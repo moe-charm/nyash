@@ -4,11 +4,29 @@ Nyashプログラミング言語開発に必要な情報をまとめたクイッ
 
 ## 🚀 クイックスタート
 
+### 🐧 Linux/WSL版
 ```bash
 # ビルドと実行
-cd nyash-rust
-cargo build
-./target/debug/nyash program.nyash
+cargo build --release
+./target/release/nyash program.nyash
+```
+
+### 🪟 Windows版 (NEW!)
+```bash
+# クロスコンパイルでWindows実行ファイル生成
+cargo install cargo-xwin
+cargo xwin build --target x86_64-pc-windows-msvc --release
+
+# 生成された実行ファイル (916KB)
+target/x86_64-pc-windows-msvc/release/nyash.exe
+```
+
+### 🌐 WebAssembly版
+```bash
+# ブラウザープレイグラウンド
+cd projects/nyash-wasm
+./build.sh
+# nyash_playground.html をブラウザーで開く
 ```
 
 ## 📚 ドキュメント構造

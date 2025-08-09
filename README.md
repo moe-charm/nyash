@@ -225,6 +225,8 @@ cd projects/nyash-wasm
 ```
 
 ### Native Development
+
+#### Linux/WSL
 ```bash
 # Build native version
 cargo build --release
@@ -235,6 +237,18 @@ cargo build --release
 # Try examples
 ./target/release/nyash test_async_demo.nyash
 ./target/release/nyash app_dice_rpg.nyash
+```
+
+#### 🪟 Windows (Cross-compile)
+```bash
+# Install cross-compiler
+cargo install cargo-xwin
+
+# Build Windows executable
+cargo xwin build --target x86_64-pc-windows-msvc --release
+
+# Generated executable (916KB)
+target/x86_64-pc-windows-msvc/release/nyash.exe
 ```
 
 ---

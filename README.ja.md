@@ -225,6 +225,8 @@ cd projects/nyash-wasm
 ```
 
 ### ネイティブ開発
+
+#### 🐧 Linux/WSL
 ```bash
 # ネイティブバージョンビルド
 cargo build --release
@@ -235,6 +237,18 @@ cargo build --release
 # 例を試す
 ./target/release/nyash test_async_demo.nyash
 ./target/release/nyash app_dice_rpg.nyash
+```
+
+#### 🪟 Windows版 (クロスコンパイル)
+```bash
+# クロスコンパイラーインストール
+cargo install cargo-xwin
+
+# Windows実行ファイルビルド
+cargo xwin build --target x86_64-pc-windows-msvc --release
+
+# 生成された実行ファイル (916KB)
+target/x86_64-pc-windows-msvc/release/nyash.exe
 ```
 
 ---
