@@ -1,0 +1,28 @@
+// 最小限のバグ再現コード
+
+box BoxA {
+    init { nodeId }
+    
+    callOther(other) {
+        // Cross-Box 3引数呼び出し（ここでハング）
+        other.receive("msg", "data", me.nodeId)
+    }
+}
+
+box BoxB {
+    init { }
+    
+    receive(type, data, from) {
+        print("Received: " + from)
+    }
+}
+
+local boxA
+boxA = new BoxA()
+boxA.nodeId = "A"
+
+local boxB  
+boxB = new BoxB()
+
+// これでハングする
+boxA.callOther(boxB)

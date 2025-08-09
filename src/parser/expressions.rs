@@ -211,11 +211,15 @@ impl NyashParser {
                         // メソッド呼び出し: obj.method(args)
                         self.advance(); // consume '('
                         let mut arguments = Vec::new();
+                        let mut arg_count = 0;
                         
                         while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
                             arguments.push(self.parse_expression()?);
+                            arg_count += 1;
+                            
                             if self.match_token(&TokenType::COMMA) {
                                 self.advance();
+                                // カンマの後の trailing comma をチェック
                             }
                         }
                         

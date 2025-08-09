@@ -1,0 +1,39 @@
+// 段階的変更テスト - 動作版をP2P構造に近づける
+
+print("=== Gradual Change Test ===")
+
+// Hub → MessageHub に名前変更
+box MessageHub {
+    init { name }
+    
+    process(messageType, data, from) {
+        print("MessageHub.process(): " + from + " -> " + messageType + " = " + data)
+    }
+}
+
+// Node → PeerNode に名前変更、フィールド名変更
+box PeerNode {
+    init { nodeId, messageHub }
+    
+    connect(nodeId, hubRef) {
+        me.nodeId = nodeId
+        me.messageHub = hubRef
+        print("PeerNode connected: " + nodeId)
+    }
+    
+    send(messageType, data) {
+        print("PeerNode.send(): " + me.nodeId + " sending " + messageType)
+        me.messageHub.process(messageType, data, me.nodeId)
+    }
+}
+
+print("Test starting...")
+local hub
+hub = new MessageHub()
+
+local alice
+alice = new PeerNode()
+alice.connect("Alice", hub)
+
+alice.send("hello", "Hi there!")
+print("Test completed!")

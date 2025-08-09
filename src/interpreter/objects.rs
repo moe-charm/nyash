@@ -9,6 +9,8 @@
 use super::*;
 use crate::boxes::null_box::NullBox;
 use crate::boxes::console_box::ConsoleBox;
+// use crate::boxes::intent_box_wrapper::IntentBoxWrapper;
+use std::sync::Arc;
 
 impl NyashInterpreter {
     /// new式を実行 - Object creation engine  
@@ -110,6 +112,61 @@ impl NyashInterpreter {
                 }
                 let console_box = Box::new(ConsoleBox::new()) as Box<dyn NyashBox>;
                 return Ok(console_box);
+            }
+            // "IntentBox" => {
+            //     // IntentBoxは引数なしで作成（メッセージバス）
+            //     if !arguments.is_empty() {
+            //         return Err(RuntimeError::InvalidOperation {
+            //             message: format!("IntentBox constructor expects 0 arguments, got {}", arguments.len()),
+            //         });
+            //     }
+            //     let intent_box = Arc::new(crate::boxes::IntentBox::new());
+            //     let intent_box_wrapped = Box::new(IntentBoxWrapper {
+            //         inner: intent_box
+            //     }) as Box<dyn NyashBox>;
+            //     return Ok(intent_box_wrapped);
+            // }
+            // "P2PBox" => {
+            //     // P2PBoxは引数2個（node_id, intent_box）で作成
+            //     if arguments.len() != 2 {
+            //         return Err(RuntimeError::InvalidOperation {
+            //             message: format!("P2PBox constructor expects 2 arguments (node_id, intent_box), got {}", arguments.len()),
+            //         });
+            //     }
+            //     
+            //     // node_id
+            //     let node_id_value = self.execute_expression(&arguments[0])?;
+            //     let node_id = if let Some(id_str) = node_id_value.as_any().downcast_ref::<StringBox>() {
+            //         id_str.value.clone()
+            //     } else {
+            //         return Err(RuntimeError::TypeError {
+            //             message: "P2PBox constructor requires string node_id as first argument".to_string(),
+            //         });
+            //     };
+            //     
+            //     // intent_box
+            //     let intent_box_value = self.execute_expression(&arguments[1])?;
+            //     let intent_box = if let Some(wrapper) = intent_box_value.as_any().downcast_ref::<IntentBoxWrapper>() {
+            //         wrapper.inner.clone()
+            //     } else {
+            //         return Err(RuntimeError::TypeError {
+            //             message: "P2PBox constructor requires IntentBox as second argument".to_string(),
+            //         });
+            //     };
+            //     
+            //     let p2p_box = Box::new(crate::boxes::P2PBox::new(node_id, intent_box)) as Box<dyn NyashBox>;
+            //     return Ok(p2p_box);
+            // }
+            #[cfg(not(target_arch = "wasm32"))]
+            "EguiBox" => {
+                // EguiBoxは引数なしで作成（GUIアプリケーション用）
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("EguiBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let egui_box = Box::new(crate::boxes::EguiBox::new()) as Box<dyn NyashBox>;
+                return Ok(egui_box);
             }
             #[cfg(target_arch = "wasm32")]
             "WebDisplayBox" => {
@@ -573,7 +630,13 @@ impl NyashInterpreter {
         #[cfg(not(target_arch = "wasm32"))]
         let is_web_box = false;
         
-        is_builtin || is_web_box || 
+        // GUI専用Box（非WASM環境のみ）
+        #[cfg(not(target_arch = "wasm32"))]
+        let is_gui_box = matches!(type_name, "EguiBox");
+        #[cfg(target_arch = "wasm32")]
+        let is_gui_box = false;
+        
+        is_builtin || is_web_box || is_gui_box ||
         // または登録済みのユーザー定義Box
         self.shared.box_declarations.read().unwrap().contains_key(type_name)
     }

@@ -12,24 +12,57 @@ use super::{NyashParser, ParseError};
 impl NyashParser {
     /// 文をパース
     pub(super) fn parse_statement(&mut self) -> Result<ASTNode, ParseError> {
-        match &self.current_token().token_type {
-            TokenType::BOX => self.parse_box_declaration(),
-            TokenType::INTERFACE => self.parse_interface_box_declaration(),
-            TokenType::GLOBAL => self.parse_global_var(),
-            TokenType::FUNCTION => self.parse_function_declaration(),
-            TokenType::STATIC => self.parse_static_declaration(),  // 🔥 静的宣言 (function/box)
-            TokenType::IF => self.parse_if(),
-            TokenType::LOOP => self.parse_loop(),
-            TokenType::BREAK => self.parse_break(),
-            TokenType::RETURN => self.parse_return(),
-            TokenType::PRINT => self.parse_print(),
-            TokenType::NOWAIT => self.parse_nowait(),
-            TokenType::INCLUDE => self.parse_include(),
-            TokenType::LOCAL => self.parse_local(),
-            TokenType::OUTBOX => self.parse_outbox(),
-            TokenType::TRY => self.parse_try_catch(),
-            TokenType::THROW => self.parse_throw(),
-            TokenType::IDENTIFIER(_) => {
+        
+        let result = match &self.current_token().token_type {
+            TokenType::BOX => {
+                self.parse_box_declaration()
+            },
+            TokenType::INTERFACE => {
+                self.parse_interface_box_declaration()
+            },
+            TokenType::GLOBAL => {
+                self.parse_global_var()
+            },
+            TokenType::FUNCTION => {
+                self.parse_function_declaration()
+            },
+            TokenType::STATIC => {
+                self.parse_static_declaration()  // 🔥 静的宣言 (function/box)
+            },
+            TokenType::IF => {
+                self.parse_if()
+            },
+            TokenType::LOOP => {
+                self.parse_loop()
+            },
+            TokenType::BREAK => {
+                self.parse_break()
+            },
+            TokenType::RETURN => {
+                self.parse_return()
+            },
+            TokenType::PRINT => {
+                self.parse_print()
+            },
+            TokenType::NOWAIT => {
+                self.parse_nowait()
+            },
+            TokenType::INCLUDE => {
+                self.parse_include()
+            },
+            TokenType::LOCAL => {
+                self.parse_local()
+            },
+            TokenType::OUTBOX => {
+                self.parse_outbox()
+            },
+            TokenType::TRY => {
+                self.parse_try_catch()
+            },
+            TokenType::THROW => {
+                self.parse_throw()
+            },
+            TokenType::IDENTIFIER(name) => {
                 // function宣言 または 代入文 または 関数呼び出し
                 self.parse_assignment_or_function_call()
             }
@@ -41,7 +74,9 @@ impl NyashParser {
                 let line = self.current_token().line;
                 Err(ParseError::InvalidStatement { line })
             }
-        }
+        };
+        
+        result
     }
     
     /// if文をパース: if (condition) { body } else if ... else { body }

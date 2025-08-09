@@ -1,0 +1,84 @@
+// P2PBox/IntentBoxをNyashスタイルで実装
+
+// IntentBox - シンプルなメッセージバス
+box IntentBox {
+    init { listeners }
+    
+    constructor() {
+        me.listeners = new MapBox()
+    }
+    
+    // メッセージを登録されたリスナーに配信
+    deliver(messageType, data, from) {
+        local handlers
+        handlers = me.listeners.get(messageType)
+        
+        if (handlers != null) {
+            local i
+            i = 0
+            loop (i < handlers.length()) {
+                local handler
+                handler = handlers.get(i)
+                handler.invoke(data, from)  // MethodBoxのinvoke
+                i = i + 1
+            }
+        }
+    }
+    
+    // リスナー登録
+    register(messageType, handler) {
+        local handlers
+        handlers = me.listeners.get(messageType)
+        
+        if (handlers == null) {
+            handlers = new ArrayBox()
+            me.listeners.set(messageType, handlers)
+        }
+        
+        handlers.add(handler)
+    }
+}
+
+// P2PBox - IntentBoxを使ってメッセージを送るノード
+box P2PBox {
+    init { nodeId, intentBox }
+    
+    constructor(nodeId, intentBox) {
+        me.nodeId = nodeId
+        me.intentBox = intentBox
+    }
+    
+    // メッセージ送信（IntentBoxに任せる）
+    send(messageType, data) {
+        me.intentBox.deliver(messageType, data, me.nodeId)
+    }
+    
+    // メッセージ受信登録
+    on(messageType, handler) {
+        me.intentBox.register(messageType, handler)
+    }
+}
+
+// テスト
+print("=== P2PBox Test ===")
+
+// 1. IntentBox作成
+local bus
+bus = new IntentBox()
+
+// 2. P2PBox作成
+local alice
+alice = new P2PBox("Alice", bus)
+
+local bob
+bob = new P2PBox("Bob", bus)
+
+// 3. Bobがメッセージ受信設定
+bob.on("greeting", new MethodBox(|data, from| {
+    print("Bob received from " + from + ": " + data)
+}))
+
+// 4. Aliceがメッセージ送信
+alice.send("greeting", "Hello Bob!")
+
+print("Done!")

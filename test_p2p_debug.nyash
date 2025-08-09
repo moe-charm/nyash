@@ -1,0 +1,67 @@
+// P2Pテスト - デバッグ版
+
+print("=== P2P Debug Test ===")
+
+// IntentBox
+box IntentBox {
+    init { handlers }
+    
+    setup() {
+        print("IntentBox.setup() ENTER")
+        me.handlers = new MapBox()
+        print("IntentBox.setup() EXIT")
+    }
+    
+    deliver(messageType, data, from) {
+        print("IntentBox.deliver() ENTER - args: " + messageType + ", " + data + ", " + from)
+        print("Message: " + from + " -> " + messageType + " = " + data)
+        print("IntentBox.deliver() EXIT")
+    }
+}
+
+// P2PBox
+box P2PBox {
+    init { nodeId, intentBox }
+    
+    setup(nodeId, intentBox) {
+        print("P2PBox.setup() ENTER - nodeId: " + nodeId)
+        me.nodeId = nodeId
+        me.intentBox = intentBox
+        print("P2PBox.setup() EXIT for " + nodeId)
+    }
+    
+    send(messageType, data) {
+        print("P2PBox.send() ENTER - node: " + me.nodeId + ", type: " + messageType + ", data: " + data)
+        print("About to call intentBox.deliver...")
+        me.intentBox.deliver(messageType, data, me.nodeId)
+        print("P2PBox.send() EXIT")
+    }
+}
+
+// テスト開始
+print("Creating IntentBox...")
+local bus
+bus = new IntentBox()
+print("Calling bus.setup()...")
+bus.setup()
+print("IntentBox ready!")
+
+print("Creating Alice...")
+local alice
+alice = new P2PBox()
+print("Calling alice.setup()...")
+alice.setup("Alice", bus)
+print("Alice ready!")
+
+print("Creating Bob...")  
+local bob
+bob = new P2PBox()
+print("Calling bob.setup()...")
+bob.setup("Bob", bus)
+print("Bob ready!")
+
+print("Alice sending message...")
+alice.send("hello", "Hi there!")
+print("Alice message sent!")
+
+print("Test completed!")

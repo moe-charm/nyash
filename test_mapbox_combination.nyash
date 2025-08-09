@@ -1,0 +1,69 @@
+// MapBox + 3引数組み合わせテスト
+
+print("=== MapBox Combination Test ===")
+
+box TargetBox {
+    init { handlers }
+    
+    // MapBoxなしのsetup
+    setup1() {
+        print("Setup without MapBox")
+    }
+    
+    // MapBoxありのsetup  
+    setup2() {
+        print("Setup with MapBox...")
+        me.handlers = new MapBox()
+        print("MapBox created successfully")
+    }
+    
+    deliver(messageType, data, from) {
+        print("deliver: " + from + " -> " + messageType + " = " + data)
+    }
+}
+
+box CallerBox {
+    init { target, nodeId }
+    
+    setup(targetRef) {
+        me.target = targetRef
+        me.nodeId = "TestNode"
+        print("CallerBox setup completed")
+    }
+    
+    testCall() {
+        print("About to call 3-arg method...")
+        me.target.deliver("hello", "data", me.nodeId)
+        print("3-arg call completed")
+    }
+}
+
+// Test 1: MapBoxなし
+print("Test 1: Without MapBox...")
+local target1
+target1 = new TargetBox()
+target1.setup1()
+
+local caller1
+caller1 = new CallerBox()
+caller1.setup(target1)
+caller1.testCall()
+
+print("Without MapBox: SUCCESS")
+
+// Test 2: MapBoxあり  
+print("Test 2: With MapBox...")
+local target2
+target2 = new TargetBox()
+target2.setup2()
+
+print("MapBox setup completed, now testing 3-arg call...")
+
+local caller2
+caller2 = new CallerBox()
+caller2.setup(target2)
+caller2.testCall()
+
+print("If you see this, MapBox + 3-arg worked!")
+
+print("All MapBox combination tests completed!")

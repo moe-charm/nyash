@@ -1,0 +1,55 @@
+// 引数数段階テスト - 問題の境界を特定
+
+print("=== Args Progression Test ===")
+
+box TestBox {
+    init { name }
+    
+    // 0引数
+    method0() {
+        print("method0: success")
+    }
+    
+    // 1引数
+    method1(a) {
+        print("method1: " + a)
+    }
+    
+    // 2引数
+    method2(a, b) {
+        print("method2: " + a + ", " + b)
+    }
+    
+    // 3引数
+    method3(a, b, c) {
+        print("method3: " + a + ", " + b + ", " + c)
+    }
+    
+    // 4引数
+    method4(a, b, c, d) {
+        print("method4: " + a + ", " + b + ", " + c + ", " + d)
+    }
+}
+
+print("Creating TestBox...")
+local testBox
+testBox = new TestBox()
+
+print("Testing 0 args...")
+testBox.method0()
+
+print("Testing 1 arg...")
+testBox.method1("arg1")
+
+print("Testing 2 args...")
+testBox.method2("arg1", "arg2")
+
+print("Testing 3 args...")
+testBox.method3("arg1", "arg2", "arg3")
+
+print("If you see this, 3 args worked!")
+
+print("Testing 4 args...")
+testBox.method4("arg1", "arg2", "arg3", "arg4")
+
+print("All tests completed!")

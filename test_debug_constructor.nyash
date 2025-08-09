@@ -1,0 +1,35 @@
+// コンストラクタのデバッグテスト
+
+print("=== Constructor Debug Test ===")
+
+// Step 1: 最もシンプルなBox
+box SimpleBox {
+    init { }
+    
+    constructor() {
+        print("SimpleBox constructor called")
+    }
+}
+
+print("Creating SimpleBox...")
+local s
+s = new SimpleBox()
+print("SimpleBox created!")
+
+// Step 2: フィールドを持つBox
+box BoxWithField {
+    init { value }
+    
+    constructor() {
+        print("BoxWithField constructor called")
+        me.value = 42
+        print("Field set to 42")
+    }
+}
+
+print("\nCreating BoxWithField...")
+local b
+b = new BoxWithField()
+print("BoxWithField created!")
+
+print("\nAll tests completed!")

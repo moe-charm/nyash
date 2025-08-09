@@ -1,0 +1,48 @@
+// シンプル名でのテスト
+
+print("=== Simple Names Test ===")
+
+// Hub
+box Hub {
+    init { data }
+    
+    constructor() {
+        print("Hub.constructor() called")
+        me.data = new MapBox()
+    }
+    
+    process(type, value, sender) {
+        print("Hub.process(): " + sender + " -> " + type + " = " + value)
+    }
+}
+
+// Node
+box Node {
+    init { id, hub }
+    
+    constructor() {
+        print("Node.constructor() called")
+    }
+    
+    connect(nodeId, hubRef) {
+        me.id = nodeId
+        me.hub = hubRef
+        print("Node connected: " + nodeId)
+    }
+    
+    send(type, value) {
+        print("Node.send(): " + me.id + " sending " + type)
+        me.hub.process(type, value, me.id)
+    }
+}
+
+print("Test starting...")
+local h
+h = new Hub()
+
+local n
+n = new Node()
+n.connect("TestNode", h)
+
+n.send("test", "data")
+print("Test completed!")

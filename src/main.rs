@@ -82,19 +82,42 @@ fn execute_nyash_file(filename: &str) {
     println!("📝 File contents:\n{}", code);
     println!("\n🚀 Parsing and executing...\n");
     
+    // テスト用：即座にファイル作成
+    std::fs::write("/mnt/c/git/nyash/development/debug_hang_issue/test.txt", "START").ok();
+    
     // Parse the code
+    eprintln!("🔍 DEBUG: Starting parse...");
     let ast = match NyashParser::parse_from_string(&code) {
-        Ok(ast) => ast,
+        Ok(ast) => {
+            eprintln!("🔍 DEBUG: Parse completed, AST created");
+            ast
+        },
         Err(e) => {
             eprintln!("❌ Parse error: {}", e);
             process::exit(1);
         }
     };
     
+    eprintln!("🔍 DEBUG: About to print parse success message...");
     println!("✅ Parse successful!");
+    eprintln!("🔍 DEBUG: Parse success message printed");
+    
+    // デバッグログファイルに書き込み
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/mnt/c/git/nyash/development/debug_hang_issue/debug_trace.log") 
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "=== MAIN: Parse successful ===");
+        let _ = file.flush();
+    }
+    
+    eprintln!("🔍 DEBUG: Creating interpreter...");
     
     // Execute the AST
     let mut interpreter = NyashInterpreter::new();
+    eprintln!("🔍 DEBUG: Starting execution...");
     match interpreter.execute(ast) {
         Ok(result) => {
             println!("✅ Execution completed successfully!");

@@ -1,0 +1,34 @@
+// MapBox + フィールドアクセス3引数テスト
+
+print("=== MapBox + Field Access Test ===")
+
+box TestBox {
+    init { data, myField }
+    
+    setup() {
+        print("TestBox setup start")
+        me.data = new MapBox()
+        me.myField = "field_value"
+        print("TestBox setup complete with MapBox")
+    }
+    
+    threeArgMethod(a, b, c) {
+        print("threeArgMethod: " + a + ", " + b + ", " + c)
+    }
+}
+
+print("Creating TestBox...")
+local testBox
+testBox = new TestBox()
+testBox.setup()
+
+print("Test 1: All literals (should work)")
+testBox.threeArgMethod("arg1", "arg2", "arg3")
+
+print("Test 2: One field access (potential issue)")
+print("About to call with field access...")
+testBox.threeArgMethod("arg1", "arg2", testBox.myField)
+
+print("If you see this, field access worked!")
+
+print("All MapBox field access tests completed!")

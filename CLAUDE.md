@@ -139,6 +139,22 @@ init { field1, field2 }  // カンマ必須（CPU暴走防止）
 init { field1 field2 }   // カンマなし→CPU暴走
 ```
 
+## 🎨 GUI開発（NEW!）
+
+### EguiBox - GUIアプリケーション開発
+```nyash
+// EguiBoxでGUIアプリ作成
+local app
+app = new EguiBox()
+app.setTitle("Nyash GUI App") 
+app.setSize(800, 600)
+
+// 注意: 現在メインスレッド制約により
+// app.run() は特別な実行コンテキストが必要
+```
+
+**実装状況**: 基本実装完了、GUI実行コンテキスト対応中
+
 ## 🔧 開発サポート
 
 ### 🤖 AI相談

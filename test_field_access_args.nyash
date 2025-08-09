@@ -1,0 +1,37 @@
+// フィールドアクセス付き引数テスト
+
+print("=== Field Access Args Test ===")
+
+box TestBox {
+    init { field1, field2, field3 }
+    
+    setup() {
+        me.field1 = "value1"
+        me.field2 = "value2"  
+        me.field3 = "value3"
+        print("Setup completed")
+    }
+    
+    process(a, b, c) {
+        print("process: " + a + ", " + b + ", " + c)
+    }
+}
+
+print("Creating TestBox...")
+local testBox
+testBox = new TestBox()
+testBox.setup()
+
+print("Testing with literals...")
+testBox.process("lit1", "lit2", "lit3")
+
+print("Testing with 1 field access...")
+testBox.process(testBox.field1, "lit2", "lit3")
+
+print("Testing with 2 field accesses...")
+testBox.process(testBox.field1, testBox.field2, "lit3")
+
+print("Testing with 3 field accesses...")
+testBox.process(testBox.field1, testBox.field2, testBox.field3)
+
+print("All field access tests completed!")

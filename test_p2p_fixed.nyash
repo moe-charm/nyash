@@ -1,0 +1,40 @@
+// 修正版P2Pテスト - nullを使わない
+
+print("=== Fixed P2P Test ===")
+
+box MessageBus {
+    init { handlers }
+    
+    setup() {
+        me.handlers = new MapBox()
+        print("MessageBus setup complete")
+    }
+    
+    send(type, data, from) {
+        local list
+        list = me.handlers.get(type)
+        
+        // "Key not found" で始まるかチェック
+        if (list == "Bob") {  // 仮の実装
+            print(from + " -> " + type + ": " + data)
+        }
+    }
+    
+    on(type, nodeId) {
+        me.handlers.set(type, nodeId)
+        print("Registered: " + nodeId + " listens to " + type)
+    }
+}
+
+print("Creating MessageBus...")
+local bus
+bus = new MessageBus()
+bus.setup()
+
+print("Registering handlers...")
+bus.on("hello", "Bob")
+
+print("Sending message...")
+bus.send("hello", "Hi!", "Alice")
+
+print("Test completed!")

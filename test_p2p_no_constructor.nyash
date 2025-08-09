@@ -1,0 +1,54 @@
+// コンストラクタを使わないP2Pテスト
+
+print("=== P2P Test (No Constructor) ===")
+
+// IntentBox - コンストラクタなし版
+box IntentBox {
+    init { handlers }
+    
+    // セットアップメソッド（コンストラクタの代わり）
+    setup() {
+        me.handlers = new MapBox()
+        print("IntentBox setup complete")
+    }
+    
+    deliver(messageType, data, from) {
+        print("Message: " + from + " -> " + messageType + " = " + data)
+    }
+}
+
+// P2PBox - コンストラクタなし版
+box P2PBox {
+    init { nodeId, intentBox }
+    
+    setup(nodeId, intentBox) {
+        me.nodeId = nodeId
+        me.intentBox = intentBox
+        print("P2PBox setup for " + nodeId)
+    }
+    
+    send(messageType, data) {
+        me.intentBox.deliver(messageType, data, me.nodeId)
+    }
+}
+
+// テスト
+print("Creating IntentBox...")
+local bus
+bus = new IntentBox()
+bus.setup()
+
+print("Creating P2PBoxes...")
+local alice
+alice = new P2PBox()
+alice.setup("Alice", bus)
+
+local bob
+bob = new P2PBox()
+bob.setup("Bob", bus)
+
+print("Sending messages...")
+alice.send("hello", "Hi there!")
+bob.send("reply", "Hello back!")
+
+print("Test completed!")

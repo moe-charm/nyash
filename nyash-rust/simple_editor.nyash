@@ -1,0 +1,36 @@
+// SimpleEditor - Nyash GUI Application
+// Everything is Box哲学によるテキストエディタ実装
+
+// エディタアプリケーション
+box SimpleEditor {
+    init { text, app }
+    
+    SimpleEditor() {
+        me.text = ""
+        me.app = new EguiBox()
+        me.app.setTitle("Nyash Simple Editor")
+        me.app.setSize(800, 600)
+    }
+    
+    setText(newText) {
+        me.text = newText
+    }
+    
+    getText() {
+        return me.text
+    }
+    
+    run() {
+        print("Starting Simple Editor...")
+        // 現在はrun()がメインスレッド制約でエラーになるが、
+        // 将来的にはGUIが起動する
+        me.app.run()
+    }
+}
+
+// メイン処理
+local editor
+editor = new SimpleEditor()
+editor.setText("Welcome to Nyash Simple Editor!\nEverything is Box!")
+print("Text content: " + editor.getText())
+editor.run()

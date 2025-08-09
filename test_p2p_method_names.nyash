@@ -1,0 +1,51 @@
+// P2P テスト - メソッド名変更
+
+print("=== P2P Method Names Test ===")
+
+box HubBox {
+    init { handlers }
+    
+    setup() {
+        print("HubBox setup called")
+    }
+    
+    // deliver → process3 に変更
+    process3(messageType, data, from) {
+        print("HubBox process3 called")
+        print("Message: " + from + " -> " + messageType + " = " + data)
+    }
+}
+
+box NodeBox {
+    init { nodeId, messageHub }
+    
+    setup(nodeId, hub) {
+        print("NodeBox setup called")
+        me.nodeId = nodeId
+        me.messageHub = hub
+        print("NodeBox setup completed")
+    }
+    
+    // send → call3 に変更
+    call3(messageType, data) {
+        print("NodeBox call3 called")
+        print("About to call messageHub.process3...")
+        me.messageHub.process3(messageType, data, me.nodeId)
+        print("NodeBox call3 completed")
+    }
+}
+
+print("Creating HubBox...")
+local hub
+hub = new HubBox()
+hub.setup()
+
+print("Creating NodeBox...")
+local alice
+alice = new NodeBox()
+alice.setup("Alice", hub)
+
+print("Calling call3...")
+alice.call3("hello", "Hi there!")
+
+print("Test completed successfully!")

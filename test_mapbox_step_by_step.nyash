@@ -1,0 +1,28 @@
+// 段階的にテスト
+
+print("=== Step by Step Test ===")
+
+// Step 1: 直接MapBox使用
+print("Step 1: Direct MapBox")
+local map1
+map1 = new MapBox()
+print("Direct MapBox created!")
+
+// Step 2: コンストラクタでMapBox
+print("Step 2: MapBox in constructor")
+box TestBox {
+    init { data }
+    
+    constructor() {
+        print("Constructor starts")
+        me.data = new MapBox()
+        print("Constructor ends")
+    }
+}
+
+print("About to create TestBox...")
+local box1
+box1 = new TestBox()
+print("TestBox created!")
+
+print("All done!")

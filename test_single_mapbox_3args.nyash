@@ -1,0 +1,34 @@
+// 単一MapBox+3引数テスト
+
+print("=== Single MapBox 3-Args Test ===")
+
+box TestBox {
+    init { data, nodeId }
+    
+    setup() {
+        print("TestBox setup start")
+        me.data = new MapBox()
+        me.nodeId = "TestNode"
+        print("TestBox setup complete")
+    }
+    
+    testMethod(arg1, arg2, arg3) {
+        print("TestMethod called: " + arg1 + ", " + arg2 + ", " + arg3)
+    }
+    
+    callSelf() {
+        print("About to call self with 3 args...")
+        me.testMethod("first", "second", me.nodeId)  // 自分自身への3引数呼び出し
+        print("Self call completed")
+    }
+}
+
+print("Creating TestBox...")
+local testBox
+testBox = new TestBox()
+testBox.setup()
+
+print("Testing self 3-arg call...")
+testBox.callSelf()
+
+print("Single MapBox 3-arg test completed!")

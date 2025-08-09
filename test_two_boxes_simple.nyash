@@ -1,0 +1,33 @@
+// 2つのBox - 相互参照なし
+
+print("=== Two Boxes Simple Test ===")
+
+// 1つ目のBox
+box MessageHub {
+    init { name }
+    
+    hello() {
+        print("MessageHub says hello")
+    }
+}
+
+// 2つ目のBox
+box PeerNode {
+    init { nodeId }
+    
+    hello() {
+        print("PeerNode says hello")
+    }
+}
+
+print("Creating MessageHub...")
+local hub
+hub = new MessageHub()
+hub.hello()
+
+print("Creating PeerNode...")
+local node
+node = new PeerNode()
+node.hello()
+
+print("Test completed!")

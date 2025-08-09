@@ -1,0 +1,34 @@
+// Debug hang test case - minimal reproduction
+
+print("=== Debug Hang Test ===")
+
+box TestBox {
+    init { mapField, simpleField }
+    
+    setup() {
+        print("Step 1: Setting up TestBox")
+        me.mapField = new MapBox()
+        me.simpleField = "test_value"
+        print("Step 2: TestBox setup complete")
+    }
+    
+    methodWith3Args(arg1, arg2, arg3) {
+        print("methodWith3Args called with: " + arg1 + ", " + arg2 + ", " + arg3)
+    }
+}
+
+print("Step 3: Creating TestBox instance")
+local testObj
+testObj = new TestBox()
+
+print("Step 4: Running setup")
+testObj.setup()
+
+print("Step 5: Testing 3-arg method with literals")
+testObj.methodWith3Args("a", "b", "c")
+
+print("Step 6: Testing 3-arg method with field access")
+print("About to call method with field access...")
+testObj.methodWith3Args("a", "b", testObj.simpleField)
+
+print("Step 7: All tests completed successfully!")

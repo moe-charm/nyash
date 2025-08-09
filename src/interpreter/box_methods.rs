@@ -135,6 +135,56 @@ impl NyashInterpreter {
 
     // DebugBox methods moved to system_methods.rs
 
+    /// EguiBoxのメソッド呼び出しを実行（非WASM環境のみ）
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn execute_egui_method(&mut self, _egui_box: &crate::boxes::EguiBox, method: &str, arguments: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // 引数を評価
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.execute_expression(arg)?);
+        }
+        
+        // メソッドを実行
+        match method {
+            "setTitle" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("setTitle expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                // EguiBoxは不変参照なので、新しいインスタンスを返す必要がある
+                // 実際のGUIアプリではstateを共有するが、今はシンプルに
+                Ok(Box::new(VoidBox::new()))
+            }
+            "setSize" => {
+                if arg_values.len() != 2 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("setSize expects 2 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(Box::new(VoidBox::new()))
+            }
+            "run" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("run expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                // run()は実際のGUIアプリケーションを起動するため、
+                // ここでは実行できない（メインスレッドブロッキング）
+                Err(RuntimeError::InvalidOperation {
+                    message: "EguiBox.run() must be called from main thread".to_string(),
+                })
+            }
+            _ => {
+                Err(RuntimeError::InvalidOperation {
+                    message: format!("Unknown method '{}' for EguiBox", method),
+                })
+            }
+        }
+    }
+
     /// ConsoleBoxのメソッド呼び出しを実行
     pub(super) fn execute_console_method(&mut self, console_box: &crate::boxes::console_box::ConsoleBox, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {

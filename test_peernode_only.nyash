@@ -1,0 +1,18 @@
+// PeerNode単体テスト
+
+print("=== PeerNode Only Test ===")
+
+box PeerNode {
+    init { nodeId }
+    
+    hello() {
+        print("PeerNode says hello")
+    }
+}
+
+print("Creating PeerNode...")
+local node
+node = new PeerNode()
+print("Calling hello...")
+node.hello()
+print("Test completed!")

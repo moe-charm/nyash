@@ -1,0 +1,81 @@
+// Box間3引数メソッド呼び出しテスト
+
+print("=== Cross Box Args Test ===")
+
+// TargetBox - メソッドを提供する側
+box TargetBox {
+    init { name }
+    
+    process2(a, b) {
+        print("TargetBox.process2: " + a + ", " + b)
+    }
+    
+    process3(a, b, c) {
+        print("TargetBox.process3: " + a + ", " + b + ", " + c)
+    }
+    
+    process4(a, b, c, d) {
+        print("TargetBox.process4: " + a + ", " + b + ", " + c + ", " + d)
+    }
+}
+
+// CallerBox - メソッドを呼び出す側
+box CallerBox {
+    init { target, myField }
+    
+    setup(targetRef) {
+        me.target = targetRef
+        me.myField = "myValue"
+        print("CallerBox setup completed")
+    }
+    
+    call2() {
+        print("Calling 2-arg method...")
+        me.target.process2("arg1", "arg2")
+        print("2-arg call completed")
+    }
+    
+    call3() {
+        print("Calling 3-arg method...")
+        me.target.process3("arg1", "arg2", "arg3")
+        print("3-arg call completed")
+    }
+    
+    call3WithField() {
+        print("Calling 3-arg method with field...")
+        me.target.process3("arg1", "arg2", me.myField)
+        print("3-arg with field completed")
+    }
+    
+    call4() {
+        print("Calling 4-arg method...")
+        me.target.process4("arg1", "arg2", "arg3", "arg4")
+        print("4-arg call completed")
+    }
+}
+
+// テスト
+print("Creating TargetBox...")
+local target
+target = new TargetBox()
+
+print("Creating CallerBox...")
+local caller
+caller = new CallerBox()
+caller.setup(target)
+
+print("Testing 2-arg cross-box call...")
+caller.call2()
+
+print("Testing 3-arg cross-box call...")
+caller.call3()
+
+print("If you see this, 3-arg cross-box worked!")
+
+print("Testing 3-arg with field...")
+caller.call3WithField()
+
+print("Testing 4-arg cross-box call...")
+caller.call4()
+
+print("All cross-box tests completed!")

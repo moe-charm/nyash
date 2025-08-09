@@ -1,0 +1,42 @@
+// 一方向参照テスト
+
+print("=== One Way Reference Test ===")
+
+// Hub側
+box MessageHub {
+    init { name }
+    
+    process(data) {
+        print("MessageHub processing: " + data)
+    }
+}
+
+// Node側 - Hubを参照
+box PeerNode {
+    init { nodeId, hub }
+    
+    setup(id, hubRef) {
+        me.nodeId = id
+        me.hub = hubRef
+        print("PeerNode setup: " + id)
+    }
+    
+    send(data) {
+        print("PeerNode sending: " + data)
+        me.hub.process(data)
+    }
+}
+
+print("Creating MessageHub...")
+local hub
+hub = new MessageHub()
+
+print("Creating PeerNode...")
+local node
+node = new PeerNode()
+node.setup("TestNode", hub)
+
+print("Sending data...")
+node.send("test data")
+
+print("Test completed!")

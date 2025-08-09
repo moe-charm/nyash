@@ -127,82 +127,82 @@ impl NyashInterpreter {
     /// MapBoxのメソッド呼び出しを実行
     pub(in crate::interpreter) fn execute_map_method(&mut self, map_box: &MapBox, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
-        // 引数を評価
-        let mut arg_values = Vec::new();
-        for arg in arguments {
-            arg_values.push(self.execute_expression(arg)?);
-        }
         
-        // メソッドを実行
+        // メソッドを実行（必要時評価方式）
         match method {
             "set" => {
-                if arg_values.len() != 2 {
+                if arguments.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("set() expects 2 arguments, got {}", arg_values.len()),
+                        message: format!("set() expects 2 arguments, got {}", arguments.len()),
                     });
                 }
-                Ok(map_box.set(arg_values[0].clone_box(), arg_values[1].clone_box()))
+                let key_value = self.execute_expression(&arguments[0])?;
+                let value_value = self.execute_expression(&arguments[1])?;
+                Ok(map_box.set(key_value, value_value))
             }
             "get" => {
-                if arg_values.len() != 1 {
+                if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("get() expects 1 argument, got {}", arg_values.len()),
+                        message: format!("get() expects 1 argument, got {}", arguments.len()),
                     });
                 }
-                Ok(map_box.get(arg_values[0].clone_box()))
+                let key_value = self.execute_expression(&arguments[0])?;
+                Ok(map_box.get(key_value))
             }
             "has" => {
-                if arg_values.len() != 1 {
+                if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("has() expects 1 argument, got {}", arg_values.len()),
+                        message: format!("has() expects 1 argument, got {}", arguments.len()),
                     });
                 }
-                Ok(map_box.has(arg_values[0].clone_box()))
+                let key_value = self.execute_expression(&arguments[0])?;
+                Ok(map_box.has(key_value))
             }
             "delete" => {
-                if arg_values.len() != 1 {
+                if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("delete() expects 1 argument, got {}", arg_values.len()),
+                        message: format!("delete() expects 1 argument, got {}", arguments.len()),
                     });
                 }
-                Ok(map_box.delete(arg_values[0].clone_box()))
+                let key_value = self.execute_expression(&arguments[0])?;
+                Ok(map_box.delete(key_value))
             }
             "keys" => {
-                if !arg_values.is_empty() {
+                if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("keys() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!("keys() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 Ok(map_box.keys())
             }
             "values" => {
-                if !arg_values.is_empty() {
+                if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("values() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!("values() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 Ok(map_box.values())
             }
             "size" => {
-                if !arg_values.is_empty() {
+                if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("size() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!("size() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 Ok(map_box.size())
             }
             "clear" => {
-                if !arg_values.is_empty() {
+                if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("clear() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!("clear() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 Ok(map_box.clear())
             }
             "isEmpty" => {
-                if !arg_values.is_empty() {
+                if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("isEmpty() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!("isEmpty() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 let size = map_box.size();
@@ -213,34 +213,37 @@ impl NyashInterpreter {
                 }
             }
             "containsKey" => {
-                if arg_values.len() != 1 {
+                if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("containsKey() expects 1 argument, got {}", arg_values.len()),
+                        message: format!("containsKey() expects 1 argument, got {}", arguments.len()),
                     });
                 }
-                Ok(map_box.has(arg_values[0].clone_box()))
+                let key_value = self.execute_expression(&arguments[0])?;
+                Ok(map_box.has(key_value))
             }
             "containsValue" => {
-                if arg_values.len() != 1 {
+                if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("containsValue() expects 1 argument, got {}", arg_values.len()),
+                        message: format!("containsValue() expects 1 argument, got {}", arguments.len()),
                     });
                 }
+                let _value = self.execute_expression(&arguments[0])?;
                 // Simple implementation: check if any value equals the given value
                 Ok(Box::new(BoolBox::new(false))) // TODO: implement proper value search
             }
             "forEach" => {
-                if arg_values.len() != 1 {
+                if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("forEach() expects 1 argument, got {}", arg_values.len()),
+                        message: format!("forEach() expects 1 argument, got {}", arguments.len()),
                     });
                 }
-                Ok(map_box.forEach(arg_values[0].clone_box()))
+                let callback_value = self.execute_expression(&arguments[0])?;
+                Ok(map_box.forEach(callback_value))
             }
             "toJSON" => {
-                if !arg_values.is_empty() {
+                if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("toJSON() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!("toJSON() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 Ok(map_box.toJSON())
@@ -248,9 +251,9 @@ impl NyashInterpreter {
             // Note: merge, filter, map methods not implemented in MapBox yet
             // These would require more complex callback handling
             "toString" => {
-                if !arg_values.is_empty() {
+                if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("toString() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 Ok(Box::new(map_box.to_string_box()))

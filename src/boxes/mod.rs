@@ -20,6 +20,10 @@ pub mod console_box;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
 
+// GUI Box（条件付きコンパイル）
+#[cfg(not(target_arch = "wasm32"))]
+pub mod egui_box;
+
 // 共通で使う型とトレイトを再エクスポート
 pub use string_box::StringBox;
 pub use integer_box::IntegerBox;
@@ -32,11 +36,20 @@ pub use sound_box::SoundBox;
 pub use map_box::MapBox;
 pub use console_box::ConsoleBox;
 
+// EguiBoxの再エクスポート（非WASM環境のみ）
+#[cfg(not(target_arch = "wasm32"))]
+pub use egui_box::EguiBox;
+
 // Web Box群の再エクスポート（WASM環境のみ）
 #[cfg(target_arch = "wasm32")]
 pub use web::{WebDisplayBox, WebConsoleBox, WebCanvasBox};
 
 pub mod null_box;
+
+// P2P通信Box群
+// pub mod intent_box;
+// pub mod intent_box_wrapper;
+// pub mod p2p_box;
 
 // 今後追加予定のBox型（コメントアウト）
 // pub mod array_box;
@@ -44,3 +57,7 @@ pub mod null_box;
 
 // null関数も再エクスポート
 pub use null_box::{NullBox, null};
+
+// P2P通信Boxの再エクスポート
+// pub use intent_box::IntentBox;
+// pub use p2p_box::P2PBox;

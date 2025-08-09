@@ -1,0 +1,62 @@
+// 直接MapBoxメソッド呼び出しテスト
+
+print("=== Direct MapBox Call Test ===")
+
+// Step 1: MapBox直接作成・使用
+print("Step 1: Direct MapBox usage")
+local map
+map = new MapBox()
+print("MapBox created")
+
+map.set("key1", "value1")
+print("MapBox.set() completed")
+
+local result
+result = map.get("key1")
+print("MapBox.get() result: " + result)
+
+// Step 2: MapBoxを持つBox作成（3引数なし）
+print("Step 2: Box with MapBox (no 3-arg calls)")
+box SimpleBox {
+    init { data }
+    
+    setup() {
+        print("SimpleBox setup start")
+        me.data = new MapBox()
+        print("SimpleBox setup complete")
+    }
+    
+    twoArgMethod(a, b) {
+        print("twoArgMethod: " + a + ", " + b)
+    }
+}
+
+local box1
+box1 = new SimpleBox()
+box1.setup()
+box1.twoArgMethod("arg1", "arg2")
+
+// Step 3: MapBoxを持つBoxで3引数メソッド呼び出し
+print("Step 3: Box with MapBox (3-arg call)")
+box TestBox {
+    init { data }
+    
+    setup() {
+        print("TestBox setup start")
+        me.data = new MapBox()
+        print("TestBox setup complete")
+    }
+    
+    threeArgMethod(a, b, c) {
+        print("threeArgMethod: " + a + ", " + b + ", " + c)
+    }
+}
+
+local box2
+box2 = new TestBox()
+box2.setup()
+
+print("About to call 3-arg method on Box with MapBox...")
+box2.threeArgMethod("arg1", "arg2", "arg3")
+
+print("All direct MapBox tests completed!")

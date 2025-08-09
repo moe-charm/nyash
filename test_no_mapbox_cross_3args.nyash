@@ -1,0 +1,47 @@
+// MapBoxなしCross-Box 3引数テスト
+
+print("=== No MapBox Cross-Box 3-Args Test ===")
+
+box BoxA {
+    init { nodeId }
+    
+    setup() {
+        print("BoxA setup start")
+        me.nodeId = "NodeA"  // MapBoxなし
+        print("BoxA setup complete (no MapBox)")
+    }
+    
+    callOther(other) {
+        print("BoxA calling other with 3 args (no MapBox)...")
+        other.receive("message", "data", me.nodeId)  // 3引数 + フィールドアクセス
+    }
+}
+
+box BoxB {
+    init { result }
+    
+    setup() {
+        print("BoxB setup start")
+        me.result = "initialized"  // MapBoxなし
+        print("BoxB setup complete (no MapBox)")
+    }
+    
+    receive(type, data, from) {
+        print("BoxB received: " + from + " -> " + type + " = " + data)
+    }
+}
+
+print("Creating BoxA (no MapBox)...")
+local boxA
+boxA = new BoxA()
+boxA.setup()
+
+print("Creating BoxB (no MapBox)...")
+local boxB
+boxB = new BoxB()
+boxB.setup()
+
+print("Testing 3-arg cross-box call (no MapBox)...")
+boxA.callOther(boxB)
+
+print("No MapBox cross-box 3-arg test completed!")

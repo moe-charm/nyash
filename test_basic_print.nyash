@@ -1,0 +1,5 @@
+// 最も基本的なテスト
+
+print("Hello!")
+print("1 + 1 = " + (1 + 1))
+print("Done!")

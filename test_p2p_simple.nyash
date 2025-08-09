@@ -1,0 +1,25 @@
+// P2PBox/IntentBoxの最もシンプルなテスト
+
+// 1. 共通のIntentBoxを作成
+local bus
+bus = new IntentBox()
+
+// 2. 2つのP2PBoxを作成（同じIntentBoxを共有）
+local node_a
+node_a = new P2PBox("node-a", bus)
+
+local node_b
+node_b = new P2PBox("node-b", bus)
+
+// 3. node_bでメッセージを受信する準備
+node_b.on("hello", |data, from| {
+    print("node_b received: " + data + " from " + from)
+})
+
+// 4. node_aからメッセージを送信
+node_a.send("hello", "Hello from A!", "node-b")
+
+// 5. ブロードキャスト（全員に送信）
+node_a.send("broadcast", "Hello everyone!")
+
+print("Test completed!")

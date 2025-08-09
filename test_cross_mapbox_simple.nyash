@@ -1,0 +1,48 @@
+// より簡単なクロスMapBoxテスト
+
+print("=== Simple Cross MapBox Test ===")
+
+// まず2つのBoxを作るが、MapBoxは1つずつ
+box BoxA {
+    init { data }
+    
+    setup() {
+        print("BoxA setup start")
+        me.data = new MapBox()
+        print("BoxA setup complete with MapBox")
+    }
+    
+    callOther(other, message) {
+        print("BoxA calling other with: " + message)
+        other.receive(message)
+    }
+}
+
+box BoxB {
+    init { otherBox }
+    
+    setup(otherRef) {
+        print("BoxB setup start")
+        me.otherBox = otherRef
+        print("BoxB setup complete")
+    }
+    
+    receive(message) {
+        print("BoxB received: " + message)
+    }
+}
+
+print("Creating BoxA with MapBox...")
+local boxA
+boxA = new BoxA()
+boxA.setup()
+
+print("Creating BoxB without MapBox...")
+local boxB
+boxB = new BoxB()
+boxB.setup(boxA)
+
+print("Testing cross-box call (2 args)...")
+boxA.callOther(boxB, "Hello")
+
+print("Simple cross-MapBox test completed!")

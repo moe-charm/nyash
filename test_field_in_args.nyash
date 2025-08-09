@@ -1,0 +1,68 @@
+// フィールドを引数に含む3引数呼び出しテスト
+
+print("=== Field In Args Test ===")
+
+box TargetBox {
+    init { name }
+    
+    process3(a, b, c) {
+        print("process3: " + a + ", " + b + ", " + c)
+    }
+}
+
+box CallerBox {
+    init { target, field1, field2, field3 }
+    
+    setup(targetRef) {
+        me.target = targetRef
+        me.field1 = "field_value_1"
+        me.field2 = "field_value_2" 
+        me.field3 = "field_value_3"
+        print("CallerBox setup completed")
+    }
+    
+    test1_AllLiterals() {
+        print("Test 1: All literals...")
+        me.target.process3("lit1", "lit2", "lit3")
+        print("Test 1 completed")
+    }
+    
+    test2_OneField() {
+        print("Test 2: One field (3rd position)...")
+        me.target.process3("lit1", "lit2", me.field3)
+        print("Test 2 completed")
+    }
+    
+    test3_TwoFields() {
+        print("Test 3: Two fields...")
+        me.target.process3("lit1", me.field2, me.field3)
+        print("Test 3 completed")
+    }
+    
+    test4_ThreeFields() {
+        print("Test 4: All fields...")
+        me.target.process3(me.field1, me.field2, me.field3)
+        print("Test 4 completed")
+    }
+}
+
+// テスト実行
+print("Creating boxes...")
+local target
+target = new TargetBox()
+
+local caller
+caller = new CallerBox()
+caller.setup(target)
+
+print("Starting tests...")
+
+caller.test1_AllLiterals()
+caller.test2_OneField()
+
+print("If you see this, one field worked!")
+
+caller.test3_TwoFields()
+caller.test4_ThreeFields()
+
+print("All field tests completed!")

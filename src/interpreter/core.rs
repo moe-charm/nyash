@@ -13,6 +13,20 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use super::{ControlFlow, BoxDeclaration, ConstructorContext, StaticBoxDefinition, StaticBoxState};
+use std::fs::OpenOptions;
+use std::io::Write;
+
+// ファイルロガー（expressions.rsと同じ）
+fn debug_log(msg: &str) {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/mnt/c/git/nyash/development/debug_hang_issue/debug_trace.log") 
+    {
+        let _ = writeln!(file, "{}", msg);
+        let _ = file.flush();
+    }
+}
 
 /// 実行時エラー
 #[derive(Error, Debug)]
@@ -188,6 +202,9 @@ pub struct NyashInterpreter {
     
     /// 現在実行中のコンストラクタ情報
     pub(super) current_constructor_context: Option<ConstructorContext>,
+    
+    /// 🔄 評価スタック - 循環参照検出用
+    pub(super) evaluation_stack: Vec<usize>,
 }
 
 impl NyashInterpreter {
@@ -201,6 +218,7 @@ impl NyashInterpreter {
             outbox_vars: HashMap::new(),
             control_flow: ControlFlow::None,
             current_constructor_context: None,
+            evaluation_stack: Vec::new(),
         }
     }
     
@@ -212,22 +230,32 @@ impl NyashInterpreter {
             outbox_vars: HashMap::new(),
             control_flow: ControlFlow::None,
             current_constructor_context: None,
+            evaluation_stack: Vec::new(),
         }
     }
     
     /// ASTを実行
     pub fn execute(&mut self, ast: ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        self.execute_node(&ast)
+        debug_log("=== NYASH EXECUTION START ===");
+        eprintln!("🔍 DEBUG: Starting interpreter execution...");
+        let result = self.execute_node(&ast);
+        debug_log("=== NYASH EXECUTION END ===");
+        eprintln!("🔍 DEBUG: Interpreter execution completed");
+        result
     }
     
     /// ノードを実行
     fn execute_node(&mut self, node: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        eprintln!("🔍 DEBUG: execute_node called with node type: {}", node.node_type());
         match node {
             ASTNode::Program { statements, .. } => {
+                eprintln!("🔍 DEBUG: Executing program with {} statements", statements.len());
                 let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
                 
-                for statement in statements {
+                for (i, statement) in statements.iter().enumerate() {
+                    eprintln!("🔍 DEBUG: Executing statement {} of {}: {}", i + 1, statements.len(), statement.node_type());
                     result = self.execute_statement(statement)?;
+                    eprintln!("🔍 DEBUG: Statement {} completed", i + 1);
                     
                     // 制御フローチェック
                     match &self.control_flow {
@@ -290,23 +318,33 @@ impl NyashInterpreter {
     
     /// 革命的変数解決: local変数 → GlobalBoxフィールド → エラー
     pub(super) fn resolve_variable(&self, name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        let log_msg = format!("resolve_variable: name='{}', local_vars={:?}", 
+                             name, self.local_vars.keys().collect::<Vec<_>>());
+        debug_log(&log_msg);
+        eprintln!("🔍 DEBUG: {}", log_msg);
+        
         // 1. outbox変数を最初にチェック（static関数内で優先）
         if let Some(outbox_value) = self.outbox_vars.get(name) {
+            eprintln!("🔍 DEBUG: Found '{}' in outbox_vars", name);
             return Ok(outbox_value.clone_box());
         }
         
         // 2. local変数をチェック
         if let Some(local_value) = self.local_vars.get(name) {
+            eprintln!("🔍 DEBUG: Found '{}' in local_vars", name);
             return Ok(local_value.clone_box());
         }
         
         // 3. GlobalBoxのフィールドをチェック
+        eprintln!("🔍 DEBUG: Checking GlobalBox for '{}'...", name);
         let global_box = self.shared.global_box.lock().unwrap();
         if let Some(field_value) = global_box.get_field(name) {
+            eprintln!("🔍 DEBUG: Found '{}' in GlobalBox", name);
             return Ok(field_value);
         }
         
         // 4. エラー：見つからない
+        eprintln!("🔍 DEBUG: '{}' not found anywhere!", name);
         Err(RuntimeError::UndefinedVariable {
             name: name.to_string(),
         })

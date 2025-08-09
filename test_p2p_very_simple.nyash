@@ -1,0 +1,22 @@
+// 超シンプルなP2PBoxテスト
+
+// 1. IntentBoxを作る（メッセージバス）
+local bus
+bus = new IntentBox()
+
+// 2. P2PBoxを2つ作る（同じIntentBoxを共有）
+local alice
+alice = new P2PBox("alice", bus)
+
+local bob
+bob = new P2PBox("bob", bus)
+
+// 3. bobが受信準備
+bob.on("hello", |data| {
+    print("Bob received: " + data)
+})
+
+// 4. aliceがメッセージ送信
+alice.send("hello", "Hi Bob!")
+
+print("Done!")

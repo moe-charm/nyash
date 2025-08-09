@@ -70,7 +70,8 @@ impl NyashParser {
         let tokens = tokenizer.tokenize()?;
         
         let mut parser = Self::new(tokens);
-        parser.parse()
+        let result = parser.parse();
+        result
     }
     
     /// パース実行 - Program ASTを返す
@@ -83,8 +84,10 @@ impl NyashParser {
     /// プログラム全体をパース
     fn parse_program(&mut self) -> Result<ASTNode, ParseError> {
         let mut statements = Vec::new();
+        let mut statement_count = 0;
         
         while !self.is_at_end() {
+            
             // EOF tokenはスキップ
             if matches!(self.current_token().token_type, TokenType::EOF) {
                 break;
@@ -98,7 +101,9 @@ impl NyashParser {
             
             let statement = self.parse_statement()?;
             statements.push(statement);
+            statement_count += 1;
         }
+        
         
         // 🔥 すべてのstatic box解析後に循環依存検出
         self.check_circular_dependencies()?;
@@ -310,13 +315,23 @@ impl NyashParser {
                         
                         let mut params = Vec::new();
                         while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                            
                             if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
                                 params.push(param.clone());
                                 self.advance();
-                            }
-                            
-                            if self.match_token(&TokenType::COMMA) {
-                                self.advance();
+                                
+                                if self.match_token(&TokenType::COMMA) {
+                                    self.advance();
+                                    // カンマの後に閉じ括弧があるかチェック（trailing comma）
+                                }
+                            } else if !self.match_token(&TokenType::RPAREN) {
+                                // IDENTIFIERでもRPARENでもない場合はエラー
+                                let line = self.current_token().line;
+                                return Err(ParseError::UnexpectedToken {
+                                    found: self.current_token().token_type.clone(),
+                                    expected: "parameter name or ')'".to_string(),
+                                    line,
+                                });
                             }
                         }
                         
@@ -914,6 +929,7 @@ impl NyashParser {
     
     /// 代入文または関数呼び出しをパース
     fn parse_assignment_or_function_call(&mut self) -> Result<ASTNode, ParseError> {
+        
         // まず左辺を式としてパース
         let expr = self.parse_expression()?;
         
@@ -965,13 +981,18 @@ impl NyashParser {
     
     /// NEWLINEトークンをスキップ
     fn skip_newlines(&mut self) {
+        let mut skip_count = 0;
         while matches!(self.current_token().token_type, TokenType::NEWLINE) && !self.is_at_end() {
             self.advance();
+            skip_count += 1;
+        }
+        if skip_count > 0 {
         }
     }
     
     /// 指定されたトークンタイプを消費 (期待通りでなければエラー)
     fn consume(&mut self, expected: TokenType) -> Result<Token, ParseError> {
+        
         if std::mem::discriminant(&self.current_token().token_type) == 
            std::mem::discriminant(&expected) {
             let token = self.current_token().clone();

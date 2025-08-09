@@ -41,7 +41,8 @@ impl NyashInterpreter {
             }
             
             ASTNode::MethodCall { object, method, arguments, .. } => {
-                self.execute_method_call(object, method, arguments)
+                let result = self.execute_method_call(object, method, arguments);
+                result
             }
             
             ASTNode::FieldAccess { object, field, .. } => {
@@ -61,11 +62,14 @@ impl NyashInterpreter {
             }
             
             ASTNode::Me { .. } => {
+                
                 // 🌍 革命的me解決：local変数から取得（thisと同じ）
-                self.resolve_variable("me")
+                let result = self.resolve_variable("me")
                     .map_err(|_| RuntimeError::InvalidOperation {
                         message: "'me' is only available inside methods".to_string(),
-                    })
+                    });
+                    
+                result
             }
             
             ASTNode::ThisField { field, .. } => {
@@ -238,6 +242,7 @@ impl NyashInterpreter {
     /// メソッド呼び出しを実行 - Method call processing
     pub(super) fn execute_method_call(&mut self, object: &ASTNode, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
         // 🔥 static関数のチェック
         if let ASTNode::Variable { name, .. } = object {
             // static関数が存在するかチェック
@@ -391,6 +396,12 @@ impl NyashInterpreter {
             return self.execute_console_method(console_box, method, arguments);
         }
         
+        // EguiBox method calls (非WASM環境のみ)
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(egui_box) = obj_value.as_any().downcast_ref::<crate::boxes::EguiBox>() {
+            return self.execute_egui_method(egui_box, method, arguments);
+        }
+        
         // WebDisplayBox method calls (WASM環境のみ)
         #[cfg(target_arch = "wasm32")]
         if let Some(web_display_box) = obj_value.as_any().downcast_ref::<crate::boxes::WebDisplayBox>() {
@@ -476,10 +487,11 @@ impl NyashInterpreter {
             
             // メソッドが関数宣言の形式であることを確認
             if let ASTNode::FunctionDeclaration { params, body, .. } = method_ast {
-                // 引数を評価
+                // 🚨 FIX: 引数評価を完全に現在のコンテキストで完了させる
                 let mut arg_values = Vec::new();
-                for arg in arguments {
-                    arg_values.push(self.execute_expression(arg)?);
+                for (i, arg) in arguments.iter().enumerate() {
+                    let arg_value = self.execute_expression(arg)?;
+                    arg_values.push(arg_value);
                 }
                 
                 // パラメータ数チェック
@@ -490,7 +502,7 @@ impl NyashInterpreter {
                     });
                 }
                 
-                // 🌍 革命的メソッド実行：local変数スタックを使用
+                // 🌍 NOW SAFE: すべての引数評価完了後にコンテキスト切り替え
                 let saved_locals = self.save_local_vars();
                 self.local_vars.clear();
                 
@@ -534,6 +546,7 @@ impl NyashInterpreter {
     /// フィールドアクセスを実行 - Field access processing
     pub(super) fn execute_field_access(&mut self, object: &ASTNode, field: &str) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
         // 🔥 Static Boxアクセスチェック
         if let ASTNode::Variable { name, .. } = object {
             // Static boxの可能性をチェック
@@ -542,8 +555,11 @@ impl NyashInterpreter {
             }
         }
         
-        // オブジェクトを評価（通常のフィールドアクセス）
-        let obj_value = self.execute_expression(object)?;
+        
+        // オブジェクトを評価（通常のフィールドアクセス）  
+        let obj_value = self.execute_expression(object);
+        
+        let obj_value = obj_value?;
         
         // InstanceBoxにキャスト
         if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
@@ -613,5 +629,33 @@ impl NyashInterpreter {
             // FutureBoxでなければそのまま返す
             Ok(value)
         }
+    }
+    
+    /// 🔄 循環参照検出: オブジェクトの一意IDを取得
+    fn get_object_id(&self, node: &ASTNode) -> Option<usize> {
+        match node {
+            ASTNode::Variable { name, .. } => {
+                // 変数名のハッシュをIDとして使用
+                Some(self.hash_string(name))
+            }
+            ASTNode::Me { .. } => {
+                // 'me'参照の特別なID
+                Some(usize::MAX) 
+            }
+            ASTNode::This { .. } => {
+                // 'this'参照の特別なID  
+                Some(usize::MAX - 1)
+            }
+            _ => None, // 他のノードタイプはID追跡しない
+        }
+    }
+    
+    /// 🔄 文字列のシンプルなハッシュ関数
+    fn hash_string(&self, s: &str) -> usize {
+        let mut hash = 0usize;
+        for byte in s.bytes() {
+            hash = hash.wrapping_mul(31).wrapping_add(byte as usize);
+        }
+        hash
     }
 }

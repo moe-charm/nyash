@@ -1,0 +1,16 @@
+// EguiBox基本動作テスト
+// 「なんでもBoxにできる」化け物言語の実証！
+
+// シンプルなGUIアプリケーション作成
+local app
+app = new EguiBox()
+
+// タイトル設定
+app.setTitle("Nyash GUI - Everything is Box!")
+
+// ウィンドウサイズ設定
+app.setSize(400, 300)
+
+// 実行（現在はエラーになる予定）
+print("Starting GUI application...")
+app.run()
