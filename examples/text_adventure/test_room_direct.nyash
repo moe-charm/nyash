@@ -1,0 +1,29 @@
+// Test Room class directly
+include "text_adventure/simple_rooms.nyash"
+
+print("Creating a room...")
+room = new Room("Test Room", "A simple test room")
+
+print("Room created successfully!")
+print("Name: " + room.name)
+print("Description: " + room.description)
+
+print("\nTesting visited field...")
+if room.visited {
+    print("Room has been visited")
+} else {
+    print("Room has not been visited")
+}
+
+print("\nCalling look()...")
+result = room.look()
+print(result)
+
+print("\nChecking visited after look()...")
+if room.visited {
+    print("Room has been visited")
+} else {
+    print("Room has not been visited")
+}
+
+print("\n✅ Room test completed!")

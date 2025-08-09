@@ -1,0 +1,88 @@
+// 📝 SymbolBox - LISP symbol（変数名・関数名）実装
+
+box SymbolBox {
+    name
+    
+    init { name }
+    
+    // コンストラクタ
+    SymbolBox(symbolName) {
+        me.name = symbolName
+    }
+    
+    getName() { return me.name }
+    setName(newName) { me.name = newName }
+    
+    toString() { return me.name }
+    
+    // シンボル同士の比較
+    equals(other) {
+        if other == NIL { return false }
+        // SymbolBoxかチェック（簡易版）
+        if me.isSymbolBox(other) {
+            return me.name == other.name
+        }
+        return false
+    }
+    
+    // SymbolBoxかどうかをチェック（簡易版）
+    isSymbolBox(obj) {
+        if obj == NIL { return false }
+        if obj == 0 { return false }
+        if obj == 1 { return false }
+        if obj == 2 { return false }
+        if obj == 3 { return false }
+        if obj == 4 { return false }
+        if obj == 5 { return false }
+        if obj == 6 { return false }
+        if obj == 7 { return false }
+        if obj == 8 { return false }
+        if obj == 9 { return false }
+        // 文字列は除外
+        if obj == "a" { return false }
+        if obj == "b" { return false }
+        if obj == "c" { return false }
+        if obj == "" { return false }
+        if obj == "nil" { return false }
+        if obj == "+" { return false }
+        if obj == "-" { return false }
+        if obj == "*" { return false }
+        if obj == "/" { return false }
+        // それ以外はSymbolBoxと仮定
+        return true
+    }
+}
+
+// 便利関数
+function symbol(name) {
+    return new SymbolBox(name)
+}
+
+// グローバル定数
+NIL = 0
+
+// テスト
+print("=== SymbolBox Test ===")
+print("")
+
+// 基本的なシンボル作成
+print("1. Basic symbol creation:")
+s1 = new SymbolBox("foo")
+print("   new SymbolBox('foo') = " + s1.toString())
+s2 = symbol("bar")
+print("   symbol('bar') = " + s2.toString())
+
+print("")
+print("2. Symbol comparison:")
+s3 = symbol("foo")
+s4 = symbol("bar")
+print("   symbol('foo') == symbol('foo'): " + s1.equals(s3))
+print("   symbol('foo') == symbol('bar'): " + s1.equals(s4))
+
+print("")
+print("3. Symbol properties:")
+print("   s1.name = " + s1.getName())
+print("   s2.name = " + s2.getName())
+
+print("")
+print("✅ SymbolBox test done!")

@@ -1,0 +1,24 @@
+// 最小限のConsBoxテスト
+
+box ConsBox {
+    car
+    cdr
+    
+    init {
+        car, cdr
+    }
+}
+
+// 空のConsBoxを作成
+print("Creating empty ConsBox...")
+cons1 = new ConsBox()
+print("Created!")
+
+// フィールドに値を設定
+cons1.car = 42
+cons1.cdr = "hello"
+
+print("car: " + cons1.car)
+print("cdr: " + cons1.cdr)
+
+print("✅ Test completed!")

@@ -1,0 +1,52 @@
+// ⚡ 非同期処理デモ - ローカルテスト
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("⚡ 非同期処理デモ開始！")
+        me.console.log("==================")
+        
+        me.console.log("🚀 重い計算タスクを並行で開始...")
+        
+        // ローカル変数宣言
+        local future1, future2, result1, result2
+        
+        // 非同期タスク開始
+        nowait future1 = heavyComputation(5000)
+        nowait future2 = heavyComputation(3000)
+        
+        me.console.log("⏳ 非同期実行中... 他の処理ができます")
+        me.console.log("✨ これが非同期の威力！")
+        me.console.log("🔄 両方の計算が並行実行されています")
+        
+        // 結果を待機して取得
+        me.console.log("📥 結果1を待機中...")
+        result1 = await future1
+        
+        me.console.log("📥 結果2を待機中...")
+        result2 = await future2
+        
+        me.console.log("==================")
+        me.console.log("🎉 結果1: " + result1)
+        me.console.log("🎉 結果2: " + result2)
+        me.console.log("⚡ 非同期処理完了！")
+        
+        return "非同期デモ成功！"
+    }
+}
+
+// 重い計算処理をシミュレートする関数
+function heavyComputation(iterations) {
+    local result, i
+    result = 0
+    i = 0
+    
+    loop(i < iterations) {
+        result = result + i * i
+        i = i + 1
+    }
+    
+    return result
+}

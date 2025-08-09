@@ -1,0 +1,216 @@
+// Text Adventure Game - Player Module
+// プレイヤーシステムの実装
+
+include "text_adventure/simple_rooms.nyash"
+
+// プレイヤーBox
+box Player {
+    init { name, health, currentRoom, inventory1, inventory2, inventory3, inventoryCount }
+    
+    Player(name, startRoom) {
+        me.name = name
+        me.health = 100
+        me.currentRoom = startRoom
+        me.inventory1 = false
+        me.inventory2 = false  
+        me.inventory3 = false
+        me.inventoryCount = 0
+    }
+    
+    // プレイヤーの状態表示
+    status() {
+        result = "=== Player Status ===\n"
+        result = result + "Name: " + me.name + "\n"
+        result = result + "Health: " + me.health + "\n"
+        result = result + "Location: " + me.currentRoom.getName() + "\n"
+        
+        if me.inventoryCount > 0 {
+            result = result + "\nInventory:\n"
+            
+            if me.inventory1 {
+                itemDisplay = me.inventory1.display()
+                result = result + "- " + itemDisplay + "\n"
+            }
+            if me.inventory2 {
+                itemDisplay = me.inventory2.display()
+                result = result + "- " + itemDisplay + "\n"
+            }
+            if me.inventory3 {
+                itemDisplay = me.inventory3.display()
+                result = result + "- " + itemDisplay + "\n"
+            }
+        } else {
+            result = result + "\nInventory: Empty\n"
+        }
+        
+        return result
+    }
+    
+    // 現在の部屋を見る
+    look() {
+        return me.currentRoom.look()
+    }
+    
+    // アイテムを拾う
+    take(itemName) {
+        if me.inventoryCount >= 3 {
+            return "Inventory is full! Cannot take more items."
+        }
+        
+        if me.currentRoom.hasItem(itemName) {
+            item = me.currentRoom.takeItem(itemName)
+            if item {
+                // インベントリに追加
+                if me.inventoryCount == 0 {
+                    me.inventory1 = item
+                    me.inventoryCount = 1
+                } else {
+                    if me.inventoryCount == 1 {
+                        me.inventory2 = item
+                        me.inventoryCount = 2
+                    } else {
+                        if me.inventoryCount == 2 {
+                            me.inventory3 = item
+                            me.inventoryCount = 3
+                        }
+                    }
+                }
+                itemName = item.name
+                return "Picked up: " + itemName
+            } else {
+                return "Failed to take item."
+            }
+        } else {
+            return "Item not found in this room."
+        }
+    }
+    
+    // アイテムを使用
+    use(itemName) {
+        target = false
+        slot = 0
+        
+        // インベントリ内でアイテムを検索
+        if me.inventory1 {
+            if me.inventory1.name == itemName {
+                target = me.inventory1
+                slot = 1
+            }
+        }
+        
+        if me.inventory2 {
+            if me.inventory2.name == itemName {
+                target = me.inventory2
+                slot = 2
+            }
+        }
+        
+        if me.inventory3 {
+            if me.inventory3.name == itemName {
+                target = me.inventory3
+                slot = 3
+            }
+        }
+        
+        if target {
+            // アイテムタイプに応じた処理
+            if target.damage {
+                // 武器の場合
+                damage = target.use()
+                if damage > 0 {
+                    return "Used weapon and dealt " + damage + " damage!"
+                } else {
+                    return "Weapon is broken!"
+                }
+            } else {
+                if target.effect {
+                    // 消費アイテムの場合
+                    effect = target.use()
+                    if effect > 0 {
+                        me.health = me.health + effect
+                        if me.health > 100 {
+                            me.health = 100
+                        }
+                        
+                        // 使い切った場合は削除
+                        if target.uses <= 0 {
+                            if slot == 1 {
+                                me.inventory1 = false
+                            } else {
+                                if slot == 2 {
+                                    me.inventory2 = false
+                                } else {
+                                    if slot == 3 {
+                                        me.inventory3 = false
+                                    }
+                                }
+                            }
+                            me.inventoryCount = me.inventoryCount - 1
+                            return "Used " + itemName + " and restored " + effect + " health. Item consumed."
+                        } else {
+                            return "Used " + itemName + " and restored " + effect + " health."
+                        }
+                    } else {
+                        return "Item is empty!"
+                    }
+                } else {
+                    // その他のアイテム
+                    return "Used " + itemName + "."
+                }
+            }
+        } else {
+            return "You don't have that item."
+        }
+    }
+    
+    // インベントリの表示
+    inventory() {
+        if me.inventoryCount == 0 {
+            return "Inventory is empty."
+        }
+        
+        result = "Inventory:\n"
+        
+        if me.inventory1 {
+            itemDisplay = me.inventory1.display()
+            result = result + "1. " + itemDisplay + "\n"
+        }
+        if me.inventory2 {
+            itemDisplay = me.inventory2.display()
+            result = result + "2. " + itemDisplay + "\n"
+        }
+        if me.inventory3 {
+            itemDisplay = me.inventory3.display()
+            result = result + "3. " + itemDisplay + "\n"
+        }
+        
+        return result
+    }
+    
+    // ヘルプ表示
+    help() {
+        result = "=== Available Commands ===\n"
+        result = result + "look - Look around the current room\n"
+        result = result + "take <item> - Pick up an item\n"
+        result = result + "use <item> - Use an item from inventory\n"
+        result = result + "inventory - Show your inventory\n"
+        result = result + "status - Show player status\n"
+        result = result + "help - Show this help\n"
+        return result
+    }
+}
+
+// ゲーム初期化関数
+function startGame(playerName) {
+    world = createSimpleWorld()
+    player = new Player(playerName, world)
+    
+    print("🎮 Welcome to the Text Adventure Game!")
+    print("Player: " + playerName)
+    print("")
+    print(player.look())
+    
+    return player
+}
+
+print("🎮 Player module loaded successfully!")

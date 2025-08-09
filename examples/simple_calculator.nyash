@@ -1,0 +1,203 @@
+// 🧮 シンプルNyash計算機 - Everything is Box実証
+
+print("🧮 === Simple Nyash Calculator ===")
+
+// デバッグ機能
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 🎯 式評価Box - シンプル版
+box SimpleCalculator {
+    init { name, operations }
+    
+    SimpleCalculator() {
+        me.name = "Nyash Simple Calculator"
+        me.operations = new ArrayBox()
+    }
+    
+    // 加算
+    add(a, b) {
+        result = a + b
+        operation = "add(" + a + ", " + b + ") = " + result
+        me.operations.push(operation)
+        print("➕ " + operation)
+        return result
+    }
+    
+    // 減算  
+    subtract(a, b) {
+        result = a - b
+        operation = "subtract(" + a + ", " + b + ") = " + result
+        me.operations.push(operation)
+        print("➖ " + operation)
+        return result
+    }
+    
+    // 乗算
+    multiply(a, b) {
+        result = a * b
+        operation = "multiply(" + a + ", " + b + ") = " + result
+        me.operations.push(operation)
+        print("✖️ " + operation)
+        return result
+    }
+    
+    // 複合演算
+    complex(a, b, c) {
+        print("🔄 Complex operation: a + b * c where a=" + a + ", b=" + b + ", c=" + c)
+        
+        // 演算子優先度を考慮: b * c を先に計算
+        step1 = me.multiply(b, c)
+        result = me.add(a, step1)
+        
+        print("📊 Final result: " + result)
+        return result
+    }
+    
+    // 履歴表示
+    showHistory() {
+        print("📚 Operation History:")
+        i = 0
+        loop(i < me.operations.length()) {
+            print("  " + (i + 1) + ": " + me.operations.get(i))
+            i = i + 1
+        }
+    }
+}
+
+// 🎯 数値ペアBox - ジェネリクス活用
+box NumberPair<T> {
+    init { first, second }
+    
+    NumberPair(a, b) {
+        me.first = a
+        me.second = b
+    }
+    
+    sum() {
+        return me.first + me.second
+    }
+    
+    product() {
+        return me.first * me.second
+    }
+    
+    toString() {
+        return "Pair(" + me.first + ", " + me.second + ")"
+    }
+}
+
+// 📦 汎用コンテナBox - ジェネリクス実装
+box Container<T> {
+    init { value }
+    
+    Container(initialValue) {
+        me.value = initialValue
+    }
+    
+    setValue(newValue) {
+        me.value = newValue
+    }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+// 🧮 高度計算Box
+box AdvancedCalculator {
+    init { pairs, results }
+    
+    AdvancedCalculator() {
+        me.pairs = new ArrayBox()
+        me.results = new Container<IntegerBox>(0)
+    }
+    
+    // ペア追加
+    addPair(a, b) {
+        pair = new NumberPair<IntegerBox>(a, b)
+        me.pairs.push(pair)
+        DEBUG.trackBox(pair, "pair_" + me.pairs.length())
+        print("📦 Added pair: " + pair.toString())
+        return pair
+    }
+    
+    // 全ペアの合計計算
+    calculateAllSums() {
+        print("🔢 Calculating sums for all pairs:")
+        totalSum = 0
+        
+        i = 0
+        loop(i < me.pairs.length()) {
+            pair = me.pairs.get(i)
+            pairSum = pair.sum()
+            totalSum = totalSum + pairSum
+            print("  " + pair.toString() + " sum = " + pairSum)
+            i = i + 1
+        }
+        
+        me.results.setValue(totalSum)
+        print("🎯 Total sum: " + totalSum)
+        return totalSum
+    }
+    
+    // 全ペアの積計算
+    calculateAllProducts() {
+        print("✖️ Calculating products for all pairs:")
+        totalProduct = 1
+        
+        i = 0
+        loop(i < me.pairs.length()) {
+            pair = me.pairs.get(i)
+            pairProduct = pair.product()
+            totalProduct = totalProduct * pairProduct
+            print("  " + pair.toString() + " product = " + pairProduct)
+            i = i + 1
+        }
+        
+        print("🎯 Total product: " + totalProduct)
+        return totalProduct
+    }
+}
+
+// 🚀 メイン実行
+print("🎯 Testing Simple Calculator...")
+
+calc = new SimpleCalculator()
+DEBUG.trackBox(calc, "main_calculator")
+
+// 基本演算テスト
+print("\n=== Basic Operations ===")
+calc.add(5, 3)
+calc.subtract(10, 4) 
+calc.multiply(6, 7)
+
+// 複合演算テスト  
+print("\n=== Complex Operations ===")
+calc.complex(2, 3, 4)  // 2 + 3 * 4 = 14
+calc.complex(1, 5, 2)  // 1 + 5 * 2 = 11
+
+// 履歴表示
+print("\n=== History ===")
+calc.showHistory()
+
+// 高度計算器テスト
+print("\n=== Advanced Calculator ===")
+advCalc = new AdvancedCalculator()
+DEBUG.trackBox(advCalc, "advanced_calculator")
+
+// ペア追加
+advCalc.addPair(3, 4)
+advCalc.addPair(5, 6)  
+advCalc.addPair(2, 8)
+
+// 計算実行
+advCalc.calculateAllSums()
+advCalc.calculateAllProducts()
+
+// デバッグ情報
+print("\n📊 === Debug Report ===")
+print(DEBUG.memoryReport())
+
+print("\n🎉 Simple Calculator completed!")
+print("Nyashの Everything is Box 哲学による計算機が完成にゃ！")

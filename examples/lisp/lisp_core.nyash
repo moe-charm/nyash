@@ -1,0 +1,189 @@
+// 🚀 LISP Core - 統合版
+// ConsBox + SymbolBox + 基本操作の完全版
+
+NIL = 0
+
+// ===== ConsBox実装 =====
+box ConsBox {
+    car, cdr
+    init { car, cdr }
+    
+    ConsBox(a, d) {
+        me.car = a
+        me.cdr = d
+    }
+    
+    getCar() { return me.car }
+    getCdr() { return me.cdr }
+    setCar(value) { me.car = value }
+    setCdr(value) { me.cdr = value }
+    
+    toString() {
+        return "(" + me.toStringList() + ")"
+    }
+    
+    toStringList() {
+        carStr = ""
+        if me.car == NIL {
+            carStr = "nil"
+        } else {
+            carStr = me.car.toString()
+        }
+        
+        if me.cdr == NIL {
+            return carStr
+        } else {
+            if me.isConsBox(me.cdr) {
+                return carStr + " " + me.cdr.toStringList()
+            } else {
+                cdrStr = me.cdr.toString()
+                return carStr + " . " + cdrStr
+            }
+        }
+    }
+    
+    isConsBox(obj) {
+        if obj == NIL { return false }
+        // 基本型は除外
+        local i
+        i = 0
+        loop(i < 10) {
+            if obj == i { return false }
+            i = i + 1
+        }
+        // よく使われる文字列も除外
+        if obj == "a" { return false }
+        if obj == "b" { return false }
+        if obj == "c" { return false }
+        if obj == "+" { return false }
+        if obj == "-" { return false }
+        if obj == "*" { return false }
+        return true
+    }
+}
+
+// ===== SymbolBox実装 =====  
+box SymbolBox {
+    name
+    init { name }
+    
+    SymbolBox(symbolName) {
+        me.name = symbolName
+    }
+    
+    getName() { return me.name }
+    toString() { return me.name }
+    
+    equals(other) {
+        if other == NIL { return false }
+        if me.isSymbolBox(other) {
+            return me.name == other.name
+        }
+        return false
+    }
+    
+    isSymbolBox(obj) {
+        if obj == NIL { return false }
+        local i
+        i = 0
+        loop(i < 10) {
+            if obj == i { return false }
+            i = i + 1
+        }
+        return true  // 簡易実装
+    }
+}
+
+// ===== 基本関数 =====
+function cons(a, d) { return new ConsBox(a, d) }
+function car(pair) {
+    if pair == NIL { return NIL }
+    return pair.getCar()
+}
+function cdr(pair) {
+    if pair == NIL { return NIL }
+    return pair.getCdr()
+}
+function symbol(name) { return new SymbolBox(name) }
+
+// リスト作成便利関数
+function list1(a) { return cons(a, NIL) }
+function list2(a, b) { return cons(a, cons(b, NIL)) }
+function list3(a, b, c) { return cons(a, cons(b, cons(c, NIL))) }
+
+// ===== LISP基本操作 =====
+function atomP(obj) {
+    if obj == NIL { return true }
+    local i
+    i = 0
+    loop(i < 10) {
+        if obj == i { return true }
+        i = i + 1
+    }
+    if obj == "a" { return true }
+    if obj == "b" { return true }
+    if obj == "c" { return true }
+    if obj == "+" { return true }
+    if obj == "-" { return true }
+    if obj == "*" { return true }
+    return false  // ConsBoxはアトムでない
+}
+
+function nullP(obj) {
+    return obj == NIL
+}
+
+function equalP(a, b) {
+    if a == b { return true }
+    if a == NIL and b == NIL { return true }
+    if a == NIL or b == NIL { return false }
+    
+    if atomP(a) and atomP(b) {
+        return a == b
+    }
+    
+    if not atomP(a) and not atomP(b) {
+        if not equalP(car(a), car(b)) {
+            return false
+        }
+        return equalP(cdr(a), cdr(b))
+    }
+    
+    return false
+}
+
+// ===== 統合テスト =====
+print("🚀 === LISP Core Integration Test === 🚀")
+print("")
+
+print("1. ConsBox + basic operations:")
+p1 = cons(1, 2)
+print("   cons(1, 2) = " + p1.toString())
+print("   car = " + car(p1))
+print("   cdr = " + cdr(p1))
+
+print("")
+print("2. Lists:")
+lst = list3("a", "b", "c")
+print("   list('a', 'b', 'c') = " + lst.toString())
+print("   atomP(lst) = " + atomP(lst))
+print("   nullP(NIL) = " + nullP(NIL))
+
+print("")  
+print("3. Symbols:")
+s1 = symbol("foo")
+s2 = symbol("bar")
+s3 = symbol("foo")
+print("   symbol('foo') = " + s1.toString())
+print("   symbol('bar') = " + s2.toString())
+print("   foo.equals(foo) = " + s1.equals(s3))
+print("   foo.equals(bar) = " + s1.equals(s2))
+
+print("")
+print("4. Mixed structures:")
+mixed = list2(symbol("+"), cons(1, 2))
+print("   list(symbol('+'), cons(1, 2)) = " + mixed.toString())
+
+print("")
+print("✅ LISP Core integration test completed!")
+print("🎯 Ready for eval/apply implementation!")

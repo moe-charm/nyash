@@ -1,0 +1,215 @@
+// Simple Text Adventure Game
+// Works around the function return bug by using global variables
+
+include "text_adventure/items.nyash"
+
+// Global game state
+global GAME_ROOM = false
+global GAME_PLAYER = false
+
+// Simple Room (without function returns)
+box SimpleRoom {
+    init { name, description, hasPotion, hasSword }
+    
+    SimpleRoom(name, desc) {
+        me.name = name
+        me.description = desc
+        me.hasPotion = true
+        me.hasSword = true
+    }
+    
+    look() {
+        print("=== " + me.name + " ===")
+        print(me.description)
+        print("")
+        
+        if me.hasPotion {
+            print("You see a Health Potion here.")
+        }
+        if me.hasSword {
+            print("You see an Iron Sword here.")
+        }
+    }
+    
+    takePotion() {
+        if me.hasPotion {
+            me.hasPotion = false
+            return "You take the Health Potion."
+        } else {
+            return "There's no potion here."
+        }
+    }
+    
+    takeSword() {
+        if me.hasSword {
+            me.hasSword = false
+            return "You take the Iron Sword."
+        } else {
+            return "There's no sword here."
+        }
+    }
+}
+
+// Simple Player (without complex inventory)
+box SimplePlayer {
+    init { name, health, hasPotion, hasSword, potionUsed }
+    
+    SimplePlayer(name) {
+        me.name = name
+        me.health = 100
+        me.hasPotion = false
+        me.hasSword = false
+        me.potionUsed = false
+    }
+    
+    status() {
+        print("=== " + me.name + " ===")
+        print("Health: " + me.health)
+        
+        if me.hasPotion {
+            print("Inventory: Health Potion")
+        }
+        if me.hasSword {
+            print("Inventory: Iron Sword")
+        }
+        if me.hasPotion == false && me.hasSword == false {
+            print("Inventory: Empty")
+        }
+    }
+    
+    usePotion() {
+        if me.hasPotion && me.potionUsed == false {
+            me.health = 100
+            me.potionUsed = true
+            me.hasPotion = false
+            return "You use the Health Potion and restore your health to 100!"
+        } else {
+            if me.potionUsed {
+                return "You already used the potion."
+            } else {
+                return "You don't have a potion."
+            }
+        }
+    }
+    
+    attack() {
+        if me.hasSword {
+            return "You swing your sword! *SWOOSH*"
+        } else {
+            return "You have no weapon to attack with."
+        }
+    }
+}
+
+// Initialize game (using globals to avoid function returns)
+function initGame(playerName) {
+    GAME_ROOM = new SimpleRoom("Entrance Hall", "A dusty room with stone walls.")
+    GAME_PLAYER = new SimplePlayer(playerName)
+    
+    print("🎮 Welcome to Simple Adventure, " + playerName + "!")
+    print("")
+}
+
+// Game commands
+function look() {
+    if GAME_ROOM {
+        GAME_ROOM.look()
+    }
+}
+
+function status() {
+    if GAME_PLAYER {
+        GAME_PLAYER.status()
+    }
+}
+
+function take(item) {
+    if item == "potion" || item == "health potion" {
+        result = GAME_ROOM.takePotion()
+        if result == "You take the Health Potion." {
+            GAME_PLAYER.hasPotion = true
+        }
+        print(result)
+    } else {
+        if item == "sword" || item == "iron sword" {
+            result = GAME_ROOM.takeSword()
+            if result == "You take the Iron Sword." {
+                GAME_PLAYER.hasSword = true
+            }
+            print(result)
+        } else {
+            print("I don't see that here.")
+        }
+    }
+}
+
+function use(item) {
+    if item == "potion" || item == "health potion" {
+        print(GAME_PLAYER.usePotion())
+    } else {
+        print("You can't use that.")
+    }
+}
+
+function attack() {
+    print(GAME_PLAYER.attack())
+}
+
+function hurt(damage) {
+    GAME_PLAYER.health = GAME_PLAYER.health - damage
+    print("Ouch! You take " + damage + " damage.")
+    if GAME_PLAYER.health <= 0 {
+        print("💀 You have died! Game Over.")
+    }
+}
+
+function help() {
+    print("=== Available Commands ===")
+    print("look - Look around the room")
+    print("status - Check your status")
+    print("take <item> - Take an item")
+    print("use <item> - Use an item")
+    print("attack - Attack with your weapon")
+    print("help - Show this help")
+}
+
+// Test the game
+print("🎮 Simple Adventure Game - Testing...")
+print("")
+
+initGame("Hero")
+print("")
+
+print("--- Testing look command ---")
+look()
+print("")
+
+print("--- Testing status command ---")
+status()
+print("")
+
+print("--- Testing take commands ---")
+take("potion")
+take("sword")
+print("")
+
+print("--- Testing status after taking items ---")
+status()
+print("")
+
+print("--- Testing hurt and heal ---")
+hurt(50)
+status()
+print("")
+use("potion")
+status()
+print("")
+
+print("--- Testing attack ---")
+attack()
+print("")
+
+print("✅ Simple Adventure Game test completed!")
+print("")
+print("This game works around the instance return bug by using global variables.")
+print("All game functionality is working correctly!")

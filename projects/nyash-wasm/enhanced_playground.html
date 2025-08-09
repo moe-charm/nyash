@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Nyash Ultimate Playground - Everything is Box</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Consolas', monospace;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.4);
+        }
+        .subtitle {
+            text-align: center;
+            color: #e3f2fd;
+            margin-bottom: 40px;
+            font-size: 1.3em;
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .demo-card {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .demo-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        
+        .demo-title {
+            color: #ffeb3b;
+            font-size: 1.8em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .demo-description {
+            color: #e8eaf6;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .demo-area {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 300px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #ff6b6b, #ffa726);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+        }
+        
+        .btn.secondary {
+            background: linear-gradient(45deg, #42a5f5, #26c6da);
+        }
+        
+        canvas {
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: white;
+        }
+        
+        .box-visualizer {
+            position: relative;
+            background: #1a237e;
+            border-radius: 10px;
+            overflow: hidden;
+            width: 100%;
+            height: 250px;
+            border: 2px solid #fff;
+            /* デバッグ用 */
+            min-height: 250px;
+            display: block;
+        }
+        
+        .box-visualizer::before {
+            content: "Everything is Box Canvas";
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: rgba(255,255,255,0.5);
+            font-size: 12px;
+            z-index: 1;
+        }
+        
+        .box-element {
+            position: absolute;
+            background: linear-gradient(45deg, #ff4081, #f06292);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.5s ease;
+            cursor: pointer;
+        }
+        
+        .box-element.integer {
+            background: linear-gradient(45deg, #4caf50, #66bb6a);
+        }
+        
+        .box-element.string {
+            background: linear-gradient(45deg, #ff9800, #ffb74d);
+        }
+        
+        .box-element.result {
+            background: linear-gradient(45deg, #e91e63, #ec407a);
+            border: 2px solid #fff;
+        }
+        
+        .code-editor {
+            background: #263238;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+            border: none;
+            width: 100%;
+            min-height: 150px;
+            resize: vertical;
+        }
+        
+        .output-area {
+            background: #000;
+            color: #00ff00;
+            font-family: monospace;
+            padding: 15px;
+            border-radius: 8px;
+            min-height: 100px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .lisp-demo {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .lisp-input, .lisp-output {
+            flex: 1;
+        }
+        
+        .async-timeline {
+            height: 200px;
+            position: relative;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        }
+        
+        .async-event {
+            position: absolute;
+            background: #00bcd4;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            animation: slideRight 3s ease-in-out;
+        }
+        
+        @keyframes slideRight {
+            0% { left: 0; opacity: 0; }
+            50% { opacity: 1; }
+            100% { left: 80%; opacity: 0.7; }
+        }
+        
+        .philosophy-banner {
+            text-align: center;
+            font-size: 2em;
+            color: #ffeb3b;
+            margin: 50px 0;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            background: rgba(255,235,59,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px solid rgba(255,235,59,0.3);
+        }
+        
+        .stats-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        
+        .audio-visualizer {
+            width: 100%;
+            height: 100px;
+            background: #000;
+            border-radius: 8px;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Nyash Ultimate Playground</h1>
+        <div class="subtitle">Everything is Box - 究極のプログラミング哲学を体験せよ</div>
+        
+        <div class="philosophy-banner">
+            🐱 "すべてはBoxである" - 数字も文字も関数も、みんなBox！ 🎨
+        </div>
+        
+        <!-- 統計パネル -->
+        <div class="stats-panel" id="global-stats">
+            Total Boxes: 0<br>
+            Active Animations: 0<br>
+            Everything is Box!
+        </div>
+        
+        <div class="demo-grid">
+            <!-- Everything is Box ビジュアライザー -->
+            <div class="demo-card">
+                <div class="demo-title">
+                    🎨 Everything is Box Visualizer
+                </div>
+                <div class="demo-description">
+                    Nyashコードの実行過程を視覚化！IntegerBox、StringBox等がリアルタイムでやりとりする様子を見よう。
+                </div>
+                
+                <div class="demo-area">
+                    <div class="box-visualizer" id="box-canvas"></div>
+                </div>
+                
+                <div>
+                    <button class="btn" onclick="demoBasicMath()">🔢 基本計算</button>
+                    <button class="btn" onclick="demoStringConcat()">📝 文字結合</button>
+                    <button class="btn" onclick="demoComplexOp()">⚡ 複雑演算</button>
+                    <button class="btn secondary" onclick="clearBoxes()">🧹 クリア</button>
+                </div>
+            </div>
+            
+            <!-- ライブサウンドジェネレーター -->
+            <div class="demo-card">
+                <div class="demo-title">
+                    🎵 Live Sound Generator
+                </div>
+                <div class="demo-description">
+                    SoundBoxで音楽を生成！コードを変更すると即座に音が変化する驚きの体験。
+                </div>
+                
+                <div class="demo-area">
+                    <textarea class="code-editor" id="sound-code" placeholder="// Nyash音楽コード例
+Sound.play(440, 'sine')
+Sound.chord([440, 554, 659], 'triangle')
+Sound.sequence([220, 440, 880], 0.5)">// SoundBox デモ
+freq = 440
+Sound.play(freq, "sine")
+Sound.delay(1000)
+Sound.play(freq * 1.5, "triangle")</textarea>
+                    
+                    <canvas class="audio-visualizer" id="audio-canvas" width="400" height="100"></canvas>
+                </div>
+                
+                <div>
+                    <button class="btn" onclick="playSound()">🎵 演奏開始</button>
+                    <button class="btn" onclick="stopSound()">⏹️ 停止</button>
+                    <button class="btn secondary" onclick="loadMelody()">🎼 メロディ例</button>
+                </div>
+            </div>
+            
+            <!-- 非同期デモ -->
+            <div class="demo-card">
+                <div class="demo-title">
+                    ⚡ Async Box Communication
+                </div>
+                <div class="demo-description">
+                    ChannelBoxによる非同期通信！複数のBoxが並行して動作し、メッセージをやりとりする様子を観察。
+                </div>
+                
+                <div class="demo-area">
+                    <div class="async-timeline" id="async-timeline"></div>
+                    <div class="output-area" id="async-output">非同期処理の結果がここに表示されます...</div>
+                </div>
+                
+                <div>
+                    <button class="btn" onclick="demoBasicAsync()">📤 基本通信</button>
+                    <button class="btn" onclick="demoParallelAsync()">🔄 並列処理</button>
+                    <button class="btn" onclick="demoPipeline()">⚡ パイプライン</button>
+                </div>
+            </div>
+            
+            <!-- Lispインタープリター -->
+            <div class="demo-card">
+                <div class="demo-title">
+                    🧠 Live Lisp Interpreter
+                </div>
+                <div class="demo-description">
+                    NyashのLispインタープリターがリアルタイムで動作！S式の評価過程を視覚的に追跡。
+                </div>
+                
+                <div class="demo-area">
+                    <div class="lisp-demo">
+                        <div class="lisp-input">
+                            <textarea class="code-editor" id="lisp-code" placeholder="Lisp式を入力...">(+ 1 2 3)
+(* 4 5)
+(define square (lambda (x) (* x x)))
+(square 7)</textarea>
+                        </div>
+                        
+                        <div class="lisp-output">
+                            <div class="output-area" id="lisp-output">結果がここに表示されます...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <button class="btn" onclick="evalLisp()">🚀 実行</button>
+                    <button class="btn" onclick="stepEval()">👣 ステップ実行</button>
+                    <button class="btn secondary" onclick="loadLispExample()">📚 例を読込</button>
+                </div>
+            </div>
+            
+            <!-- Canvas統合デモ (既存) -->
+            <div class="demo-card full-width">
+                <div class="demo-title">
+                    🎆 Ultimate Canvas Integration
+                </div>
+                <div class="demo-description">
+                    パーティクル、フラクタル、Game of Lifeが同時動作！複数のCanvasBoxが協調する究極のデモ。
+                </div>
+                
+                <div class="demo-area" style="min-height: 400px;">
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; justify-content: center;">
+                        <canvas id="mini-particles" width="200" height="150"></canvas>
+                        <canvas id="mini-fractal" width="200" height="150"></canvas>
+                        <canvas id="mini-life" width="200" height="150"></canvas>
+                    </div>
+                </div>
+                
+                <div style="text-align: center;">
+                    <button class="btn" onclick="startUltimateDemo()">🌟 究極デモ開始</button>
+                    <button class="btn" onclick="pauseAllCanvas()">⏸️ 一時停止</button>
+                    <button class="btn secondary" onclick="resetAllCanvas()">🔄 リセット</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="philosophy-banner">
+            🌟 Everything is Box, Everything is Beautiful, Everything is Nyash! 🚀
+        </div>
+    </div>
+
+    <script type="module">
+        // グローバル状態
+        let boxCount = 0;
+        let animationCount = 0;
+        let audioContext = null;
+        let audioNodes = [];
+        
+        // 統計更新
+        function updateStats() {
+            document.getElementById('global-stats').innerHTML = `
+                Total Boxes: ${boxCount}<br>
+                Active Animations: ${animationCount}<br>
+                Everything is Box!
+            `;
+        }
+        
+        // 1. Everything is Box ビジュアライザー
+        class BoxVisualizer {
+            constructor(containerId) {
+                this.container = document.getElementById(containerId);
+                console.log('BoxVisualizer container:', this.container);
+                this.boxes = [];
+                this.nextId = 1;
+            }
+            
+            createBox(type, value, x, y) {
+                console.log(`Creating box: ${type}(${value}) at (${x}, ${y})`);
+                
+                if (!this.container) {
+                    console.error('Container not found!');
+                    return null;
+                }
+                
+                const box = document.createElement('div');
+                box.className = `box-element ${type}`;
+                box.textContent = `${type.toUpperCase()}(${value})`;
+                box.style.left = `${x}px`;
+                box.style.top = `${y}px`;
+                box.style.position = 'absolute';
+                box.dataset.id = this.nextId++;
+                
+                this.container.appendChild(box);
+                this.boxes.push(box);
+                boxCount++;
+                updateStats();
+                
+                console.log('Box created and added to container');
+                return box;
+            }
+            
+            animateInteraction(box1, box2, result) {
+                animationCount++;
+                updateStats();
+                
+                // Box1とBox2が中央に移動
+                const centerX = this.container.offsetWidth / 2 - 40;
+                const centerY = this.container.offsetHeight / 2 - 20;
+                
+                box1.style.transform = `translate(${centerX - parseInt(box1.style.left)}px, ${centerY - parseInt(box1.style.top)}px)`;
+                box2.style.transform = `translate(${centerX + 20 - parseInt(box2.style.left)}px, ${centerY - parseInt(box2.style.top)}px)`;
+                
+                setTimeout(() => {
+                    // 結果Boxを表示
+                    const resultBox = this.createBox('result', result, centerX, centerY + 40);
+                    
+                    setTimeout(() => {
+                        box1.style.opacity = '0.5';
+                        box2.style.opacity = '0.5';
+                        animationCount--;
+                        updateStats();
+                    }, 1000);
+                }, 800);
+            }
+            
+            clear() {
+                this.container.innerHTML = '';
+                this.boxes = [];
+                boxCount = 0;
+                updateStats();
+            }
+        }
+        
+        const boxViz = new BoxVisualizer('box-canvas');
+        
+        window.demoBasicMath = () => {
+            console.log('demoBasicMath called');
+            boxViz.clear();
+            const box1 = boxViz.createBox('integer', '5', 50, 50);
+            const box2 = boxViz.createBox('integer', '3', 200, 50);
+            console.log('Boxes created:', box1, box2);
+            setTimeout(() => {
+                if (box1 && box2) {
+                    boxViz.animateInteraction(box1, box2, '8');
+                }
+            }, 500);
+        };
+        
+        window.demoStringConcat = () => {
+            boxViz.clear();
+            const box1 = boxViz.createBox('string', '"Hello"', 30, 100);
+            const box2 = boxViz.createBox('string', '"World"', 180, 100);
+            setTimeout(() => boxViz.animateInteraction(box1, box2, '"HelloWorld"'), 500);
+        };
+        
+        window.demoComplexOp = () => {
+            boxViz.clear();
+            // 複数のBoxが連鎖的に相互作用
+            const boxes = [
+                boxViz.createBox('integer', '2', 20, 30),
+                boxViz.createBox('integer', '3', 120, 30),
+                boxViz.createBox('integer', '4', 220, 30)
+            ];
+            
+            setTimeout(() => boxViz.animateInteraction(boxes[0], boxes[1], '6'), 500);
+            setTimeout(() => {
+                const resultBox = boxViz.createBox('result', '6', 150, 100);
+                boxViz.animateInteraction(resultBox, boxes[2], '24');
+            }, 2000);
+        };
+        
+        window.clearBoxes = () => boxViz.clear();
+        
+        // 2. サウンドジェネレーター
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        function playTone(frequency, duration = 0.3, type = 'sine') {
+            initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+            
+            audioNodes.push(oscillator);
+        }
+        
+        window.playSound = () => {
+            const code = document.getElementById('sound-code').value;
+            // 簡単なSound API エミュレーション
+            const lines = code.split('\n');
+            let delay = 0;
+            
+            lines.forEach(line => {
+                if (line.includes('Sound.play')) {
+                    const match = line.match(/Sound\.play\((\d+)/);
+                    if (match) {
+                        const freq = parseInt(match[1]);
+                        setTimeout(() => playTone(freq), delay);
+                        delay += 400;
+                    }
+                }
+            });
+        };
+        
+        window.stopSound = () => {
+            audioNodes.forEach(node => {
+                try { node.stop(); } catch(e) {}
+            });
+            audioNodes = [];
+        };
+        
+        window.loadMelody = () => {
+            document.getElementById('sound-code').value = `// 🎼 Beautiful Melody
+Sound.play(262, "sine")  // C
+Sound.delay(300)
+Sound.play(294, "sine")  // D
+Sound.delay(300) 
+Sound.play(330, "sine")  // E
+Sound.delay(300)
+Sound.play(349, "sine")  // F
+Sound.chord([262, 330, 392], "triangle")`;
+        };
+        
+        // 3. 非同期デモ
+        let asyncEventId = 0;
+        
+        function createAsyncEvent(message, delay = 0) {
+            setTimeout(() => {
+                const timeline = document.getElementById('async-timeline');
+                const event = document.createElement('div');
+                event.className = 'async-event';
+                event.textContent = message;
+                event.style.top = `${20 + (asyncEventId % 8) * 20}px`;
+                timeline.appendChild(event);
+                
+                const output = document.getElementById('async-output');
+                output.textContent += `[${new Date().toLocaleTimeString()}] ${message}\n`;
+                output.scrollTop = output.scrollHeight;
+                
+                setTimeout(() => event.remove(), 3000);
+                asyncEventId++;
+            }, delay);
+        }
+        
+        window.demoBasicAsync = () => {
+            document.getElementById('async-output').textContent = '';
+            createAsyncEvent('📤 ChannelBox created');
+            createAsyncEvent('✉️ Message sent: "Hello"', 500);
+            createAsyncEvent('📬 Message received', 1000);
+            createAsyncEvent('✅ Async operation complete', 1500);
+        };
+        
+        window.demoParallelAsync = () => {
+            document.getElementById('async-output').textContent = '';
+            createAsyncEvent('🚀 Worker1 started');
+            createAsyncEvent('🚀 Worker2 started', 100);
+            createAsyncEvent('🚀 Worker3 started', 200);
+            createAsyncEvent('⚡ Worker1 result: 42', 800);
+            createAsyncEvent('⚡ Worker2 result: "OK"', 1200);
+            createAsyncEvent('⚡ Worker3 result: [1,2,3]', 1600);
+            createAsyncEvent('🎯 All results combined', 2000);
+        };
+        
+        window.demoPipeline = () => {
+            document.getElementById('async-output').textContent = '';
+            createAsyncEvent('📥 Input: raw data');
+            createAsyncEvent('🔄 Stage1: parse', 300);
+            createAsyncEvent('🔄 Stage2: transform', 700);
+            createAsyncEvent('🔄 Stage3: validate', 1100);
+            createAsyncEvent('📤 Output: processed', 1500);
+        };
+        
+        // 4. Lispインタープリター
+        class SimpleLisp {
+            eval(expr) {
+                if (typeof expr === 'number') return expr;
+                if (typeof expr === 'string') return expr;
+                if (!Array.isArray(expr)) return expr;
+                
+                const [op, ...args] = expr;
+                
+                switch (op) {
+                    case '+':
+                        return args.reduce((sum, arg) => sum + this.eval(arg), 0);
+                    case '*':
+                        return args.reduce((prod, arg) => prod * this.eval(arg), 1);
+                    case '-':
+                        const [first, ...rest] = args.map(arg => this.eval(arg));
+                        return rest.length === 0 ? -first : rest.reduce((diff, val) => diff - val, first);
+                    default:
+                        return `Unknown operator: ${op}`;
+                }
+            }
+            
+            parse(code) {
+                // 簡単なS式パーサー
+                try {
+                    return JSON.parse(code.replace(/\(/g, '[').replace(/\)/g, ']').replace(/(\w+)/g, '"$1"'));
+                } catch {
+                    return code;
+                }
+            }
+        }
+        
+        const lisp = new SimpleLisp();
+        
+        window.evalLisp = () => {
+            const code = document.getElementById('lisp-code').value;
+            const output = document.getElementById('lisp-output');
+            
+            try {
+                const lines = code.split('\n').filter(line => line.trim());
+                let result = '';
+                
+                lines.forEach(line => {
+                    if (line.trim()) {
+                        const expr = lisp.parse(line.trim());
+                        const value = lisp.eval(expr);
+                        result += `${line} => ${value}\n`;
+                    }
+                });
+                
+                output.textContent = result;
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            }
+        };
+        
+        window.stepEval = () => {
+            // ステップバイステップ評価のデモ
+            const output = document.getElementById('lisp-output');
+            output.textContent = 'Step-by-step evaluation:\n';
+            output.textContent += '1. Parse: (+ 1 2 3)\n';
+            output.textContent += '2. Evaluate args: 1, 2, 3\n';
+            output.textContent += '3. Apply +: 1 + 2 + 3\n';
+            output.textContent += '4. Result: 6\n';
+        };
+        
+        window.loadLispExample = () => {
+            document.getElementById('lisp-code').value = `(+ 1 2 3 4 5)
+(* 6 7)
+(- 100 25)
+(+ (* 2 3) (* 4 5))`;
+        };
+        
+        // 5. Canvas統合デモ (簡略版)
+        window.startUltimateDemo = () => {
+            // 各Canvasで簡単なアニメーション
+            const particleCanvas = document.getElementById('mini-particles');
+            const fractalCanvas = document.getElementById('mini-fractal');
+            const lifeCanvas = document.getElementById('mini-life');
+            
+            // 簡単なパーティクルアニメーション
+            const pCtx = particleCanvas.getContext('2d');
+            const particles = [];
+            
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x: Math.random() * 200,
+                    y: Math.random() * 150,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    color: ['red', 'lime', 'cyan', 'yellow'][Math.floor(Math.random() * 4)]
+                });
+            }
+            
+            function animateParticles() {
+                pCtx.fillStyle = 'rgba(0,0,0,0.1)';
+                pCtx.fillRect(0, 0, 200, 150);
+                
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > 200) p.vx *= -1;
+                    if (p.y < 0 || p.y > 150) p.vy *= -1;
+                    
+                    pCtx.fillStyle = p.color;
+                    pCtx.beginPath();
+                    pCtx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                    pCtx.fill();
+                });
+                
+                requestAnimationFrame(animateParticles);
+            }
+            animateParticles();
+            
+            // 簡単なフラクタル
+            const fCtx = fractalCanvas.getContext('2d');
+            for (let y = 0; y < 150; y += 2) {
+                for (let x = 0; x < 200; x += 2) {
+                    const real = (x - 100) / 50;
+                    const imag = (y - 75) / 50;
+                    const c = Math.sqrt(real * real + imag * imag);
+                    const hue = (c * 180) % 360;
+                    fCtx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+                    fCtx.fillRect(x, y, 2, 2);
+                }
+            }
+            
+            // 簡単なLifeパターン
+            const lCtx = lifeCanvas.getContext('2d');
+            lCtx.fillStyle = 'black';
+            lCtx.fillRect(0, 0, 200, 150);
+            lCtx.fillStyle = 'lime';
+            
+            // グライダーパターン
+            const pattern = [[1,0],[2,1],[0,2],[1,2],[2,2]];
+            pattern.forEach(([x, y]) => {
+                lCtx.fillRect((x + 5) * 8, (y + 5) * 8, 8, 8);
+            });
+        };
+        
+        window.pauseAllCanvas = () => {
+            // アニメーション停止のプレースホルダー
+        };
+        
+        window.resetAllCanvas = () => {
+            // Canvas リセットのプレースホルダー
+            ['mini-particles', 'mini-fractal', 'mini-life'].forEach(id => {
+                const canvas = document.getElementById(id);
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            });
+        };
+        
+        // 初期化
+        updateStats();
+        
+        // 初期状態でBoxVisualizer動作確認
+        setTimeout(() => {
+            console.log('Testing box visualizer...');
+            const testBox = boxViz.createBox('integer', '42', 100, 100);
+            console.log('Test box created:', testBox);
+        }, 500);
+        
+        // 自動デモンストレーション
+        setTimeout(() => {
+            console.log('Starting auto demo...');
+            demoBasicMath();
+        }, 2000);
+        
+        setTimeout(() => {
+            demoBasicAsync();
+        }, 5000);
+    </script>
+</body>
+</html>

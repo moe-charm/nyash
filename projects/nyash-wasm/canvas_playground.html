@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎨 Nyash Canvas Playground - Everything is Box</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Consolas', monospace;
+            margin: 20px;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #ffffff;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .subtitle {
+            text-align: center;
+            color: #b3d9ff;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+        
+        .demo-section {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .demo-title {
+            color: #ffeb3b;
+            font-size: 24px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .demo-description {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .canvas-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+        
+        .canvas-wrapper {
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        canvas {
+            border: 2px solid #4ecdc4;
+            border-radius: 8px;
+            display: block;
+        }
+        
+        .canvas-info {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            background: rgba(76, 175, 80, 0.2);
+            margin: 8px 0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .controls {
+            margin-top: 20px;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+        
+        .stats {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-family: monospace;
+        }
+        
+        .philosophy {
+            text-align: center;
+            font-size: 20px;
+            color: #ffeb3b;
+            margin: 40px 0;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Nyash Canvas Playground</h1>
+        <div class="subtitle">Everything is Box - WebCanvasBox in Action</div>
+        
+        <div class="philosophy">
+            "すべては Box である" - Canvas も粒子も複素数も、みんな Box！
+        </div>
+        
+        <!-- パーティクル爆発システム -->
+        <div class="demo-section">
+            <div class="demo-title">
+                🌟 Particle Explosion System
+            </div>
+            <div class="demo-description">
+                各粒子が独立した ParticleBox として動作する美しい爆発エフェクト。物理演算、重力、空気抵抗、寿命システムを完備。虹色パーティクルが舞い踊る Everything is Box の究極実証！
+            </div>
+            
+            <div class="canvas-container">
+                <div class="canvas-wrapper">
+                    <canvas id="particle-canvas" width="800" height="600"></canvas>
+                </div>
+                
+                <div class="canvas-info">
+                    <ul class="feature-list">
+                        <li>🎆 各粒子が独立した ParticleBox</li>
+                        <li>🌈 虹色ランダムカラーシステム</li>
+                        <li>⚡ リアルタイム物理演算</li>
+                        <li>💨 重力・空気抵抗・寿命管理</li>
+                        <li>✨ 美しいトレイルエフェクト</li>
+                        <li>🎮 自動連続爆発システム</li>
+                    </ul>
+                    
+                    <div class="controls">
+                        <button class="btn" onclick="createBigExplosion()">💥 大爆発!</button>
+                        <button class="btn" onclick="createRandomExplosions()">🎆 連続爆発</button>
+                        <button class="btn" onclick="clearParticles()">🧹 クリア</button>
+                    </div>
+                    
+                    <div class="stats" id="particle-stats">
+                        アクティブ粒子: 0<br>
+                        総爆発回数: 0<br>
+                        Everything is Box!
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- フラクタル -->
+        <div class="demo-section">
+            <div class="demo-title">
+                📊 Mandelbrot Fractal Generator
+            </div>
+            <div class="demo-description">
+                ComplexBox による複素数計算でマンデルブロ集合を描画。MathBox との完璧な統合により、数学的美しさをWebCanvas上に実現。Everything is Box の数学的表現！
+            </div>
+            
+            <div class="canvas-container">
+                <div class="canvas-wrapper">
+                    <canvas id="fractal-canvas" width="400" height="400"></canvas>
+                </div>
+                
+                <div class="canvas-info">
+                    <ul class="feature-list">
+                        <li>🔢 ComplexBox による複素数演算</li>
+                        <li>🌀 マンデルブロ集合の完全計算</li>
+                        <li>🎨 美しいカラーグラデーション</li>
+                        <li>🔍 ズーム・中心移動機能</li>
+                        <li>⚡ 高速反復計算アルゴリズム</li>
+                        <li>📐 MathBox との統合</li>
+                    </ul>
+                    
+                    <div class="controls">
+                        <button class="btn" onclick="renderBasicFractal()">🌀 基本フラクタル</button>
+                        <button class="btn" onclick="renderZoomedFractal()">🔍 ズーム版</button>
+                        <button class="btn" onclick="renderColorfulFractal()">🌈 カラフル版</button>
+                    </div>
+                    
+                    <div class="stats" id="fractal-stats">
+                        ズーム: 1.0x<br>
+                        反復計算: 50回<br>
+                        Complex Mathematics!
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Game of Life -->
+        <div class="demo-section">
+            <div class="demo-title">
+                🧬 Conway's Game of Life
+            </div>
+            <div class="demo-description">
+                各セルが独立した CellBox として生命活動をシミュレート。セルラーオートマトンの美しい進化過程をリアルタイム可視化。生命の神秘を Everything is Box で表現！
+            </div>
+            
+            <div class="canvas-container">
+                <div class="canvas-wrapper">
+                    <canvas id="life-canvas" width="400" height="300"></canvas>
+                </div>
+                
+                <div class="canvas-info">
+                    <ul class="feature-list">
+                        <li>🔬 各セルが独立した CellBox</li>
+                        <li>🌱 Conway の 4つの生命ルール</li>
+                        <li>🎮 グライダー・点滅等のパターン</li>
+                        <li>📈 世代追跡・統計表示</li>
+                        <li>🎲 ランダム初期化機能</li>
+                        <li>⏱️ リアルタイム進化</li>
+                    </ul>
+                    
+                    <div class="controls">
+                        <button class="btn" onclick="startLife('random')">🎲 ランダム開始</button>
+                        <button class="btn" onclick="startLife('glider')">✈️ グライダー</button>
+                        <button class="btn" onclick="startLife('blinker')">💫 点滅パターン</button>
+                        <button class="btn" onclick="pauseLife()">⏸️ 一時停止</button>
+                    </div>
+                    
+                    <div class="stats" id="life-stats">
+                        世代: 0<br>
+                        生存セル: 0<br>
+                        Cellular Automaton!
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="philosophy">
+            🐱 Everything is Box, Everything is Beautiful! 🎨✨
+        </div>
+    </div>
+
+    <script type="module">
+        // WebCanvasBox シミュレーション
+        
+        class WebCanvasBox {
+            constructor(canvasId, width, height) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.width = width;
+                this.height = height;
+            }
+            
+            setFillStyle(color) {
+                this.ctx.fillStyle = color;
+            }
+            
+            setStrokeStyle(color) {
+                this.ctx.strokeStyle = color;
+            }
+            
+            setLineWidth(width) {
+                this.ctx.lineWidth = width;
+            }
+            
+            fillRect(x, y, width, height) {
+                this.ctx.fillRect(x, y, width, height);
+            }
+            
+            strokeRect(x, y, width, height) {
+                this.ctx.strokeRect(x, y, width, height);
+            }
+            
+            beginPath() {
+                this.ctx.beginPath();
+            }
+            
+            arc(x, y, radius, startAngle, endAngle) {
+                this.ctx.arc(x, y, radius, startAngle, endAngle);
+            }
+            
+            fill() {
+                this.ctx.fill();
+            }
+            
+            stroke() {
+                this.ctx.stroke();
+            }
+            
+            fillText(text, x, y) {
+                this.ctx.fillText(text, x, y);
+            }
+            
+            clear() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+            }
+        }
+        
+        // パーティクルシステム
+        class ParticleBox {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = Math.random() * -8 - 2;
+                this.size = Math.random() * 4 + 2;
+                this.color = ['red', 'orange', 'yellow', 'lime', 'cyan', 'magenta'][Math.floor(Math.random() * 6)];
+                this.life = 100;
+                this.maxLife = 100;
+                this.gravity = 0.1;
+            }
+            
+            update() {
+                this.vy += this.gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.99;
+                this.vy *= 0.98;
+                this.life--;
+                this.size *= 0.995;
+                return this.life > 0;
+            }
+            
+            draw(canvas) {
+                if (this.life > 0) {
+                    canvas.setFillStyle(this.color);
+                    canvas.beginPath();
+                    canvas.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    canvas.fill();
+                    
+                    if (this.life > this.maxLife * 0.8) {
+                        canvas.setFillStyle('white');
+                        canvas.beginPath();
+                        canvas.arc(this.x, this.y, this.size * 0.3, 0, Math.PI * 2);
+                        canvas.fill();
+                    }
+                }
+            }
+        }
+        
+        // パーティクルシステム管理
+        let particles = [];
+        let explosionCount = 0;
+        let animationId;
+        
+        const particleCanvas = new WebCanvasBox('particle-canvas', 800, 600);
+        
+        function createExplosion(x, y, count = 30) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new ParticleBox(x, y));
+            }
+            explosionCount++;
+        }
+        
+        function animateParticles() {
+            // 背景（トレイルエフェクト）
+            particleCanvas.setFillStyle('rgba(0,0,0,0.1)');
+            particleCanvas.fillRect(0, 0, 800, 600);
+            
+            // パーティクル更新・描画
+            particles = particles.filter(particle => {
+                if (particle.update()) {
+                    particle.draw(particleCanvas);
+                    return true;
+                }
+                return false;
+            });
+            
+            // 統計更新
+            document.getElementById('particle-stats').innerHTML = `
+                アクティブ粒子: ${particles.length}<br>
+                総爆発回数: ${explosionCount}<br>
+                Everything is Box!
+            `;
+            
+            animationId = requestAnimationFrame(animateParticles);
+        }
+        
+        // 自動爆発開始
+        particleCanvas.setFillStyle('black');
+        particleCanvas.fillRect(0, 0, 800, 600);
+        animateParticles();
+        
+        // 定期的な自動爆発
+        setInterval(() => {
+            if (Math.random() < 0.3) {
+                const x = Math.random() * 700 + 50;
+                const y = Math.random() * 500 + 50;
+                createExplosion(x, y, 20);
+            }
+        }, 2000);
+        
+        // パーティクル制御関数
+        window.createBigExplosion = () => {
+            createExplosion(400, 300, 60);
+        };
+        
+        window.createRandomExplosions = () => {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const x = Math.random() * 600 + 100;
+                    const y = Math.random() * 400 + 100;
+                    createExplosion(x, y, 25);
+                }, i * 300);
+            }
+        };
+        
+        window.clearParticles = () => {
+            particles = [];
+        };
+        
+        // フラクタル描画
+        const fractalCanvas = new WebCanvasBox('fractal-canvas', 400, 400);
+        
+        function mandelbrot(c_real, c_imag, max_iter = 50) {
+            let z_real = 0, z_imag = 0;
+            let iter = 0;
+            
+            while (iter < max_iter) {
+                const z_real_temp = z_real * z_real - z_imag * z_imag + c_real;
+                z_imag = 2 * z_real * z_imag + c_imag;
+                z_real = z_real_temp;
+                
+                if (z_real * z_real + z_imag * z_imag > 4) {
+                    return iter;
+                }
+                iter++;
+            }
+            return max_iter;
+        }
+        
+        function getColor(iterations, maxIter) {
+            if (iterations === maxIter) return 'black';
+            const ratio = iterations / maxIter;
+            if (ratio < 0.25) return 'blue';
+            if (ratio < 0.5) return 'cyan';
+            if (ratio < 0.75) return 'yellow';
+            return 'red';
+        }
+        
+        function renderFractal(zoom = 1, centerX = -0.5, centerY = 0) {
+            fractalCanvas.clear();
+            
+            for (let y = 0; y < 400; y += 2) {
+                for (let x = 0; x < 400; x += 2) {
+                    const real = (x - 200) / (200 / 2) / zoom + centerX;
+                    const imag = (y - 200) / (200 / 2) / zoom + centerY;
+                    
+                    const iterations = mandelbrot(real, imag);
+                    const color = getColor(iterations, 50);
+                    
+                    fractalCanvas.setFillStyle(color);
+                    fractalCanvas.fillRect(x, y, 2, 2);
+                }
+            }
+            
+            fractalCanvas.setFillStyle('white');
+            fractalCanvas.fillText(`Zoom: ${zoom}x`, 10, 20);
+            fractalCanvas.fillText('Mandelbrot Set', 10, 40);
+        }
+        
+        window.renderBasicFractal = () => {
+            renderFractal(1, -0.5, 0);
+            document.getElementById('fractal-stats').innerHTML = `
+                ズーム: 1.0x<br>
+                中心: (-0.5, 0.0)<br>
+                Complex Mathematics!
+            `;
+        };
+        
+        window.renderZoomedFractal = () => {
+            renderFractal(3, -0.8, 0.156);
+            document.getElementById('fractal-stats').innerHTML = `
+                ズーム: 3.0x<br>
+                中心: (-0.8, 0.156)<br>
+                Zoomed Beauty!
+            `;
+        };
+        
+        window.renderColorfulFractal = () => {
+            renderFractal(2, -0.235125, 0.827215);
+            document.getElementById('fractal-stats').innerHTML = `
+                ズーム: 2.0x<br>
+                中心: (-0.235125, 0.827215)<br>
+                Colorful Patterns!
+            `;
+        };
+        
+        // 初期フラクタル描画
+        renderBasicFractal();
+        
+        // Game of Life
+        const lifeCanvas = new WebCanvasBox('life-canvas', 400, 300);
+        let lifeGrid = [];
+        let lifeRunning = false;
+        let lifeGeneration = 0;
+        const GRID_WIDTH = 40;
+        const GRID_HEIGHT = 30;
+        const CELL_SIZE = 10;
+        
+        function initLife() {
+            lifeGrid = [];
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                lifeGrid[y] = [];
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    lifeGrid[y][x] = false;
+                }
+            }
+            lifeGeneration = 0;
+        }
+        
+        function setPattern(pattern) {
+            initLife();
+            
+            if (pattern === 'random') {
+                for (let y = 0; y < GRID_HEIGHT; y++) {
+                    for (let x = 0; x < GRID_WIDTH; x++) {
+                        lifeGrid[y][x] = Math.random() < 0.3;
+                    }
+                }
+            } else if (pattern === 'glider') {
+                const centerX = Math.floor(GRID_WIDTH / 2);
+                const centerY = Math.floor(GRID_HEIGHT / 2);
+                lifeGrid[centerY][centerX + 1] = true;
+                lifeGrid[centerY + 1][centerX + 2] = true;
+                lifeGrid[centerY + 2][centerX] = true;
+                lifeGrid[centerY + 2][centerX + 1] = true;
+                lifeGrid[centerY + 2][centerX + 2] = true;
+            } else if (pattern === 'blinker') {
+                const centerX = Math.floor(GRID_WIDTH / 2);
+                const centerY = Math.floor(GRID_HEIGHT / 2);
+                lifeGrid[centerY][centerX - 1] = true;
+                lifeGrid[centerY][centerX] = true;
+                lifeGrid[centerY][centerX + 1] = true;
+            }
+        }
+        
+        function countNeighbors(x, y) {
+            let count = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+                        if (lifeGrid[ny][nx]) count++;
+                    }
+                }
+            }
+            return count;
+        }
+        
+        function updateLife() {
+            const newGrid = [];
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                newGrid[y] = [];
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    const neighbors = countNeighbors(x, y);
+                    const alive = lifeGrid[y][x];
+                    
+                    if (alive) {
+                        newGrid[y][x] = neighbors === 2 || neighbors === 3;
+                    } else {
+                        newGrid[y][x] = neighbors === 3;
+                    }
+                }
+            }
+            lifeGrid = newGrid;
+            lifeGeneration++;
+        }
+        
+        function drawLife() {
+            lifeCanvas.setFillStyle('white');
+            lifeCanvas.fillRect(0, 0, 400, 300);
+            
+            let aliveCount = 0;
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (lifeGrid[y][x]) {
+                        lifeCanvas.setFillStyle('lime');
+                        aliveCount++;
+                    } else {
+                        lifeCanvas.setFillStyle('black');
+                    }
+                    lifeCanvas.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    
+                    lifeCanvas.setStrokeStyle('gray');
+                    lifeCanvas.strokeRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+            
+            lifeCanvas.setFillStyle('blue');
+            lifeCanvas.fillText(`Generation: ${lifeGeneration}`, 10, 20);
+            lifeCanvas.fillText(`Alive: ${aliveCount}`, 10, 40);
+            
+            document.getElementById('life-stats').innerHTML = `
+                世代: ${lifeGeneration}<br>
+                生存セル: ${aliveCount}<br>
+                Cellular Automaton!
+            `;
+        }
+        
+        function animateLife() {
+            if (lifeRunning) {
+                updateLife();
+                drawLife();
+                setTimeout(animateLife, 200);
+            }
+        }
+        
+        window.startLife = (pattern) => {
+            setPattern(pattern);
+            lifeRunning = true;
+            animateLife();
+        };
+        
+        window.pauseLife = () => {
+            lifeRunning = false;
+        };
+        
+        // 初期化
+        initLife();
+        drawLife();
+    </script>
+</body>
+</html>

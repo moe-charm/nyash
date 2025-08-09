@@ -1,0 +1,158 @@
+// 📦 ConsBox - LISPのcons cell実装 v3
+// 🎉 コンストラクタ引数サポート版！
+
+// NilBox - null値の代替実装
+box NilBox {
+    init {}
+    
+    isNil() { return true }
+    toString() { return "nil" }
+}
+
+// グローバルなnil値
+NIL = new NilBox()
+
+// nil判定関数
+function isNil(value) {
+    if value == 0 { return true }
+    if value == NIL { return true }
+    // NilBoxインスタンスかチェック（型安全）
+    // InstanceBoxのみフィールドアクセス可能
+    return false  // 他の値はnilではない
+}
+
+box ConsBox {
+    car
+    cdr
+    
+    init { car, cdr }
+    
+    // 🎉 NEW: コンストラクタ引数対応！
+    ConsBox(a, d) {
+        me.car = a
+        me.cdr = d
+    }
+    
+    // 引数なしコンストラクタ
+    ConsBox() {
+        me.car = NIL
+        me.cdr = NIL
+    }
+    
+    getCar() { return me.car }
+    getCdr() { return me.cdr }
+    setCar(value) { me.car = value }
+    setCdr(value) { me.cdr = value }
+    
+    // リスト形式の文字列表現
+    toString() {
+        return me.toStringHelper(true)
+    }
+    
+    toStringHelper(isFirst) {
+        result = ""
+        if isFirst { result = "(" }
+        
+        // car部分の処理
+        if isNil(me.car) {
+            result = result + "nil"
+        } else {
+            result = result + me.car
+        }
+        
+        // cdr部分の処理
+        if isNil(me.cdr) {
+            result = result + ")"
+        } else {
+            // ドット対として表示（シンプル版）
+            result = result + " . " + me.cdr + ")"
+        }
+        
+        return result
+    }
+}
+
+// ファクトリー関数（後方互換性のため残す）
+function cons(car, cdr) {
+    return new ConsBox(car, cdr)
+}
+
+// リスト作成ヘルパー
+function list() {
+    // 引数なしの場合は空リスト
+    return NIL
+}
+
+function list1(a) {
+    return new ConsBox(a, NIL)
+}
+
+function list2(a, b) {
+    return new ConsBox(a, new ConsBox(b, NIL))
+}
+
+function list3(a, b, c) {
+    return new ConsBox(a, new ConsBox(b, new ConsBox(c, NIL)))
+}
+
+// car/cdr アクセサ関数
+function car(pair) {
+    if isNil(pair) { return NIL }
+    return pair.getCar()
+}
+
+function cdr(pair) {
+    if isNil(pair) { return NIL }
+    return pair.getCdr()
+}
+
+// テストコード
+print("🎯 === ConsBox v3 Test (Constructor Args!) ===")
+print("")
+
+// 基本的なペア（コンストラクタ引数使用）
+print("1. Basic cons cell with constructor args:")
+pair1 = new ConsBox(1, 2)
+print("   new ConsBox(1, 2) = " + pair1.toString())
+
+// リスト作成
+print("")
+print("2. List creation:")
+list_a = list1("hello")
+print("   (list 'hello') = " + list_a.toString())
+
+list_b = list2(10, 20)
+print("   (list 10 20) = " + list_b.toString())
+
+list_c = list3("a", "b", "c")
+print("   (list 'a' 'b' 'c') = " + list_c.toString())
+
+// car/cdr操作
+print("")
+print("3. car/cdr operations:")
+test = new ConsBox(42, "world")
+print("   test = " + test.toString())
+print("   (car test) = " + car(test))
+print("   (cdr test) = " + cdr(test))
+
+// ネストしたリスト
+print("")
+print("4. Nested lists:")
+inner = new ConsBox(1, new ConsBox(2, NIL))
+outer = new ConsBox(inner, new ConsBox(3, NIL))
+print("   ((1 2) 3) = " + outer.toString())
+
+// 空リスト
+print("")
+print("5. Empty list:")
+empty = NIL
+print("   '() = " + empty.toString())
+
+// nil要素を含むリスト
+print("")
+print("6. List with nil:")
+list_with_nil = new ConsBox(1, new ConsBox(NIL, new ConsBox(3, NIL)))
+print("   (1 nil 3) = " + list_with_nil.toString())
+
+print("")
+print("✅ ConsBox v3 tests completed!")

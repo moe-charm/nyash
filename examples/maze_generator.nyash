@@ -1,0 +1,228 @@
+// 🌀 迷路ジェネレーター - outboxキーワード活用デモ
+// 棒倒し法による迷路生成
+
+print("=== Maze Generator with outbox ===")
+
+// Cellの定義（迷路の1マス）
+box Cell {
+    init { x, y, wall }
+    
+    Cell(x_pos, y_pos) {
+        me.x = x_pos
+        me.y = y_pos
+        me.wall = true  // 初期状態は壁
+    }
+    
+    makePassage() {
+        me.wall = false
+    }
+    
+    isWall() {
+        return me.wall
+    }
+}
+
+// 迷路Box定義
+box Maze {
+    init { width, height, cells }
+    
+    Maze(w, h) {
+        me.width = w
+        me.height = h
+        me.cells = new MapBox()  // 座標→Cellのマップ
+        
+        // 初期化：全部壁にする
+        local y, x, key, cell
+        y = 0
+        loop(y < h) {
+            x = 0
+            loop(x < w) {
+                key = x + "," + y
+                cell = new Cell(x, y)
+                me.cells.set(key, cell)
+                x = x + 1
+            }
+            y = y + 1
+        }
+    }
+    
+    // 座標からCellを取得
+    getCell(x, y) {
+        local key
+        key = x + "," + y
+        return me.cells.get(key)
+    }
+    
+    // 迷路生成（簡易版：外周以外を通路にする）
+    generate() {
+        print("Generating maze...")
+        
+        // まず通路を作る（1マスおきに）
+        local y, x, cell
+        y = 1
+        loop(y < me.height - 1) {
+            x = 1
+            loop(x < me.width - 1) {
+                // 奇数座標を通路にする
+                if isOdd(x) && isOdd(y) {
+                    cell = me.getCell(x, y)
+                    cell.makePassage()
+                }
+                x = x + 1
+            }
+            y = y + 1
+        }
+        
+        // 棒倒し法で壁を作る
+        y = 2
+        loop(y < me.height - 2) {
+            if isEven(y) {
+                x = 2
+                loop(x < me.width - 2) {
+                    if isEven(x) {
+                        me.placeRandomWall(x, y)
+                    }
+                    x = x + 2
+                }
+            }
+            y = y + 2
+        }
+    }
+    
+    // ランダムに壁を置く
+    placeRandomWall(x, y) {
+        // ランダムな方向を選ぶ（簡易版：固定パターン）
+        local pattern, dir, dx, dy, targetX, targetY, key
+        pattern = (x + y) * 7  // 疑似ランダム
+        dir = pattern - (pattern >= 4) * 4  // 0-3の値
+        
+        dx = 0
+        dy = 0
+        
+        if dir == 0 { 
+            dx = 0
+            dy = -1 
+        }   // 上
+        if dir == 1 { 
+            dx = 1
+            dy = 0 
+        }    // 右
+        if dir == 2 { 
+            dx = 0
+            dy = 1 
+        }    // 下
+        if dir == 3 { 
+            dx = -1
+            dy = 0 
+        }   // 左
+        
+        targetX = x + dx
+        targetY = y + dy
+        key = targetX + "," + targetY
+        
+        // MapBox.hasを使ってキーの存在確認
+        if me.cells.has(key) {
+            local cell
+            cell = me.getCell(targetX, targetY)
+            cell.wall = true
+        }
+    }
+    
+    // 迷路を表示
+    display() {
+        print("\nGenerated Maze:")
+        local y, x, line, cell
+        y = 0
+        loop(y < me.height) {
+            line = ""
+            x = 0
+            loop(x < me.width) {
+                cell = me.getCell(x, y)
+                if cell.isWall() {
+                    line = line + "■"
+                } else {
+                    line = line + "  "
+                }
+                x = x + 1
+            }
+            print(line)
+            y = y + 1
+        }
+    }
+}
+
+// MazeFactory定義
+box MazeFactory {
+    init { dummy }
+}
+
+// static関数でoutboxを使用
+static function MazeFactory.create(width, height) {
+    print("MazeFactory.create called with size: " + width + "x" + height)
+    
+    // outbox変数で迷路オブジェクトを作成
+    outbox maze
+    maze = new Maze(width, height)
+    
+    // local変数も使う
+    local message
+    message = "Creating maze of size " + width + "x" + height
+    print(message)
+    
+    // 迷路を生成
+    maze.generate()
+    
+    return maze  // 所有権を呼び出し側に移転
+}
+
+// 複数の迷路を作るデモ
+static function MazeFactory.createMultiple() {
+    print("\nCreating multiple mazes...")
+    
+    outbox small, medium, large
+    
+    small = MazeFactory.create(11, 7)
+    medium = MazeFactory.create(21, 11)
+    large = MazeFactory.create(31, 15)
+    
+    // 最初の迷路だけ返す（他は破棄される）
+    return small
+}
+
+// ヘルパー関数（%演算子がないため工夫）
+function isOdd(n) {
+    // n % 2 == 1 の代替実装
+    local half
+    half = 0
+    loop(half * 2 < n) {
+        half = half + 1
+    }
+    return (n - half * 2) == 1
+}
+
+function isEven(n) {
+    // n % 2 == 0 の代替実装
+    local half
+    half = 0
+    loop(half * 2 < n) {
+        half = half + 1
+    }
+    return (n - half * 2) == 0
+}
+
+// メイン実行
+print("\n--- Small Maze (11x7) ---")
+maze1 = MazeFactory.create(11, 7)
+maze1.display()
+
+print("\n--- Medium Maze (21x11) ---")
+maze2 = MazeFactory.create(21, 11)
+maze2.display()
+
+print("\n--- Multiple Maze Creation Test ---")
+firstMaze = MazeFactory.createMultiple()
+print("\nFirst maze from multiple creation:")
+firstMaze.display()
+
+print("\n=== Maze Generator completed! ===")
+print("Note: Outbox variables successfully transferred ownership!")

@@ -1,0 +1,195 @@
+// Text Adventure Game - Items Module
+// アイテムシステムの基本実装
+
+// 基本アイテムBox
+box Item {
+    init { name, description, weight, value }
+    
+    Item(name, description, weight, value) {
+        me.name = name
+        me.description = description
+        me.weight = weight
+        me.value = value
+    }
+    
+    // アイテムの表示
+    display() {
+        return me.name + " - " + me.description
+    }
+    
+    // Getter for field access bug workaround
+    getName() {
+        return me.name
+    }
+    
+    // 詳細情報表示
+    examine() {
+        return me.description + " (Weight: " + me.weight + ", Value: " + me.value + ")"
+    }
+    
+    // 持ち上げ可能かチェック
+    canPickUp() {
+        return me.weight <= 10
+    }
+    
+    // 価値があるかチェック
+    isValuable() {
+        return me.value > 50
+    }
+}
+
+// 武器アイテム（継承なし、全フィールド独立）
+box Weapon {
+    init { name, description, weight, value, damage, durability }
+    
+    Weapon(name, description, weight, value, damage, durability) {
+        me.name = name
+        me.description = description
+        me.weight = weight
+        me.value = value
+        me.damage = damage
+        me.durability = durability
+    }
+    
+    display() {
+        return me.name + " (DMG: " + me.damage + ")"
+    }
+    
+    getName() {
+        return me.name
+    }
+    
+    examine() {
+        return me.description + " - Damage: " + me.damage + ", Durability: " + me.durability + "/" + me.durability
+    }
+    
+    canPickUp() {
+        return me.weight <= 15  // 武器は少し重くてもOK
+    }
+    
+    // 武器の使用
+    use() {
+        if me.durability > 0 {
+            me.durability = me.durability - 1
+            return me.damage
+        } else {
+            return 0  // 壊れた武器
+        }
+    }
+    
+    isBroken() {
+        return me.durability <= 0
+    }
+    
+    // Weaponにも必要なメソッド追加
+    isValuable() {
+        return me.value > 50
+    }
+}
+
+// 消費アイテム（継承なし、全フィールド独立）
+box Consumable {
+    init { name, description, weight, value, effect, uses }
+    
+    Consumable(name, description, weight, value, effect, uses) {
+        me.name = name
+        me.description = description
+        me.weight = weight
+        me.value = value
+        me.effect = effect
+        me.uses = uses
+    }
+    
+    display() {
+        return me.name + " (" + me.uses + " uses)"
+    }
+    
+    getName() {
+        return me.name
+    }
+    
+    examine() {
+        return me.description + " - Effect: " + me.effect + ", Uses remaining: " + me.uses
+    }
+    
+    canPickUp() {
+        return true  // 消費アイテムは軽い
+    }
+    
+    // アイテムの使用
+    use() {
+        if me.uses > 0 {
+            me.uses = me.uses - 1
+            return me.effect
+        } else {
+            return 0  // 使い切った
+        }
+    }
+    
+    isEmpty() {
+        return me.uses <= 0
+    }
+    
+    // Consumableにも必要なメソッド追加
+    isValuable() {
+        return me.value > 25
+    }
+}
+
+// 鍵アイテム（特別なアイテム）
+box Key {
+    init { name, description, targetDoor, weight, value }
+    
+    Key(name, description, targetDoor) {
+        me.name = name
+        me.description = description
+        me.targetDoor = targetDoor
+        me.weight = 1  // 鍵は軽い
+        me.value = 10  // 鍵は安い
+    }
+    
+    display() {
+        return me.name + " (Key)"
+    }
+    
+    getName() {
+        return me.name
+    }
+    
+    examine() {
+        return me.description + " - Opens: " + me.targetDoor
+    }
+    
+    canPickUp() {
+        return true  // 鍵は必ず拾える
+    }
+    
+    // 扉を開けるか確認
+    opensDoor(doorName) {
+        return me.targetDoor == doorName
+    }
+    
+    // Keyにも必要なメソッド追加
+    isValuable() {
+        return me.value > 50  // 鍵は特別価値が高い場合のみ
+    }
+}
+
+// アイテムファクトリー（便利関数）
+function createSword() {
+    return new Weapon("Iron Sword", "A sharp iron blade", 8, 100, 15, 50)
+}
+
+function createPotion() {
+    return new Consumable("Health Potion", "Restores health", 1, 25, 50, 1)
+}
+
+function createKey(doorName) {
+    return new Key("Old Key", "An ancient rusty key", doorName)
+}
+
+function createTreasure() {
+    return new Item("Golden Coin", "A shiny gold piece", 1, 100)
+}
+
+print("📦 Items module loaded successfully!")

@@ -1,0 +1,905 @@
+{
+  "command_history": [
+    {
+      "command": "stats",
+      "result_type": "success",
+      "timestamp": "2025-08-09T06:57:30"
+    },
+    {
+      "command": "include-cycles",
+      "result_type": "success",
+      "timestamp": "2025-08-09T06:57:57"
+    }
+  ],
+  "created_at": "2025-08-09T06:57:26",
+  "directory_files": [
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 786,
+        "comment_lines": 87,
+        "empty_lines": 90,
+        "name": "ast.rs",
+        "path": "/mnt/c/git/nyash/src/ast.rs",
+        "size_bytes": 31854,
+        "total_lines": 963
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 53,
+        "comment_lines": 2,
+        "empty_lines": 12,
+        "name": "bool_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/bool_box.rs",
+        "size_bytes": 1561,
+        "total_lines": 67
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 197,
+        "comment_lines": 6,
+        "empty_lines": 43,
+        "name": "debug_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/debug_box.rs",
+        "size_bytes": 8396,
+        "total_lines": 246
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 51,
+        "comment_lines": 2,
+        "empty_lines": 11,
+        "name": "integer_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/integer_box.rs",
+        "size_bytes": 1467,
+        "total_lines": 64
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 131,
+        "comment_lines": 20,
+        "empty_lines": 24,
+        "name": "map_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/map_box.rs",
+        "size_bytes": 5606,
+        "total_lines": 175
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 332,
+        "comment_lines": 26,
+        "empty_lines": 50,
+        "name": "math_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/math_box.rs",
+        "size_bytes": 13527,
+        "total_lines": 408
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 20,
+        "comment_lines": 8,
+        "empty_lines": 5,
+        "name": "mod.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/mod.rs",
+        "size_bytes": 824,
+        "total_lines": 33
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 106,
+        "comment_lines": 16,
+        "empty_lines": 27,
+        "name": "null_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/null_box.rs",
+        "size_bytes": 3803,
+        "total_lines": 149
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 169,
+        "comment_lines": 23,
+        "empty_lines": 33,
+        "name": "random_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/random_box.rs",
+        "size_bytes": 7974,
+        "total_lines": 225
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 166,
+        "comment_lines": 27,
+        "empty_lines": 28,
+        "name": "sound_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/sound_box.rs",
+        "size_bytes": 7482,
+        "total_lines": 221
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 105,
+        "comment_lines": 14,
+        "empty_lines": 22,
+        "name": "string_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/string_box.rs",
+        "size_bytes": 4356,
+        "total_lines": 141
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 281,
+        "comment_lines": 32,
+        "empty_lines": 53,
+        "name": "time_box.rs",
+        "path": "/mnt/c/git/nyash/src/boxes/time_box.rs",
+        "size_bytes": 10499,
+        "total_lines": 366
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 1096,
+        "comment_lines": 118,
+        "empty_lines": 230,
+        "name": "box_trait.rs",
+        "path": "/mnt/c/git/nyash/src/box_trait.rs",
+        "size_bytes": 42202,
+        "total_lines": 1444
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 167,
+        "comment_lines": 24,
+        "empty_lines": 35,
+        "name": "channel_box.rs",
+        "path": "/mnt/c/git/nyash/src/channel_box.rs",
+        "size_bytes": 6470,
+        "total_lines": 226
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 233,
+        "comment_lines": 58,
+        "empty_lines": 68,
+        "name": "environment.rs",
+        "path": "/mnt/c/git/nyash/src/environment.rs",
+        "size_bytes": 12850,
+        "total_lines": 359
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 81,
+        "comment_lines": 9,
+        "empty_lines": 14,
+        "name": "exception_box.rs",
+        "path": "/mnt/c/git/nyash/src/exception_box.rs",
+        "size_bytes": 2659,
+        "total_lines": 104
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 74,
+        "comment_lines": 21,
+        "empty_lines": 16,
+        "name": "finalization.rs",
+        "path": "/mnt/c/git/nyash/src/finalization.rs",
+        "size_bytes": 3224,
+        "total_lines": 111
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 136,
+        "comment_lines": 31,
+        "empty_lines": 37,
+        "name": "instance.rs",
+        "path": "/mnt/c/git/nyash/src/instance.rs",
+        "size_bytes": 6444,
+        "total_lines": 204
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 1203,
+        "comment_lines": 72,
+        "empty_lines": 39,
+        "name": "box_methods.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/box_methods.rs",
+        "size_bytes": 55280,
+        "total_lines": 1314
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 457,
+        "comment_lines": 76,
+        "empty_lines": 119,
+        "name": "core.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/core.rs",
+        "size_bytes": 23608,
+        "total_lines": 652
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 413,
+        "comment_lines": 86,
+        "empty_lines": 95,
+        "name": "expressions.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/expressions.rs",
+        "size_bytes": 25980,
+        "total_lines": 594
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 62,
+        "comment_lines": 21,
+        "empty_lines": 13,
+        "name": "functions.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/functions.rs",
+        "size_bytes": 4106,
+        "total_lines": 96
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 65,
+        "comment_lines": 30,
+        "empty_lines": 19,
+        "name": "io.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/io.rs",
+        "size_bytes": 4459,
+        "total_lines": 114
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 70,
+        "comment_lines": 17,
+        "empty_lines": 11,
+        "name": "mod.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/mod.rs",
+        "size_bytes": 2888,
+        "total_lines": 98
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 491,
+        "comment_lines": 100,
+        "empty_lines": 58,
+        "name": "objects.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/objects.rs",
+        "size_bytes": 29692,
+        "total_lines": 649
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 323,
+        "comment_lines": 52,
+        "empty_lines": 52,
+        "name": "statements.rs",
+        "path": "/mnt/c/git/nyash/src/interpreter/statements.rs",
+        "size_bytes": 19226,
+        "total_lines": 427
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 30,
+        "comment_lines": 7,
+        "empty_lines": 2,
+        "name": "lib.rs",
+        "path": "/mnt/c/git/nyash/src/lib.rs",
+        "size_bytes": 1433,
+        "total_lines": 39
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 775,
+        "comment_lines": 76,
+        "empty_lines": 155,
+        "name": "main.rs",
+        "path": "/mnt/c/git/nyash/src/main.rs",
+        "size_bytes": 35787,
+        "total_lines": 1006
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 140,
+        "comment_lines": 35,
+        "empty_lines": 32,
+        "name": "method_box.rs",
+        "path": "/mnt/c/git/nyash/src/method_box.rs",
+        "size_bytes": 6362,
+        "total_lines": 207
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 1765,
+        "comment_lines": 176,
+        "empty_lines": 338,
+        "name": "parser.rs",
+        "path": "/mnt/c/git/nyash/src/parser.rs",
+        "size_bytes": 88020,
+        "total_lines": 2279
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 507,
+        "comment_lines": 40,
+        "empty_lines": 65,
+        "name": "tokenizer.rs",
+        "path": "/mnt/c/git/nyash/src/tokenizer.rs",
+        "size_bytes": 20221,
+        "total_lines": 612
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    },
+    {
+      "classes": [],
+      "complexity": {
+        "cyclomatic_complexity": 1,
+        "max_nesting_depth": 0,
+        "rating": "Simple 🟢"
+      },
+      "file_info": {
+        "code_lines": 298,
+        "comment_lines": 60,
+        "empty_lines": 75,
+        "name": "type_box.rs",
+        "path": "/mnt/c/git/nyash/src/type_box.rs",
+        "size_bytes": 12533,
+        "total_lines": 433
+      },
+      "function_calls": [],
+      "functions": [],
+      "stats": {
+        "class_count": 0,
+        "export_count": 0,
+        "function_count": 0,
+        "import_count": 0,
+        "total_calls": 0,
+        "unique_calls": 0
+      }
+    }
+  ],
+  "directory_result": {
+    "files_count": 32,
+    "summary": {
+      "complex_files": 0,
+      "large_files": 9,
+      "total_classes": 0,
+      "total_files": 32,
+      "total_functions": 0,
+      "total_lines": 14026,
+      "total_size": 500793
+    }
+  },
+  "is_directory": true,
+  "quick_stats": {
+    "classes": 0,
+    "files": 32,
+    "functions": 0,
+    "lines": 14026,
+    "size": 500793,
+    "type": "directory"
+  },
+  "session_id": "session_20250809_065726",
+  "session_type": "ai_optimized",
+  "target_path": "/mnt/c/git/nyash/src"
+}

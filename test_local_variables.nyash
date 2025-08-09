@@ -1,0 +1,25 @@
+// 🔥 Local変数テスト - 厳密性の実証
+
+static box Main {
+    init {
+        console, finalResult
+    }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔥 Testing local variables!")
+        
+        // ✅ local変数の正しい使用
+        local x, y, result
+        x = 42
+        y = 58
+        result = x + y
+        me.console.log("Local calculation: " + result)
+        
+        // ✅ local変数からフィールドへの代入
+        me.finalResult = result
+        me.console.log("Final result: " + me.finalResult)
+        
+        return "Local variables work perfectly!"
+    }
+}

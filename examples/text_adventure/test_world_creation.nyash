@@ -1,0 +1,32 @@
+// Test world creation
+include "text_adventure/simple_rooms.nyash"
+
+print("Testing createSimpleWorld()...")
+
+// Call the function
+world = createSimpleWorld()
+
+print("World created!")
+print("Type check - does it have name?")
+
+// Try different ways to access
+try {
+    print("Attempting world.name...")
+    name = world.name
+    print("Success! Name: " + name)
+} catch {
+    print("ERROR: Cannot access world.name")
+}
+
+// Test if it's really a Room
+print("\nTesting if it's a Room...")
+try {
+    print("Calling world.look()...")
+    result = world.look()
+    print("Look result:")
+    print(result)
+} catch {
+    print("ERROR: Cannot call look()")
+}
+
+print("\n✅ World creation test completed!")

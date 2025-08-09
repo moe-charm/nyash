@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Rust
+/target/
+Cargo.lock
+
+# 開発用秘密フォルダ（完全除外）
+/development/
+
+# Test files
+*.tmp
+*.bak
+*.orig
+test_*.ny
+output_*.ny
+temp_*.ny
+current_task
+
+# Logs
+*.log
+debug_output.txt
+stats_output.txt
+
+# LLVM
+*.ll
+*.bc
+*.o
+*.exe
+a.out

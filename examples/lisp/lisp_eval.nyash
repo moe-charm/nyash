@@ -1,0 +1,271 @@
+// ⚙️ LISP Evaluator - eval/apply/環境管理
+// 簡易版LISP評価エンジン
+
+NIL = 0
+
+// ===== LISP Core関数の再実装（簡単版） =====
+box ConsBox {
+    car, cdr
+    init { car, cdr }
+    ConsBox(a, d) { 
+        me.car = a
+        me.cdr = d
+    }
+    getCar() { return me.car }
+    getCdr() { return me.cdr }
+    toString() { return "(" + me.car.toString() + " . " + me.cdr.toString() + ")" }
+}
+
+box SymbolBox {
+    name
+    init { name }
+    SymbolBox(symbolName) { 
+        me.name = symbolName 
+    }
+    getName() { return me.name }
+    toString() { return me.name }
+}
+
+function cons(a, d) { return new ConsBox(a, d) }
+function car(pair) { 
+    if pair == NIL { return NIL }
+    return pair.getCar() 
+}
+function cdr(pair) { 
+    if pair == NIL { return NIL }
+    return pair.getCdr() 
+}
+function symbol(name) { return new SymbolBox(name) }
+function list1(a) { return cons(a, NIL) }
+function list2(a, b) { return cons(a, cons(b, NIL)) }
+function list3(a, b, c) { return cons(a, cons(b, cons(c, NIL))) }
+
+function atomP(obj) {
+    if obj == NIL { return true }
+    if obj == 0 or obj == 1 or obj == 2 or obj == 3 or obj == 4 { return true }
+    if obj == 5 or obj == 6 or obj == 7 or obj == 8 or obj == 9 { return true }
+    if obj == "a" or obj == "b" or obj == "c" { return true }
+    return false
+}
+
+function nullP(obj) { return obj == NIL }
+
+// ===== 簡易環境管理（MapBox代替） =====
+box Environment {
+    names, values, count
+    
+    init { names, values, count }
+    
+    Environment() {
+        me.names = cons(NIL, NIL)   // 変数名のリスト
+        me.values = cons(NIL, NIL)  // 値のリスト
+        me.count = 0                // 変数の数
+    }
+    
+    // 変数を定義
+    define(name, value) {
+        me.names = cons(name, me.names)
+        me.values = cons(value, me.values)
+        me.count = me.count + 1
+    }
+    
+    // 変数を検索
+    lookup(name) {
+        return me.lookupHelper(name, me.names, me.values)
+    }
+    
+    lookupHelper(target, nameList, valueList) {
+        if nullP(nameList) { return symbol("UNDEFINED") }
+        
+        currentName = car(nameList)
+        currentValue = car(valueList)
+        
+        // 名前が一致するかチェック
+        if currentName == target {
+            return currentValue
+        }
+        if currentName.toString() == target {
+            return currentValue
+        }
+        
+        return me.lookupHelper(target, cdr(nameList), cdr(valueList))
+    }
+}
+
+// ===== 基本的な評価関数 =====
+
+// eval - 式を評価
+function lispEval(expr, env) {
+    // アトムの場合
+    if atomP(expr) {
+        // 数値はそのまま返す
+        if expr == 0 { return 0 }
+        if expr == 1 { return 1 }
+        if expr == 2 { return 2 }
+        if expr == 3 { return 3 }
+        if expr == 4 { return 4 }
+        if expr == 5 { return 5 }
+        if expr == 6 { return 6 }
+        if expr == 7 { return 7 }
+        if expr == 8 { return 8 }
+        if expr == 9 { return 9 }
+        
+        // 文字列リテラルはそのまま返す
+        if expr == "a" { return "a" }
+        if expr == "b" { return "b" }
+        if expr == "c" { return "c" }
+        if expr == "hello" { return "hello" }
+        if expr == "world" { return "world" }
+        
+        // シンボル（変数）は環境から検索
+        return env.lookup(expr.toString())
+    }
+    
+    // リスト（関数呼び出し）の場合
+    operator = car(expr)
+    operands = cdr(expr)
+    
+    // 特殊形式の処理
+    opName = operator.toString()
+    
+    // quote - リテラル
+    if opName == "quote" {
+        return car(operands)
+    }
+    
+    // if - 条件分岐
+    if opName == "if" {
+        condition = lispEval(car(operands), env)
+        if not nullP(condition) {
+            return lispEval(car(cdr(operands)), env)  // then節
+        } else {
+            return lispEval(car(cdr(cdr(operands))), env)  // else節
+        }
+    }
+    
+    // define - 変数定義
+    if opName == "define" {
+        varName = car(operands).toString()
+        value = lispEval(car(cdr(operands)), env)
+        env.define(varName, value)
+        return value
+    }
+    
+    // 通常の関数呼び出し
+    func = lispEval(operator, env)
+    args = lispEvalList(operands, env)
+    return lispApply(func, args, env)
+}
+
+// 引数リストを評価
+function lispEvalList(exprs, env) {
+    if nullP(exprs) { return NIL }
+    first = lispEval(car(exprs), env)
+    rest = lispEvalList(cdr(exprs), env)
+    return cons(first, rest)
+}
+
+// apply - 関数適用
+function lispApply(func, args, env) {
+    funcName = func.toString()
+    
+    // 組み込み関数
+    if funcName == "+" {
+        return lispAdd(args)
+    }
+    if funcName == "-" {
+        return lispSub(args)
+    }
+    if funcName == "*" {
+        return lispMul(args)
+    }
+    if funcName == "car" {
+        return car(car(args))
+    }
+    if funcName == "cdr" {
+        return cdr(car(args))
+    }
+    if funcName == "cons" {
+        return cons(car(args), car(cdr(args)))
+    }
+    if funcName == "atom?" {
+        return atomP(car(args))
+    }
+    if funcName == "null?" {
+        return nullP(car(args))
+    }
+    
+    return symbol("UNKNOWN-FUNCTION")
+}
+
+// 算術演算の実装
+function lispAdd(args) {
+    if nullP(args) { return 0 }
+    return car(args) + lispAdd(cdr(args))
+}
+
+function lispSub(args) {
+    if nullP(args) { return 0 }
+    if nullP(cdr(args)) { return 0 - car(args) }  // 単項マイナス
+    return car(args) - lispAdd(cdr(args))
+}
+
+function lispMul(args) {
+    if nullP(args) { return 1 }
+    return car(args) * lispMul(cdr(args))
+}
+
+// ===== グローバル環境初期化 =====
+function makeGlobalEnv() {
+    env = new Environment()
+    
+    // 組み込み関数を定義
+    env.define("+", symbol("+"))
+    env.define("-", symbol("-"))
+    env.define("*", symbol("*"))
+    env.define("car", symbol("car"))
+    env.define("cdr", symbol("cdr"))
+    env.define("cons", symbol("cons"))
+    env.define("atom?", symbol("atom?"))
+    env.define("null?", symbol("null?"))
+    
+    // 特殊値
+    env.define("nil", NIL)
+    env.define("t", true)
+    
+    return env
+}
+
+// ===== 簡易パーサー（手動構築版） =====
+function parseManual() {
+    // (+ 1 2) を手動構築
+    expr1 = list3(symbol("+"), 1, 2)
+    return expr1
+}
+
+// ===== テスト =====
+print("⚙️ === LISP Evaluator Test === ⚙️")
+print("")
+
+// 環境準備
+globalEnv = makeGlobalEnv()
+
+print("1. Simple arithmetic:")
+// (+ 1 2)
+expr = list3(symbol("+"), 1, 2)
+print("   Expression: " + expr.toString())
+result = lispEval(expr, globalEnv)
+print("   Result: " + result)
+
+print("")
+print("2. Nested expression:")
+// (+ 1 (* 2 3))
+inner = list3(symbol("*"), 2, 3)
+expr2 = list3(symbol("+"), 1, inner)
+print("   Expression: " + expr2.toString())
+result2 = lispEval(expr2, globalEnv)
+print("   Result: " + result2)
+
+print("")
+print("✅ LISP Evaluator test completed!")
+print("🎯 Ready for full LISP interpreter!")

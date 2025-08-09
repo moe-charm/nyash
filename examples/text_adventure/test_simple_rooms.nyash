@@ -1,0 +1,44 @@
+// Test file for simple_rooms.nyash
+include "text_adventure/simple_rooms.nyash"
+
+print("🏰 Testing Simple Rooms Module...")
+
+// Test 1: Basic room creation
+print("\n=== Test 1: Basic Room ===")
+testRoom = new Room("Test Room", "A simple test room for debugging.")
+print("Room created: " + testRoom.name)
+print(testRoom.look())
+
+// Test 2: Adding items to room
+print("\n=== Test 2: Room Items ===")
+coin = new Item("Gold Coin", "A shiny coin", 1, 50)
+testRoom.addItem(coin)
+print("After adding coin:")
+print(testRoom.look())
+
+// Test 3: Taking items from room
+print("\n=== Test 3: Taking Items ===")
+takenItem = testRoom.takeItem("Gold Coin")
+if takenItem {
+    takenName = takenItem.name
+    print("Took: " + takenName)
+} else {
+    print("Failed to take item")
+}
+print("Room after taking item:")
+print(testRoom.look())
+
+// Test 4: Has item check
+print("\n=== Test 4: Item Existence ===")
+sword = createSword()
+testRoom.addItem(sword)
+print("Has Iron Sword: " + testRoom.hasItem("Iron Sword"))
+print("Has Gold Coin: " + testRoom.hasItem("Gold Coin"))
+
+// Test 5: World creation
+print("\n=== Test 5: Simple World ===")
+startRoom = createSimpleWorld()
+print("World created! Starting room:")
+print(startRoom.look())
+
+print("\n✅ Simple Rooms module test completed!")

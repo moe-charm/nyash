@@ -1,0 +1,92 @@
+// Test file for items.nyash - デバッグしやすい単体テスト
+include "text_adventure/items.nyash"
+
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+print("🧪 Testing Items Module...")
+
+// Test 1: Basic Item creation
+print("\n=== Test 1: Basic Item ===")
+coin = new Item("Gold Coin", "A shiny gold piece", 1, 100)
+DEBUG.trackBox(coin, "basic_item")
+
+print("Item name: " + coin.name)
+print("Description: " + coin.description)
+print("Weight: " + coin.weight)
+print("Value: " + coin.value)
+print("Display: " + coin.display())
+print("Examine: " + coin.examine())
+print("Can pick up: " + coin.canPickUp())
+print("Is valuable: " + coin.isValuable())
+
+// Test 2: Weapon creation and usage
+print("\n=== Test 2: Weapon ===")
+sword = new Weapon("Iron Sword", "A sharp iron blade", 8, 100, 15, 50)
+DEBUG.trackBox(sword, "weapon_item")
+
+print("Weapon display: " + sword.display())
+print("Weapon examine: " + sword.examine())
+print("Can pick up: " + sword.canPickUp())
+
+print("Using weapon...")
+damage1 = sword.use()
+print("Damage dealt: " + damage1)
+print("Durability after use: " + sword.durability)
+
+print("Is broken: " + sword.isBroken())
+
+// Test 3: Consumable creation and usage
+print("\n=== Test 3: Consumable ===")
+potion = new Consumable("Health Potion", "Restores health", 1, 25, 50, 3)
+DEBUG.trackBox(potion, "consumable_item")
+
+print("Potion display: " + potion.display())
+print("Potion examine: " + potion.examine())
+print("Can pick up: " + potion.canPickUp())
+
+print("Using potion...")
+effect1 = potion.use()
+print("Effect: " + effect1)
+print("Uses remaining: " + potion.uses)
+
+effect2 = potion.use()
+print("Second use effect: " + effect2)
+print("Uses remaining: " + potion.uses)
+
+print("Is empty: " + potion.isEmpty())
+
+// Test 4: Key creation and door checking
+print("\n=== Test 4: Key ===")
+key = new Key("Old Key", "An ancient rusty key", "treasure_door")
+DEBUG.trackBox(key, "key_item")
+
+print("Key display: " + key.display())
+print("Key examine: " + key.examine())
+print("Can pick up: " + key.canPickUp())
+
+print("Opens treasure_door: " + key.opensDoor("treasure_door"))
+print("Opens main_door: " + key.opensDoor("main_door"))
+
+// Test 5: Factory functions
+print("\n=== Test 5: Factory Functions ===")
+factorySword = createSword()
+factoryPotion = createPotion()
+factoryKey = createKey("dungeon_exit")
+factoryTreasure = createTreasure()
+
+DEBUG.trackBox(factorySword, "factory_sword")
+DEBUG.trackBox(factoryPotion, "factory_potion")
+DEBUG.trackBox(factoryKey, "factory_key")
+DEBUG.trackBox(factoryTreasure, "factory_treasure")
+
+print("Factory sword: " + factorySword.display())
+print("Factory potion: " + factoryPotion.display())
+print("Factory key: " + factoryKey.display())
+print("Factory treasure: " + factoryTreasure.display())
+
+// Memory report
+print("\n=== Memory Report ===")
+print(DEBUG.memoryReport())
+
+print("\n✅ Items module test completed!")

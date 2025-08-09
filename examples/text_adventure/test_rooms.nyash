@@ -1,0 +1,79 @@
+// Test file for rooms.nyash
+include "text_adventure/rooms.nyash"
+
+print("🏰 Testing Rooms Module...")
+
+// Test 1: Basic room creation
+print("\n=== Test 1: Basic Room ===")
+testRoom = new Room("Test Room", "A simple test room for debugging.")
+print("Room created: " + testRoom.name)
+print(testRoom.look())
+
+// Test 2: Adding items to room
+print("\n=== Test 2: Room Items ===")
+coin = new Item("Gold Coin", "A shiny coin", 1, 50)
+testRoom.addItem(coin)
+print("After adding coin:")
+print(testRoom.look())
+
+// Test 3: Taking items from room
+print("\n=== Test 3: Taking Items ===")
+takenItem = testRoom.takeItem("Gold Coin")
+if takenItem {
+    print("Took: " + takenItem.name)
+} else {
+    print("Failed to take item")
+}
+print("Room after taking item:")
+print(testRoom.look())
+
+// Test 4: Room connections
+print("\n=== Test 4: Room Connections ===")
+room1 = new Room("Room 1", "First room")
+room2 = new Room("Room 2", "Second room")
+
+room1.addExit("north", room2)
+room2.addExit("south", room1)
+
+print("Room 1:")
+print(room1.look())
+
+print("Moving north from Room 1:")
+destination = room1.move("north")
+if destination {
+    print("Arrived at: " + destination.name)
+    print(destination.look())
+} else {
+    print("Cannot move north")
+}
+
+// Test 5: Treasure room
+print("\n=== Test 5: Treasure Room ===")
+specialTreasure = new Item("Diamond", "A precious diamond", 1, 1000)
+treasureRoom = new TreasureRoom("Secret Vault", "A hidden treasure chamber", specialTreasure)
+print(treasureRoom.look())
+
+print("Is treasure room locked: " + treasureRoom.isLocked())
+treasureRoom.unlock()
+print("After unlocking: " + treasureRoom.isLocked())
+
+// Test 6: World creation
+print("\n=== Test 6: World Creation ===")
+startRoom = createWorld()
+print("World created! Starting room:")
+print(startRoom.look())
+
+print("Moving through the world...")
+corridor = startRoom.move("north")
+if corridor {
+    print("In corridor:")
+    print(corridor.look())
+    
+    armory = corridor.move("east")
+    if armory {
+        print("In armory:")
+        print(armory.look())
+    }
+}
+
+print("\n✅ Rooms module test completed!")

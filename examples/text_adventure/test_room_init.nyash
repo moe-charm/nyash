@@ -1,0 +1,20 @@
+// Test Room initialization issue
+
+box TestBox {
+    init { a, b, c }
+    
+    TestBox(a, b) {  // Only 2 params in constructor
+        me.a = a
+        me.b = b
+        me.c = "default"
+    }
+}
+
+print("Testing mismatched init/constructor...")
+obj = new TestBox("first", "second")
+
+print("Field a: " + obj.a)
+print("Field b: " + obj.b)
+print("Field c: " + obj.c)
+
+print("\n✅ Test completed!")

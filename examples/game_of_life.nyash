@@ -1,0 +1,306 @@
+// Conway's Game of Life - Nyash Implementation
+// A classic cellular automaton showcasing Nyash Box philosophy
+
+// Cell representation - Everything is Box!
+box Cell {
+    init {
+        alive
+        x
+        y
+    }
+    
+    Cell(x, y, alive) {
+        me.x = x
+        me.y = y
+        me.alive = alive
+    }
+    
+    // Toggle cell state
+    toggle() {
+        if me.alive {
+            me.alive = false
+        } else {
+            me.alive = true
+        }
+    }
+    
+    // Get visual representation
+    display() {
+        if me.alive {
+            return "█"
+        } else {
+            return "."
+        }
+    }
+}
+
+// Main Game of Life engine
+box GameOfLife {
+    init {
+        width
+        height
+        grid
+        generation
+        debug
+    }
+    
+    GameOfLife(w, h) {
+        me.width = w
+        me.height = h
+        me.generation = 0
+        me.grid = new ArrayBox()
+        me.debug = new DebugBox()
+        me.debug.startTracking()
+        
+        // Initialize empty grid
+        me.initializeGrid()
+        
+        // Track this game instance
+        me.debug.trackBox(me, "game_of_life")
+    }
+    
+    // Initialize empty grid
+    initializeGrid() {
+        me.debug.traceCall("initializeGrid")
+        
+        y = 0
+        loop(y < me.height) {
+            row = new ArrayBox()
+            x = 0
+            loop(x < me.width) {
+                cell = new Cell(x, y, false)
+                row.push(cell)
+                x = x + 1
+            }
+            me.grid.push(row)
+            y = y + 1
+        }
+        
+        me.debug.trackBox(me.grid, "game_grid")
+    }
+    
+    // Get cell at position (with bounds checking)
+    getCell(x, y) {
+        if x < 0 || x >= me.width || y < 0 || y >= me.height {
+            return new Cell(x, y, false)  // Dead cells outside bounds
+        }
+        row = me.grid.get(y)
+        return row.get(x)
+    }
+    
+    // Set cell state
+    setCell(x, y, alive) {
+        if x >= 0 && x < me.width && y >= 0 && y < me.height {
+            cell = me.getCell(x, y)
+            cell.alive = alive
+        }
+    }
+    
+    // Count living neighbors for a cell
+    countNeighbors(x, y) {
+        count = 0
+        
+        // Check all 8 neighbors
+        dy = -1
+        loop(dy <= 1) {
+            dx = -1
+            loop(dx <= 1) {
+                // Skip the cell itself
+                if (dx != 0 || dy != 0) {
+                    neighbor = me.getCell(x + dx, y + dy)
+                    if neighbor.alive {
+                        count = count + 1
+                    }
+                }
+                dx = dx + 1
+            }
+            dy = dy + 1
+        }
+        
+        return count
+    }
+    
+    // Apply Conway's rules to calculate next generation
+    nextGeneration() {
+        me.debug.traceCall("nextGeneration", me.generation)
+        
+        newGrid = new ArrayBox()
+        
+        y = 0
+        loop(y < me.height) {
+            newRow = new ArrayBox()
+            x = 0
+            loop(x < me.width) {
+                currentCell = me.getCell(x, y)
+                neighbors = me.countNeighbors(x, y)
+                
+                newAlive = false
+                
+                // Conway's Rules:
+                // 1. Live cell with 2-3 neighbors survives
+                // 2. Dead cell with exactly 3 neighbors becomes alive
+                // 3. All other cells die or stay dead
+                
+                if currentCell.alive {
+                    if neighbors == 2 || neighbors == 3 {
+                        newAlive = true
+                    }
+                } else {
+                    if neighbors == 3 {
+                        newAlive = true
+                    }
+                }
+                
+                newCell = new Cell(x, y, newAlive)
+                newRow.push(newCell)
+                x = x + 1
+            }
+            newGrid.push(newRow)
+            y = y + 1
+        }
+        
+        me.grid = newGrid
+        me.generation = me.generation + 1
+        me.debug.trackBox(me.grid, "game_grid_gen_" + me.generation)
+    }
+    
+    // Display the current state
+    display() {
+        output = "Generation " + me.generation + ":\n"
+        
+        y = 0
+        loop(y < me.height) {
+            row = me.grid.get(y)
+            line = ""
+            x = 0
+            loop(x < me.width) {
+                cell = row.get(x)
+                line = line + cell.display()
+                x = x + 1
+            }
+            output = output + line + "\n"
+            y = y + 1
+        }
+        
+        return output
+    }
+    
+    // Load a pattern into the grid
+    loadPattern(pattern, startX, startY) {
+        me.debug.traceCall("loadPattern", pattern.length(), startX, startY)
+        
+        y = 0
+        loop(y < pattern.length()) {
+            row = pattern.get(y)
+            x = 0
+            loop(x < row.length()) {
+                if row.get(x) == "1" {
+                    me.setCell(startX + x, startY + y, true)
+                }
+                x = x + 1
+            }
+            y = y + 1
+        }
+    }
+    
+    // Count total living cells
+    countLiving() {
+        count = 0
+        y = 0
+        loop(y < me.height) {
+            x = 0
+            loop(x < me.width) {
+                cell = me.getCell(x, y)
+                if cell.alive {
+                    count = count + 1
+                }
+                x = x + 1
+            }
+            y = y + 1
+        }
+        return count
+    }
+    
+    // Save debug information
+    saveDebugInfo() {
+        me.debug.saveToFile("game_of_life_debug.txt")
+    }
+}
+
+// Pattern definitions Box
+box Patterns {
+    // Classic Glider pattern
+    glider() {
+        pattern = new ArrayBox()
+        pattern.push("010")
+        pattern.push("001")
+        pattern.push("111")
+        return pattern
+    }
+    
+    // Blinker pattern (oscillator)
+    blinker() {
+        pattern = new ArrayBox()
+        pattern.push("111")
+        return pattern
+    }
+    
+    // Block pattern (still life)
+    block() {
+        pattern = new ArrayBox()
+        pattern.push("11")
+        pattern.push("11")
+        return pattern
+    }
+    
+    // Toad pattern (oscillator)
+    toad() {
+        pattern = new ArrayBox()
+        pattern.push("0111")
+        pattern.push("1110")
+        return pattern
+    }
+}
+
+// Main execution
+print("🎮 Conway's Game of Life - Nyash Implementation")
+print("=" * 50)
+
+// Create game instance
+game = new GameOfLife(20, 10)
+
+// Create patterns
+patterns = new Patterns()
+
+// Load some interesting patterns
+print("Loading patterns...")
+game.loadPattern(patterns.glider(), 1, 1)
+game.loadPattern(patterns.blinker(), 10, 3)
+game.loadPattern(patterns.block(), 15, 2)
+game.loadPattern(patterns.toad(), 5, 6)
+
+// Display initial state
+print(game.display())
+print("Living cells: " + game.countLiving())
+
+// Run simulation for several generations
+print("\nRunning simulation...")
+generation = 0
+loop(generation < 10) {
+    game.nextGeneration()
+    print(game.display())
+    print("Generation " + game.generation + " - Living cells: " + game.countLiving())
+    print("-" * 30)
+    generation = generation + 1
+}
+
+// Save debug information
+game.saveDebugInfo()
+print("Debug information saved to game_of_life_debug.txt")
+
+print("\n✨ Game of Life simulation completed!")
+print("This demonstrates Nyash's Box philosophy:")
+print("- Cell Box: Individual cell state and behavior")
+print("- GameOfLife Box: Game logic and grid management") 
+print("- Patterns Box: Reusable pattern definitions")
+print("- Everything is Box! 📦")

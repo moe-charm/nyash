@@ -1,0 +1,11 @@
+// 🚨 未宣言変数エラーテスト - 厳密性の実証
+
+static box Main {
+    main() {
+        // ❌ これは未宣言変数エラーになるはず
+        x = 42
+        console = new ConsoleBox()
+        console.log("This should not work!")
+        return "This should fail!"
+    }
+}

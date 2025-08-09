@@ -1,0 +1,28 @@
+// Debug player creation
+include "text_adventure/player.nyash"
+
+print("🎮 Debug Player Creation...")
+
+// Manually create world and player
+print("\n1. Creating world...")
+world = createSimpleWorld()
+print("World created: " + world.name)
+
+print("\n2. Creating player...")
+player = new Player("TestHero", world)
+print("Player created!")
+
+print("\n3. Checking player fields...")
+print("Player name: " + player.name)
+print("Player health: " + player.health)
+print("Player room name: " + player.currentRoom.name)
+
+print("\n4. Trying to call look()...")
+try {
+    lookResult = player.look()
+    print("Look result: " + lookResult)
+} catch {
+    print("ERROR in look()!")
+}
+
+print("\n✅ Debug test completed!")

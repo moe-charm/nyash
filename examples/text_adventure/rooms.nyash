@@ -1,0 +1,256 @@
+// Text Adventure Game - Rooms Module
+// ルームシステムの実装
+
+include "text_adventure/items.nyash"
+
+// 基本ルームBox
+box Room {
+    init { name, description, items, exits, visited, locked }
+    
+    Room(name, description) {
+        me.name = name
+        me.description = description
+        me.items = new MapBox()
+        me.exits = new MapBox()
+        me.visited = false
+        me.locked = false
+    }
+    
+    // ルームの表示
+    look() {
+        result = ""
+        if me.visited {
+            result = me.name + "\n"
+        } else {
+            result = me.name + " (First time here!)\n"
+            me.visited = true
+        }
+        
+        result = result + me.description + "\n"
+        
+        // アイテムの表示
+        if me.items.size() > 0 {
+            result = result + "\nItems here:\n"
+            // MapBoxのキーを反復処理
+            keys = me.items.keys()
+            i = 0
+            loop(i < keys.size()) {
+                itemName = keys.get(i)
+                item = me.items.get(itemName)
+                itemDisplay = item.display()
+                result = result + "- " + itemDisplay + "\n"
+                i = i + 1
+            }
+        }
+        
+        // 出口の表示
+        if me.exits.size() > 0 {
+            result = result + "\nExits: "
+            exitKeys = me.exits.keys()
+            i = 0
+            loop(i < exitKeys.size()) {
+                direction = exitKeys.get(i)
+                if i > 0 {
+                    result = result + ", "
+                }
+                result = result + direction
+                i = i + 1
+            }
+            result = result + "\n"
+        }
+        
+        return result
+    }
+    
+    // アイテムを追加
+    addItem(item) {
+        itemName = item.name
+        me.items.put(itemName, item)
+    }
+    
+    // アイテムを取得（削除）
+    takeItem(itemName) {
+        if me.items.has(itemName) {
+            item = me.items.get(itemName)
+            me.items.remove(itemName)
+            return item
+        }
+        return null
+    }
+    
+    // アイテムの存在確認
+    hasItem(itemName) {
+        return me.items.has(itemName)
+    }
+    
+    // 出口を追加
+    addExit(direction, targetRoom) {
+        me.exits.put(direction, targetRoom)
+    }
+    
+    // 移動を試行
+    move(direction) {
+        if me.exits.has(direction) {
+            targetRoom = me.exits.get(direction)
+            isLocked = targetRoom.locked
+            if isLocked {
+                return null  // 鍵がかかっている
+            }
+            return targetRoom
+        }
+        return null  // 出口がない
+    }
+    
+    // ルームをロック/アンロック
+    lock() {
+        me.locked = true
+    }
+    
+    unlock() {
+        me.locked = false
+    }
+    
+    isLocked() {
+        return me.locked
+    }
+}
+
+// 特別なルーム：宝物庫
+box TreasureRoom {
+    init { name, description, items, exits, visited, locked, treasure }
+    
+    TreasureRoom(name, description, treasureItem) {
+        me.name = name
+        me.description = description
+        me.items = new MapBox()
+        me.exits = new MapBox()
+        me.visited = false
+        me.locked = true  // 宝物庫は最初ロック
+        me.treasure = treasureItem
+        
+        // 宝物を配置
+        me.addItem(me.treasure)
+    }
+    
+    // 基本Roomメソッドを再実装
+    look() {
+        result = ""
+        if me.visited {
+            result = me.name + " ✨\n"
+        } else {
+            result = me.name + " ✨ (First time here!)\n"
+            me.visited = true
+        }
+        
+        result = result + me.description + "\n"
+        
+        // アイテムの表示（特別演出）
+        if me.items.size() > 0 {
+            result = result + "\n💰 Treasures here:\n"
+            keys = me.items.keys()
+            i = 0
+            loop(i < keys.size()) {
+                itemName = keys.get(i)
+                item = me.items.get(itemName)
+                itemDisplay = item.display()
+                result = result + "- ✨ " + itemDisplay + " ✨\n"
+                i = i + 1
+            }
+        }
+        
+        // 出口の表示
+        if me.exits.size() > 0 {
+            result = result + "\nExits: "
+            exitKeys = me.exits.keys()
+            i = 0
+            loop(i < exitKeys.size()) {
+                direction = exitKeys.get(i)
+                if i > 0 {
+                    result = result + ", "
+                }
+                result = result + direction
+                i = i + 1
+            }
+            result = result + "\n"
+        }
+        
+        return result
+    }
+    
+    addItem(item) {
+        me.items.put(item.name, item)
+    }
+    
+    takeItem(itemName) {
+        if me.items.has(itemName) {
+            item = me.items.get(itemName)
+            me.items.remove(itemName)
+            return item
+        }
+        return null
+    }
+    
+    hasItem(itemName) {
+        return me.items.has(itemName)
+    }
+    
+    addExit(direction, targetRoom) {
+        me.exits.put(direction, targetRoom)
+    }
+    
+    move(direction) {
+        if me.exits.has(direction) {
+            targetRoom = me.exits.get(direction)
+            isLocked = targetRoom.locked
+            if isLocked {
+                return null
+            }
+            return targetRoom
+        }
+        return null
+    }
+    
+    lock() {
+        me.locked = true
+    }
+    
+    unlock() {
+        me.locked = false
+    }
+    
+    isLocked() {
+        return me.locked
+    }
+}
+
+// ワールド作成関数
+function createWorld() {
+    // アイテム作成
+    sword = createSword()
+    potion = createPotion()
+    treasureKey = createKey("treasure_room")
+    treasure = createTreasure()
+    
+    // ルーム作成
+    entrance = new Room("Entrance Hall", "A grand entrance with marble columns. Light streams in from above.")
+    corridor = new Room("Long Corridor", "A dimly lit corridor with ancient tapestries on the walls.")
+    armory = new Room("Old Armory", "A dusty armory with weapon racks. Some items remain.")
+    treasureRoom = new TreasureRoom("Treasure Chamber", "A magnificent chamber filled with golden light.", treasure)
+    
+    // アイテム配置
+    armory.addItem(sword)
+    corridor.addItem(potion)
+    entrance.addItem(treasureKey)
+    
+    // 出口設定（双方向）
+    entrance.addExit("north", corridor)
+    corridor.addExit("south", entrance)
+    corridor.addExit("east", armory)
+    armory.addExit("west", corridor)
+    corridor.addExit("west", treasureRoom)
+    treasureRoom.addExit("east", corridor)
+    
+    return entrance  // スタート地点
+}
+
+print("🏰 Rooms module loaded successfully!")

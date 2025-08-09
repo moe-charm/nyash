@@ -1,0 +1,33 @@
+// Test room with workaround
+include "text_adventure/simple_rooms.nyash"
+
+print("Testing Room workaround...")
+
+// Direct creation
+print("\n1. Direct Room creation:")
+room1 = new Room("Direct Room", "Created directly")
+print("Name: " + room1.getName())
+print("Visited: " + room1.isVisited())
+print("Look result:")
+print(room1.look())
+
+// Function return
+print("\n2. Function return:")
+function makeRoom() {
+    return new Room("Function Room", "Created in function")
+}
+
+room2 = makeRoom()
+print("Name: " + room2.getName())
+print("Visited: " + room2.isVisited())
+print("Look result:")
+print(room2.look())
+
+// Test world creation
+print("\n3. World creation:")
+world = createSimpleWorld()
+print("World name: " + world.getName())
+print("World look:")
+print(world.look())
+
+print("\n✅ Room workaround test completed!")

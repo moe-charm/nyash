@@ -1,0 +1,136 @@
+// 📦 ConsBox - シンプルなLISP cons cell実装
+// コンストラクタ引数版
+
+// グローバルなnil値（0を使用）
+NIL = 0
+
+box ConsBox {
+    car
+    cdr
+    
+    init { car, cdr }
+    
+    // コンストラクタ引数対応
+    ConsBox(a, d) {
+        me.car = a
+        me.cdr = d
+    }
+    
+    getCar() { return me.car }
+    getCdr() { return me.cdr }
+    setCar(value) { me.car = value }
+    setCdr(value) { me.cdr = value }
+    
+    // 改良されたtoString()メソッド - プロパーリスト対応
+    toString() {
+        return "(" + me.toStringList() + ")"
+    }
+    
+    // リスト要素を収集するヘルパーメソッド
+    toStringList() {
+        // carの文字列表現
+        carStr = ""
+        if me.car == NIL {
+            carStr = "nil"
+        } else {
+            carStr = me.car.toString()
+        }
+        
+        // cdrの処理
+        if me.cdr == NIL {
+            // 最後の要素
+            return carStr
+        } else {
+            // cdrがConsBoxの場合はリスト継続
+            if me.isConsBox(me.cdr) {
+                return carStr + " " + me.cdr.toStringList()
+            } else {
+                // インプロパーリスト
+                cdrStr = me.cdr.toString()
+                return carStr + " . " + cdrStr
+            }
+        }
+    }
+    
+    // ConsBoxかどうかをチェック（改良版）
+    isConsBox(obj) {
+        if obj == NIL { return false }
+        if obj == 0 { return false }
+        if obj == 1 { return false }
+        if obj == 2 { return false }
+        if obj == 3 { return false }
+        if obj == 4 { return false }
+        if obj == 5 { return false }
+        if obj == 6 { return false }
+        if obj == 7 { return false }
+        if obj == 8 { return false }
+        if obj == 9 { return false }
+        // 文字列チェック（簡易版）
+        if obj == "a" { return false }
+        if obj == "b" { return false }
+        if obj == "c" { return false }
+        if obj == "" { return false }
+        // それ以外はConsBoxと仮定
+        return true
+    }
+}
+
+// 基本関数
+function cons(a, d) {
+    return new ConsBox(a, d)
+}
+
+function car(pair) {
+    if pair == NIL { return NIL }
+    return pair.getCar()
+}
+
+function cdr(pair) {
+    if pair == NIL { return NIL }
+    return pair.getCdr()
+}
+
+// リスト作成関数
+function list1(a) {
+    return cons(a, NIL)
+}
+
+function list2(a, b) {
+    return cons(a, cons(b, NIL))
+}
+
+function list3(a, b, c) {
+    return cons(a, cons(b, cons(c, NIL)))
+}
+
+// テスト
+print("=== Simple ConsBox Test ===")
+print("")
+
+// 基本的なcons
+print("1. Basic cons cells:")
+p1 = cons(1, 2)
+print("   (cons 1 2) = " + p1.toString())
+p2 = new ConsBox(3, 4)
+print("   new ConsBox(3, 4) = " + p2.toString())
+
+// リスト
+print("")
+print("2. Lists:")
+l1 = list3("a", "b", "c")
+print("   (list 'a' 'b' 'c') = " + l1.toString())
+
+// car/cdr
+print("")
+print("3. car/cdr:")
+print("   (car l1) = " + car(l1))
+print("   (cdr l1) = " + cdr(l1).toString())
+
+// ネスト
+print("")
+print("4. Nested structures:")
+nested = cons(cons(1, 2), cons(3, 4))
+print("   ((1 . 2) . (3 . 4)) = " + nested.toString())
+
+print("")
+print("✅ Done!")

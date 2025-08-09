@@ -1,0 +1,1444 @@
+/*!
+ * Nyash Box Trait System - Everything is Box in Rust
+ * 
+ * This module implements the core "Everything is Box" philosophy using Rust's
+ * ownership system and trait system. Every value in Nyash is a Box that
+ * implements the NyashBox trait.
+ */
+
+use std::fmt::{Debug, Display};
+use std::any::Any;
+use std::sync::{Arc, Mutex};
+use std::fs;
+use std::path::Path;
+
+/// The fundamental trait that all Nyash values must implement.
+/// This embodies the "Everything is Box" philosophy with Rust's type safety.
+pub trait NyashBox: Debug + Send + Sync {
+    /// Convert this box to a string representation (equivalent to Python's toString())
+    fn to_string_box(&self) -> StringBox;
+    
+    /// Check equality with another box (equivalent to Python's equals())
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox;
+    
+    /// Get the type name of this box for debugging
+    fn type_name(&self) -> &'static str;
+    
+    /// Clone this box (equivalent to Python's copy())
+    fn clone_box(&self) -> Box<dyn NyashBox>;
+    
+    /// Convert to Any for downcasting (enables dynamic typing in static Rust)
+    fn as_any(&self) -> &dyn Any;
+    
+    /// Get a unique identifier for this box instance
+    fn box_id(&self) -> u64;
+    
+    // 🌟 TypeBox革命: Get type information as a Box
+    // Everything is Box極限実現 - 型情報もBoxとして取得！
+    // TODO: 次のステップで完全実装
+    // fn get_type_box(&self) -> std::sync::Arc<crate::type_box::TypeBox>;
+}
+
+// ===== Basic Box Types =====
+
+/// String values in Nyash - immutable and owned
+#[derive(Debug, Clone, PartialEq)]
+pub struct StringBox {
+    pub value: String,
+    id: u64,
+}
+
+impl StringBox {
+    pub fn new(value: impl Into<String>) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            value: value.into(),
+            id,
+        }
+    }
+    
+    pub fn empty() -> Self {
+        Self::new("")
+    }
+    
+    // ===== String Methods for Nyash =====
+    
+    /// Split string by delimiter and return ArrayBox
+    pub fn split(&self, delimiter: &str) -> Box<dyn NyashBox> {
+        let parts: Vec<String> = self.value.split(delimiter).map(|s| s.to_string()).collect();
+        let array_elements: Vec<Box<dyn NyashBox>> = parts.into_iter()
+            .map(|s| Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
+            .collect();
+        Box::new(ArrayBox::new_with_elements(array_elements))
+    }
+    
+    /// Find substring and return position (or -1 if not found)
+    pub fn find(&self, search: &str) -> Box<dyn NyashBox> {
+        match self.value.find(search) {
+            Some(pos) => Box::new(IntegerBox::new(pos as i64)),
+            None => Box::new(IntegerBox::new(-1)),
+        }
+    }
+    
+    /// Replace all occurrences of old with new
+    pub fn replace(&self, old: &str, new: &str) -> Box<dyn NyashBox> {
+        Box::new(StringBox::new(self.value.replace(old, new)))
+    }
+    
+    /// Trim whitespace from both ends
+    pub fn trim(&self) -> Box<dyn NyashBox> {
+        Box::new(StringBox::new(self.value.trim()))
+    }
+    
+    /// Convert to uppercase
+    pub fn to_upper(&self) -> Box<dyn NyashBox> {
+        Box::new(StringBox::new(self.value.to_uppercase()))
+    }
+    
+    /// Convert to lowercase  
+    pub fn to_lower(&self) -> Box<dyn NyashBox> {
+        Box::new(StringBox::new(self.value.to_lowercase()))
+    }
+    
+    /// Check if string contains substring
+    pub fn contains(&self, search: &str) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.value.contains(search)))
+    }
+    
+    /// Check if string starts with prefix
+    pub fn starts_with(&self, prefix: &str) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.value.starts_with(prefix)))
+    }
+    
+    /// Check if string ends with suffix
+    pub fn ends_with(&self, suffix: &str) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.value.ends_with(suffix)))
+    }
+    
+    /// Join array elements using this string as delimiter
+    pub fn join(&self, array_box: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        if let Some(array) = array_box.as_any().downcast_ref::<ArrayBox>() {
+            let strings: Vec<String> = array.elements.lock().unwrap()
+                .iter()
+                .map(|element| element.to_string_box().value)
+                .collect();
+            Box::new(StringBox::new(strings.join(&self.value)))
+        } else {
+            // If not an ArrayBox, treat as single element
+            Box::new(StringBox::new(array_box.to_string_box().value))
+        }
+    }
+    
+    /// Get string length
+    pub fn length(&self) -> Box<dyn NyashBox> {
+        Box::new(IntegerBox::new(self.value.len() as i64))
+    }
+    
+    /// Get character at index
+    pub fn get(&self, index: usize) -> Option<Box<dyn NyashBox>> {
+        if let Some(ch) = self.value.chars().nth(index) {
+            Some(Box::new(StringBox::new(ch.to_string())))
+        } else {
+            None
+        }
+    }
+}
+
+impl NyashBox for StringBox {
+    fn to_string_box(&self) -> StringBox {
+        self.clone()
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_string) = other.as_any().downcast_ref::<StringBox>() {
+            BoolBox::new(self.value == other_string.value)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "StringBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for StringBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+/// Integer values in Nyash - 64-bit signed integers
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntegerBox {
+    pub value: i64,
+    id: u64,
+}
+
+impl IntegerBox {
+    pub fn new(value: i64) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self { value, id }
+    }
+    
+    pub fn zero() -> Self {
+        Self::new(0)
+    }
+}
+
+impl NyashBox for IntegerBox {
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new(self.value.to_string())
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
+            BoolBox::new(self.value == other_int.value)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "IntegerBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for IntegerBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+/// Boolean values in Nyash - true/false
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoolBox {
+    pub value: bool,
+    id: u64,
+}
+
+impl BoolBox {
+    pub fn new(value: bool) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self { value, id }
+    }
+    
+    pub fn true_box() -> Self {
+        Self::new(true)
+    }
+    
+    pub fn false_box() -> Self {
+        Self::new(false)
+    }
+}
+
+impl NyashBox for BoolBox {
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new(if self.value { "true" } else { "false" })
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_bool) = other.as_any().downcast_ref::<BoolBox>() {
+            BoolBox::new(self.value == other_bool.value)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "BoolBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for BoolBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", if self.value { "true" } else { "false" })
+    }
+}
+
+/// Void/null values in Nyash - represents empty or null results
+#[derive(Debug, Clone, PartialEq)]
+pub struct VoidBox {
+    id: u64,
+}
+
+impl VoidBox {
+    pub fn new() -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self { id }
+    }
+}
+
+impl Default for VoidBox {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl NyashBox for VoidBox {
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new("void")
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        BoolBox::new(other.as_any().is::<VoidBox>())
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "VoidBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for VoidBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "void")
+    }
+}
+
+/// Array values in Nyash - dynamic arrays of Box values
+#[derive(Debug)]
+pub struct ArrayBox {
+    pub elements: Arc<Mutex<Vec<Box<dyn NyashBox>>>>,
+    id: u64,
+}
+
+impl Clone for ArrayBox {
+    fn clone(&self) -> Self {
+        Self {
+            elements: Arc::clone(&self.elements),  // Arcをクローンして同じデータを共有
+            id: self.id,  // 同じIDを保持
+        }
+    }
+}
+
+impl ArrayBox {
+    pub fn new() -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            elements: Arc::new(Mutex::new(Vec::new())),
+            id,
+        }
+    }
+    
+    pub fn new_with_elements(elements: Vec<Box<dyn NyashBox>>) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            elements: Arc::new(Mutex::new(elements)),
+            id,
+        }
+    }
+    
+    // ===== Array Methods for Nyash =====
+    
+    /// Add element to end of array
+    pub fn push(&self, element: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        self.elements.lock().unwrap().push(element);
+        Box::new(VoidBox::new())
+    }
+    
+    /// Remove and return last element
+    pub fn pop(&self) -> Box<dyn NyashBox> {
+        match self.elements.lock().unwrap().pop() {
+            Some(element) => element,
+            None => Box::new(VoidBox::new()),
+        }
+    }
+    
+    /// Get array length
+    pub fn length(&self) -> Box<dyn NyashBox> {
+        Box::new(IntegerBox::new(self.elements.lock().unwrap().len() as i64))
+    }
+    
+    /// Join array elements with delimiter into string
+    pub fn join(&self, delimiter: &str) -> Box<dyn NyashBox> {
+        let strings: Vec<String> = self.elements.lock().unwrap()
+            .iter()
+            .map(|element| element.to_string_box().value)
+            .collect();
+        Box::new(StringBox::new(strings.join(delimiter)))
+    }
+    
+    /// Get element at index
+    pub fn get(&self, index: usize) -> Option<Box<dyn NyashBox>> {
+        self.elements.lock().unwrap().get(index).map(|e| e.clone_box())
+    }
+    
+    /// Set element at index
+    pub fn set(&self, index: usize, value: Box<dyn NyashBox>) -> Result<(), String> {
+        let mut elements = self.elements.lock().unwrap();
+        if index < elements.len() {
+            elements[index] = value;
+            Ok(())
+        } else {
+            Err(format!("Index {} out of bounds for array of length {}", index, elements.len()))
+        }
+    }
+}
+
+impl NyashBox for ArrayBox {
+    fn to_string_box(&self) -> StringBox {
+        let elements_str: Vec<String> = self.elements.lock().unwrap()
+            .iter()
+            .map(|e| e.to_string_box().value)
+            .collect();
+        StringBox::new(format!("[{}]", elements_str.join(", ")))
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_array) = other.as_any().downcast_ref::<ArrayBox>() {
+            let self_elements = self.elements.lock().unwrap();
+            let other_elements = other_array.elements.lock().unwrap();
+            
+            if self_elements.len() != other_elements.len() {
+                return BoolBox::new(false);
+            }
+            
+            for (a, b) in self_elements.iter().zip(other_elements.iter()) {
+                if !a.equals(b.as_ref()).value {
+                    return BoolBox::new(false);
+                }
+            }
+            BoolBox::new(true)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "ArrayBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())  // 同じインスタンスを共有
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for ArrayBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string_box().value)
+    }
+}
+
+/// File values in Nyash - file system operations
+#[derive(Debug, Clone)]
+pub struct FileBox {
+    pub path: String,
+    id: u64,
+}
+
+impl FileBox {
+    pub fn new(path: impl Into<String>) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            path: path.into(),
+            id,
+        }
+    }
+    
+    // ===== File Methods for Nyash =====
+    
+    /// Read file contents as string
+    pub fn read(&self) -> Box<dyn NyashBox> {
+        match fs::read_to_string(&self.path) {
+            Ok(content) => Box::new(StringBox::new(content)),
+            Err(_) => Box::new(VoidBox::new()), // Return void on error for now
+        }
+    }
+    
+    /// Write content to file
+    pub fn write(&self, content: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let content_str = content.to_string_box().value;
+        match fs::write(&self.path, content_str) {
+            Ok(_) => Box::new(BoolBox::new(true)),
+            Err(_) => Box::new(BoolBox::new(false)),
+        }
+    }
+    
+    /// Check if file exists
+    pub fn exists(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(Path::new(&self.path).exists()))
+    }
+    
+    /// Delete file
+    pub fn delete(&self) -> Box<dyn NyashBox> {
+        match fs::remove_file(&self.path) {
+            Ok(_) => Box::new(BoolBox::new(true)),
+            Err(_) => Box::new(BoolBox::new(false)),
+        }
+    }
+    
+    /// Copy file to destination
+    pub fn copy(&self, dest_path: &str) -> Box<dyn NyashBox> {
+        match fs::copy(&self.path, dest_path) {
+            Ok(_) => Box::new(BoolBox::new(true)),
+            Err(_) => Box::new(BoolBox::new(false)),
+        }
+    }
+}
+
+impl NyashBox for FileBox {
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new(format!("<FileBox: {}>", self.path))
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_file) = other.as_any().downcast_ref::<FileBox>() {
+            BoolBox::new(self.path == other_file.path)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "FileBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for FileBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<FileBox: {}>", self.path)
+    }
+}
+
+/// Error values in Nyash - represents error information
+#[derive(Debug, Clone)]
+pub struct ErrorBox {
+    pub error_type: String,
+    pub message: String,
+    id: u64,
+}
+
+impl ErrorBox {
+    pub fn new(error_type: impl Into<String>, message: impl Into<String>) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            error_type: error_type.into(),
+            message: message.into(),
+            id,
+        }
+    }
+}
+
+impl NyashBox for ErrorBox {
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new(format!("{}: {}", self.error_type, self.message))
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_error) = other.as_any().downcast_ref::<ErrorBox>() {
+            BoolBox::new(self.error_type == other_error.error_type && self.message == other_error.message)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "ErrorBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for ErrorBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.error_type, self.message)
+    }
+}
+
+/// Result values in Nyash - represents success or error results
+#[derive(Debug)]
+pub struct ResultBox {
+    pub is_success: bool,
+    pub value: Option<Box<dyn NyashBox>>,
+    pub error: Option<ErrorBox>,
+    id: u64,
+}
+
+impl ResultBox {
+    pub fn new_success(value: Box<dyn NyashBox>) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            is_success: true,
+            value: Some(value),
+            error: None,
+            id,
+        }
+    }
+    
+    pub fn new_error(error: ErrorBox) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            is_success: false,
+            value: None,
+            error: Some(error),
+            id,
+        }
+    }
+    
+    // ===== Result Methods for Nyash =====
+    
+    /// Check if result is successful
+    pub fn is_ok(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.is_success))
+    }
+    
+    /// Get success value (returns void if error)
+    pub fn get_value(&self) -> Box<dyn NyashBox> {
+        match &self.value {
+            Some(val) => val.clone_box(),
+            None => Box::new(VoidBox::new()),
+        }
+    }
+    
+    /// Get error (returns void if success)
+    pub fn get_error(&self) -> Box<dyn NyashBox> {
+        match &self.error {
+            Some(err) => Box::new(err.clone()),
+            None => Box::new(VoidBox::new()),
+        }
+    }
+}
+
+impl NyashBox for ResultBox {
+    fn to_string_box(&self) -> StringBox {
+        if self.is_success {
+            if let Some(value) = &self.value {
+                StringBox::new(format!("Result(OK: {})", value.to_string_box().value))
+            } else {
+                StringBox::new("Result(OK: void)".to_string())
+            }
+        } else {
+            if let Some(error) = &self.error {
+                StringBox::new(format!("Result(Error: {})", error.to_string_box().value))
+            } else {
+                StringBox::new("Result(Error: unknown)".to_string())
+            }
+        }
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_result) = other.as_any().downcast_ref::<ResultBox>() {
+            if self.is_success != other_result.is_success {
+                return BoolBox::new(false);
+            }
+            
+            if self.is_success {
+                // Compare success values
+                match (&self.value, &other_result.value) {
+                    (Some(a), Some(b)) => a.equals(b.as_ref()),
+                    (None, None) => BoolBox::new(true),
+                    _ => BoolBox::new(false),
+                }
+            } else {
+                // Compare errors
+                match (&self.error, &other_result.error) {
+                    (Some(a), Some(b)) => a.equals(b),
+                    (None, None) => BoolBox::new(true),
+                    _ => BoolBox::new(false),
+                }
+            }
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "ResultBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        if self.is_success {
+            if let Some(value) = &self.value {
+                Box::new(ResultBox::new_success(value.clone_box()))
+            } else {
+                Box::new(ResultBox::new_success(Box::new(VoidBox::new())))
+            }
+        } else {
+            if let Some(error) = &self.error {
+                Box::new(ResultBox::new_error(error.clone()))
+            } else {
+                Box::new(ResultBox::new_error(ErrorBox::new("Unknown", "Unknown error")))
+            }
+        }
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for ResultBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string_box().value)
+    }
+}
+
+/// Future values in Nyash - represents async operations
+#[derive(Debug)]
+pub struct FutureBox {
+    pub result: Arc<Mutex<Option<Box<dyn NyashBox>>>>,
+    pub is_ready: Arc<Mutex<bool>>,
+    id: u64,
+}
+
+impl Clone for FutureBox {
+    fn clone(&self) -> Self {
+        Self {
+            result: Arc::clone(&self.result),
+            is_ready: Arc::clone(&self.is_ready),
+            id: self.id,
+        }
+    }
+}
+
+impl FutureBox {
+    pub fn new() -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self {
+            result: Arc::new(Mutex::new(None)),
+            is_ready: Arc::new(Mutex::new(false)),
+            id,
+        }
+    }
+    
+    /// Set the result of the future
+    pub fn set_result(&self, value: Box<dyn NyashBox>) {
+        let mut result = self.result.lock().unwrap();
+        *result = Some(value);
+        let mut ready = self.is_ready.lock().unwrap();
+        *ready = true;
+    }
+    
+    /// Get the result (blocks until ready)
+    pub fn get(&self) -> Box<dyn NyashBox> {
+        // 簡易実装: ビジーウェイト（後でcondvarに改善）
+        loop {
+            let ready = self.is_ready.lock().unwrap();
+            if *ready {
+                break;
+            }
+            drop(ready);
+            std::thread::yield_now();
+        }
+        
+        let result = self.result.lock().unwrap();
+        result.as_ref().unwrap().clone_box()
+    }
+    
+    /// Check if the future is ready
+    pub fn ready(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(*self.is_ready.lock().unwrap()))
+    }
+    
+    /// Wait and get the result (for await implementation)
+    pub fn wait_and_get(&self) -> Result<Box<dyn NyashBox>, String> {
+        // 結果が準備できるまで待機
+        while !*self.is_ready.lock().unwrap() {
+            std::thread::yield_now();
+        }
+        
+        let result = self.result.lock().unwrap();
+        result.as_ref()
+            .map(|v| v.clone_box())
+            .ok_or_else(|| "Future has no result".to_string())
+    }
+}
+
+impl NyashBox for FutureBox {
+    fn to_string_box(&self) -> StringBox {
+        let ready = *self.is_ready.lock().unwrap();
+        if ready {
+            let result = self.result.lock().unwrap();
+            if let Some(value) = result.as_ref() {
+                StringBox::new(format!("Future(ready: {})", value.to_string_box().value))
+            } else {
+                StringBox::new("Future(ready: void)".to_string())
+            }
+        } else {
+            StringBox::new("Future(pending)".to_string())
+        }
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_future) = other.as_any().downcast_ref::<FutureBox>() {
+            BoolBox::new(self.id == other_future.id)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "FutureBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+impl Display for FutureBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string_box().value)
+    }
+}
+
+// ===== Box Operations =====
+
+/// Binary operations between boxes (addition, concatenation, etc.)
+pub struct AddBox {
+    pub left: Box<dyn NyashBox>,
+    pub right: Box<dyn NyashBox>,
+    id: u64,
+}
+
+impl AddBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        
+        Self { left, right, id }
+    }
+    
+    /// Execute the addition operation and return the result
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer + Integer
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(IntegerBox::new(left_int.value + right_int.value));
+        }
+        
+        // 2. Float + Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value + right_float.value));
+        }
+        
+        // 3. Integer + Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_int.value as f64 + right_float.value));
+        }
+        
+        // 4. Float + Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value + right_int.value as f64));
+        }
+        
+        // 5. Fall back to string concatenation
+        let left_str = self.left.to_string_box();
+        let right_str = self.right.to_string_box();
+        Box::new(StringBox::new(format!("{}{}", left_str.value, right_str.value)))
+    }
+}
+
+impl Debug for AddBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AddBox")
+            .field("left", &self.left.to_string_box().value)
+            .field("right", &self.right.to_string_box().value)
+            .field("id", &self.id)
+            .finish()
+    }
+}
+
+impl NyashBox for AddBox {
+    fn to_string_box(&self) -> StringBox {
+        let result = self.execute();
+        result.to_string_box()
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_add) = other.as_any().downcast_ref::<AddBox>() {
+            let left_eq = self.left.equals(other_add.left.as_ref());
+            let right_eq = self.right.equals(other_add.right.as_ref());
+            BoolBox::new(left_eq.value && right_eq.value)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "AddBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(AddBox::new(
+            self.left.clone_box(),
+            self.right.clone_box()
+        ))
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+}
+
+// ===== 数値演算Boxの実装 =====
+
+/// 減算を行うBox
+pub struct SubtractBox {
+    left: Box<dyn NyashBox>,
+    right: Box<dyn NyashBox>,
+}
+
+impl SubtractBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        Self { left, right }
+    }
+    
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer - Integer
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(IntegerBox::new(left_int.value - right_int.value));
+        }
+        
+        // 2. Float - Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value - right_float.value));
+        }
+        
+        // 3. Integer - Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_int.value as f64 - right_float.value));
+        }
+        
+        // 4. Float - Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value - right_int.value as f64));
+        }
+        
+        // エラーの場合はvoid返す
+        Box::new(VoidBox::new())
+    }
+}
+
+/// 乗算を行うBox
+pub struct MultiplyBox {
+    left: Box<dyn NyashBox>,
+    right: Box<dyn NyashBox>,
+}
+
+impl MultiplyBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        Self { left, right }
+    }
+    
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer * Integer
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(IntegerBox::new(left_int.value * right_int.value));
+        }
+        
+        // 2. Float * Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value * right_float.value));
+        }
+        
+        // 3. Integer * Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_int.value as f64 * right_float.value));
+        }
+        
+        // 4. Float * Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value * right_int.value as f64));
+        }
+        
+        // エラーの場合はvoid返す
+        Box::new(VoidBox::new())
+    }
+}
+
+/// 除算を行うBox
+pub struct DivideBox {
+    left: Box<dyn NyashBox>,
+    right: Box<dyn NyashBox>,
+}
+
+impl DivideBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        Self { left, right }
+    }
+    
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer / Integer -> Float (常に浮動小数点で返す)
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            if right_int.value == 0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_int.value as f64 / right_int.value as f64));
+        }
+        
+        // 2. Float / Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            if right_float.value == 0.0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_float.value / right_float.value));
+        }
+        
+        // 3. Integer / Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            if right_float.value == 0.0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_int.value as f64 / right_float.value));
+        }
+        
+        // 4. Float / Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            if right_int.value == 0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_float.value / right_int.value as f64));
+        }
+        
+        // エラーの場合はvoid返す
+        Box::new(VoidBox::new())
+    }
+}
+
+/// 比較演算用のヘルパー
+pub struct CompareBox;
+
+impl CompareBox {
+    pub fn less(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::math_box::FloatBox;
+        
+        // Integer < Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value < right_int.value);
+        }
+        
+        // Float < Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value < right_float.value);
+        }
+        
+        // Integer < Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) < right_float.value);
+        }
+        
+        // Float < Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value < (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+    
+    pub fn greater(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::math_box::FloatBox;
+        
+        // Integer > Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value > right_int.value);
+        }
+        
+        // Float > Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value > right_float.value);
+        }
+        
+        // Integer > Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) > right_float.value);
+        }
+        
+        // Float > Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value > (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+    
+    pub fn less_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::math_box::FloatBox;
+        
+        // Integer <= Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value <= right_int.value);
+        }
+        
+        // Float <= Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value <= right_float.value);
+        }
+        
+        // Integer <= Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) <= right_float.value);
+        }
+        
+        // Float <= Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value <= (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+    
+    pub fn greater_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::math_box::FloatBox;
+        
+        // Integer >= Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value >= right_int.value);
+        }
+        
+        // Float >= Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value >= right_float.value);
+        }
+        
+        // Integer >= Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) >= right_float.value);
+        }
+        
+        // Float >= Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value >= (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+}
+
+// ===== Tests =====
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_string_box_creation() {
+        let s = StringBox::new("Hello, Rust!");
+        assert_eq!(s.value, "Hello, Rust!");
+        assert_eq!(s.type_name(), "StringBox");
+        assert_eq!(s.to_string_box().value, "Hello, Rust!");
+    }
+    
+    #[test]
+    fn test_integer_box_creation() {
+        let i = IntegerBox::new(42);
+        assert_eq!(i.value, 42);
+        assert_eq!(i.type_name(), "IntegerBox");
+        assert_eq!(i.to_string_box().value, "42");
+    }
+    
+    #[test]
+    fn test_bool_box_creation() {
+        let b = BoolBox::new(true);
+        assert_eq!(b.value, true);
+        assert_eq!(b.type_name(), "BoolBox");
+        assert_eq!(b.to_string_box().value, "true");
+    }
+    
+    #[test]
+    fn test_box_equality() {
+        let s1 = StringBox::new("test");
+        let s2 = StringBox::new("test");
+        let s3 = StringBox::new("different");
+        
+        assert!(s1.equals(&s2).value);
+        assert!(!s1.equals(&s3).value);
+    }
+    
+    #[test]
+    fn test_add_box_integers() {
+        let left = Box::new(IntegerBox::new(5)) as Box<dyn NyashBox>;
+        let right = Box::new(IntegerBox::new(3)) as Box<dyn NyashBox>;
+        let add = AddBox::new(left, right);
+        
+        let result = add.execute();
+        let result_int = result.as_any().downcast_ref::<IntegerBox>().unwrap();
+        assert_eq!(result_int.value, 8);
+    }
+    
+    #[test]
+    fn test_add_box_strings() {
+        let left = Box::new(StringBox::new("Hello, ")) as Box<dyn NyashBox>;
+        let right = Box::new(StringBox::new("Rust!")) as Box<dyn NyashBox>;
+        let add = AddBox::new(left, right);
+        
+        let result = add.execute();
+        let result_str = result.as_any().downcast_ref::<StringBox>().unwrap();
+        assert_eq!(result_str.value, "Hello, Rust!");
+    }
+    
+    #[test]
+    fn test_box_ids_unique() {
+        let s1 = StringBox::new("test");
+        let s2 = StringBox::new("test");
+        
+        // Same content but different IDs
+        assert_ne!(s1.box_id(), s2.box_id());
+    }
+    
+    #[test]
+    fn test_void_box() {
+        let v = VoidBox::new();
+        assert_eq!(v.type_name(), "VoidBox");
+        assert_eq!(v.to_string_box().value, "void");
+    }
+}

@@ -1,0 +1,16 @@
+// Minimal test for player-room interaction
+include "text_adventure/simple_rooms.nyash"
+
+// Create a room
+print("Creating room...")
+room = new Room("Test Room", "A test room")
+
+// Test direct access
+print("Direct access to room.visited: " + room.visited)
+
+// Test look method
+print("\nCalling room.look()...")
+lookResult = room.look()
+print(lookResult)
+
+print("\n✅ Minimal test completed!")

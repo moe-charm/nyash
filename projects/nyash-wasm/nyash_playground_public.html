@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐱 Nyash Browser Playground - Everything is Box!</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Consolas', monospace;
+            margin: 20px;
+            background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #ff6b6b;
+            text-align: center;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+        }
+        .subtitle {
+            text-align: center;
+            color: #4ecdc4;
+            margin-bottom: 30px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .philosophy {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-style: italic;
+            background: rgba(78, 205, 196, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid rgba(78, 205, 196, 0.3);
+        }
+        
+        .learning-path {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .learning-step {
+            display: inline-block;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        .learning-step:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        .learning-step.active {
+            background: linear-gradient(45deg, #4caf50, #66bb6a);
+        }
+        
+        .editor-container {
+            display: flex;
+            gap: 20px;
+            height: 75vh;
+        }
+        .left-panel, .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            color: #4ecdc4;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #editor {
+            flex: 1;
+            background: #2d2d2d;
+            color: #f8f8f2;
+            border: 2px solid #4ecdc4;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+        }
+        #output {
+            background: #000;
+            color: #00ff00;
+            border: 2px solid #666;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            height: 180px;
+        }
+        
+        .right-panel-content {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            justify-content: center;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .examples {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .example-btn {
+            background: #444;
+            color: #ccc;
+            font-size: 12px;
+            padding: 8px 16px;
+        }
+        .example-btn:hover {
+            background: #555;
+        }
+        .loading {
+            text-align: center;
+            color: #4ecdc4;
+            margin: 20px 0;
+        }
+        .error {
+            color: #ff6b6b;
+            background: #2d1b1b;
+            border: 1px solid #ff6b6b;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .features {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .feature {
+            text-align: center;
+            color: #4ecdc4;
+            margin: 10px;
+        }
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐱 Nyash Browser Playground</h1>
+        <p class="subtitle">Everything is Box in your browser! - Rust WASM powered</p>
+        
+        <div class="philosophy">
+            <strong>🎯 The Philosophy:</strong> In Nyash, Everything is Box! 
+            Each value, function, and even the main program lives inside a Box. 
+            This creates a unified, memory-safe, and beautifully consistent world.
+        </div>
+        
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">🎯</div>
+                <div>Static Box Main</div>
+                <small>Entry point philosophy</small>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🔒</div>
+                <div>Memory Safety</div>
+                <small>Explicit declarations</small>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">🌐</div>
+                <div>WASM Ready</div>
+                <small>Browser native</small>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">⚡</div>
+                <div>Rich Operators</div>
+                <small>AND/OR/NOT/Division</small>
+            </div>
+        </div>
+        
+        <div class="learning-path">
+            <h3 style="color: #4ecdc4; margin-bottom: 15px;">📚 Learning Path - Choose Your Journey:</h3>
+            <span class="learning-step" onclick="loadExample('simple')">1️⃣ First Steps</span>
+            <span class="learning-step" onclick="loadExample('hello')">2️⃣ Hello World</span>
+            <span class="learning-step" onclick="loadExample('math')">3️⃣ Math & Logic</span>
+            <span class="learning-step" onclick="loadExample('webcanvas')">4️⃣ Graphics</span>
+            <span class="learning-step" onclick="loadExample('canvas_advanced')">5️⃣ Advanced</span>
+            <span class="learning-step" onclick="loadExample('debug')">6️⃣ Debugging</span>
+        </div>
+        
+        <div class="loading" id="loading">
+            🚀 Loading Nyash WebAssembly module...
+        </div>
+        
+        <div id="playground" style="display: none;">
+            <div class="editor-container">
+                <div class="left-panel">
+                    <label for="editor">📝 Nyash Code - Write Everything is Box:</label>
+                    <textarea id="editor" placeholder="// Welcome to Nyash - Everything is Box!
+// Click on Learning Path buttons above to try examples
+// Or write your own code here...
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new WebConsoleBox(\"output\")
+        me.console.log(\"🎉 Hello from Nyash!\")
+        return \"Success!\"
+    }
+}"></textarea>
+                </div>
+                
+                <div class="right-panel">
+                    <div class="right-panel-content">
+                        <!-- ログ出力エリア -->
+                        <div style="margin-bottom: 20px;">
+                            <label for="output" style="color: #4ecdc4; font-weight: bold;">📺 Output Console:</label>
+                            <div id="output"></div>
+                        </div>
+                        
+                        <!-- Canvas エリア -->
+                        <div style="flex: 1;">
+                            <label for="game-canvas" style="color: #4ecdc4; font-weight: bold; margin-bottom: 10px; display: block;">🎨 Graphics Canvas:</label>
+                            <canvas id="game-canvas" width="400" height="250" 
+                                    style="border: 2px solid #4ecdc4; border-radius: 8px; 
+                                           background: black; display: block;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button onclick="runNyash()">🚀 Run Code</button>
+                <button onclick="clearOutput()">🧹 Clear Output</button>
+                <button onclick="showVersion()">📋 Version Info</button>
+                <button onclick="showHelp()">❓ Help</button>
+            </div>
+            
+            <div class="examples">
+                <button class="example-btn" onclick="loadExample('operators')">⚡ All Operators</button>
+                <button class="example-btn" onclick="loadExample('webdisplay')">🌐 HTML Control</button>
+                <button class="example-btn" onclick="loadExample('oldstyle')">🌍 GlobalBox Style</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import init, { NyashWasm } from './pkg/nyash_rust.js';
+        
+        let nyash;
+        
+        async function initializeNyash() {
+            try {
+                await init();
+                nyash = new NyashWasm();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('playground').style.display = 'block';
+                
+                const output = document.getElementById('output');
+                output.textContent = '🎉 Nyash WASM initialized successfully!\\n' + 
+                                   nyash.version() + '\\n\\n' +
+                                   'Ready to execute Nyash code...\\n';
+                
+                // Load default example
+                loadExample('simple');
+                                   
+            } catch (error) {
+                document.getElementById('loading').innerHTML = 
+                    '<div class="error">❌ Failed to load Nyash WASM: ' + error.message + '</div>';
+            }
+        }
+        
+        window.runNyash = function() {
+            if (!nyash) {
+                alert('Nyash is not loaded yet!');
+                return;
+            }
+            
+            const code = document.getElementById('editor').value;
+            const output = document.getElementById('output');
+            
+            if (!code.trim()) {
+                output.textContent += '⚠️ Please enter some Nyash code to run.\\n';
+                return;
+            }
+            
+            output.textContent += '🚀 Executing Nyash code...\\n';
+            
+            try {
+                const result = nyash.eval(code);
+                
+                if (result.includes('Error:')) {
+                    output.textContent += '❌ ' + result + '\\n\\n';
+                } else {
+                    output.textContent += '✅ Execution complete! Result: ' + result + '\\n\\n';
+                }
+                
+                output.scrollTop = output.scrollHeight;
+            } catch (error) {
+                output.textContent += '❌ JavaScript Error: ' + error.message + '\\n\\n';
+                output.scrollTop = output.scrollHeight;
+            }
+        };
+        
+        window.clearOutput = function() {
+            document.getElementById('output').textContent = '';
+            // Clear canvas
+            const canvas = document.getElementById('game-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        };
+        
+        window.showVersion = function() {
+            if (nyash) {
+                const output = document.getElementById('output');
+                output.textContent += '📋 ' + nyash.version() + '\\n';
+                output.textContent += '🎯 Static Box Main Pattern: ✅ Implemented\\n';
+                output.textContent += '🔒 Variable Declaration Strictness: ✅ Active\\n';
+                output.textContent += '⚡ Operators (AND/OR/NOT/Division): ✅ Ready\\n';
+                output.textContent += '🌐 WebCanvasBox + WebConsoleBox: ✅ Available\\n\\n';
+                output.scrollTop = output.scrollHeight;
+            }
+        };
+        
+        window.showHelp = function() {
+            const output = document.getElementById('output');
+            output.textContent += `📚 Nyash Quick Help:
+
+🎯 Proper Nyash Style:
+static box Main {
+    init { field1, field2 }  // Declare fields
+    
+    main() {
+        me.field1 = "value"    // Use me.field
+        local temp            // Declare local vars
+        temp = 42
+        return "Success!"
+    }
+}
+
+⚡ Available Operators:
+- Arithmetic: +, -, *, /
+- Comparison: ==, !=, <, >, <=, >=  
+- Logical: not, and, or
+
+🎨 Special Boxes:
+- WebConsoleBox("output") - HTML output
+- WebCanvasBox("game-canvas", w, h) - Graphics
+- DebugBox() - Memory tracking
+
+💡 Tips:
+- All variables must be declared (init {} or local)
+- Use me.field for accessing fields
+- Everything is Box - even main()!
+
+`;
+            output.scrollTop = output.scrollHeight;
+        };
+        
+        window.loadExample = function(type) {
+            const editor = document.getElementById('editor');
+            
+            // Update active learning step
+            document.querySelectorAll('.learning-step').forEach(step => {
+                step.classList.remove('active');
+            });
+            document.querySelectorAll('.learning-step').forEach(step => {
+                if (step.textContent.includes(getStepNumber(type))) {
+                    step.classList.add('active');
+                }
+            });
+            
+            const examples = {
+                simple: \`// 🚀 First Steps - Welcome to Nyash!
+static box Main {
+    init { console, name, result }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.log("🎉 Welcome to Nyash!")
+        me.console.log("Everything is Box philosophy!")
+        
+        me.name = "New Programmer"
+        me.console.log("Hello, " + me.name + "!")
+        
+        local answer
+        answer = 6 * 7
+        me.console.log("The answer to everything: " + answer)
+        
+        return "First steps completed!"
+    }
+}\`,
+
+                hello: \`// 🎯 Hello World - Proper Nyash Style!
+static box Main {
+    init { console, message, greeting }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.log("🌟 Hello World - Nyash Style!")
+        
+        me.message = "Everything is Box"
+        me.greeting = "Welcome to the Box world!"
+        
+        me.console.log(me.message)
+        me.console.log(me.greeting)
+        me.console.log("🎊 Static box Main pattern working!")
+        
+        return "Hello World completed!"
+    }
+}\`,
+
+                math: \`// 🧮 Math & Logic Operations
+static box Main {
+    init { console, a, b, result }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.group("🔢 Math Operations")
+        
+        me.a = 42
+        me.b = 18
+        
+        me.console.info("Values: a = " + me.a + ", b = " + me.b)
+        me.console.log("Addition: a + b = " + (me.a + me.b))
+        me.console.log("Subtraction: a - b = " + (me.a - me.b))
+        me.console.log("Multiplication: a * b = " + (me.a * me.b))
+        me.console.log("Division: a / b = " + (me.a / me.b))
+        
+        me.console.separator()
+        me.console.info("🔍 Logic Operations:")
+        me.console.log("a > b: " + (me.a > me.b))
+        me.console.log("not (a < b): " + not (me.a < me.b))
+        me.console.log("a > 30 and b < 30: " + (me.a > 30 and me.b < 30))
+        me.console.log("a < 30 or b > 10: " + (me.a < 30 or me.b > 10))
+        
+        me.console.groupEnd()
+        return "Math operations completed!"
+    }
+}\`,
+
+                webcanvas: \`// 🎨 Graphics with WebCanvasBox
+static box Main {
+    init { canvas, console }
+    
+    main() {
+        me.canvas = new WebCanvasBox("game-canvas", 400, 250)
+        me.console = new WebConsoleBox("output")
+        
+        me.console.group("🎨 Canvas Drawing")
+        me.console.log("Drawing colorful shapes...")
+        
+        // Clear and background
+        me.canvas.clear()
+        me.canvas.fillRect(0, 0, 400, 250, "navy")
+        
+        // Colorful shapes
+        me.canvas.fillRect(50, 50, 80, 60, "red")
+        me.canvas.strokeRect(160, 50, 80, 60, "yellow", 4)
+        me.canvas.fillCircle(300, 80, 30, "lime")
+        
+        // Text and lines
+        me.canvas.drawLine(50, 150, 350, 150, "white", 3)
+        me.canvas.fillText("Hello Canvas!", 120, 180, "24px Arial", "cyan")
+        me.canvas.fillText("🎨 Nyash Graphics", 110, 210, "18px Arial", "orange")
+        
+        me.console.log("🎉 Canvas drawing completed!")
+        me.console.groupEnd()
+        return "Graphics demo finished!"
+    }
+}\`,
+
+                canvas_advanced: \`// 🎮 Advanced Canvas - Game Patterns
+static box Main {
+    init { canvas, console, cellSize, x, y, i }
+    
+    main() {
+        me.canvas = new WebCanvasBox("game-canvas", 400, 250)
+        me.console = new WebConsoleBox("output")
+        
+        me.console.group("🎮 Advanced Graphics")
+        me.canvas.clear()
+        me.canvas.fillRect(0, 0, 400, 250, "black")
+        
+        // Draw game grid pattern
+        me.cellSize = 10
+        me.console.log("Creating game world...")
+        
+        // Create a pattern
+        me.i = 0
+        loop(me.i < 15) {
+            me.x = me.i * me.cellSize * 2 + 50
+            me.y = 80
+            me.canvas.fillRect(me.x, me.y, me.cellSize, me.cellSize, "lime")
+            me.canvas.fillRect(me.x + me.cellSize, me.y + me.cellSize, me.cellSize, me.cellSize, "cyan")
+            me.i = me.i + 1
+        }
+        
+        // Add decorative elements
+        me.canvas.fillCircle(200, 50, 20, "gold")
+        me.canvas.fillCircle(200, 180, 15, "magenta")
+        
+        me.canvas.fillText("🎮 Game Development Ready!", 50, 220, "16px Arial", "white")
+        
+        me.console.log("🌟 Game world created!")
+        me.console.info("✨ Ready for game logic!")
+        me.console.groupEnd()
+        
+        return "Advanced canvas completed!"
+    }
+}\`,
+
+                debug: \`// 🔍 Debug & Memory Tracking
+static box Main {
+    init { console, debug, testData, memoryInfo }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.debug = new DebugBox()
+        
+        me.console.group("🔍 Debug Session")
+        
+        me.debug.startTracking()
+        me.console.log("🚀 Debug tracking started!")
+        
+        me.testData = "Critical Information"
+        me.debug.trackBox(me.testData, "important_data")
+        me.console.info("📊 Tracking: " + me.testData)
+        
+        me.console.separator()
+        me.memoryInfo = me.debug.memoryReport()
+        me.console.debug("💾 Memory Report:")
+        me.console.log(me.memoryInfo)
+        
+        me.console.separator()
+        me.console.info("🎯 Debug features available:")
+        me.console.log("- Memory tracking")
+        me.console.log("- Box lifecycle monitoring")
+        me.console.log("- Performance analysis")
+        
+        me.console.groupEnd()
+        return "Debug session completed!"
+    }
+}\`,
+
+                webdisplay: \`// 🌐 Rich HTML Control with WebDisplayBox
+static box Main {
+    init { display }
+    
+    main() {
+        me.display = new WebDisplayBox("output")
+        
+        me.display.clear()
+        me.display.setHTML("<h2>🌟 WebDisplayBox Demo</h2>")
+        
+        me.display.setCSS("color", "lime")
+        me.display.appendHTML("<p><strong>Green text</strong> - Direct HTML control!</p>")
+        
+        me.display.setCSS("color", "cyan")
+        me.display.appendHTML("<p><em>Cyan styling</em> - CSS manipulation!</p>")
+        
+        me.display.setCSS("color", "white")
+        me.display.appendHTML("<h3>🎨 Features:</h3>")
+        me.display.appendHTML("<ul>")
+        me.display.appendHTML("<li>Direct HTML output</li>")
+        me.display.appendHTML("<li>Real-time CSS styling</li>")
+        me.display.appendHTML("<li>Rich content rendering</li>")
+        me.display.appendHTML("</ul>")
+        
+        me.display.appendHTML("<p><strong>🌐 Everything is Box in your browser!</strong></p>")
+        
+        return "WebDisplay demo completed!"
+    }
+}\`,
+
+                operators: \`// ⚡ Complete Operators Showcase
+static box Main {
+    init { console, x, y, flag, result }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.group("⚡ All Operators Demo")
+        
+        me.x = 50
+        me.y = 20
+        me.flag = true
+        
+        me.console.info("📊 Test values: x=" + me.x + ", y=" + me.y + ", flag=" + me.flag)
+        me.console.separator()
+        
+        // Arithmetic
+        me.console.info("🧮 Arithmetic:")
+        me.console.log("x + y = " + (me.x + me.y))
+        me.console.log("x - y = " + (me.x - me.y))
+        me.console.log("x * y = " + (me.x * me.y))
+        me.console.log("x / y = " + (me.x / me.y))
+        
+        me.console.separator()
+        
+        // Comparison
+        me.console.info("🔍 Comparison:")
+        me.console.log("x > y: " + (me.x > me.y))
+        me.console.log("x < y: " + (me.x < me.y))
+        me.console.log("x == y: " + (me.x == me.y))
+        me.console.log("x != y: " + (me.x != me.y))
+        
+        me.console.separator()
+        
+        // Logical
+        me.console.info("🔗 Logical:")
+        me.console.log("not flag: " + not me.flag)
+        me.console.log("x > 30 and y < 30: " + (me.x > 30 and me.y < 30))
+        me.console.log("x < 30 or flag: " + (me.x < 30 or me.flag))
+        
+        me.console.separator()
+        
+        // Complex
+        me.result = (me.x > 40 and me.y > 10) or not me.flag
+        me.console.info("🎯 Complex: (x > 40 and y > 10) or not flag = " + me.result)
+        
+        me.console.groupEnd()
+        return "All operators tested!"
+    }
+}\`,
+
+                oldstyle: \`// 🌍 GlobalBox Style (Legacy but functional)
+// Note: This uses implicit GlobalBox variables
+// Recommended: Use static box Main pattern above!
+
+console = new WebConsoleBox("output")
+console.log("🌍 This is the legacy GlobalBox style")
+console.log("It still works, but proper Nyash uses:")
+console.log("   static box Main { main() { ... } }")
+
+local temp
+temp = "Legacy code"
+console.log("Local variable works: " + temp)
+
+console.separator()
+console.info("💡 For new code, prefer static box Main pattern!")
+console.info("✨ It's more explicit and follows Everything is Box!"
+\`
+            };
+            
+            if (examples[type]) {
+                editor.value = examples[type];
+            }
+        };
+        
+        function getStepNumber(type) {
+            const steps = {
+                simple: '1️⃣',
+                hello: '2️⃣', 
+                math: '3️⃣',
+                webcanvas: '4️⃣',
+                canvas_advanced: '5️⃣',
+                debug: '6️⃣'
+            };
+            return steps[type] || '';
+        }
+        
+        initializeNyash();
+    </script>
+</body>
+</html>

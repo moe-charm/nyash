@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐱 Nyash Browser Playground</title>
+    <style>
+        body {
+            font-family: 'Monaco', 'Consolas', monospace;
+            margin: 20px;
+            background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+            color: #ffffff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #ff6b6b;
+            text-align: center;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+        }
+        .subtitle {
+            text-align: center;
+            color: #4ecdc4;
+            margin-bottom: 30px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .philosophy {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-style: italic;
+            background: rgba(78, 205, 196, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid rgba(78, 205, 196, 0.3);
+        }
+        
+        .demo-selector {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .demo-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ffa726);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        .demo-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+        
+        .demo-btn.active {
+            background: linear-gradient(45deg, #4caf50, #66bb6a);
+        }
+        
+        
+        .editor-container {
+            display: flex;
+            gap: 20px;
+            height: 75vh;
+        }
+        .left-panel, .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            color: #4ecdc4;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #editor {
+            flex: 1;
+            background: #2d2d2d;
+            color: #f8f8f2;
+            border: 2px solid #4ecdc4;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+        }
+        #output {
+            background: #000;
+            color: #00ff00;
+            border: 2px solid #666;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            height: 180px;
+        }
+        
+        .right-panel-content {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            justify-content: center;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .examples {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .example-btn {
+            background: #444;
+            color: #ccc;
+            font-size: 12px;
+            padding: 8px 16px;
+        }
+        .example-btn:hover {
+            background: #555;
+        }
+        .loading {
+            text-align: center;
+            color: #4ecdc4;
+            margin: 20px 0;
+        }
+        .error {
+            color: #ff6b6b;
+            background: #2d1b1b;
+            border: 1px solid #ff6b6b;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐱 Nyash Browser Playground</h1>
+        <p class="subtitle">Everything is Box in your browser! - Rust WASM powered</p>
+        
+        <div class="philosophy">
+            <strong>🎯 Everything is Box哲学:</strong> Nyashでは、すべての値・関数・メインプログラムまでがBoxです。
+            これにより統一的で美しく、メモリ安全な世界を実現しています。
+        </div>
+        
+        <div class="loading" id="loading">
+            🚀 Loading Nyash WebAssembly module...
+        </div>
+        
+        <div id="playground" style="display: none;">
+            <div class="editor-container">
+                <div class="left-panel">
+                    <label for="editor">📝 Nyash Code:</label>
+                    <textarea id="editor" placeholder="// Nyashコードをここに書くにゃ！
+// 🎯 正統派Nyashスタイル - static box Main!
+
+static box Main {
+    init { console, x, y, result }
+    
+    main() {
+        me.console = new WebConsoleBox(\"output\")
+        me.console.log(\"🎉 Hello from Nyash!\")
+        
+        me.x = 42
+        me.y = 58
+        me.result = me.x + me.y
+        me.console.log(\"x + y = \" + me.result)
+        
+        return \"Success!\"
+    }
+}"></textarea>
+                </div>
+                
+                <div class="right-panel">
+                    <div class="right-panel-content">
+                        <!-- ログ出力エリア（固定） -->
+                        <div style="margin-bottom: 20px;">
+                            <label for="output" style="color: #4ecdc4; font-weight: bold;">📺 Output:</label>
+                            <div id="output"></div>
+                        </div>
+                        
+                        <!-- Canvas エリア -->
+                        <div style="flex: 1;">
+                            <label for="game-canvas" style="color: #4ecdc4; font-weight: bold; margin-bottom: 10px; display: block;">🎨 Canvas:</label>
+                            <canvas id="game-canvas" width="400" height="250" style="border: 2px solid #4ecdc4; border-radius: 8px; background: black; display: block;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button onclick="runNyash()">🚀 実行！</button>
+                <button onclick="clearOutput()">🧹 クリア</button>
+                <button onclick="showVersion()">📋 Version</button>
+                <button onclick="showHelp()">❓ ヘルプ</button>
+            </div>
+            
+            <div class="examples">
+                <button class="example-btn" onclick="loadExample('hello')">Hello World</button>
+                <button class="example-btn" onclick="loadExample('math')">数学計算</button>
+                <button class="example-btn" onclick="loadExample('async')">⚡ 計算処理</button>
+                <button class="example-btn" onclick="loadExample('artists')">🎨 協同制作</button>
+                <button class="example-btn" onclick="loadExample('debug')">デバッグ</button>
+                <button class="example-btn" onclick="loadExample('webdisplay')">🌐 WebDisplay</button>
+                <button class="example-btn" onclick="loadExample('webcanvas')">🎨 WebCanvas</button>
+                <button class="example-btn" onclick="loadExample('canvas_advanced')">🎨 Canvas高度</button>
+                <button class="example-btn" onclick="loadExample('operators')">演算子テスト</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import init, { NyashWasm } from './pkg/nyash_rust.js';
+        
+        let nyash;
+        
+        async function initializeNyash() {
+            try {
+                // Initialize WASM module
+                await init();
+                
+                // Create Nyash interpreter instance
+                nyash = new NyashWasm();
+                
+                // Show playground and hide loading
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('playground').style.display = 'block';
+                
+                // Show version info in output
+                const output = document.getElementById('output');
+                output.textContent = '🎉 Nyash WASM initialized successfully!\\n' + 
+                                   nyash.version() + '\\n\\n' +
+                                   'Ready to execute Nyash code...\\n';
+                
+            } catch (error) {
+                document.getElementById('loading').innerHTML = 
+                    '<div class="error">❌ Failed to load Nyash WASM: ' + error.message + '</div>';
+            }
+        }
+        
+        // Global functions for buttons
+        window.runNyash = function() {
+            if (!nyash) {
+                alert('Nyash is not loaded yet!');
+                return;
+            }
+            
+            const code = document.getElementById('editor').value;
+            const output = document.getElementById('output');
+            
+            // Web出力Boxを使用しているかチェック
+            const usesWebOutputBox = code.includes('WebDisplayBox') || code.includes('WebConsoleBox') || code.includes('WebCanvasBox');
+            
+            try {
+                const result = nyash.eval(code);
+                
+                if (usesWebOutputBox) {
+                    // Web出力Boxが制御するので、JavaScriptは何もしない
+                    console.log('Web output box is controlling the output panel');
+                } else {
+                    // Web出力Boxを使わない場合は、通常通りJavaScriptで出力
+                    output.textContent += '> ' + result + '\\n';
+                    output.scrollTop = output.scrollHeight;
+                }
+            } catch (error) {
+                output.textContent += '❌ Error: ' + error.message + '\\n';
+                output.scrollTop = output.scrollHeight;
+            }
+        };
+        
+        window.clearOutput = function() {
+            document.getElementById('output').textContent = '';
+        };
+        
+        window.showVersion = function() {
+            if (nyash) {
+                const output = document.getElementById('output');
+                output.textContent += '📋 ' + nyash.version() + '\\n';
+                output.textContent += '🎯 Static Box Mainパターン: ✅ 実装済み\\n';
+                output.textContent += '🔒 変数宣言厳密性: ✅ 有効\\n';
+                output.textContent += '⚡ 演算子(AND/OR/NOT/除算): ✅ 対応済み\\n';
+                output.textContent += '🌐 WebCanvasBox + WebConsoleBox: ✅ 利用可能\\n\\n';
+                output.scrollTop = output.scrollHeight;
+            }
+        };
+        
+        window.showHelp = function() {
+            const output = document.getElementById('output');
+            output.textContent += `📚 Nyash クイックヘルプ:
+
+🎯 正統派Nyashスタイル:
+static box Main {
+    init { field1, field2 }  // フィールド宣言
+    
+    main() {
+        me.field1 = "値"      // me.fieldで参照
+        local temp           // local変数宣言
+        temp = 42
+        return "成功！"
+    }
+}
+
+⚡ 利用可能演算子:
+- 算術: +, -, *, /
+- 比較: ==, !=, <, >, <=, >=  
+- 論理: not, and, or
+
+🎨 特殊Box:
+- WebConsoleBox("output") - HTML出力
+- WebCanvasBox("game-canvas", w, h) - グラフィック
+- DebugBox() - メモリ追跡
+
+💡 Tips:
+- すべての変数は宣言必須 (init {} または local)
+- フィールドアクセスは me.field
+- Everything is Box - main()でさえも！
+
+`;
+            output.scrollTop = output.scrollHeight;
+        };
+        
+        window.loadExample = function(type) {
+            const editor = document.getElementById('editor');
+            
+            const examples = {
+                hello: `// 🐱 Hello World Example (正統派Nyashスタイル)
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.log("🎉 Hello from 正統派 Nyash!")
+        me.console.log("Everything is Box philosophy!")
+        me.console.log("🎊 Static box Mainパターン動作中！")
+        return "Hello World完了！"
+    }
+}`,
+
+                math: `// 🧮 Math Example (正統派Nyashスタイル)
+static box Main {
+    init { console, a, b }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.group("🔢 数学演算テスト")
+        
+        me.a = 10
+        me.b = 5
+        me.console.info("値: a = " + me.a + ", b = " + me.b)
+        me.console.log("加算: a + b = " + (me.a + me.b))
+        me.console.log("減算: a - b = " + (me.a - me.b))
+        me.console.log("乗算: a * b = " + (me.a * me.b))
+        me.console.log("除算: a / b = " + (me.a / me.b))
+        
+        me.console.separator()
+        me.console.info("🔍 論理演算:")
+        me.console.log("a > b: " + (me.a > me.b))
+        me.console.log("not (a < b): " + not (me.a < me.b))
+        me.console.log("a > 8 and b < 8: " + (me.a > 8 and me.b < 8))
+        
+        me.console.groupEnd()
+        return "数学演算完了！"
+    }
+}`,
+
+                debug: `// 🔍 Debug Example (正統派Nyashスタイル)
+static box Main {
+    init { console, debug, x, memoryInfo }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.debug = new DebugBox()
+        
+        me.console.group("🔍 デバッグセッション")
+        me.debug.startTracking()
+        me.console.log("🚀 デバッグ追跡開始！")
+        
+        me.x = 100
+        me.debug.trackBox(me.x, "重要な値")
+        me.console.info("追跡中: x = " + me.x)
+        
+        me.console.separator()
+        me.memoryInfo = me.debug.memoryReport()
+        me.console.debug("💾 メモリレポート:")
+        me.console.log(me.memoryInfo)
+        
+        me.console.groupEnd()
+        return "デバッグ完了！"
+    }
+}`,
+
+                webdisplay: `// 🌐 WebDisplayBox Example (正統派Nyashスタイル)
+static box Main {
+    init { display }
+    
+    main() {
+        me.display = new WebDisplayBox("output")
+        
+        me.display.clear()
+        me.display.setHTML("<h2>🌟 WebDisplayBox デモ</h2>")
+        
+        me.display.setCSS("color", "lime")
+        me.display.appendHTML("<p><strong>緑色のテキスト</strong> - 直接HTML制御！</p>")
+        
+        me.display.setCSS("color", "cyan")
+        me.display.appendHTML("<p><em>シアンのスタイリング</em> - CSS操作！</p>")
+        
+        me.display.setCSS("color", "white")
+        me.display.appendHTML("<h3>🎨 機能:</h3>")
+        me.display.appendHTML("<ul>")
+        me.display.appendHTML("<li>直接HTML出力</li>")
+        me.display.appendHTML("<li>リアルタイムCSS制御</li>")
+        me.display.appendHTML("<li>リッチコンテンツ描画</li>")
+        me.display.appendHTML("</ul>")
+        
+        me.display.appendHTML("<p><strong>🌐 Everything is Box がブラウザで！</strong></p>")
+        
+        return "WebDisplay デモ完了！"
+    }
+}`,
+
+                webcanvas: `// 🎨 WebCanvasBox Basic Example (正統派Nyashスタイル)
+static box Main {
+    init { canvas, console }
+    
+    main() {
+        me.canvas = new WebCanvasBox("game-canvas", 400, 250)
+        me.console = new WebConsoleBox("output")
+        
+        me.console.group("🎨 Canvas描画デモ")
+        me.console.log("Canvas作成: 400x250")
+        
+        // 背景をクリアして描画
+        me.canvas.clear()
+        me.canvas.fillRect(0, 0, 400, 250, "black")
+        
+        // 基本図形
+        me.canvas.fillRect(30, 30, 60, 50, "red")
+        me.canvas.strokeRect(120, 30, 60, 50, "blue", 3)
+        me.canvas.fillCircle(250, 60, 25, "green")
+        me.canvas.strokeCircle(330, 60, 25, "yellow", 4)
+        
+        me.console.log("基本図形描画完了！")
+        
+        // 線とテキスト
+        me.canvas.drawLine(50, 120, 350, 120, "white", 2)
+        me.canvas.fillText("Hello Canvas!", 80, 160, "20px Arial", "magenta")
+        me.canvas.fillText("Nyash WebCanvas!", 100, 200, "16px Arial", "cyan")
+        
+        me.console.log("線とテキスト追加完了！")
+        me.console.groupEnd()
+        return "Canvas描画完了！"
+    }
+}`,
+
+                canvas_advanced: `// 🎨 WebCanvasBox Advanced Example (正統派Nyashスタイル)
+static box Main {
+    init { canvas, console, cellSize, x, y, i, j }
+    
+    main() {
+        me.canvas = new WebCanvasBox("game-canvas", 400, 250)
+        me.console = new WebConsoleBox("output")
+        
+        me.console.group("🎮 高度なCanvas デモ")
+        
+        // セットアップ
+        me.canvas.clear()
+        me.canvas.fillRect(0, 0, 400, 250, "navy")
+        
+        me.console.log("🎨 カラフルなパターン描画中...")
+        
+        // 虹色のグリッドパターン
+        me.cellSize = 12
+        me.i = 0
+        loop(me.i < 10) {
+            me.j = 0
+            loop(me.j < 8) {
+                me.x = 30 + me.i * me.cellSize
+                me.y = 50 + me.j * me.cellSize
+                
+                // 色を計算 (rainbow効果)
+                if me.i + me.j == 0 {
+                    me.canvas.fillRect(me.x, me.y, me.cellSize - 2, me.cellSize - 2, "red")
+                }
+                if me.i + me.j == 2 {
+                    me.canvas.fillRect(me.x, me.y, me.cellSize - 2, me.cellSize - 2, "orange")
+                }
+                if me.i + me.j == 4 {
+                    me.canvas.fillRect(me.x, me.y, me.cellSize - 2, me.cellSize - 2, "yellow")
+                }
+                if me.i + me.j == 6 {
+                    me.canvas.fillRect(me.x, me.y, me.cellSize - 2, me.cellSize - 2, "lime")
+                }
+                if me.i + me.j == 8 {
+                    me.canvas.fillRect(me.x, me.y, me.cellSize - 2, me.cellSize - 2, "cyan")
+                }
+                if me.i + me.j == 10 {
+                    me.canvas.fillRect(me.x, me.y, me.cellSize - 2, me.cellSize - 2, "blue")
+                }
+                if me.i + me.j == 12 {
+                    me.canvas.fillRect(me.x, me.y, me.cellSize - 2, me.cellSize - 2, "magenta")
+                }
+                
+                me.j = me.j + 1
+            }
+            me.i = me.i + 1
+        }
+        
+        me.console.log("🌈 虹色グリッド完成！")
+        
+        // ゲーム要素 - プレイヤーとエネミー
+        me.canvas.fillCircle(80, 200, 15, "gold")
+        me.canvas.strokeCircle(80, 200, 15, "orange", 3)
+        me.canvas.fillText("Player", 60, 235, "12px Arial", "white")
+        
+        me.canvas.fillRect(200, 185, 30, 30, "red")
+        me.canvas.strokeRect(200, 185, 30, 30, "darkred", 2)
+        me.canvas.fillText("Enemy", 195, 235, "12px Arial", "white")
+        
+        me.canvas.fillCircle(320, 200, 12, "lime")
+        me.canvas.fillText("Goal", 300, 235, "12px Arial", "white")
+        
+        // パワーアップアイテム
+        me.i = 0
+        loop(me.i < 3) {
+            me.x = 250 + me.i * 30
+            me.canvas.fillCircle(me.x, 100, 8, "hotpink")
+            me.canvas.strokeCircle(me.x, 100, 8, "purple", 2)
+            me.i = me.i + 1
+        }
+        me.canvas.fillText("Power-ups", 230, 125, "10px Arial", "white")
+        
+        // タイトルとUI
+        me.canvas.fillText("🎮 Nyash Game World", 20, 25, "16px Arial", "white")
+        me.canvas.fillText("Everything is Interactive!", 20, 45, "12px Arial", "cyan")
+        
+        me.console.log("🎮 ゲーム要素配置完了！")
+        me.console.info("🎯 ゲーム開発準備完了！")
+        me.console.groupEnd()
+        return "高度なCanvas完了！"
+    }
+}`,
+
+                operators: `// ⚡ Operators Example (正統派Nyashスタイル)
+static box Main {
+    init { console, isActive, x, y, canAccess }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.group("⚡ 全演算子デモ")
+        
+        me.isActive = true
+        me.x = 10
+        me.y = 20
+        
+        me.console.info("📊 テスト値: x=" + me.x + ", y=" + me.y + ", flag=" + me.isActive)
+        me.console.separator()
+        
+        // NOT演算子
+        me.console.info("❌ NOT演算子:")
+        me.console.log("not isActive = " + not me.isActive)
+        
+        me.console.separator()
+        
+        // AND/OR演算子
+        me.console.info("🔗 AND/OR演算子:")
+        me.console.log("x > 5 and y < 30 = " + (me.x > 5 and me.y < 30))
+        me.console.log("x > 15 or y > 15 = " + (me.x > 15 or me.y > 15))
+        
+        me.console.separator()
+        
+        // 複合条件
+        me.canAccess = (me.x > 5 and me.y > 10) or not me.isActive
+        me.console.info("🎯 複合条件:")
+        me.console.log("(x > 5 and y > 10) or not isActive = " + me.canAccess)
+        
+        me.console.groupEnd()
+        return "全演算子テスト完了！"
+    }
+}`,
+
+                async: `// ⚡ 計算処理デモ (WASM版 - 同期処理)
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.group("⚡ 計算処理デモ")
+        
+        me.console.log("🚀 重い計算処理開始...")
+        me.console.log("💡 注意: WASM版では同期処理で実行されます")
+        
+        // ローカル変数宣言
+        local result1, result2, total
+        
+        // 計算処理実行
+        me.console.separator()
+        me.console.log("📊 計算1実行中 (3000回)...")
+        result1 = heavyComputation(3000)
+        
+        me.console.log("📊 計算2実行中 (2000回)...")
+        result2 = heavyComputation(2000)
+        
+        me.console.separator()
+        me.console.info("🎉 計算結果:")
+        me.console.log("結果1 (3000回): " + result1)
+        me.console.log("結果2 (2000回): " + result2)
+        
+        total = result1 + result2
+        me.console.log("合計結果: " + total)
+        me.console.log("✨ 計算処理完了！")
+        
+        me.console.separator()
+        me.console.debug("💡 非同期版はローカル版で試してください:")
+        me.console.debug("   ./target/debug/nyash test_async_demo.nyash")
+        
+        me.console.groupEnd()
+        return "計算デモ成功！"
+    }
+}
+
+// 重い計算処理をシミュレート
+function heavyComputation(iterations) {
+    local result, i
+    result = 0
+    i = 0
+    
+    loop(i < iterations) {
+        result = result + i * i
+        i = i + 1
+    }
+    
+    return result
+}`,
+
+                artists: `// 🎨 アーティスト協同制作 - 複数Boxインスタンス版
+static box Main {
+    init { console, canvas, artist1, artist2, artist3 }
+    
+    main() {
+        me.console = new WebConsoleBox("output")
+        me.console.group("🎨 アーティスト協同制作")
+        
+        // Canvas準備
+        me.canvas = new WebCanvasBox("game-canvas", 400, 250)
+        me.canvas.clear()
+        me.canvas.fillRect(0, 0, 400, 250, "lightgray")
+        
+        // エリア境界線
+        me.canvas.fillRect(133, 0, 2, 250, "gray")
+        me.canvas.fillRect(267, 0, 2, 250, "gray")
+        me.console.log("🖼️ キャンバス準備完了")
+        
+        // 3人のアーティストを雇用
+        me.artist1 = new Artist("抽象画家ピカソ", "red")
+        me.artist2 = new Artist("幾何学者ガウス", "blue") 
+        me.artist3 = new Artist("自然派モネ", "green")
+        
+        me.console.info("👩‍🎨 アーティスト登場:")
+        me.console.log("• " + me.artist1.name + " (" + me.artist1.color + ")")
+        me.console.log("• " + me.artist2.name + " (" + me.artist2.color + ")")
+        me.console.log("• " + me.artist3.name + " (" + me.artist3.color + ")")
+        
+        me.console.separator()
+        me.console.log("🎨 各アーティストが創作開始...")
+        
+        // 各アーティストが独自エリアで作品制作（シンプルバージョン）
+        me.artist1.paintInArea(me.canvas, 10, 20, 113, 210)
+        me.artist2.paintInArea(me.canvas, 143, 20, 114, 210)  
+        me.artist3.paintInArea(me.canvas, 277, 20, 113, 210)
+        
+        // アーティスト名表示
+        me.canvas.fillRect(20, 5, 90, 12, "white")
+        me.canvas.fillRect(150, 5, 90, 12, "white")
+        me.canvas.fillRect(285, 5, 90, 12, "white")
+        
+        me.console.separator()
+        me.console.info("🎉 協同アート作品完成！")
+        me.console.log("3つの異なるスタイルで表現されました")
+        me.console.groupEnd()
+        
+        return "アーティスト協同制作成功！"
+    }
+}
+
+box Artist {
+    init { name, color }
+    
+    Artist(n, c) {
+        me.name = n
+        me.color = c
+    }
+    
+    paintInArea(canvas, x, y, width, height) {
+        // シンプルな描画（ネストループ回避）
+        canvas.fillRect(x + 10, y + 10, 30, 30, me.color)
+        canvas.fillRect(x + 50, y + 30, 25, 25, me.color)
+        canvas.fillRect(x + 20, y + 70, 40, 20, me.color)
+        canvas.fillRect(x + 70, y + 60, 20, 35, me.color)
+        canvas.fillRect(x + 30, y + 110, 35, 15, me.color)
+        canvas.fillRect(x + 15, y + 140, 50, 25, me.color)
+        canvas.fillRect(x + 75, y + 120, 25, 40, me.color)
+    }
+}`
+            };
+            
+            if (examples[type]) {
+                editor.value = examples[type];
+            }
+        };
+        
+        // Initialize when page loads
+        initializeNyash();
+    </script>
+</body>
+</html>

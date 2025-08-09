@@ -1,0 +1,97 @@
+// 🚀 最小版LISP - 動作確認用
+// 基本的な算術計算のみ実装
+
+NIL = 0
+
+// データ構造
+box ConsBox {
+    car
+    cdr
+    init { car, cdr }
+    ConsBox(a, d) { 
+        me.car = a
+        me.cdr = d 
+    }
+    getCar() { return me.car }
+    getCdr() { return me.cdr }
+    toString() { return "(" + me.car.toString() + " . " + me.cdr.toString() + ")" }
+}
+
+// 基本関数
+function cons(a, d) { return new ConsBox(a, d) }
+function car(pair) { 
+    if pair == NIL { return NIL }
+    return pair.getCar() 
+}
+function cdr(pair) { 
+    if pair == NIL { return NIL }
+    return pair.getCdr() 
+}
+
+// リスト作成
+function list2(a, b) { return cons(a, cons(b, NIL)) }
+function list3(a, b, c) { return cons(a, cons(b, cons(c, NIL))) }
+
+// 超シンプル評価器 - 数値の加算のみ
+function simpleEval(expr) {
+    // 数値リテラルはそのまま返す
+    if expr == 0 { return 0 }
+    if expr == 1 { return 1 }
+    if expr == 2 { return 2 }
+    if expr == 3 { return 3 }
+    if expr == 4 { return 4 }
+    if expr == 5 { return 5 }
+    if expr == 6 { return 6 }
+    if expr == 7 { return 7 }
+    if expr == 8 { return 8 }
+    if expr == 9 { return 9 }
+    
+    // リストの場合
+    operator = car(expr)
+    arg1 = car(cdr(expr))
+    arg2 = car(cdr(cdr(expr)))
+    
+    // 文字列の加算演算子チェック
+    if operator == "+" {
+        return simpleEval(arg1) + simpleEval(arg2)
+    }
+    if operator == "*" {
+        return simpleEval(arg1) * simpleEval(arg2)
+    }
+    if operator == "-" {
+        return simpleEval(arg1) - simpleEval(arg2)
+    }
+    
+    return 0  // エラーの場合
+}
+
+// テスト
+print("🚀 === Minimal LISP Test === 🚀")
+print("")
+
+print("1. Basic data structures:")
+p1 = cons(1, 2)
+print("   cons(1, 2) = " + p1.toString())
+print("   car = " + car(p1))
+print("   cdr = " + cdr(p1))
+
+print("")
+print("2. Simple evaluation:")
+// (+ 1 2) を手動構築
+expr1 = list3("+", 1, 2)
+print("   Expression: " + expr1.toString())
+result1 = simpleEval(expr1)
+print("   Result: " + result1)
+
+print("")
+print("3. Nested expression:")
+// (+ 1 (* 2 3))
+inner = list3("*", 2, 3)
+expr2 = list3("+", 1, inner)
+print("   Expression: " + expr2.toString())
+result2 = simpleEval(expr2)
+print("   Result: " + result2)
+
+print("")
+print("✅ Minimal LISP working!")
+print("🎯 This proves the concept - now we can build more features!")

@@ -1,0 +1,253 @@
+// Simple Chat Simulation in Nyash
+// Simulate P2P messaging without network components
+
+print("=== Nyash Simple Chat Simulator ===")
+print("")
+
+// Initialize components
+rand = new RandomBox()
+time = new TimeBox()
+messageHistory = new ArrayBox()
+userList = new ArrayBox()
+
+print("Chat system initialized!")
+print("")
+
+// Setup users
+userList.push("Alice")
+userList.push("Bob") 
+userList.push("Charlie")
+userList.push("Diana")
+userList.push("Eve")
+
+print("=== Active Users ===")
+i = 0
+loop {
+    if i >= userList.length() {
+        break
+    }
+    user = userList.get(i)
+    userNum = i + 1
+    print(userNum + ". " + user)
+    i = i + 1
+}
+print("")
+
+// Message templates for simulation
+messageTemplates = new ArrayBox()
+messageTemplates.push("Hello everyone!")
+messageTemplates.push("How is everyone doing?")
+messageTemplates.push("Just finished a great coding session!")
+messageTemplates.push("Anyone working on interesting projects?")
+messageTemplates.push("The weather is nice today!")
+messageTemplates.push("Thanks for the help earlier!")
+messageTemplates.push("Looking forward to our next meeting!")
+messageTemplates.push("Great work on the latest release!")
+messageTemplates.push("Happy to be part of this team!")
+messageTemplates.push("Coffee break anyone?")
+
+// Simulate chat conversation
+print("=== Chat Conversation Simulation ===")
+print("")
+
+conversationLength = rand.randInt(8, 15)
+i = 0
+loop {
+    if i >= conversationLength {
+        break
+    }
+    
+    // Select random user and message
+    sender = rand.choice(userList)
+    message = rand.choice(messageTemplates)
+    timestamp = time.format("%H:%M:%S")
+    
+    // Create formatted message
+    formattedMessage = "[" + timestamp + "] " + sender + ": " + message
+    messageHistory.push(formattedMessage)
+    
+    // Display message
+    print(formattedMessage)
+    
+    i = i + 1
+}
+print("")
+
+// Chat statistics
+print("=== Chat Session Statistics ===")
+print("Total messages: " + messageHistory.length())
+print("Active users: " + userList.length())
+print("Session duration: " + conversationLength + " message exchanges")
+print("")
+
+// Message analysis
+print("=== Message Analysis ===")
+
+// Count messages per user (simplified)
+aliceCount = 0
+bobCount = 0
+charlieCount = 0
+
+i = 0
+loop {
+    if i >= messageHistory.length() {
+        break
+    }
+    message = messageHistory.get(i)
+    
+    if message.contains("Alice") {
+        aliceCount = aliceCount + 1
+    }
+    if message.contains("Bob") {
+        bobCount = bobCount + 1  
+    }
+    if message.contains("Charlie") {
+        charlieCount = charlieCount + 1
+    }
+    
+    i = i + 1
+}
+
+print("Alice messages: " + aliceCount)
+print("Bob messages: " + bobCount)
+print("Charlie messages: " + charlieCount)
+print("")
+
+// Most active user
+mostActiveUser = "Alice"
+maxMessages = aliceCount
+
+if bobCount > maxMessages {
+    mostActiveUser = "Bob"
+    maxMessages = bobCount
+}
+if charlieCount > maxMessages {
+    mostActiveUser = "Charlie"  
+    maxMessages = charlieCount
+}
+
+print("Most active user: " + mostActiveUser + " (" + maxMessages + " messages)")
+print("")
+
+// Sentiment analysis (very basic)
+print("=== Basic Sentiment Analysis ===")
+positiveWords = new ArrayBox()
+positiveWords.push("great")
+positiveWords.push("thanks")
+positiveWords.push("happy")
+positiveWords.push("nice")
+positiveWords.push("good")
+
+positiveCount = 0
+i = 0
+loop {
+    if i >= messageHistory.length() {
+        break
+    }
+    message = messageHistory.get(i)
+    
+    j = 0
+    loop {
+        if j >= positiveWords.length() {
+            break
+        }
+        word = positiveWords.get(j)
+        
+        if message.contains(word) {
+            positiveCount = positiveCount + 1
+        }
+        
+        j = j + 1
+    }
+    
+    i = i + 1
+}
+
+print("Positive sentiment indicators: " + positiveCount)
+if positiveCount >= 3 {
+    print("Overall mood: Positive :)")
+}
+if positiveCount < 3 {
+    print("Overall mood: Neutral :|")
+}
+print("")
+
+// Save chat log
+currentDate = time.format("%Y-%m-%d")
+currentTime = time.format("%H-%M-%S")
+filename = "chat_log_" + currentDate + "_" + currentTime + ".txt"
+file = new FileBox(filename)
+
+// Create chat log content
+logContent = "=== Nyash Simple Chat Log ===\n"
+logContent = logContent + "Date: " + currentDate + "\n"
+logContent = logContent + "Session Start: " + currentTime + "\n"
+logContent = logContent + "Total Messages: " + messageHistory.length() + "\n"
+logContent = logContent + "Active Users: " + userList.length() + "\n"
+logContent = logContent + "\n=== Message History ===\n"
+
+i = 0
+loop {
+    if i >= messageHistory.length() {
+        break
+    }
+    message = messageHistory.get(i)
+    logContent = logContent + message + "\n"
+    i = i + 1
+}
+
+logContent = logContent + "\n=== Session Statistics ===\n"
+logContent = logContent + "Most Active User: " + mostActiveUser + "\n"
+logContent = logContent + "Positive Sentiment Count: " + positiveCount + "\n"
+logContent = logContent + "\nChat session completed successfully!\n"
+
+// Save log
+saveResult = file.write(logContent)
+print("=== Chat Log Saved ===")
+print("Saved to: " + filename)
+print("Save result: " + saveResult)
+print("")
+
+// P2P Connection Simulation
+print("=== P2P Connection Status ===")
+connectionStatus = new ArrayBox()
+connectionStatus.push("Connected")
+connectionStatus.push("Reconnecting")
+connectionStatus.push("Stable")
+
+currentStatus = rand.choice(connectionStatus)
+print("Network status: " + currentStatus)
+print("Peers connected: " + userList.length())
+
+latency = rand.randInt(10, 150)
+print("Average latency: " + latency + "ms")
+print("")
+
+// Future features
+print("=== Planned Features ===")
+features = new ArrayBox()
+features.push("File sharing")
+features.push("Voice messages")
+features.push("Message encryption")
+features.push("Group channels")
+features.push("Message history search")
+features.push("User presence indicators")
+
+plannedFeature = rand.choice(features)
+print("Next feature to implement: " + plannedFeature)
+print("")
+
+// Random chat tip
+tips = new ArrayBox()
+tips.push("Keep messages clear and concise")
+tips.push("Be respectful to all participants")
+tips.push("Use @mentions for direct communication")
+tips.push("Share resources and help others learn")
+tips.push("Stay engaged but don't overwhelm the chat")
+
+tip = rand.choice(tips)
+print("Chat Tip: " + tip)
+print("")
+
+print("=== Chat Session Complete! ===")
+print("Thanks for using Nyash Simple Chat!")

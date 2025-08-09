@@ -1,0 +1,2279 @@
+/*!
+ * Nyash Parser - Rust Implementation
+ * 
+ * Python版nyashc_v4.pyのNyashParserをRustで完全再実装
+ * Token列をAST (Abstract Syntax Tree) に変換
+ */
+
+use crate::tokenizer::{Token, TokenType, TokenizeError};
+use crate::ast::{ASTNode, BinaryOperator, LiteralValue, UnaryOperator, CatchClause, Span};
+use std::collections::HashMap;
+use thiserror::Error;
+
+/// 🔥 Loop構造情報 - 2段階パーサー用
+#[derive(Debug, Clone)]
+struct LoopStructure {
+    condition_tokens: Vec<Token>,
+    body_tokens: Vec<Token>,
+}
+
+/// 🌟 If構造情報 - 2段階パーサー用
+#[derive(Debug, Clone)]
+struct IfStructure {
+    condition_tokens: Vec<Token>,
+    then_body_tokens: Vec<Token>,
+    else_if_clauses: Vec<ElseIfClause>,
+    else_body_tokens: Option<Vec<Token>>,
+}
+
+/// else if節の構造
+#[derive(Debug, Clone)]
+struct ElseIfClause {
+    condition_tokens: Vec<Token>,
+    body_tokens: Vec<Token>,
+}
+
+/// パースエラー
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Unexpected token {found:?}, expected {expected} at line {line}")]
+    UnexpectedToken { found: TokenType, expected: String, line: usize },
+    
+    #[error("Unexpected end of file")]
+    UnexpectedEOF,
+    
+    #[error("Invalid expression at line {line}")]
+    InvalidExpression { line: usize },
+    
+    #[error("Invalid statement at line {line}")]
+    InvalidStatement { line: usize },
+    
+    #[error("Circular dependency detected between static boxes: {cycle}")]
+    CircularDependency { cycle: String },
+    
+    #[error("Tokenize error: {0}")]
+    TokenizeError(#[from] TokenizeError),
+}
+
+/// Nyashパーサー - トークン列をASTに変換
+pub struct NyashParser {
+    tokens: Vec<Token>,
+    current: usize,
+    /// 🔥 Static box依存関係追跡（循環依存検出用）
+    static_box_dependencies: std::collections::HashMap<String, std::collections::HashSet<String>>,
+}
+
+impl NyashParser {
+    /// 新しいパーサーを作成
+    pub fn new(tokens: Vec<Token>) -> Self {
+        Self {
+            tokens,
+            current: 0,
+            static_box_dependencies: std::collections::HashMap::new(),
+        }
+    }
+    
+    /// 文字列からパース (トークナイズ + パース)
+    pub fn parse_from_string(input: impl Into<String>) -> Result<ASTNode, ParseError> {
+        let mut tokenizer = crate::tokenizer::NyashTokenizer::new(input);
+        let tokens = tokenizer.tokenize()?;
+        
+        let mut parser = Self::new(tokens);
+        parser.parse()
+    }
+    
+    /// パース実行 - Program ASTを返す
+    pub fn parse(&mut self) -> Result<ASTNode, ParseError> {
+        self.parse_program()
+    }
+    
+    // ===== パース関数群 =====
+    
+    /// プログラム全体をパース
+    fn parse_program(&mut self) -> Result<ASTNode, ParseError> {
+        let mut statements = Vec::new();
+        
+        while !self.is_at_end() {
+            // EOF tokenはスキップ
+            if matches!(self.current_token().token_type, TokenType::EOF) {
+                break;
+            }
+            
+            // NEWLINE tokenはスキップ（文の区切りとして使用）
+            if matches!(self.current_token().token_type, TokenType::NEWLINE) {
+                self.advance();
+                continue;
+            }
+            
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+        }
+        
+        // 🔥 すべてのstatic box解析後に循環依存検出
+        self.check_circular_dependencies()?;
+        
+        Ok(ASTNode::Program { statements, span: Span::unknown() })
+    }
+    
+    /// 文をパース
+    fn parse_statement(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::BOX => self.parse_box_declaration(),
+            TokenType::INTERFACE => self.parse_interface_box_declaration(),
+            TokenType::GLOBAL => self.parse_global_var(),
+            TokenType::FUNCTION => self.parse_function_declaration(),
+            TokenType::STATIC => self.parse_static_declaration(),  // 🔥 静的宣言 (function/box)
+            TokenType::IF => self.parse_if(),
+            TokenType::LOOP => self.parse_loop(),
+            TokenType::BREAK => self.parse_break(),
+            TokenType::RETURN => self.parse_return(),
+            TokenType::PRINT => self.parse_print(),
+            TokenType::NOWAIT => self.parse_nowait(),
+            TokenType::INCLUDE => self.parse_include(),
+            TokenType::LOCAL => self.parse_local(),
+            TokenType::OUTBOX => self.parse_outbox(),
+            TokenType::TRY => self.parse_try_catch(),
+            TokenType::THROW => self.parse_throw(),
+            TokenType::IDENTIFIER(_) => {
+                // function宣言 または 代入文 または 関数呼び出し
+                self.parse_assignment_or_function_call()
+            }
+            TokenType::THIS | TokenType::ME => {
+                // this/me で始まる文も通常の代入文または関数呼び出しとして処理
+                self.parse_assignment_or_function_call()
+            }
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::InvalidStatement { line })
+            }
+        }
+    }
+    
+    /// box宣言をパース: box Name { fields... methods... }
+    fn parse_box_declaration(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::BOX)?;
+        
+        let name = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "identifier".to_string(),
+                line,
+            });
+        };
+        
+        // 🔥 ジェネリクス型パラメータのパース (<T, U>)
+        let type_parameters = if self.match_token(&TokenType::LESS) {
+            self.advance(); // consume '<'
+            let mut params = Vec::new();
+            
+            loop {
+                if let TokenType::IDENTIFIER(param_name) = &self.current_token().token_type {
+                    params.push(param_name.clone());
+                    self.advance();
+                    
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance(); // consume ','
+                    } else {
+                        break;
+                    }
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "type parameter name".to_string(),
+                        line,
+                    });
+                }
+            }
+            
+            self.consume(TokenType::GREATER)?; // consume '>'
+            params
+        } else {
+            Vec::new()
+        };
+        
+        // from句のパース（継承）
+        let extends = if self.match_token(&TokenType::FROM) {
+            self.advance(); // consume 'from'
+            
+            if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
+                let parent_name = parent_name.clone();
+                self.advance();
+                Some(parent_name)
+            } else {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "parent class name".to_string(),
+                    line,
+                });
+            }
+        } else {
+            None
+        };
+        
+        // interface句のパース（インターフェース実装）
+        let implements = if self.match_token(&TokenType::INTERFACE) {
+            self.advance(); // consume 'interface'
+            
+            let mut interface_list = Vec::new();
+            
+            loop {
+                if let TokenType::IDENTIFIER(interface_name) = &self.current_token().token_type {
+                    interface_list.push(interface_name.clone());
+                    self.advance();
+                    
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance(); // consume ','
+                    } else {
+                        break;
+                    }
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "interface name".to_string(),
+                        line,
+                    });
+                }
+            }
+            
+            interface_list
+        } else {
+            vec![]
+        };
+        
+        self.consume(TokenType::LBRACE)?;
+        self.skip_newlines(); // ブレース後の改行をスキップ
+        
+        let mut fields = Vec::new();
+        let mut methods = HashMap::new();
+        let mut constructors = HashMap::new();
+        let mut init_fields = Vec::new();
+        
+        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            self.skip_newlines(); // ループ開始時に改行をスキップ
+            
+            // RBRACEに到達していればループを抜ける
+            if self.match_token(&TokenType::RBRACE) {
+                break;
+            }
+            
+            // initブロックの処理
+            if self.match_token(&TokenType::INIT) {
+                self.advance(); // consume 'init'
+                self.consume(TokenType::LBRACE)?;
+                
+                // initブロック内のフィールド定義を読み込み
+                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                    self.skip_newlines();
+                    
+                    if self.match_token(&TokenType::RBRACE) {
+                        break;
+                    }
+                    
+                    if let TokenType::IDENTIFIER(field_name) = &self.current_token().token_type {
+                        init_fields.push(field_name.clone());
+                        self.advance();
+                        
+                        // カンマがあればスキップ
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
+                    } else {
+                        // 不正なトークンがある場合はエラー
+                        return Err(ParseError::UnexpectedToken {
+                            expected: "field name".to_string(),
+                            found: self.current_token().token_type.clone(),
+                            line: self.current_token().line,
+                        });
+                    }
+                }
+                
+                self.consume(TokenType::RBRACE)?;
+                continue;
+            }
+            
+            if let TokenType::IDENTIFIER(field_or_method) = &self.current_token().token_type {
+                let field_or_method = field_or_method.clone();
+                self.advance();
+                
+                // メソッド定義またはコンストラクタか？
+                if self.match_token(&TokenType::LPAREN) {
+                    // Box名と同じ場合はコンストラクタ
+                    if field_or_method == name {
+                        // コンストラクタの処理
+                        self.advance(); // consume '('
+                        
+                        let mut params = Vec::new();
+                        while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                            if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
+                                params.push(param.clone());
+                                self.advance();
+                            }
+                            
+                            if self.match_token(&TokenType::COMMA) {
+                                self.advance();
+                            }
+                        }
+                        
+                        self.consume(TokenType::RPAREN)?;
+                        self.consume(TokenType::LBRACE)?;
+                        
+                        let mut body = Vec::new();
+                        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                            self.skip_newlines();
+                            if !self.match_token(&TokenType::RBRACE) {
+                                body.push(self.parse_statement()?);
+                            }
+                        }
+                        
+                        self.consume(TokenType::RBRACE)?;
+                        
+                        let constructor = ASTNode::FunctionDeclaration {
+                            name: field_or_method.clone(),
+                            params: params.clone(),
+                            body,
+                            is_static: false,  // コンストラクタは静的でない
+                            span: Span::unknown(),
+                        };
+                        
+                        // パラメータの数でコンストラクタを区別
+                        let constructor_key = format!("{}/{}", field_or_method, params.len());
+                        constructors.insert(constructor_key, constructor);
+                    } else {
+                        // 通常のメソッド定義
+                        self.advance(); // consume '('
+                        
+                        let mut params = Vec::new();
+                        while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                            if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
+                                params.push(param.clone());
+                                self.advance();
+                            }
+                            
+                            if self.match_token(&TokenType::COMMA) {
+                                self.advance();
+                            }
+                        }
+                        
+                        self.consume(TokenType::RPAREN)?;
+                        self.consume(TokenType::LBRACE)?;
+                        
+                        let mut body = Vec::new();
+                        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                            self.skip_newlines(); // メソッド本体内の改行をスキップ
+                            if !self.match_token(&TokenType::RBRACE) {
+                                body.push(self.parse_statement()?);
+                            }
+                        }
+                        
+                        self.consume(TokenType::RBRACE)?;
+                        
+                        let method = ASTNode::FunctionDeclaration {
+                            name: field_or_method.clone(),
+                            params,
+                            body,
+                            is_static: false,  // メソッドは通常静的でない
+                            span: Span::unknown(),
+                        };
+                        
+                        methods.insert(field_or_method, method);
+                    }
+                } else {
+                    // フィールド定義
+                    fields.push(field_or_method);
+                }
+                self.skip_newlines(); // フィールド/メソッド定義後の改行をスキップ
+            } else {
+                // 予期しないトークンの場合、詳細なエラー情報を出力してスキップ
+                let line = self.current_token().line;
+                eprintln!("Debug: Unexpected token {:?} at line {}", self.current_token().token_type, line);
+                self.advance(); // トークンをスキップして続行
+            }
+        }
+        
+        self.consume(TokenType::RBRACE)?;
+        
+        Ok(ASTNode::BoxDeclaration {
+            name,
+            fields,
+            methods,
+            constructors,
+            init_fields,
+            is_interface: false,
+            extends,
+            implements,
+            type_parameters,
+            is_static: false,
+            static_init: None,
+            span: Span::unknown(),
+        })
+    }
+    
+    /// インターフェースBox宣言をパース: interface box Name { method1() method2() }
+    fn parse_interface_box_declaration(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::INTERFACE)?;
+        self.consume(TokenType::BOX)?;
+        
+        let name = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "identifier".to_string(),
+                line,
+            });
+        };
+        
+        self.consume(TokenType::LBRACE)?;
+        self.skip_newlines(); // ブレース後の改行をスキップ
+        
+        let mut methods = HashMap::new();
+        
+        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            self.skip_newlines(); // ループ開始時に改行をスキップ
+            if let TokenType::IDENTIFIER(method_name) = &self.current_token().token_type {
+                let method_name = method_name.clone();
+                self.advance();
+                
+                // インターフェースメソッドはシグネチャのみ
+                if self.match_token(&TokenType::LPAREN) {
+                    self.advance(); // consume '('
+                    
+                    let mut params = Vec::new();
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
+                            params.push(param.clone());
+                            self.advance();
+                        }
+                        
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
+                    }
+                    
+                    self.consume(TokenType::RPAREN)?;
+                    
+                    // インターフェースメソッドは実装なし（空のbody）
+                    let method_decl = ASTNode::FunctionDeclaration {
+                        name: method_name.clone(),
+                        params,
+                        body: vec![], // 空の実装
+                        is_static: false,  // インターフェースメソッドは通常静的でない
+                        span: Span::unknown(),
+                    };
+                    
+                    methods.insert(method_name, method_decl);
+                    
+                    // メソッド宣言後の改行をスキップ
+                    self.skip_newlines();
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "(".to_string(),
+                        line,
+                    });
+                }
+            } else {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "method name".to_string(),
+                    line,
+                });
+            }
+        }
+        
+        self.consume(TokenType::RBRACE)?;
+        
+        Ok(ASTNode::BoxDeclaration {
+            name,
+            fields: vec![], // インターフェースはフィールドなし
+            methods,
+            constructors: HashMap::new(), // インターフェースにコンストラクタなし
+            init_fields: vec![], // インターフェースにinitブロックなし
+            is_interface: true, // インターフェースフラグ
+            extends: None,
+            implements: vec![],
+            type_parameters: Vec::new(), // 🔥 インターフェースではジェネリクス未対応
+            is_static: false, // インターフェースは非static
+            static_init: None, // インターフェースにstatic initなし
+            span: Span::unknown(),
+        })
+    }
+    
+    /// グローバル変数をパース: global name = value
+    fn parse_global_var(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::GLOBAL)?;
+        
+        let name = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "identifier".to_string(),
+                line,
+            });
+        };
+        
+        self.consume(TokenType::ASSIGN)?;
+        let value = Box::new(self.parse_expression()?);
+        
+        Ok(ASTNode::GlobalVar { name, value, span: Span::unknown() })
+    }
+    
+    /// 🌟 if/else if/else文をパース - 2段階アプローチで完全安定化！
+    /// if condition { ... } else if condition2 { ... } else { ... }
+    fn parse_if(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::IF)?;
+        
+        // 🎯 第1段階：構造認識 - if/else if/else全体の構造を把握
+        let if_structure = self.extract_if_structure()?;
+        
+        // 🎯 第2段階：内容パース - 分離された要素を個別に解析
+        self.parse_if_content(if_structure)
+    }
+    
+    /// loop文をパース: loop(condition) { body } のみ
+    /// 🔥 LOOP 2段階パーサー - セルフホスティング実現への重要ステップ！
+    fn parse_loop(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::LOOP)?;
+        
+        // 🎯 第1段階：構造認識 - loop(condition) { ... }の構造を把握
+        let loop_structure = self.extract_loop_structure()?;
+        
+        // 🚀 第2段階：内容パース - 独立した環境で各部分をパース
+        self.parse_loop_content(loop_structure)
+    }
+    
+    /// 第1段階：loop構造の抽出（スタックベース）
+    fn extract_loop_structure(&mut self) -> Result<LoopStructure, ParseError> {
+        // condition部分を抽出
+        self.consume(TokenType::LPAREN)?;
+        let condition_tokens = self.extract_condition_tokens()?;
+        self.consume(TokenType::RPAREN)?;
+        
+        // body部分を抽出
+        let body_tokens = self.extract_block_tokens()?;
+        
+        Ok(LoopStructure {
+            condition_tokens,
+            body_tokens,
+        })
+    }
+    
+    /// condition部分のトークンを抽出
+    fn extract_condition_tokens(&mut self) -> Result<Vec<Token>, ParseError> {
+        let mut tokens = Vec::new();
+        let mut paren_stack = 0;
+        
+        while !self.is_at_end() {
+            match &self.current_token().token_type {
+                TokenType::LPAREN => {
+                    paren_stack += 1;
+                    tokens.push(self.current_token().clone());
+                    self.advance();
+                }
+                TokenType::RPAREN => {
+                    if paren_stack == 0 {
+                        break; // loop条件の終了
+                    }
+                    paren_stack -= 1;
+                    tokens.push(self.current_token().clone());
+                    self.advance();
+                }
+                _ => {
+                    tokens.push(self.current_token().clone());
+                    self.advance();
+                }
+            }
+        }
+        
+        Ok(tokens)
+    }
+    
+    /// 第2段階：独立環境でのパース
+    fn parse_loop_content(&mut self, structure: LoopStructure) -> Result<ASTNode, ParseError> {
+        // condition部分を独立パース
+        let condition = self.parse_token_sequence(structure.condition_tokens)?;
+        
+        // body部分を独立パース
+        let body = self.parse_token_block(structure.body_tokens)?;
+        
+        Ok(ASTNode::Loop { 
+            condition: Box::new(condition), 
+            body, 
+            span: Span::unknown() 
+        })
+    }
+    
+    /// break文をパース
+    fn parse_break(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::BREAK)?;
+        Ok(ASTNode::Break { span: Span::unknown() })
+    }
+    
+    /// return文をパース: return [value]
+    fn parse_return(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::RETURN)?;
+        self.skip_newlines(); // return後の改行をスキップ
+        
+        let value = if self.match_token(&TokenType::LBRACE) || 
+                       self.match_token(&TokenType::RBRACE) ||
+                       self.match_token(&TokenType::NEWLINE) ||
+                       self.is_at_end() {
+            None
+        } else {
+            Some(Box::new(self.parse_expression()?))
+        };
+        
+        Ok(ASTNode::Return { value, span: Span::unknown() })
+    }
+    
+    /// print文をパース: print(expression)
+    fn parse_print(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::PRINT)?;
+        self.skip_newlines(); // print後の改行をスキップ
+        self.consume(TokenType::LPAREN)?;
+        let expression = Box::new(self.parse_expression()?);
+        self.consume(TokenType::RPAREN)?;
+        
+        Ok(ASTNode::Print { expression, span: Span::unknown() })
+    }
+    
+    /// nowait文をパース: nowait variable = expression
+    fn parse_nowait(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::NOWAIT)?;
+        self.skip_newlines(); // nowait後の改行をスキップ
+        
+        // 変数名を取得
+        let variable = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "variable name".to_string(),
+                line,
+            });
+        };
+        
+        self.consume(TokenType::ASSIGN)?;
+        let expression = Box::new(self.parse_expression()?);
+        
+        Ok(ASTNode::Nowait { variable, expression, span: Span::unknown() })
+    }
+    
+    /// function宣言をパース: function name(params) { body }
+    fn parse_function_declaration(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::FUNCTION)?;
+        
+        // 関数名を取得
+        let name = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "function name".to_string(),
+                line,
+            });
+        };
+        
+        // パラメータリストをパース
+        self.consume(TokenType::LPAREN)?;
+        let mut params = Vec::new();
+        
+        while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+            if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
+                params.push(param.clone());
+                self.advance();
+                
+                if self.match_token(&TokenType::COMMA) {
+                    self.advance();
+                }
+            } else if !self.match_token(&TokenType::RPAREN) {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "parameter name".to_string(),
+                    line,
+                });
+            }
+        }
+        
+        self.consume(TokenType::RPAREN)?;
+        
+        // 関数本体をパース
+        self.consume(TokenType::LBRACE)?;
+        self.skip_newlines();
+        
+        let mut body = Vec::new();
+        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            self.skip_newlines();
+            if !self.match_token(&TokenType::RBRACE) {
+                body.push(self.parse_statement()?);
+            }
+        }
+        
+        self.consume(TokenType::RBRACE)?;
+        
+        Ok(ASTNode::FunctionDeclaration {
+            name,
+            params,
+            body,
+            is_static: false,  // 通常の関数は静的でない
+            span: Span::unknown(),
+        })
+    }
+    
+    /// 静的宣言をパース - 🔥 static function / static box 記法  
+    fn parse_static_declaration(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::STATIC)?;
+        
+        // 次のトークンで分岐: function か box か
+        match &self.current_token().token_type {
+            TokenType::FUNCTION => self.parse_static_function(),
+            TokenType::BOX => self.parse_static_box(),
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "function or box after static".to_string(),
+                    line,
+                })
+            }
+        }
+    }
+    
+    /// 静的関数宣言をパース - static function Name() { ... }
+    fn parse_static_function(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::FUNCTION)?;
+        
+        // 関数名を取得（Box名.関数名の形式をサポート）
+        let name = if let TokenType::IDENTIFIER(first_part) = &self.current_token().token_type {
+            let mut full_name = first_part.clone();
+            self.advance();
+            
+            // ドット記法をチェック（例：Math.min）
+            if self.match_token(&TokenType::DOT) {
+                self.advance(); // DOTを消費
+                
+                if let TokenType::IDENTIFIER(method_name) = &self.current_token().token_type {
+                    full_name = format!("{}.{}", full_name, method_name);
+                    self.advance();
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "method name after dot".to_string(),
+                        line,
+                    });
+                }
+            }
+            
+            full_name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "static function name".to_string(),
+                line,
+            });
+        };
+        
+        // パラメータリストをパース
+        self.consume(TokenType::LPAREN)?;
+        let mut params = Vec::new();
+        
+        while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+            if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
+                params.push(param.clone());
+                self.advance();
+                
+                if self.match_token(&TokenType::COMMA) {
+                    self.advance();
+                }
+            } else if !self.match_token(&TokenType::RPAREN) {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "parameter name".to_string(),
+                    line,
+                });
+            }
+        }
+        
+        self.consume(TokenType::RPAREN)?;
+        
+        // 関数本体をパース
+        self.consume(TokenType::LBRACE)?;
+        self.skip_newlines(); // ブレースの後の改行をスキップ
+        
+        let mut body = Vec::new();
+        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            self.skip_newlines(); // ループ開始時の改行をスキップ
+            if !self.match_token(&TokenType::RBRACE) {
+                body.push(self.parse_statement()?);
+            }
+        }
+        
+        self.consume(TokenType::RBRACE)?;
+        
+        Ok(ASTNode::FunctionDeclaration {
+            name,
+            params,
+            body,
+            is_static: true,  // 🔥 静的関数フラグを設定
+            span: Span::unknown(),
+        })
+    }
+    
+    /// 静的Box宣言をパース - static box Name { ... }
+    fn parse_static_box(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::BOX)?;
+        
+        let name = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "identifier".to_string(),
+                line,
+            });
+        };
+        
+        // 🔥 ジェネリクス型パラメータのパース (<T, U>)
+        let type_parameters = if self.match_token(&TokenType::LESS) {
+            self.advance(); // consume '<'
+            let mut params = Vec::new();
+            
+            loop {
+                if let TokenType::IDENTIFIER(param_name) = &self.current_token().token_type {
+                    params.push(param_name.clone());
+                    self.advance();
+                    
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance(); // consume ','
+                    } else {
+                        break;
+                    }
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "type parameter name".to_string(),
+                        line,
+                    });
+                }
+            }
+            
+            self.consume(TokenType::GREATER)?; // consume '>'
+            params
+        } else {
+            Vec::new()
+        };
+        
+        // from句のパース（継承）- static boxでも継承可能
+        let extends = if self.match_token(&TokenType::FROM) {
+            self.advance(); // consume 'from'
+            
+            if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
+                let parent_name = parent_name.clone();
+                self.advance();
+                Some(parent_name)
+            } else {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "parent class name".to_string(),
+                    line,
+                });
+            }
+        } else {
+            None
+        };
+        
+        // interface句のパース（インターフェース実装）
+        let implements = if self.match_token(&TokenType::INTERFACE) {
+            self.advance(); // consume 'interface'
+            
+            let mut interface_list = Vec::new();
+            
+            loop {
+                if let TokenType::IDENTIFIER(interface_name) = &self.current_token().token_type {
+                    interface_list.push(interface_name.clone());
+                    self.advance();
+                    
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance(); // consume ','
+                    } else {
+                        break;
+                    }
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "interface name".to_string(),
+                        line,
+                    });
+                }
+            }
+            
+            interface_list
+        } else {
+            vec![]
+        };
+        
+        self.consume(TokenType::LBRACE)?;
+        self.skip_newlines(); // ブレース後の改行をスキップ
+        
+        let mut fields = Vec::new();
+        let mut methods = HashMap::new();
+        let constructors = HashMap::new();
+        let mut init_fields = Vec::new();
+        let mut static_init = None;
+        
+        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            self.skip_newlines(); // ループ開始時に改行をスキップ
+            
+            // RBRACEに到達していればループを抜ける
+            if self.match_token(&TokenType::RBRACE) {
+                break;
+            }
+            
+            // 🔥 static { } ブロックの処理
+            if self.match_token(&TokenType::STATIC) {
+                self.advance(); // consume 'static'
+                self.consume(TokenType::LBRACE)?;
+                
+                let mut static_body = Vec::new();
+                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                    self.skip_newlines();
+                    if !self.match_token(&TokenType::RBRACE) {
+                        static_body.push(self.parse_statement()?);
+                    }
+                }
+                
+                self.consume(TokenType::RBRACE)?;
+                static_init = Some(static_body);
+                continue;
+            }
+            
+            // initブロックの処理
+            if self.match_token(&TokenType::INIT) {
+                self.advance(); // consume 'init'
+                self.consume(TokenType::LBRACE)?;
+                
+                // initブロック内のフィールド定義を読み込み
+                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                    self.skip_newlines();
+                    
+                    if self.match_token(&TokenType::RBRACE) {
+                        break;
+                    }
+                    
+                    if let TokenType::IDENTIFIER(field_name) = &self.current_token().token_type {
+                        init_fields.push(field_name.clone());
+                        self.advance();
+                        
+                        // カンマがあればスキップ
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
+                    } else {
+                        // 不正なトークンがある場合はエラー
+                        return Err(ParseError::UnexpectedToken {
+                            expected: "field name".to_string(),
+                            found: self.current_token().token_type.clone(),
+                            line: self.current_token().line,
+                        });
+                    }
+                }
+                
+                self.consume(TokenType::RBRACE)?;
+                continue;
+            }
+            
+            if let TokenType::IDENTIFIER(field_or_method) = &self.current_token().token_type {
+                let field_or_method = field_or_method.clone();
+                self.advance();
+                
+                // メソッド定義か？
+                if self.match_token(&TokenType::LPAREN) {
+                    // メソッド定義
+                    self.advance(); // consume '('
+                    
+                    let mut params = Vec::new();
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
+                            params.push(param.clone());
+                            self.advance();
+                        }
+                        
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
+                    }
+                    
+                    self.consume(TokenType::RPAREN)?;
+                    self.consume(TokenType::LBRACE)?;
+                    
+                    let mut body = Vec::new();
+                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                        self.skip_newlines();
+                        if !self.match_token(&TokenType::RBRACE) {
+                            body.push(self.parse_statement()?);
+                        }
+                    }
+                    
+                    self.consume(TokenType::RBRACE)?;
+                    
+                    let method = ASTNode::FunctionDeclaration {
+                        name: field_or_method.clone(),
+                        params,
+                        body,
+                        is_static: false,  // static box内のメソッドは通常メソッド
+                        span: Span::unknown(),
+                    };
+                    
+                    methods.insert(field_or_method, method);
+                } else {
+                    // フィールド定義
+                    fields.push(field_or_method);
+                }
+            } else {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "method or field name".to_string(),
+                    found: self.current_token().token_type.clone(),
+                    line: self.current_token().line,
+                });
+            }
+        }
+        
+        self.consume(TokenType::RBRACE)?;
+        
+        // 🔥 Static初期化ブロックから依存関係を抽出
+        if let Some(ref init_stmts) = static_init {
+            let dependencies = self.extract_dependencies_from_statements(init_stmts);
+            self.static_box_dependencies.insert(name.clone(), dependencies);
+        } else {
+            self.static_box_dependencies.insert(name.clone(), std::collections::HashSet::new());
+        }
+        
+        Ok(ASTNode::BoxDeclaration {
+            name,
+            fields,
+            methods,
+            constructors,
+            init_fields,
+            is_interface: false,
+            extends,
+            implements,
+            type_parameters,
+            is_static: true,  // 🔥 static boxフラグを設定
+            static_init,      // 🔥 static初期化ブロック
+            span: Span::unknown(),
+        })
+    }
+    
+    /// 代入文または関数呼び出しをパース
+    fn parse_assignment_or_function_call(&mut self) -> Result<ASTNode, ParseError> {
+        // まず左辺を式としてパース
+        let expr = self.parse_expression()?;
+        
+        // 次のトークンが = なら代入文
+        if self.match_token(&TokenType::ASSIGN) {
+            self.advance(); // consume '='
+            let value = Box::new(self.parse_expression()?);
+            
+            // 左辺が代入可能な形式かチェック
+            match &expr {
+                ASTNode::Variable { .. } | 
+                ASTNode::FieldAccess { .. } => {
+                    Ok(ASTNode::Assignment {
+                        target: Box::new(expr),
+                        value,
+                        span: Span::unknown(),
+                    })
+                }
+                _ => {
+                    let line = self.current_token().line;
+                    Err(ParseError::InvalidStatement { line })
+                }
+            }
+        } else {
+            // 代入文でなければ式文として返す
+            Ok(expr)
+        }
+    }
+    
+    
+    
+    /// 式をパース (演算子優先順位あり)
+    fn parse_expression(&mut self) -> Result<ASTNode, ParseError> {
+        self.parse_or()
+    }
+    
+    /// OR演算子をパース: ||
+    fn parse_or(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_and()?;
+        
+        while self.match_token(&TokenType::OR) {
+            let operator = BinaryOperator::Or;
+            self.advance();
+            let right = self.parse_and()?;
+            expr = ASTNode::BinaryOp {
+                operator,
+                left: Box::new(expr),
+                right: Box::new(right),
+                span: Span::unknown(),
+            };
+        }
+        
+        Ok(expr)
+    }
+    
+    /// AND演算子をパース: &&
+    fn parse_and(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_equality()?;
+        
+        while self.match_token(&TokenType::AND) {
+            let operator = BinaryOperator::And;
+            self.advance();
+            let right = self.parse_equality()?;
+            expr = ASTNode::BinaryOp {
+                operator,
+                left: Box::new(expr),
+                right: Box::new(right),
+                span: Span::unknown(),
+            };
+        }
+        
+        Ok(expr)
+    }
+    
+    /// 等値演算子をパース: == !=
+    fn parse_equality(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_comparison()?;
+        
+        while self.match_token(&TokenType::EQUALS) || self.match_token(&TokenType::NotEquals) {
+            let operator = match &self.current_token().token_type {
+                TokenType::EQUALS => BinaryOperator::Equal,
+                TokenType::NotEquals => BinaryOperator::NotEqual,
+                _ => unreachable!(),
+            };
+            self.advance();
+            let right = self.parse_comparison()?;
+            expr = ASTNode::BinaryOp {
+                operator,
+                left: Box::new(expr),
+                right: Box::new(right),
+                span: Span::unknown(),
+            };
+        }
+        
+        Ok(expr)
+    }
+    
+    /// 比較演算子をパース: < <= > >=
+    fn parse_comparison(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_term()?;
+        
+        while self.match_token(&TokenType::LESS) || 
+              self.match_token(&TokenType::LessEquals) ||
+              self.match_token(&TokenType::GREATER) ||
+              self.match_token(&TokenType::GreaterEquals) {
+            let operator = match &self.current_token().token_type {
+                TokenType::LESS => BinaryOperator::Less,
+                TokenType::LessEquals => BinaryOperator::LessEqual,
+                TokenType::GREATER => BinaryOperator::Greater,
+                TokenType::GreaterEquals => BinaryOperator::GreaterEqual,
+                _ => unreachable!(),
+            };
+            self.advance();
+            let right = self.parse_term()?;
+            expr = ASTNode::BinaryOp {
+                operator,
+                left: Box::new(expr),
+                right: Box::new(right),
+                span: Span::unknown(),
+            };
+        }
+        
+        Ok(expr)
+    }
+    
+    /// 項をパース: + - >>
+    fn parse_term(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_factor()?;
+        
+        while self.match_token(&TokenType::PLUS) || self.match_token(&TokenType::MINUS) || self.match_token(&TokenType::ARROW) {
+            if self.match_token(&TokenType::ARROW) {
+                // >> Arrow演算子
+                self.advance();
+                let right = self.parse_factor()?;
+                expr = ASTNode::Arrow {
+                    sender: Box::new(expr),
+                    receiver: Box::new(right),
+                    span: Span::unknown(),
+                };
+            } else {
+                let operator = match &self.current_token().token_type {
+                    TokenType::PLUS => BinaryOperator::Add,
+                    TokenType::MINUS => BinaryOperator::Subtract,
+                    _ => unreachable!(),
+                };
+                self.advance();
+                let right = self.parse_factor()?;
+                expr = ASTNode::BinaryOp {
+                    operator,
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                    span: Span::unknown(),
+                };
+            }
+        }
+        
+        Ok(expr)
+    }
+    
+    /// 因子をパース: * /
+    fn parse_factor(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_unary()?;
+        
+        while self.match_token(&TokenType::MULTIPLY) || self.match_token(&TokenType::DIVIDE) {
+            let operator = match &self.current_token().token_type {
+                TokenType::MULTIPLY => BinaryOperator::Multiply,
+                TokenType::DIVIDE => BinaryOperator::Divide,
+                _ => unreachable!(),
+            };
+            self.advance();
+            let right = self.parse_unary()?;
+            expr = ASTNode::BinaryOp {
+                operator,
+                left: Box::new(expr),
+                right: Box::new(right),
+                span: Span::unknown(),
+            };
+        }
+        
+        Ok(expr)
+    }
+    
+    /// 単項演算子をパース
+    fn parse_unary(&mut self) -> Result<ASTNode, ParseError> {
+        if self.match_token(&TokenType::MINUS) {
+            self.advance(); // consume '-'
+            let operand = self.parse_unary()?; // 再帰的に単項演算をパース
+            return Ok(ASTNode::UnaryOp {
+                operator: UnaryOperator::Minus,
+                operand: Box::new(operand),
+                span: Span::unknown(),
+            });
+        }
+        
+        if self.match_token(&TokenType::NOT) {
+            self.advance(); // consume 'not'
+            let operand = self.parse_unary()?; // 再帰的に単項演算をパース
+            return Ok(ASTNode::UnaryOp {
+                operator: UnaryOperator::Not,
+                operand: Box::new(operand),
+                span: Span::unknown(),
+            });
+        }
+        
+        if self.match_token(&TokenType::AWAIT) {
+            self.advance(); // consume 'await'
+            let expression = self.parse_unary()?; // 再帰的にパース
+            return Ok(ASTNode::AwaitExpression {
+                expression: Box::new(expression),
+                span: Span::unknown(),
+            });
+        }
+        
+        self.parse_call()
+    }
+    
+    /// 関数・メソッド呼び出しをパース
+    fn parse_call(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_primary()?;
+        
+        loop {
+            if self.match_token(&TokenType::DOT) {
+                self.advance(); // consume '.'
+                
+                if let TokenType::IDENTIFIER(method_name) = &self.current_token().token_type {
+                    let method_name = method_name.clone();
+                    self.advance();
+                    
+                    if self.match_token(&TokenType::LPAREN) {
+                        // メソッド呼び出し: obj.method(args)
+                        self.advance(); // consume '('
+                        let mut arguments = Vec::new();
+                        
+                        while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                            arguments.push(self.parse_expression()?);
+                            if self.match_token(&TokenType::COMMA) {
+                                self.advance();
+                            }
+                        }
+                        
+                        self.consume(TokenType::RPAREN)?;
+                        
+                        expr = ASTNode::MethodCall {
+                            object: Box::new(expr),
+                            method: method_name,
+                            arguments,
+                            span: Span::unknown(),
+                        };
+                    } else {
+                        // フィールドアクセス: obj.field
+                        expr = ASTNode::FieldAccess {
+                            object: Box::new(expr),
+                            field: method_name,
+                            span: Span::unknown(),
+                        };
+                    }
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "identifier".to_string(),
+                        line,
+                    });
+                }
+            } else if self.match_token(&TokenType::LPAREN) {
+                // 関数呼び出し: function(args)
+                if let ASTNode::Variable { name, .. } = expr {
+                    self.advance(); // consume '('
+                    let mut arguments = Vec::new();
+                    
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        arguments.push(self.parse_expression()?);
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
+                    }
+                    
+                    self.consume(TokenType::RPAREN)?;
+                    
+                    expr = ASTNode::FunctionCall { name, arguments, span: Span::unknown() };
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        
+        Ok(expr)
+    }
+    
+    /// 基本式をパース: リテラル、変数、括弧、this、new
+    fn parse_primary(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::STRING(s) => {
+                let value = s.clone();
+                self.advance();
+                Ok(ASTNode::Literal {
+                    value: LiteralValue::String(value),
+                    span: Span::unknown(),
+                })
+            }
+            
+            TokenType::NUMBER(n) => {
+                let value = *n;
+                self.advance();
+                Ok(ASTNode::Literal {
+                    value: LiteralValue::Integer(value),
+                    span: Span::unknown(),
+                })
+            }
+            
+            TokenType::FLOAT(f) => {
+                let value = *f;
+                self.advance();
+                Ok(ASTNode::Literal {
+                    value: LiteralValue::Float(value),
+                    span: Span::unknown(),
+                })
+            }
+            
+            TokenType::TRUE => {
+                self.advance();
+                Ok(ASTNode::Literal {
+                    value: LiteralValue::Bool(true),
+                    span: Span::unknown(),
+                })
+            }
+            
+            TokenType::FALSE => {
+                self.advance();
+                Ok(ASTNode::Literal {
+                    value: LiteralValue::Bool(false),
+                    span: Span::unknown(),
+                })
+            }
+            
+            TokenType::THIS => {
+                self.advance();
+                Ok(ASTNode::This { span: Span::unknown() })
+            }
+            
+            TokenType::ME => {
+                self.advance();
+                Ok(ASTNode::Me { span: Span::unknown() })
+            }
+            
+            TokenType::NEW => {
+                self.advance();
+                
+                if let TokenType::IDENTIFIER(class_name) = &self.current_token().token_type {
+                    let class_name = class_name.clone();
+                    self.advance();
+                    
+                    // 🔥 ジェネリクス型引数のパース (<IntegerBox, StringBox>)
+                    let type_arguments = if self.match_token(&TokenType::LESS) {
+                        self.advance(); // consume '<'
+                        let mut args = Vec::new();
+                        
+                        loop {
+                            if let TokenType::IDENTIFIER(type_name) = &self.current_token().token_type {
+                                args.push(type_name.clone());
+                                self.advance();
+                                
+                                if self.match_token(&TokenType::COMMA) {
+                                    self.advance(); // consume ','
+                                } else {
+                                    break;
+                                }
+                            } else {
+                                let line = self.current_token().line;
+                                return Err(ParseError::UnexpectedToken {
+                                    found: self.current_token().token_type.clone(),
+                                    expected: "type argument".to_string(),
+                                    line,
+                                });
+                            }
+                        }
+                        
+                        self.consume(TokenType::GREATER)?; // consume '>'
+                        args
+                    } else {
+                        Vec::new()
+                    };
+                    
+                    self.consume(TokenType::LPAREN)?;
+                    let mut arguments = Vec::new();
+                    
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        arguments.push(self.parse_expression()?);
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
+                    }
+                    
+                    self.consume(TokenType::RPAREN)?;
+                    
+                    Ok(ASTNode::New {
+                        class: class_name,
+                        arguments,
+                        type_arguments,
+                        span: Span::unknown(),
+                    })
+                } else {
+                    let line = self.current_token().line;
+                    Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "class name".to_string(),
+                        line,
+                    })
+                }
+            }
+            
+            TokenType::IDENTIFIER(name) => {
+                let name = name.clone();
+                self.advance();
+                Ok(ASTNode::Variable { name, span: Span::unknown() })
+            }
+            
+            TokenType::LPAREN => {
+                self.advance(); // consume '('
+                let expr = self.parse_expression()?;
+                self.consume(TokenType::RPAREN)?;
+                Ok(expr)
+            }
+            
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::InvalidExpression { line })
+            }
+        }
+    }
+    
+    // ===== ユーティリティメソッド =====
+    
+    /// 現在のトークンを取得
+    fn current_token(&self) -> &Token {
+        self.tokens.get(self.current).unwrap_or(&Token {
+            token_type: TokenType::EOF,
+            line: 0,
+            column: 0,
+        })
+    }
+    
+    /// 位置を1つ進める
+    fn advance(&mut self) {
+        if !self.is_at_end() {
+            self.current += 1;
+        }
+    }
+    
+    /// NEWLINEトークンをスキップ
+    fn skip_newlines(&mut self) {
+        while matches!(self.current_token().token_type, TokenType::NEWLINE) && !self.is_at_end() {
+            self.advance();
+        }
+    }
+    
+    /// 指定されたトークンタイプを消費 (期待通りでなければエラー)
+    fn consume(&mut self, expected: TokenType) -> Result<Token, ParseError> {
+        if std::mem::discriminant(&self.current_token().token_type) == 
+           std::mem::discriminant(&expected) {
+            let token = self.current_token().clone();
+            self.advance();
+            Ok(token)
+        } else {
+            let line = self.current_token().line;
+            Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: format!("{:?}", expected),
+                line,
+            })
+        }
+    }
+    
+    /// 現在のトークンが指定されたタイプかチェック
+    fn match_token(&self, token_type: &TokenType) -> bool {
+        std::mem::discriminant(&self.current_token().token_type) == 
+        std::mem::discriminant(token_type)
+    }
+    
+    /// 終端に達したかチェック
+    fn is_at_end(&self) -> bool {
+        self.current >= self.tokens.len() || 
+        matches!(self.current_token().token_type, TokenType::EOF)
+    }
+    
+    /// include文をパース: include "filename.nyash"
+    fn parse_include(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::INCLUDE)?;
+        
+        // ファイル名（文字列リテラル）を取得
+        let filename = if let TokenType::STRING(filename) = &self.current_token().token_type {
+            let filename = filename.clone();
+            self.advance();
+            filename
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "string filename".to_string(),
+                line,
+            });
+        };
+        
+        Ok(ASTNode::Include { filename, span: Span::unknown() })
+    }
+    
+    /// local変数宣言をパース: local x, y, z
+    fn parse_local(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::LOCAL)?;
+        
+        let mut variables = Vec::new();
+        let mut initial_values = Vec::new();
+        
+        // 最初の変数名を取得
+        if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            variables.push(name.clone());
+            self.advance();
+            
+            // 初期化チェック: local x = value
+            if self.match_token(&TokenType::ASSIGN) {
+                self.advance(); // consume '='
+                let init_expr = self.parse_expression()?;
+                initial_values.push(Some(Box::new(init_expr)));
+            } else {
+                initial_values.push(None);
+            }
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "variable name".to_string(),
+                line,
+            });
+        }
+        
+        // カンマ区切りで複数の変数を読み込む
+        while self.current_token().token_type == TokenType::COMMA {
+            self.advance(); // カンマをスキップ
+            
+            if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+                variables.push(name.clone());
+                self.advance();
+                
+                // 初期化チェック: local x, y = value
+                if self.match_token(&TokenType::ASSIGN) {
+                    self.advance(); // consume '='
+                    let init_expr = self.parse_expression()?;
+                    initial_values.push(Some(Box::new(init_expr)));
+                } else {
+                    initial_values.push(None);
+                }
+            } else {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "variable name".to_string(),
+                    line,
+                });
+            }
+        }
+        
+        Ok(ASTNode::Local { 
+            variables, 
+            initial_values, // 🚀 初期化値をサポート（Some/None混在）
+            span: Span::unknown() 
+        })
+    }
+    
+    /// outbox変数宣言をパース: outbox x, y, z (static関数内専用)
+    fn parse_outbox(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::OUTBOX)?;
+        
+        let mut variables = Vec::new();
+        
+        // 最初の変数名を取得
+        if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            variables.push(name.clone());
+            self.advance();
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "variable name".to_string(),
+                line,
+            });
+        }
+        
+        // カンマ区切りで複数の変数を読み込む
+        while self.current_token().token_type == TokenType::COMMA {
+            self.advance(); // カンマをスキップ
+            
+            if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+                variables.push(name.clone());
+                self.advance();
+            } else {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "variable name".to_string(),
+                    line,
+                });
+            }
+        }
+        
+        let num_vars = variables.len();
+        Ok(ASTNode::Outbox { 
+            variables, 
+            initial_values: vec![None; num_vars], // 🚀 初期化値なし（従来の動作）
+            span: Span::unknown() 
+        })
+    }
+    
+    /// try/catch/finally文をパース - 2段階アプローチ
+    fn parse_try_catch(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::TRY)?;
+        
+        // 第1段階: 構造認識 - try/catch/finally全体の括弧構造を把握
+        let try_block_tokens = self.extract_block_tokens()?;
+        
+        let mut catch_blocks = Vec::new();
+        let mut finally_block_tokens = None;
+        
+        // catch節の構造認識
+        while self.current_token().token_type == TokenType::CATCH {
+            self.advance(); // CATCH消費
+            
+            // catch (Type var) または catch (var) または catch の解析
+            let mut exception_type = None;
+            let mut variable_name = None;
+            
+            if self.current_token().token_type == TokenType::LPAREN {
+                self.advance(); // LPAREN消費
+                
+                if let TokenType::IDENTIFIER(first_id) = &self.current_token().token_type {
+                    let first_name = first_id.clone();
+                    self.advance();
+                    
+                    if let TokenType::IDENTIFIER(second_id) = &self.current_token().token_type {
+                        // catch (Type var) 形式
+                        exception_type = Some(first_name);
+                        variable_name = Some(second_id.clone());
+                        self.advance();
+                    } else {
+                        // catch (var) 形式
+                        variable_name = Some(first_name);
+                    }
+                }
+                
+                self.consume(TokenType::RPAREN)?;
+            }
+            
+            let catch_body_tokens = self.extract_block_tokens()?;
+            catch_blocks.push((exception_type, variable_name, catch_body_tokens));
+        }
+        
+        // finally節の構造認識
+        if self.current_token().token_type == TokenType::FINALLY {
+            self.advance(); // FINALLY消費
+            finally_block_tokens = Some(self.extract_block_tokens()?);
+        }
+        
+        // 第2段階: 内容パース - 各ブロックを独立してパース
+        let try_body = self.parse_token_block(try_block_tokens)?;
+        
+        let mut catch_clauses = Vec::new();
+        for (exception_type, variable_name, tokens) in catch_blocks {
+            let body = self.parse_token_block(tokens)?;
+            catch_clauses.push(CatchClause {
+                exception_type,
+                variable_name,
+                body,
+                span: Span::unknown(),
+            });
+        }
+        
+        let finally_body = if let Some(tokens) = finally_block_tokens {
+            Some(self.parse_token_block(tokens)?)
+        } else {
+            None
+        };
+        
+        // try文にはcatchかfinallyのどちらかが必要
+        if catch_clauses.is_empty() && finally_body.is_none() {
+            return Err(ParseError::UnexpectedToken {
+                found: TokenType::TRY,
+                expected: "catch or finally clause".to_string(),
+                line: self.current_token().line,
+            });
+        }
+        
+        Ok(ASTNode::TryCatch {
+            try_body,
+            catch_clauses,
+            finally_body,
+            span: Span::unknown(),
+        })
+    }
+    
+    
+    /// throw文をパース: throw expression
+    fn parse_throw(&mut self) -> Result<ASTNode, ParseError> {
+        self.consume(TokenType::THROW)?;
+        
+        // throw式を評価
+        let expression = Box::new(self.parse_expression()?);
+        
+        Ok(ASTNode::Throw { expression, span: Span::unknown() })
+    }
+    
+    
+    
+    /// ブロックトークン抽出 - スタックベースで括弧の対応を正確に追跡
+    fn extract_block_tokens(&mut self) -> Result<Vec<Token>, ParseError> {
+        self.consume(TokenType::LBRACE)?;
+        
+        let mut tokens = Vec::new();
+        let mut brace_stack = 1; // 既に開き括弧1つ消費済み
+        
+        while !self.is_at_end() && brace_stack > 0 {
+            match self.current_token().token_type {
+                TokenType::LBRACE => {
+                    brace_stack += 1;
+                    tokens.push(self.current_token().clone());
+                }
+                TokenType::RBRACE => {
+                    brace_stack -= 1;
+                    if brace_stack > 0 {
+                        // 内部の閉じ括弧のみ追加
+                        tokens.push(self.current_token().clone());
+                    }
+                    // brace_stack == 0 なら外側の括弧なので追加せずループ終了
+                }
+                _ => {
+                    tokens.push(self.current_token().clone());
+                }
+            }
+            self.advance();
+        }
+        
+        if brace_stack != 0 {
+            return Err(ParseError::UnexpectedEOF);
+        }
+        
+        Ok(tokens)
+    }
+    
+    /// トークンブロックをパース - 独立したパーサーコンテキストで実行
+    fn parse_token_block(&mut self, tokens: Vec<Token>) -> Result<Vec<ASTNode>, ParseError> {
+        if tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+        
+        // 現在の位置を保存
+        let saved_position = self.current;
+        let saved_tokens = self.tokens.clone();
+        
+        // 新しいトークン列でパーサーを一時的に初期化
+        self.tokens = tokens;
+        self.current = 0;
+        
+        let mut statements = Vec::new();
+        
+        while !self.is_at_end() {
+            // NEWLINE tokenはスキップ
+            if matches!(self.current_token().token_type, TokenType::NEWLINE) {
+                self.advance();
+                continue;
+            }
+            
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+        }
+        
+        // 元の状態を復元
+        self.tokens = saved_tokens;
+        self.current = saved_position;
+        
+        Ok(statements)
+    }
+    
+    /// 🌟 if構造全体を抽出 - if/else if/else の複雑な構造を完全認識！
+    fn extract_if_structure(&mut self) -> Result<IfStructure, ParseError> {
+        // if condition のパース
+        let condition_tokens = self.extract_if_condition_tokens()?;
+        let then_body_tokens = self.extract_block_tokens()?;
+        
+        let mut else_if_clauses = Vec::new();
+        let mut else_body_tokens = None;
+        
+        // else if/else節の処理
+        while self.match_token(&TokenType::ELSE) {
+            self.advance(); // consume 'else'
+            
+            // else if か plain else かチェック
+            if self.match_token(&TokenType::IF) {
+                self.advance(); // consume 'if'
+                
+                let else_if_condition = self.extract_if_condition_tokens()?;
+                let else_if_body = self.extract_block_tokens()?;
+                
+                else_if_clauses.push(ElseIfClause {
+                    condition_tokens: else_if_condition,
+                    body_tokens: else_if_body,
+                });
+            } else {
+                // plain else
+                else_body_tokens = Some(self.extract_block_tokens()?);
+                break; // else は最後なのでループ終了
+            }
+        }
+        
+        Ok(IfStructure {
+            condition_tokens,
+            then_body_tokens,
+            else_if_clauses,
+            else_body_tokens,
+        })
+    }
+    
+    /// if条件部分のトークンを抽出
+    fn extract_if_condition_tokens(&mut self) -> Result<Vec<Token>, ParseError> {
+        let mut tokens = Vec::new();
+        let mut brace_depth = 0;
+        
+        while !self.is_at_end() {
+            match &self.current_token().token_type {
+                TokenType::LBRACE => {
+                    if brace_depth == 0 {
+                        break; // if条件の終了
+                    }
+                    brace_depth += 1;
+                    tokens.push(self.current_token().clone());
+                    self.advance();
+                }
+                TokenType::RBRACE => {
+                    brace_depth -= 1;
+                    tokens.push(self.current_token().clone());
+                    self.advance();
+                }
+                TokenType::NEWLINE => {
+                    // 改行は条件内ではスキップ
+                    self.advance();
+                }
+                _ => {
+                    tokens.push(self.current_token().clone());
+                    self.advance();
+                }
+            }
+        }
+        
+        Ok(tokens)
+    }
+    
+    /// 🌟 if内容をパース - 分離された各要素を個別処理！
+    fn parse_if_content(&mut self, structure: IfStructure) -> Result<ASTNode, ParseError> {
+        // if条件をパース
+        let condition = self.parse_token_sequence(structure.condition_tokens)?;
+        
+        // then_bodyをパース
+        let then_body = self.parse_token_block(structure.then_body_tokens)?;
+        
+        // else if節をパース
+        let mut processed_else_body = None;
+        if !structure.else_if_clauses.is_empty() || structure.else_body_tokens.is_some() {
+            // else if があれば連鎖をネストしたif文として構築
+            let mut current_else: Option<Vec<ASTNode>> = None;
+            
+            // 逆順で処理してネストを正しく構築
+            for else_if in structure.else_if_clauses.into_iter().rev() {
+                let else_if_condition = self.parse_token_sequence(else_if.condition_tokens)?;
+                let else_if_body = self.parse_token_block(else_if.body_tokens)?;
+                
+                let nested_if = ASTNode::If {
+                    condition: Box::new(else_if_condition),
+                    then_body: else_if_body,
+                    else_body: current_else,
+                    span: Span::unknown(),
+                };
+                
+                current_else = Some(vec![nested_if]);
+            }
+            
+            // 最終的なelse bodyを処理
+            if let Some(else_tokens) = structure.else_body_tokens {
+                let else_stmts = self.parse_token_block(else_tokens)?;
+                if current_else.is_some() {
+                    // else if があった場合、最深部に追加
+                    // 複雑な構造なので単純化: else if を個別ノードとして扱う
+                    processed_else_body = current_else;
+                } else {
+                    processed_else_body = Some(else_stmts);
+                }
+            } else {
+                processed_else_body = current_else;
+            }
+        }
+        
+        Ok(ASTNode::If {
+            condition: Box::new(condition),
+            then_body,
+            else_body: processed_else_body,
+            span: Span::unknown(),
+        })
+    }
+    
+    /// 🔥 トークン列から単一式をパース - loop条件専用
+    fn parse_token_sequence(&mut self, tokens: Vec<Token>) -> Result<ASTNode, ParseError> {
+        if tokens.is_empty() {
+            return Err(ParseError::UnexpectedEOF);
+        }
+        
+        // 現在の位置を保存
+        let saved_position = self.current;
+        let saved_tokens = self.tokens.clone();
+        
+        // 新しいトークン列でパーサーを一時的に初期化
+        self.tokens = tokens;
+        self.current = 0;
+        
+        // 単一の式をパース
+        let expression = self.parse_expression()?;
+        
+        // 元の状態を復元
+        self.tokens = saved_tokens;
+        self.current = saved_position;
+        
+        Ok(expression)
+    }
+    
+    // ===== 🔥 Static Box循環依存検出 =====
+    
+    /// Static初期化ブロック内の文から依存関係を抽出
+    fn extract_dependencies_from_statements(&self, statements: &[ASTNode]) -> std::collections::HashSet<String> {
+        let mut dependencies = std::collections::HashSet::new();
+        
+        for stmt in statements {
+            self.extract_dependencies_from_ast(stmt, &mut dependencies);
+        }
+        
+        dependencies
+    }
+    
+    /// AST内から静的Box参照を再帰的に検出
+    fn extract_dependencies_from_ast(&self, node: &ASTNode, dependencies: &mut std::collections::HashSet<String>) {
+        match node {
+            ASTNode::FieldAccess { object, .. } => {
+                // Math.PI のような参照を検出
+                if let ASTNode::Variable { name, .. } = object.as_ref() {
+                    dependencies.insert(name.clone());
+                }
+            }
+            ASTNode::MethodCall { object, .. } => {
+                // Config.getDebug() のような呼び出しを検出
+                if let ASTNode::Variable { name, .. } = object.as_ref() {
+                    dependencies.insert(name.clone());
+                }
+            }
+            ASTNode::Assignment { target, value, .. } => {
+                self.extract_dependencies_from_ast(target, dependencies);
+                self.extract_dependencies_from_ast(value, dependencies);
+            }
+            ASTNode::BinaryOp { left, right, .. } => {
+                self.extract_dependencies_from_ast(left, dependencies);
+                self.extract_dependencies_from_ast(right, dependencies);
+            }
+            ASTNode::UnaryOp { operand, .. } => {
+                self.extract_dependencies_from_ast(operand, dependencies);
+            }
+            ASTNode::If { condition, then_body, else_body, .. } => {
+                self.extract_dependencies_from_ast(condition, dependencies);
+                for stmt in then_body {
+                    self.extract_dependencies_from_ast(stmt, dependencies);
+                }
+                if let Some(else_stmts) = else_body {
+                    for stmt in else_stmts {
+                        self.extract_dependencies_from_ast(stmt, dependencies);
+                    }
+                }
+            }
+            ASTNode::Loop { condition, body, .. } => {
+                self.extract_dependencies_from_ast(condition, dependencies);
+                for stmt in body {
+                    self.extract_dependencies_from_ast(stmt, dependencies);
+                }
+            }
+            ASTNode::Return { value, .. } => {
+                if let Some(val) = value {
+                    self.extract_dependencies_from_ast(val, dependencies);
+                }
+            }
+            ASTNode::Print { expression, .. } => {
+                self.extract_dependencies_from_ast(expression, dependencies);
+            }
+            // 他のAST nodeタイプも必要に応じて追加
+            _ => {}
+        }
+    }
+    
+    /// 循環依存検出（深さ優先探索）
+    fn check_circular_dependencies(&self) -> Result<(), ParseError> {
+        let mut visited = std::collections::HashSet::new();
+        let mut rec_stack = std::collections::HashSet::new();
+        let mut path = Vec::new();
+        
+        for box_name in self.static_box_dependencies.keys() {
+            if !visited.contains(box_name) {
+                if self.has_cycle_dfs(box_name, &mut visited, &mut rec_stack, &mut path)? {
+                    return Ok(()); // エラーは既にhas_cycle_dfs内で返される
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// DFS による循環依存検出
+    fn has_cycle_dfs(
+        &self,
+        current: &str,
+        visited: &mut std::collections::HashSet<String>,
+        rec_stack: &mut std::collections::HashSet<String>,
+        path: &mut Vec<String>,
+    ) -> Result<bool, ParseError> {
+        visited.insert(current.to_string());
+        rec_stack.insert(current.to_string());
+        path.push(current.to_string());
+        
+        if let Some(dependencies) = self.static_box_dependencies.get(current) {
+            for dependency in dependencies {
+                if !visited.contains(dependency) {
+                    if self.has_cycle_dfs(dependency, visited, rec_stack, path)? {
+                        return Ok(true);
+                    }
+                } else if rec_stack.contains(dependency) {
+                    // 循環依存を発見！
+                    let cycle_start_pos = path.iter().position(|x| x == dependency).unwrap_or(0);
+                    let cycle_path: Vec<String> = path[cycle_start_pos..].iter().cloned().collect();
+                    let cycle_display = format!("{} -> {}", cycle_path.join(" -> "), dependency);
+                    
+                    return Err(ParseError::CircularDependency { 
+                        cycle: cycle_display 
+                    });
+                }
+            }
+        }
+        
+        rec_stack.remove(current);
+        path.pop();
+        Ok(false)
+    }
+}
+
+// ===== Tests =====
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tokenizer::NyashTokenizer;
+    
+    #[test]
+    fn test_simple_parse() {
+        let code = r#"
+        box TestBox {
+            value
+        }
+        "#;
+        
+        let result = NyashParser::parse_from_string(code);
+        assert!(result.is_ok());
+        
+        let ast = result.unwrap();
+        match ast {
+            ASTNode::Program { statements, .. } => {
+                assert_eq!(statements.len(), 1);
+                match &statements[0] {
+                    ASTNode::BoxDeclaration { name, fields, methods, .. } => {
+                        assert_eq!(name, "TestBox");
+                        assert_eq!(fields.len(), 1);
+                        assert_eq!(fields[0], "value");
+                        assert_eq!(methods.len(), 0);
+                    }
+                    _ => panic!("Expected BoxDeclaration"),
+                }
+            }
+            _ => panic!("Expected Program"),
+        }
+    }
+    
+    #[test] 
+    fn test_assignment_parse() {
+        let code = "x = 42";
+        
+        let result = NyashParser::parse_from_string(code);
+        assert!(result.is_ok());
+        
+        let ast = result.unwrap();
+        match ast {
+            ASTNode::Program { statements, .. } => {
+                assert_eq!(statements.len(), 1);
+                match &statements[0] {
+                    ASTNode::Assignment { target, value, .. } => {
+                        match target.as_ref() {
+                            ASTNode::Variable { name, .. } => assert_eq!(name, "x"),
+                            _ => panic!("Expected Variable in target"),
+                        }
+                        match value.as_ref() {
+                            ASTNode::Literal { .. } => {},
+                            _ => panic!("Expected Literal in value"),
+                        }
+                    }
+                    _ => panic!("Expected Assignment"),
+                }
+            }
+            _ => panic!("Expected Program"),
+        }
+    }
+    
+    #[test]
+    fn test_method_call_parse() {
+        let code = "obj.getValue()";
+        
+        let result = NyashParser::parse_from_string(code);
+        assert!(result.is_ok());
+        
+        let ast = result.unwrap();
+        match ast {
+            ASTNode::Program { statements, .. } => {
+                assert_eq!(statements.len(), 1);
+                match &statements[0] {
+                    ASTNode::MethodCall { object, method, arguments, .. } => {
+                        match object.as_ref() {
+                            ASTNode::Variable { name, .. } => assert_eq!(name, "obj"),
+                            _ => panic!("Expected Variable in object"),
+                        }
+                        assert_eq!(method, "getValue");
+                        assert_eq!(arguments.len(), 0);
+                    }
+                    _ => panic!("Expected MethodCall"),
+                }
+            }
+            _ => panic!("Expected Program"),
+        }
+    }
+    
+    #[test]
+    fn test_binary_operation_parse() {
+        let code = "x + y * z";
+        
+        let result = NyashParser::parse_from_string(code);
+        assert!(result.is_ok());
+        
+        let ast = result.unwrap();
+        match ast {
+            ASTNode::Program { statements, .. } => {
+                assert_eq!(statements.len(), 1);
+                match &statements[0] {
+                    ASTNode::BinaryOp { operator, left, right, .. } => {
+                        assert!(matches!(operator, BinaryOperator::Add));
+                        match left.as_ref() {
+                            ASTNode::Variable { name, .. } => assert_eq!(name, "x"),
+                            _ => panic!("Expected Variable in left"),
+                        }
+                        match right.as_ref() {
+                            ASTNode::BinaryOp { operator, .. } => {
+                                assert!(matches!(operator, BinaryOperator::Multiply));
+                            }
+                            _ => panic!("Expected BinaryOp in right"),
+                        }
+                    }
+                    _ => panic!("Expected BinaryOp"),
+                }
+            }
+            _ => panic!("Expected Program"),
+        }
+    }
+}

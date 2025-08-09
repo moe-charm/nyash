@@ -1,0 +1,6 @@
+print("Hello from simple_math.nyash")
+
+x = 10
+y = 20
+result = x + y
+print("Simple calculation: " + result)

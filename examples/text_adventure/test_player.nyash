@@ -1,0 +1,41 @@
+// Test file for player.nyash
+include "text_adventure/player.nyash"
+
+print("🎮 Testing Player Module...")
+
+// Test 1: Player creation
+print("\n=== Test 1: Player Creation ===")
+player = startGame("TestHero")
+print(player.status())
+
+// Test 2: Taking items
+print("\n=== Test 2: Taking Items ===")
+result1 = player.take("Health Potion")
+print(result1)
+
+result2 = player.take("Old Key")
+print(result2)
+
+print("\nInventory after taking items:")
+print(player.inventory())
+
+// Test 3: Using items
+print("\n=== Test 3: Using Items ===")
+print("Health before using potion: " + player.health)
+
+player.health = 50  // Reduce health to test healing
+print("Health reduced to: " + player.health)
+
+useResult = player.use("Health Potion")
+print(useResult)
+print("Health after using potion: " + player.health)
+
+// Test 4: Player status
+print("\n=== Test 4: Player Status ===")
+print(player.status())
+
+// Test 5: Help system
+print("\n=== Test 5: Help System ===")
+print(player.help())
+
+print("\n✅ Player module test completed!")

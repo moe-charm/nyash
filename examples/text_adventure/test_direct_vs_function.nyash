@@ -1,0 +1,34 @@
+// Test direct creation vs function return
+
+box TestBox {
+    init { x, y }
+    
+    TestBox(x, y) {
+        me.x = x
+        me.y = y
+    }
+    
+    getX() {
+        return me.x
+    }
+}
+
+print("1. Direct creation:")
+direct = new TestBox(10, 20)
+print("Using method: " + direct.getX())
+print("Direct field: " + direct.x)
+
+print("\n2. Function return:")
+function createBox() {
+    return new TestBox(30, 40)
+}
+
+fromFunc = createBox()
+print("Using method: " + fromFunc.getX())
+try {
+    print("Direct field: " + fromFunc.x)
+} catch {
+    print("ERROR: Cannot access field from function-returned instance")
+}
+
+print("\n✅ Test completed!")

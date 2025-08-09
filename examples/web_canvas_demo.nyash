@@ -1,0 +1,32 @@
+// 🎨 WebCanvas Demo - HTML5 Canvas control from Nyash
+// Demonstrates Everything is Box philosophy for web graphics
+
+print("🎨 === WebCanvas Demo Starting ===")
+
+// Create canvas for drawing
+canvas = new WebCanvasBox("demo-canvas", 400, 300)
+
+// Set up drawing style
+canvas.setFillStyle("red")
+canvas.setStrokeStyle("blue")
+canvas.setLineWidth(3)
+
+// Draw shapes
+canvas.fillRect(50, 50, 100, 75)        // Red rectangle
+canvas.strokeRect(200, 50, 100, 75)     // Blue outline rectangle
+
+// Draw circles
+canvas.beginPath()
+canvas.arc(100, 200, 30, 0, 6.28)      // Full circle
+canvas.fill()
+
+canvas.beginPath()
+canvas.arc(250, 200, 30, 0, 6.28)      
+canvas.stroke()
+
+// Draw text
+canvas.setFillStyle("green")
+canvas.fillText("Nyash WebCanvas", 150, 250)
+
+print("🎨 Canvas drawing complete! Everything is Box!")
+print("Open your browser to see the HTML5 canvas graphics.")

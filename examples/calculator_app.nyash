@@ -1,0 +1,367 @@
+// 🧮 Nyash数式パーサー - Everything is Box哲学による実装
+// 再帰下降構文解析 + デバッグ機能付き
+
+print("🧮 === Nyash Calculator App ===")
+
+// デバッグ機能初期化
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 🎯 トークンBox - すべてのトークンがBox
+box Token<T> {
+    init { type, value, position }
+    
+    Token(tokenType, tokenValue) {
+        me.type = tokenType
+        me.value = tokenValue
+        me.position = 0
+    }
+    
+    toString() {
+        return "Token(" + me.type + ": " + me.value + ")"
+    }
+    
+    isType(expectedType) {
+        return me.type == expectedType
+    }
+}
+
+// 🔢 数値トークン専用Box
+box NumberToken from Token<IntegerBox> {
+    init { numValue }
+    
+    NumberToken(value) {
+        super("NUMBER", value)
+        me.numValue = value
+    }
+    
+    getValue() {
+        return me.numValue
+    }
+}
+
+// ➕ 演算子トークン専用Box
+box OperatorToken from Token<StringBox> {
+    init { operator, precedence }
+    
+    OperatorToken(op) {
+        super("OPERATOR", op)
+        me.operator = op
+        
+        // 演算子優先度設定
+        if op == "+" || op == "-" {
+            me.precedence = 1
+        }
+        if op == "*" || op == "/" {
+            me.precedence = 2
+        }
+    }
+    
+    getPrecedence() {
+        return me.precedence
+    }
+}
+
+// 📝 字句解析器Box
+box Tokenizer {
+    init { input, position, tokens }
+    
+    Tokenizer(expression) {
+        me.input = expression
+        me.position = 0
+        me.tokens = new ArrayBox()
+    }
+    
+    // 次の文字を取得
+    peek() {
+        if me.position >= me.input.length() {
+            return ""
+        }
+        return me.input.charAt(me.position)
+    }
+    
+    // 文字を消費して進む
+    advance() {
+        me.position = me.position + 1
+    }
+    
+    // 空白をスキップ
+    skipWhitespace() {
+        loop(me.position < me.input.length() && me.peek() == " ") {
+            me.advance()
+        }
+    }
+    
+    // 数値を読み取り
+    readNumber() {
+        start = me.position
+        
+        loop(me.position < me.input.length()) {
+            char = me.peek()
+            if char >= "0" && char <= "9" {
+                me.advance()
+            } else {
+                break
+            }
+        }
+        
+        numberStr = me.input.substring(start, me.position)
+        return new NumberToken(numberStr.toInteger())
+    }
+    
+    // トークン化実行
+    tokenize() {
+        loop(me.position < me.input.length()) {
+            me.skipWhitespace()
+            
+            if me.position >= me.input.length() {
+                break
+            }
+            
+            char = me.peek()
+            
+            // 数値の場合
+            if char >= "0" && char <= "9" {
+                token = me.readNumber()
+                me.tokens.push(token)
+                DEBUG.trackBox(token, "number_token_" + me.tokens.length())
+            }
+            // 演算子の場合
+            else if char == "+" || char == "-" || char == "*" || char == "/" {
+                token = new OperatorToken(char)
+                me.tokens.push(token)
+                me.advance()
+                DEBUG.trackBox(token, "operator_token_" + me.tokens.length())
+            }
+            // 括弧の場合
+            else if char == "(" || char == ")" {
+                token = new Token("PAREN", char)
+                me.tokens.push(token)
+                me.advance()
+                DEBUG.trackBox(token, "paren_token_" + me.tokens.length())
+            }
+            else {
+                print("❌ Unknown character: " + char)
+                me.advance()
+            }
+        }
+        
+        // 終端トークン追加
+        eofToken = new Token("EOF", "")
+        me.tokens.push(eofToken)
+        
+        return me.tokens
+    }
+    
+    printTokens() {
+        print("🎯 Tokens:")
+        i = 0
+        loop(i < me.tokens.length()) {
+            token = me.tokens.get(i)
+            print("  " + i + ": " + token.toString())
+            i = i + 1
+        }
+    }
+}
+
+// 🔍 構文解析器Box - 再帰下降パーサー
+box Parser {
+    init { tokens, position }
+    
+    Parser(tokenList) {
+        me.tokens = tokenList
+        me.position = 0
+    }
+    
+    // 現在のトークンを取得
+    currentToken() {
+        if me.position >= me.tokens.length() {
+            return new Token("EOF", "")
+        }
+        return me.tokens.get(me.position)
+    }
+    
+    // トークンを消費して進む
+    consume() {
+        me.position = me.position + 1
+    }
+    
+    // 指定したタイプのトークンを期待して消費
+    expect(expectedType) {
+        token = me.currentToken()
+        if token.isType(expectedType) {
+            me.consume()
+            return token
+        }
+        print("❌ Parse error: Expected " + expectedType + ", got " + token.type)
+        return null
+    }
+    
+    // 式の解析 (+ と -)
+    parseExpression() {
+        DEBUG.traceCall("parseExpression", "", "")
+        
+        result = me.parseTerm()
+        
+        loop(true) {
+            token = me.currentToken()
+            if token.isType("OPERATOR") {
+                op = token.value
+                if op == "+" || op == "-" {
+                    me.consume()
+                    right = me.parseTerm()
+                    
+                    if op == "+" {
+                        result = result + right
+                    } else {
+                        result = result - right
+                    }
+                    
+                    print("📊 " + op + " operation: result = " + result)
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        }
+        
+        return result
+    }
+    
+    // 項の解析 (* と /)
+    parseTerm() {
+        DEBUG.traceCall("parseTerm", "", "")
+        
+        result = me.parseFactor()
+        
+        loop(true) {
+            token = me.currentToken()
+            if token.isType("OPERATOR") {
+                op = token.value
+                if op == "*" || op == "/" {
+                    me.consume()
+                    right = me.parseFactor()
+                    
+                    if op == "*" {
+                        result = result * right
+                    } else {
+                        if right == 0 {
+                            print("❌ Division by zero!")
+                            return 0
+                        }
+                        result = result / right
+                    }
+                    
+                    print("📊 " + op + " operation: result = " + result)
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        }
+        
+        return result
+    }
+    
+    // 因子の解析 (数値と括弧)
+    parseFactor() {
+        DEBUG.traceCall("parseFactor", "", "")
+        
+        token = me.currentToken()
+        
+        // 数値
+        if token.isType("NUMBER") {
+            me.consume()
+            value = token.value.toInteger()
+            print("🔢 Number: " + value)
+            return value
+        }
+        // 括弧
+        else if token.isType("PAREN") && token.value == "(" {
+            me.consume()  // consume '('
+            result = me.parseExpression()
+            me.expect("PAREN")  // expect ')'
+            return result
+        }
+        // エラー
+        else {
+            print("❌ Parse error: Unexpected token " + token.toString())
+            return 0
+        }
+    }
+    
+    // 構文解析実行
+    parse() {
+        print("🚀 Starting parse...")
+        result = me.parseExpression()
+        
+        // 最後にEOFトークンがあることを確認
+        if !me.currentToken().isType("EOF") {
+            print("⚠️  Warning: Extra tokens after expression")
+        }
+        
+        return result
+    }
+}
+
+// 🧮 メイン計算機Box
+box Calculator {
+    init { name }
+    
+    Calculator() {
+        me.name = "Nyash Calculator"
+    }
+    
+    // 式を評価
+    evaluate(expression) {
+        print("\n📝 Evaluating: " + expression)
+        
+        // Step 1: トークン化
+        tokenizer = new Tokenizer(expression)
+        DEBUG.trackBox(tokenizer, "main_tokenizer")
+        
+        tokens = tokenizer.tokenize()
+        tokenizer.printTokens()
+        
+        // Step 2: 構文解析・評価
+        parser = new Parser(tokens)
+        DEBUG.trackBox(parser, "main_parser")
+        
+        result = parser.parse()
+        
+        print("✅ Result: " + result)
+        return result
+    }
+}
+
+// 🚀 アプリケーション実行
+print("🎯 Testing Nyash Calculator...")
+
+calc = new Calculator()
+DEBUG.trackBox(calc, "main_calculator")
+
+// テスト式
+testExpressions = new ArrayBox()
+testExpressions.push("2 + 3")
+testExpressions.push("5 * 4")  
+testExpressions.push("10 - 6")
+testExpressions.push("15 / 3")
+testExpressions.push("2 + 3 * 4")
+testExpressions.push("(2 + 3) * 4")
+
+// すべてのテスト実行
+i = 0
+loop(i < testExpressions.length()) {
+    expression = testExpressions.get(i)
+    calc.evaluate(expression)
+    i = i + 1
+}
+
+// デバッグ情報表示
+print("\n📊 === Debug Report ===")
+print(DEBUG.memoryReport())
+print(DEBUG.showCallStack())
+
+print("\n🎉 Calculator app completed!")

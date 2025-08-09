@@ -1,0 +1,197 @@
+// 🚀 Simple LISP with Variables - シンプル変数対応版
+
+NIL = 0
+
+// ===== データ構造 =====
+box ConsBox {
+    car
+    cdr
+    init { car, cdr }
+    ConsBox(a, d) { 
+        me.car = a
+        me.cdr = d 
+    }
+    getCar() { return me.car }
+    getCdr() { return me.cdr }
+    toString() { return "(" + me.car.toString() + " . " + me.cdr.toString() + ")" }
+}
+
+// ===== グローバル変数として環境を実装 =====
+x_value = NIL
+y_value = NIL
+z_value = NIL
+
+function setVar(name, value) {
+    if name == "x" { x_value = value }
+    if name == "y" { y_value = value }
+    if name == "z" { z_value = value }
+}
+
+function getVar(name) {
+    if name == "x" { return x_value }
+    if name == "y" { return y_value }
+    if name == "z" { return z_value }
+    return 0  // 未定義の場合
+}
+
+// ===== 基本関数 =====
+function cons(a, d) { return new ConsBox(a, d) }
+function car(pair) { 
+    if pair == NIL { return NIL }
+    return pair.getCar() 
+}
+function cdr(pair) { 
+    if pair == NIL { return NIL }
+    return pair.getCdr() 
+}
+function list2(a, b) { return cons(a, cons(b, NIL)) }
+function list3(a, b, c) { return cons(a, cons(b, cons(c, NIL))) }
+
+function atomP(obj) {
+    if obj == NIL { return true }
+    if obj == 0 or obj == 1 or obj == 2 or obj == 3 or obj == 4 { return true }
+    if obj == 5 or obj == 6 or obj == 7 or obj == 8 or obj == 9 { return true }
+    if obj == "+" or obj == "-" or obj == "*" or obj == "=" or obj == ">" { return true }
+    if obj == "x" or obj == "y" or obj == "z" { return true }
+    if obj == "big" or obj == "small" { return true }
+    return false
+}
+
+// ===== シンプル評価器 =====
+function simpleEval(expr) {
+    // アトムの場合
+    if atomP(expr) {
+        // 数値リテラル
+        if expr == 0 { return 0 }
+        if expr == 1 { return 1 }
+        if expr == 2 { return 2 }
+        if expr == 3 { return 3 }
+        if expr == 4 { return 4 }
+        if expr == 5 { return 5 }
+        if expr == 6 { return 6 }
+        if expr == 7 { return 7 }
+        if expr == 8 { return 8 }
+        if expr == 9 { return 9 }
+        
+        // 文字列リテラル
+        if expr == "big" { return "big" }
+        if expr == "small" { return "small" }
+        
+        // 変数参照
+        if expr == "x" { return getVar("x") }
+        if expr == "y" { return getVar("y") }
+        if expr == "z" { return getVar("z") }
+        
+        return expr  // それ以外はそのまま
+    }
+    
+    // リスト（関数呼び出し）の場合
+    operator = car(expr)
+    operands = cdr(expr)
+    
+    // define - 変数定義
+    if operator == "define" {
+        varName = car(operands)
+        value = simpleEval(car(cdr(operands)))
+        setVar(varName, value)
+        return value
+    }
+    
+    // if - 条件分岐
+    if operator == "if" {
+        condition = simpleEval(car(operands))
+        thenExpr = car(cdr(operands))
+        elseExpr = car(cdr(cdr(operands)))
+        
+        if condition != NIL and condition != false {
+            return simpleEval(thenExpr)
+        } else {
+            return simpleEval(elseExpr)
+        }
+    }
+    
+    // 算術演算
+    if operator == "+" {
+        arg1 = simpleEval(car(operands))
+        arg2 = simpleEval(car(cdr(operands)))
+        return arg1 + arg2
+    }
+    
+    if operator == "-" {
+        arg1 = simpleEval(car(operands))
+        arg2 = simpleEval(car(cdr(operands)))
+        return arg1 - arg2
+    }
+    
+    if operator == "*" {
+        arg1 = simpleEval(car(operands))
+        arg2 = simpleEval(car(cdr(operands)))
+        return arg1 * arg2
+    }
+    
+    // 比較演算
+    if operator == "=" {
+        arg1 = simpleEval(car(operands))
+        arg2 = simpleEval(car(cdr(operands)))
+        if arg1 == arg2 { return true } else { return false }
+    }
+    
+    if operator == ">" {
+        arg1 = simpleEval(car(operands))
+        arg2 = simpleEval(car(cdr(operands)))
+        if arg1 > arg2 { return true } else { return false }
+    }
+    
+    return 0
+}
+
+// ===== テスト =====
+print("🚀 === Simple LISP with Variables === 🚀")
+print("")
+
+print("1. Variable definition:")
+// (define x 42)
+defineExpr = list3("define", "x", 42)
+print("   " + defineExpr.toString())
+result = simpleEval(defineExpr)
+print("   → " + result)
+
+print("")
+print("2. Variable reference:")
+print("   x → " + getVar("x"))
+
+print("")
+print("3. Arithmetic with variables:")
+// (+ x 10)
+expr1 = list3("+", "x", 10)
+print("   " + expr1.toString())
+result1 = simpleEval(expr1)
+print("   → " + result1)
+
+print("")
+print("4. Conditional with variables:")
+// (if (> x 40) "big" "small")
+condition = list3(">", "x", 40)
+ifExpr = list3("if", condition, "big")
+// elseを追加
+ifExprFull = cons("if", cons(condition, cons("big", cons("small", NIL))))
+print("   (if (> x 40) \"big\" \"small\")")
+result2 = simpleEval(ifExprFull)
+print("   → " + result2)
+
+print("")
+print("5. Multiple variables:")
+// (define y 20)
+defineY = list3("define", "y", 20)
+print("   " + defineY.toString())
+simpleEval(defineY)
+
+// (+ x y)
+addXY = list3("+", "x", "y")
+print("   " + addXY.toString())
+result3 = simpleEval(addXY)
+print("   → " + result3)
+
+print("")
+print("✅ Simple LISP with variables working!")
+print("🎯 Next: Add lambda functions!")

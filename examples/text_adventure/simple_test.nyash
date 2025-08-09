@@ -1,0 +1,30 @@
+// Simplified test for items.nyash
+include "text_adventure/items.nyash"
+
+print("🧪 Simple Items Test...")
+
+// Test basic creation without DEBUG tracking
+print("\n=== Basic Item Test ===")
+coin = new Item("Gold Coin", "A shiny gold piece", 1, 100)
+print("Item created successfully!")
+print("Name: " + coin.name)
+
+print("\n=== Weapon Test ===")
+sword = new Weapon("Iron Sword", "A sharp iron blade", 8, 100, 15, 50)
+print("Weapon created successfully!")
+print("Name: " + sword.name)
+print("Damage: " + sword.damage)
+
+print("\n=== Consumable Test ===")
+potion = new Consumable("Health Potion", "Restores health", 1, 25, 50, 3)
+print("Consumable created successfully!")
+print("Name: " + potion.name)
+print("Effect: " + potion.effect)
+
+print("\n=== Key Test ===")
+key = new Key("Old Key", "An ancient rusty key", "treasure_door")
+print("Key created successfully!")
+print("Name: " + key.name)
+print("Target: " + key.targetDoor)
+
+print("\n✅ Simple test completed!")
