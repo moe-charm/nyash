@@ -1,7 +1,7 @@
 # 🐱 Nyash Programming Language
 **Next-Generation Browser-Native Programming Experience**
 
-*革新的プログラミング言語 - ブラウザーで動く新世代開発体験*
+*[🇯🇵 日本語版はこちら / Japanese Version](README.ja.md)*
 
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](#)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
@@ -236,47 +236,6 @@ cargo build --release
 ./target/release/nyash test_async_demo.nyash
 ./target/release/nyash app_dice_rpg.nyash
 ```
-
----
-
-## 🌏 **日本語 / Japanese**
-
-### Nyashとは？
-Nyashは「**すべてがBox**」という革新的哲学に基づく次世代プログラミング言語です。
-
-**🎯 特徴：**
-- **ブラウザーネイティブ**: WebAssemblyで直接実行、インストール不要
-- **メモリ安全性**: Box哲学により、メモリリークやクラッシュを根本的に防止
-- **創作向け設計**: Canvas描画、ゲーム開発、アート制作に最適化
-- **教育フレンドリー**: 視覚的デバッグで学習効果を最大化
-
-### Everything is Box哲学の意味
-従来の言語の複雑さを排除し、すべてを統一されたBox概念で表現：
-
-```nyash
-// 🎮 ゲーム開発例
-static box Main {
-    init { player, enemies, ui }
-    
-    main() {
-        me.player = new PlayerBox("勇者", 100)
-        me.enemies = new ArrayBox()
-        me.ui = new WebCanvasBox("game-canvas", 800, 600)
-        
-        // すべてがBoxなので一貫した操作
-        me.player.moveTo(400, 300)
-        me.ui.drawPlayer(me.player)
-        
-        return "ゲーム開始！"
-    }
-}
-```
-
-### 対象ユーザー
-- 🎨 **クリエイター**: アーティスト、ゲーム開発者
-- 🎓 **教育者**: プログラミング講師、学生
-- 🌐 **Web開発者**: インタラクティブコンテンツ制作者
-- 🔬 **研究者**: 新しいプログラミングパラダイムの探求者
 
 ---
 
