@@ -1,0 +1,265 @@
+/*!
+ * Collection Methods Module
+ * 
+ * Extracted from box_methods.rs
+ * Contains method implementations for collection types:
+ * - ArrayBox (execute_array_method)
+ * - MapBox (execute_map_method)
+ */
+
+use super::super::*;
+use crate::box_trait::{StringBox, IntegerBox, ArrayBox, NyashBox, VoidBox, BoolBox};
+use crate::boxes::map_box::MapBox;
+
+impl NyashInterpreter {
+    /// ArrayBoxのメソッド呼び出しを実行  
+    pub(in crate::interpreter) fn execute_array_method(&mut self, array_box: &ArrayBox, method: &str, arguments: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        match method {
+            "push" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("push() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let element = self.execute_expression(&arguments[0])?;
+                Ok(array_box.push(element))
+            }
+            "pop" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("pop() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(array_box.pop())
+            }
+            "length" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("length() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(array_box.length())
+            }
+            "get" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("get() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let index_value = self.execute_expression(&arguments[0])?;
+                if let Some(index_int) = index_value.as_any().downcast_ref::<IntegerBox>() {
+                    if let Some(element) = array_box.get(index_int.value as usize) {
+                        Ok(element)
+                    } else {
+                        Ok(Box::new(StringBox::new("Index out of bounds")))
+                    }
+                } else {
+                    Err(RuntimeError::TypeError {
+                        message: "get() requires integer index".to_string(),
+                    })
+                }
+            }
+            "set" => {
+                if arguments.len() != 2 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("set() expects 2 arguments, got {}", arguments.len()),
+                    });
+                }
+                let index_value = self.execute_expression(&arguments[0])?;
+                let element_value = self.execute_expression(&arguments[1])?;
+                if let Some(index_int) = index_value.as_any().downcast_ref::<IntegerBox>() {
+                    match array_box.set(index_int.value as usize, element_value) {
+                        Ok(()) => Ok(Box::new(VoidBox::new())),
+                        Err(msg) => Ok(Box::new(StringBox::new(&msg))),
+                    }
+                } else {
+                    Err(RuntimeError::TypeError {
+                        message: "set() requires integer index".to_string(),
+                    })
+                }
+            }
+            // Note: indexOf, contains, clear, reverse, slice methods not implemented in ArrayBox yet
+            "join" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("join() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let delimiter_value = self.execute_expression(&arguments[0])?;
+                if let Some(delimiter_str) = delimiter_value.as_any().downcast_ref::<StringBox>() {
+                    Ok(array_box.join(&delimiter_str.value))
+                } else {
+                    Err(RuntimeError::TypeError {
+                        message: "join() requires string delimiter".to_string(),
+                    })
+                }
+            }
+            "isEmpty" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("isEmpty() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let length = array_box.length();
+                if let Some(int_box) = length.as_any().downcast_ref::<IntegerBox>() {
+                    Ok(Box::new(BoolBox::new(int_box.value == 0)))
+                } else {
+                    Ok(Box::new(BoolBox::new(false)))
+                }
+            }
+            "toString" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(Box::new(array_box.to_string_box()))
+            }
+            _ => {
+                Err(RuntimeError::InvalidOperation {
+                    message: format!("Unknown method '{}' for ArrayBox", method),
+                })
+            }
+        }
+    }
+
+    /// MapBoxのメソッド呼び出しを実行
+    pub(in crate::interpreter) fn execute_map_method(&mut self, map_box: &MapBox, method: &str, arguments: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // 引数を評価
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.execute_expression(arg)?);
+        }
+        
+        // メソッドを実行
+        match method {
+            "set" => {
+                if arg_values.len() != 2 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("set() expects 2 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.set(arg_values[0].clone_box(), arg_values[1].clone_box()))
+            }
+            "get" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("get() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.get(arg_values[0].clone_box()))
+            }
+            "has" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("has() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.has(arg_values[0].clone_box()))
+            }
+            "delete" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("delete() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.delete(arg_values[0].clone_box()))
+            }
+            "keys" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("keys() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.keys())
+            }
+            "values" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("values() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.values())
+            }
+            "size" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("size() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.size())
+            }
+            "clear" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("clear() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.clear())
+            }
+            "isEmpty" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("isEmpty() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                let size = map_box.size();
+                if let Some(int_box) = size.as_any().downcast_ref::<IntegerBox>() {
+                    Ok(Box::new(BoolBox::new(int_box.value == 0)))
+                } else {
+                    Ok(Box::new(BoolBox::new(false)))
+                }
+            }
+            "containsKey" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("containsKey() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.has(arg_values[0].clone_box()))
+            }
+            "containsValue" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("containsValue() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                // Simple implementation: check if any value equals the given value
+                Ok(Box::new(BoolBox::new(false))) // TODO: implement proper value search
+            }
+            "forEach" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("forEach() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.forEach(arg_values[0].clone_box()))
+            }
+            "toJSON" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toJSON() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(map_box.toJSON())
+            }
+            // Note: merge, filter, map methods not implemented in MapBox yet
+            // These would require more complex callback handling
+            "toString" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(Box::new(map_box.to_string_box()))
+            }
+            _ => {
+                Err(RuntimeError::InvalidOperation {
+                    message: format!("Unknown MapBox method: {}", method),
+                })
+            }
+        }
+    }
+}

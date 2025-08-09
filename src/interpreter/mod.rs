@@ -9,7 +9,7 @@
 use crate::ast::{ASTNode, BinaryOperator, CatchClause};
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox, ArrayBox, FileBox, ResultBox, ErrorBox, FutureBox};
 use crate::instance::InstanceBox;
-use crate::channel_box::{ChannelBox, MessageBox};
+use crate::channel_box::ChannelBox;
 use crate::boxes::math_box::{MathBox, FloatBox, RangeBox};
 use crate::boxes::time_box::{TimeBox, DateTimeBox, TimerBox};
 use crate::boxes::map_box::MapBox;
@@ -17,11 +17,16 @@ use crate::boxes::random_box::RandomBox;
 use crate::boxes::sound_box::SoundBox;
 use crate::boxes::debug_box::DebugBox;
 use crate::method_box::MethodBox;
+
+// WASM-specific Box types (conditionally included)
+#[cfg(target_arch = "wasm32")]
+use crate::boxes::web::{WebDisplayBox, WebConsoleBox, WebCanvasBox};
 use crate::finalization;
 use crate::exception_box;
 use std::collections::HashMap;
 
 // Module declarations  
+mod async_methods;
 mod box_methods;
 mod core;
 mod expressions;
@@ -29,6 +34,11 @@ mod statements;
 mod functions;
 mod objects;
 mod io;
+mod methods;
+mod math_methods;
+mod system_methods;
+mod web_methods;
+mod special_methods;
 
 // Main interpreter implementation - will be moved from interpreter.rs
 
