@@ -1,0 +1,31 @@
+{
+  "name": "nyash-rust",
+  "type": "module",
+  "collaborators": [
+    "Claude Code <claude@anthropic.com>"
+  ],
+  "description": "Everything is Box in Rust - Ultimate Memory Safe Nyash Implementation",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/nyash"
+  },
+  "files": [
+    "nyash_rust_bg.wasm",
+    "nyash_rust.js",
+    "nyash_rust.d.ts"
+  ],
+  "main": "nyash_rust.js",
+  "types": "nyash_rust.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ],
+  "keywords": [
+    "language",
+    "interpreter",
+    "box",
+    "memory-safe",
+    "rust"
+  ]
+}
