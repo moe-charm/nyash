@@ -15,7 +15,7 @@
 
 **No installation, no setup - just open and code!**
 
-👉 **[🎮 Launch Nyash Browser Playground](projects/nyash-wasm/nyash_playground.html)** 👈
+👉 **[🎮 Launch Nyash Browser Playground](https://moe-charm.github.io/nyash/projects/nyash-wasm/nyash_playground.html)** 👈
 
 Experience features like:
 - 🎨 **Artist Collaboration Demo** - Multiple Box instances working together
@@ -297,7 +297,7 @@ MIT License - Free for personal and commercial use.
 
 ## 🔗 **Links**
 
-- **[🎮 Try Now - Browser Playground](projects/nyash-wasm/nyash_playground.html)**
+- **[🎮 Try Now - Browser Playground](https://moe-charm.github.io/nyash/projects/nyash-wasm/nyash_playground.html)**
 - **[📚 Documentation](docs/)**
 - **[🎯 Examples](examples/)**
 - **[💬 Community Discussion](https://github.com/moe-charm/nyash/discussions)**
