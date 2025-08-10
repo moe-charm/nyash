@@ -125,6 +125,10 @@ impl NyashInterpreter {
                 Ok(Box::new(VoidBox::new()))
             }
             
+            ASTNode::FromCall { parent, method, arguments, .. } => {
+                self.execute_from_call(parent, method, arguments)
+            }
+            
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Cannot execute {:?} as expression", expression.node_type()),
             }),
@@ -698,5 +702,187 @@ impl NyashInterpreter {
             hash = hash.wrapping_mul(31).wrapping_add(byte as usize);
         }
         hash
+    }
+    
+    /// 🔥 FromCall実行処理 - from Parent.method(arguments) or from Parent.constructor(arguments)
+    pub(super) fn execute_from_call(&mut self, parent: &str, method: &str, arguments: &[ASTNode])
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
+        // 1. 現在のコンテキストで'me'変数を取得（現在のインスタンス）
+        let current_instance_val = self.resolve_variable("me")
+            .map_err(|_| RuntimeError::InvalidOperation {
+                message: "'from' can only be used inside methods".to_string(),
+            })?;
+        
+        let current_instance = current_instance_val.as_any().downcast_ref::<InstanceBox>()
+            .ok_or(RuntimeError::TypeError {
+                message: "'from' requires current instance to be InstanceBox".to_string(),
+            })?;
+        
+        // 2. 現在のクラスのデリゲーション関係を検証
+        let current_class = &current_instance.class_name;
+        let box_declarations = self.shared.box_declarations.read().unwrap();
+        
+        let current_box_decl = box_declarations.get(current_class)
+            .ok_or(RuntimeError::UndefinedClass { 
+                name: current_class.clone() 
+            })?;
+        
+        // extendsまたはimplementsでparentが指定されているか確認
+        let is_valid_delegation = current_box_decl.extends.as_ref().map(|s| s.as_str()) == Some(parent) || 
+                                 current_box_decl.implements.contains(&parent.to_string());
+        
+        if !is_valid_delegation {
+            return Err(RuntimeError::InvalidOperation {
+                message: format!("Class '{}' does not delegate to '{}'. Use 'box {} : {}' to establish delegation.", 
+                               current_class, parent, current_class, parent),
+            });
+        }
+        
+        // 3. 親クラスのBox宣言を取得
+        let parent_box_decl = box_declarations.get(parent)
+            .ok_or(RuntimeError::UndefinedClass { 
+                name: parent.to_string() 
+            })?
+            .clone();
+        
+        drop(box_declarations); // ロック早期解放
+        
+        // 4. constructorの場合の特別処理
+        if method == "constructor" {
+            return self.execute_from_parent_constructor(parent, &parent_box_decl, current_instance_val.clone_box(), arguments);
+        }
+        
+        // 5. 親クラスのメソッドを取得
+        let parent_method = parent_box_decl.methods.get(method)
+            .ok_or(RuntimeError::InvalidOperation {
+                message: format!("Method '{}' not found in parent class '{}'", method, parent),
+            })?
+            .clone();
+        
+        // 6. 引数を評価
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.execute_expression(arg)?);
+        }
+        
+        // 7. 親メソッドを実行
+        if let ASTNode::FunctionDeclaration { params, body, .. } = parent_method {
+            // パラメータ数チェック
+            if arg_values.len() != params.len() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("Parent method {}.{} expects {} arguments, got {}", 
+                                   parent, method, params.len(), arg_values.len()),
+                });
+            }
+            
+            // 🌍 local変数スタックを保存・クリア（親メソッド実行開始）
+            let saved_locals = self.save_local_vars();
+            self.local_vars.clear();
+            
+            // 'me'を現在のインスタンスに設定（重要：現在のインスタンスを維持）
+            self.declare_local_variable("me", current_instance_val.clone_box());
+            
+            // 引数をlocal変数として設定
+            for (param, value) in params.iter().zip(arg_values.iter()) {
+                self.declare_local_variable(param, value.clone_box());
+            }
+            
+            // 親メソッドの本体を実行
+            let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
+            for statement in &body {
+                result = self.execute_statement(statement)?;
+                
+                // return文チェック
+                if let super::ControlFlow::Return(return_val) = &self.control_flow {
+                    result = return_val.clone_box();
+                    self.control_flow = super::ControlFlow::None;
+                    break;
+                }
+            }
+            
+            // 🔍 DEBUG: FromCall実行結果をログ出力
+            eprintln!("🔍 DEBUG: FromCall {}.{} result: {}", parent, method, result.to_string_box().value);
+            
+            // local変数スタックを復元
+            self.restore_local_vars(saved_locals);
+            
+            Ok(result)
+        } else {
+            Err(RuntimeError::InvalidOperation {
+                message: format!("Parent method '{}' is not a valid function declaration", method),
+            })
+        }
+    }
+    
+    /// 🔥 fromCall専用親コンストラクタ実行処理 - from Parent.constructor(arguments)
+    fn execute_from_parent_constructor(&mut self, parent: &str, parent_box_decl: &super::BoxDeclaration, 
+                                       current_instance: Box<dyn NyashBox>, arguments: &[ASTNode])
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
+        // 1. 親クラスのコンストラクタを取得（デフォルトコンストラクタまたは指定されたもの）
+        let constructor_name = if arguments.is_empty() { 
+            "constructor" 
+        } else { 
+            "constructor" // TODO: 将来的に名前付きコンストラクタ対応
+        };
+        
+        let parent_constructor = parent_box_decl.constructors.get(constructor_name)
+            .ok_or(RuntimeError::InvalidOperation {
+                message: format!("Constructor '{}' not found in parent class '{}'", constructor_name, parent),
+            })?
+            .clone();
+        
+        // 2. 引数を評価
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.execute_expression(arg)?);
+        }
+        
+        // 3. 親コンストラクタを実行
+        if let ASTNode::FunctionDeclaration { params, body, .. } = parent_constructor {
+            // パラメータ数チェック
+            if arg_values.len() != params.len() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("Parent constructor {}.{} expects {} arguments, got {}", 
+                                   parent, constructor_name, params.len(), arg_values.len()),
+                });
+            }
+            
+            // 🌍 local変数スタックを保存・クリア（親コンストラクタ実行開始）
+            let saved_locals = self.save_local_vars();
+            self.local_vars.clear();
+            
+            // 'me'を現在のインスタンスに設定
+            self.declare_local_variable("me", current_instance.clone_box());
+            
+            // 引数をlocal変数として設定
+            for (param, value) in params.iter().zip(arg_values.iter()) {
+                self.declare_local_variable(param, value.clone_box());
+            }
+            
+            // 親コンストラクタの本体を実行
+            let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
+            for statement in &body {
+                result = self.execute_statement(statement)?;
+                
+                // return文チェック
+                if let super::ControlFlow::Return(return_val) = &self.control_flow {
+                    result = return_val.clone_box();
+                    self.control_flow = super::ControlFlow::None;
+                    break;
+                }
+            }
+            
+            // local変数スタックを復元
+            self.restore_local_vars(saved_locals);
+            
+            // 親コンストラクタは通常現在のインスタンスを返す
+            Ok(current_instance)
+        } else {
+            Err(RuntimeError::InvalidOperation {
+                message: format!("Parent constructor '{}' is not a valid function declaration", constructor_name),
+            })
+        }
     }
 }

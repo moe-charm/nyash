@@ -86,12 +86,36 @@ impl InstanceBox {
         self.methods.contains_key(method_name)
     }
     
-    /// 🌍 GlobalBox用：メソッドを動的に追加
-    pub fn add_method(&mut self, method_name: String, method_ast: ASTNode) {
+    /// 🌍 GlobalBox用：メソッドを動的に追加 - 🔥 暗黙オーバーライド禁止による安全実装
+    pub fn add_method(&mut self, method_name: String, method_ast: ASTNode) -> Result<(), String> {
         // Arc<T>は不変なので、新しいHashMapを作成してArcで包む
         let mut new_methods = (*self.methods).clone();
+        
+        // 🚨 暗黙オーバーライド禁止：既存メソッドの検査
+        if let Some(existing_method) = new_methods.get(&method_name) {
+            // 新しいメソッドのoverride状態を確認
+            let is_override = match &method_ast {
+                crate::ast::ASTNode::FunctionDeclaration { is_override, .. } => *is_override,
+                _ => false, // FunctionDeclaration以外はオーバーライドなし
+            };
+            
+            if !is_override {
+                // 🔥 明示的オーバーライド革命：overrideキーワードなしの重複を禁止
+                return Err(format!(
+                    "🚨 EXPLICIT OVERRIDE REQUIRED: Method '{}' already exists.\n\
+                    💡 To replace the existing method, use 'override {}(...) {{ ... }}'.\n\
+                    🌟 This is Nyash's explicit delegation philosophy - no hidden overrides!",
+                    method_name, method_name
+                ));
+            }
+            
+            // override宣言があれば、明示的な置換として許可
+            eprintln!("🔥 EXPLICIT OVERRIDE: Method '{}' replaced with override declaration", method_name);
+        }
+        
         new_methods.insert(method_name, method_ast);
         self.methods = Arc::new(new_methods);
+        Ok(())
     }
     
     /// fini()メソッド - インスタンスの解放

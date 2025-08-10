@@ -350,6 +350,7 @@ impl NyashParser {
                             params: params.clone(),
                             body,
                             is_static: false,  // コンストラクタは静的でない
+                            is_override: false, // デフォルトは非オーバーライド
                             span: Span::unknown(),
                         };
                         
@@ -401,6 +402,7 @@ impl NyashParser {
                             params,
                             body,
                             is_static: false,  // メソッドは通常静的でない
+                            is_override: false, // デフォルトは非オーバーライド
                             span: Span::unknown(),
                         };
                         
@@ -490,6 +492,7 @@ impl NyashParser {
                         params,
                         body: vec![], // 空の実装
                         is_static: false,  // インターフェースメソッドは通常静的でない
+                        is_override: false, // デフォルトは非オーバーライド
                         span: Span::unknown(),
                     };
                     
@@ -620,6 +623,7 @@ impl NyashParser {
             params,
             body,
             is_static: false,  // 通常の関数は静的でない
+            is_override: false, // デフォルトは非オーバーライド
             span: Span::unknown(),
         })
     }
@@ -724,6 +728,7 @@ impl NyashParser {
             params,
             body,
             is_static: true,  // 🔥 静的関数フラグを設定
+            is_override: false, // デフォルトは非オーバーライド
             span: Span::unknown(),
         })
     }
@@ -936,6 +941,7 @@ impl NyashParser {
                         params,
                         body,
                         is_static: false,  // static box内のメソッドは通常メソッド
+                        is_override: false, // デフォルトは非オーバーライド
                         span: Span::unknown(),
                     };
                     
@@ -1203,6 +1209,7 @@ impl NyashParser {
 mod tests {
     use super::*;
     use crate::tokenizer::NyashTokenizer;
+    use crate::ast::BinaryOperator;
     
     #[test]
     fn test_simple_parse() {
@@ -1315,6 +1322,66 @@ mod tests {
                         }
                     }
                     _ => panic!("Expected BinaryOp"),
+                }
+            }
+            _ => panic!("Expected Program"),
+        }
+    }
+    
+    #[test]
+    fn test_from_call_parse() {
+        let code = "from Parent.method(42, \"test\")";
+        
+        let result = NyashParser::parse_from_string(code);
+        assert!(result.is_ok());
+        
+        let ast = result.unwrap();
+        match ast {
+            ASTNode::Program { statements, .. } => {
+                assert_eq!(statements.len(), 1);
+                match &statements[0] {
+                    ASTNode::FromCall { parent, method, arguments, .. } => {
+                        assert_eq!(parent, "Parent");
+                        assert_eq!(method, "method");
+                        assert_eq!(arguments.len(), 2);
+                        // First argument should be integer 42
+                        match &arguments[0] {
+                            ASTNode::Literal { value: crate::ast::LiteralValue::Integer(42), .. } => {},
+                            _ => panic!("Expected integer literal 42"),
+                        }
+                        // Second argument should be string "test"
+                        match &arguments[1] {
+                            ASTNode::Literal { value: crate::ast::LiteralValue::String(s), .. } => {
+                                assert_eq!(s, "test");
+                            },
+                            _ => panic!("Expected string literal 'test'"),
+                        }
+                    }
+                    _ => panic!("Expected FromCall, got: {:?}", &statements[0]),
+                }
+            }
+            _ => panic!("Expected Program"),
+        }
+    }
+    
+    #[test]
+    fn test_from_call_no_args() {
+        let code = "from BaseClass.constructor()";
+        
+        let result = NyashParser::parse_from_string(code);
+        assert!(result.is_ok());
+        
+        let ast = result.unwrap();
+        match ast {
+            ASTNode::Program { statements, .. } => {
+                assert_eq!(statements.len(), 1);
+                match &statements[0] {
+                    ASTNode::FromCall { parent, method, arguments, .. } => {
+                        assert_eq!(parent, "BaseClass");
+                        assert_eq!(method, "constructor");
+                        assert_eq!(arguments.len(), 0);
+                    }
+                    _ => panic!("Expected FromCall"),
                 }
             }
             _ => panic!("Expected Program"),

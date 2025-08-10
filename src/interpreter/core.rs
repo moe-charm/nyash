@@ -416,10 +416,11 @@ impl NyashInterpreter {
         self.outbox_vars = saved;
     }
     
-    /// トップレベル関数をGlobalBoxのメソッドとして登録
+    /// トップレベル関数をGlobalBoxのメソッドとして登録 - 🔥 暗黙オーバーライド禁止対応
     pub(super) fn register_global_function(&mut self, name: String, func_ast: ASTNode) -> Result<(), RuntimeError> {
         let mut global_box = self.shared.global_box.lock().unwrap();
-        global_box.add_method(name, func_ast);
+        global_box.add_method(name, func_ast)
+            .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
         Ok(())
     }
     

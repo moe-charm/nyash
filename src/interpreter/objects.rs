@@ -667,7 +667,7 @@ impl NyashInterpreter {
         }
     }
     
-    /// Box宣言を登録 - Box declaration registration
+    /// Box宣言を登録 - 🔥 コンストラクタオーバーロード禁止対応
     pub(super) fn register_box_declaration(
         &mut self, 
         name: String, 
@@ -679,7 +679,23 @@ impl NyashInterpreter {
         extends: Option<String>,
         implements: Vec<String>,
         type_parameters: Vec<String>  // 🔥 ジェネリクス型パラメータ追加
-    ) {
+    ) -> Result<(), RuntimeError> {
+        
+        // 🚨 コンストラクタオーバーロード禁止：複数コンストラクタ検出
+        if constructors.len() > 1 {
+            let constructor_names: Vec<String> = constructors.keys().cloned().collect();
+            return Err(RuntimeError::InvalidOperation {
+                message: format!(
+                    "🚨 CONSTRUCTOR OVERLOAD FORBIDDEN: Box '{}' has {} constructors: [{}].\n\
+                    🌟 Nyash's explicit philosophy: One Box, One Constructor!\n\
+                    💡 Use different Box classes for different initialization patterns.\n\
+                    📖 Example: UserBox, AdminUserBox, GuestUserBox instead of User(type)",
+                    name, 
+                    constructors.len(),
+                    constructor_names.join(", ")
+                )
+            });
+        }
         let box_decl = super::BoxDeclaration { 
             name: name.clone(), 
             fields, 
@@ -696,6 +712,8 @@ impl NyashInterpreter {
             let mut box_decls = self.shared.box_declarations.write().unwrap();
             box_decls.insert(name, box_decl);
         }
+        
+        Ok(()) // 🔥 正常終了
     }
     
     /// 🔥 ジェネリクス型引数の検証

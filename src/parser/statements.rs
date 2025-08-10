@@ -62,6 +62,10 @@ impl NyashParser {
             TokenType::THROW => {
                 self.parse_throw()
             },
+            TokenType::FROM => {
+                // 🔥 from構文: from Parent.method(args) または from Parent.constructor(args)
+                self.parse_from_call_statement()
+            },
             TokenType::IDENTIFIER(name) => {
                 // function宣言 または 代入文 または 関数呼び出し
                 self.parse_assignment_or_function_call()
@@ -440,5 +444,15 @@ impl NyashParser {
         self.advance(); // consume 'throw'
         let value = Box::new(self.parse_expression()?);
         Ok(ASTNode::Throw { expression: value, span: Span::unknown() })
+    }
+    
+    /// 🔥 from構文を文としてパース: from Parent.method(args)
+    pub(super) fn parse_from_call_statement(&mut self) -> Result<ASTNode, ParseError> {
+        // 既存のparse_from_call()を使用してFromCall ASTノードを作成
+        let from_call_expr = self.parse_from_call()?;
+        
+        // FromCallは式でもあるが、文としても使用可能
+        // 例: from Animal.constructor() （戻り値を使わない）
+        Ok(from_call_expr)
     }
 }

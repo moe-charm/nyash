@@ -120,6 +120,7 @@ pub enum StructureNode {
         params: Vec<String>,
         body: Vec<ASTNode>,
         is_static: bool,     // 🔥 静的メソッドフラグ
+        is_override: bool,   // 🔥 オーバーライドフラグ
         span: Span,
     },
     IfStructure {
@@ -465,6 +466,7 @@ pub enum ASTNode {
         params: Vec<String>,
         body: Vec<ASTNode>,
         is_static: bool,     // 🔥 静的メソッドフラグ
+        is_override: bool,   // 🔥 オーバーライドフラグ
         span: Span,
     },
     
@@ -537,6 +539,14 @@ pub enum ASTNode {
         span: Span,
     },
     
+    /// 🔥 from呼び出し: from Parent.method(arguments) or from Parent.constructor(arguments)
+    FromCall {
+        parent: String,        // Parent名
+        method: String,        // method名またはconstructor
+        arguments: Vec<ASTNode>, // 引数
+        span: Span,
+    },
+    
     /// thisフィールドアクセス: this.field
     ThisField {
         field: String,
@@ -602,6 +612,7 @@ impl ASTNode {
             ASTNode::New { .. } => "New",
             ASTNode::This { .. } => "This",
             ASTNode::Me { .. } => "Me",
+            ASTNode::FromCall { .. } => "FromCall",
             ASTNode::ThisField { .. } => "ThisField",
             ASTNode::MeField { .. } => "MeField",
             ASTNode::Include { .. } => "Include",
@@ -638,6 +649,7 @@ impl ASTNode {
             ASTNode::New { .. } => ASTNodeType::Expression,
             ASTNode::This { .. } => ASTNodeType::Expression,
             ASTNode::Me { .. } => ASTNodeType::Expression,
+            ASTNode::FromCall { .. } => ASTNodeType::Expression,
             ASTNode::ThisField { .. } => ASTNodeType::Expression,
             ASTNode::MeField { .. } => ASTNodeType::Expression,
             
@@ -713,10 +725,11 @@ impl ASTNode {
                 desc.push(')');
                 desc
             }
-            ASTNode::FunctionDeclaration { name, params, body, is_static, .. } => {
+            ASTNode::FunctionDeclaration { name, params, body, is_static, is_override, .. } => {
                 let static_str = if *is_static { "static " } else { "" };
-                format!("FunctionDeclaration({}{}({}), {} statements)", 
-                        static_str, name, params.join(", "), body.len())
+                let override_str = if *is_override { "override " } else { "" };
+                format!("FunctionDeclaration({}{}{}({}), {} statements)", 
+                        override_str, static_str, name, params.join(", "), body.len())
             }
             ASTNode::GlobalVar { name, .. } => {
                 format!("GlobalVar({})", name)
@@ -746,6 +759,9 @@ impl ASTNode {
             }
             ASTNode::This { .. } => "This".to_string(),
             ASTNode::Me { .. } => "Me".to_string(),
+            ASTNode::FromCall { parent, method, arguments, .. } => {
+                format!("FromCall({}.{}, {} args)", parent, method, arguments.len())
+            }
             ASTNode::ThisField { field, .. } => {
                 format!("ThisField({})", field)
             }
@@ -812,6 +828,7 @@ impl ASTNode {
             ASTNode::New { span, .. } => *span,
             ASTNode::This { span, .. } => *span,
             ASTNode::Me { span, .. } => *span,
+            ASTNode::FromCall { span, .. } => *span,
             ASTNode::ThisField { span, .. } => *span,
             ASTNode::MeField { span, .. } => *span,
             ASTNode::Include { span, .. } => *span,

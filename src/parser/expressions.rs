@@ -434,6 +434,11 @@ impl NyashParser {
                 }
             }
             
+            TokenType::FROM => {
+                // from構文をパース: from Parent.method(arguments)
+                self.parse_from_call()
+            }
+            
             TokenType::IDENTIFIER(name) => {
                 let name = name.clone();
                 self.advance();
@@ -452,5 +457,65 @@ impl NyashParser {
                 Err(ParseError::InvalidExpression { line })
             }
         }
+    }
+    
+    /// from構文をパース: from Parent.method(arguments)
+    pub(super) fn parse_from_call(&mut self) -> Result<ASTNode, ParseError> {
+        self.advance(); // consume 'from'
+        
+        // Parent名を取得
+        let parent = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "parent class name".to_string(),
+                line,
+            });
+        };
+        
+        // DOTを確認
+        self.consume(TokenType::DOT)?;
+        
+        // method名を取得
+        let method = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let name = name.clone();
+            self.advance();
+            name
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "method name".to_string(),
+                line,
+            });
+        };
+        
+        // 引数リストをパース
+        self.consume(TokenType::LPAREN)?;
+        let mut arguments = Vec::new();
+        
+        while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+            must_advance!(self, _unused, "from call argument parsing");
+            
+            arguments.push(self.parse_expression()?);
+            
+            if self.match_token(&TokenType::COMMA) {
+                self.advance();
+                // カンマの後の trailing comma をチェック
+            }
+        }
+        
+        self.consume(TokenType::RPAREN)?;
+        
+        Ok(ASTNode::FromCall {
+            parent,
+            method,
+            arguments,
+            span: Span::unknown(),
+        })
     }
 }

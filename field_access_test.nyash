@@ -1,0 +1,63 @@
+// フィールドアクセステスト
+
+box Parent {
+    init { value }
+    
+    constructor() {
+        me.value = "Parent Value"
+    }
+    
+    getValue() {
+        return me.value
+    }
+    
+    // 直接フィールド値をデバッグ
+    debugValue() {
+        return me.value
+    }
+}
+
+box Child : Parent {
+    init { childValue }
+    
+    constructor() {
+        from Parent.constructor()
+        me.childValue = "Child Value"  
+    }
+    
+    test() {
+        // 親の値を直接取得
+        local parentValue
+        parentValue = from Parent.getValue()
+        
+        // 親の値をデバッグ用メソッドで取得
+        local debugValue
+        debugValue = from Parent.debugValue()
+        
+        return "Parent: " + parentValue + ", Debug: " + debugValue
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // 親クラス単独テスト
+        local parent
+        parent = new Parent()
+        local directValue
+        directValue = parent.getValue()
+        me.console.log("Direct Parent getValue: " + directValue)
+        
+        // 子クラスから親メソッドテスト
+        local child
+        child = new Child()
+        local childResult
+        childResult = child.test()
+        me.console.log("Child test result: " + childResult)
+        
+        return "Field access test completed"
+    }
+}

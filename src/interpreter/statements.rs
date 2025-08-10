@@ -63,7 +63,7 @@ impl NyashInterpreter {
                         type_parameters.clone()
                     )?;
                 } else {
-                    // 通常のBox宣言の処理
+                    // 通常のBox宣言の処理 - 🔥 コンストラクタオーバーロード禁止対応
                     self.register_box_declaration(
                         name.clone(), 
                         fields.clone(), 
@@ -74,7 +74,7 @@ impl NyashInterpreter {
                         extends.clone(),
                         implements.clone(),
                         type_parameters.clone() // 🔥 ジェネリクス型パラメータ追加
-                    );
+                    )?; // 🔥 エラーハンドリング追加
                 }
                 Ok(Box::new(VoidBox::new()))
             }
@@ -92,6 +92,7 @@ impl NyashInterpreter {
                             params: params.clone(),
                             body: body.clone(),
                             is_static: true,
+                            is_override: false,
                             span: crate::ast::Span::unknown(),
                         };
                         

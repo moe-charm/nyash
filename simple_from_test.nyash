@@ -1,0 +1,45 @@
+// FromCall simple test
+
+box Parent {
+    init { value }
+    
+    constructor() {
+        me.value = "Parent Value"
+    }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+box Child : Parent {
+    init { childValue }
+    
+    constructor() {
+        from Parent.constructor()
+        me.childValue = "Child Value"
+    }
+    
+    test() {
+        local parentValue
+        parentValue = from Parent.getValue()
+        return parentValue
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        local child
+        child = new Child()
+        
+        local result  
+        result = child.test()
+        
+        me.console.log("Result: " + result)
+        return "Test completed"
+    }
+}

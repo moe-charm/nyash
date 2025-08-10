@@ -86,6 +86,7 @@ impl NyashInterpreter {
             params,
             body,
             is_static: false,  // 通常の関数は静的でない
+            is_override: false, // 🔥 通常の関数はオーバーライドでない
             span: crate::ast::Span::unknown(), // デフォルトspan
         };
         

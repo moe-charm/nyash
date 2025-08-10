@@ -45,6 +45,8 @@ pub enum TokenType {
     STATIC,          // static (静的メソッド)
     OUTBOX,          // outbox (所有権移転変数)
     NOT,             // not (否定演算子)
+    OVERRIDE,        // override (明示的オーバーライド)
+    FROM,            // from (親メソッド呼び出し)
     
     // 演算子 (長いものから先に定義)
     ARROW,           // >>
@@ -400,6 +402,8 @@ impl NyashTokenizer {
             "static" => TokenType::STATIC,
             "outbox" => TokenType::OUTBOX,
             "not" => TokenType::NOT,
+            "override" => TokenType::OVERRIDE,
+            "from" => TokenType::FROM,
             "and" => TokenType::AND,
             "or" => TokenType::OR,
             "true" => TokenType::TRUE,

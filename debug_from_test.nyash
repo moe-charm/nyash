@@ -1,0 +1,46 @@
+// 詳細デバッグ: FromCall issue investigation
+
+box Simple {
+    init { }
+    
+    // 単純なreturn文テスト
+    simpleReturn() {
+        return "Simple Text"
+    }
+    
+    // 数値return文テスト  
+    numberReturn() {
+        return 42
+    }
+}
+
+box TestChild : Simple {
+    init { }
+    
+    test() {
+        local result1
+        result1 = from Simple.simpleReturn()
+        
+        local result2  
+        result2 = from Simple.numberReturn()
+        
+        return result1 + " | " + result2
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        local child
+        child = new TestChild()
+        
+        local result
+        result = child.test()
+        
+        me.console.log("Final result: " + result)
+        return "Debug completed"
+    }
+}
