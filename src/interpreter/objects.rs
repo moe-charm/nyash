@@ -9,6 +9,7 @@
 use super::*;
 use crate::boxes::null_box::NullBox;
 use crate::boxes::console_box::ConsoleBox;
+use crate::boxes::array::ArrayBox;
 // use crate::boxes::intent_box_wrapper::IntentBoxWrapper;
 use std::sync::Arc;
 
@@ -29,6 +30,8 @@ impl NyashInterpreter {
                 // 🌍 革命的実装：Environment tracking廃止
                 return Ok(array_box);
             }
+            // TODO: 以下のBoxはまだ実装されていない
+            /*
             "FileBox" => {
                 // FileBoxは引数1個（ファイルパス）で作成
                 if arguments.len() != 1 {
@@ -59,6 +62,7 @@ impl NyashInterpreter {
                 // 🌍 革命的実装：Environment tracking廃止
                 return Ok(result_box);
             }
+            */
             "ErrorBox" => {
                 // ErrorBoxは引数2個（エラータイプ、メッセージ）で作成
                 if arguments.len() != 2 {
@@ -619,9 +623,9 @@ impl NyashInterpreter {
         // 基本的なビルトイン型
         let is_builtin = matches!(type_name, 
             "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
-            "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
+            "MathBox" | 
             "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
-            "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox"
+            "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox"
         );
         
         // Web専用Box（WASM環境のみ）

@@ -8,7 +8,8 @@
  */
 
 use super::super::*;
-use crate::box_trait::{StringBox, IntegerBox, ArrayBox, NyashBox, VoidBox, BoolBox};
+use crate::box_trait::{StringBox, IntegerBox, NyashBox, BoolBox};
+use crate::boxes::array::ArrayBox;
 use crate::boxes::map_box::MapBox;
 
 impl NyashInterpreter {
@@ -48,17 +49,7 @@ impl NyashInterpreter {
                     });
                 }
                 let index_value = self.execute_expression(&arguments[0])?;
-                if let Some(index_int) = index_value.as_any().downcast_ref::<IntegerBox>() {
-                    if let Some(element) = array_box.get(index_int.value as usize) {
-                        Ok(element)
-                    } else {
-                        Ok(Box::new(StringBox::new("Index out of bounds")))
-                    }
-                } else {
-                    Err(RuntimeError::TypeError {
-                        message: "get() requires integer index".to_string(),
-                    })
-                }
+                Ok(array_box.get(index_value))
             }
             "set" => {
                 if arguments.len() != 2 {
@@ -68,18 +59,43 @@ impl NyashInterpreter {
                 }
                 let index_value = self.execute_expression(&arguments[0])?;
                 let element_value = self.execute_expression(&arguments[1])?;
-                if let Some(index_int) = index_value.as_any().downcast_ref::<IntegerBox>() {
-                    match array_box.set(index_int.value as usize, element_value) {
-                        Ok(()) => Ok(Box::new(VoidBox::new())),
-                        Err(msg) => Ok(Box::new(StringBox::new(&msg))),
-                    }
-                } else {
-                    Err(RuntimeError::TypeError {
-                        message: "set() requires integer index".to_string(),
-                    })
-                }
+                Ok(array_box.set(index_value, element_value))
             }
-            // Note: indexOf, contains, clear, reverse, slice methods not implemented in ArrayBox yet
+            "remove" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("remove() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let index_value = self.execute_expression(&arguments[0])?;
+                Ok(array_box.remove(index_value))
+            }
+            "indexOf" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("indexOf() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let element = self.execute_expression(&arguments[0])?;
+                Ok(array_box.indexOf(element))
+            }
+            "contains" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("contains() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let element = self.execute_expression(&arguments[0])?;
+                Ok(array_box.contains(element))
+            }
+            "clear" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("clear() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(array_box.clear())
+            }
             "join" => {
                 if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
@@ -87,13 +103,7 @@ impl NyashInterpreter {
                     });
                 }
                 let delimiter_value = self.execute_expression(&arguments[0])?;
-                if let Some(delimiter_str) = delimiter_value.as_any().downcast_ref::<StringBox>() {
-                    Ok(array_box.join(&delimiter_str.value))
-                } else {
-                    Err(RuntimeError::TypeError {
-                        message: "join() requires string delimiter".to_string(),
-                    })
-                }
+                Ok(array_box.join(delimiter_value))
             }
             "isEmpty" => {
                 if !arguments.is_empty() {

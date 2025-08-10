@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
+use crate::boxes::array::ArrayBox;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
 
@@ -326,6 +327,8 @@ impl NyashInterpreter {
             return self.execute_array_method(array_box, method, arguments);
         }
         
+        // TODO: 以下のBoxはまだ実装されていない
+        /*
         // FileBox method calls
         if let Some(file_box) = obj_value.as_any().downcast_ref::<FileBox>() {
             return self.execute_file_method(file_box, method, arguments);
@@ -345,6 +348,7 @@ impl NyashInterpreter {
         if let Some(channel_box) = obj_value.as_any().downcast_ref::<ChannelBox>() {
             return self.execute_channel_method(channel_box, method, arguments);
         }
+        */
         
         // MathBox method calls
         if let Some(math_box) = obj_value.as_any().downcast_ref::<MathBox>() {

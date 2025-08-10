@@ -103,7 +103,8 @@
  * - 存在しないキーの取得は "Key not found" メッセージ返却
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, ArrayBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::boxes::array::ArrayBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::collections::HashMap;

@@ -99,9 +99,9 @@ pub mod null_box;
 // pub mod intent_box_wrapper;
 // pub mod p2p_box;
 
-// 今後追加予定のBox型（コメントアウト）
-// pub mod array_box;
-// pub use array_box::ArrayBox;
+// 配列・リスト操作Box
+pub mod array;
+pub use array::ArrayBox;
 
 // null関数も再エクスポート
 pub use null_box::{NullBox, null};
