@@ -26,6 +26,9 @@ pub mod type_box;  // 🌟 TypeBox revolutionary system
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
 
+#[cfg(test)]
+pub mod tests;
+
 // Re-export main types for easy access
 pub use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox};
 pub use environment::{Environment, PythonCompatEnvironment};
