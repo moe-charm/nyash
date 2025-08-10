@@ -20,7 +20,7 @@ impl NyashResultBox {
         NyashResultBox::Err(error)
     }
     
-    pub fn is_ok(&self) -> bool {
+    pub fn is_ok_bool(&self) -> bool {
         matches!(self, NyashResultBox::Ok(_))
     }
     

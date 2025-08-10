@@ -70,7 +70,7 @@ impl RegexBox {
         let text_str = text.to_string_box().value;
         let replacement_str = replacement.to_string_box().value;
         let result = self.regex.replace_all(&text_str, replacement_str.as_str());
-        Box::new(StringBox::new(&result))
+        Box::new(StringBox::new(&result.to_string()))
     }
     
     /// 文字列分割
@@ -92,7 +92,7 @@ impl NyashBox for RegexBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!("RegexBox({})", **self.pattern))
+        StringBox::new(format!("RegexBox({})", self.pattern.as_str()))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -109,7 +109,7 @@ impl NyashBox for RegexBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_regex) = other.as_any().downcast_ref::<RegexBox>() {
-            BoolBox::new(**self.pattern == **other_regex.pattern)
+            BoolBox::new(self.pattern.as_str() == other_regex.pattern.as_str())
         } else {
             BoolBox::new(false)
         }

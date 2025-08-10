@@ -181,7 +181,10 @@ impl NyashBox for BufferBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_buffer) = other.as_any().downcast_ref::<BufferBox>() {
-            BoolBox::new(self.data == other_buffer.data)
+            // Arc<Mutex>の内容を比較
+            let self_data = self.data.lock().unwrap();
+            let other_data = other_buffer.data.lock().unwrap();
+            BoolBox::new(*self_data == *other_data)
         } else {
             BoolBox::new(false)
         }

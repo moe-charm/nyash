@@ -390,6 +390,78 @@ impl NyashInterpreter {
                 // 🌍 革命的実装：Environment tracking廃止
                 return Ok(debug_box);
             }
+            "BufferBox" => {
+                // BufferBoxは引数なしで作成
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("BufferBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let buffer_box = Box::new(crate::boxes::buffer::BufferBox::new()) as Box<dyn NyashBox>;
+                return Ok(buffer_box);
+            }
+            "RegexBox" => {
+                // RegexBoxは引数1個（パターン）で作成
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("RegexBox constructor expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let pattern_value = self.execute_expression(&arguments[0])?;
+                if let Some(pattern_str) = pattern_value.as_any().downcast_ref::<StringBox>() {
+                    match crate::boxes::regex::RegexBox::new(&pattern_str.value) {
+                        Ok(regex_box) => return Ok(Box::new(regex_box)),
+                        Err(e) => return Err(RuntimeError::InvalidOperation {
+                            message: format!("Invalid regex pattern: {}", e),
+                        }),
+                    }
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: "RegexBox constructor requires string pattern argument".to_string(),
+                    });
+                }
+            }
+            "JSONBox" => {
+                // JSONBoxは引数1個（JSON文字列）で作成
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("JSONBox constructor expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let json_value = self.execute_expression(&arguments[0])?;
+                if let Some(json_str) = json_value.as_any().downcast_ref::<StringBox>() {
+                    match crate::boxes::json::JSONBox::from_str(&json_str.value) {
+                        Ok(json_box) => return Ok(Box::new(json_box)),
+                        Err(e) => return Err(RuntimeError::InvalidOperation {
+                            message: format!("Invalid JSON: {}", e),
+                        }),
+                    }
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: "JSONBox constructor requires string JSON argument".to_string(),
+                    });
+                }
+            }
+            "StreamBox" => {
+                // StreamBoxは引数なしで作成
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("StreamBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let stream_box = Box::new(crate::boxes::stream::StreamBox::new()) as Box<dyn NyashBox>;
+                return Ok(stream_box);
+            }
+            "HTTPClientBox" => {
+                // HTTPClientBoxは引数なしで作成
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("HTTPClientBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let http_box = Box::new(crate::boxes::http::HttpClientBox::new()) as Box<dyn NyashBox>;
+                return Ok(http_box);
+            }
             "MethodBox" => {
                 // MethodBoxは引数2個（インスタンス、メソッド名）で作成
                 if arguments.len() != 2 {
@@ -621,7 +693,8 @@ impl NyashInterpreter {
             "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
             "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
             "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
-            "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox"
+            "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
+            "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox"
         );
         
         // Web専用Box（WASM環境のみ）

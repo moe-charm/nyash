@@ -171,7 +171,9 @@ fn json_value_to_nyash_box(value: &Value) -> Box<dyn NyashBox> {
             if let Some(i) = n.as_i64() {
                 Box::new(IntegerBox::new(i))
             } else if let Some(f) = n.as_f64() {
-                Box::new(crate::box_trait::FloatBox::new(f))
+                // TODO: FloatBoxが実装されたら有効化
+                // Box::new(crate::boxes::float_box::FloatBox::new(f))
+                Box::new(StringBox::new(&f.to_string()))
             } else {
                 Box::new(StringBox::new(&n.to_string()))
             }
@@ -205,12 +207,13 @@ fn nyash_box_to_json_value(value: Box<dyn NyashBox>) -> Value {
         Value::Bool(bool_box.value)
     } else if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
         Value::Number(serde_json::Number::from(int_box.value))
-    } else if let Some(float_box) = value.as_any().downcast_ref::<crate::box_trait::FloatBox>() {
-        if let Some(n) = serde_json::Number::from_f64(float_box.value) {
-            Value::Number(n)
-        } else {
-            Value::String(float_box.value.to_string())
-        }
+    // TODO: FloatBoxが実装されたら有効化
+    // } else if let Some(float_box) = value.as_any().downcast_ref::<crate::boxes::float_box::FloatBox>() {
+    //     if let Some(n) = serde_json::Number::from_f64(float_box.value) {
+    //         Value::Number(n)
+    //     } else {
+    //         Value::String(float_box.value.to_string())
+    //     }
     } else if let Some(string_box) = value.as_any().downcast_ref::<StringBox>() {
         Value::String(string_box.value.clone())
     } else if let Some(array_box) = value.as_any().downcast_ref::<ArrayBox>() {
@@ -220,7 +223,8 @@ fn nyash_box_to_json_value(value: Box<dyn NyashBox>) -> Value {
             .collect();
         Value::Array(arr)
     } else if let Some(map_box) = value.as_any().downcast_ref::<MapBox>() {
-        let map = map_box.map.lock().unwrap();
+        let data = map_box.get_data();
+        let map = data.lock().unwrap();
         let mut obj = serde_json::Map::new();
         for (key, val) in map.iter() {
             obj.insert(key.clone(), nyash_box_to_json_value(val.clone_box()));
