@@ -78,7 +78,7 @@ env_logger = "0.11"
 chrono = "0.4"
 
 # HTTP通信（HttpClientBox用）
-reqwest = { version = "0.11", features = ["blocking"] }
+# reqwest = { version = "0.11", features = ["blocking"] }  # Temporarily disabled
 
 # 正規表現（RegexBox用）
 regex = "1.0"

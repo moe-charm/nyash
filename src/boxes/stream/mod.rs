@@ -4,6 +4,7 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox};
 use crate::boxes::buffer::BufferBox;
+use crate::boxes::array::ArrayBox;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 use std::io::{Read, Write, Result};
@@ -80,10 +81,25 @@ impl NyashStreamBox {
     pub fn stream_write(&self, data: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         // BufferBoxから変換
         if let Some(buffer_box) = data.as_any().downcast_ref::<BufferBox>() {
-            let buffer_data = buffer_box.data.lock().unwrap();
-            match self.write(&buffer_data) {
-                Ok(()) => Box::new(StringBox::new("ok")),
-                Err(e) => Box::new(StringBox::new(&format!("Error writing to stream: {}", e))),
+            // BufferBoxのreadAllを使用してデータ取得
+            let array_data = buffer_box.readAll();
+            // ArrayBoxをバイト配列に変換
+            if let Some(array_box) = array_data.as_any().downcast_ref::<ArrayBox>() {
+                let items = array_box.items.lock().unwrap();
+                let mut bytes = Vec::new();
+                for item in items.iter() {
+                    if let Some(int_box) = item.as_any().downcast_ref::<IntegerBox>() {
+                        if int_box.value >= 0 && int_box.value <= 255 {
+                            bytes.push(int_box.value as u8);
+                        }
+                    }
+                }
+                match self.write(&bytes) {
+                    Ok(()) => Box::new(StringBox::new("ok")),
+                    Err(e) => Box::new(StringBox::new(&format!("Error writing to stream: {}", e))),
+                }
+            } else {
+                Box::new(StringBox::new("Error: BufferBox data is not an ArrayBox"))
             }
         } else if let Some(string_box) = data.as_any().downcast_ref::<StringBox>() {
             match self.write(string_box.value.as_bytes()) {

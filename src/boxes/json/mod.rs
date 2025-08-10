@@ -120,7 +120,8 @@ impl JSONBox {
         
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
-                array.push(Box::new(StringBox::new(key)));
+                // ArrayBoxのpushメソッドは&selfなので、直接呼び出し可能
+                let _ = array.push(Box::new(StringBox::new(key)));
             }
         }
         

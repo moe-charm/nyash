@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::{BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox};
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
 

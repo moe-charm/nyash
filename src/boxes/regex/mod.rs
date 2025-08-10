@@ -59,7 +59,7 @@ impl RegexBox {
         let array = ArrayBox::new();
         
         for mat in self.regex.find_iter(&text_str) {
-            array.push(Box::new(StringBox::new(mat.as_str())));
+            let _ = array.push(Box::new(StringBox::new(mat.as_str())));
         }
         
         Box::new(array)
@@ -79,7 +79,7 @@ impl RegexBox {
         let array = ArrayBox::new();
         
         for part in self.regex.split(&text_str) {
-            array.push(Box::new(StringBox::new(part)));
+            let _ = array.push(Box::new(StringBox::new(part)));
         }
         
         Box::new(array)

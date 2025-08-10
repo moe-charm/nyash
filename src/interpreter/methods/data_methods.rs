@@ -9,7 +9,7 @@
 
 use super::super::*;
 use crate::box_trait::{NyashBox, StringBox, IntegerBox};
-use crate::boxes::{BufferBox, JSONBox, RegexBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, RegexBox};
 
 impl NyashInterpreter {
     /// BufferBoxのメソッド呼び出しを実行
