@@ -1,0 +1,94 @@
+// 🧪 P2PBox コールバック実行デモ
+// 実際のメッセージ受信とコールバック実行の様子を確認
+
+print("=== P2PBox Callback Demo ===")
+
+// 通信世界を作成
+local world
+world = new IntentBox()
+
+print("\n1. Creating chat nodes...")
+local alice
+local bob
+alice = new P2PBox("alice", world)
+bob = new P2PBox("bob", world)
+print("✅ Alice and Bob joined the chat")
+
+// 現在はコールバックを実際に実行できないため、
+// 登録と送信の流れを示すデモンストレーション
+print("\n2. Registering message handlers...")
+print("⚠️  Note: Callbacks are registered but not executed in current implementation")
+print("   (MethodBox integration pending)")
+
+// Bobのメッセージハンドラー登録
+bob.on("chat", "bob_chat_handler")
+bob.on("typing", "bob_typing_handler")
+bob.on("image", "bob_image_handler")
+print("✅ Bob's handlers registered")
+
+// Aliceのメッセージハンドラー登録
+alice.on("chat", "alice_chat_handler") 
+alice.on("reply", "alice_reply_handler")
+print("✅ Alice's handlers registered")
+
+print("\n3. Message exchange simulation...")
+
+// チャットメッセージ
+local chatMsg
+chatMsg = new MapBox()
+chatMsg.set("text", "Hi Bob! How are you?")
+chatMsg.set("timestamp", 1234567890)
+alice.send("chat", chatMsg, "bob")
+print("Alice → Bob: Hi Bob! How are you?")
+
+// タイピング通知
+alice.send("typing", true, "bob")
+print("Alice → Bob: [typing...]")
+
+// 画像送信
+local imageMsg
+imageMsg = new MapBox()
+imageMsg.set("url", "https://example.com/photo.jpg")
+imageMsg.set("caption", "Check out this photo!")
+alice.send("image", imageMsg, "bob")
+print("Alice → Bob: [sent an image]")
+
+// 返信
+local replyMsg
+replyMsg = new MapBox()
+replyMsg.set("text", "I'm doing great, thanks!")
+replyMsg.set("replyTo", "Hi Bob! How are you?")
+bob.send("reply", replyMsg, "alice")
+print("Bob → Alice: I'm doing great, thanks!")
+
+print("\n4. Broadcast demo...")
+// 全員への通知
+local announcement
+announcement = new MapBox()
+announcement.set("type", "system")
+announcement.set("message", "Welcome to NyaMesh P2P Chat!")
+alice.broadcast("announcement", announcement)
+print("System broadcast: Welcome to NyaMesh P2P Chat!")
+
+print("\n5. Testing message queue...")
+// メッセージキューの処理
+local processed
+processed = world.processMessages()
+print("Messages in queue: " + processed)
+
+print("\n6. Dynamic listener management...")
+// 動的なリスナー管理
+alice.off("chat")
+print("✅ Alice unsubscribed from chat")
+
+// 解除後のメッセージ（受信されない）
+bob.send("chat", "Are you still there?", "alice")
+print("Bob → Alice: Are you still there? (Alice won't receive)")
+
+print("\n=== Demo Complete ===")
+print("\n📝 Summary:")
+print("- IntentBox creates communication worlds")
+print("- P2PBox nodes can join and exchange messages")
+print("- Listeners can be dynamically added/removed")
+print("- LocalTransport handles in-process messaging")
+print("- Full callback execution requires MethodBox integration")

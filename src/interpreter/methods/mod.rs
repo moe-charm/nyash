@@ -21,6 +21,7 @@ pub mod collection_methods; // ArrayBox, MapBox
 pub mod io_methods;         // FileBox, ResultBox
 pub mod data_methods;       // BufferBox, JSONBox, RegexBox
 pub mod network_methods;    // HttpClientBox, StreamBox
+pub mod p2p_methods;        // IntentBox, P2PBox
 
 // Re-export methods for easy access
 pub use basic_methods::*;

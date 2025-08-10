@@ -442,6 +442,58 @@ impl NyashInterpreter {
                     });
                 }
             }
+            
+            "IntentBox" => {
+                // IntentBoxは引数なしで作成（デフォルトローカル通信）
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("IntentBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let intent_box = crate::boxes::IntentBox::new();
+                return Ok(Box::new(intent_box) as Box<dyn NyashBox>);
+            }
+            
+            "P2PBox" => {
+                // P2PBoxは引数2個（node_id, intent_box）で作成
+                if arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "P2PBox requires at least 1 argument (node_id)".to_string(),
+                    });
+                }
+                
+                // 引数を評価
+                let mut arg_values = Vec::new();
+                for arg in arguments {
+                    arg_values.push(self.execute_expression(arg)?);
+                }
+                
+                // 第1引数: ノードID
+                let node_id = if let Some(str_box) = arg_values[0].as_any().downcast_ref::<StringBox>() {
+                    str_box.value.clone()
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: "P2PBox first argument must be a string (node_id)".to_string(),
+                    });
+                };
+                
+                // 第2引数: IntentBox（省略時はデフォルト）
+                let intent_box = if arg_values.len() > 1 {
+                    if let Some(intent) = arg_values[1].as_any().downcast_ref::<crate::boxes::IntentBox>() {
+                        std::sync::Arc::new(intent.clone())
+                    } else {
+                        return Err(RuntimeError::TypeError {
+                            message: "P2PBox second argument must be an IntentBox".to_string(),
+                        });
+                    }
+                } else {
+                    // デフォルトのIntentBoxを作成
+                    std::sync::Arc::new(crate::boxes::IntentBox::new())
+                };
+                
+                let p2p_box = crate::boxes::P2PBox::new(node_id, intent_box);
+                return Ok(Box::new(p2p_box));
+            }
             "StreamBox" => {
                 // StreamBoxは引数なしで作成
                 if !arguments.is_empty() {
@@ -694,7 +746,8 @@ impl NyashInterpreter {
             "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
             "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
             "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
-            "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox"
+            "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox" |
+            "IntentBox" | "P2PBox"
         );
         
         // Web専用Box（WASM環境のみ）

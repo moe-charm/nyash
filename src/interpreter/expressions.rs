@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox};
 use crate::operator_traits::OperatorResolver;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
@@ -425,6 +425,16 @@ impl NyashInterpreter {
         // ConsoleBox method calls
         if let Some(console_box) = obj_value.as_any().downcast_ref::<crate::boxes::console_box::ConsoleBox>() {
             return self.execute_console_method(console_box, method, arguments);
+        }
+        
+        // IntentBox method calls
+        if let Some(intent_box) = obj_value.as_any().downcast_ref::<IntentBox>() {
+            return self.execute_intent_box_method(intent_box, method, arguments);
+        }
+        
+        // P2PBox method calls
+        if let Some(p2p_box) = obj_value.as_any().downcast_ref::<P2PBox>() {
+            return self.execute_p2p_box_method(p2p_box, method, arguments);
         }
         
         // EguiBox method calls (非WASM環境のみ)

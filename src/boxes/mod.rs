@@ -106,9 +106,8 @@ pub mod stream;
 pub mod regex;
 
 // P2P通信Box群
-// pub mod intent_box;
-// pub mod intent_box_wrapper;
-// pub mod p2p_box;
+pub mod intent_box;
+pub mod p2p_box;
 
 // null関数も再エクスポート
 pub use null_box::{NullBox, null};
@@ -125,5 +124,5 @@ pub use stream::{NyashStreamBox, StreamBox};
 pub use regex::RegexBox;
 
 // P2P通信Boxの再エクスポート
-// pub use intent_box::IntentBox;
-// pub use p2p_box::P2PBox;
+pub use intent_box::IntentBox;
+pub use p2p_box::P2PBox;
