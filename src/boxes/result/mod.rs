@@ -80,23 +80,28 @@ impl NyashBox for NyashResultBox {
     }
 }
 
-// Keep the original generic ResultBox for compatibility
-pub enum ResultBox<T, E> {
-    Ok(T),
-    Err(E),
-}
+// Export NyashResultBox as ResultBox for compatibility
+pub type ResultBox = NyashResultBox;
 
-impl<T, E> ResultBox<T, E> {
-    pub fn is_ok(&self) -> bool {
-        matches!(self, ResultBox::Ok(_))
+impl ResultBox {
+    /// is_ok()の実装
+    pub fn is_ok(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(matches!(self, NyashResultBox::Ok(_))))
     }
-    pub fn is_err(&self) -> bool {
-        matches!(self, ResultBox::Err(_))
-    }
-    pub fn unwrap(self) -> T {
+    
+    /// getValue()の実装 - Ok値を取得
+    pub fn get_value(&self) -> Box<dyn NyashBox> {
         match self {
-            ResultBox::Ok(val) => val,
-            ResultBox::Err(_) => panic!("called `unwrap()` on an `Err` value"),
+            NyashResultBox::Ok(val) => val.clone_box(),
+            NyashResultBox::Err(_) => Box::new(StringBox::new("Error: Result is Err")),
+        }
+    }
+    
+    /// getError()の実装 - Err値を取得
+    pub fn get_error(&self) -> Box<dyn NyashBox> {
+        match self {
+            NyashResultBox::Ok(_) => Box::new(StringBox::new("Error: Result is Ok")),
+            NyashResultBox::Err(err) => err.clone_box(),
         }
     }
 }

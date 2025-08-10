@@ -109,18 +109,12 @@ impl NyashBox for NyashFutureBox {
     }
 }
 
-// Keep the original generic FutureBox for compatibility
-pub struct FutureBox<T> {
-    pub future: Pin<Box<dyn Future<Output = T> + Send>>,
-}
+// Export NyashFutureBox as FutureBox for consistency
+pub type FutureBox = NyashFutureBox;
 
-impl<T> FutureBox<T> {
-    pub fn new<F>(fut: F) -> Self
-    where
-        F: Future<Output = T> + Send + 'static,
-    {
-        FutureBox {
-            future: Box::pin(fut),
-        }
+impl FutureBox {
+    /// wait_and_get()の実装 - await演算子で使用
+    pub fn wait_and_get(&self) -> Result<Box<dyn NyashBox>, String> {
+        Ok(self.get())
     }
 }
