@@ -1,3 +1,104 @@
+/*! 🔍 DebugBox - デバッグ支援Box
+ * 
+ * ## 📝 概要
+ * プロフェッショナル開発向けデバッグ機能を提供するBox。
+ * メモリ使用量監視、実行トレース、ブレークポイントなど
+ * 高度なデバッグ機能を完備。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * 
+ * ### 🎯 基本デバッグ
+ * - `startTracking()` - デバッグ追跡開始
+ * - `stopTracking()` - デバッグ追跡停止
+ * - `trackBox(box, name)` - 特定Boxを追跡対象に追加
+ * - `watch(box, name)` - リアルタイム監視
+ * - `clear()` - 全デバッグ情報クリア
+ * 
+ * ### 📊 レポート・分析
+ * - `dumpAll()` - 全追跡データダンプ
+ * - `memoryReport()` - メモリ使用量レポート
+ * - `showCallStack()` - 関数呼び出しスタック表示
+ * - `saveToFile(filename)` - デバッグ情報をファイル保存
+ * 
+ * ### 🎮 高度機能
+ * - `setBreakpoint(function)` - ブレークポイント設定
+ * - `traceCall(function, args)` - 関数呼び出しトレース
+ * - `isTracking()` - 追跡状態確認
+ * - `getTrackedCount()` - 追跡中Box数取得
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local debug, user, product
+ * debug = new DebugBox()
+ * 
+ * // デバッグ開始
+ * debug.startTracking()
+ * 
+ * // オブジェクトを追跡
+ * user = new User("Alice", 25)
+ * debug.trackBox(user, "user_alice")
+ * 
+ * product = new Product("Book", 1500)
+ * debug.trackBox(product, "book_product")
+ * 
+ * // リアルタイム監視
+ * debug.watch(user.age, "user_age")
+ * 
+ * // レポート生成
+ * print(debug.memoryReport())
+ * print(debug.dumpAll())
+ * 
+ * // ファイルに保存
+ * debug.saveToFile("debug_report.txt")
+ * ```
+ * 
+ * ## 🎮 実用例 - パフォーマンス診断
+ * ```nyash
+ * static box PerformanceTest {
+ *     init { debug, data, results }
+ *     
+ *     main() {
+ *         me.debug = new DebugBox()
+ *         me.debug.startTracking()
+ *         
+ *         // 大量データ処理のテスト
+ *         me.data = []
+ *         loop(i < 1000) {
+ *             me.data.push("item_" + i.toString())
+ *         }
+ *         me.debug.trackBox(me.data, "large_array")
+ *         
+ *         // 処理実行
+ *         me.processData()
+ *         
+ *         // 結果分析
+ *         print(me.debug.memoryReport())
+ *     }
+ * }
+ * ```
+ * 
+ * ## ⚡ ベストプラクティス
+ * ```nyash
+ * // エラーハンドリング付きデバッグ
+ * local debug
+ * debug = new DebugBox()
+ * 
+ * try {
+ *     debug.startTracking()
+ *     // 問題のあるコード
+ *     risky_operation()
+ * } catch (error) {
+ *     debug.saveToFile("error_dump.txt")
+ *     print("Debug info saved to error_dump.txt")
+ * }
+ * ```
+ * 
+ * ## ⚠️ 注意
+ * - 本格運用時はtrackingを無効にしてパフォーマンス向上
+ * - 大量データ追跡時はメモリ消費に注意
+ * - call stackは直近100件まで自動保持
+ */
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use chrono::Local;

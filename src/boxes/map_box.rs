@@ -1,8 +1,106 @@
-/*!
- * Nyash Map Box - Key-Value store implementation
+/*! 🗄️ MapBox - キー値ストレージBox
  * 
- * キーバリューストアを提供するBox型
- * Everything is Box哲学に基づくマップデータ構造
+ * ## 📝 概要
+ * 高性能キー値ストレージを提供するBox。
+ * JavaScript Map、Python dict、C# Dictionaryと同等機能。
+ * 動的データ管理やキャッシュ実装に最適。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `set(key, value)` - キー値ペア設定
+ * - `get(key)` - 値取得
+ * - `has(key)` - キー存在確認
+ * - `remove(key)` - キー値ペア削除
+ * - `clear()` - 全データクリア
+ * - `keys()` - 全キー取得
+ * - `values()` - 全値取得
+ * - `size()` - データ数取得
+ * - `isEmpty()` - 空判定
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local map, result
+ * map = new MapBox()
+ * 
+ * // データ設定
+ * map.set("name", "Alice")
+ * map.set("age", 25)
+ * map.set("active", true)
+ * 
+ * // データ取得
+ * result = map.get("name")     // "Alice"
+ * print("User: " + result)
+ * 
+ * // 存在確認
+ * if (map.has("email")) {
+ *     print("Email: " + map.get("email"))
+ * } else {
+ *     print("No email registered")
+ * }
+ * ```
+ * 
+ * ## 🎮 実用例 - ゲーム設定管理
+ * ```nyash
+ * static box GameConfig {
+ *     init { settings, scores }
+ *     
+ *     main() {
+ *         me.settings = new MapBox()
+ *         me.scores = new MapBox()
+ *         
+ *         // 設定初期化
+ *         me.settings.set("difficulty", "normal")
+ *         me.settings.set("sound", true)
+ *         me.settings.set("graphics", "high")
+ *         
+ *         // スコア記録
+ *         me.scores.set("level1", 850)
+ *         me.scores.set("level2", 1200)
+ *         me.scores.set("level3", 950)
+ *         
+ *         me.displayConfig()
+ *     }
+ *     
+ *     displayConfig() {
+ *         print("=== Game Settings ===")
+ *         print("Difficulty: " + me.settings.get("difficulty"))
+ *         print("Sound: " + me.settings.get("sound").toString())
+ *         print("Total scores: " + me.scores.size().toString())
+ *     }
+ * }
+ * ```
+ * 
+ * ## 🔍 キャッシュ実装例
+ * ```nyash
+ * static box APICache {
+ *     init { cache, ttl_map }
+ *     
+ *     main() {
+ *         me.cache = new MapBox()
+ *         me.ttl_map = new MapBox()
+ *     }
+ *     
+ *     getData(url) {
+ *         // キャッシュ確認
+ *         if (me.cache.has(url)) {
+ *             return me.cache.get(url)
+ *         }
+ *         
+ *         // APIから取得
+ *         local data
+ *         data = fetchFromAPI(url)
+ *         
+ *         // キャッシュに保存
+ *         me.cache.set(url, data)
+ *         return data
+ *     }
+ * }
+ * ```
+ * 
+ * ## ⚠️ 注意
+ * - キーは自動的に文字列変換される
+ * - スレッドセーフ (Arc<Mutex>使用)
+ * - 大量データ格納時はメモリ使用量に注意
+ * - 存在しないキーの取得は "Key not found" メッセージ返却
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, ArrayBox};

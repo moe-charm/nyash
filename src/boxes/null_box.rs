@@ -1,8 +1,87 @@
-/*!
- * Nyash Null Box - Null value representation
+/*! 🚫 NullBox - NULL値表現Box
  * 
- * null値を表現するBox型
- * Everything is Box哲学に基づくnull実装
+ * ## 📝 概要
+ * null/void値を表現する特別なBox。
+ * JavaScript null、Python None、C# nullと同等の機能を提供。
+ * NULL安全プログラミングをサポート。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `isNull()` - null判定 (常にtrue)
+ * - `isNotNull()` - 非null判定 (常にfalse)
+ * - `toString()` - 文字列変換 ("null")
+ * - `equals(other)` - 等価比較 (他のnullとのみtrue)
+ * 
+ * ## 🛡️ 静的メソッド (null安全機能)
+ * - `NullBox.checkNull(value)` - 値のnull判定
+ * - `NullBox.checkNotNull(value)` - 値の非null判定
+ * - `NullBox.getOrDefault(value, default)` - null時デフォルト値取得
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local user, name, default_name
+ * 
+ * // null値の作成と判定
+ * user = null
+ * if (user == null) {
+ *     print("User is null")
+ * }
+ * 
+ * // null安全な値取得
+ * name = getUsername()  // null の可能性
+ * default_name = NullBox.getOrDefault(name, "Anonymous")
+ * print("Hello, " + default_name)
+ * ```
+ * 
+ * ## 🎮 実用例 - null安全プログラミング
+ * ```nyash
+ * static box UserManager {
+ *     init { current_user }
+ *     
+ *     main() {
+ *         me.current_user = null
+ *         
+ *         // null安全なログイン処理
+ *         me.loginUser("alice")
+ *         me.displayUserInfo()
+ *     }
+ *     
+ *     loginUser(username) {
+ *         if (username == null or username == "") {
+ *             print("Error: Invalid username")
+ *             return
+ *         }
+ *         me.current_user = new User(username)
+ *     }
+ *     
+ *     displayUserInfo() {
+ *         if (me.current_user == null) {
+ *             print("No user logged in")
+ *         } else {
+ *             print("Current user: " + me.current_user.name)
+ *         }
+ *     }
+ * }
+ * ```
+ * 
+ * ## 🔍 デバッグ活用
+ * ```nyash
+ * local data, result
+ * data = fetchDataFromAPI()  // null になる可能性
+ * 
+ * // null チェック付きデバッグ
+ * if (NullBox.checkNull(data)) {
+ *     print("Warning: API returned null data")
+ *     result = NullBox.getOrDefault(data, "default_data")
+ * } else {
+ *     result = data.process()
+ * }
+ * ```
+ * 
+ * ## ⚠️ 重要な特徴
+ * - `null == null` は常にtrue
+ * - `null.toString()` は "null"
+ * - 全てのNullBoxインスタンスは論理的に等価
+ * - メソッド呼び出し時のnullチェックでNullPointerException防止
  */
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox};

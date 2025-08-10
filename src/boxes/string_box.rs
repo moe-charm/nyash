@@ -1,4 +1,32 @@
-// StringBox implementation - String values in Nyash
+/*! 🔤 StringBox - 文字列操作Box
+ * 
+ * ## 📝 概要
+ * UTF-8エンコード文字列を扱うためのBox。
+ * JavaScript風のメソッドで直感的な文字列操作が可能。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `length()` - 文字列長を取得
+ * - `concat(other)` - 文字列結合  
+ * - `split(separator)` - 区切り文字で分割
+ * - `substring(start, end)` - 部分文字列取得
+ * - `toUpperCase()` - 大文字変換
+ * - `toLowerCase()` - 小文字変換
+ * - `trim()` - 前後の空白除去
+ * - `indexOf(search)` - 文字列検索
+ * - `replace(from, to)` - 文字列置換
+ * - `charAt(index)` - 指定位置の文字取得
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local text, parts, result
+ * text = "Hello, World!"
+ * 
+ * print(text.length())        // 13
+ * print(text.toUpperCase())   // "HELLO, WORLD!"
+ * parts = text.split(",")     // ["Hello", " World!"]
+ * result = text.concat(" Nyash")  // "Hello, World! Nyash"
+ * ```
+ */
 use crate::box_trait::NyashBox;
 use std::any::Any;
 use std::fmt::Display;

@@ -1,8 +1,141 @@
-/*!
- * Nyash Sound Box - Simple sound generation
+/*! 🔊 SoundBox - サウンド・音響効果Box
  * 
- * 音響効果を提供するBox型
- * Everything is Box哲学に基づく音響ライブラリ
+ * ## 📝 概要
+ * システム音・効果音を提供するBox。
+ * ゲーム効果音、通知音、アラート音の生成に使用。
+ * クロスプラットフォーム対応のシンプルなサウンドシステム。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `beep()` - 基本ビープ音
+ * - `beeps(count)` - 指定回数ビープ
+ * - `bell()` - ベル音
+ * - `alarm()` - アラーム音
+ * - `playTone(frequency, duration)` - 指定周波数・時間で音生成
+ * - `playFile(filename)` - 音声ファイル再生
+ * - `setVolume(level)` - 音量設定 (0.0-1.0)
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local sound
+ * sound = new SoundBox()
+ * 
+ * // 基本的な音
+ * sound.beep()              // シンプルビープ
+ * sound.beeps(3)            // 3回ビープ
+ * sound.bell()              // ベル音
+ * 
+ * // ゲーム効果音
+ * sound.playTone(440, 500)  // ラの音を500ms
+ * sound.playTone(880, 200)  // 高いラの音を200ms
+ * ```
+ * 
+ * ## 🎮 実用例 - ゲーム効果音
+ * ```nyash
+ * static box GameSFX {
+ *     init { sound }
+ *     
+ *     main() {
+ *         me.sound = new SoundBox()
+ *         me.sound.setVolume(0.7)
+ *         
+ *         // ゲームイベント
+ *         me.playerJump()
+ *         me.coinCollect()
+ *         me.gameOver()
+ *     }
+ *     
+ *     playerJump() {
+ *         // ジャンプ音：低→高
+ *         me.sound.playTone(220, 100)
+ *         me.sound.playTone(440, 150)
+ *     }
+ *     
+ *     coinCollect() {
+ *         // コイン音：上昇音階
+ *         me.sound.playTone(523, 80)   // ド
+ *         me.sound.playTone(659, 80)   // ミ
+ *         me.sound.playTone(784, 120)  // ソ
+ *     }
+ *     
+ *     gameOver() {
+ *         // ゲームオーバー音：下降
+ *         me.sound.playTone(440, 200)
+ *         me.sound.playTone(392, 200)
+ *         me.sound.playTone(349, 400)
+ *     }
+ * }
+ * ```
+ * 
+ * ## 🚨 通知・アラート用途
+ * ```nyash
+ * static box NotificationSystem {
+ *     init { sound }
+ *     
+ *     main() {
+ *         me.sound = new SoundBox()
+ *         me.testNotifications()
+ *     }
+ *     
+ *     info() {
+ *         me.sound.beep()  // 情報通知
+ *     }
+ *     
+ *     warning() {
+ *         me.sound.beeps(2)  // 警告
+ *     }
+ *     
+ *     error() {
+ *         // エラー音：断続的
+ *         me.sound.playTone(200, 100)
+ *         // 短い間隔
+ *         me.sound.playTone(200, 100)
+ *         me.sound.playTone(200, 200)
+ *     }
+ *     
+ *     success() {
+ *         // 成功音：上昇音階
+ *         me.sound.playTone(523, 150)  // ド
+ *         me.sound.playTone(659, 150)  // ミ
+ *         me.sound.playTone(784, 200)  // ソ
+ *     }
+ * }
+ * ```
+ * 
+ * ## 🎵 音楽生成例
+ * ```nyash
+ * static box MusicBox {
+ *     init { sound, notes }
+ *     
+ *     main() {
+ *         me.sound = new SoundBox()
+ *         me.notes = new MapBox()
+ *         me.setupNotes()
+ *         me.playMelody()
+ *     }
+ *     
+ *     setupNotes() {
+ *         // 音階定義
+ *         me.notes.set("C", 261)   // ド
+ *         me.notes.set("D", 293)   // レ
+ *         me.notes.set("E", 329)   // ミ
+ *         me.notes.set("F", 349)   // ファ
+ *         me.notes.set("G", 392)   // ソ
+ *     }
+ *     
+ *     playNote(note, duration) {
+ *         local freq
+ *         freq = me.notes.get(note)
+ *         me.sound.playTone(freq, duration)
+ *     }
+ * }
+ * ```
+ * 
+ * ## ⚠️ 注意
+ * - システムによってはビープ音が無効化されている場合あり
+ * - 音量設定は環境依存
+ * - 長時間音生成はCPU使用率に注意
+ * - ファイル再生は対応フォーマット限定
+ * - Web環境では制限が多い（ユーザー操作後のみ音声再生可能）
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};

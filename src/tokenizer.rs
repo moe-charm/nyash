@@ -35,7 +35,7 @@ pub enum TokenType {
     NOWAIT,          // nowait
     AWAIT,           // await
     INTERFACE,       // interface
-    FROM,            // from (継承用)
+    COLON,           // : (継承用)
     INCLUDE,         // include (ファイル読み込み)
     TRY,             // try
     CATCH,           // catch
@@ -266,6 +266,10 @@ impl NyashTokenizer {
                 self.advance();
                 Ok(Token::new(TokenType::COMMA, start_line, start_column))
             }
+            Some(':') => {
+                self.advance();
+                Ok(Token::new(TokenType::COLON, start_line, start_column))
+            }
             Some('\n') => {
                 self.advance();
                 Ok(Token::new(TokenType::NEWLINE, start_line, start_column))
@@ -387,7 +391,6 @@ impl NyashTokenizer {
             "nowait" => TokenType::NOWAIT,
             "await" => TokenType::AWAIT,
             "interface" => TokenType::INTERFACE,
-            "from" => TokenType::FROM,
             "include" => TokenType::INCLUDE,
             "try" => TokenType::TRY,
             "catch" => TokenType::CATCH,

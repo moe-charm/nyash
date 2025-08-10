@@ -1,4 +1,42 @@
-// IntegerBox implementation - Integer values in Nyash
+/*! 🔢 IntegerBox - 整数計算Box
+ * 
+ * ## 📝 概要
+ * 64ビット符号付き整数を扱うためのBox。
+ * JavaScript Number型のように直感的な数値操作が可能。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `toString()` - 文字列変換
+ * - `add(other)` - 加算 (演算子: +)
+ * - `subtract(other)` - 減算 (演算子: -)
+ * - `multiply(other)` - 乗算 (演算子: *)
+ * - `divide(other)` - 除算 (演算子: /) 
+ * - `modulo(other)` - 余り計算 (演算子: %)
+ * - `equals(other)` - 等価比較 (演算子: ==)
+ * - `abs()` - 絶対値
+ * - `min(other)` - 最小値
+ * - `max(other)` - 最大値
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local num, result, text
+ * num = 42
+ * 
+ * result = num + 8           // 50
+ * result = num * 2           // 84
+ * result = num / 3           // 14 (整数除算)
+ * text = num.toString()      // "42"
+ * 
+ * // メソッド呼び出し形式も可能
+ * result = num.add(10)       // 52
+ * result = num.multiply(3)   // 126
+ * ```
+ * 
+ * ## ⚠️ 注意
+ * - ゼロ除算は実行時エラー
+ * - オーバーフロー時は標準i64の動作に従う
+ * - 小数点以下は切り捨て（整数除算）
+ */
+
 use crate::box_trait::NyashBox;
 use std::any::Any;
 use std::fmt::Display;

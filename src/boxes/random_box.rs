@@ -1,8 +1,70 @@
-/*!
- * Nyash Random Box - Random number generation
+/*! 🎲 RandomBox - 乱数生成Box
  * 
- * 乱数生成を提供するBox型
- * Everything is Box哲学に基づく乱数ライブラリ
+ * ## 📝 概要
+ * 高品質な乱数生成機能を提供するBox。
+ * ゲーム開発、統計処理、テストデータ生成に最適。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * 
+ * ### 🔢 基本乱数
+ * - `random()` - 0.0～1.0の浮動小数点乱数
+ * - `randInt(min, max)` - 指定範囲の整数乱数
+ * - `randBool()` - true/falseのランダム選択
+ * - `seed(value)` - 乱数種を設定（再現可能な乱数）
+ * 
+ * ### 🎯 選択・配列操作
+ * - `choice(array)` - 配列からランダム選択
+ * - `shuffle(array)` - 配列をシャッフル
+ * 
+ * ### 🎨 生成
+ * - `randString(length)` - ランダム文字列生成
+ * - `probability(prob)` - 指定確率でtrue
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local random, result, dice, array
+ * random = new RandomBox()
+ * 
+ * // 基本的な乱数
+ * result = random.random()      // 0.0～1.0
+ * dice = random.randInt(1, 6)   // サイコロ(1-6)
+ * result = random.randBool()    // true or false
+ * 
+ * // 配列関連
+ * array = ["apple", "banana", "cherry"]
+ * result = random.choice(array)     // ランダム選択
+ * array = random.shuffle(array)     // シャッフル
+ * 
+ * // ゲーム用途
+ * local password, critical_hit
+ * password = random.randString(8)       // 8文字のランダム文字列
+ * critical_hit = random.probability(0.1)  // 10%でクリティカル
+ * ```
+ * 
+ * ## 🎮 実用例
+ * ```nyash
+ * // RPGダメージ計算
+ * local damage, is_critical
+ * damage = random.randInt(10, 20)        // 基本ダメージ10-20
+ * is_critical = random.probability(0.15) // 15%でクリティカル
+ * if (is_critical) {
+ *     damage = damage * 2
+ * }
+ * 
+ * // テストデータ生成
+ * local users, user_id, user_name
+ * users = []
+ * loop(i < 10) {
+ *     user_id = random.randInt(1000, 9999)
+ *     user_name = "user_" + random.randString(5)
+ *     users.push(user_name + ":" + user_id)
+ * }
+ * ```
+ * 
+ * ## ⚠️ 注意
+ * - 暗号学的に安全な乱数ではない（セキュリティ用途非推奨）
+ * - seed()で同じ値を設定すると同じ乱数列を生成（テスト用）
+ * - 大きな配列のshuffleは処理時間が長い場合あり
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, ArrayBox};

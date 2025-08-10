@@ -1,8 +1,121 @@
-/*!
- * Nyash Time Box - Time and Date operations
+/*! ⏰ TimeBox - 時間・日付操作Box
  * 
- * 時間と日付操作を提供するBox型
- * Everything is Box哲学に基づく時間ライブラリ
+ * ## 📝 概要
+ * 高精度な時間・日付操作を提供するBox。
+ * JavaScript Date、Python datetime、C# DateTimeと同等機能。
+ * タイムスタンプ処理、フォーマット、時差計算をサポート。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * 
+ * ### 📅 基本操作
+ * - `now()` - 現在日時取得
+ * - `fromTimestamp(timestamp)` - UNIXタイムスタンプから日時作成
+ * - `parse(date_string)` - 文字列から日時パース
+ * - `format(pattern)` - 指定フォーマットで文字列化
+ * 
+ * ### 🔢 値取得
+ * - `year()` - 年取得
+ * - `month()` - 月取得 (1-12)
+ * - `day()` - 日取得 (1-31)
+ * - `hour()` - 時取得 (0-23)
+ * - `minute()` - 分取得 (0-59)
+ * - `second()` - 秒取得 (0-59)
+ * - `weekday()` - 曜日取得 (0=日曜)
+ * 
+ * ### ⏱️ 計算
+ * - `addDays(days)` - 日数加算
+ * - `addHours(hours)` - 時間加算
+ * - `addMinutes(minutes)` - 分加算
+ * - `diffDays(other)` - 日数差計算
+ * - `diffHours(other)` - 時間差計算
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local time, now, birthday, age
+ * time = new TimeBox()
+ * 
+ * // 現在日時
+ * now = time.now()
+ * print("現在: " + now.format("yyyy/MM/dd HH:mm:ss"))
+ * 
+ * // 誕生日から年齢計算
+ * birthday = time.parse("1995-03-15")
+ * age = now.diffYears(birthday)
+ * print("年齢: " + age.toString() + "歳")
+ * 
+ * // 1週間後
+ * local next_week
+ * next_week = now.addDays(7)
+ * print("1週間後: " + next_week.format("MM月dd日"))
+ * ```
+ * 
+ * ## 🎮 実用例 - イベントスケジューラー
+ * ```nyash
+ * static box EventScheduler {
+ *     init { time, events, current }
+ *     
+ *     main() {
+ *         me.time = new TimeBox()
+ *         me.events = []
+ *         me.current = me.time.now()
+ *         
+ *         // イベント追加
+ *         me.addEvent("会議", me.current.addHours(2))
+ *         me.addEvent("ランチ", me.current.addHours(5))
+ *         me.addEvent("プレゼン", me.current.addDays(1))
+ *         
+ *         me.showUpcomingEvents()
+ *     }
+ *     
+ *     addEvent(title, datetime) {
+ *         local event
+ *         event = new MapBox()
+ *         event.set("title", title)
+ *         event.set("datetime", datetime)
+ *         event.set("timestamp", datetime.toTimestamp())
+ *         me.events.push(event)
+ *     }
+ *     
+ *     showUpcomingEvents() {
+ *         print("=== 今後のイベント ===")
+ *         loop(i < me.events.length()) {
+ *             local event, hours_until
+ *             event = me.events.get(i)
+ *             hours_until = event.get("datetime").diffHours(me.current)
+ *             
+ *             print(event.get("title") + " - " + 
+ *                   hours_until.toString() + "時間後")
+ *         }
+ *     }
+ * }
+ * ```
+ * 
+ * ## 🕐 時間計算例
+ * ```nyash
+ * local time, start, end, duration
+ * time = new TimeBox()
+ * 
+ * // 作業時間計測
+ * start = time.now()
+ * // 何か重い処理...
+ * heavyCalculation()
+ * end = time.now()
+ * 
+ * duration = end.diffSeconds(start)
+ * print("処理時間: " + duration.toString() + "秒")
+ * 
+ * // 締切まで残り時間
+ * local deadline, remaining
+ * deadline = time.parse("2025-12-31 23:59:59")
+ * remaining = deadline.diffDays(time.now())
+ * print("締切まで" + remaining.toString() + "日")
+ * ```
+ * 
+ * ## ⚠️ 注意
+ * - ローカルタイムゾーンに基づく処理
+ * - パース可能な日時フォーマットは限定的
+ * - UNIXタイムスタンプは秒単位
+ * - 夏時間切り替え時は計算に注意
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};

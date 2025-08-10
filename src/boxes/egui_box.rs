@@ -1,6 +1,35 @@
-// Nyash EguiBox Implementation
-// Everything is Box哲学によるGUIフレームワーク統合
-// 「なんでもBoxにできる」化け物言語の第一歩！
+/*! 🖼️ EguiBox - デスクトップGUIアプリBox
+ * Everything is Box哲学によるGUIフレームワーク統合
+ * 「なんでもBoxにできる」化け物言語の第一歩！
+ * 
+ * ## 📝 概要  
+ * Rustの人気GUI框架eframeを使ったネイティブデスクトップアプリ作成。
+ * Nyashコードから直接GUI操作が可能！
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `setTitle(title)` - ウィンドウタイトル設定
+ * - `setSize(width, height)` - ウィンドウサイズ設定  
+ * - `run()` - GUIアプリ実行開始
+ * - `addText(text)` - テキスト表示追加
+ * - `addButton(label)` - ボタン追加
+ * - `close()` - ウィンドウ閉じる
+ * 
+ * ## 💡 使用例
+ * ```nyash  
+ * // 基本的なGUIアプリ
+ * local app
+ * app = new EguiBox()
+ * app.setTitle("Nyash GUI Demo")
+ * app.setSize(800, 600)
+ * app.addText("Welcome to Nyash!")
+ * app.addButton("Click Me")
+ * app.run()  // GUIアプリ開始
+ * ```
+ * 
+ * ## ⚠️ 注意
+ * - デスクトップ環境でのみ利用可能（WASM環境では無効）
+ * - `run()`はブロッキング動作（アプリ終了まで制御を返さない）
+ */
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox};
 use crate::interpreter::RuntimeError;

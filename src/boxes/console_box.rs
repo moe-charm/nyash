@@ -1,7 +1,48 @@
-/*!
- * ConsoleBox - ブラウザコンソール制御Box
+/*! 📟 ConsoleBox - コンソール出力Box
  * 
- * WebAssembly環境でブラウザのconsole APIにアクセス
+ * ## 📝 概要
+ * Webブラウザのコンソール機能を統合したBox。
+ * WASM環境ではブラウザコンソール、ネイティブ環境では標準出力。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `log(message)` - 通常のメッセージ出力
+ * - `warn(message)` - 警告メッセージ出力
+ * - `error(message)` - エラーメッセージ出力
+ * - `clear()` - コンソール画面クリア
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local console
+ * console = new ConsoleBox()
+ * 
+ * console.log("Hello, Nyash!")           // 通常ログ
+ * console.warn("This is a warning")      // 警告
+ * console.error("Something went wrong")  // エラー
+ * console.clear()                        // クリア
+ * 
+ * // デバッグ用途
+ * local value
+ * value = 42
+ * console.log("Debug: value = " + value.toString())
+ * ```
+ * 
+ * ## 🌐 環境別動作
+ * - **WASM環境**: ブラウザの開発者ツールコンソールに出力
+ * - **ネイティブ環境**: ターミナル標準出力にプレフィックス付きで出力
+ * 
+ * ## 🔍 デバッグ活用
+ * ```nyash
+ * // エラーハンドリング
+ * if (error_condition) {
+ *     console.error("Critical error occurred!")
+ *     return null
+ * }
+ * 
+ * // 実行トレース
+ * console.log("Function start")
+ * // 処理...
+ * console.log("Function end")
+ * ```
  */
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox};

@@ -1,5 +1,53 @@
-// Nyash Box Implementations Module
-// Everything is Box哲学に基づく各Box型の実装
+/*! 🎯 Nyash Box実装モジュール
+ * Everything is Box哲学に基づく各Box型の実装
+ * 
+ * ## 📦 利用可能なBox一覧
+ * 
+ * ### 🔤 基本データ型Box
+ * - **StringBox**: 文字列操作 - `"Hello".length()`, `str.split(",")`
+ * - **IntegerBox**: 整数計算 - `42.add(8)`, `num.toString()`
+ * - **BoolBox**: 真偽値 - `true.not()`, `flag.toString()`
+ * 
+ * ### 🧮 計算・ユーティリティBox  
+ * - **MathBox**: 数学関数 - `Math.sin(x)`, `Math.random()`
+ * - **TimeBox**: 時間操作 - `Time.now()`, `time.format()`
+ * - **RandomBox**: 乱数生成 - `Random.int(10)`, `Random.choice(array)`
+ * 
+ * ### 🖥️ システム・IO Box
+ * - **ConsoleBox**: コンソール出力 - `console.log()`, `console.error()`  
+ * - **DebugBox**: デバッグ支援 - `debug.trace()`, `debug.memory()`
+ * - **SoundBox**: 音声再生 - `sound.beep()`, `sound.play(file)`
+ * 
+ * ### 🗄️ コレクション・データBox
+ * - **MapBox**: キー値ストレージ - `map.set(key, val)`, `map.get(key)`
+ * - **NullBox**: NULL値表現 - `null.toString()` → "void"
+ * 
+ * ### 🖼️ GUI・グラフィックBox
+ * - **EguiBox**: デスクトップGUI - `gui.setTitle()`, `gui.run()`
+ * 
+ * ### 🌐 Web専用Box (WASM環境)
+ * - **WebDisplayBox**: HTML表示 - `display.show(html)`
+ * - **WebConsoleBox**: ブラウザコンソール - `webConsole.log()`
+ * - **WebCanvasBox**: Canvas描画 - `canvas.drawRect()`
+ * 
+ * ### 🔗 通信・ネットワークBox
+ * - **SimpleIntentBox**: P2P通信 - `intent.send()`, `intent.on()`
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * // 基本的な使い方
+ * local str, num, result
+ * str = "Nyash"
+ * num = 42
+ * result = str.concat(" v") + num.toString()
+ * 
+ * // GUIアプリ作成
+ * local app
+ * app = new EguiBox()
+ * app.setTitle("My App")
+ * app.run()
+ * ```
+ */
 
 // Nyashは意図的にJavaScript/TypeScriptスタイルのcamelCase命名規約を採用
 #![allow(non_snake_case)]

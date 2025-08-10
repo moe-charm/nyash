@@ -1,4 +1,43 @@
-// BoolBox implementation - Boolean values in Nyash
+/*! ✅ BoolBox - 真偽値Box
+ * 
+ * ## 📝 概要
+ * true/false値を扱うためのBox。
+ * JavaScript Boolean型のように直感的な論理演算が可能。
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * - `toString()` - 文字列変換 ("true" / "false")
+ * - `not()` - 論理NOT (演算子: not)
+ * - `and(other)` - 論理AND (演算子: and)
+ * - `or(other)` - 論理OR (演算子: or)
+ * - `equals(other)` - 等価比較 (演算子: ==)
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * local flag, result, text
+ * flag = true
+ * 
+ * result = not flag          // false
+ * result = flag and true     // true
+ * result = flag or false     // true
+ * text = flag.toString()     // "true"
+ * 
+ * // 条件分岐での利用
+ * if (flag) {
+ *     print("Flag is true!")
+ * }
+ * ```
+ * 
+ * ## 🔄 型変換
+ * - 数値への変換: true → 1, false → 0
+ * - 文字列への変換: "true" / "false"
+ * - 空文字・null・0は false として扱われる
+ * 
+ * ## ⚡ 論理演算子実装済み
+ * - `not condition` - NOT演算子
+ * - `a and b` - AND演算子
+ * - `a or b` - OR演算子
+ */
+
 use crate::box_trait::NyashBox;
 use std::any::Any;
 use std::fmt::Display;

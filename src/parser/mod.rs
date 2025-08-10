@@ -22,6 +22,38 @@ use crate::ast::{ASTNode, Span};
 use std::collections::HashMap;
 use thiserror::Error;
 
+// ===== 🔥 Debug Macros =====
+
+/// Infinite loop detection macro - must be called in every loop that advances tokens
+/// Prevents parser from hanging due to token consumption bugs
+/// Uses parser's debug_fuel field for centralized fuel management
+macro_rules! must_advance {
+    ($parser:expr, $fuel:expr, $location:literal) => {
+        // デバッグ燃料がSomeの場合のみ制限チェック
+        if let Some(ref mut limit) = $parser.debug_fuel {
+            if *limit == 0 {
+                eprintln!("🚨 PARSER INFINITE LOOP DETECTED at {}", $location);
+                eprintln!("🔍 Current token: {:?} at line {}", $parser.current_token().token_type, $parser.current_token().line);
+                eprintln!("🔍 Parser position: {}/{}", $parser.current, $parser.tokens.len());
+                return Err(ParseError::InfiniteLoop { 
+                    location: $location.to_string(),
+                    token: $parser.current_token().token_type.clone(),
+                    line: $parser.current_token().line,
+                });
+            }
+            *limit -= 1;
+        }
+        // None の場合は無制限なのでチェックしない
+    };
+}
+
+/// Initialize debug fuel for loop monitoring
+macro_rules! debug_fuel {
+    () => {
+        100_000 // Default: 100k iterations should be enough for any reasonable program
+    };
+}
+
 // Two-phase parser structures are no longer needed - simplified to direct parsing
 
 /// パースエラー
@@ -42,6 +74,9 @@ pub enum ParseError {
     #[error("Circular dependency detected between static boxes: {cycle}")]
     CircularDependency { cycle: String },
     
+    #[error("🚨 Infinite loop detected in parser at {location} - token: {token:?} at line {line}")]
+    InfiniteLoop { location: String, token: TokenType, line: usize },
+    
     #[error("Tokenize error: {0}")]
     TokenizeError(#[from] TokenizeError),
 }
@@ -52,6 +87,8 @@ pub struct NyashParser {
     current: usize,
     /// 🔥 Static box依存関係追跡（循環依存検出用）
     static_box_dependencies: std::collections::HashMap<String, std::collections::HashSet<String>>,
+    /// 🔥 デバッグ燃料：無限ループ検出用制限値 (None = 無制限)
+    debug_fuel: Option<usize>,
 }
 
 impl NyashParser {
@@ -61,15 +98,23 @@ impl NyashParser {
             tokens,
             current: 0,
             static_box_dependencies: std::collections::HashMap::new(),
+            debug_fuel: Some(100_000), // デフォルト値
         }
     }
     
     /// 文字列からパース (トークナイズ + パース)
     pub fn parse_from_string(input: impl Into<String>) -> Result<ASTNode, ParseError> {
+        Self::parse_from_string_with_fuel(input, Some(100_000))
+    }
+    
+    /// 文字列からパース (デバッグ燃料指定版)
+    /// fuel: Some(n) = n回まで、None = 無制限
+    pub fn parse_from_string_with_fuel(input: impl Into<String>, fuel: Option<usize>) -> Result<ASTNode, ParseError> {
         let mut tokenizer = crate::tokenizer::NyashTokenizer::new(input);
         let tokens = tokenizer.tokenize()?;
         
         let mut parser = Self::new(tokens);
+        parser.debug_fuel = fuel;
         let result = parser.parse();
         result
     }
@@ -161,7 +206,7 @@ impl NyashParser {
         };
         
         // from句のパース（継承）
-        let extends = if self.match_token(&TokenType::FROM) {
+        let extends = if self.match_token(&TokenType::COLON) {
             self.advance(); // consume 'from'
             
             if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
@@ -275,6 +320,8 @@ impl NyashParser {
                         
                         let mut params = Vec::new();
                         while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                            must_advance!(self, _unused, "constructor parameter parsing");
+                            
                             if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
                                 params.push(param.clone());
                                 self.advance();
@@ -315,6 +362,7 @@ impl NyashParser {
                         
                         let mut params = Vec::new();
                         while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                            must_advance!(self, _unused, "box method parameter parsing");
                             
                             if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
                                 params.push(param.clone());
@@ -532,6 +580,8 @@ impl NyashParser {
         let mut params = Vec::new();
         
         while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+            must_advance!(self, _unused, "function declaration parameter parsing");
+            
             if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
                 params.push(param.clone());
                 self.advance();
@@ -634,6 +684,8 @@ impl NyashParser {
         let mut params = Vec::new();
         
         while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+            must_advance!(self, _unused, "static function parameter parsing");
+            
             if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
                 params.push(param.clone());
                 self.advance();
@@ -725,7 +777,7 @@ impl NyashParser {
         };
         
         // from句のパース（継承）- static boxでも継承可能
-        let extends = if self.match_token(&TokenType::FROM) {
+        let extends = if self.match_token(&TokenType::COLON) {
             self.advance(); // consume 'from'
             
             if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {

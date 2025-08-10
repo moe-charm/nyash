@@ -176,6 +176,24 @@ cargo test
 ```
 
 ### 🐛 デバッグ
+
+#### パーサー無限ループ対策（NEW! 2025-08-09）
+```bash
+# 🔥 デバッグ燃料でパーサー制御
+./target/release/nyash --debug-fuel 1000 program.nyash      # 1000回制限
+./target/release/nyash --debug-fuel unlimited program.nyash  # 無制限
+./target/release/nyash program.nyash                        # デフォルト10万回
+
+# パーサー無限ループが検出されると自動停止＋詳細情報表示
+🚨 PARSER INFINITE LOOP DETECTED at method call argument parsing
+🔍 Current token: IDENTIFIER("from") at line 17
+🔍 Parser position: 45/128
+```
+
+**対応状況**: must_advance!マクロでパーサー制御完全実装済み✅  
+**効果**: 予約語"from"など問題のあるトークンも安全にエラー検出
+
+#### アプリケーション デバッグ
 ```nyash
 // DebugBox活用
 DEBUG = new DebugBox()
@@ -220,4 +238,4 @@ docs/
 
 ---
 
-最終更新: 2025年8月9日 - **🎯 静的Box Mainパターン＋変数宣言厳密化システム実装完了！Gemini先生絶賛の「非常に洗練された設計」達成。メモリ安全性・非同期安全性保証で本格言語レベルに到達！**
+最終更新: 2025年8月9日 - **🔥 パーサー無限ループ完全制圧！`--debug-fuel`引数でユーザー制御可能＋must_advance!マクロによる早期検出システム完成。予約語問題も安全にエラー表示。静的Box Mainパターン＋変数宣言厳密化と合わせて本格言語レベル到達！**

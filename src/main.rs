@@ -27,17 +27,43 @@ use interpreter::NyashInterpreter;
 use std::env;
 use std::fs;
 use std::process;
+use clap::{Arg, Command};
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    // 🔥 clap使ったコマンド引数解析
+    let matches = Command::new("nyash")
+        .version("1.0")
+        .author("Claude Code <claude@anthropic.com>")
+        .about("🦀 Nyash Programming Language - Everything is Box in Rust! 🦀")
+        .arg(
+            Arg::new("file")
+                .help("Nyash file to execute")
+                .value_name("FILE")
+                .index(1)
+        )
+        .arg(
+            Arg::new("debug-fuel")
+                .long("debug-fuel")
+                .value_name("ITERATIONS")
+                .help("Set parser debug fuel limit (default: 100000, 'unlimited' for no limit)")
+                .default_value("100000")
+        )
+        .get_matches();
     
-    if args.len() > 1 {
+    // デバッグ燃料の解析
+    let debug_fuel = parse_debug_fuel(matches.get_one::<String>("debug-fuel").unwrap());
+    
+    if let Some(filename) = matches.get_one::<String>("file") {
         // File mode: parse and execute the provided .nyash file
-        let filename = &args[1];
         println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
+        if let Some(fuel) = debug_fuel {
+            println!("🔥 Debug fuel limit: {} iterations", fuel);
+        } else {
+            println!("🔥 Debug fuel limit: unlimited");
+        }
         println!("====================================================");
         
-        execute_nyash_file(filename);
+        execute_nyash_file(filename, debug_fuel);
     } else {
         // Demo mode: run built-in demonstrations
         println!("🦀 Nyash Rust Implementation - Everything is Box! 🦀");
@@ -69,7 +95,16 @@ fn main() {
     }
 }
 
-fn execute_nyash_file(filename: &str) {
+/// デバッグ燃料値をパース（"unlimited" または数値）
+fn parse_debug_fuel(value: &str) -> Option<usize> {
+    if value == "unlimited" {
+        None  // 無制限
+    } else {
+        value.parse::<usize>().ok()
+    }
+}
+
+fn execute_nyash_file(filename: &str, debug_fuel: Option<usize>) {
     // Read the file
     let code = match fs::read_to_string(filename) {
         Ok(content) => content,
@@ -85,9 +120,9 @@ fn execute_nyash_file(filename: &str) {
     // テスト用：即座にファイル作成
     std::fs::write("/mnt/c/git/nyash/development/debug_hang_issue/test.txt", "START").ok();
     
-    // Parse the code
-    eprintln!("🔍 DEBUG: Starting parse...");
-    let ast = match NyashParser::parse_from_string(&code) {
+    // Parse the code with debug fuel limit
+    eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", debug_fuel);
+    let ast = match NyashParser::parse_from_string_with_fuel(&code, debug_fuel) {
         Ok(ast) => {
             eprintln!("🔍 DEBUG: Parse completed, AST created");
             ast
