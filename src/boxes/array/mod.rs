@@ -26,6 +26,19 @@ impl ArrayBox {
         }
     }
     
+    /// 要素を持つArrayBoxを作成
+    pub fn new_with_elements(elements: Vec<Box<dyn NyashBox>>) -> Self {
+        static mut COUNTER: u64 = 0;
+        let id = unsafe {
+            COUNTER += 1;
+            COUNTER
+        };
+        ArrayBox { 
+            items: Arc::new(Mutex::new(elements)),
+            id,
+        }
+    }
+    
     /// 要素を追加
     pub fn push(&self, item: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         self.items.lock().unwrap().push(item);
@@ -46,36 +59,55 @@ impl ArrayBox {
     }
     
     /// インデックスで要素を取得
-    pub fn get(&self, index: usize) -> Option<Box<dyn NyashBox>> {
-        self.items.lock().unwrap().get(index).map(|item| item.clone_box())
+    pub fn get(&self, index: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
+            let idx = idx_box.value as usize;
+            let items = self.items.lock().unwrap();
+            match items.get(idx) {
+                Some(item) => item.clone_box(),
+                None => Box::new(crate::boxes::null_box::NullBox::new()),
+            }
+        } else {
+            Box::new(StringBox::new("Error: get() requires integer index"))
+        }
     }
     
     /// インデックスで要素を設定
-    pub fn set(&self, index: usize, value: Box<dyn NyashBox>) -> Result<(), String> {
-        let mut items = self.items.lock().unwrap();
-        if index < items.len() {
-            items[index] = value;
-            Ok(())
+    pub fn set(&self, index: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
+            let idx = idx_box.value as usize;
+            let mut items = self.items.lock().unwrap();
+            if idx < items.len() {
+                items[idx] = value;
+                Box::new(StringBox::new("ok"))
+            } else {
+                Box::new(StringBox::new("Error: index out of bounds"))
+            }
         } else {
-            Err(format!("Index {} out of bounds", index))
+            Box::new(StringBox::new("Error: set() requires integer index"))
         }
     }
     
     /// 要素を削除
-    pub fn remove(&self, index: usize) -> Option<Box<dyn NyashBox>> {
-        let mut items = self.items.lock().unwrap();
-        if index < items.len() {
-            Some(items.remove(index))
+    pub fn remove(&self, index: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
+            let idx = idx_box.value as usize;
+            let mut items = self.items.lock().unwrap();
+            if idx < items.len() {
+                items.remove(idx)
+            } else {
+                Box::new(crate::boxes::null_box::NullBox::new())
+            }
         } else {
-            None
+            Box::new(StringBox::new("Error: remove() requires integer index"))
         }
     }
     
     /// 指定された値のインデックスを検索
-    pub fn indexOf(&self, value: &dyn NyashBox) -> Box<dyn NyashBox> {
+    pub fn indexOf(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let items = self.items.lock().unwrap();
         for (i, item) in items.iter().enumerate() {
-            if item.equals(value).value {
+            if item.equals(value.as_ref()).value {
                 return Box::new(IntegerBox::new(i as i64));
             }
         }
@@ -83,10 +115,10 @@ impl ArrayBox {
     }
     
     /// 指定された値が含まれているか確認
-    pub fn contains(&self, value: &dyn NyashBox) -> Box<dyn NyashBox> {
+    pub fn contains(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let items = self.items.lock().unwrap();
         for item in items.iter() {
-            if item.equals(value).value {
+            if item.equals(value.as_ref()).value {
                 return Box::new(BoolBox::new(true));
             }
         }
@@ -100,12 +132,17 @@ impl ArrayBox {
     }
     
     /// 文字列結合
-    pub fn join(&self, delimiter: &str) -> Box<dyn NyashBox> {
-        let items = self.items.lock().unwrap();
-        let strings: Vec<String> = items.iter()
-            .map(|item| item.to_string_box().value)
-            .collect();
-        Box::new(StringBox::new(&strings.join(delimiter)))
+    pub fn join(&self, delimiter: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        if let Some(sep_box) = delimiter.as_any().downcast_ref::<StringBox>() {
+            let items = self.items.lock().unwrap();
+            let parts: Vec<String> = items
+                .iter()
+                .map(|item| item.to_string_box().value)
+                .collect();
+            Box::new(StringBox::new(&parts.join(&sep_box.value)))
+        } else {
+            Box::new(StringBox::new("Error: join() requires string separator"))
+        }
     }
 }
 

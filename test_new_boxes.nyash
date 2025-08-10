@@ -47,9 +47,8 @@ print("Read data length: " + readData.length())
 
 // 3. JSONBoxのテスト
 print("\n=== JSONBox Test ===")
-local json, parsed
-json = new JSONBox()
-parsed = json.parse('{"name": "Nyash", "version": 1.0}')
+local parsed
+parsed = new JSONBox("{\"name\": \"Nyash\", \"version\": 1.0}")
 
 print("JSON stringify: " + parsed.stringify())
 print("Name from JSON: " + parsed.get("name"))

@@ -60,12 +60,16 @@ impl StringBox {
     
     /// Split string by delimiter and return ArrayBox
     pub fn split(&self, delimiter: &str) -> Box<dyn NyashBox> {
-        use crate::box_trait::ArrayBox;
+        use crate::boxes::array::ArrayBox;
         let parts: Vec<String> = self.value.split(delimiter).map(|s| s.to_string()).collect();
         let array_elements: Vec<Box<dyn NyashBox>> = parts.into_iter()
             .map(|s| Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
             .collect();
-        Box::new(ArrayBox::new_with_elements(array_elements))
+        let result = ArrayBox::new();
+        for element in array_elements {
+            result.push(element);
+        }
+        Box::new(result)
     }
     
     /// Find substring and return position (or -1 if not found)
@@ -117,9 +121,9 @@ impl StringBox {
     
     /// Join array elements using this string as delimiter
     pub fn join(&self, array_box: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        use crate::box_trait::ArrayBox;
+        use crate::boxes::array::ArrayBox;
         if let Some(array) = array_box.as_any().downcast_ref::<ArrayBox>() {
-            let strings: Vec<String> = array.elements.lock().unwrap()
+            let strings: Vec<String> = array.items.lock().unwrap()
                 .iter()
                 .map(|element| element.to_string_box().value)
                 .collect();

@@ -67,7 +67,8 @@
  * - 大きな配列のshuffleは処理時間が長い場合あり
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, ArrayBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::boxes::array::ArrayBox;
 use crate::boxes::math_box::FloatBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
@@ -159,10 +160,8 @@ impl RandomBox {
             }
             
             let index = self.next_random() % (length as u64);
-            match array_box.get(index as usize) {
-                Some(element) => element,
-                None => Box::new(StringBox::new("Error: index out of bounds")),
-            }
+            // 新しいArrayBox.get()は既にBox<dyn NyashBox>を返すので、直接使用
+            array_box.get(Box::new(IntegerBox::new(index as i64)))
         } else {
             Box::new(StringBox::new("Error: choice() requires array input"))
         }
@@ -181,7 +180,9 @@ impl RandomBox {
             
             // 元の配列の要素を全て新しい配列にコピー
             for i in 0..length {
-                if let Some(element) = array_box.get(i as usize) {
+                let element = array_box.get(Box::new(IntegerBox::new(i as i64)));
+                // NullBoxでなければ追加
+                if element.type_name() != "NullBox" {
                     shuffled.push(element);
                 }
             }
@@ -194,7 +195,9 @@ impl RandomBox {
             while !remaining_indices.is_empty() {
                 let random_idx = (self.next_random() % remaining_indices.len() as u64) as usize;
                 let actual_idx = remaining_indices.remove(random_idx);
-                if let Some(element) = array_box.get(actual_idx) {
+                let element = array_box.get(Box::new(IntegerBox::new(actual_idx as i64)));
+                // NullBoxでなければ追加
+                if element.type_name() != "NullBox" {
                     result.push(element);
                 }
             }

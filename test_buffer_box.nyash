@@ -1,0 +1,27 @@
+// 🧪 BufferBoxのテスト
+
+print("=== BufferBox Test ===")
+local buffer, data, result
+
+// BufferBox作成
+buffer = new BufferBox()
+
+// データ配列作成
+data = new ArrayBox()
+data.push(72)  // 'H'
+data.push(101) // 'e'
+data.push(108) // 'l'  
+data.push(108) // 'l'
+data.push(111) // 'o'
+
+// データ書き込み
+result = buffer.write(data)
+print("Write result: " + result)
+print("Buffer length: " + buffer.length())
+
+// データ読み取り
+local readData
+readData = buffer.readAll()
+print("Read data: " + readData)
+
+print("BufferBox test completed!")

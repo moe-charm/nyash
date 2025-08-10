@@ -67,8 +67,8 @@ impl BufferBox {
     
     /// データを書き込む
     pub fn write(&self, data: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        // ArrayBoxから変換
-        if let Some(array_box) = data.as_any().downcast_ref::<ArrayBox>() {
+        // ArrayBoxから変換 - use crate::boxes::array::ArrayBox directly
+        if let Some(array_box) = data.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
             let mut buffer = self.data.lock().unwrap();
             let items = array_box.items.lock().unwrap();
             for item in items.iter() {
@@ -80,7 +80,8 @@ impl BufferBox {
             }
             Box::new(IntegerBox::new(buffer.len() as i64))
         } else {
-            Box::new(StringBox::new("Error: write() requires ArrayBox of integers"))
+            let type_name = data.type_name();
+            Box::new(StringBox::new(&format!("Error: write() requires ArrayBox of integers, got {}", type_name)))
         }
     }
     

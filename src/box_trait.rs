@@ -123,7 +123,7 @@ impl StringBox {
     /// Join array elements using this string as delimiter
     pub fn join(&self, array_box: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(array) = array_box.as_any().downcast_ref::<ArrayBox>() {
-            let strings: Vec<String> = array.elements.lock().unwrap()
+            let strings: Vec<String> = array.items.lock().unwrap()
                 .iter()
                 .map(|element| element.to_string_box().value)
                 .collect();
@@ -363,147 +363,8 @@ impl Display for VoidBox {
     }
 }
 
-/// Array values in Nyash - dynamic arrays of Box values
-#[derive(Debug)]
-pub struct ArrayBox {
-    pub elements: Arc<Mutex<Vec<Box<dyn NyashBox>>>>,
-    id: u64,
-}
-
-impl Clone for ArrayBox {
-    fn clone(&self) -> Self {
-        Self {
-            elements: Arc::clone(&self.elements),  // Arcをクローンして同じデータを共有
-            id: self.id,  // 同じIDを保持
-        }
-    }
-}
-
-impl ArrayBox {
-    pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self {
-            elements: Arc::new(Mutex::new(Vec::new())),
-            id,
-        }
-    }
-    
-    pub fn new_with_elements(elements: Vec<Box<dyn NyashBox>>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self {
-            elements: Arc::new(Mutex::new(elements)),
-            id,
-        }
-    }
-    
-    // ===== Array Methods for Nyash =====
-    
-    /// Add element to end of array
-    pub fn push(&self, element: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        self.elements.lock().unwrap().push(element);
-        Box::new(VoidBox::new())
-    }
-    
-    /// Remove and return last element
-    pub fn pop(&self) -> Box<dyn NyashBox> {
-        match self.elements.lock().unwrap().pop() {
-            Some(element) => element,
-            None => Box::new(VoidBox::new()),
-        }
-    }
-    
-    /// Get array length
-    pub fn length(&self) -> Box<dyn NyashBox> {
-        Box::new(IntegerBox::new(self.elements.lock().unwrap().len() as i64))
-    }
-    
-    /// Join array elements with delimiter into string
-    pub fn join(&self, delimiter: &str) -> Box<dyn NyashBox> {
-        let strings: Vec<String> = self.elements.lock().unwrap()
-            .iter()
-            .map(|element| element.to_string_box().value)
-            .collect();
-        Box::new(StringBox::new(strings.join(delimiter)))
-    }
-    
-    /// Get element at index
-    pub fn get(&self, index: usize) -> Option<Box<dyn NyashBox>> {
-        self.elements.lock().unwrap().get(index).map(|e| e.clone_box())
-    }
-    
-    /// Set element at index
-    pub fn set(&self, index: usize, value: Box<dyn NyashBox>) -> Result<(), String> {
-        let mut elements = self.elements.lock().unwrap();
-        if index < elements.len() {
-            elements[index] = value;
-            Ok(())
-        } else {
-            Err(format!("Index {} out of bounds for array of length {}", index, elements.len()))
-        }
-    }
-}
-
-impl NyashBox for ArrayBox {
-    fn to_string_box(&self) -> StringBox {
-        let elements_str: Vec<String> = self.elements.lock().unwrap()
-            .iter()
-            .map(|e| e.to_string_box().value)
-            .collect();
-        StringBox::new(format!("[{}]", elements_str.join(", ")))
-    }
-    
-    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
-        if let Some(other_array) = other.as_any().downcast_ref::<ArrayBox>() {
-            let self_elements = self.elements.lock().unwrap();
-            let other_elements = other_array.elements.lock().unwrap();
-            
-            if self_elements.len() != other_elements.len() {
-                return BoolBox::new(false);
-            }
-            
-            for (a, b) in self_elements.iter().zip(other_elements.iter()) {
-                if !a.equals(b.as_ref()).value {
-                    return BoolBox::new(false);
-                }
-            }
-            BoolBox::new(true)
-        } else {
-            BoolBox::new(false)
-        }
-    }
-    
-    fn type_name(&self) -> &'static str {
-        "ArrayBox"
-    }
-    
-    fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(self.clone())  // 同じインスタンスを共有
-    }
-    
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
-}
-
-impl Display for ArrayBox {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string_box().value)
-    }
-}
+// ArrayBox is now defined in boxes::array module
+pub use crate::boxes::array::ArrayBox;
 
 /// File values in Nyash - file system operations
 #[derive(Debug, Clone)]
