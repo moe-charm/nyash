@@ -94,17 +94,35 @@ pub use web::{WebDisplayBox, WebConsoleBox, WebCanvasBox};
 
 pub mod null_box;
 
+// High-priority Box types
+pub mod array;
+pub mod buffer;
+pub mod file;
+pub mod future;
+pub mod json;
+pub mod result;
+pub mod http;
+pub mod stream;
+pub mod regex;
+
 // P2P通信Box群
 // pub mod intent_box;
 // pub mod intent_box_wrapper;
 // pub mod p2p_box;
 
-// 今後追加予定のBox型（コメントアウト）
-// pub mod array_box;
-// pub use array_box::ArrayBox;
-
 // null関数も再エクスポート
 pub use null_box::{NullBox, null};
+
+// High-priority Box types re-export
+pub use array::ArrayBox;
+pub use buffer::BufferBox;
+pub use file::FileBox;
+pub use future::{NyashFutureBox, FutureBox};
+pub use json::JSONBox;
+pub use result::{NyashResultBox, ResultBox};
+pub use http::HttpClientBox;
+pub use stream::{NyashStreamBox, StreamBox};
+pub use regex::RegexBox;
 
 // P2P通信Boxの再エクスポート
 // pub use intent_box::IntentBox;
