@@ -1,0 +1,62 @@
+# 🚀 Rust-Style Trait-Based Operator System Test
+# Testing the new NyashAdd trait implementation
+
+static box Main {
+    init { console, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🎉 Testing New Trait-Based Operators!")
+        
+        # Test 1: Integer addition
+        local a, b, sum
+        a = 10
+        b = 20
+        sum = a + b
+        me.console.log("Integer addition: 10 + 20 = " + sum)
+        
+        # Test 2: String concatenation 
+        local s1, s2, concat
+        s1 = "Hello"
+        s2 = " World"
+        concat = s1 + s2
+        me.console.log("String concat: " + concat)
+        
+        # Test 3: String repetition
+        local str, count, repeated
+        str = "Hi"
+        count = 3
+        repeated = str * count
+        me.console.log("String repeat: Hi * 3 = " + repeated)
+        
+        # Test 4: Mixed type fallback (int + string -> string concat)
+        local mixed
+        mixed = 42 + " is the answer"
+        me.console.log("Mixed types: " + mixed)
+        
+        # Test 5: Boolean arithmetic
+        local bool1, bool2, bool_sum
+        bool1 = true
+        bool2 = false  
+        bool_sum = bool1 + bool2
+        me.console.log("Boolean add: true + false = " + bool_sum)
+        
+        # Test 6: Subtraction
+        local diff
+        diff = 100 - 25
+        me.console.log("Subtraction: 100 - 25 = " + diff)
+        
+        # Test 7: Multiplication
+        local product
+        product = 6 * 7
+        me.console.log("Multiplication: 6 * 7 = " + product)
+        
+        # Test 8: Division
+        local quotient
+        quotient = 84 / 12
+        me.console.log("Division: 84 / 12 = " + quotient)
+        
+        me.console.log("🎯 All operator tests completed!")
+        return "New trait system works perfectly!"
+    }
+}

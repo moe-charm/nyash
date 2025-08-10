@@ -9,6 +9,7 @@
 use super::*;
 use crate::ast::UnaryOperator;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox};
+use crate::operator_traits::OperatorResolver;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
 
@@ -138,8 +139,9 @@ impl NyashInterpreter {
         
         match op {
             BinaryOperator::Add => {
-                let add_box = AddBox::new(left_val, right_val);
-                Ok(add_box.execute())
+                // 🚀 New trait-based operator resolution system!
+                OperatorResolver::resolve_add(left_val.as_ref(), right_val.as_ref())
+                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
             }
             
             BinaryOperator::Equal => {
@@ -173,18 +175,21 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Subtract => {
-                let sub_box = SubtractBox::new(left_val, right_val);
-                Ok(sub_box.execute())
+                // 🚀 New trait-based subtraction
+                OperatorResolver::resolve_sub(left_val.as_ref(), right_val.as_ref())
+                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
             }
             
             BinaryOperator::Multiply => {
-                let mul_box = MultiplyBox::new(left_val, right_val);
-                Ok(mul_box.execute())
+                // 🚀 New trait-based multiplication
+                OperatorResolver::resolve_mul(left_val.as_ref(), right_val.as_ref())
+                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
             }
             
             BinaryOperator::Divide => {
-                let div_box = DivideBox::new(left_val, right_val);
-                Ok(div_box.execute())
+                // 🚀 New trait-based division
+                OperatorResolver::resolve_div(left_val.as_ref(), right_val.as_ref())
+                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
             }
             
             BinaryOperator::Less => {

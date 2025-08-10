@@ -17,6 +17,8 @@ pub mod channel_box;
 pub mod finalization;
 pub mod exception_box;
 pub mod method_box;
+pub mod operator_traits;
+pub mod box_operators;
 
 use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox};
 use environment::{Environment, PythonCompatEnvironment};

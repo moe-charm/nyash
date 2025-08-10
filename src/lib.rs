@@ -22,6 +22,8 @@ pub mod finalization;
 pub mod exception_box;
 pub mod method_box;
 pub mod type_box;  // 🌟 TypeBox revolutionary system
+pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
+pub mod box_operators; // 🚀 Operator implementations for basic Box types
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
