@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::array::ArrayBox;
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox};
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
 
@@ -327,8 +327,11 @@ impl NyashInterpreter {
             return self.execute_array_method(array_box, method, arguments);
         }
         
-        // TODO: 以下のBoxはまだ実装されていない
-        /*
+        // BufferBox method calls
+        if let Some(buffer_box) = obj_value.as_any().downcast_ref::<BufferBox>() {
+            return self.execute_buffer_method(buffer_box, method, arguments);
+        }
+        
         // FileBox method calls
         if let Some(file_box) = obj_value.as_any().downcast_ref::<FileBox>() {
             return self.execute_file_method(file_box, method, arguments);
@@ -348,7 +351,26 @@ impl NyashInterpreter {
         if let Some(channel_box) = obj_value.as_any().downcast_ref::<ChannelBox>() {
             return self.execute_channel_method(channel_box, method, arguments);
         }
-        */
+        
+        // JSONBox method calls
+        if let Some(json_box) = obj_value.as_any().downcast_ref::<JSONBox>() {
+            return self.execute_json_method(json_box, method, arguments);
+        }
+        
+        // HttpClientBox method calls
+        if let Some(http_box) = obj_value.as_any().downcast_ref::<HttpClientBox>() {
+            return self.execute_http_method(http_box, method, arguments);
+        }
+        
+        // StreamBox method calls
+        if let Some(stream_box) = obj_value.as_any().downcast_ref::<StreamBox>() {
+            return self.execute_stream_method(stream_box, method, arguments);
+        }
+        
+        // RegexBox method calls
+        if let Some(regex_box) = obj_value.as_any().downcast_ref::<RegexBox>() {
+            return self.execute_regex_method(regex_box, method, arguments);
+        }
         
         // MathBox method calls
         if let Some(math_box) = obj_value.as_any().downcast_ref::<MathBox>() {

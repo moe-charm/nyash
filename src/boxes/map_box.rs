@@ -222,6 +222,11 @@ impl MapBox {
         
         Box::new(StringBox::new(&format!("{{{}}}", json_parts.join(","))))
     }
+    
+    /// 内部データへのアクセス（JSONBox用）
+    pub fn get_data(&self) -> Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>> {
+        self.data.clone()
+    }
 }
 
 impl NyashBox for MapBox {

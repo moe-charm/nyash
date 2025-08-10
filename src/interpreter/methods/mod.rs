@@ -19,8 +19,12 @@
 pub mod basic_methods;      // StringBox, IntegerBox, BoolBox, FloatBox
 pub mod collection_methods; // ArrayBox, MapBox
 pub mod io_methods;         // FileBox, ResultBox
+pub mod data_methods;       // BufferBox, JSONBox, RegexBox
+pub mod network_methods;    // HttpClientBox, StreamBox
 
 // Re-export methods for easy access
 pub use basic_methods::*;
 pub use collection_methods::*;
 pub use io_methods::*;
+pub use data_methods::*;
+pub use network_methods::*;

@@ -1,0 +1,35 @@
+// 🧪 新Box作成テスト - メソッド呼び出しなし
+
+print("=== New Box Creation Test ===")
+
+// 📊 BufferBox Test
+print("🔹 Creating BufferBox...")
+local buffer
+buffer = new BufferBox()
+print("✅ BufferBox created successfully!")
+
+// 🔍 RegexBox Test  
+print("🔹 Creating RegexBox...")
+local regex
+regex = new RegexBox("[0-9]+")
+print("✅ RegexBox created successfully!")
+
+// 📋 JSONBox Test
+print("🔹 Creating JSONBox...")
+local json
+json = new JSONBox("{\"name\": \"test\"}")
+print("✅ JSONBox created successfully!")
+
+// 🌊 StreamBox Test
+print("🔹 Creating StreamBox...")
+local stream
+stream = new StreamBox()
+print("✅ StreamBox created successfully!")
+
+// 🌐 HTTPClientBox Test
+print("🔹 Creating HTTPClientBox...")
+local http
+http = new HTTPClientBox()
+print("✅ HTTPClientBox created successfully!")
+
+print("\n🎉 All Arc<Mutex> Boxes created successfully!")
