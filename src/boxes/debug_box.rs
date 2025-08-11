@@ -102,18 +102,18 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use chrono::Local;
-use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox};
+use crate::box_trait::{BoxCore, BoxBase, next_box_id, NyashBox, StringBox, BoolBox, VoidBox};
 use crate::interpreter::RuntimeError;
 use crate::instance::InstanceBox;
 use std::any::Any;
 
 #[derive(Debug, Clone)]
 pub struct DebugBox {
+    base: BoxBase,
     tracking_enabled: Arc<Mutex<bool>>,
     tracked_boxes: Arc<Mutex<HashMap<String, TrackedBoxInfo>>>,
     breakpoints: Arc<Mutex<Vec<String>>>,
     call_stack: Arc<Mutex<Vec<CallInfo>>>,
-    id: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -133,18 +133,12 @@ struct CallInfo {
 
 impl DebugBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         DebugBox {
+            base: BoxBase::new(),
             tracking_enabled: Arc::new(Mutex::new(false)),
             tracked_boxes: Arc::new(Mutex::new(HashMap::new())),
             breakpoints: Arc::new(Mutex::new(Vec::new())),
             call_stack: Arc::new(Mutex::new(Vec::new())),
-            id,
         }
     }
 
@@ -314,6 +308,25 @@ impl DebugBox {
     }
 }
 
+// Implement BoxCore trait for DebugBox
+impl BoxCore for DebugBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let tracked = self.tracked_boxes.lock().unwrap();
+        write!(f, "DebugBox[{} tracked]", tracked.len())
+    }
+}
+
+// Implement Display trait using BoxCore
+impl std::fmt::Display for DebugBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
 // Implement NyashBox trait for DebugBox
 impl NyashBox for DebugBox {
     fn to_string_box(&self) -> StringBox {
@@ -323,7 +336,7 @@ impl NyashBox for DebugBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_debug) = other.as_any().downcast_ref::<DebugBox>() {
-            BoolBox::new(self.id == other_debug.id)
+            BoolBox::new(self.base.id == other_debug.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -341,7 +354,4 @@ impl NyashBox for DebugBox {
         self
     }
     
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }

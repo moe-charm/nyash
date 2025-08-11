@@ -67,7 +67,7 @@
  * - 大きな配列のshuffleは処理時間が長い場合あり
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::array::ArrayBox;
 use crate::boxes::math_box::FloatBox;
 use std::fmt::{Debug, Display};
@@ -79,17 +79,11 @@ use std::sync::{Arc, Mutex};
 pub struct RandomBox {
     // 簡易線形合同法による疑似乱数生成器
     seed: Arc<Mutex<u64>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl RandomBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         // 現在時刻を種として使用
         let seed = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -98,7 +92,7 @@ impl RandomBox {
         
         Self {
             seed: Arc::new(Mutex::new(seed)),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -268,7 +262,7 @@ impl NyashBox for RandomBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_random) = other.as_any().downcast_ref::<RandomBox>() {
-            BoolBox::new(self.id == other_random.id)
+            BoolBox::new(self.base.id == other_random.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -278,13 +272,20 @@ impl NyashBox for RandomBox {
         self
     }
     
+}
+
+impl BoxCore for RandomBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "RandomBox()")
     }
 }
 
 impl Display for RandomBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RandomBox()")
+        self.fmt_box(f)
     }
 }

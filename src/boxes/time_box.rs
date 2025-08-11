@@ -118,7 +118,7 @@
  * - 夏時間切り替え時は計算に注意
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::time::{SystemTime, Duration};
@@ -127,18 +127,12 @@ use chrono::{DateTime, Local, TimeZone, Datelike, Timelike};
 /// 時間操作を提供するBox
 #[derive(Debug, Clone)]
 pub struct TimeBox {
-    id: u64,
+    base: BoxBase,
 }
 
 impl TimeBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { id }
+        Self { base: BoxBase::new() }
     }
     
     /// 現在時刻を取得
@@ -208,7 +202,7 @@ impl NyashBox for TimeBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_time) = other.as_any().downcast_ref::<TimeBox>() {
-            BoolBox::new(self.id == other_time.id)
+            BoolBox::new(self.base.id == other_time.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -217,15 +211,21 @@ impl NyashBox for TimeBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+}
+
+impl BoxCore for TimeBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TimeBox()")
     }
 }
 
 impl Display for TimeBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TimeBox()")
+        self.fmt_box(f)
     }
 }
 
@@ -233,56 +233,38 @@ impl Display for TimeBox {
 #[derive(Debug, Clone)]
 pub struct DateTimeBox {
     pub datetime: DateTime<Local>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl DateTimeBox {
     /// 現在時刻で作成
     pub fn now() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self { 
             datetime: Local::now(),
-            id,
+            base: BoxBase::new(),
         }
     }
     
     /// UNIXタイムスタンプから作成
     pub fn from_timestamp(timestamp: i64) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         let datetime = Local.timestamp_opt(timestamp, 0).unwrap();
-        Self { datetime, id }
+        Self { datetime, base: BoxBase::new() }
     }
     
     /// 文字列からパース
     pub fn parse(date_str: &str) -> Result<Self, String> {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         // ISO 8601形式でパース
         match DateTime::parse_from_rfc3339(date_str) {
             Ok(dt) => Ok(Self { 
                 datetime: dt.with_timezone(&Local),
-                id,
+                base: BoxBase::new(),
             }),
             Err(_) => {
                 // シンプルな形式でパース (YYYY-MM-DD HH:MM:SS)
                 match chrono::NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S") {
                     Ok(naive_dt) => {
                         let datetime = Local.from_local_datetime(&naive_dt).unwrap();
-                        Ok(Self { datetime, id })
+                        Ok(Self { datetime, base: BoxBase::new() })
                     }
                     Err(e) => Err(format!("Failed to parse date: {}", e)),
                 }
@@ -346,7 +328,7 @@ impl DateTimeBox {
             let new_datetime = self.datetime + chrono::Duration::days(int_box.value);
             Box::new(DateTimeBox {
                 datetime: new_datetime,
-                id: self.id,
+                base: BoxBase::new(),
             })
         } else {
             Box::new(StringBox::new("Error: addDays() requires integer input"))
@@ -359,7 +341,7 @@ impl DateTimeBox {
             let new_datetime = self.datetime + chrono::Duration::hours(int_box.value);
             Box::new(DateTimeBox {
                 datetime: new_datetime,
-                id: self.id,
+                base: BoxBase::new(),
             })
         } else {
             Box::new(StringBox::new("Error: addHours() requires integer input"))
@@ -391,15 +373,21 @@ impl NyashBox for DateTimeBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+}
+
+impl BoxCore for DateTimeBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.datetime.format("%Y-%m-%d %H:%M:%S"))
     }
 }
 
 impl Display for DateTimeBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.datetime.format("%Y-%m-%d %H:%M:%S"))
+        self.fmt_box(f)
     }
 }
 
@@ -407,20 +395,14 @@ impl Display for DateTimeBox {
 #[derive(Debug, Clone)]
 pub struct TimerBox {
     start_time: SystemTime,
-    id: u64,
+    base: BoxBase,
 }
 
 impl TimerBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             start_time: SystemTime::now(),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -457,7 +439,7 @@ impl NyashBox for TimerBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_timer) = other.as_any().downcast_ref::<TimerBox>() {
-            BoolBox::new(self.id == other_timer.id)
+            BoolBox::new(self.base.id == other_timer.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -466,14 +448,20 @@ impl NyashBox for TimerBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+}
+
+impl BoxCore for TimerBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TimerBox()")
     }
 }
 
 impl Display for TimerBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TimerBox()")
+        self.fmt_box(f)
     }
 }

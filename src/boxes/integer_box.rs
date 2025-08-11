@@ -37,7 +37,7 @@
  * - 小数点以下は切り捨て（整数除算）
  */
 
-use crate::box_trait::NyashBox;
+use crate::box_trait::{NyashBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::fmt::Display;
 
@@ -45,18 +45,15 @@ use std::fmt::Display;
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntegerBox {
     pub value: i64,
-    id: u64,
+    base: BoxBase,
 }
 
 impl IntegerBox {
     pub fn new(value: i64) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { value, id }
+        Self { 
+            value, 
+            base: BoxBase::new(),
+        }
     }
     
     pub fn zero() -> Self {
@@ -90,13 +87,20 @@ impl NyashBox for IntegerBox {
         self
     }
     
+}
+
+impl BoxCore for IntegerBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.value)
     }
 }
 
 impl Display for IntegerBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        self.fmt_box(f)
     }
 }

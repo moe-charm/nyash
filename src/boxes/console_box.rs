@@ -45,7 +45,7 @@
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::fmt::Display;
 
@@ -53,18 +53,13 @@ use std::fmt::Display;
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug, Clone)]
 pub struct ConsoleBox {
-    id: u64,
+    base: BoxBase,
 }
 
 #[cfg(target_arch = "wasm32")]
 impl ConsoleBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        Self { id }
+        Self { base: BoxBase::new() }
     }
     
     /// Log messages to browser console
@@ -89,6 +84,17 @@ impl ConsoleBox {
 }
 
 #[cfg(target_arch = "wasm32")]
+impl BoxCore for ConsoleBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[ConsoleBox - Browser Console Interface]")
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 impl NyashBox for ConsoleBox {
     fn to_string_box(&self) -> StringBox {
         StringBox::new("[ConsoleBox - Browser Console Interface]")
@@ -109,28 +115,19 @@ impl NyashBox for ConsoleBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 // Non-WASM版 - モックアップ実装  
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone)]
 pub struct ConsoleBox {
-    id: u64,
+    base: BoxBase,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl ConsoleBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        Self { id }
+        Self { base: BoxBase::new() }
     }
     
     /// Mock log method for non-WASM environments
@@ -148,6 +145,17 @@ impl ConsoleBox {
     
     pub fn clear(&self) {
         println!("[Console CLEAR]");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl BoxCore for ConsoleBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[ConsoleBox - Mock Implementation]")
     }
 }
 
@@ -172,10 +180,6 @@ impl NyashBox for ConsoleBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 
@@ -183,13 +187,13 @@ impl NyashBox for ConsoleBox {
 #[cfg(target_arch = "wasm32")]
 impl Display for ConsoleBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[ConsoleBox - Browser Console Interface]")
+        self.fmt_box(f)
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl Display for ConsoleBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[ConsoleBox - Mock Implementation]")
+        self.fmt_box(f)
     }
 }

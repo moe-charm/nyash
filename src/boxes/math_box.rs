@@ -56,25 +56,21 @@
  * - 整数演算は自動でFloatBoxに変換される場合あり
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase, next_box_id};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 
 /// 数学演算を提供するBox
 #[derive(Debug, Clone)]
 pub struct MathBox {
-    id: u64,
+    base: BoxBase,
 }
 
 impl MathBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { id }
+        Self { 
+            base: BoxBase::new() 
+        }
     }
     
     /// 絶対値を計算
@@ -286,6 +282,16 @@ impl MathBox {
     }
 }
 
+impl BoxCore for MathBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "MathBox()")
+    }
+}
+
 impl NyashBox for MathBox {
     fn type_name(&self) -> &'static str {
         "MathBox"
@@ -301,7 +307,7 @@ impl NyashBox for MathBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_math) = other.as_any().downcast_ref::<MathBox>() {
-            BoolBox::new(self.id == other_math.id)
+            BoolBox::new(self.box_id() == other_math.box_id())
         } else {
             BoolBox::new(false)
         }
@@ -310,15 +316,11 @@ impl NyashBox for MathBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for MathBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MathBox()")
+        self.fmt_box(f)
     }
 }
 
@@ -326,18 +328,25 @@ impl Display for MathBox {
 #[derive(Debug, Clone)]
 pub struct FloatBox {
     pub value: f64,
-    id: u64,
+    base: BoxBase,
 }
 
 impl FloatBox {
     pub fn new(value: f64) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { value, id }
+        Self { 
+            value, 
+            base: BoxBase::new() 
+        }
+    }
+}
+
+impl BoxCore for FloatBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.value)
     }
 }
 
@@ -367,15 +376,11 @@ impl NyashBox for FloatBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for FloatBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        self.fmt_box(f)
     }
 }
 
@@ -385,18 +390,17 @@ pub struct RangeBox {
     pub start: i64,
     pub end: i64,
     pub step: i64,
-    id: u64,
+    base: BoxBase,
 }
 
 impl RangeBox {
     pub fn new(start: i64, end: i64, step: i64) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { start, end, step, id }
+        Self { 
+            start, 
+            end, 
+            step, 
+            base: BoxBase::new() 
+        }
     }
     
     /// イテレータとして値を生成
@@ -417,6 +421,16 @@ impl RangeBox {
         }
         
         result
+    }
+}
+
+impl BoxCore for RangeBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Range({}, {}, {})", self.start, self.end, self.step)
     }
 }
 
@@ -448,14 +462,10 @@ impl NyashBox for RangeBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for RangeBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Range({}, {}, {})", self.start, self.end, self.step)
+        self.fmt_box(f)
     }
 }

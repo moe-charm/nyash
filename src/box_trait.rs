@@ -616,6 +616,16 @@ impl ResultBox {
     }
 }
 
+impl BoxCore for ResultBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.to_string_box().value)
+    }
+}
+
 impl NyashBox for ResultBox {
     fn to_string_box(&self) -> StringBox {
         if self.is_success {
@@ -682,15 +692,11 @@ impl NyashBox for ResultBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for ResultBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string_box().value)
+        self.fmt_box(f)
     }
 }
 
@@ -798,15 +804,21 @@ impl NyashBox for FutureBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+}
+
+impl BoxCore for FutureBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.to_string_box().value)
     }
 }
 
 impl Display for FutureBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string_box().value)
+        self.fmt_box(f)
     }
 }
 
@@ -816,7 +828,7 @@ impl Display for FutureBox {
 pub struct AddBox {
     pub left: Box<dyn NyashBox>,
     pub right: Box<dyn NyashBox>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl AddBox {
@@ -824,7 +836,7 @@ impl AddBox {
         Self { 
             left, 
             right, 
-            id: next_box_id() 
+            base: BoxBase::new(),
         }
     }
     
@@ -911,9 +923,21 @@ impl NyashBox for AddBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+}
+
+impl BoxCore for AddBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "({} + {})", self.left.to_string_box().value, self.right.to_string_box().value)
+    }
+}
+
+impl Display for AddBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }
 

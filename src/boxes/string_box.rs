@@ -27,7 +27,7 @@
  * result = text.concat(" Nyash")  // "Hello, World! Nyash"
  * ```
  */
-use crate::box_trait::NyashBox;
+use crate::box_trait::{NyashBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::fmt::Display;
 
@@ -35,20 +35,14 @@ use std::fmt::Display;
 #[derive(Debug, Clone, PartialEq)]
 pub struct StringBox {
     pub value: String,
-    id: u64,
+    base: BoxBase,
 }
 
 impl StringBox {
     pub fn new(value: impl Into<String>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             value: value.into(),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -161,13 +155,20 @@ impl NyashBox for StringBox {
         self
     }
     
+}
+
+impl BoxCore for StringBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.value)
     }
 }
 
 impl Display for StringBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        self.fmt_box(f)
     }
 }

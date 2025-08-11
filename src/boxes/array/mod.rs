@@ -2,40 +2,31 @@
 // Nyashの箱システムによる配列・リスト操作を提供します。
 // Arc<Mutex>パターンで内部可変性を実現
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
+use std::fmt::Display;
 
 #[derive(Debug, Clone)]
 pub struct ArrayBox {
     pub items: Arc<Mutex<Vec<Box<dyn NyashBox>>>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl ArrayBox {
     /// 新しいArrayBoxを作成
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         ArrayBox { 
             items: Arc::new(Mutex::new(Vec::new())),
-            id,
+            base: BoxBase::new(),
         }
     }
     
     /// 要素を持つArrayBoxを作成
     pub fn new_with_elements(elements: Vec<Box<dyn NyashBox>>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         ArrayBox { 
             items: Arc::new(Mutex::new(elements)),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -146,6 +137,26 @@ impl ArrayBox {
     }
 }
 
+impl BoxCore for ArrayBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let items = self.items.lock().unwrap();
+        let strings: Vec<String> = items.iter()
+            .map(|item| item.to_string_box().value)
+            .collect();
+        write!(f, "[{}]", strings.join(", "))
+    }
+}
+
+impl Display for ArrayBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
 impl NyashBox for ArrayBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
@@ -167,9 +178,6 @@ impl NyashBox for ArrayBox {
         "ArrayBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_array) = other.as_any().downcast_ref::<ArrayBox>() {

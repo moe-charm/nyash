@@ -38,7 +38,7 @@
  * - `a or b` - OR演算子
  */
 
-use crate::box_trait::NyashBox;
+use crate::box_trait::{NyashBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::fmt::Display;
 
@@ -46,18 +46,15 @@ use std::fmt::Display;
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoolBox {
     pub value: bool,
-    id: u64,
+    base: BoxBase,
 }
 
 impl BoolBox {
     pub fn new(value: bool) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { value, id }
+        Self { 
+            value, 
+            base: BoxBase::new(),
+        }
     }
     
     pub fn true_box() -> Self {
@@ -94,13 +91,20 @@ impl NyashBox for BoolBox {
         self
     }
     
+}
+
+impl BoxCore for BoolBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", if self.value { "true" } else { "false" })
     }
 }
 
 impl Display for BoolBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", if self.value { "true" } else { "false" })
+        self.fmt_box(f)
     }
 }
