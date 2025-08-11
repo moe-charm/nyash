@@ -2,7 +2,7 @@
 // Nyashの箱システムによるストリーミング処理を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBase};
 use crate::boxes::buffer::BufferBox;
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
@@ -13,33 +13,23 @@ use std::io::{Read, Write, Result};
 pub struct NyashStreamBox {
     buffer: Arc<Mutex<Vec<u8>>>,
     position: Arc<Mutex<usize>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl NyashStreamBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         NyashStreamBox {
             buffer: Arc::new(Mutex::new(Vec::new())),
             position: Arc::new(Mutex::new(0)),
-            id,
+            base: BoxBase::new(),
         }
     }
     
     pub fn from_data(data: Vec<u8>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         NyashStreamBox {
             buffer: Arc::new(Mutex::new(data)),
             position: Arc::new(Mutex::new(0)),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -165,9 +155,6 @@ impl NyashBox for NyashStreamBox {
         "NyashStreamBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_stream) = other.as_any().downcast_ref::<NyashStreamBox>() {
@@ -179,6 +166,24 @@ impl NyashBox for NyashStreamBox {
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+impl BoxCore for NyashStreamBox {
+    fn box_id(&self) -> u64 {
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let buffer = self.buffer.lock().unwrap();
+        let position = self.position.lock().unwrap();
+        write!(f, "NyashStreamBox({} bytes, pos: {})", buffer.len(), *position)
+    }
+}
+
+impl std::fmt::Display for NyashStreamBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }
 

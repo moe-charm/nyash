@@ -5,7 +5,7 @@
  * Everything is Box哲学に基づくオブジェクト指向システム
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase};
 use crate::ast::ASTNode;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
@@ -24,8 +24,8 @@ pub struct InstanceBox {
     /// メソッド定義（ClassBoxから共有）
     pub methods: Arc<HashMap<String, ASTNode>>,
     
-    /// インスタンスID
-    id: u64,
+    /// Box基底
+    base: BoxBase,
     
     /// 解放済みフラグ
     finalized: Arc<Mutex<bool>>,
@@ -33,12 +33,6 @@ pub struct InstanceBox {
 
 impl InstanceBox {
     pub fn new(class_name: String, fields: Vec<String>, methods: HashMap<String, ASTNode>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         // フィールドをVoidBoxで初期化
         let mut field_map = HashMap::new();
         for field in fields {
@@ -49,7 +43,7 @@ impl InstanceBox {
             class_name,
             fields: Arc::new(Mutex::new(field_map)),
             methods: Arc::new(methods),
-            id,
+            base: BoxBase::new(),
             finalized: Arc::new(Mutex::new(false)),
         }
     }
@@ -143,13 +137,13 @@ impl InstanceBox {
 
 impl NyashBox for InstanceBox {
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!("<{} instance #{}>", self.class_name, self.id))
+        StringBox::new(format!("<{} instance #{}>", self.class_name, self.base.id()))
     }
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_instance) = other.as_any().downcast_ref::<InstanceBox>() {
             // 同じインスタンスIDなら等しい
-            BoolBox::new(self.id == other_instance.id)
+            BoolBox::new(self.base.id() == other_instance.base.id())
         } else {
             BoolBox::new(false)
         }
@@ -168,14 +162,21 @@ impl NyashBox for InstanceBox {
         self
     }
     
+}
+
+impl BoxCore for InstanceBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{} instance #{}>", self.class_name, self.base.id())
     }
 }
 
 impl Display for InstanceBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<{} instance>", self.class_name)
+        self.fmt_box(f)
     }
 }
 

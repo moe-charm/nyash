@@ -2,7 +2,7 @@
 // Nyashの箱システムによるエラー処理を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore};
 use std::any::Any;
 
 #[derive(Debug)]
@@ -59,13 +59,6 @@ impl NyashBox for NyashResultBox {
         "NyashResultBox"
     }
 
-    fn box_id(&self) -> u64 {
-        // For enum variants, we use the contained value's ID
-        match self {
-            NyashResultBox::Ok(val) => val.box_id(),
-            NyashResultBox::Err(err) => err.box_id(),
-        }
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_result) = other.as_any().downcast_ref::<NyashResultBox>() {
@@ -77,6 +70,29 @@ impl NyashBox for NyashResultBox {
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+impl BoxCore for NyashResultBox {
+    fn box_id(&self) -> u64 {
+        // For enum variants, we use the contained value's ID
+        match self {
+            NyashResultBox::Ok(val) => val.box_id(),
+            NyashResultBox::Err(err) => err.box_id(),
+        }
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NyashResultBox::Ok(val) => write!(f, "Ok({})", val.to_string_box().value),
+            NyashResultBox::Err(err) => write!(f, "Err({})", err.to_string_box().value),
+        }
+    }
+}
+
+impl std::fmt::Display for NyashResultBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }
 

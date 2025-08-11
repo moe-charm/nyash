@@ -2,7 +2,7 @@
 // Nyashの箱システムによる非同期処理の基盤を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 pub struct NyashFutureBox {
     pub result: Arc<Mutex<Option<Box<dyn NyashBox>>>>,
     pub is_ready: Arc<Mutex<bool>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl Clone for NyashFutureBox {
@@ -20,22 +20,17 @@ impl Clone for NyashFutureBox {
         Self {
             result: Arc::clone(&self.result),
             is_ready: Arc::clone(&self.is_ready),
-            id: self.id,
+            base: self.base.clone(),
         }
     }
 }
 
 impl NyashFutureBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         Self {
             result: Arc::new(Mutex::new(None)),
             is_ready: Arc::new(Mutex::new(false)),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -96,16 +91,39 @@ impl NyashBox for NyashFutureBox {
         "NyashFutureBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_future) = other.as_any().downcast_ref::<NyashFutureBox>() {
-            BoolBox::new(self.id == other_future.id)
+            BoolBox::new(self.base.id() == other_future.base.id())
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+impl BoxCore for NyashFutureBox {
+    fn box_id(&self) -> u64 {
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ready = *self.is_ready.lock().unwrap();
+        if ready {
+            let result = self.result.lock().unwrap();
+            if let Some(value) = result.as_ref() {
+                write!(f, "Future(ready: {})", value.to_string_box().value)
+            } else {
+                write!(f, "Future(ready: void)")
+            }
+        } else {
+            write!(f, "Future(pending)")
+        }
+    }
+}
+
+impl std::fmt::Display for NyashFutureBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }
 

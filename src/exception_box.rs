@@ -4,7 +4,7 @@
  * Everything is Box哲学に基づく例外システム
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::collections::HashMap;
 
@@ -14,35 +14,25 @@ pub struct ErrorBox {
     pub message: String,
     pub stack_trace: Vec<String>,
     pub cause: Option<Box<ErrorBox>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl ErrorBox {
     pub fn new(message: &str) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         Self {
             message: message.to_string(),
             stack_trace: Vec::new(),
             cause: None,
-            id,
+            base: BoxBase::new(),
         }
     }
     
     pub fn with_cause(message: &str, cause: ErrorBox) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         Self {
             message: message.to_string(),
             stack_trace: Vec::new(),
             cause: Some(Box::new(cause)),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -68,9 +58,6 @@ impl NyashBox for ErrorBox {
         StringBox::new(format!("ErrorBox({})", self.message))
     }
     
-    fn box_id(&self) -> u64 {
-        self.id
-    }
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_error) = other.as_any().downcast_ref::<ErrorBox>() {
@@ -86,6 +73,22 @@ impl NyashBox for ErrorBox {
     
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+impl BoxCore for ErrorBox {
+    fn box_id(&self) -> u64 {
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ErrorBox({})", self.message)
+    }
+}
+
+impl std::fmt::Display for ErrorBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }
 

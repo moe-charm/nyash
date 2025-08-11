@@ -25,7 +25,7 @@
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 use std::fmt::{self, Debug};
@@ -121,14 +121,14 @@ impl Transport for LocalTransport {
 /// IntentBox - 通信世界を定義
 #[derive(Clone)]
 pub struct IntentBox {
-    id: u64,
+    base: BoxBase,
     transport: Arc<Mutex<Box<dyn Transport>>>,
 }
 
 impl Debug for IntentBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IntentBox")
-            .field("id", &self.id)
+            .field("id", &self.base.id())
             .field("transport", &"<Transport>")
             .finish()
     }
@@ -137,28 +137,16 @@ impl Debug for IntentBox {
 impl IntentBox {
     /// デフォルト（ローカル）通信世界を作成
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         IntentBox {
-            id,
+            base: BoxBase::new(),
             transport: Arc::new(Mutex::new(Box::new(LocalTransport::new()))),
         }
     }
     
     /// カスタムトランスポートで通信世界を作成
     pub fn new_with_transport(transport: Box<dyn Transport>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         IntentBox {
-            id,
+            base: BoxBase::new(),
             transport: Arc::new(Mutex::new(transport)),
         }
     }
@@ -185,7 +173,7 @@ impl NyashBox for IntentBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_intent) = other.as_any().downcast_ref::<IntentBox>() {
-            BoolBox::new(self.id == other_intent.id)
+            BoolBox::new(self.base.id() == other_intent.base.id())
         } else {
             BoolBox::new(false)
         }
@@ -203,8 +191,22 @@ impl NyashBox for IntentBox {
         self
     }
     
+}
+
+impl BoxCore for IntentBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let transport = self.transport.lock().unwrap();
+        write!(f, "IntentBox[{}]", transport.transport_type())
+    }
+}
+
+impl std::fmt::Display for IntentBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }
 

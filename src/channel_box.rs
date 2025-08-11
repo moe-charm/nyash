@@ -5,7 +5,7 @@
  * Everything is Box哲学に基づくP2P通信システム
  */
 
-use crate::box_trait::{NyashBox, StringBox, VoidBox};
+use crate::box_trait::{NyashBox, StringBox, VoidBox, BoxCore, BoxBase};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
 use std::fmt::{Debug, Display};
@@ -26,25 +26,19 @@ pub struct ChannelBox {
     /// メッセージハンドラー
     handlers: Arc<Mutex<HashMap<String, Box<dyn Fn(Box<dyn NyashBox>) -> Box<dyn NyashBox> + Send>>>>,
     
-    /// チャンネルID
-    id: u64,
+    /// Box基底
+    base: BoxBase,
 }
 
 impl ChannelBox {
     /// 新しいチャンネルを作成
     pub fn new(sender: &str, receiver: &str) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             sender_name: sender.to_string(),
             receiver_name: receiver.to_string(),
             linked_boxes: Arc::new(Mutex::new(HashMap::new())),
             handlers: Arc::new(Mutex::new(HashMap::new())),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -141,14 +135,21 @@ impl NyashBox for ChannelBox {
         self
     }
     
+}
+
+impl BoxCore for ChannelBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Channel({} >> {})", self.sender_name, self.receiver_name)
     }
 }
 
 impl Display for ChannelBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string_box().value)
+        self.fmt_box(f)
     }
 }
 
@@ -157,7 +158,7 @@ impl Debug for ChannelBox {
         f.debug_struct("ChannelBox")
             .field("sender_name", &self.sender_name)
             .field("receiver_name", &self.receiver_name)
-            .field("id", &self.id)
+            .field("id", &self.base.id())
             .finish()
     }
 }
@@ -167,21 +168,15 @@ impl Debug for ChannelBox {
 pub struct MessageBox {
     pub sender: String,
     pub content: String,
-    pub timestamp: u64,
+    base: BoxBase,
 }
 
 impl MessageBox {
     pub fn new(sender: &str, content: &str) -> Self {
-        static mut COUNTER: u64 = 0;
-        let timestamp = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             sender: sender.to_string(),
             content: content.to_string(),
-            timestamp,
+            base: BoxBase::new(),
         }
     }
 }
@@ -192,7 +187,7 @@ impl NyashBox for MessageBox {
     }
     
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(&format!("[{}] {}: {}", self.timestamp, self.sender, self.content))
+        StringBox::new(&format!("[{}] {}: {}", self.base.id(), self.sender, self.content))
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
@@ -214,13 +209,20 @@ impl NyashBox for MessageBox {
         self
     }
     
+}
+
+impl BoxCore for MessageBox {
     fn box_id(&self) -> u64 {
-        self.timestamp
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}: {}", self.base.id(), self.sender, self.content)
     }
 }
 
 impl Display for MessageBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string_box().value)
+        self.fmt_box(f)
     }
 }

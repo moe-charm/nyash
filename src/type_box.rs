@@ -5,7 +5,7 @@
  * ジェネリクス基盤を提供する革命的システム
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::fmt::{Debug, Display};
@@ -72,19 +72,13 @@ pub struct TypeBox {
     /// ビルトイン型かどうか
     pub is_builtin: bool,
     
-    /// ユニークID
-    id: u64,
+    /// Box基底
+    base: BoxBase,
 }
 
 impl TypeBox {
     /// 新しいTypeBoxを作成
     pub fn new(name: &str) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             name: name.to_string(),
             fields: HashMap::new(),
@@ -93,7 +87,7 @@ impl TypeBox {
             type_parameters: Vec::new(),
             concrete_types: HashMap::new(),
             is_builtin: false,
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -264,14 +258,21 @@ impl NyashBox for TypeBox {
         self
     }
     
+}
+
+impl BoxCore for TypeBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<TypeBox: {}>", self.full_name())
     }
 }
 
 impl Display for TypeBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<TypeBox: {}>", self.full_name())
+        self.fmt_box(f)
     }
 }
 

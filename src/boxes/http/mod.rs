@@ -5,24 +5,21 @@
 // NOTE: HTTPサポートは現在開発中です。
 // reqwestクレートの依存関係のため、一時的に無効化されています。
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::map_box::MapBox;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct HttpClientBox {
-    id: u64,
+    base: BoxBase,
 }
 
 impl HttpClientBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        HttpClientBox { id }
+        HttpClientBox { 
+            base: BoxBase::new() 
+        }
     }
     
     /// HTTP GETリクエスト（スタブ）
@@ -57,7 +54,7 @@ impl NyashBox for HttpClientBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!("HttpClientBox(id: {})", self.id))
+        StringBox::new(format!("HttpClientBox(id: {})", self.base.id()))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -68,15 +65,28 @@ impl NyashBox for HttpClientBox {
         "HttpClientBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_http) = other.as_any().downcast_ref::<HttpClientBox>() {
-            BoolBox::new(self.id == other_http.id)
+            BoolBox::new(self.base.id() == other_http.base.id())
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+impl BoxCore for HttpClientBox {
+    fn box_id(&self) -> u64 {
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HttpClientBox(id: {})", self.base.id())
+    }
+}
+
+impl std::fmt::Display for HttpClientBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }

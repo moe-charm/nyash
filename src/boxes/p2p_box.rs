@@ -33,7 +33,7 @@
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::intent_box::IntentBox;
 pub use crate::boxes::intent_box::Message;
 use crate::boxes::map_box::MapBox;
@@ -47,7 +47,7 @@ pub type ListenerFn = Box<dyn NyashBox>;
 /// P2PBox内部実装
 #[derive(Debug)]
 struct P2PBoxInner {
-    id: u64,
+    base: BoxBase,
     node_id: String,
     intent_box: Arc<IntentBox>,
     listeners: Arc<Mutex<HashMap<String, Vec<ListenerFn>>>>,
@@ -62,14 +62,8 @@ pub struct P2PBox {
 impl P2PBox {
     /// 新しいP2PBoxノードを作成
     pub fn new(node_id: String, intent_box: Arc<IntentBox>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         let inner = Arc::new(P2PBoxInner {
-            id,
+            base: BoxBase::new(),
             node_id,
             intent_box: intent_box.clone(),
             listeners: Arc::new(Mutex::new(HashMap::new())),
@@ -150,7 +144,7 @@ impl NyashBox for P2PBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_p2p) = other.as_any().downcast_ref::<P2PBox>() {
-            BoolBox::new(self.inner.id == other_p2p.inner.id)
+            BoolBox::new(self.inner.base.id() == other_p2p.inner.base.id())
         } else {
             BoolBox::new(false)
         }
@@ -168,7 +162,20 @@ impl NyashBox for P2PBox {
         self
     }
     
+}
+
+impl BoxCore for P2PBox {
     fn box_id(&self) -> u64 {
-        self.inner.id
+        self.inner.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "P2PBox[{}]", self.inner.node_id)
+    }
+}
+
+impl std::fmt::Display for P2PBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }

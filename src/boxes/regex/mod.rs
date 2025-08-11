@@ -3,7 +3,7 @@
 // 参考: 既存Boxの設計思想
 
 use regex::Regex;
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
@@ -13,21 +13,16 @@ use std::fmt::Debug;
 pub struct RegexBox {
     regex: Arc<Regex>,
     pattern: Arc<String>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl RegexBox {
     pub fn new(pattern: &str) -> Result<Self, regex::Error> {
-        static mut COUNTER: u64 = 0;
         let regex = Regex::new(pattern)?;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         Ok(RegexBox {
             regex: Arc::new(regex),
             pattern: Arc::new(pattern.to_string()),
-            id,
+            base: BoxBase::new(),
         })
     }
     pub fn is_match(&self, text: &str) -> bool {
@@ -103,9 +98,6 @@ impl NyashBox for RegexBox {
         "RegexBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_regex) = other.as_any().downcast_ref::<RegexBox>() {
@@ -113,5 +105,21 @@ impl NyashBox for RegexBox {
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+impl BoxCore for RegexBox {
+    fn box_id(&self) -> u64 {
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RegexBox({})", self.pattern.as_str())
+    }
+}
+
+impl std::fmt::Display for RegexBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }

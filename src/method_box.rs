@@ -5,7 +5,7 @@
  * ChatGPT先生のアドバイスを全面採用
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::ast::ASTNode;
 use crate::instance::InstanceBox;
 use std::fmt::{Debug, Display};
@@ -46,19 +46,13 @@ pub struct MethodBox {
     /// メソッド定義（キャッシュ用）
     pub method_def: Option<FunctionDefinition>,
     
-    /// ユニークID
-    id: u64,
+    /// Box基底
+    base: BoxBase,
 }
 
 impl MethodBox {
     /// 新しいMethodBoxを作成
     pub fn new(instance: Box<dyn NyashBox>, method_name: String) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         // メソッド定義をキャッシュ（可能であれば）
         let method_def = if let Some(inst) = instance.as_any().downcast_ref::<InstanceBox>() {
             inst.get_method(&method_name).and_then(|ast| {
@@ -81,7 +75,7 @@ impl MethodBox {
             instance: Arc::new(Mutex::new(instance)),
             method_name,
             method_def,
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -129,14 +123,21 @@ impl NyashBox for MethodBox {
         self
     }
     
+}
+
+impl BoxCore for MethodBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id()
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<MethodBox: {}>", self.method_name)
     }
 }
 
 impl Display for MethodBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<MethodBox: {}>", self.method_name)
+        self.fmt_box(f)
     }
 }
 
