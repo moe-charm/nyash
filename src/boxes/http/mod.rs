@@ -54,12 +54,9 @@ impl NyashBox for HttpClientBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!("HttpClientBox(id: {})", self.base.id()))
+        StringBox::new(format!("HttpClientBox(id: {})", self.base.id))
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "HttpClientBox"
@@ -68,7 +65,7 @@ impl NyashBox for HttpClientBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_http) = other.as_any().downcast_ref::<HttpClientBox>() {
-            BoolBox::new(self.base.id() == other_http.base.id())
+            BoolBox::new(self.base.id == other_http.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -77,11 +74,23 @@ impl NyashBox for HttpClientBox {
 
 impl BoxCore for HttpClientBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "HttpClientBox(id: {})", self.base.id())
+        write!(f, "HttpClientBox(id: {})", self.base.id)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

@@ -142,12 +142,24 @@ impl BoxCore for ArrayBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let items = self.items.lock().unwrap();
         let strings: Vec<String> = items.iter()
             .map(|item| item.to_string_box().value)
             .collect();
         write!(f, "[{}]", strings.join(", "))
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -170,9 +182,6 @@ impl NyashBox for ArrayBox {
         StringBox::new(format!("[{}]", strings.join(", ")))
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "ArrayBox"

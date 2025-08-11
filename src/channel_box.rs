@@ -131,19 +131,28 @@ impl NyashBox for ChannelBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
 impl BoxCore for ChannelBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Channel({} >> {})", self.sender_name, self.receiver_name)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -158,7 +167,7 @@ impl Debug for ChannelBox {
         f.debug_struct("ChannelBox")
             .field("sender_name", &self.sender_name)
             .field("receiver_name", &self.receiver_name)
-            .field("id", &self.base.id())
+            .field("id", &self.base.id)
             .finish()
     }
 }
@@ -187,7 +196,7 @@ impl NyashBox for MessageBox {
     }
     
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(&format!("[{}] {}: {}", self.base.id(), self.sender, self.content))
+        StringBox::new(&format!("[{}] {}: {}", self.base.id, self.sender, self.content))
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
@@ -205,19 +214,28 @@ impl NyashBox for MessageBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
 impl BoxCore for MessageBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}] {}: {}", self.base.id(), self.sender, self.content)
+        write!(f, "[{}] {}: {}", self.base.id, self.sender, self.content)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

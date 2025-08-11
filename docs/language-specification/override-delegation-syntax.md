@@ -25,19 +25,19 @@ Nyashプログラミング言語における明示的オーバーライドとデ
 
 ### デリゲーション宣言
 ```nyash
-box Child : Parent {
+box Child from Parent {
     // 親Boxからの機能デリゲーション
 }
 
 // 多重デリゲーション
-box Child : Parent1, Parent2 {
+box Child from Parent1, Parent2 {
     // 複数のBoxからの機能デリゲーション
 }
 ```
 
 ### メソッドオーバーライド
 ```nyash
-box Child : Parent {
+box Child from Parent {
     // 必須: overrideキーワードによる明示的宣言
     override methodName(params) {
         // オーバーライド実装
@@ -48,9 +48,9 @@ box Child : Parent {
 
 ### コンストラクタデリゲーション
 ```nyash
-box Child : Parent {
-    constructor(params) {
-        from Parent.constructor(params)  // 必須: 親コンストラクタ明示呼び出し
+box Child from Parent {
+    init(params) {  # init構文に統一
+        from Parent.init(params)  # 必須: 親コンストラクタ明示呼び出し
         me.childSpecificField = value
     }
 }
@@ -70,7 +70,7 @@ box Child : Parent {
 
 #### 構文例
 ```nyash
-box MeshNode : P2PBox {
+box MeshNode from P2PBox {
     // ✅ 正しい使用法
     override send(intent, data, target) {
         me.routing.log(target)
@@ -117,8 +117,8 @@ from Logger.logLevel = "DEBUG"
 
 #### コンストラクタ呼び出し
 ```nyash
-constructor(nodeId, world) {
-    from P2PBox.constructor(nodeId, world)  // 完全統一構文
+init(nodeId, world) {  # init構文に統一
+    from P2PBox.init(nodeId, world)  # 完全統一構文
     me.routing = RoutingTable()
 }
 ```
@@ -127,7 +127,7 @@ constructor(nodeId, world) {
 
 #### 基本形式
 ```nyash
-box ComplexNode : P2PBox, Logger, Cache {
+box ComplexNode from P2PBox, Logger, Cache {
     override send(intent, data, target) {
         from Logger.debug("Sending: " + intent)    // Logger親から
         from Cache.store(intent, data)             // Cache親から  
@@ -139,7 +139,7 @@ box ComplexNode : P2PBox, Logger, Cache {
 #### 曖昧性の解消
 ```nyash
 // 複数親に同名メソッドが存在する場合
-box ConflictNode : ParentA, ParentB {
+box ConflictNode from ParentA, ParentB {
     // ❌ エラー: どちらのprocessを置換するか不明
     override process(data) {
         // Error: Method 'process' exists in multiple parents. Use specific parent.
@@ -208,7 +208,7 @@ Help: Use 'override ParentA.process' or 'override ParentB.process'
 
 ### 1. 暗黙のオーバーライド
 ```nyash
-box Child : Parent {
+box Child from Parent {
     send(msg) {  // ❌ エラー: overrideキーワードなし
         print("Child implementation")
     }
@@ -218,11 +218,11 @@ box Child : Parent {
 ### 2. コンストラクタオーバーロード
 ```nyash
 box Node {
-    constructor(id) {           // 最初の定義
+    init(id) {           // 最初の定義
         me.id = id
     }
     
-    constructor(id, name) {     // ❌ エラー: 重複定義
+    init(id, name) {     // ❌ エラー: 重複定義
         me.id = id
         me.name = name
     }
@@ -246,7 +246,7 @@ box Example {
 
 ### 1. 明示的な親呼び出し
 ```nyash
-box MeshNode : P2PBox {
+box MeshNode from P2PBox {
     override send(intent, data, target) {
         // 前処理
         me.routing.logOutgoing(target)
@@ -262,7 +262,7 @@ box MeshNode : P2PBox {
 
 ### 2. 多重デリゲーションでの順序指定
 ```nyash
-box SmartNode : P2PBox, Logger, Cache {
+box SmartNode from P2PBox, Logger, Cache {
     override send(intent, data, target) {
         // 1. ログ記録
         from Logger.info("Sending to: " + target)
@@ -278,12 +278,12 @@ box SmartNode : P2PBox, Logger, Cache {
 
 ### 3. コンストラクタチェーン
 ```nyash
-box SecureNode : P2PBox {
+box SecureNode from P2PBox {
     init security = SecurityManager()
     
-    constructor(nodeId, world, keyFile) {
+    init(nodeId, world, keyFile) {  # init構文に統一
         // 1. 親初期化（必須）
-        from P2PBox.constructor(nodeId, world)
+        from P2PBox.init(nodeId, world)
         
         // 2. 子固有の初期化
         me.security = SecurityManager()

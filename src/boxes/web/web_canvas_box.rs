@@ -5,7 +5,7 @@
  * ピクセルの世界を制圧する革命的Box！
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 
 #[cfg(target_arch = "wasm32")]
@@ -21,7 +21,7 @@ use web_sys::{
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug, Clone)]
 pub struct WebCanvasBox {
-    id: u64,
+    base: BoxBase,
     canvas_id: String,
     width: u32,
     height: u32,
@@ -30,14 +30,8 @@ pub struct WebCanvasBox {
 #[cfg(target_arch = "wasm32")]
 impl WebCanvasBox {
     pub fn new(canvas_id: String, width: u32, height: u32) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         let instance = Self { 
-            id,
+            base: BoxBase::new(),
             canvas_id: canvas_id.clone(),
             width,
             height,
@@ -268,6 +262,26 @@ impl WebCanvasBox {
 }
 
 #[cfg(target_arch = "wasm32")]
+impl BoxCore for WebCanvasBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "WebCanvasBox({}, {}x{})", self.canvas_id, self.width, self.height)
+    }
+    
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 impl NyashBox for WebCanvasBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
@@ -282,23 +296,24 @@ impl NyashBox for WebCanvasBox {
         ))
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "WebCanvasBox"
     }
     
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_canvas) = other.as_any().downcast_ref::<WebCanvasBox>() {
-            BoolBox::new(self.id == other_canvas.id)
+            BoolBox::new(self.base.id == other_canvas.base.id)
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::fmt::Display for WebCanvasBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }

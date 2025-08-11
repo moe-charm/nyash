@@ -159,30 +159,43 @@
  * - 本格P2P実装は将来バージョンで提供予定
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct SimpleIntentBox {
-    id: u64,
+    base: BoxBase,
     // ノードID -> コールバック関数のマップ
     listeners: Arc<Mutex<HashMap<String, Vec<String>>>>, // 仮実装
 }
 
 impl SimpleIntentBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         SimpleIntentBox {
-            id,
+            base: BoxBase::new(),
             listeners: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+}
+
+impl BoxCore for SimpleIntentBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "SimpleIntentBox(id: {}))", self.base.id)
+    }
+    
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -193,7 +206,7 @@ impl NyashBox for SimpleIntentBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_intent) = other.as_any().downcast_ref::<SimpleIntentBox>() {
-            BoolBox::new(self.id == other_intent.id)
+            BoolBox::new(self.base.id == other_intent.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -206,16 +219,15 @@ impl NyashBox for SimpleIntentBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         // IntentBoxは共有されるので、新しいインスタンスを作らない
         Box::new(SimpleIntentBox {
-            id: self.id,
+            base: BoxBase::new(), // Create new base with unique ID for clone
             listeners: self.listeners.clone(),
         })
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    
-    fn box_id(&self) -> u64 {
-        self.id
+}
+
+impl std::fmt::Display for SimpleIntentBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }

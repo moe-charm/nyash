@@ -20,7 +20,7 @@ impl Clone for NyashFutureBox {
         Self {
             result: Arc::clone(&self.result),
             is_ready: Arc::clone(&self.is_ready),
-            base: self.base.clone(),
+            base: BoxBase::new(), // Create a new base with unique ID for the clone
         }
     }
 }
@@ -83,9 +83,6 @@ impl NyashBox for NyashFutureBox {
         }
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "NyashFutureBox"
@@ -94,7 +91,7 @@ impl NyashBox for NyashFutureBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_future) = other.as_any().downcast_ref::<NyashFutureBox>() {
-            BoolBox::new(self.base.id() == other_future.base.id())
+            BoolBox::new(self.base.id == other_future.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -103,7 +100,11 @@ impl NyashBox for NyashFutureBox {
 
 impl BoxCore for NyashFutureBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -118,6 +119,14 @@ impl BoxCore for NyashFutureBox {
         } else {
             write!(f, "Future(pending)")
         }
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

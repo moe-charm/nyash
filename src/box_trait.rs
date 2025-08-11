@@ -22,8 +22,11 @@ pub fn next_box_id() -> u64 {
 
 /// 🏗️ BoxBase - 全てのBox型の共通基盤構造体
 /// Phase 2: 統一的な基盤データを提供
+/// 🔥 Phase 1: ビルトインBox継承システム - 最小限拡張
+#[derive(Debug, Clone, PartialEq)]
 pub struct BoxBase {
     pub id: u64,
+    pub parent_type_id: Option<std::any::TypeId>, // ビルトインBox継承用
 }
 
 impl BoxBase {
@@ -31,18 +34,37 @@ impl BoxBase {
     pub fn new() -> Self {
         Self {
             id: next_box_id(),
+            parent_type_id: None, // ビルトインBox: 継承なし
+        }
+    }
+    
+    /// ビルトインBox継承用コンストラクタ
+    pub fn with_parent_type(parent_type_id: std::any::TypeId) -> Self {
+        Self {
+            id: next_box_id(),
+            parent_type_id: Some(parent_type_id),
         }
     }
 }
 
 /// 🎯 BoxCore - Box型共通メソッドの統一インターフェース
 /// Phase 2: 重複コードを削減する中核トレイト
+/// 🔥 Phase 2: ビルトインBox継承システム対応
 pub trait BoxCore: Send + Sync {
     /// ボックスの一意ID取得
     fn box_id(&self) -> u64;
     
+    /// 継承元の型ID取得（ビルトインBox継承用）
+    fn parent_type_id(&self) -> Option<std::any::TypeId>;
+    
     /// Display実装のための統一フォーマット
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result;
+    
+    /// Any変換（ダウンキャスト用）
+    fn as_any(&self) -> &dyn Any;
+    
+    /// Anyミュータブル変換（ダウンキャスト用）  
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// The fundamental trait that all Nyash values must implement.
@@ -61,9 +83,6 @@ pub trait NyashBox: BoxCore + Debug {
     
     /// Clone this box (equivalent to Python's copy())
     fn clone_box(&self) -> Box<dyn NyashBox>;
-    
-    /// Convert to Any for downcasting (enables dynamic typing in static Rust)
-    fn as_any(&self) -> &dyn Any;
     
     // 🌟 TypeBox革命: Get type information as a Box
     // Everything is Box極限実現 - 型情報もBoxとして取得！
@@ -180,8 +199,20 @@ impl BoxCore for StringBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -206,9 +237,6 @@ impl NyashBox for StringBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for StringBox {
@@ -242,8 +270,20 @@ impl BoxCore for IntegerBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -268,9 +308,6 @@ impl NyashBox for IntegerBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for IntegerBox {
@@ -308,8 +345,20 @@ impl BoxCore for BoolBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", if self.value { "true" } else { "false" })
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -334,9 +383,6 @@ impl NyashBox for BoolBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for BoolBox {
@@ -370,8 +416,20 @@ impl BoxCore for VoidBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "void")
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -392,9 +450,6 @@ impl NyashBox for VoidBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for VoidBox {
@@ -467,8 +522,20 @@ impl BoxCore for FileBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "<FileBox: {}>", self.path)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -493,9 +560,6 @@ impl NyashBox for FileBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for FileBox {
@@ -527,8 +591,20 @@ impl BoxCore for ErrorBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}: {}", self.error_type, self.message)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -553,9 +629,6 @@ impl NyashBox for ErrorBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for ErrorBox {
@@ -621,8 +694,20 @@ impl BoxCore for ResultBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string_box().value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -689,9 +774,6 @@ impl NyashBox for ResultBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for ResultBox {
@@ -705,7 +787,7 @@ impl Display for ResultBox {
 pub struct FutureBox {
     pub result: Arc<Mutex<Option<Box<dyn NyashBox>>>>,
     pub is_ready: Arc<Mutex<bool>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl Clone for FutureBox {
@@ -713,7 +795,7 @@ impl Clone for FutureBox {
         Self {
             result: Arc::clone(&self.result),
             is_ready: Arc::clone(&self.is_ready),
-            id: self.id,
+            base: BoxBase::new(), // 新しいIDを生成
         }
     }
 }
@@ -723,7 +805,7 @@ impl FutureBox {
         Self {
             result: Arc::new(Mutex::new(None)),
             is_ready: Arc::new(Mutex::new(false)),
-            id: next_box_id(),
+            base: BoxBase::new(),
         }
     }
     
@@ -787,7 +869,7 @@ impl NyashBox for FutureBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_future) = other.as_any().downcast_ref::<FutureBox>() {
-            BoolBox::new(self.id == other_future.id)
+            BoolBox::new(self.base.id == other_future.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -801,9 +883,6 @@ impl NyashBox for FutureBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl BoxCore for FutureBox {
@@ -811,8 +890,20 @@ impl BoxCore for FutureBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string_box().value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -888,7 +979,7 @@ impl Debug for AddBox {
         f.debug_struct("AddBox")
             .field("left", &self.left.to_string_box().value)
             .field("right", &self.right.to_string_box().value)
-            .field("id", &self.id)
+            .field("id", &self.base.id)
             .finish()
     }
 }
@@ -920,9 +1011,6 @@ impl NyashBox for AddBox {
         ))
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl BoxCore for AddBox {
@@ -930,8 +1018,20 @@ impl BoxCore for AddBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "({} + {})", self.left.to_string_box().value, self.right.to_string_box().value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

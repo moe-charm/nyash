@@ -151,9 +151,6 @@ impl NyashBox for StringBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
@@ -162,8 +159,20 @@ impl BoxCore for StringBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

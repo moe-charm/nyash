@@ -147,9 +147,6 @@ impl NyashBox for NyashStreamBox {
         StringBox::new(format!("NyashStreamBox({} bytes, pos: {})", buffer.len(), *position))
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "NyashStreamBox"
@@ -171,13 +168,25 @@ impl NyashBox for NyashStreamBox {
 
 impl BoxCore for NyashStreamBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let buffer = self.buffer.lock().unwrap();
         let position = self.position.lock().unwrap();
         write!(f, "NyashStreamBox({} bytes, pos: {})", buffer.len(), *position)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

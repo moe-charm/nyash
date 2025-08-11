@@ -9,6 +9,7 @@
 use super::*;
 use crate::ast::UnaryOperator;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox};
+use crate::boxes::{MathBox, ConsoleBox, TimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
 use crate::operator_traits::OperatorResolver;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
@@ -342,7 +343,7 @@ impl NyashInterpreter {
         }
         
         // FileBox method calls
-        if let Some(file_box) = obj_value.as_any().downcast_ref::<FileBox>() {
+        if let Some(file_box) = obj_value.as_any().downcast_ref::<crate::boxes::file::FileBox>() {
             return self.execute_file_method(file_box, method, arguments);
         }
         
@@ -734,12 +735,28 @@ impl NyashInterpreter {
         
         if !is_valid_delegation {
             return Err(RuntimeError::InvalidOperation {
-                message: format!("Class '{}' does not delegate to '{}'. Use 'box {} : {}' to establish delegation.", 
+                message: format!("Class '{}' does not delegate to '{}'. Use 'box {} from {}' to establish delegation.", 
                                current_class, parent, current_class, parent),
             });
         }
         
-        // 3. 親クラスのBox宣言を取得
+        // 🔥 ビルトインBoxかチェック
+        let is_builtin = matches!(parent, 
+            "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
+            "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
+            "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
+            "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
+            "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox" |
+            "IntentBox" | "P2PBox" | "EguiBox"
+        );
+        
+        if is_builtin {
+            // ビルトインBoxの場合、ロックを解放してからメソッド呼び出し
+            drop(box_declarations);
+            return self.execute_builtin_box_method(parent, method, current_instance_val.clone_box(), arguments);
+        }
+        
+        // 3. 親クラスのBox宣言を取得（ユーザー定義Boxの場合）
         let parent_box_decl = box_declarations.get(parent)
             .ok_or(RuntimeError::UndefinedClass { 
                 name: parent.to_string() 
@@ -884,6 +901,75 @@ impl NyashInterpreter {
             Err(RuntimeError::InvalidOperation {
                 message: format!("Parent constructor is not a valid function declaration"),
             })
+        }
+    }
+    
+    /// 🔥 ビルトインBoxのメソッド呼び出し
+    fn execute_builtin_box_method(&mut self, parent: &str, method: &str, current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
+        // ビルトインBoxのインスタンスを作成または取得
+        // 現在のインスタンスからビルトインBoxのデータを取得し、ビルトインBoxとしてメソッド実行
+        
+        match parent {
+            "StringBox" => {
+                // StringBoxのインスタンスを作成（デフォルト値）
+                let string_box = StringBox::new("");
+                self.execute_string_method(&string_box, method, arguments)
+            }
+            "IntegerBox" => {
+                // IntegerBoxのインスタンスを作成（デフォルト値）
+                let integer_box = IntegerBox::new(0);
+                self.execute_integer_method(&integer_box, method, arguments)
+            }
+            "ArrayBox" => {
+                let array_box = ArrayBox::new();
+                self.execute_array_method(&array_box, method, arguments)
+            }
+            "MapBox" => {
+                let map_box = MapBox::new();
+                self.execute_map_method(&map_box, method, arguments)
+            }
+            "MathBox" => {
+                let math_box = MathBox::new();
+                self.execute_math_method(&math_box, method, arguments)
+            }
+            "P2PBox" => {
+                // P2PBoxの場合、現在のインスタンスからP2PBoxインスタンスを取得する必要がある
+                // TODO: 現在のインスタンスのフィールドからP2PBoxを取得
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("P2PBox delegation not yet fully implemented: {}.{}", parent, method),
+                });
+            }
+            "FileBox" => {
+                let file_box = crate::boxes::file::FileBox::new();
+                self.execute_file_method(&file_box, method, arguments)
+            }
+            "ConsoleBox" => {
+                let console_box = ConsoleBox::new();
+                self.execute_console_method(&console_box, method, arguments)
+            }
+            "TimeBox" => {
+                let time_box = TimeBox::new();
+                self.execute_time_method(&time_box, method, arguments)
+            }
+            "RandomBox" => {
+                let random_box = RandomBox::new();
+                self.execute_random_method(&random_box, method, arguments)
+            }
+            "DebugBox" => {
+                let debug_box = DebugBox::new();
+                self.execute_debug_method(&debug_box, method, arguments)
+            }
+            "SoundBox" => {
+                let sound_box = SoundBox::new();
+                self.execute_sound_method(&sound_box, method, arguments)
+            }
+            _ => {
+                Err(RuntimeError::InvalidOperation {
+                    message: format!("Unknown built-in Box type for delegation: {}", parent),
+                })
+            }
         }
     }
 }

@@ -51,9 +51,6 @@ impl NyashBox for NyashResultBox {
         }
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "NyashResultBox"
@@ -81,12 +78,28 @@ impl BoxCore for NyashResultBox {
             NyashResultBox::Err(err) => err.box_id(),
         }
     }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        // For enum variants, we use the contained value's parent type ID
+        match self {
+            NyashResultBox::Ok(val) => val.parent_type_id(),
+            NyashResultBox::Err(err) => err.parent_type_id(),
+        }
+    }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NyashResultBox::Ok(val) => write!(f, "Ok({})", val.to_string_box().value),
             NyashResultBox::Err(err) => write!(f, "Err({})", err.to_string_box().value),
         }
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

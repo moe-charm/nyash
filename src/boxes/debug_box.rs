@@ -314,9 +314,21 @@ impl BoxCore for DebugBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let tracked = self.tracked_boxes.lock().unwrap();
         write!(f, "DebugBox[{} tracked]", tracked.len())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -350,8 +362,5 @@ impl NyashBox for DebugBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }

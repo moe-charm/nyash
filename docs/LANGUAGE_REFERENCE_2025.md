@@ -1,6 +1,6 @@
 # 🚀 Nyash Language Reference 2025
 
-**最終更新: 2025年8月10日夜 - Arc<Mutex> Revolution + AI大相談会 + 関数オーバーロード完全実装**
+**最終更新: 2025年8月11日 - デリゲーション革命完了！`from`統一構文＋`init`構文決定！**
 
 ## 📖 概要
 
@@ -17,7 +17,7 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 | `box` | クラス定義 | `box MyClass { }` |
 | `static` | 静的Box・関数定義 | `static box Main { }` |
 | `interface` | インターフェース定義 | `interface Comparable { }` |
-| `from` | 継承指定 | `box Child from Parent { }` |
+| `from` | デリゲーション指定 | `box Child from Parent { }` |
 | `new` | オブジェクト生成 | `new ConsoleBox()` |
 | `me`/`this` | 自己参照 | `me.field = value` |
 
@@ -79,7 +79,7 @@ box ClassName {
     init { field1, field2, field3 }  # カンマ必須！CPU暴走防止
     
     # コンストラクタ
-    ClassName(param1, param2) {
+    init(param1, param2) {  # init構文に統一
         me.field1 = param1
         me.field2 = param2
         me.field3 = defaultValue()
@@ -97,14 +97,25 @@ box ClassName {
 }
 ```
 
-#### **継承Box**
+#### **デリゲーションBox**
 ```nyash
 box Child from Parent interface Comparable {
     init { childField }
     
-    Child(parentParam, childParam) {
-        # 親のコンストラクタは自動呼び出し
+    init(parentParam, childParam) {  # init構文に統一
+        from Parent.init(parentParam)  # 親コンストラクタ明示呼び出し
         me.childField = childParam
+    }
+    
+    # メソッドオーバーライド
+    override process(data) {  # override必須
+        local result = from Parent.process(data)  # 親メソッド呼び出し
+        return result + " (Child processed)"
+    }
+    
+    # インターフェース実装
+    compareTo(other) {
+        return me.value - other.value
     }
 }
 ```
@@ -250,7 +261,7 @@ console.log("Everything is Box!")   # コンソール出力
 box Person {
     init { name, age, email }
     
-    Person(personName, personAge) {
+    init(personName, personAge) {  # init構文に統一
         me.name = personName
         me.age = personAge  
         me.email = me.name + "@example.com"  # 計算フィールド
@@ -271,28 +282,32 @@ guest = Person.createGuest()
 
 ### **3.3 継承とインターフェース**
 
-#### **継承チェーン**
+#### **デリゲーションチェーン**
 ```nyash
-# 基底クラス
+# 基底Box
 box Animal {
     init { name, species }
+    
+    init(animalName, animalSpecies) {
+        me.name = animalName
+        me.species = animalSpecies
+    }
     
     speak() {
         return me.name + " makes a sound"
     }
 }
 
-# 継承
+# デリゲーション
 box Dog from Animal {
     init { breed }  # 追加フィールド
     
-    Dog(dogName, dogBreed) {
-        me.name = dogName
-        me.species = "Canine"
+    init(dogName, dogBreed) {
+        from Animal.init(dogName, "Canine")  # 親コンストラクタ呼び出し
         me.breed = dogBreed
     }
     
-    speak() {  # オーバーライド
+    override speak() {  # 明示的オーバーライド
         return me.name + " barks: Woof!"
     }
 }

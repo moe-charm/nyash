@@ -208,9 +208,6 @@ impl NyashBox for TimeBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl BoxCore for TimeBox {
@@ -218,8 +215,20 @@ impl BoxCore for TimeBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TimeBox()")
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -370,9 +379,6 @@ impl NyashBox for DateTimeBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl BoxCore for DateTimeBox {
@@ -380,8 +386,20 @@ impl BoxCore for DateTimeBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.datetime.format("%Y-%m-%d %H:%M:%S"))
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -445,9 +463,6 @@ impl NyashBox for TimerBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl BoxCore for TimerBox {
@@ -455,8 +470,20 @@ impl BoxCore for TimerBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TimerBox()")
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

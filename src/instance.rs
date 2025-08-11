@@ -137,13 +137,13 @@ impl InstanceBox {
 
 impl NyashBox for InstanceBox {
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!("<{} instance #{}>", self.class_name, self.base.id()))
+        StringBox::new(format!("<{} instance #{}>", self.class_name, self.base.id))
     }
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_instance) = other.as_any().downcast_ref::<InstanceBox>() {
             // 同じインスタンスIDなら等しい
-            BoolBox::new(self.base.id() == other_instance.base.id())
+            BoolBox::new(self.base.id == other_instance.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -158,19 +158,28 @@ impl NyashBox for InstanceBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
 impl BoxCore for InstanceBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<{} instance #{}>", self.class_name, self.base.id())
+        write!(f, "<{} instance #{}>", self.class_name, self.base.id)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

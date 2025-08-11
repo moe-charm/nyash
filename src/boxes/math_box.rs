@@ -287,8 +287,20 @@ impl BoxCore for MathBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "MathBox()")
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -313,9 +325,6 @@ impl NyashBox for MathBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for MathBox {
@@ -345,8 +354,20 @@ impl BoxCore for FloatBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -373,9 +394,6 @@ impl NyashBox for FloatBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for FloatBox {
@@ -429,8 +447,20 @@ impl BoxCore for RangeBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Range({}, {}, {})", self.start, self.end, self.step)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -459,9 +489,6 @@ impl NyashBox for RangeBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for RangeBox {

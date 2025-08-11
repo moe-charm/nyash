@@ -153,9 +153,21 @@ impl BoxCore for BufferBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let data = self.data.lock().unwrap();
         write!(f, "BufferBox({} bytes)", data.len())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -175,9 +187,6 @@ impl NyashBox for BufferBox {
         StringBox::new(format!("BufferBox({} bytes)", data.len()))
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "BufferBox"

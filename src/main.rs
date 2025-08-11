@@ -20,7 +20,7 @@ pub mod method_box;
 pub mod operator_traits;
 pub mod box_operators;
 
-use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox};
+use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox, BoxCore};
 use environment::{Environment, PythonCompatEnvironment};
 use tokenizer::{NyashTokenizer, TokenType};
 use ast::ASTNode;

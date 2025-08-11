@@ -144,7 +144,7 @@ impl NyashBox for P2PBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_p2p) = other.as_any().downcast_ref::<P2PBox>() {
-            BoolBox::new(self.inner.base.id() == other_p2p.inner.base.id())
+            BoolBox::new(self.inner.base.id == other_p2p.inner.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -158,19 +158,28 @@ impl NyashBox for P2PBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
 impl BoxCore for P2PBox {
     fn box_id(&self) -> u64 {
-        self.inner.base.id()
+        self.inner.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.inner.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "P2PBox[{}]", self.inner.node_id)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

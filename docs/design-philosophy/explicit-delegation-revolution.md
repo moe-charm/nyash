@@ -82,7 +82,7 @@ box Node {
 
 #### 1. 宣言の統一
 ```nyash
-box Child : Parent  // デリゲーション関係の明示
+box Child from Parent  // デリゲーション関係の明示
 ```
 
 #### 2. 置換の統一  
@@ -97,7 +97,7 @@ from Parent.methodName()  // 親実装の明示呼び出し
 
 #### 4. 構築の統一
 ```nyash
-from Parent.constructor()  // コンストラクタも同じ構文
+from Parent.init()  // コンストラクタも同じ構文
 ```
 
 ### 完全な例
@@ -144,7 +144,7 @@ box SmartNode : P2PBox, Logger {
 }
 
 // 競合時は更に明示的に
-box ConflictNode : ParentA, ParentB {
+box ConflictNode from ParentA, ParentB {
     override ParentA.process(data) {  // ParentAのprocessを置換
         from ParentA.process(data)
     }
@@ -160,7 +160,7 @@ box ConflictNode : ParentA, ParentB {
 **覚えるべきルール**：
 1. 親のメソッドを置換したい → `override`
 2. 親のメソッドを呼びたい → `from Parent.method()`
-3. 親のコンストラクタを呼びたい → `from Parent.constructor()`
+3. 親のコンストラクタを呼びたい → `from Parent.init()`
 
 たった3つのルールで、すべてのデリゲーション操作が表現できます。
 
@@ -257,7 +257,7 @@ ChatGPT先生の提案による実装ロードマップ：
 - コンストラクタ重複禁止
 
 **Phase 3（1日）**：
-- `from Parent.constructor()` 実装
+- `from Parent.init()` 実装
 - エラーメッセージ改善
 
 ### 移行支援

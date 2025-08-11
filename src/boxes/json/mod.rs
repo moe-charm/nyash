@@ -124,6 +124,10 @@ impl BoxCore for JSONBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let value = self.value.lock().unwrap();
         let json_type = match *value {
@@ -139,6 +143,14 @@ impl BoxCore for JSONBox {
             },
         };
         write!(f, "JSONBox[{}]", json_type)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -158,9 +170,6 @@ impl NyashBox for JSONBox {
         StringBox::new(value.to_string())
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "JSONBox"

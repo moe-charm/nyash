@@ -16,6 +16,26 @@ pub struct FileBox {
 }
 
 impl FileBox {
+    pub fn new() -> Self {
+        // Create a default FileBox for delegation dispatch
+        // Uses a temporary file for built-in Box inheritance dispatch
+        let temp_path = "/tmp/nyash_temp_file";
+        match Self::open(temp_path) {
+            Ok(file_box) => file_box,
+            Err(_) => {
+                // Fallback: create with empty file handle - only for dispatch
+                use std::fs::OpenOptions;
+                let file = OpenOptions::new().create(true).write(true).read(true)
+                    .open("/dev/null").unwrap_or_else(|_| File::open("/dev/null").unwrap());
+                FileBox {
+                    file: Arc::new(Mutex::new(file)),
+                    path: Arc::new(String::new()),
+                    base: BoxBase::new(),
+                }
+            }
+        }
+    }
+    
     pub fn open(path: &str) -> Result<Self> {
         let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
         Ok(FileBox { 
@@ -82,8 +102,20 @@ impl BoxCore for FileBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "FileBox({})", self.path)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -100,9 +132,6 @@ impl NyashBox for FileBox {
         StringBox::new(format!("FileBox({})", self.path))
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "FileBox"

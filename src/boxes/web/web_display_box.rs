@@ -5,7 +5,7 @@
  * プレイグラウンドの出力パネル等を完全制御
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 
 #[cfg(target_arch = "wasm32")]
@@ -18,20 +18,15 @@ use web_sys::{Element, HtmlElement};
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug, Clone)]
 pub struct WebDisplayBox {
-    id: u64,
+    base: BoxBase,
     target_element_id: String,
 }
 
 #[cfg(target_arch = "wasm32")]
 impl WebDisplayBox {
     pub fn new(element_id: String) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         Self { 
-            id,
+            base: BoxBase::new(),
             target_element_id: element_id,
         }
     }
@@ -137,6 +132,26 @@ impl WebDisplayBox {
 }
 
 #[cfg(target_arch = "wasm32")]
+impl BoxCore for WebDisplayBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "WebDisplayBox({})", self.target_element_id)
+    }
+    
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 impl NyashBox for WebDisplayBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
@@ -146,24 +161,24 @@ impl NyashBox for WebDisplayBox {
         StringBox::new(format!("WebDisplayBox({})", self.target_element_id))
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 
     fn type_name(&self) -> &'static str {
         "WebDisplayBox"
     }
     
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_display) = other.as_any().downcast_ref::<WebDisplayBox>() {
-            BoolBox::new(self.id == other_display.id)
+            BoolBox::new(self.base.id == other_display.base.id)
         } else {
             BoolBox::new(false)
         }
     }
+}
 
+#[cfg(target_arch = "wasm32")]
+impl std::fmt::Display for WebDisplayBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
 }

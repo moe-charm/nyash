@@ -836,26 +836,41 @@ impl NyashInterpreter {
         
         // 親クラスの継承チェーンを再帰的に解決
         if let Some(parent_name) = &box_decl.extends {
-            let parent_decl = {
-                let box_decls = self.shared.box_declarations.read().unwrap();
-                box_decls.get(parent_name)
-                    .ok_or(RuntimeError::UndefinedClass { name: parent_name.clone() })?
-                    .clone()
-            };
+            // 🔥 ビルトインBoxかチェック
+            let is_builtin = matches!(parent_name.as_str(), 
+                "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
+                "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
+                "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
+                "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
+                "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox" |
+                "IntentBox" | "P2PBox" | "EguiBox"
+            );
             
-            // インターフェースは継承できない
-            if parent_decl.is_interface {
-                return Err(RuntimeError::InvalidOperation {
-                    message: format!("Cannot extend interface '{}'. Use 'implements' instead.", parent_name),
-                });
+            if is_builtin {
+                // ビルトインBoxの場合、フィールドやメソッドは継承しない
+                // （ビルトインBoxのメソッドはfrom構文でアクセス可能）
+            } else {
+                let parent_decl = {
+                    let box_decls = self.shared.box_declarations.read().unwrap();
+                    box_decls.get(parent_name)
+                        .ok_or(RuntimeError::UndefinedClass { name: parent_name.clone() })?
+                        .clone()
+                };
+                
+                // インターフェースは継承できない
+                if parent_decl.is_interface {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("Cannot extend interface '{}'. Use 'implements' instead.", parent_name),
+                    });
+                }
+                
+                // 親クラスの継承チェーンを再帰的に解決
+                let (parent_fields, parent_methods) = self.resolve_inheritance(&parent_decl)?;
+                
+                // 親のフィールドとメソッドを追加
+                all_fields.extend(parent_fields);
+                all_methods.extend(parent_methods);
             }
-            
-            // 親クラスの継承チェーンを再帰的に解決
-            let (parent_fields, parent_methods) = self.resolve_inheritance(&parent_decl)?;
-            
-            // 親のフィールドとメソッドを追加
-            all_fields.extend(parent_fields);
-            all_methods.extend(parent_methods);
         }
         
         // 現在のクラスのフィールドとメソッドを追加（オーバーライド可能）

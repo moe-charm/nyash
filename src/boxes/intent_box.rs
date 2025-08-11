@@ -128,7 +128,7 @@ pub struct IntentBox {
 impl Debug for IntentBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("IntentBox")
-            .field("id", &self.base.id())
+            .field("id", &self.base.id)
             .field("transport", &"<Transport>")
             .finish()
     }
@@ -173,7 +173,7 @@ impl NyashBox for IntentBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_intent) = other.as_any().downcast_ref::<IntentBox>() {
-            BoolBox::new(self.base.id() == other_intent.base.id())
+            BoolBox::new(self.base.id == other_intent.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -187,20 +187,29 @@ impl NyashBox for IntentBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
 impl BoxCore for IntentBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let transport = self.transport.lock().unwrap();
         write!(f, "IntentBox[{}]", transport.transport_type())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

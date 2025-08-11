@@ -107,8 +107,20 @@ impl BoxCore for EguiBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "EguiBox('{}', {}x{})", self.title, self.size.x, self.size.y)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -136,9 +148,6 @@ impl NyashBox for EguiBox {
         })
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_egui) = other.as_any().downcast_ref::<EguiBox>() {

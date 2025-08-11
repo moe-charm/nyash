@@ -7,7 +7,7 @@
 
 // Import all necessary dependencies
 use crate::ast::{ASTNode, BinaryOperator, CatchClause};
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox, ArrayBox, FileBox, ResultBox, ErrorBox, FutureBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox, ArrayBox, FileBox, ResultBox, ErrorBox, FutureBox, BoxCore};
 use crate::instance::InstanceBox;
 use crate::channel_box::ChannelBox;
 use crate::boxes::math_box::{MathBox, FloatBox, RangeBox};

@@ -139,8 +139,20 @@ impl BoxCore for NullBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "null")
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -162,9 +174,6 @@ impl NyashBox for NullBox {
         BoolBox::new(other.as_any().downcast_ref::<NullBox>().is_some())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 impl Display for NullBox {

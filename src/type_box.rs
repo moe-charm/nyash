@@ -254,19 +254,28 @@ impl NyashBox for TypeBox {
         Box::new(self.clone())
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
 impl BoxCore for TypeBox {
     fn box_id(&self) -> u64 {
-        self.base.id()
+        self.base.id
+    }
+
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<TypeBox: {}>", self.full_name())
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

@@ -268,9 +268,6 @@ impl NyashBox for RandomBox {
         }
     }
     
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     
 }
 
@@ -279,8 +276,20 @@ impl BoxCore for RandomBox {
         self.base.id
     }
     
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "RandomBox()")
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
