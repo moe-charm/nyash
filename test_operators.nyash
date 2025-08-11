@@ -1,0 +1,100 @@
+// test_operators.nyash - Operator Phase 3 comprehensive test
+// Testing: comparison operators (<, >, <=, >=, ==, !=) with mixed types
+
+print("⚖️ Testing comprehensive operator support...")
+
+local f1, f2, i1, i2, result
+
+print("=== Setup: Creating test values ===")
+f1 = new FloatBox(3.14)
+f2 = new FloatBox(2.86) 
+i1 = 5
+i2 = 3
+print("f1 = " + f1.toString() + " (FloatBox)")
+print("f2 = " + f2.toString() + " (FloatBox)")
+print("i1 = " + i1.toString() + " (IntegerBox)")
+print("i2 = " + i2.toString() + " (IntegerBox)")
+
+print("\n=== Test 1: Equality operators (==, !=) ===")
+result = f1 == new FloatBox(3.14)
+print("f1 == 3.14: " + result.toString())  // Expected: true
+
+result = f1 != f2
+print("f1 != f2: " + result.toString())    // Expected: true
+
+result = i1 == 5
+print("i1 == 5: " + result.toString())     // Expected: true
+
+result = i1 != i2  
+print("i1 != i2: " + result.toString())    // Expected: true
+
+print("\n=== Test 2: Mixed type equality ===")
+result = f1 == 3  // FloatBox vs IntegerBox
+print("f1 == 3: " + result.toString())     // Expected: false (3.14 != 3)
+
+result = new FloatBox(5.0) == i1  // FloatBox vs IntegerBox
+print("5.0 == i1: " + result.toString())   // Expected: true
+
+print("\n=== Test 3: Less than (<) ===")
+result = f2 < f1  // FloatBox < FloatBox
+print("f2 < f1: " + result.toString())     // Expected: true (2.86 < 3.14)
+
+result = i2 < i1  // IntegerBox < IntegerBox  
+print("i2 < i1: " + result.toString())     // Expected: true (3 < 5)
+
+result = f2 < i1  // FloatBox < IntegerBox
+print("f2 < i1: " + result.toString())     // Expected: true (2.86 < 5)
+
+result = i2 < f1  // IntegerBox < FloatBox
+print("i2 < f1: " + result.toString())     // Expected: true (3 < 3.14)
+
+print("\n=== Test 4: Greater than (>) ===") 
+result = f1 > f2  // FloatBox > FloatBox
+print("f1 > f2: " + result.toString())     // Expected: true (3.14 > 2.86)
+
+result = i1 > i2  // IntegerBox > IntegerBox
+print("i1 > i2: " + result.toString())     // Expected: true (5 > 3)
+
+result = i1 > f1  // IntegerBox > FloatBox
+print("i1 > f1: " + result.toString())     // Expected: true (5 > 3.14)
+
+result = f1 > i2  // FloatBox > IntegerBox
+print("f1 > i2: " + result.toString())     // Expected: true (3.14 > 3)
+
+print("\n=== Test 5: Less than or equal (<=) ===")
+result = f2 <= f1  // FloatBox <= FloatBox
+print("f2 <= f1: " + result.toString())    // Expected: true (2.86 <= 3.14)
+
+result = f1 <= f1  // FloatBox <= FloatBox (equal)
+print("f1 <= f1: " + result.toString())    // Expected: true (3.14 <= 3.14)
+
+result = i2 <= i1  // IntegerBox <= IntegerBox
+print("i2 <= i1: " + result.toString())    // Expected: true (3 <= 5)
+
+result = new FloatBox(5.0) <= i1  // FloatBox <= IntegerBox (equal)
+print("5.0 <= i1: " + result.toString())   // Expected: true (5.0 <= 5)
+
+print("\n=== Test 6: Greater than or equal (>=) ===")
+result = f1 >= f2  // FloatBox >= FloatBox  
+print("f1 >= f2: " + result.toString())    // Expected: true (3.14 >= 2.86)
+
+result = f1 >= f1  // FloatBox >= FloatBox (equal)
+print("f1 >= f1: " + result.toString())    // Expected: true (3.14 >= 3.14)
+
+result = i1 >= i2  // IntegerBox >= IntegerBox
+print("i1 >= i2: " + result.toString())    // Expected: true (5 >= 3)
+
+result = i1 >= new FloatBox(5.0)  // IntegerBox >= FloatBox (equal)
+print("i1 >= 5.0: " + result.toString())   // Expected: true (5 >= 5.0)
+
+print("\n=== Test 7: Complex expression chains ===")
+result = (f1 > f2) and (i1 > i2)
+print("(f1 > f2) and (i1 > i2): " + result.toString())  // Expected: true
+
+result = (f1 < i1) and (f2 > 1)
+print("(f1 < i1) and (f2 > 1): " + result.toString())   // Expected: true
+
+result = not (f1 == f2)
+print("not (f1 == f2): " + result.toString())           // Expected: true
+
+print("\n✅ Comprehensive operator tests completed!")
