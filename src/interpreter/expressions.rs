@@ -8,8 +8,9 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox, FloatBox};
 use crate::boxes::{MathBox, ConsoleBox, TimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
+use crate::box_trait::BoolBox;
 use crate::operator_traits::OperatorResolver;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
@@ -330,6 +331,21 @@ impl NyashInterpreter {
         // StringBox method calls
         if let Some(string_box) = obj_value.as_any().downcast_ref::<StringBox>() {
             return self.execute_string_method(string_box, method, arguments);
+        }
+        
+        // IntegerBox method calls
+        if let Some(integer_box) = obj_value.as_any().downcast_ref::<IntegerBox>() {
+            return self.execute_integer_method(integer_box, method, arguments);
+        }
+        
+        // FloatBox method calls
+        if let Some(float_box) = obj_value.as_any().downcast_ref::<FloatBox>() {
+            return self.execute_float_method(float_box, method, arguments);
+        }
+        
+        // BoolBox method calls
+        if let Some(bool_box) = obj_value.as_any().downcast_ref::<BoolBox>() {
+            return self.execute_bool_method(bool_box, method, arguments);
         }
         
         // ArrayBox method calls  

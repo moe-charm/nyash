@@ -76,7 +76,7 @@ pub mod egui_box;
 pub use string_box::StringBox;
 pub use integer_box::IntegerBox;
 pub use bool_box::BoolBox;
-pub use math_box::MathBox;
+pub use math_box::{MathBox, FloatBox};
 pub use time_box::TimeBox;
 pub use debug_box::DebugBox;
 pub use random_box::RandomBox;

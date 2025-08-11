@@ -10,6 +10,7 @@
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::boxes::math_box::FloatBox;
 use crate::operator_traits::{
     NyashAdd, NyashSub, NyashMul, NyashDiv,
     DynamicAdd, DynamicSub, DynamicMul, DynamicDiv,
@@ -66,8 +67,10 @@ impl DynamicAdd for IntegerBox {
             return Some(Box::new(IntegerBox::new(self.value + other_int.value)));
         }
         
-        // IntegerBox + FloatBox (if FloatBox exists)
-        // TODO: Add when FloatBox is properly integrated
+        // IntegerBox + FloatBox -> FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            return Some(Box::new(FloatBox::new(self.value as f64 + other_float.value)));
+        }
         
         // Fallback: Convert both to strings and concatenate
         // This preserves the existing AddBox behavior
@@ -88,8 +91,10 @@ impl DynamicSub for IntegerBox {
             return Some(Box::new(IntegerBox::new(self.value - other_int.value)));
         }
         
-        // IntegerBox - FloatBox (if FloatBox exists)
-        // TODO: Add when FloatBox is properly integrated
+        // IntegerBox - FloatBox -> FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            return Some(Box::new(FloatBox::new(self.value as f64 - other_float.value)));
+        }
         
         None // Subtraction not supported for other types
     }
@@ -104,6 +109,11 @@ impl DynamicMul for IntegerBox {
         // IntegerBox * IntegerBox
         if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
             return Some(Box::new(IntegerBox::new(self.value * other_int.value)));
+        }
+        
+        // IntegerBox * FloatBox -> FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            return Some(Box::new(FloatBox::new(self.value as f64 * other_float.value)));
         }
         
         // IntegerBox * StringBox -> Repeated string
@@ -124,13 +134,20 @@ impl DynamicMul for IntegerBox {
 
 impl DynamicDiv for IntegerBox {
     fn try_div(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
-        // IntegerBox / IntegerBox
+        // IntegerBox / IntegerBox -> FloatBox (for precision)
         if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
             if other_int.value == 0 {
-                // Return error box or None - for now None
-                return None;
+                return None; // Division by zero
             }
-            return Some(Box::new(IntegerBox::new(self.value / other_int.value)));
+            return Some(Box::new(FloatBox::new(self.value as f64 / other_int.value as f64)));
+        }
+        
+        // IntegerBox / FloatBox -> FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            if other_float.value == 0.0 {
+                return None; // Division by zero
+            }
+            return Some(Box::new(FloatBox::new(self.value as f64 / other_float.value)));
         }
         
         None
@@ -138,6 +155,139 @@ impl DynamicDiv for IntegerBox {
     
     fn can_div_with(&self, other_type: &str) -> bool {
         matches!(other_type, "IntegerBox" | "FloatBox")
+    }
+}
+
+// ===== FloatBox Operator Implementations =====
+
+/// FloatBox + FloatBox -> FloatBox
+impl NyashAdd<FloatBox> for FloatBox {
+    type Output = FloatBox;
+    
+    fn add(self, rhs: FloatBox) -> Self::Output {
+        FloatBox::new(self.value + rhs.value)
+    }
+}
+
+/// FloatBox - FloatBox -> FloatBox
+impl NyashSub<FloatBox> for FloatBox {
+    type Output = FloatBox;
+    
+    fn sub(self, rhs: FloatBox) -> Self::Output {
+        FloatBox::new(self.value - rhs.value)
+    }
+}
+
+/// FloatBox * FloatBox -> FloatBox
+impl NyashMul<FloatBox> for FloatBox {
+    type Output = FloatBox;
+    
+    fn mul(self, rhs: FloatBox) -> Self::Output {
+        FloatBox::new(self.value * rhs.value)
+    }
+}
+
+/// FloatBox / FloatBox -> FloatBox (with zero check)
+impl NyashDiv<FloatBox> for FloatBox {
+    type Output = Result<FloatBox, OperatorError>;
+    
+    fn div(self, rhs: FloatBox) -> Self::Output {
+        if rhs.value == 0.0 {
+            Err(OperatorError::DivisionByZero)
+        } else {
+            Ok(FloatBox::new(self.value / rhs.value))
+        }
+    }
+}
+
+// ===== FloatBox Dynamic Operator Implementations =====
+
+impl DynamicAdd for FloatBox {
+    fn try_add(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        // FloatBox + FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            return Some(Box::new(FloatBox::new(self.value + other_float.value)));
+        }
+        
+        // FloatBox + IntegerBox -> FloatBox
+        if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
+            return Some(Box::new(FloatBox::new(self.value + other_int.value as f64)));
+        }
+        
+        // Fallback: Convert both to strings and concatenate
+        let left_str = self.to_string_box();
+        let right_str = other.to_string_box();
+        Some(Box::new(StringBox::new(format!("{}{}", left_str.value, right_str.value))))
+    }
+    
+    fn can_add_with(&self, other_type: &str) -> bool {
+        matches!(other_type, "FloatBox" | "IntegerBox" | "StringBox")
+    }
+}
+
+impl DynamicSub for FloatBox {
+    fn try_sub(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        // FloatBox - FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            return Some(Box::new(FloatBox::new(self.value - other_float.value)));
+        }
+        
+        // FloatBox - IntegerBox -> FloatBox
+        if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
+            return Some(Box::new(FloatBox::new(self.value - other_int.value as f64)));
+        }
+        
+        None // Subtraction not supported for other types
+    }
+    
+    fn can_sub_with(&self, other_type: &str) -> bool {
+        matches!(other_type, "FloatBox" | "IntegerBox")
+    }
+}
+
+impl DynamicMul for FloatBox {
+    fn try_mul(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        // FloatBox * FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            return Some(Box::new(FloatBox::new(self.value * other_float.value)));
+        }
+        
+        // FloatBox * IntegerBox -> FloatBox
+        if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
+            return Some(Box::new(FloatBox::new(self.value * other_int.value as f64)));
+        }
+        
+        None
+    }
+    
+    fn can_mul_with(&self, other_type: &str) -> bool {
+        matches!(other_type, "FloatBox" | "IntegerBox")
+    }
+}
+
+impl DynamicDiv for FloatBox {
+    fn try_div(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        // FloatBox / FloatBox
+        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+            if other_float.value == 0.0 {
+                return None; // Division by zero
+            }
+            return Some(Box::new(FloatBox::new(self.value / other_float.value)));
+        }
+        
+        // FloatBox / IntegerBox -> FloatBox
+        if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
+            if other_int.value == 0 {
+                return None; // Division by zero
+            }
+            return Some(Box::new(FloatBox::new(self.value / other_int.value as f64)));
+        }
+        
+        None
+    }
+    
+    fn can_div_with(&self, other_type: &str) -> bool {
+        matches!(other_type, "FloatBox" | "IntegerBox")
     }
 }
 
