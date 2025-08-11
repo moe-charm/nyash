@@ -122,6 +122,12 @@ impl OperatorResolver {
             }
         }
         
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_add(right) {
+                return Ok(result);
+            }
+        }
+        
         if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
             if let Some(result) = bool_box.try_add(right) {
                 return Ok(result);
@@ -144,6 +150,12 @@ impl OperatorResolver {
         // Try concrete types for DynamicSub
         if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
             if let Some(result) = int_box.try_sub(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_sub(right) {
                 return Ok(result);
             }
         }
@@ -179,6 +191,12 @@ impl OperatorResolver {
             }
         }
         
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_mul(right) {
+                return Ok(result);
+            }
+        }
+        
         if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
             if let Some(result) = bool_box.try_mul(right) {
                 return Ok(result);
@@ -200,6 +218,15 @@ impl OperatorResolver {
         // Try concrete types for DynamicDiv
         if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
             if let Some(result) = int_box.try_div(right) {
+                return Ok(result);
+            } else {
+                // If try_div returns None, it might be division by zero
+                return Err(OperatorError::DivisionByZero);
+            }
+        }
+        
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_div(right) {
                 return Ok(result);
             } else {
                 // If try_div returns None, it might be division by zero

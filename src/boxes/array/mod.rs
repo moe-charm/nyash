@@ -135,6 +135,100 @@ impl ArrayBox {
             Box::new(StringBox::new("Error: join() requires string separator"))
         }
     }
+    
+    /// 配列をソート（昇順）
+    pub fn sort(&self) -> Box<dyn NyashBox> {
+        let mut items = self.items.lock().unwrap();
+        
+        // Numeric values first, then string values
+        items.sort_by(|a, b| {
+            use std::cmp::Ordering;
+            
+            // Try to compare as numbers first
+            if let (Some(a_int), Some(b_int)) = (
+                a.as_any().downcast_ref::<IntegerBox>(),
+                b.as_any().downcast_ref::<IntegerBox>()
+            ) {
+                return a_int.value.cmp(&b_int.value);
+            }
+            
+            // Try FloatBox comparison
+            if let (Some(a_float), Some(b_float)) = (
+                a.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>(),
+                b.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>()
+            ) {
+                return a_float.value.partial_cmp(&b_float.value).unwrap_or(Ordering::Equal);
+            }
+            
+            // Mixed numeric types
+            if let (Some(a_int), Some(b_float)) = (
+                a.as_any().downcast_ref::<IntegerBox>(),
+                b.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>()
+            ) {
+                return (a_int.value as f64).partial_cmp(&b_float.value).unwrap_or(Ordering::Equal);
+            }
+            
+            if let (Some(a_float), Some(b_int)) = (
+                a.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>(),
+                b.as_any().downcast_ref::<IntegerBox>()
+            ) {
+                return a_float.value.partial_cmp(&(b_int.value as f64)).unwrap_or(Ordering::Equal);
+            }
+            
+            // Fall back to string comparison
+            let a_str = a.to_string_box().value;
+            let b_str = b.to_string_box().value;
+            a_str.cmp(&b_str)
+        });
+        
+        Box::new(StringBox::new("ok"))
+    }
+    
+    /// 配列を反転
+    pub fn reverse(&self) -> Box<dyn NyashBox> {
+        let mut items = self.items.lock().unwrap();
+        items.reverse();
+        Box::new(StringBox::new("ok"))
+    }
+    
+    /// 部分配列を取得
+    pub fn slice(&self, start: Box<dyn NyashBox>, end: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let items = self.items.lock().unwrap();
+        
+        // Extract start and end indices
+        let start_idx = if let Some(start_int) = start.as_any().downcast_ref::<IntegerBox>() {
+            if start_int.value < 0 {
+                0
+            } else {
+                start_int.value as usize
+            }
+        } else {
+            return Box::new(StringBox::new("Error: slice() start index must be an integer"));
+        };
+        
+        let end_idx = if let Some(end_int) = end.as_any().downcast_ref::<IntegerBox>() {
+            if end_int.value < 0 {
+                items.len()
+            } else {
+                (end_int.value as usize).min(items.len())
+            }
+        } else {
+            return Box::new(StringBox::new("Error: slice() end index must be an integer"));
+        };
+        
+        // Validate indices
+        if start_idx > items.len() || start_idx > end_idx {
+            return Box::new(ArrayBox::new());
+        }
+        
+        // Create slice
+        let slice_items: Vec<Box<dyn NyashBox>> = items[start_idx..end_idx]
+            .iter()
+            .map(|item| item.clone_box())
+            .collect();
+            
+        Box::new(ArrayBox::new_with_elements(slice_items))
+    }
 }
 
 impl BoxCore for ArrayBox {

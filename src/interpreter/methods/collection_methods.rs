@@ -126,6 +126,32 @@ impl NyashInterpreter {
                 }
                 Ok(Box::new(array_box.to_string_box()))
             }
+            "sort" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("sort() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(array_box.sort())
+            }
+            "reverse" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("reverse() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(array_box.reverse())
+            }
+            "slice" => {
+                if arguments.len() != 2 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("slice() expects 2 arguments (start, end), got {}", arguments.len()),
+                    });
+                }
+                let start_value = self.execute_expression(&arguments[0])?;
+                let end_value = self.execute_expression(&arguments[1])?;
+                Ok(array_box.slice(start_value, end_value))
+            }
             _ => {
                 Err(RuntimeError::InvalidOperation {
                     message: format!("Unknown method '{}' for ArrayBox", method),
