@@ -31,7 +31,7 @@
  * - `run()`はブロッキング動作（アプリ終了まで制御を返さない）
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::interpreter::RuntimeError;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
@@ -47,6 +47,7 @@ use eframe::{self, epaint::Vec2};
 /// app.run()
 /// ```
 pub struct EguiBox {
+    base: BoxBase,
     title: String,
     size: Vec2,
     app_state: Arc<Mutex<Box<dyn Any + Send>>>,
@@ -65,6 +66,7 @@ impl std::fmt::Debug for EguiBox {
 impl EguiBox {
     pub fn new() -> Self {
         Self {
+            base: BoxBase::new(),
             title: "Nyash GUI Application".to_string(),
             size: Vec2::new(800.0, 600.0),
             app_state: Arc::new(Mutex::new(Box::new(()) as Box<dyn Any + Send>)),
@@ -100,6 +102,22 @@ impl eframe::App for NyashApp {
     }
 }
 
+impl BoxCore for EguiBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "EguiBox('{}', {}x{})", self.title, self.size.x, self.size.y)
+    }
+}
+
+impl std::fmt::Display for EguiBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
 impl NyashBox for EguiBox {
     fn to_string_box(&self) -> StringBox {
         StringBox::new(
@@ -110,6 +128,7 @@ impl NyashBox for EguiBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         // GUI Boxはクローン不可（単一インスタンス）
         Box::new(Self {
+            base: BoxBase::new(),
             title: self.title.clone(),
             size: self.size,
             app_state: Arc::new(Mutex::new(Box::new(()) as Box<dyn Any + Send>)),
@@ -133,10 +152,6 @@ impl NyashBox for EguiBox {
         "EguiBox"
     }
     
-    fn box_id(&self) -> u64 {
-        // 簡易的なIDとしてポインタアドレスを使用
-        self as *const _ as u64
-    }
 }
 
 // EguiBoxのメソッド実装（実際にはインタープリターから呼ばれない）

@@ -2,7 +2,7 @@
 // Nyashの箱システムによるファイル入出力を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Result};
@@ -12,21 +12,16 @@ use std::sync::{Arc, Mutex};
 pub struct FileBox {
     file: Arc<Mutex<File>>,
     path: Arc<String>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl FileBox {
     pub fn open(path: &str) -> Result<Self> {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
         Ok(FileBox { 
             file: Arc::new(Mutex::new(file)),
             path: Arc::new(path.to_string()),
-            id,
+            base: BoxBase::new(),
         })
     }
     
@@ -82,6 +77,16 @@ impl FileBox {
     }
 }
 
+impl BoxCore for FileBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "FileBox({})", self.path)
+    }
+}
+
 impl NyashBox for FileBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         // Note: Cannot truly clone a File handle, so create a new one to the same path
@@ -103,9 +108,6 @@ impl NyashBox for FileBox {
         "FileBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_file) = other.as_any().downcast_ref::<FileBox>() {
@@ -113,5 +115,11 @@ impl NyashBox for FileBox {
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+impl std::fmt::Display for FileBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
     }
 }

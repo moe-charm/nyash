@@ -2,7 +2,7 @@
 // Nyashの箱システムによるJSON解析・生成を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox};
+use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox, BoolBox, IntegerBox};
 use crate::boxes::array::ArrayBox;
 use crate::boxes::map_box::MapBox;
 use std::any::Any;
@@ -12,32 +12,22 @@ use serde_json::{Value, Error};
 #[derive(Debug, Clone)]
 pub struct JSONBox {
     value: Arc<Mutex<Value>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl JSONBox {
     pub fn from_str(s: &str) -> Result<Self, Error> {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         let value = serde_json::from_str(s)?;
         Ok(JSONBox { 
             value: Arc::new(Mutex::new(value)), 
-            id 
+            base: BoxBase::new() 
         })
     }
     
     pub fn new(value: Value) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         JSONBox { 
             value: Arc::new(Mutex::new(value)), 
-            id 
+            base: BoxBase::new() 
         }
     }
     
@@ -129,6 +119,35 @@ impl JSONBox {
     }
 }
 
+impl BoxCore for JSONBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let value = self.value.lock().unwrap();
+        let json_type = match *value {
+            Value::Null => "null",
+            Value::Bool(_) => "boolean",
+            Value::Number(_) => "number",
+            Value::String(_) => "string",
+            Value::Array(ref arr) => {
+                return write!(f, "JSONBox[array:{}]", arr.len());
+            },
+            Value::Object(ref obj) => {
+                return write!(f, "JSONBox[object:{}]", obj.len());
+            },
+        };
+        write!(f, "JSONBox[{}]", json_type)
+    }
+}
+
+impl std::fmt::Display for JSONBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
 impl NyashBox for JSONBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
@@ -147,9 +166,6 @@ impl NyashBox for JSONBox {
         "JSONBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_json) = other.as_any().downcast_ref::<JSONBox>() {

@@ -103,7 +103,7 @@
  * - 存在しないキーの取得は "Key not found" メッセージ返却
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::box_trait::{BoxCore, BoxBase, NyashBox, StringBox, IntegerBox, BoolBox};
 use crate::boxes::array::ArrayBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
@@ -114,20 +114,14 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone)]
 pub struct MapBox {
     data: Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl MapBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             data: Arc::new(Mutex::new(HashMap::new())),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -229,6 +223,17 @@ impl MapBox {
     }
 }
 
+impl BoxCore for MapBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let size = self.data.lock().unwrap().len();
+        write!(f, "MapBox(size={})", size)
+    }
+}
+
 impl NyashBox for MapBox {
     fn type_name(&self) -> &'static str {
         "MapBox"
@@ -246,7 +251,7 @@ impl NyashBox for MapBox {
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_map) = other.as_any().downcast_ref::<MapBox>() {
             // 同じインスタンスかチェック（データの共有を考慮）
-            BoolBox::new(self.id == other_map.id)
+            BoolBox::new(self.box_id() == other_map.box_id())
         } else {
             BoolBox::new(false)
         }
@@ -255,15 +260,11 @@ impl NyashBox for MapBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for MapBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string_box().value)
+        self.fmt_box(f)
     }
 }
 
@@ -271,7 +272,7 @@ impl Debug for MapBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let data = self.data.lock().unwrap();
         f.debug_struct("MapBox")
-            .field("id", &self.id)
+            .field("id", &self.base.id)
             .field("size", &data.len())
             .field("keys", &data.keys().collect::<Vec<_>>())
             .finish()

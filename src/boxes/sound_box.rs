@@ -138,7 +138,7 @@
  * - Web環境では制限が多い（ユーザー操作後のみ音声再生可能）
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::process::Command;
@@ -147,18 +147,14 @@ use std::time::Duration;
 /// 音響効果を提供するBox
 #[derive(Debug, Clone)]
 pub struct SoundBox {
-    id: u64,
+    base: BoxBase,
 }
 
 impl SoundBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { id }
+        Self { 
+            base: BoxBase::new() 
+        }
     }
     
     /// ビープ音を鳴らす（基本）
@@ -332,7 +328,7 @@ impl NyashBox for SoundBox {
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_sound) = other.as_any().downcast_ref::<SoundBox>() {
-            BoolBox::new(self.id == other_sound.id)
+            BoolBox::new(self.base.id == other_sound.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -342,13 +338,20 @@ impl NyashBox for SoundBox {
         self
     }
     
+}
+
+impl BoxCore for SoundBox {
     fn box_id(&self) -> u64 {
-        self.id
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "SoundBox()")
     }
 }
 
 impl Display for SoundBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "SoundBox()")
+        self.fmt_box(f)
     }
 }

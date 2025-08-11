@@ -28,7 +28,7 @@
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBase};
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
@@ -37,31 +37,21 @@ use std::fmt::{Debug, Display};
 #[derive(Debug, Clone)]
 pub struct BufferBox {
     data: Arc<Mutex<Vec<u8>>>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl BufferBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         BufferBox { 
             data: Arc::new(Mutex::new(Vec::new())),
-            id,
+            base: BoxBase::new(),
         }
     }
     
     pub fn from_vec(data: Vec<u8>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
         BufferBox { 
             data: Arc::new(Mutex::new(data)),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -158,6 +148,23 @@ impl BufferBox {
     }
 }
 
+impl BoxCore for BufferBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let data = self.data.lock().unwrap();
+        write!(f, "BufferBox({} bytes)", data.len())
+    }
+}
+
+impl Display for BufferBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
 impl NyashBox for BufferBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
@@ -176,9 +183,6 @@ impl NyashBox for BufferBox {
         "BufferBox"
     }
 
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_buffer) = other.as_any().downcast_ref::<BufferBox>() {
