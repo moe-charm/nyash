@@ -1217,7 +1217,7 @@ pub struct CompareBox;
 
 impl CompareBox {
     pub fn less(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
-        use crate::boxes::math_box::FloatBox;
+        use crate::boxes::FloatBox;
         
         // Integer < Integer
         if let (Some(left_int), Some(right_int)) = (
@@ -1255,7 +1255,7 @@ impl CompareBox {
     }
     
     pub fn greater(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
-        use crate::boxes::math_box::FloatBox;
+        use crate::boxes::FloatBox;
         
         // Integer > Integer
         if let (Some(left_int), Some(right_int)) = (
@@ -1293,7 +1293,7 @@ impl CompareBox {
     }
     
     pub fn less_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
-        use crate::boxes::math_box::FloatBox;
+        use crate::boxes::FloatBox;
         
         // Integer <= Integer
         if let (Some(left_int), Some(right_int)) = (
@@ -1331,7 +1331,7 @@ impl CompareBox {
     }
     
     pub fn greater_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
-        use crate::boxes::math_box::FloatBox;
+        use crate::boxes::FloatBox;
         
         // Integer >= Integer
         if let (Some(left_int), Some(right_int)) = (
