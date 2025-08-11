@@ -480,18 +480,29 @@ impl NyashParser {
         // DOTを確認
         self.consume(TokenType::DOT)?;
         
-        // method名を取得
-        let method = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
-            let name = name.clone();
-            self.advance();
-            name
-        } else {
-            let line = self.current_token().line;
-            return Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: "method name".to_string(),
-                line,
-            });
+        // method名を取得 (IDENTIFIERまたはINITを受け入れ)
+        let method = match &self.current_token().token_type {
+            TokenType::IDENTIFIER(name) => {
+                let name = name.clone();
+                self.advance();
+                name
+            }
+            TokenType::INIT => {
+                self.advance();
+                "init".to_string()
+            }
+            TokenType::PACK => {
+                self.advance();
+                "pack".to_string()
+            }
+            _ => {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "method name".to_string(),
+                    line,
+                });
+            }
         };
         
         // 引数リストをパース

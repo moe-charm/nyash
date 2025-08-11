@@ -748,8 +748,8 @@ impl NyashInterpreter {
         
         drop(box_declarations); // ロック早期解放
         
-        // 4. constructorの場合の特別処理
-        if method == "constructor" {
+        // 4. constructorまたはinitまたはpackの場合の特別処理
+        if method == "constructor" || method == "init" || method == "pack" || method == parent {
             return self.execute_from_parent_constructor(parent, &parent_box_decl, current_instance_val.clone_box(), arguments);
         }
         
@@ -820,16 +820,17 @@ impl NyashInterpreter {
                                        current_instance: Box<dyn NyashBox>, arguments: &[ASTNode])
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         
-        // 1. 親クラスのコンストラクタを取得（デフォルトコンストラクタまたは指定されたもの）
-        let constructor_name = if arguments.is_empty() { 
-            "constructor" 
-        } else { 
-            "constructor" // TODO: 将来的に名前付きコンストラクタ対応
-        };
+        // 1. 親クラスのコンストラクタを取得（引数の数でキーを作成）
+        // "pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
+        let pack_key = format!("pack/{}", arguments.len());
+        let init_key = format!("init/{}", arguments.len());
+        let box_name_key = format!("{}/{}", parent, arguments.len());
         
-        let parent_constructor = parent_box_decl.constructors.get(constructor_name)
+        let parent_constructor = parent_box_decl.constructors.get(&pack_key)
+            .or_else(|| parent_box_decl.constructors.get(&init_key))
+            .or_else(|| parent_box_decl.constructors.get(&box_name_key))
             .ok_or(RuntimeError::InvalidOperation {
-                message: format!("Constructor '{}' not found in parent class '{}'", constructor_name, parent),
+                message: format!("No constructor found for parent class '{}' with {} arguments", parent, arguments.len()),
             })?
             .clone();
         
@@ -844,8 +845,8 @@ impl NyashInterpreter {
             // パラメータ数チェック
             if arg_values.len() != params.len() {
                 return Err(RuntimeError::InvalidOperation {
-                    message: format!("Parent constructor {}.{} expects {} arguments, got {}", 
-                                   parent, constructor_name, params.len(), arg_values.len()),
+                    message: format!("Parent constructor {} expects {} arguments, got {}", 
+                                   parent, params.len(), arg_values.len()),
                 });
             }
             
@@ -881,7 +882,7 @@ impl NyashInterpreter {
             Ok(current_instance)
         } else {
             Err(RuntimeError::InvalidOperation {
-                message: format!("Parent constructor '{}' is not a valid function declaration", constructor_name),
+                message: format!("Parent constructor is not a valid function declaration"),
             })
         }
     }

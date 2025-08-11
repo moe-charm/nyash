@@ -32,6 +32,7 @@ pub enum TokenType {
     THIS,
     ME,
     INIT,            // init (初期化ブロック)
+    PACK,            // pack (コンストラクタ)
     NOWAIT,          // nowait
     AWAIT,           // await
     INTERFACE,       // interface
@@ -390,6 +391,7 @@ impl NyashTokenizer {
             "this" => TokenType::THIS,
             "me" => TokenType::ME,
             "init" => TokenType::INIT,
+            "pack" => TokenType::PACK,
             "nowait" => TokenType::NOWAIT,
             "await" => TokenType::AWAIT,
             "interface" => TokenType::INTERFACE,

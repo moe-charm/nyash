@@ -60,6 +60,20 @@ cd projects/nyash-wasm
 - すべての値がBox（StringBox, IntegerBox, BoolBox等）
 - ユーザー定義Box: `box ClassName { init { field1, field2 } }`
 
+### 🌟 完全明示デリゲーション（2025-08-11革命）
+```nyash
+// デリゲーション構文
+box Child from Parent {  // from構文でデリゲーション
+    init(args) {  // コンストラクタは「init」に統一
+        from Parent.init(args)  // 親の初期化
+    }
+    
+    override method() {  // 明示的オーバーライド必須
+        from Parent.method()  // 親メソッド呼び出し
+    }
+}
+```
+
 ### 🔄 統一ループ構文
 ```nyash
 // ✅ 唯一の正しい形式
@@ -68,6 +82,32 @@ loop(condition) { }
 // ❌ 削除済み構文
 while condition { }  // 使用不可
 loop() { }          // 使用不可
+```
+
+### 🎁 pack構文 - Box哲学の具現化（2025-08-11実装）
+```nyash
+// 🎁 「箱に詰める」直感的コンストラクタ
+box User {
+    init { name, email }
+    
+    pack(userName, userEmail) {  // ← Box哲学を体現！
+        me.name = userName
+        me.email = userEmail
+    }
+}
+
+// 🔄 デリゲーションでのpack
+box AdminUser from User {
+    init { permissions }
+    
+    pack(adminName, adminEmail, perms) {
+        from User.pack(adminName, adminEmail)  // 親のpackを呼び出し
+        me.permissions = perms
+    }
+}
+
+// ✅ 優先順位: pack > init > Box名形式
+local user = new User("Alice", "alice@example.com")  // packが使われる
 ```
 
 ### 🎯 正統派Nyashスタイル（2025-08-09実装）
@@ -238,4 +278,9 @@ docs/
 
 ---
 
-最終更新: 2025年8月9日 - **🔥 パーサー無限ループ完全制圧！`--debug-fuel`引数でユーザー制御可能＋must_advance!マクロによる早期検出システム完成。予約語問題も安全にエラー表示。静的Box Mainパターン＋変数宣言厳密化と合わせて本格言語レベル到達！**
+最終更新: 2025年8月11日 - **🎁 `pack`構文革命完全達成！**
+- **Everything is Packed**: Gemini・ChatGPT両先生一致推薦の`pack`コンストラクタ採用
+- **Box哲学具現化**: 「箱に詰める」直感的メタファーでコードを書くたび哲学体験
+- **完全実装**: `pack()`、`from Parent.pack()`、`pack`>`init`>Box名順優先選択
+- **革命的UX**: 他言語の`new`/`init`を超越、Nyash独自アイデンティティ確立
+- **デリゲーション完成**: `box Child from Parent`+`pack`+`override`+`from`統合完了

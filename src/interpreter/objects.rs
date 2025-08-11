@@ -592,8 +592,14 @@ impl NyashInterpreter {
         // 🌍 革命的実装：Environment tracking廃止
         
         // コンストラクタを呼び出す
-        let constructor_key = format!("{}/{}", actual_class_name, arguments.len());
-        if let Some(constructor) = final_box_decl.constructors.get(&constructor_key) {
+        // "pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
+        let pack_key = format!("pack/{}", arguments.len());
+        let init_key = format!("init/{}", arguments.len());
+        let box_name_key = format!("{}/{}", actual_class_name, arguments.len());
+        
+        if let Some(constructor) = final_box_decl.constructors.get(&pack_key)
+            .or_else(|| final_box_decl.constructors.get(&init_key))
+            .or_else(|| final_box_decl.constructors.get(&box_name_key)) {
             // コンストラクタを実行
             self.execute_constructor(&instance_box, constructor, arguments, &final_box_decl)?;
         } else if !arguments.is_empty() {
@@ -797,8 +803,12 @@ impl NyashInterpreter {
         };
             
         // 親コンストラクタを探す
-        let constructor_key = format!("{}/{}", parent_class, arguments.len());
-        if let Some(parent_constructor) = parent_decl.constructors.get(&constructor_key) {
+        // まず "init/引数数" を試し、なければ "Box名/引数数" を試す
+        let init_key = format!("init/{}", arguments.len());
+        let box_name_key = format!("{}/{}", parent_class, arguments.len());
+        
+        if let Some(parent_constructor) = parent_decl.constructors.get(&init_key)
+            .or_else(|| parent_decl.constructors.get(&box_name_key)) {
             // 現在のthis参照を取得
             // 🌍 革命的this取得：local変数から
             let this_instance = self.resolve_variable("me")
