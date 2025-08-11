@@ -9,8 +9,6 @@
 use super::*;
 use crate::boxes::null_box::NullBox;
 use crate::boxes::console_box::ConsoleBox;
-use crate::boxes::{NewP2PBox, MessageIntentBox};
-use crate::transport_trait::TransportKind;
 // use crate::boxes::intent_box_wrapper::IntentBoxWrapper;
 use std::sync::Arc;
 
@@ -535,64 +533,6 @@ impl NyashInterpreter {
                 } else {
                     return Err(RuntimeError::TypeError {
                         message: "MethodBox constructor requires string method name as second argument".to_string(),
-                    });
-                }
-            }
-            "NewP2PBox" => {
-                // NewP2PBoxは引数2個（node_id, transport_kind）で作成
-                if arguments.len() != 2 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("NewP2PBox constructor expects 2 arguments (node_id, transport_kind), got {}", arguments.len()),
-                    });
-                }
-                
-                // node_id
-                let node_id_value = self.execute_expression(&arguments[0])?;
-                let node_id = if let Some(id_str) = node_id_value.as_any().downcast_ref::<StringBox>() {
-                    id_str.value.clone()
-                } else {
-                    return Err(RuntimeError::TypeError {
-                        message: "NewP2PBox constructor requires string node_id as first argument".to_string(),
-                    });
-                };
-                
-                // transport_kind（文字列 → TransportKind enum）
-                let transport_value = self.execute_expression(&arguments[1])?;
-                let transport_kind = if let Some(transport_str) = transport_value.as_any().downcast_ref::<StringBox>() {
-                    match transport_str.value.as_str() {
-                        "InProcess" => TransportKind::InProcess,
-                        "WebSocket" => TransportKind::WebSocket,
-                        "WebRTC" => TransportKind::WebRTC,
-                        _ => {
-                            return Err(RuntimeError::TypeError {
-                                message: format!("Invalid transport kind '{}'. Valid options: InProcess, WebSocket, WebRTC", transport_str.value),
-                            });
-                        }
-                    }
-                } else {
-                    return Err(RuntimeError::TypeError {
-                        message: "NewP2PBox constructor requires string transport_kind as second argument".to_string(),
-                    });
-                };
-                
-                let p2p_box = Box::new(NewP2PBox::new(&node_id, transport_kind)) as Box<dyn NyashBox>;
-                return Ok(p2p_box);
-            }
-            "MessageIntentBox" => {
-                // MessageIntentBoxは引数1個（intent）で作成
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("MessageIntentBox constructor expects 1 argument (intent), got {}", arguments.len()),
-                    });
-                }
-                
-                let intent_value = self.execute_expression(&arguments[0])?;
-                if let Some(intent_str) = intent_value.as_any().downcast_ref::<StringBox>() {
-                    let message_box = Box::new(MessageIntentBox::new(&intent_str.value)) as Box<dyn NyashBox>;
-                    return Ok(message_box);
-                } else {
-                    return Err(RuntimeError::TypeError {
-                        message: "MessageIntentBox constructor requires string intent as argument".to_string(),
                     });
                 }
             }

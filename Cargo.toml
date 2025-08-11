@@ -54,9 +54,6 @@ path = "development/egui_research/experiments/visual_node_prototype.rs"
 name = "test_icon_extraction"
 path = "examples/test_icon_extraction.rs"
 
-[[bin]]
-name = "test_new_p2p_box"
-path = "test_new_p2p_box.rs"
 
 [[bin]]
 name = "test_method_box_integration"

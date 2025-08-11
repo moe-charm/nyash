@@ -195,6 +195,39 @@ app.setSize(800, 600)
 
 **実装状況**: 基本実装完了、GUI実行コンテキスト対応中
 
+## 📖 ドキュメントファースト開発（重要！）
+
+### 🚨 開発手順の鉄則
+**絶対にソースコードを直接読みに行かない！必ずこの順序で作業：**
+
+1. **📚 ドキュメント確認** - まず既存ドキュメントをチェック
+2. **🔄 ドキュメント更新** - 古い/不足している場合は更新
+3. **💻 ソース確認** - それでも解決しない場合のみソースコード参照
+
+### 🎯 最重要ドキュメント（2つの核心）
+
+#### 🔤 言語仕様
+- **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
+- **[完全リファレンス](docs/reference/)** - 言語仕様詳細
+- **[予約語一覧](docs/reference/keywords.md)** - from, override, pack等
+
+#### 📦 主要BOXのAPI
+- **[ビルトイン型](docs/reference/built-in-boxes.md)** - 全Box型API仕様
+- **P2PBox & IntentBox** - docs/reference/built-in-boxes.md内
+- **StringBox, IntegerBox, ConsoleBox** - 基本Box API
+- **EguiBox, DebugBox, MathBox** - 特殊Box API
+
+### ⚡ API確認の実践例
+```bash
+# ❌ 悪い例：いきなりソース読む
+Read src/boxes/p2p_box.rs  # 直接ソース参照
+
+# ✅ 良い例：ドキュメント優先
+Read docs/reference/built-in-boxes.md  # まずドキュメント
+# → 古い/不足 → ドキュメント更新
+# → それでも不明 → ソース確認
+```
+
 ## 🔧 開発サポート
 
 ### 🤖 AI相談
