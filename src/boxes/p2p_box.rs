@@ -34,9 +34,8 @@
  */
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
-use crate::boxes::intent_box::IntentBox;
+use crate::boxes::{IntentBox, MapBox};
 pub use crate::boxes::intent_box::Message;
-use crate::boxes::map_box::MapBox;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;

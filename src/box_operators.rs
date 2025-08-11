@@ -10,7 +10,7 @@
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
-use crate::boxes::math_box::FloatBox;
+use crate::boxes::FloatBox;
 use crate::operator_traits::{
     NyashAdd, NyashSub, NyashMul, NyashDiv,
     DynamicAdd, DynamicSub, DynamicMul, DynamicDiv,

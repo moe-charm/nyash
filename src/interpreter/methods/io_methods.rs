@@ -9,7 +9,7 @@
 
 use super::super::*;
 use crate::box_trait::{ResultBox, StringBox, NyashBox};
-use crate::boxes::file::FileBox;
+use crate::boxes::FileBox;
 
 impl NyashInterpreter {
     /// FileBoxのメソッド呼び出しを実行
