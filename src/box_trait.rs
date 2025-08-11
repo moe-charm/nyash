@@ -9,12 +9,45 @@
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::fs;
 use std::path::Path;
 
+/// 🔥 BoxBase + BoxCore革命 - 統一ID生成システム
+/// CharmFlow教訓を活かした互換性保証の基盤
+pub fn next_box_id() -> u64 {
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+/// 🏗️ BoxBase - 全てのBox型の共通基盤構造体
+/// Phase 2: 統一的な基盤データを提供
+pub struct BoxBase {
+    pub id: u64,
+}
+
+impl BoxBase {
+    /// 新しいBoxBase作成 - 安全なID生成
+    pub fn new() -> Self {
+        Self {
+            id: next_box_id(),
+        }
+    }
+}
+
+/// 🎯 BoxCore - Box型共通メソッドの統一インターフェース
+/// Phase 2: 重複コードを削減する中核トレイト
+pub trait BoxCore: Send + Sync {
+    /// ボックスの一意ID取得
+    fn box_id(&self) -> u64;
+    
+    /// Display実装のための統一フォーマット
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result;
+}
+
 /// The fundamental trait that all Nyash values must implement.
 /// This embodies the "Everything is Box" philosophy with Rust's type safety.
-pub trait NyashBox: Debug + Send + Sync {
+pub trait NyashBox: BoxCore + Debug {
     /// Convert this box to a string representation (equivalent to Python's toString())
     fn to_string_box(&self) -> StringBox;
     
@@ -22,16 +55,15 @@ pub trait NyashBox: Debug + Send + Sync {
     fn equals(&self, other: &dyn NyashBox) -> BoolBox;
     
     /// Get the type name of this box for debugging
-    fn type_name(&self) -> &'static str;
+    fn type_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
     
     /// Clone this box (equivalent to Python's copy())
     fn clone_box(&self) -> Box<dyn NyashBox>;
     
     /// Convert to Any for downcasting (enables dynamic typing in static Rust)
     fn as_any(&self) -> &dyn Any;
-    
-    /// Get a unique identifier for this box instance
-    fn box_id(&self) -> u64;
     
     // 🌟 TypeBox革命: Get type information as a Box
     // Everything is Box極限実現 - 型情報もBoxとして取得！
@@ -45,20 +77,14 @@ pub trait NyashBox: Debug + Send + Sync {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StringBox {
     pub value: String,
-    id: u64,
+    base: BoxBase,
 }
 
 impl StringBox {
     pub fn new(value: impl Into<String>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             value: value.into(),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -149,6 +175,16 @@ impl StringBox {
     }
 }
 
+impl BoxCore for StringBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 impl NyashBox for StringBox {
     fn to_string_box(&self) -> StringBox {
         self.clone()
@@ -173,15 +209,11 @@ impl NyashBox for StringBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for StringBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        self.fmt_box(f)
     }
 }
 
@@ -189,22 +221,29 @@ impl Display for StringBox {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntegerBox {
     pub value: i64,
-    id: u64,
+    base: BoxBase,
 }
 
 impl IntegerBox {
     pub fn new(value: i64) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { value, id }
+        Self { 
+            value, 
+            base: BoxBase::new() 
+        }
     }
     
     pub fn zero() -> Self {
         Self::new(0)
+    }
+}
+
+impl BoxCore for IntegerBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.value)
     }
 }
 
@@ -232,15 +271,11 @@ impl NyashBox for IntegerBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for IntegerBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        self.fmt_box(f)
     }
 }
 
@@ -248,18 +283,15 @@ impl Display for IntegerBox {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoolBox {
     pub value: bool,
-    id: u64,
+    base: BoxBase,
 }
 
 impl BoolBox {
     pub fn new(value: bool) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { value, id }
+        Self { 
+            value, 
+            base: BoxBase::new() 
+        }
     }
     
     pub fn true_box() -> Self {
@@ -268,6 +300,16 @@ impl BoolBox {
     
     pub fn false_box() -> Self {
         Self::new(false)
+    }
+}
+
+impl BoxCore for BoolBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", if self.value { "true" } else { "false" })
     }
 }
 
@@ -295,39 +337,41 @@ impl NyashBox for BoolBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for BoolBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", if self.value { "true" } else { "false" })
+        self.fmt_box(f)
     }
 }
 
 /// Void/null values in Nyash - represents empty or null results
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoidBox {
-    id: u64,
+    base: BoxBase,
 }
 
 impl VoidBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { id }
+        Self { 
+            base: BoxBase::new() 
+        }
     }
 }
 
 impl Default for VoidBox {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl BoxCore for VoidBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "void")
     }
 }
 
@@ -351,15 +395,11 @@ impl NyashBox for VoidBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for VoidBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "void")
+        self.fmt_box(f)
     }
 }
 
@@ -370,20 +410,14 @@ pub use crate::boxes::array::ArrayBox;
 #[derive(Debug, Clone)]
 pub struct FileBox {
     pub path: String,
-    id: u64,
+    base: BoxBase,
 }
 
 impl FileBox {
     pub fn new(path: impl Into<String>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             path: path.into(),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -428,6 +462,16 @@ impl FileBox {
     }
 }
 
+impl BoxCore for FileBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "<FileBox: {}>", self.path)
+    }
+}
+
 impl NyashBox for FileBox {
     fn to_string_box(&self) -> StringBox {
         StringBox::new(format!("<FileBox: {}>", self.path))
@@ -452,15 +496,11 @@ impl NyashBox for FileBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for FileBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<FileBox: {}>", self.path)
+        self.fmt_box(f)
     }
 }
 
@@ -469,22 +509,26 @@ impl Display for FileBox {
 pub struct ErrorBox {
     pub error_type: String,
     pub message: String,
-    id: u64,
+    base: BoxBase,
 }
 
 impl ErrorBox {
     pub fn new(error_type: impl Into<String>, message: impl Into<String>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             error_type: error_type.into(),
             message: message.into(),
-            id,
+            base: BoxBase::new(),
         }
+    }
+}
+
+impl BoxCore for ErrorBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}: {}", self.error_type, self.message)
     }
 }
 
@@ -512,15 +556,11 @@ impl NyashBox for ErrorBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for ErrorBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.error_type, self.message)
+        self.fmt_box(f)
     }
 }
 
@@ -530,37 +570,25 @@ pub struct ResultBox {
     pub is_success: bool,
     pub value: Option<Box<dyn NyashBox>>,
     pub error: Option<ErrorBox>,
-    id: u64,
+    base: BoxBase,
 }
 
 impl ResultBox {
     pub fn new_success(value: Box<dyn NyashBox>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             is_success: true,
             value: Some(value),
             error: None,
-            id,
+            base: BoxBase::new(),
         }
     }
     
     pub fn new_error(error: ErrorBox) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             is_success: false,
             value: None,
             error: Some(error),
-            id,
+            base: BoxBase::new(),
         }
     }
     
@@ -686,16 +714,10 @@ impl Clone for FutureBox {
 
 impl FutureBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
         Self {
             result: Arc::new(Mutex::new(None)),
             is_ready: Arc::new(Mutex::new(false)),
-            id,
+            id: next_box_id(),
         }
     }
     
@@ -799,13 +821,11 @@ pub struct AddBox {
 
 impl AddBox {
     pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { left, right, id }
+        Self { 
+            left, 
+            right, 
+            id: next_box_id() 
+        }
     }
     
     /// Execute the addition operation and return the result

@@ -84,25 +84,21 @@
  * - メソッド呼び出し時のnullチェックでNullPointerException防止
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase, next_box_id};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 
 /// null値を表現するBox
 #[derive(Debug, Clone)]
 pub struct NullBox {
-    id: u64,
+    base: BoxBase,
 }
 
 impl NullBox {
     pub fn new() -> Self {
-        static mut COUNTER: u64 = 0;
-        let id = unsafe {
-            COUNTER += 1;
-            COUNTER
-        };
-        
-        Self { id }
+        Self { 
+            base: BoxBase::new() 
+        }
     }
     
     /// null値かどうかを判定
@@ -138,6 +134,16 @@ impl NullBox {
     }
 }
 
+impl BoxCore for NullBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "null")
+    }
+}
+
 impl NyashBox for NullBox {
     fn type_name(&self) -> &'static str {
         "NullBox"
@@ -159,15 +165,11 @@ impl NyashBox for NullBox {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
-    fn box_id(&self) -> u64 {
-        self.id
-    }
 }
 
 impl Display for NullBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "null")
+        self.fmt_box(f)
     }
 }
 
