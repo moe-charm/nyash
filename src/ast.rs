@@ -256,7 +256,7 @@ impl LiteralValue {
     /// LiteralValueをNyashBoxに変換
     pub fn to_nyash_box(&self) -> Box<dyn NyashBox> {
         use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
-        use crate::boxes::math_box::FloatBox;
+        use crate::boxes::FloatBox;
         
         match self {
             LiteralValue::String(s) => Box::new(StringBox::new(s)),
@@ -272,7 +272,7 @@ impl LiteralValue {
         #[allow(unused_imports)]
         use std::any::Any;
         use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
-        use crate::boxes::math_box::FloatBox;
+        use crate::boxes::FloatBox;
         
         if let Some(string_box) = box_val.as_any().downcast_ref::<StringBox>() {
             Some(LiteralValue::String(string_box.value.clone()))

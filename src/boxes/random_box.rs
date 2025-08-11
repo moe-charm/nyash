@@ -68,8 +68,7 @@
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
-use crate::boxes::array::ArrayBox;
-use crate::boxes::math_box::FloatBox;
+use crate::boxes::{ArrayBox, FloatBox};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::sync::{Arc, Mutex};

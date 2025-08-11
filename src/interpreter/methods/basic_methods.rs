@@ -11,7 +11,7 @@
 
 use super::super::*;
 use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
-use crate::boxes::math_box::FloatBox;
+use crate::boxes::FloatBox;
 
 impl NyashInterpreter {
     /// StringBoxのメソッド呼び出しを実行

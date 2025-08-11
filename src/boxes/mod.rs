@@ -77,7 +77,7 @@ pub use string_box::StringBox;
 pub use integer_box::IntegerBox;
 pub use bool_box::BoolBox;
 pub use math_box::{MathBox, FloatBox};
-pub use time_box::TimeBox;
+pub use time_box::{TimeBox, DateTimeBox};
 pub use debug_box::DebugBox;
 pub use random_box::RandomBox;
 pub use sound_box::SoundBox;

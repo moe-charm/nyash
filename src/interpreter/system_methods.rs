@@ -11,6 +11,7 @@
 
 use super::*;
 use crate::box_trait::StringBox;
+use crate::boxes::{TimeBox, DateTimeBox};
 
 impl NyashInterpreter {
     /// TimeBoxのメソッド呼び出しを実行
@@ -170,6 +171,14 @@ impl NyashInterpreter {
                     });
                 }
                 Ok(datetime_box.addHours(arg_values[0].clone_box()))
+            }
+            "toString" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(Box::new(datetime_box.to_string_box()))
             }
             _ => {
                 Err(RuntimeError::InvalidOperation {

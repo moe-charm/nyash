@@ -104,7 +104,7 @@
  */
 
 use crate::box_trait::{BoxCore, BoxBase, NyashBox, StringBox, IntegerBox, BoolBox};
-use crate::boxes::array::ArrayBox;
+use crate::boxes::ArrayBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::collections::HashMap;

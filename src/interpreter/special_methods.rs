@@ -13,7 +13,7 @@
  */
 
 use super::*;
-use crate::boxes::sound_box::SoundBox;
+use crate::boxes::SoundBox;
 use crate::method_box::MethodBox;
 
 impl NyashInterpreter {

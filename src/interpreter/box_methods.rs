@@ -47,7 +47,7 @@
  */
 
 use super::*;
-use crate::boxes::null_box::NullBox;
+use crate::boxes::NullBox;
 
 impl NyashInterpreter {
     // StringBox methods moved to methods/basic_methods.rs

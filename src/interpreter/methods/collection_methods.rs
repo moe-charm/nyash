@@ -9,8 +9,7 @@
 
 use super::super::*;
 use crate::box_trait::{StringBox, IntegerBox, NyashBox, BoolBox};
-use crate::boxes::array::ArrayBox;
-use crate::boxes::map_box::MapBox;
+use crate::boxes::{ArrayBox, MapBox};
 
 impl NyashInterpreter {
     /// ArrayBoxのメソッド呼び出しを実行  
