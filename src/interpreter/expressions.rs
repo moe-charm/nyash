@@ -8,7 +8,8 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox, FloatBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox};
+use crate::boxes::math_box::FloatBox;
 use crate::boxes::{MathBox, ConsoleBox, TimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
 use crate::box_trait::BoolBox;
 use crate::operator_traits::OperatorResolver;
