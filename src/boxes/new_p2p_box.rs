@@ -15,6 +15,7 @@ use crate::box_trait::{NyashBox, BoxCore, BoxBase, next_box_id};
 use crate::boxes::MessageIntentBox;
 use crate::transport_trait::{Transport, TransportKind, create_transport};
 use crate::message_bus::{get_global_message_bus, BusMessage, MessageBus};
+use crate::method_box::MethodBox;
 
 /// NewP2PBox - 天才アルゴリズム内蔵P2P通信ノード
 pub struct NewP2PBox {
@@ -44,7 +45,7 @@ impl NewP2PBox {
         }
     }
     
-    /// 購読メソッド - Busに登録
+    /// 購読メソッド - Busに登録（Rustクロージャ版）
     pub fn on(&self, intent: &str, callback: Box<dyn Fn(&MessageIntentBox) + Send + Sync>) {
         // BusMessageからMessageIntentBoxを抽出するラッパー
         let wrapper = Box::new(move |bus_message: &BusMessage| {
@@ -54,6 +55,33 @@ impl NewP2PBox {
             }
         });
         self.bus.on(&self.node_id, intent, wrapper).unwrap();
+    }
+    
+    /// 購読メソッド - MethodBox版（Nyash統合用）
+    pub fn on_method(&self, intent: &str, method_box: MethodBox) -> Result<(), String> {
+        // MethodBoxをクロージャでラップ
+        let wrapper = Box::new(move |bus_message: &BusMessage| {
+            // BusMessageのdataをMessageIntentBoxにダウンキャスト
+            if let Some(intent_box) = bus_message.data.as_any().downcast_ref::<MessageIntentBox>() {
+                // TODO: インタープリターコンテキストが必要
+                // 現在は単純化実装
+                println!("🎯 MethodBox callback triggered for intent '{}' from {}", 
+                         intent_box.intent, bus_message.from);
+                
+                // MethodBox.invoke()を呼び出し（引数としてMessageIntentBoxを渡す）
+                let args = vec![intent_box.clone_box()];
+                match method_box.invoke(args) {
+                    Ok(result) => {
+                        println!("📥 MethodBox execution result: {}", result.to_string_box().value);
+                    }
+                    Err(e) => {
+                        eprintln!("❌ MethodBox execution error: {}", e);
+                    }
+                }
+            }
+        });
+        
+        self.bus.on(&self.node_id, intent, wrapper)
     }
     
     /// 送信メソッド - 天才アルゴリズム内蔵（同期版）

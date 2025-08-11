@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox, NewP2PBox, MessageIntentBox};
 use crate::boxes::{MathBox, ConsoleBox, TimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
 use crate::operator_traits::OperatorResolver;
 // TODO: Fix NullBox import issue later
@@ -747,7 +747,7 @@ impl NyashInterpreter {
             "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
             "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
             "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox" |
-            "IntentBox" | "P2PBox" | "EguiBox"
+            "IntentBox" | "P2PBox" | "NewP2PBox" | "MessageIntentBox" | "EguiBox"
         );
         
         if is_builtin {
@@ -905,7 +905,7 @@ impl NyashInterpreter {
     }
     
     /// 🔥 ビルトインBoxのメソッド呼び出し
-    fn execute_builtin_box_method(&mut self, parent: &str, method: &str, current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
+    fn execute_builtin_box_method(&mut self, parent: &str, method: &str, mut current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         
         // ビルトインBoxのインスタンスを作成または取得
@@ -940,6 +940,26 @@ impl NyashInterpreter {
                 return Err(RuntimeError::InvalidOperation {
                     message: format!("P2PBox delegation not yet fully implemented: {}.{}", parent, method),
                 });
+            }
+            "NewP2PBox" => {
+                // NewP2PBoxの場合、current_instanceから実際のNewP2PBoxインスタンスを取得
+                if let Some(p2p_box) = current_instance.as_any().downcast_ref::<NewP2PBox>() {
+                    self.execute_new_p2p_box_method(p2p_box, method, arguments)
+                } else {
+                    Err(RuntimeError::TypeError {
+                        message: format!("Expected NewP2PBox instance for method call {}.{}", parent, method),
+                    })
+                }
+            }
+            "MessageIntentBox" => {
+                // MessageIntentBoxの場合、current_instanceから実際のMessageIntentBoxインスタンスを取得
+                if let Some(message_box) = current_instance.as_any_mut().downcast_mut::<MessageIntentBox>() {
+                    self.execute_message_intent_box_method(message_box, method, arguments)
+                } else {
+                    Err(RuntimeError::TypeError {
+                        message: format!("Expected MessageIntentBox instance for method call {}.{}", parent, method),
+                    })
+                }
             }
             "FileBox" => {
                 let file_box = crate::boxes::file::FileBox::new();
