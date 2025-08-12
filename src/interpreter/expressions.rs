@@ -638,7 +638,7 @@ impl NyashInterpreter {
                     eprintln!("🔗 DEBUG: Accessing weak field '{}' in class '{}'", field, instance.class_name);
                     
                     // 🎯 PHASE 2: Use unified accessor for auto-nil weak reference handling
-                    if let Some(weak_value) = instance.get_weak_field(field) {
+                    if let Some(weak_value) = instance.get_weak_field(field, self) { // Pass self
                         match &weak_value {
                             crate::value::NyashValue::Null => {
                                 eprintln!("🔗 DEBUG: Weak field '{}' is null (reference dropped)", field);

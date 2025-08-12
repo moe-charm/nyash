@@ -41,6 +41,7 @@ mod web_methods;
 mod special_methods;
 
 // Main interpreter implementation - will be moved from interpreter.rs
+pub use core::NyashInterpreter;
 
 
 /// 実行制御フロー

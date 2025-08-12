@@ -1,0 +1,54 @@
+// Simple direct test of weak reference auto-nil behavior
+
+box Parent {
+    init { name }
+    
+    pack(parentName) {
+        me.name = parentName
+    }
+}
+
+box Child {
+    init { weak parent }  // weak modifier on parent field
+    
+    setParent(p) {
+        me.parent = p
+    }
+    
+    // Direct access to weak field
+    getParent() {
+        return me.parent
+    }
+    
+    // Check if parent is null directly
+    isParentNull() {
+        local parentRef = me.parent
+        print("Direct parent access returned: " + parentRef.toString())
+        return parentRef
+    }
+}
+
+static box Main {
+    main() {
+        print("=== Simple Weak Reference Test ===")
+        
+        local parent = new Parent("TestParent")
+        local child = new Child()
+        
+        print("Step 1: Set parent")
+        child.setParent(parent)
+        print("Parent before drop: " + child.getParent().toString())
+        
+        print("Step 2: Drop parent")
+        parent = 0  // This should trigger weak reference invalidation
+        
+        print("Step 3: Check parent after drop")
+        local parentAfterDrop = child.getParent()
+        print("Parent after drop: " + parentAfterDrop.toString())
+        
+        print("Step 4: Direct null check")
+        child.isParentNull()
+        
+        return "Simple test completed"
+    }
+}
