@@ -38,7 +38,7 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::IntentBox;
 use crate::transport::{Transport, InProcessTransport, TransportError};
-use crate::messaging::{IntentHandler, MessageBusData};
+use crate::messaging::IntentHandler;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 
