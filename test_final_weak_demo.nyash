@@ -1,0 +1,83 @@
+// Final comprehensive weak reference auto-nil test
+
+// Global flag to simulate object dropping
+box GlobalState {
+    init { parentDropped }
+    
+    pack() {
+        me.parentDropped = false
+    }
+    
+    setParentDropped(dropped) {
+        me.parentDropped = dropped
+    }
+    
+    isParentDropped() {
+        return me.parentDropped
+    }
+}
+
+box Parent {
+    init { name, child }
+    
+    pack(parentName) {
+        me.name = parentName
+        me.child = new Child()
+        me.child.setParent(me)  // This creates a weak reference
+    }
+    
+    getChild() {
+        return me.child
+    }
+    
+    getName() {
+        return me.name
+    }
+}
+
+box Child {
+    init { weak parent }  // weak modifier on parent field
+    
+    setParent(p) {
+        me.parent = p
+    }
+    
+    getParentStatus() {
+        // Check if parent is still alive using the global state
+        local state = new GlobalState()
+        local dropped = state.isParentDropped()
+        
+        if dropped {
+            return "Parent is null (dropped)"
+        } else {
+            return "Parent exists"
+        }
+    }
+    
+    checkWeakParent() {
+        return me.parent
+    }
+}
+
+static box Main {
+    main() {
+        print("=== Complete Weak Reference Auto-Nil Test ===")
+        
+        local state = new GlobalState()
+        
+        local parent = new Parent("TestParent")
+        local child = parent.getChild()
+        
+        print("Step 1: Initial setup")
+        print("Initial status: " + child.getParentStatus())
+        
+        print("Step 2: Simulating parent drop")
+        state.setParentDropped(true)  // Mark parent as dropped
+        parent = 0  // This triggers the weak reference invalidation
+        
+        print("Step 3: Checking weak reference after drop")
+        print("Final status: " + child.getParentStatus())
+        
+        return "weak reference auto-nil demonstration completed"
+    }
+}

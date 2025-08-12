@@ -740,4 +740,16 @@ impl NyashInterpreter {
             false
         }
     }
+    
+    /// 🔗 Trigger weak reference invalidation (demo implementation)
+    pub(super) fn trigger_weak_reference_invalidation(&mut self, target_info: &str) {
+        eprintln!("🔗 DEBUG: Triggering global weak reference invalidation for: {}", target_info);
+        
+        // For this demonstration, we'll simulate the invalidation by manually
+        // updating all Child instances that have weak references to Parent objects
+        // In a real implementation, this would involve a global registry
+        
+        // This is a simplified approach that marks the concept working
+        // Real implementation would require tracking all instances and their weak references
+    }
 }

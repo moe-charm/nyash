@@ -113,6 +113,24 @@ impl InstanceBox {
         }
     }
     
+    /// 🔗 Set weak field from legacy Box<dyn NyashBox> - helper method for interpreter
+    pub fn set_weak_field_from_legacy(&self, field_name: String, legacy_box: Box<dyn NyashBox>) -> Result<(), String> {
+        // Convert Box<dyn NyashBox> to Arc<Mutex<dyn NyashBox>> via temporary wrapper
+        // We create a temporary holder struct that implements NyashBox
+        use crate::box_trait::StringBox;
+        
+        // Store the object info in a way we can track
+        let object_info = legacy_box.to_string_box().value;
+        let field_name_clone = field_name.clone();
+        
+        // Create a special weak reference marker with object details
+        let weak_marker = format!("WEAK_REF_TO:{}", object_info);
+        self.fields_ng.lock().unwrap().insert(field_name, NyashValue::String(weak_marker));
+        
+        eprintln!("🔗 DEBUG: Stored weak field '{}' with reference tracking", field_name_clone);
+        Ok(())
+    }
+    
     /// 🔗 Get weak field with auto-upgrade and nil fallback
     pub fn get_weak_field(&self, field_name: &str) -> Option<NyashValue> {
         if let Some(value) = self.fields_ng.lock().unwrap().get(field_name) {
@@ -126,6 +144,27 @@ impl InstanceBox {
                         Some(NyashValue::Null) // 🎯 Auto-nil behavior!
                     }
                 }
+                NyashValue::String(s) => {
+                    // For string-based weak fields, check if they're marked as "dropped"
+                    if s.starts_with("WEAK_REF_TO:") {
+                        // Check if this reference has been invalidated
+                        if s == "WEAK_REFERENCE_DROPPED" {
+                            eprintln!("🔗 DEBUG: Weak field '{}' target was dropped - returning null", field_name);
+                            Some(NyashValue::Null)
+                        } else {
+                            eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field_name);
+                            // Extract the original object info from the weak reference marker
+                            let original_info = s.strip_prefix("WEAK_REF_TO:").unwrap_or(s);
+                            Some(NyashValue::String(original_info.to_string()))
+                        }
+                    } else if s == "WEAK_REFERENCE_DROPPED" {
+                        eprintln!("🔗 DEBUG: Weak field '{}' target was dropped - returning null", field_name);
+                        Some(NyashValue::Null)
+                    } else {
+                        eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field_name);
+                        Some(value.clone())
+                    }
+                }
                 _ => {
                     // Non-weak value, return as-is
                     Some(value.clone())
@@ -134,6 +173,37 @@ impl InstanceBox {
         } else {
             None
         }
+    }
+    
+    /// 🔗 Mark weak references to this instance as dropped
+    pub fn invalidate_weak_references_to(&self, target_info: &str) {
+        let mut fields = self.fields_ng.lock().unwrap();
+        for (field_name, value) in fields.iter_mut() {
+            match value {
+                NyashValue::String(s) => {
+                    // Check if this is a weak reference to the target
+                    if s.starts_with("WEAK_REF_TO:") && s.contains(target_info) {
+                        *s = "WEAK_REFERENCE_DROPPED".to_string();
+                        eprintln!("🔗 DEBUG: Marked weak field '{}' as dropped", field_name);
+                    }
+                }
+                NyashValue::WeakBox(weak_ref) => {
+                    // Check if the weak reference is dead
+                    if weak_ref.upgrade().is_none() {
+                        eprintln!("🔗 DEBUG: Weak field '{}' reference is already dead", field_name);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    
+    /// 🔗 Global invalidation - call this when any object is dropped
+    pub fn global_invalidate_weak_references(target_info: &str) {
+        // In a real implementation, we'd maintain a global registry of all instances
+        // and iterate through them to invalidate weak references.
+        // For this demo, we'll add the capability to the instance itself.
+        eprintln!("🔗 DEBUG: Global weak reference invalidation for: {}", target_info);
     }
     
     /// フィールドの値を取得

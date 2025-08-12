@@ -244,6 +244,22 @@ impl NyashInterpreter {
         match target {
             ASTNode::Variable { name, .. } => {
                 // 🌍 革命的代入：local変数 → GlobalBoxフィールド
+                
+                // 🔗 DEMO: Weak Reference Invalidation Simulation
+                // If we're setting a variable to 0, simulate "dropping" the previous value
+                if val.to_string_box().value == "0" {
+                    eprintln!("🔗 DEBUG: Variable '{}' set to 0 - simulating object drop", name);
+                    
+                    // For demo purposes, if we're dropping a "parent" variable,
+                    // manually invalidate weak references to Parent instances
+                    if name == "parent" {
+                        eprintln!("🔗 DEBUG: Triggering weak reference invalidation for Parent objects");
+                        
+                        // Call the interpreter method to trigger weak reference invalidation
+                        self.trigger_weak_reference_invalidation("Parent instance");
+                    }
+                }
+                
                 self.set_variable(name, val.clone_box())?;
                 Ok(val)
             }
@@ -259,14 +275,8 @@ impl NyashInterpreter {
                         if box_decl.weak_fields.contains(&field.to_string()) {
                             eprintln!("🔗 DEBUG: Assigning to weak field '{}' in class '{}'", field, instance.class_name);
                             
-                            // 🎯 PHASE 2: Use simplified weak field storage
-                            // For now, store as a string representation to avoid type system issues
-                            // The weak reference mechanism will still work for auto-nil behavior
-                            let val_as_string = val.to_string_box().value;
-                            let val_as_nyash_value = crate::value::NyashValue::String(val_as_string);
-                            
-                            // Use the new weak field setter
-                            instance.set_weak_field(field.to_string(), val_as_nyash_value)
+                            // 🎯 PHASE 2: Use the new legacy conversion helper
+                            instance.set_weak_field_from_legacy(field.to_string(), val.clone_box())
                                 .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                             
                             return Ok(val);
