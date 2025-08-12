@@ -26,6 +26,10 @@ use tokenizer::{NyashTokenizer, TokenType};
 use ast::ASTNode;
 use parser::NyashParser;
 use interpreter::NyashInterpreter;
+
+// 🚀 MIR Infrastructure
+pub mod mir;
+use mir::{MirCompiler, MirPrinter};
 use std::env;
 use std::fs;
 use std::process;
@@ -50,22 +54,50 @@ fn main() {
                 .help("Set parser debug fuel limit (default: 100000, 'unlimited' for no limit)")
                 .default_value("100000")
         )
+        .arg(
+            Arg::new("dump-mir")
+                .long("dump-mir")
+                .help("Dump MIR (Mid-level Intermediate Representation) instead of executing")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("verify")
+                .long("verify")
+                .help("Verify MIR integrity and exit")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("mir-verbose")
+                .long("mir-verbose")
+                .help("Show verbose MIR output with statistics")
+                .action(clap::ArgAction::SetTrue)
+        )
         .get_matches();
     
     // デバッグ燃料の解析
     let debug_fuel = parse_debug_fuel(matches.get_one::<String>("debug-fuel").unwrap());
     
+    // MIR mode flags
+    let dump_mir = matches.get_flag("dump-mir");
+    let verify_mir = matches.get_flag("verify");
+    let mir_verbose = matches.get_flag("mir-verbose");
+    
     if let Some(filename) = matches.get_one::<String>("file") {
         // File mode: parse and execute the provided .nyash file
-        println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
-        if let Some(fuel) = debug_fuel {
-            println!("🔥 Debug fuel limit: {} iterations", fuel);
+        if dump_mir || verify_mir {
+            println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
+            execute_mir_mode(filename, dump_mir, verify_mir, mir_verbose);
         } else {
-            println!("🔥 Debug fuel limit: unlimited");
+            println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
+            if let Some(fuel) = debug_fuel {
+                println!("🔥 Debug fuel limit: {} iterations", fuel);
+            } else {
+                println!("🔥 Debug fuel limit: unlimited");
+            }
+            println!("====================================================");
+            
+            execute_nyash_file(filename, debug_fuel);
         }
-        println!("====================================================");
-        
-        execute_nyash_file(filename, debug_fuel);
     } else {
         // Demo mode: run built-in demonstrations
         println!("🦀 Nyash Rust Implementation - Everything is Box! 🦀");
@@ -1046,6 +1078,92 @@ fn demo_interpreter_system() {
                     }
                 }
                 Err(e) => println!("    ❌ Inheritance test parse error: {}", e),
+            }
+        }
+    }
+}
+
+/// Execute MIR compilation and processing mode
+fn execute_mir_mode(filename: &str, dump_mir: bool, verify_mir: bool, verbose: bool) {
+    // Read the source file
+    let source = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", filename, e);
+            process::exit(1);
+        }
+    };
+    
+    // Parse to AST
+    let ast = match NyashParser::parse_from_string(&source) {
+        Ok(ast) => ast,
+        Err(e) => {
+            eprintln!("❌ Parse error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Compile to MIR
+    let mut compiler = MirCompiler::new();
+    let compile_result = match compiler.compile(ast) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("❌ MIR compilation error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Handle verification
+    if verify_mir || dump_mir {
+        match &compile_result.verification_result {
+            Ok(()) => {
+                if verify_mir {
+                    println!("✅ MIR verification passed");
+                }
+            },
+            Err(errors) => {
+                eprintln!("❌ MIR verification failed with {} error(s):", errors.len());
+                for (i, error) in errors.iter().enumerate() {
+                    eprintln!("  {}: {}", i + 1, error);
+                }
+                if verify_mir {
+                    process::exit(1);
+                }
+            }
+        }
+    }
+    
+    // Handle MIR dumping
+    if dump_mir {
+        let mut printer = if verbose {
+            MirPrinter::verbose()
+        } else {
+            MirPrinter::new()
+        };
+        
+        let mir_output = printer.print_module(&compile_result.module);
+        println!("{}", mir_output);
+    }
+    
+    // Show module statistics if verification was requested
+    if verify_mir {
+        let stats = compile_result.module.stats();
+        println!("\n📊 Module Statistics:");
+        println!("   Functions: {}", stats.function_count);
+        println!("   Total Blocks: {}", stats.total_blocks);
+        println!("   Total Instructions: {}", stats.total_instructions);
+        println!("   Total Values: {}", stats.total_values);
+        println!("   Pure Functions: {}", stats.pure_functions);
+        
+        if stats.function_count > 0 {
+            for (name, function) in &compile_result.module.functions {
+                let func_stats = function.stats();
+                println!("\n📊 Function '{}' Statistics:", name);
+                println!("   Blocks: {}", func_stats.block_count);
+                println!("   Instructions: {}", func_stats.instruction_count);
+                println!("   Values: {}", func_stats.value_count);
+                println!("   Phi Functions: {}", func_stats.phi_count);
+                println!("   Pure: {}", func_stats.is_pure);
             }
         }
     }

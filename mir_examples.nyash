@@ -1,0 +1,27 @@
+/*!
+ * MIR Code Examples - What our Stage 1 implementation can handle
+ */
+
+// Example 1: Simple arithmetic
+42 + 10
+
+// Example 2: Binary operations
+(5 * 8) + (3 - 1)
+
+// Example 3: Comparison operations  
+42 > 10
+
+// Example 4: Unary operations
+-42
+not true
+
+// Example 5: Variable assignment and access
+x = 42
+y = x + 10
+
+// The MIR system will convert these to SSA form with:
+// - ValueId tracking for each computation
+// - Basic blocks with proper termination
+// - Effect analysis (PURE for arithmetic, etc.)
+// - Phi functions for control flow merging
+// - Complete verification and pretty-printing
