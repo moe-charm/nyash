@@ -7,7 +7,7 @@
  * Inspired by Lua's TValue system for performance-critical language implementations.
  */
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::collections::HashMap;
 use std::fmt::{self, Display, Debug};
 use crate::box_trait::NyashBox;
@@ -27,6 +27,9 @@ pub enum NyashValue {
     
     // Legacy Box compatibility and custom types
     Box(Arc<Mutex<dyn NyashBox>>),
+    
+    // 🔗 Weak reference system - prevents circular reference memory leaks
+    WeakBox(Weak<Mutex<dyn NyashBox>>),
     
     // Special values
     Null,
@@ -101,6 +104,17 @@ impl NyashValue {
                     "Box (locked)".to_string()
                 }
             },
+            NyashValue::WeakBox(weak_ref) => {
+                if let Some(arc) = weak_ref.upgrade() {
+                    if let Ok(guard) = arc.try_lock() {
+                        format!("WeakRef({})", guard.to_string_box().value)
+                    } else {
+                        "WeakRef(locked)".to_string()
+                    }
+                } else {
+                    "WeakRef(null)".to_string()
+                }
+            },
             NyashValue::Null => "null".to_string(),
             NyashValue::Void => "void".to_string(),
         }
@@ -143,6 +157,10 @@ impl NyashValue {
             NyashValue::String(s) => Ok(!s.is_empty()),
             NyashValue::Null => Ok(false),
             NyashValue::Void => Ok(false),
+            NyashValue::WeakBox(weak_ref) => {
+                // WeakBox is truthy if it can be upgraded (still alive)
+                Ok(weak_ref.upgrade().is_some())
+            },
             _ => Ok(true), // Arrays, Maps, Boxes are truthy
         }
     }
@@ -157,6 +175,7 @@ impl NyashValue {
             NyashValue::Array(_) => "Array",
             NyashValue::Map(_) => "Map",
             NyashValue::Box(_) => "Box",
+            NyashValue::WeakBox(_) => "WeakBox",
             NyashValue::Null => "Null",
             NyashValue::Void => "Void",
         }
@@ -171,6 +190,43 @@ impl NyashValue {
     pub fn is_falsy(&self) -> bool {
         matches!(self, NyashValue::Null | NyashValue::Void) || 
         self.to_bool().unwrap_or(false) == false
+    }
+    
+    /// 🔗 Weak Reference System - Core functionality
+    
+    /// Upgrade a weak reference to a strong reference
+    /// Returns None if the referenced object has been dropped
+    pub fn upgrade_weak(&self) -> Option<NyashValue> {
+        match self {
+            NyashValue::WeakBox(weak_ref) => {
+                weak_ref.upgrade().map(|arc| NyashValue::Box(arc))
+            },
+            _ => Some(self.clone()), // Non-weak values return themselves
+        }
+    }
+    
+    /// Downgrade a strong reference to a weak reference
+    /// Only works on Box values, others return None
+    pub fn downgrade_to_weak(&self) -> Option<NyashValue> {
+        match self {
+            NyashValue::Box(arc) => {
+                Some(NyashValue::WeakBox(Arc::downgrade(arc)))
+            },
+            _ => None, // Can only create weak refs from strong Box refs
+        }
+    }
+    
+    /// Check if this is a weak reference
+    pub fn is_weak_reference(&self) -> bool {
+        matches!(self, NyashValue::WeakBox(_))
+    }
+    
+    /// Check if a weak reference is still valid (not dropped)
+    pub fn is_weak_alive(&self) -> bool {
+        match self {
+            NyashValue::WeakBox(weak_ref) => weak_ref.strong_count() > 0,
+            _ => true, // Non-weak values are always "alive"
+        }
     }
 }
 
@@ -194,6 +250,32 @@ impl PartialEq for NyashValue {
             (NyashValue::Map(a), NyashValue::Map(b)) => Arc::ptr_eq(a, b),
             (NyashValue::Box(a), NyashValue::Box(b)) => Arc::ptr_eq(a, b),
             
+            // Weak reference equality
+            (NyashValue::WeakBox(a), NyashValue::WeakBox(b)) => {
+                // Compare if they point to the same object (if both still alive)
+                match (a.upgrade(), b.upgrade()) {
+                    (Some(arc_a), Some(arc_b)) => Arc::ptr_eq(&arc_a, &arc_b),
+                    (None, None) => true,  // Both dropped, consider equal
+                    _ => false,  // One dropped, one alive
+                }
+            },
+            
+            // WeakBox vs Box comparison (upgrade weak, then compare)
+            (NyashValue::WeakBox(weak), NyashValue::Box(strong)) => {
+                if let Some(upgraded) = weak.upgrade() {
+                    Arc::ptr_eq(&upgraded, strong)
+                } else {
+                    false // Dropped weak ref != any strong ref
+                }
+            },
+            (NyashValue::Box(strong), NyashValue::WeakBox(weak)) => {
+                if let Some(upgraded) = weak.upgrade() {
+                    Arc::ptr_eq(strong, &upgraded)
+                } else {
+                    false // Dropped weak ref != any strong ref
+                }
+            },
+            
             // Everything else is not equal
             _ => false,
         }
@@ -216,6 +298,13 @@ impl Debug for NyashValue {
             NyashValue::Array(_) => write!(f, "Array([...])"),
             NyashValue::Map(_) => write!(f, "Map({{...}})"),
             NyashValue::Box(_) => write!(f, "Box(...)"),
+            NyashValue::WeakBox(weak_ref) => {
+                if weak_ref.upgrade().is_some() {
+                    write!(f, "WeakBox(alive)")
+                } else {
+                    write!(f, "WeakBox(dropped)")
+                }
+            },
             NyashValue::Null => write!(f, "Null"),
             NyashValue::Void => write!(f, "Void"),
         }
@@ -292,6 +381,13 @@ impl NyashValue {
             },
             NyashValue::Box(b) => {
                 Ok(b.clone())
+            },
+            NyashValue::WeakBox(weak_ref) => {
+                // Try to upgrade weak reference
+                match weak_ref.upgrade() {
+                    Some(arc) => Ok(arc),
+                    None => Err("Cannot convert dropped weak reference to Box".to_string()),
+                }
             },
             _ => Err(format!("Cannot convert {} to legacy Box", self.type_name())),
         }
@@ -406,5 +502,74 @@ mod tests {
         assert_eq!(NyashValue::new_string("".to_string()).type_name(), "String");
         assert_eq!(NyashValue::new_null().type_name(), "Null");
         assert_eq!(NyashValue::new_void().type_name(), "Void");
+    }
+    
+    #[test]
+    fn test_weak_reference_basic() {
+        use crate::box_trait::StringBox;
+        
+        // Create a strong reference
+        let strong_ref = NyashValue::Box(Arc::new(Mutex::new(StringBox::new("test".to_string()))));
+        
+        // Create weak reference
+        let weak_ref = strong_ref.downgrade_to_weak().unwrap();
+        assert!(weak_ref.is_weak_reference());
+        assert_eq!(weak_ref.type_name(), "WeakBox");
+        
+        // Upgrade should work
+        let upgraded = weak_ref.upgrade_weak().unwrap();
+        assert_eq!(upgraded, strong_ref);
+        
+        // Both should be alive initially
+        assert!(weak_ref.is_weak_alive());
+    }
+    
+    #[test]
+    fn test_weak_reference_drop() {
+        use crate::box_trait::StringBox;
+        
+        let weak_ref = {
+            let strong_ref = NyashValue::Box(Arc::new(Mutex::new(StringBox::new("test".to_string()))));
+            strong_ref.downgrade_to_weak().unwrap()
+        }; // strong_ref goes out of scope and is dropped
+        
+        // Weak reference should now be invalid
+        assert!(!weak_ref.is_weak_alive());
+        assert!(weak_ref.upgrade_weak().is_none());
+        
+        // to_bool should return false for dropped weak ref
+        assert_eq!(weak_ref.to_bool().unwrap(), false);
+    }
+    
+    #[test]
+    fn test_weak_reference_equality() {
+        use crate::box_trait::StringBox;
+        
+        let strong_ref = NyashValue::Box(Arc::new(Mutex::new(StringBox::new("test".to_string()))));
+        let weak_ref1 = strong_ref.downgrade_to_weak().unwrap();
+        let weak_ref2 = strong_ref.downgrade_to_weak().unwrap();
+        
+        // Weak refs to same object should be equal
+        assert_eq!(weak_ref1, weak_ref2);
+        
+        // Weak ref should equal its strong ref
+        assert_eq!(weak_ref1, strong_ref);
+        assert_eq!(strong_ref, weak_ref1);
+    }
+    
+    #[test] 
+    fn test_weak_reference_string_representation() {
+        use crate::box_trait::StringBox;
+        
+        let strong_ref = NyashValue::Box(Arc::new(Mutex::new(StringBox::new("hello".to_string()))));
+        let weak_ref = strong_ref.downgrade_to_weak().unwrap();
+        
+        // Should show weak reference to the content
+        assert!(weak_ref.to_string().contains("WeakRef"));
+        assert!(weak_ref.to_string().contains("hello"));
+        
+        // After dropping strong ref
+        drop(strong_ref);
+        assert_eq!(weak_ref.to_string(), "WeakRef(null)");
     }
 }
