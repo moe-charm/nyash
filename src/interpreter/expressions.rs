@@ -745,8 +745,8 @@ impl NyashInterpreter {
                 name: current_class.clone() 
             })?;
         
-        // extendsまたはimplementsでparentが指定されているか確認
-        let is_valid_delegation = current_box_decl.extends.as_ref().map(|s| s.as_str()) == Some(parent) || 
+        // extendsまたはimplementsでparentが指定されているか確認 (Multi-delegation) 🚀
+        let is_valid_delegation = current_box_decl.extends.contains(&parent.to_string()) || 
                                  current_box_decl.implements.contains(&parent.to_string());
         
         if !is_valid_delegation {

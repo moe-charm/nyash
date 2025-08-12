@@ -205,24 +205,35 @@ impl NyashParser {
             Vec::new()
         };
         
-        // from句のパース（デリゲーション）
+        // from句のパース（Multi-delegation）🚀
         let extends = if self.match_token(&TokenType::FROM) {
             self.advance(); // consume 'from'
             
-            if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
-                let parent_name = parent_name.clone();
-                self.advance();
-                Some(parent_name)
-            } else {
-                let line = self.current_token().line;
-                return Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "parent class name".to_string(),
-                    line,
-                });
+            let mut parent_list = Vec::new();
+            
+            loop {
+                if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
+                    parent_list.push(parent_name.clone());
+                    self.advance();
+                    
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance(); // consume ','
+                    } else {
+                        break;
+                    }
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "parent class name".to_string(),
+                        line,
+                    });
+                }
             }
+            
+            parent_list
         } else {
-            None
+            Vec::new()
         };
         
         // interface句のパース（インターフェース実装）
@@ -564,8 +575,11 @@ impl NyashParser {
         self.consume(TokenType::RBRACE)?;
         
         // 🔍 デリゲーションメソッドチェック：親Boxに存在しないメソッドのoverride検出
-        if let Some(ref parent_name) = extends {
-            self.validate_override_methods(&name, parent_name, &methods)?;
+        if !extends.is_empty() {
+            // For multi-delegation, validate against all parents
+            for parent_name in &extends {
+                self.validate_override_methods(&name, parent_name, &methods)?;
+            }
         }
         
         Ok(ASTNode::BoxDeclaration {
@@ -672,7 +686,7 @@ impl NyashParser {
             constructors: HashMap::new(), // インターフェースにコンストラクタなし
             init_fields: vec![], // インターフェースにinitブロックなし
             is_interface: true, // インターフェースフラグ
-            extends: None,
+            extends: vec![],  // 🚀 Multi-delegation: Changed from None to vec![]
             implements: vec![],
             type_parameters: Vec::new(), // 🔥 インターフェースではジェネリクス未対応
             is_static: false, // インターフェースは非static
@@ -926,27 +940,38 @@ impl NyashParser {
             Vec::new()
         };
         
-        // from句のパース（デリゲーション）- static boxでもデリゲーション可能
+        // from句のパース（Multi-delegation）- static boxでもデリゲーション可能 🚀
         let extends = if self.match_token(&TokenType::FROM) {
             self.advance(); // consume 'from'
             
-            if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
-                let parent_name = parent_name.clone();
-                self.advance();
-                Some(parent_name)
-            } else {
-                let line = self.current_token().line;
-                return Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "parent class name".to_string(),
-                    line,
-                });
+            let mut parent_list = Vec::new();
+            
+            loop {
+                if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
+                    parent_list.push(parent_name.clone());
+                    self.advance();
+                    
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance(); // consume ','
+                    } else {
+                        break;
+                    }
+                } else {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "parent class name".to_string(),
+                        line,
+                    });
+                }
             }
+            
+            parent_list
         } else {
-            None
+            Vec::new()
         };
         
-        // interface句のパース（インターフェース実装）
+        // interface句のパース（インターフェース実装）- static boxでもinterface実装可能
         let implements = if self.match_token(&TokenType::INTERFACE) {
             self.advance(); // consume 'interface'
             

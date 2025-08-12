@@ -720,7 +720,7 @@ impl NyashInterpreter {
             let old_context = self.current_constructor_context.clone();
             self.current_constructor_context = Some(ConstructorContext {
                 class_name: box_decl.name.clone(),
-                parent_class: box_decl.extends.clone(),
+                parent_class: box_decl.extends.first().cloned(), // Use first parent for context
             });
             
             // コンストラクタを実行
@@ -753,7 +753,7 @@ impl NyashInterpreter {
         constructors: HashMap<String, ASTNode>,
         init_fields: Vec<String>,
         is_interface: bool,
-        extends: Option<String>,
+        extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
         type_parameters: Vec<String>  // 🔥 ジェネリクス型パラメータ追加
     ) -> Result<(), RuntimeError> {
@@ -905,8 +905,8 @@ impl NyashInterpreter {
         let mut all_fields = Vec::new();
         let mut all_methods = HashMap::new();
         
-        // 親クラスの継承チェーンを再帰的に解決
-        if let Some(parent_name) = &box_decl.extends {
+        // 親クラスの継承チェーンを再帰的に解決 (Multi-delegation) 🚀
+        for parent_name in &box_decl.extends {
             // 🔥 ビルトインBoxかチェック
             let is_builtin = matches!(parent_name.as_str(), 
                 "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
