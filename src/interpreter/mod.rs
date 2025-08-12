@@ -67,6 +67,7 @@ pub struct BoxDeclaration {
     pub methods: HashMap<String, ASTNode>,
     pub constructors: HashMap<String, ASTNode>,
     pub init_fields: Vec<String>,
+    pub weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
     pub is_interface: bool,
     pub extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
     pub implements: Vec<String>,
@@ -80,6 +81,7 @@ pub struct StaticBoxDefinition {
     pub fields: Vec<String>,
     pub methods: HashMap<String, ASTNode>,
     pub init_fields: Vec<String>,
+    pub weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
     pub static_init: Option<Vec<ASTNode>>,  // static { } ブロック
     pub extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
     pub implements: Vec<String>,

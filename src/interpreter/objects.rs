@@ -752,6 +752,7 @@ impl NyashInterpreter {
         methods: HashMap<String, ASTNode>,
         constructors: HashMap<String, ASTNode>,
         init_fields: Vec<String>,
+        weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
         is_interface: bool,
         extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
@@ -779,6 +780,7 @@ impl NyashInterpreter {
             methods,
             constructors,
             init_fields,
+            weak_fields,  // 🔗 Add weak_fields to the construction
             is_interface,
             extends,
             implements,
