@@ -1,0 +1,32 @@
+// Test Basic Box Constructor Issues (Problem 1)
+// This should demonstrate the core failures described in the issue
+
+local console = new ConsoleBox()
+console.log("=== Testing Basic Box Constructors ===")
+
+// Test StringBox constructor
+console.log("Testing StringBox constructor...")
+local str_box = new StringBox("test")
+console.log("StringBox created: " + str_box.toString())
+
+// Test IntegerBox constructor  
+console.log("Testing IntegerBox constructor...")
+local int_box = new IntegerBox(123)
+console.log("IntegerBox created: " + int_box.toString())
+
+// Test BoolBox constructor
+console.log("Testing BoolBox constructor...")
+local bool_box = new BoolBox(false)
+console.log("BoolBox created: " + bool_box.toString())
+
+// Compare with literals (these should work)
+console.log("=== Comparing with Literals ===")
+local str_literal = "test"
+local int_literal = 123
+local bool_literal = false
+
+console.log("String literal: " + str_literal)
+console.log("Integer literal: " + int_literal)
+console.log("Bool literal: " + bool_literal)
+
+console.log("Test complete!")

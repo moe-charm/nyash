@@ -502,13 +502,10 @@ impl NyashInterpreter {
                     });
                 };
                 
-                let transport_kind = transport_str.parse::<crate::boxes::p2p_box::TransportKind>()
-                    .map_err(|e| RuntimeError::InvalidOperation {
-                        message: format!("Invalid transport type '{}': {}", transport_str, e),
-                    })?;
-                
-                let p2p_box = crate::boxes::p2p_box::P2PBoxData::new(node_id, transport_kind);
-                return Ok(Box::new(p2p_box) as Box<dyn NyashBox>);
+                // TODO: Re-enable P2PBox after fixing transport/messaging imports
+                return Err(RuntimeError::TypeError {
+                    message: "P2PBox temporarily disabled due to import issues".to_string(),
+                });
             }
             "StreamBox" => {
                 // StreamBoxは引数なしで作成
