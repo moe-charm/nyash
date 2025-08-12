@@ -68,7 +68,7 @@ pub struct BoxDeclaration {
     pub constructors: HashMap<String, ASTNode>,
     pub init_fields: Vec<String>,
     pub is_interface: bool,
-    pub extends: Option<String>,
+    pub extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
     pub implements: Vec<String>,
     pub type_parameters: Vec<String>,  // 🔥 ジェネリクス型パラメータ
 }
@@ -81,7 +81,7 @@ pub struct StaticBoxDefinition {
     pub methods: HashMap<String, ASTNode>,
     pub init_fields: Vec<String>,
     pub static_init: Option<Vec<ASTNode>>,  // static { } ブロック
-    pub extends: Option<String>,
+    pub extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
     pub implements: Vec<String>,
     pub type_parameters: Vec<String>,
     /// 初期化状態

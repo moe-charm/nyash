@@ -1,0 +1,60 @@
+// Advanced Multi-Delegation Test Cases
+// Testing complex scenarios and edge cases
+
+local console = new ConsoleBox()
+console.log("=== Advanced Multi-Delegation Tests ===")
+
+// Test 1: Three-way delegation
+console.log("Testing three-way delegation...")
+box TripleChild from StringBox, IntegerBox, BoolBox {
+    init { strVal, intVal, boolVal }
+    
+    pack(s, i, b) {
+        me.strVal = s
+        me.intVal = i  
+        me.boolVal = b
+    }
+    
+    getAll() {
+        return me.strVal + " | " + me.intVal + " | " + me.boolVal
+    }
+}
+
+local triple = new TripleChild("Hello", 42, true)
+console.log("Triple delegation: " + triple.getAll())
+
+// Test 2: No delegation (should still work)
+console.log("Testing no delegation...")
+box StandaloneBox {
+    init { data }
+    
+    pack(value) {
+        me.data = value
+    }
+    
+    getData() {
+        return "Standalone: " + me.data
+    }
+}
+
+local standalone = new StandaloneBox("Independent")
+console.log(standalone.getData())
+
+// Test 3: Single delegation (backward compatibility)
+console.log("Testing single delegation backward compatibility...")
+box SingleBox from StringBox {
+    init { value }
+    
+    pack(val) {
+        me.value = val
+    }
+    
+    getValue() {
+        return "Single: " + me.value
+    }
+}
+
+local single = new SingleBox("OnlyOne")
+console.log(single.getValue())
+
+console.log("=== All Multi-Delegation Tests Passed! ===")

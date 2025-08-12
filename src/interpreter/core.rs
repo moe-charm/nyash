@@ -565,7 +565,7 @@ impl NyashInterpreter {
         methods: HashMap<String, ASTNode>,
         init_fields: Vec<String>,
         static_init: Option<Vec<ASTNode>>,
-        extends: Option<String>,
+        extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
         type_parameters: Vec<String>
     ) -> Result<(), RuntimeError> {

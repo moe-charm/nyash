@@ -17,6 +17,64 @@ impl NyashInterpreter {
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         // 組み込みBox型のチェック
         match class {
+            // Basic Box constructors (CRITICAL - these were missing!)
+            "StringBox" => {
+                // StringBoxは引数1個（文字列値）で作成
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("StringBox constructor expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let value = self.execute_expression(&arguments[0])?;
+                let string_value = value.to_string_box().value;
+                let string_box = Box::new(StringBox::new(string_value)) as Box<dyn NyashBox>;
+                return Ok(string_box);
+            }
+            "IntegerBox" => {
+                // IntegerBoxは引数1個（整数値）で作成
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("IntegerBox constructor expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let value = self.execute_expression(&arguments[0])?;
+                if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
+                    let integer_box = Box::new(IntegerBox::new(int_box.value)) as Box<dyn NyashBox>;
+                    return Ok(integer_box);
+                } else {
+                    // Try to parse from string or other types
+                    let int_value = value.to_string_box().value.parse::<i64>()
+                        .map_err(|_| RuntimeError::TypeError {
+                            message: format!("Cannot convert '{}' to integer", value.to_string_box().value),
+                        })?;
+                    let integer_box = Box::new(IntegerBox::new(int_value)) as Box<dyn NyashBox>;
+                    return Ok(integer_box);
+                }
+            }
+            "BoolBox" => {
+                // BoolBoxは引数1個（真偽値）で作成
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("BoolBox constructor expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let value = self.execute_expression(&arguments[0])?;
+                if let Some(bool_box) = value.as_any().downcast_ref::<BoolBox>() {
+                    let bool_box_new = Box::new(BoolBox::new(bool_box.value)) as Box<dyn NyashBox>;
+                    return Ok(bool_box_new);
+                } else {
+                    // Try to convert from string or other types
+                    let bool_value = match value.to_string_box().value.to_lowercase().as_str() {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err(RuntimeError::TypeError {
+                            message: format!("Cannot convert '{}' to boolean", value.to_string_box().value),
+                        }),
+                    };
+                    let bool_box_new = Box::new(BoolBox::new(bool_value)) as Box<dyn NyashBox>;
+                    return Ok(bool_box_new);
+                }
+            }
             "ArrayBox" => {
                 // ArrayBoxは引数なしで作成
                 if !arguments.is_empty() {
@@ -502,13 +560,10 @@ impl NyashInterpreter {
                     });
                 };
                 
-                let transport_kind = transport_str.parse::<crate::boxes::p2p_box::TransportKind>()
-                    .map_err(|e| RuntimeError::InvalidOperation {
-                        message: format!("Invalid transport type '{}': {}", transport_str, e),
-                    })?;
-                
-                let p2p_box = crate::boxes::p2p_box::P2PBoxData::new(node_id, transport_kind);
-                return Ok(Box::new(p2p_box) as Box<dyn NyashBox>);
+                // TODO: Re-enable P2PBox after fixing transport/messaging imports
+                return Err(RuntimeError::TypeError {
+                    message: "P2PBox temporarily disabled due to import issues".to_string(),
+                });
             }
             "StreamBox" => {
                 // StreamBoxは引数なしで作成
@@ -665,7 +720,7 @@ impl NyashInterpreter {
             let old_context = self.current_constructor_context.clone();
             self.current_constructor_context = Some(ConstructorContext {
                 class_name: box_decl.name.clone(),
-                parent_class: box_decl.extends.clone(),
+                parent_class: box_decl.extends.first().cloned(), // Use first parent for context
             });
             
             // コンストラクタを実行
@@ -698,7 +753,7 @@ impl NyashInterpreter {
         constructors: HashMap<String, ASTNode>,
         init_fields: Vec<String>,
         is_interface: bool,
-        extends: Option<String>,
+        extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
         type_parameters: Vec<String>  // 🔥 ジェネリクス型パラメータ追加
     ) -> Result<(), RuntimeError> {
@@ -850,8 +905,8 @@ impl NyashInterpreter {
         let mut all_fields = Vec::new();
         let mut all_methods = HashMap::new();
         
-        // 親クラスの継承チェーンを再帰的に解決
-        if let Some(parent_name) = &box_decl.extends {
+        // 親クラスの継承チェーンを再帰的に解決 (Multi-delegation) 🚀
+        for parent_name in &box_decl.extends {
             // 🔥 ビルトインBoxかチェック
             let is_builtin = matches!(parent_name.as_str(), 
                 "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 

@@ -7,7 +7,7 @@ use crate::interpreter::core::NyashInterpreter;
 use crate::interpreter::core::RuntimeError;
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox, BoolBox};
-use crate::boxes::{IntentBox, P2PBox};
+use crate::boxes::{IntentBox};
 use crate::method_box::MethodBox;
 
 impl NyashInterpreter {
@@ -45,7 +45,8 @@ impl NyashInterpreter {
         }
     }
     
-    /// P2PBoxのメソッド実行 (Arc<Mutex>版)
+    // P2PBoxのメソッド実行 (Arc<Mutex>版) - Temporarily disabled
+    /*
     pub(in crate::interpreter) fn execute_p2p_box_method(
         &mut self,
         p2p_box: &P2PBox,
@@ -114,4 +115,5 @@ impl NyashInterpreter {
             })
         }
     }
+    */
 }

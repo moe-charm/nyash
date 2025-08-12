@@ -105,7 +105,7 @@ pub enum StructureNode {
         constructors: Vec<ASTNode>,
         init_fields: Vec<String>,
         is_interface: bool,
-        extends: Option<String>,
+        extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
         /// 🔥 ジェネリクス型パラメータ (例: ["T", "U"])
         type_parameters: Vec<String>,
@@ -450,7 +450,7 @@ pub enum ASTNode {
         constructors: HashMap<String, ASTNode>, // constructor_key -> FunctionDeclaration
         init_fields: Vec<String>,         // initブロック内のフィールド定義
         is_interface: bool,               // interface box かどうか
-        extends: Option<String>,          // 継承元のBox名
+        extends: Vec<String>,             // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,          // 実装するinterface名のリスト
         type_parameters: Vec<String>,     // 🔥 ジェネリクス型パラメータ (例: ["T", "U"])
         /// 🔥 Static boxかどうかのフラグ
@@ -714,8 +714,8 @@ impl ASTNode {
                     format!("BoxDeclaration({}, {} fields, {} methods, {} constructors", name, fields.len(), methods.len(), constructors.len())
                 };
                 
-                if let Some(parent) = extends {
-                    desc.push_str(&format!(", extends {}", parent));
+                if !extends.is_empty() {
+                    desc.push_str(&format!(", extends [{}]", extends.join(", ")));
                 }
                 
                 if !implements.is_empty() {
@@ -936,7 +936,7 @@ mod tests {
             constructors: HashMap::new(),
             init_fields: vec![],
             is_interface: false,
-            extends: None,
+            extends: vec![],  // 🚀 Multi-delegation: Changed from None to vec![]
             implements: vec![],
             span: Span::unknown(),
         };

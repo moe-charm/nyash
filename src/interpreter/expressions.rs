@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, P2PBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox};
 use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
 use crate::box_trait::BoolBox;
 use crate::operator_traits::OperatorResolver;
@@ -453,10 +453,10 @@ impl NyashInterpreter {
             return self.execute_intent_box_method(intent_box, method, arguments);
         }
         
-        // P2PBox method calls
-        if let Some(p2p_box) = obj_value.as_any().downcast_ref::<P2PBox>() {
-            return self.execute_p2p_box_method(p2p_box, method, arguments);
-        }
+        // P2PBox method calls - Temporarily disabled
+        // if let Some(p2p_box) = obj_value.as_any().downcast_ref::<P2PBox>() {
+        //     return self.execute_p2p_box_method(p2p_box, method, arguments);
+        // }
         
         // EguiBox method calls (非WASM環境のみ)
         #[cfg(not(target_arch = "wasm32"))]
@@ -745,8 +745,8 @@ impl NyashInterpreter {
                 name: current_class.clone() 
             })?;
         
-        // extendsまたはimplementsでparentが指定されているか確認
-        let is_valid_delegation = current_box_decl.extends.as_ref().map(|s| s.as_str()) == Some(parent) || 
+        // extendsまたはimplementsでparentが指定されているか確認 (Multi-delegation) 🚀
+        let is_valid_delegation = current_box_decl.extends.contains(&parent.to_string()) || 
                                  current_box_decl.implements.contains(&parent.to_string());
         
         if !is_valid_delegation {
