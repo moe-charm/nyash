@@ -49,7 +49,7 @@ impl NyashInterpreter {
                 self.execute_nowait(variable, expression)
             }
             
-            ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, is_interface, extends, implements, type_parameters, is_static, static_init, .. } => {
+            ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, is_static, static_init, .. } => {
                 if *is_static {
                     // 🔥 Static Box宣言の処理
                     self.register_static_box_declaration(
@@ -57,6 +57,7 @@ impl NyashInterpreter {
                         fields.clone(),
                         methods.clone(),
                         init_fields.clone(),
+                        weak_fields.clone(),  // 🔗 Add weak_fields parameter
                         static_init.clone(),
                         extends.clone(),
                         implements.clone(),
@@ -70,6 +71,7 @@ impl NyashInterpreter {
                         methods.clone(),
                         constructors.clone(),
                         init_fields.clone(),
+                        weak_fields.clone(),  // 🔗 Add weak_fields parameter
                         *is_interface,
                         extends.clone(),
                         implements.clone(),
@@ -250,6 +252,17 @@ impl NyashInterpreter {
                 let obj_value = self.execute_expression(object)?;
                 
                 if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
+                    // 🔗 Weak Reference Assignment Check
+                    let box_decls = self.shared.box_declarations.read().unwrap();
+                    if let Some(box_decl) = box_decls.get(&instance.class_name) {
+                        if box_decl.weak_fields.contains(&field.to_string()) {
+                            eprintln!("🔗 DEBUG: Assigning to weak field '{}' in class '{}'", field, instance.class_name);
+                            eprintln!("🔗 DEBUG: In a full implementation, this would convert strong reference to weak");
+                            // For now, just log that this is a weak field assignment
+                            // In the full implementation, we would convert val to a weak reference here
+                        }
+                    }
+                    
                     // 既存のフィールド値があればfini()を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
                         if let Some(old_instance) = old_field_value.as_any().downcast_ref::<InstanceBox>() {

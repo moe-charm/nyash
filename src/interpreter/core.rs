@@ -564,6 +564,7 @@ impl NyashInterpreter {
         fields: Vec<String>,
         methods: HashMap<String, ASTNode>,
         init_fields: Vec<String>,
+        weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
         static_init: Option<Vec<ASTNode>>,
         extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
@@ -577,6 +578,7 @@ impl NyashInterpreter {
             fields,
             methods,
             init_fields,
+            weak_fields,  // 🔗 Add weak_fields to static box definition
             static_init,
             extends,
             implements,

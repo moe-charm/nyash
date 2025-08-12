@@ -1,0 +1,38 @@
+// Simplified weak reference detection test
+
+box Parent {
+    init { child }
+    
+    pack() {
+        me.child = new Child()
+        me.child.setParent(me)  // This should detect weak assignment
+    }
+    
+    getChild() {
+        return me.child
+    }
+}
+
+box Child {
+    init { weak parent }  // weak modifier on parent field
+    
+    setParent(p) {
+        me.parent = p  // Should detect weak field assignment
+    }
+    
+    checkParent() {
+        return me.parent  // Should detect weak field access
+    }
+}
+
+static box Main {
+    main() {
+        local p = new Parent()
+        local child = p.getChild()
+        
+        print("Testing weak field access...")
+        local parent_ref = child.checkParent()
+        
+        return "weak reference detection test completed"
+    }
+}

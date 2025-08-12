@@ -605,7 +605,7 @@ impl NyashInterpreter {
         }
     }
     
-    /// フィールドアクセスを実行 - Field access processing
+    /// フィールドアクセスを実行 - Field access processing with weak reference support
     pub(super) fn execute_field_access(&mut self, object: &ASTNode, field: &str) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         
@@ -626,10 +626,28 @@ impl NyashInterpreter {
         // InstanceBoxにキャスト
         if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
             // フィールドの値を取得
-            instance.get_field(field)
+            let field_value = instance.get_field(field)
                 .ok_or(RuntimeError::InvalidOperation {
                     message: format!("Field '{}' not found in {}", field, instance.class_name),
-                })
+                })?;
+            
+            // 🔗 Weak Reference Check: Log that we're accessing a weak field
+            let box_decls = self.shared.box_declarations.read().unwrap();
+            if let Some(box_decl) = box_decls.get(&instance.class_name) {
+                if box_decl.weak_fields.contains(&field.to_string()) {
+                    eprintln!("🔗 DEBUG: Accessing weak field '{}' in class '{}'", field, instance.class_name);
+                    
+                    // For now, just check if the field is null (simulating dropped weak reference)
+                    if field_value.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+                        eprintln!("🔗 DEBUG: Weak field '{}' is null (reference dropped)", field);
+                    } else {
+                        eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field);
+                    }
+                }
+            }
+            
+            // Normal field access for now
+            Ok(field_value)
         } else {
             Err(RuntimeError::TypeError {
                 message: format!("Cannot access field '{}' on non-instance type. Type: {}", field, obj_value.type_name()),
@@ -720,6 +738,30 @@ impl NyashInterpreter {
         }
         hash
     }
+    
+    /// 🔗 Convert NyashBox to NyashValue for weak reference operations
+    // fn box_to_nyash_value(&self, box_val: &Box<dyn NyashBox>) -> Option<nyash_rust::value::NyashValue> {
+    //     // Try to convert the box back to NyashValue for weak reference operations
+    //     // This is a simplified conversion - in reality we might need more sophisticated logic
+    //     use nyash_rust::value::NyashValue;
+    //     use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
+    //     
+    //     if let Some(string_box) = box_val.as_any().downcast_ref::<StringBox>() {
+    //         Some(NyashValue::String(string_box.value.clone()))
+    //     } else if let Some(int_box) = box_val.as_any().downcast_ref::<IntegerBox>() {
+    //         Some(NyashValue::Integer(int_box.value))
+    //     } else if let Some(bool_box) = box_val.as_any().downcast_ref::<BoolBox>() {
+    //         Some(NyashValue::Bool(bool_box.value))
+    //     } else if box_val.as_any().downcast_ref::<VoidBox>().is_some() {
+    //         Some(NyashValue::Void)
+    //     } else if box_val.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+    //         Some(NyashValue::Null)
+    //     } else {
+    //         // For complex types, create a Box variant
+    //         // Note: This is where we'd store the weak reference
+    //         None // Simplified for now
+    //     }
+    // }
     
     /// 🔥 FromCall実行処理 - from Parent.method(arguments) or from Parent.constructor(arguments)
     pub(super) fn execute_from_call(&mut self, parent: &str, method: &str, arguments: &[ASTNode])

@@ -104,6 +104,7 @@ pub enum StructureNode {
         methods: Vec<ASTNode>,
         constructors: Vec<ASTNode>,
         init_fields: Vec<String>,
+        weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
         is_interface: bool,
         extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
@@ -449,6 +450,7 @@ pub enum ASTNode {
         methods: HashMap<String, ASTNode>, // method_name -> FunctionDeclaration
         constructors: HashMap<String, ASTNode>, // constructor_key -> FunctionDeclaration
         init_fields: Vec<String>,         // initブロック内のフィールド定義
+        weak_fields: Vec<String>,         // 🔗 weak修飾子が付いたフィールドのリスト
         is_interface: bool,               // interface box かどうか
         extends: Vec<String>,             // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,          // 実装するinterface名のリスト
@@ -935,9 +937,13 @@ mod tests {
             methods,
             constructors: HashMap::new(),
             init_fields: vec![],
+            weak_fields: vec![],  // 🔗 No weak fields in test
             is_interface: false,
             extends: vec![],  // 🚀 Multi-delegation: Changed from None to vec![]
             implements: vec![],
+            type_parameters: vec![], // No generics in test
+            is_static: false,
+            static_init: None,
             span: Span::unknown(),
         };
         
