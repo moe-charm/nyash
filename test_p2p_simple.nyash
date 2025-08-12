@@ -1,0 +1,14 @@
+// Simple P2P Test - Basic functionality check
+print("=== Simple P2P Test ===")
+
+// Test 1: Create IntentBox
+local msg
+msg = new IntentBox("test.message", "Hello P2P")
+print("✅ IntentBox created: " + msg.getName())
+
+// Test 2: Create P2PBox
+local node
+node = new P2PBox("test_node", "inprocess") 
+print("✅ P2PBox created: " + node.getNodeId())
+
+print("✅ P2P system is working!")

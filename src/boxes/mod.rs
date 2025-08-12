@@ -105,7 +105,7 @@ pub mod http;
 pub mod stream;
 pub mod regex;
 
-// P2P通信Box群
+// P2P通信Box群 (NEW! - Completely rewritten)
 pub mod intent_box;
 pub mod p2p_box;
 
