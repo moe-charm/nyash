@@ -274,6 +274,7 @@ impl NyashParser {
         let mut methods = HashMap::new();
         let mut constructors = HashMap::new();
         let mut init_fields = Vec::new();
+        let mut weak_fields = Vec::new();  // 🔗 Track weak fields
         
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
             self.skip_newlines(); // ループ開始時に改行をスキップ
@@ -296,8 +297,19 @@ impl NyashParser {
                         break;
                     }
                     
+                    // Check for weak modifier
+                    let is_weak = if self.match_token(&TokenType::WEAK) {
+                        self.advance(); // consume 'weak'
+                        true
+                    } else {
+                        false
+                    };
+                    
                     if let TokenType::IDENTIFIER(field_name) = &self.current_token().token_type {
                         init_fields.push(field_name.clone());
+                        if is_weak {
+                            weak_fields.push(field_name.clone()); // 🔗 Add to weak fields list
+                        }
                         self.advance();
                         
                         // カンマがあればスキップ
@@ -307,7 +319,7 @@ impl NyashParser {
                     } else {
                         // 不正なトークンがある場合はエラー
                         return Err(ParseError::UnexpectedToken {
-                            expected: "field name".to_string(),
+                            expected: if is_weak { "field name after 'weak'" } else { "field name" }.to_string(),
                             found: self.current_token().token_type.clone(),
                             line: self.current_token().line,
                         });
@@ -588,6 +600,7 @@ impl NyashParser {
             methods,
             constructors,
             init_fields,
+            weak_fields,  // 🔗 Add weak fields to the construction
             is_interface: false,
             extends,
             implements,
@@ -685,6 +698,7 @@ impl NyashParser {
             methods,
             constructors: HashMap::new(), // インターフェースにコンストラクタなし
             init_fields: vec![], // インターフェースにinitブロックなし
+            weak_fields: vec![], // 🔗 インターフェースにweak fieldsなし
             is_interface: true, // インターフェースフラグ
             extends: vec![],  // 🚀 Multi-delegation: Changed from None to vec![]
             implements: vec![],
@@ -1009,6 +1023,7 @@ impl NyashParser {
         let mut methods = HashMap::new();
         let constructors = HashMap::new();
         let mut init_fields = Vec::new();
+        let mut weak_fields = Vec::new();  // 🔗 Track weak fields for static box
         let mut static_init = None;
         
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
@@ -1050,8 +1065,19 @@ impl NyashParser {
                         break;
                     }
                     
+                    // Check for weak modifier
+                    let is_weak = if self.match_token(&TokenType::WEAK) {
+                        self.advance(); // consume 'weak'
+                        true
+                    } else {
+                        false
+                    };
+                    
                     if let TokenType::IDENTIFIER(field_name) = &self.current_token().token_type {
                         init_fields.push(field_name.clone());
+                        if is_weak {
+                            weak_fields.push(field_name.clone()); // 🔗 Add to weak fields list
+                        }
                         self.advance();
                         
                         // カンマがあればスキップ
@@ -1061,7 +1087,7 @@ impl NyashParser {
                     } else {
                         // 不正なトークンがある場合はエラー
                         return Err(ParseError::UnexpectedToken {
-                            expected: "field name".to_string(),
+                            expected: if is_weak { "field name after 'weak'" } else { "field name" }.to_string(),
                             found: self.current_token().token_type.clone(),
                             line: self.current_token().line,
                         });
@@ -1145,6 +1171,7 @@ impl NyashParser {
             methods,
             constructors,
             init_fields,
+            weak_fields,  // 🔗 Add weak fields to static box construction
             is_interface: false,
             extends,
             implements,

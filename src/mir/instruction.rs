@@ -5,7 +5,7 @@
  */
 
 use super::{ValueId, LocalId, EffectMask, Effect};
-use crate::value::NyashValue;
+// use crate::value::NyashValue;  // Commented out to avoid circular dependency
 use std::fmt;
 
 /// MIR instruction types - limited to 20 core instructions
@@ -345,6 +345,7 @@ impl MirInstruction {
 }
 
 impl ConstValue {
+    /*
     /// Convert to NyashValue
     pub fn to_nyash_value(&self) -> NyashValue {
         match self {
@@ -369,6 +370,7 @@ impl ConstValue {
             _ => None, // Collections and Boxes can't be constants
         }
     }
+    */
 }
 
 impl fmt::Display for MirInstruction {
@@ -479,6 +481,7 @@ mod tests {
         assert_eq!(inst.effects(), EffectMask::IO);
     }
     
+    /*
     #[test]
     fn test_const_value_conversion() {
         let const_val = ConstValue::Integer(42);
@@ -489,4 +492,5 @@ mod tests {
         let back = ConstValue::from_nyash_value(&nyash_val).unwrap();
         assert_eq!(back, const_val);
     }
+    */
 }
