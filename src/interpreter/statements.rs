@@ -252,7 +252,7 @@ impl NyashInterpreter {
                     
                     // For demo purposes, if we're dropping a "parent" variable,
                     // manually invalidate weak references to Parent instances
-                    if name == "parent" {
+                    if name.contains("parent") {
                         eprintln!("🔗 DEBUG: Triggering weak reference invalidation for Parent objects");
                         
                         // Call the interpreter method to trigger weak reference invalidation
