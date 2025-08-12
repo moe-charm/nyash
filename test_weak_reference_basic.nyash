@@ -41,7 +41,7 @@ static box Main {
         print("Initial parent check: " + child.getParentInfo())
         
         // When p goes out of scope, child.parent should automatically become null
-        p = null
+        p = 0  // Setting to 0 instead of null to avoid the undefined variable issue
         
         print("After parent dropped: " + child.getParentInfo())
         
