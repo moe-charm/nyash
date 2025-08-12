@@ -25,6 +25,9 @@ pub mod type_box;  // 🌟 TypeBox revolutionary system
 pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
 pub mod box_operators; // 🚀 Operator implementations for basic Box types
 
+// 🔥 NyashValue Revolutionary System (NEW!)
+pub mod value;
+
 // 🌐 P2P Communication Infrastructure (NEW!)
 pub mod messaging;
 pub mod transport;
@@ -54,6 +57,9 @@ pub use boxes::debug_box::DebugBox;
 pub use boxes::console_box::ConsoleBox;
 pub use method_box::{MethodBox, BoxType, FunctionDefinition, EphemeralInstance};
 pub use boxes::null_box::{NullBox, null};
+
+// 🔥 NyashValue Revolutionary System exports
+pub use value::NyashValue;
 
 // Direct canvas test export
 #[cfg(target_arch = "wasm32")]
