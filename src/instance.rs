@@ -7,10 +7,11 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase};
 use crate::ast::ASTNode;
+use crate::value::NyashValue;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 /// Boxインスタンス - フィールドとメソッドを持つオブジェクト
 #[derive(Debug, Clone)]
@@ -18,8 +19,11 @@ pub struct InstanceBox {
     /// クラス名
     pub class_name: String,
     
-    /// フィールド値
+    /// フィールド値 (Legacy compatibility)
     pub fields: Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>>,
+    
+    /// 🔗 Next-generation fields (weak reference capable)
+    pub fields_ng: Arc<Mutex<HashMap<String, NyashValue>>>,
     
     /// メソッド定義（ClassBoxから共有）
     pub methods: Arc<HashMap<String, ASTNode>>,
@@ -42,9 +46,93 @@ impl InstanceBox {
         Self {
             class_name,
             fields: Arc::new(Mutex::new(field_map)),
+            fields_ng: Arc::new(Mutex::new(HashMap::new())), // 🔗 Initialize next-gen fields
             methods: Arc::new(methods),
             base: BoxBase::new(),
             finalized: Arc::new(Mutex::new(false)),
+        }
+    }
+    
+    /// 🔗 Unified field access - prioritizes fields_ng, fallback to legacy fields with conversion
+    pub fn get_field_unified(&self, field_name: &str) -> Option<NyashValue> {
+        // Check fields_ng first
+        if let Some(value) = self.fields_ng.lock().unwrap().get(field_name) {
+            return Some(value.clone());
+        }
+        
+        // Fallback to legacy fields with conversion
+        if let Some(legacy_box) = self.fields.lock().unwrap().get(field_name) {
+            // For backward compatibility, we need to work around the type mismatch
+            // Since we can't easily convert Box<dyn NyashBox> to Arc<Mutex<dyn NyashBox>>
+            // We'll use the from_box method which handles this conversion
+            // We need to create a temporary Arc to satisfy the method signature
+            let temp_arc = Arc::new(Mutex::new(VoidBox::new()));
+            // Unfortunately, there's a type system limitation here
+            // For now, let's return a simple converted value
+            let string_rep = legacy_box.to_string_box().value;
+            return Some(NyashValue::String(string_rep));
+        }
+        
+        None
+    }
+    
+    /// 🔗 Unified field setting - always stores in fields_ng
+    pub fn set_field_unified(&self, field_name: String, value: NyashValue) -> Result<(), String> {
+        // Always store in fields_ng for future compatibility
+        self.fields_ng.lock().unwrap().insert(field_name.clone(), value.clone());
+        
+        // For backward compatibility, also update legacy fields if they exist
+        // Convert NyashValue back to Box<dyn NyashBox> for legacy storage
+        if self.fields.lock().unwrap().contains_key(&field_name) {
+            if let Ok(legacy_box) = value.to_box() {
+                // Convert Arc<Mutex<dyn NyashBox>> to Box<dyn NyashBox>
+                if let Ok(inner_box) = legacy_box.try_lock() {
+                    self.fields.lock().unwrap().insert(field_name, inner_box.clone_box());
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// 🔗 Set weak field - converts strong reference to weak and stores in fields_ng
+    pub fn set_weak_field(&self, field_name: String, value: NyashValue) -> Result<(), String> {
+        match value {
+            NyashValue::Box(arc_box) => {
+                let weak_ref = Arc::downgrade(&arc_box);
+                let field_name_clone = field_name.clone(); // Clone for eprintln
+                self.fields_ng.lock().unwrap().insert(field_name, NyashValue::WeakBox(weak_ref));
+                eprintln!("🔗 DEBUG: Successfully converted strong reference to weak for field '{}'", field_name_clone);
+                Ok(())
+            }
+            _ => {
+                // For non-Box values, store as-is (they don't need weak conversion)
+                self.fields_ng.lock().unwrap().insert(field_name, value);
+                Ok(())
+            }
+        }
+    }
+    
+    /// 🔗 Get weak field with auto-upgrade and nil fallback
+    pub fn get_weak_field(&self, field_name: &str) -> Option<NyashValue> {
+        if let Some(value) = self.fields_ng.lock().unwrap().get(field_name) {
+            match value {
+                NyashValue::WeakBox(weak_ref) => {
+                    if let Some(strong_ref) = weak_ref.upgrade() {
+                        eprintln!("🔗 DEBUG: Weak field '{}' upgraded successfully", field_name);
+                        Some(NyashValue::Box(strong_ref))
+                    } else {
+                        eprintln!("🔗 DEBUG: Weak field '{}' target was dropped - returning null", field_name);
+                        Some(NyashValue::Null) // 🎯 Auto-nil behavior!
+                    }
+                }
+                _ => {
+                    // Non-weak value, return as-is
+                    Some(value.clone())
+                }
+            }
+        } else {
+            None
         }
     }
     
