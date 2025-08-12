@@ -443,55 +443,72 @@ impl NyashInterpreter {
             }
             
             "IntentBox" => {
-                // IntentBoxは引数なしで作成（デフォルトローカル通信）
-                if !arguments.is_empty() {
+                // IntentBoxは引数2個（name, payload）で作成
+                if arguments.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("IntentBox constructor expects 0 arguments, got {}", arguments.len()),
+                        message: format!("IntentBox constructor expects 2 arguments (name, payload), got {}", arguments.len()),
                     });
                 }
-                let intent_box = crate::boxes::IntentBox::new();
+                
+                // メッセージ名
+                let name_value = self.execute_expression(&arguments[0])?;
+                let name = if let Some(name_str) = name_value.as_any().downcast_ref::<StringBox>() {
+                    name_str.value.clone()
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: "IntentBox constructor requires string name as first argument".to_string(),
+                    });
+                };
+                
+                // ペイロード（JSON形式）
+                let payload_value = self.execute_expression(&arguments[1])?;
+                let payload = match payload_value.to_string_box().value.parse::<serde_json::Value>() {
+                    Ok(json) => json,
+                    Err(_) => {
+                        // 文字列として保存
+                        serde_json::Value::String(payload_value.to_string_box().value)
+                    }
+                };
+                
+                let intent_box = crate::boxes::intent_box::IntentBoxData::new(name, payload);
                 return Ok(Box::new(intent_box) as Box<dyn NyashBox>);
             }
             
             "P2PBox" => {
-                // P2PBoxは引数2個（node_id, intent_box）で作成
-                if arguments.is_empty() {
+                // P2PBoxは引数2個（node_id, transport_type）で作成
+                if arguments.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: "P2PBox requires at least 1 argument (node_id)".to_string(),
+                        message: format!("P2PBox constructor expects 2 arguments (node_id, transport_type), got {}", arguments.len()),
                     });
                 }
                 
-                // 引数を評価
-                let mut arg_values = Vec::new();
-                for arg in arguments {
-                    arg_values.push(self.execute_expression(arg)?);
-                }
-                
-                // 第1引数: ノードID
-                let node_id = if let Some(str_box) = arg_values[0].as_any().downcast_ref::<StringBox>() {
-                    str_box.value.clone()
+                // ノードID
+                let node_id_value = self.execute_expression(&arguments[0])?;
+                let node_id = if let Some(id_str) = node_id_value.as_any().downcast_ref::<StringBox>() {
+                    id_str.value.clone()
                 } else {
                     return Err(RuntimeError::TypeError {
-                        message: "P2PBox first argument must be a string (node_id)".to_string(),
+                        message: "P2PBox constructor requires string node_id as first argument".to_string(),
                     });
                 };
                 
-                // 第2引数: IntentBox（省略時はデフォルト）
-                let intent_box = if arg_values.len() > 1 {
-                    if let Some(intent) = arg_values[1].as_any().downcast_ref::<crate::boxes::IntentBox>() {
-                        std::sync::Arc::new(intent.clone())
-                    } else {
-                        return Err(RuntimeError::TypeError {
-                            message: "P2PBox second argument must be an IntentBox".to_string(),
-                        });
-                    }
+                // トランスポート種類
+                let transport_value = self.execute_expression(&arguments[1])?;
+                let transport_str = if let Some(t_str) = transport_value.as_any().downcast_ref::<StringBox>() {
+                    t_str.value.clone()
                 } else {
-                    // デフォルトのIntentBoxを作成
-                    std::sync::Arc::new(crate::boxes::IntentBox::new())
+                    return Err(RuntimeError::TypeError {
+                        message: "P2PBox constructor requires string transport_type as second argument".to_string(),
+                    });
                 };
                 
-                let p2p_box = crate::boxes::P2PBox::new(node_id, intent_box);
-                return Ok(Box::new(p2p_box));
+                let transport_kind = transport_str.parse::<crate::boxes::p2p_box::TransportKind>()
+                    .map_err(|e| RuntimeError::InvalidOperation {
+                        message: format!("Invalid transport type '{}': {}", transport_str, e),
+                    })?;
+                
+                let p2p_box = crate::boxes::p2p_box::P2PBoxData::new(node_id, transport_kind);
+                return Ok(Box::new(p2p_box) as Box<dyn NyashBox>);
             }
             "StreamBox" => {
                 // StreamBoxは引数なしで作成

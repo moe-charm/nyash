@@ -25,6 +25,10 @@ pub mod type_box;  // 🌟 TypeBox revolutionary system
 pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
 pub mod box_operators; // 🚀 Operator implementations for basic Box types
 
+// 🌐 P2P Communication Infrastructure (NEW!)
+pub mod messaging;
+pub mod transport;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
 
