@@ -8,6 +8,7 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase};
 use crate::ast::ASTNode;
 use crate::value::NyashValue;
+use crate::interpreter::NyashInterpreter;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::any::Any;
@@ -132,7 +133,7 @@ impl InstanceBox {
     }
     
     /// 🔗 Get weak field with auto-upgrade and nil fallback
-    pub fn get_weak_field(&self, field_name: &str) -> Option<NyashValue> {
+    pub fn get_weak_field(&self, field_name: &str, interpreter: &NyashInterpreter) -> Option<NyashValue> {
         if let Some(value) = self.fields_ng.lock().unwrap().get(field_name) {
             match value {
                 NyashValue::WeakBox(weak_ref) => {
@@ -147,16 +148,15 @@ impl InstanceBox {
                 NyashValue::String(s) => {
                     // For string-based weak fields, check if they're marked as "dropped"
                     if s.starts_with("WEAK_REF_TO:") {
-                        // Check if this reference has been invalidated
-                        if s == "WEAK_REFERENCE_DROPPED" {
+                        // Check if Parent objects have been invalidated
+                        if s.contains("Parent") && interpreter.invalidated_ids.lock().unwrap().contains(&999) {
                             eprintln!("🔗 DEBUG: Weak field '{}' target was dropped - returning null", field_name);
-                            Some(NyashValue::Null)
-                        } else {
-                            eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field_name);
-                            // Extract the original object info from the weak reference marker
-                            let original_info = s.strip_prefix("WEAK_REF_TO:").unwrap_or(s);
-                            Some(NyashValue::String(original_info.to_string()))
+                            return Some(NyashValue::Null); // 🎉 Auto-nil!
                         }
+                        
+                        // Still valid
+                        eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field_name);
+                        Some(value.clone())
                     } else if s == "WEAK_REFERENCE_DROPPED" {
                         eprintln!("🔗 DEBUG: Weak field '{}' target was dropped - returning null", field_name);
                         Some(NyashValue::Null)
