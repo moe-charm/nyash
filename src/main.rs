@@ -19,6 +19,7 @@ pub mod exception_box;
 pub mod method_box;
 pub mod operator_traits;
 pub mod box_operators;
+pub mod value; // 🔥 NyashValue Revolutionary System
 
 use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox, BoxCore};
 use environment::{Environment, PythonCompatEnvironment};

@@ -1,0 +1,54 @@
+// Complete weak reference auto-nil test
+
+box Parent {
+    init { name, child }
+    
+    pack(parentName) {
+        me.name = parentName
+        me.child = new Child()
+        me.child.setParent(me)  // This should create a weak reference
+    }
+    
+    getChild() {
+        return me.child
+    }
+    
+    getName() {
+        return me.name
+    }
+}
+
+box Child {
+    init { weak parent }  // weak modifier on parent field
+    
+    setParent(p) {
+        me.parent = p
+    }
+    
+    getParentInfo() {
+        // Instead of comparing to null, check if parent field exists and is valid
+        local parentExists = me.parent != 0  // Using 0 as a null check workaround
+        if parentExists {
+            return "Parent exists"
+        } else {
+            return "Parent is null (dropped)"
+        }
+    }
+}
+
+static box Main {
+    main() {
+        local p = new Parent("TestParent")
+        local child = p.getChild()
+        
+        print("Initial: " + child.getParentInfo())
+        
+        // Test the weak reference system
+        // When p goes out of scope, child.parent should automatically become null
+        p = 0  // Setting to 0 to simulate parent dropping
+        
+        print("After drop: " + child.getParentInfo())
+        
+        return "weak reference auto-nil test completed"
+    }
+}

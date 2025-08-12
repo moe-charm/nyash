@@ -631,18 +631,32 @@ impl NyashInterpreter {
                     message: format!("Field '{}' not found in {}", field, instance.class_name),
                 })?;
             
-            // 🔗 Weak Reference Check: Log that we're accessing a weak field
+            // 🔗 Weak Reference Check: Use unified accessor for weak fields
             let box_decls = self.shared.box_declarations.read().unwrap();
             if let Some(box_decl) = box_decls.get(&instance.class_name) {
                 if box_decl.weak_fields.contains(&field.to_string()) {
                     eprintln!("🔗 DEBUG: Accessing weak field '{}' in class '{}'", field, instance.class_name);
                     
-                    // For now, just check if the field is null (simulating dropped weak reference)
-                    if field_value.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
-                        eprintln!("🔗 DEBUG: Weak field '{}' is null (reference dropped)", field);
-                    } else {
-                        eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field);
+                    // 🎯 PHASE 2: Use unified accessor for auto-nil weak reference handling
+                    if let Some(weak_value) = instance.get_weak_field(field) {
+                        match &weak_value {
+                            crate::value::NyashValue::Null => {
+                                eprintln!("🔗 DEBUG: Weak field '{}' is null (reference dropped)", field);
+                                // Return null box for compatibility
+                                return Ok(Box::new(crate::boxes::null_box::NullBox::new()));
+                            }
+                            _ => {
+                                eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field);
+                                // Convert back to Box<dyn NyashBox> for now
+                                if let Ok(box_value) = weak_value.to_box() {
+                                    if let Ok(inner_box) = box_value.try_lock() {
+                                        return Ok(inner_box.clone_box());
+                                    }
+                                }
+                            }
+                        }
                     }
+                    // If weak field access failed, fall through to normal access
                 }
             }
             

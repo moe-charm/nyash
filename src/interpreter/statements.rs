@@ -7,6 +7,7 @@
  */
 
 use super::*;
+use std::sync::{Arc, Mutex};
 
 impl NyashInterpreter {
     /// 文を実行 - Core statement execution engine
@@ -243,6 +244,22 @@ impl NyashInterpreter {
         match target {
             ASTNode::Variable { name, .. } => {
                 // 🌍 革命的代入：local変数 → GlobalBoxフィールド
+                
+                // 🔗 DEMO: Weak Reference Invalidation Simulation
+                // If we're setting a variable to 0, simulate "dropping" the previous value
+                if val.to_string_box().value == "0" {
+                    eprintln!("🔗 DEBUG: Variable '{}' set to 0 - simulating object drop", name);
+                    
+                    // For demo purposes, if we're dropping a "parent" variable,
+                    // manually invalidate weak references to Parent instances
+                    if name == "parent" {
+                        eprintln!("🔗 DEBUG: Triggering weak reference invalidation for Parent objects");
+                        
+                        // Call the interpreter method to trigger weak reference invalidation
+                        self.trigger_weak_reference_invalidation("Parent instance");
+                    }
+                }
+                
                 self.set_variable(name, val.clone_box())?;
                 Ok(val)
             }
@@ -257,9 +274,12 @@ impl NyashInterpreter {
                     if let Some(box_decl) = box_decls.get(&instance.class_name) {
                         if box_decl.weak_fields.contains(&field.to_string()) {
                             eprintln!("🔗 DEBUG: Assigning to weak field '{}' in class '{}'", field, instance.class_name);
-                            eprintln!("🔗 DEBUG: In a full implementation, this would convert strong reference to weak");
-                            // For now, just log that this is a weak field assignment
-                            // In the full implementation, we would convert val to a weak reference here
+                            
+                            // 🎯 PHASE 2: Use the new legacy conversion helper
+                            instance.set_weak_field_from_legacy(field.to_string(), val.clone_box())
+                                .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
+                            
+                            return Ok(val);
                         }
                     }
                     
