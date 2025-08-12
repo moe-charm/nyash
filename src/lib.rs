@@ -32,6 +32,9 @@ pub mod value;
 pub mod messaging;
 pub mod transport;
 
+// 🚀 MIR (Mid-level Intermediate Representation) Infrastructure (NEW!)
+pub mod mir;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
 
