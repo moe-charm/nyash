@@ -72,6 +72,9 @@ impl MirBuilder {
         self.current_function = Some(main_function);
         self.current_block = Some(entry_block);
         
+        // Add safepoint at function entry
+        self.emit_instruction(MirInstruction::Safepoint)?;
+        
         // Convert AST to MIR
         let result_value = self.build_expression(ast)?;
         
@@ -158,6 +161,18 @@ impl MirBuilder {
                     },
                     else_ast
                 )
+            },
+            
+            ASTNode::Loop { condition, body, .. } => {
+                self.build_loop_statement(*condition.clone(), body.clone())
+            },
+            
+            ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => {
+                self.build_try_catch_statement(try_body.clone(), catch_clauses.clone(), finally_body.clone())
+            },
+            
+            ASTNode::Throw { expression, .. } => {
+                self.build_throw_statement(*expression.clone())
             },
             
             _ => {
@@ -385,6 +400,160 @@ impl MirBuilder {
                 let block = BasicBlock::new(block_id);
                 function.add_block(block);
             }
+            Ok(())
+        } else {
+            Err("No current function".to_string())
+        }
+    }
+    
+    /// Build a loop statement: loop(condition) { body }
+    fn build_loop_statement(&mut self, condition: ASTNode, body: Vec<ASTNode>) -> Result<ValueId, String> {
+        // Add safepoint at loop entry
+        self.emit_instruction(MirInstruction::Safepoint)?;
+        
+        let loop_header = self.block_gen.next();
+        let loop_body = self.block_gen.next();
+        let loop_exit = self.block_gen.next();
+        
+        // Jump to loop header
+        self.emit_instruction(MirInstruction::Jump { target: loop_header })?;
+        
+        // Create loop header block
+        self.start_new_block(loop_header)?;
+        
+        // Evaluate condition
+        let condition_value = self.build_expression(condition)?;
+        
+        // Branch based on condition
+        self.emit_instruction(MirInstruction::Branch {
+            condition: condition_value,
+            then_bb: loop_body,
+            else_bb: loop_exit,
+        })?;
+        
+        // Create loop body block
+        self.start_new_block(loop_body)?;
+        
+        // Add safepoint at loop body start
+        self.emit_instruction(MirInstruction::Safepoint)?;
+        
+        // Build loop body
+        let body_ast = ASTNode::Program {
+            statements: body,
+            span: crate::ast::Span::unknown(),
+        };
+        self.build_expression(body_ast)?;
+        
+        // Jump back to loop header
+        self.emit_instruction(MirInstruction::Jump { target: loop_header })?;
+        
+        // Create exit block
+        self.start_new_block(loop_exit)?;
+        
+        // Return void value
+        let void_dst = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: void_dst,
+            value: ConstValue::Void,
+        })?;
+        
+        Ok(void_dst)
+    }
+    
+    /// Build a try/catch statement
+    fn build_try_catch_statement(&mut self, try_body: Vec<ASTNode>, catch_clauses: Vec<crate::ast::CatchClause>, finally_body: Option<Vec<ASTNode>>) -> Result<ValueId, String> {
+        let try_block = self.block_gen.next();
+        let catch_block = self.block_gen.next();
+        let finally_block = if finally_body.is_some() { Some(self.block_gen.next()) } else { None };
+        let exit_block = self.block_gen.next();
+        
+        // Jump to try block
+        self.emit_instruction(MirInstruction::Jump { target: try_block })?;
+        
+        // Build try block
+        self.start_new_block(try_block)?;
+        
+        let try_ast = ASTNode::Program {
+            statements: try_body,
+            span: crate::ast::Span::unknown(),
+        };
+        let try_result = self.build_expression(try_ast)?;
+        
+        // Jump to finally or exit
+        let next_target = finally_block.unwrap_or(exit_block);
+        self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+        
+        // Build catch block
+        self.start_new_block(catch_block)?;
+        
+        // For now, handle first catch clause only (simplified)
+        if let Some(catch_clause) = catch_clauses.first() {
+            let exception_value = self.value_gen.next();
+            
+            // Set up catch handler
+            self.emit_instruction(MirInstruction::Catch {
+                exception_type: catch_clause.exception_type.clone(),
+                exception_value,
+                handler_bb: catch_block,
+            })?;
+            
+            // Build catch body
+            let catch_ast = ASTNode::Program {
+                statements: catch_clause.body.clone(),
+                span: crate::ast::Span::unknown(),
+            };
+            self.build_expression(catch_ast)?;
+        }
+        
+        // Jump to finally or exit
+        let next_target = finally_block.unwrap_or(exit_block);
+        self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+        
+        // Build finally block if present
+        if let (Some(finally_block_id), Some(finally_statements)) = (finally_block, finally_body) {
+            self.start_new_block(finally_block_id)?;
+            
+            let finally_ast = ASTNode::Program {
+                statements: finally_statements,
+                span: crate::ast::Span::unknown(),
+            };
+            self.build_expression(finally_ast)?;
+            
+            self.emit_instruction(MirInstruction::Jump { target: exit_block })?;
+        }
+        
+        // Create exit block
+        self.start_new_block(exit_block)?;
+        
+        // Return the try result (simplified - in real implementation would need phi node)
+        Ok(try_result)
+    }
+    
+    /// Build a throw statement
+    fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+        let exception_value = self.build_expression(expression)?;
+        
+        // Emit throw instruction with PANIC effect
+        self.emit_instruction(MirInstruction::Throw {
+            exception: exception_value,
+            effects: EffectMask::PANIC,
+        })?;
+        
+        // Throw doesn't return normally, but we need to return a value for the type system
+        let void_dst = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: void_dst,
+            value: ConstValue::Void,
+        })?;
+        
+        Ok(void_dst)
+    }
+    
+    /// Start a new basic block
+    fn start_new_block(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut function) = self.current_function {
+            function.add_block(BasicBlock::new(block_id));
+            self.current_block = Some(block_id);
             Ok(())
         } else {
             Err("No current function".to_string())

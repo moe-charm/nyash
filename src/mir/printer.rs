@@ -301,6 +301,23 @@ impl MirPrinter {
             MirInstruction::Nop => {
                 "nop".to_string()
             },
+            
+            // Phase 5: Control flow & exception handling
+            MirInstruction::Throw { exception, effects: _ } => {
+                format!("throw {}", exception)
+            },
+            
+            MirInstruction::Catch { exception_type, exception_value, handler_bb } => {
+                if let Some(ref exc_type) = exception_type {
+                    format!("catch {} {} -> {}", exc_type, exception_value, handler_bb)
+                } else {
+                    format!("catch * {} -> {}", exception_value, handler_bb)
+                }
+            },
+            
+            MirInstruction::Safepoint => {
+                "safepoint".to_string()
+            },
         }
     }
     
