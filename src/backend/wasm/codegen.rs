@@ -34,14 +34,14 @@ impl WasmModule {
         let mut wat = String::new();
         wat.push_str("(module\n");
         
-        // Add memory declaration first
-        if !self.memory.is_empty() {
-            wat.push_str(&format!("  {}\n", self.memory));
-        }
-        
-        // Add imports
+        // Add imports first (must come before other definitions in WASM)
         for import in &self.imports {
             wat.push_str(&format!("  {}\n", import));
+        }
+        
+        // Add memory declaration 
+        if !self.memory.is_empty() {
+            wat.push_str(&format!("  {}\n", self.memory));
         }
         
         // Add globals
@@ -118,7 +118,7 @@ impl WasmCodegen {
         self.next_local_index = 0;
         
         let mut function_body = String::new();
-        function_body.push_str(&format!("(func ${})", name));
+        function_body.push_str(&format!("(func ${}", name));
         
         // Add return type if not void
         match mir_function.signature.return_type {
@@ -133,7 +133,10 @@ impl WasmCodegen {
         // Collect all local variables needed
         let local_count = self.count_locals(&mir_function)?;
         if local_count > 0 {
-            function_body.push_str(&format!(" (local $locals i32)"));
+            // Declare individual local variables for each ValueId
+            for i in 0..local_count {
+                function_body.push_str(&format!(" (local ${} i32)", i));
+            }
         }
         
         function_body.push('\n');
