@@ -123,8 +123,11 @@ impl MirBuilder {
             },
             
             ASTNode::Assignment { target, value, .. } => {
-                // For now, assume target is a variable identifier
-                if let ASTNode::Variable { name, .. } = target.as_ref() {
+                // Check if target is a field access for RefSet
+                if let ASTNode::FieldAccess { object, field, .. } = target.as_ref() {
+                    self.build_field_assignment(*object.clone(), field.clone(), *value.clone())
+                } else if let ASTNode::Variable { name, .. } = target.as_ref() {
+                    // Plain variable assignment - existing behavior
                     self.build_assignment(name.clone(), *value.clone())
                 } else {
                     Err("Complex assignment targets not yet supported in MIR".to_string())
@@ -194,6 +197,10 @@ impl MirBuilder {
             
             ASTNode::FieldAccess { object, field, .. } => {
                 self.build_field_access(*object.clone(), field.clone())
+            },
+            
+            ASTNode::New { class, arguments, .. } => {
+                self.build_new_expression(class.clone(), arguments.clone())
             },
             
             _ => {
@@ -666,22 +673,54 @@ impl MirBuilder {
         // First, build the object expression to get its ValueId
         let object_value = self.build_expression(object)?;
         
-        // Create a reference to the object
-        let ref_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::RefNew {
-            dst: ref_id,
-            box_val: object_value,
-        })?;
-        
-        // Get the field from the reference
+        // Get the field from the object using RefGet
         let result_id = self.value_gen.next();
         self.emit_instruction(MirInstruction::RefGet {
             dst: result_id,
-            reference: ref_id,
+            reference: object_value,
             field,
         })?;
         
         Ok(result_id)
+    }
+    
+    /// Build new expression: new ClassName(arguments)
+    fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+        // For Phase 6.1, we'll create a simple RefNew without processing arguments
+        // In a full implementation, arguments would be used for constructor calls
+        let dst = self.value_gen.next();
+        
+        // For now, create a "box type" value representing the class
+        let type_value = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: type_value,
+            value: ConstValue::String(class),
+        })?;
+        
+        // Create the reference using RefNew
+        self.emit_instruction(MirInstruction::RefNew {
+            dst,
+            box_val: type_value,
+        })?;
+        
+        Ok(dst)
+    }
+    
+    /// Build field assignment: object.field = value
+    fn build_field_assignment(&mut self, object: ASTNode, field: String, value: ASTNode) -> Result<ValueId, String> {
+        // Build the object and value expressions
+        let object_value = self.build_expression(object)?;
+        let value_result = self.build_expression(value)?;
+        
+        // Set the field using RefSet
+        self.emit_instruction(MirInstruction::RefSet {
+            reference: object_value,
+            field,
+            value: value_result,
+        })?;
+        
+        // Return the assigned value
+        Ok(value_result)
     }
     
     /// Start a new basic block

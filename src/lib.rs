@@ -35,6 +35,9 @@ pub mod transport;
 // 🚀 MIR (Mid-level Intermediate Representation) Infrastructure (NEW!)
 pub mod mir;
 
+// 🚀 Backend Infrastructure (NEW!)
+pub mod backend;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
 

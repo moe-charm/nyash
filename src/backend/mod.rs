@@ -4,4 +4,4 @@
 
 pub mod vm;
 
-pub use vm::{VM, VMError};
+pub use vm::{VM, VMError, VMValue};
