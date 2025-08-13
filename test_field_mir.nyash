@@ -1,0 +1,16 @@
+// Test field access MIR generation
+static box TestBox {
+    init { name, value }
+}
+
+static box Main {
+    init { test_obj }
+    
+    main() {
+        me.test_obj = new TestBox()
+        local result
+        result = me.test_obj.name
+        print(result)
+        return "Done"
+    }
+}

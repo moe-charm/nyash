@@ -37,6 +37,8 @@ pub enum Effect {
     Unsafe = 0x0400,
     /// Debug/logging operations
     Debug = 0x0800,
+    /// Memory barrier operations
+    Barrier = 0x1000,
 }
 
 impl EffectMask {
@@ -156,6 +158,7 @@ impl EffectMask {
         if self.contains(Effect::Async) { names.push("async"); }
         if self.contains(Effect::Unsafe) { names.push("unsafe"); }
         if self.contains(Effect::Debug) { names.push("debug"); }
+        if self.contains(Effect::Barrier) { names.push("barrier"); }
         
         names
     }

@@ -192,6 +192,10 @@ impl MirBuilder {
                 }
             },
             
+            ASTNode::FieldAccess { object, field, .. } => {
+                self.build_field_access(*object.clone(), field.clone())
+            },
+            
             _ => {
                 Err(format!("Unsupported AST node type: {:?}", ast))
             }
@@ -655,6 +659,29 @@ impl MirBuilder {
         } else {
             Err("static box Main must contain a main() method".to_string())
         }
+    }
+    
+    /// Build field access: object.field
+    fn build_field_access(&mut self, object: ASTNode, field: String) -> Result<ValueId, String> {
+        // First, build the object expression to get its ValueId
+        let object_value = self.build_expression(object)?;
+        
+        // Create a reference to the object
+        let ref_id = self.value_gen.next();
+        self.emit_instruction(MirInstruction::RefNew {
+            dst: ref_id,
+            box_val: object_value,
+        })?;
+        
+        // Get the field from the reference
+        let result_id = self.value_gen.next();
+        self.emit_instruction(MirInstruction::RefGet {
+            dst: result_id,
+            reference: ref_id,
+            field,
+        })?;
+        
+        Ok(result_id)
     }
     
     /// Start a new basic block
