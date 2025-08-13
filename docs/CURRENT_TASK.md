@@ -1,14 +1,34 @@
-# 🎯 現在のタスク (2025-08-11 シンプルBoxから段階的実装！)
+# 🎯 現在のタスク (2025-08-13 Native Nyash Phase 7 & 弱参照テスト追加)
 
-## 🚀 2025-08-11 複雑なP2PBox実装をリセット → シンプルBox段階実装開始！
+## 🎯 2025-08-13 現在の進行状況
 
-### 💡 **学習成果**
-**複雑すぎる実装を一度に追加すると失敗することを学習！**
+### 🚀 Native Nyash実装
+- **Phase 6.1**: ✅ 完了（PR #43 - RefNew/RefGet/RefSet実装）
+- **Phase 7**: 📝 Issue #44作成済み - Async model (nowait/await)実装待ち
 
-#### **新方針**
-- **依存の少ないBox**: まずシンプルなBoxから追加
-- **段階的実装**: 一つずつ確実に動作確認
-- **テストファースト**: 必ず動作確認してから次へ
+### 🧪 ChatGPT5さんからの弱参照テスト追加タスク
+
+#### 実装予定のテスト（tests/integration_tests.rs）
+- [ ] `test_weak_field_cannot_finalize`: weakフィールドに対して `me.field.fini()` を呼ぶとエラーになることを確認
+  - コード: weak parent を持つ Child に対して `me.parent.fini()` を呼ぶ
+  - 期待: 実行エラー（メッセージに "Cannot finalize weak field" を含む）
+  
+- [ ] `test_usage_prohibited_after_fini`: インスタンスを `fini()` 後にメソッド呼び出しすると使用禁止エラーになることを確認
+  
+- [ ] weak自動null化テスト
+  - 親 `p.fini()` 後に `c.isParentNull()` が `true` になる
+
+#### テスト実行のワークアラウンド
+- 推奨: `cargo test --tests -j32`（examples除外）
+- Windows向けexampleをビルド対象から一時外すか、CIのmatrixでexamplesをスキップ
+
+#### 追加検討事項
+- weakの複数段/循環
+- fini内でのカスケード順序検証
+
+---
+
+## 📋 以前の実装計画（参考）
 
 ### 📋 **段階的実装計画（優先度順）**
 
