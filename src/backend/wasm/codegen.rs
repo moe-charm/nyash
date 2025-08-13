@@ -97,6 +97,17 @@ impl WasmCodegen {
         // Add globals (heap pointer)
         wasm_module.globals.extend(memory_manager.get_globals());
         
+        // Add memory management functions
+        wasm_module.functions.push(memory_manager.get_malloc_function());
+        wasm_module.functions.push(memory_manager.get_generic_box_alloc_function());
+        
+        // Add Box-specific allocation functions for known types
+        for box_type in ["StringBox", "IntegerBox", "BoolBox", "DataBox"] {
+            if let Ok(alloc_func) = memory_manager.get_box_alloc_function(box_type) {
+                wasm_module.functions.push(alloc_func);
+            }
+        }
+        
         // Generate functions
         for (name, function) in &mir_module.functions {
             let wasm_function = self.generate_function(name, function.clone())?;
@@ -222,26 +233,78 @@ impl WasmCodegen {
                 self.generate_print(*value)
             },
             
-            // Phase 8.3 PoC2: Reference operations (stub for now)
+            // Phase 8.3 PoC2: Reference operations
             MirInstruction::RefNew { dst, box_val } => {
-                // For now, just copy the value (TODO: implement heap allocation)
+                // Create a new reference to a Box by copying the Box value
+                // This assumes box_val contains a Box pointer already
                 Ok(vec![
                     format!("local.get ${}", self.get_local_index(*box_val)?),
                     format!("local.set ${}", self.get_local_index(*dst)?),
                 ])
             },
             
-            MirInstruction::RefGet { dst, reference, field: _ } => {
-                // For now, just copy the reference (TODO: implement field access)
+            MirInstruction::RefGet { dst, reference, field } => {
+                // Load field value from Box through reference
+                // reference contains Box pointer, field is the field name
+                // For now, assume all fields are at offset 12 (first field after header)
+                // TODO: Add proper field offset calculation
                 Ok(vec![
                     format!("local.get ${}", self.get_local_index(*reference)?),
+                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
+                    "i32.add".to_string(),
+                    "i32.load".to_string(),
                     format!("local.set ${}", self.get_local_index(*dst)?),
                 ])
             },
             
-            MirInstruction::RefSet { reference: _, field: _, value: _ } => {
-                // For now, no-op (TODO: implement field assignment)
-                Ok(vec!["nop".to_string()])
+            MirInstruction::RefSet { reference, field, value } => {
+                // Store field value to Box through reference  
+                // reference contains Box pointer, field is the field name, value is new value
+                // For now, assume all fields are at offset 12 (first field after header)
+                // TODO: Add proper field offset calculation
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*reference)?),
+                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
+                    "i32.add".to_string(),
+                    format!("local.get ${}", self.get_local_index(*value)?),
+                    "i32.store".to_string(),
+                ])
+            },
+            
+            MirInstruction::NewBox { dst, box_type, args } => {
+                // Create a new Box using the generic allocator
+                match box_type.as_str() {
+                    "DataBox" => {
+                        // Use specific allocator for known types
+                        let mut instructions = vec![
+                            "call $alloc_databox".to_string(),
+                            format!("local.set ${}", self.get_local_index(*dst)?),
+                        ];
+                        
+                        // Initialize fields with arguments if provided
+                        for (i, arg) in args.iter().enumerate() {
+                            instructions.extend(vec![
+                                format!("local.get ${}", self.get_local_index(*dst)?),
+                                format!("i32.const {}", 12 + i * 4), // Field offset
+                                "i32.add".to_string(),
+                                format!("local.get ${}", self.get_local_index(*arg)?),
+                                "i32.store".to_string(),
+                            ]);
+                        }
+                        
+                        Ok(instructions)
+                    },
+                    _ => {
+                        // Use generic allocator for unknown types
+                        // This is a fallback - in a real implementation, all Box types should be known
+                        Ok(vec![
+                            "i32.const 8192".to_string(), // Default unknown type ID
+                            format!("i32.const {}", args.len()),
+                            "call $box_alloc".to_string(),
+                            format!("local.set ${}", self.get_local_index(*dst)?),
+                        ])
+                    }
+                }
             },
             
             // Phase 8.4 PoC3: Extension stubs
@@ -265,7 +328,8 @@ impl WasmCodegen {
             
             MirInstruction::BarrierRead { .. } |
             MirInstruction::BarrierWrite { .. } |
-            MirInstruction::FutureSet { .. } => {
+            MirInstruction::FutureSet { .. } |
+            MirInstruction::Safepoint => {
                 // No-op for now
                 Ok(vec!["nop".to_string()])
             },

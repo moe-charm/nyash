@@ -34,7 +34,7 @@ use mir::{MirCompiler, MirPrinter};
 
 // 🚀 Backend Infrastructure  
 pub mod backend;
-use backend::VM;
+use backend::{VM, wasm::WasmBackend};
 use std::env;
 use std::fs;
 use std::process;
@@ -84,6 +84,12 @@ fn main() {
                 .help("Choose execution backend: 'interpreter' (default) or 'vm'")
                 .default_value("interpreter")
         )
+        .arg(
+            Arg::new("compile-wasm")
+                .long("compile-wasm")
+                .help("Compile to WebAssembly (WAT format) instead of executing")
+                .action(clap::ArgAction::SetTrue)
+        )
         .get_matches();
     
     // デバッグ燃料の解析
@@ -93,6 +99,7 @@ fn main() {
     let dump_mir = matches.get_flag("dump-mir");
     let verify_mir = matches.get_flag("verify");
     let mir_verbose = matches.get_flag("mir-verbose");
+    let compile_wasm = matches.get_flag("compile-wasm");
     let backend = matches.get_one::<String>("backend").unwrap();
     
     if let Some(filename) = matches.get_one::<String>("file") {
@@ -100,6 +107,9 @@ fn main() {
         if dump_mir || verify_mir {
             println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             execute_mir_mode(filename, dump_mir, verify_mir, mir_verbose);
+        } else if compile_wasm {
+            println!("🌐 Nyash WASM Compiler - Compiling file: {} 🌐", filename);
+            execute_wasm_mode(filename);
         } else if backend == "vm" {
             println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             execute_vm_mode(filename);
@@ -1233,6 +1243,58 @@ fn execute_vm_mode(filename: &str) {
         },
         Err(e) => {
             eprintln!("❌ VM runtime error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn execute_wasm_mode(filename: &str) {
+    // Read the source file
+    let source = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", filename, e);
+            process::exit(1);
+        }
+    };
+    
+    // Parse to AST
+    let ast = match NyashParser::parse_from_string(&source) {
+        Ok(ast) => ast,
+        Err(e) => {
+            eprintln!("❌ Parse error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Compile to MIR
+    let mut compiler = MirCompiler::new();
+    let compile_result = match compiler.compile(ast) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("❌ MIR compilation error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Check for verification errors
+    if let Err(errors) = &compile_result.verification_result {
+        eprintln!("❌ MIR verification failed with {} error(s):", errors.len());
+        for (i, error) in errors.iter().enumerate() {
+            eprintln!("  {}: {}", i + 1, error);
+        }
+        // Continue compilation anyway for now
+    }
+    
+    // Compile to WASM
+    let mut wasm_backend = WasmBackend::new();
+    match wasm_backend.compile_to_wat(compile_result.module) {
+        Ok(wat_text) => {
+            println!("✅ WASM compilation completed successfully!");
+            println!("Generated WAT:\n{}", wat_text);
+        },
+        Err(e) => {
+            eprintln!("❌ WASM compilation error: {}", e);
             process::exit(1);
         }
     }
