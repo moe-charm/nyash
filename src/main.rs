@@ -84,6 +84,32 @@ fn main() {
                 .help("Choose execution backend: 'interpreter' (default) or 'vm'")
                 .default_value("interpreter")
         )
+        .arg(
+            Arg::new("compile-wasm")
+                .long("compile-wasm")
+                .help("Compile to WASM and output WAT text")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("output")
+                .long("output")
+                .short('o')
+                .value_name("FILE")
+                .help("Output file (for WASM compilation)")
+        )
+        .arg(
+            Arg::new("benchmark")
+                .long("benchmark")
+                .help("Run performance benchmarks across all backends")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("iterations")
+                .long("iterations")
+                .value_name("COUNT")
+                .help("Number of iterations for benchmarks (default: 10)")
+                .default_value("10")
+        )
         .get_matches();
     
     // デバッグ燃料の解析
@@ -94,10 +120,28 @@ fn main() {
     let verify_mir = matches.get_flag("verify");
     let mir_verbose = matches.get_flag("mir-verbose");
     let backend = matches.get_one::<String>("backend").unwrap();
+    let compile_wasm = matches.get_flag("compile-wasm");
+    let output_file = matches.get_one::<String>("output");
+    let benchmark = matches.get_flag("benchmark");
+    let iterations: u32 = matches.get_one::<String>("iterations").unwrap().parse().unwrap_or(10);
+    
+    // Benchmark mode - can run without a file
+    if benchmark {
+        println!("📊 Nyash Performance Benchmark Suite");
+        println!("====================================");
+        println!("Running {} iterations per test...", iterations);
+        println!();
+        
+        execute_benchmark_mode(iterations);
+        return;
+    }
     
     if let Some(filename) = matches.get_one::<String>("file") {
         // File mode: parse and execute the provided .nyash file
-        if dump_mir || verify_mir {
+        if compile_wasm {
+            println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
+            execute_wasm_mode(filename, output_file);
+        } else if dump_mir || verify_mir {
             println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             execute_mir_mode(filename, dump_mir, verify_mir, mir_verbose);
         } else if backend == "vm" {
@@ -1236,6 +1280,94 @@ fn execute_vm_mode(filename: &str) {
             process::exit(1);
         }
     }
+}
+
+/// Execute WASM compilation mode
+fn execute_wasm_mode(filename: &str, output_file: Option<&String>) {
+    use backend::wasm::WasmBackend;
+    
+    // Read the source file
+    let source = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", filename, e);
+            process::exit(1);
+        }
+    };
+    
+    // Parse to AST
+    let ast = match NyashParser::parse_from_string(&source) {
+        Ok(ast) => ast,
+        Err(e) => {
+            eprintln!("❌ Parse error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Compile to MIR
+    let mut compiler = MirCompiler::new();
+    let compile_result = match compiler.compile(ast) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("❌ MIR compilation error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Check for verification errors
+    if let Err(errors) = &compile_result.verification_result {
+        eprintln!("⚠️  MIR verification warnings ({} issues):", errors.len());
+        for (i, error) in errors.iter().enumerate() {
+            eprintln!("  {}: {}", i + 1, error);
+        }
+        println!("Continuing with WASM compilation...");
+    }
+    
+    // Compile to WASM
+    let mut wasm_backend = WasmBackend::new();
+    match wasm_backend.compile_to_wat(compile_result.module) {
+        Ok(wat_text) => {
+            println!("✅ WASM compilation successful!");
+            
+            if let Some(output_path) = output_file {
+                // Write to file
+                match fs::write(output_path, &wat_text) {
+                    Ok(_) => println!("📄 WAT output written to: {}", output_path),
+                    Err(e) => {
+                        eprintln!("❌ Error writing to file '{}': {}", output_path, e);
+                        process::exit(1);
+                    }
+                }
+            } else {
+                // Print to stdout
+                println!("📄 Generated WAT:");
+                println!("{}", wat_text);
+            }
+        },
+        Err(e) => {
+            eprintln!("❌ WASM compilation error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+/// Execute benchmark mode
+fn execute_benchmark_mode(iterations: u32) {
+    use nyash_rust::benchmarks::BenchmarkSuite;
+    
+    let suite = BenchmarkSuite::new(iterations);
+    let results = suite.run_all();
+    
+    if results.is_empty() {
+        println!("❌ No benchmark results - make sure benchmark files exist in benchmarks/ directory");
+        println!("   Expected files:");
+        println!("   - benchmarks/bench_light.nyash");
+        println!("   - benchmarks/bench_medium.nyash");
+        println!("   - benchmarks/bench_heavy.nyash");
+        process::exit(1);
+    }
+    
+    suite.print_results(&results);
 }
 
 #[cfg(test)]

@@ -1,0 +1,47 @@
+// Heavy benchmark - intensive calculations
+static box Main {
+    main() {
+        local a, b, c, d, e, f, g, h, i, j
+        local result1, result2, result3, result4, result5
+        
+        // Initialize values
+        a = 1
+        b = 2
+        c = 3
+        d = 4
+        e = 5
+        f = 6
+        g = 7
+        h = 8
+        i = 9
+        j = 10
+        
+        // Complex arithmetic operations (50+ operations)
+        result1 = a * b + c * d - e / f
+        result2 = g + h * i - j + a
+        result3 = result1 * result2 + b * c
+        result4 = result3 - a * b + c
+        result5 = result4 + result1 - result2
+        
+        result1 = result5 * a + b - c
+        result2 = result1 + d * e - f
+        result3 = result2 * g + h - i
+        result4 = result3 + j * a - b
+        result5 = result4 - c + d * e
+        
+        result1 = result5 + f * g - h
+        result2 = result1 * i + j - a
+        result3 = result2 + b * c - d
+        result4 = result3 * e + f - g
+        result5 = result4 + h * i - j
+        
+        result1 = result5 - a + b * c
+        result2 = result1 + d - e * f
+        result3 = result2 * g - h + i
+        result4 = result3 + j - a * b
+        result5 = result4 * c + d - e
+        
+        print(result5)
+        return result5
+    }
+}

@@ -270,6 +270,12 @@ impl WasmCodegen {
                 Ok(vec!["nop".to_string()])
             },
             
+            // Control flow and debugging
+            MirInstruction::Safepoint => {
+                // Safepoint is a no-op in WASM (used for GC/debugging in other backends)
+                Ok(vec!["nop".to_string()])
+            },
+            
             // Unsupported instructions
             _ => Err(WasmError::UnsupportedInstruction(
                 format!("Instruction not yet supported: {:?}", instruction)

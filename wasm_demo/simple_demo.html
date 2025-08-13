@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Nyash WASM Simple Demo</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #569cd6;
+            text-align: center;
+        }
+        .container {
+            background: #2d2d30;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        #output {
+            background: #1e1e1e;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            border: 1px solid #3e3e42;
+        }
+        .nyash-title {
+            color: #c586c0;
+            font-size: 24px;
+        }
+        input {
+            background: #3c3c3c;
+            color: white;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            margin: 0 5px;
+            border-radius: 4px;
+            width: 60px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎁 <span class="nyash-title">Nyash</span> WASM Simple Demo</h1>
+    
+    <div class="container">
+        <h2>Everything is Box... 📦 (WASM Edition)</h2>
+        
+        <div>
+            <button onclick="runAdd()">Test WASM Add Function</button>
+            <button onclick="testMemory()">Test WASM Memory</button>
+            <button onclick="runMain()">Run WASM Main</button>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <input type="number" id="num1" value="42" />
+            +
+            <input type="number" id="num2" value="8" />
+            = <span id="result">?</span>
+        </div>
+        
+        <div id="output">Loading WASM module...</div>
+    </div>
+
+    <script>
+        let wasmInstance = null;
+        let output = document.getElementById('output');
+        
+        function log(message) {
+            output.textContent += message + '\n';
+            console.log(message);
+        }
+        
+        function clearOutput() {
+            output.textContent = '';
+        }
+        
+        // Create a simple WASM binary with memory
+        function createSimpleWasm() {
+            // WASM binary with add function AND memory
+            const wasmBinary = new Uint8Array([
+                0x00, 0x61, 0x73, 0x6d, // magic
+                0x01, 0x00, 0x00, 0x00, // version
+                
+                // Type section - function signature (i32, i32) -> i32
+                0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01, 0x7f,
+                
+                // Function section - declare 1 function
+                0x03, 0x02, 0x01, 0x00,
+                
+                // Memory section - 1 page (64KB)
+                0x05, 0x03, 0x01, 0x00, 0x01,
+                
+                // Export section - export add function and memory
+                0x07, 0x11, 0x02,
+                0x03, 0x61, 0x64, 0x64, 0x00, 0x00,           // export "add" function 0
+                0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00, // export "memory" memory 0
+                
+                // Code section - implement add function
+                0x0a, 0x09, 0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a, 0x0b
+            ]);
+            
+            return wasmBinary;
+        }
+        
+        // Load WASM
+        async function loadWasm() {
+            try {
+                log('🚀 Creating simple WASM module...');
+                
+                const wasmBinary = createSimpleWasm();
+                
+                const wasmModule = await WebAssembly.instantiate(wasmBinary);
+                wasmInstance = wasmModule.instance;
+                
+                log('✅ WASM module loaded successfully!');
+                log('🎯 Functions available: ' + Object.keys(wasmInstance.exports).join(', '));
+                log('Ready to test Nyash WASM!');
+                
+            } catch (error) {
+                log('❌ Error loading WASM: ' + error.message);
+                
+                // Fallback to JavaScript
+                log('📦 Falling back to JavaScript implementation...');
+                wasmInstance = {
+                    exports: {
+                        add: (a, b) => {
+                            log(`JS Fallback: ${a} + ${b} = ${a + b}`);
+                            return a + b;
+                        }
+                    }
+                };
+                log('✅ JavaScript fallback ready!');
+            }
+        }
+        
+        function runAdd() {
+            clearOutput();
+            if (!wasmInstance) {
+                log('WASM not loaded yet!');
+                return;
+            }
+            
+            const a = parseInt(document.getElementById('num1').value);
+            const b = parseInt(document.getElementById('num2').value);
+            const result = wasmInstance.exports.add(a, b);
+            
+            document.getElementById('result').textContent = result;
+            log(`✨ WASM calculated: ${a} + ${b} = ${result}`);
+            log('🎉 Nyash "Everything is Box" philosophy works in WASM!');
+        }
+        
+        function testMemory() {
+            clearOutput();
+            log('🧠 Testing WASM memory access...');
+            
+            if (wasmInstance && wasmInstance.exports.memory) {
+                const memory = new Uint8Array(wasmInstance.exports.memory.buffer);
+                log(`✅ Memory size: ${memory.length} bytes (${memory.length/1024}KB)`);
+                
+                // Write "Nyash Box!" to memory
+                const message = "Nyash Box! 📦";
+                const encoder = new TextEncoder();
+                const encoded = encoder.encode(message);
+                
+                // Write to memory starting at offset 100
+                for (let i = 0; i < encoded.length; i++) {
+                    memory[100 + i] = encoded[i];
+                }
+                memory[100 + encoded.length] = 0; // null terminator
+                
+                // Read it back
+                const decoder = new TextDecoder();
+                const readBack = decoder.decode(memory.slice(100, 100 + encoded.length));
+                
+                log(`📝 Wrote to memory: "${message}"`);
+                log(`📖 Read from memory: "${readBack}"`);
+                log(`📍 Memory address: 100-${100 + encoded.length}`);
+                log('🎯 This is how Nyash Boxes will be stored in WASM!');
+                
+                // Simulate Box layout
+                log('');
+                log('📦 Simulating Nyash Box layout:');
+                
+                // Box layout: [type_id:4][field_count:4][field0:4][field1:4]...
+                const boxOffset = 200;
+                const boxData = new Int32Array(memory.buffer, boxOffset, 4);
+                
+                boxData[0] = 0x1001; // StringBox type ID
+                boxData[1] = 2;      // 2 fields
+                boxData[2] = 100;    // pointer to string data
+                boxData[3] = encoded.length; // string length
+                
+                log(`   [${boxData[0].toString(16)}][${boxData[1]}][${boxData[2]}][${boxData[3]}]`);
+                log(`   ^type_id  ^count ^ptr   ^len`);
+                log('✨ Perfect for "Everything is Box" philosophy!');
+                
+            } else {
+                log('❌ Memory not available in this demo');
+                log('🔧 Check WASM compilation...');
+            }
+        }
+        
+        function runMain() {
+            clearOutput();
+            log('🎯 Running main function...');
+            log('📦 In real Nyash WASM, this would execute your program!');
+            log('✨ Everything is Box! ✨');
+            
+            // Simulate some Box operations
+            log('Creating StringBox("Hello")...');
+            log('Creating IntegerBox(42)...');
+            log('Executing: print(stringBox + integerBox)...');
+            log('Output: Hello42');
+        }
+        
+        // Load WASM on page load
+        window.onload = loadWasm;
+    </script>
+</body>
+</html>

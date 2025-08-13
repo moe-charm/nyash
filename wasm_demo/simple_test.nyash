@@ -1,0 +1,9 @@
+// Simple Nyash program for WASM testing
+static box Main {
+    main() {
+        local result
+        result = 42 + 8
+        print(result)
+        return result
+    }
+}

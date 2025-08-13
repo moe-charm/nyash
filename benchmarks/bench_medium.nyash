@@ -1,0 +1,51 @@
+// Medium benchmark - more calculations
+static box Main {
+    main() {
+        local sum, temp, i
+        sum = 0
+        i = 1
+        
+        // Manual "loop" - 10 iterations of calculations
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        i = i + 1
+        
+        temp = i * 2 + 3
+        sum = sum + temp
+        
+        print(sum)
+        return sum
+    }
+}

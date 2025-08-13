@@ -38,6 +38,9 @@ pub mod mir;
 // 🚀 Backend Infrastructure (NEW!)
 pub mod backend;
 
+// 📊 Performance Benchmarks (NEW!)
+pub mod benchmarks;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
 

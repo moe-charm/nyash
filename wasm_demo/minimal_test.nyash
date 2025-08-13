@@ -1,0 +1,6 @@
+// Minimal test without safepoint
+static box Main {
+    main() {
+        return 42
+    }
+}

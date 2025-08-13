@@ -1,0 +1,18 @@
+// Light benchmark - basic arithmetic
+static box Main {
+    main() {
+        local a, b, c, result
+        a = 42
+        b = 8
+        c = 15
+        
+        // Multiple arithmetic operations
+        result = a + b
+        result = result * c
+        result = result - a
+        result = result / b
+        
+        print(result)
+        return result
+    }
+}

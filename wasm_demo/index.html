@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Nyash WASM Demo</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #569cd6;
+            text-align: center;
+        }
+        .container {
+            background: #2d2d30;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        #output {
+            background: #1e1e1e;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            border: 1px solid #3e3e42;
+        }
+        .nyash-title {
+            color: #c586c0;
+            font-size: 24px;
+        }
+        input {
+            background: #3c3c3c;
+            color: white;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            margin: 0 5px;
+            border-radius: 4px;
+            width: 60px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎁 <span class="nyash-title">Nyash</span> WASM Demo</h1>
+    
+    <div class="container">
+        <h2>Everything is Box... even in WASM! 📦</h2>
+        
+        <div>
+            <button onclick="runMain()">Run main()</button>
+            <button onclick="getHelloString()">Get Hello String</button>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <input type="number" id="num1" value="42" />
+            +
+            <input type="number" id="num2" value="8" />
+            <button onclick="runAdd()">Calculate</button>
+        </div>
+        
+        <div id="output">Output will appear here...</div>
+    </div>
+
+    <script>
+        let wasmInstance = null;
+        let output = document.getElementById('output');
+        
+        function log(message) {
+            output.textContent += message + '\n';
+            console.log(message);
+        }
+        
+        function clearOutput() {
+            output.textContent = '';
+        }
+        
+        // Load and compile WASM
+        async function loadWasm() {
+            try {
+                log('Loading Nyash WASM module...');
+                
+                // Check if wabt is available
+                if (typeof WabtModule === 'undefined') {
+                    log('❌ wabt.js not loaded. Trying alternative method...');
+                    await loadWasmAlternative();
+                    return;
+                }
+                
+                // Fetch the WAT file and compile it
+                const response = await fetch('hello.wat');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch hello.wat: ${response.status}`);
+                }
+                const watText = await response.text();
+                log('📄 WAT file loaded successfully');
+                
+                // Use wabt.js to compile WAT to WASM
+                const wabt = await WabtModule();
+                const module = wabt.parseWat('hello.wat', watText);
+                const binary = module.toBinary({});
+                
+                // Create import object
+                const importObject = {
+                    console: {
+                        log: (value) => {
+                            log(`WASM says: ${value}`);
+                        }
+                    }
+                };
+                
+                // Instantiate the module
+                const wasmModule = await WebAssembly.instantiate(binary.buffer, importObject);
+                wasmInstance = wasmModule.instance;
+                
+                log('✅ WASM module loaded successfully!');
+                log('Ready to run Nyash in the browser!');
+                
+            } catch (error) {
+                log('❌ Error loading WASM: ' + error.message);
+                log('🔧 You can still test the interface - WASM loading will be fixed soon!');
+            }
+        }
+        
+        // Alternative method without wabt.js
+        async function loadWasmAlternative() {
+            log('📦 Using pre-compiled WASM (alternative method)');
+            
+            // Create a simple WASM module manually
+            const wasmCode = new Uint8Array([
+                0x00, 0x61, 0x73, 0x6d, // WASM magic
+                0x01, 0x00, 0x00, 0x00, // Version
+            ]);
+            
+            // For now, create a dummy module
+            wasmInstance = {
+                exports: {
+                    add: (a, b) => a + b,
+                    main: () => { log('WASM says: 42 (dummy implementation)'); },
+                    getHelloString: () => 0,
+                    memory: { buffer: new ArrayBuffer(1024) }
+                }
+            };
+            
+            log('✅ Dummy WASM module created!');
+            log('🎯 Try the buttons - they will work with JavaScript fallback');
+        }
+        
+        function runMain() {
+            clearOutput();
+            if (!wasmInstance) {
+                log('WASM not loaded yet!');
+                return;
+            }
+            log('Running main()...');
+            wasmInstance.exports.main();
+        }
+        
+        function getHelloString() {
+            clearOutput();
+            if (!wasmInstance) {
+                log('WASM not loaded yet!');
+                return;
+            }
+            
+            const ptr = wasmInstance.exports.getHelloString();
+            const memory = new Uint8Array(wasmInstance.exports.memory.buffer);
+            
+            // Read string from memory
+            let str = '';
+            for (let i = ptr; memory[i] !== 0; i++) {
+                str += String.fromCharCode(memory[i]);
+            }
+            
+            log(`String from WASM: "${str}"`);
+        }
+        
+        function runAdd() {
+            clearOutput();
+            if (!wasmInstance) {
+                log('WASM not loaded yet!');
+                return;
+            }
+            
+            const a = parseInt(document.getElementById('num1').value);
+            const b = parseInt(document.getElementById('num2').value);
+            const result = wasmInstance.exports.add(a, b);
+            
+            log(`Nyash WASM calculated: ${a} + ${b} = ${result}`);
+        }
+        
+        // Load WASM on page load
+        window.onload = loadWasm;
+    </script>
+    
+    <!-- Include wabt.js for WAT compilation -->
+    <script src="https://cdn.jsdelivr.net/npm/wabt@1.0.24/index.js"></script>
+</body>
+</html>
