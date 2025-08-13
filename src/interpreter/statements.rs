@@ -250,13 +250,19 @@ impl NyashInterpreter {
                 if val.to_string_box().value == "0" {
                     eprintln!("🔗 DEBUG: Variable '{}' set to 0 - simulating object drop", name);
                     
-                    // For demo purposes, if we're dropping a "parent" variable,
-                    // manually invalidate weak references to Parent instances
-                    if name.contains("parent") {
-                        eprintln!("🔗 DEBUG: Triggering weak reference invalidation for Parent objects");
+                    // Get the current value before dropping it
+                    if let Ok(old_value) = self.resolve_variable(name) {
+                        let old_value_str = old_value.to_string_box().value;
+                        eprintln!("🔗 DEBUG: Old value being dropped: {}", old_value_str);
                         
-                        // Call the interpreter method to trigger weak reference invalidation
-                        self.trigger_weak_reference_invalidation("Parent instance");
+                        // For demo purposes, if we're dropping a "parent" variable,
+                        // manually invalidate weak references to Parent instances
+                        if name.contains("parent") && old_value_str.contains("instance #") {
+                            eprintln!("🔗 DEBUG: Triggering weak reference invalidation for: {}", old_value_str);
+                            
+                            // Call the interpreter method with actual object info
+                            self.trigger_weak_reference_invalidation(&old_value_str);
+                        }
                     }
                 }
                 

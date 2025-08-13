@@ -93,6 +93,14 @@ impl NyashInterpreter {
                 }
                 Ok(Box::new(BoolBox::new(false)))
             }
+            "toString" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                Ok(Box::new(StringBox::new("null".to_string())))
+            }
             "equals" => {
                 if arg_values.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
