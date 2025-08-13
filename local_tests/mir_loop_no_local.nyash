@@ -1,0 +1,13 @@
+// MIR test with static main pattern - loop without local variables
+static box Main {
+    init { counter, result }
+    
+    main() {
+        me.counter = 0
+        loop(me.counter < 3) {
+            me.counter = me.counter + 1
+        }
+        me.result = me.counter
+        return me.result
+    }
+}
