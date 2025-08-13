@@ -74,7 +74,7 @@ pub mod console_box;
 pub mod web;
 
 // GUI Box（条件付きコンパイル）
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
 pub mod egui_box;
 
 // 共通で使う型とトレイトを再エクスポート
@@ -95,7 +95,7 @@ pub use map_box::MapBox;
 pub use console_box::ConsoleBox;
 
 // EguiBoxの再エクスポート（非WASM環境のみ）
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
 pub use egui_box::EguiBox;
 
 // Web Box群の再エクスポート（WASM環境のみ）

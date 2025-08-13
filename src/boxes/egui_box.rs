@@ -1,3 +1,5 @@
+#![cfg(feature = "gui")]
+
 /*! 🖼️ EguiBox - デスクトップGUIアプリBox
  * Everything is Box哲学によるGUIフレームワーク統合
  * 「なんでもBoxにできる」化け物言語の第一歩！

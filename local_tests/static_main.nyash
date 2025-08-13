@@ -1,0 +1,15 @@
+// Static box Main pattern - current working syntax
+static box Main {
+    init { console, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("Hello from Static Main!")
+        
+        local temp
+        temp = 42
+        me.result = temp
+        
+        return "Main completed!"
+    }
+}
