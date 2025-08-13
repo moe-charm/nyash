@@ -30,41 +30,54 @@ jobs:
         id: analyze-pr
         run: |
           echo "🔍 Analyzing PR changes..."
-          ./bin/nekocode-rust analyze src/ --stats-only > pr_analysis.txt 2>&1 || true
+          
+          # 🎯 修正1: パスを. (ルート)に変更
+          ./bin/nekocode-rust analyze . --stats-only > pr_analysis.txt 2>&1
+          
+          # 🎯 修正2: エラー処理を改善
+          if [ $? -ne 0 ]; then
+            echo "❌ NekoCode analysis failed!"
+            cat pr_analysis.txt
+            exit 1
+          fi
           
           echo "📊 Analysis Results:"
           cat pr_analysis.txt
           
-          FILES_COUNT=$(grep -o "found [0-9]* files" pr_analysis.txt | grep -o "[0-9]*" || echo "0")
-          ANALYSIS_TIME=$(grep -o "Total directory analysis took: [0-9.]*s" pr_analysis.txt | grep -o "[0-9.]*s" || echo "N/A")
+          # 🎯 修正3: より確実な値抽出
+          FILES_COUNT=$(grep -E "found [0-9]+ files" pr_analysis.txt | grep -oE "[0-9]+" || echo "0")
+          ANALYSIS_TIME=$(grep -E "Total.*took: [0-9.]+s" pr_analysis.txt | grep -oE "[0-9.]+s" || echo "N/A")
+          LANGUAGES=$(grep -A 10 "言語別:" pr_analysis.txt | grep -E "• \w+:" | wc -l || echo "1")
           
           echo "files_analyzed=$FILES_COUNT" >> $GITHUB_OUTPUT
           echo "analysis_time=$ANALYSIS_TIME" >> $GITHUB_OUTPUT
+          echo "languages_detected=$LANGUAGES" >> $GITHUB_OUTPUT
 
       - name: Generate Impact Report
         run: |
           PR_FILES=${{ steps.analyze-pr.outputs.files_analyzed }}
           ANALYSIS_TIME=${{ steps.analyze-pr.outputs.analysis_time }}
+          LANGUAGES_COUNT=${{ steps.analyze-pr.outputs.languages_detected }}
           
           cat > impact_report.md << EOF
-          ## 🦀 NekoCode Analysis Report
+          ## 🦀 NekoCode 分析レポート
           
-          ### 📊 Code Impact Summary
+          ### 📊 コードの影響の概要
           
-          | Metric | Value |
-          |--------|-------|
-          | **Files Analyzed** | ${PR_FILES} files |
-          | **Analysis Time** | ${ANALYSIS_TIME} |
-          | **Languages Detected** | Rust |
+          | メトリック | 価値 |
+          |-----------|------|
+          | **分析されたファイル** | ${PR_FILES} ファイル |
+          | **分析時間** | ${ANALYSIS_TIME} |
+          | **検出された言語** | ${LANGUAGES_COUNT}言語 |
           
-          ### ✅ Analysis Status
+          ### ✅ 分析ステータス
           
-          - **Code Quality**: NekoCode analysis completed successfully
-          - **Performance**: Analysis completed in ${ANALYSIS_TIME}
-          - **Compatibility**: All detected files processed without errors
+          - **コード品質**: NekoCode分析が正常完了
+          - **パフォーマンス**: 分析時間 ${ANALYSIS_TIME}
+          - **互換性**: 検出されたファイルがエラーなしで処理完了
           
           ---
-          *🚀 Analysis powered by [NekoCode](https://github.com/moe-charm/nekocode-rust)*
+          *🚀 [NekoCode](https://github.com/moe-charm/nekocode-rust)による分析*
           EOF
 
       - name: Comment PR
@@ -81,7 +94,7 @@ jobs:
             });
             
             const nekocodeComment = comments.data.find(comment => 
-              comment.body.includes('🦀 NekoCode Analysis Report')
+              comment.body.includes('🦀 NekoCode 分析レポート')
             );
             
             if (nekocodeComment) {
