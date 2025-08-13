@@ -1,5 +1,9 @@
 Nyash 説明書（ユーザー向けガイド）
 
+## 🚀 実行方式
+- **実行バックエンド**: [../execution-backends.md](../execution-backends.md) - インタープリター・VM・WASM実行の完全ガイド
+
+## 🎯 入門・基本
 - ネイティブビルド: docs/説明書/native-build/README.md
 - WASM: docs/説明書/wasm/wasm_quick_start.md, docs/説明書/wasm/wasm_browser_plan.md
 - 入門: docs/説明書/GETTING_STARTED.md, docs/説明書/GETTING_STARTED_2025.md

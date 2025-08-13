@@ -8,11 +8,21 @@ Nyashプログラミング言語開発に必要な情報をまとめたクイッ
 
 ## 🚀 クイックスタート
 
+### 🎯 実行方式選択 (重要!)
+- **実行バックエンド完全ガイド**: [docs/execution-backends.md](docs/execution-backends.md) 
+  - インタープリター（開発・デバッグ）/ VM（高速実行）/ WASM（Web配布）
+
 ### 🐧 Linux/WSL版
 ```bash
 # ビルドと実行（32スレッド並列ビルド）
 cargo build --release -j32
 ./target/release/nyash program.nyash
+
+# 高速VM実行
+./target/release/nyash --backend vm program.nyash
+
+# WASM生成
+./target/release/nyash --compile-wasm program.nyash
 ```
 
 ### 🪟 Windows版 (NEW!)
