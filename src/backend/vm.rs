@@ -177,9 +177,10 @@ impl VM {
             let mut next_block = None;
             let mut should_return = None;
             
-            // Execute instructions in this block
-            println!("Executing block {} with {} instructions", current_block, block.instructions.len());
-            for (index, instruction) in block.instructions.iter().enumerate() {
+            // Execute instructions in this block (including terminator)
+            let all_instructions: Vec<_> = block.all_instructions().collect();
+            println!("Executing block {} with {} instructions", current_block, all_instructions.len());
+            for (index, instruction) in all_instructions.iter().enumerate() {
                 self.pc = index;
                 println!("  Instruction {}: {:?}", index, instruction);
                 
