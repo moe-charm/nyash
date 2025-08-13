@@ -1,0 +1,113 @@
+// 🧪 新しいBox実装のテスト
+
+// 1. ArrayBoxのテスト
+print("=== ArrayBox Test ===")
+local arr
+arr = new ArrayBox()
+
+// push/pop
+arr.push("Hello")
+arr.push("World")
+arr.push(42)
+print("Length after push: " + arr.length())
+
+local popped
+popped = arr.pop()
+print("Popped: " + popped)
+print("Length after pop: " + arr.length())
+
+// get/set
+print("arr[0]: " + arr.get(0))
+arr.set(1, "Nyash")
+print("arr[1] after set: " + arr.get(1))
+
+// join
+print("Joined: " + arr.join(", "))
+
+// 2. BufferBoxのテスト
+print("\n=== BufferBox Test ===")
+local buffer
+buffer = new BufferBox()
+
+// write
+local bytesArray
+bytesArray = new ArrayBox()
+bytesArray.push(72)   // H
+bytesArray.push(101)  // e
+bytesArray.push(108)  // l
+bytesArray.push(108)  // l
+bytesArray.push(111)  // o
+buffer.write(bytesArray)
+print("Buffer length after write: " + buffer.length())
+
+// readAll
+local readData
+readData = buffer.readAll()
+print("Read data length: " + readData.length())
+
+// 3. JSONBoxのテスト
+print("\n=== JSONBox Test ===")
+local parsed
+parsed = new JSONBox("{\"name\": \"Nyash\", \"version\": 1.0}")
+
+print("JSON stringify: " + parsed.stringify())
+print("Name from JSON: " + parsed.get("name"))
+print("Version from JSON: " + parsed.get("version"))
+
+// set/has
+parsed.set("author", "Claude")
+print("Has author: " + parsed.has("author"))
+print("Author: " + parsed.get("author"))
+
+// keys
+local keys
+keys = parsed.keys()
+print("Keys count: " + keys.length())
+
+// 4. RegexBoxのテスト
+print("\n=== RegexBox Test ===")
+local regex, text
+regex = new RegexBox("[0-9]+")
+text = "The answer is 42 and 100"
+
+print("Test match: " + regex.test(text))
+print("Find first: " + regex.find(text))
+
+local allMatches
+allMatches = regex.findAll(text)
+print("All matches count: " + allMatches.length())
+
+// replace
+local replaced
+replaced = regex.replace(text, "X")
+print("Replaced: " + replaced)
+
+// split
+local emailRegex, email
+emailRegex = new RegexBox("@")
+email = "user@example.com"
+local parts
+parts = emailRegex.split(email)
+print("Email parts: " + parts.join(" | "))
+
+// 5. StreamBoxのテスト
+print("\n=== StreamBox Test ===")
+local stream
+stream = new StreamBox()
+
+// write
+stream.write("Hello Stream!")
+print("Stream length: " + stream.length())
+print("Stream position: " + stream.position())
+
+// read
+local readCount, streamData
+readCount = stream.read(5)
+print("Read from stream: " + readCount.length() + " bytes")
+print("Position after read: " + stream.position())
+
+// reset
+stream.reset()
+print("Position after reset: " + stream.position())
+
+print("\n✅ All tests completed!")

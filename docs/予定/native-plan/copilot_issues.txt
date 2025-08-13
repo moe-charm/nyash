@@ -1,0 +1,235 @@
+01. Phase 0: Stabilize native CLI build (Linux/Windows)
+
+Summary:
+- CLIバイナリ nyash を最小構成で安定ビルド・実行できる状態にする。
+- examples/GUI をデフォルトのビルド対象から外し、開発の足場を固める。
+
+Why:
+- 以降の MIR/VM/JIT 開発を素早く検証できる基盤づくり。
+
+Scope:
+- Cargo の features で GUI/examples 等を切り分け、デフォルトは CLI 最小にする。
+- CLI オプションの動作点検（--dump-mir / --verify）。
+- ローカル実行導線を README に明記（docs/guides/how-to-build-native/README.md）。
+
+Tasks:
+- Cargo.toml: examples/GUI を feature でガード（default は CLI 最小）。
+- ビルド検証: `cargo build --bin nyash`（Linux/Windows）。
+- 実行検証: `cargo run -- ./local_tests/sample.nyash`。
+- ドキュメント: 上記手順を how-to-build-native に追記/点検。
+
+Acceptance Criteria:
+- Linux/Windows で `cargo build --bin nyash` が成功する。
+- `local_tests/` 配下の簡単な .nyash が実行できる。
+- 他 bin/examples が壊れていても `--bin nyash` だけで通る。
+
+Out of Scope:
+- examples/GUI の修理・最適化。
+- JIT/AOT/WASM。
+
+References:
+- docs/guides/how-to-build-native/README.md
+- docs/nativebuild大作戦/chatgptネイティブビルド大作戦.txt（Phase 0）
+- CURRENT_TASK.md
+
+Copilot Notes:
+- まずは features 分離と `--bin nyash` でビルドが通る状態を作る。README の手順確認まで含めて PR に反映。
+
+------------------------------------------------------------
+
+02. Phase 1: Minimal MIR + VM backend (lowering + runner)
+
+Summary:
+- AST → MIR の最小 lowering と、VM バックエンドでの実行を通す。
+
+Scope:
+- MIR: Const, BinOp, Compare, Branch, Jump, Phi, Return の最小命令
+- Lowering: リテラル/二項演算/if/loop/return のみ
+- VM: 上記命令の最小実装
+
+Tasks:
+- instruction.rs: 最小命令の定義
+- builder.rs: 上記 AST 範囲を lowering
+- vm.rs: 実装 + stats（命令数）
+
+Acceptance Criteria:
+- `--dump-mir` が最小サンプルで期待通り
+- `--backend vm` で実行して結果一致
+
+Out of Scope:
+- 例外/関数/Box 参照/弱参照
+
+------------------------------------------------------------
+
+03. Phase 2: Control-flow coverage (if/else/loop/phi correctness)
+
+Summary:
+- 制御フローの網羅と Phi の整合性検証を拡充。
+
+Scope/Tasks:
+- if/else nested, loop with breaks, nested loops のスナップショット
+- Phi の入力ブロック/値の対応を Verifier で強化
+
+Acceptance Criteria:
+- 代表制御フローの snapshot が安定し、verify も通る
+
+------------------------------------------------------------
+
+04. Phase 3: Exceptions (throw/try/catch/finally) minimal lowering
+
+Summary:
+- 例外機構の最小 lowering を導入（詳細設計は簡素）。
+
+Scope/Tasks:
+- MIR: Throw, TryBegin/TryEnd, Catch, FinallyBegin/End（最小）
+- builder.rs: try/catch/finally ノードの下ろし
+- VM: 例外伝播を最小で（未捕捉はエラー）
+
+Acceptance Criteria:
+- 代表 try/catch/finally のスナップショットと VM 実行
+
+Out of Scope:
+- 例外の型体系、詳細な stack map
+
+------------------------------------------------------------
+
+05. Phase 4: Functions and calls (BoxCall minimal)
+
+Summary:
+- 関数呼び出し/BoxCall を最小導入（効果注釈は保守的）。
+
+Scope/Tasks:
+- MIR: Call, BoxCall（effects = READS_HEAP など保守）
+- builder.rs: FunctionCall/MethodCall の最小対応
+- VM: 呼び出し/戻り値
+
+Acceptance Criteria:
+- 簡単な関数定義/呼び出しの MIR/VM が通る
+
+Out of Scope:
+- 可変長/キーワード引数、FFI
+
+------------------------------------------------------------
+
+06. Phase 5.0: Parser/AST stabilization for lowering
+
+Summary:
+- lowering 対象 AST の表現ぶれを修正、安定化。
+
+Scope/Tasks:
+- AST: If/Loop/Return/Assignment/Local などの統一
+- Parser: エラー復帰/スパン情報の見直し
+
+Acceptance Criteria:
+- builder.rs の分岐がシンプル化、テストが安定
+
+------------------------------------------------------------
+
+07. Phase 5.1: Control-flow edge cases + verifier hardening
+
+Summary:
+- ブロック未終端/未到達/自己分岐等の検証強化でクラッシュ回避。
+
+Scope/Tasks:
+- Verifier: 未終端ブロック検出、到達不能検出
+- Builder: Jump/Branch の生成前後の状態管理改善
+
+Acceptance Criteria:
+- 不正ケースを含むスナップショット/verify が緑
+
+------------------------------------------------------------
+
+08. Phase 5.2: Lowering for static box Main (BoxDeclaration → main body)
+
+Summary:
+- static box Main { main() { ... } } を MirBuilder で受け、main() の body を Program として lowering する経路を実装。
+
+Scope/Tasks:
+- AST: BoxDeclaration(is_static=true, name=Main) を検出 → main() を抽出
+- Lowering: body を Program に変換して既存経路に渡す
+- Tests: local_tests/mir_loop_no_local.nyash で dump/VM が通る
+
+Acceptance Criteria:
+- `--dump-mir` が static Main サンプルで成功
+- `--backend vm` で実行成功
+
+References:
+- docs/guides/how-to-build-native/issues/phase5_2_static_main_lowering.md
+
+------------------------------------------------------------
+
+09. Phase 6: Box ops minimal (Ref/Weak + Barriers no-op)
+
+Summary:
+- 参照/弱参照/バリア（no-op）を最小導入。
+
+Scope/Tasks:
+- MIR: RefNew/RefGet/RefSet/WeakNew/WeakLoad/BarrierRead/Write
+- Lowering: New/FieldAccess/MethodCall の最小対応
+- VM: 参照テーブル/weak テーブルで動作（fini 不変は維持）
+
+Acceptance Criteria:
+- 代表サンプルで dump/VM/verify が通る
+
+References:
+- docs/guides/how-to-build-native/issues/phase6_box_ops_minimal.md
+
+------------------------------------------------------------
+
+10. Phase 7: Async model (nowait/await) in MIR
+
+Summary:
+- nowait/await を MIR に導入し、現行 FutureBox と連携。
+
+Scope/Tasks:
+- MIR: FutureNew/FutureSet/Await（スレッドベース）
+- Lowering: nowait→Future 作成、await→wait_and_get
+- VM: FutureBox 実装を利用
+
+Acceptance Criteria:
+- 代表ケースで正しく並行実行→await 回収
+
+References:
+- docs/guides/how-to-build-native/issues/phase7_async_mir.md
+
+------------------------------------------------------------
+
+11. Phase 8: JIT (baseline) planning
+
+Summary:
+- baseline JIT の設計と MIR→JIT の変換方針固め。
+
+Scope/Tasks:
+- Deopt テーブル、Safepoint、Effect 属性の扱いを定義
+- NaN-box/Tagged 値 or 型テーブル参照の選択
+
+Acceptance Criteria:
+- 設計ドキュメント草案と最小 PoC（JIT off で VM と一致）
+
+------------------------------------------------------------
+
+12. Phase 9: AOT/WASM exploration (scaffolding only)
+
+Summary:
+- AOT/WASM の下ごしらえ（ビルド配線と最小 PoC）。
+
+Scope/Tasks:
+- Cargo features/targets 整備、最小 wasm-bindgen 配線
+
+Acceptance Criteria:
+- `wasm` ターゲットでのビルド雛形が通る
+
+------------------------------------------------------------
+
+13. Phase 10: Packaging/CI polish
+
+Summary:
+- Windows/Linux の配布パッケージ化と CI 整備。
+
+Scope/Tasks:
+- GitHub Actions: Windows(MSVC)/WSL+cargo-xwin のマトリクス
+- dist/: nyash(.exe) + LICENSE/README 同梱
+
+Acceptance Criteria:
+- リリースアーティファクトが自動生成される
+

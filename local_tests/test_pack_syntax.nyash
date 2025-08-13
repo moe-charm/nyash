@@ -1,0 +1,108 @@
+// 🎁 pack構文の包括的テスト
+
+// 1. 基本的なpack構文
+box Animal {
+    init { name, age }
+    
+    pack(animalName, animalAge) {
+        me.name = animalName
+        me.age = animalAge
+    }
+    
+    speak() {
+        return me.name + " (age " + me.age + ") makes a sound"
+    }
+}
+
+// 2. fromデリゲーションでのpack
+box Dog from Animal {
+    init { breed }
+    
+    pack(dogName, dogAge, dogBreed) {
+        from Animal.pack(dogName, dogAge)  // 親のpackを呼び出し
+        me.breed = dogBreed
+    }
+    
+    override speak() {
+        return me.name + " (age " + me.age + ", " + me.breed + ") barks: Woof!"
+    }
+}
+
+// 3. 混在形式（packと従来形式の共存）
+box Cat from Animal {
+    init { color }
+    
+    Cat(catName, catAge, catColor) {  // 従来形式
+        from Animal.pack(catName, catAge)  // 親はpack使用
+        me.color = catColor
+    }
+    
+    override speak() {
+        return me.name + " (age " + me.age + ", " + me.color + ") meows: Meow!"
+    }
+}
+
+// 4. pack単独使用テスト
+box Bird {
+    init { species, canFly }
+    
+    // pack単独 - Box哲学に最適！
+    pack(birdSpecies, flying) {
+        me.species = birdSpecies + " (pack使用)"
+        me.canFly = flying
+    }
+    
+    describe() {
+        local flyText
+        if me.canFly {
+            flyText = "can fly"
+        } else {
+            flyText = "cannot fly"
+        }
+        return me.species + " - " + flyText
+    }
+}
+
+// テスト実行
+print("=== 🎁 pack構文テスト ===")
+
+// 1. 基本的なpack
+local animal
+animal = new Animal("Generic", 5)
+print("Animal: " + animal.speak())
+
+// 2. デリゲーションでのpack
+local dog
+dog = new Dog("Buddy", 3, "Golden Retriever")
+print("Dog: " + dog.speak())
+
+// 3. 混在形式
+local cat
+cat = new Cat("Whiskers", 2, "Black")
+print("Cat: " + cat.speak())
+
+// 4. pack単独使用確認
+local bird
+bird = new Bird("Eagle", true)
+print("Bird: " + bird.describe())
+
+// 5. 引数なしpack
+box SimpleBox {
+    init { message }
+    
+    pack() {  // 引数なしpack
+        me.message = "Packed with love! 🎁"
+    }
+    
+    getMessage() {
+        return me.message
+    }
+}
+
+local simple
+simple = new SimpleBox()
+print("SimpleBox: " + simple.getMessage())
+
+print("")
+print("✅ pack構文テスト完了！")
+print("🎉 Everything is Box - Now Everything is Packed!")

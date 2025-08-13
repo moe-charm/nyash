@@ -1,0 +1,37 @@
+// 🔥 Weak-fini Prohibition Test - Should catch me.weakField.fini()
+
+box SimpleResource {
+    init { name }
+    
+    pack(resourceName) {
+        me.name = resourceName
+    }
+}
+
+box BadParent {
+    init { weak weakChild }
+    
+    pack() {
+        me.weakChild = new SimpleResource("WeakChild")
+    }
+    
+    // This should trigger weak-fini prohibition
+    fini() {
+        print("🔥 BadParent.fini(): Attempting to finalize weak field")
+        me.weakChild.fini()  // Should fail: "Cannot finalize weak field 'weakChild'"
+    }
+}
+
+static box Main {
+    main() {
+        print("=== 🔥 Weak-fini Prohibition Test ===")
+        
+        local badParent = new BadParent()
+        print("BadParent created with weak child")
+        
+        print("Attempting to finalize BadParent (should detect illegal weak-fini)...")
+        badParent.fini()  // Should fail during execution of user fini()
+        
+        return "Test should have failed before reaching here"
+    }
+}

@@ -1,0 +1,596 @@
+ぜったいアリにゃ！やるなら「多層エンジン（tiered）」で攻めるのが一番きれい。
+Nyash → 共通IR → 好きなバックエンド（解釈/ネイティブ/JIT/WASM）に流す構成にゃ。
+推しアーキテクチャ（現実解）
+
+    Front-end
+
+        パーサ → AST → HIR（型付け・名前解決済み）→ MIR/SSA（最適化しやすい共通IR）
+
+    Back-ends（並行に育てる）
+
+        VM（現在のインタープリター）：MIR→バイトコード→解釈実行（開発スピード最優先）
+
+        JIT（Cranelift）：MIR→Cranelift IR→ネイティブJIT（ホットパスだけコンパイル）
+
+        AOT to Rust：MIR→Rustコード生成→rustcで最適化（配布バイナリ向き、リンクも楽）
+
+        WASM：MIR→WASM（ブラウザ/wasmtime用、サンドボックス実行）
+
+ひとつのIRから複数出力＝最適化ロジックを1か所に集中できるのが最大の利点。
+
+【Phase 0: 最小ビルド基盤（最初のゴール）】
+
+狙い: 「簡単なNyash言語がビルドできる」を最速・堅実に達成する。土台はシンプルだが確実に動くことを最重視。
+
+1) スコープ（最小言語機能）
+  - 式: 整数/文字列リテラル、変数参照、二項演算 (+,-,*,/, 比較)
+  - 文: 代入、if、return
+  - 関数: 単純な関数定義/呼び出し（可変長やジェネリクスは対象外）
+  - Box/弱参照/fini 等の高機能はPhase 0では“使わない”（この計画の安定化が目的）
+
+2) ビルドターゲット（まずはCLIのみ）
+  - Linux/WSL: cargo build --bin nyash -j 32（現状OK）
+  - Windows (MSVC): cargo build --bin nyash -j 32（CIでも検証）
+  - WASM: ひな型を残すがPhase 0では対象外（Phase 1で着手）
+
+3) 実行確認（スモークテスト）
+  - サンプル: local_tests/ 以下に簡単な .nyash を配置（Git管理外）
+    例) sample_min.nyash
+      a = 10
+      b = 32
+      result = a + b
+  - 実行: cargo run -- ./local_tests/sample_min.nyash
+  - 期待: 実行完了・エラーなし（必要なら結果表示）
+
+4) 再現性/安定性（基礎をしっかり）
+  - rust-toolchain を固定（stable明記）
+  - Linux/Windows 共通のビルドフラグ: release/profileの統一、features最小化
+  - 例やGUI/Windows依存コードはCIマトリクスから除外（CLI最小に絞る）
+
+5) CI（Phase 0の完成条件）
+  - ジョブ: linux-x64, windows-x64 での “build nyash (bin)”
+  - コマンド: cargo build --bin nyash -j 32
+  - 成果物: nyash バイナリ（zip/tar）をArtifactsに保存（配布検証）
+  - 余裕があれば: cargo test --lib だけ実行（examplesは無効）
+
+6) トラブル防止（Phase 0の運用）
+  - Linux CIでWindows専用exampleはビルド対象から除外
+  - examples/* はPhase 0では“参考”扱い。CLIのビルド/実行に集中。
+  - .nyash の共有が必要なものは tests/ 配下へ昇格（local_tests/ は各自ローカル）
+
+7) 完了チェックリスト
+  - [ ] Linux/WSL で nyash バイナリがビルド・実行できる
+  - [ ] Windows(MSVC) で nyash バイナリがビルド・実行できる
+  - [ ] CI で linux/windows の “build nyash (bin)” がグリーン
+  - [ ] sample_min.nyash のスモークが両OSで通る
+
+補足: Phase 0 で「ビルド/実行の骨格」を固めて、Phase 1 以降で VM/IR/JIT/AOT/WASM を段階的に拡張する。
+
+それぞれのメリデメ
+
+【MIR設計（早期に合意しておくと得する要点）】
+
+- 値表現: Tagged/NaN-box/小整数直格納 か 型テーブル参照か
+- アドレス空間: ヒープ/スタック/アリーナの扱い（Phase 0はヒープ優先でOK）
+- 所有/別名: aliasable/unique の属性を型/値に保持（最初は型情報だけでも可）
+- 効果(Effects): PURE/READS_HEAP/WRITES_HEAP/IO/FFI/PANIC のビット集合を命令・関数に付与
+- 例外/パニック: Throw/Catch/Defer を命令化するか、関数境界に限定するか（当面は境界限定）
+- GCモデル: Tracing/RC/混合の方針と弱参照の意味（WeakLoad→None）
+- セーフポイント: 関数入口・ループ先頭・Call直後（命令としてno-op挿入で開始）
+- 呼出規約: 通常Call/FFI/Box拡張を区別、可変長/キーワード引数の扱い（Phase 0は固定引数）
+- メモリバリア: write/read barrier は命令/属性で表現（初期はダミー実装で可）
+- デオプ(Deopt): JIT最適化時の巻き戻し情報の格納場所（関数メタ or ブロック注釈）
+
+【Nyash向け 最小MIR命令セット（弱参照対応込み・ドラフト）】
+
+- 制御/値: Const, BinOp, Cmp, Br, Jmp, Phi, Ret
+- 呼び出し: Call, TailCall（effects必須）
+- メモリ: Alloc, Load, Store, Gep(必要なら)
+- 参照/GC: RefNew, RefGet, RefSet, WeakNew, WeakLoad, BarrierRead, BarrierWrite, Pin, Unpin
+- 例外/拡張: Throw, Catch, FfiCall, BoxCall
+- 実行点: Safepoint, Assume, Nop
+- 効果: EffectMask = PURE | READS_HEAP | WRITES_HEAP | IO | FFI | PANIC
+
+弱参照の意味論:
+- WeakNew(r): r を追う弱参照を作成（PURE）
+- WeakLoad(w): 生きていれば Some(Ref)、死んでいれば None（Option<Ref>を型で明示）
+
+【壊れにくい共通ポイント（VM/JIT/AOT共通の約束）】
+- Safepoint は 関数入口/ループ先頭/Call直後 に配置（no-opで開始し、後で意味付け）
+- Barrier 命令は最初はダミー（最適化段で消せる）
+- Null/None は Option<Ref> で明示（分岐に埋めない）
+- JIT は Deopt テーブルで SSA値⇔ソース位置 の対応を保持
+
+【弱参照の落とし穴（回避策セット）】
+- クロージャ環境: 生成時 env.has_weak を立て、キャプチャ解決時に必ず WeakLoad→None分岐を強制
+- 弱参照キーのハッシュ: GC後の無効化で不整合→ 標準の弱マップ（キー死亡で自動削除）を用意
+- FFI渡し: 寿命不明→ Pin を要求 or WeakLoad 成功した生参照のみ渡す
+
+【テスト戦略（壊れにくい順）】
+- 黄金テスト: ソース→MIRダンプをスナップショットし、差分で後退検知
+- VM/JIT一致テスト: 同一入力の VM 結果＝JIT 結果 を比較するオラクル
+- 弱参照の確率テスト: alloc→weak→drop→collect→weak_load の順序/タイミングをゆらして多数回
+- 効果チェック: PURE なはずの関数に WRITES_HEAP が混じったらビルド失敗（静的検証）
+
+【軽量 “次の一手”（Phase 0と親和性が高い）】
+- WeakNew/WeakLoad を MIRとVM に先に導入（JITは後回し）
+- EffectMask をデータ構造として追加（評価は後回しでもOK）
+- Safepoint 命令を関数入口・ループ先頭にno-opで挿入
+- 黄金テストでMIRダンプをCIに可視化（Phase 0のCLIビルドと併走）
+
+    VM：実装が速い／デバッグ容易｜最高速は出ない
+
+    Cranelift JIT：実行時最適化で爆速／実装難度は中｜起動コストあり
+
+    AOT→Rust：rustc最適化の恩恵・配布しやすい｜コード生成器の保守が要る
+
+    WASM：移植性・安全｜ネイティブよりは遅め（ただしwasmtime/wasmerで結構速い）
+
+まずやる順序（最短で“速い”を得る）
+
+    共通MIR/SSAを切る（基本ブロック・SSA・型/効果情報）
+
+    VMを MIR→バイトコード に置き換え（インタープリターの土台を共通化）
+
+    Cranelift JIT を載せる（ホット関数だけJIT）
+
+    並行で Rustコード生成 の雛形を作る（AOT配布の道を確保）
+
+    余力で WASM 出力（エディタ内実行やブラウザデモに最適）
+
+Nyash流にハマる設計ポイント
+
+    Box拡張のABIを先に決める
+
+        呼出規約：fn nyash_box_call(ctx: &mut Ctx, args: &[Val]) -> Result<Val>
+
+        メモリ：Arc<[Val]> か Arena で一時領域を明示（GCを後回しにできる）
+
+    所有権/借用に似た効果注釈をMIRに入れる
+
+        「純粋」「可変」「外部副作用あり」をフラグ化→最適化と並列実行の判断に使える
+
+    定数畳み込み/死コード除去/インライン化はMIR段階で実施
+
+    プロファイラを最初から同梱（どの関数をJIT/AOTに送るか判定）
+
+最小プロトタスク（1〜2週間スプリント想定）
+
+HIR/MIRスキーマ確定（基本ブロック・命令セット・型表現）
+
+MIR→バイトコード変換器／VMループの実装
+
+プロファイル計測（関数実行回数・時間）
+
+Craneliftで fn 単位JIT（整数演算と分岐から）
+
+簡易 Rustコード生成（fn add(a:i64,b:i64)->i64 などから）
+
+    Box ABI v0（同期版）＋サンプル拡張（数値/文字列ユーティリティ）
+
+ちょいサンプル（超概念）
+
+enum MirInst {
+  Const(ValId, ConstVal),
+  BinOp(ValId, ValId, Op, ValId),
+  Call(ValId, FuncId, Vec<ValId>),
+  Phi(ValId, Vec<(BlockId, ValId)>),
+  // ...
+}
+struct MirFunc { blocks: Vec<MirBlock>, signature: Sig, effects: Effects }
+
+trait Backend {
+  fn compile(&mut self, f: &MirFunc) -> CompiledFn;
+}
+
+    VM backend: compile = バイトコード化
+
+    JIT backend: compile = Cranelift IR生成→jit_func
+
+    Rust backend: compile = fn ... { ... } のRust文字列出力→rustcでAOT
+
+「いまのNyashソース」を見れたら、MIR命令セットの初版とJIT/AOTの足場コードをすぐ書き起こせるよ。
+まずは MIRの最小命令リストを一緒に決めよっか？（算術・比較・分岐・Call・Phi・Load/Store 相当）
+あなた:
+くわしくききたにゃ　Front-end
+
+    パーサ → AST → HIR（型付け・名前解決済み）→ MIR/SSA（最適化しやすい共通IR）パーサーで解析してＡＳＴは木構造だよね？　そこからどういう処理にゃ？
+ChatGPT:
+
+いいね、その流れを実務目線でがっつり分解するにゃ。
+キーワードは「情報を徐々に確定させつつ“最適化しやすい形”へ落としていく」。
+Nyash流に当てはめて、各段階で“何を追加・削除・変換するか”を整理するよ。
+Front-end 全体像
+
+ソース → Lexer → Parser(AST) → スコープ/名前解決 → 型推論/型検査(HIR) → 糖衣剥がし(Desugar) → 制御フロー化(CFG) → SSA化/効果注釈(MIR/SSA)
+1) Parser → AST（抽象構文木）
+
+目的：構文だけを正しく捉える。意味（型/名前）はまだ未確定。
+
+    データ構造（例）
+
+    enum AstExpr {
+      LitInt(i64),
+      Var(Symbol),
+      Call{ callee: Box<AstExpr>, args: Vec<AstExpr> },
+      Lambda{ params: Vec<AstParam>, body: Box<AstExpr> },
+      If{ cond: Box<AstExpr>, then_e: Box<AstExpr>, else_e: Box<AstExpr> },
+      Let{ pat: AstPat, init: Box<AstExpr>, body: Box<AstExpr> },
+      // … match, while, for, block, …
+    }
+
+    まだやらないこと
+
+        シンボルの多義性解決（foo がローカルか、モジュールか、メソッドか）
+
+        型の決定
+
+        糖衣構文の展開
+
+2) スコープ構築 & 名前解決（AST上の解決）
+
+目的：識別子を定義元に結びつける。未定義やシャドーイングもここで判定。
+
+    やること
+
+        ブロックスコープ/関数スコープ/モジュールスコープの**環境（symbol table）**を構築
+
+        use/import、module、with 的な構文を解決
+
+        各 Var(Symbol) を DefId（定義へのID）にひも付け
+
+    成果物：
+
+        解決済みAST or ここで HIR に写経（次段のために構造を少し整える）
+
+3) 型推論 & 型検査 → HIR（型情報付きIR）
+
+目的：式ごとに型を確定し、オーバーロード/ジェネリクスを具体化できる所まで進める。
+
+    型推論（Hindley–Milner＋制約ベースなど）
+
+        let x = 1 + f(y) なら、f: T -> i64 みたいな制約を立てて解く
+
+    オーバーロード解決 / メソッド解決（a + b → 実体メソッドやトレイト関数に解決）
+
+    ジェネリクス
+
+        可能ならモノモーフィック化（型実引数が確定している呼び出しは単相化）
+
+        未確定なら型パラ付きのまま保持
+
+    データ構造（例）
+
+    struct HirExpr {
+      kind: HirExprKind,
+      ty: TyId,           // ここが肝：各式に型が付く
+      effect: EffectMask, // 純粋/可変/外部副作用 など（後述の最適化で効く）
+    }
+    enum HirExprKind {
+      LitInt(i64),
+      Local(DefId),
+      Call{ fun: Box<HirExpr>, args: Vec<HirExpr>, resolved: FunId },
+      If{ cond: Box<HirExpr>, then_e: Box<HirExpr>, else_e: Box<HirExpr> },
+      // 糖衣はまだ残っていてもOK
+    }
+
+    エラー検出
+
+        型不一致、未初期化、到達不能、借用/所有に関する静的規則（Nyash流に簡易化しても良い）
+
+4) 糖衣剥がし（Desugaring）
+
+目的：意味は同じだが最適化しづらい構文を、プリミティブな形に落とす。
+
+    例
+
+        for x in iter { body } → let mut it = iter.into_iter(); while let Some(x) = it.next() { body }
+
+        a && b → if a { b } else { false }（短絡を明示化）
+
+        パターン束縛 let (a,b) = e; → 一時変数＋個別bind
+
+        クロージャ → 明示キャプチャ＋ラムダ表現を正規化
+
+    この段階で構文のバリエーションは減らして、後段のCFG/SSA化を楽にする
+
+5) 制御フローグラフ（CFG）作成
+
+目的：式主導（式木）を基本ブロック＋ジャンプへ落とす。
+最適化やSSA化の土台になる。
+
+    ブロック（BasicBlock）単位で命令列を持つ
+
+    例：if/else は br cond thenBB elseBB に分解
+    while は loopBB / bodyBB / exitBB に分解
+
+    ここで**一時変数（tmp）**を導入して、「値がどのブロックから来るか」を明示できるようにする
+
+6) SSA化（Static Single Assignment）
+
+目的：各変数が“ちょうど一度だけ代入”される形に変換。
+最適化（定数畳み込み・コピー伝播・死コード除去・ループ最適化）がやりやすくなる。
+
+    φ関数（Phi）を導入
+    分岐合流点で「どのブロックから来た値か」に応じて値を選ぶ
+
+    データ構造（MIR/SSA例）
+
+    enum MirInst {
+      Const{ dst: V, c: ConstVal },
+      BinOp{ dst: V, op: Op, a: V, b: V },
+      Call{ dst: V, fun: FnId, args: Vec<V>, effects: EffectMask },
+      Br{ cond: V, then_bb: Bb, else_bb: Bb },
+      Jmp{ bb: Bb },
+      Phi{ dst: V, inputs: Vec<(Bb, V)> },
+      Store{ ptr: V, val: V },  // メモリ命令を分離しておくと最適化が楽
+      Load{ dst: V, ptr: V },
+      Ret{ v: Option<V> },
+    }
+    struct MirFunc { blocks: Vec<MirBlock>, sig: Sig, effects: EffectMask }
+
+    ここまでで最適化の主戦場が整う
+
+7) 効果注釈（Effects）と簡易別解（所有/借用に近いもの）
+
+目的：最適化・並列化・Box拡張の安全性判定に使う副作用情報を付与。
+
+    例：PURE, READS_HEAP, WRITES_HEAP, IO, FFI, PANIC, THROW などのビットフラグ
+
+    呼び出し先の効果を合成して、関数単位の effects: EffectMask を確定
+    → 並列実行可否、共通部分式除去可否、コードモーション許可範囲に使える
+
+8) 代表的な変換の“実例”で見る
+
+Nyash（仮）：
+
+let x = 10
+let y = 20
+if x < y {
+  print(add(x, y))
+} else {
+  print(y)
+}
+
+AST（ざっくり）
+
+    Let(x, 10)、Let(y, 20)、If( BinOp(<, Var(x), Var(y)), Call(print, …), Call(print, Var(y)) )
+
+HIR（型付け・解決済み）
+
+    x: i64, y: i64
+
+    add: (i64,i64)->i64, print: (i64)->Unit
+
+Desugar
+
+    ほぼそのまま（ここでは糖衣なしと仮定）
+
+CFG→SSA（MIRの一部）
+
+bb0:
+  v1 = Const 10
+  v2 = Const 20
+  v3 = BinOp Lt v1 v2
+  Br v3 then=bb1 else=bb2
+
+bb1:
+  v4 = Call add(v1, v2)       ; PURE
+  Call print(v4)               ; IO
+  Jmp bb3
+
+bb2:
+  Call print(v2)               ; IO
+  Jmp bb3
+
+bb3:
+  Ret ()
+
+（print は IO 効果、add は PURE、関数全体は IO を持つ、などが付与される）
+よくある疑問Q&A
+
+Q. AST→HIRでどこまで“形を変える”？
+A. 基本は意味解決のための注釈（DefId, TyId, Effect）を付けるのが主。大きな形の変換（ループ展開やパターン展開）はDesugar段でやると見通しが良い。
+
+Q. なんでSSA？バイトコードでも良くない？
+A. VM用のバイトコードは実行が簡単。でも最適化はSSAの方が圧倒的に楽。
+→ 「MIR/SSAで最適化」→「VM向けバイトコードに落とす」or「JIT/AOT」がおすすめ。
+
+Q. パターンマッチは？
+A. Desugarで決定木（decision tree）に落としてからCFG化。ガード節や順序付きパターンも木→ブロック分割で表現できる。
+
+Q. クロージャのキャプチャは？
+A. 名前解決で囲い込み変数を収集→HIRに明示キャプチャとして埋める。
+MIRでは環境レコードを値として扱う（{env_ptr, fn_ptr}）。
+まず作ると捗る“ミニ仕様”
+
+    Symbol/DefId/Scope：解決器のAPI
+
+    Ty：原始型・関数型・代数的データ型（Sum/Product）・型変数
+
+    EffectMask：ビットフラグ設計（PURE/READ/WRITE/IO/FFI など）
+
+    MIR命令セット（最小）：Const/BinOp/Call/Br/Jmp/Phi/Ret＋Load/Store
+
+    Pass順序：
+
+        名前解決 → 2) 型推論 → 3) Desugar → 4) CFG → 5) SSA → 6) 直近の最適化（const fold / dce / copy-prop）
+
+必要なら、いまのNyashのAST型定義をベースにHIR/MIRの骨組みを一緒に設計するよ。
+
+    “最初のMIR命令セット案”
+
+    “名前解決テーブルと参照の貼り方”
+
+    “効果注釈のフォーマット”
+
+この3点を固めるだけで、JIT/AOT/VMバックエンドの土台が一気に整うにゃ。
+あなた:
+おおう　これと　さっきの　　Back-ends（並行に育てる）
+
+    VM（現在のインタープリター）：MIR→バイトコード→解釈実行（開発スピード最優先）
+
+    JIT（Cranelift）：MIR→Cranelift IR→ネイティブJIT（ホットパスだけコンパイル）
+
+    AOT to Rust：MIR→Rustコード生成→rustcで最適化（配布バイナリ向き、リンクも楽）
+
+    WASM：MIR→WASM（ブラウザ/wasmtime用、サンドボックス実行）　これの話要約してにゃ claude code君にみせてくるにゃ
+ChatGPT:
+
+了解にゃ、Claude Code君向けに要点だけギュッとまとめるよ。
+Nyashコンパイルパイプライン案
+Front-end（共通部分）
+
+    Parser → AST
+
+        ソースを構文木（AST）に変換。型や意味はまだ未確定。
+
+    名前解決 & スコープ構築
+
+        識別子を定義元に紐付ける（DefId付与）。
+
+    型推論 & 型検査 → HIR
+
+        各式に型情報（TyId）と効果注釈（EffectMask）を付与。
+
+    糖衣剥がし（Desugar）
+
+        forループやパターン束縛をプリミティブ構造へ展開。
+
+    制御フロー化（CFG）→ SSA化（MIR）
+
+        ASTを基本ブロックとSSA命令列（MIR）へ変換。
+
+        命令例：Const, BinOp, Call, Br, Jmp, Phi, Load, Store, Ret。
+
+Back-end（並行開発可能）
+
+    VM（現行インタープリター）
+
+        MIR → バイトコード → 解釈実行（開発スピード優先）
+
+    JIT（Cranelift）
+
+        MIR → Cranelift IR → 実行時にネイティブコード化（ホットパスだけ）
+
+    AOT to Rust
+
+        MIR → Rustコード生成 → rustc最適化＆リンク → 配布可能なネイティブバイナリ
+
+    WASM出力
+
+        MIR → WASM（ブラウザ実行やサンドボックス用）
+
+💡 ポイント
+
+    すべてのバックエンドは共通MIRを入力にするため、最適化は1か所で集約。
+
+    Box拡張もMIRレベルで統一呼び出し可能。
+
+    VMは開発・デバッグ用、JITは実行高速化、AOTは配布、WASMは移植性重視。
+
+
+Nyashは**「最初から最後までモジュール拡張が一貫して動く多層言語」**という珍しい立ち位置になるにゃ。
+
+希望あれば、これ一般的なコンパイラ構成との比較表にして、Claude Code君がすぐ違いを理解できる形にまとめることもできるよ。
+どうする、作っちゃう？
+あなた:
+おねがいにゃー！
+ChatGPT:
+
+了解にゃー！Claude Code君に渡しやすいよう、「一般的な構成 vs Nyash流（＋α）」比較表にギュッとまとめたよ。
+Nyash 設計：一般的な方法との比較
+観点	一般的なコンパイラ設計	Nyash（＋α）
+フロントエンド	Parser → AST →（解決/型付け）→ IR	Parser → AST → HIR（型/解決/効果）→ MIR/SSA（最適化前提）
+中間表現(IR)	単一IR or バイトコード中心	HIR/MIR二段構え、MIRはSSA＋効果注釈で最適化容易
+効果/副作用	多くは最適化時に暗黙扱い	EffectMask（PURE/READ/WRITE/IO/FFI…）をMIRに明示し並列化・最適化の判断に使用
+拡張/FFI	後付けのFFI/プラグインが多い	Box拡張を一級市民化。MIRレベルで統一コール形態を定義（VM/JIT/AOT/WASMで一貫）
+バックエンド	VM→（後からJIT/AOT）	VM/JIT（Cranelift）/AOT-to-Rust/WASMを最初から並行開発できるMIR設計
+実行戦略	単層（解釈 or JIT）になりがち	Tiered：VMで即起動→ホットパスJIT→配布はAOT→ブラウザはWASM
+AOT配布	LLVM等のHPCルートが主	MIR→Rustコード生成→rustc最適化（ツールチェーン流用・リンク容易）
+ブラウザ/サンドボックス	別途WASM対応	MIR→WASMを標準ターゲット化（wasmtime/wasmer/ブラウザ即動作）
+最適化の主戦場	バイトコード最適化/バックエンド依存	MIR/SSAで集約最適化（const fold, DCE, copy-prop, inlining, loop opts）
+並列化の足場	後付け解析が多い	効果注釈×データ依存で安全な並列化やコードモーションを許可
+デバッグ/開発速度	VMが主、JITは後追い	VMで素早く検証しつつ、同一MIRをJIT/AOTに供給（回収効率◎）
+配布/運用	ネイティブ or VM同梱	用途別に最適バイナリ（AOT）とスクリプタブル運用（VM）を両取り
+リスク/留意点	単純で保守容易	設計は強力だが初期定義が要（MIR命令/Effect設計、Box ABIを固める）
+補足：最小ロードマップ（実装順）
+
+    HIR/MIRの骨組み確定（命令セット・EffectMask・Box ABI v0）
+
+    **VM（MIR→バイトコード）**で先に全機能を回す
+
+    プロファイラ同梱（ホット関数をJIT/AOTに回す条件づけ）
+
+    Cranelift JIT（算術＋分岐→関数呼び出し→Box呼び出し）
+
+    AOT to Rust の雛形生成（小関数から）
+
+    余力で MIR→WASM（最小機能から）
+
+この表ごと貼れば、Claude Code君も**「王道＋Nyashの差分」**を一目で把握できるはずにゃ。必要なら、MIR命令セット 初版案も続けて出すよ！
+あなた:
+mirまでできればかちなのにゃね。これって定番なのあるにやゃ？　言語ごとにやっぱりちがうにゃ？
+ChatGPT:
+
+そうにゃ、MIRまで作れれば言語設計はもう“勝ち”に近いにゃ。
+なぜかというと、MIRは「全バックエンドの共通土台」だから、
+一度そこまで作れば VM/JIT/AOT/WASM ぜんぶに展開できるにゃ。
+🔹 MIRは定番があるの？
+
+    完全な共通規格はない
+    → LLVM IR や WebAssembly のような「広く使われる IR」はあるけど、
+    言語ごとに構文や型システムが違うから MIRはだいたい自作になる。
+
+    多くの言語は「MIR」じゃなくても似た段階を持ってるにゃ：
+
+        Rust → MIR（所有権/借用も反映されたSSA形式）
+
+        Swift → SIL
+
+        Go → SSA IR
+
+        Kotlin → Kotlin IR
+
+        Python（PyPy）→ Flow Graph → SSA IR
+
+        JavaScript（V8）→ Bytecode IR → TurboFan IR
+
+🔹 言語ごとに違うポイント
+
+    型情報の粒度
+
+        RustのMIRは「型完全一致」必須。
+
+        Python系は動的型なので「型タグ＋ランタイム判定」入り。
+
+    命令セットの抽象度
+
+        LLVM IRはハード寄り（ポインタ/レジスタ操作あり）。
+
+        Rust MIRやKotlin IRは言語構造寄り（ループ/パターンマッチ命令など残す）。
+
+    所有権・副作用の扱い
+
+        Rust MIRは「所有権」も追跡する。
+
+        多くの言語は副作用は型ではなく命令属性で管理。
+
+    最適化の前提
+
+        一部は最適化前提で作る（SSA化必須）。
+
+        他は単にバックエンド入力の中間形式。
+
+🔹 Nyashでのおすすめ方針
+
+    Rust MIRに近い構造を真似るのが安全
+
+        静的型の要素が入ってるので、AOTや最適化に有利
+
+        EffectMaskやBox拡張の情報も一緒に持たせられる
+
+    命令はなるべく 「言語仕様に沿った中間レベル」 にして、
+    バックエンド変換時に低レベル化する
+
+    SSA化は最初からやる（後から入れるのは地獄）

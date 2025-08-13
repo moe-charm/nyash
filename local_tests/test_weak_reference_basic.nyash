@@ -1,0 +1,50 @@
+// Basic weak reference test case
+
+box Parent {
+    init { child }
+    
+    pack() {
+        me.child = new Child()
+        me.child.setParent(me)  // This should create a weak reference
+    }
+    
+    getChild() {
+        return me.child
+    }
+}
+
+box Child {
+    init { weak parent }  // weak modifier on parent field
+    
+    setParent(p) {
+        me.parent = p
+    }
+    
+    checkParent() {
+        return me.parent != null
+    }
+    
+    getParentInfo() {
+        if me.parent != null {
+            return "Parent exists"
+        } else {
+            return "Parent is null (dropped)"
+        }
+    }
+}
+
+static box Main {
+    main() {
+        local p = new Parent()
+        local child = p.getChild()
+        
+        print("Initial parent check: " + child.getParentInfo())
+        
+        // When p goes out of scope, child.parent should automatically become null
+        p = 0  // Setting to 0 instead of null to avoid the undefined variable issue
+        
+        print("After parent dropped: " + child.getParentInfo())
+        
+        return "weak reference test completed"
+    }
+}

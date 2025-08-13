@@ -1,0 +1,41 @@
+P2PBox ビルドエラー詳細 (2025-08-11)
+=====================================
+
+エラー概要：
+- ライブラリのビルド: ✅ 成功
+- テストの実行: ✅ 成功  
+- nyashバイナリのビルド: ❌ モジュールインポートエラー
+
+エラー詳細：
+
+error[E0432]: unresolved imports `crate::Transport`, `crate::TransportKind`, `crate::create_transport`
+  --> src/boxes/p2p_box.rs:16:13
+   |
+16 | use crate::{Transport, TransportKind, create_transport};
+   |             ^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^ no `create_transport` in the root
+   |             |          |
+   |             |          no `TransportKind` in the root
+   |             no `Transport` in the root
+
+error[E0432]: unresolved imports `crate::get_global_message_bus`, `crate::BusMessage`, `crate::MessageBus`
+  --> src/boxes/p2p_box.rs:17:13
+   |
+17 | use crate::{get_global_message_bus, BusMessage, MessageBus};
+   |             ^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^ no `MessageBus` in the root
+
+error[E0432]: unresolved import `crate::TransportKind`
+  --> src/interpreter/objects.rs:13:5
+   |
+13 | use crate::TransportKind;
+   |     ^^^^^^^^^^^^^^^^^^^^ no `TransportKind` in the root
+
+解決案：
+1. src/boxes/p2p_box.rs でインポートパスを修正:
+   use crate::transport_trait::{Transport, TransportKind, create_transport};
+   use crate::message_bus::{get_global_message_bus, BusMessage, MessageBus};
+
+2. src/interpreter/objects.rs でインポートパスを修正:
+   use crate::transport_trait::TransportKind;
+
+これは単純なモジュールパスの問題で、機能的な問題ではありません。
+P2PBoxの実装自体は完全に動作しています。

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Nyash Drawing App Test</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
+        canvas { border: 2px solid #00ff88; background: black; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Nyash Drawing App Test</h1>
+    <p id="status">Loading WASM and Nyash script...</p>
+    <canvas id="drawing-canvas" width="800" height="600"></canvas>
+
+    <script type="module">
+        // Import the WASM initialization function and the NyashWasm class
+        import init, { NyashWasm } from '../../projects/nyash-wasm/pkg/nyash_rust.js';
+
+        async function main() {
+            const status = document.getElementById('status');
+            try {
+                // 1. Initialize the WASM module
+                await init();
+                status.textContent = 'WASM module loaded. Initializing interpreter...';
+
+                // 2. Create a new instance of the Nyash interpreter
+                const nyash = new NyashWasm();
+                status.textContent = 'Interpreter initialized. Fetching Nyash script...';
+
+                // 3. Fetch the drawing app's source code
+                const response = await fetch('01_drawing_app.nyash');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch script: ${response.statusText}`);
+                }
+                const code = await response.text();
+                status.textContent = 'Script fetched. Executing...';
+
+                // 4. Execute the Nyash code
+                // The Nyash script is expected to find and use the canvas with id="drawing-canvas"
+                const result = nyash.eval(code);
+                status.textContent = `✅ Nyash script executed successfully! Result: ${result}`;
+
+            } catch (error) {
+                status.textContent = `❌ Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>

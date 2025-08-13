@@ -1,0 +1,65 @@
+// test_array_methods.nyash - ArrayBox改良テスト
+// Phase 1: ArrayBox sort(), reverse(), indexOf(), slice() validation
+
+print("🗂️ Testing ArrayBox improvements...")
+
+// Create and populate array
+local arr
+arr = new ArrayBox()
+arr.push(3)
+arr.push(1) 
+arr.push(2)
+
+print("Original: " + arr.toString())
+
+// Test sort() method
+arr.sort()
+print("Sorted: " + arr.toString())
+
+// Test reverse() method
+arr.reverse()
+print("Reversed: " + arr.toString())
+
+// Test indexOf() method
+local index
+index = arr.indexOf(2)
+print("Index of 2: " + index.toString())
+
+index = arr.indexOf(1)
+print("Index of 1: " + index.toString())
+
+index = arr.indexOf(99)
+print("Index of 99: " + index.toString())
+
+// Test slice() method
+local slice
+slice = arr.slice(0, 2)
+print("Slice [0,2): " + slice.toString())
+
+slice = arr.slice(1, 3)
+print("Slice [1,3): " + slice.toString())
+
+// Test with string array
+local strArr
+strArr = new ArrayBox()
+strArr.push("zebra")
+strArr.push("apple")
+strArr.push("banana")
+
+print("String array original: " + strArr.toString())
+
+strArr.sort()
+print("String array sorted: " + strArr.toString())
+
+strArr.reverse()
+print("String array reversed: " + strArr.toString())
+
+// Test indexOf on strings
+index = strArr.indexOf("apple")
+print("Index of 'apple': " + index.toString())
+
+// Test slice on strings
+slice = strArr.slice(0, 2)
+print("String slice [0,2): " + slice.toString())
+
+print("✅ ArrayBox improvements Phase 1 tests completed!")

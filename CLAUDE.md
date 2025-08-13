@@ -2,6 +2,10 @@
 
 Nyashプログラミング言語開発に必要な情報をまとめたクイックリファレンス。
 
+## 🧭 Start Here (最初に見る)
+- 現在のタスク: docs/CURRENT_TASK.md
+- コア概念（速習）: docs/nyash_core_concepts.md
+
 ## 🚀 クイックスタート
 
 ### 🐧 Linux/WSL版
@@ -31,27 +35,28 @@ cd projects/nyash-wasm
 
 ## 📚 ドキュメント構造
 
+- 説明書: docs/説明書/README.md
+  - ネイティブビルド: docs/説明書/native-build/README.md
+  - WASM: docs/説明書/wasm/
+  - リファレンス: docs/説明書/reference/
+- 予定: docs/予定/README.md
+  - CURRENT_TASK, ネイティブ計画, フェーズ課題
+- archive: docs/archive/
 ### 🎯 よく使う情報
-- **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
-- **[演算子一覧](docs/quick-reference/operators-summary.md)** - 実装済み演算子
-- **[開発コマンド](docs/quick-reference/development-commands.md)** - build/test/AI相談
-
+- Getting Started: docs/説明書/GETTING_STARTED.md
+- Language Guide: docs/説明書/LANGUAGE_GUIDE.md
+- Playground Guide: docs/説明書/guides/playground_guide.md
 ### 📊 最新開発状況
-- **[実装状況](docs/status/current-implementation.md)** - 完全な機能実装状況
-- **[最新成果](docs/status/recent-achievements.md)** - 2025-08-08更新
-- **[既知の問題](docs/status/known-issues.md)** - 制限事項・回避策
-
+- 現在のタスク: docs/CURRENT_TASK.md
+- 予定インデックス: docs/予定/README.md
 ### 📖 詳細リファレンス
-- **[完全リファレンス](docs/reference/)** - 言語仕様詳細
-  - [予約語一覧](docs/reference/keywords.md)
-  - [演算子リファレンス](docs/reference/operators.md)
-  - [ビルトイン型](docs/reference/built-in-boxes.md)
-  - [MethodBox（invoke）](docs/reference/method-box-reference.md)
-  - [ジェネリクス](docs/reference/generics-reference.md)
-- **[学習ガイド](docs/language-guide/)** - 体系的学習用
-
+- リファレンス: docs/説明書/reference/
+  - 言語: docs/説明書/reference/language-reference.md
+  - デリゲーション構文: docs/説明書/reference/override-delegation-syntax.md
+  - ビルトイン: docs/説明書/reference/builtin-boxes.md
+  - fini/弱参照: docs/説明書/reference/finalization-system.md
 ### 🎮 実用例・アプリ
-- **[実用例](docs/examples/)** - サンプルコード・パターン集
+- **[実用例](docs/説明書/guides/)** - サンプルコード・パターン集
 - **実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
 
 ## ⚡ 重要な設計原則
@@ -208,12 +213,12 @@ app.setSize(800, 600)
 
 #### 🔤 言語仕様
 - **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
-- **[完全リファレンス](docs/reference/)** - 言語仕様詳細
-- **[予約語一覧](docs/reference/keywords.md)** - from, override, pack等
+- **[完全リファレンス](docs/説明書/reference/)** - 言語仕様詳細
+- **[予約語一覧](docs/説明書/reference/keywords.md)** - from, override, pack等
 
 #### 📦 主要BOXのAPI
-- **[ビルトイン型](docs/reference/built-in-boxes.md)** - 全Box型API仕様
-- **P2PBox & IntentBox** - docs/reference/built-in-boxes.md内
+- **[ビルトイン型](docs/説明書/reference/built-in-boxes.md)** - 全Box型API仕様
+- **P2PBox & IntentBox** - docs/説明書/reference/built-in-boxes.md内
 - **StringBox, IntegerBox, ConsoleBox** - 基本Box API
 - **EguiBox, DebugBox, MathBox** - 特殊Box API
 
@@ -223,7 +228,7 @@ app.setSize(800, 600)
 Read src/boxes/p2p_box.rs  # 直接ソース参照
 
 # ✅ 良い例：ドキュメント優先
-Read docs/reference/built-in-boxes.md  # まずドキュメント
+Read docs/説明書/reference/built-in-boxes.md  # まずドキュメント
 # → 古い/不足 → ドキュメント更新
 # → それでも不明 → ソース確認
 ```

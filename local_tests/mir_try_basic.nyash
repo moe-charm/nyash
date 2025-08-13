@@ -1,0 +1,12 @@
+static box Main {
+    main() {
+        try {
+            print("in try")
+            throw "oops"
+        } catch (Exception e) {
+            print("caught")
+        }
+        print("after")
+    }
+}
+

@@ -1,0 +1,77 @@
+// test_comparison_operators.nyash - Comparison operators test
+// Phase 4: Comparison operators implementation validation
+
+print("⚖️ Testing comparison operators implementation...")
+
+// Basic variables for testing
+local f1, f2, i1, i2, s1, s2, result
+
+// Test FloatBox comparisons
+f1 = new FloatBox(3.14)
+f2 = new FloatBox(2.86)
+
+print("=== FloatBox Comparisons ===")
+result = f1 > f2
+print("3.14 > 2.86: " + result.toString())
+
+result = f1 < f2
+print("3.14 < 2.86: " + result.toString())
+
+result = f1 >= f2
+print("3.14 >= 2.86: " + result.toString())
+
+result = f1 <= f2
+print("3.14 <= 2.86: " + result.toString())
+
+result = f1 == f2
+print("3.14 == 2.86: " + result.toString())
+
+result = f1 != f2
+print("3.14 != 2.86: " + result.toString())
+
+// Test IntegerBox comparisons
+i1 = 10
+i2 = 5
+
+print("=== IntegerBox Comparisons ===")
+result = i1 > i2
+print("10 > 5: " + result.toString())
+
+result = i1 < i2
+print("10 < 5: " + result.toString())
+
+result = i1 >= i2
+print("10 >= 5: " + result.toString())
+
+result = i1 <= i2
+print("10 <= 5: " + result.toString())
+
+result = i1 == i2
+print("10 == 5: " + result.toString())
+
+result = i1 != i2
+print("10 != 5: " + result.toString())
+
+// Test mixed type comparisons (FloatBox vs IntegerBox)
+print("=== Mixed Type Comparisons ===")
+result = f1 > i2
+print("3.14 > 5: " + result.toString())
+
+result = f1 < i1
+print("3.14 < 10: " + result.toString())
+
+result = i1 >= f1
+print("10 >= 3.14: " + result.toString())
+
+result = i2 <= f2
+print("5 <= 2.86: " + result.toString())
+
+// Test logical operators
+print("=== Logical Operators ===")
+result = (f1 > f2) and (i1 > i2)
+print("(3.14 > 2.86) and (10 > 5): " + result.toString())
+
+result = (f1 < f2) or (i1 > i2)
+print("(3.14 < 2.86) or (10 > 5): " + result.toString())
+
+print("✅ Comparison operators Phase 4 tests completed!")

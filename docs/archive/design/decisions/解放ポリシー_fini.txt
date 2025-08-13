@@ -1,0 +1,63 @@
+Nyash Finalization Policy (fini as destructor-style method)
+
+最終更新: 2025-08-13
+
+目的
+- fini を「フィールド列挙」ではなく「通常のメソッド本体（デストラクタ的）」として運用しつつ、
+  自動カスケード解放（init フィールドの残り処理）と整合する最終ルールを定義する。
+
+設計方針（合意）
+- すべての Box は論理的に fini() を持つ（ユーザー未定義でもシステム既定が働く）。
+- fini() は“論理的解放”のフックであり、以後の使用は禁止（finalized）。
+- weak フィールドは所有権を持たないため、自動の fini 対象にしない（アクセス時の upgrade 失敗で null）。
+
+実行順序（最終）
+1) 既に finalized なら何もしない（idempotent）。
+2) 再入防止のため in_finalization フラグを立てる（finalized はまだ立てない）。
+3) ユーザー定義 fini() 本体があれば実行（この間、フィールドアクセス/メソッド呼び出しは許可）。
+4) 自動カスケード解放：init{ ... } に宣言された強参照フィールドのうち、
+   - ユーザー fini() 本体で明示的に処理されなかった“残り”に対して、宣言順で child.fini() を呼ぶ。
+   - weak 修飾フィールドは対象外。
+5) 全フィールドをクリアし finalized フラグを立てる（以後の使用は禁止）。
+6) 再入フラグを下ろして終了。
+
+使用禁止ガード
+- finalized 後の操作はエラーとする：
+  - メソッド呼び出し、フィールドアクセス/代入、デリゲーション経由の呼び出し等。
+  - 推奨メッセージ："Instance was finalized; further use is prohibited"。
+- idempotent な fini() の再呼び出しのみ許容（無害化）。
+
+補足
+- ユーザー定義 fini() 内で解放順序が必要な場合は、自由に child.fini() を呼べる（柔軟性）。
+- その後に“残り”が自動処理されるため、完全手動にしたい場合は将来的に属性（例：@no_auto_finalize）導入を検討（現段階は自動処理ありを既定）。
+- 例外発生時はベストエフォートで自動カスケードとクリアを続行（安全側）。
+
+weak の取り扱い
+- weak はアクセス時に upgrade／失敗で null となる（lazy nilification）。
+- デバッグ用途として finalize 時に weak を即時無効化する eager モードを将来オプションで検討可（既定は lazy）。
+
+禁止事項と診断（weak に対する fini 呼び出し）
+- ルール: weak 修飾フィールドは所有権を持たないため、`me.<weak_field>.fini()` のような直接の fini 呼び出しを禁止する。
+- 推奨診断レベル: ビルド（解析）時エラー。
+  - 推奨エラーメッセージ: "Cannot finalize weak field '<name>' (non-owning reference). Use null assignment or let it lazily nilify."
+- 実装補足: 静的解析で `fini()` 本体内のフィールド呼び出しを走査し、対象が weak に該当すればエラー。検出困難な動的経路は実行時にもエラーを返す。
+- 推奨代替手段: `me.<weak_field> = null`（参照解除）／アクセス時の自動 nil 化に任せる。
+
+簡易疑似コード
+  fn finalize(instance):
+    if instance.finalized: return
+    instance.in_finalization = true
+    if has_user_fini(instance):
+      run_user_fini_body(instance)
+    for field in instance.init_fields:
+      if is_strong_ref(field) and not handled_in_user_fini(field):
+        if is_instance(field.value) and not field.value.finalized:
+          finalize(field.value)
+    clear_all_fields(instance)
+    instance.finalized = true
+    instance.in_finalization = false
+
+期待する効果
+- 柔軟性：ユーザー fini() 本体で任意順序・任意処理が書ける。
+- 決定性：残りは init 宣言順で自動解放され、毎回同じ順に実行。
+- 明確性：finalized 後は使用禁止をガードで強制、誤用を早期検知。

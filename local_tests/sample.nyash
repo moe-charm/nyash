@@ -1,0 +1,14 @@
+# Minimal Nyash sample
+box Greeter {
+    message
+    pack(msg) { me.message = msg }
+    say() { print(me.message) }
+}
+
+static box Main {
+    main() {
+        local g
+        g = new Greeter("Hello, Nyash!")
+        g.say()
+    }
+}
