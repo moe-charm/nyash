@@ -66,6 +66,7 @@ jobs:
           
           | メトリック | 価値 |
           |-----------|------|
+| **分析対象** | $(basename "$GITHUB_WORKSPACE") ディレクトリ全体 |
           | **分析されたファイル** | ${PR_FILES} ファイル |
           | **分析時間** | ${ANALYSIS_TIME} |
           | **検出された言語** | ${LANGUAGES_COUNT}言語 |
