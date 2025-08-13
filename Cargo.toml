@@ -27,47 +27,6 @@ crate-type = ["cdylib", "rlib"]
 name = "nyash"
 path = "src/main.rs"
 
-# GUI examples - only built with gui-examples feature
-[[bin]]
-name = "simple_notepad"
-path = "examples/simple_notepad.rs"
-required-features = ["gui-examples"]
-
-[[bin]]
-name = "nyash_notepad"
-path = "examples/simple_notepad_v2.rs"
-required-features = ["gui-examples"]
-
-[[bin]]
-name = "nyash_notepad_ascii"
-path = "examples/simple_notepad_ascii.rs"
-required-features = ["gui-examples"]
-
-[[bin]]
-name = "debug_notepad"
-path = "examples/debug_notepad.rs"
-required-features = ["gui-examples"]
-
-[[bin]]
-name = "nyash_notepad_jp"
-path = "examples/nyash_notepad_jp.rs"
-required-features = ["gui-examples"]
-
-[[bin]]
-name = "nyash_explorer"
-path = "examples/nyash_explorer.rs"
-required-features = ["gui-examples"]
-
-[[bin]]
-name = "nyash_explorer_icons"
-path = "examples/nyash_explorer_with_icons.rs"
-required-features = ["gui-examples"]
-
-[[bin]]
-name = "test_icon_extraction"
-path = "examples/test_icon_extraction.rs"
-required-features = ["gui-examples"]
-
 # Examples for development - only available as examples, not bins
 [[example]]
 name = "gui_simple_notepad"
