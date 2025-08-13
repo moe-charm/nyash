@@ -750,12 +750,27 @@ impl NyashInterpreter {
     pub(super) fn trigger_weak_reference_invalidation(&mut self, target_info: &str) {
         eprintln!("🔗 DEBUG: Registering invalidation for: {}", target_info);
         
-        // For string-based tracking, we'll use a simple marker
-        // Since we're dropping Parent objects, mark a special "parent dropped" flag
-        if target_info.contains("Parent") {
-            // Use a special ID to mark that Parent objects have been dropped
-            self.invalidated_ids.lock().unwrap().insert(999); // Special marker for Parent drops
-            eprintln!("🔗 DEBUG: Parent objects marked as invalidated (ID 999)");
+        // Extract actual object ID from target_info string
+        // Format: "<ClassName instance #ID>" -> extract ID
+        if let Some(hash_pos) = target_info.find('#') {
+            let id_str = &target_info[hash_pos + 1..];
+            // Find the end of the ID (before '>')
+            let id_end = id_str.find('>').unwrap_or(id_str.len());
+            let clean_id_str = &id_str[..id_end];
+            
+            if let Ok(id) = clean_id_str.parse::<u64>() {
+                self.invalidated_ids.lock().unwrap().insert(id);
+                eprintln!("🔗 DEBUG: Object with ID {} marked as invalidated", id);
+            } else {
+                eprintln!("🔗 DEBUG: Failed to parse ID from: {}", clean_id_str);
+            }
+        } else {
+            // Fallback for non-standard target_info format
+            eprintln!("🔗 DEBUG: No ID found in target_info, using fallback");
+            if target_info.contains("Parent") {
+                self.invalidated_ids.lock().unwrap().insert(999); // Fallback marker
+                eprintln!("🔗 DEBUG: Parent objects marked as invalidated (fallback ID 999)");
+            }
         }
     }
 }

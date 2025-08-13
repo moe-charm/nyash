@@ -148,8 +148,28 @@ impl InstanceBox {
                 NyashValue::String(s) => {
                     // For string-based weak fields, check if they're marked as "dropped"
                     if s.starts_with("WEAK_REF_TO:") {
-                        // Check if Parent objects have been invalidated
-                        if s.contains("Parent") && interpreter.invalidated_ids.lock().unwrap().contains(&999) {
+                        // Extract the object ID from the weak reference string
+                        // Format: "WEAK_REF_TO:<ClassName instance #ID>"
+                        let mut is_dropped = false;
+                        
+                        if let Some(hash_pos) = s.find('#') {
+                            let id_str = &s[hash_pos + 1..];
+                            let id_end = id_str.find('>').unwrap_or(id_str.len());
+                            let clean_id_str = &id_str[..id_end];
+                            
+                            if let Ok(id) = clean_id_str.parse::<u64>() {
+                                is_dropped = interpreter.invalidated_ids.lock().unwrap().contains(&id);
+                                eprintln!("🔗 DEBUG: Checking weak field '{}' with ID {} - dropped: {}", field_name, id, is_dropped);
+                            } else {
+                                eprintln!("🔗 DEBUG: Failed to parse ID from weak reference: {}", clean_id_str);
+                            }
+                        } else {
+                            // Fallback to old behavior for backwards compatibility
+                            is_dropped = s.contains("Parent") && interpreter.invalidated_ids.lock().unwrap().contains(&999);
+                            eprintln!("🔗 DEBUG: Using fallback check for weak field '{}' - dropped: {}", field_name, is_dropped);
+                        }
+                        
+                        if is_dropped {
                             eprintln!("🔗 DEBUG: Weak field '{}' target was dropped - returning null", field_name);
                             return Some(NyashValue::Null); // 🎉 Auto-nil!
                         }
