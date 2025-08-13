@@ -178,6 +178,27 @@ pub enum MirInstruction {
     
     /// No-op instruction (for optimization placeholders)
     Nop,
+    
+    // === Control Flow & Exception Handling (Phase 5) ===
+    
+    /// Throw an exception
+    /// `throw %exception_value`
+    Throw {
+        exception: ValueId,
+        effects: EffectMask,
+    },
+    
+    /// Catch handler setup (landing pad for exceptions)
+    /// `catch %exception_type -> %handler_bb`
+    Catch {
+        exception_type: Option<String>, // None = catch-all
+        exception_value: ValueId,       // Where to store caught exception
+        handler_bb: super::BasicBlockId,
+    },
+    
+    /// Safepoint instruction (no-op for now, can be used for GC/debugging)
+    /// `safepoint`
+    Safepoint,
 }
 
 /// Constant values in MIR
@@ -274,6 +295,11 @@ impl MirInstruction {
             
             // Print has external write effect
             MirInstruction::Print { effects, .. } => *effects,
+            
+            // Phase 5: Control flow & exception handling
+            MirInstruction::Throw { effects, .. } => *effects,
+            MirInstruction::Catch { .. } => EffectMask::PURE, // Setting up handler is pure
+            MirInstruction::Safepoint => EffectMask::PURE,    // No-op for now
         }
     }
     
@@ -302,7 +328,11 @@ impl MirInstruction {
             MirInstruction::ArraySet { .. } |
             MirInstruction::Debug { .. } |
             MirInstruction::Print { .. } |
+            MirInstruction::Throw { .. } |
+            MirInstruction::Safepoint |
             MirInstruction::Nop => None,
+            
+            MirInstruction::Catch { exception_value, .. } => Some(*exception_value),
         }
     }
     
@@ -352,6 +382,11 @@ impl MirInstruction {
             MirInstruction::Phi { inputs, .. } => {
                 inputs.iter().map(|(_, value)| *value).collect()
             },
+            
+            // Phase 5: Control flow & exception handling
+            MirInstruction::Throw { exception, .. } => vec![*exception],
+            MirInstruction::Catch { .. } => Vec::new(), // Handler setup doesn't use values
+            MirInstruction::Safepoint => Vec::new(),
         }
     }
 }

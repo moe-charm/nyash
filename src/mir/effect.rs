@@ -55,6 +55,9 @@ impl EffectMask {
     /// P2P communication effects
     pub const P2P: Self = Self(Effect::P2P as u16);
     
+    /// Panic/exception effects
+    pub const PANIC: Self = Self(Effect::Panic as u16);
+    
     /// All effects - maximum side effects
     pub const ALL: Self = Self(0xFFFF);
     

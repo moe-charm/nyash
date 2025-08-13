@@ -256,6 +256,33 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
+            MirInstruction::Nop => {
+                // No-op instruction
+                Ok(ControlFlow::Continue)
+            },
+            
+            // Phase 5: Control flow & exception handling
+            MirInstruction::Throw { exception, effects: _ } => {
+                let exception_val = self.get_value(*exception)?;
+                // For now, convert throw to error return (simplified exception handling)
+                // In a full implementation, this would unwind the stack looking for catch handlers
+                println!("Exception thrown: {}", exception_val.to_string());
+                Err(VMError::InvalidInstruction(format!("Unhandled exception: {}", exception_val.to_string())))
+            },
+            
+            MirInstruction::Catch { exception_type: _, exception_value, handler_bb: _ } => {
+                // For now, catch is a no-op since we don't have full exception handling
+                // In a real implementation, this would set up exception handling metadata
+                self.values.insert(*exception_value, VMValue::Void);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Safepoint => {
+                // Safepoint is a no-op for now
+                // In a real implementation, this could trigger GC, debugging, etc.
+                Ok(ControlFlow::Continue)
+            },
+            
             _ => {
                 Err(VMError::InvalidInstruction(format!("Unsupported instruction: {:?}", instruction)))
             }

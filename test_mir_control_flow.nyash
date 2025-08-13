@@ -1,0 +1,21 @@
+// Test MIR control flow and exception handling - Phase 5
+
+// Test loop functionality
+local counter
+counter = 0
+
+loop(counter < 3) {
+    print(counter)
+    counter = counter + 1
+}
+
+// Test try/catch functionality  
+try {
+    print("In try block")
+    throw "Test exception"
+    print("This should not execute")
+} catch (exception) {
+    print("Caught exception")
+}
+
+print("Program completed")
