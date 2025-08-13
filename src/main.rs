@@ -31,6 +31,10 @@ use interpreter::NyashInterpreter;
 // 🚀 MIR Infrastructure
 pub mod mir;
 use mir::{MirCompiler, MirPrinter};
+
+// 🚀 Backend Infrastructure  
+pub mod backend;
+use backend::VM;
 use std::env;
 use std::fs;
 use std::process;
@@ -73,6 +77,13 @@ fn main() {
                 .help("Show verbose MIR output with statistics")
                 .action(clap::ArgAction::SetTrue)
         )
+        .arg(
+            Arg::new("backend")
+                .long("backend")
+                .value_name("BACKEND")
+                .help("Choose execution backend: 'interpreter' (default) or 'vm'")
+                .default_value("interpreter")
+        )
         .get_matches();
     
     // デバッグ燃料の解析
@@ -82,12 +93,16 @@ fn main() {
     let dump_mir = matches.get_flag("dump-mir");
     let verify_mir = matches.get_flag("verify");
     let mir_verbose = matches.get_flag("mir-verbose");
+    let backend = matches.get_one::<String>("backend").unwrap();
     
     if let Some(filename) = matches.get_one::<String>("file") {
         // File mode: parse and execute the provided .nyash file
         if dump_mir || verify_mir {
             println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             execute_mir_mode(filename, dump_mir, verify_mir, mir_verbose);
+        } else if backend == "vm" {
+            println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
+            execute_vm_mode(filename);
         } else {
             println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
             if let Some(fuel) = debug_fuel {
@@ -1166,6 +1181,59 @@ fn execute_mir_mode(filename: &str, dump_mir: bool, verify_mir: bool, verbose: b
                 println!("   Phi Functions: {}", func_stats.phi_count);
                 println!("   Pure: {}", func_stats.is_pure);
             }
+        }
+    }
+}
+
+/// Execute VM mode
+fn execute_vm_mode(filename: &str) {
+    // Read the source file
+    let source = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", filename, e);
+            process::exit(1);
+        }
+    };
+    
+    // Parse to AST
+    let ast = match NyashParser::parse_from_string(&source) {
+        Ok(ast) => ast,
+        Err(e) => {
+            eprintln!("❌ Parse error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Compile to MIR
+    let mut compiler = MirCompiler::new();
+    let compile_result = match compiler.compile(ast) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("❌ MIR compilation error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Check for verification errors
+    if let Err(errors) = &compile_result.verification_result {
+        eprintln!("❌ MIR verification failed with {} error(s):", errors.len());
+        for (i, error) in errors.iter().enumerate() {
+            eprintln!("  {}: {}", i + 1, error);
+        }
+        // Continue execution anyway for now
+    }
+    
+    // Execute with VM
+    let mut vm = VM::new();
+    match vm.execute_module(&compile_result.module) {
+        Ok(result) => {
+            println!("✅ VM execution completed successfully!");
+            println!("Result: {}", result.to_string_box().value);
+        },
+        Err(e) => {
+            eprintln!("❌ VM runtime error: {}", e);
+            process::exit(1);
         }
     }
 }

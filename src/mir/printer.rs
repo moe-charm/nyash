@@ -294,6 +294,10 @@ impl MirPrinter {
                 format!("debug {} \"{}\"", value, message)
             },
             
+            MirInstruction::Print { value, effects: _ } => {
+                format!("print {}", value)
+            },
+            
             MirInstruction::Nop => {
                 "nop".to_string()
             },

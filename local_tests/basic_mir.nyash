@@ -1,0 +1,5 @@
+// Basic MIR test - minimal scope only
+x = 42
+y = 10
+result = x + y
+print("Result: " + result)
