@@ -1,0 +1,73 @@
+Nyash Finalization Examples
+
+最終更新: 2025-08-13
+
+1) 既定: init 宣言順での解放（強参照のみ）
+--------------------------------------------------
+box A { fini() { print("A.fini") } }
+box B { fini() { print("B.fini") } }
+
+box Holder {
+    init { a, b, weak c }
+}
+
+h = new Holder()
+h.a = new A()
+h.b = new B()
+# h.c は weak なので対象外
+
+# h.fini() を呼ぶと：
+# 1) ユーザー定義 fini() があれば先に実行
+# 2) 残りは init の宣言順に a → b の順で child.fini()
+# 3) フィールドクリア → finalized
+
+
+2) カスタム順序: ユーザー定義 fini() で順序制御
+--------------------------------------------------
+box Resource { init { name } fini() { print("close:" + me.name) } }
+
+box Pipeline {
+    init { r1, r2, r3 }
+    fini() {
+        # 依存性の都合で r3 → r2 → r1 の順に閉じたい
+        if me.r3 != null { me.r3.fini() }
+        if me.r2 != null { me.r2.fini() }
+        # r1 は明示しない → 自動カスケードで最後に閉じられる
+    }
+}
+
+p = new Pipeline()
+p.r1 = new Resource("r1")
+p.r2 = new Resource("r2")
+p.r3 = new Resource("r3")
+p.fini()
+# 期待: close:r3 → close:r2 → close:r1 の順
+
+
+3) 弱参照は対象外（禁止パターン）
+--------------------------------------------------
+box Parent { init { weak child } fini() { 
+    # NG: 非所有参照のため fini は禁止
+    # me.child.fini()  # → ビルド時エラー（推奨）：Cannot finalize weak field 'child'
+    # 代替: 参照解除
+    me.child = null
+} }
+
+
+4) 再代入での予備解放
+--------------------------------------------------
+box Thing { fini() { print("Thing.fini") } }
+box Holder { init { obj } }
+
+h = new Holder()
+h.obj = new Thing()
+h.obj = new Thing()  # → 旧 obj に対して自動的に fini()
+
+
+5) finalized 後の使用禁止
+--------------------------------------------------
+box X { }
+x = new X()
+x.fini()
+x.doSomething()  # → 実行時エラー: Instance was finalized; further use is prohibited
+

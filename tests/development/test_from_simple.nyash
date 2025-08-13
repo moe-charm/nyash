@@ -1,0 +1,24 @@
+
+// from構文のみのテスト（まず式として）
+box Parent {
+    init { value }
+    
+    getValue() {
+        return "Parent value"
+    }
+}
+
+box Child from Parent {
+    init { }
+    
+    test() {
+        local result
+        result = from Parent.getValue()
+        return result
+    }
+}
+
+local c
+c = new Child()
+print("Result: " + c.test())
+

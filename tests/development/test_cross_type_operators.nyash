@@ -1,0 +1,56 @@
+// Cross-type演算子全パターンテスト
+local console
+console = new ConsoleBox()
+
+console.log("=== Cross-type Operator Tests ===")
+
+// 基本型の準備
+local num
+num = 42
+
+local float
+float = new FloatBox(3.14)
+
+local str
+str = "Hello"
+
+local bool
+bool = true
+
+// === 数値 + 浮動小数点 ===
+console.log("=== Number + Float ===")
+console.log("42 + 3.14 = " + (num + float.value))
+console.log("42 - 3.14 = " + (num - float.value))
+console.log("42 * 3.14 = " + (num * float.value))
+console.log("42 / 3.14 = " + (num / float.value))
+
+// === 文字列連結 ===
+console.log("=== String concatenation ===")
+console.log("String + Number: " + str + num)
+console.log("String + Float: " + str + float.value)
+console.log("String + Bool: " + str + bool)
+
+// === 比較演算子 ===
+console.log("=== Comparison operators ===")
+console.log("42 == 42: " + (num == 42))
+console.log("42 != 43: " + (num != 43))
+console.log("42 > 30: " + (num > 30))
+console.log("42 < 50: " + (num < 50))
+console.log("42 >= 42: " + (num >= 42))
+console.log("42 <= 45: " + (num <= 45))
+
+// === 論理演算子 ===
+console.log("=== Logical operators ===")
+console.log("true and true: " + (bool and true))
+console.log("true or false: " + (bool or false))
+console.log("not true: " + (not bool))
+
+// === FloatBox specific ===
+console.log("=== FloatBox operations ===")
+local float1
+float1 = new FloatBox(2.5)
+local float2
+float2 = new FloatBox(1.5)
+
+console.log("2.5 + 1.5 = " + (float1.value + float2.value))
+console.log("2.5 * 1.5 = " + (float1.value * float2.value))

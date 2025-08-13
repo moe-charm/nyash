@@ -1,0 +1,31 @@
+// 🧪 基本的な新Box テスト
+
+print("=== Basic New Boxes Test ===")
+
+// 📦 ArrayBox Test (already working)
+print("\n✅ ArrayBox:")
+local arr
+arr = new ArrayBox()
+arr.push("test")
+print("ArrayBox works: " + arr.length())
+
+// 🗄️ MapBox Test (already working) 
+print("\n✅ MapBox:")
+local map
+map = new MapBox()
+map.set("key", "value")
+print("MapBox works: " + map.size())
+
+// 📊 BufferBox Test
+print("\n🔹 BufferBox:")
+local buffer
+buffer = new BufferBox()
+print("BufferBox created: " + buffer.toString())
+
+// 🔍 RegexBox Test  
+print("\n🔹 RegexBox:")
+local regex
+regex = new RegexBox("[0-9]+")
+print("RegexBox created: " + regex.toString())
+
+print("\n🎉 Basic new Box creation tests completed!")

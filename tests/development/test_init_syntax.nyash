@@ -1,0 +1,80 @@
+// init構文の包括的テスト
+
+// 1. 基本的なinit構文
+box Animal {
+    init { name, age }
+    
+    init(animalName, animalAge) {
+        me.name = animalName
+        me.age = animalAge
+    }
+    
+    speak() {
+        return me.name + " (age " + me.age + ") makes a sound"
+    }
+}
+
+// 2. fromデリゲーションでのinit
+box Dog from Animal {
+    init { breed }
+    
+    init(dogName, dogAge, dogBreed) {
+        from Animal.init(dogName, dogAge)  // 親のinitを呼び出し
+        me.breed = dogBreed
+    }
+    
+    override speak() {
+        return me.name + " (age " + me.age + ", " + me.breed + ") barks: Woof!"
+    }
+}
+
+// 3. 従来のBox名形式（互換性確認）
+box Cat from Animal {
+    init { color }
+    
+    Cat(catName, catAge, catColor) {  // 従来形式もまだ動作する
+        from Animal.init(catName, catAge)
+        me.color = catColor
+    }
+    
+    override speak() {
+        return me.name + " (age " + me.age + ", " + me.color + ") meows: Meow!"
+    }
+}
+
+// テスト実行
+print("=== init構文テスト ===")
+
+// 1. 基本的なinit
+local animal
+animal = new Animal("Generic", 5)
+print("Animal: " + animal.speak())
+
+// 2. デリゲーションでのinit
+local dog
+dog = new Dog("Buddy", 3, "Golden Retriever")
+print("Dog: " + dog.speak())
+
+// 3. 従来形式との互換性
+local cat
+cat = new Cat("Whiskers", 2, "Black")
+print("Cat: " + cat.speak())
+
+// 4. 引数なしinit
+box SimpleBox {
+    init { value }
+    
+    init() {  // 引数なしinit
+        me.value = "Default value"
+    }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+local simple
+simple = new SimpleBox()
+print("SimpleBox: " + simple.getValue())
+
+print("\n✅ init構文テスト完了！")

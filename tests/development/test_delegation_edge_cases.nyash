@@ -1,0 +1,79 @@
+// デリゲーション・overrideの詳細テスト（エッジケース）
+local console
+console = new ConsoleBox()
+
+// === 基本デリゲーション ===
+box BaseBox {
+    init { value, count }
+    
+    pack(val) {
+        me.value = val
+        me.count = 0
+    }
+    
+    getValue() {
+        return me.value
+    }
+    
+    increment() {
+        me.count = me.count + 1
+        return me.count
+    }
+}
+
+box ExtendedBox from BaseBox {
+    init { multiplier }
+    
+    pack(val, mult) {
+        from BaseBox.pack(val)
+        me.multiplier = mult
+    }
+    
+    // override without calling parent
+    override getValue() {
+        return me.value + " (Extended)"
+    }
+    
+    // override with parent call
+    override increment() {
+        local result
+        result = from BaseBox.increment()
+        return result * me.multiplier
+    }
+}
+
+// === テスト実行 ===
+console.log("=== Basic delegation test ===")
+local base
+base = new BaseBox("Hello")
+console.log("Base value: " + base.getValue())
+console.log("Base increment: " + base.increment())
+
+console.log("=== Extended delegation test ===")
+local ext
+ext = new ExtendedBox("World", 2)
+console.log("Extended value: " + ext.getValue())
+console.log("Extended increment: " + ext.increment())
+console.log("Extended increment again: " + ext.increment())
+
+// === 多重デリゲーション ===
+console.log("=== Multiple delegation test ===")
+box SuperExtendedBox from ExtendedBox {
+    init { suffix }
+    
+    pack(val, mult, suf) {
+        from ExtendedBox.pack(val, mult)
+        me.suffix = suf
+    }
+    
+    override getValue() {
+        local parentValue
+        parentValue = from ExtendedBox.getValue()
+        return parentValue + me.suffix
+    }
+}
+
+local super
+super = new SuperExtendedBox("Chain", 3, "!!!")
+console.log("Super value: " + super.getValue())
+console.log("Super increment: " + super.increment())

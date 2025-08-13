@@ -1,0 +1,14 @@
+
+// シンプルなコンストラクタテスト
+box TestBox {
+    init { value }
+    
+    constructor() {
+        me.value = "default"
+    }
+}
+
+local t
+t = new TestBox()
+print("Value: " + t.value)
+

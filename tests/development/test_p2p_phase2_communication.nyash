@@ -1,0 +1,76 @@
+// 🌐 P2PBox Phase 2: P2P通信テスト
+// 目標: 同プロセス内P2P通信・ハンドラ登録・メッセージ送受信確認
+
+local console
+console = new ConsoleBox()
+console.log("🌐 Phase 2: P2P通信テスト開始")
+
+// 2.1 同プロセス内P2P通信セットアップ
+console.log("\n🔗 2.1 同プロセス内P2P通信セットアップ")
+
+local node_a
+local node_b
+node_a = new P2PBox("alice", "inprocess")
+node_b = new P2PBox("bob", "inprocess")
+
+console.log("✅ ノード作成完了")
+console.log("Alice ID: " + node_a.getNodeId())
+console.log("Bob ID: " + node_b.getNodeId())
+
+// 2.2 ハンドラ登録・メッセージ受信テスト
+console.log("\n📥 2.2 メッセージハンドラ登録テスト")
+
+// 受信カウンタ初期化
+local receivedCount
+receivedCount = 0
+
+// Bobにメッセージハンドラ登録（chatメッセージ用）
+console.log("Bob用chatハンドラ登録中...")
+
+// 注意: ハンドラ登録のAPIを確認する必要あり
+// 想定されるAPI: node_b.on("chat", handler_function)
+// しかし、現在の実装でfunction型がサポートされているかチェックが必要
+
+console.log("⚠️ ハンドラ登録API確認が必要")
+console.log("予想API: node_b.on(\"chat\", handler_function)")
+
+// 2.3 基本メッセージ送信テスト（ハンドラなし版）
+console.log("\n📤 2.3 基本メッセージ送信テスト")
+
+local msg
+msg = new IntentBox("greeting", "Hello from Alice!")
+
+console.log("送信メッセージ作成:")
+console.log("Intent名: " + msg.getName())
+console.log("Payload: " + msg.getPayload())
+
+// メッセージ送信（現在のsend APIを確認）
+console.log("\n📡 メッセージ送信実行...")
+
+// 送信API確認が必要
+console.log("⚠️ 送信API確認が必要")
+console.log("予想API: node_a.send(\"bob\", msg)")
+
+// 2.4 到達可能性テスト
+console.log("\n🔍 2.4 ノード到達可能性テスト")
+
+// 到達可能性チェック（isReachableメソッドがあるかテスト）
+console.log("Alice → Bob 到達可能性チェック...")
+console.log("⚠️ isReachableAPI確認が必要")
+console.log("予想API: node_a.isReachable(\"bob\")")
+
+// 2.5 Phase 2テスト結果
+console.log("\n📊 Phase 2テスト結果統計")
+console.log("✅ ノード作成: 成功")
+console.log("✅ IntentBox作成: 成功")
+console.log("⚠️ ハンドラ登録: API確認要")
+console.log("⚠️ メッセージ送信: API確認要")
+console.log("⚠️ 到達可能性チェック: API確認要")
+
+console.log("\n🎯 Phase 2次のステップ:")
+console.log("1. P2PBox.on() ハンドラ登録API確認")
+console.log("2. P2PBox.send() メッセージ送信API確認")
+console.log("3. P2PBox.isReachable() 到達可能性API確認")
+console.log("4. Function型サポートの確認")
+
+console.log("\n🚧 Phase 2: API確認段階完了")

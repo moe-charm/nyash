@@ -928,6 +928,7 @@ mod tests {
                 }
             ],
             is_static: false,  // 通常のメソッド
+            is_override: false,
             span: Span::unknown(),
         });
         

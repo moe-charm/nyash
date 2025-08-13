@@ -1,0 +1,92 @@
+Implementation Plan: Finalization Policy Integration (fini)
+
+Last updated: 2025-08-13
+
+Goals
+- Default: Auto-finalize strong fields in init declaration order.
+- Custom: User-defined fini() can implement any order and additional cleanup.
+- Remainder: Auto-cascade finalization for strong fields not handled in user fini().
+- Prohibit: Calling fini() on weak fields (non-owning).
+- Guard: Forbid any use after finalized (errors), idempotent fini().
+
+Touched code (planned)
+- src/instance.rs (core: InstanceBox state + fini strengthen)
+- src/interpreter/objects.rs (construct InstanceBox with needed metadata)
+- src/interpreter/expressions.rs (method/field guards, weak-fini runtime check)
+- src/interpreter/statements.rs (assignment guards)
+- parser (optional later: static detection of weak-fini inside user fini())
+
+1) InstanceBox: add metadata and strengthen fini()
+- Add fields:
+  - init_field_order: Vec<String>
+    Purpose: deterministic auto-cascade order (includes inherited fields).
+  - weak_fields_union: std::collections::HashSet<String>
+    Purpose: fast check to skip weak fields in auto-cascade (includes parents’ weak fields).
+  - in_finalization: bool
+    Purpose: prevent re-entrancy; together with existing finalized flag.
+- Constructor changes:
+  - InstanceBox::new(class_name: String, all_fields: Vec<String>, methods: HashMap<String, ASTNode>,
+                     weak_fields_union: HashSet<String>)
+    Set init_field_order = all_fields; weak_fields_union = provided; in_finalization = false.
+- Strengthen InstanceBox::fini():
+  - if finalized => return Ok(()) (idempotent)
+  - set in_finalization = true
+  - (User-defined fini() body is executed by interpreter before calling this method; keep that flow)
+  - Auto-cascade: for each field in init_field_order
+      - if field in weak_fields_union => skip
+      - get current field value; if InstanceBox => child.fini() (idempotent)
+  - Clear all fields; set finalized = true; set in_finalization = false; return Ok(())
+
+2) objects.rs: pass metadata at construction time
+- Location: src/interpreter/objects.rs, execute_new() / resolve_inheritance()
+- Already computes `all_fields` via resolve_inheritance(). Use as init_field_order.
+- Implement helper union_weak_fields(box_decl: &BoxDeclaration) -> HashSet<String>
+  - Traverse current box_decl and recursively parents (extends) to collect weak fields.
+- Call: InstanceBox::new(actual_class_name, all_fields, all_methods, weak_fields_union)
+
+3) Runtime guards and weak-fini prohibition (expressions.rs/statements.rs)
+- Method calls (src/interpreter/expressions.rs::execute_method_call)
+  - If target is InstanceBox and method != "fini":
+    - if instance.is_finalized() => error: "Instance was finalized; further use is prohibited"
+  - If method == "fini":
+    - If object AST is FieldAccess/ThisField/MeField, resolve owner + field name; if field is weak (by box_decl.weak_fields) => error: "Cannot finalize weak field '<name>' (non-owning reference)"
+    - Else proceed with current special fini handling (user body execution) then call instance.fini()
+- Field access (execute_field_access)
+  - If owner InstanceBox is finalized => error as above
+- Assignments (src/interpreter/statements.rs)
+  - For FieldAccess/ThisField/MeField targets: if owner InstanceBox is finalized => error
+
+4) Parser (optional, later)
+- Static detection inside user-defined fini() body:
+  - Walk AST; detect `me.<weak_field>.fini()` and emit build-time error.
+- Runtime check remains as fallback for dynamic flows.
+
+Important decisions
+- Do not track "handled-by-user-fini" set. Rely on idempotent child.fini(). This keeps implementation simple and safe.
+- Ensure weak_fields_union includes parents to avoid accidentally finalizing weak fields inherited from parents.
+
+Tests (to add/verify)
+- Reassignment: old value’s fini() is called exactly once; Thing.fini counter.
+- Weak prohibition: `me.weakField.fini()` raises error (runtime; later build-time).
+- Custom order: User fini closes r3->r2, auto cascade closes remaining r1.
+- Finalized guard: method call / field access / assignment after fini => error.
+- Cycles: Parent<->Child (Child weak parent); Parent.fini() => Child’s parent becomes null on access (lazy nilification), no leaks.
+
+Rollout order
+1. InstanceBox fields + fini strengthen (core).
+2. Interpreter guards (method/field/assignment).
+3. Weak-fini runtime prohibition via AST check.
+4. Tests and sample updates (docs/chatgpt5/finalization_examples.txt cases).
+5. Optional: parser build-time detection.
+
+Risks and mitigations
+- Re-entrancy: guarded by in_finalization + idempotent finalized flag.
+- Performance: auto-cascade per field; usually shallow; child.fini idempotent avoids repeated heavy work.
+- Compatibility: InstanceBox::new signature change; update all call sites (objects.rs, core.rs statics/global creations).
+- UX: Clear error messages as documented in docs/chatgpt5/finalization_errors.txt.
+
+Future enhancements (optional)
+- Attribute `@no_auto_finalize` to exclude fields from auto-cascade when fully managed in user fini().
+- FinalizationContext injected into user fini() for safe, limited operations.
+- Debug mode: eager weak invalidation at finalize time for visualization.
+

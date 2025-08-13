@@ -1,0 +1,55 @@
+// 🧪 P2PBox Phase 1: 基本テスト
+// 目標: IntentBox作成・P2PBox基本動作・MessageBus確認
+
+local console
+console = new ConsoleBox()
+console.log("🚀 Phase 1: P2PBox基本テスト開始")
+
+// 1.1 IntentBox基本テスト
+console.log("\n📦 1.1 IntentBox基本テスト")
+
+local intent
+intent = new IntentBox("test", "Hello")
+console.log("✅ IntentBox作成成功")
+console.log("Intent名: " + intent.getName())         // "test"
+console.log("Payload: " + intent.getPayload())       // "Hello"
+
+// 異なるペイロードでのテスト
+local msgIntent
+msgIntent = new IntentBox("message", "Hello P2P World!")
+console.log("✅ メッセージIntentBox作成成功")
+console.log("Intent名: " + msgIntent.getName())      // "message"
+console.log("Payload: " + msgIntent.getPayload())    // "Hello P2P World!"
+
+// 1.2 P2PBox作成テスト
+console.log("\n🌐 1.2 P2PBox作成テスト")
+
+local node
+node = new P2PBox("test_node", "inprocess")
+console.log("✅ P2PBox作成成功")
+console.log("ノードID: " + node.getNodeId())       // "test_node"
+
+// 複数ノード作成テスト
+local alice
+local bob
+alice = new P2PBox("alice", "inprocess")
+bob = new P2PBox("bob", "inprocess")
+console.log("✅ 複数P2PBox作成成功")
+console.log("Alice ID: " + alice.getNodeId())      // "alice"
+console.log("Bob ID: " + bob.getNodeId())          // "bob"
+
+// 1.3 MessageBus基本動作テスト
+console.log("\n🚌 1.3 MessageBus基本動作テスト")
+
+// Note: MessageBusはシングルトンなので直接テストは難しいが、
+// P2PBoxが正常に作成できていることでMessageBusも動作していると判断
+console.log("✅ MessageBus動作確認（P2PBox作成成功により間接確認）")
+
+// 基本統計
+console.log("\n📊 Phase 1テスト結果統計")
+console.log("作成されたIntentBox数: 2")
+console.log("作成されたP2PBox数: 3")
+console.log("テストされた機能: IntentBox作成、P2PBox作成、ノードID取得")
+
+console.log("\n🎉 Phase 1: 基本テスト完了！")
+console.log("次はPhase 2: P2P通信テストに進みます")

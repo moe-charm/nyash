@@ -1,0 +1,18 @@
+// コンストラクタデバッグ
+box Test {
+    init { value }
+    
+    Test(v) {
+        me.value = v
+        print("Constructor called with: " + v)
+    }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+local t
+print("Creating Test...")
+t = new Test("hello")
+print("getValue: " + t.getValue())

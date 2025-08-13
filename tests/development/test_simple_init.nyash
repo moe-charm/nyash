@@ -1,0 +1,16 @@
+// シンプルなinit構文テスト
+box Test {
+    init { value }
+    
+    init(testValue) {
+        me.value = testValue
+    }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+local t
+t = new Test("Hello init!")
+print(t.getValue())

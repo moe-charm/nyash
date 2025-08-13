@@ -469,19 +469,20 @@ mod tests {
     fn test_if_statement_building() {
         let mut builder = MirBuilder::new();
         
-        let ast = ASTNode::IfStatement {
+        // Adapt test to current AST: If with statement bodies
+        let ast = ASTNode::If {
             condition: Box::new(ASTNode::Literal {
-                value: LiteralValue::Boolean(true),
+                value: LiteralValue::Bool(true),
                 span: Span::unknown(),
             }),
-            then_branch: Box::new(ASTNode::Literal {
+            then_body: vec![ASTNode::Literal {
                 value: LiteralValue::Integer(1),
                 span: Span::unknown(),
-            }),
-            else_branch: Some(Box::new(ASTNode::Literal {
+            }],
+            else_body: Some(vec![ASTNode::Literal {
                 value: LiteralValue::Integer(2),
                 span: Span::unknown(),
-            })),
+            }]),
             span: Span::unknown(),
         };
         

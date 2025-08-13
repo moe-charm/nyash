@@ -1,0 +1,19 @@
+
+// 暗黙オーバーライド禁止のテスト
+box Parent {
+    init { }
+    
+    method() {
+        return "Parent method"
+    }
+}
+
+box Child from Parent {
+    init { }
+    
+    // overrideなしで同名メソッド定義（エラーになるはず）
+    method() {
+        return "Child method"
+    }
+}
+

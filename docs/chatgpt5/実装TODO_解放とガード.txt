@@ -1,0 +1,31 @@
+Implementation TODOs: Finalization & Guards
+
+最終更新: 2025-08-13
+
+Scope: src/instance.rs, src/interpreter/{core,expressions,statements}.rs, parser
+
+1) InstanceBox::fini() の強化（src/instance.rs）
+- 状態機械: in_finalization（再入防止）→ finalized。
+- 再帰: init 強参照フィールドを走査し、未処理の子 Instance に対して finalize。weak は対象外。
+- クリア: 全フィールドクリア、finalized = true。
+- 無害化: 二重呼び出しは no-op。
+
+2) 使用禁止ガード（実行時）
+- expressions.rs: メソッド呼び出し前に instance.is_finalized() をチェック→エラー。
+- statements.rs: フィールド代入/アクセス時にチェック→エラー。
+- core.rs: 必要なら共通ヘルパーで一元化。
+
+3) weak への fini 禁止（静的検出＋実行時フォールバック）
+- parser: AST 上で fini() 呼び出しを検出し、対象が weak フィールドならビルドエラーに。
+- 実行時: 保険として expressions.rs で weak フィールド経由の fini 呼び出しを拒否。
+
+4) 例外方針とログ
+- ユーザー fini() で例外→自動カスケードは続行。最後に集約報告。
+- ログレベル: デバッグ時のみ詳細（upgrade失敗、already finalized等）。
+
+5) Playground 可視化（別PR）
+- fini 回数、Finalizing→Finalized遷移、weak upgrade失敗数をUI表示。
+
+6) ドキュメント反映（実装後）
+- LANGUAGE_GUIDE / reference へ最終ルール・エラーメッセージ・サンプルを移植。
+

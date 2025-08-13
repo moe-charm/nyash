@@ -1,0 +1,24 @@
+// Simple test for built-in Box inheritance
+box MyMath from MathBox {
+    override sin(x) {
+        local result
+        result = from MathBox.sin(x)
+        print("Called sin(" + x.toString() + ") = " + result.toString())
+        return result
+    }
+}
+
+// Main test
+local console
+console = new ConsoleBox()
+
+console.log("Testing built-in MathBox inheritance...")
+
+local math
+math = new MyMath()
+
+local result
+result = math.sin(1.5708)  // π/2 ≈ 1.5708
+console.log("Result: " + result.toString())
+
+console.log("Test complete!")

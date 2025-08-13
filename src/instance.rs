@@ -34,14 +34,24 @@ pub struct InstanceBox {
     
     /// 解放済みフラグ
     finalized: Arc<Mutex<bool>>,
+    
+    /// 🔥 Phase 2: finiシステム完全実装 - ChatGPT5設計
+    /// init宣言順序（決定的カスケード用）
+    init_field_order: Vec<String>,
+    
+    /// weak フィールド高速判定用
+    weak_fields_union: std::collections::HashSet<String>,
+    
+    /// 解放中フラグ（再入防止）
+    in_finalization: Arc<Mutex<bool>>,
 }
 
 impl InstanceBox {
     pub fn new(class_name: String, fields: Vec<String>, methods: HashMap<String, ASTNode>) -> Self {
         // フィールドをVoidBoxで初期化
         let mut field_map = HashMap::new();
-        for field in fields {
-            field_map.insert(field, Box::new(VoidBox::new()) as Box<dyn NyashBox>);
+        for field in &fields {
+            field_map.insert(field.clone(), Box::new(VoidBox::new()) as Box<dyn NyashBox>);
         }
         
         Self {
@@ -51,6 +61,39 @@ impl InstanceBox {
             methods: Arc::new(methods),
             base: BoxBase::new(),
             finalized: Arc::new(Mutex::new(false)),
+            init_field_order: fields.clone(), // 🔥 Basic field order for backwards compatibility
+            weak_fields_union: std::collections::HashSet::new(), // 🔥 Empty for backwards compatibility
+            in_finalization: Arc::new(Mutex::new(false)), // 🔥 Initialize finalization guard
+        }
+    }
+    
+    /// 🔥 Enhanced constructor with complete fini system support
+    pub fn new_with_box_info(
+        class_name: String, 
+        fields: Vec<String>, 
+        methods: HashMap<String, ASTNode>,
+        init_field_order: Vec<String>,
+        weak_fields: Vec<String>
+    ) -> Self {
+        // フィールドをVoidBoxで初期化
+        let mut field_map = HashMap::new();
+        for field in &fields {
+            field_map.insert(field.clone(), Box::new(VoidBox::new()) as Box<dyn NyashBox>);
+        }
+        
+        // Weak fields をHashSetに変換（高速判定用）
+        let weak_fields_union: std::collections::HashSet<String> = weak_fields.into_iter().collect();
+        
+        Self {
+            class_name,
+            fields: Arc::new(Mutex::new(field_map)),
+            fields_ng: Arc::new(Mutex::new(HashMap::new())),
+            methods: Arc::new(methods),
+            base: BoxBase::new(),
+            finalized: Arc::new(Mutex::new(false)),
+            init_field_order, // 🔥 決定的カスケード順序
+            weak_fields_union, // 🔥 高速weak判定
+            in_finalization: Arc::new(Mutex::new(false)), // 🔥 再入防止
         }
     }
     
@@ -290,19 +333,75 @@ impl InstanceBox {
         Ok(())
     }
     
-    /// fini()メソッド - インスタンスの解放
+    /// 🔥 Enhanced fini()メソッド - ChatGPT5設計による完全実装
     pub fn fini(&self) -> Result<(), String> {
+        // 1) finalized チェック（idempotent）
         let mut finalized = self.finalized.lock().unwrap();
         if *finalized {
             // 既に解放済みなら何もしない
             return Ok(());
         }
         
-        *finalized = true;
+        // 2) in_finalization = true（再入防止）
+        let mut in_finalization = self.in_finalization.lock().unwrap();
+        if *in_finalization {
+            return Err("Circular finalization detected - fini() called recursively".to_string());
+        }
+        *in_finalization = true;
         
-        // フィールドをクリア
+        // 3) TODO: ユーザー定義fini()実行（インタープリター側で実装予定）
+        // このメソッドは低レベルなfini処理なので、高レベルなユーザー定義fini()は
+        // インタープリター側で先に呼び出される想定
+        
+        // 4) 自動カスケード: init_field_order の強参照フィールドに child.fini()
+        self.cascade_finalize_fields()?;
+        
+        // 5) 全フィールドクリア + finalized = true
         let mut fields = self.fields.lock().unwrap();
         fields.clear();
+        let mut fields_ng = self.fields_ng.lock().unwrap();
+        fields_ng.clear();
+        
+        *finalized = true;
+        *in_finalization = false; // 再入フラグをクリア
+        
+        eprintln!("🔥 fini(): Instance {} (ID: {}) finalized", self.class_name, self.base.id);
+        Ok(())
+    }
+    
+    /// 🔥 自動カスケード解放 - init宣言順でフィールドをfini
+    fn cascade_finalize_fields(&self) -> Result<(), String> {
+        let fields_ng = self.fields_ng.lock().unwrap();
+        
+        // init_field_order の逆順でfiniを実行（LIFO - Last In First Out）
+        for field_name in self.init_field_order.iter().rev() {
+            // weak フィールドはスキップ
+            if self.weak_fields_union.contains(field_name) {
+                eprintln!("🔥 fini(): Skipping weak field '{}' (non-owning reference)", field_name);
+                continue;
+            }
+            
+            // フィールドの値を取得してfini呼び出し
+            if let Some(field_value) = fields_ng.get(field_name) {
+                match field_value {
+                    crate::value::NyashValue::Box(arc_box) => {
+                        if let Ok(inner_box) = arc_box.try_lock() {
+                            // InstanceBoxならfini()を呼び出し
+                            if let Some(instance) = inner_box.as_any().downcast_ref::<InstanceBox>() {
+                                eprintln!("🔥 fini(): Cascading finalization to field '{}'", field_name);
+                                if let Err(e) = instance.fini() {
+                                    eprintln!("🔥 fini(): Warning - failed to finalize field '{}': {}", field_name, e);
+                                    // エラーは警告として記録するが、続行する
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // non-Box値はfini不要
+                    }
+                }
+            }
+        }
         
         Ok(())
     }
@@ -310,6 +409,16 @@ impl InstanceBox {
     /// 解放済みかチェック
     pub fn is_finalized(&self) -> bool {
         *self.finalized.lock().unwrap()
+    }
+    
+    /// 🔥 解放中かチェック
+    pub fn is_in_finalization(&self) -> bool {
+        *self.in_finalization.lock().unwrap()
+    }
+    
+    /// 🔥 指定フィールドがweakかチェック
+    pub fn is_weak_field(&self, field_name: &str) -> bool {
+        self.weak_fields_union.contains(field_name)
     }
 }
 

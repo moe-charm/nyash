@@ -1,0 +1,27 @@
+// デリゲーション + pack構文テスト
+box User {
+    init { name, email }
+    
+    pack(userName, userEmail) {
+        me.name = userName
+        me.email = userEmail
+    }
+}
+
+box AdminUser from User {
+    init { permissions }
+    
+    pack(adminName, adminEmail, perms) {
+        from User.pack(adminName, adminEmail)
+        me.permissions = perms
+    }
+}
+
+local admin
+admin = new AdminUser("Bob", "bob@admin.com", "ALL")
+
+local console
+console = new ConsoleBox()
+console.log("Admin name: " + admin.name)
+console.log("Admin email: " + admin.email)
+console.log("Admin permissions: " + admin.permissions)

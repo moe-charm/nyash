@@ -650,11 +650,17 @@ impl NyashInterpreter {
         // 継承チェーンを解決してフィールドとメソッドを収集（init_fieldsも含む）
         let (all_fields, all_methods) = self.resolve_inheritance(&final_box_decl)?;
         
-        // インスタンスを作成
-        let instance = InstanceBox::new(
+        // 🔥 フィールド順序と weak フィールドを準備（finiシステム用）
+        let init_field_order = final_box_decl.init_fields.clone();
+        let weak_fields = final_box_decl.weak_fields.clone();
+        
+        // インスタンスを作成（Enhanced fini system対応）
+        let instance = InstanceBox::new_with_box_info(
             actual_class_name.clone(),
             all_fields,
-            all_methods
+            all_methods,
+            init_field_order,
+            weak_fields
         );
         
         let instance_box = Box::new(instance) as Box<dyn NyashBox>;

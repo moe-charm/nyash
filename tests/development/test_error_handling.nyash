@@ -1,0 +1,46 @@
+// エラーハンドリング・型安全性テスト
+local console
+console = new ConsoleBox()
+
+console.log("=== Error Handling Tests ===")
+
+// 1. ゼロ除算エラー
+console.log("Testing division by zero...")
+local math
+math = new MathBox()
+local result
+result = math.divide(10, 0)
+console.log("Division result: " + result.toString())
+
+// 2. 存在しないメソッド呼び出し
+console.log("Testing undefined method...")
+local arr
+arr = new ArrayBox()
+// arr.nonexistentMethod()  // これはコメントアウト
+
+// 3. 存在しないフィールドアクセス
+console.log("Testing undefined field...")
+// console.log(arr.nonexistentField)  // これもコメントアウト
+
+// 4. 型変換エラー
+console.log("Testing type conversions...")
+local num
+num = 42
+local float  
+float = new FloatBox(3.14)
+
+// 数値 + 浮動小数点
+console.log("Number + Float: " + (num + float.value))
+
+// 5. ArrayBox操作
+console.log("Testing ArrayBox operations...")
+arr.push("item1")
+arr.push("item2")
+console.log("Array length: " + arr.length())
+console.log("Array item[0]: " + arr.get(0))
+
+// 範囲外アクセス
+console.log("Testing array bounds...")
+local outOfBounds
+outOfBounds = arr.get(999)
+console.log("Out of bounds result: " + outOfBounds.toString())

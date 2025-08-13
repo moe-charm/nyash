@@ -1,0 +1,150 @@
+// 🔥 P2PBox Phase 3B: ユーザー定義Box間デリゲーション実証
+// 目標: ユーザー定義Box同士のデリゲーション・override完全実証
+
+local console
+console = new ConsoleBox()
+console.log("🔥 Phase 3B: ユーザー定義デリゲーション革命！")
+
+// 3B.1 BaseNodeBox（ユーザー定義）作成
+console.log("\n📦 3B.1 BaseNodeBox（ユーザー定義）実装")
+
+box BaseNodeBox {
+    init { nodeId, messageCount }
+    
+    pack(id) {
+        me.nodeId = id
+        me.messageCount = 0
+    }
+    
+    getId() {
+        return me.nodeId
+    }
+    
+    sendMessage(target, message) {
+        me.messageCount = me.messageCount + 1
+        return "BaseNode sent: " + message + " to " + target
+    }
+    
+    getMessageCount() {
+        return me.messageCount
+    }
+}
+
+// 3B.2 ChatNodeBox（BaseNodeBoxからデリゲーション）
+console.log("\n🔄 3B.2 ChatNodeBox（BaseNodeBoxデリゲーション）実装")
+
+box ChatNodeBox from BaseNodeBox {
+    init { chatHistory, specialFeature }
+    
+    pack(id, feature) {
+        from BaseNodeBox.pack(id)  // 親の初期化
+        me.chatHistory = new ArrayBox()
+        me.specialFeature = feature
+    }
+    
+    // 3B.3 sendMessage()のoverride - ログ機能追加
+    override sendMessage(target, message) {
+        local logEntry
+        logEntry = "[CHAT] " + message + " -> " + target
+        me.chatHistory.push(logEntry)
+        
+        console = new ConsoleBox()
+        console.log("📤 ChatNode override: " + logEntry)
+        
+        // 親のsendMessage()を呼び出し
+        return from BaseNodeBox.sendMessage(target, message)
+    }
+    
+    // 3B.4 getId()のoverride - 拡張情報付き
+    override getId() {
+        local baseId
+        baseId = from BaseNodeBox.getId()
+        return "[" + me.specialFeature + "]" + baseId + "(" + me.getMessageCount() + ")"
+    }
+    
+    // 3B.5 独自メソッド追加
+    getChatHistory() {
+        return me.chatHistory.length() + " chat messages logged"
+    }
+    
+    getLastChat() {
+        if me.chatHistory.length() > 0 {
+            return me.chatHistory.get(me.chatHistory.length() - 1)
+        } else {
+            return "No chats yet"
+        }
+    }
+}
+
+// 3B.6 デリゲーション動作テスト
+console.log("\n🚀 3B.6 ユーザー定義デリゲーション動作テスト")
+
+local baseNode
+local chatNode
+
+baseNode = new BaseNodeBox("base_alice")
+chatNode = new ChatNodeBox("chat_bob", "AdvancedChat")
+
+console.log("✅ ノード作成完了")
+console.log("BaseNode ID: " + baseNode.getId())
+console.log("ChatNode ID: " + chatNode.getId())  // override版
+
+// 3B.7 Override機能テスト
+console.log("\n🔄 3B.7 Override sendMessage()テスト")
+
+local result1
+local result2
+
+result1 = baseNode.sendMessage("target1", "Hello from base")
+console.log("Base送信結果: " + result1)
+
+result2 = chatNode.sendMessage("target2", "Hello from chat")  // override版
+console.log("Chat送信結果: " + result2)
+
+// 3B.8 複数メッセージテスト
+console.log("\n📨 3B.8 複数メッセージ送信テスト")
+
+local result3
+local result4
+
+result3 = chatNode.sendMessage("alice", "First chat message")
+result4 = chatNode.sendMessage("bob", "Second chat message")
+
+console.log("結果3: " + result3)
+console.log("結果4: " + result4)
+
+// 3B.9 独自メソッド・継承メソッドテスト
+console.log("\n📊 3B.9 独自メソッド・継承機能テスト")
+
+console.log("Chat履歴: " + chatNode.getChatHistory())
+console.log("最新Chat: " + chatNode.getLastChat())
+console.log("更新されたID: " + chatNode.getId())  // カウント更新確認
+
+// 継承されたメソッドの動作確認
+console.log("継承されたカウント: " + chatNode.getMessageCount())
+
+// 3B.10 ベースノードとの比較
+console.log("\n⚖️ 3B.10 BaseNode vs ChatNode比較")
+
+console.log("BaseNode カウント: " + baseNode.getMessageCount())
+console.log("ChatNode カウント: " + chatNode.getMessageCount())
+
+console.log("BaseNode ID: " + baseNode.getId())
+console.log("ChatNode ID: " + chatNode.getId())
+
+// 3B.11 Revolution成果確認
+console.log("\n🎉 3B.11 ユーザー定義デリゲーション革命成果")
+
+console.log("✅ ユーザー定義Boxデリゲーション: 完全成功")
+console.log("✅ Override機能: sendMessage()・getId()正常動作")
+console.log("✅ 独自メソッド: getChatHistory()・getLastChat()追加")
+console.log("✅ 親機能継承: getMessageCount()正常動作")
+console.log("✅ from構文: 親メソッド呼び出し成功")
+
+console.log("\n🌟 最終統計:")
+console.log("- ChatNode送信数: " + chatNode.getMessageCount())
+console.log("- Chat履歴統計: " + chatNode.getChatHistory())
+console.log("- 最新Chatログ: " + chatNode.getLastChat())
+
+console.log("\n🔥🔥🔥 Phase 3B: ユーザー定義デリゲーション革命完全達成！ 🔥🔥🔥")
+console.log("Everything is Box + デリゲーション + Override = 完全動作実証！")

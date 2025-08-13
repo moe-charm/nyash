@@ -1,5 +1,5 @@
 //! Tests for NyashBox trait implementations
-use crate::box_trait::{NyashBox, StringBox, IntegerBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoxCore};
 use crate::boxes::{ArrayBox, BufferBox, JSONBox, NyashFutureBox, NyashStreamBox, NyashResultBox};
 
 #[cfg(test)]
@@ -111,7 +111,7 @@ mod tests {
         let success_result = NyashResultBox::new_ok(Box::new(StringBox::new("success")));
         
         assert_eq!(success_result.type_name(), "NyashResultBox");
-        assert!(success_result.is_ok());
+        assert!(success_result.is_ok_bool());
         assert!(!success_result.is_err());
         
         let string_repr = success_result.to_string_box();
@@ -119,7 +119,7 @@ mod tests {
         
         // Test error case
         let error_result = NyashResultBox::new_err(Box::new(StringBox::new("error")));
-        assert!(!error_result.is_ok());
+        assert!(!error_result.is_ok_bool());
         assert!(error_result.is_err());
         
         let error_string = error_result.to_string_box();

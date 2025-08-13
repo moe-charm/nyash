@@ -1,0 +1,23 @@
+// シンプルなfrom構文テスト
+box Parent {
+    init { value }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+box Child from Parent {
+    init { extra }
+    
+    test() {
+        // 親のフィールドに直接アクセス
+        me.value = "Set from Child"
+        me.extra = " (extra)"
+        return me.getValue() + me.extra
+    }
+}
+
+local c
+c = new Child()
+print("Result: " + c.test())
