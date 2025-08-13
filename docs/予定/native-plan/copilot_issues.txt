@@ -194,7 +194,30 @@ References:
 
 ------------------------------------------------------------
 
-11. Phase 8: JIT (baseline) planning
+11. Phase 8: MIR→WASM codegen (browser/wasmtime; sandboxed; Rust runtime free)
+
+Summary:
+- MIR から素の WebAssembly を生成し、ブラウザ/wasmtime（WASI）でサンドボックス実行する。
+- Rust はコンパイラ本体のみ。実行は純WASM＋ホストimport（env.print など）。
+
+Scope/Tasks:
+- ABI/Imports/Exports 定義（exports: main/memory、imports: env.print(i32) 等の最小）
+- 線形メモリと簡易ヒープ（bump/自由リスト）
+- 命令カバレッジ（段階導入）: 算術/比較/分岐/loop/return/print、RefNew/RefSet/RefGet（Phase 6 整合）、Weak/Barrier はダミー
+
+Acceptance Criteria:
+- wasmtime 実行で戻り値/print が期待通り（PoC1–2）
+- Ref 系がメモリ上で正しく動作（PoC2）
+- Weak/Barrier のダミー実装を含むWASMが生成・実行（PoC3）
+- CLI `--backend wasm` は未実装でもよいが、実装する場合は明瞭にエラーメッセージ/誘導
+
+References:
+- docs/予定/native-plan/README.md（Phase 8 節）
+- docs/説明書/wasm/*（ユーザー向けメモ）
+
+------------------------------------------------------------
+
+12. Phase 9: JIT (baseline) planning
 
 Summary:
 - baseline JIT の設計と MIR→JIT の変換方針固め。
@@ -208,20 +231,20 @@ Acceptance Criteria:
 
 ------------------------------------------------------------
 
-12. Phase 9: AOT/WASM exploration (scaffolding only)
+13. Phase 10: AOT exploration (scaffolding only)
 
 Summary:
-- AOT/WASM の下ごしらえ（ビルド配線と最小 PoC）。
+- AOT の下ごしらえ（ビルド配線と最小 PoC）。
 
 Scope/Tasks:
-- Cargo features/targets 整備、最小 wasm-bindgen 配線
+- Cargo features/targets 整備（将来のAOT配線）
 
 Acceptance Criteria:
-- `wasm` ターゲットでのビルド雛形が通る
+- AOT 雛形/設計が通る（ビルド/テスト スケルトン）
 
 ------------------------------------------------------------
 
-13. Phase 10: Packaging/CI polish
+14. Packaging/CI polish
 
 Summary:
 - Windows/Linux の配布パッケージ化と CI 整備。
@@ -232,4 +255,3 @@ Scope/Tasks:
 
 Acceptance Criteria:
 - リリースアーティファクトが自動生成される
-
