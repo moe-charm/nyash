@@ -1,0 +1,4 @@
+loop(false) {
+    print("This should not execute")
+}
+print("Loop completed")

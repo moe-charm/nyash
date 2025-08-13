@@ -1,0 +1,6 @@
+try {
+    print("In try block")
+    throw "Test exception"
+} catch (Exception e) {
+    print("Caught exception")
+}
