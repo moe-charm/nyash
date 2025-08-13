@@ -23,14 +23,14 @@ jobs:
       - name: Download NekoCode
         run: |
           mkdir -p bin
-          curl -L https://github.com/moe-charm/nekocode-rust/raw/main/bin/nekocode_ai -o bin/nekocode_ai
-          chmod +x bin/nekocode_ai
+          curl -L https://github.com/moe-charm/nekocode-rust/raw/main/releases/nekocode-rust -o bin/nekocode-rust
+          chmod +x bin/nekocode-rust
 
       - name: Analyze Current PR
         id: analyze-pr
         run: |
           echo "🔍 Analyzing PR changes..."
-          ./bin/nekocode_ai analyze src/ --stats-only > pr_analysis.txt 2>&1 || true
+          ./bin/nekocode-rust analyze src/ --stats-only > pr_analysis.txt 2>&1 || true
           
           echo "📊 Analysis Results:"
           cat pr_analysis.txt
