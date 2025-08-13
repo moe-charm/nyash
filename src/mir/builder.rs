@@ -175,8 +175,21 @@ impl MirBuilder {
                 self.build_throw_statement(*expression.clone())
             },
             
+            ASTNode::Return { value, .. } => {
+                self.build_return_statement(value.clone())
+            },
+            
             ASTNode::Local { variables, initial_values, .. } => {
                 self.build_local_statement(variables.clone(), initial_values.clone())
+            },
+            
+            // Handle static box Main declarations
+            ASTNode::BoxDeclaration { name, methods, is_static, .. } => {
+                if is_static && name == "Main" {
+                    self.build_static_main_box(methods.clone())
+                } else {
+                    Err(format!("BoxDeclaration support is currently limited to static box Main"))
+                }
             },
             
             _ => {
@@ -599,6 +612,49 @@ impl MirBuilder {
             }).unwrap();
             void_val
         }))
+    }
+    
+    /// Build return statement
+    fn build_return_statement(&mut self, value: Option<Box<ASTNode>>) -> Result<ValueId, String> {
+        let return_value = if let Some(expr) = value {
+            self.build_expression(*expr)?
+        } else {
+            // Return void if no value specified
+            let void_dst = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const {
+                dst: void_dst,
+                value: ConstValue::Void,
+            })?;
+            void_dst
+        };
+        
+        // Emit return instruction
+        self.emit_instruction(MirInstruction::Return {
+            value: Some(return_value),
+        })?;
+        
+        Ok(return_value)
+    }
+    
+    /// Build static box Main - extracts main() method body and converts to Program
+    fn build_static_main_box(&mut self, methods: std::collections::HashMap<String, ASTNode>) -> Result<ValueId, String> {
+        // Look for the main() method
+        if let Some(main_method) = methods.get("main") {
+            if let ASTNode::FunctionDeclaration { body, .. } = main_method {
+                // Convert the method body to a Program AST node and lower it
+                let program_ast = ASTNode::Program {
+                    statements: body.clone(),
+                    span: crate::ast::Span::unknown(),
+                };
+                
+                // Use existing Program lowering logic
+                self.build_expression(program_ast)
+            } else {
+                Err("main method in static box Main is not a FunctionDeclaration".to_string())
+            }
+        } else {
+            Err("static box Main must contain a main() method".to_string())
+        }
     }
     
     /// Start a new basic block

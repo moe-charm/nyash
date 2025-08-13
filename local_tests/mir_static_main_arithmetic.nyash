@@ -1,0 +1,12 @@
+// Test case for static Main arithmetic in MIR
+static box Main {
+    init { }
+    
+    main() {
+        local a, b, result
+        a = 10
+        b = 32
+        result = a + b
+        return result
+    }
+}

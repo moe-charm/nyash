@@ -1,0 +1,13 @@
+// MIR test with static main pattern - simple loop without field access
+static box Main {
+    init { counter, result }
+    
+    main() {
+        local temp
+        temp = 0
+        loop(temp < 3) {
+            temp = temp + 1
+        }
+        return temp
+    }
+}
