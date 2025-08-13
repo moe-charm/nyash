@@ -30,6 +30,19 @@ dist/
 /target/
 Cargo.lock
 
+# 🔧 Rust開発用ディレクトリ（Git追跡除外）
+nyash-rust/
+
+# 🔧 LaTeX生成ファイル（Git追跡除外）
+*.aux
+*.log
+*.out
+*.pdf
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
 # 開発用秘密フォルダ（完全除外）
 /development/
 
