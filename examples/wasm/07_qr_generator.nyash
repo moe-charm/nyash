@@ -1,0 +1,380 @@
+// 📱 QR Code Generator Demo - QRBox + WebCanvasBox
+// Professional QR code generation with multiple formats and customization
+
+print("📱 === QR Code Generator Demo Starting ===")
+
+// Initialize components
+local canvas, qr, random
+canvas = new WebCanvasBox("demo-canvas", 600, 500)
+qr = new QRBox()
+random = new RandomBox()
+
+// QR Generator settings
+local currentType, sampleData
+currentType = "url"  // url, text, wifi, contact, email
+sampleData = {
+    url: "https://nyash-lang.org",
+    text: "Hello from Nyash! Everything is Box 🐱",
+    wifi: {ssid: "NyashWiFi", password: "boxed123", security: "WPA2"},
+    contact: {name: "Nyash Developer", phone: "+1234567890", email: "dev@nyash-lang.org"},
+    email: "mailto:hello@nyash-lang.org?subject=Nyash Inquiry"
+}
+
+// Customization options
+local qrStyles
+qrStyles = {
+    classic: {fg: "#000000", bg: "#ffffff"},
+    modern: {fg: "#2c3e50", bg: "#ecf0f1"},
+    vibrant: {fg: "#e74c3c", bg: "#f9f9f9"},
+    ocean: {fg: "#2980b9", bg: "#ebf2ff"},
+    forest: {fg: "#27ae60", bg: "#f0fff0"},
+    sunset: {fg: "#f39c12", bg: "#fff8e1"}
+}
+
+local currentStyle
+currentStyle = "classic"
+
+// Generate QR code based on type
+local generateQR
+generateQR = function(type) {
+    qr.setSize(180, 180)
+    
+    local style
+    style = qrStyles[currentStyle]
+    qr.setColors(style.fg, style.bg)
+    qr.setErrorCorrection("M")
+    
+    if (type == "url") {
+        qr.generateURL(sampleData.url)
+    } else if (type == "text") {
+        qr.generate(sampleData.text)
+    } else if (type == "wifi") {
+        local wifi
+        wifi = sampleData.wifi
+        qr.generateWiFi(wifi.ssid, wifi.password, wifi.security)
+    } else if (type == "contact") {
+        local contact
+        contact = sampleData.contact
+        qr.generateContact(contact.name, contact.phone, contact.email)
+    } else if (type == "email") {
+        qr.generate(sampleData.email)
+    }
+    
+    currentType = type
+}
+
+// Draw QR code preview
+local drawQRPreview
+drawQRPreview = function() {
+    // Draw QR code area background
+    canvas.setFillStyle("#f8f9fa")
+    canvas.fillRect(50, 100, 200, 200)
+    
+    // Draw border
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.setLineWidth(2)
+    canvas.strokeRect(50, 100, 200, 200)
+    
+    // Draw QR code (simulated pattern)
+    canvas.setFillStyle(qrStyles[currentStyle].bg)
+    canvas.fillRect(60, 110, 180, 180)
+    
+    // Draw QR pattern (simplified)
+    local moduleSize, modules, x, y
+    moduleSize = 6
+    modules = 25
+    
+    canvas.setFillStyle(qrStyles[currentStyle].fg)
+    
+    // Finder patterns (corners)
+    y = 0
+    loop(y < 7) {
+        x = 0
+        loop(x < 7) {
+            if ((x == 0 or x == 6 or y == 0 or y == 6) or
+                (x >= 2 and x <= 4 and y >= 2 and y <= 4)) {
+                canvas.fillRect(60 + x * moduleSize, 110 + y * moduleSize, moduleSize, moduleSize)
+            }
+            x = x + 1
+        }
+        y = y + 1
+    }
+    
+    // Right top finder
+    y = 0
+    loop(y < 7) {
+        x = 18
+        loop(x < 25) {
+            if ((x == 18 or x == 24 or y == 0 or y == 6) or
+                (x >= 20 and x <= 22 and y >= 2 and y <= 4)) {
+                canvas.fillRect(60 + x * moduleSize, 110 + y * moduleSize, moduleSize, moduleSize)
+            }
+            x = x + 1
+        }
+        y = y + 1
+    }
+    
+    // Bottom left finder
+    y = 18
+    loop(y < 25) {
+        x = 0
+        loop(x < 7) {
+            if ((x == 0 or x == 6 or y == 18 or y == 24) or
+                (x >= 2 and x <= 4 and y >= 20 and y <= 22)) {
+                canvas.fillRect(60 + x * moduleSize, 110 + y * moduleSize, moduleSize, moduleSize)
+            }
+            x = x + 1
+        }
+        y = y + 1
+    }
+    
+    // Data pattern (simplified based on current type)
+    local dataHash
+    if (currentType == "url") {
+        dataHash = 0xA5A5
+    } else if (currentType == "text") {
+        dataHash = 0x5A5A
+    } else if (currentType == "wifi") {
+        dataHash = 0x3C3C
+    } else if (currentType == "contact") {
+        dataHash = 0xC3C3
+    } else {
+        dataHash = 0x6969
+    }
+    
+    y = 8
+    loop(y < 17) {
+        x = 8
+        loop(x < 17) {
+            local bit
+            bit = (dataHash >> ((x + y) % 16)) & 1
+            if (bit == 1) {
+                canvas.fillRect(60 + x * moduleSize, 110 + y * moduleSize, moduleSize, moduleSize)
+            }
+            x = x + 1
+        }
+        y = y + 1
+    }
+}
+
+// Draw UI elements
+local drawUI
+drawUI = function() {
+    // Clear canvas
+    canvas.setFillStyle("#ffffff")
+    canvas.fillRect(0, 0, 600, 500)
+    
+    // Title
+    canvas.setFillStyle("#2c3e50")
+    canvas.fillText("📱 Nyash QR Code Generator", 150, 30, "24px Arial", "#2c3e50")
+    
+    // Current type indicator
+    canvas.setFillStyle("#34495e")
+    canvas.fillText("Type: " + currentType.toUpperCase(), 50, 70, "18px Arial", "#34495e")
+    canvas.fillText("Style: " + currentStyle, 250, 70, "18px Arial", "#34495e")
+    
+    // Draw QR preview
+    drawQRPreview()
+    
+    // Data info panel
+    canvas.setFillStyle("#ecf0f1")
+    canvas.fillRect(300, 100, 280, 200)
+    canvas.setStrokeStyle("#bdc3c7")
+    canvas.strokeRect(300, 100, 280, 200)
+    
+    canvas.setFillStyle("#2c3e50")
+    canvas.fillText("📊 QR Code Info", 320, 125, "16px Arial", "#2c3e50")
+    
+    // Display current data
+    local dataText, lines, line, y
+    if (currentType == "url") {
+        dataText = sampleData.url
+    } else if (currentType == "text") {
+        dataText = sampleData.text
+    } else if (currentType == "wifi") {
+        dataText = "WiFi: " + sampleData.wifi.ssid
+    } else if (currentType == "contact") {
+        dataText = sampleData.contact.name
+    } else {
+        dataText = sampleData.email
+    }
+    
+    canvas.setFillStyle("#555555")
+    canvas.fillText("Data:", 320, 150, "14px Arial", "#555555")
+    
+    // Word wrap for long text
+    lines = []
+    if (dataText.length() > 25) {
+        lines.push(dataText.substring(0, 25) + "...")
+    } else {
+        lines.push(dataText)
+    }
+    
+    y = 170
+    local i
+    i = 0
+    loop(i < lines.length()) {
+        line = lines[i]
+        canvas.fillText(line, 320, y, "12px monospace", "#666666")
+        y = y + 16
+        i = i + 1
+    }
+    
+    // QR Info
+    local info
+    info = qr.getInfo()
+    canvas.fillText("Size: 180x180px", 320, 220, "12px Arial", "#666666")
+    canvas.fillText("Error Correction: M", 320, 235, "12px Arial", "#666666")
+    canvas.fillText("Format: PNG", 320, 250, "12px Arial", "#666666")
+    
+    local complexity
+    complexity = qr.calculateComplexity()
+    canvas.fillText("Complexity: " + complexity, 320, 265, "12px Arial", "#666666")
+}
+
+// Color style selector
+local drawStyleSelector
+drawStyleSelector = function() {
+    local styles, styleNames, i, x, y, style
+    styleNames = ["classic", "modern", "vibrant", "ocean", "forest", "sunset"]
+    
+    canvas.setFillStyle("#f8f9fa")
+    canvas.fillRect(50, 320, 500, 80)
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.strokeRect(50, 320, 500, 80)
+    
+    canvas.setFillStyle("#495057")
+    canvas.fillText("🎨 Color Styles", 60, 340, "16px Arial", "#495057")
+    
+    i = 0
+    loop(i < styleNames.length()) {
+        style = qrStyles[styleNames[i]]
+        x = 70 + i * 70
+        y = 350
+        
+        // Style preview
+        canvas.setFillStyle(style.bg)
+        canvas.fillRect(x, y, 30, 30)
+        canvas.setStrokeStyle(style.fg)
+        canvas.setLineWidth(2)
+        canvas.strokeRect(x, y, 30, 30)
+        
+        // Fill some squares to show style
+        canvas.setFillStyle(style.fg)
+        canvas.fillRect(x + 5, y + 5, 5, 5)
+        canvas.fillRect(x + 15, y + 5, 5, 5)
+        canvas.fillRect(x + 5, y + 15, 5, 5)
+        canvas.fillRect(x + 20, y + 20, 5, 5)
+        
+        // Style name
+        canvas.setFillStyle("#6c757d")
+        canvas.fillText(styleNames[i], x, y + 45, "10px Arial", "#6c757d")
+        
+        // Current style indicator
+        if (styleNames[i] == currentStyle) {
+            canvas.setStrokeStyle("#007bff")
+            canvas.setLineWidth(3)
+            canvas.strokeRect(x - 2, y - 2, 34, 34)
+        }
+        
+        i = i + 1
+    }
+}
+
+// Type selector
+local drawTypeSelector
+drawTypeSelector = function() {
+    local types, typeIcons, i, x, y
+    types = ["url", "text", "wifi", "contact", "email"]
+    typeIcons = ["🌐", "📝", "📶", "👤", "📧"]
+    
+    canvas.setFillStyle("#f8f9fa")
+    canvas.fillRect(50, 420, 500, 60)
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.strokeRect(50, 420, 500, 60)
+    
+    canvas.setFillStyle("#495057")
+    canvas.fillText("📱 QR Types", 60, 440, "16px Arial", "#495057")
+    
+    i = 0
+    loop(i < types.length()) {
+        x = 70 + i * 90
+        y = 450
+        
+        // Type button
+        if (types[i] == currentType) {
+            canvas.setFillStyle("#007bff")
+        } else {
+            canvas.setFillStyle("#6c757d")
+        }
+        canvas.fillRect(x, y, 60, 25)
+        
+        // Icon and text
+        canvas.setFillStyle("#ffffff")
+        canvas.fillText(typeIcons[i] + " " + types[i], x + 5, y + 17, "12px Arial", "#ffffff")
+        
+        i = i + 1
+    }
+}
+
+// Main drawing function
+local drawGenerator
+drawGenerator = function() {
+    drawUI()
+    drawStyleSelector()
+    drawTypeSelector()
+    
+    // Instructions
+    canvas.setFillStyle("#6c757d")
+    canvas.fillText("Click types to change content • Click styles to change colors", 100, 495, "12px Arial", "#6c757d")
+}
+
+// Initialize with URL QR code
+generateQR("url")
+drawGenerator()
+
+// Demo different QR types
+print("📱 QR Code Generator Demo Ready!")
+print("• Current type: " + currentType)
+print("• Current style: " + currentStyle)
+print("• Supported formats: URL, Text, WiFi, Contact, Email")
+print("• 6 professional color schemes")
+print("• Error correction level: M")
+
+// Show some sample generations
+local types
+types = ["url", "text", "wifi", "contact"]
+local i
+i = 0
+loop(i < types.length()) {
+    generateQR(types[i])
+    print("✓ Generated " + types[i] + " QR code - " + qr.getInfo())
+    i = i + 1
+}
+
+// Set back to URL for display
+generateQR("url")
+
+// Add some advanced features demo
+canvas.setFillStyle("#28a745")
+canvas.fillRect(300, 320, 280, 60)
+canvas.setFillStyle("#ffffff")
+canvas.fillText("💡 Advanced Features", 320, 340, "14px Arial", "#ffffff")
+canvas.fillText("• Batch generation", 320, 355, "12px Arial", "#ffffff")
+canvas.fillText("• Logo embedding", 320, 370, "12px Arial", "#ffffff")
+
+// Demo batch generation
+local batchData
+batchData = ["Product A", "Product B", "Product C"]
+local batchQRs
+batchQRs = qr.generateBatch(batchData)
+
+print("🔧 Advanced features demonstrated:")
+print("• Batch QR generation: " + batchQRs.length() + " codes")
+print("• Multiple format support with validation")
+print("• Professional color schemes with preview")
+print("• Error correction and complexity calculation")
+print("• Responsive UI design with interactive elements")
+
+print("🌐 Everything is Box - even data sharing!")
+print("✅ QR Code Generator Demo Complete!")

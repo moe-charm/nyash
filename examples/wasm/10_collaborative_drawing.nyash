@@ -1,0 +1,426 @@
+// 🎨 Collaborative Drawing Board Demo - WebCanvasBox + CanvasEventBox + P2P simulation
+// Multi-user drawing application with Everything is Box architecture
+
+print("🎨 === Collaborative Drawing Board Demo Starting ===")
+
+// Initialize components
+local canvas, events, timer, random
+canvas = new WebCanvasBox("demo-canvas", 800, 600)
+events = new CanvasEventBox("demo-canvas")
+timer = new TimerBox()
+random = new RandomBox()
+
+// Drawing application state
+local drawingState
+drawingState = {
+    isDrawing: false,
+    tool: "brush",  // brush, eraser, line, rectangle, circle, text
+    color: "#000000",
+    size: 3,
+    users: [],
+    history: [],
+    maxHistory: 50
+}
+
+// User management (simulated multiplayer)
+local users
+users = [
+    {id: 1, name: "Alice", color: "#e74c3c", cursor: {x: 100, y: 100}, isActive: true},
+    {id: 2, name: "Bob", color: "#3498db", cursor: {x: 200, y: 150}, isActive: true},
+    {id: 3, name: "Charlie", color: "#2ecc71", cursor: {x: 300, y: 200}, isActive: false},
+    {id: 4, name: "Diana", color: "#9b59b6", cursor: {x: 150, y: 250}, isActive: true}
+]
+
+// Tool palette
+local tools
+tools = [
+    {name: "brush", icon: "🖌️", size: 3},
+    {name: "eraser", icon: "🧽", size: 10},
+    {name: "line", icon: "📏", size: 2},
+    {name: "rectangle", icon: "⬜", size: 2},
+    {name: "circle", icon: "⭕", size: 2},
+    {name: "text", icon: "📝", size: 16}
+]
+
+// Color palette
+local colorPalette
+colorPalette = [
+    "#000000", "#ffffff", "#e74c3c", "#3498db", "#2ecc71",
+    "#f39c12", "#9b59b6", "#1abc9c", "#34495e", "#95a5a6",
+    "#e67e22", "#e91e63", "#673ab7", "#ff5722", "#795548"
+]
+
+// Drawing functions
+local drawBrushStroke
+drawBrushStroke = function(x1, y1, x2, y2, color, size) {
+    canvas.setStrokeStyle(color)
+    canvas.setLineWidth(size)
+    canvas.drawLine(x1, y1, x2, y2, color, size)
+    
+    // Add to history
+    local stroke
+    stroke = {
+        type: "brush",
+        x1: x1, y1: y1, x2: x2, y2: y2,
+        color: color, size: size,
+        timestamp: timer.now()
+    }
+    drawingState.history.push(stroke)
+}
+
+local drawShape
+drawShape = function(shape, x1, y1, x2, y2, color, size, filled) {
+    canvas.setStrokeStyle(color)
+    canvas.setLineWidth(size)
+    
+    if (filled) {
+        canvas.setFillStyle(color)
+    }
+    
+    if (shape == "rectangle") {
+        local width, height
+        width = x2 - x1
+        height = y2 - y1
+        
+        if (filled) {
+            canvas.fillRect(x1, y1, width, height)
+        } else {
+            canvas.strokeRect(x1, y1, width, height)
+        }
+    } else if (shape == "circle") {
+        local centerX, centerY, radius
+        centerX = (x1 + x2) / 2
+        centerY = (y1 + y2) / 2
+        radius = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)) / 2
+        
+        if (filled) {
+            canvas.fillCircle(centerX, centerY, radius)
+        } else {
+            canvas.strokeCircle(centerX, centerY, radius)
+        }
+    } else if (shape == "line") {
+        canvas.drawLine(x1, y1, x2, y2, color, size)
+    }
+    
+    // Add to history
+    local shapeData
+    shapeData = {
+        type: shape,
+        x1: x1, y1: y1, x2: x2, y2: y2,
+        color: color, size: size, filled: filled,
+        timestamp: timer.now()
+    }
+    drawingState.history.push(shapeData)
+}
+
+local drawText
+drawText = function(text, x, y, color, size) {
+    canvas.setFillStyle(color)
+    canvas.fillText(text, x, y, size + "px Arial", color)
+    
+    // Add to history
+    local textData
+    textData = {
+        type: "text",
+        text: text, x: x, y: y,
+        color: color, size: size,
+        timestamp: timer.now()
+    }
+    drawingState.history.push(textData)
+}
+
+// UI Drawing functions
+local drawToolbar
+drawToolbar = function() {
+    // Toolbar background
+    canvas.setFillStyle("#f8f9fa")
+    canvas.fillRect(0, 0, 800, 60)
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.setLineWidth(1)
+    canvas.strokeRect(0, 0, 800, 60)
+    
+    // Tools section
+    canvas.setFillStyle("#495057")
+    canvas.fillText("🛠️ Tools", 10, 20, "14px Arial", "#495057")
+    
+    local i, tool, x, y
+    i = 0
+    loop(i < tools.length()) {
+        tool = tools[i]
+        x = 10 + i * 45
+        y = 25
+        
+        // Tool button
+        if (tool.name == drawingState.tool) {
+            canvas.setFillStyle("#007bff")
+        } else {
+            canvas.setFillStyle("#6c757d")
+        }
+        canvas.fillRect(x, y, 35, 25)
+        
+        // Tool icon
+        canvas.setFillStyle("#ffffff")
+        canvas.fillText(tool.icon, x + 8, y + 18, "16px Arial", "#ffffff")
+        
+        i = i + 1
+    }
+    
+    // Colors section
+    canvas.setFillStyle("#495057")
+    canvas.fillText("🎨 Colors", 300, 20, "14px Arial", "#495057")
+    
+    i = 0
+    loop(i < colorPalette.length()) {
+        x = 300 + (i % 10) * 25
+        y = 25 + Math.floor(i / 10) * 20
+        
+        canvas.setFillStyle(colorPalette[i])
+        canvas.fillRect(x, y, 20, 15)
+        
+        // Current color indicator
+        if (colorPalette[i] == drawingState.color) {
+            canvas.setStrokeStyle("#007bff")
+            canvas.setLineWidth(3)
+            canvas.strokeRect(x - 2, y - 2, 24, 19)
+        } else {
+            canvas.setStrokeStyle("#000000")
+            canvas.setLineWidth(1)
+            canvas.strokeRect(x, y, 20, 15)
+        }
+        
+        i = i + 1
+    }
+    
+    // Size control
+    canvas.setFillStyle("#495057")
+    canvas.fillText("📏 Size: " + drawingState.size, 600, 20, "14px Arial", "#495057")
+    
+    // Size slider representation
+    canvas.setStrokeStyle("#6c757d")
+    canvas.setLineWidth(2)
+    canvas.drawLine(600, 35, 700, 35, "#6c757d", 2)
+    
+    // Size indicator
+    local sliderPos
+    sliderPos = 600 + (drawingState.size / 20) * 100
+    canvas.setFillStyle("#007bff")
+    canvas.fillCircle(sliderPos, 35, 6)
+}
+
+local drawUserCursors
+drawUserCursors = function() {
+    local i, user
+    i = 0
+    loop(i < users.length()) {
+        user = users[i]
+        
+        if (user.isActive) {
+            // Cursor dot
+            canvas.setFillStyle(user.color)
+            canvas.fillCircle(user.cursor.x, user.cursor.y, 8)
+            
+            // User name label
+            canvas.setFillStyle("#ffffff")
+            canvas.fillRect(user.cursor.x + 15, user.cursor.y - 15, user.name.length() * 8, 20)
+            canvas.setStrokeStyle(user.color)
+            canvas.setLineWidth(2)
+            canvas.strokeRect(user.cursor.x + 15, user.cursor.y - 15, user.name.length() * 8, 20)
+            
+            canvas.setFillStyle(user.color)
+            canvas.fillText(user.name, user.cursor.x + 18, user.cursor.y - 2, "12px Arial", user.color)
+        }
+        
+        i = i + 1
+    }
+}
+
+local drawUserList
+drawUserList = function() {
+    // Users panel
+    canvas.setFillStyle("#f8f9fa")
+    canvas.fillRect(680, 70, 115, 120)
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.strokeRect(680, 70, 115, 120)
+    
+    canvas.setFillStyle("#495057")
+    canvas.fillText("👥 Users", 690, 90, "14px Arial", "#495057")
+    
+    local i, user, y
+    i = 0
+    loop(i < users.length()) {
+        user = users[i]
+        y = 105 + i * 20
+        
+        // Status indicator
+        if (user.isActive) {
+            canvas.setFillStyle("#28a745")
+            canvas.fillCircle(690, y, 4)
+        } else {
+            canvas.setFillStyle("#6c757d")
+            canvas.fillCircle(690, y, 4)
+        }
+        
+        // User name with color
+        canvas.setFillStyle(user.color)
+        canvas.fillText(user.name, 700, y + 5, "12px Arial", user.color)
+        
+        i = i + 1
+    }
+}
+
+local drawCanvas
+drawCanvas = function() {
+    // Canvas area (below toolbar)
+    canvas.setFillStyle("#ffffff")
+    canvas.fillRect(0, 60, 800, 540)
+    
+    // Canvas border
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.setLineWidth(2)
+    canvas.strokeRect(0, 60, 800, 540)
+}
+
+// Main drawing function
+local drawCollaborativeBoard
+drawCollaborativeBoard = function() {
+    // Clear entire canvas
+    canvas.clear()
+    
+    // Draw main components
+    drawCanvas()
+    drawToolbar()
+    drawUserCursors()
+    drawUserList()
+    
+    // Status bar
+    canvas.setFillStyle("#f8f9fa")
+    canvas.fillRect(0, 580, 800, 20)
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.strokeRect(0, 580, 800, 20)
+    
+    canvas.setFillStyle("#6c757d")
+    canvas.fillText("Connected users: " + users.length() + " | Tool: " + drawingState.tool + " | History: " + drawingState.history.length(), 10, 595, "12px Arial", "#6c757d")
+}
+
+// Simulate collaborative drawing
+local simulateCollaborativeActivity
+simulateCollaborativeActivity = function() {
+    // Simulate user drawing activities
+    local i, user
+    i = 0
+    loop(i < users.length()) {
+        user = users[i]
+        
+        if (user.isActive) {
+            // Move cursor randomly
+            user.cursor.x = user.cursor.x + random.randInt(-20, 20)
+            user.cursor.y = user.cursor.y + random.randInt(-20, 20)
+            
+            // Keep cursor in bounds
+            user.cursor.x = Math.max(50, Math.min(750, user.cursor.x))
+            user.cursor.y = Math.max(100, Math.min(550, user.cursor.y))
+            
+            // Occasionally draw something
+            if (random.randInt(0, 10) == 0) {
+                local x1, y1, x2, y2
+                x1 = user.cursor.x
+                y1 = user.cursor.y
+                x2 = x1 + random.randInt(-30, 30)
+                y2 = y1 + random.randInt(-30, 30)
+                
+                drawBrushStroke(x1, y1, x2, y2, user.color, 3)
+            }
+        }
+        
+        i = i + 1
+    }
+}
+
+// Initialize the drawing board
+drawCollaborativeBoard()
+
+// Add some sample collaborative content
+drawText("🎨 Collaborative Nyash Drawing", 250, 120, "#2c3e50", 24)
+drawText("Everything is Box - even teamwork!", 270, 150, "#7f8c8d", 16)
+
+// Draw some sample collaborative strokes
+drawBrushStroke(100, 200, 150, 250, "#e74c3c", 5)
+drawBrushStroke(150, 250, 200, 200, "#3498db", 4)
+drawShape("circle", 300, 200, 350, 250, "#2ecc71", 3, false)
+drawShape("rectangle", 400, 180, 500, 280, "#f39c12", 2, false)
+
+// Run simulation
+local simulationFrames
+simulationFrames = 0
+loop(simulationFrames < 5) {
+    simulateCollaborativeActivity()
+    drawCollaborativeBoard()
+    simulationFrames = simulationFrames + 1
+}
+
+print("🎨 Collaborative Drawing Board Demo Ready!")
+print("• Connected users: " + users.length())
+print("• Active users: " + (users.filter(function(u) { return u.isActive }).length()))
+print("• Available tools: " + tools.length())
+print("• Color palette: " + colorPalette.length() + " colors")
+print("• Drawing history: " + drawingState.history.length() + " actions")
+
+// Demo advanced collaboration features
+print("🌟 Collaboration features demonstrated:")
+print("• Real-time user cursors with names")
+print("• User presence indicators")
+print("• Shared drawing canvas with history")
+print("• Multi-tool support (brush, shapes, text)")
+print("• Professional UI with tool palette")
+print("• Color selection and size controls")
+
+// Show P2P concepts (simulated)
+local p2pFeatures
+p2pFeatures = [
+    "Real-time stroke synchronization",
+    "User presence broadcasting", 
+    "Conflict resolution for simultaneous edits",
+    "Canvas state synchronization",
+    "Chat integration",
+    "File sharing and export"
+]
+
+canvas.setFillStyle("#17a2b8")
+canvas.fillRect(500, 300, 200, 120)
+canvas.setStrokeStyle("#138496")
+canvas.strokeRect(500, 300, 200, 120)
+
+canvas.setFillStyle("#ffffff")
+canvas.fillText("🔗 P2P Features:", 510, 320, "14px Arial", "#ffffff")
+
+local j
+j = 0
+loop(j < 4) {  // Show first 4 features
+    canvas.fillText("• " + p2pFeatures[j].substring(0, 15) + "...", 510, 340 + j * 15, "10px Arial", "#ffffff")
+    j = j + 1
+}
+
+print("🔗 P2P architecture concepts:")
+j = 0
+loop(j < p2pFeatures.length()) {
+    print("  • " + p2pFeatures[j])
+    j = j + 1
+}
+
+// Performance statistics
+local performanceStats
+performanceStats = {
+    drawCalls: drawingState.history.length(),
+    activeConnections: users.filter(function(u) { return u.isActive }).length(),
+    memoryUsage: drawingState.history.length() * 50,  // Estimated bytes
+    latency: random.randInt(15, 45)  // Simulated ms
+}
+
+print("📊 Performance metrics:")
+print("  • Draw calls: " + performanceStats.drawCalls)
+print("  • Active connections: " + performanceStats.activeConnections)
+print("  • Memory usage: " + performanceStats.memoryUsage + " bytes")
+print("  • Network latency: " + performanceStats.latency + "ms")
+
+print("🌐 Everything is Box - even creativity is collaborative!")
+print("✅ Collaborative Drawing Board Demo Complete!")

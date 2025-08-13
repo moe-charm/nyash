@@ -1,0 +1,253 @@
+// 🎲 Random Color Generator Demo - RandomBox + WebCanvasBox
+// Beautiful color harmony generation using advanced color theory
+
+print("🎲 === Random Color Generator Demo Starting ===")
+
+// Initialize components
+local canvas, random
+canvas = new WebCanvasBox("demo-canvas", 600, 400)
+random = new RandomBox()
+
+// Color theory functions
+local hslToRgb, rgbToHex, generateHarmoniousColors
+hslToRgb = function(h, s, l) {
+    local r, g, b, c, x, m
+    
+    // Normalize values
+    h = h / 360
+    s = s / 100
+    l = l / 100
+    
+    c = (1 - Math.abs(2 * l - 1)) * s
+    x = c * (1 - Math.abs((h * 6) % 2 - 1))
+    m = l - c / 2
+    
+    if (h < 1/6) {
+        r = c; g = x; b = 0
+    } else if (h < 2/6) {
+        r = x; g = c; b = 0
+    } else if (h < 3/6) {
+        r = 0; g = c; b = x
+    } else if (h < 4/6) {
+        r = 0; g = x; b = c
+    } else if (h < 5/6) {
+        r = x; g = 0; b = c
+    } else {
+        r = c; g = 0; b = x
+    }
+    
+    r = Math.round((r + m) * 255)
+    g = Math.round((g + m) * 255)
+    b = Math.round((b + m) * 255)
+    
+    return [r, g, b]
+}
+
+rgbToHex = function(r, g, b) {
+    local toHex
+    toHex = function(n) {
+        local hex
+        hex = n.toString(16)
+        if (hex.length() < 2) {
+            hex = "0" + hex
+        }
+        return hex
+    }
+    
+    return "#" + toHex(r) + toHex(g) + toHex(b)
+}
+
+// Generate harmonious color schemes
+generateHarmoniousColors = function(baseHue, scheme) {
+    local colors, i, hue, saturation, lightness, rgb, hex
+    colors = []
+    
+    if (scheme == "monochromatic") {
+        // Same hue, different saturation/lightness
+        i = 0
+        loop(i < 6) {
+            saturation = 60 + i * 8
+            lightness = 30 + i * 12
+            rgb = hslToRgb(baseHue, saturation, lightness)
+            hex = rgbToHex(rgb[0], rgb[1], rgb[2])
+            colors.push({hue: baseHue, sat: saturation, light: lightness, hex: hex})
+            i = i + 1
+        }
+    } else if (scheme == "complementary") {
+        // Base color and its complement
+        local compHue
+        compHue = (baseHue + 180) % 360
+        
+        rgb = hslToRgb(baseHue, 70, 50)
+        colors.push({hue: baseHue, sat: 70, light: 50, hex: rgbToHex(rgb[0], rgb[1], rgb[2])})
+        
+        rgb = hslToRgb(compHue, 70, 50)
+        colors.push({hue: compHue, sat: 70, light: 50, hex: rgbToHex(rgb[0], rgb[1], rgb[2])})
+        
+        // Add variations
+        i = 0
+        loop(i < 4) {
+            saturation = 40 + i * 15
+            lightness = 35 + i * 15
+            
+            rgb = hslToRgb(baseHue, saturation, lightness)
+            colors.push({hue: baseHue, sat: saturation, light: lightness, hex: rgbToHex(rgb[0], rgb[1], rgb[2])})
+            
+            rgb = hslToRgb(compHue, saturation, lightness)
+            colors.push({hue: compHue, sat: saturation, light: lightness, hex: rgbToHex(rgb[0], rgb[1], rgb[2])})
+            
+            i = i + 1
+        }
+    } else if (scheme == "triadic") {
+        // Three colors evenly spaced around color wheel
+        local hue1, hue2, hue3
+        hue1 = baseHue
+        hue2 = (baseHue + 120) % 360
+        hue3 = (baseHue + 240) % 360
+        
+        local hues
+        hues = [hue1, hue2, hue3]
+        
+        i = 0
+        loop(i < 3) {
+            hue = hues[i]
+            saturation = 65 + random.randInt(-10, 20)
+            lightness = 45 + random.randInt(-10, 20)
+            
+            rgb = hslToRgb(hue, saturation, lightness)
+            colors.push({hue: hue, sat: saturation, light: lightness, hex: rgbToHex(rgb[0], rgb[1], rgb[2])})
+            
+            // Add lighter variation
+            rgb = hslToRgb(hue, saturation - 20, lightness + 25)
+            colors.push({hue: hue, sat: saturation-20, light: lightness+25, hex: rgbToHex(rgb[0], rgb[1], rgb[2])})
+            
+            i = i + 1
+        }
+    }
+    
+    return colors
+}
+
+// Current palette
+local currentPalette, currentScheme
+currentPalette = []
+currentScheme = "monochromatic"
+
+// Generate initial palette
+local generateNewPalette
+generateNewPalette = function() {
+    local baseHue, schemes, scheme
+    baseHue = random.randInt(0, 359)
+    schemes = ["monochromatic", "complementary", "triadic"]
+    scheme = schemes[random.randInt(0, 2)]
+    
+    currentScheme = scheme
+    currentPalette = generateHarmoniousColors(baseHue, scheme)
+}
+
+// Draw palette
+local drawPalette
+drawPalette = function() {
+    // Clear canvas
+    canvas.clear()
+    canvas.setFillStyle("#f8f8f8")
+    canvas.fillRect(0, 0, 600, 400)
+    
+    // Title
+    canvas.setFillStyle("#333333")
+    canvas.fillText("🎨 Nyash Random Color Generator", 150, 30, "24px Arial", "#333333")
+    
+    // Scheme name
+    canvas.fillText("Scheme: " + currentScheme, 200, 60, "18px Arial", "#666666")
+    
+    // Draw color swatches
+    local i, color, x, y, swatchSize
+    swatchSize = 80
+    i = 0
+    
+    loop(i < currentPalette.length()) {
+        color = currentPalette[i]
+        x = 50 + (i % 6) * 90
+        y = 100 + Math.floor(i / 6) * 120
+        
+        // Color swatch
+        canvas.setFillStyle(color.hex)
+        canvas.fillRect(x, y, swatchSize, swatchSize)
+        
+        // Border
+        canvas.setStrokeStyle("#333333")
+        canvas.setLineWidth(2)
+        canvas.strokeRect(x, y, swatchSize, swatchSize)
+        
+        // Color info
+        canvas.setFillStyle("#333333")
+        canvas.fillText(color.hex, x, y + swatchSize + 15, "12px monospace", "#333333")
+        canvas.fillText("H:" + color.hue, x, y + swatchSize + 30, "10px Arial", "#666666")
+        canvas.fillText("S:" + color.sat + "%", x, y + swatchSize + 42, "10px Arial", "#666666")
+        canvas.fillText("L:" + color.light + "%", x, y + swatchSize + 54, "10px Arial", "#666666")
+        
+        i = i + 1
+    }
+    
+    // Instructions
+    canvas.setFillStyle("#888888")
+    canvas.fillText("Click 'Generate' for new palette • Export saves color codes", 50, 380, "14px Arial", "#888888")
+}
+
+// Export palette function
+local exportPalette
+exportPalette = function() {
+    local exportText, i, color
+    exportText = "# " + currentScheme + " Color Palette\n"
+    
+    i = 0
+    loop(i < currentPalette.length()) {
+        color = currentPalette[i]
+        exportText = exportText + color.hex + " // HSL(" + color.hue + ", " + color.sat + "%, " + color.light + "%)\n"
+        i = i + 1
+    }
+    
+    print("📄 === Exported Color Palette ===")
+    print(exportText)
+    print("================================")
+    
+    return exportText
+}
+
+// Generate and display initial palette
+generateNewPalette()
+drawPalette()
+
+// Demo additional color operations
+print("🎨 Random Color Generator Demo Ready!")
+print("• Current scheme: " + currentScheme)
+print("• Palette size: " + currentPalette.length() + " colors")
+print("• HSL color space with harmony algorithms")
+print("• Export functionality for design tools")
+
+// Show some sample operations
+local favoriteColors
+favoriteColors = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#ffeaa7"]
+
+canvas.setFillStyle("#ffffff")
+canvas.fillRect(420, 100, 150, 200)
+canvas.setStrokeStyle("#cccccc")
+canvas.strokeRect(420, 100, 150, 200)
+
+canvas.setFillStyle("#333333")
+canvas.fillText("Favorites", 450, 125, "16px Arial", "#333333")
+
+local j
+j = 0
+loop(j < favoriteColors.length()) {
+    canvas.setFillStyle(favoriteColors[j])
+    canvas.fillRect(430 + (j % 2) * 60, 140 + Math.floor(j / 2) * 35, 50, 25)
+    
+    canvas.setStrokeStyle("#333333")
+    canvas.strokeRect(430 + (j % 2) * 60, 140 + Math.floor(j / 2) * 35, 50, 25)
+    
+    j = j + 1
+}
+
+print("🌐 Everything is Box - even colors have personality!")
+print("✅ Random Color Generator Demo Complete!")

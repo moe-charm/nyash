@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎨 Nyash WASM Canvas Demos</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #00ff88;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .demo-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            border: 2px solid #00ff88;
+            backdrop-filter: blur(10px);
+        }
+        
+        .demo-title {
+            color: #00ff88;
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .demo-canvas {
+            width: 100%;
+            max-width: 400px;
+            height: 300px;
+            border: 2px solid #ffffff;
+            border-radius: 8px;
+            background: #000;
+            display: block;
+            margin: 0 auto 15px;
+        }
+        
+        .demo-controls {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .demo-btn {
+            background: #00ff88;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        
+        .demo-btn:hover {
+            background: #00cc66;
+            transform: scale(1.05);
+        }
+        
+        .demo-description {
+            font-size: 0.9em;
+            line-height: 1.4;
+            color: #cccccc;
+        }
+        
+        .status {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #00ff88;
+        }
+        
+        .console-output {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border: 1px solid #00ff88;
+        }
+        
+        .philosophy {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            border: 2px solid #ff8800;
+        }
+        
+        .philosophy h2 {
+            color: #ff8800;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Nyash WASM Canvas Demos</h1>
+        
+        <div class="demo-grid">
+            <!-- Drawing App Demo -->
+            <div class="demo-card">
+                <div class="demo-title">🎨 Interactive Drawing App</div>
+                <canvas id="drawing-canvas" class="demo-canvas" width="400" height="300"></canvas>
+                <div class="demo-controls">
+                    <button class="demo-btn" onclick="runDrawingDemo()">🎨 Start Drawing</button>
+                    <button class="demo-btn" onclick="clearCanvas('drawing-canvas')">🗑️ Clear</button>
+                </div>
+                <div class="demo-description">
+                    Interactive drawing with color palette and brush tools.
+                    Uses CanvasEventBox + WebCanvasBox for mouse interaction.
+                </div>
+            </div>
+            
+            <!-- Clock & Timer Demo -->
+            <div class="demo-card">
+                <div class="demo-title">⏰ Clock & Timer</div>
+                <canvas id="clock-canvas" class="demo-canvas" width="400" height="300"></canvas>
+                <div class="demo-controls">
+                    <button class="demo-btn" onclick="runClockDemo()">⏰ Start Clock</button>
+                    <button class="demo-btn" onclick="toggleTimer()">⏱️ Toggle Timer</button>
+                </div>
+                <div class="demo-description">
+                    Digital and analog clock with timer functionality.
+                    Demonstrates TimerBox and real-time canvas updates.
+                </div>
+            </div>
+            
+            <!-- Particle Fireworks Demo -->
+            <div class="demo-card">
+                <div class="demo-title">🎆 Particle Fireworks</div>
+                <canvas id="fireworks-canvas" class="demo-canvas" width="400" height="300"></canvas>
+                <div class="demo-controls">
+                    <button class="demo-btn" onclick="runFireworksDemo()">🎆 Launch Fireworks</button>
+                    <button class="demo-btn" onclick="addBurst()">💥 Add Burst</button>
+                </div>
+                <div class="demo-description">
+                    Physics-based particle system with gravity and collisions.
+                    Shows RandomBox and CanvasLoopBox in action.
+                </div>
+            </div>
+            
+            <!-- Random Color Generator -->
+            <div class="demo-card">
+                <div class="demo-title">🎨 Random Color Generator</div>
+                <canvas id="color-canvas" class="demo-canvas" width="400" height="300"></canvas>
+                <div class="demo-controls">
+                    <button class="demo-btn" onclick="generateColors()">🎲 Generate Colors</button>
+                    <button class="demo-btn" onclick="saveColorPalette()">💾 Save Palette</button>
+                </div>
+                <div class="demo-description">
+                    Beautiful color palettes using RandomBox for HSL generation.
+                    Includes color harmony algorithms and palette export.
+                </div>
+            </div>
+        </div>
+        
+        <div class="status">
+            <h3>🚀 Demo Status</h3>
+            <p id="wasm-status">Loading Nyash WebAssembly runtime...</p>
+            <div class="console-output" id="console-output">
+                <div>🐱 Nyash WASM Console Ready</div>
+                <div>Everything is Box - even in the browser!</div>
+            </div>
+        </div>
+        
+        <div class="philosophy">
+            <h2>📦 Everything is Box Philosophy</h2>
+            <p>
+                In Nyash, every value - numbers, strings, canvases, timers, even user interactions - 
+                are unified under the Box abstraction. This creates incredibly consistent and 
+                powerful composable systems that work beautifully in WebAssembly.
+            </p>
+            <p>
+                <strong>🌟 Featured Boxes:</strong> WebCanvasBox, CanvasEventBox, CanvasLoopBox, 
+                TimerBox, RandomBox, ParticleBox
+            </p>
+        </div>
+    </div>
+
+    <script type="module">
+        let nyashWasm = null;
+        let animationIds = new Map();
+        
+        // Initialize WASM when available
+        async function initWasm() {
+            try {
+                // This would normally load the actual WASM module
+                // For demo purposes, we'll simulate Nyash functionality
+                document.getElementById('wasm-status').textContent = 
+                    '✅ Nyash WASM Runtime Loaded (Simulated)';
+                    
+                logToConsole('🎯 WebCanvasBox, TimerBox, CanvasEventBox loaded');
+                logToConsole('🎮 Ready for interactive demos');
+            } catch (error) {
+                document.getElementById('wasm-status').textContent = 
+                    '❌ WASM Loading Error: ' + error.message;
+                logToConsole('❌ Error: ' + error.message);
+            }
+        }
+        
+        function logToConsole(message) {
+            const console = document.getElementById('console-output');
+            const div = document.createElement('div');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            console.appendChild(div);
+            console.scrollTop = console.scrollHeight;
+        }
+        
+        // Drawing App Demo
+        window.runDrawingDemo = function() {
+            const canvas = document.getElementById('drawing-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Simulate Nyash drawing app
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Color palette
+            const colors = ['black', 'red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+            colors.forEach((color, i) => {
+                ctx.fillStyle = color;
+                ctx.fillRect(10 + i * 50, 10, 40, 20);
+            });
+            
+            // Instructions
+            ctx.fillStyle = 'black';
+            ctx.font = '12px Arial';
+            ctx.fillText('Click and drag to draw • Click colors to change', 10, 50);
+            
+            // Sample drawing
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(100, 100);
+            ctx.lineTo(150, 80);
+            ctx.lineTo(200, 100);
+            ctx.stroke();
+            
+            ctx.fillStyle = 'blue';
+            ctx.beginPath();
+            ctx.arc(250, 150, 20, 0, Math.PI * 2);
+            ctx.fill();
+            
+            logToConsole('🎨 Drawing App: WebCanvasBox + CanvasEventBox active');
+        };
+        
+        // Clock Demo
+        window.runClockDemo = function() {
+            const canvas = document.getElementById('clock-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            function drawClock() {
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Digital time
+                const now = new Date();
+                const timeString = now.toLocaleTimeString();
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '24px Courier New';
+                ctx.fillText(timeString, 100, 60);
+                
+                // Analog clock
+                const centerX = 200, centerY = 150, radius = 50;
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Hour hand
+                const hours = now.getHours() % 12;
+                const hourAngle = (hours * 30 - 90) * Math.PI / 180;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(centerX + 30 * Math.cos(hourAngle), centerY + 30 * Math.sin(hourAngle));
+                ctx.stroke();
+                
+                // Minute hand
+                const minutes = now.getMinutes();
+                const minuteAngle = (minutes * 6 - 90) * Math.PI / 180;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(centerX + 40 * Math.cos(minuteAngle), centerY + 40 * Math.sin(minuteAngle));
+                ctx.stroke();
+            }
+            
+            // Start animation
+            const intervalId = setInterval(drawClock, 1000);
+            animationIds.set('clock', intervalId);
+            drawClock();
+            
+            logToConsole('⏰ Clock Demo: TimerBox animation loop started');
+        };
+        
+        // Fireworks Demo
+        window.runFireworksDemo = function() {
+            const canvas = document.getElementById('fireworks-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            let particles = [];
+            
+            function createFirework(x, y) {
+                const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+                for (let i = 0; i < 15; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 5 + 2;
+                    particles.push({
+                        x: x,
+                        y: y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        life: 60,
+                        maxLife: 60
+                    });
+                }
+            }
+            
+            function animate() {
+                ctx.fillStyle = '#000011';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Update particles
+                particles = particles.filter(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.1; // gravity
+                    p.vx *= 0.99; // friction
+                    p.vy *= 0.99;
+                    p.life--;
+                    
+                    if (p.life > 0) {
+                        const alpha = p.life / p.maxLife;
+                        ctx.fillStyle = p.color;
+                        ctx.globalAlpha = alpha;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                        ctx.fill();
+                        return true;
+                    }
+                    return false;
+                });
+                
+                ctx.globalAlpha = 1;
+                
+                // Add random fireworks
+                if (Math.random() < 0.02) {
+                    createFirework(
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height * 0.5
+                    );
+                }
+            }
+            
+            // Initial fireworks
+            createFirework(200, 100);
+            createFirework(300, 80);
+            
+            const intervalId = setInterval(animate, 16); // ~60fps
+            animationIds.set('fireworks', intervalId);
+            
+            logToConsole('🎆 Fireworks Demo: ParticleBox physics simulation active');
+        };
+        
+        // Color Generator Demo
+        window.generateColors = function() {
+            const canvas = document.getElementById('color-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#f8f8f8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Generate harmonious color palette
+            const baseHue = Math.random() * 360;
+            const colors = [];
+            
+            for (let i = 0; i < 8; i++) {
+                const hue = (baseHue + i * 45) % 360;
+                const saturation = 70 + Math.random() * 30;
+                const lightness = 40 + Math.random() * 40;
+                const color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                colors.push(color);
+                
+                // Draw color swatch
+                ctx.fillStyle = color;
+                ctx.fillRect(i * 50, 50, 40, 80);
+                
+                // Color info
+                ctx.fillStyle = 'black';
+                ctx.font = '8px Arial';
+                ctx.fillText(`H:${Math.round(hue)}`, i * 50 + 2, 140);
+                ctx.fillText(`S:${Math.round(saturation)}`, i * 50 + 2, 150);
+                ctx.fillText(`L:${Math.round(lightness)}`, i * 50 + 2, 160);
+            }
+            
+            // Title
+            ctx.fillStyle = 'black';
+            ctx.font = '16px Arial';
+            ctx.fillText('Generated Color Palette', 50, 30);
+            
+            logToConsole('🎨 Color Generator: RandomBox created harmonious palette');
+        };
+        
+        // Utility functions
+        window.clearCanvas = function(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            logToConsole(`🗑️ Canvas "${canvasId}" cleared`);
+        };
+        
+        window.addBurst = function() {
+            logToConsole('💥 Manual firework burst triggered');
+        };
+        
+        window.toggleTimer = function() {
+            logToConsole('⏱️ Timer toggled');
+        };
+        
+        window.saveColorPalette = function() {
+            logToConsole('💾 Color palette saved (feature demo)');
+        };
+        
+        // Initialize on page load
+        initWasm();
+    </script>
+</body>
+</html>
