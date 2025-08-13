@@ -203,6 +203,15 @@ impl MirBuilder {
                 self.build_new_expression(class.clone(), arguments.clone())
             },
             
+            // Phase 7: Async operations
+            ASTNode::Nowait { variable, expression, .. } => {
+                self.build_nowait_statement(variable.clone(), *expression.clone())
+            },
+            
+            ASTNode::AwaitExpression { expression, .. } => {
+                self.build_await_expression(*expression.clone())
+            },
+            
             _ => {
                 Err(format!("Unsupported AST node type: {:?}", ast))
             }
@@ -770,6 +779,41 @@ impl MirBuilder {
             "~" => Ok(UnaryOp::BitNot),
             _ => Err(format!("Unsupported unary operator: {}", op)),
         }
+    }
+    
+    /// Build nowait statement: nowait variable = expression
+    fn build_nowait_statement(&mut self, variable: String, expression: ASTNode) -> Result<ValueId, String> {
+        // Evaluate the expression
+        let expression_value = self.build_expression(expression)?;
+        
+        // Create a new Future with the evaluated expression as the initial value
+        let future_id = self.value_gen.next();
+        self.emit_instruction(MirInstruction::FutureNew {
+            dst: future_id,
+            value: expression_value,
+        })?;
+        
+        // Store the future in the variable
+        self.variable_map.insert(variable.clone(), future_id);
+        
+        Ok(future_id)
+    }
+    
+    /// Build await expression: await expression
+    fn build_await_expression(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+        // Evaluate the expression (should be a Future)
+        let future_value = self.build_expression(expression)?;
+        
+        // Create destination for await result
+        let result_id = self.value_gen.next();
+        
+        // Emit await instruction
+        self.emit_instruction(MirInstruction::Await {
+            dst: result_id,
+            future: future_value,
+        })?;
+        
+        Ok(result_id)
     }
 }
 

@@ -347,6 +347,19 @@ impl MirPrinter {
             MirInstruction::BarrierWrite { ptr } => {
                 format!("barrier_write {}", ptr)
             },
+            
+            // Phase 7: Async/Future Operations
+            MirInstruction::FutureNew { dst, value } => {
+                format!("{} = future_new {}", dst, value)
+            },
+            
+            MirInstruction::FutureSet { future, value } => {
+                format!("future_set {} = {}", future, value)
+            },
+            
+            MirInstruction::Await { dst, future } => {
+                format!("{} = await {}", dst, future)
+            },
         }
     }
     
@@ -359,6 +372,7 @@ impl MirPrinter {
             super::MirType::String => "str".to_string(),
             super::MirType::Box(name) => format!("box<{}>", name),
             super::MirType::Array(elem_type) => format!("[{}]", self.format_type(elem_type)),
+            super::MirType::Future(inner_type) => format!("future<{}>", self.format_type(inner_type)),
             super::MirType::Void => "void".to_string(),
             super::MirType::Unknown => "?".to_string(),
         }
