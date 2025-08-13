@@ -4,7 +4,7 @@
  * SSA-form instructions with effect tracking for optimization
  */
 
-use super::{ValueId, LocalId, EffectMask, Effect};
+use super::{ValueId, EffectMask, Effect};
 // use crate::value::NyashValue;  // Commented out to avoid circular dependency
 use std::fmt;
 
@@ -169,6 +169,13 @@ pub enum MirInstruction {
         message: String,
     },
     
+    /// Print instruction for console output
+    /// `print %value`
+    Print {
+        value: ValueId,
+        effects: EffectMask,
+    },
+    
     /// No-op instruction (for optimization placeholders)
     Nop,
 }
@@ -264,6 +271,9 @@ impl MirInstruction {
             
             // Debug has debug effect
             MirInstruction::Debug { .. } => EffectMask::PURE.add(Effect::Debug),
+            
+            // Print has external write effect
+            MirInstruction::Print { effects, .. } => *effects,
         }
     }
     
@@ -291,6 +301,7 @@ impl MirInstruction {
             MirInstruction::Return { .. } |
             MirInstruction::ArraySet { .. } |
             MirInstruction::Debug { .. } |
+            MirInstruction::Print { .. } |
             MirInstruction::Nop => None,
         }
     }
@@ -307,7 +318,8 @@ impl MirInstruction {
             MirInstruction::TypeCheck { value: operand, .. } |
             MirInstruction::Cast { value: operand, .. } |
             MirInstruction::Copy { src: operand, .. } |
-            MirInstruction::Debug { value: operand, .. } => vec![*operand],
+            MirInstruction::Debug { value: operand, .. } |
+            MirInstruction::Print { value: operand, .. } => vec![*operand],
             
             MirInstruction::BinOp { lhs, rhs, .. } |
             MirInstruction::Compare { lhs, rhs, .. } |

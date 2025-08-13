@@ -1,0 +1,2 @@
+// Comparison test
+print(42 == 42)

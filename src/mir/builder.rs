@@ -132,6 +132,10 @@ impl MirBuilder {
                 self.build_function_call(name.clone(), arguments.clone())
             },
             
+            ASTNode::Print { expression, .. } => {
+                self.build_print_statement(*expression.clone())
+            },
+            
             ASTNode::Program { statements, .. } => {
                 self.build_block(statements.clone())
             },
@@ -269,6 +273,20 @@ impl MirBuilder {
         })?;
         
         Ok(dst)
+    }
+    
+    /// Build print statement - converts to console output
+    fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+        let value = self.build_expression(expression)?;
+        
+        // For now, use a special Print instruction (minimal scope)
+        self.emit_instruction(MirInstruction::Print {
+            value,
+            effects: EffectMask::PURE.add(Effect::IO),
+        })?;
+        
+        // Return the value that was printed
+        Ok(value)
     }
     
     /// Build a block of statements

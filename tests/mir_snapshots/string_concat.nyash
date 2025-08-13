@@ -1,0 +1,2 @@
+// String concatenation test
+print("Hello" + "World")

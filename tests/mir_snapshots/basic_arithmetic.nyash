@@ -1,0 +1,2 @@
+// Basic arithmetic test - expression statement
+print(42 + 10)
