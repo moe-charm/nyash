@@ -1,0 +1,13 @@
+// Basic arithmetic test
+local a, b, c, d, flag
+a = 10
+b = 20
+c = a + b
+print("10 + 20 = " + c)
+
+d = c * 2
+print("30 * 2 = " + d)
+
+// Boolean test
+flag = true
+print("Flag is: " + flag)

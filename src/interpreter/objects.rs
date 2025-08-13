@@ -214,7 +214,7 @@ impl NyashInterpreter {
             //     let p2p_box = Box::new(crate::boxes::P2PBox::new(node_id, intent_box)) as Box<dyn NyashBox>;
             //     return Ok(p2p_box);
             // }
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
             "EguiBox" => {
                 // EguiBoxは引数なしで作成（GUIアプリケーション用）
                 if !arguments.is_empty() {
@@ -860,9 +860,9 @@ impl NyashInterpreter {
         let is_web_box = false;
         
         // GUI専用Box（非WASM環境のみ）
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
         let is_gui_box = matches!(type_name, "EguiBox");
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(not(all(feature = "gui", not(target_arch = "wasm32"))))]
         let is_gui_box = false;
         
         is_builtin || is_web_box || is_gui_box ||
@@ -916,14 +916,19 @@ impl NyashInterpreter {
         // 親クラスの継承チェーンを再帰的に解決 (Multi-delegation) 🚀
         for parent_name in &box_decl.extends {
             // 🔥 ビルトインBoxかチェック
-            let is_builtin = matches!(parent_name.as_str(), 
-                "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
-                "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
-                "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
-                "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
-                "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox" |
-                "IntentBox" | "P2PBox" | "EguiBox"
-            );
+            let mut builtin_boxes = vec![
+                "IntegerBox", "StringBox", "BoolBox", "ArrayBox", "MapBox", 
+                "FileBox", "ResultBox", "FutureBox", "ChannelBox", "MathBox", 
+                "TimeBox", "DateTimeBox", "TimerBox", "RandomBox", "SoundBox", 
+                "DebugBox", "MethodBox", "NullBox", "ConsoleBox", "FloatBox",
+                "BufferBox", "RegexBox", "JSONBox", "StreamBox", "HTTPClientBox",
+                "IntentBox", "P2PBox"
+            ];
+            
+            #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
+            builtin_boxes.push("EguiBox");
+            
+            let is_builtin = builtin_boxes.contains(&parent_name.as_str());
             
             if is_builtin {
                 // ビルトインBoxの場合、フィールドやメソッドは継承しない

@@ -1,0 +1,12 @@
+// Simple Hello World test
+print("Hello, Nyash!")
+
+local greeting
+greeting = new StringBox("Welcome to Nyash!")
+print(greeting.toString())
+
+local numbers
+numbers = new IntegerBox(42)
+local result
+result = numbers + 8
+print("42 + 8 = " + result)

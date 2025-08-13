@@ -144,7 +144,7 @@ impl NyashInterpreter {
     // DebugBox methods moved to system_methods.rs
 
     /// EguiBoxのメソッド呼び出しを実行（非WASM環境のみ）
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
     pub(super) fn execute_egui_method(&mut self, _egui_box: &crate::boxes::EguiBox, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         // 引数を評価

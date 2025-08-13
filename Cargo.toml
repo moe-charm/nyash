@@ -9,50 +9,110 @@ repository = "https://github.com/user/nyash"
 keywords = ["language", "interpreter", "box", "memory-safe", "rust"]
 categories = ["development-tools::parsing", "interpreters"]
 
+# Default features - minimal CLI only
+[features]
+default = ["cli"]
+cli = []
+gui = ["dep:egui", "dep:eframe", "dep:egui_extras", "dep:image"]
+gui-examples = ["gui"]
+all-examples = ["gui-examples"]
+
 [lib]
 name = "nyash_rust"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
+# Main CLI binary - always available
 [[bin]]
 name = "nyash"
 path = "src/main.rs"
 
+# GUI examples - only built with gui-examples feature
 [[bin]]
 name = "simple_notepad"
 path = "examples/simple_notepad.rs"
+required-features = ["gui-examples"]
 
 [[bin]]
 name = "nyash_notepad"
 path = "examples/simple_notepad_v2.rs"
+required-features = ["gui-examples"]
 
 [[bin]]
 name = "nyash_notepad_ascii"
 path = "examples/simple_notepad_ascii.rs"
+required-features = ["gui-examples"]
 
 [[bin]]
 name = "debug_notepad"
 path = "examples/debug_notepad.rs"
+required-features = ["gui-examples"]
 
 [[bin]]
 name = "nyash_notepad_jp"
 path = "examples/nyash_notepad_jp.rs"
+required-features = ["gui-examples"]
 
 [[bin]]
 name = "nyash_explorer"
 path = "examples/nyash_explorer.rs"
+required-features = ["gui-examples"]
 
 [[bin]]
 name = "nyash_explorer_icons"
 path = "examples/nyash_explorer_with_icons.rs"
-
-[[example]]
-name = "visual_node_prototype"
-path = "development/egui_research/experiments/visual_node_prototype.rs"
+required-features = ["gui-examples"]
 
 [[bin]]
 name = "test_icon_extraction"
 path = "examples/test_icon_extraction.rs"
+required-features = ["gui-examples"]
+
+# Examples for development - only available as examples, not bins
+[[example]]
+name = "gui_simple_notepad"
+path = "examples/simple_notepad.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_simple_notepad_v2"
+path = "examples/simple_notepad_v2.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_simple_notepad_ascii"
+path = "examples/simple_notepad_ascii.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_debug_notepad"
+path = "examples/debug_notepad.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_nyash_notepad_jp"
+path = "examples/nyash_notepad_jp.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_nyash_explorer"
+path = "examples/nyash_explorer.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_nyash_explorer_with_icons"
+path = "examples/nyash_explorer_with_icons.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_test_icon_extraction"
+path = "examples/test_icon_extraction.rs"
+required-features = ["gui-examples"]
+
+[[example]]
+name = "gui_visual_node_prototype"
+path = "development/egui_research/experiments/visual_node_prototype.rs"
+required-features = ["gui-examples"]
 
 
 
@@ -90,11 +150,11 @@ wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 
-# GUI フレームワーク
-egui = "0.29"
-eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"] }
-egui_extras = { version = "0.29", features = ["image"] }
-image = { version = "0.25", features = ["png", "ico"] }
+# GUI フレームワーク - only when gui feature is enabled
+egui = { version = "0.29", optional = true }
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"], optional = true }
+egui_extras = { version = "0.29", features = ["image"], optional = true }
+image = { version = "0.25", features = ["png", "ico"], optional = true }
 
 # Windows API
 [target.'cfg(windows)'.dependencies]

@@ -459,7 +459,7 @@ impl NyashInterpreter {
         // }
         
         // EguiBox method calls (非WASM環境のみ)
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
         if let Some(egui_box) = obj_value.as_any().downcast_ref::<crate::boxes::EguiBox>() {
             return self.execute_egui_method(egui_box, method, arguments);
         }
@@ -849,14 +849,19 @@ impl NyashInterpreter {
         }
         
         // 🔥 ビルトインBoxかチェック
-        let is_builtin = matches!(parent, 
-            "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
-            "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
-            "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
-            "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
-            "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox" |
-            "IntentBox" | "P2PBox" | "EguiBox"
-        );
+        let mut builtin_boxes = vec![
+            "IntegerBox", "StringBox", "BoolBox", "ArrayBox", "MapBox", 
+            "FileBox", "ResultBox", "FutureBox", "ChannelBox", "MathBox", 
+            "TimeBox", "DateTimeBox", "TimerBox", "RandomBox", "SoundBox", 
+            "DebugBox", "MethodBox", "NullBox", "ConsoleBox", "FloatBox",
+            "BufferBox", "RegexBox", "JSONBox", "StreamBox", "HTTPClientBox",
+            "IntentBox", "P2PBox"
+        ];
+        
+        #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
+        builtin_boxes.push("EguiBox");
+        
+        let is_builtin = builtin_boxes.contains(&parent);
         
         if is_builtin {
             // ビルトインBoxの場合、ロックを解放してからメソッド呼び出し
