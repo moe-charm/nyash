@@ -275,6 +275,13 @@ impl NyashInterpreter {
                 let obj_value = self.execute_expression(object)?;
                 
                 if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
+                    // 🔥 Usage prohibition guard - check if instance is finalized
+                    if instance.is_finalized() {
+                        return Err(RuntimeError::InvalidOperation {
+                            message: "Instance was finalized; further use is prohibited".to_string(),
+                        });
+                    }
+                    
                     // 🔗 Weak Reference Assignment Check
                     let box_decls = self.shared.box_declarations.read().unwrap();
                     if let Some(box_decl) = box_decls.get(&instance.class_name) {
@@ -315,6 +322,13 @@ impl NyashInterpreter {
                     })?;
                     
                 if let Some(instance) = this_value.as_any().downcast_ref::<InstanceBox>() {
+                    // 🔥 Usage prohibition guard - check if instance is finalized
+                    if instance.is_finalized() {
+                        return Err(RuntimeError::InvalidOperation {
+                            message: "Instance was finalized; further use is prohibited".to_string(),
+                        });
+                    }
+                    
                     // 既存のthis.field値があればfini()を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
                         if let Some(old_instance) = old_field_value.as_any().downcast_ref::<InstanceBox>() {
@@ -341,6 +355,13 @@ impl NyashInterpreter {
                     })?;
                     
                 if let Some(instance) = me_value.as_any().downcast_ref::<InstanceBox>() {
+                    // 🔥 Usage prohibition guard - check if instance is finalized
+                    if instance.is_finalized() {
+                        return Err(RuntimeError::InvalidOperation {
+                            message: "Instance was finalized; further use is prohibited".to_string(),
+                        });
+                    }
+                    
                     // 既存のme.field値があればfini()を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
                         if let Some(old_instance) = old_field_value.as_any().downcast_ref::<InstanceBox>() {

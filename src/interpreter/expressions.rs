@@ -498,8 +498,37 @@ impl NyashInterpreter {
         
         // InstanceBox method calls
         if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
+            // 🔥 Usage prohibition guard - check if instance is finalized
+            if instance.is_finalized() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: "Instance was finalized; further use is prohibited".to_string(),
+                });
+            }
+            
             // fini()は特別処理
             if method == "fini" {
+                // 🔥 weak-fini prohibition check - prevent fini() on weak fields
+                if let ASTNode::FieldAccess { object: field_object, field, .. } = object {
+                    // Check if this is me.<field>.fini() pattern
+                    if let ASTNode::Variable { name, .. } = field_object.as_ref() {
+                        if name == "me" {
+                            // Get current instance to check if field is weak
+                            if let Ok(current_me) = self.resolve_variable("me") {
+                                if let Some(current_instance) = current_me.as_any().downcast_ref::<InstanceBox>() {
+                                    if current_instance.is_weak_field(field) {
+                                        return Err(RuntimeError::InvalidOperation {
+                                            message: format!(
+                                                "Cannot finalize weak field '{}' (non-owning reference)",
+                                                field
+                                            ),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 // 既に解放済みの場合は何もしない（二重fini()対策）
                 if instance.is_finalized() {
                     return Ok(Box::new(VoidBox::new()));
@@ -625,6 +654,13 @@ impl NyashInterpreter {
         
         // InstanceBoxにキャスト
         if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
+            // 🔥 Usage prohibition guard - check if instance is finalized
+            if instance.is_finalized() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: "Instance was finalized; further use is prohibited".to_string(),
+                });
+            }
+            
             // フィールドの値を取得
             let field_value = instance.get_field(field)
                 .ok_or(RuntimeError::InvalidOperation {

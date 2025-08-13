@@ -1,0 +1,51 @@
+// 🔥 fini System Violation Tests - Testing guards and prohibitions
+
+box TestResource {
+    init { name }
+    
+    pack(resourceName) {
+        me.name = resourceName
+    }
+    
+    getData() {
+        return "Resource: " + me.name.toString()
+    }
+    
+    fini() {
+        print("🔥 TestResource.fini(): Finalizing " + me.name.toString())
+    }
+}
+
+box BadExample {
+    init { weak weakRef, strongRef }
+    
+    pack(name) {
+        me.strongRef = new TestResource(name + "_strong")
+        me.weakRef = new TestResource(name + "_weak")  // Will be set as weak
+    }
+    
+    // This should trigger weak-fini prohibition
+    badFini() {
+        print("🔥 BadExample.badFini(): Attempting illegal operations")
+        me.weakRef.fini()  // Should fail with "Cannot finalize weak field"
+    }
+}
+
+static box Main {
+    main() {
+        print("=== 🔥 fini System Violation Tests ===")
+        
+        // Test 1: Usage after finalization prohibition
+        print("\n📋 Test 1: Usage after finalization (should fail)")
+        local resource = new TestResource("TestViolation")
+        print("Before fini: " + resource.getData())
+        
+        resource.fini()
+        print("Resource finalized")
+        
+        print("Attempting to access finalized resource...")
+        resource.getData()  // Should fail with "Instance was finalized"
+        
+        return "Test should have failed before reaching here"
+    }
+}
