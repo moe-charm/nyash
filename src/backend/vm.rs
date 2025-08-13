@@ -41,6 +41,7 @@ pub enum VMValue {
     Float(f64),
     Bool(bool),
     String(String),
+    Future(crate::boxes::future::FutureBox),
     Void,
 }
 
@@ -52,6 +53,7 @@ impl VMValue {
             VMValue::Float(f) => Box::new(StringBox::new(&f.to_string())), // Simplified for now
             VMValue::Bool(b) => Box::new(BoolBox::new(*b)),
             VMValue::String(s) => Box::new(StringBox::new(s)),
+            VMValue::Future(f) => Box::new(f.clone()),
             VMValue::Void => Box::new(VoidBox::new()),
         }
     }
@@ -63,6 +65,7 @@ impl VMValue {
             VMValue::Float(f) => f.to_string(),
             VMValue::Bool(b) => b.to_string(),
             VMValue::String(s) => s.clone(),
+            VMValue::Future(f) => f.to_string_box().value,
             VMValue::Void => "void".to_string(),
         }
     }
@@ -81,6 +84,23 @@ impl VMValue {
             VMValue::Bool(b) => Ok(*b),
             VMValue::Integer(i) => Ok(*i != 0),
             _ => Err(VMError::TypeError(format!("Expected bool, got {:?}", self))),
+        }
+    }
+    
+    /// Convert from NyashBox to VMValue  
+    pub fn from_nyash_box(nyash_box: Box<dyn crate::box_trait::NyashBox>) -> VMValue {
+        // Try to downcast to known types
+        if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
+            VMValue::Integer(int_box.value)
+        } else if let Some(bool_box) = nyash_box.as_any().downcast_ref::<BoolBox>() {
+            VMValue::Bool(bool_box.value)
+        } else if let Some(string_box) = nyash_box.as_any().downcast_ref::<StringBox>() {
+            VMValue::String(string_box.value.clone())
+        } else if let Some(future_box) = nyash_box.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
+            VMValue::Future(future_box.clone())
+        } else {
+            // For any other type, convert to string representation
+            VMValue::String(nyash_box.to_string_box().value)
         }
     }
 }
@@ -158,8 +178,10 @@ impl VM {
             let mut should_return = None;
             
             // Execute instructions in this block
+            println!("Executing block {} with {} instructions", current_block, block.instructions.len());
             for (index, instruction) in block.instructions.iter().enumerate() {
                 self.pc = index;
+                println!("  Instruction {}: {:?}", index, instruction);
                 
                 match self.execute_instruction(instruction)? {
                     ControlFlow::Continue => continue,
@@ -173,6 +195,8 @@ impl VM {
                     },
                 }
             }
+            
+            println!("Block execution finished. should_return: {:?}, next_block: {:?}", should_return.is_some(), next_block.is_some());
             
             // Handle control flow
             if let Some(return_value) = should_return {
@@ -189,6 +213,7 @@ impl VM {
     
     /// Execute a single instruction
     fn execute_instruction(&mut self, instruction: &MirInstruction) -> Result<ControlFlow, VMError> {
+        println!("Executing instruction: {:?}", instruction);
         match instruction {
             MirInstruction::Const { dst, value } => {
                 let vm_value = VMValue::from(value);
@@ -227,8 +252,11 @@ impl VM {
             
             MirInstruction::Return { value } => {
                 let return_value = if let Some(val_id) = value {
-                    self.get_value(*val_id)?
+                    let val = self.get_value(*val_id)?;
+                    println!("Return: returning value from {:?} = {:?}", val_id, val);
+                    val
                 } else {
+                    println!("Return: returning void (no value specified)");
                     VMValue::Void
                 };
                 Ok(ControlFlow::Return(return_value))
@@ -438,6 +466,51 @@ impl VM {
                 // Memory barrier write is a no-op for now
                 // In a real implementation, this would ensure memory ordering
                 Ok(ControlFlow::Continue)
+            },
+            
+            // Phase 7: Async/Future Operations
+            MirInstruction::FutureNew { dst, value } => {
+                let initial_value = self.get_value(*value)?;
+                println!("FutureNew: initial_value = {:?}", initial_value);
+                let future = crate::boxes::future::FutureBox::new();
+                // Convert VMValue to NyashBox and set it in the future
+                let nyash_box = initial_value.to_nyash_box();
+                println!("FutureNew: converted to NyashBox type = {}", nyash_box.type_name());
+                future.set_result(nyash_box);
+                self.values.insert(*dst, VMValue::Future(future));
+                println!("FutureNew: stored Future in dst = {:?}", dst);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::FutureSet { future, value } => {
+                let future_val = self.get_value(*future)?;
+                let new_value = self.get_value(*value)?;
+                
+                if let VMValue::Future(ref future_box) = future_val {
+                    future_box.set_result(new_value.to_nyash_box());
+                    Ok(ControlFlow::Continue)
+                } else {
+                    Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
+                }
+            },
+            
+            MirInstruction::Await { dst, future } => {
+                let future_val = self.get_value(*future)?;
+                println!("Await: future_val = {:?}", future_val);
+                
+                if let VMValue::Future(ref future_box) = future_val {
+                    // This blocks until the future is ready
+                    let result = future_box.get();
+                    println!("Await: future.get() returned type = {}", result.type_name());
+                    println!("Await: future.get() string = {}", result.to_string_box().value);
+                    // Convert NyashBox back to VMValue
+                    let vm_value = VMValue::from_nyash_box(result);
+                    println!("Await: converted back to VMValue = {:?}", vm_value);
+                    self.values.insert(*dst, vm_value);
+                    Ok(ControlFlow::Continue)
+                } else {
+                    Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
+                }
             },
         }
     }
