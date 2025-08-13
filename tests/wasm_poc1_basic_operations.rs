@@ -33,21 +33,6 @@ fn test_wasm_poc1_basic_arithmetic() {
     assert!(wat_result.is_ok(), "WAT generation should succeed");
     
     let wat_text = wat_result.unwrap();
-    println!("Generated WAT:\n{}", wat_text);
-    
-    // Debug: Print MIR instructions
-    if let Some(main_func) = mir_module.functions.get("main") {
-        if let Some(entry_block) = main_func.blocks.get(&main_func.entry_block) {
-            println!("MIR instructions ({}:", entry_block.instructions.len());
-            for (i, instruction) in entry_block.instructions.iter().enumerate() {
-                println!("  {}: {:?}", i, instruction);
-            }
-            
-            // Check if any instruction is a Return
-            let has_return = entry_block.instructions.iter().any(|instr| matches!(instr, MirInstruction::Return { .. }));
-            println!("Has return instruction: {}", has_return);
-        }
-    }
     
     // Verify WAT contains expected elements
     assert!(wat_text.contains("(module"), "Should contain module declaration");
@@ -58,6 +43,7 @@ fn test_wasm_poc1_basic_arithmetic() {
     assert!(wat_text.contains("i32.const 8"), "Should contain constant 8");
     assert!(wat_text.contains("i32.add"), "Should contain addition operation");
     assert!(wat_text.contains("call $print"), "Should contain print call");
+    assert!(wat_text.contains("return"), "Should contain return instruction");
     
     // Compile to WASM binary and execute 
     let wasm_result = backend.compile_module(mir_module);
@@ -150,12 +136,13 @@ fn build_arithmetic_mir_module() -> MirModule {
         effects: EffectMask::IO,
     });
     
-    block.add_instruction(MirInstruction::Return {
+    // Set terminator instruction (Return must be a terminator, not regular instruction)
+    block.set_terminator(MirInstruction::Return {
         value: Some(result),
     });
     
-    // Debug: Print number of instructions
-    println!("Total instructions added: {}", block.instructions.len());
+    // Debug: Print number of instructions and terminator
+    println!("Instructions: {}, Has terminator: {}", block.instructions.len(), block.terminator.is_some());
     
     // Add block to function
     main_function.add_block(block);
@@ -202,7 +189,7 @@ fn build_multiplication_mir_module() -> MirModule {
         rhs: val_b,
     });
     
-    block.add_instruction(MirInstruction::Return {
+    block.set_terminator(MirInstruction::Return {
         value: Some(result),
     });
     
@@ -248,7 +235,7 @@ fn build_subtraction_mir_module() -> MirModule {
         rhs: val_b,
     });
     
-    block.add_instruction(MirInstruction::Return {
+    block.set_terminator(MirInstruction::Return {
         value: Some(result),
     });
     

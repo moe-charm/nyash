@@ -183,8 +183,15 @@ impl WasmCodegen {
         
         let mut instructions = Vec::new();
         
+        // Process regular instructions
         for mir_instruction in &block.instructions {
             let wasm_instructions = self.generate_instruction(mir_instruction)?;
+            instructions.extend(wasm_instructions);
+        }
+        
+        // Process terminator instruction
+        if let Some(ref terminator) = block.terminator {
+            let wasm_instructions = self.generate_instruction(terminator)?;
             instructions.extend(wasm_instructions);
         }
         
