@@ -199,6 +199,57 @@ pub enum MirInstruction {
     /// Safepoint instruction (no-op for now, can be used for GC/debugging)
     /// `safepoint`
     Safepoint,
+    
+    // === Phase 6: Box Reference Operations ===
+    
+    /// Create a new reference to a Box
+    /// `%dst = ref_new %box`
+    RefNew {
+        dst: ValueId,
+        box_val: ValueId,
+    },
+    
+    /// Get/dereference a Box field through reference
+    /// `%dst = ref_get %ref.field`
+    RefGet {
+        dst: ValueId,
+        reference: ValueId,
+        field: String,
+    },
+    
+    /// Set/assign Box field through reference
+    /// `ref_set %ref.field = %value`
+    RefSet {
+        reference: ValueId,
+        field: String,
+        value: ValueId,
+    },
+    
+    /// Create a weak reference to a Box
+    /// `%dst = weak_new %box`
+    WeakNew {
+        dst: ValueId,
+        box_val: ValueId,
+    },
+    
+    /// Load from weak reference (if still alive)
+    /// `%dst = weak_load %weak_ref`
+    WeakLoad {
+        dst: ValueId,
+        weak_ref: ValueId,
+    },
+    
+    /// Memory barrier read (no-op for now, proper effect annotation)
+    /// `barrier_read %ptr`
+    BarrierRead {
+        ptr: ValueId,
+    },
+    
+    /// Memory barrier write (no-op for now, proper effect annotation)
+    /// `barrier_write %ptr`
+    BarrierWrite {
+        ptr: ValueId,
+    },
 }
 
 /// Constant values in MIR
@@ -300,6 +351,15 @@ impl MirInstruction {
             MirInstruction::Throw { effects, .. } => *effects,
             MirInstruction::Catch { .. } => EffectMask::PURE, // Setting up handler is pure
             MirInstruction::Safepoint => EffectMask::PURE,    // No-op for now
+            
+            // Phase 6: Box reference operations
+            MirInstruction::RefNew { .. } => EffectMask::PURE, // Creating reference is pure
+            MirInstruction::RefGet { .. } => EffectMask::READ, // Reading field has read effects
+            MirInstruction::RefSet { .. } => EffectMask::WRITE, // Writing field has write effects
+            MirInstruction::WeakNew { .. } => EffectMask::PURE, // Creating weak ref is pure
+            MirInstruction::WeakLoad { .. } => EffectMask::READ, // Loading weak ref has read effects
+            MirInstruction::BarrierRead { .. } => EffectMask::READ.add(Effect::Barrier), // Memory barrier with read
+            MirInstruction::BarrierWrite { .. } => EffectMask::WRITE.add(Effect::Barrier), // Memory barrier with write
         }
     }
     
@@ -316,7 +376,11 @@ impl MirInstruction {
             MirInstruction::TypeCheck { dst, .. } |
             MirInstruction::Cast { dst, .. } |
             MirInstruction::ArrayGet { dst, .. } |
-            MirInstruction::Copy { dst, .. } => Some(*dst),
+            MirInstruction::Copy { dst, .. } |
+            MirInstruction::RefNew { dst, .. } |
+            MirInstruction::RefGet { dst, .. } |
+            MirInstruction::WeakNew { dst, .. } |
+            MirInstruction::WeakLoad { dst, .. } => Some(*dst),
             
             MirInstruction::Call { dst, .. } |
             MirInstruction::BoxCall { dst, .. } => *dst,
@@ -329,6 +393,9 @@ impl MirInstruction {
             MirInstruction::Debug { .. } |
             MirInstruction::Print { .. } |
             MirInstruction::Throw { .. } |
+            MirInstruction::RefSet { .. } |
+            MirInstruction::BarrierRead { .. } |
+            MirInstruction::BarrierWrite { .. } |
             MirInstruction::Safepoint |
             MirInstruction::Nop => None,
             
@@ -387,6 +454,15 @@ impl MirInstruction {
             MirInstruction::Throw { exception, .. } => vec![*exception],
             MirInstruction::Catch { .. } => Vec::new(), // Handler setup doesn't use values
             MirInstruction::Safepoint => Vec::new(),
+            
+            // Phase 6: Box reference operations
+            MirInstruction::RefNew { box_val, .. } => vec![*box_val],
+            MirInstruction::RefGet { reference, .. } => vec![*reference],
+            MirInstruction::RefSet { reference, value, .. } => vec![*reference, *value],
+            MirInstruction::WeakNew { box_val, .. } => vec![*box_val],
+            MirInstruction::WeakLoad { weak_ref, .. } => vec![*weak_ref],
+            MirInstruction::BarrierRead { ptr } => vec![*ptr],
+            MirInstruction::BarrierWrite { ptr } => vec![*ptr],
         }
     }
 }
@@ -540,4 +616,81 @@ mod tests {
         assert_eq!(back, const_val);
     }
     */
+    
+    #[test]
+    fn test_ref_new_instruction() {
+        let dst = ValueId::new(0);
+        let box_val = ValueId::new(1);
+        let inst = MirInstruction::RefNew { dst, box_val };
+        
+        assert_eq!(inst.dst_value(), Some(dst));
+        assert_eq!(inst.used_values(), vec![box_val]);
+        assert!(inst.effects().is_pure());
+    }
+    
+    #[test]
+    fn test_ref_get_instruction() {
+        let dst = ValueId::new(0);
+        let reference = ValueId::new(1);
+        let field = "name".to_string();
+        let inst = MirInstruction::RefGet { dst, reference, field };
+        
+        assert_eq!(inst.dst_value(), Some(dst));
+        assert_eq!(inst.used_values(), vec![reference]);
+        assert!(!inst.effects().is_pure());
+        assert!(inst.effects().contains(super::super::effect::Effect::ReadHeap));
+    }
+    
+    #[test]
+    fn test_ref_set_instruction() {
+        let reference = ValueId::new(0);
+        let field = "value".to_string();
+        let value = ValueId::new(1);
+        let inst = MirInstruction::RefSet { reference, field, value };
+        
+        assert_eq!(inst.dst_value(), None);
+        assert_eq!(inst.used_values(), vec![reference, value]);
+        assert!(!inst.effects().is_pure());
+        assert!(inst.effects().contains(super::super::effect::Effect::WriteHeap));
+    }
+    
+    #[test] 
+    fn test_weak_new_instruction() {
+        let dst = ValueId::new(0);
+        let box_val = ValueId::new(1);
+        let inst = MirInstruction::WeakNew { dst, box_val };
+        
+        assert_eq!(inst.dst_value(), Some(dst));
+        assert_eq!(inst.used_values(), vec![box_val]);
+        assert!(inst.effects().is_pure());
+    }
+    
+    #[test]
+    fn test_weak_load_instruction() {
+        let dst = ValueId::new(0);
+        let weak_ref = ValueId::new(1);
+        let inst = MirInstruction::WeakLoad { dst, weak_ref };
+        
+        assert_eq!(inst.dst_value(), Some(dst));
+        assert_eq!(inst.used_values(), vec![weak_ref]);
+        assert!(!inst.effects().is_pure());
+        assert!(inst.effects().contains(super::super::effect::Effect::ReadHeap));
+    }
+    
+    #[test]
+    fn test_barrier_instructions() {
+        let ptr = ValueId::new(0);
+        
+        let read_barrier = MirInstruction::BarrierRead { ptr };
+        assert_eq!(read_barrier.dst_value(), None);
+        assert_eq!(read_barrier.used_values(), vec![ptr]);
+        assert!(read_barrier.effects().contains(super::super::effect::Effect::Barrier));
+        assert!(read_barrier.effects().contains(super::super::effect::Effect::ReadHeap));
+        
+        let write_barrier = MirInstruction::BarrierWrite { ptr };
+        assert_eq!(write_barrier.dst_value(), None);
+        assert_eq!(write_barrier.used_values(), vec![ptr]);
+        assert!(write_barrier.effects().contains(super::super::effect::Effect::Barrier));
+        assert!(write_barrier.effects().contains(super::super::effect::Effect::WriteHeap));
+    }
 }

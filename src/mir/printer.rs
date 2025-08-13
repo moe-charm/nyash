@@ -318,6 +318,35 @@ impl MirPrinter {
             MirInstruction::Safepoint => {
                 "safepoint".to_string()
             },
+            
+            // Phase 6: Box reference operations
+            MirInstruction::RefNew { dst, box_val } => {
+                format!("{} = ref_new {}", dst, box_val)
+            },
+            
+            MirInstruction::RefGet { dst, reference, field } => {
+                format!("{} = ref_get {}.{}", dst, reference, field)
+            },
+            
+            MirInstruction::RefSet { reference, field, value } => {
+                format!("ref_set {}.{} = {}", reference, field, value)
+            },
+            
+            MirInstruction::WeakNew { dst, box_val } => {
+                format!("{} = weak_new {}", dst, box_val)
+            },
+            
+            MirInstruction::WeakLoad { dst, weak_ref } => {
+                format!("{} = weak_load {}", dst, weak_ref)
+            },
+            
+            MirInstruction::BarrierRead { ptr } => {
+                format!("barrier_read {}", ptr)
+            },
+            
+            MirInstruction::BarrierWrite { ptr } => {
+                format!("barrier_write {}", ptr)
+            },
         }
     }
     

@@ -256,6 +256,88 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
+            // Missing instructions that need basic implementations
+            MirInstruction::Load { dst, ptr } => {
+                // For now, loading is the same as getting the value
+                let value = self.get_value(*ptr)?;
+                self.values.insert(*dst, value);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Store { value, ptr } => {
+                // For now, storing just updates the ptr with the value
+                let val = self.get_value(*value)?;
+                self.values.insert(*ptr, val);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Call { dst, func: _, args: _, effects: _ } => {
+                // For now, function calls return void
+                // TODO: Implement proper function call handling
+                if let Some(dst_id) = dst {
+                    self.values.insert(*dst_id, VMValue::Void);
+                }
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::BoxCall { dst, box_val: _, method: _, args: _, effects: _ } => {
+                // For now, box method calls return void
+                // TODO: Implement proper box method call handling
+                if let Some(dst_id) = dst {
+                    self.values.insert(*dst_id, VMValue::Void);
+                }
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::NewBox { dst, box_type: _, args: _ } => {
+                // For now, new box creates a placeholder string value
+                // TODO: Implement proper box creation
+                self.values.insert(*dst, VMValue::String("NewBox".to_string()));
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::TypeCheck { dst, value: _, expected_type: _ } => {
+                // For now, type checks always return true
+                // TODO: Implement proper type checking
+                self.values.insert(*dst, VMValue::Bool(true));
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Cast { dst, value, target_type: _ } => {
+                // For now, casting just copies the value
+                // TODO: Implement proper type casting
+                let val = self.get_value(*value)?;
+                self.values.insert(*dst, val);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::ArrayGet { dst, array: _, index: _ } => {
+                // For now, array access returns a placeholder
+                // TODO: Implement proper array access
+                self.values.insert(*dst, VMValue::Integer(0));
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::ArraySet { array: _, index: _, value: _ } => {
+                // For now, array setting is a no-op
+                // TODO: Implement proper array setting
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Copy { dst, src } => {
+                // Copy instruction - duplicate the source value
+                let val = self.get_value(*src)?;
+                self.values.insert(*dst, val);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Debug { value, message: _ } => {
+                // Debug instruction - print value for debugging
+                let val = self.get_value(*value)?;
+                println!("DEBUG: {}", val.to_string());
+                Ok(ControlFlow::Continue)
+            },
+            
             MirInstruction::Nop => {
                 // No-op instruction
                 Ok(ControlFlow::Continue)
@@ -283,9 +365,70 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            _ => {
-                Err(VMError::InvalidInstruction(format!("Unsupported instruction: {:?}", instruction)))
-            }
+            // Phase 6: Box reference operations
+            MirInstruction::RefNew { dst, box_val } => {
+                // For now, a reference is just the same as the box value
+                // In a real implementation, this would create a proper reference
+                let box_value = self.get_value(*box_val)?;
+                self.values.insert(*dst, box_value);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::RefGet { dst, reference, field } => {
+                // For now, field access is simplified - we'll treat it as accessing a property
+                // In a real implementation, this would dereference the reference and access the field
+                let _ref_value = self.get_value(*reference)?;
+                
+                // Simplified: return a placeholder value for field access
+                // TODO: Implement proper Box field access
+                let field_value = match field.as_str() {
+                    "length" => VMValue::Integer(0), // Default length
+                    "size" => VMValue::Integer(0),   // Default size
+                    _ => VMValue::String(format!("field_{}", field)), // Default field value
+                };
+                
+                self.values.insert(*dst, field_value);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::RefSet { reference, field, value } => {
+                // For now, field setting is simplified
+                // In a real implementation, this would dereference the reference and set the field
+                let _ref_value = self.get_value(*reference)?;
+                let _new_value = self.get_value(*value)?;
+                
+                // TODO: Implement proper Box field setting
+                // For now, this is a no-op that doesn't actually set anything
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::WeakNew { dst, box_val } => {
+                // For now, a weak reference is just a copy of the value
+                // In a real implementation, this would create a proper weak reference
+                let box_value = self.get_value(*box_val)?;
+                self.values.insert(*dst, box_value);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::WeakLoad { dst, weak_ref } => {
+                // For now, loading from weak ref is the same as getting the value
+                // In a real implementation, this would check if the weak ref is still valid
+                let weak_value = self.get_value(*weak_ref)?;
+                self.values.insert(*dst, weak_value);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::BarrierRead { ptr: _ } => {
+                // Memory barrier read is a no-op for now
+                // In a real implementation, this would ensure memory ordering
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::BarrierWrite { ptr: _ } => {
+                // Memory barrier write is a no-op for now
+                // In a real implementation, this would ensure memory ordering
+                Ok(ControlFlow::Continue)
+            },
         }
     }
     
