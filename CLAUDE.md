@@ -10,8 +10,8 @@ Nyashプログラミング言語開発に必要な情報をまとめたクイッ
 
 ### 🐧 Linux/WSL版
 ```bash
-# ビルドと実行
-cargo build --release
+# ビルドと実行（32スレッド並列ビルド）
+cargo build --release -j32
 ./target/release/nyash program.nyash
 ```
 

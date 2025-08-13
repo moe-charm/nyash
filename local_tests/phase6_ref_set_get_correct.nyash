@@ -1,0 +1,14 @@
+// Phase 6.1 test: Object creation and field access (Nyash哲学準拠版)
+box DataBox {
+  init { value }
+}
+
+static box Main {
+  main() {
+    local data
+    data = new DataBox()
+    data.value = 1
+    print(data.value)
+    return data.value
+  }
+}
