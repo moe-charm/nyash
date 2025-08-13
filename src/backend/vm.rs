@@ -110,6 +110,8 @@ pub struct VM {
     pc: usize,
     /// Return value from last execution
     last_result: Option<VMValue>,
+    /// Simple field storage for objects (maps reference -> field -> value)
+    object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
 }
 
 impl VM {
@@ -121,6 +123,7 @@ impl VM {
             current_block: None,
             pc: 0,
             last_result: None,
+            object_fields: HashMap::new(),
         }
     }
     
@@ -375,16 +378,17 @@ impl VM {
             },
             
             MirInstruction::RefGet { dst, reference, field } => {
-                // For now, field access is simplified - we'll treat it as accessing a property
-                // In a real implementation, this would dereference the reference and access the field
-                let _ref_value = self.get_value(*reference)?;
-                
-                // Simplified: return a placeholder value for field access
-                // TODO: Implement proper Box field access
-                let field_value = match field.as_str() {
-                    "length" => VMValue::Integer(0), // Default length
-                    "size" => VMValue::Integer(0),   // Default size
-                    _ => VMValue::String(format!("field_{}", field)), // Default field value
+                // Get field value from object
+                let field_value = if let Some(fields) = self.object_fields.get(reference) {
+                    if let Some(value) = fields.get(field) {
+                        value.clone()
+                    } else {
+                        // Field not set yet, return default
+                        VMValue::Integer(0)
+                    }
+                } else {
+                    // Object has no fields yet, return default
+                    VMValue::Integer(0)
                 };
                 
                 self.values.insert(*dst, field_value);
@@ -392,13 +396,19 @@ impl VM {
             },
             
             MirInstruction::RefSet { reference, field, value } => {
-                // For now, field setting is simplified
-                // In a real implementation, this would dereference the reference and set the field
-                let _ref_value = self.get_value(*reference)?;
-                let _new_value = self.get_value(*value)?;
+                // Get the value to set
+                let new_value = self.get_value(*value)?;
                 
-                // TODO: Implement proper Box field setting
-                // For now, this is a no-op that doesn't actually set anything
+                // Ensure object has field storage
+                if !self.object_fields.contains_key(reference) {
+                    self.object_fields.insert(*reference, HashMap::new());
+                }
+                
+                // Set the field
+                if let Some(fields) = self.object_fields.get_mut(reference) {
+                    fields.insert(field.clone(), new_value);
+                }
+                
                 Ok(ControlFlow::Continue)
             },
             

@@ -1,0 +1,9 @@
+static box Main {
+  main() {
+    local o
+    o = new Obj()
+    o.x = 1
+    print(o.x)
+    return o.x
+  }
+}
