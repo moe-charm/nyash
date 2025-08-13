@@ -175,6 +175,10 @@ impl MirBuilder {
                 self.build_throw_statement(*expression.clone())
             },
             
+            ASTNode::Local { variables, initial_values, .. } => {
+                self.build_local_statement(variables.clone(), initial_values.clone())
+            },
+            
             _ => {
                 Err(format!("Unsupported AST node type: {:?}", ast))
             }
@@ -343,7 +347,9 @@ impl MirBuilder {
         self.current_block = Some(then_block);
         self.ensure_block_exists(then_block)?;
         let then_value = self.build_expression(then_branch)?;
-        self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        if !self.is_current_block_terminated() {
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
         
         // Build else branch
         self.current_block = Some(else_block);
@@ -359,7 +365,9 @@ impl MirBuilder {
             })?;
             void_val
         };
-        self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        if !self.is_current_block_terminated() {
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
         
         // Create merge block with phi function
         self.current_block = Some(merge_block);
@@ -467,6 +475,18 @@ impl MirBuilder {
         let finally_block = if finally_body.is_some() { Some(self.block_gen.next()) } else { None };
         let exit_block = self.block_gen.next();
         
+        // Set up exception handler for the try block (before we enter it)
+        if let Some(catch_clause) = catch_clauses.first() {
+            let exception_value = self.value_gen.next();
+            
+            // Register catch handler for exceptions that may occur in try block
+            self.emit_instruction(MirInstruction::Catch {
+                exception_type: catch_clause.exception_type.clone(),
+                exception_value,
+                handler_bb: catch_block,
+            })?;
+        }
+        
         // Jump to try block
         self.emit_instruction(MirInstruction::Jump { target: try_block })?;
         
@@ -477,26 +497,19 @@ impl MirBuilder {
             statements: try_body,
             span: crate::ast::Span::unknown(),
         };
-        let try_result = self.build_expression(try_ast)?;
+        let _try_result = self.build_expression(try_ast)?;
         
-        // Jump to finally or exit
-        let next_target = finally_block.unwrap_or(exit_block);
-        self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+        // Normal completion of try block - jump to finally or exit (if not already terminated)
+        if !self.is_current_block_terminated() {
+            let next_target = finally_block.unwrap_or(exit_block);
+            self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+        }
         
-        // Build catch block
+        // Build catch block (reachable via exception handling)
         self.start_new_block(catch_block)?;
         
-        // For now, handle first catch clause only (simplified)
+        // Handle catch clause
         if let Some(catch_clause) = catch_clauses.first() {
-            let exception_value = self.value_gen.next();
-            
-            // Set up catch handler
-            self.emit_instruction(MirInstruction::Catch {
-                exception_type: catch_clause.exception_type.clone(),
-                exception_value,
-                handler_bb: catch_block,
-            })?;
-            
             // Build catch body
             let catch_ast = ASTNode::Program {
                 statements: catch_clause.body.clone(),
@@ -505,9 +518,11 @@ impl MirBuilder {
             self.build_expression(catch_ast)?;
         }
         
-        // Jump to finally or exit
-        let next_target = finally_block.unwrap_or(exit_block);
-        self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+        // Catch completion - jump to finally or exit (if not already terminated)
+        if !self.is_current_block_terminated() {
+            let next_target = finally_block.unwrap_or(exit_block);
+            self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+        }
         
         // Build finally block if present
         if let (Some(finally_block_id), Some(finally_statements)) = (finally_block, finally_body) {
@@ -525,28 +540,65 @@ impl MirBuilder {
         // Create exit block
         self.start_new_block(exit_block)?;
         
-        // Return the try result (simplified - in real implementation would need phi node)
-        Ok(try_result)
+        // Return void for now (in a complete implementation, would use phi for try/catch values)
+        let result = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: result,
+            value: ConstValue::Void,
+        })?;
+        
+        Ok(result)
     }
     
     /// Build a throw statement
     fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         let exception_value = self.build_expression(expression)?;
         
-        // Emit throw instruction with PANIC effect
+        // Emit throw instruction with PANIC effect (this is a terminator)
         self.emit_instruction(MirInstruction::Throw {
             exception: exception_value,
             effects: EffectMask::PANIC,
         })?;
         
         // Throw doesn't return normally, but we need to return a value for the type system
-        let void_dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: void_dst,
-            value: ConstValue::Void,
-        })?;
+        // We can't add more instructions after throw, so just return the exception value
+        Ok(exception_value)
+    }
+    
+    /// Build local variable declarations with optional initial values
+    fn build_local_statement(&mut self, variables: Vec<String>, initial_values: Vec<Option<Box<ASTNode>>>) -> Result<ValueId, String> {
+        let mut last_value = None;
         
-        Ok(void_dst)
+        // Process each variable declaration
+        for (i, var_name) in variables.iter().enumerate() {
+            let value_id = if i < initial_values.len() && initial_values[i].is_some() {
+                // Variable has initial value - evaluate it
+                let init_expr = initial_values[i].as_ref().unwrap();
+                self.build_expression(*init_expr.clone())?
+            } else {
+                // No initial value - assign void (uninitialized)
+                let void_dst = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const {
+                    dst: void_dst,
+                    value: ConstValue::Void,
+                })?;
+                void_dst
+            };
+            
+            // Register variable in SSA form
+            self.variable_map.insert(var_name.clone(), value_id);
+            last_value = Some(value_id);
+        }
+        
+        // Return the last assigned value, or void if no variables
+        Ok(last_value.unwrap_or_else(|| {
+            let void_val = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const {
+                dst: void_val,
+                value: ConstValue::Void,
+            }).unwrap();
+            void_val
+        }))
     }
     
     /// Start a new basic block
@@ -558,6 +610,16 @@ impl MirBuilder {
         } else {
             Err("No current function".to_string())
         }
+    }
+    
+    /// Check if the current basic block is terminated
+    fn is_current_block_terminated(&self) -> bool {
+        if let (Some(block_id), Some(ref function)) = (self.current_block, &self.current_function) {
+            if let Some(block) = function.get_block(block_id) {
+                return block.is_terminated();
+            }
+        }
+        false
     }
     
     /// Convert AST binary operator to MIR operator

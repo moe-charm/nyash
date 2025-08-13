@@ -1,4 +1,0 @@
-// test_float_tostring.nyash - FloatBox toString() test as mentioned in issue
-local f1
-f1 = new FloatBox(3.14)
-print(f1.toString())

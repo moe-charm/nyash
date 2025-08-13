@@ -103,7 +103,8 @@ impl BasicBlock {
         matches!(instruction, 
             MirInstruction::Branch { .. } |
             MirInstruction::Jump { .. } |
-            MirInstruction::Return { .. }
+            MirInstruction::Return { .. } |
+            MirInstruction::Throw { .. }
         )
     }
     
@@ -122,6 +123,10 @@ impl BasicBlock {
                 },
                 MirInstruction::Return { .. } => {
                     // No successors for return
+                },
+                MirInstruction::Throw { .. } => {
+                    // No normal successors for throw - control goes to exception handlers
+                    // Exception edges are handled separately from normal control flow
                 },
                 _ => unreachable!("Non-terminator instruction in terminator position"),
             }

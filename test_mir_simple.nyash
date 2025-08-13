@@ -1,6 +1,0 @@
-/*!
- * Simple test for basic MIR functionality
- */
-
-// A simple Nyash program for testing MIR compilation
-print(42 + 10)

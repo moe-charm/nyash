@@ -228,9 +228,28 @@ impl MirVerifier {
         while let Some(current) = worklist.pop() {
             if reachable.insert(current) {
                 if let Some(block) = function.blocks.get(&current) {
+                    // Add normal successors
                     for successor in &block.successors {
                         if !reachable.contains(successor) {
                             worklist.push(*successor);
+                        }
+                    }
+                    
+                    // Add exception handler blocks as reachable
+                    for instruction in &block.instructions {
+                        if let super::MirInstruction::Catch { handler_bb, .. } = instruction {
+                            if !reachable.contains(handler_bb) {
+                                worklist.push(*handler_bb);
+                            }
+                        }
+                    }
+                    
+                    // Also check terminator for exception handlers
+                    if let Some(ref terminator) = block.terminator {
+                        if let super::MirInstruction::Catch { handler_bb, .. } = terminator {
+                            if !reachable.contains(handler_bb) {
+                                worklist.push(*handler_bb);
+                            }
                         }
                     }
                 }
