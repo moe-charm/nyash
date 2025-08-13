@@ -250,6 +250,29 @@ pub enum MirInstruction {
     BarrierWrite {
         ptr: ValueId,
     },
+    
+    // === Phase 7: Async/Future Operations ===
+    
+    /// Create a new Future with initial value
+    /// `%dst = future_new %value`
+    FutureNew {
+        dst: ValueId,
+        value: ValueId,
+    },
+    
+    /// Set Future value and mark as ready
+    /// `future_set %future = %value`
+    FutureSet {
+        future: ValueId,
+        value: ValueId,
+    },
+    
+    /// Wait for Future completion and get value
+    /// `%dst = await %future`
+    Await {
+        dst: ValueId,
+        future: ValueId,
+    },
 }
 
 /// Constant values in MIR
@@ -304,6 +327,7 @@ pub enum MirType {
     String,
     Box(String), // Box type with name
     Array(Box<MirType>),
+    Future(Box<MirType>), // Future containing a type
     Void,
     Unknown,
 }
@@ -360,6 +384,11 @@ impl MirInstruction {
             MirInstruction::WeakLoad { .. } => EffectMask::READ, // Loading weak ref has read effects
             MirInstruction::BarrierRead { .. } => EffectMask::READ.add(Effect::Barrier), // Memory barrier with read
             MirInstruction::BarrierWrite { .. } => EffectMask::WRITE.add(Effect::Barrier), // Memory barrier with write
+            
+            // Phase 7: Async/Future Operations
+            MirInstruction::FutureNew { .. } => EffectMask::PURE.add(Effect::Alloc), // Creating future may allocate
+            MirInstruction::FutureSet { .. } => EffectMask::WRITE, // Setting future has write effects
+            MirInstruction::Await { .. } => EffectMask::READ.add(Effect::Async), // Await blocks and reads
         }
     }
     
@@ -380,7 +409,9 @@ impl MirInstruction {
             MirInstruction::RefNew { dst, .. } |
             MirInstruction::RefGet { dst, .. } |
             MirInstruction::WeakNew { dst, .. } |
-            MirInstruction::WeakLoad { dst, .. } => Some(*dst),
+            MirInstruction::WeakLoad { dst, .. } |
+            MirInstruction::FutureNew { dst, .. } |
+            MirInstruction::Await { dst, .. } => Some(*dst),
             
             MirInstruction::Call { dst, .. } |
             MirInstruction::BoxCall { dst, .. } => *dst,
@@ -396,6 +427,7 @@ impl MirInstruction {
             MirInstruction::RefSet { .. } |
             MirInstruction::BarrierRead { .. } |
             MirInstruction::BarrierWrite { .. } |
+            MirInstruction::FutureSet { .. } |
             MirInstruction::Safepoint |
             MirInstruction::Nop => None,
             
@@ -463,6 +495,11 @@ impl MirInstruction {
             MirInstruction::WeakLoad { weak_ref, .. } => vec![*weak_ref],
             MirInstruction::BarrierRead { ptr } => vec![*ptr],
             MirInstruction::BarrierWrite { ptr } => vec![*ptr],
+            
+            // Phase 7: Async/Future Operations
+            MirInstruction::FutureNew { value, .. } => vec![*value],
+            MirInstruction::FutureSet { future, value } => vec![*future, *value],
+            MirInstruction::Await { future, .. } => vec![*future],
         }
     }
 }
