@@ -1,0 +1,23 @@
+
+// overrideキーワードが必要かどうかのテスト
+box Parent {
+    init { }
+    
+    method() {
+        return "Parent method"
+    }
+}
+
+local p
+p = new Parent()
+print("Parent method: " + p.method())
+
+// 同じ名前のメソッドを後から追加しようとする
+function addMethod() {
+    local parent
+    parent = new Parent()
+    // これはGlobalBoxへの追加なので、暗黙オーバーライドチェックが働くはず
+}
+
+addMethod()
+

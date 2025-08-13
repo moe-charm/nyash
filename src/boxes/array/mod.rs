@@ -48,6 +48,11 @@ impl ArrayBox {
     pub fn length(&self) -> Box<dyn NyashBox> {
         Box::new(IntegerBox::new(self.items.lock().unwrap().len() as i64))
     }
+
+    /// Rust向けヘルパー: 要素数をusizeで取得（テスト用）
+    pub fn len(&self) -> usize {
+        self.items.lock().unwrap().len()
+    }
     
     /// インデックスで要素を取得
     pub fn get(&self, index: Box<dyn NyashBox>) -> Box<dyn NyashBox> {

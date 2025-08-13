@@ -1,0 +1,33 @@
+// test_quick_check.nyash - 修正状況クイックチェック用
+// Copilotの修正進捗を素早く確認するためのファイル
+
+print("⚡ Quick check for Phase 1 fixes...")
+
+// Quick Test 1: FloatBox toString()
+local f
+f = new FloatBox(3.14)
+print("FloatBox toString(): " + f.toString())
+
+// Quick Test 2: DateTimeBox toString()  
+local dt
+dt = new DateTimeBox()
+print("DateTimeBox toString(): " + dt.toString())
+
+// Quick Test 3: 比較演算結果 toString()
+local result
+result = 10 > 5
+print("Comparison toString(): " + result.toString())
+
+// Quick Test 4: ArrayBox基本動作
+local arr
+arr = new ArrayBox()
+arr.push(1)
+arr.push(2)
+print("ArrayBox toString(): " + arr.toString())
+
+// Quick Test 5: 型間演算
+local mixed
+mixed = 10 + 3.14
+print("Mixed operation: " + mixed.toString())
+
+print("✅ Quick check completed!")

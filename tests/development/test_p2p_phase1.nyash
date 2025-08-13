@@ -1,0 +1,18 @@
+// Phase 1: IntentBox基本テスト
+local intent
+intent = new IntentBox("test", "Hello")
+
+local console
+console = new ConsoleBox()
+console.log("Intent name: " + intent.name)
+console.log("Intent payload: " + intent.payload)
+
+// P2PBox作成テスト
+local node
+node = new P2PBox("test_node", "inprocess")
+console.log("Node ID: " + node.nodeId())
+
+// MessageBus基本動作
+local bus
+bus = MessageBus.global()
+console.log("MessageBus Ready: " + bus.isReady())

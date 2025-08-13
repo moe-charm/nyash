@@ -1,0 +1,18 @@
+
+box SimpleChild : P2PBox {
+    constructor(nodeId, world) {
+        from P2PBox.constructor(nodeId, world)
+    }
+    
+    test() {
+        print("Testing from call")
+        return from P2PBox.send("test", "data", "target")
+    }
+}
+
+local world, child, result
+world = new IntentBox()  
+child = new SimpleChild("test", world)
+result = child.test()
+print("Result: " + result)
+

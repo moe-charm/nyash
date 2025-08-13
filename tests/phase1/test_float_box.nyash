@@ -1,0 +1,49 @@
+// test_float_box.nyash - FloatBox functionality test
+// Phase 1: Basic FloatBox implementation validation
+
+print("🧮 Testing FloatBox implementation...")
+
+// Basic FloatBox creation
+local f1, f2, result
+f1 = new FloatBox(3.14)
+f2 = new FloatBox(2.86)
+
+print("Created FloatBox f1: " + f1.toString())
+print("Created FloatBox f2: " + f2.toString())
+
+// Addition test
+result = f1 + f2
+print("3.14 + 2.86 = " + result.toString())
+
+// Multiplication test  
+result = f1 * f2
+print("3.14 * 2.86 = " + result.toString())
+
+// Division test
+result = f1 / f2  
+print("3.14 / 2.86 = " + result.toString())
+
+// Subtraction test
+result = f1 - f2
+print("3.14 - 2.86 = " + result.toString())
+
+// Mixed operations with IntegerBox
+local intVal
+intVal = 5
+result = f1 + intVal
+print("3.14 + 5 = " + result.toString())
+
+result = f1 * intVal
+print("3.14 * 5 = " + result.toString())
+
+// FloatBox methods
+result = f1.abs()
+print("abs(3.14) = " + result.toString())
+
+result = f1.floor()  
+print("floor(3.14) = " + result.toString())
+
+result = f1.ceil()
+print("ceil(3.14) = " + result.toString())
+
+print("✅ FloatBox Phase 1 tests completed!")

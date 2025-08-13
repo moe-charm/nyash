@@ -1,0 +1,24 @@
+// 利用可能なBox型の確認
+local console
+console = new ConsoleBox()
+console.log("ConsoleBox: OK")
+
+// ArrayBox
+local arr
+arr = new ArrayBox()
+console.log("ArrayBox: OK")
+
+// FloatBox  
+local float
+float = new FloatBox(3.14)
+console.log("FloatBox: OK")
+
+// MathBox
+local math
+math = new MathBox()
+console.log("MathBox: OK")
+
+// NullBox
+local null
+null = new NullBox()
+console.log("NullBox: OK")

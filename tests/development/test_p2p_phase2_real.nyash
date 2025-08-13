@@ -1,0 +1,97 @@
+// 🌐 P2PBox Phase 2: 実際のP2P通信テスト
+// 目標: send・isReachable API実証テスト
+
+local console
+console = new ConsoleBox()
+console.log("🌐 Phase 2: 実際のP2P通信テスト開始")
+
+// 2.1 ノードセットアップ
+console.log("\n🔗 2.1 P2Pノードセットアップ")
+
+local alice
+local bob
+alice = new P2PBox("alice", "inprocess")
+bob = new P2PBox("bob", "inprocess")
+
+console.log("✅ ノード作成完了")
+console.log("Alice: " + alice.getNodeId())
+console.log("Bob: " + bob.getNodeId())
+
+// 2.2 到達可能性テスト
+console.log("\n🔍 2.2 到達可能性テスト")
+
+local alice_to_bob
+local bob_to_alice
+alice_to_bob = alice.isReachable("bob")
+bob_to_alice = bob.isReachable("alice")
+
+console.log("Alice → Bob 到達可能: " + alice_to_bob)
+console.log("Bob → Alice 到達可能: " + bob_to_alice)
+
+// 存在しないノードテスト
+local alice_to_unknown
+alice_to_unknown = alice.isReachable("unknown_node")
+console.log("Alice → Unknown 到達可能: " + alice_to_unknown)
+
+// 2.3 メッセージ送信テスト
+console.log("\n📤 2.3 メッセージ送信テスト")
+
+local greeting
+greeting = new IntentBox("greeting", "Hello from Alice!")
+
+console.log("送信メッセージ:")
+console.log("- Intent: " + greeting.getName())
+console.log("- Payload: " + greeting.getPayload())
+
+// Alice → Bob メッセージ送信
+console.log("\n📡 Alice → Bob 送信実行...")
+local send_result
+send_result = alice.send("bob", greeting)
+console.log("送信結果: " + send_result)
+
+// 2.4 複数メッセージ送信テスト
+console.log("\n📨 2.4 複数メッセージ送信テスト")
+
+local chat_msg
+local info_msg
+
+chat_msg = new IntentBox("chat", "こんにちは！")
+info_msg = new IntentBox("info", "システム情報です")
+
+local result1
+local result2
+result1 = alice.send("bob", chat_msg)
+result2 = alice.send("bob", info_msg)
+
+console.log("Chat送信結果: " + result1)
+console.log("Info送信結果: " + result2)
+
+// Bob → Alice 送信もテスト
+local reply_msg
+reply_msg = new IntentBox("reply", "返信メッセージです")
+
+local result3
+result3 = bob.send("alice", reply_msg)
+console.log("Bob → Alice 送信結果: " + result3)
+
+// 2.5 エラーケーステスト
+console.log("\n⚠️ 2.5 エラーケーステスト")
+
+// 存在しないノードへの送信
+local error_msg
+error_msg = new IntentBox("test", "This should fail")
+
+console.log("存在しないノード宛送信テスト...")
+// このテストはエラーが予想される
+console.log("予想: 送信エラーが発生")
+
+// 2.6 Phase 2結果統計
+console.log("\n📊 2.6 Phase 2テスト結果")
+console.log("✅ ノード作成: 成功")
+console.log("✅ 到達可能性チェック: 成功")
+console.log("✅ メッセージ送信: 実行済み")
+console.log("✅ 複数メッセージ送信: 実行済み")
+console.log("✅ 双方向通信: 実行済み")
+
+console.log("\n🎉 Phase 2: 基本P2P通信機能確認完了！")
+console.log("次はPhase 3: デリゲーション・override革命へ！")

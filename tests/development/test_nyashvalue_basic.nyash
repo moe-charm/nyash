@@ -1,0 +1,48 @@
+// NyashValue革命基本動作テスト
+// Arc<Mutex>過剰症候群解決確認
+
+static box Main {
+    main() {
+        local console
+        console = new ConsoleBox()
+        console.log("🔥 NyashValue Revolution Test Started!")
+        
+        // 基本値テスト
+        console.log("=== Basic Values Test ===")
+        local testInteger, testFloat, testBool, testString
+        testInteger = 42
+        testFloat = 3.14
+        testBool = true
+        testString = "Hello NyashValue!"
+        
+        console.log("Integer: " + testInteger)
+        console.log("Float: " + testFloat)  
+        console.log("Bool: " + testBool)
+        console.log("String: " + testString)
+        
+        // 型変換テスト
+        console.log("=== Type Conversion Test ===")
+        console.log("42 as string: " + testInteger)
+        
+        // 等価性テスト
+        console.log("=== Cross-type Equality Test ===")
+        local intVal, floatVal
+        intVal = 42
+        floatVal = 42.0
+        console.log("Integer 42: " + intVal)
+        console.log("Float 42.0: " + floatVal)
+        
+        // 配列テスト
+        console.log("=== Array Test ===")
+        local arr
+        arr = new ArrayBox()
+        arr.push(1)
+        arr.push(2)
+        arr.push(3)
+        console.log("Array length: " + arr.length())
+        console.log("Array[0]: " + arr.get(0))
+        
+        console.log("🎉 NyashValue Revolution Test Completed!")
+        return "success"
+    }
+}

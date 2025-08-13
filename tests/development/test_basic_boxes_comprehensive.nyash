@@ -1,0 +1,60 @@
+// 基本Box機能の網羅的テスト
+local console
+console = new ConsoleBox()
+
+// === 基本系Box ===
+console.log("=== 基本系Box ===")
+
+// StringBox
+local str
+str = new StringBox("Hello")
+console.log("StringBox: " + str.toString())
+
+// IntegerBox  
+local num
+num = new IntegerBox(42)
+console.log("IntegerBox: " + num.toString())
+
+// BoolBox
+local bool
+bool = new BoolBox(true)
+console.log("BoolBox: " + bool.toString())
+
+// NullBox
+local null
+null = new NullBox()
+console.log("NullBox: " + null.toString())
+
+// === 新機能Box ===
+console.log("=== 新機能Box ===")
+
+// FloatBox（新実装）
+local float
+float = new FloatBox(3.14)
+console.log("FloatBox: " + float.toString())
+
+// ArrayBox（改良版）
+local arr
+arr = new ArrayBox()
+arr.push("item1")
+arr.push("item2")
+console.log("ArrayBox length: " + arr.length())
+
+// === ユーティリティBox ===
+console.log("=== ユーティリティBox ===")
+
+// MathBox
+local math
+math = new MathBox()
+console.log("MathBox PI: " + math.pi())
+
+// TimeBox
+local time
+time = new TimeBox()
+console.log("TimeBox: " + time.toString())
+
+// MapBox
+local map
+map = new MapBox()
+map.set("key1", "value1")
+console.log("MapBox has key1: " + map.has("key1"))

@@ -1,0 +1,67 @@
+// Test built-in Box inheritance with P2PBox
+box ChatNode from P2PBox {
+    init { chatHistory }
+    
+    pack(nodeId, world) {
+        from P2PBox.pack(nodeId, world)
+        me.chatHistory = new ArrayBox()
+    }
+    
+    override send(intent, data, target) {
+        // Log chat message
+        me.chatHistory.push({
+            "from": me.get_node_id(),
+            "to": target,
+            "message": data
+        })
+        
+        // Call parent send method
+        from P2PBox.send(intent, data, target)
+    }
+    
+    getChatHistory() {
+        return me.chatHistory
+    }
+}
+
+// Test with MathBox
+box ScientificCalc from MathBox {
+    init { history }
+    
+    pack() {
+        from MathBox.pack()
+        me.history = []
+    }
+    
+    override sin(x) {
+        local result
+        result = from MathBox.sin(x)
+        me.history.push("sin(" + x.toString() + ") = " + result.toString())
+        return result
+    }
+    
+    getHistory() {
+        return me.history
+    }
+}
+
+// Main test
+static box Main {
+    main() {
+        local console
+        console = new ConsoleBox()
+        
+        console.log("Testing built-in Box inheritance...")
+        
+        // Test MathBox inheritance
+        local calc
+        calc = new ScientificCalc()
+        
+        local result
+        result = calc.sin(3.14159 / 2)
+        console.log("Sin(π/2) = " + result.toString())
+        console.log("Calculation history: " + calc.getHistory().toString())
+        
+        console.log("✅ Built-in Box inheritance test complete!")
+    }
+}

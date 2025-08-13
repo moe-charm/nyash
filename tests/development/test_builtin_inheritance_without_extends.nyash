@@ -1,0 +1,9 @@
+// Test if MathBox is recognized as a built-in type
+local instance
+instance = new MathBox()
+
+local result
+result = instance.sin(1.5708)
+print("Sin(π/2) = " + result.toString())
+
+print("MathBox test complete!")

@@ -1,0 +1,45 @@
+// from統一構文のテスト
+box Parent {
+    init { value }
+    
+    init() {  # init構文に統一
+        me.value = "Parent value"
+    }
+    
+    getValue() {
+        return me.value
+    }
+    
+    process(x) {
+        return "Parent processed: " + x
+    }
+}
+
+// from構文でデリゲーション
+box Child from Parent {
+    init { extra }
+    
+    init() {  # init構文に統一
+        from Parent.init()  # 親コンストラクタ呼び出し
+        me.extra = " (Child extra)"
+    }
+    
+    // overrideで明示的置換
+    override process(x) {
+        local result
+        result = from Parent.process(x)
+        return result + me.extra
+    }
+    
+    // 新しいメソッド
+    getAll() {
+        return me.getValue() + me.extra
+    }
+}
+
+// テスト実行
+local child
+child = new Child()
+print("getValue: " + child.getValue())
+print("process: " + child.process("test"))
+print("getAll: " + child.getAll())

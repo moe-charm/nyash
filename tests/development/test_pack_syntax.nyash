@@ -1,0 +1,17 @@
+// pack構文テスト
+box User {
+    init { name, email }
+    
+    pack(userName, userEmail) {
+        me.name = userName
+        me.email = userEmail
+    }
+}
+
+local user
+user = new User("Alice", "alice@example.com")
+
+local console
+console = new ConsoleBox()
+console.log("User name: " + user.name)
+console.log("User email: " + user.email)

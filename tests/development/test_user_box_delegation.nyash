@@ -1,0 +1,48 @@
+
+// ユーザー定義Box同士でのデリゲーションテスト
+box Parent {
+    init { value }
+    
+    init(value) {  # init構文に統一
+        me.value = value
+    }
+    
+    getValue() {
+        return me.value
+    }
+    
+    process(x) {
+        return "Parent processing: " + x
+    }
+}
+
+box Child from Parent {
+    init { extra }
+    
+    init(value, extra) {  # init構文に統一
+        from Parent.init(value)  # 親コンストラクタ呼び出し
+        me.extra = extra
+    }
+    
+    override process(x) {  // 明示的オーバーライド
+        local result
+        result = from Parent.process(x)  // 親メソッド呼び出し
+        return result + " (Child added: " + me.extra + ")"
+    }
+    
+    getAll() {
+        return me.getValue() + " / " + me.extra
+    }
+}
+
+// テスト実行
+local p, c
+p = new Parent("parent value")
+print("Parent getValue: " + p.getValue())
+print("Parent process: " + p.process("test"))
+
+c = new Child("child value", "extra data")
+print("Child getValue: " + c.getValue())  // デリゲートされたメソッド
+print("Child process: " + c.process("test"))  // オーバーライドされたメソッド
+print("Child getAll: " + c.getAll())
+

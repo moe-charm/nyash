@@ -1,0 +1,56 @@
+Nyash Interpreter Assessment (Current Strengths, Weaknesses, Direction)
+
+Strengths
+- Everything is Box: 統一データモデルで生成/代入/比較/解放が一貫。学習・読解が容易。
+- Explicit lifecycle: init/fini/weak/スコープ解放を構文で規約化。解放点が読み取れる。
+- Cycles solved pragmatically: init { weak ... } + 自動nil化で双方向参照を安全に扱える。
+- Delegation-first: from（多重対応）+ override必須で明示合成。暗黙解決を排しテスト容易。
+- Rust core: Arc<Mutex<...>>/Weak、BoxFinalizer、二重解放防止など堅牢な実装基盤。
+- Dev UX: 明示変数宣言、単一ループ構文、static box Mainでコード規律が単純。
+- Repro: WASM Playgroundでゼロインストール再現（docs/chatgpt5/PLAYGROUND_GUIDE.md）。
+
+Weaknesses
+- Mixed field models: fields（レガシー）と fields_ng（次世代）が併存し、理解/実装が複雑。
+- Weak shim leakage: 一部weakを文字列マーカーで代替（set_weak_field_from_legacy）。完全WeakBox化が未完。
+- Builtin gaps: Math/Float/Intent/P2P周辺に未実装・登録不足が残る。
+- P2P disabled path: インタープリタ内のP2P呼び出しが一時無効化で連携が途切れがち。
+- Verbose debug: 実行時eprintlnが多くノイズ。ログレベル切替が未整備。
+- Multi-delegation policy: 競合解決の仕様/診断が未完成でユーザーが迷う余地。
+
+Current Limitations
+- Determinism vs sharing: finiは解放フックだが強参照が残る場合は実体が残存。期待との齟齬可能性あり。
+- Error surfacing: RuntimeErrorのSpan拡張が全コードパスで統一されていない。
+- Perf visibility: ベンチ/メトリクス不足。weak upgradeやfini回数の観測が難しい。
+- WASM behavior: ブラウザでのタイミング/ログ表示がネイティブと異なる場合あり。
+
+Direction
+- Product-first clarity: 「迷わない規約」を前面に。実用性と予測可能性を訴求。
+- Unify field storage: fields_ngへ一本化し、WeakBoxをエンドツーエンドで運用。
+- Delegation doctrine: 多重デリゲーション競合のポリシー（優先/明示/エラー）を明文化・実装。
+- Measurable DX: Playgroundでfini回数/weak upgrade成功・失敗を可視化して説得力向上。
+- Complete builtins: Float/Math/Intent/P2Pの未完箇所を段階的に充足し、テストで裏付け。
+
+High-Impact Next Steps
+- WeakBox E2E完了: 文字列マーカー廃止→NyashValue::WeakBoxで統一。テスト追加。
+- Assignment safety audit: 再代入→fini→weak自動nil化の一連を網羅試験（成功/競合/例外）。
+- Multi-delegation conflicts: 明示親指定必須・曖昧時はエラー＋提案を実装。エラーメッセージ改善。
+- P2P経路の復活: expressions.rsのP2P呼び出しを段階的に再有効化。Intentアクセサ整備。
+- Debug levels: ログレベル導入（環境変数/DebugBox）でノイズ削減と計測を両立。
+- Playground強化: 3シナリオにメトリクス表示（fini総数、weak失敗数、簡易時間）。
+
+Risks / Trade-offs
+- Perception risk: finiを「即時破棄」と誤解される恐れ。共有参照残存の挙動を明文化要。
+- Dual-storage complexity: レガシー/次世代の二重管理期間にバグ混入リスク。
+- Performance cliffs: 過度なMutexロック/頻繁なupgradeがホットパスで効く可能性。測定・キャッシュ要検討。
+- WASM differences: ブラウザでのタイミング/ログ/スレッド制約がネイティブと異なる。
+
+Stretch Ideas
+- Static analysis: init/weakの静的検証、循環参照ヒント、未宣言代入の修正提案（LSP連携）。
+- Conflict DSL: 多重デリゲーション競合を宣言で解決できる軽量DSL導入。
+- Tracing viz: weak生死・finiイベントのタイムライン可視化（Playground連携）。
+- Packages/templates: 標準Boxとテンプレート（ゲーム/アート/教育）で“動く最小”を量産。
+
+Summary
+統一モデルと明示規約で日常のメモリ管理を楽にする点が最大の強み。短期はWeakの完全統一とデモ/数値の可視化に集中し、
+多重デリゲーションの競合仕様や未完Boxを段階的に整備するのが最も効果的。
+

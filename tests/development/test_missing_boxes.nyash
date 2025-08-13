@@ -1,0 +1,35 @@
+// 基本的なBoxの存在確認
+local console
+console = new ConsoleBox()
+
+// 文字列リテラルと数値リテラルの動作確認
+local str
+str = "Hello World"
+console.log("String literal: " + str)
+
+local num
+num = 42
+console.log("Number literal: " + num.toString())
+
+local bool
+bool = true
+console.log("Bool literal: " + bool.toString())
+
+// StringBox, IntegerBox, BoolBoxコンストラクタのテスト
+console.log("=== Constructor tests ===")
+
+// これらがエラーになるかテスト
+console.log("Testing StringBox...")
+local str_box
+str_box = new StringBox("test")
+console.log("StringBox created")
+
+console.log("Testing IntegerBox...")
+local int_box
+int_box = new IntegerBox(123)
+console.log("IntegerBox created")
+
+console.log("Testing BoolBox...")
+local bool_box
+bool_box = new BoolBox(false)
+console.log("BoolBox created")

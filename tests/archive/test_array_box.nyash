@@ -1,0 +1,74 @@
+// ArrayBox実装テスト
+print("=== ArrayBox実装テスト ===")
+
+// 1. ArrayBoxの作成
+print("\n1. ArrayBoxの作成:")
+local arr
+arr = new ArrayBox()
+print("ArrayBox created: " + arr.toString())
+// print("Type: " + arr.type_name())  // type_nameはArrayBoxのメソッドではない
+print("Initial length: " + arr.length())
+
+// 2. 要素の追加（push）
+print("\n2. 要素の追加:")
+arr.push("Apple")
+arr.push("Banana")
+arr.push("Cherry")
+arr.push(42)
+arr.push(true)
+print("After push: " + arr.toString())
+print("Length: " + arr.length())
+
+// 3. 要素の取得（get）
+print("\n3. 要素の取得:")
+print("arr.get(0) = " + arr.get(0))
+print("arr.get(1) = " + arr.get(1))
+print("arr.get(3) = " + arr.get(3))
+print("arr.get(10) = " + arr.get(10))  // 範囲外
+
+// 4. 要素の削除（pop）
+print("\n4. 要素の削除:")
+local popped
+popped = arr.pop()
+print("Popped: " + popped)
+print("After pop: " + arr.toString())
+print("Length: " + arr.length())
+
+// 5. インデックス検索（indexOf）
+print("\n5. インデックス検索:")
+print("indexOf('Apple') = " + arr.indexOf("Apple"))
+print("indexOf('Banana') = " + arr.indexOf("Banana"))
+print("indexOf('NotExist') = " + arr.indexOf("NotExist"))
+
+// 6. 要素の確認（contains）
+print("\n6. 要素の確認:")
+print("contains('Apple') = " + arr.contains("Apple"))
+print("contains(42) = " + arr.contains(42))
+print("contains('NotExist') = " + arr.contains("NotExist"))
+
+// 7. 文字列結合（join）
+print("\n7. 文字列結合:")
+print("join(', ') = " + arr.join(", "))
+print("join(' - ') = " + arr.join(" - "))
+
+// 8. 要素の設定（set）
+print("\n8. 要素の設定:")
+arr.set(1, "Orange")
+print("After set(1, 'Orange'): " + arr.toString())
+
+// 9. 要素の削除（remove）
+print("\n9. 要素の削除:")
+local removed
+removed = arr.remove(2)
+print("Removed: " + removed)
+print("After remove(2): " + arr.toString())
+print("Length: " + arr.length())
+
+// 10. 配列のクリア（clear）
+print("\n10. 配列のクリア:")
+arr.clear()
+print("After clear: " + arr.toString())
+print("Length: " + arr.length())
+print("isEmpty: " + arr.isEmpty())
+
+print("\n=== ArrayBoxテスト完了！ ===")

@@ -1,0 +1,5 @@
+
+world = new IntentBox()
+child = new TestChild("test", world)
+child.send("hello", "data", "target")
+

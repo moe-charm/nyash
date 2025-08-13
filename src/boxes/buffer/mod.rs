@@ -47,6 +47,11 @@ impl BufferBox {
             base: BoxBase::new(),
         }
     }
+
+    /// Rust向けヘルパー: バッファ長をusizeで取得（テスト用）
+    pub fn len(&self) -> usize {
+        self.data.lock().unwrap().len()
+    }
     
     pub fn from_vec(data: Vec<u8>) -> Self {
         BufferBox { 

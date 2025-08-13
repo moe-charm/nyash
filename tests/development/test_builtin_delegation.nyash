@@ -1,0 +1,13 @@
+
+box TestChild : P2PBox {
+    constructor(nodeId, world) {
+        from P2PBox.constructor(nodeId, world)
+        me.test = "hello"
+    }
+    
+    override send(intent, data, target) {
+        print("Child sending: " + intent)
+        from P2PBox.send(intent, data, target)
+    }
+}
+

@@ -1,0 +1,39 @@
+Nyash Finalization Errors and Diagnostics
+
+最終更新: 2025-08-13
+
+1) 使用禁止エラー（finalized 後の操作）
+---------------------------------------
+Message: "Instance was finalized; further use is prohibited"
+When: finalized フラグが立ったインスタンスに対して、
+      - メソッド呼び出し
+      - フィールドアクセス/代入
+      - デリゲーション経由の呼び出し
+      を行った場合。
+Notes: toString 相当も原則禁止（方針次第）。まずは全面禁止が明快。
+
+2) weak に対する fini 呼び出し（禁止）
+---------------------------------------
+Message (build-time preferred):
+  "Cannot finalize weak field '<name>' (non-owning reference)."
+Message (runtime fallback):
+  "Finalization of non-owning (weak) reference is not allowed: '<name>'"
+When: `init { weak <name> }` で宣言されたフィールドに対して `fini()` を直接呼んだ場合。
+Fix: `me.<name> = null`（参照解除） or 自動 nil 化に任せる。
+
+3) 二重解放の抑止（無害化）
+---------------------------------------
+Behavior: 2回目以降の `fini()` 呼出しは no-op。
+Notes: ログに "already finalized" を出すかは運用ポリシー次第。
+
+4) 自動カスケード中の例外
+---------------------------------------
+Policy: ベストエフォートで残りの解放を継続、最後にまとめて報告（fail-safe）。
+Message example:
+  "Finalization encountered errors; see aggregated report (N failures)."
+
+5) 解析時の注意（推奨）
+---------------------------------------
+- fini() 本体内でのフィールド fini 呼び出しは静的解析で走査し、weak を検知したらビルドエラーへ。
+- 明示属性 `@no_auto_finalize`（将来案）を付与したフィールドは自動カスケード対象から除外。
+

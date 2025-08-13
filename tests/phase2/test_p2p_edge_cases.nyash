@@ -1,0 +1,86 @@
+// 🧪 P2PBox エッジケーステスト
+// エラーハンドリングと異常系の動作検証
+
+print("=== P2PBox Edge Cases Test ===")
+
+// 基本セットアップ
+local world
+world = new IntentBox()
+
+local node1
+node1 = new P2PBox("node1", world)
+
+print("\n1. Testing invalid target send")
+// 存在しないノードへの送信
+local result
+result = node1.send("test", "data", "non_existent_node")
+print("Send to non-existent node: " + result)
+
+print("\n2. Testing empty intent string")
+// 空のintent文字列
+node1.on("", "empty_handler")
+result = node1.send("", "test data", "node1")
+print("Empty intent handled: " + result)
+
+print("\n3. Testing duplicate listener removal")
+// 同じintentを2回削除
+node1.on("test_event", "handler1")
+result = node1.off("test_event")
+print("First removal: " + result)
+result = node1.off("test_event")
+print("Second removal: " + result)
+
+print("\n4. Testing self-messaging")
+// 自分自身へのメッセージ送信
+node1.on("self_msg", "self_handler")
+result = node1.send("self_msg", "Hello myself!", "node1")
+print("Self message sent: " + result)
+
+print("\n5. Testing very long intent names")
+// 非常に長いintent名
+local longIntent
+longIntent = "this_is_a_very_long_intent_name_that_tests_the_system_limits_1234567890_abcdefghijklmnopqrstuvwxyz"
+node1.on(longIntent, "long_handler")
+result = node1.send(longIntent, "test", "node1")
+print("Long intent handled: " + result)
+
+print("\n6. Testing special characters in node ID")
+// 特殊文字を含むノードID（新規作成時）
+local specialNode
+specialNode = new P2PBox("node-with-special_chars.123", world)
+print("Special node created: " + specialNode.getNodeId())
+
+print("\n7. Testing rapid fire messages")
+// 高速連続メッセージ送信
+local node2
+node2 = new P2PBox("node2", world)
+node2.on("rapid", "rapid_handler")
+
+local i
+i = 0
+loop(i < 10) {
+    node1.send("rapid", "Message " + i, "node2")
+    i = i + 1
+}
+print("Sent 10 rapid messages")
+
+print("\n8. Testing null data send")
+// nullデータの送信
+local nullData
+nullData = new NullBox()
+result = node1.send("null_test", nullData, "node2")
+print("Null data sent: " + result)
+
+print("\n9. Testing listener with same intent multiple times")
+// 同じintentに複数のリスナー登録
+node1.on("multi", "handler1")
+node1.on("multi", "handler2")
+node1.on("multi", "handler3")
+print("Multiple handlers registered for same intent")
+
+print("\n10. Testing IntentBox message processing")
+// IntentBoxの内部メッセージ処理
+result = world.processMessages()
+print("IntentBox processed messages: " + result)
+
+print("\n=== Edge Cases Test Complete ===")

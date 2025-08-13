@@ -1,0 +1,12 @@
+// Phase 1: IntentBox基本テスト（メソッド形式）
+local intent
+intent = new IntentBox("test", "Hello")
+
+local console
+console = new ConsoleBox()
+console.log("Intent created: " + intent.toString())
+
+// P2PBox作成テスト
+local node
+node = new P2PBox("test_node", "inprocess")
+console.log("P2PBox created: " + node.toString())

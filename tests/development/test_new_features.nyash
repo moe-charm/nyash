@@ -1,0 +1,63 @@
+// 新機能（FloatBox・ArrayBox改良）動作確認
+local console
+console = new ConsoleBox()
+
+console.log("=== New Features Test ===")
+
+// === FloatBox ===
+console.log("=== FloatBox Tests ===")
+local float1
+float1 = new FloatBox(3.14159)
+console.log("FloatBox created: " + float1.toString())
+
+local float2
+float2 = new FloatBox(2.71828)
+console.log("FloatBox 2 created: " + float2.toString())
+
+// === ArrayBox改良版 ===
+console.log("=== ArrayBox Enhanced Tests ===")
+local arr
+arr = new ArrayBox()
+
+// 基本操作
+arr.push("apple")
+arr.push("banana")
+arr.push("cherry")
+console.log("Array length: " + arr.length())
+
+// 改良機能のテスト
+console.log("Testing enhanced ArrayBox methods...")
+
+// get/set operations
+console.log("Item 0: " + arr.get(0))
+console.log("Item 1: " + arr.get(1))
+console.log("Item 2: " + arr.get(2))
+
+// push/pop operations
+local popped
+popped = arr.pop()
+console.log("Popped item: " + popped)
+console.log("Array length after pop: " + arr.length())
+
+// 数値配列での試験
+local numArr
+numArr = new ArrayBox()
+numArr.push(10)
+numArr.push(20)
+numArr.push(30)
+console.log("Number array length: " + numArr.length())
+console.log("Number array item 1: " + numArr.get(1))
+
+// === MathBox ===
+console.log("=== MathBox Tests ===")
+local math
+math = new MathBox()
+console.log("Math PI: " + math.pi())
+console.log("Math E: " + math.e())
+console.log("Math random: " + math.random())
+
+// === TimeBox ===
+console.log("=== TimeBox Tests ===")
+local time
+time = new TimeBox()
+console.log("Current time: " + time.toString())

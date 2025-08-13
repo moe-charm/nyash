@@ -1,0 +1,28 @@
+// Test Multi-Delegation Syntax (Phase 2 Implementation)
+// This should test the new `box Child from ParentA, ParentB` syntax
+
+local console = new ConsoleBox()
+console.log("=== Testing Multi-Delegation Syntax ===")
+
+// Test 1: Simple multi-delegation syntax parsing
+console.log("Testing multi-delegation syntax...")
+box MultiChild from StringBox, IntegerBox {
+    init { textValue, numValue }
+    
+    pack(text, num) {
+        me.textValue = text
+        me.numValue = num
+    }
+    
+    getCombined() {
+        return me.textValue + ": " + me.numValue
+    }
+}
+
+console.log("Multi-delegation box declared successfully!")
+
+// Test if the parser accepted the syntax
+local multi = new MultiChild("Count", 123)
+console.log("Multi delegation instance: " + multi.getCombined())
+
+console.log("=== Multi-Delegation Test Complete ===")
