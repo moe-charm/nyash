@@ -34,7 +34,7 @@ use mir::{MirCompiler, MirPrinter};
 
 // 🚀 Backend Infrastructure  
 pub mod backend;
-use backend::VM;
+use backend::{VM, wasm::WasmBackend};
 use std::env;
 use std::fs;
 use std::process;
@@ -87,7 +87,7 @@ fn main() {
         .arg(
             Arg::new("compile-wasm")
                 .long("compile-wasm")
-                .help("Compile to WASM and output WAT text")
+                .help("Compile to WebAssembly (WAT format) instead of executing")
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
@@ -119,8 +119,8 @@ fn main() {
     let dump_mir = matches.get_flag("dump-mir");
     let verify_mir = matches.get_flag("verify");
     let mir_verbose = matches.get_flag("mir-verbose");
-    let backend = matches.get_one::<String>("backend").unwrap();
     let compile_wasm = matches.get_flag("compile-wasm");
+    let backend = matches.get_one::<String>("backend").unwrap();
     let output_file = matches.get_one::<String>("output");
     let benchmark = matches.get_flag("benchmark");
     let iterations: u32 = matches.get_one::<String>("iterations").unwrap().parse().unwrap_or(10);
@@ -138,12 +138,12 @@ fn main() {
     
     if let Some(filename) = matches.get_one::<String>("file") {
         // File mode: parse and execute the provided .nyash file
-        if compile_wasm {
-            println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
-            execute_wasm_mode(filename, output_file);
-        } else if dump_mir || verify_mir {
+        if dump_mir || verify_mir {
             println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             execute_mir_mode(filename, dump_mir, verify_mir, mir_verbose);
+        } else if compile_wasm {
+            println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
+            execute_wasm_mode(filename, output_file);
         } else if backend == "vm" {
             println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             execute_vm_mode(filename);
@@ -1284,8 +1284,6 @@ fn execute_vm_mode(filename: &str) {
 
 /// Execute WASM compilation mode
 fn execute_wasm_mode(filename: &str, output_file: Option<&String>) {
-    use backend::wasm::WasmBackend;
-    
     // Read the source file
     let source = match fs::read_to_string(filename) {
         Ok(content) => content,
@@ -1316,7 +1314,7 @@ fn execute_wasm_mode(filename: &str, output_file: Option<&String>) {
     
     // Check for verification errors
     if let Err(errors) = &compile_result.verification_result {
-        eprintln!("⚠️  MIR verification warnings ({} issues):", errors.len());
+        eprintln!("⚠️ MIR verification warnings ({} issues):", errors.len());
         for (i, error) in errors.iter().enumerate() {
             eprintln!("  {}: {}", i + 1, error);
         }
@@ -1327,7 +1325,7 @@ fn execute_wasm_mode(filename: &str, output_file: Option<&String>) {
     let mut wasm_backend = WasmBackend::new();
     match wasm_backend.compile_to_wat(compile_result.module) {
         Ok(wat_text) => {
-            println!("✅ WASM compilation successful!");
+            println!("✅ WASM compilation completed successfully!");
             
             if let Some(output_path) = output_file {
                 // Write to file
