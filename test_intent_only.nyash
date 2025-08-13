@@ -1,6 +1,0 @@
-// Test only the IntentBox functionality to verify the basic structure works
-print("Testing IntentBox basic functionality...")
-
-local msg
-msg = new IntentBox("test", "data")
-print("IntentBox created: " + msg.type())

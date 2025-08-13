@@ -347,7 +347,9 @@ impl MirBuilder {
         self.current_block = Some(then_block);
         self.ensure_block_exists(then_block)?;
         let then_value = self.build_expression(then_branch)?;
-        self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        if !self.is_current_block_terminated() {
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
         
         // Build else branch
         self.current_block = Some(else_block);
@@ -363,7 +365,9 @@ impl MirBuilder {
             })?;
             void_val
         };
-        self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        if !self.is_current_block_terminated() {
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
         
         // Create merge block with phi function
         self.current_block = Some(merge_block);
