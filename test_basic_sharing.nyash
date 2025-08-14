@@ -1,0 +1,20 @@
+// Test basic field access sharing
+static box Main {
+    init { mybox }
+    
+    main() {
+        me.mybox = new IntegerBox(100)
+        
+        print("=== Test 1: Basic field access ===")
+        local temp1
+        temp1 = me.mybox
+        print("temp1 ID: " + temp1.toString())
+        
+        local temp2
+        temp2 = me.mybox  
+        print("temp2 ID: " + temp2.toString())
+        
+        // The IDs should be the same if sharing works
+        return temp1
+    }
+}

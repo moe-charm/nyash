@@ -718,20 +718,21 @@ impl NyashInterpreter {
             .or_else(|| final_box_decl.constructors.get(&init_key))
             .or_else(|| final_box_decl.constructors.get(&box_name_key)) {
             // コンストラクタを実行
-            self.execute_constructor(&instance_box, constructor, arguments, &final_box_decl)?;
+            let instance_arc = Arc::from(instance_box);
+            self.execute_constructor(&instance_arc, constructor, arguments, &final_box_decl)?;
         } else if !arguments.is_empty() {
             return Err(RuntimeError::InvalidOperation {
                 message: format!("No constructor found for {} with {} arguments", class, arguments.len()),
             });
         }
         
-        Ok(instance_box)
+        Ok((*instance_arc).clone_box())  // Convert Arc back to Box for external interface
     }
     
     /// コンストラクタを実行 - Constructor execution
     pub(super) fn execute_constructor(
         &mut self, 
-        instance: &Box<dyn NyashBox>, 
+        instance: &SharedNyashBox, 
         constructor: &ASTNode, 
         arguments: &[ASTNode],
         box_decl: &BoxDeclaration

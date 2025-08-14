@@ -6,7 +6,7 @@
  */
 
 use crate::ast::{ASTNode, Span};
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, SharedNyashBox};
 use crate::instance::InstanceBox;
 use crate::parser::ParseError;
 use std::sync::{Arc, Mutex, RwLock};
@@ -192,10 +192,10 @@ pub struct NyashInterpreter {
     pub(super) shared: SharedState,
     
     /// 📦 local変数スタック（関数呼び出し時の一時変数）
-    pub(super) local_vars: HashMap<String, Box<dyn NyashBox>>,
+    pub(super) local_vars: HashMap<String, SharedNyashBox>,
     
     /// 📤 outbox変数スタック（static関数内の所有権移転変数）
-    pub(super) outbox_vars: HashMap<String, Box<dyn NyashBox>>,
+    pub(super) outbox_vars: HashMap<String, SharedNyashBox>,
     
     /// 制御フロー状態
     pub(super) control_flow: ControlFlow,
@@ -322,7 +322,7 @@ impl NyashInterpreter {
     // ========== 🌍 GlobalBox変数解決システム ==========
     
     /// 革命的変数解決: local変数 → GlobalBoxフィールド → エラー
-    pub(super) fn resolve_variable(&self, name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(super) fn resolve_variable(&self, name: &str) -> Result<SharedNyashBox, RuntimeError> {
         let log_msg = format!("resolve_variable: name='{}', local_vars={:?}", 
                              name, self.local_vars.keys().collect::<Vec<_>>());
         debug_log(&log_msg);
@@ -331,13 +331,27 @@ impl NyashInterpreter {
         // 1. outbox変数を最初にチェック（static関数内で優先）
         if let Some(outbox_value) = self.outbox_vars.get(name) {
             eprintln!("🔍 DEBUG: Found '{}' in outbox_vars", name);
-            return Ok(outbox_value.clone_box());
+            
+            // 🔧 修正：clone_box() → Arc::clone() で参照共有
+            let shared_value = Arc::clone(outbox_value);
+            
+            eprintln!("✅ RESOLVE_VARIABLE shared reference: {} id={}", 
+                     name, shared_value.box_id());
+            
+            return Ok(shared_value);
         }
         
         // 2. local変数をチェック
         if let Some(local_value) = self.local_vars.get(name) {
             eprintln!("🔍 DEBUG: Found '{}' in local_vars", name);
-            return Ok(local_value.clone_box());
+            
+            // 🔧 修正：clone_box() → Arc::clone() で参照共有
+            let shared_value = Arc::clone(local_value);
+            
+            eprintln!("✅ RESOLVE_VARIABLE shared reference: {} id={}", 
+                     name, shared_value.box_id());
+            
+            return Ok(shared_value);
         }
         
         // 3. GlobalBoxのフィールドをチェック
@@ -357,15 +371,17 @@ impl NyashInterpreter {
     
     /// 🔥 厳密変数設定: 明示的宣言のみ許可 - Everything is Box哲学
     pub(super) fn set_variable(&mut self, name: &str, value: Box<dyn NyashBox>) -> Result<(), RuntimeError> {
+        let shared_value = Arc::from(value); // Convert Box to Arc
+        
         // 1. outbox変数が存在する場合は更新
         if self.outbox_vars.contains_key(name) {
-            self.outbox_vars.insert(name.to_string(), value);
+            self.outbox_vars.insert(name.to_string(), shared_value);
             return Ok(());
         }
         
         // 2. local変数が存在する場合は更新
         if self.local_vars.contains_key(name) {
-            self.local_vars.insert(name.to_string(), value);
+            self.local_vars.insert(name.to_string(), shared_value);
             return Ok(());
         }
         
@@ -375,7 +391,7 @@ impl NyashInterpreter {
             if global_box.get_field(name).is_some() {
                 drop(global_box); // lockを解放
                 let mut global_box = self.shared.global_box.lock().unwrap();
-                global_box.set_field_dynamic(name.to_string(), value);
+                global_box.set_field_dynamic(name.to_string(), shared_value);
                 return Ok(());
             }
         }
@@ -391,34 +407,38 @@ impl NyashInterpreter {
     
     /// local変数を宣言（関数内でのみ有効）
     pub(super) fn declare_local_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
-        self.local_vars.insert(name.to_string(), value);
+        self.local_vars.insert(name.to_string(), Arc::from(value));
     }
     
     /// outbox変数を宣言（static関数内で所有権移転）
     pub(super) fn declare_outbox_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
-        self.outbox_vars.insert(name.to_string(), value);
+        self.outbox_vars.insert(name.to_string(), Arc::from(value));
     }
     
     /// local変数スタックを保存・復元（関数呼び出し時）
     pub(super) fn save_local_vars(&self) -> HashMap<String, Box<dyn NyashBox>> {
         self.local_vars.iter()
-            .map(|(k, v)| (k.clone(), v.clone_box()))
+            .map(|(k, v)| (k.clone(), (**v).clone_box()))  // Deref Arc to get the Box
             .collect()
     }
     
     pub(super) fn restore_local_vars(&mut self, saved: HashMap<String, Box<dyn NyashBox>>) {
-        self.local_vars = saved;
+        self.local_vars = saved.into_iter()
+            .map(|(k, v)| (k, Arc::from(v)))  // Convert Box to Arc
+            .collect();
     }
     
     /// outbox変数スタックを保存・復元（static関数呼び出し時）
     pub(super) fn save_outbox_vars(&self) -> HashMap<String, Box<dyn NyashBox>> {
         self.outbox_vars.iter()
-            .map(|(k, v)| (k.clone(), v.clone_box()))
+            .map(|(k, v)| (k.clone(), (**v).clone_box()))  // Deref Arc to get the Box
             .collect()
     }
     
     pub(super) fn restore_outbox_vars(&mut self, saved: HashMap<String, Box<dyn NyashBox>>) {
-        self.outbox_vars = saved;
+        self.outbox_vars = saved.into_iter()
+            .map(|(k, v)| (k, Arc::from(v)))  // Convert Box to Arc
+            .collect();
     }
     
     /// トップレベル関数をGlobalBoxのメソッドとして登録 - 🔥 暗黙オーバーライド禁止対応
@@ -453,7 +473,8 @@ impl NyashInterpreter {
     
     /// 🌍 革命的変数取得（テスト用）：GlobalBoxのフィールドから取得
     pub fn get_variable(&self, name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        self.resolve_variable(name)
+        let shared_var = self.resolve_variable(name)?;
+        Ok((*shared_var).clone_box())  // Convert Arc back to Box for external interface
     }
 }
 

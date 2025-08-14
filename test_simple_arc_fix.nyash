@@ -1,0 +1,24 @@
+// Simple test case to verify Arc sharing fix
+static box Main {
+    init { counter }
+    
+    main() {
+        me.counter = new IntegerBox(42)
+        
+        print("=== Initial value ===")
+        print("counter: " + me.counter.to_string())
+        
+        // Test if getting the same field returns the same object
+        local temp1
+        temp1 = me.counter
+        
+        local temp2 
+        temp2 = me.counter
+        
+        print("=== Testing shared reference ===")
+        print("temp1: " + temp1.to_string())
+        print("temp2: " + temp2.to_string())
+        
+        return me.counter
+    }
+}

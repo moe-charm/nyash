@@ -25,11 +25,12 @@ impl NyashInterpreter {
             
             ASTNode::Variable { name, .. } => {
                 // 🌍 革命的変数解決：local変数 → GlobalBoxフィールド → エラー
-                self.resolve_variable(name)
+                let shared_var = self.resolve_variable(name)
                     .map_err(|_| RuntimeError::UndefinedVariableAt { 
                         name: name.clone(), 
                         span: expression.span() 
-                    })
+                    })?;
+                Ok((*shared_var).clone_box())  // Convert for external interface
             }
             
             ASTNode::BinaryOp { operator, left, right, .. } => {
@@ -50,7 +51,8 @@ impl NyashInterpreter {
             }
             
             ASTNode::FieldAccess { object, field, .. } => {
-                self.execute_field_access(object, field)
+                let shared_result = self.execute_field_access(object, field)?;
+                Ok((*shared_result).clone_box())  // Convert Arc to Box for external interface
             }
             
             ASTNode::New { class, arguments, type_arguments, .. } => {
@@ -59,21 +61,22 @@ impl NyashInterpreter {
             
             ASTNode::This { .. } => {
                 // 🌍 革命的this解決：local変数から取得
-                self.resolve_variable("me")
+                let shared_this = self.resolve_variable("me")
                     .map_err(|_| RuntimeError::InvalidOperation {
                         message: "'this' is only available inside methods".to_string(),
-                    })
+                    })?;
+                Ok((**shared_this).clone_box())  // Convert for external interface
             }
             
             ASTNode::Me { .. } => {
                 
                 // 🌍 革命的me解決：local変数から取得（thisと同じ）
-                let result = self.resolve_variable("me")
+                let shared_me = self.resolve_variable("me")
                     .map_err(|_| RuntimeError::InvalidOperation {
                         message: "'me' is only available inside methods".to_string(),
-                    });
+                    })?;
                     
-                result
+                Ok((**shared_me).clone_box())  // Convert for external interface
             }
             
             ASTNode::ThisField { field, .. } => {
@@ -83,11 +86,12 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                 
-                if let Some(instance) = this_value.as_any().downcast_ref::<InstanceBox>() {
-                    instance.get_field(field)
+                if let Some(instance) = (**this_value).as_any().downcast_ref::<InstanceBox>() {
+                    let shared_field = instance.get_field(field)
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on this", field)
-                        })
+                        })?;
+                    Ok((**shared_field).clone_box())  // Convert for external interface
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),
@@ -102,11 +106,12 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                 
-                if let Some(instance) = me_value.as_any().downcast_ref::<InstanceBox>() {
-                    instance.get_field(field)
+                if let Some(instance) = (**me_value).as_any().downcast_ref::<InstanceBox>() {
+                    let shared_field = instance.get_field(field)
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on me", field)
-                        })
+                        })?;
+                    Ok((**shared_field).clone_box())  // Convert for external interface
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),
@@ -549,7 +554,7 @@ impl NyashInterpreter {
                         if name == "me" {
                             // Get current instance to check if field is weak
                             if let Ok(current_me) = self.resolve_variable("me") {
-                                if let Some(current_instance) = current_me.as_any().downcast_ref::<InstanceBox>() {
+                                if let Some(current_instance) = (**current_me).as_any().downcast_ref::<InstanceBox>() {
                                     if current_instance.is_weak_field(field) {
                                         return Err(RuntimeError::InvalidOperation {
                                             message: format!(
@@ -671,7 +676,7 @@ impl NyashInterpreter {
     
     /// フィールドアクセスを実行 - Field access processing with weak reference support
     pub(super) fn execute_field_access(&mut self, object: &ASTNode, field: &str) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        -> Result<SharedNyashBox, RuntimeError> {
         
         // 🔥 Static Boxアクセスチェック
         if let ASTNode::Variable { name, .. } = object {
@@ -702,6 +707,8 @@ impl NyashInterpreter {
                     message: format!("Field '{}' not found in {}", field, instance.class_name),
                 })?;
             
+            eprintln!("✅ FIELD ACCESS: Returning shared reference id={}", field_value.box_id());
+            
             // 🔗 Weak Reference Check: Use unified accessor for weak fields
             let box_decls = self.shared.box_declarations.read().unwrap();
             if let Some(box_decl) = box_decls.get(&instance.class_name) {
@@ -731,7 +738,7 @@ impl NyashInterpreter {
                 }
             }
             
-            // Normal field access for now
+            // Return the shared Arc reference directly
             Ok(field_value)
         } else {
             Err(RuntimeError::TypeError {
@@ -858,7 +865,7 @@ impl NyashInterpreter {
                 message: "'from' can only be used inside methods".to_string(),
             })?;
         
-        let current_instance = current_instance_val.as_any().downcast_ref::<InstanceBox>()
+        let current_instance = (**current_instance_val).as_any().downcast_ref::<InstanceBox>()
             .ok_or(RuntimeError::TypeError {
                 message: "'from' requires current instance to be InstanceBox".to_string(),
             })?;

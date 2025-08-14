@@ -56,18 +56,14 @@ pub struct SocketBox {
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
-        // Read the current state values atomically
-        let current_is_server = *self.is_server.lock().unwrap();
-        let current_is_connected = *self.is_connected.lock().unwrap();
-        
-        // For listener and stream, we can't clone them, so we'll share them
-        // but create new Arc instances with the current state
+        // 🔧 FIX: Share state containers for "Everything is Box" reference sharing
+        // This ensures that clones of the same SocketBox share mutable state
         Self {
-            base: BoxBase::new(), // New unique ID for clone
-            listener: Arc::clone(&self.listener),  // Share the same listener
-            stream: Arc::clone(&self.stream),      // Share the same stream  
-            is_server: Arc::new(Mutex::new(current_is_server)),     // New Arc with current value
-            is_connected: Arc::new(Mutex::new(current_is_connected)), // New Arc with current value
+            base: BoxBase::new(), // New unique ID for clone (for debugging/identity)
+            listener: Arc::clone(&self.listener),      // Share the same listener
+            stream: Arc::clone(&self.stream),          // Share the same stream  
+            is_server: Arc::clone(&self.is_server),    // 🔧 Share the same state container
+            is_connected: Arc::clone(&self.is_connected), // 🔧 Share the same state container
         }
     }
 }

@@ -13,6 +13,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::fs;
 use std::path::Path;
 
+// 🔥 新しい型エイリアス - 将来的にBox<dyn NyashBox>を全て置き換える
+pub type SharedNyashBox = Arc<dyn NyashBox>;
+
 /// 🔥 BoxBase + BoxCore革命 - 統一ID生成システム
 /// CharmFlow教訓を活かした互換性保証の基盤
 pub fn next_box_id() -> u64 {
@@ -83,6 +86,11 @@ pub trait NyashBox: BoxCore + Debug {
     
     /// Clone this box (equivalent to Python's copy())
     fn clone_box(&self) -> Box<dyn NyashBox>;
+    
+    /// Arc参照を返す新しいcloneメソッド（参照共有）
+    fn clone_arc(&self) -> SharedNyashBox {
+        Arc::from(self.clone_box())
+    }
     
     // 🌟 TypeBox革命: Get type information as a Box
     // Everything is Box極限実現 - 型情報もBoxとして取得！
