@@ -321,7 +321,7 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                     
-                if let Some(instance) = this_value.as_any().downcast_ref::<InstanceBox>() {
+                if let Some(instance) = (**this_value).as_any().downcast_ref::<InstanceBox>() {
                     // 🔥 Usage prohibition guard - check if instance is finalized
                     if instance.is_finalized() {
                         return Err(RuntimeError::InvalidOperation {
@@ -354,7 +354,7 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                     
-                if let Some(instance) = me_value.as_any().downcast_ref::<InstanceBox>() {
+                if let Some(instance) = (**me_value).as_any().downcast_ref::<InstanceBox>() {
                     // 🔥 Usage prohibition guard - check if instance is finalized
                     if instance.is_finalized() {
                         return Err(RuntimeError::InvalidOperation {

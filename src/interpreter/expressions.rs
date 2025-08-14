@@ -61,21 +61,22 @@ impl NyashInterpreter {
             
             ASTNode::This { .. } => {
                 // 🌍 革命的this解決：local変数から取得
-                self.resolve_variable("me")
+                let shared_this = self.resolve_variable("me")
                     .map_err(|_| RuntimeError::InvalidOperation {
                         message: "'this' is only available inside methods".to_string(),
-                    })
+                    })?;
+                Ok((**shared_this).clone_box())  // Convert for external interface
             }
             
             ASTNode::Me { .. } => {
                 
                 // 🌍 革命的me解決：local変数から取得（thisと同じ）
-                let result = self.resolve_variable("me")
+                let shared_me = self.resolve_variable("me")
                     .map_err(|_| RuntimeError::InvalidOperation {
                         message: "'me' is only available inside methods".to_string(),
-                    });
+                    })?;
                     
-                result
+                Ok((**shared_me).clone_box())  // Convert for external interface
             }
             
             ASTNode::ThisField { field, .. } => {
@@ -85,11 +86,12 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                 
-                if let Some(instance) = this_value.as_any().downcast_ref::<InstanceBox>() {
-                    instance.get_field(field)
+                if let Some(instance) = (**this_value).as_any().downcast_ref::<InstanceBox>() {
+                    let shared_field = instance.get_field(field)
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on this", field)
-                        })
+                        })?;
+                    Ok((**shared_field).clone_box())  // Convert for external interface
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),
@@ -104,11 +106,12 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                 
-                if let Some(instance) = me_value.as_any().downcast_ref::<InstanceBox>() {
-                    instance.get_field(field)
+                if let Some(instance) = (**me_value).as_any().downcast_ref::<InstanceBox>() {
+                    let shared_field = instance.get_field(field)
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on me", field)
-                        })
+                        })?;
+                    Ok((**shared_field).clone_box())  // Convert for external interface
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),
@@ -551,7 +554,7 @@ impl NyashInterpreter {
                         if name == "me" {
                             // Get current instance to check if field is weak
                             if let Ok(current_me) = self.resolve_variable("me") {
-                                if let Some(current_instance) = current_me.as_any().downcast_ref::<InstanceBox>() {
+                                if let Some(current_instance) = (**current_me).as_any().downcast_ref::<InstanceBox>() {
                                     if current_instance.is_weak_field(field) {
                                         return Err(RuntimeError::InvalidOperation {
                                             message: format!(
@@ -862,7 +865,7 @@ impl NyashInterpreter {
                 message: "'from' can only be used inside methods".to_string(),
             })?;
         
-        let current_instance = current_instance_val.as_any().downcast_ref::<InstanceBox>()
+        let current_instance = (**current_instance_val).as_any().downcast_ref::<InstanceBox>()
             .ok_or(RuntimeError::TypeError {
                 message: "'from' requires current instance to be InstanceBox".to_string(),
             })?;

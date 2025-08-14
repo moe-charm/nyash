@@ -1,0 +1,40 @@
+// Comprehensive test for multiple stateful boxes
+static box Main {
+    init { socket, debug_tracker }
+    
+    main() {
+        print("=== Comprehensive Stateful Box Test ===")
+        
+        // Test 1: SocketBox (the main issue)
+        print("=== Test 1: SocketBox ===")
+        me.socket = new SocketBox()
+        print("Before bind - isServer: " + me.socket.isServer())
+        me.socket.bind("127.0.0.1", 8080)
+        print("After bind - isServer: " + me.socket.isServer())
+        
+        // Test multiple field accesses
+        local socket1
+        socket1 = me.socket
+        local socket2  
+        socket2 = me.socket
+        print("socket1.isServer(): " + socket1.isServer())
+        print("socket2.isServer(): " + socket2.isServer())
+        
+        // Test 2: DebugBox (should already work)
+        print("=== Test 2: DebugBox ===")
+        me.debug_tracker = new DebugBox()
+        me.debug_tracker.enableTracking()
+        print("Tracking enabled: " + me.debug_tracker.isTrackingEnabled())
+        
+        // Test multiple accesses
+        local debug1
+        debug1 = me.debug_tracker
+        local debug2
+        debug2 = me.debug_tracker
+        print("debug1.isTrackingEnabled(): " + debug1.isTrackingEnabled())
+        print("debug2.isTrackingEnabled(): " + debug2.isTrackingEnabled())
+        
+        print("=== All tests completed ===")
+        return me.socket.isServer()
+    }
+}

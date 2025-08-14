@@ -1,0 +1,33 @@
+// Complete test for the SocketBox state preservation fix
+static box Main {
+    init { server }
+    
+    main() {
+        print("=== SocketBox State Preservation Test ===")
+        
+        // 1. Create new SocketBox
+        me.server = new SocketBox()
+        
+        print("=== Before bind ===")
+        print("isServer: " + me.server.isServer())
+        
+        // 2. Call bind() which should set is_server=true
+        me.server.bind("127.0.0.1", 8080)
+        
+        print("=== After bind ===")
+        print("isServer: " + me.server.isServer())  
+        
+        // 3. Test multiple accesses
+        print("=== Multiple access test ===")
+        local temp1
+        temp1 = me.server
+        print("temp1.isServer(): " + temp1.isServer())
+        
+        local temp2
+        temp2 = me.server
+        print("temp2.isServer(): " + temp2.isServer())
+        
+        // If the fix works, all should return true
+        return me.server.isServer()
+    }
+}
