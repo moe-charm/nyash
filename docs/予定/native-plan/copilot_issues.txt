@@ -874,6 +874,104 @@ References:
 
 ------------------------------------------------------------
 
+## 🌐 Phase 9.76: Everything is API - 標準Box型のExternCall統一化
+
+Summary:
+- ArrayBox、StringBox等の標準Box型をExternCall APIとして統一
+- 「Everything is Box」から「Everything is API」への進化
+- Universal Exchange実現のための基盤確立
+
+Priority: High (Phase 9.75完了後・9.8より優先)
+Expected Duration: 2-3週間
+GitHub Issue: 予定
+
+### 設計思想
+**現状**: 標準Box型（内部実装）と外部API（ExternCall）の混在
+```nyash
+// 混在状態
+arr.push(item)              // 内部実装
+console.log("test")         // 内部実装
+dom.getElementById("x")     // ExternCall
+```
+
+**目標**: すべてを統一されたExternCall APIに
+```nyash
+// 統一後の美しい世界
+arr.call("push", item)              // ExternCall
+console.call("log", "test")         // ExternCall
+dom.call("getElementById", "x")     // ExternCall
+```
+
+### 技術的アプローチ
+**段階的移行戦略**:
+```rust
+// Phase A: ExternBoxラッパー導入
+ArrayBox → ExternBox("Array") + 互換レイヤー
+
+// Phase B: BID仕様標準化
+Array.bid: push/get/set/length/forEach...
+
+// Phase C: 言語出力対応
+Nyash → Python/TypeScript/Rust自動変換
+```
+
+### 実装計画
+- [ ] Phase A: 標準Box型のExternCall移行（2週間）
+  - ArrayBox → ExternBox("Array")
+  - StringBox → ExternBox("String") 
+  - ConsoleBox → ExternBox("Console")
+  - MathBox → ExternBox("Math")
+  - 既存API互換性維持
+
+- [ ] Phase B: BID標準仕様策定（1週間）
+  - 標準ライブラリBID定義
+  - 型システム・効果システム統合
+  - パフォーマンス最適化指針
+
+- [ ] Phase C: Universal Exchange基盤（1週間）
+  - 言語出力テンプレート作成
+  - ランタイム最適化実装
+  - 統合テスト・ベンチマーク
+
+### 🤖 Copilot協力期待
+- 標準Box→ExternBox機械的変換
+- BID仕様ファイル自動生成
+- 互換性テストスイート作成
+- パフォーマンス計測・最適化
+
+### 成功基準
+- [ ] 全標準Box型がExternCall API化
+- [ ] 既存Nyashコード100%互換
+- [ ] パフォーマンス劣化5%以内
+- [ ] Python/TypeScript出力可能
+
+### Universal Exchange効果
+```yaml
+# array.bid
+name: Array
+version: 1.0
+methods:
+  push: { args: [item: any], returns: void, effects: [mut] }
+  get: { args: [index: i32], returns: any, effects: [pure] }
+
+# ↓ 言語出力例
+Python: array.append(item)     # push → append
+TypeScript: array.push(item)   # push → push
+Rust: vec.push(item)           # push → push
+```
+
+### 期待される革命的効果
+- **設計統一**: Everything is APIの完全実現
+- **言語互換**: 真のUniversal Exchange基盤
+- **拡張性**: 新ライブラリの統一的統合
+- **保守性**: 単一の呼び出しパターン
+
+References:
+- docs/説明書/reference/box-design/ffi-abi-specification.md
+- docs/説明書/reference/box-design/everything-is-box.md
+
+------------------------------------------------------------
+
 ## 📦 Phase 9.8: BIDレジストリ + 自動コード生成ツール（WASM/VM/LLVM/言語）
 
 Summary:

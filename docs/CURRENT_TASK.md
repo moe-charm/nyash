@@ -253,6 +253,45 @@ impl PlainSocketBox {
 - 新規開発者のオンボーディング改善
 - Everything is Box哲学の明文化
 
+## ✅ **Phase 9.75-A: SocketBox Arc<Mutex>責務一元化 完了（2025-08-14）**
+
+### 🎉 **Copilot PR #87による完璧な修正達成**
+
+**✅ 技術実装完了**:
+- **RwLock統一**: Arc<Mutex>→RwLock内部可変性で二重ロック除去
+- **状態保持修正**: Clone時の状態保持メカニズム完全実装
+- **デッドロック根絶**: 外部Arc<Mutex>と内部ロックの責務分離達成
+- **HTTPServer互換**: 既存機能への影響なし確認完了
+
+**📊 修正効果実証**:
+```bash
+# 修正前: 状態保持失敗
+server.bind("127.0.0.1", 8080)  // ✅ true
+server.isServer()                // ❌ false
+
+# 修正後: 完全成功
+server.bind("127.0.0.1", 8080)  // ✅ true  
+server.isServer()                // ✅ true
+```
+
+**🔧 技術的解決策**:
+```rust
+// Before: 二重ロック地獄
+Arc<Mutex<SocketBox>> {
+    is_server: Arc<Mutex<bool>>  // 内部ロック
+}
+
+// After: 責務一元化
+Arc<Mutex<SocketBox>> {
+    is_server: RwLock<bool>      // シンプル内部可変性
+}
+```
+
+### 🎯 **Phase 9.75次期展開準備**
+- **Phase 9.75-B**: 他14個のBox型への同パターン適用
+- **Phase 9.76**: Everything is API統一化
+- **Box設計革命**: 完全ドキュメント体系確立済み
+
 ### 🌍 **Phase 9.7: ExternCallテスト**
 ```bash
 # ExternBox動作テスト
