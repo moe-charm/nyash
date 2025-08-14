@@ -56,24 +56,24 @@ pub struct SocketBox {
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
+        // Read the current state values atomically
+        let current_is_server = *self.is_server.lock().unwrap();
+        let current_is_connected = *self.is_connected.lock().unwrap();
+        
+        // For listener and stream, we can't clone them, so we'll share them
+        // but create new Arc instances with the current state
         let cloned = Self {
             base: BoxBase::new(), // New unique ID for clone
-            listener: Arc::clone(&self.listener),
-            stream: Arc::clone(&self.stream),
-            is_server: Arc::clone(&self.is_server),
-            is_connected: Arc::clone(&self.is_connected),
+            listener: Arc::clone(&self.listener),  // Share the same listener
+            stream: Arc::clone(&self.stream),      // Share the same stream  
+            is_server: Arc::new(Mutex::new(current_is_server)),     // New Arc with current value
+            is_connected: Arc::new(Mutex::new(current_is_connected)), // New Arc with current value
         };
+        
         let original_arc_ptr = Arc::as_ptr(&self.is_server) as usize;
         let cloned_arc_ptr = Arc::as_ptr(&cloned.is_server) as usize;
-        let is_server_value = match self.is_server.lock() {
-            Ok(guard) => *guard,
-            Err(_) => {
-                println!("🚨 SocketBox::clone() - Failed to lock is_server mutex!");
-                false
-            }
-        };
         println!("🔄 SocketBox::clone() - original Box ID: {}, cloned Box ID: {}, Arc ptr: {:x} -> {:x}, is_server: {}", 
-                self.base.id, cloned.base.id, original_arc_ptr, cloned_arc_ptr, is_server_value);
+                self.base.id, cloned.base.id, original_arc_ptr, cloned_arc_ptr, current_is_server);
         cloned
     }
 }
@@ -106,7 +106,8 @@ impl SocketBox {
                 match self.listener.lock() {
                     Ok(mut listener_guard) => {
                         *listener_guard = Some(listener);
-                        println!("✅ SocketBox::bind() - Listener stored successfully (Box ID: {})", self.base.id);
+                        let arc_ptr = Arc::as_ptr(&self.listener) as usize;
+                        println!("✅ SocketBox::bind() - Listener stored successfully (Box ID: {}, Arc ptr: {:x})", self.base.id, arc_ptr);
                     },
                     Err(_) => {
                         println!("🚨 SocketBox::bind() - Failed to acquire listener lock (Box ID: {})", self.base.id);
@@ -153,10 +154,13 @@ impl SocketBox {
             },
         };
         
+        println!("🔍 SocketBox::listen() - Listener guard acquired (Box ID: {}), is_some: {}", 
+                self.base.id, listener_guard.is_some());
+        
         if let Some(ref listener) = *listener_guard {
             println!("✅ SocketBox::listen() - Listener found (Box ID: {})", self.base.id);
-            let arc_ptr = Arc::as_ptr(&self.is_server) as usize;
-            println!("🔍 SocketBox::listen() - Arc ptr: {:x}", arc_ptr);
+            let arc_ptr = Arc::as_ptr(&self.listener) as usize;
+            println!("🔍 SocketBox::listen() - Listener Arc ptr: {:x}", arc_ptr);
             // Try to get the local address to confirm the listener is working
             match listener.local_addr() {
                 Ok(_addr) => {
@@ -172,6 +176,8 @@ impl SocketBox {
             }
         } else {
             println!("🚨 SocketBox::listen() - No listener bound (Box ID: {})", self.base.id);
+            let arc_ptr = Arc::as_ptr(&self.listener) as usize;
+            println!("🔍 SocketBox::listen() - Listener Arc ptr: {:x}", arc_ptr);
             // No listener bound - this is expected behavior for now
             // HTTPServerBox will handle binding separately
             Box::new(BoolBox::new(false))
