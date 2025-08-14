@@ -141,36 +141,42 @@ server.bind("127.0.0.1", 8080)  // 状態設定
 server.isServer()                // 🎯 true期待（修正前: false）
 ```
 
-## ✅ **PR #75・Phase 9.7実装完了 - 新規緊急問題発生**
+## ✅ **PR #75・Phase 9.7実装完了 - SocketBox問題段階的解決**
 
-### 🎯 **SocketBoxメソッド呼び出しデッドロック問題 (2025-08-14発見)**
+### 🎉 **SocketBoxデッドロック問題完全解決（2025-08-14）**
 
-**🔥 緊急度: 最高** - SocketBoxの全メソッド（bind, listen, isServer, toString等）が無限ブロックする致命的バグ
+**✅ 解決完了**: 79行目での同時Lock呼び出し修正により、SocketBoxの全メソッドが正常動作
 
-**📋 問題の詳細**:
-- SocketBox作成・Clone・Arc参照共有: ✅ **正常動作確認済み**
-- メソッド呼び出し: ❌ **インタープリターメソッド解決段階でデッドロック**
-- 他のBox（StringBox, IntegerBox, ArrayBox等）: ✅ **正常動作**
-
-**🎯 特定済み問題箇所**:
-```rust
-// src/interpreter/expressions.rs:462-464
-if let Some(socket_box) = obj_value.as_any().downcast_ref::<SocketBox>() {
-    let result = self.execute_socket_method(socket_box, method, arguments)?;
-    // ↑ ここに到達しない（execute_socket_methodが呼ばれない）
-```
-
-**📊 実行ログ証拠**:
+**📊 修正効果確認**:
 ```bash
+# 修正前: 無限ブロック
 [Console LOG] bind実行開始...
-🔥 SOCKETBOX CLONE DEBUG: Arc addresses match = true  # ← Clone正常
-# ここで無限ブロック - 🔥 SOCKET_METHOD: bind() called が出力されない
+# (ここでデッドロック)
+
+# 修正後: 正常完了  
+[Console LOG] bind実行開始...
+[Console LOG] ✅ bind() success: true
+[Console LOG] ✅ toString() success: SocketBox(id: 17, status: Disconnected) 
+[Console LOG] ✅ isServer() before: false
+[Console LOG] 🎉 All SocketBox methods working without deadlock!
 ```
 
-### 🚨 **Copilot緊急依頼Issue再作成**: [Issue #78](https://github.com/moe-charm/nyash/issues/78)
-- SocketBox専用デッドロック問題の完全解決
-- 詳細テストケース・再現手順・期待結果すべて明記
-- 他のBox型との差異分析要請
+### 🎯 **新発見：SocketBox状態分離問題 (2025-08-14)**
+
+**📋 問題**: bind()後のisServer()が false を返す（状態変更の逆流不全）
+
+**🔍 根本原因特定**:
+```bash
+# メソッド呼び出しごとにSocketBox IDが変化（新Clone作成）
+toString(): Socket ID = 17  
+isServer():  Socket ID = 26  # 異なるID！
+bind():      Socket ID = 36  # bind()で状態変更
+isServer():  Socket ID = 51  # 新Cloneのため状態失われる
+```
+
+**核心問題**: メソッド実行時に作成される新Cloneに状態変更が適用され、元変数への状態逆流が機能しない
+
+### 🚨 **Issue #78完了**: Copilotによるデッドロック修正が完了し、状態分離問題が新たに特定された
 
 ### 🌍 **Phase 9.7: ExternCallテスト**
 ```bash
