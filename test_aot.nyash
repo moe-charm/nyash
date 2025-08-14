@@ -1,0 +1,7 @@
+// Simple arithmetic test for all backends
+local a, b, c, d, result
+a = 10
+b = 20
+c = 30
+d = 40
+result = a + b + c + d
