@@ -19,25 +19,27 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
   }
   ```
 
-- **コンストラクタ (優先度: `pack` > `init`)**
-  - **`pack` (推奨):** Boxを構築するためのモダンで直感的な方法。オブジェクトのフィールドに値を「詰める」メソッドです。
+- **コンストラクタ**
+  - **`init` (標準):** 通常のユーザー定義Boxのコンストラクタ。フィールド宣言と初期化を行います。
     ```nyash
     box User {
-        init { name, email } // フィールド宣言は依然として必要
-
-        pack(userName, userEmail) {
-            me.name = userName
-            me.email = userEmail
+        init { name, email }  // フィールド宣言
+        
+        // initの場合、new時に直接フィールドに値が設定される
+    }
+    local user = new User("Alice", "alice@example.com")  // initが呼び出される
+    ```
+  - **`pack` (ビルトインBox継承専用):** ビルトインBox（P2PBox、MathBox等）を継承する際の特別なコンストラクタ。
+    ```nyash
+    box ChatNode from P2PBox {
+        init { chatHistory }  // 追加フィールド宣言
+        
+        pack(nodeId, world) {
+            from P2PBox.pack(nodeId, world)  // ビルトインBoxの初期化
+            me.chatHistory = new ArrayBox()   // 自分の追加フィールド初期化
         }
     }
-    local user = new User("Alice", "alice@example.com") // packが呼び出される
-    ```
-  - **`init` (旧式/シンプル):** 引数を直接フィールドにマッピングする、よりシンプルなコンストラクタ。
-    ```nyash
-    box Point {
-        init { x, y }
-    }
-    local p = new Point(10, 20) // initが呼び出される
+    local node = new ChatNode("node1", "tcp")  // packが呼び出される
     ```
 
 - **デリゲーション (`from`キーワード):** あるオブジェクトが、メソッド呼び出しやフィールドアクセスを別のオブジェクトに委譲できます。
@@ -50,19 +52,31 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
 
 - **明示的なオーバーライド (`override`キーワード):** 子Boxが親Boxのメソッドを再実装する場合、必ず`override`でマークしなければなりません。
   ```nyash
-  box Admin from User {
-      override pack(name, email, perms) {
-          // ... 実装 ...
+  box AdminUser from User {
+      init { permissions }  // 追加フィールド
+      
+      override greet() {
+          from User.greet()                // 親の処理を実行
+          print("(Administrator)")         // 追加の処理
       }
   }
   ```
 
 - **デリゲートされたメソッドの呼び出し (`from`キーワード):** オーバーライドしたメソッド内から親の実装を呼び出すには、`from Parent.method()`を使用します。
   ```nyash
-  override pack(name, email, perms) {
-      // Userのpackメソッドを明示的に呼び出す
-      from User.pack(name, email)
-      me.permissions = perms
+  box ScientificCalc from MathBox {
+      init { history }
+      
+      pack() {
+          from MathBox.pack()              // ビルトインBoxの初期化
+          me.history = new ArrayBox()      // 自分の追加フィールド
+      }
+      
+      override sin(x) {
+          local result = from MathBox.sin(x)  // 親のメソッド呼び出し
+          me.history.push("sin(" + x + ") = " + result)
+          return result
+      }
   }
   ```
 
@@ -250,8 +264,34 @@ r3 = await f3
   }
   ```
 
-## 11. クイック実行（ローカル）
+## 11. 実行バックエンド選択 (2025-08-14追加)
 
-- ビルド: `cargo build --bin nyash`
-- 実行: `cargo run -- ./local_tests/sample.nyash`
+Nyashは3つの実行方式をサポート。用途に応じて選択可能：
+
+```bash
+# インタープリター実行（開発・デバッグ重視）
+nyash program.nyash
+
+# VM実行（高速実行・本番環境）
+nyash --backend vm program.nyash
+
+# WASM生成（Web配布・最高性能）
+nyash --compile-wasm program.nyash
+
+# ベンチマーク実行（性能比較）
+nyash --benchmark --iterations 100
+```
+
+**性能比較（100回実行平均）:**
+- **WASM**: 0.17ms（280倍高速！）
+- **VM**: 16.97ms（2.9倍高速）
+- **Interpreter**: 48.59ms（ベースライン）
+
+詳細: [docs/execution-backends.md](execution-backends.md)
+
+## 12. クイック実行（ローカル）
+
+- ビルド: `cargo build --release -j32`
+- 実行: `./target/release/nyash program.nyash`
+- WASM: `./target/release/nyash --compile-wasm program.nyash`
 

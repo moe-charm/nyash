@@ -3,15 +3,28 @@
 Nyashプログラミング言語開発に必要な情報をまとめたクイックリファレンス。
 
 ## 🧭 Start Here (最初に見る)
-- 現在のタスク: docs/CURRENT_TASK.md
-- コア概念（速習）: docs/nyash_core_concepts.md
+- **🎯 主軸タスク**: [docs/予定/native-plan/copilot_issues.txt](docs/予定/native-plan/copilot_issues.txt) **← 最重要！**
+- 現在のタスク: [docs/CURRENT_TASK.md](docs/CURRENT_TASK.md)
+- コア概念（速習）: [docs/nyash_core_concepts.md](docs/nyash_core_concepts.md)
+
+## 🤖 **Claude×Copilot協調開発の主軸**
+### 📋 **copilot_issues.txt - 開発の軸となるファイル**
+**すべてはここに書いてある！** - Phase順タスク・優先順位・技術詳細
+
+- **Phase 8.4**: AST→MIR Lowering完全実装（最優先）
+- **Phase 8.5**: MIRダイエット（35命令→20命令）
+- **Phase 8.6**: VM性能改善（0.9倍 → 2倍以上）
+- **Phase 9**: JIT実装
+- **Phase 10**: AOT最終形態
+
+**迷ったらcopilot_issues.txtを確認せよ！**
 
 ## 🚀 クイックスタート
 
 ### 🎯 実行方式選択 (重要!)
 - **実行バックエンド完全ガイド**: [docs/execution-backends.md](docs/execution-backends.md) 
   - インタープリター（開発・デバッグ）/ VM（高速実行）/ WASM（Web配布）
-  - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較（280倍高速化実証済み！）
+  - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較（13.5倍実行高速化実証済み！）
 
 ### 🐧 Linux/WSL版
 ```bash
@@ -49,6 +62,12 @@ cd projects/nyash-wasm
 
 ## 📚 ドキュメント構造
 
+### 🎯 **最重要ドキュメント（開発者向け）**
+- **[copilot_issues.txt](docs/予定/native-plan/copilot_issues.txt)** - **Phase順開発計画の軸**
+- **[CURRENT_TASK.md](docs/CURRENT_TASK.md)** - 現在進行状況詳細
+- **[native-plan/README.md](docs/予定/native-plan/README.md)** - ネイティブビルド計画
+
+### 📖 利用者向けドキュメント
 - 説明書: docs/説明書/README.md
   - ネイティブビルド: docs/説明書/native-build/README.md
   - WASM: docs/説明書/wasm/
@@ -365,9 +384,10 @@ docs/
 
 ---
 
-最終更新: 2025年8月11日 - **🎁 `pack`構文革命完全達成！**
-- **Everything is Packed**: Gemini・ChatGPT両先生一致推薦の`pack`コンストラクタ採用
-- **Box哲学具現化**: 「箱に詰める」直感的メタファーでコードを書くたび哲学体験
-- **完全実装**: `pack()`、`from Parent.pack()`、`pack`>`init`>Box名順優先選択
-- **革命的UX**: 他言語の`new`/`init`を超越、Nyash独自アイデンティティ確立
-- **デリゲーション完成**: `box Child from Parent`+`pack`+`override`+`from`統合完了
+最終更新: 2025年8月14日 - **🚀 Phase 8完了・真の性能測定達成！**
+- **Phase 8.3完了**: Copilot×Claude協調でBox操作WASM実装完成
+- **真の性能判明**: WASM 13.5倍実行高速化（280倍はコンパイル性能）
+- **wasmtime統合**: 真のWASM実行性能測定環境完成
+- **VM性能問題発見**: インタープリターより0.9倍遅い問題特定
+- **copilot_issues.txt**: Phase順開発計画の軸として確立
+- **次期最優先**: AST→MIR Lowering完全実装（Phase 8.4）

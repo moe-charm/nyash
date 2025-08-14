@@ -541,57 +541,144 @@ References:
 
 ------------------------------------------------------------
 
-## 🚀 Phase 9: JIT (baseline) planning
+## 🚀 Phase 9: AOT WASM実装（最優先）
 
 Summary:
-- baseline JIT の設計と MIR→JIT の変換方針固め。
+- wasmtime compileによるAOT実行ファイル生成で確実なユーザー価値提供
 
 Scope/Tasks:
-- Deopt テーブル、Safepoint、Effect 属性の扱いを定義
-- NaN-box/Tagged 値 or 型テーブル参照の選択
+- `wasmtime compile` 統合実装
+- `--compile-native` / `--aot` CLI追加
+- 単一バイナリ梱包（`include_bytes!`）
+- 起動時間・配布サイズ最適化
 
 Acceptance Criteria:
-- 設計ドキュメント草案と最小 PoC（JIT off で VM と一致）
+- `nyash --compile-native app.nyash -o app.exe` 動作
+- 起動時間大幅短縮（JIT起動コスト除去）
+- 配布可能実行ファイル生成
 
-Priority: Medium (Phase 8完了後)
-Expected Duration: 2-3ヶ月
+Priority: **Critical** (Phase 8.6完了直後)
+Expected Duration: 2-3週間
 
-### 技術的検討事項
+### 技術的実装詳細
 🤖 Copilot協力期待:
-- JIT コード生成アーキテクチャ設計
-- Cranelift/LLVM 統合戦略
-- エスケープ解析・ボックス化解除実装
+- wasmtime::Config統一実装
+- .cwasm生成・実行パイプライン  
+- 互換性キー管理（CPU機能・wasmtimeバージョン）
+- パッケージング（単一バイナリ梱包）
 
 ### パフォーマンス目標
-- 現在のWASM (13.5倍実行) → 50-100倍高速化目標
-- VMの性能問題解決（現在0.9倍 → 5倍以上へ）
+- 現在のWASM JIT (13.5倍実行) → AOT (500倍目標：起動含む)
+- 配布ファイルサイズ: <10MB目標
+- 起動時間: <100ms目標
+
+### 期待される効果
+- **即座実用価値**: 配布可能実行ファイル生成
+- **差別化優位**: Everything is BoxのネイティブAOT実現
+- **LLVM準備**: AOT基盤確立でLLVM移行準備
 
 ------------------------------------------------------------
 
-## 🚀 Phase 10: AOT exploration (scaffolding only)
+## 🌐 Phase 9.5: HTTPサーバー実用テスト（AOT検証）
 
 Summary:
-- AOT の下ごしらえ（ビルド配線と最小 PoC）。
+- AOT実装完了後の複雑アプリケーション検証（並行処理・メモリ管理・実用性能）
 
 Scope/Tasks:
-- Cargo features/targets 整備（将来のAOT配線）
+- tiny-web-server実装（HTTP/1.1対応）
+- 同時接続・早期切断・例外経路テスト
+- AOT環境での真の性能測定
+- 配布可能HTTPサーバーデモ
 
 Acceptance Criteria:
-- AOT 雛形/設計が通る（ビルド/テスト スケルトン）
+- `http_server.exe`として配布可能
+- 同時100接続でメモリリークなし
+- fini()システム確実動作（I/Oハンドル解放）
+- AOT性能でベンチマーク測定
 
-Priority: Low (長期目標)
-Expected Duration: 6ヶ月+
+Priority: High (Phase 9完了直後)
+Expected Duration: 2週間
 
-### 技術アプローチ候補
+### 技術的複雑度
+```nyash
+box HTTPServer {
+    init { clients, requests, handlers }
+    
+    acceptConnections() {
+        loop(me.running) {
+            local client = me.socket.accept()
+            nowait me.handleClient(client)  // 非同期並行処理
+        }
+    }
+    
+    handleClient(client) {
+        local request = client.readRequest()
+        local response = me.processRequest(request)
+        client.sendResponse(response)
+        client.fini()  // 重要: 確実なリソース解放
+    }
+}
+```
+
+### 検証ポイント
+- **並行処理**: nowait/awaitのAOT実行性能
+- **メモリ管理**: Server→Clients→Requests木構造+weak参照
+- **I/Oリソース**: ソケット・ファイルハンドルの確実解放
+- **実用性能**: リアルHTTP負荷でのAOT効果測定
+
+### 🤖 Copilot協力期待
+- Socket・HTTP実装の効率化
+- 複雑なメモリ管理パターン検証
+- 負荷テスト・ベンチマーク整備
+- AOT最適化効果の定量測定
+
+------------------------------------------------------------
+
+## 🏆 Phase 10: LLVM Direct AOT（最高性能実現）
+
+Summary:
+- MIR→LLVM IR直接変換による最高性能AOT実現（Cranelift JITスキップ）
+
+Scope/Tasks:
+- MIR→LLVM IR lowering実装
+- エスケープ解析・ボックス化解除
+- LTO・PGO・高度最適化統合
+- Everything is Box最適化
+
+Acceptance Criteria:
+- 1000倍高速化達成
+- プロダクションレベル最適化
+- 他言語との競争力確立
+
+Priority: Medium (Phase 9.5完了後)
+Expected Duration: 4-6ヶ月
+
+### 技術アプローチ
 🤖 Copilot協力期待:
-- **Phase A**: AOT WASM (wasmtime compile) → 100倍目標
-- **Phase B**: Cranelift Direct → 200倍目標  
-- **Phase C**: LLVM Ultimate → 500-1000倍目標
+- **LLVM統合**: MIR→LLVM IR変換基盤
+- **エスケープ解析**: Box→スタック値最適化
+- **型特殊化**: コンパイル時型推論・特殊化
+- **LTO統合**: Link-time optimization
+- **PGO対応**: Profile-guided optimization
 
-### 実装戦略
-- MIR最適化: ボックス化解除がバックエンド差より圧倒的効果
-- エスケープ解析: スタック割り当て・型特殊化
-- 段階的検証: 各Phaseでベンチマーク駆動開発
+### Everything is Box最適化戦略
+- **Box回避**: スタック割り当て・直接レジスタ配置
+- **NaN Boxing**: 効率的な値表現
+- **型推論**: コンパイル時型特定・最適化
+- **メモリレイアウト**: 連続配置・キャッシュ効率
+
+### パフォーマンス目標
+- **実行性能**: 1000倍高速化（現在13.5倍 → 目標13500倍相当）
+- **メモリ効率**: Box割当数80%削減
+- **起動時間**: ネイティブレベル（<10ms）
+- **競合比較**: C/C++/Rust並みの性能
+
+### Cranelift JIT位置づけ変更
+**Phase 12以降の将来オプション**:
+- JIT開発体験向上（nyashプログラマー向け）
+- REPL・インタラクティブ実行
+- プロファイル駆動最適化
+- 言語完成後の付加価値機能
 
 ------------------------------------------------------------
 
@@ -625,25 +712,32 @@ Acceptance Criteria:
 - リリースアーティファクトが自動生成される
 
 ================================================================================
-🧠 AI大会議で得られた技術的知見 (2025-08-14更新)
+🧠 AI大会議 + 実用優先戦略で得られた技術的知見 (2025-08-14更新)
 ================================================================================
 
-## Gemini先生の助言
-✅ Cranelift → LLVM段階的アプローチ推奨
+## Gemini先生の助言（修正適用）
 ✅ エスケープ解析・ボックス化解除が性能の鍵  
-✅ wasmtime compileは短期的に実用的
+✅ wasmtime compileは短期的に実用的 → **Phase 9で最優先実装**
 ✅ WASM実行は確実に高速（13.5倍実証済み）
+🔄 Cranelift → LLVM段階的アプローチ → **実用優先でLLVM直接へ**
 
-## codex先生の助言  
+## codex先生の助言（重点化）
 ✅ MIR前倒し実装推奨（全バックエンドが恩恵）
-✅ wasmtime互換性管理が重要
+✅ wasmtime互換性管理が重要 → **AOT実装で最重要**
 ✅ CPU差異対応 (baseline/v3二段ビルド)
-✅ 起動時間・割当削減・配布体験がKPI
+✅ 起動時間・割当削減・配布体験がKPI → **AOT価値の核心**
 
-## Claude統合分析
-✅ 段階的アプローチが技術的に最適
+## Claude統合分析（実用優先）
+✅ 実用価値最大化: WASM+AOTで十分な競争力
+✅ 開発効率: Cranelift JITの恩恵限定的（cargo build変わらず）
 ✅ Everything is Box最適化が差別化の核心
-✅ ベンチマーク駆動開発で継続改善
+✅ 時間効率: 2-3ヶ月節約でLLVM集中投資
+
+## 🎯 実用優先戦略の確定理由
+- **ユーザー体験**: WASM既に動作、AOTで配布価値追加
+- **開発効率**: Cranelift JITは重複投資（Rust開発環境改善せず）
+- **競合優位**: AOT+LLVM早期実現で差別化
+- **リソース効果**: 限られた開発時間の最大効率化
 
 ================================================================================
 💡 Copilot様への具体的お願い・相談事項
@@ -656,15 +750,22 @@ Acceptance Criteria:
 ❓ ChatGPT5推奨の3-point setアプローチ最適化は？
 ❓ Portability Contract v0での互換性確保方法は？
 
-### Phase 9 JIT設計準備
-❓ baseline JITの実用的な設計アプローチは？
-❓ Deoptテーブル・Safepointの効率実装は？
-❓ NaN-box vs 型テーブルの性能トレードオフは？
-
-### Phase 10 AOT戦略
+### Phase 9 AOT WASM実装（最優先）
 ❓ wasmtime compileの実用配備方法は？
-❓ クロスプラットフォーム配布戦略は？
-❓ Cranelift統合の技術的ハードルは？
+❓ .cwasm生成・単一バイナリ梱包戦略は？
+❓ 互換性キー管理（CPU機能・wasmtimeバージョン）は？
+❓ 起動時間最適化の実装アプローチは？
+
+### Phase 9.5 HTTPサーバー検証
+❓ Socket・HTTP実装の効率的な設計は？
+❓ 並行処理でのメモリ管理パターンは？
+❓ AOT環境でのI/Oリソース管理は？
+❓ 負荷テスト・ベンチマーク設計は？
+
+### Phase 10 LLVM Direct AOT
+❓ MIR→LLVM IR変換の効率実装は？
+❓ エスケープ解析・ボックス化解除の実装戦略は？
+❓ LTO・PGO統合の技術的ハードルは？
 
 ## 🚀 長期戦略相談
 
@@ -674,9 +775,10 @@ Acceptance Criteria:
 ❓ 型特殊化・ボックス化解除の実装戦略は？
 
 ### ベンチマーク拡張
-❓ JIT/AOT性能測定の追加指標は？
+❓ AOT性能測定の追加指標は？
 ❓ 1000倍高速化実現のマイルストーン設計は？
 ❓ 他言語(JavaScript V8, Rust, C++)との競争力分析は？
+❓ HTTPサーバー負荷テストの効率設計は？
 
 ================================================================================
 📊 進捗管理・コミュニケーション
@@ -705,22 +807,24 @@ Acceptance Criteria:
 🎯 期待される成果・インパクト
 ================================================================================
 
-## Phase 8.3完了時の成果 (達成済み)
+## Phase 8完了時の成果 (達成済み)
 🏆 RefNew/RefGet/RefSet WASM完全動作
 🏆 Box操作ベンチマーク追加
 🏆 メモリレイアウト最適化効果測定
 🏆 オブジェクト指向プログラミングWASM対応
+🏆 25命令MIR階層化完了（Phase 8.5）
+🏆 VM性能改善完了（Phase 8.6）
 
-## Phase 9-10以降の展望
-🚀 ネイティブ実行ファイル生成 (Phase 10)
-🚀 500-1000倍高速化達成 (Phase 10 ultimate goal)
-🚀 実用レベルのアプリケーション開発対応
-🚀 他言語との競争力確立
+## Phase 9-10実用優先展望
+🚀 **AOT WASM実装** (Phase 9 - 2-3週間): 配布可能実行ファイル
+🚀 **HTTPサーバー検証** (Phase 9.5 - 2週間): 実用アプリデモ
+🚀 **LLVM Direct AOT** (Phase 10 - 4-6ヶ月): 1000倍高速化
+🚀 **実用競争力確立**: 他言語との差別化完成
 
 ## 言語としての完成度向上
 💎 Everything is Box哲学のネイティブ実現
 💎 開発効率性と実行性能の両立
-💎 5つの実行形態対応（Interpreter/VM/WASM/JIT/AOT）
+💎 4つの実行形態対応（Interpreter/VM/WASM/AOT）+ 将来JIT
 💎 現代的言語としての地位確立
 
 ================================================================================
@@ -738,6 +842,13 @@ Acceptance Criteria:
 一緒にNyashを最高の言語にしていきましょう🚀
 
 ================================================================================
-最終更新: 2025-08-14 (Git履歴復元・Phase 9/10詳細追加)
-作成者: Claude (Git履歴復元 + AI大会議結果統合)
+最終更新: 2025-08-14 (実用優先戦略・Phase 9-10再設計完了)
+作成者: Claude (AI大会議結果 + 実用優先戦略統合)
+
+🎯 重要な変更点:
+- Phase 9: JIT planning → AOT WASM実装（最優先）
+- Phase 9.5: HTTPサーバー実用テスト追加（AOT検証）
+- Phase 10: AOT exploration → LLVM Direct AOT（最高性能）
+- Cranelift JIT: Phase 12以降の将来オプションに変更
+- HTTPサーバー: kilo後のタイミングで実用性能検証に特化
 ================================================================================
