@@ -919,10 +919,463 @@ impl Display for FutureBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.fmt_box(f)
     }
+// Re-export operation boxes from the dedicated operations module
+pub use crate::box_operations::{AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox};
+
+#[cfg(test)]
+    pub left: Box<dyn NyashBox>,
+    pub right: Box<dyn NyashBox>,
+    base: BoxBase,
 }
 
-// Re-export operation boxes from the dedicated operations module
-pub use crate::box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox};
+impl AddBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        Self { 
+            left, 
+            right, 
+            base: BoxBase::new(),
+        }
+    }
+    
+    /// Execute the addition operation and return the result
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer + Integer
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(IntegerBox::new(left_int.value + right_int.value));
+        }
+        
+        // 2. Float + Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value + right_float.value));
+        }
+        
+        // 3. Integer + Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_int.value as f64 + right_float.value));
+        }
+        
+        // 4. Float + Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value + right_int.value as f64));
+        }
+        
+        // 5. Fall back to string concatenation
+        let left_str = self.left.to_string_box();
+        let right_str = self.right.to_string_box();
+        Box::new(StringBox::new(format!("{}{}", left_str.value, right_str.value)))
+    }
+}
+
+impl Debug for AddBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AddBox")
+            .field("left", &self.left.to_string_box().value)
+            .field("right", &self.right.to_string_box().value)
+            .field("id", &self.base.id)
+            .finish()
+    }
+}
+
+impl NyashBox for AddBox {
+    fn to_string_box(&self) -> StringBox {
+        let result = self.execute();
+        result.to_string_box()
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_add) = other.as_any().downcast_ref::<AddBox>() {
+            let left_eq = self.left.equals(other_add.left.as_ref());
+            let right_eq = self.right.equals(other_add.right.as_ref());
+            BoolBox::new(left_eq.value && right_eq.value)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "AddBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(AddBox::new(
+            self.left.clone_box(),
+            self.right.clone_box()
+        ))
+    }
+    
+}
+
+impl BoxCore for AddBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "({} + {})", self.left.to_string_box().value, self.right.to_string_box().value)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Display for AddBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
+// ===== 数値演算Boxの実装 =====
+
+/// 減算を行うBox
+pub struct SubtractBox {
+    left: Box<dyn NyashBox>,
+    right: Box<dyn NyashBox>,
+}
+
+impl SubtractBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        Self { left, right }
+    }
+    
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer - Integer
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(IntegerBox::new(left_int.value - right_int.value));
+        }
+        
+        // 2. Float - Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value - right_float.value));
+        }
+        
+        // 3. Integer - Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_int.value as f64 - right_float.value));
+        }
+        
+        // 4. Float - Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value - right_int.value as f64));
+        }
+        
+        // エラーの場合はvoid返す
+        Box::new(VoidBox::new())
+    }
+}
+
+/// 乗算を行うBox
+pub struct MultiplyBox {
+    left: Box<dyn NyashBox>,
+    right: Box<dyn NyashBox>,
+}
+
+impl MultiplyBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        Self { left, right }
+    }
+    
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer * Integer
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(IntegerBox::new(left_int.value * right_int.value));
+        }
+        
+        // 2. Float * Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value * right_float.value));
+        }
+        
+        // 3. Integer * Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return Box::new(FloatBox::new(left_int.value as f64 * right_float.value));
+        }
+        
+        // 4. Float * Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return Box::new(FloatBox::new(left_float.value * right_int.value as f64));
+        }
+        
+        // エラーの場合はvoid返す
+        Box::new(VoidBox::new())
+    }
+}
+
+/// 除算を行うBox
+pub struct DivideBox {
+    left: Box<dyn NyashBox>,
+    right: Box<dyn NyashBox>,
+}
+
+impl DivideBox {
+    pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
+        Self { left, right }
+    }
+    
+    pub fn execute(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::math_box::FloatBox;
+        
+        // 1. Integer / Integer -> Float (常に浮動小数点で返す)
+        if let (Some(left_int), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            if right_int.value == 0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_int.value as f64 / right_int.value as f64));
+        }
+        
+        // 2. Float / Float
+        if let (Some(left_float), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            if right_float.value == 0.0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_float.value / right_float.value));
+        }
+        
+        // 3. Integer / Float -> Float
+        if let (Some(left_int), Some(right_float)) = (
+            self.left.as_any().downcast_ref::<IntegerBox>(),
+            self.right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            if right_float.value == 0.0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_int.value as f64 / right_float.value));
+        }
+        
+        // 4. Float / Integer -> Float
+        if let (Some(left_float), Some(right_int)) = (
+            self.left.as_any().downcast_ref::<FloatBox>(),
+            self.right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            if right_int.value == 0 {
+                // ゼロ除算エラー
+                return Box::new(StringBox::new("Error: Division by zero".to_string()));
+            }
+            return Box::new(FloatBox::new(left_float.value / right_int.value as f64));
+        }
+        
+        // エラーの場合はvoid返す
+        Box::new(VoidBox::new())
+    }
+}
+
+/// 比較演算用のヘルパー
+pub struct CompareBox;
+
+impl CompareBox {
+    pub fn less(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::FloatBox;
+        
+        // Integer < Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value < right_int.value);
+        }
+        
+        // Float < Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value < right_float.value);
+        }
+        
+        // Integer < Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) < right_float.value);
+        }
+        
+        // Float < Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value < (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+    
+    pub fn greater(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::FloatBox;
+        
+        // Integer > Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value > right_int.value);
+        }
+        
+        // Float > Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value > right_float.value);
+        }
+        
+        // Integer > Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) > right_float.value);
+        }
+        
+        // Float > Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value > (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+    
+    pub fn less_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::FloatBox;
+        
+        // Integer <= Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value <= right_int.value);
+        }
+        
+        // Float <= Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value <= right_float.value);
+        }
+        
+        // Integer <= Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) <= right_float.value);
+        }
+        
+        // Float <= Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value <= (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+    
+    pub fn greater_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+        use crate::boxes::FloatBox;
+        
+        // Integer >= Integer
+        if let (Some(left_int), Some(right_int)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_int.value >= right_int.value);
+        }
+        
+        // Float >= Float
+        if let (Some(left_float), Some(right_float)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new(left_float.value >= right_float.value);
+        }
+        
+        // Integer >= Float
+        if let (Some(left_int), Some(right_float)) = (
+            left.as_any().downcast_ref::<IntegerBox>(),
+            right.as_any().downcast_ref::<FloatBox>()
+        ) {
+            return BoolBox::new((left_int.value as f64) >= right_float.value);
+        }
+        
+        // Float >= Integer
+        if let (Some(left_float), Some(right_int)) = (
+            left.as_any().downcast_ref::<FloatBox>(),
+            right.as_any().downcast_ref::<IntegerBox>()
+        ) {
+            return BoolBox::new(left_float.value >= (right_int.value as f64));
+        }
+        
+        BoolBox::new(false)
+    }
+}
+
+// ===== Tests =====
 
 #[cfg(test)]
 mod tests {

@@ -22,7 +22,7 @@ pub mod finalization;
 pub mod exception_box;
 pub mod method_box;
 pub mod operator_traits;
-pub mod box_operators;
+pub mod box_arithmetic; // 🚀 Moved from box_trait.rs for better organization
 pub mod value; // 🔥 NyashValue Revolutionary System
 
 // 🚀 MIR Infrastructure
