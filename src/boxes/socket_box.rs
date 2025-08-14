@@ -1,0 +1,369 @@
+/*! 🔌 SocketBox - TCP/UDP Socket networking
+ * 
+ * ## 📝 概要
+ * Rustの std::net を基盤とした高性能ネットワーキング Box
+ * TCP サーバー・クライアント両対応、HTTPサーバー基盤として利用
+ * 
+ * ## 🛠️ 利用可能メソッド
+ * ### TCP Server
+ * - `bind(address, port)` - TCP ソケット bind
+ * - `listen(backlog)` - 接続待機開始
+ * - `accept()` - クライアント接続受諾
+ * 
+ * ### TCP Client  
+ * - `connect(address, port)` - サーバーへ接続
+ * 
+ * ### IO Operations
+ * - `read()` - データ読み取り
+ * - `write(data)` - データ送信
+ * - `close()` - ソケット閉鎖
+ * 
+ * ## 💡 使用例
+ * ```nyash
+ * // TCP Server
+ * server = new SocketBox()
+ * server.bind("0.0.0.0", 8080)
+ * server.listen(128)
+ * client = server.accept()
+ * 
+ * // TCP Client
+ * client = new SocketBox()
+ * client.connect("127.0.0.1", 8080)
+ * client.write("Hello Server!")
+ * response = client.read()
+ * ```
+ */
+
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
+use std::any::Any;
+use std::net::{TcpListener, TcpStream, SocketAddr, ToSocketAddrs};
+use std::io::{Read, Write, BufRead, BufReader};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// TCP/UDP ソケット操作を提供するBox
+#[derive(Debug)]
+pub struct SocketBox {
+    base: BoxBase,
+    // TCP Server
+    listener: Arc<Mutex<Option<TcpListener>>>,
+    // TCP Client/Connected Socket
+    stream: Arc<Mutex<Option<TcpStream>>>,
+    // Connection state
+    is_server: Arc<Mutex<bool>>,
+    is_connected: Arc<Mutex<bool>>,
+}
+
+impl Clone for SocketBox {
+    fn clone(&self) -> Self {
+        Self {
+            base: BoxBase::new(), // New unique ID for clone
+            listener: Arc::clone(&self.listener),
+            stream: Arc::clone(&self.stream),
+            is_server: Arc::clone(&self.is_server),
+            is_connected: Arc::clone(&self.is_connected),
+        }
+    }
+}
+
+impl SocketBox {
+    pub fn new() -> Self {
+        Self {
+            base: BoxBase::new(),
+            listener: Arc::new(Mutex::new(None)),
+            stream: Arc::new(Mutex::new(None)),
+            is_server: Arc::new(Mutex::new(false)),
+            is_connected: Arc::new(Mutex::new(false)),
+        }
+    }
+    
+    /// TCP ソケットをアドレス・ポートにバインド
+    pub fn bind(&self, address: Box<dyn NyashBox>, port: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let addr_str = address.to_string_box().value;
+        let port_str = port.to_string_box().value;
+        
+        let socket_addr = format!("{}:{}", addr_str, port_str);
+        
+        match TcpListener::bind(&socket_addr) {
+            Ok(listener) => {
+                *self.listener.lock().unwrap() = Some(listener);
+                *self.is_server.lock().unwrap() = true;
+                Box::new(BoolBox::new(true))
+            },
+            Err(e) => {
+                eprintln!("🚨 SocketBox bind error: {}", e);
+                Box::new(BoolBox::new(false))
+            }
+        }
+    }
+    
+    /// 指定した backlog で接続待機開始
+    pub fn listen(&self, backlog: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        // TcpListener::bind already sets up listening with default backlog
+        // This method exists for API compatibility but doesn't need additional setup
+        let _backlog_num = backlog.to_string_box().value.parse::<i32>().unwrap_or(128);
+        
+        if self.listener.lock().unwrap().is_some() {
+            Box::new(BoolBox::new(true))
+        } else {
+            Box::new(BoolBox::new(false))
+        }
+    }
+    
+    /// クライアント接続を受諾（ブロッキング）
+    pub fn accept(&self) -> Box<dyn NyashBox> {
+        let listener_guard = self.listener.lock().unwrap();
+        if let Some(ref listener) = *listener_guard {
+            match listener.accept() {
+                Ok((stream, _addr)) => {
+                    drop(listener_guard);
+                    
+                    // Create new SocketBox for the client connection
+                    let client_socket = SocketBox::new();
+                    *client_socket.stream.lock().unwrap() = Some(stream);
+                    *client_socket.is_connected.lock().unwrap() = true;
+                    
+                    Box::new(client_socket)
+                },
+                Err(e) => {
+                    eprintln!("🚨 SocketBox accept error: {}", e);
+                    Box::new(BoolBox::new(false))
+                }
+            }
+        } else {
+            Box::new(BoolBox::new(false))
+        }
+    }
+    
+    /// サーバーに接続（クライアントモード）
+    pub fn connect(&self, address: Box<dyn NyashBox>, port: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let addr_str = address.to_string_box().value;
+        let port_str = port.to_string_box().value;
+        
+        let socket_addr = format!("{}:{}", addr_str, port_str);
+        
+        match TcpStream::connect(&socket_addr) {
+            Ok(stream) => {
+                // Set timeout for read/write operations
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+                let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
+                
+                *self.stream.lock().unwrap() = Some(stream);
+                *self.is_connected.lock().unwrap() = true;
+                *self.is_server.lock().unwrap() = false;
+                Box::new(BoolBox::new(true))
+            },
+            Err(e) => {
+                eprintln!("🚨 SocketBox connect error: {}", e);
+                Box::new(BoolBox::new(false))
+            }
+        }
+    }
+    
+    /// データを読み取り（改行まで or EOF）
+    pub fn read(&self) -> Box<dyn NyashBox> {
+        let stream_guard = self.stream.lock().unwrap();
+        if let Some(ref stream) = *stream_guard {
+            // Clone the stream to avoid borrowing issues
+            match stream.try_clone() {
+                Ok(stream_clone) => {
+                    drop(stream_guard);
+                    
+                    let mut reader = BufReader::new(stream_clone);
+                    let mut buffer = String::new();
+                    
+                    match reader.read_line(&mut buffer) {
+                        Ok(_) => {
+                            // Remove trailing newline
+                            if buffer.ends_with('\n') {
+                                buffer.pop();
+                                if buffer.ends_with('\r') {
+                                    buffer.pop();
+                                }
+                            }
+                            Box::new(StringBox::new(buffer))
+                        },
+                        Err(e) => {
+                            eprintln!("🚨 SocketBox read error: {}", e);
+                            Box::new(StringBox::new("".to_string()))
+                        }
+                    }
+                },
+                Err(e) => {
+                    eprintln!("🚨 SocketBox stream clone error: {}", e);
+                    Box::new(StringBox::new("".to_string()))
+                }
+            }
+        } else {
+            Box::new(StringBox::new("".to_string()))
+        }
+    }
+    
+    /// HTTP request を読み取り（ヘッダーまで含む）
+    pub fn read_http_request(&self) -> Box<dyn NyashBox> {
+        let stream_guard = self.stream.lock().unwrap();
+        if let Some(ref stream) = *stream_guard {
+            match stream.try_clone() {
+                Ok(stream_clone) => {
+                    drop(stream_guard);
+                    
+                    let mut reader = BufReader::new(stream_clone);
+                    let mut request = String::new();
+                    let mut line = String::new();
+                    
+                    // Read HTTP request line by line until empty line
+                    loop {
+                        line.clear();
+                        match reader.read_line(&mut line) {
+                            Ok(0) => break, // EOF
+                            Ok(_) => {
+                                request.push_str(&line);
+                                // Empty line indicates end of headers
+                                if line.trim().is_empty() {
+                                    break;
+                                }
+                            },
+                            Err(e) => {
+                                eprintln!("🚨 SocketBox HTTP read error: {}", e);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    Box::new(StringBox::new(request))
+                },
+                Err(e) => {
+                    eprintln!("🚨 SocketBox stream clone error: {}", e);
+                    Box::new(StringBox::new("".to_string()))
+                }
+            }
+        } else {
+            Box::new(StringBox::new("".to_string()))
+        }
+    }
+    
+    /// データを送信
+    pub fn write(&self, data: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let data_str = data.to_string_box().value;
+        
+        let mut stream_guard = self.stream.lock().unwrap();
+        if let Some(ref mut stream) = *stream_guard {
+            match stream.write_all(data_str.as_bytes()) {
+                Ok(_) => {
+                    match stream.flush() {
+                        Ok(_) => Box::new(BoolBox::new(true)),
+                        Err(e) => {
+                            eprintln!("🚨 SocketBox flush error: {}", e);
+                            Box::new(BoolBox::new(false))
+                        }
+                    }
+                },
+                Err(e) => {
+                    eprintln!("🚨 SocketBox write error: {}", e);
+                    Box::new(BoolBox::new(false))
+                }
+            }
+        } else {
+            Box::new(BoolBox::new(false))
+        }
+    }
+    
+    /// ソケット閉鎖
+    pub fn close(&self) -> Box<dyn NyashBox> {
+        *self.stream.lock().unwrap() = None;
+        *self.listener.lock().unwrap() = None;
+        *self.is_connected.lock().unwrap() = false;
+        *self.is_server.lock().unwrap() = false;
+        Box::new(BoolBox::new(true))
+    }
+    
+    /// 接続状態確認
+    pub fn is_connected(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(*self.is_connected.lock().unwrap()))
+    }
+    
+    /// サーバーモード確認
+    pub fn is_server(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(*self.is_server.lock().unwrap()))
+    }
+}
+
+impl NyashBox for SocketBox {
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+
+    fn to_string_box(&self) -> StringBox {
+        let is_server = *self.is_server.lock().unwrap();
+        let is_connected = *self.is_connected.lock().unwrap();
+        
+        let status = if is_server {
+            "Server"
+        } else if is_connected {
+            "Connected"
+        } else {
+            "Disconnected"
+        };
+        
+        StringBox::new(format!("SocketBox(id: {}, status: {})", self.base.id, status))
+    }
+
+    fn type_name(&self) -> &'static str {
+        "SocketBox"
+    }
+
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_socket) = other.as_any().downcast_ref::<SocketBox>() {
+            BoolBox::new(self.base.id == other_socket.base.id)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+}
+
+impl BoxCore for SocketBox {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
+
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let is_server = *self.is_server.lock().unwrap();
+        let is_connected = *self.is_connected.lock().unwrap();
+        
+        let status = if is_server {
+            "Server"
+        } else if is_connected {
+            "Connected"
+        } else {
+            "Disconnected"
+        };
+        
+        write!(f, "SocketBox(id: {}, status: {})", self.base.id, status)
+    }
+    
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl std::fmt::Display for SocketBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
+// Auto-cleanup implementation for proper resource management
+impl Drop for SocketBox {
+    fn drop(&mut self) {
+        // Ensure sockets are properly closed
+        let _ = self.close();
+    }
+}

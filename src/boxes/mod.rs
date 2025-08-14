@@ -114,6 +114,9 @@ pub mod result;
 pub mod http;
 pub mod stream;
 pub mod regex;
+pub mod socket_box;
+pub mod http_message_box;
+pub mod http_server_box;
 
 // P2P通信Box群 (NEW! - Completely rewritten)
 pub mod intent_box;
@@ -133,6 +136,9 @@ pub use result::{NyashResultBox, ResultBox};
 pub use http::HttpClientBox;
 pub use stream::{NyashStreamBox, StreamBox};
 pub use regex::RegexBox;
+pub use socket_box::SocketBox;
+pub use http_message_box::{HTTPRequestBox, HTTPResponseBox};
+pub use http_server_box::HTTPServerBox;
 
 // P2P通信Boxの再エクスポート
 pub use intent_box::IntentBox;

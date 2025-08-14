@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::ast::UnaryOperator;
-use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox};
+use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
 use crate::box_trait::BoolBox;
 use crate::operator_traits::OperatorResolver;
@@ -453,6 +453,26 @@ impl NyashInterpreter {
             return self.execute_intent_box_method(intent_box, method, arguments);
         }
         
+        // SocketBox method calls
+        if let Some(socket_box) = obj_value.as_any().downcast_ref::<SocketBox>() {
+            return self.execute_socket_method(socket_box, method, arguments);
+        }
+        
+        // HTTPServerBox method calls
+        if let Some(http_server_box) = obj_value.as_any().downcast_ref::<HTTPServerBox>() {
+            return self.execute_http_server_method(http_server_box, method, arguments);
+        }
+        
+        // HTTPRequestBox method calls
+        if let Some(http_request_box) = obj_value.as_any().downcast_ref::<HTTPRequestBox>() {
+            return self.execute_http_request_method(http_request_box, method, arguments);
+        }
+        
+        // HTTPResponseBox method calls
+        if let Some(http_response_box) = obj_value.as_any().downcast_ref::<HTTPResponseBox>() {
+            return self.execute_http_response_method(http_response_box, method, arguments);
+        }
+        
         // P2PBox method calls - Temporarily disabled
         // if let Some(p2p_box) = obj_value.as_any().downcast_ref::<P2PBox>() {
         //     return self.execute_p2p_box_method(p2p_box, method, arguments);
@@ -855,7 +875,7 @@ impl NyashInterpreter {
             "TimeBox", "DateTimeBox", "TimerBox", "RandomBox", "SoundBox", 
             "DebugBox", "MethodBox", "NullBox", "ConsoleBox", "FloatBox",
             "BufferBox", "RegexBox", "JSONBox", "StreamBox", "HTTPClientBox",
-            "IntentBox", "P2PBox"
+            "IntentBox", "P2PBox", "SocketBox", "HTTPServerBox", "HTTPRequestBox", "HTTPResponseBox"
         ];
         
         #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
@@ -1077,6 +1097,22 @@ impl NyashInterpreter {
             "SoundBox" => {
                 let sound_box = SoundBox::new();
                 self.execute_sound_method(&sound_box, method, arguments)
+            }
+            "SocketBox" => {
+                let socket_box = SocketBox::new();
+                self.execute_socket_method(&socket_box, method, arguments)
+            }
+            "HTTPServerBox" => {
+                let http_server_box = HTTPServerBox::new();
+                self.execute_http_server_method(&http_server_box, method, arguments)
+            }
+            "HTTPRequestBox" => {
+                let http_request_box = HTTPRequestBox::new();
+                self.execute_http_request_method(&http_request_box, method, arguments)
+            }
+            "HTTPResponseBox" => {
+                let http_response_box = HTTPResponseBox::new();
+                self.execute_http_response_method(&http_response_box, method, arguments)
             }
             _ => {
                 Err(RuntimeError::InvalidOperation {

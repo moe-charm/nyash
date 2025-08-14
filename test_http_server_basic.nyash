@@ -1,0 +1,42 @@
+// 🌐 Simple HTTP Server Box Test
+// Tests HTTPServerBox creation and basic operations
+
+static box Main {
+    init { server, result }
+    
+    main() {
+        print("🌐 Testing HTTPServerBox functionality...")
+        
+        // Create HTTPServerBox
+        me.server = new HTTPServerBox()
+        print("✅ HTTPServerBox created: " + me.server.toString())
+        
+        // Test binding
+        print("🔌 Testing bind operation...")
+        local bindResult
+        bindResult = me.server.bind("127.0.0.1", 8080)
+        print("📡 Bind result: " + bindResult.toString())
+        
+        if (bindResult.toString() == "true") {
+            print("✅ Successfully bound to port 8080")
+            
+            // Test listen
+            print("👂 Testing listen operation...")
+            local listenResult
+            listenResult = me.server.listen(10)
+            print("📡 Listen result: " + listenResult.toString())
+            
+            if (listenResult.toString() == "true") {
+                print("✅ HTTPServerBox ready!")
+                me.result = "HTTPServerBox test successful"
+            } else {
+                me.result = "HTTPServerBox listen failed"
+            }
+        } else {
+            me.result = "HTTPServerBox bind failed"
+        }
+        
+        print("🏁 Test completed: " + me.result)
+        return me.result
+    }
+}
