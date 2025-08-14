@@ -167,7 +167,7 @@ if let Some(socket_box) = obj_value.as_any().downcast_ref::<SocketBox>() {
 # ここで無限ブロック - 🔥 SOCKET_METHOD: bind() called が出力されない
 ```
 
-### 🚨 **Copilot緊急依頼Issue作成済み**: [Issue #76](https://github.com/moe-charm/nyash/issues/76)
+### 🚨 **Copilot緊急依頼Issue再作成**: [Issue #78](https://github.com/moe-charm/nyash/issues/78)
 - SocketBox専用デッドロック問題の完全解決
 - 詳細テストケース・再現手順・期待結果すべて明記
 - 他のBox型との差異分析要請
