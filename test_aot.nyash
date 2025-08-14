@@ -1,0 +1,4 @@
+// Simple arithmetic test for AOT compilation
+x = 42
+y = 58
+result = x + y

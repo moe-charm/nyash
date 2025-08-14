@@ -34,7 +34,7 @@ use mir::{MirCompiler, MirPrinter};
 
 // 🚀 Backend Infrastructure  
 pub mod backend;
-use backend::{VM, wasm::WasmBackend};
+use backend::{VM, wasm::WasmBackend, aot::AotBackend};
 use std::env;
 use std::fs;
 use std::process;
@@ -91,11 +91,23 @@ fn main() {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("compile-native")
+                .long("compile-native")
+                .help("Compile to native AOT executable using wasmtime precompilation")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("aot")
+                .long("aot")
+                .help("Short form of --compile-native")
+                .action(clap::ArgAction::SetTrue)
+        )
+        .arg(
             Arg::new("output")
                 .long("output")
                 .short('o')
                 .value_name("FILE")
-                .help("Output file (for WASM compilation)")
+                .help("Output file (for WASM compilation or AOT executable)")
         )
         .arg(
             Arg::new("benchmark")
@@ -120,6 +132,7 @@ fn main() {
     let verify_mir = matches.get_flag("verify");
     let mir_verbose = matches.get_flag("mir-verbose");
     let compile_wasm = matches.get_flag("compile-wasm");
+    let compile_native = matches.get_flag("compile-native") || matches.get_flag("aot");
     let backend = matches.get_one::<String>("backend").unwrap();
     let output_file = matches.get_one::<String>("output");
     let benchmark = matches.get_flag("benchmark");
@@ -144,6 +157,9 @@ fn main() {
         } else if compile_wasm {
             println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
             execute_wasm_mode(filename, output_file);
+        } else if compile_native {
+            println!("🚀 Nyash AOT Compiler - Processing file: {} 🚀", filename);
+            execute_aot_mode(filename, output_file);
         } else if backend == "vm" {
             println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             execute_vm_mode(filename);
@@ -1344,6 +1360,97 @@ fn execute_wasm_mode(filename: &str, output_file: Option<&String>) {
         },
         Err(e) => {
             eprintln!("❌ WASM compilation error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+/// Execute AOT compilation mode
+fn execute_aot_mode(filename: &str, output_file: Option<&String>) {
+    // Read the source file
+    let source = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("❌ Error reading file '{}': {}", filename, e);
+            process::exit(1);
+        }
+    };
+    
+    // Parse to AST
+    let ast = match NyashParser::parse_from_string(&source) {
+        Ok(ast) => ast,
+        Err(e) => {
+            eprintln!("❌ Parse error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Compile to MIR
+    let mut compiler = MirCompiler::new();
+    let compile_result = match compiler.compile(ast) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("❌ MIR compilation error: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Check for verification errors
+    if let Err(errors) = &compile_result.verification_result {
+        eprintln!("⚠️ MIR verification warnings ({} issues):", errors.len());
+        for (i, error) in errors.iter().enumerate() {
+            eprintln!("  {}: {}", i + 1, error);
+        }
+        println!("Continuing with AOT compilation...");
+    }
+    
+    // Compile to AOT executable
+    let mut aot_backend = match AotBackend::new() {
+        Ok(backend) => backend,
+        Err(e) => {
+            eprintln!("❌ Failed to create AOT backend: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Determine output file name
+    let output_path = if let Some(output) = output_file {
+        output.clone()
+    } else {
+        // Generate default output name
+        let input_path = std::path::Path::new(filename);
+        let stem = input_path.file_stem().unwrap_or_default().to_string_lossy();
+        if cfg!(windows) {
+            format!("{}.exe", stem)
+        } else {
+            stem.to_string()
+        }
+    };
+    
+    println!("📦 Compiling to AOT executable: {}", output_path);
+    
+    match aot_backend.compile_to_executable(compile_result.module, &output_path) {
+        Ok(()) => {
+            println!("✅ AOT compilation completed successfully!");
+            
+            // Show statistics
+            let stats = aot_backend.get_stats();
+            println!("📊 Compilation Statistics:");
+            println!("   WASM size: {} bytes", stats.wasm_size);
+            println!("   Precompiled size: {} bytes", stats.precompiled_size);
+            println!("   Compilation time: {}ms", stats.compilation_time_ms);
+            println!("   Optimization level: {}", stats.optimization_level);
+            
+            if stats.wasm_size > 0 {
+                let ratio = stats.precompiled_size as f64 / stats.wasm_size as f64;
+                println!("   Size ratio: {:.2}x", ratio);
+            }
+            
+            println!("📄 AOT executable written to: {}", output_path);
+            println!("🚀 Run with: ./{}", output_path);
+        },
+        Err(e) => {
+            eprintln!("❌ AOT compilation error: {}", e);
             process::exit(1);
         }
     }
