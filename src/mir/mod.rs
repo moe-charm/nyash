@@ -6,20 +6,24 @@
  */
 
 pub mod instruction;
+pub mod instruction_v2; // New 25-instruction specification
 pub mod basic_block;
 pub mod function;
 pub mod builder;
 pub mod verification;
+pub mod ownership_verifier_simple; // Simple ownership forest verification for current MIR
 pub mod printer;
 pub mod value_id;
 pub mod effect;
 
 // Re-export main types for easy access
 pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, MirType};
+pub use instruction_v2::{MirInstructionV2, AtomicOrdering}; // New 25-instruction set
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use function::{MirFunction, MirModule, FunctionSignature};
 pub use builder::MirBuilder;
 pub use verification::{MirVerifier, VerificationError};
+pub use ownership_verifier_simple::{OwnershipVerifier, OwnershipError, OwnershipStats}; // Simple ownership forest verification
 pub use printer::MirPrinter;
 pub use value_id::{ValueId, LocalId, ValueIdGenerator};
 pub use effect::{EffectMask, Effect};

@@ -10,51 +10,65 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EffectMask(u16);
 
-/// Individual effect types
+/// Individual effect types for the 4-category MIR hierarchy
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Effect {
-    /// Pure computation with no side effects
+    /// Pure computation with no side effects (Tier-0: reorderable, CSE/LICM eligible)
     Pure = 0x0001,
-    /// Reads from heap/memory (but doesn't modify)
-    ReadHeap = 0x0002,
-    /// Writes to heap/memory
-    WriteHeap = 0x0004,
-    /// Performs I/O operations (file, network, console)
-    IO = 0x0008,
-    /// P2P/network communication
-    P2P = 0x0010,
-    /// Foreign Function Interface calls
-    FFI = 0x0020,
-    /// May panic or throw exceptions
-    Panic = 0x0040,
-    /// Allocates memory
-    Alloc = 0x0080,
-    /// Accesses global state
-    Global = 0x0100,
-    /// Thread/async operations
-    Async = 0x0200,
-    /// Unsafe operations
-    Unsafe = 0x0400,
-    /// Debug/logging operations
-    Debug = 0x0800,
-    /// Memory barrier operations
-    Barrier = 0x1000,
+    /// Mutable operations (Tier-1: same Box/Field dependency preservation)
+    Mut = 0x0002,
+    /// I/O operations (Tier-1: no reordering, side effects present)
+    Io = 0x0004,
+    /// Control flow operations (Tier-0: affects execution flow)
+    Control = 0x0008,
+    
+    // Legacy effects for compatibility (will be mapped to above categories)
+    /// Reads from heap/memory (maps to Pure if read-only)
+    ReadHeap = 0x0010,
+    /// Writes to heap/memory (maps to Mut)
+    WriteHeap = 0x0020,
+    /// P2P/network communication (maps to Io)
+    P2P = 0x0040,
+    /// Foreign Function Interface calls (maps to Io)
+    FFI = 0x0080,
+    /// May panic or throw exceptions (maps to Io)
+    Panic = 0x0100,
+    /// Allocates memory (maps to Mut)
+    Alloc = 0x0200,
+    /// Accesses global state (maps to Io)
+    Global = 0x0400,
+    /// Thread/async operations (maps to Io)
+    Async = 0x0800,
+    /// Unsafe operations (maps to Io)
+    Unsafe = 0x1000,
+    /// Debug/logging operations (maps to Io)
+    Debug = 0x2000,
+    /// Memory barrier operations (maps to Io)
+    Barrier = 0x4000,
 }
 
 impl EffectMask {
     /// No effects - pure computation
     pub const PURE: Self = Self(Effect::Pure as u16);
     
+    /// Mutable operations (writes, ownership changes)
+    pub const MUT: Self = Self(Effect::Mut as u16);
+    
+    /// I/O operations (external effects, cannot reorder)
+    pub const IO: Self = Self(Effect::Io as u16);
+    
+    /// Control flow operations
+    pub const CONTROL: Self = Self(Effect::Control as u16);
+    
+    // Legacy constants for compatibility
     /// Memory read effects
     pub const READ: Self = Self(Effect::ReadHeap as u16);
+    pub const read: Self = Self::READ; // Lowercase alias for compatibility
     
     /// Memory write effects (includes read)
     pub const WRITE: Self = Self((Effect::WriteHeap as u16) | (Effect::ReadHeap as u16));
     
-    /// I/O effects
-    pub const IO: Self = Self(Effect::IO as u16);
-    
-    /// P2P communication effects
+    /// P2P communication effects  
     pub const P2P: Self = Self(Effect::P2P as u16);
     
     /// Panic/exception effects
@@ -115,15 +129,50 @@ impl EffectMask {
     
     /// Check if the computation is pure (no side effects)
     pub fn is_pure(self) -> bool {
-        self.0 == 0 || self.0 == (Effect::Pure as u16)
+        self.contains(Effect::Pure) || self.0 == 0
+    }
+    
+    /// Check if the computation is mutable (modifies state)
+    pub fn is_mut(self) -> bool {
+        self.contains(Effect::Mut) || 
+        self.contains(Effect::WriteHeap) ||
+        self.contains(Effect::Alloc)
+    }
+    
+    /// Check if the computation has I/O effects (external side effects)
+    pub fn is_io(self) -> bool {
+        self.contains(Effect::Io) ||
+        self.contains(Effect::P2P) ||
+        self.contains(Effect::FFI) ||
+        self.contains(Effect::Global) ||
+        self.contains(Effect::Async) ||
+        self.contains(Effect::Unsafe) ||
+        self.contains(Effect::Debug) ||
+        self.contains(Effect::Barrier) ||
+        self.contains(Effect::Panic)
+    }
+    
+    /// Check if the computation affects control flow
+    pub fn is_control(self) -> bool {
+        self.contains(Effect::Control)
+    }
+    
+    /// Get the primary effect category for MIR optimization
+    pub fn primary_category(self) -> Effect {
+        if self.is_control() {
+            Effect::Control
+        } else if self.is_io() {
+            Effect::Io
+        } else if self.is_mut() {
+            Effect::Mut
+        } else {
+            Effect::Pure
+        }
     }
     
     /// Check if the computation only reads (doesn't modify state)
     pub fn is_read_only(self) -> bool {
-        !self.contains(Effect::WriteHeap) && 
-        !self.contains(Effect::IO) && 
-        !self.contains(Effect::P2P) &&
-        !self.contains(Effect::Global)
+        !self.is_mut() && !self.is_io()
     }
     
     /// Check if parallel execution is safe
@@ -142,14 +191,15 @@ impl EffectMask {
     pub fn effect_names(self) -> Vec<&'static str> {
         let mut names = Vec::new();
         
-        if self.is_pure() {
-            names.push("pure");
-            return names;
-        }
+        // Primary categories
+        if self.contains(Effect::Pure) { names.push("pure"); }
+        if self.contains(Effect::Mut) { names.push("mut"); }
+        if self.contains(Effect::Io) { names.push("io"); }
+        if self.contains(Effect::Control) { names.push("control"); }
         
+        // Legacy effects for detailed tracking
         if self.contains(Effect::ReadHeap) { names.push("read"); }
         if self.contains(Effect::WriteHeap) { names.push("write"); }
-        if self.contains(Effect::IO) { names.push("io"); }
         if self.contains(Effect::P2P) { names.push("p2p"); }
         if self.contains(Effect::FFI) { names.push("ffi"); }
         if self.contains(Effect::Panic) { names.push("panic"); }
@@ -159,6 +209,10 @@ impl EffectMask {
         if self.contains(Effect::Unsafe) { names.push("unsafe"); }
         if self.contains(Effect::Debug) { names.push("debug"); }
         if self.contains(Effect::Barrier) { names.push("barrier"); }
+        
+        if names.is_empty() {
+            names.push("none");
+        }
         
         names
     }
@@ -240,8 +294,8 @@ mod tests {
         assert!(effects.contains(Effect::WriteHeap));
         assert!(!effects.is_read_only());
         
-        effects = effects.add(Effect::IO);
-        assert!(effects.contains(Effect::IO));
+        effects = effects.add(Effect::Io);
+        assert!(effects.contains(Effect::Io));
         assert!(!effects.is_parallel_safe());
     }
     
@@ -253,7 +307,7 @@ mod tests {
         let combined = read_effect | io_effect;
         
         assert!(combined.contains(Effect::ReadHeap));
-        assert!(combined.contains(Effect::IO));
+        assert!(combined.contains(Effect::Io));
         assert!(!combined.is_pure());
         assert!(!combined.is_parallel_safe());
     }
