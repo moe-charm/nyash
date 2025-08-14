@@ -56,33 +56,13 @@ pub struct SocketBox {
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
-        eprintln!("🔥 SOCKETBOX CLONE DEBUG:");
-        eprintln!("🔥   Original Socket ID = {}", self.base.id);
-        eprintln!("🔥   Original Arc pointer = {:p}", &self.is_server);
-        eprintln!("🔥   Arc strong_count BEFORE = {}", std::sync::Arc::strong_count(&self.is_server));
-        
-        let cloned = Self {
+        Self {
             base: BoxBase::new(), // New unique ID for clone (for debugging/identity)
             listener: Arc::clone(&self.listener),      // Share the same listener
             stream: Arc::clone(&self.stream),          // Share the same stream  
-            is_server: Arc::clone(&self.is_server),    // 🔧 Share the same state container
-            is_connected: Arc::clone(&self.is_connected), // 🔧 Share the same state container
-        };
-        
-        eprintln!("🔥   Cloned Socket ID = {}", cloned.base.id);
-        eprintln!("🔥   Cloned Arc pointer = {:p}", &cloned.is_server);
-        eprintln!("🔥   Arc strong_count AFTER = {}", std::sync::Arc::strong_count(&self.is_server));
-        eprintln!("🔥   Arc addresses match = {}", 
-                 std::ptr::eq(&*self.is_server as *const _, &*cloned.is_server as *const _));
-        
-        // 状態共有テスト
-        if let (Ok(orig_guard), Ok(clone_guard)) = (self.is_server.lock(), cloned.is_server.lock()) {
-            eprintln!("🔥   Original state = {}", *orig_guard);
-            eprintln!("🔥   Cloned state = {}", *clone_guard);
-            eprintln!("🔥   States match = {}", *orig_guard == *clone_guard);
+            is_server: Arc::clone(&self.is_server),    // Share the same state container
+            is_connected: Arc::clone(&self.is_connected), // Share the same state container
         }
-        
-        cloned
     }
 }
 
