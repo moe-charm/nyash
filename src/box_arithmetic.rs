@@ -91,12 +91,14 @@ impl NyashBox for AddBox {
         result.to_string_box()
     }
     
-    fn equals(&self, other: &dyn NyashBox) -> bool {
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_add) = other.as_any().downcast_ref::<AddBox>() {
-            self.left.equals(other_add.left.as_ref()) && 
-            self.right.equals(other_add.right.as_ref())
+            BoolBox::new(
+                self.left.equals(other_add.left.as_ref()).value && 
+                self.right.equals(other_add.right.as_ref()).value
+            )
         } else {
-            false
+            BoolBox::new(false)
         }
     }
     
@@ -167,9 +169,18 @@ impl SubtractBox {
             Box::new(IntegerBox::new(result))
         } else {
             // Convert to integers and subtract
-            let left_int = self.left.to_integer_box();
-            let right_int = self.right.to_integer_box();
-            let result = left_int.value - right_int.value;
+            // For simplicity, default to 0 for non-integer types
+            let left_val = if let Some(int_box) = self.left.as_any().downcast_ref::<IntegerBox>() {
+                int_box.value
+            } else {
+                0
+            };
+            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>() {
+                int_box.value
+            } else {
+                0
+            };
+            let result = left_val - right_val;
             Box::new(IntegerBox::new(result))
         }
     }
@@ -191,12 +202,14 @@ impl NyashBox for SubtractBox {
         result.to_string_box()
     }
     
-    fn equals(&self, other: &dyn NyashBox) -> bool {
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_sub) = other.as_any().downcast_ref::<SubtractBox>() {
-            self.left.equals(other_sub.left.as_ref()) && 
-            self.right.equals(other_sub.right.as_ref())
+            BoolBox::new(
+                self.left.equals(other_sub.left.as_ref()).value && 
+                self.right.equals(other_sub.right.as_ref()).value
+            )
         } else {
-            false
+            BoolBox::new(false)
         }
     }
     
@@ -249,9 +262,17 @@ impl MultiplyBox {
             Box::new(IntegerBox::new(result))
         } else {
             // Convert to integers and multiply
-            let left_int = self.left.to_integer_box();
-            let right_int = self.right.to_integer_box();
-            let result = left_int.value * right_int.value;
+            let left_val = if let Some(int_box) = self.left.as_any().downcast_ref::<IntegerBox>() {
+                int_box.value
+            } else {
+                0
+            };
+            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>() {
+                int_box.value
+            } else {
+                0
+            };
+            let result = left_val * right_val;
             Box::new(IntegerBox::new(result))
         }
     }
@@ -273,12 +294,14 @@ impl NyashBox for MultiplyBox {
         result.to_string_box()
     }
     
-    fn equals(&self, other: &dyn NyashBox) -> bool {
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_mul) = other.as_any().downcast_ref::<MultiplyBox>() {
-            self.left.equals(other_mul.left.as_ref()) && 
-            self.right.equals(other_mul.right.as_ref())
+            BoolBox::new(
+                self.left.equals(other_mul.left.as_ref()).value && 
+                self.right.equals(other_mul.right.as_ref()).value
+            )
         } else {
-            false
+            BoolBox::new(false)
         }
     }
     
@@ -337,12 +360,20 @@ impl DivideBox {
             Box::new(FloatBox::new(result))
         } else {
             // Convert to integers and divide
-            let left_int = self.left.to_integer_box();
-            let right_int = self.right.to_integer_box();
-            if right_int.value == 0 {
+            let left_val = if let Some(int_box) = self.left.as_any().downcast_ref::<IntegerBox>() {
+                int_box.value
+            } else {
+                0
+            };
+            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>() {
+                int_box.value
+            } else {
+                1 // Avoid division by zero
+            };
+            if right_val == 0 {
                 return Box::new(StringBox::new("Error: Division by zero".to_string()));
             }
-            let result = left_int.value as f64 / right_int.value as f64;
+            let result = left_val as f64 / right_val as f64;
             Box::new(FloatBox::new(result))
         }
     }
@@ -364,12 +395,14 @@ impl NyashBox for DivideBox {
         result.to_string_box()
     }
     
-    fn equals(&self, other: &dyn NyashBox) -> bool {
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_div) = other.as_any().downcast_ref::<DivideBox>() {
-            self.left.equals(other_div.left.as_ref()) && 
-            self.right.equals(other_div.right.as_ref())
+            BoolBox::new(
+                self.left.equals(other_div.left.as_ref()).value && 
+                self.right.equals(other_div.right.as_ref()).value
+            )
         } else {
-            false
+            BoolBox::new(false)
         }
     }
     
@@ -401,11 +434,11 @@ pub struct CompareBox;
 impl CompareBox {
     /// Compare two boxes for equality
     pub fn equals(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
-        BoolBox::new(left.equals(right))
+        left.equals(right)
     }
     
     /// Compare two boxes for less than
-    pub fn less_than(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+    pub fn less(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
         // Try integer comparison first
         if let (Some(left_int), Some(right_int)) = (
             left.as_any().downcast_ref::<IntegerBox>(),
@@ -421,7 +454,7 @@ impl CompareBox {
     }
     
     /// Compare two boxes for greater than
-    pub fn greater_than(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
+    pub fn greater(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
         // Try integer comparison first
         if let (Some(left_int), Some(right_int)) = (
             left.as_any().downcast_ref::<IntegerBox>(),
@@ -539,8 +572,8 @@ mod tests {
         let left = IntegerBox::new(10);
         let right = IntegerBox::new(20);
         
-        assert_eq!(CompareBox::less_than(&left, &right).value, true);
-        assert_eq!(CompareBox::greater_than(&left, &right).value, false);
+        assert_eq!(CompareBox::less(&left, &right).value, true);
+        assert_eq!(CompareBox::greater(&left, &right).value, false);
         assert_eq!(CompareBox::equals(&left, &right).value, false);
     }
 }
