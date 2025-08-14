@@ -1,0 +1,34 @@
+# Diagnostic test to understand clone state sharing
+static box Main {
+    init { console, socket1, socket2 }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔬 Clone State Diagnostic Test")
+        
+        # Create original SocketBox
+        me.socket1 = new SocketBox()
+        
+        # Set state via bind
+        local bindResult = me.socket1.bind("127.0.0.1", 19001)
+        me.console.log("✅ bind() result: " + bindResult.toString())
+        
+        # Check state immediately
+        local isServer1 = me.socket1.isServer()
+        me.console.log("🔍 socket1.isServer() after bind: " + isServer1.toString())
+        
+        # Now check toString to see the socket ID
+        local socketStr1 = me.socket1.toString()
+        me.console.log("🆔 socket1 ID after bind: " + socketStr1)
+        
+        # Check state again to see if we get the same socket ID
+        local isServer2 = me.socket1.isServer()
+        me.console.log("🔍 socket1.isServer() second call: " + isServer2.toString())
+        
+        # Check toString again
+        local socketStr2 = me.socket1.toString()
+        me.console.log("🆔 socket1 ID second call: " + socketStr2)
+        
+        return "DIAGNOSTIC_COMPLETE"
+    }
+}

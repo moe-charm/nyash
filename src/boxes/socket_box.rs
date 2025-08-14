@@ -56,13 +56,25 @@ pub struct SocketBox {
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
-        Self {
+        eprintln!("🔄 SOCKETBOX CLONE: Creating clone of Socket ID={}", self.base.id);
+        eprintln!("🔄   Original Arc pointer = {:p}", &self.is_server);
+        eprintln!("🔄   Original Arc data pointer = {:p}", self.is_server.as_ref());
+        eprintln!("🔄   Original Arc strong_count = {}", std::sync::Arc::strong_count(&self.is_server));
+        
+        let cloned = Self {
             base: BoxBase::new(), // New unique ID for clone (for debugging/identity)
             listener: Arc::clone(&self.listener),      // Share the same listener
             stream: Arc::clone(&self.stream),          // Share the same stream  
             is_server: Arc::clone(&self.is_server),    // Share the same state container
             is_connected: Arc::clone(&self.is_connected), // Share the same state container
-        }
+        };
+        
+        eprintln!("🔄   New clone ID = {}", cloned.base.id);
+        eprintln!("🔄   New Arc pointer = {:p}", &cloned.is_server);
+        eprintln!("🔄   New Arc data pointer = {:p}", cloned.is_server.as_ref());
+        eprintln!("🔄   New Arc strong_count = {}", std::sync::Arc::strong_count(&cloned.is_server));
+        
+        cloned
     }
 }
 
@@ -358,6 +370,7 @@ impl SocketBox {
         eprintln!("🔥 SOCKETBOX DEBUG: is_server() called");
         eprintln!("🔥   Socket ID = {}", self.base.id);
         eprintln!("🔥   Arc pointer = {:p}", &self.is_server);
+        eprintln!("🔥   Arc data pointer = {:p}", self.is_server.as_ref());
         
         match self.is_server.lock() {
             Ok(is_server_guard) => {

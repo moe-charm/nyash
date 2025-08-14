@@ -467,28 +467,69 @@ impl NyashInterpreter {
             // These methods modify the SocketBox internal state, so we need to update
             // the stored variable/field to ensure subsequent accesses get the updated state
             if matches!(method, "bind" | "connect" | "close") {
+                eprintln!("🔧 DEBUG: Stateful method '{}' called, updating stored instance", method);
                 let updated_instance = socket_box.clone();
+                eprintln!("🔧 DEBUG: Updated instance created with ID={}", updated_instance.box_id());
                 
                 match object {
                     ASTNode::Variable { name, .. } => {
+                        eprintln!("🔧 DEBUG: Updating local variable '{}'", name);
                         // Handle local variables
                         if let Some(stored_var) = self.local_vars.get_mut(name) {
+                            eprintln!("🔧 DEBUG: Found local variable '{}', updating from id={} to id={}", 
+                                     name, stored_var.box_id(), updated_instance.box_id());
                             *stored_var = Arc::new(updated_instance);
+                        } else {
+                            eprintln!("🔧 DEBUG: Local variable '{}' not found", name);
                         }
                     },
                     ASTNode::FieldAccess { object: field_obj, field, .. } => {
+                        eprintln!("🔧 DEBUG: Updating field access '{}'", field);
                         // Handle StaticBox fields like me.server
-                        if let ASTNode::Variable { name, .. } = field_obj.as_ref() {
-                            if name == "me" {
-                                if let Ok(me_instance) = self.resolve_variable("me") {
-                                    if let Some(instance) = (*me_instance).as_any().downcast_ref::<InstanceBox>() {
-                                        let _ = instance.set_field(field, Arc::new(updated_instance));
+                        match field_obj.as_ref() {
+                            ASTNode::Variable { name, .. } => {
+                                eprintln!("🔧 DEBUG: Field object is variable '{}'", name);
+                                if name == "me" {
+                                    eprintln!("🔧 DEBUG: Updating me.{} (via variable)", field);
+                                    if let Ok(me_instance) = self.resolve_variable("me") {
+                                        eprintln!("🔧 DEBUG: Resolved 'me' instance id={}", me_instance.box_id());
+                                        if let Some(instance) = (*me_instance).as_any().downcast_ref::<InstanceBox>() {
+                                            eprintln!("🔧 DEBUG: me is InstanceBox, setting field '{}' to updated instance id={}", field, updated_instance.box_id());
+                                            let result = instance.set_field(field, Arc::new(updated_instance));
+                                            eprintln!("🔧 DEBUG: set_field result: {:?}", result);
+                                        } else {
+                                            eprintln!("🔧 DEBUG: me is not an InstanceBox, type: {}", me_instance.type_name());
+                                        }
+                                    } else {
+                                        eprintln!("🔧 DEBUG: Failed to resolve 'me'");
                                     }
+                                } else {
+                                    eprintln!("🔧 DEBUG: Field object is not 'me', it's '{}'", name);
                                 }
+                            },
+                            ASTNode::Me { .. } => {
+                                eprintln!("🔧 DEBUG: Field object is Me node, updating me.{}", field);
+                                if let Ok(me_instance) = self.resolve_variable("me") {
+                                    eprintln!("🔧 DEBUG: Resolved 'me' instance id={}", me_instance.box_id());
+                                    if let Some(instance) = (*me_instance).as_any().downcast_ref::<InstanceBox>() {
+                                        eprintln!("🔧 DEBUG: me is InstanceBox, setting field '{}' to updated instance id={}", field, updated_instance.box_id());
+                                        let result = instance.set_field(field, Arc::new(updated_instance));
+                                        eprintln!("🔧 DEBUG: set_field result: {:?}", result);
+                                    } else {
+                                        eprintln!("🔧 DEBUG: me is not an InstanceBox, type: {}", me_instance.type_name());
+                                    }
+                                } else {
+                                    eprintln!("🔧 DEBUG: Failed to resolve 'me'");
+                                }
+                            },
+                            _ => {
+                                eprintln!("🔧 DEBUG: Field object is not a variable or me, type: {:?}", field_obj);
                             }
                         }
                     },
-                    _ => {}
+                    _ => {
+                        eprintln!("🔧 DEBUG: Object type not handled: {:?}", object);
+                    }
                 }
             }
             
