@@ -1,0 +1,32 @@
+box Parent {
+    init { name }
+    
+    pack(n) {
+        me.name = n
+    }
+    
+    greet() {
+        return "Hello " + me.name
+    }
+}
+
+box Child from Parent {
+    init { age }
+    
+    pack(n, a) {
+        from Parent.pack(n)
+        me.age = a
+    }
+    
+    override greet() {
+        local base = from Parent.greet()
+        return base + " (age " + me.age + ")"
+    }
+}
+
+static box Main {
+    main() {
+        local c = new Child("Alice", 25)
+        return c.greet()
+    }
+}
