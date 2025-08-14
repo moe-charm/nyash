@@ -5,7 +5,7 @@
  * Everything is Box哲学に基づくオブジェクト指向システム
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase, SharedNyashBox};
 use crate::ast::ASTNode;
 use crate::value::NyashValue;
 use crate::interpreter::NyashInterpreter;
@@ -20,8 +20,8 @@ pub struct InstanceBox {
     /// クラス名
     pub class_name: String,
     
-    /// フィールド値 (Legacy compatibility)
-    pub fields: Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>>,
+    /// フィールド値 (Updated to use Arc for reference sharing)
+    pub fields: Arc<Mutex<HashMap<String, SharedNyashBox>>>,
     
     /// 🔗 Next-generation fields (weak reference capable)
     pub fields_ng: Arc<Mutex<HashMap<String, NyashValue>>>,
@@ -49,9 +49,9 @@ pub struct InstanceBox {
 impl InstanceBox {
     pub fn new(class_name: String, fields: Vec<String>, methods: HashMap<String, ASTNode>) -> Self {
         // フィールドをVoidBoxで初期化
-        let mut field_map = HashMap::new();
+        let mut field_map: HashMap<String, SharedNyashBox> = HashMap::new();
         for field in &fields {
-            field_map.insert(field.clone(), Box::new(VoidBox::new()) as Box<dyn NyashBox>);
+            field_map.insert(field.clone(), Arc::new(VoidBox::new()));
         }
         
         Self {
@@ -270,14 +270,24 @@ impl InstanceBox {
     }
     
     /// フィールドの値を取得
-    pub fn get_field(&self, field_name: &str) -> Option<Box<dyn NyashBox>> {
-        self.fields.lock().unwrap().get(field_name).map(|v| v.clone_box())
+    pub fn get_field(&self, field_name: &str) -> Option<SharedNyashBox> {
+        eprintln!("✅ FIX: get_field('{}') returning shared Arc reference", field_name);
+        
+        // 🔧 修正：v.clone_box() → Arc::clone(v) で参照共有
+        self.fields.lock().unwrap().get(field_name).map(Arc::clone)
     }
     
     /// フィールドに値を設定
-    pub fn set_field(&self, field_name: &str, value: Box<dyn NyashBox>) -> Result<(), String> {
+    pub fn set_field(&self, field_name: &str, value: SharedNyashBox) -> Result<(), String> {
+        eprintln!("🔧 INSTANCE: set_field('{}') with shared Arc reference id={}", 
+                 field_name, value.box_id());
+        
         let mut fields = self.fields.lock().unwrap();
         if fields.contains_key(field_name) {
+            if let Some(old_value) = fields.get(field_name) {
+                eprintln!("🔧 INSTANCE: Replacing field '{}': old_id={} -> new_id={}", 
+                         field_name, old_value.box_id(), value.box_id());
+            }
             fields.insert(field_name.to_string(), value);
             Ok(())
         } else {
@@ -286,7 +296,7 @@ impl InstanceBox {
     }
     
     /// 🌍 GlobalBox用：フィールドを動的に追加・設定
-    pub fn set_field_dynamic(&mut self, field_name: String, value: Box<dyn NyashBox>) {
+    pub fn set_field_dynamic(&mut self, field_name: String, value: SharedNyashBox) {
         let mut fields = self.fields.lock().unwrap();
         fields.insert(field_name, value);
     }

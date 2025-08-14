@@ -25,11 +25,12 @@ impl NyashInterpreter {
             
             ASTNode::Variable { name, .. } => {
                 // 🌍 革命的変数解決：local変数 → GlobalBoxフィールド → エラー
-                self.resolve_variable(name)
+                let shared_var = self.resolve_variable(name)
                     .map_err(|_| RuntimeError::UndefinedVariableAt { 
                         name: name.clone(), 
                         span: expression.span() 
-                    })
+                    })?;
+                Ok((*shared_var).clone_box())  // Convert for external interface
             }
             
             ASTNode::BinaryOp { operator, left, right, .. } => {
@@ -702,6 +703,8 @@ impl NyashInterpreter {
                     message: format!("Field '{}' not found in {}", field, instance.class_name),
                 })?;
             
+            eprintln!("✅ FIELD ACCESS: Returning shared reference id={}", field_value.box_id());
+            
             // 🔗 Weak Reference Check: Use unified accessor for weak fields
             let box_decls = self.shared.box_declarations.read().unwrap();
             if let Some(box_decl) = box_decls.get(&instance.class_name) {
@@ -731,8 +734,8 @@ impl NyashInterpreter {
                 }
             }
             
-            // Normal field access for now
-            Ok(field_value)
+            // Normal field access - convert Arc back to Box for compatibility
+            Ok((*field_value).clone_box())
         } else {
             Err(RuntimeError::TypeError {
                 message: format!("Cannot access field '{}' on non-instance type. Type: {}", field, obj_value.type_name()),
