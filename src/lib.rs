@@ -24,6 +24,7 @@ pub mod method_box;
 pub mod type_box;  // 🌟 TypeBox revolutionary system
 pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
 pub mod box_operators; // 🚀 Operator implementations for basic Box types
+pub mod box_arithmetic; // 🚀 Arithmetic operations moved from box_trait.rs
 
 // 🔥 NyashValue Revolutionary System (NEW!)
 pub mod value;
@@ -48,7 +49,8 @@ pub mod wasm_test;
 pub mod tests;
 
 // Re-export main types for easy access
-pub use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox};
+pub use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
+pub use box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox};
 pub use environment::{Environment, PythonCompatEnvironment};
 pub use tokenizer::{NyashTokenizer, TokenType, Token};
 pub use type_box::{TypeBox, TypeRegistry, MethodSignature};  // 🌟 TypeBox exports
