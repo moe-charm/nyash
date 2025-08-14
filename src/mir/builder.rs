@@ -122,6 +122,18 @@ impl MirBuilder {
                 self.build_variable_access(name.clone())
             },
             
+            ASTNode::Me { .. } => {
+                self.build_me_expression()
+            },
+            
+            ASTNode::MethodCall { object, method, arguments, .. } => {
+                self.build_method_call(*object.clone(), method.clone(), arguments.clone())
+            },
+            
+            ASTNode::FromCall { parent, method, arguments, .. } => {
+                self.build_from_expression(parent.clone(), method.clone(), arguments.clone())
+            },
+            
             ASTNode::Assignment { target, value, .. } => {
                 // Check if target is a field access for RefSet
                 if let ASTNode::FieldAccess { object, field, .. } = target.as_ref() {
@@ -186,12 +198,20 @@ impl MirBuilder {
                 self.build_local_statement(variables.clone(), initial_values.clone())
             },
             
-            // Handle static box Main declarations
-            ASTNode::BoxDeclaration { name, methods, is_static, .. } => {
+            ASTNode::BoxDeclaration { name, methods, is_static, fields, .. } => {
                 if is_static && name == "Main" {
                     self.build_static_main_box(methods.clone())
                 } else {
-                    Err(format!("BoxDeclaration support is currently limited to static box Main"))
+                    // Support user-defined boxes - handle as statement, return void
+                    self.build_box_declaration(name.clone(), methods.clone(), fields.clone())?;
+                    
+                    // Return a void value since this is a statement
+                    let void_val = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: void_val,
+                        value: ConstValue::Void,
+                    })?;
+                    Ok(void_val)
                 }
             },
             
@@ -814,6 +834,113 @@ impl MirBuilder {
         })?;
         
         Ok(result_id)
+    }
+    
+    /// Build me expression: me
+    fn build_me_expression(&mut self) -> Result<ValueId, String> {
+        // For now, return a reference to the current instance
+        // In a full implementation, this would resolve to the actual instance reference
+        let me_value = self.value_gen.next();
+        
+        // For simplicity, emit a constant representing "me"
+        // In practice, this should resolve to the current instance context
+        self.emit_instruction(MirInstruction::Const {
+            dst: me_value,
+            value: ConstValue::String("__me__".to_string()),
+        })?;
+        
+        Ok(me_value)
+    }
+    
+    /// Build method call: object.method(arguments)
+    fn build_method_call(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+        // Build the object expression
+        let object_value = self.build_expression(object)?;
+        
+        // Build argument expressions
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.build_expression(arg)?);
+        }
+        
+        // Create result value
+        let result_id = self.value_gen.next();
+        
+        // Emit a BoxCall instruction
+        self.emit_instruction(MirInstruction::BoxCall {
+            dst: Some(result_id),
+            box_val: object_value,
+            method,
+            args: arg_values,
+            effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
+        })?;
+        
+        Ok(result_id)
+    }
+    
+    /// Build from expression: from Parent.method(arguments)
+    fn build_from_expression(&mut self, parent: String, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+        // Build argument expressions
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.build_expression(arg)?);
+        }
+        
+        // Create a synthetic "parent reference" value
+        let parent_value = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: parent_value,
+            value: ConstValue::String(parent),
+        })?;
+        
+        // Create result value
+        let result_id = self.value_gen.next();
+        
+        // Emit a BoxCall instruction for delegation
+        self.emit_instruction(MirInstruction::BoxCall {
+            dst: Some(result_id),
+            box_val: parent_value,
+            method,
+            args: arg_values,
+            effects: EffectMask::READ.add(Effect::ReadHeap),
+        })?;
+        
+        Ok(result_id)
+    }
+    
+    /// Build box declaration: box Name { fields... methods... }
+    fn build_box_declaration(&mut self, name: String, methods: std::collections::HashMap<String, ASTNode>, fields: Vec<String>) -> Result<(), String> {
+        // For Phase 8.4, we'll emit metadata instructions to register the box type
+        // In a full implementation, this would register type information for later use
+        
+        // Create a type registration constant
+        let type_id = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: type_id,
+            value: ConstValue::String(format!("__box_type_{}", name)),
+        })?;
+        
+        // For each field, emit metadata about the field
+        for field in fields {
+            let field_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const {
+                dst: field_id,
+                value: ConstValue::String(format!("__field_{}_{}", name, field)),
+            })?;
+        }
+        
+        // Process methods - now methods is a HashMap
+        for (method_name, method_ast) in methods {
+            if let ASTNode::FunctionDeclaration { .. } = method_ast {
+                let method_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const {
+                    dst: method_id,
+                    value: ConstValue::String(format!("__method_{}_{}", name, method_name)),
+                })?;
+            }
+        }
+        
+        Ok(())
     }
 }
 
