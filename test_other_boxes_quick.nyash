@@ -1,0 +1,1 @@
+static box Main { init { console } main() { me.console = new ConsoleBox() local str = new StringBox("test") me.console.log("StringBox: " + str.toString()) local num = new IntegerBox(42) me.console.log("IntegerBox: " + num.toString()) return "OTHER_BOXES_OK" } }
