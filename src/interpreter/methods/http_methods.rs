@@ -18,9 +18,8 @@ impl NyashInterpreter {
         match method {
             "bind" => {
                 if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("bind() expects 2 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -30,9 +29,8 @@ impl NyashInterpreter {
             }
             "listen" => {
                 if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("listen() expects 1 argument, got {}", arguments.len()),
                     });
                 }
                 
@@ -41,9 +39,8 @@ impl NyashInterpreter {
             }
             "accept" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("accept() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -51,9 +48,8 @@ impl NyashInterpreter {
             }
             "connect" => {
                 if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("connect() expects 2 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -63,9 +59,8 @@ impl NyashInterpreter {
             }
             "read" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("read() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -73,9 +68,8 @@ impl NyashInterpreter {
             }
             "readHttpRequest" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("readHttpRequest() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -83,9 +77,8 @@ impl NyashInterpreter {
             }
             "write" => {
                 if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("write() expects 1 argument, got {}", arguments.len()),
                     });
                 }
                 
@@ -94,9 +87,8 @@ impl NyashInterpreter {
             }
             "close" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("close() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -104,9 +96,8 @@ impl NyashInterpreter {
             }
             "isConnected" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("isConnected() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -114,17 +105,24 @@ impl NyashInterpreter {
             }
             "isServer" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("isServer() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
                 Ok(socket_box.is_server())
             }
-            _ => Err(RuntimeError::UndefinedMethod {
-                method: method.to_string(),
-                object_type: "SocketBox".to_string(),
+            "toString" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                
+                Ok(Box::new(socket_box.to_string_box()))
+            }
+            _ => Err(RuntimeError::UndefinedVariable {
+                name: format!("SocketBox method '{}' not found", method),
             }),
         }
     }
@@ -139,9 +137,8 @@ impl NyashInterpreter {
         match method {
             "bind" => {
                 if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("bind() expects 2 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -151,9 +148,8 @@ impl NyashInterpreter {
             }
             "listen" => {
                 if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("listen() expects 1 argument, got {}", arguments.len()),
                     });
                 }
                 
@@ -162,9 +158,8 @@ impl NyashInterpreter {
             }
             "start" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("start() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -172,9 +167,8 @@ impl NyashInterpreter {
             }
             "stop" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("stop() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -182,9 +176,8 @@ impl NyashInterpreter {
             }
             "get" => {
                 if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("get() expects 2 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -192,104 +185,22 @@ impl NyashInterpreter {
                 let handler = self.execute_expression(&arguments[1])?;
                 Ok(server_box.get(path, handler))
             }
-            "post" => {
-                if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let path = self.execute_expression(&arguments[0])?;
-                let handler = self.execute_expression(&arguments[1])?;
-                Ok(server_box.post(path, handler))
-            }
-            "put" => {
-                if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let path = self.execute_expression(&arguments[0])?;
-                let handler = self.execute_expression(&arguments[1])?;
-                Ok(server_box.put(path, handler))
-            }
-            "delete" => {
-                if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let path = self.execute_expression(&arguments[0])?;
-                let handler = self.execute_expression(&arguments[1])?;
-                Ok(server_box.delete(path, handler))
-            }
-            "route" => {
-                if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let path = self.execute_expression(&arguments[0])?;
-                let handler = self.execute_expression(&arguments[1])?;
-                Ok(server_box.route(path, handler))
-            }
-            "setStaticPath" => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let path = self.execute_expression(&arguments[0])?;
-                Ok(server_box.set_static_path(path))
-            }
-            "setTimeout" => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let timeout = self.execute_expression(&arguments[0])?;
-                Ok(server_box.set_timeout(timeout))
-            }
-            "getActiveConnections" => {
+            "toString" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
-                Ok(server_box.get_active_connections())
+                Ok(Box::new(server_box.to_string_box()))
             }
-            "isRunning" => {
-                if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                Ok(server_box.is_running())
-            }
-            _ => Err(RuntimeError::UndefinedMethod {
-                method: method.to_string(),
-                object_type: "HTTPServerBox".to_string(),
+            _ => Err(RuntimeError::UndefinedVariable {
+                name: format!("HTTPServerBox method '{}' not found", method),
             }),
         }
     }
 
-    /// HTTPRequestBox methods
+    /// HTTPRequestBox methods  
     pub(in crate::interpreter) fn execute_http_request_method(
         &mut self, 
         request_box: &HTTPRequestBox, 
@@ -299,9 +210,8 @@ impl NyashInterpreter {
         match method {
             "getMethod" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("getMethod() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -309,89 +219,24 @@ impl NyashInterpreter {
             }
             "getPath" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("getPath() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
                 Ok(request_box.get_path())
             }
-            "getQueryString" => {
+            "toString" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
-                Ok(request_box.get_query_string())
+                Ok(Box::new(request_box.to_string_box()))
             }
-            "getHeader" => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let header_name = self.execute_expression(&arguments[0])?;
-                Ok(request_box.get_header(header_name))
-            }
-            "getAllHeaders" => {
-                if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                Ok(request_box.get_all_headers())
-            }
-            "hasHeader" => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let header_name = self.execute_expression(&arguments[0])?;
-                Ok(request_box.has_header(header_name))
-            }
-            "getBody" => {
-                if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                Ok(request_box.get_body())
-            }
-            "getContentType" => {
-                if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                Ok(request_box.get_content_type())
-            }
-            "getContentLength" => {
-                if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                Ok(request_box.get_content_length())
-            }
-            _ => Err(RuntimeError::UndefinedMethod {
-                method: method.to_string(),
-                object_type: "HTTPRequestBox".to_string(),
+            _ => Err(RuntimeError::UndefinedVariable {
+                name: format!("HTTPRequestBox method '{}' not found", method),
             }),
         }
     }
@@ -406,9 +251,8 @@ impl NyashInterpreter {
         match method {
             "setStatus" => {
                 if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("setStatus() expects 2 arguments, got {}", arguments.len()),
                     });
                 }
                 
@@ -416,64 +260,26 @@ impl NyashInterpreter {
                 let message = self.execute_expression(&arguments[1])?;
                 Ok(response_box.set_status(code, message))
             }
-            "setHeader" => {
-                if arguments.len() != 2 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 2,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let name = self.execute_expression(&arguments[0])?;
-                let value = self.execute_expression(&arguments[1])?;
-                Ok(response_box.set_header(name, value))
-            }
-            "setContentType" => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let content_type = self.execute_expression(&arguments[0])?;
-                Ok(response_box.set_content_type(content_type))
-            }
-            "setBody" => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let content = self.execute_expression(&arguments[0])?;
-                Ok(response_box.set_body(content))
-            }
-            "appendBody" => {
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 1,
-                        actual: arguments.len(),
-                    });
-                }
-                
-                let content = self.execute_expression(&arguments[0])?;
-                Ok(response_box.append_body(content))
-            }
             "toHttpString" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::WrongNumberOfArguments {
-                        expected: 0,
-                        actual: arguments.len(),
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toHttpString() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
                 
                 Ok(response_box.to_http_string())
             }
-            _ => Err(RuntimeError::UndefinedMethod {
-                method: method.to_string(),
-                object_type: "HTTPResponseBox".to_string(),
+            "toString" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                
+                Ok(Box::new(response_box.to_string_box()))
+            }
+            _ => Err(RuntimeError::UndefinedVariable {
+                name: format!("HTTPResponseBox method '{}' not found", method),
             }),
         }
     }

@@ -7,7 +7,7 @@
  */
 
 use super::*;
-use crate::boxes::{NullBox, ConsoleBox, FloatBox, DateTimeBox};
+use crate::boxes::{NullBox, ConsoleBox, FloatBox, DateTimeBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 // use crate::boxes::intent_box_wrapper::IntentBoxWrapper;
 use std::sync::Arc;
 
@@ -606,6 +606,46 @@ impl NyashInterpreter {
                         message: "MethodBox constructor requires string method name as second argument".to_string(),
                     });
                 }
+            }
+            "SocketBox" => {
+                // SocketBoxは引数なしで作成
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("SocketBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let socket_box = Box::new(SocketBox::new()) as Box<dyn NyashBox>;
+                return Ok(socket_box);
+            }
+            "HTTPServerBox" => {
+                // HTTPServerBoxは引数なしで作成
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("HTTPServerBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let http_server_box = Box::new(HTTPServerBox::new()) as Box<dyn NyashBox>;
+                return Ok(http_server_box);
+            }
+            "HTTPRequestBox" => {
+                // HTTPRequestBoxは引数なしで作成
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("HTTPRequestBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let http_request_box = Box::new(HTTPRequestBox::new()) as Box<dyn NyashBox>;
+                return Ok(http_request_box);
+            }
+            "HTTPResponseBox" => {
+                // HTTPResponseBoxは引数なしで作成
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("HTTPResponseBox constructor expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                let http_response_box = Box::new(HTTPResponseBox::new()) as Box<dyn NyashBox>;
+                return Ok(http_response_box);
             }
             _ => {}
         }
