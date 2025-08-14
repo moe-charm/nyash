@@ -43,7 +43,14 @@ impl RuntimeImports {
             result: None,
         });
         
-        // Future: env.print_string for string output
+        // env.print_str for string debugging (ptr, len)
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "print_str".to_string(),
+            params: vec!["i32".to_string(), "i32".to_string()],
+            result: None,
+        });
+        
         // Future: env.file_read, env.file_write for file I/O
         // Future: env.http_request for network access
     }

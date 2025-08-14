@@ -13,6 +13,7 @@ use std::collections::HashMap;
 pub struct WasmModule {
     pub imports: Vec<String>,
     pub memory: String,
+    pub data_segments: Vec<String>,
     pub globals: Vec<String>,
     pub functions: Vec<String>,
     pub exports: Vec<String>,
@@ -23,6 +24,7 @@ impl WasmModule {
         Self {
             imports: Vec::new(),
             memory: String::new(),
+            data_segments: Vec::new(),
             globals: Vec::new(),
             functions: Vec::new(),
             exports: Vec::new(),
@@ -42,6 +44,11 @@ impl WasmModule {
         // Add memory declaration 
         if !self.memory.is_empty() {
             wat.push_str(&format!("  {}\n", self.memory));
+        }
+        
+        // Add data segments (must come after memory)
+        for data_segment in &self.data_segments {
+            wat.push_str(&format!("  {}\n", data_segment));
         }
         
         // Add globals
@@ -69,6 +76,9 @@ pub struct WasmCodegen {
     /// Current function context for local variable management
     current_locals: HashMap<ValueId, u32>,
     next_local_index: u32,
+    /// String literals and their data segment offsets
+    string_literals: HashMap<String, u32>,
+    next_data_offset: u32,
 }
 
 impl WasmCodegen {
@@ -76,6 +86,8 @@ impl WasmCodegen {
         Self {
             current_locals: HashMap::new(),
             next_local_index: 0,
+            string_literals: HashMap::new(),
+            next_data_offset: 0x1000, // Start data after initial heap space
         }
     }
     
@@ -113,6 +125,9 @@ impl WasmCodegen {
             let wasm_function = self.generate_function(name, function.clone())?;
             wasm_module.functions.push(wasm_function);
         }
+        
+        // Add string literal data segments
+        wasm_module.data_segments.extend(self.generate_data_segments());
         
         // Add main function export if it exists
         if mir_module.functions.contains_key("main") {
@@ -188,7 +203,7 @@ impl WasmCodegen {
     }
     
     /// Generate WASM instructions for a basic block
-    fn generate_basic_block(&self, mir_function: &MirFunction, block_id: BasicBlockId) -> Result<Vec<String>, WasmError> {
+    fn generate_basic_block(&mut self, mir_function: &MirFunction, block_id: BasicBlockId) -> Result<Vec<String>, WasmError> {
         let block = mir_function.blocks.get(&block_id)
             .ok_or_else(|| WasmError::CodegenError(format!("Basic block {:?} not found", block_id)))?;
         
@@ -210,7 +225,7 @@ impl WasmCodegen {
     }
     
     /// Generate WASM instructions for a single MIR instruction
-    fn generate_instruction(&self, instruction: &MirInstruction) -> Result<Vec<String>, WasmError> {
+    fn generate_instruction(&mut self, instruction: &MirInstruction) -> Result<Vec<String>, WasmError> {
         match instruction {
             // Phase 8.2 PoC1: Basic operations
             MirInstruction::Const { dst, value } => {
@@ -348,11 +363,20 @@ impl WasmCodegen {
     }
     
     /// Generate constant loading
-    fn generate_const(&self, dst: ValueId, value: &ConstValue) -> Result<Vec<String>, WasmError> {
+    fn generate_const(&mut self, dst: ValueId, value: &ConstValue) -> Result<Vec<String>, WasmError> {
         let const_instruction = match value {
             ConstValue::Integer(n) => format!("i32.const {}", n),
             ConstValue::Bool(b) => format!("i32.const {}", if *b { 1 } else { 0 }),
             ConstValue::Void => "i32.const 0".to_string(),
+            ConstValue::String(s) => {
+                // Register the string literal and get its offset
+                let data_offset = self.register_string_literal(s);
+                let string_len = s.len() as u32;
+                
+                // Generate code to allocate a StringBox and return its pointer
+                // This is more complex and will need StringBox allocation
+                return self.generate_string_box_const(dst, data_offset, string_len);
+            },
             _ => return Err(WasmError::UnsupportedInstruction(
                 format!("Unsupported constant type: {:?}", value)
             )),
@@ -417,12 +441,79 @@ impl WasmCodegen {
         }
     }
     
+    /// Generate StringBox allocation for a string constant
+    fn generate_string_box_const(&self, dst: ValueId, data_offset: u32, string_len: u32) -> Result<Vec<String>, WasmError> {
+        // Allocate a StringBox using the StringBox allocator
+        // StringBox layout: [type_id:0x1001][ref_count:1][field_count:2][data_ptr:offset][length:len]
+        Ok(vec![
+            // Call StringBox allocator function
+            "call $alloc_stringbox".to_string(),
+            // Store the result (StringBox pointer) in local variable
+            format!("local.set ${}", self.get_local_index(dst)?),
+            
+            // Initialize StringBox fields
+            // Get StringBox pointer back
+            format!("local.get ${}", self.get_local_index(dst)?),
+            // Set data_ptr field (offset 12 from StringBox pointer)
+            "i32.const 12".to_string(),
+            "i32.add".to_string(),
+            format!("i32.const {}", data_offset),
+            "i32.store".to_string(),
+            
+            // Get StringBox pointer again  
+            format!("local.get ${}", self.get_local_index(dst)?),
+            // Set length field (offset 16 from StringBox pointer)
+            "i32.const 16".to_string(),
+            "i32.add".to_string(),
+            format!("i32.const {}", string_len),
+            "i32.store".to_string(),
+        ])
+    }
+    
     /// Generate print instruction (calls env.print import)
     fn generate_print(&self, value: ValueId) -> Result<Vec<String>, WasmError> {
         Ok(vec![
             format!("local.get ${}", self.get_local_index(value)?),
             "call $print".to_string(),
         ])
+    }
+    
+    /// Register a string literal and return its data offset
+    fn register_string_literal(&mut self, string: &str) -> u32 {
+        if let Some(&offset) = self.string_literals.get(string) {
+            return offset;
+        }
+        
+        let offset = self.next_data_offset;
+        let string_bytes = string.as_bytes();
+        self.string_literals.insert(string.to_string(), offset);
+        self.next_data_offset += string_bytes.len() as u32;
+        
+        offset
+    }
+    
+    /// Generate data segments for all registered string literals
+    fn generate_data_segments(&self) -> Vec<String> {
+        let mut segments = Vec::new();
+        
+        for (string, &offset) in &self.string_literals {
+            let string_bytes = string.as_bytes();
+            
+            // Convert to hex-escaped string for WAT
+            let byte_string = string_bytes.iter()
+                .map(|b| format!("\\{:02x}", b))
+                .collect::<String>();
+            
+            let data_segment = format!(
+                "(data (i32.const {}) \"{}\")",
+                offset,
+                byte_string
+            );
+            
+            segments.push(data_segment);
+        }
+        
+        segments
     }
     
     /// Get WASM local variable index for ValueId
@@ -452,7 +543,7 @@ mod tests {
     
     #[test]
     fn test_constant_generation() {
-        let codegen = WasmCodegen::new();
+        let mut codegen = WasmCodegen::new();
         let dst = ValueId::new(0);
         
         let result = codegen.generate_const(dst, &ConstValue::Integer(42));
