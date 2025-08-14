@@ -471,6 +471,155 @@ impl DynamicDiv for BoolBox {
     }
 }
 
+// ===== High-level Operator Resolution =====
+
+/// High-level operator resolution that tries static dispatch first,
+/// then falls back to dynamic dispatch
+pub struct OperatorResolver;
+
+impl OperatorResolver {
+    /// Resolve addition operation with hybrid dispatch
+    pub fn resolve_add(
+        left: &dyn NyashBox,
+        right: &dyn NyashBox,
+    ) -> Result<Box<dyn NyashBox>, OperatorError> {
+        // Try to cast to concrete types first and use their DynamicAdd implementation
+        // This approach uses the concrete types rather than trait objects
+        
+        // Check if left implements DynamicAdd by trying common types
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            if let Some(result) = int_box.try_add(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+            if let Some(result) = str_box.try_add(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(float_box) = right.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_add(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            if let Some(result) = bool_box.try_add(right) {
+                return Ok(result);
+            }
+        }
+        
+        Err(OperatorError::UnsupportedOperation {
+            operator: "+".to_string(),
+            left_type: left.type_name().to_string(),
+            right_type: right.type_name().to_string(),
+        })
+    }
+    
+    /// Resolve subtraction operation with hybrid dispatch
+    pub fn resolve_sub(
+        left: &dyn NyashBox,
+        right: &dyn NyashBox,
+    ) -> Result<Box<dyn NyashBox>, OperatorError> {
+        // Try concrete types for DynamicSub
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            if let Some(result) = int_box.try_sub(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_sub(right) {
+                return Ok(result);
+            }
+        }
+        
+        Err(OperatorError::UnsupportedOperation {
+            operator: "-".to_string(),
+            left_type: left.type_name().to_string(),
+            right_type: right.type_name().to_string(),
+        })
+    }
+    
+    /// Resolve multiplication operation with hybrid dispatch
+    pub fn resolve_mul(
+        left: &dyn NyashBox,
+        right: &dyn NyashBox,
+    ) -> Result<Box<dyn NyashBox>, OperatorError> {
+        // Try concrete types for DynamicMul
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            if let Some(result) = int_box.try_mul(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+            if let Some(result) = str_box.try_mul(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_mul(right) {
+                return Ok(result);
+            }
+        }
+        
+        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            if let Some(result) = bool_box.try_mul(right) {
+                return Ok(result);
+            }
+        }
+        
+        Err(OperatorError::UnsupportedOperation {
+            operator: "*".to_string(),
+            left_type: left.type_name().to_string(),
+            right_type: right.type_name().to_string(),
+        })
+    }
+    
+    /// Resolve division operation with hybrid dispatch
+    pub fn resolve_div(
+        left: &dyn NyashBox,
+        right: &dyn NyashBox,
+    ) -> Result<Box<dyn NyashBox>, OperatorError> {
+        // Try concrete types for DynamicDiv
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            if let Some(result) = int_box.try_div(right) {
+                return Ok(result);
+            } else {
+                // If try_div returns None, it might be division by zero
+                return Err(OperatorError::DivisionByZero);
+            }
+        }
+        
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_div(right) {
+                return Ok(result);
+            } else {
+                // If try_div returns None, it might be division by zero
+                return Err(OperatorError::DivisionByZero);
+            }
+        }
+        
+        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            if let Some(result) = bool_box.try_div(right) {
+                return Ok(result);
+            } else {
+                return Err(OperatorError::DivisionByZero);
+            }
+        }
+        
+        Err(OperatorError::UnsupportedOperation {
+            operator: "/".to_string(),
+            left_type: left.type_name().to_string(),
+            right_type: right.type_name().to_string(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -11,7 +11,7 @@ use crate::ast::UnaryOperator;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
 use crate::box_trait::{BoolBox, SharedNyashBox};
-use crate::operator_traits::OperatorResolver;
+use crate::box_operators::OperatorResolver;
 use std::sync::Arc;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
