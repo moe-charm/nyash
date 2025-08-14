@@ -312,11 +312,25 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::BoxCall { dst, box_val: _, method: _, args: _, effects: _ } => {
-                // For now, box method calls return void
-                // TODO: Implement proper box method call handling
+            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
+                // Get the box value
+                let box_vm_value = self.get_value(*box_val)?;
+                let box_nyash = box_vm_value.to_nyash_box();
+                
+                // Evaluate arguments
+                let mut arg_values = Vec::new();
+                for arg_id in args {
+                    let arg_vm_value = self.get_value(*arg_id)?;
+                    arg_values.push(arg_vm_value.to_nyash_box());
+                }
+                
+                // Call the method - this mimics interpreter method dispatch
+                let result = self.call_box_method(box_nyash, method, arg_values)?;
+                
+                // Store result if destination is specified
                 if let Some(dst_id) = dst {
-                    self.values.insert(*dst_id, VMValue::Void);
+                    let vm_result = VMValue::from_nyash_box(result);
+                    self.values.insert(*dst_id, vm_result);
                 }
                 Ok(ControlFlow::Continue)
             },
@@ -600,6 +614,51 @@ impl VM {
             
             _ => Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right))),
         }
+    }
+    
+    /// Call a method on a Box - simplified version of interpreter method dispatch
+    fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
+        // For now, implement basic methods for common box types
+        // This is a simplified version - real implementation would need full method dispatch
+        
+        // StringBox methods
+        if let Some(string_box) = box_value.as_any().downcast_ref::<StringBox>() {
+            match method {
+                "length" | "len" => {
+                    return Ok(Box::new(IntegerBox::new(string_box.value.len() as i64)));
+                },
+                "toString" => {
+                    return Ok(Box::new(StringBox::new(string_box.value.clone())));
+                },
+                _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
+            }
+        }
+        
+        // IntegerBox methods  
+        if let Some(integer_box) = box_value.as_any().downcast_ref::<IntegerBox>() {
+            match method {
+                "toString" => {
+                    return Ok(Box::new(StringBox::new(integer_box.value.to_string())));
+                },
+                "abs" => {
+                    return Ok(Box::new(IntegerBox::new(integer_box.value.abs())));
+                },
+                _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
+            }
+        }
+        
+        // BoolBox methods
+        if let Some(bool_box) = box_value.as_any().downcast_ref::<BoolBox>() {
+            match method {
+                "toString" => {
+                    return Ok(Box::new(StringBox::new(bool_box.value.to_string())));
+                },
+                _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
+            }
+        }
+        
+        // Default: return void for any unrecognized box type or method
+        Ok(Box::new(VoidBox::new()))
     }
 }
 
