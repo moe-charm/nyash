@@ -1,0 +1,32 @@
+// Test script to validate BoxCall fix
+// This should work with both interpreter and VM backends
+
+// Test StringBox method calls
+local s
+local len_result
+local str_result
+s = "Hello World"
+len_result = s.length()
+str_result = s.toString()
+
+print(len_result)
+print(str_result)
+
+// Test IntegerBox method calls
+local num
+local num_str
+local abs_num
+num = 42
+num_str = num.toString()
+abs_num = num.abs()
+
+print(num_str)
+print(abs_num)
+
+// Test BoolBox method calls  
+local flag
+local bool_str
+flag = true
+bool_str = flag.toString()
+
+print(bool_str)

@@ -312,19 +312,59 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::BoxCall { dst, box_val: _, method: _, args: _, effects: _ } => {
-                // For now, box method calls return void
-                // TODO: Implement proper box method call handling
+            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
+                // Get the box value
+                let box_vm_value = self.get_value(*box_val)?;
+                let box_nyash = box_vm_value.to_nyash_box();
+                
+                // Evaluate arguments
+                let mut arg_values = Vec::new();
+                for arg_id in args {
+                    let arg_vm_value = self.get_value(*arg_id)?;
+                    arg_values.push(arg_vm_value.to_nyash_box());
+                }
+                
+                // Call the method - this mimics interpreter method dispatch
+                let result = self.call_box_method(box_nyash, method, arg_values)?;
+                
+                // Store result if destination is specified
                 if let Some(dst_id) = dst {
-                    self.values.insert(*dst_id, VMValue::Void);
+                    let vm_result = VMValue::from_nyash_box(result);
+                    self.values.insert(*dst_id, vm_result);
                 }
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::NewBox { dst, box_type: _, args: _ } => {
-                // For now, new box creates a placeholder string value
-                // TODO: Implement proper box creation
-                self.values.insert(*dst, VMValue::String("NewBox".to_string()));
+            MirInstruction::NewBox { dst, box_type, args: _ } => {
+                // Implement basic box creation for common types
+                let result = match box_type.as_str() {
+                    "StringBox" => {
+                        // Create empty StringBox - in real implementation would use args
+                        let string_box = Box::new(StringBox::new(""));
+                        VMValue::from_nyash_box(string_box)
+                    },
+                    "ArrayBox" => {
+                        // Create empty ArrayBox - in real implementation would use args
+                        let array_box = Box::new(crate::boxes::array::ArrayBox::new());
+                        VMValue::from_nyash_box(array_box)
+                    },
+                    "IntegerBox" => {
+                        // Create IntegerBox with default value
+                        let int_box = Box::new(IntegerBox::new(0));
+                        VMValue::from_nyash_box(int_box)
+                    },
+                    "BoolBox" => {
+                        // Create BoolBox with default value
+                        let bool_box = Box::new(BoolBox::new(false));
+                        VMValue::from_nyash_box(bool_box)
+                    },
+                    _ => {
+                        // For unknown types, create a placeholder string
+                        VMValue::String(format!("NewBox[{}]", box_type))
+                    }
+                };
+                
+                self.values.insert(*dst, result);
                 Ok(ControlFlow::Continue)
             },
             
@@ -600,6 +640,124 @@ impl VM {
             
             _ => Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right))),
         }
+    }
+    
+    /// Call a method on a Box - simplified version of interpreter method dispatch
+    fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
+        // For now, implement basic methods for common box types
+        // This is a simplified version - real implementation would need full method dispatch
+        
+        // StringBox methods
+        if let Some(string_box) = box_value.as_any().downcast_ref::<StringBox>() {
+            match method {
+                "length" | "len" => {
+                    return Ok(Box::new(IntegerBox::new(string_box.value.len() as i64)));
+                },
+                "toString" => {
+                    return Ok(Box::new(StringBox::new(string_box.value.clone())));
+                },
+                "substring" => {
+                    // substring(start, end) - simplified implementation
+                    if _args.len() >= 2 {
+                        if let (Some(start_box), Some(end_box)) = (_args.get(0), _args.get(1)) {
+                            if let (Some(start_int), Some(end_int)) = (
+                                start_box.as_any().downcast_ref::<IntegerBox>(),
+                                end_box.as_any().downcast_ref::<IntegerBox>()
+                            ) {
+                                let start = start_int.value.max(0) as usize;
+                                let end = end_int.value.max(0) as usize;
+                                let len = string_box.value.len();
+                                
+                                if start <= len {
+                                    let end_idx = end.min(len);
+                                    if start <= end_idx {
+                                        let substr = &string_box.value[start..end_idx];
+                                        return Ok(Box::new(StringBox::new(substr)));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return Ok(Box::new(StringBox::new(""))); // Return empty string on error
+                },
+                "concat" => {
+                    // concat(other) - concatenate with another string
+                    if let Some(other_box) = _args.get(0) {
+                        let other_str = other_box.to_string_box().value;
+                        let result = string_box.value.clone() + &other_str;
+                        return Ok(Box::new(StringBox::new(result)));
+                    }
+                    return Ok(Box::new(StringBox::new(string_box.value.clone())));
+                },
+                _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
+            }
+        }
+        
+        // IntegerBox methods  
+        if let Some(integer_box) = box_value.as_any().downcast_ref::<IntegerBox>() {
+            match method {
+                "toString" => {
+                    return Ok(Box::new(StringBox::new(integer_box.value.to_string())));
+                },
+                "abs" => {
+                    return Ok(Box::new(IntegerBox::new(integer_box.value.abs())));
+                },
+                _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
+            }
+        }
+        
+        // BoolBox methods
+        if let Some(bool_box) = box_value.as_any().downcast_ref::<BoolBox>() {
+            match method {
+                "toString" => {
+                    return Ok(Box::new(StringBox::new(bool_box.value.to_string())));
+                },
+                _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
+            }
+        }
+        
+        // ArrayBox methods - needed for kilo editor
+        if let Some(array_box) = box_value.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+            match method {
+                "length" | "len" => {
+                    let items = array_box.items.lock().unwrap();
+                    return Ok(Box::new(IntegerBox::new(items.len() as i64)));
+                },
+                "get" => {
+                    // get(index) - get element at index
+                    if let Some(index_box) = _args.get(0) {
+                        if let Some(index_int) = index_box.as_any().downcast_ref::<IntegerBox>() {
+                            let items = array_box.items.lock().unwrap();
+                            let index = index_int.value as usize;
+                            if index < items.len() {
+                                return Ok(items[index].clone_box());
+                            }
+                        }
+                    }
+                    return Ok(Box::new(VoidBox::new())); // Return void for out of bounds
+                },
+                "set" => {
+                    // set(index, value) - simplified implementation
+                    // Note: This is a read-only operation in the VM for now
+                    // In a real implementation, we'd need mutable access
+                    return Ok(Box::new(VoidBox::new()));
+                },
+                "push" => {
+                    // push(value) - simplified implementation
+                    // Note: This is a read-only operation in the VM for now
+                    return Ok(Box::new(VoidBox::new()));
+                },
+                "insert" => {
+                    // insert(index, value) - simplified implementation
+                    // Note: This is a read-only operation in the VM for now
+                    return Ok(Box::new(VoidBox::new()));
+                },
+                _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
+            }
+        }
+        
+        // Default: return void for any unrecognized box type or method
+        Ok(Box::new(VoidBox::new()))
     }
 }
 
