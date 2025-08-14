@@ -1,0 +1,19 @@
+# Test HTTPServerBox compatibility with new SocketBox
+local console = new ConsoleBox()
+console.log("🔧 Testing HTTPServerBox compatibility...")
+
+local httpServer = new HTTPServerBox()
+console.log("HTTPServerBox created: " + httpServer.toString())
+
+# Basic functionality test
+local bindResult = httpServer.bind("127.0.0.1", 8888)
+console.log("HTTPServer bind result: " + bindResult.toString())
+
+if bindResult.toString() == "true" {
+    console.log("✅ HTTPServerBox compatibility maintained!")
+} else {
+    console.log("⚠️ HTTPServerBox may have issues")
+}
+
+httpServer.close()
+console.log("HTTPServerBox test completed.")

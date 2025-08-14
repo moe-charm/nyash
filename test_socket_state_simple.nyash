@@ -1,0 +1,28 @@
+# Simple SocketBox state preservation test
+local console = new ConsoleBox()
+console.log("🔥 Testing SocketBox state preservation...")
+
+local server = new SocketBox()
+
+# Check initial state
+local beforeBind = server.isServer()
+console.log("Before bind: isServer = " + beforeBind.toString())
+
+# Perform bind
+local bindResult = server.bind("127.0.0.1", 8080)
+console.log("Bind result: " + bindResult.toString())
+
+# 🎯 CRITICAL TEST: Check state after bind
+local afterBind = server.isServer()
+console.log("After bind: isServer = " + afterBind.toString())
+
+# Check if afterBind is true (compare with string since .value access has issues)
+if afterBind.toString() == "true" {
+    console.log("🎉 SUCCESS: SocketBox state preservation WORKS!")
+} else {
+    console.log("❌ FAILED: SocketBox state preservation BROKEN!")
+}
+
+# Clean up
+server.close()
+console.log("Test completed.")

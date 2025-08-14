@@ -1,0 +1,95 @@
+# 🔧 SocketBox Functionality Validation - Phase 9.75
+# Tests all SocketBox methods work properly after Arc<Mutex> redesign
+
+static box SocketBoxFunctionalityTest {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔧 Starting SocketBox Functionality Tests")
+        
+        # Basic functionality tests
+        me.testBindSuccess()
+        me.testBindFailure()
+        me.testToStringMethod()
+        me.testConnectionStates()
+        
+        me.console.log("🎉 All functionality tests completed!")
+        return "SUCCESS: All functionality tests passed"
+    }
+    
+    testBindSuccess() {
+        me.console.log("🔍 Testing bind() success case")
+        
+        local server = new SocketBox()
+        local result = server.bind("127.0.0.1", 8090)
+        
+        assert(result.value == true)
+        me.console.log("✅ Bind success test passed")
+        
+        server.close()
+    }
+    
+    testBindFailure() {
+        me.console.log("🔍 Testing bind() failure case")
+        
+        local server = new SocketBox()
+        # Try to bind to invalid address
+        local result = server.bind("invalid.address", "invalid.port")
+        
+        assert(result.value == false)
+        me.console.log("✅ Bind failure test passed")
+    }
+    
+    testToStringMethod() {
+        me.console.log("🔍 Testing toString() method")
+        
+        local server = new SocketBox()
+        local str = server.toString()
+        
+        me.console.log("ToString result: " + str)
+        
+        # Basic string representation check
+        assert(str.contains("SocketBox"))
+        
+        # Test state reflection in toString
+        server.bind("127.0.0.1", 8091)
+        local serverStr = server.toString()
+        me.console.log("Server toString: " + serverStr)
+        assert(serverStr.contains("Server"))
+        
+        server.close()
+        me.console.log("✅ ToString test passed")
+    }
+    
+    testConnectionStates() {
+        me.console.log("🔍 Testing connection state management")
+        
+        local socket = new SocketBox()
+        
+        # Initial state
+        local initialConnected = socket.isConnected()
+        local initialServer = socket.isServer()
+        
+        assert(initialConnected.value == false)
+        assert(initialServer.value == false)
+        
+        # After bind (server mode)
+        socket.bind("127.0.0.1", 8092)
+        local serverConnected = socket.isConnected()
+        local serverIsServer = socket.isServer()
+        
+        assert(serverConnected.value == false)  # Not connected, just listening
+        assert(serverIsServer.value == true)    # Is a server
+        
+        # After close
+        socket.close()
+        local closedConnected = socket.isConnected()
+        local closedServer = socket.isServer()
+        
+        assert(closedConnected.value == false)
+        assert(closedServer.value == false)
+        
+        me.console.log("✅ Connection states test passed")
+    }
+}

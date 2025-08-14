@@ -1,0 +1,106 @@
+# 🎯 SocketBox State Persistence Test - Phase 9.75 Validation
+# Tests the core fix: bind() -> isServer() state preservation
+
+static box SocketBoxStateTest {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔥 Starting SocketBox State Persistence Tests")
+        
+        # Test 1: Basic State Persistence 
+        me.testBasicStatePersistence()
+        
+        # Test 2: Multiple Operations Consistency
+        me.testMultipleOperations()
+        
+        # Test 3: Clone State Preservation 
+        me.testCloneStatePersistence()
+        
+        me.console.log("🎉 All SocketBox state persistence tests completed!")
+        return "SUCCESS: All state persistence tests passed"
+    }
+    
+    testBasicStatePersistence() {
+        me.console.log("🔍 Test 1: Basic State Persistence")
+        
+        local server = new SocketBox()
+        
+        # Initial state check
+        local beforeBind = server.isServer()
+        me.console.log("Before bind: isServer = " + beforeBind.toString())
+        assert(beforeBind.value == false)
+        
+        # Perform bind operation
+        local bindResult = server.bind("127.0.0.1", 8080)
+        me.console.log("Bind result: " + bindResult.toString())
+        assert(bindResult.value == true)
+        
+        # 🚨 CRITICAL TEST: State preservation after bind
+        local afterBind = server.isServer()
+        me.console.log("After bind: isServer = " + afterBind.toString())
+        assert(afterBind.value == true)  # This was the failing case!
+        
+        # Clean up
+        server.close()
+        
+        me.console.log("✅ Test 1 PASSED: Basic state persistence works")
+    }
+    
+    testMultipleOperations() {
+        me.console.log("🔍 Test 2: Multiple Operations Consistency")
+        
+        local server = new SocketBox()
+        
+        # Bind the server
+        server.bind("127.0.0.1", 8081)
+        
+        # Multiple consecutive state checks should all return true
+        local check1 = server.isServer()
+        local check2 = server.isServer()
+        local check3 = server.isServer()
+        
+        me.console.log("Check 1: " + check1.toString())
+        me.console.log("Check 2: " + check2.toString())
+        me.console.log("Check 3: " + check3.toString())
+        
+        assert(check1.value == true)
+        assert(check2.value == true)
+        assert(check3.value == true)
+        
+        # Test state changes with close
+        server.close()
+        local afterClose = server.isServer()
+        me.console.log("After close: " + afterClose.toString())
+        assert(afterClose.value == false)
+        
+        me.console.log("✅ Test 2 PASSED: Multiple operations consistency works")
+    }
+    
+    testCloneStatePersistence() {
+        me.console.log("🔍 Test 3: Clone State Persistence")
+        
+        local original = new SocketBox()
+        original.bind("127.0.0.1", 8082)
+        
+        # Verify original state
+        local originalState = original.isServer()
+        assert(originalState.value == true)
+        
+        # Clone the SocketBox
+        local cloned = original.clone()
+        
+        # New design: cloned should preserve the state
+        local clonedState = cloned.isServer()
+        me.console.log("Original state: " + originalState.toString())
+        me.console.log("Cloned state: " + clonedState.toString())
+        
+        assert(clonedState.value == true)
+        
+        # Clean up
+        original.close()
+        cloned.close()
+        
+        me.console.log("✅ Test 3 PASSED: Clone state persistence works")
+    }
+}
