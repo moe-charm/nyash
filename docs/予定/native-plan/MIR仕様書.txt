@@ -1,0 +1,110 @@
+やったね！この粒度なら “化け物に伸びる余白” と “実装の現実” のちょうど真ん中。
+仕上げとして **25命令をキッチリ確定**＋**意味論/効果/検証ルール** を短く固めよう。
+
+# 決定版 MIR（25命令）
+
+## Tier-0: 普遍コア（8）
+
+```
+Const, BinOp, Compare, Branch, Jump, Phi, Call, Return
+```
+
+* 効果: `Const/Phi`=pure, `BinOp/Compare`=pure, `Branch/Jump/Return`=control, `Call`は呼先の効果に従う
+* 備考: 将来のJIT/AOT/WASMすべてで必須
+
+## Tier-1: Nyashセマンティクス（12）
+
+```
+NewBox,        // 強所有のBox生成（所有森のノード）
+BoxFieldLoad,  // Boxのフィールド読み
+BoxFieldStore, // Boxのフィールド書き（= mut）
+BoxCall,       // Boxのメソッド呼び出し（動的/静的両方）
+Safepoint,     // 分割finiや割込み許可ポイント
+RefGet,        // 参照（強/弱を問わず）を値として取得
+RefSet,        // 参照の差し替え（所有規則の検証付き）
+WeakNew,       // `weak` ハンドル生成（非所有リンクの作成）
+WeakLoad,      // `weak` から生存チェック付きで強参照を得る（失効時null）
+WeakCheck,     // `weak` の生存確認（bool）
+Send,          // Bus送信（Effect=io）
+Recv           // Bus受信（Effect=io）
+```
+
+* 効果: `BoxFieldStore/RefSet`=mut, `Send/Recv`=io, 他は基本pure/可変
+* これで **所有森＋weak/look＋Bus** が言語一次市民として表現可能
+
+## Tier-2: 実装補助・最適化友好（5）
+
+```
+TailCall,     // 末尾呼び出し（スタック節約）
+Adopt,        // 所有移管: this が子を強所有に取り込む
+Release,      // 強所有を解除（weak化 or null化）
+MemCopy,      // 小さなメモリ移動（構造体/配列の最適化フック）
+AtomicFence   // 並行時の順序保証（Actor/Port境界で使用）
+```
+
+* 位置づけ: どれも“言語仕様の裏方”。無くても表現可能だが、**性能・安全検査・移植性**が安定する
+
+---
+
+## 効果（Effect）既定値
+
+* `pure`: Const, BinOp, Compare, Phi, WeakCheck, WeakLoad(成功時の取得自体はpure扱い)
+* `mut`: BoxFieldStore, RefSet, Adopt, Release, MemCopy
+* `io`: Send, Recv, Safepoint(割り込み/分割fini許可点としてio扱い)
+* `control`: Branch, Jump, Return, TailCall
+* `context依存`: Call, BoxCall（呼先の効果に従属）
+
+> 最適化ルールは「pure同士の再順序化OK」「mutは同一Box/同一Fieldで依存保持」「ioは再順序化禁止」。
+
+---
+
+## 検証（Lint/Verifier）要件（短縮版）
+
+* **所有森**: `strong in-degree ≤ 1`（`NewBox/Adopt/Release/RefSet`で常時検査）
+* **強循環禁止**: 強エッジのみ辿ってDAG（森）であること
+* **弱/強相互**: 双方向とも強 → エラー（片側は `WeakNew` 経由で弱化）
+* **RefSetの安全**: 強→強の差し替え時は旧所有元からの `Release` が伴うこと
+* **WeakLoad/WeakCheck**: 失効時は `null/false` を返す（例外禁止、決定的挙動）
+* **TailCall**: 末尾位置のみ可（`Return` 直前）
+* **Send/Recv**: バックエンドが同期/非同期いずれでも**at-least-once**契約を満たすか、契約を明示
+
+---
+
+## 代表的ロワリング（例）
+
+* `look` 参照 → `WeakNew` + `WeakLoad`（読取専用型なら `RefSet` を禁止）
+* `borrow{}` → ブロック先頭 `WeakNew`、末尾でハンドル破棄（MIR上はNop、型で書換禁止）
+* Bus最適化（Elision）:
+
+  * `(pure|mut(local))` かつ同一スレッド/アリーナ/単一受信なら **`Send/Recv` → 直呼び/直アクセス** に縮退
+* `fini` 伝播: ランタイムで **強エッジのみ** 再帰。`Safepoint` で分割解放/優先度解放に対応
+
+---
+
+## バックエンド指針（対応表）
+
+* **Interpreter**: 25命令を素直に実装（正しさの基準）
+* **VM**: Register-VM + direct-threading。`Send/Recv` はローカル判定時にインライン化
+* **WASM**: `Send/Recv` は host import。`MemCopy` は `memory.copy` に対応
+* **Cranelift/JIT**: `TailCall` 最適化、`WeakLoad` は世代タグでO(1)生存チェック
+* **AOT-Rust**: `BoxCall` を trait 呼び出しへ、`Adopt/Release` は所有者IDの切替 + デバッガ用アサート
+
+---
+
+## 互換テスト（常設）
+
+* **golden MIR**: 各サンプルのMIRダンプが全バックエンドで一致
+* **行動一致**: `interp/vm/wasm` で**同入力→同出力**（`weak`失効時の`null/false`含む）
+* **性能スモーク**: `add_loop / map_getset / alloc_free / bus_local / bus_actor` の5種で、
+
+  * VMがinterp以上、WASMがVM以上、を継続検証
+
+---
+
+これで **25命令フルセット**が完成。
+
+* Nyashのコア価値（所有森＋weak＋Bus＋効果注釈）を**無理なくIR化**
+* それぞれのバックエンドに**綺麗に落ちる**
+* Verifier/最適化/テストも**最小で回る**
+
+次は、このリストをそのまま `docs/mir.md` にコピペして、各命令に **1行の意味論＋効果＋等価変換の例** を添えれば、実装と論文の両方が一気に前進するにゃ。
