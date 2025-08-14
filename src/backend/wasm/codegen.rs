@@ -371,6 +371,38 @@ impl WasmCodegen {
                 ])
             },
             
+            // Phase 9.7: External Function Calls
+            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
+                // Generate call to external function import
+                let call_target = match (iface_name.as_str(), method_name.as_str()) {
+                    ("env.console", "log") => "console_log",
+                    ("env.canvas", "fillRect") => "canvas_fillRect", 
+                    ("env.canvas", "fillText") => "canvas_fillText",
+                    _ => return Err(WasmError::UnsupportedInstruction(
+                        format!("Unsupported extern call: {}.{}", iface_name, method_name)
+                    )),
+                };
+                
+                let mut instructions = Vec::new();
+                
+                // Load all arguments onto stack in order
+                for arg in args {
+                    instructions.push(format!("local.get ${}", self.get_local_index(*arg)?));
+                }
+                
+                // Call the external function
+                instructions.push(format!("call ${}", call_target));
+                
+                // Store result if destination is provided
+                if let Some(dst) = dst {
+                    // For void functions, we still need to provide a dummy value
+                    instructions.push("i32.const 0".to_string()); // Void result
+                    instructions.push(format!("local.set ${}", self.get_local_index(*dst)?));
+                }
+                
+                Ok(instructions)
+            },
+            
             // Unsupported instructions
             _ => Err(WasmError::UnsupportedInstruction(
                 format!("Instruction not yet supported: {:?}", instruction)

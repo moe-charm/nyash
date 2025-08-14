@@ -51,6 +51,44 @@ impl RuntimeImports {
             result: None,
         });
         
+        // Phase 9.7: Box FFI/ABI imports per BID specifications
+        
+        // env.console_log for console.log(message) - (string_ptr, string_len)
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "console_log".to_string(),
+            params: vec!["i32".to_string(), "i32".to_string()],
+            result: None,
+        });
+        
+        // env.canvas_fillRect for canvas.fillRect(canvas_id, x, y, w, h, color)
+        // Parameters: (canvas_id_ptr, canvas_id_len, x, y, w, h, color_ptr, color_len)
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "canvas_fillRect".to_string(),
+            params: vec![
+                "i32".to_string(), "i32".to_string(), // canvas_id (ptr, len)
+                "i32".to_string(), "i32".to_string(), "i32".to_string(), "i32".to_string(), // x, y, w, h
+                "i32".to_string(), "i32".to_string(), // color (ptr, len)
+            ],
+            result: None,
+        });
+        
+        // env.canvas_fillText for canvas.fillText(canvas_id, text, x, y, font, color)
+        // Parameters: (canvas_id_ptr, canvas_id_len, text_ptr, text_len, x, y, font_ptr, font_len, color_ptr, color_len)
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "canvas_fillText".to_string(),
+            params: vec![
+                "i32".to_string(), "i32".to_string(), // canvas_id (ptr, len)
+                "i32".to_string(), "i32".to_string(), // text (ptr, len)
+                "i32".to_string(), "i32".to_string(), // x, y
+                "i32".to_string(), "i32".to_string(), // font (ptr, len)
+                "i32".to_string(), "i32".to_string(), // color (ptr, len)
+            ],
+            result: None,
+        });
+        
         // Future: env.file_read, env.file_write for file I/O
         // Future: env.http_request for network access
     }
@@ -119,6 +157,49 @@ impl RuntimeImports {
                 match function.name.as_str() {
                     "print" => {
                         js.push_str("    print: (value) => console.log(value),\n");
+                    },
+                    "print_str" => {
+                        js.push_str("    print_str: (ptr, len) => {\n");
+                        js.push_str("      const memory = instance.exports.memory;\n");
+                        js.push_str("      const str = new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len));\n");
+                        js.push_str("      console.log(str);\n");
+                        js.push_str("    },\n");
+                    },
+                    "console_log" => {
+                        js.push_str("    console_log: (ptr, len) => {\n");
+                        js.push_str("      const memory = instance.exports.memory;\n");
+                        js.push_str("      const str = new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len));\n");
+                        js.push_str("      console.log(str);\n");
+                        js.push_str("    },\n");
+                    },
+                    "canvas_fillRect" => {
+                        js.push_str("    canvas_fillRect: (canvasIdPtr, canvasIdLen, x, y, w, h, colorPtr, colorLen) => {\n");
+                        js.push_str("      const memory = instance.exports.memory;\n");
+                        js.push_str("      const canvasId = new TextDecoder().decode(new Uint8Array(memory.buffer, canvasIdPtr, canvasIdLen));\n");
+                        js.push_str("      const color = new TextDecoder().decode(new Uint8Array(memory.buffer, colorPtr, colorLen));\n");
+                        js.push_str("      const canvas = document.getElementById(canvasId);\n");
+                        js.push_str("      if (canvas) {\n");
+                        js.push_str("        const ctx = canvas.getContext('2d');\n");
+                        js.push_str("        ctx.fillStyle = color;\n");
+                        js.push_str("        ctx.fillRect(x, y, w, h);\n");
+                        js.push_str("      }\n");
+                        js.push_str("    },\n");
+                    },
+                    "canvas_fillText" => {
+                        js.push_str("    canvas_fillText: (canvasIdPtr, canvasIdLen, textPtr, textLen, x, y, fontPtr, fontLen, colorPtr, colorLen) => {\n");
+                        js.push_str("      const memory = instance.exports.memory;\n");
+                        js.push_str("      const canvasId = new TextDecoder().decode(new Uint8Array(memory.buffer, canvasIdPtr, canvasIdLen));\n");
+                        js.push_str("      const text = new TextDecoder().decode(new Uint8Array(memory.buffer, textPtr, textLen));\n");
+                        js.push_str("      const font = new TextDecoder().decode(new Uint8Array(memory.buffer, fontPtr, fontLen));\n");
+                        js.push_str("      const color = new TextDecoder().decode(new Uint8Array(memory.buffer, colorPtr, colorLen));\n");
+                        js.push_str("      const canvas = document.getElementById(canvasId);\n");
+                        js.push_str("      if (canvas) {\n");
+                        js.push_str("        const ctx = canvas.getContext('2d');\n");
+                        js.push_str("        ctx.font = font;\n");
+                        js.push_str("        ctx.fillStyle = color;\n");
+                        js.push_str("        ctx.fillText(text, x, y);\n");
+                        js.push_str("      }\n");
+                        js.push_str("    },\n");
                     },
                     _ => {
                         js.push_str(&format!("    {}: () => {{ throw new Error('Not implemented: {}'); }},\n", 

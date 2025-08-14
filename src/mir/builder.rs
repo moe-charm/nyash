@@ -855,7 +855,7 @@ impl MirBuilder {
     /// Build method call: object.method(arguments)
     fn build_method_call(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // Build the object expression
-        let object_value = self.build_expression(object)?;
+        let object_value = self.build_expression(object.clone())?;
         
         // Build argument expressions
         let mut arg_values = Vec::new();
@@ -866,7 +866,70 @@ impl MirBuilder {
         // Create result value
         let result_id = self.value_gen.next();
         
-        // Emit a BoxCall instruction
+        // Check if this is an external call (console.log, canvas.fillRect, etc.)
+        if let ASTNode::Variable { name: object_name, .. } = object {
+            match (object_name.as_str(), method.as_str()) {
+                ("console", "log") => {
+                    // Generate ExternCall for console.log
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None, // console.log is void
+                        iface_name: "env.console".to_string(),
+                        method_name: "log".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO, // Console output is I/O
+                    })?;
+                    
+                    // Return void value
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: void_id,
+                        value: ConstValue::Void,
+                    })?;
+                    return Ok(void_id);
+                },
+                ("canvas", "fillRect") => {
+                    // Generate ExternCall for canvas.fillRect
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None, // canvas.fillRect is void
+                        iface_name: "env.canvas".to_string(),
+                        method_name: "fillRect".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO, // Canvas operations are I/O
+                    })?;
+                    
+                    // Return void value
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: void_id,
+                        value: ConstValue::Void,
+                    })?;
+                    return Ok(void_id);
+                },
+                ("canvas", "fillText") => {
+                    // Generate ExternCall for canvas.fillText
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None, // canvas.fillText is void
+                        iface_name: "env.canvas".to_string(),
+                        method_name: "fillText".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO, // Canvas operations are I/O
+                    })?;
+                    
+                    // Return void value
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: void_id,
+                        value: ConstValue::Void,
+                    })?;
+                    return Ok(void_id);
+                },
+                _ => {
+                    // Regular method call - continue with BoxCall
+                }
+            }
+        }
+        
+        // Emit a BoxCall instruction for regular method calls
         self.emit_instruction(MirInstruction::BoxCall {
             dst: Some(result_id),
             box_val: object_value,

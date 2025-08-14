@@ -273,6 +273,18 @@ pub enum MirInstruction {
         dst: ValueId,
         future: ValueId,
     },
+    
+    // === Phase 9.7: External Function Calls (Box FFI/ABI) ===
+    
+    /// External function call through Box FFI/ABI
+    /// `%dst = extern_call interface.method(%args...)`
+    ExternCall {
+        dst: Option<ValueId>,
+        iface_name: String,         // e.g., "env.console"
+        method_name: String,        // e.g., "log"
+        args: Vec<ValueId>,
+        effects: EffectMask,
+    },
 }
 
 /// Constant values in MIR
@@ -389,6 +401,9 @@ impl MirInstruction {
             MirInstruction::FutureNew { .. } => EffectMask::PURE.add(Effect::Alloc), // Creating future may allocate
             MirInstruction::FutureSet { .. } => EffectMask::WRITE, // Setting future has write effects
             MirInstruction::Await { .. } => EffectMask::READ.add(Effect::Async), // Await blocks and reads
+            
+            // Phase 9.7: External Function Calls
+            MirInstruction::ExternCall { effects, .. } => *effects, // Use provided effect mask
         }
     }
     
@@ -414,7 +429,8 @@ impl MirInstruction {
             MirInstruction::Await { dst, .. } => Some(*dst),
             
             MirInstruction::Call { dst, .. } |
-            MirInstruction::BoxCall { dst, .. } => *dst,
+            MirInstruction::BoxCall { dst, .. } |
+            MirInstruction::ExternCall { dst, .. } => *dst,
             
             MirInstruction::Store { .. } |
             MirInstruction::Branch { .. } |
@@ -500,6 +516,9 @@ impl MirInstruction {
             MirInstruction::FutureNew { value, .. } => vec![*value],
             MirInstruction::FutureSet { future, value } => vec![*future, *value],
             MirInstruction::Await { future, .. } => vec![*future],
+            
+            // Phase 9.7: External Function Calls
+            MirInstruction::ExternCall { args, .. } => args.clone(),
         }
     }
 }
@@ -570,6 +589,17 @@ impl fmt::Display for MirInstruction {
                     write!(f, "ret {}", value)
                 } else {
                     write!(f, "ret void")
+                }
+            },
+            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects } => {
+                if let Some(dst) = dst {
+                    write!(f, "{} = extern_call {}.{}({}); effects: {}", dst, iface_name, method_name,
+                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
+                           effects)
+                } else {
+                    write!(f, "extern_call {}.{}({}); effects: {}", iface_name, method_name,
+                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
+                           effects)
                 }
             },
             _ => write!(f, "{:?}", self), // Fallback for other instructions
@@ -729,5 +759,35 @@ mod tests {
         assert_eq!(write_barrier.used_values(), vec![ptr]);
         assert!(write_barrier.effects().contains(super::super::effect::Effect::Barrier));
         assert!(write_barrier.effects().contains(super::super::effect::Effect::WriteHeap));
+    }
+    
+    #[test]
+    fn test_extern_call_instruction() {
+        let dst = ValueId::new(0);
+        let arg1 = ValueId::new(1);
+        let arg2 = ValueId::new(2);
+        let inst = MirInstruction::ExternCall {
+            dst: Some(dst),
+            iface_name: "env.console".to_string(),
+            method_name: "log".to_string(),
+            args: vec![arg1, arg2],
+            effects: super::super::effect::EffectMask::IO,
+        };
+        
+        assert_eq!(inst.dst_value(), Some(dst));
+        assert_eq!(inst.used_values(), vec![arg1, arg2]);
+        assert_eq!(inst.effects(), super::super::effect::EffectMask::IO);
+        
+        // Test void extern call
+        let void_inst = MirInstruction::ExternCall {
+            dst: None,
+            iface_name: "env.canvas".to_string(),
+            method_name: "fillRect".to_string(),
+            args: vec![arg1],
+            effects: super::super::effect::EffectMask::IO,
+        };
+        
+        assert_eq!(void_inst.dst_value(), None);
+        assert_eq!(void_inst.used_values(), vec![arg1]);
     }
 }

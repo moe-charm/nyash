@@ -1,0 +1,17 @@
+# Phase 9.7 ExternCall Demo - Modified for explicit console creation
+# Test console.log and canvas operations
+
+static box Main {
+    init { result, console }
+    
+    main() {
+        # Create console instance for testing
+        me.console = new ConsoleBox()
+        
+        # Test console.log external call
+        me.console.log("Hello from Nyash via ExternCall!")
+        
+        me.result = "ExternCall demo completed"
+        return me.result
+    }
+}
