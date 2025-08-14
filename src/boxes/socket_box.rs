@@ -65,7 +65,13 @@ impl Clone for SocketBox {
         };
         let original_arc_ptr = Arc::as_ptr(&self.is_server) as usize;
         let cloned_arc_ptr = Arc::as_ptr(&cloned.is_server) as usize;
-        let is_server_value = *self.is_server.lock().unwrap();
+        let is_server_value = match self.is_server.lock() {
+            Ok(guard) => *guard,
+            Err(_) => {
+                println!("🚨 SocketBox::clone() - Failed to lock is_server mutex!");
+                false
+            }
+        };
         println!("🔄 SocketBox::clone() - original Box ID: {}, cloned Box ID: {}, Arc ptr: {:x} -> {:x}, is_server: {}", 
                 self.base.id, cloned.base.id, original_arc_ptr, cloned_arc_ptr, is_server_value);
         cloned
@@ -114,6 +120,10 @@ impl SocketBox {
                         // Verify the value was actually set
                         let verify_value = *is_server_guard;
                         println!("✅ SocketBox::bind() - is_server set to true (Box ID: {}, Arc ptr: {:x}, verify: {})", self.base.id, arc_ptr, verify_value);
+                        // Also verify it's readable immediately
+                        drop(is_server_guard);
+                        let reread_value = *self.is_server.lock().unwrap();
+                        println!("🔍 SocketBox::bind() - reread value: {}", reread_value);
                     },
                     Err(_) => {
                         println!("🚨 SocketBox::bind() - Failed to acquire is_server lock (Box ID: {})", self.base.id);
@@ -346,6 +356,11 @@ impl SocketBox {
         let arc_ptr = Arc::as_ptr(&self.is_server) as usize;
         println!("🔍 SocketBox::is_server() called - returning {} (Box ID: {}, Arc ptr: {:x})", 
                 is_server_value, self.base.id, arc_ptr);
+        // Double-check by re-reading
+        let double_check = *self.is_server.lock().unwrap();
+        if is_server_value != double_check {
+            println!("🚨 WARNING: is_server value changed between reads! {} -> {}", is_server_value, double_check);
+        }
         Box::new(BoolBox::new(is_server_value))
     }
 }

@@ -467,7 +467,26 @@ impl NyashInterpreter {
         
         // SocketBox method calls
         if let Some(socket_box) = obj_value.as_any().downcast_ref::<SocketBox>() {
-            return self.execute_socket_method(socket_box, method, arguments);
+            let result = self.execute_socket_method(socket_box, method, arguments)?;
+            
+            // 🔧 FIX: Update stored variable for stateful SocketBox methods
+            // These methods modify the SocketBox internal state, so we need to update
+            // the stored local variable to ensure subsequent accesses get the updated state
+            if matches!(method, "bind" | "connect" | "close") {
+                if let ASTNode::Variable { name, .. } = object {
+                    if let Some(stored_var) = self.local_vars.get_mut(name) {
+                        // Replace the stored instance with the modified one
+                        let updated_instance = socket_box.clone();
+                        let new_box_id = updated_instance.box_id();
+                        let new_is_server = updated_instance.is_server().to_string_box().value == "true";
+                        *stored_var = Box::new(updated_instance);
+                        println!("🔧 Updated local variable '{}' after '{}' - new Box ID: {}, is_server: {}", 
+                                name, method, new_box_id, new_is_server);
+                    }
+                }
+            }
+            
+            return Ok(result);
         }
         
         // HTTPServerBox method calls
