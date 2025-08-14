@@ -100,7 +100,7 @@
  */
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use chrono::Local;
 use crate::box_trait::{BoxCore, BoxBase, next_box_id, NyashBox, StringBox, BoolBox, VoidBox};
 use crate::interpreter::RuntimeError;
@@ -110,10 +110,10 @@ use std::any::Any;
 #[derive(Debug, Clone)]
 pub struct DebugBox {
     base: BoxBase,
-    tracking_enabled: Arc<Mutex<bool>>,
-    tracked_boxes: Arc<Mutex<HashMap<String, TrackedBoxInfo>>>,
-    breakpoints: Arc<Mutex<Vec<String>>>,
-    call_stack: Arc<Mutex<Vec<CallInfo>>>,
+    tracking_enabled: RwLock<bool>,
+    tracked_boxes: RwLock<HashMap<String, TrackedBoxInfo>>,
+    breakpoints: RwLock<Vec<String>>,
+    call_stack: RwLock<Vec<CallInfo>>,
 }
 
 #[derive(Debug, Clone)]
@@ -135,34 +135,34 @@ impl DebugBox {
     pub fn new() -> Self {
         DebugBox {
             base: BoxBase::new(),
-            tracking_enabled: Arc::new(Mutex::new(false)),
-            tracked_boxes: Arc::new(Mutex::new(HashMap::new())),
-            breakpoints: Arc::new(Mutex::new(Vec::new())),
-            call_stack: Arc::new(Mutex::new(Vec::new())),
+            tracking_enabled: RwLock::new(false),
+            tracked_boxes: RwLock::new(HashMap::new()),
+            breakpoints: RwLock::new(Vec::new()),
+            call_stack: RwLock::new(Vec::new()),
         }
     }
 
     pub fn start_tracking(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let mut enabled = self.tracking_enabled.lock().unwrap();
+        let mut enabled = self.tracking_enabled.write().unwrap();
         *enabled = true;
         println!("[DEBUG] Tracking started");
         Ok(Box::new(VoidBox::new()))
     }
 
     pub fn stop_tracking(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let mut enabled = self.tracking_enabled.lock().unwrap();
+        let mut enabled = self.tracking_enabled.write().unwrap();
         *enabled = false;
         println!("[DEBUG] Tracking stopped");
         Ok(Box::new(VoidBox::new()))
     }
 
     pub fn track_box(&self, box_value: &dyn NyashBox, name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let enabled = self.tracking_enabled.lock().unwrap();
+        let enabled = self.tracking_enabled.read().unwrap();
         if !*enabled {
             return Ok(Box::new(VoidBox::new()));
         }
 
-        let mut tracked = self.tracked_boxes.lock().unwrap();
+        let mut tracked = self.tracked_boxes.write().unwrap();
         
         let info = TrackedBoxInfo {
             box_type: box_value.type_name().to_string(),
@@ -298,7 +298,7 @@ impl DebugBox {
     }
 
     pub fn is_tracking(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let enabled = self.tracking_enabled.lock().unwrap();
+        let enabled = self.tracking_enabled.read().unwrap();
         Ok(Box::new(BoolBox::new(*enabled)))
     }
 

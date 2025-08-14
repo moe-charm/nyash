@@ -6,36 +6,35 @@ use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBas
 use crate::boxes::buffer::BufferBox;
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use std::io::{Read, Write, Result};
 
-#[derive(Debug, Clone)]
 pub struct NyashStreamBox {
-    buffer: Arc<Mutex<Vec<u8>>>,
-    position: Arc<Mutex<usize>>,
+    buffer: RwLock<Vec<u8>>,
+    position: RwLock<usize>,
     base: BoxBase,
 }
 
 impl NyashStreamBox {
     pub fn new() -> Self {
         NyashStreamBox {
-            buffer: Arc::new(Mutex::new(Vec::new())),
-            position: Arc::new(Mutex::new(0)),
+            buffer: RwLock::new(Vec::new()),
+            position: RwLock::new(0),
             base: BoxBase::new(),
         }
     }
     
     pub fn from_data(data: Vec<u8>) -> Self {
         NyashStreamBox {
-            buffer: Arc::new(Mutex::new(data)),
-            position: Arc::new(Mutex::new(0)),
+            buffer: RwLock::new(data),
+            position: RwLock::new(0),
             base: BoxBase::new(),
         }
     }
     
     pub fn read(&self, buf: &mut [u8]) -> Result<usize> {
-        let buffer = self.buffer.lock().unwrap();
-        let mut position = self.position.lock().unwrap();
+        let buffer = self.buffer.read().unwrap();
+        let mut position = self.position.write().unwrap();
         
         let available = buffer.len().saturating_sub(*position);
         let to_read = buf.len().min(available);
@@ -50,21 +49,21 @@ impl NyashStreamBox {
     }
     
     pub fn write(&self, buf: &[u8]) -> Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
+        let mut buffer = self.buffer.write().unwrap();
         buffer.extend_from_slice(buf);
         Ok(())
     }
     
     pub fn len(&self) -> usize {
-        self.buffer.lock().unwrap().len()
+        self.buffer.read().unwrap().len()
     }
     
     pub fn position(&self) -> usize {
-        *self.position.lock().unwrap()
+        *self.position.read().unwrap()
     }
     
     pub fn reset(&self) {
-        *self.position.lock().unwrap() = 0;
+        *self.position.write().unwrap() = 0;
     }
     
     /// ストリームに書き込み
@@ -75,7 +74,7 @@ impl NyashStreamBox {
             let array_data = buffer_box.readAll();
             // ArrayBoxをバイト配列に変換
             if let Some(array_box) = array_data.as_any().downcast_ref::<ArrayBox>() {
-                let items = array_box.items.lock().unwrap();
+                let items = array_box.items.read().unwrap();
                 let mut bytes = Vec::new();
                 for item in items.iter() {
                     if let Some(int_box) = item.as_any().downcast_ref::<IntegerBox>() {
@@ -142,8 +141,8 @@ impl NyashBox for NyashStreamBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        let buffer = self.buffer.lock().unwrap();
-        let position = self.position.lock().unwrap();
+        let buffer = self.buffer.read().unwrap();
+        let position = self.position.read().unwrap();
         StringBox::new(format!("NyashStreamBox({} bytes, pos: {})", buffer.len(), *position))
     }
 
@@ -155,10 +154,10 @@ impl NyashBox for NyashStreamBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_stream) = other.as_any().downcast_ref::<NyashStreamBox>() {
-            let self_buffer = self.buffer.lock().unwrap();
-            let self_position = self.position.lock().unwrap();
-            let other_buffer = other_stream.buffer.lock().unwrap();
-            let other_position = other_stream.position.lock().unwrap();
+            let self_buffer = self.buffer.read().unwrap();
+            let self_position = self.position.read().unwrap();
+            let other_buffer = other_stream.buffer.read().unwrap();
+            let other_position = other_stream.position.read().unwrap();
             BoolBox::new(*self_buffer == *other_buffer && *self_position == *other_position)
         } else {
             BoolBox::new(false)
@@ -176,8 +175,8 @@ impl BoxCore for NyashStreamBox {
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let buffer = self.buffer.lock().unwrap();
-        let position = self.position.lock().unwrap();
+        let buffer = self.buffer.read().unwrap();
+        let position = self.position.read().unwrap();
         write!(f, "NyashStreamBox({} bytes, pos: {})", buffer.len(), *position)
     }
     
@@ -187,6 +186,32 @@ impl BoxCore for NyashStreamBox {
     
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+// Clone implementation for NyashStreamBox (needed since RwLock doesn't auto-derive Clone)
+impl Clone for NyashStreamBox {
+    fn clone(&self) -> Self {
+        let buffer = self.buffer.read().unwrap();
+        let position = self.position.read().unwrap();
+        NyashStreamBox {
+            buffer: RwLock::new(buffer.clone()),
+            position: RwLock::new(*position),
+            base: BoxBase::new(),
+        }
+    }
+}
+
+// Debug implementation for NyashStreamBox
+impl std::fmt::Debug for NyashStreamBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let buffer = self.buffer.read().unwrap();
+        let position = self.position.read().unwrap();
+        f.debug_struct("NyashStreamBox")
+            .field("id", &self.base.id)
+            .field("buffer_len", &buffer.len())
+            .field("position", &position)
+            .finish()
     }
 }
 

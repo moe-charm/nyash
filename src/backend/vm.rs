@@ -751,14 +751,14 @@ impl VM {
         if let Some(array_box) = box_value.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
             match method {
                 "length" | "len" => {
-                    let items = array_box.items.lock().unwrap();
+                    let items = array_box.items.read().unwrap();
                     return Ok(Box::new(IntegerBox::new(items.len() as i64)));
                 },
                 "get" => {
                     // get(index) - get element at index
                     if let Some(index_box) = _args.get(0) {
                         if let Some(index_int) = index_box.as_any().downcast_ref::<IntegerBox>() {
-                            let items = array_box.items.lock().unwrap();
+                            let items = array_box.items.read().unwrap();
                             let index = index_int.value as usize;
                             if index < items.len() {
                                 return Ok(items[index].clone_box());

@@ -216,3 +216,14 @@ impl NyashBox for BufferBox {
         }
     }
 }
+
+// Debug implementation for BufferBox  
+impl std::fmt::Debug for BufferBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data = self.data.read().unwrap();
+        f.debug_struct("BufferBox")
+            .field("id", &self.base.id)
+            .field("length", &data.len())
+            .finish()
+    }
+}

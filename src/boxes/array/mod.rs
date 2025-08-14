@@ -299,8 +299,8 @@ impl NyashBox for ArrayBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_array) = other.as_any().downcast_ref::<ArrayBox>() {
-            let self_items = self.items.lock().unwrap();
-            let other_items = other_array.items.lock().unwrap();
+            let self_items = self.items.read().unwrap();
+            let other_items = other_array.items.read().unwrap();
             
             if self_items.len() != other_items.len() {
                 return BoolBox::new(false);
@@ -316,5 +316,16 @@ impl NyashBox for ArrayBox {
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+// Debug implementation for ArrayBox
+impl std::fmt::Debug for ArrayBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let items = self.items.read().unwrap();
+        f.debug_struct("ArrayBox")
+            .field("id", &self.base.id)
+            .field("length", &items.len())
+            .finish()
     }
 }
