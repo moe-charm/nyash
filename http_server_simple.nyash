@@ -1,0 +1,117 @@
+// 🌐 HTTP Server Example - Phase 9.5 Validation
+// Demonstrates Nyash HTTP server with concurrent request handling
+
+// Simple API Handler Box
+box APIHandler {
+    init { }
+    
+    pack() {
+        // Empty initialization for static-like usage
+    }
+    
+    // Home page handler
+    home(request) {
+        local html
+        html = "<html><body>"
+        html = html + "<h1>🐱 Nyash HTTP Server</h1>"
+        html = html + "<p>Everything is Box! Server running successfully.</p>"
+        html = html + "<ul>"
+        html = html + "<li><a href='/api/status'>Server Status</a></li>"
+        html = html + "<li><a href='/api/info'>Server Info</a></li>"
+        html = html + "<li><a href='/nonexistent'>404 Test</a></li>"
+        html = html + "</ul>"
+        html = html + "</body></html>"
+        
+        return html
+    }
+    
+    // Status API handler
+    status(request) {
+        local json
+        json = "{"
+        json = json + "\"status\": \"running\","
+        json = json + "\"server\": \"Nyash HTTP Server\","
+        json = json + "\"version\": \"1.0.0\","
+        json = json + "\"timestamp\": \"" + Time.now() + "\","
+        json = json + "\"everything_is\": \"Box\""
+        json = json + "}"
+        
+        return json
+    }
+    
+    // Info API handler
+    info(request) {
+        local json
+        json = "{"
+        json = json + "\"message\": \"Nyash Programming Language\","
+        json = json + "\"philosophy\": \"Everything is Box\","
+        json = json + "\"features\": ["
+        json = json + "\"Async/Await\","
+        json = json + "\"HTTP Server\","
+        json = json + "\"Memory Management\","
+        json = json + "\"AOT Compilation\""
+        json = json + "]"
+        json = json + "}"
+        
+        return json
+    }
+}
+
+// Main HTTP Server Box
+static box Main {
+    init { server, handler, running }
+    
+    main() {
+        print("🌐 Starting Nyash HTTP Server...")
+        
+        // Initialize components
+        me.server = new HTTPServerBox()
+        me.handler = new APIHandler()
+        me.running = true
+        
+        // Configure server
+        local bindResult
+        bindResult = me.server.bind("127.0.0.1", 8080)
+        
+        if (bindResult.toString() != "true") {
+            print("❌ Failed to bind to port 8080")
+            return false
+        }
+        
+        local listenResult
+        listenResult = me.server.listen(128)
+        
+        if (listenResult.toString() != "true") {
+            print("❌ Failed to listen on port 8080")
+            return false
+        }
+        
+        // Register routes
+        print("📋 Registering routes...")
+        me.server.get("/", me.handler.home)
+        me.server.get("/api/status", me.handler.status)
+        me.server.get("/api/info", me.handler.info)
+        
+        print("✅ Server configuration complete")
+        print("🚀 Server starting on http://127.0.0.1:8080")
+        print("📡 Test URLs:")
+        print("   http://127.0.0.1:8080/ - Home page")
+        print("   http://127.0.0.1:8080/api/status - Status API")
+        print("   http://127.0.0.1:8080/api/info - Info API")
+        print("")
+        print("Press Ctrl+C to stop the server")
+        print("=" * 50)
+        
+        // Start server (blocking)
+        local result
+        result = me.server.start()
+        
+        if (result.toString() == "true") {
+            print("✅ Server started successfully")
+            return true
+        } else {
+            print("❌ Server failed to start")
+            return false
+        }
+    }
+}

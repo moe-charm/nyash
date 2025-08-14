@@ -1,0 +1,13 @@
+// Simple HTTP Box test
+static box Main {
+    init { socket }
+    
+    main() {
+        print("🔌 Testing SocketBox creation...")
+        
+        me.socket = new SocketBox()
+        print("✅ SocketBox created: " + me.socket.toString())
+        
+        return true
+    }
+}
