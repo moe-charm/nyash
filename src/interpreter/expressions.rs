@@ -328,18 +328,6 @@ impl NyashInterpreter {
         // オブジェクトを評価（通常のメソッド呼び出し）
         let obj_value = self.execute_expression(object)?;
         
-        // Debug: Print object type and Box ID for SocketBox debugging
-        if method == "bind" || method == "listen" || method == "isServer" {
-            println!("🔍 DEBUG: Method '{}' called on object type: {} (Box ID: {})", 
-                    method, 
-                    obj_value.type_name(), 
-                    if let Some(socket_box) = obj_value.as_any().downcast_ref::<SocketBox>() {
-                        socket_box.box_id().to_string()
-                    } else {
-                        "N/A".to_string()
-                    });
-        }
-        
         // StringBox method calls
         if let Some(string_box) = obj_value.as_any().downcast_ref::<StringBox>() {
             return self.execute_string_method(string_box, method, arguments);
@@ -477,11 +465,7 @@ impl NyashInterpreter {
                     if let Some(stored_var) = self.local_vars.get_mut(name) {
                         // Replace the stored instance with the modified one
                         let updated_instance = socket_box.clone();
-                        let new_box_id = updated_instance.box_id();
-                        let new_is_server = updated_instance.is_server().to_string_box().value == "true";
                         *stored_var = Box::new(updated_instance);
-                        println!("🔧 Updated local variable '{}' after '{}' - new Box ID: {}, is_server: {}", 
-                                name, method, new_box_id, new_is_server);
                     }
                 }
             }
