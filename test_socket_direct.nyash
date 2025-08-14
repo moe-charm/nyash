@@ -1,0 +1,20 @@
+// Test SocketBox directly
+static box Main {
+    init { socket, console }
+    
+    main() {
+        me.socket = new SocketBox()
+        me.console = new ConsoleBox()
+        
+        // Test bind and listen operations directly on SocketBox
+        local bindResult = me.socket.bind("127.0.0.1", 8080)
+        me.console.log("SocketBox Bind result:")
+        print(bindResult)
+        
+        local listenResult = me.socket.listen(10)
+        me.console.log("SocketBox Listen result:")
+        print(listenResult)
+        
+        return listenResult
+    }
+}

@@ -1,0 +1,21 @@
+// Test HTTPServer listen functionality
+static box Main {
+    init { server, console }
+    
+    main() {
+        me.server = new HTTPServerBox()
+        me.console = new ConsoleBox()
+        
+        // Test bind and listen operations
+        local bindResult = me.server.bind("127.0.0.1", 8080)
+        me.console.log("Bind result:")
+        print(bindResult)
+        
+        local listenResult = me.server.listen(10)
+        me.console.log("Listen result:")
+        print(listenResult)
+        
+        // Should return true if listen actually works
+        return listenResult
+    }
+}

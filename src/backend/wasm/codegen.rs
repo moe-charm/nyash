@@ -349,10 +349,26 @@ impl WasmCodegen {
                 Ok(vec!["nop".to_string()])
             },
             
-            // Control flow and debugging
-            MirInstruction::Safepoint => {
-                // Safepoint is a no-op in WASM (used for GC/debugging in other backends)
-                Ok(vec!["nop".to_string()])
+            // Control Flow Instructions (Critical for loops and conditions)
+            MirInstruction::Jump { target } => {
+                // Unconditional jump to target basic block
+                // Use WASM br instruction to break to the target block
+                Ok(vec![
+                    format!("br $block_{}", target.as_u32()),
+                ])
+            },
+            
+            MirInstruction::Branch { condition, then_bb, else_bb } => {
+                // Conditional branch based on condition value
+                // Load condition value and branch accordingly
+                Ok(vec![
+                    // Load condition value onto stack
+                    format!("local.get ${}", self.get_local_index(*condition)?),
+                    // If condition is true (non-zero), branch to then_bb
+                    format!("br_if $block_{}", then_bb.as_u32()),
+                    // Otherwise, fall through to else_bb
+                    format!("br $block_{}", else_bb.as_u32()),
+                ])
             },
             
             // Unsupported instructions
