@@ -9,6 +9,7 @@
 use super::*;
 use crate::boxes::{NullBox, ConsoleBox, FloatBox, DateTimeBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 // use crate::boxes::intent_box_wrapper::IntentBoxWrapper;
+use crate::box_trait::SharedNyashBox;
 use std::sync::Arc;
 
 impl NyashInterpreter {
@@ -708,6 +709,9 @@ impl NyashInterpreter {
         // 現在のスコープでBoxを追跡（自動解放のため）
         // 🌍 革命的実装：Environment tracking廃止
         
+        // Create Arc outside if block so it's available in all scopes
+        let instance_arc = Arc::from(instance_box);
+        
         // コンストラクタを呼び出す
         // "pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
         let pack_key = format!("pack/{}", arguments.len());
@@ -718,7 +722,6 @@ impl NyashInterpreter {
             .or_else(|| final_box_decl.constructors.get(&init_key))
             .or_else(|| final_box_decl.constructors.get(&box_name_key)) {
             // コンストラクタを実行
-            let instance_arc = Arc::from(instance_box);
             self.execute_constructor(&instance_arc, constructor, arguments, &final_box_decl)?;
         } else if !arguments.is_empty() {
             return Err(RuntimeError::InvalidOperation {

@@ -201,7 +201,7 @@ impl EphemeralInstance {
             let inst = parent.lock().unwrap();
             if let Some(instance_box) = inst.as_any().downcast_ref::<InstanceBox>() {
                 if let Some(field_value) = instance_box.get_field(name) {
-                    return Some(field_value);
+                    return Some((*field_value).clone_box());
                 }
             }
         }

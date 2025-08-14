@@ -1,0 +1,44 @@
+// 🔍 詳細デバッグテスト - Box IDとArcポインタ追跡
+
+static box Main {
+    init { console, server }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        me.console.log("=== 詳細デバッグ: Box ID & Arc ポインタ追跡 ===")
+        
+        // Step 1: SocketBox作成直後
+        me.server = new SocketBox()
+        me.console.log("1. SocketBox作成直後:")
+        me.console.log("   Box toString: " + me.server.toString())
+        me.console.log("   isServer: " + me.server.isServer().toString())
+        
+        // Step 2: bind実行
+        me.console.log("")
+        me.console.log("2. bind実行...")
+        local bind_result
+        bind_result = me.server.bind("127.0.0.1", 18080)
+        me.console.log("   bind結果: " + bind_result.toString())
+        
+        // Step 3: bind直後の状態
+        me.console.log("")
+        me.console.log("3. bind直後:")
+        me.console.log("   Box toString: " + me.server.toString())
+        me.console.log("   isServer: " + me.server.isServer().toString())
+        
+        // Step 4: 明示的な変数代入なし - 直接アクセス
+        me.console.log("")
+        me.console.log("4. 直接アクセス:")
+        me.console.log("   me.server.isServer(): " + me.server.isServer().toString())
+        
+        // Step 5: 複数回連続アクセス
+        me.console.log("")
+        me.console.log("5. 複数回アクセス:")
+        me.console.log("   1回目: " + me.server.isServer().toString())
+        me.console.log("   2回目: " + me.server.isServer().toString())
+        me.console.log("   3回目: " + me.server.isServer().toString())
+        
+        return "debug_completed"
+    }
+}

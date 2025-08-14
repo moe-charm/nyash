@@ -1,0 +1,7 @@
+static box Main {
+    main() {
+        local obj = new DataBox(42)
+        print(obj.value)
+        return obj.value
+    }
+}

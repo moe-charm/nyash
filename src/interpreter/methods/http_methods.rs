@@ -17,15 +17,25 @@ impl NyashInterpreter {
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "bind" => {
+                eprintln!("🔥 SOCKET_METHOD: bind() called");
                 if arguments.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
                         message: format!("bind() expects 2 arguments, got {}", arguments.len()),
                     });
                 }
                 
+                eprintln!("🔥 SOCKET_METHOD: Evaluating address argument...");
                 let address = self.execute_expression(&arguments[0])?;
+                eprintln!("🔥 SOCKET_METHOD: Address evaluated: {}", address.to_string_box().value);
+                
+                eprintln!("🔥 SOCKET_METHOD: Evaluating port argument...");
                 let port = self.execute_expression(&arguments[1])?;
-                Ok(socket_box.bind(address, port))
+                eprintln!("🔥 SOCKET_METHOD: Port evaluated: {}", port.to_string_box().value);
+                
+                eprintln!("🔥 SOCKET_METHOD: Calling socket_box.bind()...");
+                let result = socket_box.bind(address, port);
+                eprintln!("🔥 SOCKET_METHOD: bind() completed");
+                Ok(result)
             }
             "listen" => {
                 if arguments.len() != 1 {

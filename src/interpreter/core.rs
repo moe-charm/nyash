@@ -669,7 +669,7 @@ impl NyashInterpreter {
             };
             
             // 🌍 this変数をバインドしてstatic初期化実行（me構文のため）
-            self.declare_local_variable("me", static_instance);
+            self.declare_local_variable("me", (*static_instance).clone_box());
             
             for stmt in init_statements {
                 self.execute_statement(stmt)?;
@@ -722,7 +722,7 @@ impl NyashInterpreter {
         // GlobalBoxのfieldsに直接挿入
         {
             let mut fields = global_box.fields.lock().unwrap();
-            fields.insert("statics".to_string(), Box::new(statics_box));
+            fields.insert("statics".to_string(), Arc::new(statics_box));
         }
             
         eprintln!("🌍 statics namespace created in GlobalBox successfully");
@@ -751,7 +751,7 @@ impl NyashInterpreter {
         // statics InstanceBoxのfieldsに直接挿入（動的フィールド追加）
         {
             let mut fields = statics_instance.fields.lock().unwrap();
-            fields.insert(name.to_string(), Box::new(instance));
+            fields.insert(name.to_string(), Arc::new(instance));
         }
         
         eprintln!("🔥 Static box '{}' instance registered in statics namespace", name);

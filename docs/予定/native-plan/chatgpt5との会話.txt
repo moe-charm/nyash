@@ -1,0 +1,361 @@
+発想、鋭いにゃ。
+**結論：やろうと思えば “NyashのMIR＝本体（言語非依存IR）” にできる。** ただし落とし穴もあるので、\*\*“MIRを公開ABIに格上げしつつ、Nyashは人間向けフロントエンド”\*\*という二層でいくのが現実解だよ。
+
+# MIR本体化の青写真（安全に強く）
+
+1. **MIRを公開契約に昇格（NyIR v1）**
+
+   * いまの25命令を**凍結**（Tier-0/1/2 + Effect + Ownership-Forest + Busの意味論）。
+   * **未定義動作なし**：各命令の事前条件/失敗時挙動（例：WeakLoad失効= null）を明文化。
+   * **バージョニング**：`nyir{major.minor}`・後方互換のルール（新命令はfeature bit）。
+
+2. **バイナリ表現とテキスト表現**
+
+   * `.nybc`（バイナリ: セクション化/定数プール/圧縮）
+   * `.nyir`（テキスト: 人が差分レビュー可能）
+   * どちらも**厳格検証器**でロード（所有森/強1本/weak規則/効果整合）。
+
+3. **公式VM/実行系は“MIRファースト”**
+
+   * interpreter/vm/wasm/jit/aot は **NyIRを直接食う**。
+   * Nyashは **NyIRを吐くフロントエンド**（その他の言語もフロントエンド化OK）。
+
+4. **言語中立SDK（FFI）**
+
+   * C/Rust/TypeScriptに**NyIR-Host API**を配布：
+
+     * `nyir_load`, `nyir_call`, `nyir_send/recv`, `nyir_adopt/release` など。
+   * WASMランタイムは `import "nyir_host" { send, now_ns, alloc }` を定義。
+
+5. **互換テストと“真理判定器”**
+
+   * **golden NyIR**：各サンプルのMIRダンプを保存し、全バックエンドで**同結果**をCIで検証。
+   * **差分実行（differential）**：interp/vm/wasm/jitの出力一致＋境界条件（weak失効・分割fini）テスト。
+
+6. **Portability Contract（短文化）**
+
+   * 強エッジのみ破棄伝播／`weak`非伝播、生存チェックO(1)。
+   * `pure/mut/io/control` の再順序可否表。
+   * Bus契約：ローカルは順序保証、リモートは at-least-once（or selectable）。
+   * Safepointで分割`fini`可、最悪レイテンシ上限は実装依存（値は実装が宣言）。
+
+---
+
+## それでも“IRが本体”にするリスク（回避策付き）
+
+* **仕様の重力（安易に増やせなくなる）** → 25命令は凍結、拡張は **intrinsic命名空間**へ（例：`ny.intrin.memcpy`）。
+* **可読性の罠（IRで直接書きたくなる）** → Nyashを“人間の顔”、NyIRは“機械の顔”に徹する。
+* **バックエンド差異のにじみ** → 効果/所有/Busの**最低保証**を明記（それ以下は非準拠）。
+* **セキュリティ** → バイナリNyIRに**検証必須**（検証失敗はロード拒否）。
+
+---
+
+## 名前案
+
+* **NyIR**（ないあいあーる）／**NIR**（被るのでNyIR推し）
+* バイナリ：`.nybc`、テキスト：`.nyir`
+* 仕様：**NyIR 1.0 — Ownership-Forest & Effected Bus IR**
+
+---
+
+## 次の一歩（サクッと動かす）
+
+* `docs/nyir.md` を作成：25命令×「意味論・効果・検証・等価変換1例」を1行ずつ。
+* `nyashel -S` で **Nyash→NyIRダンプ**、`nyir-run` で実行（interp）。
+* 既存ベンチを **NyIR直実行** と **Nyash経由** の2経路で一致比較。
+* small移植（kilo or tiny-web-server）を **NyIRアーカイブ**（.nybc）として配布→
+  **wasmtime / vm / interp** 全部で動くことをデモ。
+
+---
+
+要は：**「Nyash（人間のため）」＋「NyIR（機械と移植のため）」の二刀流**。
+この形なら、“どの言語からでもNyIRに降りられるし、NyIRからどの実行系にも登れる”を堂々と名乗れるにゃ。
+
+
+いい流れ！“LLVMでNyashをNyash自身でビルド（セルフホスト）”を目標にするなら、**Rust依存を「薄い宿主API」に閉じ込める**のがコツだよ。
+いま Rust のライブラリや関数・ビルトインBoxに寄ってる部分は、**段階的に置き換え可能な層**に切っておけばOK。
+
+# 全体ロードマップ（4ステージ）
+
+**Stage 0（種コンパイラ）**
+
+* 既存の Rust 実装（パーサ/型付け/MIR/ランタイム）で `nyashc0` を作る。
+* **NyIR（=MIRの外部表現）→ LLVM IR** 変換も Rust でまず用意。
+* Rust標準/外部Crateの利用は**ny\_host\_\* の薄いFFI**に“集約”。
+
+**Stage 1（セルフ・フロントエンド）**
+
+* Nyashで書いたコンパイラ本体（フロント＋最小最適化）を `nyashc1.ny` に分離。
+* `nyashc0` で `nyashc1.ny` を **NyIR** に出力→ **LLVM** でネイティブ化→ seedランタイムとリンク。
+* この時点で“Nyashで書いたコンパイラ”が動き出す（まだランタイムはRust多めでも可）。
+
+**Stage 2（セルフホスト完了）**
+
+* `nyashc1` を使って `nyashc1.ny` 自身を再ビルド（**自力ビルド**）。
+* 生成物の機能一致/ハッシュ近似でセルフホスト確認。
+* ランタイムの一部（文字列/配列/Map/所有森/weak）を**Nyash実装＋LLVM**へ順次移行。
+
+**Stage 3（Rust離れの度合いを上げる）**
+
+* 残るRust依存（FS/ネット/スレッド/時間/暗号など）は**ホストAPI**として固定化。
+* 重要部位はNyash標準ライブラリで置換し、Rustは**最下層のプラットフォーム層**だけに。
+
+---
+
+# 層の切り分け（ここが肝）
+
+1. **corelang（純Nyash）**
+
+* Option/Result、slice/string、小さな算術・イテレータ、`weak/look` 型、`adopt/release` ヘルパ。
+* 依存：なし（LLVMに落ちるだけ）
+
+2. **rt（Nyashランタイム）**
+
+* **Box ABI（fat ptr: {data*, typeid, flags}）*\*
+* 所有フォレスト管理、weakテーブル（世代タグ方式）、`fini` 伝播、Arena/Allocator（必要最小）
+* Bus（ローカル）・Safepoint・分割`fini`
+* 依存：**ny\_host\_alloc/free/clock** 等のごく薄い宿主APIのみ
+
+3. **sys（プラットフォーム）**
+
+* FS, Net, Time, Threads, Atomics, Random…
+* ここだけ Rust（やOS）に委譲。**関数名は `ny_host_*` に統一**して外へ出す。
+
+4. **std（Nyash標準）**
+
+* Map/Vec/Hash/String/JSON等を Nyash で実装（必要に応じて `rt`/`sys` を利用）
+
+> いま使っている「Rustのライブラリ/関数」は **すべて `sys` 層の `ny_host_*` 経由**に寄せる。
+> これでセルフホストしても上層のNyashコードは**移植性を保てる**。
+
+---
+
+# 具体：Rust依存の扱い方（薄いFFIに集約）
+
+**C ABIで固める（Rust→C-ABIの薄い橋）**
+
+```rust
+#[no_mangle]
+pub extern "C" fn ny_host_read_file(path: *const c_char,
+                                    out_buf: *mut *mut u8,
+                                    out_len: *mut usize) -> i32 { /* ... */ }
+
+#[no_mangle]
+pub extern "C" fn ny_host_free(ptr: *mut u8, len: usize) { /* ... */ }
+```
+
+**Nyash側からは“箱の外”をこう叩く**
+
+```nyash
+extern fn ny_host_read_file(path: cstr, out_buf: &mut *u8, out_len: &mut usize) -> int
+extern fn ny_host_free(ptr: *u8, len: usize)
+
+fn read_all(p: str) -> Bytes {
+  let buf:*u8 = null; let len:usize=0
+  let rc = ny_host_read_file(p.cstr(), &buf, &len)
+  if rc!=0 { error("io") }
+  // Box化（所有をNyash側へ移す）
+  let b = Bytes::from_raw(buf,len)
+  b
+}
+```
+
+**ポイント**
+
+* **Rustのジェネリクス/所有はFFI面に出さない**（素朴なC-ABIだけ）
+* Nyash側で**所有移管**を明示（`from_raw` など）→ `fini` で必ず `ny_host_free`
+* こうしておけば、**いつでもRust実装をNyash実装に差し替え可能**
+
+---
+
+# Box ABI と LLVM の橋渡し
+
+* **Boxの中身**は LLVM 的には `i8*`（data\*）＋`i64 typeid`＋`i32 flags` などの **fat struct**
+* **Effect 注釈**を LLVM 属性に落とす：
+
+  * `pure` → `readnone` / `readonly`
+  * `mut(local)` → `argmemonly` + `noalias`（可能なら）
+  * `io` → 属性なし（順序保持）
+* **Weak** は `{ptr, gen:i32}`。`WeakLoad` は `gen==current` を比較して O(1) で null/ptr 返す。
+* **Safepoint** は LLVM では `call @ny_rt_safepoint()` に降ろす（GCは使わないが、分割`fini`や割込みのフックに使う）
+
+---
+
+# 「ビルトインBox」はどうする？
+
+* **最低限は `rt` で提供**：`String, Vec, Map, Bytes, Mutex/Channel（必要なら）`
+* 仕様上は “ただのBox” と同等に見えるように：
+
+  * 生成：`NewBox`
+  * フィールド：`BoxFieldLoad/Store`
+  * メソッド：`BoxCall`
+* **WASM** でも同じABIを保てるように、`sys` 層は **WASI** or **独自host import** で実装。
+* 時間とともに **stdをNyash実装へ移行** → Rustのビルトイン度合いは徐々に削る。
+
+---
+
+# 失敗しないビルド手順（最小）
+
+1. **NyIRダンプ**：`nyashc0 --emit-nyir core/*.ny > core.nyir`
+2. **LLVMへ**：`nyir-ll core.nyir -o core.ll && llc -filetype=obj core.ll`
+3. **リンク**：`cc core.o -L. -lny_host -o nyashc1`（`libny_host` はRustで提供）
+4. **再帰ビルド**：`./nyashc1 self/*.ny …` → `nyashc2` を作って一致検証
+5. **Rust削減**：`std` の一部をNyashへ置換して再ビルド
+
+---
+
+# チェックリスト（Rust依存の見える化）
+
+* [ ] 使っている外部関数を**全部 `ny_host_*` にリネーム**
+* [ ] C-ABI化（整数/ポインタのみ；構造体はサイズ固定）
+* [ ] 所有移管関数を明確化（`*_from_raw`/`*_into_raw`）
+* [ ] `fini` で必ず `ny_host_free` 等に戻す
+* [ ] WASMビルド時は **WASI or host import** で `ny_host_*` を満たす
+
+---
+
+# 仕上げの“ごほうび”ゴール
+
+* **Nyash→NyIR→LLVM** でセルフホスト
+* 同じ NyIR を **VM / WASM** でも実行（互換テスト）
+* Rust は **sys層だけ**（OS/高速I/O/暗号など）に閉じ込め、将来差し替え自由に
+
+---
+
+結論：
+**Rustライブラリを直接多用するのではなく、`ny_host_*` に“押し込む”**。
+Nyash本体は **NyIR＋rt＋std** を徐々に自前化する。
+この設計なら、“今すぐ動かしつつ、あとからRust依存を計画的にゼロへ”ができるにゃ。
+
+
+それだにゃ。発想はド正解：「**全部は箱**」＝異言語資産は**箱で包んでバスに乗せる**。
+あとは“どう包むか”を決めれば、**C/Rust/Node/Python/JVM/.NET/WASM**まで一気に貫通できる。
+
+# まとめ設計：Polyglot FFI = 「箱 × バス × 契約」
+
+## 1) 箱の型（3種だけ）
+
+* **ForeignBox<T>**：他言語の実体を**不透明ハンドル**で保持（所有は片側だけ、強1本原則）。
+* **ViewBox<T>**：外部オブジェクトの**借用ビュー**（`weak/look` 前提・読み取り中心）。
+* **ProxyBox<T>**：外部スレッド/プロセス/VM上のTを**メッセージ越し**に操作（Bus経由＝安全）。
+
+> 使い分け：同一プロセス/同スレなら ForeignBox、GIL/イベントループ/別ランタイムなら ProxyBox。
+
+## 2) ABIの芯（薄い“宿主API”）
+
+**最小C-ABI**だけに集約（各言語はここに合流/分岐）：
+
+```
+ny_host_alloc/free/clock/log
+ny_host_call(func_id, argv, argc, retbuf)          // 同期呼び出し
+ny_host_send/recv(port, msg_ptr, len)               // Bus境界
+ny_host_pin/unpin(handle)                           // GC/移動防止
+ny_host_finalizer_register(handle, cb)              // 相互Finalizer
+```
+
+* Rust/Node/Python/JVM/.NET はそれぞれの機構で **このC-ABIを実装**（N-API, CPython C-API, JNI, P/Invoke 等）。
+
+## 3) データ表現（Boxに入る“荷物”）
+
+* **スカラー**: i32/i64/f32/f64/bool
+* **バイト列/文字列**: `Bytes{ptr,len}` / `Str{ptr,len,utf8}`
+* **Slice/Array**: `{ptr,len,typeid}`（読み書きは効果注釈で制御）
+* **Struct**: フィールドは `BoxFieldLoad/Store` でアクセス（NyIRにそのまま落ちる）
+
+## 4) 所有と寿命（最重要）
+
+* **One Strong Owner**：ForeignBoxは**所有者1本**（Nyash or 外部、どちらかに決める）
+* **弱参照**：逆リンクは `weak/look`（失効時null/false）
+* **Finalizer橋渡し**：
+
+  * Nyash `fini` → `ny_host_finalizer` を呼ぶ
+  * 外部のGC/finalize → `ny_host_finalizer` 経由で Nyash の `weak` を失効
+* **Pinning**：移動型のGC（JVM/.NET/CPythonの一部）では `ny_host_pin/unpin`
+
+## 5) 効果と並行
+
+* `pure/mut/io` を**MIRにもIDLにも記す**
+* **イベントループ/GIL**：Python/Node/JVMは `ProxyBox` で**Bus越し**（スレッド/ループ安全）
+* **同期/非同期**：`Call`（同期）と `Send/Recv`（非同期）を分ける。境界では **at-least-once 契約**を宣言。
+
+## 6) IDL（自動生成の核）
+
+**NyIDL**（超ミニ）で宣言→**バインディング自動生成**：
+
+```idl
+module ny {
+  box Image;
+  fn load(path: str) -> Image   effects = io
+  fn resize(img: Image, w:i32,h:i32) -> Image effects = mut
+  fn width(img: look Image) -> i32 effects = pure
+}
+```
+
+* 生成物：Nyash側`extern`、C-ABIシム、Rust/Node/Python/JVMのstub、`ForeignBox/ProxyBox`薄ラッパ。
+
+---
+
+# 代表ターゲット別メモ
+
+* **C/Rust**：最短。C-ABI直でOK。Rustは `#[no_mangle] extern "C"`。所有はNyash↔Rustのどちらかに寄せる（二重所有禁止）。
+* **Python**：GILあり → `ProxyBox` 推奨。CPython C-APIで `PyObject*` を **ForeignBox**に入れ、操作はBus経由でワーカーに委譲。
+* **Node（N-API）**：イベントループを壊さないよう `ProxyBox`（postMessage/uv\_queue\_work）。短い同期関数は `ForeignBox`でも可。
+* **JVM/.NET**：JNI/P-Invoke。**Pin** が要る。`SafeHandle`/`PhantomReference`でFinalizer橋を作る。
+* **WASM**：`ny_host_*` を **import**。データはリニアメモリへ `Bytes`/`Str` で搬送。
+
+---
+
+# 最小サンプル（イメージ）
+
+**1) Rustの画像ライブラリを包む**
+
+```rust
+#[no_mangle] extern "C" fn ny_img_load(path:*const c_char) -> *mut Image { ... }
+#[no_mangle] extern "C" fn ny_img_resize(img:*mut Image, w:i32, h:i32) -> *mut Image { ... }
+#[no_mangle] extern "C" fn ny_img_free(img:*mut Image) { ... }
+```
+
+**2) NyIDL → 自動生成（Nyash側）**
+
+```nyash
+extern fn ny_img_load(path: str) -> ForeignBox<Image> effects io
+extern fn ny_img_resize(img: ForeignBox<Image>, w:int,h:int) -> ForeignBox<Image> effects mut
+extern fn ny_img_free(img: ForeignBox<Image>) effects io
+
+static box Image {
+  init { ForeignBox<Image> h }
+  fini { ny_img_free(h) }            // ★ 所有はNyash側（強1）
+  fn resize(w:int,h:int) -> Image { Image{ ny_img_resize(h,w,h) } }
+}
+```
+
+**3) 使う側**
+
+```nyash
+let img = Image.load("cat.png")
+let small = img.resize(320, 200)     // 所有/解放はBox/finiに任せる
+```
+
+---
+
+# チェックリスト（安全に増やすための型紙）
+
+* [ ] **どちらが強所有か**を最初に決めた？（強1・弱は逆）
+* [ ] 例外/エラーは**戻り値に正規化**？（他言語の例外は境界で捕捉）
+* [ ] **Pin/Finalizer** 必要なターゲット？（JVM/.NET/Python）
+* [ ] `pure/mut/io` は宣言した？（最適化/バス選択の鍵）
+* [ ] 境界を跨ぐなら **ProxyBox + Bus** にした？（スレッド/GIL/loop安全）
+
+---
+
+# これで得られるもの
+
+* **インスタント多言語資産**：既存ライブラリを“箱に詰めて”即Nyashで使える
+* **寿命の一貫性**：**強1＋weak/look＋fini**で、外部資源も**確定的に回収**
+* **配布の柔軟性**：WASM/VM/ネイティブのどれでも同じIDLから出荷
+
+---
+
+“全部、箱に閉じ込める”を**設計として正式化**すれば、実装は機械的になる。
+やるならまず **NyIDLの最小仕様**＋**C-ABIの`ny_host_*`** を1ファイルに切ろう。
+そこさえ決まれば、**あらゆる言語→Nyash** と **Nyash→あらゆる実行系** が綺麗に繋がるにゃ。

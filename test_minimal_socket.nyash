@@ -1,0 +1,31 @@
+# 🔥 最小限SocketBoxテスト - bind()のみ
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("最小限SocketBoxテスト開始")
+        
+        # SocketBox作成
+        local socket = new SocketBox()
+        me.console.log("SocketBox作成完了")
+        
+        # bind前状態
+        local beforeBind = socket.isServer()
+        me.console.log("Before: " + beforeBind.toString())
+        
+        # bind実行
+        local bindResult = socket.bind("127.0.0.1", 19999)
+        me.console.log("Bind: " + bindResult.toString())
+        
+        # bind後状態
+        local afterBind = socket.isServer()
+        me.console.log("After: " + afterBind.toString())
+        
+        # クリーンアップ
+        socket.close()
+        
+        return "DONE"
+    }
+}

@@ -1,0 +1,14 @@
+box SimpleBox {
+    init { value }
+    
+    pack(v) {
+        me.value = v
+    }
+}
+
+static box Main {
+    main() {
+        local obj = new SimpleBox(100)
+        return 200
+    }
+}

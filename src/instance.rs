@@ -78,7 +78,7 @@ impl InstanceBox {
         // フィールドをVoidBoxで初期化
         let mut field_map = HashMap::new();
         for field in &fields {
-            field_map.insert(field.clone(), Box::new(VoidBox::new()) as Box<dyn NyashBox>);
+            field_map.insert(field.clone(), Arc::new(VoidBox::new()) as Arc<dyn NyashBox>);
         }
         
         // Weak fields をHashSetに変換（高速判定用）
@@ -131,7 +131,7 @@ impl InstanceBox {
             if let Ok(legacy_box) = value.to_box() {
                 // Convert Arc<Mutex<dyn NyashBox>> to Box<dyn NyashBox>
                 if let Ok(inner_box) = legacy_box.try_lock() {
-                    self.fields.lock().unwrap().insert(field_name, inner_box.clone_box());
+                    self.fields.lock().unwrap().insert(field_name, Arc::from(inner_box.clone_box()));
                 }
             }
         }

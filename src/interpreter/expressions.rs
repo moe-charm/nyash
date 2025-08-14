@@ -10,8 +10,9 @@ use super::*;
 use crate::ast::UnaryOperator;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
-use crate::box_trait::BoolBox;
+use crate::box_trait::{BoolBox, SharedNyashBox};
 use crate::operator_traits::OperatorResolver;
+use std::sync::Arc;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
 
@@ -65,7 +66,7 @@ impl NyashInterpreter {
                     .map_err(|_| RuntimeError::InvalidOperation {
                         message: "'this' is only available inside methods".to_string(),
                     })?;
-                Ok((**shared_this).clone_box())  // Convert for external interface
+                Ok((*shared_this).clone_box())  // Convert for external interface
             }
             
             ASTNode::Me { .. } => {
@@ -76,7 +77,7 @@ impl NyashInterpreter {
                         message: "'me' is only available inside methods".to_string(),
                     })?;
                     
-                Ok((**shared_me).clone_box())  // Convert for external interface
+                Ok((*shared_me).clone_box())  // Convert for external interface
             }
             
             ASTNode::ThisField { field, .. } => {
@@ -86,12 +87,12 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                 
-                if let Some(instance) = (**this_value).as_any().downcast_ref::<InstanceBox>() {
+                if let Some(instance) = (*this_value).as_any().downcast_ref::<InstanceBox>() {
                     let shared_field = instance.get_field(field)
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on this", field)
                         })?;
-                    Ok((**shared_field).clone_box())  // Convert for external interface
+                    Ok((*shared_field).clone_box())  // Convert for external interface
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),
@@ -106,12 +107,12 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                 
-                if let Some(instance) = (**me_value).as_any().downcast_ref::<InstanceBox>() {
+                if let Some(instance) = (*me_value).as_any().downcast_ref::<InstanceBox>() {
                     let shared_field = instance.get_field(field)
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on me", field)
                         })?;
-                    Ok((**shared_field).clone_box())  // Convert for external interface
+                    Ok((*shared_field).clone_box())  // Convert for external interface
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),
@@ -464,14 +465,30 @@ impl NyashInterpreter {
             
             // 🔧 FIX: Update stored variable for stateful SocketBox methods
             // These methods modify the SocketBox internal state, so we need to update
-            // the stored local variable to ensure subsequent accesses get the updated state
+            // the stored variable/field to ensure subsequent accesses get the updated state
             if matches!(method, "bind" | "connect" | "close") {
-                if let ASTNode::Variable { name, .. } = object {
-                    if let Some(stored_var) = self.local_vars.get_mut(name) {
-                        // Replace the stored instance with the modified one
-                        let updated_instance = socket_box.clone();
-                        *stored_var = Box::new(updated_instance);
-                    }
+                let updated_instance = socket_box.clone();
+                
+                match object {
+                    ASTNode::Variable { name, .. } => {
+                        // Handle local variables
+                        if let Some(stored_var) = self.local_vars.get_mut(name) {
+                            *stored_var = Arc::new(updated_instance);
+                        }
+                    },
+                    ASTNode::FieldAccess { object: field_obj, field, .. } => {
+                        // Handle StaticBox fields like me.server
+                        if let ASTNode::Variable { name, .. } = field_obj.as_ref() {
+                            if name == "me" {
+                                if let Ok(me_instance) = self.resolve_variable("me") {
+                                    if let Some(instance) = (*me_instance).as_any().downcast_ref::<InstanceBox>() {
+                                        let _ = instance.set_field(field, Arc::new(updated_instance));
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    _ => {}
                 }
             }
             
@@ -554,7 +571,7 @@ impl NyashInterpreter {
                         if name == "me" {
                             // Get current instance to check if field is weak
                             if let Ok(current_me) = self.resolve_variable("me") {
-                                if let Some(current_instance) = (**current_me).as_any().downcast_ref::<InstanceBox>() {
+                                if let Some(current_instance) = (*current_me).as_any().downcast_ref::<InstanceBox>() {
                                     if current_instance.is_weak_field(field) {
                                         return Err(RuntimeError::InvalidOperation {
                                             message: format!(
@@ -682,7 +699,8 @@ impl NyashInterpreter {
         if let ASTNode::Variable { name, .. } = object {
             // Static boxの可能性をチェック
             if self.is_static_box(name) {
-                return self.execute_static_field_access(name, field);
+                let static_result = self.execute_static_field_access(name, field)?;
+                return Ok(Arc::from(static_result));
             }
         }
         
@@ -721,14 +739,14 @@ impl NyashInterpreter {
                             crate::value::NyashValue::Null => {
                                 eprintln!("🔗 DEBUG: Weak field '{}' is null (reference dropped)", field);
                                 // Return null box for compatibility
-                                return Ok(Box::new(crate::boxes::null_box::NullBox::new()));
+                                return Ok(Arc::new(crate::boxes::null_box::NullBox::new()));
                             }
                             _ => {
                                 eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field);
                                 // Convert back to Box<dyn NyashBox> for now
                                 if let Ok(box_value) = weak_value.to_box() {
                                     if let Ok(inner_box) = box_value.try_lock() {
-                                        return Ok(inner_box.clone_box());
+                                        return Ok(Arc::from(inner_box.clone_box()));
                                     }
                                 }
                             }
@@ -782,10 +800,13 @@ impl NyashInterpreter {
             })?;
         
         // 3. フィールドアクセス
-        instance.get_field(field)
+        let shared_field = instance.get_field(field)
             .ok_or(RuntimeError::InvalidOperation {
                 message: format!("Field '{}' not found in static box '{}'", field, static_box_name),
-            })
+            })?;
+        
+        // Convert Arc to Box for compatibility
+        Ok((*shared_field).clone_box())
     }
     
     
@@ -865,7 +886,7 @@ impl NyashInterpreter {
                 message: "'from' can only be used inside methods".to_string(),
             })?;
         
-        let current_instance = (**current_instance_val).as_any().downcast_ref::<InstanceBox>()
+        let current_instance = (*current_instance_val).as_any().downcast_ref::<InstanceBox>()
             .ok_or(RuntimeError::TypeError {
                 message: "'from' requires current instance to be InstanceBox".to_string(),
             })?;

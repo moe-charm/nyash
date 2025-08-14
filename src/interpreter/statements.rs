@@ -298,13 +298,13 @@ impl NyashInterpreter {
                     
                     // 既存のフィールド値があればfini()を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
-                        if let Some(old_instance) = old_field_value.as_any().downcast_ref::<InstanceBox>() {
+                        if let Some(old_instance) = (*old_field_value).as_any().downcast_ref::<InstanceBox>() {
                             let _ = old_instance.fini();
                             finalization::mark_as_finalized(old_instance.box_id());
                         }
                     }
                     
-                    instance.set_field(field, val.clone_box())
+                    instance.set_field(field, Arc::from(val.clone_box()))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)
                 } else {
@@ -321,7 +321,7 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                     
-                if let Some(instance) = (**this_value).as_any().downcast_ref::<InstanceBox>() {
+                if let Some(instance) = (*this_value).as_any().downcast_ref::<InstanceBox>() {
                     // 🔥 Usage prohibition guard - check if instance is finalized
                     if instance.is_finalized() {
                         return Err(RuntimeError::InvalidOperation {
@@ -331,13 +331,13 @@ impl NyashInterpreter {
                     
                     // 既存のthis.field値があればfini()を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
-                        if let Some(old_instance) = old_field_value.as_any().downcast_ref::<InstanceBox>() {
+                        if let Some(old_instance) = (*old_field_value).as_any().downcast_ref::<InstanceBox>() {
                             let _ = old_instance.fini();
                             finalization::mark_as_finalized(old_instance.box_id());
                         }
                     }
                     
-                    instance.set_field(field, val.clone_box())
+                    instance.set_field(field, Arc::from(val.clone_box()))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)
                 } else {
@@ -354,7 +354,7 @@ impl NyashInterpreter {
                         message: "'this' is not bound in the current context".to_string(),
                     })?;
                     
-                if let Some(instance) = (**me_value).as_any().downcast_ref::<InstanceBox>() {
+                if let Some(instance) = (*me_value).as_any().downcast_ref::<InstanceBox>() {
                     // 🔥 Usage prohibition guard - check if instance is finalized
                     if instance.is_finalized() {
                         return Err(RuntimeError::InvalidOperation {
@@ -364,13 +364,13 @@ impl NyashInterpreter {
                     
                     // 既存のme.field値があればfini()を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
-                        if let Some(old_instance) = old_field_value.as_any().downcast_ref::<InstanceBox>() {
+                        if let Some(old_instance) = (*old_field_value).as_any().downcast_ref::<InstanceBox>() {
                             let _ = old_instance.fini();
                             finalization::mark_as_finalized(old_instance.box_id());
                         }
                     }
                     
-                    instance.set_field(field, val.clone_box())
+                    instance.set_field(field, Arc::from(val.clone_box()))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)
                 } else {
