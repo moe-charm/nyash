@@ -86,7 +86,31 @@ impl WasmBackend {
             println!("{}", value);
         });
         
-        let imports = [print_func.into()];
+        // Create print_str function import for string debugging
+        let print_str_func = wasmtime::Func::wrap(&mut store, |mut caller: wasmtime::Caller<'_, ()>, ptr: i32, len: i32| -> Result<(), wasmtime::Error> {
+            let memory = caller.get_export("memory")
+                .and_then(|export| export.into_memory())
+                .ok_or_else(|| wasmtime::Error::msg("Memory export not found"))?;
+            
+            let data = memory.data(&caller);
+            let start = ptr as usize;
+            let end = start + len as usize;
+            
+            if end <= data.len() {
+                let bytes = &data[start..end];
+                if let Ok(s) = std::str::from_utf8(bytes) {
+                    println!("String: {}", s);
+                } else {
+                    println!("Invalid UTF-8 bytes: {:?}", bytes);
+                }
+            } else {
+                println!("String out of bounds: ptr={}, len={}, memory_size={}", ptr, len, data.len());
+            }
+            
+            Ok(())
+        });
+        
+        let imports = [print_func.into(), print_str_func.into()];
         let instance = wasmtime::Instance::new(&mut store, &module, &imports)
             .map_err(|e| WasmError::WasmValidationError(format!("Instance creation failed: {}", e)))?;
         
