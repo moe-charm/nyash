@@ -86,12 +86,26 @@ impl SocketBox {
         
         match TcpListener::bind(&socket_addr) {
             Ok(listener) => {
-                *self.listener.lock().unwrap() = Some(listener);
-                *self.is_server.lock().unwrap() = true;
+                match self.listener.lock() {
+                    Ok(mut listener_guard) => {
+                        *listener_guard = Some(listener);
+                    },
+                    Err(_) => {
+                        return Box::new(BoolBox::new(false));
+                    }
+                }
+                match self.is_server.lock() {
+                    Ok(mut is_server_guard) => {
+                        *is_server_guard = true;
+                    },
+                    Err(_) => {
+                        // Non-critical error, continue
+                    }
+                }
                 Box::new(BoolBox::new(true))
             },
-            Err(e) => {
-                eprintln!("🚨 SocketBox bind error: {}", e);
+            Err(_e) => {
+                // Port might be in use, return false
                 Box::new(BoolBox::new(false))
             }
         }
@@ -99,13 +113,29 @@ impl SocketBox {
     
     /// 指定した backlog で接続待機開始
     pub fn listen(&self, backlog: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        // TcpListener::bind already sets up listening with default backlog
-        // This method exists for API compatibility but doesn't need additional setup
         let _backlog_num = backlog.to_string_box().value.parse::<i32>().unwrap_or(128);
         
-        if self.listener.lock().unwrap().is_some() {
-            Box::new(BoolBox::new(true))
+        // Check if listener exists and is properly bound
+        let listener_guard = match self.listener.lock() {
+            Ok(guard) => guard,
+            Err(_) => return Box::new(BoolBox::new(false)),
+        };
+        
+        if let Some(ref listener) = *listener_guard {
+            // Try to get the local address to confirm the listener is working
+            match listener.local_addr() {
+                Ok(_addr) => {
+                    // Listener is properly set up and can accept connections
+                    Box::new(BoolBox::new(true))
+                },
+                Err(_) => {
+                    // Listener exists but has issues
+                    Box::new(BoolBox::new(false))
+                }
+            }
         } else {
+            // No listener bound - this is expected behavior for now
+            // HTTPServerBox will handle binding separately
             Box::new(BoolBox::new(false))
         }
     }
