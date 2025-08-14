@@ -1446,8 +1446,8 @@ fn execute_aot_mode(filename: &str, output_file: Option<&String>) {
                 println!("   Size ratio: {:.2}x", ratio);
             }
             
-            println!("📄 AOT executable written to: {}", output_path);
-            println!("🚀 Run with: ./{}", output_path);
+            println!("📄 AOT precompiled module written to: {}.cwasm", output_path);
+            println!("🚀 This creates a precompiled WASM module for faster loading");
         },
         Err(e) => {
             eprintln!("❌ AOT compilation error: {}", e);
