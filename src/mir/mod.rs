@@ -11,7 +11,7 @@ pub mod basic_block;
 pub mod function;
 pub mod builder;
 pub mod verification;
-pub mod ownership_verifier; // Ownership forest verification
+pub mod ownership_verifier_simple; // Simple ownership forest verification for current MIR
 pub mod printer;
 pub mod value_id;
 pub mod effect;
@@ -23,7 +23,7 @@ pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use function::{MirFunction, MirModule, FunctionSignature};
 pub use builder::MirBuilder;
 pub use verification::{MirVerifier, VerificationError};
-pub use ownership_verifier::{OwnershipVerifier, OwnershipError, OwnershipStats}; // Ownership forest verification
+pub use ownership_verifier_simple::{OwnershipVerifier, OwnershipError, OwnershipStats}; // Simple ownership forest verification
 pub use printer::MirPrinter;
 pub use value_id::{ValueId, LocalId, ValueIdGenerator};
 pub use effect::{EffectMask, Effect};

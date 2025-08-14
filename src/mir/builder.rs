@@ -354,7 +354,7 @@ impl MirBuilder {
         // For now, use a special Print instruction (minimal scope)
         self.emit_instruction(MirInstruction::Print {
             value,
-            effects: EffectMask::PURE.add(Effect::IO),
+            effects: EffectMask::PURE.add(Effect::Io),
         })?;
         
         // Return the value that was printed
