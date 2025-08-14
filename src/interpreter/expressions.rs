@@ -11,7 +11,81 @@ use crate::ast::UnaryOperator;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
 use crate::box_trait::{BoolBox, SharedNyashBox};
-use crate::operator_traits::OperatorResolver;
+// Direct implementation approach to avoid import issues
+use crate::operator_traits::{DynamicAdd, DynamicSub, DynamicMul, DynamicDiv, OperatorError};
+
+// Local helper functions to bypass import issues
+fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+    // IntegerBox + IntegerBox
+    if let (Some(left_int), Some(right_int)) = (
+        left.as_any().downcast_ref::<IntegerBox>(),
+        right.as_any().downcast_ref::<IntegerBox>()
+    ) {
+        return Some(Box::new(IntegerBox::new(left_int.value + right_int.value)));
+    }
+    
+    // StringBox + anything -> concatenation
+    if let Some(left_str) = left.as_any().downcast_ref::<StringBox>() {
+        let right_str = right.to_string_box();
+        return Some(Box::new(StringBox::new(format!("{}{}", left_str.value, right_str.value))));
+    }
+    
+    // BoolBox + BoolBox -> IntegerBox 
+    if let (Some(left_bool), Some(right_bool)) = (
+        left.as_any().downcast_ref::<BoolBox>(),
+        right.as_any().downcast_ref::<BoolBox>()
+    ) {
+        return Some(Box::new(IntegerBox::new((left_bool.value as i64) + (right_bool.value as i64))));
+    }
+    
+    None
+}
+
+fn try_sub_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+    // IntegerBox - IntegerBox
+    if let (Some(left_int), Some(right_int)) = (
+        left.as_any().downcast_ref::<IntegerBox>(),
+        right.as_any().downcast_ref::<IntegerBox>()
+    ) {
+        return Some(Box::new(IntegerBox::new(left_int.value - right_int.value)));
+    }
+    None
+}
+
+fn try_mul_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+    // IntegerBox * IntegerBox
+    if let (Some(left_int), Some(right_int)) = (
+        left.as_any().downcast_ref::<IntegerBox>(),
+        right.as_any().downcast_ref::<IntegerBox>()
+    ) {
+        return Some(Box::new(IntegerBox::new(left_int.value * right_int.value)));
+    }
+    
+    // StringBox * IntegerBox -> repetition
+    if let (Some(str_box), Some(count_int)) = (
+        left.as_any().downcast_ref::<StringBox>(),
+        right.as_any().downcast_ref::<IntegerBox>()
+    ) {
+        return Some(Box::new(StringBox::new(str_box.value.repeat(count_int.value as usize))));
+    }
+    
+    None
+}
+
+fn try_div_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Result<Box<dyn NyashBox>, String> {
+    // IntegerBox / IntegerBox
+    if let (Some(left_int), Some(right_int)) = (
+        left.as_any().downcast_ref::<IntegerBox>(),
+        right.as_any().downcast_ref::<IntegerBox>()
+    ) {
+        if right_int.value == 0 {
+            return Err("Division by zero".to_string());
+        }
+        return Ok(Box::new(IntegerBox::new(left_int.value / right_int.value)));
+    }
+    
+    Err(format!("Division not supported between {} and {}", left.type_name(), right.type_name()))
+}
 use std::sync::Arc;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
@@ -151,9 +225,30 @@ impl NyashInterpreter {
         
         match op {
             BinaryOperator::Add => {
-                // 🚀 New trait-based operator resolution system!
-                OperatorResolver::resolve_add(left_val.as_ref(), right_val.as_ref())
-                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
+                // 🚀 Direct trait-based operator resolution (temporary workaround)
+                // Try concrete types first
+                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
+                    if let Some(result) = int_box.try_add(right_val.as_ref()) {
+                        return Ok(result);
+                    }
+                }
+                
+                if let Some(str_box) = left_val.as_any().downcast_ref::<StringBox>() {
+                    if let Some(result) = str_box.try_add(right_val.as_ref()) {
+                        return Ok(result);
+                    }
+                }
+                
+                if let Some(bool_box) = left_val.as_any().downcast_ref::<BoolBox>() {
+                    if let Some(result) = bool_box.try_add(right_val.as_ref()) {
+                        return Ok(result);
+                    }
+                }
+                
+                Err(RuntimeError::InvalidOperation { 
+                    message: format!("Addition not supported between {} and {}", 
+                                   left_val.type_name(), right_val.type_name()) 
+                })
             }
             
             BinaryOperator::Equal => {
@@ -187,21 +282,55 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Subtract => {
-                // 🚀 New trait-based subtraction
-                OperatorResolver::resolve_sub(left_val.as_ref(), right_val.as_ref())
-                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
+                // 🚀 Direct trait-based subtraction (temporary workaround)
+                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
+                    if let Some(result) = int_box.try_sub(right_val.as_ref()) {
+                        return Ok(result);
+                    }
+                }
+                
+                Err(RuntimeError::InvalidOperation { 
+                    message: format!("Subtraction not supported between {} and {}", 
+                                   left_val.type_name(), right_val.type_name()) 
+                })
             }
             
             BinaryOperator::Multiply => {
-                // 🚀 New trait-based multiplication
-                OperatorResolver::resolve_mul(left_val.as_ref(), right_val.as_ref())
-                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
+                // 🚀 Direct trait-based multiplication (temporary workaround)
+                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
+                    if let Some(result) = int_box.try_mul(right_val.as_ref()) {
+                        return Ok(result);
+                    }
+                }
+                
+                if let Some(str_box) = left_val.as_any().downcast_ref::<StringBox>() {
+                    if let Some(result) = str_box.try_mul(right_val.as_ref()) {
+                        return Ok(result);
+                    }
+                }
+                
+                Err(RuntimeError::InvalidOperation { 
+                    message: format!("Multiplication not supported between {} and {}", 
+                                   left_val.type_name(), right_val.type_name()) 
+                })
             }
             
             BinaryOperator::Divide => {
-                // 🚀 New trait-based division
-                OperatorResolver::resolve_div(left_val.as_ref(), right_val.as_ref())
-                    .map_err(|e| RuntimeError::InvalidOperation { message: e.to_string() })
+                // 🚀 Direct trait-based division (temporary workaround)
+                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
+                    if let Some(result) = int_box.try_div(right_val.as_ref()) {
+                        return Ok(result);
+                    } else {
+                        return Err(RuntimeError::InvalidOperation { 
+                            message: "Division by zero".to_string() 
+                        });
+                    }
+                }
+                
+                Err(RuntimeError::InvalidOperation { 
+                    message: format!("Division not supported between {} and {}", 
+                                   left_val.type_name(), right_val.type_name()) 
+                })
             }
             
             BinaryOperator::Less => {
