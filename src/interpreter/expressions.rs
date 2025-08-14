@@ -328,6 +328,18 @@ impl NyashInterpreter {
         // オブジェクトを評価（通常のメソッド呼び出し）
         let obj_value = self.execute_expression(object)?;
         
+        // Debug: Print object type and Box ID for SocketBox debugging
+        if method == "bind" || method == "listen" || method == "isServer" {
+            println!("🔍 DEBUG: Method '{}' called on object type: {} (Box ID: {})", 
+                    method, 
+                    obj_value.type_name(), 
+                    if let Some(socket_box) = obj_value.as_any().downcast_ref::<SocketBox>() {
+                        socket_box.box_id().to_string()
+                    } else {
+                        "N/A".to_string()
+                    });
+        }
+        
         // StringBox method calls
         if let Some(string_box) = obj_value.as_any().downcast_ref::<StringBox>() {
             return self.execute_string_method(string_box, method, arguments);

@@ -56,25 +56,34 @@ pub struct SocketBox {
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
-        Self {
+        let cloned = Self {
             base: BoxBase::new(), // New unique ID for clone
             listener: Arc::clone(&self.listener),
             stream: Arc::clone(&self.stream),
             is_server: Arc::clone(&self.is_server),
             is_connected: Arc::clone(&self.is_connected),
-        }
+        };
+        let original_arc_ptr = Arc::as_ptr(&self.is_server) as usize;
+        let cloned_arc_ptr = Arc::as_ptr(&cloned.is_server) as usize;
+        let is_server_value = *self.is_server.lock().unwrap();
+        println!("🔄 SocketBox::clone() - original Box ID: {}, cloned Box ID: {}, Arc ptr: {:x} -> {:x}, is_server: {}", 
+                self.base.id, cloned.base.id, original_arc_ptr, cloned_arc_ptr, is_server_value);
+        cloned
     }
 }
 
 impl SocketBox {
     pub fn new() -> Self {
-        Self {
+        let instance = Self {
             base: BoxBase::new(),
             listener: Arc::new(Mutex::new(None)),
             stream: Arc::new(Mutex::new(None)),
             is_server: Arc::new(Mutex::new(false)),
             is_connected: Arc::new(Mutex::new(false)),
-        }
+        };
+        let arc_ptr = Arc::as_ptr(&instance.is_server) as usize;
+        println!("🔧 SocketBox::new() - created (Box ID: {}, Arc ptr: {:x})", instance.base.id, arc_ptr);
+        instance
     }
     
     /// TCP ソケットをアドレス・ポートにバインド
@@ -83,22 +92,31 @@ impl SocketBox {
         let port_str = port.to_string_box().value;
         
         let socket_addr = format!("{}:{}", addr_str, port_str);
+        println!("🔍 SocketBox::bind() called with address: {} (Box ID: {})", socket_addr, self.base.id);
         
         match TcpListener::bind(&socket_addr) {
             Ok(listener) => {
+                println!("✅ SocketBox::bind() - TcpListener created successfully (Box ID: {})", self.base.id);
                 match self.listener.lock() {
                     Ok(mut listener_guard) => {
                         *listener_guard = Some(listener);
+                        println!("✅ SocketBox::bind() - Listener stored successfully (Box ID: {})", self.base.id);
                     },
                     Err(_) => {
+                        println!("🚨 SocketBox::bind() - Failed to acquire listener lock (Box ID: {})", self.base.id);
                         return Box::new(BoolBox::new(false));
                     }
                 }
                 match self.is_server.lock() {
                     Ok(mut is_server_guard) => {
                         *is_server_guard = true;
+                        let arc_ptr = Arc::as_ptr(&self.is_server) as usize;
+                        // Verify the value was actually set
+                        let verify_value = *is_server_guard;
+                        println!("✅ SocketBox::bind() - is_server set to true (Box ID: {}, Arc ptr: {:x}, verify: {})", self.base.id, arc_ptr, verify_value);
                     },
                     Err(_) => {
+                        println!("🚨 SocketBox::bind() - Failed to acquire is_server lock (Box ID: {})", self.base.id);
                         // Non-critical error, continue
                     }
                 }
@@ -114,26 +132,36 @@ impl SocketBox {
     /// 指定した backlog で接続待機開始
     pub fn listen(&self, backlog: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let _backlog_num = backlog.to_string_box().value.parse::<i32>().unwrap_or(128);
+        println!("🔍 SocketBox::listen() called (Box ID: {})", self.base.id);
         
         // Check if listener exists and is properly bound
         let listener_guard = match self.listener.lock() {
             Ok(guard) => guard,
-            Err(_) => return Box::new(BoolBox::new(false)),
+            Err(_) => {
+                println!("🚨 SocketBox::listen() - Failed to acquire listener lock (Box ID: {})", self.base.id);
+                return Box::new(BoolBox::new(false));
+            },
         };
         
         if let Some(ref listener) = *listener_guard {
+            println!("✅ SocketBox::listen() - Listener found (Box ID: {})", self.base.id);
+            let arc_ptr = Arc::as_ptr(&self.is_server) as usize;
+            println!("🔍 SocketBox::listen() - Arc ptr: {:x}", arc_ptr);
             // Try to get the local address to confirm the listener is working
             match listener.local_addr() {
                 Ok(_addr) => {
+                    println!("✅ SocketBox::listen() - Listener is valid (Box ID: {})", self.base.id);
                     // Listener is properly set up and can accept connections
                     Box::new(BoolBox::new(true))
                 },
                 Err(_) => {
+                    println!("🚨 SocketBox::listen() - Listener exists but has issues (Box ID: {})", self.base.id);
                     // Listener exists but has issues
                     Box::new(BoolBox::new(false))
                 }
             }
         } else {
+            println!("🚨 SocketBox::listen() - No listener bound (Box ID: {})", self.base.id);
             // No listener bound - this is expected behavior for now
             // HTTPServerBox will handle binding separately
             Box::new(BoolBox::new(false))
@@ -314,7 +342,11 @@ impl SocketBox {
     
     /// サーバーモード確認
     pub fn is_server(&self) -> Box<dyn NyashBox> {
-        Box::new(BoolBox::new(*self.is_server.lock().unwrap()))
+        let is_server_value = *self.is_server.lock().unwrap();
+        let arc_ptr = Arc::as_ptr(&self.is_server) as usize;
+        println!("🔍 SocketBox::is_server() called - returning {} (Box ID: {}, Arc ptr: {:x})", 
+                is_server_value, self.base.id, arc_ptr);
+        Box::new(BoolBox::new(is_server_value))
     }
 }
 
