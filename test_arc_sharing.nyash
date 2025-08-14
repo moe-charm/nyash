@@ -1,0 +1,24 @@
+// Test Arc sharing issue
+static box Main {
+    main() {
+        print("🔬 Testing Arc sharing...")
+        
+        local socket1
+        socket1 = new SocketBox()
+        
+        local socket2  
+        socket2 = socket1  // This should clone
+        
+        print("Before bind - socket1.isServer(): " + socket1.isServer().toString())
+        print("Before bind - socket2.isServer(): " + socket2.isServer().toString())
+        
+        socket1.bind("127.0.0.1", 8080)
+        
+        print("After bind - socket1.isServer(): " + socket1.isServer().toString())
+        print("After bind - socket2.isServer(): " + socket2.isServer().toString())
+        
+        socket1.close()
+        
+        return true
+    }
+}

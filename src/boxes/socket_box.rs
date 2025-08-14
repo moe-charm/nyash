@@ -56,12 +56,18 @@ pub struct SocketBox {
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
+        // Read the current state values atomically
+        let current_is_server = *self.is_server.lock().unwrap();
+        let current_is_connected = *self.is_connected.lock().unwrap();
+        
+        // For listener and stream, we can't clone them, so we'll share them
+        // but create new Arc instances with the current state
         Self {
             base: BoxBase::new(), // New unique ID for clone
-            listener: Arc::clone(&self.listener),
-            stream: Arc::clone(&self.stream),
-            is_server: Arc::clone(&self.is_server),
-            is_connected: Arc::clone(&self.is_connected),
+            listener: Arc::clone(&self.listener),  // Share the same listener
+            stream: Arc::clone(&self.stream),      // Share the same stream  
+            is_server: Arc::new(Mutex::new(current_is_server)),     // New Arc with current value
+            is_connected: Arc::new(Mutex::new(current_is_connected)), // New Arc with current value
         }
     }
 }
@@ -314,7 +320,8 @@ impl SocketBox {
     
     /// サーバーモード確認
     pub fn is_server(&self) -> Box<dyn NyashBox> {
-        Box::new(BoolBox::new(*self.is_server.lock().unwrap()))
+        let is_server_value = *self.is_server.lock().unwrap();
+        Box::new(BoolBox::new(is_server_value))
     }
 }
 
