@@ -793,7 +793,84 @@ Timeline:
 - Week 4+: 他ライブラリBID追加、言語FFI生成の着手
 
 References:
-- docs/予定/native-plan/box_ffi_abi.md
+- docs/説明書/reference/box-design/ffi-abi-specification.md
+
+------------------------------------------------------------
+
+## 🔧 Phase 9.75: Box設計根本革命 - Arc<Mutex>責務一元化（緊急）
+
+Summary:
+- SocketBoxで発覚した「責務の二重化」問題を全Box型で根本解決
+- Box内部のArc<Mutex>を除去し、インタープリターが一元管理
+- Everything is Box哲学を守りながらシンプルで正しい設計へ
+
+Priority: Critical (Phase 9.7完了直後・9.8より優先)
+Expected Duration: 2-3週間
+GitHub Issue: #80
+
+### 問題分析
+**現状**: 15個のBox型が二重ロック構造
+```rust
+// 🚨 問題構造
+Box内部:          Arc<Mutex<データ>>      // 内部ロック
+インタープリター:  Arc<Mutex<Box>>        // 外部ロック
+→ デッドロック・状態不整合・デバッグ困難
+```
+
+### 技術的アプローチ
+**新設計**: 純粋データコンテナ + ロック責務一元化
+```rust
+// ✅ 解決策
+pub struct PlainSocketBox {
+    pub listener: Option<TcpListener>,
+    pub is_server: bool,  // Arc<Mutex>完全除去！
+}
+// インタープリターがArc<Mutex<dyn NyashBox>>で一元管理
+```
+
+### 実装計画
+- [ ] Phase A: 設計ガイドライン策定（3日）
+  - Box実装パターンドキュメント作成
+  - 内部Arc<Mutex>禁止ルール明文化
+  - 新Box実装時のテンプレート作成
+
+- [ ] Phase B: 最優先Box修正（1週間）
+  - SocketBox/HTTPServerBox（最も問題顕著）
+  - テストスイート作成（状態保持・並行アクセス）
+  - パフォーマンス計測
+
+- [ ] Phase C: ステートフルBox修正（1週間）
+  - ArrayBox, MapBox, FileBox
+  - P2PBox, IntentBox, StreamBox
+  - weak参照との整合性確認
+
+- [ ] Phase D: 残りのBox統一（3日）
+  - その他9個のBox型
+  - 全体統合テスト
+  - ベンチマーク確認
+
+### 🤖 Copilot協力期待
+- Arc<Mutex>除去の機械的リファクタリング
+- Clone実装の適切な修正
+- テストケース自動生成
+- 並行アクセステスト実装
+
+### 成功基準
+- [ ] 全Box型で内部Arc<Mutex>ゼロ
+- [ ] SocketBox状態保持テスト成功
+- [ ] デッドロック完全排除
+- [ ] パフォーマンス向上（ロック競合削減）
+- [ ] デバッグ容易性向上
+
+### 期待される効果
+- デッドロック・状態不整合の根絶
+- パフォーマンス向上（二重ロック除去）
+- コード可読性・保守性の大幅改善
+- 新Box実装時の混乱防止
+
+References:
+- GitHub Issue #80（SocketBox状態保持問題）
+- CURRENT_TASK.md（Gemini先生の根本原因分析）
 
 ------------------------------------------------------------
 
