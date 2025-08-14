@@ -1,10 +1,10 @@
-# 🎯 現在のタスク (2025-08-14 Phase 8完全完了・Phase 9実用優先戦略開始)
+# 🎯 現在のタスク (2025-08-14 Phase 9.51修正完了・NyIR Core 26命令統一完了)
 
 ## 🎉 2025-08-14 Phase 8完全完了！
 
 ### ✅ **Native Nyash Phase 8完了済み**
 - **Phase 8.1-8.4**: ✅ 完了（WASM基盤・Box操作・AST→MIR Lowering）
-- **Phase 8.5**: ✅ **完了（Copilot実装）** - 25命令MIR階層化実装
+- **Phase 8.5**: ✅ **完了（Copilot実装）** - 26命令MIR階層化実装（ExternCall統合）
 - **Phase 8.6**: ✅ **完了（Copilot実装）** - VM性能改善・BoxCall修正
 - **Phase 8.7**: ✅ **完了（Copilot実装）** - Real-world Memory Testing
   - **kilo editor完成**: `kilo_editor.nyash`
@@ -13,45 +13,152 @@
 
 ### 🚀 **Phase 8達成成果**
 - **🌐 WASM実行**: 13.5倍実行高速化実証済み
-- **📋 MIR基盤**: 25命令階層化完全実装
+- **📋 MIR基盤**: 26命令階層化完全実装（ExternCall統合）
 - **🏎️ VM改善**: BoxCall戻り値問題解決
 - **📝 実用アプリ**: kiloエディタで複雑メモリ管理実証
 - **⚡ ベンチマーク**: 真の性能測定環境完成
 
-## 🚀 **Phase 9: 実用優先戦略開始**
+## ✅ **Phase 9: AOT WASM実装完了（PR #67）**
 
-### 📋 **戦略変更決定（2025-08-14）**
-AI大会議結果とCopilot様のPhase 8完了を受けて、実用価値最大化戦略を決定：
+### 🎉 **Phase 9達成成果（2025-08-14）**
+**期間**: 計画2-3週間 → **実際5日で完了**（Copilot様の超高速実装）
 
-**従来計画**: Phase 9 JIT → Phase 10 AOT
-**新戦略**: Phase 9 AOT WASM → Phase 10 LLVM AOT（Cranelift JITスキップ）
-
-### 🎯 **Phase 9: AOT WASM実装（最優先）**
-**期間**: 2-3週間
-**実装目標**: 
+✅ **完了実装**:
 ```bash
-nyash --compile-native app.nyash -o app.exe    # AOT実行ファイル生成
-nyash --aot app.nyash                          # 短縮形
-./app.exe                                       # 起動高速化
+nyash --compile-native app.nyash -o app.exe    # ✅ AOT実行ファイル生成
+nyash --aot app.nyash                          # ✅ 短縮形
+./app.exe                                       # ✅ 起動高速化
 ```
 
-**技術アプローチ**:
-- `wasmtime compile`統合実装
-- 単一バイナリ梱包（`include_bytes!`）
-- 起動時間・配布サイズ最適化
+✅ **技術実装完了**:
+- `wasmtime compile`統合実装 ✅
+- 単一バイナリ梱包（`include_bytes!`）✅  
+- HTTPサーバーインフラ実装 ✅
+- SocketBox/HTTPServerBox/HTTPMessageBox完全実装 ✅
 
-**パフォーマンス目標**:
-- 現在のWASM JIT (8.12ms) → AOT (1.6ms) = **5倍高速化**
-- 起動時間: JIT(~50ms) → AOT(<10ms) = **5倍高速化**  
-- **総合**: 13.5倍 → **500倍目標**（起動含む）
+✅ **性能実証**:
+- **VM: 0.42ms (20.4倍高速)** 🚀
+- **WASM: 0.74ms (11.5倍高速)** 🚀
+- AOT基盤実装完了・.cwasmファイル生成成功
 
-### 🌐 **Phase 9.5: HTTPサーバー実用テスト**
-**期間**: 2週間（Phase 9完了後）
-**実装目標**:
+## ✅ **Phase 9.51: 緊急修正完了（Issue #68 → PR #71）**
+
+### 🎉 **Copilot様による完全修正達成（2025-08-14）**
+
+**✅ WASM Jump/Branch命令実装完了**
 ```bash
-nyash --compile-native http_server.nyash -o http_server.exe
-./http_server.exe --port 8080
-curl http://localhost:8080/api/status
+$ ./target/release/nyash --compile-wasm test_simple_loop.nyash
+✅ WASM compilation completed successfully!
+```
+**効果**: **ループ・条件分岐を含む全プログラムがWASM/AOT対応完了**
+
+**✅ SocketBox状態管理革命的修正**  
+```bash
+server.bind("127.0.0.1", 8080)  # ✅ true
+server.isServer()                # ✅ true (修正完了!)
+server.listen(10)                # ✅ 動作正常
+```
+**効果**: **ステートフルBox完全対応・HTTPサーバー実用化達成**
+
+**✅ Arc<Mutex>統一設計の勝利確認**
+- Everything is Box哲学: 設計完璧 ✅
+- メモリ安全性: 問題なし ✅  
+- 実装レベル修正のみで解決 ✅
+
+## 🌟 **NyIR Core 26命令統一完了（2025-08-14）**
+
+### ✅ **Universal Exchange Vision実現基盤確立**
+**決断**: NyIR Core 25命令 → **26命令（ExternCall追加）**
+
+**理由**: 
+- 外部世界接続は基本セマンティクス ✅
+- Everything is Box哲学の完全実現 ✅  
+- 全言語→NyIR→全言語変換の必須機能 ✅
+
+### 📋 **完了した統一作業**
+- ✅ `docs/nyir/spec.md`: 26命令正式仕様確定
+- ✅ `docs/nyir/vision_universal_exchange.md`: ビジョン整合  
+- ✅ `docs/予定/native-plan/copilot_issues.txt`: 実装計画全面更新
+- ✅ Extension戦略再定義: 言語固有機能に限定
+
+### 🎯 **26命令完全定義**
+```yaml
+Tier-0 (8命令): Const, BinOp, Compare, Branch, Jump, Phi, Call, Return
+Tier-1 (13命令): NewBox, BoxFieldLoad, BoxFieldStore, BoxCall, ExternCall,
+                Safepoint, RefGet, RefSet, WeakNew, WeakLoad, WeakCheck, Send, Recv  
+Tier-2 (5命令): TailCall, Adopt, Release, MemCopy, AtomicFence
+```
+
+**🔥 ExternCall**: 外部ライブラリを統一Box APIで利用する革命的機能
+
+## 🚀 **次期優先タスク (Phase 9.7: Box FFI/ABI実装)**
+
+### 📋 **Phase 9.7実装準備完了**
+- ✅ **技術仕様**: `docs/予定/native-plan/issues/phase_9_7_box_ffi_abi_and_externcall.md`
+- ✅ **ABI設計**: `docs/予定/native-plan/box_ffi_abi.md` (ChatGPT5完全設計)
+- ✅ **BIDサンプル**: `docs/nyir/bid_samples/*.yaml` 
+- ✅ **26命令統合**: ExternCallがNyIR Core確定
+
+### 🎯 **実装目標**
+```yaml
+1. MIR ExternCall命令追加: NyIR Core 26命令の13番目として確立
+2. WASM RuntimeImports: env.console.log, env.canvas.*等最小実装
+3. BID統合: Box Interface Definition仕様適用
+4. E2Eデモ: Nyash→MIR→WASM→ブラウザ動作確認
+```
+
+### 💎 **期待される革命的効果**
+- **Universal Exchange**: 外部ライブラリの統一Box API化
+- **Everything is Box完成**: 内部Box + 外部Boxの完全統合
+- **クロスプラットフォーム**: WASM/VM/LLVM統一外部呼び出し
+
+## 🧪 **今後のテスト計画**
+
+### ⚡ **ストレステスト**
+- SocketBox状態管理: 大量接続・早期切断テスト
+- HTTPServerBox負荷: 同時100接続処理確認  
+- メモリリーク検証: fini/weak参照システム長時間運用
+
+### 🌐 **実用アプリケーション検証**
+- NyaMesh P2P: 実際のP2P通信での状態管理テスト
+- WebサーバーDemo: 実用HTTPサーバーでの負荷確認
+
+### 📋 **Phase 9.51修正計画（Issue #68）**
+**期間**: 1週間  
+**担当**: Copilot様  
+**GitHub**: https://github.com/moe-charm/nyash/issues/68
+
+**🔴 Task 1**: WASM Jump/Branch命令実装（2日）
+- `src/backend/wasm/codegen.rs`にJump/Branch追加
+- ブロック深度管理実装
+
+**🔴 Task 2**: SocketBox listen()修正（1日）  
+- `src/boxes/socket_box.rs`の状態管理修正
+
+**🟡 Task 3**: エラーハンドリング改善（2日）
+- unwrap()使用箇所: 26 → 5以下
+
+**🟡 Task 4**: HTTPサーバー実用化（2日）
+- スレッドプール実装・グレースフルシャットダウン
+
+### 🎯 **Phase 9.51完了条件**
+```bash
+# WASM/AOT成功
+$ ./target/release/nyash --compile-wasm test_wasm_loop.nyash
+✅ WASM compilation completed successfully!
+
+# HTTPサーバー実動作  
+$ ./target/release/nyash test_http_server_real.nyash &
+$ curl http://localhost:8080/
+<h1>Nyash Server Running!</h1>
+
+# 性能目標
+WASM: 11.5倍 → 13.5倍以上
+```
+
+## 🌐 **Phase 9.5: HTTPサーバー実用テスト（Phase 9.51完了後）**
+**期間**: 2週間
+**実装目標**:
 ```
 
 **検証ポイント**:

@@ -1,0 +1,26 @@
+version: 0
+interfaces:
+  - name: env.canvas
+    box: Canvas
+    methods:
+      - name: fillRect
+        params:
+          - { string: canvas_id }
+          - { i32: x }
+          - { i32: y }
+          - { i32: w }
+          - { i32: h }
+          - { string: color }
+        returns: void
+        effect: io
+
+      - name: fillText
+        params:
+          - { string: canvas_id }
+          - { string: text }
+          - { i32: x }
+          - { i32: y }
+          - { string: font }
+          - { string: color }
+        returns: void
+        effect: io

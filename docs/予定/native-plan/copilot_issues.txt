@@ -30,25 +30,25 @@ Status: ✅ 完了 (Copilot PR #56マージ済み)
 
 ================================================================================
 
-## 🔧 Phase 8.5: MIR 25命令階層化（最優先）
+## 🔧 Phase 8.5: MIR 26命令階層化（最優先）
 Status: ⭐ **CRITICAL** 
 Priority: **最重要** (Phase 8.4完了直後の次期目標)
 
 ### 🎯 実装目標
-ChatGPT5 + AI大会議決定版25命令MIR実装
+ChatGPT5 + AI大会議決定版26命令MIR実装（ExternCall追加）
 - 期間: 3週間
 - 効果: VM/WASM問題根本解決
 - 詳細仕様: `/docs/予定/native-plan/issues/phase_8_5_mir_25_instruction_specification.md`
 
-### 📋 25命令セマンティック階層化
+### 📋 26命令セマンティック階層化
 **Tier-0: 普遍コア（8命令）**
 ```mir
 Const, BinOp, Compare, Branch, Jump, Phi, Call, Return
 ```
 
-**Tier-1: Nyashセマンティクス（12命令）**
+**Tier-1: Nyashセマンティクス（13命令）**
 ```mir
-NewBox, BoxFieldLoad, BoxFieldStore, BoxCall, Safepoint,
+NewBox, BoxFieldLoad, BoxFieldStore, BoxCall, ExternCall, Safepoint,
 RefGet, RefSet, WeakNew, WeakLoad, WeakCheck, Send, Recv
 ```
 
@@ -357,9 +357,9 @@ Expected Duration: 1週間
 ## 🧠 Phase 8.5: MIRセマンティック階層化（AI大会議決定版）
 
 Summary:
-- 方針転換: ChatGPT5の20命令intrinsic戦略 → Gemini+Codex一致推奨の25命令階層化
+- 方針転換: ChatGPT5の20命令intrinsic戦略 → Gemini+Codex一致推奨の26命令階層化（ExternCall追加）
 - 理由: JIT/AOT最適化阻害・Everything is Box意味喪失・長期コスト増の問題判明
-- 二相ロワリング: 25命令維持パス（VM/JIT/AOT）+ 20+intrinsic降格パス（WASM/最小実装）
+- 二相ロワリング: 26命令維持パス（VM/JIT/AOT）+ 21+intrinsic降格パス（WASM/最小実装）
 
 Priority: High (Phase 8.4完了後)
 Expected Duration: 3週間
@@ -373,18 +373,19 @@ Expected Duration: 3週間
 - 実装コスト: 5命令追加で10-20人日（intrinsic戦略より安い）
 - マイクロベンチ実測でパフォーマンス検証
 
-### 確定版MIR（25命令）- ChatGPT5完全仕様
+### 確定版MIR（26命令）- ChatGPT5完全仕様 + ExternCall統合
 **Tier-0: 普遍的コア（8命令）**
 ```mir
 Const, BinOp, Compare, Branch, Jump, Phi, Call, Return
 ```
 
-**Tier-1: Nyashセマンティクス（12命令）**
+**Tier-1: Nyashセマンティクス（13命令）**
 ```mir
 NewBox,        // 強所有のBox生成（所有森のノード）
 BoxFieldLoad,  // Boxのフィールド読み（Everything is Box核心）
 BoxFieldStore, // Boxのフィールド書き（mut効果）
 BoxCall,       // Boxのメソッド呼び出し（動的/静的両方）
+ExternCall,    // 外部ライブラリをBoxとして呼び出し（Universal Exchange）
 Safepoint,     // 分割finiや割込み許可ポイント
 RefGet,        // 参照（強/弱を問わず）を値として取得
 RefSet,        // 参照の差し替え（所有規則検証付き）
@@ -405,16 +406,16 @@ AtomicFence    // 並行時の順序保証（Actor/Port境界で使用）
 ```
 
 ### 二相ロワリング戦略
-- パスA: VM/JIT/AOT向け（25命令のまま最適化）
-- パスB: WASM/最小実装向け（25→20+intrinsic降格）
+- パスA: VM/JIT/AOT向け（26命令のまま最適化）
+- パスB: WASM/最小実装向け（26→21+intrinsic降格）
 - バックエンド能力に応じて最適形式選択
 
-### 効果（Effect）システム（ChatGPT5設計）
+### 効果（Effect）システム（ChatGPT5設計 + ExternCall統合）
 - **pure**: Const, BinOp, Compare, Phi, RefGet, WeakNew, WeakLoad, WeakCheck
 - **mut**: BoxFieldStore, RefSet, Adopt, Release, MemCopy
 - **io**: Send, Recv, Safepoint, AtomicFence
 - **control**: Branch, Jump, Return, TailCall
-- **context依存**: Call, BoxCall（呼び先効果に従属）
+- **context依存**: Call, BoxCall, ExternCall（呼び先効果に従属・BID定義に基づく）
 
 **最適化ルール**: 「pure同士の再順序化OK」「mutは同一Box/同一Fieldで依存保持」「ioは再順序化禁止」
 
@@ -433,15 +434,15 @@ AtomicFence    // 並行時の順序保証（Actor/Port境界で使用）
 - **二相ロワリング**: 25命令維持パス + 20+intrinsic降格パス構築
 
 ### 成功基準
-- [ ] **25命令完全実装**: ChatGPT5仕様の完璧な実装
+- [ ] **26命令完全実装**: ChatGPT5仕様 + ExternCall統合の完璧な実装
 - [ ] **効果システム動作**: pure再順序化・mut依存保持・io順序保証
 - [ ] **Verifier動作**: 所有森・strong循環・安全性検証
 - [ ] **Golden MIRテスト**: 全バックエンドでMIR一致
 - [ ] **行動一致テスト**: 同入力→同出力（weak失効時null/false含む）
 - [ ] **性能要件**: VM≥Interpreter、WASM≥VM継続検証
 
-### バックエンド指針（ChatGPT5設計）
-- **Interpreter**: 25命令を素直に実装（正しさの基準）
+### バックエンド指針（ChatGPT5設計 + ExternCall統合）
+- **Interpreter**: 26命令を素直に実装（正しさの基準）
 - **VM**: Register-VM + direct-threading。Send/Recvはローカル判定時にインライン化
 - **WASM**: Send/Recvはhost import。MemCopyはmemory.copyに対応
 - **JIT（将来）**: TailCall最適化、WeakLoadは世代タグでO(1)生存チェック
@@ -579,6 +580,71 @@ Expected Duration: 2-3週間
 
 ------------------------------------------------------------
 
+## 🔴 Phase 9.51: WASM Jump/Branch実装とHTTPサーバー実用化 **【緊急修正】**
+
+Status: 🔴 **Critical Issue**（Phase 9実用化ブロッカー）
+Summary:
+- Phase 9 (PR #67) 完了後に判明した重大制約の修正
+- WASM/AOT実用化の最終仕上げ
+
+### 🚨 現在の問題（実用化を阻害）
+
+1. **WASM/AOT コンパイルエラー（最重要）**
+   ```bash
+   $ ./target/release/nyash --compile-wasm test_simple_loop.nyash
+   ❌ Unsupported instruction: Jump { target: BasicBlockId(1) }
+   ```
+   **影響**: ループ・条件分岐を含む全プログラムがWASM/AOT化不可
+
+2. **HTTPServerBox listen()常に失敗**  
+   - server.bind() ✅, server.listen() ❌ always false
+   **影響**: HTTPサーバーが実際には動作しない
+
+3. **エラーハンドリング脆弱性**
+   - unwrap()使用箇所: 26箇所 → パニック多発リスク
+
+### Scope/Tasks:
+**🔴 Task 1**: WASM Jump/Branch命令実装（2日）
+- `src/backend/wasm/codegen.rs`にJump/Branch追加
+- ブロック深度管理（`get_block_depth`メソッド）
+- ループ構造のblock/loop/end生成
+
+**🔴 Task 2**: SocketBox listen()修正（1日）  
+- `src/boxes/socket_box.rs`の実装修正
+- SocketStatus::Listening状態管理
+
+**🟡 Task 3**: エラーハンドリング改善（2日）
+- HTTPServerBox/SocketBoxのunwrap()除去
+- Result<T,E>ベースのエラー処理
+
+**🟡 Task 4**: HTTPサーバー実用化（2日）
+- スレッドプール実装（固定サイズワーカー）
+- グレースフルシャットダウン
+
+Acceptance Criteria:
+- ✅ `nyash --compile-wasm test_loop.nyash` 成功
+- ✅ HTTPサーバー実動作（curl http://localhost:8080/）
+- ✅ unwrap()使用箇所: 26 → 5以下
+- ✅ WASM性能: 11.5倍 → 13.5倍達成
+
+Priority: **🔴 Critical** (Phase 9.5開始前の必須修正)
+Expected Duration: 1週間
+
+### 詳細設計・実装指示
+📋 **完全実装ガイド**: `docs/予定/native-plan/issues/phase9_51_wasm_jump_http_fixes.md`
+
+🤖 **Copilot協力依頼**:
+- WASM br/br_if命令実装
+- HTTPサーバーリファクタリング  
+- エラーハンドリング統一
+
+### 期待される効果
+- **実用性達成**: ループ・HTTPサーバーのWASM/AOT化
+- **安定性向上**: パニックフリーな実装
+- **Phase 9.5準備**: 複雑アプリケーションテストの基盤確立
+
+------------------------------------------------------------
+
 ## 🌐 Phase 9.5: HTTPサーバー実用テスト（AOT検証）
 
 Summary:
@@ -681,6 +747,213 @@ Expected Duration: 4-6ヶ月
 - 言語完成後の付加価値機能
 
 ------------------------------------------------------------
+
+## 🔭 Phase 9.7: Box FFI/ABI基盤 + MIR ExternCall 追加（RuntimeImports対応）
+
+Summary:
+- 「あらゆるライブラリを箱に」を実現するための共通ABI（Box FFI/ABI）とBID（Box Interface Definition）を策定。
+- MIRに `ExternCall` 命令を導入し、WASM/VM/言語出力で外部Box APIを一貫呼び出しできる基盤を整える。
+- WASM向けには RuntimeImports をABI準拠で拡張（console/canvasの最小セットから）。
+
+Why:
+- nyashがRustに依存せずnyasuをビルドできるように（実行時は純WASM＋ホストimport）。
+- MIR→任意言語出力時に、外部ライブラリ（=Box API）をBID→各言語FFIへ写像しやすくする。
+- Everything is BoxのAPI設計を、外部ライブラリにも一貫適用。
+
+Scope/Tasks:
+- [ ] 1) ABI/BIDの策定（最優先）
+  - 型: i32/i64/f32/f64/string(ptr,len)/bool/boxref/array、null/void
+  - 呼出規約: 名前解決（namespace.box.method）、エラー/例外、同期/非同期
+  - 効果: pure/mut/io/control（MIR効果と整合）
+  - 成果物: `docs/予定/native-plan/box_ffi_abi.md`、BIDサンプル（console/canvas）
+- [ ] 2) MIR拡張: `ExternCall`
+  - 命令: `ExternCall(dst, iface_name, method_name, args[])`
+  - Verifier: BIDと型/効果の整合、最適化（pure再順序化/ mut依存）維持
+  - Lowering: 既存のBoxCall/Field opsとの橋渡し
+- [ ] 3) WASM RuntimeImports（ABI準拠）
+  - import群: `env.console.log(ptr,len)`, `env.canvas.fillRect(...)`, `env.canvas.fillText(...)`
+  - Host(JS): importObject実装（DOM解決→Canvas/Console呼び出し）
+- [ ] 4) コード生成: ExternCall→バックエンド写像
+  - WASM: import呼び出し（線形メモリから文字列復元）
+  - VM: ホスト関数テーブルでスタブ実装（最小はログ/ダミー）
+  - 言語出力: TypeScript/Python/Rust等へのFFI雛形（後続）
+- [ ] 5) E2Eデモ
+  - Nyash→MIR(ExternCall)→WASM→ブラウザ（console/canvas）
+
+Acceptance Criteria:
+- `docs/予定/native-plan/box_ffi_abi.md` 初版＋BIDサンプル（console/canvas）が存在
+- MIRに `ExternCall` が追加され、WASMコード生成で import 呼び出しが生成される
+- ブラウザで「直接WASM出力」→Canvas描画/Console出力が成功
+- 既存PlaygroundAPIとABI経由APIが概ね一致
+
+Timeline:
+- Week 1: ABI/BID仕様初版＋MIR `ExternCall` 雛形
+- Week 2: WASM RuntimeImports最小（console/canvas）＋E2Eデモ
+- Week 3: Verifier効果整合＋WASMコード生成の安定化
+- Week 4+: 他ライブラリBID追加、言語FFI生成の着手
+
+References:
+- docs/予定/native-plan/box_ffi_abi.md
+
+------------------------------------------------------------
+
+## 📦 Phase 9.8: BIDレジストリ + 自動コード生成ツール（WASM/VM/LLVM/言語）
+
+Summary:
+- BIDレジストリと、BID→各ターゲットのスタブ生成（import/extern宣言）を自動化。
+
+Scope/Tasks:
+- BIDレジストリ仕様（署名・効果・バージョン・依存関係）
+- 生成: WASM(importObject), VM(関数テーブル), LLVM(declare), TS/Python(RTEラッパ)
+- CLI: `nyash bid gen --target wasm|vm|llvm|ts|py bid.yaml`
+
+Acceptance:
+- console/canvasのBIDから各ターゲットの骨子が自動生成される
+
+------------------------------------------------------------
+
+## 🔒 Phase 9.9: ExternCall 権限/ケイパビリティモデル（Sandbox/Allowlist）
+
+Summary:
+- 外部API呼び出しの安全化。BIDに必要権限を宣言し、ホスト側で許可/拒否。WASMはimport allowlist、VM/LLVMは関数テーブルで制御。
+
+Scope/Tasks:
+- 権限種別（console, canvas, storage, net, audio...）とポリシー
+- 実行時プロンプト/設定ファイル/環境変数での許可
+- 失権時の挙動（明示エラー）
+
+Acceptance:
+- 禁止権限のExternCallが実行時にブロックされ、明確なエラーが返る
+
+------------------------------------------------------------
+
+## 🧱 Phase 9.10: NyIR（公開IR）仕様化 + フォーマット + 検証器
+
+Summary:
+- 26命令MIRを公開IR（NyIR v1）として基本セマンティクス凍結。バージョニング、バイナリ`.nybc`/テキスト`.nyir`、厳格検証器を用意。
+
+Scope/Tasks:
+- docs/nyir/spec.md（Core＋Ext骨子）
+- nyir-parser/nyir-serializer（.nyir/.nybc）
+- Verifier: 所有森/weak/効果/Bus整合
+- ツール: `nyashel -S`, `nyir-run`
+
+Acceptance:
+- 代表サンプルがNyIRで保存・検証・実行可能
+
+References:
+- docs/nyir/spec.md
+- docs/予定/native-plan/issues/phase_9_10_nyir_spec.md
+
+------------------------------------------------------------
+
+## 🧪 Phase 9.11: Golden NyIR + Differential 実行テスト（CI）
+
+Summary:
+- NyIRダンプをゴールデンとし、interp/vm/wasm/jitの出力一致をCIで検証。
+
+Scope/Tasks:
+- golden/*.nyir の整備
+- CIで各バックエンド実行→結果一致チェック
+
+Acceptance:
+- 主要サンプルで全バックエンド一致
+
+------------------------------------------------------------
+
+## 🧰 Phase 10.0: LLVM Backend Skeleton（MIR→LLVM IR AOT 最小実装）
+
+Summary:
+- MIRからLLVM IRへの直接変換と最小AOTパイプライン。ExternCallはprintf等へ写像しデモ可能に。
+
+Implementation Steps（要約）
+1) `src/backend/llvm/` 追加（mod.rs/lower.rs/passes.rs/build.rs）
+2) 依存: Cargoへ`llvm-sys`（feature化）、ビルド要件整備
+3) `LLVMBackend::compile_mir`（lower→passes→emit object）
+4) `main`: i32()、voidは0に正規化
+5) 型写像: i32/i64/f32/f64/bool, 文字列は(i8*,i32)、Box参照はi32 or i8*
+6) 命令: Const/BinOp/Compare/Branch/Jump/Phi/Call/Return ほか基本
+7) ExternCall: console.log(ptr,len)→printf("%.*s",len,ptr)、canvasはnoop/ログ
+8) 文字列定数: @.str + getelementptr
+9) 出力: TargetMachineで.o生成、`clang app.o -o app`
+10) CLI: `--backend llvm --emit obj`
+11) 最小テスト: 四則/分岐/ループ/ExternCall出力
+
+References:
+- docs/予定/native-plan/issues/phase_10_x_llvm_backend_skeleton.md
+
+------------------------------------------------------------
+
+## 🧰 Phase 10.1: LLVM 外部関数マッピング方針（プラットフォーム抽象）
+
+Summary:
+- ExternCallのFQN→ネイティブ関数（printf等）への写像レイヤーと、OS差の抽象。初手はLinux/clang、他OSは後続。
+
+Scope/Tasks:
+- env.console.log → printfテンプレート、他は段階的拡張
+- プラットフォーム切替（feature）とリンク方針
+
+Acceptance:
+- 代表ExternCall（console.log）がAOTバイナリで出力可能
+
+------------------------------------------------------------
+
+## 🧩 Phase 10.2: Host API層（C-ABI `ny_host_*` / WASM `nyir_host`）
+
+Summary:
+- Rust依存を薄い宿主APIへ集約。C-ABI公開（ファイル/メモリ/時間等）、WASMは`nyir_host` importで提供。
+
+Scope/Tasks:
+- `ny_host_*`関数群（read_file/free/clockなど）をC-ABIで実装
+- Nyash側extern宣言と所有移管`*_from_raw`/`*_into_raw`
+- WASM: import `nyir_host` 名前空間で最低限の関数提供
+
+Acceptance:
+- 代表I/OがHost API経由で動作し、Rust実装置換が容易
+
+------------------------------------------------------------
+
+## 🧱 Phase 10.3: ランタイム層の切り分け（corelang/rt/sys/std）
+
+Summary:
+- corelang（純Nyash）, rt（Box ABI/所有/weak/Safepoint/Bus）, sys（プラットフォーム）, std（Nyash実装）に整理。
+
+Scope/Tasks:
+- ドキュメント化＋最小コードの配置替えスケルトン
+
+Acceptance:
+- 層構造が明文化され、新規実装がガイドに従って進められる
+
+------------------------------------------------------------
+
+## 🧬 Phase 10.4: Box ABI（fat ptr）とLLVM属性（Effects）
+
+Summary:
+- Boxのfat pointer（data*, typeid, flags）の定義、Weakの世代タグ、SafepointのLLVM降ろし、Effect→LLVM属性（readonly/readnone等）。
+
+Scope/Tasks:
+- LLVM IR側のstruct宣言・属性付与の雛形
+
+Acceptance:
+- 代表関数で属性が付与され、最適化に寄与（noalias/argmemonly等は可能な範囲で）
+
+------------------------------------------------------------
+
+## 📚 Phase 10.5: コア標準（String/Array/Map）Nyash実装（Rust依存の段階的削減）
+
+Summary:
+- 現在Rust実装に依存している基本コンテナ（String/Array/Map）を、rt/sys層を活用してNyash実装に置換。
+
+Scope/Tasks:
+- String: {ptr,len,cap}, new/push_str/substr/len、`ny_host_alloc/realloc/free`
+- Array<T>: {ptr,len,cap}, push/get/set/len/reserve、要素fini
+- Map<K,V>: 簡易hash、set/get/remove/len、所有規則順守
+
+Acceptance:
+- 代表サンプルでString/Array/MapがNyash実装で動作し、Rust実装をリンクせずに通る
+
+References:
+- docs/予定/native-plan/issues/phase_10_5_core_std_nyash_impl.md
 
 ## Phase 11-14: Infrastructure & Polish
 
@@ -812,7 +1085,7 @@ Acceptance Criteria:
 🏆 Box操作ベンチマーク追加
 🏆 メモリレイアウト最適化効果測定
 🏆 オブジェクト指向プログラミングWASM対応
-🏆 25命令MIR階層化完了（Phase 8.5）
+🏆 26命令MIR階層化完了（Phase 8.5）
 🏆 VM性能改善完了（Phase 8.6）
 
 ## Phase 9-10実用優先展望

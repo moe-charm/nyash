@@ -1,0 +1,10 @@
+version: 0
+interfaces:
+  - name: env.console
+    box: Console
+    methods:
+      - name: log
+        params:
+          - { string: msg }
+        returns: void
+        effect: io
