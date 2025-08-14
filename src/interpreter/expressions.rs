@@ -51,7 +51,8 @@ impl NyashInterpreter {
             }
             
             ASTNode::FieldAccess { object, field, .. } => {
-                self.execute_field_access(object, field)
+                let shared_result = self.execute_field_access(object, field)?;
+                Ok((*shared_result).clone_box())  // Convert Arc to Box for external interface
             }
             
             ASTNode::New { class, arguments, type_arguments, .. } => {
@@ -672,7 +673,7 @@ impl NyashInterpreter {
     
     /// フィールドアクセスを実行 - Field access processing with weak reference support
     pub(super) fn execute_field_access(&mut self, object: &ASTNode, field: &str) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        -> Result<SharedNyashBox, RuntimeError> {
         
         // 🔥 Static Boxアクセスチェック
         if let ASTNode::Variable { name, .. } = object {
@@ -734,8 +735,8 @@ impl NyashInterpreter {
                 }
             }
             
-            // Normal field access - convert Arc back to Box for compatibility
-            Ok((*field_value).clone_box())
+            // Return the shared Arc reference directly
+            Ok(field_value)
         } else {
             Err(RuntimeError::TypeError {
                 message: format!("Cannot access field '{}' on non-instance type. Type: {}", field, obj_value.type_name()),
