@@ -360,6 +360,16 @@ impl MirPrinter {
             MirInstruction::Await { dst, future } => {
                 format!("{} = await {}", dst, future)
             },
+            
+            // Phase 9.7: External Function Calls
+            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects } => {
+                let args_str = args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", ");
+                if let Some(dst) = dst {
+                    format!("{} = extern_call {}.{}({}) [effects: {}]", dst, iface_name, method_name, args_str, effects)
+                } else {
+                    format!("extern_call {}.{}({}) [effects: {}]", iface_name, method_name, args_str, effects)
+                }
+            },
         }
     }
     

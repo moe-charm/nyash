@@ -1,0 +1,9 @@
+# Simple test without external calls
+static box Main {
+    init { result }
+    
+    main() {
+        me.result = "Simple test"
+        return me.result
+    }
+}

@@ -553,6 +553,37 @@ impl VM {
                     Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
                 }
             },
+            
+            // Phase 9.7: External Function Calls  
+            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
+                // For VM backend, we implement a stub that logs the call
+                // Real implementation would route to native host functions
+                let arg_values: Result<Vec<_>, _> = args.iter().map(|id| self.get_value(*id)).collect();
+                let arg_values = arg_values?;
+                
+                println!("ExternCall: {}.{}({:?})", iface_name, method_name, arg_values);
+                
+                // For console.log, print the message
+                if iface_name == "env.console" && method_name == "log" {
+                    for arg in &arg_values {
+                        if let VMValue::String(s) = arg {
+                            println!("Console: {}", s);
+                        }
+                    }
+                }
+                
+                // For canvas operations, just log them for now
+                if iface_name == "env.canvas" {
+                    println!("Canvas operation: {}", method_name);
+                }
+                
+                // Store void result if destination is provided
+                if let Some(dst) = dst {
+                    self.values.insert(*dst, VMValue::Void);
+                }
+                
+                Ok(ControlFlow::Continue)
+            },
         }
     }
     
