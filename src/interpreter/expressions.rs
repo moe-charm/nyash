@@ -226,23 +226,9 @@ impl NyashInterpreter {
         match op {
             BinaryOperator::Add => {
                 // 🚀 Direct trait-based operator resolution (temporary workaround)
-                // Try concrete types first
-                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
-                    if let Some(result) = int_box.try_add(right_val.as_ref()) {
-                        return Ok(result);
-                    }
-                }
-                
-                if let Some(str_box) = left_val.as_any().downcast_ref::<StringBox>() {
-                    if let Some(result) = str_box.try_add(right_val.as_ref()) {
-                        return Ok(result);
-                    }
-                }
-                
-                if let Some(bool_box) = left_val.as_any().downcast_ref::<BoolBox>() {
-                    if let Some(result) = bool_box.try_add(right_val.as_ref()) {
-                        return Ok(result);
-                    }
+                // Use helper function instead of trait methods
+                if let Some(result) = try_add_operation(left_val.as_ref(), right_val.as_ref()) {
+                    return Ok(result);
                 }
                 
                 Err(RuntimeError::InvalidOperation { 
@@ -282,11 +268,9 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Subtract => {
-                // 🚀 Direct trait-based subtraction (temporary workaround)
-                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
-                    if let Some(result) = int_box.try_sub(right_val.as_ref()) {
-                        return Ok(result);
-                    }
+                // Use helper function instead of trait methods
+                if let Some(result) = try_sub_operation(left_val.as_ref(), right_val.as_ref()) {
+                    return Ok(result);
                 }
                 
                 Err(RuntimeError::InvalidOperation { 
@@ -296,17 +280,9 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Multiply => {
-                // 🚀 Direct trait-based multiplication (temporary workaround)
-                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
-                    if let Some(result) = int_box.try_mul(right_val.as_ref()) {
-                        return Ok(result);
-                    }
-                }
-                
-                if let Some(str_box) = left_val.as_any().downcast_ref::<StringBox>() {
-                    if let Some(result) = str_box.try_mul(right_val.as_ref()) {
-                        return Ok(result);
-                    }
+                // Use helper function instead of trait methods
+                if let Some(result) = try_mul_operation(left_val.as_ref(), right_val.as_ref()) {
+                    return Ok(result);
                 }
                 
                 Err(RuntimeError::InvalidOperation { 
@@ -316,21 +292,13 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Divide => {
-                // 🚀 Direct trait-based division (temporary workaround)
-                if let Some(int_box) = left_val.as_any().downcast_ref::<IntegerBox>() {
-                    if let Some(result) = int_box.try_div(right_val.as_ref()) {
-                        return Ok(result);
-                    } else {
-                        return Err(RuntimeError::InvalidOperation { 
-                            message: "Division by zero".to_string() 
-                        });
-                    }
+                // Use helper function instead of trait methods
+                match try_div_operation(left_val.as_ref(), right_val.as_ref()) {
+                    Ok(result) => Ok(result),
+                    Err(error_msg) => Err(RuntimeError::InvalidOperation { 
+                        message: error_msg 
+                    })
                 }
-                
-                Err(RuntimeError::InvalidOperation { 
-                    message: format!("Division not supported between {} and {}", 
-                                   left_val.type_name(), right_val.type_name()) 
-                })
             }
             
             BinaryOperator::Less => {
