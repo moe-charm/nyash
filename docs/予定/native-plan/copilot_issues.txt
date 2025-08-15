@@ -748,6 +748,125 @@ Expected Duration: 4-6ヶ月
 
 ------------------------------------------------------------
 
+## 🌐 Phase 9.6: WASM独自実装 - wasmtime依存完全排除（緊急）
+
+Summary:
+- wasmtime依存による互換性問題・BoxCall未実装を根本解決する独自WASM実装
+- Pure WAT Generation による軽量・高性能・依存関係フリーなWASM生成
+
+Priority: **Critical** (Phase 9.5完了後・9.7より先行)
+Expected Duration: 2週間
+GitHub Issue: 予定
+
+### 🚨 現在のwasmtime依存問題
+**バージョン互換性問題**:
+```toml
+# 現在の問題
+wasmtime = "18.0"    # Nyash内部
+wasmtime = "35.0.0"  # システム環境
+# → 完全に動作不可
+```
+
+**機能不完全問題**:
+- ❌ **BoxCall命令未実装**: `toString()`, `print()`等が全て使用不可
+- ❌ **ExternCall未実装**: ブラウザーAPI連携不可
+- ❌ **WASM出力エラー**: WAT→WASM変換でUTF-8エラー
+
+### 🎯 独自実装アプローチ
+**Pure WAT Generation Engine**:
+```rust
+// wasmtime完全排除の独自実装
+struct PureWatGenerator {
+    // wasmtimeなし！純粋なWAT文字列生成
+}
+
+impl PureWatGenerator {
+    fn generate_box_call(&mut self, method: &str) -> String {
+        match method {
+            "toString" => "(call $box_to_string (local.get $box_ptr))",
+            "print" => "(call $print_function (local.get $value))",
+            // 独自実装でwasmtime不要
+        }
+    }
+    
+    fn generate_extern_call(&mut self, interface: &str, method: &str) -> String {
+        match interface {
+            "console" => format!("(call $env_console_{} ...)", method),
+            "canvas" => format!("(call $env_canvas_{} ...)", method),
+            // ブラウザーAPI直接連携
+        }
+    }
+}
+```
+
+### 📋 実装計画
+
+#### Phase 1: Pure WAT Generator基盤（1週間）
+**🔴 Task 1**: wasmtime排除・純粋WAT生成（3日）
+- `src/backend/wasm/pure_wat.rs`: 独自WAT生成エンジン
+- `wabt` crateのみでWASM生成（wasmtime除去）
+- 軽量・高速・依存関係最小化
+
+**🔴 Task 2**: BoxCall独自実装（2日）
+- `toString()`, `equals()`, `clone()` 基本メソッド
+- `StringBox.length()`, `ArrayBox.push()` 等
+- MIR BoxCall → Pure WAT変換
+
+**🔴 Task 3**: ExternCall独自実装（2日）
+- `console.log()`, `canvas.fillRect()` ブラウザーAPI
+- import declaration自動生成
+- ホスト側JavaScript連携
+
+#### Phase 2: 互換性・性能最適化（1週間）
+**🟡 Task 4**: メモリ管理最適化（3日）
+- Box layouts効率化
+- ガベージコレクション最適化
+- メモリ断片化対策
+
+**🟡 Task 5**: 統合テスト・検証（2日）
+- 既存WASMテスト全通過
+- ブラウザー実行検証
+- 性能ベンチマーク
+
+**🟡 Task 6**: CLI統合・移行（2日）
+- `--compile-wasm` 独自実装切り替え
+- 旧実装との後方互換性
+- エラーメッセージ改善
+
+### 🤖 Copilot協力期待
+- Pure WAT生成ロジックの効率実装
+- BoxCall/ExternCall命令の完全対応
+- wasmtime除去に伴うリファクタリング
+- ブラウザー連携テストの自動化
+
+### 成功基準
+- [ ] **wasmtime依存完全排除**: Cargo.tomlからwasmtime除去
+- [ ] **BoxCall完全実装**: 全基本メソッドがWASM実行
+- [ ] **ExternCall動作**: ブラウザーAPIが正常動作
+- [ ] **互換性問題解決**: バージョン非依存WASM生成
+- [ ] **性能向上**: Pure WAT生成による高速化
+- [ ] **軽量化**: 依存関係削減によるビルドサイズ削減
+
+### 期待される効果
+**技術的効果**:
+- **依存関係激減**: `wasmtime` → 不要
+- **互換性問題解決**: バージョン依存完全排除
+- **性能向上**: 軽量・直接的WASM生成
+- **制御完全掌握**: 独自実装による完全制御
+
+**戦略的効果**:
+- **独立性確保**: 外部ランタイム依存なし
+- **Everything is Box哲学実現**: 純粋な実装
+- **メンテナンス容易**: シンプルなアーキテクチャ
+- **将来拡張性**: 独自最適化の基盤確立
+
+### References
+- docs/予定/wasm/current_issues.md（現在の問題分析）
+- docs/予定/wasm/compatibility_matrix.md（wasmtime互換性問題）
+- 調査結果: WASM二重実装方式の分析結果
+
+------------------------------------------------------------
+
 ## 🔭 Phase 9.7: Box FFI/ABI基盤 + MIR ExternCall 追加（RuntimeImports対応）
 
 Summary:
