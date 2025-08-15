@@ -1090,7 +1090,6 @@ impl NyashInterpreter {
         // 🔥 Phase 8.8: pack透明化システム - ビルトイン自動呼び出し (先行チェック)
         if is_builtin && method == parent {
             // 透明化: `from StringBox()` → 内部的にビルトインBox作成・統合
-            eprintln!("🔥 DEBUG: Pack transparency activated! {} -> {}", parent, method);
             drop(box_declarations); // ロック解放
             return self.execute_builtin_constructor_call(parent, current_instance_val.clone_box(), arguments);
         }
@@ -1098,7 +1097,6 @@ impl NyashInterpreter {
         if is_builtin {
             // ビルトインBoxの場合、ロックを解放してからメソッド呼び出し
             drop(box_declarations);
-            eprintln!("🔥 DEBUG: Builtin box method call: {} -> {}", parent, method);
             return self.execute_builtin_box_method(parent, method, current_instance_val.clone_box(), arguments);
         }
         
@@ -1300,6 +1298,28 @@ impl NyashInterpreter {
                 };
                 
                 let integer_box = IntegerBox::new(value);
+                Ok(Box::new(VoidBox::new()))
+            }
+            "MathBox" => {
+                // MathBoxは引数なしのコンストラクタ
+                if arg_values.len() != 0 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("MathBox constructor expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                
+                let math_box = MathBox::new();
+                Ok(Box::new(VoidBox::new()))
+            }
+            "ArrayBox" => {
+                // ArrayBoxも引数なしのコンストラクタ
+                if arg_values.len() != 0 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("ArrayBox constructor expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                
+                let array_box = ArrayBox::new();
                 Ok(Box::new(VoidBox::new()))
             }
             _ => {
