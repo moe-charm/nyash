@@ -1,0 +1,91 @@
+# 🧪 SocketBox Edge Cases Test - Phase 9.75
+# Tests edge cases and regression scenarios
+
+static box SocketBoxEdgeCaseTest {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 Starting SocketBox Edge Cases Tests")
+        
+        # Edge case tests
+        me.testCloneBehavior()
+        me.testRapidStateChanges()
+        me.testErrorHandling()
+        
+        me.console.log("🎉 All edge case tests completed!")
+        return "SUCCESS: All edge case tests passed"
+    }
+    
+    testCloneBehavior() {
+        me.console.log("🔍 Testing clone behavior edge cases")
+        
+        local original = new SocketBox()
+        original.bind("127.0.0.1", 8093)
+        
+        # Test multiple clones preserve state
+        local clone1 = original.clone()
+        local clone2 = original.clone()
+        
+        local originalState = original.isServer()
+        local clone1State = clone1.isServer()
+        local clone2State = clone2.isServer()
+        
+        assert(originalState.value == true)
+        assert(clone1State.value == true)
+        assert(clone2State.value == true)
+        
+        # Test independence of clones (close one doesn't affect others)
+        clone1.close()
+        local clone1After = clone1.isServer()
+        local originalAfter = original.isServer()
+        
+        assert(clone1After.value == false)
+        assert(originalAfter.value == true)
+        
+        original.close()
+        clone2.close()
+        
+        me.console.log("✅ Clone behavior test passed")
+    }
+    
+    testRapidStateChanges() {
+        me.console.log("🔍 Testing rapid state changes")
+        
+        local socket = new SocketBox()
+        
+        # Rapid bind/close cycles
+        loop(5) {
+            socket.bind("127.0.0.1", 8094)
+            local state1 = socket.isServer()
+            assert(state1.value == true)
+            
+            socket.close()
+            local state2 = socket.isServer()
+            assert(state2.value == false)
+        }
+        
+        me.console.log("✅ Rapid state changes test passed")
+    }
+    
+    testErrorHandling() {
+        me.console.log("🔍 Testing error handling scenarios")
+        
+        local socket = new SocketBox()
+        
+        # Test multiple binds on same socket
+        local bind1 = socket.bind("127.0.0.1", 8095)
+        local bind2 = socket.bind("127.0.0.1", 8096)  # Should handle gracefully
+        
+        # Both should succeed (second bind replaces first)
+        assert(bind1.value == true)
+        assert(bind2.value == true)
+        
+        local finalState = socket.isServer()
+        assert(finalState.value == true)
+        
+        socket.close()
+        
+        me.console.log("✅ Error handling test passed")
+    }
+}

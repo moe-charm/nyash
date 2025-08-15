@@ -1,0 +1,3 @@
+local test = new SocketBoxStateTest()
+local result = test.main()
+print(result)
