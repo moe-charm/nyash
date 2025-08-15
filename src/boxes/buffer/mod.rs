@@ -150,6 +150,35 @@ impl BufferBox {
             Box::new(StringBox::new("Error: slice() requires integer indices"))
         }
     }
+    
+    /// ⭐ Phase 10: Zero-copy detection - check if buffer is shared with another buffer
+    pub fn is_shared_with(&self, other: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        if let Some(other_buffer) = other.as_any().downcast_ref::<BufferBox>() {
+            // Check if the Arc pointers are the same (shared memory)
+            let is_shared = Arc::ptr_eq(&self.data, &other_buffer.data);
+            Box::new(BoolBox::new(is_shared))
+        } else {
+            // Not a BufferBox, so definitely not shared
+            Box::new(BoolBox::new(false))
+        }
+    }
+    
+    /// ⭐ Phase 10: Share reference - create a zero-copy shared reference to this buffer's data
+    pub fn share_reference(&self, _data: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        // Create a new BufferBox that shares the same Arc as this buffer
+        let shared_buffer = BufferBox {
+            data: Arc::clone(&self.data), // Share THIS buffer's data
+            base: BoxBase::new(), // New ID but shared data
+        };
+        Box::new(shared_buffer)
+    }
+    
+    /// ⭐ Phase 10: Memory footprint - get current memory usage in bytes
+    pub fn memory_footprint(&self) -> Box<dyn NyashBox> {
+        let data = self.data.read().unwrap();
+        let bytes = data.len() + std::mem::size_of::<BufferBox>();
+        Box::new(IntegerBox::new(bytes as i64))
+    }
 }
 
 // Clone implementation for BufferBox (needed since RwLock doesn't auto-derive Clone)
