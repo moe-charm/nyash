@@ -45,7 +45,7 @@ use crate::boxes::{SocketBox, MapBox, ArrayBox};
 use crate::boxes::http_message_box::{HTTPRequestBox, HTTPResponseBox};
 use crate::boxes::future::FutureBox;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use std::collections::HashMap;
 use std::thread;
 
@@ -53,26 +53,35 @@ use std::thread;
 #[derive(Debug)]
 pub struct HTTPServerBox {
     base: BoxBase,
-    socket: Arc<Mutex<Option<SocketBox>>>,
-    routes: Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>>,
-    middleware: Arc<Mutex<Vec<Box<dyn NyashBox>>>>,
-    running: Arc<Mutex<bool>>,
-    static_path: Arc<Mutex<Option<String>>>,
-    timeout_seconds: Arc<Mutex<u64>>,
-    active_connections: Arc<Mutex<Vec<Box<dyn NyashBox>>>>,
+    socket: RwLock<Option<SocketBox>>,
+    routes: RwLock<HashMap<String, Box<dyn NyashBox>>>,
+    middleware: RwLock<Vec<Box<dyn NyashBox>>>,
+    running: RwLock<bool>,
+    static_path: RwLock<Option<String>>,
+    timeout_seconds: RwLock<u64>,
+    active_connections: RwLock<Vec<Box<dyn NyashBox>>>,
 }
 
 impl Clone for HTTPServerBox {
     fn clone(&self) -> Self {
+        // State-preserving clone implementation following PR #87 pattern
+        let socket_val = self.socket.read().unwrap().clone();
+        let routes_val = self.routes.read().unwrap().clone();
+        let middleware_val = self.middleware.read().unwrap().clone();
+        let running_val = *self.running.read().unwrap();
+        let static_path_val = self.static_path.read().unwrap().clone();
+        let timeout_val = *self.timeout_seconds.read().unwrap();
+        let connections_val = self.active_connections.read().unwrap().clone();
+        
         Self {
             base: BoxBase::new(), // New unique ID for clone
-            socket: Arc::clone(&self.socket),
-            routes: Arc::clone(&self.routes),
-            middleware: Arc::clone(&self.middleware),
-            running: Arc::clone(&self.running),
-            static_path: Arc::clone(&self.static_path),
-            timeout_seconds: Arc::clone(&self.timeout_seconds),
-            active_connections: Arc::clone(&self.active_connections),
+            socket: RwLock::new(socket_val),
+            routes: RwLock::new(routes_val),
+            middleware: RwLock::new(middleware_val),
+            running: RwLock::new(running_val),
+            static_path: RwLock::new(static_path_val),
+            timeout_seconds: RwLock::new(timeout_val),
+            active_connections: RwLock::new(connections_val),
         }
     }
 }
@@ -81,13 +90,13 @@ impl HTTPServerBox {
     pub fn new() -> Self {
         Self {
             base: BoxBase::new(),
-            socket: Arc::new(Mutex::new(None)),
-            routes: Arc::new(Mutex::new(HashMap::new())),
-            middleware: Arc::new(Mutex::new(Vec::new())),
-            running: Arc::new(Mutex::new(false)),
-            static_path: Arc::new(Mutex::new(None)),
-            timeout_seconds: Arc::new(Mutex::new(30)),
-            active_connections: Arc::new(Mutex::new(Vec::new())),
+            socket: RwLock::new(None),
+            routes: RwLock::new(HashMap::new()),
+            middleware: RwLock::new(Vec::new()),
+            running: RwLock::new(false),
+            static_path: RwLock::new(None),
+            timeout_seconds: RwLock::new(30),
+            active_connections: RwLock::new(Vec::new()),
         }
     }
     
@@ -97,7 +106,7 @@ impl HTTPServerBox {
         let bind_result = socket.bind(address, port);
         
         if bind_result.to_string_box().value == "true" {
-            match self.socket.lock() {
+            match self.socket.write() {
                 Ok(mut socket_guard) => {
                     *socket_guard = Some(socket);
                     Box::new(BoolBox::new(true))
@@ -113,7 +122,7 @@ impl HTTPServerBox {
     
     /// 接続待機開始
     pub fn listen(&self, backlog: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        let socket_guard = match self.socket.lock() {
+        let socket_guard = match self.socket.read() {
             Ok(guard) => guard,
             Err(_) => return Box::new(StringBox::new("Error: Failed to acquire socket lock".to_string())),
         };
@@ -134,12 +143,12 @@ impl HTTPServerBox {
     /// HTTP サーバー開始（メインループ）
     pub fn start(&self) -> Box<dyn NyashBox> {
         // Set running state
-        match self.running.lock() {
+        match self.running.write() {
             Ok(mut running) => *running = true,
             Err(_) => return Box::new(StringBox::new("Error: Failed to set running state".to_string())),
         };
         
-        let socket_guard = match self.socket.lock() {
+        let socket_guard = match self.socket.read() {
             Ok(guard) => guard,
             Err(_) => return Box::new(StringBox::new("Error: Failed to acquire socket lock".to_string())),
         };
@@ -151,14 +160,10 @@ impl HTTPServerBox {
             
             println!("🚀 HTTP Server starting...");
             
-            // Main server loop
-            let running = Arc::clone(&self.running);
-            let routes = Arc::clone(&self.routes);
-            let active_connections = Arc::clone(&self.active_connections);
-            
+            // Main server loop - need to handle RwLock references carefully for threading
             loop {
                 // Check if server should stop
-                let should_continue = match running.lock() {
+                let should_continue = match self.running.read() {
                     Ok(running_guard) => *running_guard,
                     Err(_) => break, // Exit loop if we can't check running state
                 };
@@ -177,25 +182,20 @@ impl HTTPServerBox {
                 };
                 
                 // Add to active connections (with error handling)
-                if let Ok(mut connections) = active_connections.lock() {
+                if let Ok(mut connections) = self.active_connections.write() {
                     connections.push(Box::new(client_socket.clone()));
                 }
                 
                 // Handle client in separate thread (simulate nowait)
-                let routes_clone = Arc::clone(&routes);
-                let active_connections_clone = Arc::clone(&active_connections);
+                // For RwLock pattern, we need to pass the data needed for the thread
+                let routes_snapshot = match self.routes.read() {
+                    Ok(routes_guard) => routes_guard.clone(),
+                    Err(_) => continue, // Skip this connection if we can't read routes
+                };
                 
                 thread::spawn(move || {
-                    Self::handle_client_request(client_socket, routes_clone);
-                    
-                    // Remove from active connections when done
-                    // Note: This is a simplified cleanup - real implementation would need proper tracking
-                    let mut connections = active_connections_clone.lock().unwrap();
-                    connections.retain(|conn| {
-                        // Simple cleanup - remove all connections for now
-                        // Real implementation would track by ID
-                        false
-                    });
+                    Self::handle_client_request_with_routes(client_socket, routes_snapshot);
+                    // Note: Connection cleanup is handled separately to avoid complex lifetime issues
                 });
             }
             
@@ -207,10 +207,10 @@ impl HTTPServerBox {
     
     /// サーバー停止
     pub fn stop(&self) -> Box<dyn NyashBox> {
-        *self.running.lock().unwrap() = false;
+        *self.running.write().unwrap() = false;
         
         // Close all active connections
-        let mut connections = self.active_connections.lock().unwrap();
+        let mut connections = self.active_connections.write().unwrap();
         for connection in connections.iter() {
             if let Some(socket) = connection.as_any().downcast_ref::<SocketBox>() {
                 let _ = socket.close();
@@ -219,7 +219,7 @@ impl HTTPServerBox {
         connections.clear();
         
         // Close server socket
-        if let Some(ref socket) = *self.socket.lock().unwrap() {
+        if let Some(ref socket) = *self.socket.read().unwrap() {
             let _ = socket.close();
         }
         
@@ -232,7 +232,7 @@ impl HTTPServerBox {
         let path_str = path.to_string_box().value;
         let route_key = format!("ANY {}", path_str);
         
-        self.routes.lock().unwrap().insert(route_key, handler);
+        self.routes.write().unwrap().insert(route_key, handler);
         Box::new(BoolBox::new(true))
     }
     
@@ -241,7 +241,7 @@ impl HTTPServerBox {
         let path_str = path.to_string_box().value;
         let route_key = format!("GET {}", path_str);
         
-        self.routes.lock().unwrap().insert(route_key, handler);
+        self.routes.write().unwrap().insert(route_key, handler);
         Box::new(BoolBox::new(true))
     }
     
@@ -250,7 +250,7 @@ impl HTTPServerBox {
         let path_str = path.to_string_box().value;
         let route_key = format!("POST {}", path_str);
         
-        self.routes.lock().unwrap().insert(route_key, handler);
+        self.routes.write().unwrap().insert(route_key, handler);
         Box::new(BoolBox::new(true))
     }
     
@@ -259,7 +259,7 @@ impl HTTPServerBox {
         let path_str = path.to_string_box().value;
         let route_key = format!("PUT {}", path_str);
         
-        self.routes.lock().unwrap().insert(route_key, handler);
+        self.routes.write().unwrap().insert(route_key, handler);
         Box::new(BoolBox::new(true))
     }
     
@@ -268,28 +268,28 @@ impl HTTPServerBox {
         let path_str = path.to_string_box().value;
         let route_key = format!("DELETE {}", path_str);
         
-        self.routes.lock().unwrap().insert(route_key, handler);
+        self.routes.write().unwrap().insert(route_key, handler);
         Box::new(BoolBox::new(true))
     }
     
     /// 静的ファイル配信パス設定
     pub fn set_static_path(&self, path: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let path_str = path.to_string_box().value;
-        *self.static_path.lock().unwrap() = Some(path_str);
+        *self.static_path.write().unwrap() = Some(path_str);
         Box::new(BoolBox::new(true))
     }
     
     /// リクエストタイムアウト設定
     pub fn set_timeout(&self, seconds: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let timeout_val = seconds.to_string_box().value.parse::<u64>().unwrap_or(30);
-        *self.timeout_seconds.lock().unwrap() = timeout_val;
+        *self.timeout_seconds.write().unwrap() = timeout_val;
         Box::new(BoolBox::new(true))
     }
     
     /// クライアントリクエスト処理（内部メソッド）
-    fn handle_client_request(
+    fn handle_client_request_with_routes(
         client_socket: SocketBox, 
-        routes: Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>>
+        routes: HashMap<String, Box<dyn NyashBox>>
     ) {
         // Read HTTP request
         let raw_request = client_socket.read_http_request();
@@ -308,17 +308,16 @@ impl HTTPServerBox {
         println!("📬 {} {}", method, path);
         
         // Find matching route
-        let routes_guard = routes.lock().unwrap();
         let route_key = format!("{} {}", method, path);
         let fallback_key = format!("ANY {}", path);
         
-        let response = if let Some(_handler) = routes_guard.get(&route_key) {
+        let response = if let Some(_handler) = routes.get(&route_key) {
             // Found specific method route
             // TODO: Actual handler invocation would need method calling infrastructure
             HTTPResponseBox::create_json_response(
                 Box::new(StringBox::new(r#"{"message": "Route found", "method": ""#.to_string() + &method + r#""}"#))
             )
-        } else if let Some(_handler) = routes_guard.get(&fallback_key) {
+        } else if let Some(_handler) = routes.get(&fallback_key) {
             // Found generic route
             HTTPResponseBox::create_json_response(
                 Box::new(StringBox::new(r#"{"message": "Generic route found"}"#))
@@ -328,8 +327,6 @@ impl HTTPServerBox {
             HTTPResponseBox::create_404_response()
         };
         
-        drop(routes_guard);
-        
         // Send response
         let response_str = response.to_http_string();
         let _ = client_socket.write(response_str);
@@ -338,13 +335,13 @@ impl HTTPServerBox {
     
     /// アクティブ接続数取得
     pub fn get_active_connections(&self) -> Box<dyn NyashBox> {
-        let connections = self.active_connections.lock().unwrap();
+        let connections = self.active_connections.read().unwrap();
         Box::new(IntegerBox::new(connections.len() as i64))
     }
     
     /// サーバー状態取得
     pub fn is_running(&self) -> Box<dyn NyashBox> {
-        Box::new(BoolBox::new(*self.running.lock().unwrap()))
+        Box::new(BoolBox::new(*self.running.read().unwrap()))
     }
 }
 
@@ -354,9 +351,9 @@ impl NyashBox for HTTPServerBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        let running = *self.running.lock().unwrap();
-        let routes_count = self.routes.lock().unwrap().len();
-        let connections_count = self.active_connections.lock().unwrap().len();
+        let running = *self.running.read().unwrap();
+        let routes_count = self.routes.read().unwrap().len();
+        let connections_count = self.active_connections.read().unwrap().len();
         
         StringBox::new(format!(
             "HTTPServer(id: {}, running: {}, routes: {}, connections: {})", 
@@ -387,9 +384,9 @@ impl BoxCore for HTTPServerBox {
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let running = *self.running.lock().unwrap();
-        let routes_count = self.routes.lock().unwrap().len();
-        let connections_count = self.active_connections.lock().unwrap().len();
+        let running = *self.running.read().unwrap();
+        let routes_count = self.routes.read().unwrap().len();
+        let connections_count = self.active_connections.read().unwrap().len();
         
         write!(f, "HTTPServer(id: {}, running: {}, routes: {}, connections: {})", 
                self.base.id, running, routes_count, connections_count)

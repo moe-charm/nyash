@@ -6,13 +6,26 @@ use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write, Result};
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FileBox {
-    file: Arc<Mutex<File>>,
-    path: Arc<String>,
+    file: RwLock<File>,
+    path: String,
     base: BoxBase,
+}
+
+impl Clone for FileBox {
+    fn clone(&self) -> Self {
+        // File handles can't be easily cloned, so we'll reopen the file
+        match Self::open(&self.path) {
+            Ok(new_file_box) => new_file_box,
+            Err(_) => {
+                // Fallback to default if reopening fails
+                Self::new()
+            }
+        }
+    }
 }
 
 impl FileBox {
@@ -28,8 +41,8 @@ impl FileBox {
                 let file = OpenOptions::new().create(true).write(true).read(true)
                     .open("/dev/null").unwrap_or_else(|_| File::open("/dev/null").unwrap());
                 FileBox {
-                    file: Arc::new(Mutex::new(file)),
-                    path: Arc::new(String::new()),
+                    file: RwLock::new(file),
+                    path: String::new(),
                     base: BoxBase::new(),
                 }
             }
@@ -39,21 +52,21 @@ impl FileBox {
     pub fn open(path: &str) -> Result<Self> {
         let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
         Ok(FileBox { 
-            file: Arc::new(Mutex::new(file)),
-            path: Arc::new(path.to_string()),
+            file: RwLock::new(file),
+            path: path.to_string(),
             base: BoxBase::new(),
         })
     }
     
     pub fn read_to_string(&self) -> Result<String> {
-        let mut file = self.file.lock().unwrap();
+        let mut file = self.file.write().unwrap();
         let mut s = String::new();
         file.read_to_string(&mut s)?;
         Ok(s)
     }
     
     pub fn write_all(&self, buf: &[u8]) -> Result<()> {
-        let mut file = self.file.lock().unwrap();
+        let mut file = self.file.write().unwrap();
         file.write_all(buf)
     }
     
@@ -77,12 +90,12 @@ impl FileBox {
     /// ファイルが存在するかチェック
     pub fn exists(&self) -> Box<dyn NyashBox> {
         use std::path::Path;
-        Box::new(BoolBox::new(Path::new(&**self.path).exists()))
+        Box::new(BoolBox::new(Path::new(&self.path).exists()))
     }
     
     /// ファイルを削除
     pub fn delete(&self) -> Box<dyn NyashBox> {
-        match std::fs::remove_file(&**self.path) {
+        match std::fs::remove_file(&self.path) {
             Ok(()) => Box::new(StringBox::new("ok")),
             Err(e) => Box::new(StringBox::new(&format!("Error deleting file: {}", e))),
         }
@@ -90,7 +103,7 @@ impl FileBox {
     
     /// ファイルをコピー
     pub fn copy(&self, dest: &str) -> Box<dyn NyashBox> {
-        match std::fs::copy(&**self.path, dest) {
+        match std::fs::copy(&self.path, dest) {
             Ok(_) => Box::new(StringBox::new("ok")),
             Err(e) => Box::new(StringBox::new(&format!("Error copying file: {}", e))),
         }
@@ -140,7 +153,7 @@ impl NyashBox for FileBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_file) = other.as_any().downcast_ref::<FileBox>() {
-            BoolBox::new(*self.path == *other_file.path)
+            BoolBox::new(self.path == other_file.path)
         } else {
             BoolBox::new(false)
         }

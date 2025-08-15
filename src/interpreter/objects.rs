@@ -529,7 +529,7 @@ impl NyashInterpreter {
                     }
                 };
                 
-                let intent_box = crate::boxes::intent_box::IntentBoxData::new(name, payload);
+                let intent_box = crate::boxes::intent_box::IntentBox::new(name, payload);
                 return Ok(Box::new(intent_box) as Box<dyn NyashBox>);
             }
             

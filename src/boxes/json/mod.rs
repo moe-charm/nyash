@@ -6,33 +6,44 @@ use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox, BoolBox, IntegerBo
 use crate::boxes::array::ArrayBox;
 use crate::boxes::map_box::MapBox;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use serde_json::{Value, Error};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct JSONBox {
-    value: Arc<Mutex<Value>>,
+    value: RwLock<Value>,
     base: BoxBase,
+}
+
+impl Clone for JSONBox {
+    fn clone(&self) -> Self {
+        let value_clone = self.value.read().unwrap().clone();
+        
+        Self {
+            value: RwLock::new(value_clone),
+            base: BoxBase::new(), // New unique ID for clone
+        }
+    }
 }
 
 impl JSONBox {
     pub fn from_str(s: &str) -> Result<Self, Error> {
         let value = serde_json::from_str(s)?;
         Ok(JSONBox { 
-            value: Arc::new(Mutex::new(value)), 
+            value: RwLock::new(value), 
             base: BoxBase::new() 
         })
     }
     
     pub fn new(value: Value) -> Self {
         JSONBox { 
-            value: Arc::new(Mutex::new(value)), 
+            value: RwLock::new(value), 
             base: BoxBase::new() 
         }
     }
     
     pub fn to_string(&self) -> String {
-        let value = self.value.lock().unwrap();
+        let value = self.value.read().unwrap();
         value.to_string()
     }
     
@@ -53,7 +64,7 @@ impl JSONBox {
     /// 値取得
     pub fn get(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        let value = self.value.lock().unwrap();
+        let value = self.value.read().unwrap();
         
         if let Some(obj) = value.as_object() {
             if let Some(val) = obj.get(&key_str) {
@@ -79,7 +90,7 @@ impl JSONBox {
     /// 値設定
     pub fn set(&self, key: Box<dyn NyashBox>, new_value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        let mut value = self.value.lock().unwrap();
+        let mut value = self.value.write().unwrap();
         
         let json_value = nyash_box_to_json_value(new_value);
         
@@ -94,7 +105,7 @@ impl JSONBox {
     /// キー存在チェック
     pub fn has(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        let value = self.value.lock().unwrap();
+        let value = self.value.read().unwrap();
         
         if let Some(obj) = value.as_object() {
             Box::new(BoolBox::new(obj.contains_key(&key_str)))
@@ -105,7 +116,7 @@ impl JSONBox {
     
     /// すべてのキーを取得
     pub fn keys(&self) -> Box<dyn NyashBox> {
-        let value = self.value.lock().unwrap();
+        let value = self.value.read().unwrap();
         let array = ArrayBox::new();
         
         if let Some(obj) = value.as_object() {
@@ -129,7 +140,7 @@ impl BoxCore for JSONBox {
     }
     
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let value = self.value.lock().unwrap();
+        let value = self.value.read().unwrap();
         let json_type = match *value {
             Value::Null => "null",
             Value::Bool(_) => "boolean",
@@ -166,7 +177,7 @@ impl NyashBox for JSONBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        let value = self.value.lock().unwrap();
+        let value = self.value.read().unwrap();
         StringBox::new(value.to_string())
     }
 
@@ -178,8 +189,8 @@ impl NyashBox for JSONBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_json) = other.as_any().downcast_ref::<JSONBox>() {
-            let self_value = self.value.lock().unwrap();
-            let other_value = other_json.value.lock().unwrap();
+            let self_value = self.value.read().unwrap();
+            let other_value = other_json.value.read().unwrap();
             BoolBox::new(*self_value == *other_value)
         } else {
             BoolBox::new(false)

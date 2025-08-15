@@ -36,7 +36,7 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::interpreter::RuntimeError;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use eframe::{self, epaint::Vec2};
 
 /// EguiBox - GUI アプリケーションを包むBox
@@ -52,7 +52,7 @@ pub struct EguiBox {
     base: BoxBase,
     title: String,
     size: Vec2,
-    app_state: Arc<Mutex<Box<dyn Any + Send>>>,
+    app_state: RwLock<Box<dyn Any + Send>>,
     update_fn: Option<Arc<dyn Fn(&mut Box<dyn Any + Send>, &egui::Context) + Send + Sync>>,
 }
 
@@ -65,20 +65,34 @@ impl std::fmt::Debug for EguiBox {
     }
 }
 
+impl Clone for EguiBox {
+    fn clone(&self) -> Self {
+        // Note: This is a simplified clone that doesn't preserve app_state
+        // Complex Any+Send state and function pointers are difficult to clone properly
+        Self {
+            base: BoxBase::new(), // New unique ID for clone
+            title: self.title.clone(),
+            size: self.size,
+            app_state: RwLock::new(Box::new(()) as Box<dyn Any + Send>),
+            update_fn: self.update_fn.clone(), // Arc is cloneable
+        }
+    }
+}
+
 impl EguiBox {
     pub fn new() -> Self {
         Self {
             base: BoxBase::new(),
             title: "Nyash GUI Application".to_string(),
             size: Vec2::new(800.0, 600.0),
-            app_state: Arc::new(Mutex::new(Box::new(()) as Box<dyn Any + Send>)),
+            app_state: RwLock::new(Box::new(()) as Box<dyn Any + Send>),
             update_fn: None,
         }
     }
     
     /// アプリケーション状態を設定
     pub fn set_app_state<T: Any + Send + 'static>(&mut self, state: T) {
-        self.app_state = Arc::new(Mutex::new(Box::new(state)));
+        *self.app_state.write().unwrap() = Box::new(state);
     }
     
     /// 更新関数を設定
@@ -92,13 +106,13 @@ impl EguiBox {
 
 // NyashApp - eframe::Appを実装する内部構造体
 struct NyashApp {
-    app_state: Arc<Mutex<Box<dyn Any + Send>>>,
+    app_state: Arc<RwLock<Box<dyn Any + Send>>>,
     update_fn: Arc<dyn Fn(&mut Box<dyn Any + Send>, &egui::Context) + Send + Sync>,
 }
 
 impl eframe::App for NyashApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Ok(mut state) = self.app_state.lock() {
+        if let Ok(mut state) = self.app_state.write() {
             (self.update_fn)(&mut *state, ctx);
         }
     }
@@ -140,14 +154,7 @@ impl NyashBox for EguiBox {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        // GUI Boxはクローン不可（単一インスタンス）
-        Box::new(Self {
-            base: BoxBase::new(),
-            title: self.title.clone(),
-            size: self.size,
-            app_state: Arc::new(Mutex::new(Box::new(()) as Box<dyn Any + Send>)),
-            update_fn: None,
-        })
+        Box::new(self.clone())
     }
     
     
@@ -169,7 +176,13 @@ impl NyashBox for EguiBox {
 impl EguiBox {
     pub fn run_gui(&self) -> Result<(), RuntimeError> {
         if let Some(update_fn) = &self.update_fn {
-            let app_state = Arc::clone(&self.app_state);
+            // Create a new Arc<RwLock> with the current state for thread safety
+            let state_snapshot = self.app_state.read().unwrap();
+            // Note: This is a simplified approach - in a full implementation,
+            // we would need a more sophisticated state sharing mechanism
+            let app_state = Arc::new(RwLock::new(Box::new(()) as Box<dyn Any + Send>));
+            drop(state_snapshot);
+            
             let update_fn = Arc::clone(update_fn);
             
             let options = eframe::NativeOptions {

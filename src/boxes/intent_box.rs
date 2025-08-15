@@ -34,59 +34,80 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use std::fmt::{self, Debug};
 
-/// IntentBox内部データ構造
-#[derive(Debug, Clone)]
-pub struct IntentBoxData {
+/// IntentBox - 構造化メッセージBox (RwLock pattern)
+#[derive(Debug)]
+pub struct IntentBox {
     base: BoxBase,
     /// メッセージの種類 ("chat.message", "file.share"等)
-    pub name: String,
+    name: RwLock<String>,
     /// 任意のJSONデータ
-    pub payload: serde_json::Value,
+    payload: RwLock<serde_json::Value>,
 }
 
-/// IntentBox - 構造化メッセージBox（Arc<Mutex>統一パターン）
-pub type IntentBox = Arc<Mutex<IntentBoxData>>;
+impl Clone for IntentBox {
+    fn clone(&self) -> Self {
+        let name_val = self.name.read().unwrap().clone();
+        let payload_val = self.payload.read().unwrap().clone();
+        
+        Self {
+            base: BoxBase::new(), // New unique ID for clone
+            name: RwLock::new(name_val),
+            payload: RwLock::new(payload_val),
+        }
+    }
+}
 
-impl IntentBoxData {
+impl IntentBox {
     /// 新しいIntentBoxを作成
-    pub fn new(name: String, payload: serde_json::Value) -> IntentBox {
-        Arc::new(Mutex::new(IntentBoxData {
+    pub fn new(name: String, payload: serde_json::Value) -> Self {
+        IntentBox {
             base: BoxBase::new(),
-            name,
-            payload,
-        }))
+            name: RwLock::new(name),
+            payload: RwLock::new(payload),
+        }
     }
     
     /// メッセージ名を取得
-    pub fn get_name(&self) -> &str {
-        &self.name
+    pub fn get_name(&self) -> Box<dyn NyashBox> {
+        let name = self.name.read().unwrap().clone();
+        Box::new(StringBox::new(name))
     }
     
     /// ペイロードを取得
-    pub fn get_payload(&self) -> &serde_json::Value {
-        &self.payload
+    pub fn get_payload(&self) -> Box<dyn NyashBox> {
+        let payload = self.payload.read().unwrap().clone();
+        Box::new(StringBox::new(payload.to_string()))
     }
     
     /// ペイロードを更新
-    pub fn set_payload(&mut self, payload: serde_json::Value) {
-        self.payload = payload;
+    pub fn set_payload(&self, payload: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let payload_str = payload.to_string_box().value;
+        match serde_json::from_str(&payload_str) {
+            Ok(json_val) => {
+                *self.payload.write().unwrap() = json_val;
+                Box::new(BoolBox::new(true))
+            },
+            Err(_) => Box::new(BoolBox::new(false))
+        }
     }
 }
 
 impl NyashBox for IntentBox {
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+
     fn to_string_box(&self) -> StringBox {
-        let data = self.lock().unwrap();
-        StringBox::new(format!("IntentBox[{}]", data.name))
+        let name = self.name.read().unwrap().clone();
+        StringBox::new(format!("IntentBox[{}]", name))
     }
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_intent) = other.as_any().downcast_ref::<IntentBox>() {
-            let self_data = self.lock().unwrap();
-            let other_data = other_intent.lock().unwrap();
-            BoolBox::new(self_data.base.id == other_data.base.id)
+            BoolBox::new(self.base.id == other_intent.base.id)
         } else {
             BoolBox::new(false)
         }
@@ -95,25 +116,20 @@ impl NyashBox for IntentBox {
     fn type_name(&self) -> &'static str {
         "IntentBox"
     }
-    
-    fn clone_box(&self) -> Box<dyn NyashBox> {
-        let data = self.lock().unwrap();
-        Box::new(IntentBoxData::new(data.name.clone(), data.payload.clone()))
-    }
 }
 
 impl BoxCore for IntentBox {
     fn box_id(&self) -> u64 {
-        self.lock().unwrap().base.id
+        self.base.id
     }
     
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
-        self.lock().unwrap().base.parent_type_id
+        self.base.parent_type_id
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let data = self.lock().unwrap();
-        write!(f, "IntentBox[{}]", data.name)
+        let name = self.name.read().unwrap().clone();
+        write!(f, "IntentBox[{}]", name)
     }
     
     fn as_any(&self) -> &dyn Any {
@@ -125,9 +141,9 @@ impl BoxCore for IntentBox {
     }
 }
 
-impl std::fmt::Display for IntentBoxData {
+impl std::fmt::Display for IntentBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "IntentBox[{}]", self.name)
+        self.fmt_box(f)
     }
 }
 
