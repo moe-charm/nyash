@@ -76,7 +76,7 @@ impl NyashInterpreter {
     
     /// nowait文を実行 - 非同期実行（真の非同期実装） - Async execution
     pub(super) fn execute_nowait(&mut self, variable: &str, expression: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        use crate::box_trait::FutureBox;
+        use crate::boxes::FutureBox;
         use std::thread;
         
         // FutureBoxを作成
