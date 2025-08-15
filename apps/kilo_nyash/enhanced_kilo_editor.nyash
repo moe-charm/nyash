@@ -22,18 +22,30 @@ box EnhancedTextBuffer {
     memory_footprint() {
         // Calculate total memory usage
         local total_memory = 100  // Base TextBuffer overhead
-        local line_count = me.lines.length()
+        local line_count_box = me.lines.length()
+        
+        // Convert to integer for loop usage
+        local line_count = 0
+        if line_count_box != null {
+            line_count = line_count_box.toString().toInteger()
+        }
         
         // Add memory for each line
         local i = 0
         loop(i < line_count) {
             local line = me.lines.get(i)
-            total_memory = total_memory + line.toString().length() + 20  // String overhead
+            if line != null {
+                total_memory = total_memory + line.toString().length() + 20  // String overhead
+            }
             i = i + 1
         }
         
         // Add undo stack memory
-        local undo_count = me.undo_stack.length()
+        local undo_count_box = me.undo_stack.length()
+        local undo_count = 0
+        if undo_count_box != null {
+            undo_count = undo_count_box.toString().toInteger()
+        }
         total_memory = total_memory + (undo_count * 50)  // Estimate for undo operations
         
         return total_memory
@@ -116,7 +128,11 @@ box EnhancedTextBuffer {
         
         print("🔍 Starting search and replace: '" + pattern + "' -> '" + replacement + "'")
         
-        local line_count = me.lines.length()
+        local line_count_box = me.lines.length()
+        local line_count = 0
+        if line_count_box != null {
+            line_count = line_count_box.toString().toInteger()
+        }
         local i = 0
         loop(i < line_count) {
             local line = me.lines.get(i)
@@ -163,7 +179,7 @@ box EnhancedTextBuffer {
         local line_count = me.lines.length()
         local undo_count = me.undo_stack.length()
         
-        return "Lines: " + line_count + ", Undo: " + undo_count + ", Memory: " + current_memory + "B, Ops: " + me.operation_count
+        return "Lines: " + line_count.toString() + ", Undo: " + undo_count.toString() + ", Memory: " + current_memory + "B, Ops: " + me.operation_count
     }
 }
 

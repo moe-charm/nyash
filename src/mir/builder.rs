@@ -245,6 +245,7 @@ impl MirBuilder {
             LiteralValue::Float(f) => ConstValue::Float(f),
             LiteralValue::String(s) => ConstValue::String(s),
             LiteralValue::Bool(b) => ConstValue::Bool(b),
+            LiteralValue::Null => ConstValue::Null,
             LiteralValue::Void => ConstValue::Void,
         };
         
