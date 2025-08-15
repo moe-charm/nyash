@@ -307,6 +307,66 @@ References:
 
 ------------------------------------------------------------
 
+## ⚡ Phase 9.77: WASM緊急復旧 - BoxCall/wasmtime/基本機能復活（最優先）
+
+Summary:
+- BoxCall命令未実装により基本的なBox操作（toString, print等）がWASMで全停止している緊急事態を解決
+- wasmtimeバージョン互換性問題によるAOT実行失敗を修正
+- WASM出力エラーを根本解決し、実用的なWASM実行環境を復旧
+
+Priority: **Critical** (Phase 9.75完了直後・全Phase前提条件)
+Expected Duration: 1-2週間
+GitHub Issue: 予定
+
+### 🚨 緊急問題の現状
+**基本機能全停止**:
+```nyash
+// ❌ 現在WASMで実行不可
+local result = value.toString()  // BoxCall未実装
+print("Hello")                   // 基本出力不可
+```
+
+**エラー例**:
+```bash
+❌ WASM compilation error: Unsupported instruction: BoxCall
+❌ Module was compiled with incompatible Wasmtime version '18.0.4' vs '35.0.0'
+❌ Generated WASM is not valid UTF-8
+```
+
+### 📋 実装計画（段階的復旧）
+
+#### Phase 1: 基本機能復旧（1週間）
+- [ ] **BoxCall命令実装** - toString(), print()等の基本メソッド
+- [ ] **wasmtimeバージョン統一** - Cargo.toml更新、互換性確保
+- [ ] **WASM出力エラー修正** - WAT→WASM変換修正
+
+#### Phase 2: 機能拡充（1週間）
+- [ ] **RuntimeImports完全実装** - Box メモリ管理、型変換
+- [ ] **メモリ管理改善** - レイアウト最適化、ガベージコレクション
+
+### 🤖 Copilot協力期待
+- BoxCall→WASM命令変換の効率実装
+- wasmtimeバージョン管理の自動化
+- WASM出力パイプライン修正
+- メモリ管理最適化
+
+### 成功基準
+- [ ] **基本動作復旧**: toString(), print()がWASMで動作
+- [ ] **AOT実行成功**: .cwasmファイルが正常実行
+- [ ] **WASM出力成功**: バイナリエラーなし
+- [ ] **互換性確保**: バージョン依存問題解決
+
+### 期待される効果
+- **即時価値**: NyashがWASMで実用可能に復帰
+- **開発継続**: 他Phase実装の前提条件満足
+- **ユーザー満足**: 基本機能の確実な動作保証
+
+References:
+- docs/予定/wasm/current_issues.md（現在の問題詳細分析）
+- docs/予定/native-plan/issues/phase_9_77_wasm_emergency.md（詳細実装計画）
+
+------------------------------------------------------------
+
 ## 📦 Phase 9.8: BIDレジストリ + 自動コード生成ツール（WASM/VM/LLVM/言語）
 
 Summary:
