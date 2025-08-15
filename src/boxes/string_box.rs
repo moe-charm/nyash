@@ -157,9 +157,6 @@ impl NyashBox for StringBox {
         self.clone_box()
     }
 }
-    
-    
-}
 
 impl BoxCore for StringBox {
     fn box_id(&self) -> u64 {

@@ -108,18 +108,18 @@ use crate::boxes::ArrayBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};  // Arc追加
 
 /// キーバリューストアを表すBox
 pub struct MapBox {
-    data: RwLock<HashMap<String, Box<dyn NyashBox>>>,
+    data: Arc<RwLock<HashMap<String, Box<dyn NyashBox>>>>,  // Arc追加
     base: BoxBase,
 }
 
 impl MapBox {
     pub fn new() -> Self {
         Self {
-            data: RwLock::new(HashMap::new()),
+            data: Arc::new(RwLock::new(HashMap::new())),  // Arc::new追加
             base: BoxBase::new(),
         }
     }
@@ -225,12 +225,13 @@ impl MapBox {
 // Clone implementation for MapBox (needed since RwLock doesn't auto-derive Clone)
 impl Clone for MapBox {
     fn clone(&self) -> Self {
-        let data = self.data.read().unwrap();
-        let cloned_data: HashMap<String, Box<dyn NyashBox>> = data.iter()
-            .map(|(k, v)| (k.clone(), v.clone_box()))
+        // ディープコピー（独立インスタンス）
+        let data_guard = self.data.read().unwrap();
+        let cloned_data: HashMap<String, Box<dyn NyashBox>> = data_guard.iter()
+            .map(|(k, v)| (k.clone(), v.clone_box()))  // 要素もディープコピー
             .collect();
         MapBox {
-            data: RwLock::new(cloned_data),
+            data: Arc::new(RwLock::new(cloned_data)),  // 新しいArc
             base: BoxBase::new(),
         }
     }
@@ -274,9 +275,13 @@ impl NyashBox for MapBox {
         Box::new(self.clone())
     }
     
-    /// 仮実装: clone_boxと同じ（後で修正）
+    /// 🎯 状態共有の核心実装
     fn share_box(&self) -> Box<dyn NyashBox> {
-        self.clone_box()
+        let new_instance = MapBox {
+            data: Arc::clone(&self.data),  // Arcクローンで状態共有
+            base: BoxBase::new(),          // 新しいID
+        };
+        Box::new(new_instance)
     }
 }
     
