@@ -1,0 +1,47 @@
+// 🧪 ArrayBox.length() Bug Fix Test
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 Testing ArrayBox.length() Bug Fix")
+        
+        // Test 1: Empty array length
+        local empty_array = new ArrayBox()
+        local empty_length = empty_array.length()
+        me.console.log("Empty array length: " + empty_length)
+        
+        // Test 2: Add elements and check length
+        local test_array = new ArrayBox()
+        me.console.log("Adding elements...")
+        
+        test_array.push("line1")
+        local length1 = test_array.length()
+        me.console.log("After adding 1 element: " + length1)
+        
+        test_array.push("line2")
+        local length2 = test_array.length()
+        me.console.log("After adding 2 elements: " + length2)
+        
+        test_array.push("line3")
+        local length3 = test_array.length()
+        me.console.log("After adding 3 elements: " + length3)
+        
+        // Test 3: Pop and check length consistency
+        local popped = test_array.pop()
+        local length_after_pop = test_array.length()
+        me.console.log("After popping (" + popped + "): " + length_after_pop)
+        
+        // Evaluation
+        if empty_length == 0 and length1 == 1 and length2 == 2 and length3 == 3 and length_after_pop == 2 {
+            me.console.log("✅ ArrayBox.length() fix SUCCESSFUL!")
+        } else {
+            me.console.log("❌ ArrayBox.length() fix FAILED!")
+            me.console.log("Expected: 0, 1, 2, 3, 2")
+            me.console.log("Got: " + empty_length + ", " + length1 + ", " + length2 + ", " + length3 + ", " + length_after_pop)
+        }
+        
+        return "ArrayBox.length() test complete"
+    }
+}

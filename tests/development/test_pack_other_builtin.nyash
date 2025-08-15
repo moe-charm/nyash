@@ -1,0 +1,34 @@
+// 🔍 他のビルトインBoxでpack構文テスト
+
+// P2PBoxでpack構文テスト
+box MyP2PBox from P2PBox {
+    init { nodeHistory }
+    
+    pack(nodeId, world) {
+        from P2PBox.pack(nodeId, world)
+        me.nodeHistory = new ArrayBox()
+        print("✅ MyP2PBox pack成功")
+    }
+    
+    getHistory() {
+        return me.nodeHistory
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔍 P2PBox pack構文テスト")
+        
+        // P2PBox継承でpack使用
+        local p2pNode = new MyP2PBox("node1", "tcp")
+        me.console.log("✅ MyP2PBox作成成功")
+        
+        local history = p2pNode.getHistory()
+        me.console.log("📚 履歴作成確認")
+        
+        return "P2PBox pack構文テスト完了"
+    }
+}

@@ -1,0 +1,57 @@
+// 🔄 通常のデリゲーション（pack使用しない）
+
+// 親Box
+box Animal {
+    init { name, species }
+    
+    init(animalName, animalSpecies) {
+        me.name = animalName
+        me.species = animalSpecies
+        print("🐾 Animal init: " + animalName + " (" + animalSpecies + ")")
+    }
+    
+    speak() {
+        return me.name + " makes a sound"
+    }
+}
+
+// 子Box - 通常のデリゲーション（pack使わない）
+box Dog from Animal {
+    init { breed }
+    
+    init(dogName, dogBreed) {
+        from Animal.init(dogName, "Dog")
+        me.breed = dogBreed
+        print("🐕 Dog init: " + dogName + " (breed: " + dogBreed + ")")
+    }
+    
+    override speak() {
+        return me.name + " barks!"
+    }
+    
+    getBreed() {
+        return me.breed
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔄 通常のデリゲーションテスト（pack使用なし）")
+        
+        // 通常のデリゲーションでDogインスタンス作成
+        local myDog = new Dog("Rex", "German Shepherd")
+        me.console.log("✅ Dog作成成功")
+        
+        // メソッド呼び出し
+        local sound = myDog.speak()
+        me.console.log("🔊 " + sound)
+        
+        local breed = myDog.getBreed()
+        me.console.log("🐕 犬種: " + breed)
+        
+        return "通常デリゲーションテスト成功"
+    }
+}

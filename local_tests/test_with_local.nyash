@@ -1,0 +1,10 @@
+static box Main {
+    init { result }
+    
+    main() {
+        local x = 10
+        local y = 20  
+        me.result = x + y
+        return me.result
+    }
+}

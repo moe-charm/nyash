@@ -1,1 +1,1 @@
-print("Simple test")
+static box Main { main() { return 42 } }

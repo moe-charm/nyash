@@ -1,0 +1,26 @@
+// Nyash標準ライブラリテスト
+// Phase 0: using nyashstd 基本機能
+
+using nyashstd
+
+local result
+result = string.create("Hello World")
+print(result)
+
+local upper_result  
+upper_result = string.upper(result)
+print(upper_result)
+
+local number
+number = integer.create(42)
+print(number)
+
+local flag
+flag = bool.create(true)
+print(flag)
+
+local arr
+arr = array.create()
+print(arr)
+
+console.log("✅ using nyashstd test completed!")

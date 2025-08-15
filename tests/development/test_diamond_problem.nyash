@@ -1,0 +1,48 @@
+# Diamond Problem（菱形継承問題）テスト
+
+print("=== Diamond Problem Test ===")
+
+# 中間層
+box Middle from StringBox {
+    init { middle_data }
+    
+    birth(content) {
+        from StringBox.birth(content)
+        me.middle_data = "middle"
+        print("Middle.birth called")
+    }
+    
+    override toString() {
+        print("Middle.toString called")
+        return "Middle[" + from StringBox.toString() + "]"
+    }
+}
+
+# 多重委譲（問題のあるパターン）
+box Diamond from Middle, StringBox {
+    init { diamond_data }
+    
+    birth(content) {
+        from Middle.birth(content)
+        # from StringBox.birth(content)  # これも必要？
+        me.diamond_data = "diamond"
+        print("Diamond.birth called")
+    }
+    
+    override toString() {
+        print("Diamond.toString called")
+        # どちらも StringBox.toString() を呼ぶ
+        local a = from Middle.toString()     # Middle -> StringBox
+        local b = from StringBox.toString()  # 直接 StringBox
+        return "Diamond[" + a + " | " + b + "]"
+    }
+}
+
+# テスト実行
+print("\n--- Creating diamond instance ---")
+local diamond = new Diamond("test")
+
+print("\n--- Calling toString ---")
+print(diamond.toString())
+
+print("\n=== Test completed ===")

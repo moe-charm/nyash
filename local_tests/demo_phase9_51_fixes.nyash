@@ -1,0 +1,30 @@
+// Demo: Phase 9.51 WASM + HTTPServer fixes working
+static box Main {
+    init { counter, result, server }
+    
+    main() {
+        // WASM-compatible loop (Jump/Branch instructions now supported)
+        me.counter = 0
+        me.result = 0
+        
+        loop(me.counter < 5) {
+            me.result = me.result + me.counter
+            me.counter = me.counter + 1
+        }
+        
+        print("Loop result (WASM-compatible):")
+        print(me.result)
+        
+        // HTTPServer bind + listen now works
+        me.server = new HTTPServerBox()
+        local bindOk = me.server.bind("127.0.0.1", 8080)
+        local listenOk = me.server.listen(10)
+        
+        print("HTTPServer bind:")
+        print(bindOk)
+        print("HTTPServer listen:")
+        print(listenOk)
+        
+        return me.result
+    }
+}

@@ -1,0 +1,63 @@
+# 🔍 他のBox動作確認 - SocketBoxとの比較分析
+# 正常に動作するBoxの状態保持を検証
+
+static box Main {
+    init { console, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔍 他のBox動作確認テスト開始")
+        
+        # ===== MapBox状態テスト =====
+        me.console.log("=== MapBox状態テスト ===")
+        local testMap = new MapBox()
+        me.console.log("MapBox作成: " + testMap.toString())
+        
+        testMap.set("key1", "value1")
+        local getValue = testMap.get("key1")
+        me.console.log("MapBox set/get: " + getValue.toString())
+        
+        # ===== ArrayBox状態テスト =====
+        me.console.log("=== ArrayBox状態テスト ===")
+        local testArray = new ArrayBox()
+        me.console.log("ArrayBox作成: " + testArray.toString())
+        
+        testArray.push("item1")
+        local arraySize = testArray.size()
+        me.console.log("ArrayBox push/size: " + arraySize.toString())
+        
+        # ===== MathBox状態テスト =====
+        me.console.log("=== MathBox状態テスト ===")
+        local testMath = new MathBox()
+        me.console.log("MathBox作成: " + testMath.toString())
+        
+        local mathResult = testMath.add(5, 3)
+        me.console.log("MathBox add: " + mathResult.toString())
+        
+        # ===== SocketBox状態テスト（問題箇所） =====
+        me.console.log("=== SocketBox状態テスト（問題箇所） ===")
+        local testSocket = new SocketBox()
+        me.console.log("SocketBox作成: " + testSocket.toString())
+        
+        local beforeBind = testSocket.isServer()
+        me.console.log("Before bind: isServer = " + beforeBind.toString())
+        
+        local bindResult = testSocket.bind("127.0.0.1", 18080)
+        me.console.log("Bind result = " + bindResult.toString())
+        
+        local afterBind = testSocket.isServer()
+        me.console.log("After bind: isServer = " + afterBind.toString())
+        
+        testSocket.close()
+        
+        # ===== 結果判定 =====
+        if afterBind.equals(true) {
+            me.result = "SocketBox正常動作"
+        } else {
+            me.result = "SocketBox状態保持失敗 - 他のBoxは正常"
+        }
+        
+        me.console.log("🎯 テスト結果: " + me.result)
+        return me.result
+    }
+}

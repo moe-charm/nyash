@@ -1,0 +1,82 @@
+// Phase 9.75-B修正テスト - RwLock変換後の各Box動作確認
+// ArrayBox、MapBox、BufferBox、StreamBox、DebugBoxテスト
+
+static box Main {
+    init { console, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 Phase 9.75-B Box型テスト開始")
+        
+        // ArrayBox RwLock変換テスト
+        me.console.log("\n📦 ArrayBox RwLock テスト")
+        local array
+        array = new ArrayBox()
+        array.push("test1")
+        array.push("test2")
+        local arrayLen
+        arrayLen = array.length()
+        me.console.log("ArrayBox length: " + arrayLen.toString())
+        
+        local firstItem
+        firstItem = array.get(0)
+        me.console.log("ArrayBox first item: " + firstItem.toString())
+        
+        // MapBox RwLock変換テスト
+        me.console.log("\n🗺️ MapBox RwLock テスト")
+        local map
+        map = new MapBox()
+        map.set("key1", "value1")
+        map.set("key2", "value2")
+        
+        local value1
+        value1 = map.get("key1")
+        me.console.log("MapBox get key1: " + value1.toString())
+        
+        local mapSize
+        mapSize = map.size()
+        me.console.log("MapBox size: " + mapSize.toString())
+        
+        // BufferBox RwLock変換テスト
+        me.console.log("\n📄 BufferBox RwLock テスト")
+        local buffer
+        buffer = new BufferBox()
+        buffer.write("Hello")
+        buffer.write(" ")
+        buffer.write("World")
+        
+        local bufferContent
+        bufferContent = buffer.toString()
+        me.console.log("BufferBox content: " + bufferContent)
+        
+        local bufferSize
+        bufferSize = buffer.size()
+        me.console.log("BufferBox size: " + bufferSize.toString())
+        
+        // StreamBox RwLock変換テスト
+        me.console.log("\n🌊 StreamBox RwLock テスト")
+        local stream
+        stream = new StreamBox()
+        stream.write("Stream data")
+        
+        local streamContent
+        streamContent = stream.read()
+        me.console.log("StreamBox read: " + streamContent.toString())
+        
+        // DebugBox RwLock変換テスト
+        me.console.log("\n🐛 DebugBox RwLock テスト")
+        local debug
+        debug = new DebugBox()
+        debug.startTracking()
+        debug.trackBox(array, "test array")
+        
+        local memoryReport
+        memoryReport = debug.memoryReport()
+        me.console.log("DebugBox tracking: " + memoryReport.toString())
+        
+        me.console.log("\n✅ Phase 9.75-B すべてのBox型テスト完了")
+        me.result = "SUCCESS: RwLock変換後のBox型動作正常"
+        
+        return me.result
+    }
+}

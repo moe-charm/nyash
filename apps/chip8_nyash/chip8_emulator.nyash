@@ -1,11 +1,11 @@
 // 🎮 Chip-8 Emulator in Nyash - Phase 10.2
-// Testing fini propagation and weak reference lifecycle
+// Testing fini propagation and reference lifecycle
 
 // Chip8CPU - Central processing unit with fini propagation
 static box Chip8CPU {
     init { memory, graphics, sound, program_counter, registers }
     
-    pack() {
+    constructor() {
         me.program_counter = 512  // 0x200 = 512 decimal - Standard Chip-8 start address
         me.registers = new ArrayBox() // 16 general registers V0-VF
         
@@ -94,11 +94,11 @@ static box Chip8CPU {
     }
 }
 
-// Chip8Memory - Memory system with weak CPU reference
+// Chip8Memory - Memory system with CPU reference
 static box Chip8Memory {
-    init { ram, weak cpu_ref }  // CPU reference is weak to prevent cycles
+    init { ram, cpu_ref }  // CPU reference is to prevent cycles
     
-    pack(cpu_instance) {
+    constructor(cpu_instance) {
         me.ram = new ArrayBox()
         
         // Initialize 4KB of RAM (4096 bytes)
@@ -108,14 +108,14 @@ static box Chip8Memory {
             i = i + 1
         }
         
-        // Create weak reference to CPU
-        me.cpu_ref = weak cpu_instance
+        // Create reference to CPU
+        me.cpu_ref = cpu_instance
         
-        print("💾 Memory initialized: 4KB RAM + weak CPU reference")
+        print("💾 Memory initialized: 4KB RAM + CPU reference")
         me.load_test_program()
     }
     
-    // ⭐ Phase 10: weak reference life cycle test
+    // ⭐ Phase 10: reference life cycle test
     read_byte(address) {
         // Check if CPU is still alive before accessing memory
         if (me.cpu_ref != null) {
@@ -169,9 +169,9 @@ static box Chip8Memory {
 
 // Chip8Graphics - Display system  
 static box Chip8Graphics {
-    init { screen, weak cpu_ref }
+    init { screen, cpu_ref }
     
-    pack(cpu_instance) {
+    constructor(cpu_instance) {
         me.screen = new ArrayBox()
         
         // Initialize 64x32 pixel display (2048 pixels)
@@ -181,8 +181,8 @@ static box Chip8Graphics {
             i = i + 1
         }
         
-        me.cpu_ref = weak cpu_instance
-        print("🖼️ Graphics initialized: 64x32 display + weak CPU reference")
+        me.cpu_ref = cpu_instance
+        print("🖼️ Graphics initialized: 64x32 display + CPU reference")
     }
     
     draw_sprite(x, y, sprite_data) {
@@ -219,12 +219,12 @@ static box Chip8Graphics {
 
 // Chip8Sound - Audio system
 static box Chip8Sound {
-    init { beep_timer, weak cpu_ref }
+    init { beep_timer, cpu_ref }
     
-    pack(cpu_instance) {
+    constructor(cpu_instance) {
         me.beep_timer = 0
-        me.cpu_ref = weak cpu_instance
-        print("🔊 Sound initialized with weak CPU reference")
+        me.cpu_ref = cpu_instance
+        print("🔊 Sound initialized with CPU reference")
     }
     
     play_beep() {
@@ -261,28 +261,28 @@ static box Chip8System {
     
     main() {
         print("🎮 Starting Chip-8 Emulator - Phase 10.2")
-        print("Testing fini propagation and weak reference lifecycle")
+        print("Testing fini propagation and reference lifecycle")
         
         // Create CPU first
         me.cpu = new Chip8CPU()
-        me.cpu.pack()
+        me.cpu.constructor()
         
-        // Create subsystems with weak references to CPU
+        // Create subsystems with references to CPU
         me.memory = new Chip8Memory()
-        me.memory.pack(me.cpu)
+        me.memory.constructor(me.cpu)
         
         me.graphics = new Chip8Graphics()
-        me.graphics.pack(me.cpu)
+        me.graphics.constructor(me.cpu)
         
         me.sound = new Chip8Sound()
-        me.sound.pack(me.cpu)
+        me.sound.constructor(me.cpu)
         
         // Link components to CPU for fini propagation
         me.cpu.memory = me.memory
         me.cpu.graphics = me.graphics
         me.cpu.sound = me.sound
         
-        print("🔗 All components linked with weak references")
+        print("🔗 All components linked with references")
         
         // Run a few emulation cycles
         me.run_emulation()
@@ -292,8 +292,8 @@ static box Chip8System {
         me.cpu.fini()
         me.cpu = null
         
-        // Test weak reference after CPU destruction
-        print("🧪 Testing weak references after CPU destruction...")
+        // Test reference after CPU destruction
+        print("🧪 Testing references after CPU destruction...")
         me.test_weak_references()
         
         return "Chip-8 emulation and memory management test complete"

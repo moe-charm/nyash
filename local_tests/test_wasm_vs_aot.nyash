@@ -1,0 +1,7 @@
+# 🎯 WASM vs AOT WASM 比較テスト
+local x
+x = 42
+local y
+y = x + 58
+print("Result: " + y.toString())
+return y

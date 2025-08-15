@@ -1,0 +1,23 @@
+// Simple test for SocketBox state sharing
+static box Main {
+    main() {
+        print("🧪 Testing SocketBox state sharing...")
+        
+        local socket
+        socket = new SocketBox()
+        
+        print("Initial isServer: " + socket.isServer().toString())
+        
+        local bindOk
+        bindOk = socket.bind("127.0.0.1", 8080)
+        print("Bind result: " + bindOk.toString())
+        
+        print("After bind isServer: " + socket.isServer().toString())
+        
+        local closeOk
+        closeOk = socket.close()
+        print("Close result: " + closeOk.toString())
+        
+        return true
+    }
+}

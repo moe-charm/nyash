@@ -1,0 +1,62 @@
+// 🔥 Arc<Mutex>状態共有破壊バグの最小再現テスト
+
+static box Main {
+    init { console, server, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // 🎯 テスト1: SocketBox作成・bind・状態確認
+        me.console.log("=== Arc<Mutex>状態共有破壊バグ再現テスト ===")
+        
+        // Step 1: SocketBox作成
+        me.server = new SocketBox()
+        me.console.log("1. SocketBox作成完了")
+        
+        // Step 2: bind実行（is_server = trueに設定されるはず）
+        local bind_result
+        bind_result = me.server.bind("127.0.0.1", 18080)
+        me.console.log("2. bind完了, 結果: " + bind_result.toString())
+        
+        // Step 3: 状態確認（ここでclone()が発生する可能性）
+        local is_server_check1  
+        is_server_check1 = me.server.isServer()
+        me.console.log("3. isServer()チェック1: " + is_server_check1.toString())
+        
+        // Step 4: 変数再代入（clone()確実に発生）
+        local server_copy
+        server_copy = me.server
+        me.console.log("4. サーバー変数コピー完了")
+        
+        // Step 5: コピー後の状態確認
+        local is_server_check2
+        is_server_check2 = server_copy.isServer()  
+        me.console.log("5. コピー後isServer()チェック2: " + is_server_check2.toString())
+        
+        // Step 6: 元の変数での状態確認
+        local is_server_check3
+        is_server_check3 = me.server.isServer()
+        me.console.log("6. 元変数isServer()チェック3: " + is_server_check3.toString())
+        
+        // 🔍 期待結果 vs 実際結果
+        me.console.log("")
+        me.console.log("=== 結果分析 ===")
+        me.console.log("期待結果: 全てtrueであるべき（Arc共有なら）")
+        me.console.log("実際結果:")
+        me.console.log("  bind後: " + is_server_check1.toString())
+        me.console.log("  copy後: " + is_server_check2.toString()) 
+        me.console.log("  元変数: " + is_server_check3.toString())
+        
+        if is_server_check1.toString() == "true" and is_server_check2.toString() == "false" {
+            me.console.log("")
+            me.console.log("🔥 BUG CONFIRMED: clone()でArc共有が破壊されています！")
+            me.result = "bug_confirmed"
+        } else {
+            me.console.log("")
+            me.console.log("✅ 予想外: 問題が修正されている可能性")
+            me.result = "unexpected_fix"
+        }
+        
+        return me.result
+    }
+}

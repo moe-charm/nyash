@@ -1,0 +1,29 @@
+// Debug the listen issue
+static box Main {
+    main() {
+        print("🔍 Debugging socket listen issue...")
+        
+        local socket
+        socket = new SocketBox()
+        
+        local bindOk
+        bindOk = socket.bind("127.0.0.1", 8080)
+        print("Bind result: " + bindOk.toString())
+        
+        // Test server state after bind
+        local isServerResult
+        isServerResult = socket.isServer()
+        print("Is server after bind: " + isServerResult.toString())
+        
+        local listenOk  
+        listenOk = socket.listen(10)
+        print("Listen result: " + listenOk.toString())
+        
+        // Close
+        local closeOk
+        closeOk = socket.close()
+        print("Close result: " + closeOk.toString())
+        
+        return true
+    }
+}

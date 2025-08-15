@@ -1,0 +1,57 @@
+// 📦 ユーザー定義Box間でpack構文テスト
+
+// 親Box
+box Animal {
+    init { name, species }
+    
+    pack(animalName, animalSpecies) {
+        me.name = animalName
+        me.species = animalSpecies
+        print("🐾 Animal pack: " + animalName + " (" + animalSpecies + ")")
+    }
+    
+    speak() {
+        return me.name + " makes a sound"
+    }
+}
+
+// 子Box - pack構文でデリゲーション
+box Dog from Animal {
+    init { breed }
+    
+    pack(dogName, dogBreed) {
+        from Animal.pack(dogName, "Dog")
+        me.breed = dogBreed
+        print("🐕 Dog pack: " + dogName + " (breed: " + dogBreed + ")")
+    }
+    
+    override speak() {
+        return me.name + " barks!"
+    }
+    
+    getBreed() {
+        return me.breed
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("📦 ユーザー定義Box間 pack構文テスト")
+        
+        // pack構文でDogインスタンス作成
+        local myDog = new Dog("Buddy", "Golden Retriever")
+        me.console.log("✅ Dog作成成功")
+        
+        // メソッド呼び出し
+        local sound = myDog.speak()
+        me.console.log("🔊 " + sound)
+        
+        local breed = myDog.getBreed()
+        me.console.log("🐕 犬種: " + breed)
+        
+        return "pack構文テスト成功"
+    }
+}

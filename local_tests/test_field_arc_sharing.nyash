@@ -1,0 +1,29 @@
+# Test Arc sharing for field access
+static box Main {
+    init { console, server }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔬 Field Access Arc Sharing Test")
+        
+        # Store socket in field
+        me.server = new SocketBox()
+        me.console.log("✅ Created me.server")
+        
+        # Test 1: Multiple field accesses
+        local str1 = me.server.toString()
+        me.console.log("📊 First field access: " + str1)
+        
+        local str2 = me.server.toString() 
+        me.console.log("📊 Second field access: " + str2)
+        
+        # Test 2: State change via field access
+        local bindResult = me.server.bind("127.0.0.1", 19888)
+        me.console.log("✅ Bind via field access: " + bindResult.toString())
+        
+        local isServer = me.server.isServer()
+        me.console.log("🔍 isServer via field access: " + isServer.toString())
+        
+        return "FIELD_ACCESS_ARC_TEST"
+    }
+}

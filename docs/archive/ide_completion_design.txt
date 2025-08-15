@@ -1,0 +1,64 @@
+NyashプログラミングIDE補完機能との相性を考慮した名前空間設計について相談です。
+
+【発見した重要な問題】
+プレリュード（自動インポート）は、IDE補完機能との相性が悪い。
+
+【具体例】
+// プレリュード方式
+string.upper("hello")  // ❌ stringがどこから来たか不明、補完が効かない
+
+// 明示的名前空間方式  
+nyashstd.string.upper("hello")  // ✅ ny と打つだけで全候補表示！
+
+【IDE補完の重要性】
+1. **探索可能性（Discoverability）**: 初心者が「何が使えるか」を発見
+2. **学習曲線**: 補完で関数名・引数を学べる
+3. **生産性**: タイプ数削減、タイポ防止
+4. **ドキュメント**: 補完時にドキュメント表示
+
+【検討している設計案】
+
+案1: nyashstd名前空間（超明示的）
+nyashstd.string.upper("hello")
+nyashstd.array.push(arr, item)
+nyashstd.math.sin(3.14)
+// 利点: ny で全部補完、最高の探索可能性
+// 欠点: 毎回長い
+
+案2: using nyashstd（バランス型）
+using nyashstd
+string.upper("hello")
+array.push(arr, item)
+// 利点: 補完も効く、短い
+// 欠点: using忘れると動かない
+
+案3: 階層的アプローチ（段階的）
+// レベル1: 完全明示（初心者）
+nyashstd.string.upper("hello")
+
+// レベル2: using（中級者）
+using nyashstd
+string.upper("hello")  
+
+// レベル3: プレリュード（上級者）
+upper("hello")  // 最頻出のみ
+
+案4: エイリアス提供
+// 両方提供
+nyashstd.string.upper  // 明示版
+str.upper             // 短縮版（プレリュード）
+
+【VSCode等のIDE対応を考慮した質問】
+1. IDE補完を最優先にすべきか、簡潔性を優先すべきか？
+2. nyashstd.* という統一名前空間は良い設計か？
+3. 複数の書き方を許可するのは混乱を招くか？
+4. 他言語でIDE補完に優しい設計例は？
+5. Language Serverとの相性を考慮した最適解は？
+
+【参考：他言語のアプローチ】
+- Rust: std::string::String （明示的、補完◎）
+- Go: strings.ToUpper() （パッケージ明示、補完◎）
+- Python: str.upper() （組み込み、補完△）
+- JavaScript: "".toUpperCase() （プロトタイプ、補完○）
+
+モダンなIDE連携を前提とした、初心者にも優しい名前空間設計をご提案ください。

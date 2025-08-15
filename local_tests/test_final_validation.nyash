@@ -1,0 +1,51 @@
+// Final validation test for the SocketBox state preservation fix
+// This test replicates the exact scenario described in issue #74
+
+static box Main {
+    init { server }
+    
+    main() {
+        print("=== Issue #74 Validation Test ===")
+        print("Testing SocketBox state preservation across field accesses")
+        print("")
+        
+        // Create SocketBox and store in field
+        me.server = new SocketBox()
+        
+        print("Step 1: Initial state")
+        print("me.server.isServer(): " + me.server.isServer())  // Should be false
+        print("")
+        
+        print("Step 2: Calling bind() to set server state")
+        me.server.bind("127.0.0.1", 8080)  // This should set is_server=true
+        print("bind() completed")
+        print("")
+        
+        print("Step 3: Checking state after bind()")
+        print("me.server.isServer(): " + me.server.isServer())  // Should be true if fix works!
+        print("")
+        
+        // Additional tests: multiple accesses should all return same state
+        print("Step 4: Multiple field access test")
+        local server1
+        server1 = me.server
+        print("server1.isServer(): " + server1.isServer())  // Should be true
+        
+        local server2
+        server2 = me.server
+        print("server2.isServer(): " + server2.isServer())  // Should be true
+        
+        print("")
+        print("=== Test Summary ===")
+        if (me.server.isServer()) {
+            print("✅ SUCCESS: SocketBox state preserved across field accesses!")
+            print("   The 'Everything is Box' design now correctly shares state")
+            print("   for stateful boxes like SocketBox, P2PBox, etc.")
+        } else {
+            print("❌ FAILURE: SocketBox state was not preserved")
+            print("   The fix did not work as expected")
+        }
+        
+        return me.server.isServer()
+    }
+}

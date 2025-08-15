@@ -1,0 +1,14 @@
+box DataBox {
+    init { value }
+    
+    pack(v) {
+        me.value = v
+    }
+}
+
+static box Main {
+    main() {
+        local obj = new DataBox(42)
+        return obj.value
+    }
+}

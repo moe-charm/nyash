@@ -1,7 +1,0 @@
-static box Main {
-    main() {
-        print("WASM Box Operations Test")
-        print(42 + 8)
-        return 50
-    }
-}

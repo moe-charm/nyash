@@ -1,7 +1,0 @@
-// 算術演算テスト
-print(2 + 3)
-print(10 - 4) 
-print(5 * 3)
-print(15 / 3)
-print("Hello" + "World")
-print("Test" * 3)

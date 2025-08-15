@@ -1,6 +1,9 @@
-/*!
- * Simple test for basic MIR functionality
- */
-
-// A simple Nyash program for testing MIR compilation
-print(42 + 10)
+// Simple MIR test
+static box Main {
+    main() {
+        local result
+        result = 42 + 8
+        print(result)
+        return result
+    }
+}

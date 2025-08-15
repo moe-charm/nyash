@@ -1,0 +1,75 @@
+Nyashプログラミング言語の名前空間結びつけ設計について深い相談です。
+
+【前提】
+ハイブリッドアプローチ（文字列リテラル箱化 + 静的メソッド）を採用予定。
+static class string{}, static class math{} が存在する状況での名前空間設計。
+
+【現在の課題】
+- namespace string, namespace math は明示的だが記述が煩雑
+- namespace nyash と書いて、nyashとstring/mathを結びつけたい
+- 明示性と簡潔性の完璧なバランスを求める
+
+【検討中の設計パターン】
+
+Pattern 1: namespace集約 + imports
+namespace nyash imports string, math {
+    // この中では直接アクセス可能
+    local msg = string.upper("hello")
+    local result = math.sin(3.14)
+    print(msg)  // nyash組み込み関数
+}
+
+Pattern 2: static class nyash階層
+static class nyash {
+    static class string {
+        upper(str) { ... }
+        length(str) { ... }
+    }
+    static class math {
+        sin(x) { ... }
+        cos(x) { ... }
+    }
+}
+// 使用: nyash.string.upper("hello")
+
+Pattern 3: static class nyash直接定義
+static class nyash {
+    string_upper(str) { ... }
+    math_sin(x) { ... }
+    print(msg) { ... }
+}
+// 使用: nyash.string_upper("hello")
+
+Pattern 4: using システム
+using nyash.string as string
+using nyash.math as math
+// その後: string.upper("hello")
+
+【Nyash設計哲学との整合性】
+1. Everything is Box: 全てがBoxオブジェクト
+2. 明示性重視: 何が起きているかを隠さない
+3. 初心者フレンドリー: 学習コストの低減
+4. 実用性確保: 日常的な使いやすさ
+
+【重要な検討点】
+1. **明示性 vs 簡潔性**: どこまで簡潔にしても明示性を保てるか？
+2. **スコープ管理**: namespace内での名前衝突回避方法は？
+3. **階層 vs フラット**: nyash.string.upper vs nyash.string_upper どちらが自然？
+4. **学習コスト**: ユーザーが覚えるべきルールの複雑さは？
+5. **IDE支援**: 補完・ナビゲーション機能との相性は？
+
+【他言語の参考例】
+- Python: from math import sin, cos
+- JavaScript: import { upper } from 'string-utils'
+- C#: using System; using System.Math;
+- Rust: use std::collections::HashMap;
+- Go: import "math", import "strings"
+
+【質問】
+1. Nyash哲学に最も適した名前空間結びつけ方法は？
+2. namespace nyash概念の技術的実装可能性は？
+3. 明示性を保ちながら最も簡潔な記述方法は？
+4. static class階層 vs namespace imports どちらが優れているか？
+5. 初心者にとって最も理解しやすい設計は？
+
+プログラミング言語の名前空間設計の専門的視点から、Nyashに最適な解決策をご提案ください。

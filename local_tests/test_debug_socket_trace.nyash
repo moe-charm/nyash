@@ -1,0 +1,63 @@
+# 🔥 SocketBox完全デバッグトレース
+# ファイルログ出力 + パーサーレベル追跡
+
+static box Main {
+    init { console, server, result, debug_id }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.debug_id = "TRACE_MAIN"
+        me.console.log("🔥 SocketBox完全デバッグトレース開始")
+        me.console.log("Debug ID: " + me.debug_id)
+        
+        # Step 1: SocketBox作成
+        me.console.log("=== Step 1: SocketBox作成 ===")
+        me.server = new SocketBox()
+        me.console.log("✅ SocketBox作成完了")
+        me.console.log("作成されたSocketBox: " + me.server.toString())
+        
+        # Step 2: 初期状態確認
+        me.console.log("=== Step 2: 初期状態確認 ===")
+        local initialState = me.server.isServer()
+        me.console.log("初期isServer状態: " + initialState.toString())
+        
+        # Step 3: bind実行 (詳細ログ出力)
+        me.console.log("=== Step 3: bind実行 ===")
+        me.console.log("bind呼び出し前のSocketBox: " + me.server.toString())
+        
+        local bindResult = me.server.bind("127.0.0.1", 18080)
+        me.console.log("bind戻り値: " + bindResult.toString())
+        
+        # Step 4: bind後状態確認
+        me.console.log("=== Step 4: bind後状態確認 ===")
+        me.console.log("bind実行後のSocketBox: " + me.server.toString())
+        
+        local postBindState = me.server.isServer()
+        me.console.log("bind後isServer状態: " + postBindState.toString())
+        
+        # Step 5: 再確認テスト
+        me.console.log("=== Step 5: 再確認テスト ===")
+        local recheck1 = me.server.isServer()
+        local recheck2 = me.server.isServer()
+        me.console.log("再確認1: " + recheck1.toString())
+        me.console.log("再確認2: " + recheck2.toString())
+        
+        # Step 6: 結果判定
+        me.console.log("=== Step 6: 結果判定 ===")
+        if postBindState.equals(true) {
+            me.result = "🎉 SUCCESS: 状態保持正常"
+            me.console.log(me.result)
+        } else {
+            me.result = "❌ FAILED: 状態保持失敗"
+            me.console.log(me.result)
+            me.console.log("bind結果: " + bindResult.toString())
+            me.console.log("期待値: true, 実際値: " + postBindState.toString())
+        }
+        
+        # クリーンアップ
+        me.server.close()
+        me.console.log("🧹 クリーンアップ完了")
+        
+        return me.result
+    }
+}

@@ -1,0 +1,51 @@
+// 🌐 Simple HTTP Server Test - Basic TCP functionality
+// Tests TCP socket operations before full HTTP implementation
+
+static box Main {
+    init { server, result }
+    
+    main() {
+        print("🚀 Testing TCP Socket Server functionality...")
+        
+        // Create and test SocketBox
+        me.server = new SocketBox()
+        print("✅ SocketBox created: " + me.server.toString())
+        
+        // Test binding to local address
+        print("🔌 Testing bind operation...")
+        local bindResult
+        bindResult = me.server.bind("127.0.0.1", 8080)
+        print("📡 Bind result: " + bindResult.toString())
+        
+        if (bindResult.toString() == "true") {
+            print("✅ Successfully bound to port 8080")
+            
+            // Test listen operation
+            print("👂 Testing listen operation...")
+            local listenResult
+            listenResult = me.server.listen(10)
+            print("📡 Listen result: " + listenResult.toString())
+            
+            if (listenResult.toString() == "true") {
+                print("✅ Successfully listening on port 8080")
+                print("🎯 Server is ready to accept connections!")
+                print("📝 Note: This is a basic test - no actual connections accepted")
+                
+                // Close the server
+                print("🛑 Closing server...")
+                local closeResult
+                closeResult = me.server.close()
+                print("📡 Close result: " + closeResult.toString())
+                
+                me.result = "TCP Server test completed successfully"
+            } else {
+                me.result = "Failed to listen on port 8080"
+            }
+        } else {
+            me.result = "Failed to bind to port 8080"
+        }
+        
+        print("🏁 Test completed: " + me.result)
+        return me.result
+    }
+}

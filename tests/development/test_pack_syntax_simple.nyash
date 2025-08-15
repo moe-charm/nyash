@@ -1,0 +1,46 @@
+// 📦 pack構文テスト - ビルトインBox継承専用機能確認
+
+// ビルトインBoxを継承してpack構文をテスト
+box MyMathBox from MathBox {
+    init { history }  // 追加フィールド
+    
+    pack() {
+        from MathBox.pack()  // 親のpackを呼び出し
+        me.history = new ArrayBox()  // 履歴追加
+        print("✅ MyMathBox pack完了")
+    }
+    
+    override sin(x) {
+        local result = from MathBox.sin(x)
+        me.history.push("sin(" + x + ") = " + result)
+        print("📝 履歴追加: sin(" + x + ") = " + result)
+        return result
+    }
+    
+    getHistory() {
+        return me.history
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 pack構文テスト開始")
+        
+        // packコンストラクタでインスタンス作成
+        local mathCalc = new MyMathBox()
+        me.console.log("✅ MyMathBox作成成功")
+        
+        // sin計算テスト
+        local result = mathCalc.sin(1.5708)  // π/2 ≈ 90度
+        me.console.log("🔢 sin(π/2) = " + result)
+        
+        // 履歴確認
+        local history = mathCalc.getHistory()
+        me.console.log("📚 履歴サイズ: " + history.length())
+        
+        return "pack構文テスト完了"
+    }
+}

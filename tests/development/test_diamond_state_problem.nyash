@@ -1,0 +1,51 @@
+# Diamond Problem - 状態変更の重複実行テスト
+
+print("=== Diamond State Problem Test ===")
+
+# カウンター付きStringBox拡張
+box CounterString from StringBox {
+    init { counter }
+    
+    birth(content) {
+        from StringBox.birth(content)
+        me.counter = 0
+        print("CounterString.birth: counter = " + me.counter)
+    }
+    
+    override toString() {
+        me.counter = me.counter + 1  # ← 呼び出されるたびにカウントアップ
+        print("CounterString.toString called: counter = " + me.counter)
+        return "Counter[" + me.counter + "]: " + from StringBox.toString()
+    }
+}
+
+# Diamond Problem - 状態変更が重複する
+box DoubleProblem from CounterString, StringBox {
+    init { prob_data }
+    
+    birth(content) {
+        from CounterString.birth(content)
+        me.prob_data = "problem"
+        print("DoubleProblem.birth called")
+    }
+    
+    override toString() {
+        print("DoubleProblem.toString called")
+        # 同じCounterStringのcounterが2回増える？
+        local a = from CounterString.toString()  # counter++
+        local b = from StringBox.toString()      # 別のStringBox？
+        return "Double[" + a + " | " + b + "]"
+    }
+}
+
+# テスト実行
+print("\n--- Creating instance ---")
+local prob = new DoubleProblem("test")
+
+print("\n--- First toString call ---")
+print(prob.toString())
+
+print("\n--- Second toString call ---")
+print(prob.toString())
+
+print("\n=== Test completed ===")

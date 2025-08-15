@@ -1,0 +1,31 @@
+// ArrayBox動作確認テスト
+static box ArrayTest {
+    init { arr, random }
+    
+    main() {
+        me.random = new RandomBox()
+        me.arr = new ArrayBox()
+        
+        print("=== ArrayBox動作テスト ===")
+        
+        // 初期状態確認
+        print("初期長さ: " + me.arr.length().toString())
+        
+        // 要素追加
+        me.arr.push("要素1")
+        print("push後の長さ: " + me.arr.length().toString())
+        
+        me.arr.push("要素2")
+        print("2回目push後の長さ: " + me.arr.length().toString())
+        
+        // 乱数テスト
+        local randomNum
+        randomNum = me.random.next()
+        print("乱数生成: " + randomNum.toString())
+        
+        // ArrayBox内容確認
+        print("配列内容: " + me.arr.toString())
+        
+        return "テスト完了"
+    }
+}

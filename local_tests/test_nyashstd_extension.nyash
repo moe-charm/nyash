@@ -1,0 +1,34 @@
+// nyashstd拡張テスト - 基本型作成関数
+
+using nyashstd
+
+static box Main {
+    main() {
+        print("🌟 nyashstd拡張テスト開始")
+        
+        // 既存のstring.upper()テスト
+        local text = string.upper("hello")
+        print("string.upper(): " + text)
+        
+        // 新機能: string.create()テスト
+        local created_string = string.create("created text")
+        print("string.create(): " + created_string)
+        
+        // 新機能: integer.create()テスト
+        local num = integer.create(42)
+        print("integer.create(): " + num)
+        
+        // 新機能: bool.create()テスト
+        local flag = bool.create(true)
+        print("bool.create(): " + flag)
+        
+        // 新機能: array.create()テスト
+        local arr = array.create()
+        print("array.create(): " + arr)
+        
+        // 新機能: console.log()テスト
+        console.log("Hello from console.log()!")
+        
+        print("✅ nyashstd拡張テスト完了")
+    }
+}

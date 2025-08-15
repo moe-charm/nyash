@@ -1,0 +1,40 @@
+# 🔥 Phase 8.8: pack透明化システム 基本テスト
+# ユーザーは`pack`を一切意識せず、`from BuiltinBox()`で自動動作
+
+print("=== pack透明化システム基本テスト開始 ===")
+
+# テストA: ユーザー定義Box基本動作 (birth優先)
+box Life {
+    init { name, energy }
+    
+    birth(lifeName) {
+        me.name = lifeName
+        me.energy = 100
+    }
+    
+    introduce() {
+        return "私の名前は " + me.name + " です。"
+    }
+}
+
+local alice = new Life("Alice")
+print("A. " + alice.introduce())
+
+# テストB: 透明化システム動作 - 最重要テスト
+box SimpleString from StringBox {
+    init { prefix }
+    
+    birth(content, prefixStr) {
+        from StringBox(content)  # ← 透明化！内部的にpack呼び出し
+        me.prefix = prefixStr
+    }
+    
+    getMessage() {
+        return me.prefix + "test message"
+    }
+}
+
+local simple = new SimpleString("World", "<<< ")
+print("B. " + simple.getMessage())
+
+print("=== pack透明化システム基本テスト完了 ===")

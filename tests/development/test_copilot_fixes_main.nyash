@@ -1,0 +1,95 @@
+// 🎯 Copilot修正版の包括的テスト - Mainエントリーポイント付き
+
+// テストクラス群
+static box TestRunner {
+    init { console }
+    
+    test_modulo_operator() {
+        me.console.log("📐 Testing % operator (ModuloBox fix)...")
+        
+        // Chip-8 style operations
+        local result1 = 4096 % 4096
+        me.console.log("4096 % 4096 = " + result1)  // Expected: 0
+        
+        local result2 = 256 % 16
+        me.console.log("256 % 16 = " + result2)   // Expected: 0
+        
+        local result3 = 17 % 5
+        me.console.log("17 % 5 = " + result3)    // Expected: 2
+        
+        local result4 = 10 % 3
+        me.console.log("10 % 3 = " + result4)    // Expected: 1
+        
+        if result1 == 0 and result2 == 0 and result3 == 2 and result4 == 1 {
+            me.console.log("✅ % operator fix SUCCESSFUL!")
+        } else {
+            me.console.log("❌ % operator fix FAILED!")
+        }
+    }
+    
+    test_null_literals() {
+        me.console.log("🔧 Testing null literal support...")
+        
+        // Test null assignment
+        local null_var = null
+        me.console.log("Null variable: " + null_var)
+        
+        // Note: null comparison might not work yet
+        me.console.log("✅ Null literal parsing works")
+    }
+    
+    test_array_length() {
+        me.console.log("📊 Testing ArrayBox.length() functionality...")
+        
+        local test_array = new ArrayBox()
+        local initial_length = test_array.length()
+        me.console.log("Empty array length: " + initial_length)
+        
+        // Add elements
+        test_array.push("line1")
+        test_array.push("line2") 
+        test_array.push("line3")
+        
+        local populated_length = test_array.length()
+        me.console.log("Array with 3 elements length: " + populated_length)
+        
+        if populated_length == 3 {
+            me.console.log("✅ ArrayBox.length() fix SUCCESSFUL!")
+        } else {
+            me.console.log("❌ ArrayBox.length() fix FAILED!")
+        }
+    }
+    
+    run_all_tests() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 Copilot Fixes - Comprehensive Test Suite")
+        me.console.log("===============================================")
+        
+        me.test_modulo_operator()
+        me.console.log("")
+        
+        me.test_null_literals()
+        me.console.log("")
+        
+        me.test_array_length()
+        me.console.log("")
+        
+        me.console.log("🎉 All Copilot fix tests completed!")
+        return "Comprehensive test suite finished"
+    }
+}
+
+// 🚀 Mainエントリーポイント - Nyashの標準パターン
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🎯 Starting Copilot Fixes Test")
+        
+        local result = TestRunner.run_all_tests()
+        
+        me.console.log("🏁 Test result: " + result)
+        return "Main execution complete"
+    }
+}

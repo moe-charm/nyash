@@ -1,0 +1,106 @@
+Nyashプログラミング言語のオーバーライド設計について深い相談です。
+
+【現在発見された実装問題】
+現在のNyashでは HashMap::insert により「暗黙のオーバーライド」が発生している：
+```rust
+// instance.rs - add_method関数
+pub fn add_method(&mut self, method_name: String, method_ast: ASTNode) {
+    let mut new_methods = (*self.methods).clone();
+    new_methods.insert(method_name, method_ast);  // ← 同名で上書き！
+    self.methods = Arc::new(new_methods);
+}
+```
+
+これにより以下が可能になってしまっている：
+```nyash
+box Node {
+    send(msg) {           // 最初の定義
+        print("Version 1")
+    }
+    
+    send(msg) {          // 暗黙に上書きされる
+        print("Version 2")  // ← こちらだけが残る
+    }
+}
+```
+
+【Nyashの設計哲学との矛盾】
+- **明示性重視**: 何が起きているかを隠さない
+- **Everything is Box**: 統一された世界観
+- **from デリゲーション**: `from Parent.method()` の明示的呼び出し
+- **初学者フレンドリー**: 複雑な概念を分かりやすく表現
+
+【提案する修正方針】
+
+**1. 暗黙のオーバーライドを完全禁止**
+```nyash
+box Node {
+    send(msg) {
+        print("Version 1")
+    }
+    
+    send(msg) {          // ← コンパイルエラーにする
+        print("Version 2")
+    }
+}
+// Error: Method 'send' is already defined. Use 'override' keyword if intentional.
+```
+
+**2. コンストラクタのオーバーロード禁止**
+```nyash
+box Node {
+    constructor(id) {
+        me.id = id
+    }
+    
+    constructor(id, name) {    // ← エラーにする
+        me.id = id
+        me.name = name
+    }
+}
+// Error: Constructor overloading is not allowed. Use explicit initialization.
+```
+
+**3. デリゲーションでの明示的override**
+```nyash
+box MeshNode : P2PBox {
+    // 明示的にオーバーライドする意図を示す
+    override send(intent, data, target) {
+        me.routing.log(target)
+        from P2PBox.send(intent, data, target)  // 親の実装も呼べる
+    }
+    
+    // 新しいメソッド（overrideなし）
+    sendWithRetry(intent, data, target) {
+        // 新機能
+    }
+}
+```
+
+**4. エラーメッセージの改善**
+- 重複定義時: "Method 'send' already exists. Use 'override' if you want to replace parent method."
+- override不正使用時: "Method 'newMethod' does not exist in parent. Remove 'override' keyword."
+
+【深く考えてほしい点】
+
+**1. 哲学的整合性**
+- この方針はNyashの「明示性重視」「Everything is Box」哲学と整合しますか？
+- `from Parent.method()` デリゲーション設計との相性は？
+
+**2. 学習コスト vs 安全性**
+- `override` キーワード追加による学習コストは妥当ですか？
+- 暗黙のオーバーライド禁止により、どの程度安全性が向上しますか？
+
+**3. デリゲーションとの関係**
+- デリゲーション先メソッドを `override` するのは自然ですか？
+- 多重デリゲーション時の `override` はどう扱うべきですか？
+
+**4. 実装上の課題**
+- コンパイル時の重複チェック実装の複雑度は？
+- 既存コードへの影響と移行戦略は？
+
+**5. 他言語との比較優位性**
+- Java/C#の `@Override` や TypeScript の `override` との違いは？
+- Nyashならではの独自価値は何ですか？
+
+プログラミング言語設計の専門的視点から、この方針がNyashの目指す「明示的で安全、かつ初学者フレンドリーな言語」に最適かどうか深く分析してください。

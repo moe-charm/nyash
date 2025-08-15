@@ -1,0 +1,21 @@
+// Debug test for statics namespace
+
+static box TestHelper {
+    greet() {
+        return "Hello from TestHelper"
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("Starting statics debug test")
+        
+        // This will fail but show us the debug output
+        local test = TestHelper
+        
+        return "Complete"
+    }
+}

@@ -1,0 +1,25 @@
+// 🧪 Null Literal Support Test (Simplified)
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 Testing Null Literal Support (Simplified)")
+        
+        // Test 1: Basic null assignment and display
+        local null_value = null
+        me.console.log("Null value: " + null_value)
+        
+        // Test 2: Null in string concatenation
+        local concat_test = "Result: " + null_value + " (end)"
+        me.console.log("Concatenation test: " + concat_test)
+        
+        // Test 3: Non-null vs null
+        local non_null_value = "not null"
+        me.console.log("Non-null value: " + non_null_value)
+        
+        me.console.log("✅ Null literal basic functionality works!")
+        return "Null literal test complete"
+    }
+}

@@ -1,0 +1,34 @@
+# 🔥 SocketBox bind()のみテスト - toString()なし
+
+static box Main {
+    init { console, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("SocketBox bind()テスト開始")
+        
+        # SocketBox作成
+        local socket = new SocketBox()
+        me.console.log("SocketBox作成完了")
+        
+        # bind実行（toString()やisServer()を避ける）
+        me.console.log("bind実行開始...")
+        local bindResult = socket.bind("127.0.0.1", 19999)
+        me.console.log("bind実行完了")
+        
+        # bindResultの状態だけ確認
+        if bindResult.equals(true) {
+            me.result = "BIND_SUCCESS"
+            me.console.log("bind成功!")
+        } else {
+            me.result = "BIND_FAILED"
+            me.console.log("bind失敗!")
+        }
+        
+        # クリーンアップ
+        socket.close()
+        me.console.log("テスト完了")
+        
+        return me.result
+    }
+}

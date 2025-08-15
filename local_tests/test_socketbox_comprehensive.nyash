@@ -1,0 +1,59 @@
+# test_socketbox_comprehensive.nyash
+# 🎯 Comprehensive test to verify SocketBox deadlock fix and functionality
+
+static box Main {
+    init { console, results }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🎯 SocketBox Comprehensive Functionality Test")
+        me.results = new StringBox("Test Results: ")
+        
+        # Test 1: Basic creation and method calls
+        me.console.log("Test 1: Basic SocketBox operations...")
+        local socket = new SocketBox()
+        local initial_str = socket.toString()
+        local initial_server = socket.isServer()
+        
+        me.results = new StringBox(me.results.toString() + "create:OK ")
+        me.console.log("✅ Creation and basic methods: " + initial_server.toString())
+        
+        # Test 2: Bind operation and state change
+        me.console.log("Test 2: Bind operation...")
+        local bind_result = socket.bind("127.0.0.1", 17777)
+        local after_bind_server = socket.isServer()
+        
+        me.results = new StringBox(me.results.toString() + "bind:OK ")
+        me.console.log("✅ Bind result: " + bind_result.toString())
+        
+        # Test 3: Multiple method calls on same socket
+        me.console.log("Test 3: Multiple operations...")
+        local str1 = socket.toString()
+        local str2 = socket.toString()
+        local server1 = socket.isServer()
+        local server2 = socket.isServer()
+        
+        me.results = new StringBox(me.results.toString() + "multiple:OK ")
+        me.console.log("✅ Multiple calls completed")
+        
+        # Test 4: Close operation
+        me.console.log("Test 4: Close operation...")
+        local close_result = socket.close()
+        local after_close_str = socket.toString()
+        
+        me.results = new StringBox(me.results.toString() + "close:OK ")
+        me.console.log("✅ Close result: " + close_result.toString())
+        
+        # Test 5: Create new socket after close
+        me.console.log("Test 5: New socket creation...")
+        local socket2 = new SocketBox()
+        local new_str = socket2.toString()
+        local new_server = socket2.isServer()
+        
+        me.results = new StringBox(me.results.toString() + "new:OK ")
+        me.console.log("✅ New socket created successfully")
+        
+        me.console.log("🎉 All tests passed! " + me.results.toString())
+        return "COMPREHENSIVE_SUCCESS"
+    }
+}

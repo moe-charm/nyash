@@ -1,9 +1,0 @@
-# Simple WASM ExternCall test - for manual MIR injection
-static box Main {
-    init { result }
-    
-    main() {
-        me.result = "WASM test ready"
-        return me.result
-    }
-}

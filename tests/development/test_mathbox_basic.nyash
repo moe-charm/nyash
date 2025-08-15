@@ -1,0 +1,33 @@
+// 🧮 MathBox基本機能テスト
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧮 MathBox基本機能テスト")
+        
+        // MathBox作成
+        local math = new MathBox()
+        me.console.log("✅ MathBox作成成功")
+        
+        // 基本計算テスト
+        local result1 = math.abs(-42)
+        me.console.log("🔢 abs(-42) = " + result1)
+        
+        local result2 = math.max(10, 25)
+        me.console.log("🔢 max(10, 25) = " + result2)
+        
+        local result3 = math.sqrt(16)
+        me.console.log("🔢 sqrt(16) = " + result3)
+        
+        // 三角関数テスト
+        local pi = math.getPi()
+        me.console.log("🔢 π = " + pi)
+        
+        local sin_result = math.sin(1.5708)  // π/2 ≈ 1.5708
+        me.console.log("🔢 sin(π/2) = " + sin_result)
+        
+        return "MathBox基本機能テスト完了"
+    }
+}

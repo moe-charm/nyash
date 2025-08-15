@@ -1,0 +1,38 @@
+Nyashプログラミング言語の多重デリゲーション設計について深い相談です。
+
+【現在の状況】
+- Everything is Box哲学でデリゲーション優先設計
+- 明示性重視（何が起きているかを隠さない）
+- 単一デリゲーション（box Child from Parent）は完全実装済み
+
+【多重デリゲーション候補】
+box MultiChild from ParentA, ParentB {
+    method() {
+        from ParentA.methodA()
+        from ParentB.methodB()
+    }
+}
+
+【Diamond Problem（菱形継承問題）】
+box Middle from StringBox { ... }
+box Diamond from Middle, StringBox {
+    toString() {
+        local a = from Middle.toString()     # Middle内でStringBox.toString()呼び出し
+        local b = from StringBox.toString()  # 直接StringBox.toString()呼び出し
+        # 同じStringBoxに2回アクセス→状態変更重複・パフォーマンス問題
+    }
+}
+
+【解決策候補】
+1. **上書き方式**: 後から指定した方を優先（from Middle, StringBox → StringBoxが優先）
+2. **明示的解決**: 曖昧性をコンパイル時エラーにして、ユーザーに解決を強制
+3. **完全禁止**: 多重デリゲーション自体を禁止、コンポジション推奨
+
+【質問】
+1. Nyash明示性哲学に最も適した解決策は？
+2. 上書き方式は「明示性」に反するか？
+3. Diamond Problemを根本的に避ける設計は？
+4. 実用性vs安全性のバランスをどう取るべき？
+5. 他言語（Go, Rust, Kotlin等）の参考になる設計は？
+
+プログラミング言語設計の専門的視点から、Nyashの哲学に最適な多重デリゲーション設計を分析してください。

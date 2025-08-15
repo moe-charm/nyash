@@ -1,0 +1,10 @@
+// Async operations MIR test
+static box Main {
+    main() {
+        nowait f1 = 42
+        local result
+        result = await f1
+        print(result)
+        return result
+    }
+}

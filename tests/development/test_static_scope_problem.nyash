@@ -1,0 +1,41 @@
+// 🚨 static box → static box スコープ解決問題テスト
+
+// 呼び出し先のstatic box
+static box TestHelper {
+    test_method() {
+        return "TestHelper method called successfully"
+    }
+    
+    calculate(x, y) {
+        return x + y
+    }
+}
+
+// メインのstatic box（呼び出し元）
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🚨 Testing static box → static box scope resolution")
+        
+        // Test 1: 直接的な静的メソッド呼び出し
+        me.console.log("Test 1: Direct static method call")
+        local result1 = TestHelper.test_method()
+        me.console.log("Result: " + result1)
+        
+        // Test 2: 引数付きの静的メソッド呼び出し
+        me.console.log("Test 2: Static method with arguments")
+        local result2 = TestHelper.calculate(10, 20)
+        me.console.log("10 + 20 = " + result2)
+        
+        // Test 3: 変数に格納してから呼び出し
+        me.console.log("Test 3: Method call with variable storage")
+        local helper = TestHelper
+        local result3 = helper.test_method()
+        me.console.log("Via variable: " + result3)
+        
+        me.console.log("🏁 Static scope resolution test complete")
+        return "Main execution finished"
+    }
+}

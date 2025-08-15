@@ -1,0 +1,47 @@
+# test_other_boxes_working.nyash
+# ✅ 他のBox型正常動作確認（SocketBoxとの対比）
+
+static box Main {
+    init { console, results }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("✅ 他のBox正常動作確認テスト開始")
+        me.results = new ArrayBox()
+        
+        # Test 1: ArrayBox正常動作確認
+        me.console.log("Test 1: ArrayBox...")
+        local array = new ArrayBox()
+        array.push("test_item")
+        local arraySize = array.size()
+        me.console.log("✅ ArrayBox正常: size=" + arraySize.toString())
+        me.results.push("ArrayBox:OK")
+        
+        # Test 2: MapBox正常動作確認
+        me.console.log("Test 2: MapBox...")
+        local map = new MapBox()
+        map.set("test_key", "test_value")
+        local mapValue = map.get("test_key")
+        me.console.log("✅ MapBox正常: value=" + mapValue.toString())
+        me.results.push("MapBox:OK")
+        
+        # Test 3: IntegerBox正常動作確認
+        me.console.log("Test 3: IntegerBox...")
+        local num = new IntegerBox(42)
+        local numStr = num.toString()
+        me.console.log("✅ IntegerBox正常: " + numStr)
+        me.results.push("IntegerBox:OK")
+        
+        # Test 4: StringBox正常動作確認
+        me.console.log("Test 4: StringBox...")
+        local str = new StringBox("Hello")
+        local strLen = str.length()
+        me.console.log("✅ StringBox正常: length=" + strLen.toString())
+        me.results.push("StringBox:OK")
+        
+        local totalResults = me.results.size()
+        me.console.log("🎉 他のBox全て正常動作: " + totalResults.toString() + "件成功")
+        
+        return "OTHER_BOXES_ALL_OK"
+    }
+}

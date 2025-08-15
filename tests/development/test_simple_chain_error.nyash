@@ -1,0 +1,37 @@
+# 簡単な3段階継承チェーンエラー再現
+
+# 1段階目: ビルトインBox
+# StringBox (内蔵)
+
+# 2段階目: ユーザー定義Box
+box MiddleBox from StringBox {
+    init { middle_data }
+    
+    birth(content) {
+        from StringBox.birth(content)
+        me.middle_data = "middle"
+    }
+    
+    override toString() {
+        return "Middle: " + from StringBox.toString()
+    }
+}
+
+# 3段階目: ユーザー定義Box (ここでエラー!)
+box TopBox from MiddleBox {
+    init { top_data }
+    
+    birth(content) {
+        from MiddleBox.birth(content)
+        me.top_data = "top"
+    }
+    
+    override toString() {
+        # ここでエラー: TopBox は StringBox に直接 from していない
+        return "Top: " + from MiddleBox.toString()  # この中で StringBox.toString() が呼ばれる
+    }
+}
+
+# エラーが出る実行
+local top = new TopBox("test")
+print(top.toString())  # ❌ ここでエラー発生！

@@ -1,0 +1,18 @@
+// Test simple loop for WASM compilation
+static box Main {
+    init { counter, result }
+    
+    main() {
+        me.counter = 0
+        me.result = 0
+        
+        // Simple loop that should generate Jump/Branch instructions
+        loop(me.counter < 5) {
+            me.result = me.result + me.counter
+            me.counter = me.counter + 1
+        }
+        
+        print(me.result)
+        return me.result
+    }
+}
