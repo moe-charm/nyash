@@ -1,4 +1,4 @@
-# 🎯 現在のタスク (2025-08-14 Phase 9.7実装完了・PR #75修正完了)
+# 🎯 現在のタスク (2025-08-15 Phase 9.75-B部分完了・残りBox修正準備完了)
 
 ## 🎉 2025-08-14 Phase 8完全完了！
 
@@ -115,31 +115,59 @@ canvas.call("fillRect", 10, 10, 100, 50)
 - **Everything is Box完成**: 内部Box + 外部Boxの完全統合 ✅
 - **クロスプラットフォーム**: WASM/VM/LLVM統一外部呼び出し ✅
 
-## ✅ **PR #75: SocketBox状態保持問題修正完了（2025-08-14）**
+## ✅ **Phase 9.75-B: Arc<Mutex> → RwLock変換部分完了（2025-08-15）**
 
-### 🎉 **Arc<dyn NyashBox>統合修正完了**
-✅ **技術的修正完了**:
-- **20箇所の型エラー**: 機械的修正完了 ✅
-- **Arc参照共有**: `(**arc)` → `(*arc)` 統一 ✅
-- **Box↔Arc変換**: `Arc::from(box)` / `(*arc).clone_box()` 統一 ✅
+### 🎉 **PR #87 + PR #89完全成功**
+✅ **RwLock変換完了Box型**:
+- **SocketBox**: ✅ **PR #87で状態保持問題完全解決** - `bind()`→`isServer()`=true確認済み
+- **ArrayBox**: `Arc<Mutex<Vec<...>>>` → `RwLock<Vec<...>>` ✅
+- **MapBox**: `Arc<Mutex<HashMap<...>>>` → `RwLock<HashMap<...>>` ✅  
+- **BufferBox**: `Arc<Mutex<Vec<u8>>>` → `RwLock<Vec<u8>>` ✅
+- **StreamBox**: buffer・positionフィールド → `RwLock<T>` ✅
+- **DebugBox**: 全フィールド → `RwLock<T>` + 手動Clone実装 ✅
 - **フルビルド成功**: `cargo build --release` エラー0個 ✅
 
-✅ **SocketBox状態保持修正原理**:
+✅ **PR #87実証済み修正パターン**:
 ```rust
-// 🔧 修正前: 状態が失われる
-Box::new(updated_instance)  // 新しいBox作成
+// 🔧 修正前: Arc<Mutex>二重ロック問題
+struct SocketBox {
+    listener: Arc<Mutex<Option<TcpListener>>>,  // 内部ロック
+    is_server: Arc<Mutex<bool>>,                // 内部ロック
+}
 
-// ✅ 修正後: Arcで状態共有
-Arc::new(updated_instance)   // 参照共有
-Arc::clone(&existing_arc)    // 同じ状態コンテナ共有
+// ✅ 修正後: RwLock単一責務
+struct SocketBox {
+    listener: RwLock<Option<TcpListener>>,      // 状態保持確実
+    is_server: RwLock<bool>,                    // シンプル内部可変性
+}
 ```
 
-### 📝 **期待効果（テスト必要）**
+### ✅ **動作確認済み**
 ```nyash
 server = new SocketBox()
 server.bind("127.0.0.1", 8080)  // 状態設定
-server.isServer()                // 🎯 true期待（修正前: false）
+server.isServer()                // ✅ true確認済み（PR #87で修正完了）
 ```
+
+## 🚀 **次のアクション: Phase 9.75-C（残り10個Box修正）**
+
+### 📋 **準備完了**
+- ✅ **実装ガイド作成**: [phase9_75c_remaining_boxes_arc_mutex_final.md](docs/予定/native-plan/issues/phase9_75c_remaining_boxes_arc_mutex_final.md)
+- ✅ **修正パターン確立**: PR #87のSocketBox成功パターン
+- ✅ **対象Box特定**: 10個のArc<Mutex>使用Box確認済み
+
+### 🎯 **Copilot協力依頼予定**
+**期間**: 2週間（優先度別段階実装）
+**対象Box型**:
+- 🔴 **最優先**: HTTPServerBox, P2PBox（3日）
+- 🟠 **高優先**: IntentBox, SimpleIntentBox（3日）  
+- 🟡 **中優先**: JSONBox, RandomBox（3日）
+- 🟢 **低優先**: EguiBox, FileBox, FutureBox（2日）
+
+### ⚡ **期待される最終効果**
+- **Arc<Mutex>完全根絶**: `grep -r "Arc<Mutex<" src/boxes/` → 0件
+- **状態保持100%確実**: 全Box型でPR #87パターン適用
+- **Everything is Box哲学完成**: 技術基盤の完全統一
 
 ## ✅ **PR #75・Phase 9.7実装完了 - SocketBox問題段階的解決**
 
