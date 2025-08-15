@@ -112,6 +112,11 @@ impl NyashBox for AddBox {
             self.right.clone_box()
         ))
     }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl BoxCore for AddBox {
@@ -217,6 +222,11 @@ impl NyashBox for SubtractBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(SubtractBox::new(self.left.clone_box(), self.right.clone_box()))
     }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl BoxCore for SubtractBox {
@@ -308,6 +318,11 @@ impl NyashBox for MultiplyBox {
     fn type_name(&self) -> &'static str { "MultiplyBox" }
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(MultiplyBox::new(self.left.clone_box(), self.right.clone_box()))
+    }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
     }
 }
 
@@ -409,6 +424,11 @@ impl NyashBox for DivideBox {
     fn type_name(&self) -> &'static str { "DivideBox" }
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(DivideBox::new(self.left.clone_box(), self.right.clone_box()))
+    }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
     }
 }
 

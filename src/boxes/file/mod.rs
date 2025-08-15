@@ -134,17 +134,16 @@ impl BoxCore for FileBox {
 
 impl NyashBox for FileBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
-    
-    /// 仮実装: clone_boxと同じ（後で修正）
-    fn share_box(&self) -> Box<dyn NyashBox> {
-        self.clone_box()
-    }
-
         // Note: Cannot truly clone a File handle, so create a new one to the same path
         match FileBox::open(&self.path) {
             Ok(new_file) => Box::new(new_file),
             Err(_) => Box::new(crate::box_trait::VoidBox::new())  // Return void on error
         }
+    }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
     }
 
     fn to_string_box(&self) -> StringBox {

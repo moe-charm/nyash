@@ -120,6 +120,11 @@ impl NyashBox for ChannelBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
     fn equals(&self, other: &dyn NyashBox) -> crate::box_trait::BoolBox {
         if let Some(other_channel) = other.as_any().downcast_ref::<ChannelBox>() {
             crate::box_trait::BoolBox::new(
@@ -130,8 +135,6 @@ impl NyashBox for ChannelBox {
             crate::box_trait::BoolBox::new(false)
         }
     }
-    
-    
 }
 
 impl BoxCore for ChannelBox {
@@ -203,6 +206,11 @@ impl NyashBox for MessageBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
     fn equals(&self, other: &dyn NyashBox) -> crate::box_trait::BoolBox {
         if let Some(other_msg) = other.as_any().downcast_ref::<MessageBox>() {
             crate::box_trait::BoolBox::new(
@@ -213,8 +221,6 @@ impl NyashBox for MessageBox {
             crate::box_trait::BoolBox::new(false)
         }
     }
-    
-    
 }
 
 impl BoxCore for MessageBox {

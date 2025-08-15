@@ -2,7 +2,7 @@
  * ExternBox - External API proxy for Phase 9.7 ExternCall
  */
 
-use crate::box_trait::{NyashBox, StringBox, VoidBox, IntegerBox, BoxCore, BoxBase};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, IntegerBox, BoxCore, BoxBase};
 use std::any::Any;
 
 /// External API proxy box for external calls
@@ -28,6 +28,18 @@ impl ExternBox {
 }
 
 impl BoxCore for ExternBox {
+    fn box_id(&self) -> u64 {
+        self.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        None // ExternBox doesn't inherit from other built-in boxes
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "ExternBox({})", self.api_name)
+    }
+    
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -35,30 +47,35 @@ impl BoxCore for ExternBox {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+}
 
-    fn box_clone(&self) -> Box<dyn NyashBox> {
+impl NyashBox for ExternBox {
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new(format!("ExternBox({})", self.api_name))
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_extern) = other.as_any().downcast_ref::<ExternBox>() {
+            BoolBox::new(self.id == other_extern.id)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    
+    fn type_name(&self) -> &'static str {
+        "ExternBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(ExternBox { 
             id: self.id,
             api_name: self.api_name.clone(),
         })
     }
-
-    fn box_eq(&self, other: &dyn NyashBox) -> bool {
-        if let Some(other_extern) = other.as_any().downcast_ref::<ExternBox>() {
-            self.id == other_extern.id
-        } else {
-            false
-        }
-    }
-}
-
-impl NyashBox for ExternBox {
-    fn get_type_name(&self) -> &str {
-        "ExternBox"
-    }
-
-    fn to_string(&self) -> String {
-        format!("ExternBox({})", self.api_name)
+    
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        // ExternBox is stateless, so share_box and clone_box behave the same
+        self.clone_box()
     }
 
     fn call_method(&mut self, method: &str, args: Vec<Box<dyn NyashBox>>) -> Box<dyn NyashBox> {
@@ -69,42 +86,42 @@ impl NyashBox for ExternBox {
                 print!("Console: ");
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 { print!(" "); }
-                    print!("{}", arg.to_string());
+                    print!("{}", arg.to_string_box().value);
                 }
                 println!();
-                VoidBox::new()
+                Box::new(VoidBox::new())
             },
             ("canvas", "fillRect") => {
                 if args.len() >= 6 {
                     println!("Canvas fillRect: canvas={}, x={}, y={}, w={}, h={}, color={}", 
-                             args[0].to_string(),
-                             args[1].to_string(), 
-                             args[2].to_string(),
-                             args[3].to_string(),
-                             args[4].to_string(),
-                             args[5].to_string());
+                             args[0].to_string_box().value,
+                             args[1].to_string_box().value, 
+                             args[2].to_string_box().value,
+                             args[3].to_string_box().value,
+                             args[4].to_string_box().value,
+                             args[5].to_string_box().value);
                 } else {
                     println!("Canvas fillRect called with {} args (expected 6)", args.len());
                 }
-                VoidBox::new()
+                Box::new(VoidBox::new())
             },
             ("canvas", "fillText") => {
                 if args.len() >= 6 {
                     println!("Canvas fillText: canvas={}, text={}, x={}, y={}, font={}, color={}", 
-                             args[0].to_string(),
-                             args[1].to_string(),
-                             args[2].to_string(),
-                             args[3].to_string(),
-                             args[4].to_string(),
-                             args[5].to_string());
+                             args[0].to_string_box().value,
+                             args[1].to_string_box().value,
+                             args[2].to_string_box().value,
+                             args[3].to_string_box().value,
+                             args[4].to_string_box().value,
+                             args[5].to_string_box().value);
                 } else {
                     println!("Canvas fillText called with {} args (expected 6)", args.len());
                 }
-                VoidBox::new()
+                Box::new(VoidBox::new())
             },
             _ => {
                 println!("Unknown external method: {}.{}", self.api_name, method);
-                VoidBox::new()
+                Box::new(VoidBox::new())
             }
         }
     }

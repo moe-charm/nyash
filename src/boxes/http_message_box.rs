@@ -193,13 +193,12 @@ impl HTTPRequestBox {
 
 impl NyashBox for HTTPRequestBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
     
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
-    }
-
-        Box::new(self.clone())
     }
 
     fn to_string_box(&self) -> StringBox {
@@ -377,13 +376,12 @@ impl HTTPResponseBox {
 
 impl NyashBox for HTTPResponseBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
     
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
-    }
-
-        Box::new(self.clone())
     }
 
     fn to_string_box(&self) -> StringBox {

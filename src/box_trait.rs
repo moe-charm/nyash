@@ -248,6 +248,10 @@ impl NyashBox for StringBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl Display for StringBox {
@@ -319,6 +323,10 @@ impl NyashBox for IntegerBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl Display for IntegerBox {
@@ -394,6 +402,10 @@ impl NyashBox for BoolBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl Display for BoolBox {
@@ -461,6 +473,10 @@ impl NyashBox for VoidBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl Display for VoidBox {
@@ -571,6 +587,10 @@ impl NyashBox for FileBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl Display for FileBox {
@@ -640,6 +660,10 @@ impl NyashBox for ErrorBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl Display for ErrorBox {
@@ -785,6 +809,10 @@ impl NyashBox for ResultBox {
         }
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }
 
 impl Display for ResultBox {

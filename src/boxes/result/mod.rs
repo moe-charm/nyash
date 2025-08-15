@@ -38,16 +38,15 @@ impl NyashResultBox {
 
 impl NyashBox for NyashResultBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
-    
-    /// 仮実装: clone_boxと同じ（後で修正）
-    fn share_box(&self) -> Box<dyn NyashBox> {
-        self.clone_box()
-    }
-
         match self {
             NyashResultBox::Ok(val) => Box::new(NyashResultBox::Ok(val.clone_box())),
             NyashResultBox::Err(err) => Box::new(NyashResultBox::Err(err.clone_box())),
         }
+    }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
     }
 
     fn to_string_box(&self) -> StringBox {
