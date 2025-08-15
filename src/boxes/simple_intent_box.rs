@@ -161,21 +161,32 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct SimpleIntentBox {
     base: BoxBase,
     // ノードID -> コールバック関数のマップ
-    listeners: Arc<Mutex<HashMap<String, Vec<String>>>>, // 仮実装
+    listeners: RwLock<HashMap<String, Vec<String>>>, // 仮実装
+}
+
+impl Clone for SimpleIntentBox {
+    fn clone(&self) -> Self {
+        let listeners_val = self.listeners.read().unwrap().clone();
+        
+        Self {
+            base: BoxBase::new(), // New unique ID for clone
+            listeners: RwLock::new(listeners_val),
+        }
+    }
 }
 
 impl SimpleIntentBox {
     pub fn new() -> Self {
         SimpleIntentBox {
             base: BoxBase::new(),
-            listeners: Arc::new(Mutex::new(HashMap::new())),
+            listeners: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -193,6 +204,9 @@ impl BoxCore for SimpleIntentBox {
         write!(f, "SimpleIntentBox(id: {}))", self.base.id)
     }
     
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
@@ -217,11 +231,7 @@ impl NyashBox for SimpleIntentBox {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        // IntentBoxは共有されるので、新しいインスタンスを作らない
-        Box::new(SimpleIntentBox {
-            base: BoxBase::new(), // Create new base with unique ID for clone
-            listeners: self.listeners.clone(),
-        })
+        Box::new(self.clone())
     }
     
 }
