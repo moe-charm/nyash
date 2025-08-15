@@ -8,7 +8,7 @@
 
 use std::fmt::{Debug, Display};
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::fs;
 use std::path::Path;
@@ -790,136 +790,8 @@ impl Display for ResultBox {
     }
 }
 
-/// Future values in Nyash - represents async operations
-#[derive(Debug)]
-pub struct FutureBox {
-    pub result: Arc<Mutex<Option<Box<dyn NyashBox>>>>,
-    pub is_ready: Arc<Mutex<bool>>,
-    base: BoxBase,
-}
-
-impl Clone for FutureBox {
-    fn clone(&self) -> Self {
-        Self {
-            result: Arc::clone(&self.result),
-            is_ready: Arc::clone(&self.is_ready),
-            base: BoxBase::new(), // 新しいIDを生成
-        }
-    }
-}
-
-impl FutureBox {
-    pub fn new() -> Self {
-        Self {
-            result: Arc::new(Mutex::new(None)),
-            is_ready: Arc::new(Mutex::new(false)),
-            base: BoxBase::new(),
-        }
-    }
-    
-    /// Set the result of the future
-    pub fn set_result(&self, value: Box<dyn NyashBox>) {
-        let mut result = self.result.lock().unwrap();
-        *result = Some(value);
-        let mut ready = self.is_ready.lock().unwrap();
-        *ready = true;
-    }
-    
-    /// Get the result (blocks until ready)
-    pub fn get(&self) -> Box<dyn NyashBox> {
-        // 簡易実装: ビジーウェイト（後でcondvarに改善）
-        loop {
-            let ready = self.is_ready.lock().unwrap();
-            if *ready {
-                break;
-            }
-            drop(ready);
-            std::thread::yield_now();
-        }
-        
-        let result = self.result.lock().unwrap();
-        result.as_ref().unwrap().clone_box()
-    }
-    
-    /// Check if the future is ready
-    pub fn ready(&self) -> Box<dyn NyashBox> {
-        Box::new(BoolBox::new(*self.is_ready.lock().unwrap()))
-    }
-    
-    /// Wait and get the result (for await implementation)
-    pub fn wait_and_get(&self) -> Result<Box<dyn NyashBox>, String> {
-        // 結果が準備できるまで待機
-        while !*self.is_ready.lock().unwrap() {
-            std::thread::yield_now();
-        }
-        
-        let result = self.result.lock().unwrap();
-        result.as_ref()
-            .map(|v| v.clone_box())
-            .ok_or_else(|| "Future has no result".to_string())
-    }
-}
-
-impl NyashBox for FutureBox {
-    fn to_string_box(&self) -> StringBox {
-        let ready = *self.is_ready.lock().unwrap();
-        if ready {
-            let result = self.result.lock().unwrap();
-            if let Some(value) = result.as_ref() {
-                StringBox::new(format!("Future(ready: {})", value.to_string_box().value))
-            } else {
-                StringBox::new("Future(ready: void)".to_string())
-            }
-        } else {
-            StringBox::new("Future(pending)".to_string())
-        }
-    }
-    
-    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
-        if let Some(other_future) = other.as_any().downcast_ref::<FutureBox>() {
-            BoolBox::new(self.base.id == other_future.base.id)
-        } else {
-            BoolBox::new(false)
-        }
-    }
-    
-    fn type_name(&self) -> &'static str {
-        "FutureBox"
-    }
-    
-    fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(self.clone())
-    }
-    
-}
-
-impl BoxCore for FutureBox {
-    fn box_id(&self) -> u64 {
-        self.base.id
-    }
-    
-    fn parent_type_id(&self) -> Option<std::any::TypeId> {
-        self.base.parent_type_id
-    }
-    
-    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.to_string_box().value)
-    }
-    
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
-impl Display for FutureBox {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.fmt_box(f)
-    }
-}
+// FutureBox is now implemented in src/boxes/future/mod.rs using RwLock pattern
+// and re-exported from src/boxes/mod.rs as both NyashFutureBox and FutureBox
 
 // Re-export operation boxes from the dedicated operations module
 pub use crate::box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox};

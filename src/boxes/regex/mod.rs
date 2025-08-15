@@ -6,7 +6,7 @@ use regex::Regex;
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::fmt::Debug;
 
 #[derive(Debug, Clone)]
