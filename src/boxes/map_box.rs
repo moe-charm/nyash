@@ -108,19 +108,18 @@ use crate::boxes::ArrayBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 
 /// キーバリューストアを表すBox
-#[derive(Clone)]
 pub struct MapBox {
-    data: Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>>,
+    data: RwLock<HashMap<String, Box<dyn NyashBox>>>,
     base: BoxBase,
 }
 
 impl MapBox {
     pub fn new() -> Self {
         Self {
-            data: Arc::new(Mutex::new(HashMap::new())),
+            data: RwLock::new(HashMap::new()),
             base: BoxBase::new(),
         }
     }
@@ -128,14 +127,14 @@ impl MapBox {
     /// 値を設定
     pub fn set(&self, key: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        self.data.lock().unwrap().insert(key_str.clone(), value);
+        self.data.write().unwrap().insert(key_str.clone(), value);
         Box::new(StringBox::new(&format!("Set key: {}", key_str)))
     }
     
     /// 値を取得
     pub fn get(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        match self.data.lock().unwrap().get(&key_str) {
+        match self.data.read().unwrap().get(&key_str) {
             Some(value) => value.clone_box(),
             None => Box::new(StringBox::new(&format!("Key not found: {}", key_str))),
         }
@@ -144,13 +143,13 @@ impl MapBox {
     /// キーが存在するかチェック
     pub fn has(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        Box::new(BoolBox::new(self.data.lock().unwrap().contains_key(&key_str)))
+        Box::new(BoolBox::new(self.data.read().unwrap().contains_key(&key_str)))
     }
     
     /// キーを削除
     pub fn delete(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        match self.data.lock().unwrap().remove(&key_str) {
+        match self.data.write().unwrap().remove(&key_str) {
             Some(_) => Box::new(StringBox::new(&format!("Deleted key: {}", key_str))),
             None => Box::new(StringBox::new(&format!("Key not found: {}", key_str))),
         }
@@ -158,7 +157,7 @@ impl MapBox {
     
     /// 全てのキーを取得
     pub fn keys(&self) -> Box<dyn NyashBox> {
-        let keys: Vec<String> = self.data.lock().unwrap().keys().cloned().collect();
+        let keys: Vec<String> = self.data.read().unwrap().keys().cloned().collect();
         let array = ArrayBox::new();
         for key in keys {
             array.push(Box::new(StringBox::new(&key)));
@@ -168,7 +167,7 @@ impl MapBox {
     
     /// 全ての値を取得
     pub fn values(&self) -> Box<dyn NyashBox> {
-        let values: Vec<Box<dyn NyashBox>> = self.data.lock().unwrap()
+        let values: Vec<Box<dyn NyashBox>> = self.data.read().unwrap()
             .values()
             .map(|v| v.clone_box())
             .collect();
@@ -181,25 +180,25 @@ impl MapBox {
     
     /// サイズを取得
     pub fn size(&self) -> Box<dyn NyashBox> {
-        Box::new(IntegerBox::new(self.data.lock().unwrap().len() as i64))
+        Box::new(IntegerBox::new(self.data.read().unwrap().len() as i64))
     }
     
     /// 全てクリア
     pub fn clear(&self) -> Box<dyn NyashBox> {
-        self.data.lock().unwrap().clear();
+        self.data.write().unwrap().clear();
         Box::new(StringBox::new("Map cleared"))
     }
     
     /// 各要素に対して関数を実行
     pub fn forEach(&self, _callback: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         // 簡易実装：callbackの実行はスキップ
-        let count = self.data.lock().unwrap().len();
+        let count = self.data.read().unwrap().len();
         Box::new(StringBox::new(&format!("Iterated over {} items", count)))
     }
     
     /// JSON文字列に変換
     pub fn toJSON(&self) -> Box<dyn NyashBox> {
-        let data = self.data.lock().unwrap();
+        let data = self.data.read().unwrap();
         let mut json_parts = Vec::new();
         
         for (key, value) in data.iter() {
@@ -218,8 +217,22 @@ impl MapBox {
     }
     
     /// 内部データへのアクセス（JSONBox用）
-    pub fn get_data(&self) -> Arc<Mutex<HashMap<String, Box<dyn NyashBox>>>> {
-        self.data.clone()
+    pub fn get_data(&self) -> &RwLock<HashMap<String, Box<dyn NyashBox>>> {
+        &self.data
+    }
+}
+
+// Clone implementation for MapBox (needed since RwLock doesn't auto-derive Clone)
+impl Clone for MapBox {
+    fn clone(&self) -> Self {
+        let data = self.data.read().unwrap();
+        let cloned_data: HashMap<String, Box<dyn NyashBox>> = data.iter()
+            .map(|(k, v)| (k.clone(), v.clone_box()))
+            .collect();
+        MapBox {
+            data: RwLock::new(cloned_data),
+            base: BoxBase::new(),
+        }
     }
 }
 
@@ -233,7 +246,7 @@ impl BoxCore for MapBox {
     }
     
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let size = self.data.lock().unwrap().len();
+        let size = self.data.read().unwrap().len();
         write!(f, "MapBox(size={})", size)
     }
     
@@ -252,7 +265,7 @@ impl NyashBox for MapBox {
     }
     
     fn to_string_box(&self) -> StringBox {
-        let size = self.data.lock().unwrap().len();
+        let size = self.data.read().unwrap().len();
         StringBox::new(&format!("MapBox(size={})", size))
     }
     
@@ -279,7 +292,7 @@ impl Display for MapBox {
 
 impl Debug for MapBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let data = self.data.lock().unwrap();
+        let data = self.data.read().unwrap();
         f.debug_struct("MapBox")
             .field("id", &self.base.id)
             .field("size", &data.len())

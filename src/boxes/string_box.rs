@@ -117,7 +117,7 @@ impl StringBox {
     pub fn join(&self, array_box: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         use crate::boxes::array::ArrayBox;
         if let Some(array) = array_box.as_any().downcast_ref::<ArrayBox>() {
-            let strings: Vec<String> = array.items.lock().unwrap()
+            let strings: Vec<String> = array.items.read().unwrap()
                 .iter()
                 .map(|element| element.to_string_box().value)
                 .collect();

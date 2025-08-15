@@ -1,15 +1,14 @@
 //! ArrayBox 📦 - 配列・リスト操作
 // Nyashの箱システムによる配列・リスト操作を提供します。
-// Arc<Mutex>パターンで内部可変性を実現
+// RwLockパターンで内部可変性を実現（Phase 9.75-B Arc<Mutex>削除）
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBase};
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
 pub struct ArrayBox {
-    pub items: Arc<Mutex<Vec<Box<dyn NyashBox>>>>,
+    pub items: RwLock<Vec<Box<dyn NyashBox>>>,
     base: BoxBase,
 }
 
@@ -17,7 +16,7 @@ impl ArrayBox {
     /// 新しいArrayBoxを作成
     pub fn new() -> Self {
         ArrayBox { 
-            items: Arc::new(Mutex::new(Vec::new())),
+            items: RwLock::new(Vec::new()),
             base: BoxBase::new(),
         }
     }
@@ -25,20 +24,20 @@ impl ArrayBox {
     /// 要素を持つArrayBoxを作成
     pub fn new_with_elements(elements: Vec<Box<dyn NyashBox>>) -> Self {
         ArrayBox { 
-            items: Arc::new(Mutex::new(elements)),
+            items: RwLock::new(elements),
             base: BoxBase::new(),
         }
     }
     
     /// 要素を追加
     pub fn push(&self, item: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        self.items.lock().unwrap().push(item);
+        self.items.write().unwrap().push(item);
         Box::new(StringBox::new("ok"))
     }
     
     /// 最後の要素を取り出す
     pub fn pop(&self) -> Box<dyn NyashBox> {
-        match self.items.lock().unwrap().pop() {
+        match self.items.write().unwrap().pop() {
             Some(item) => item,
             None => Box::new(crate::boxes::null_box::NullBox::new()),
         }
@@ -46,19 +45,19 @@ impl ArrayBox {
     
     /// 要素数を取得
     pub fn length(&self) -> Box<dyn NyashBox> {
-        Box::new(IntegerBox::new(self.items.lock().unwrap().len() as i64))
+        Box::new(IntegerBox::new(self.items.read().unwrap().len() as i64))
     }
 
     /// Rust向けヘルパー: 要素数をusizeで取得（テスト用）
     pub fn len(&self) -> usize {
-        self.items.lock().unwrap().len()
+        self.items.read().unwrap().len()
     }
     
     /// インデックスで要素を取得
     pub fn get(&self, index: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
             let idx = idx_box.value as usize;
-            let items = self.items.lock().unwrap();
+            let items = self.items.read().unwrap();
             match items.get(idx) {
                 Some(item) => item.clone_box(),
                 None => Box::new(crate::boxes::null_box::NullBox::new()),
@@ -72,7 +71,7 @@ impl ArrayBox {
     pub fn set(&self, index: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
             let idx = idx_box.value as usize;
-            let mut items = self.items.lock().unwrap();
+            let mut items = self.items.write().unwrap();
             if idx < items.len() {
                 items[idx] = value;
                 Box::new(StringBox::new("ok"))
@@ -88,7 +87,7 @@ impl ArrayBox {
     pub fn remove(&self, index: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
             let idx = idx_box.value as usize;
-            let mut items = self.items.lock().unwrap();
+            let mut items = self.items.write().unwrap();
             if idx < items.len() {
                 items.remove(idx)
             } else {
@@ -101,7 +100,7 @@ impl ArrayBox {
     
     /// 指定された値のインデックスを検索
     pub fn indexOf(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        let items = self.items.lock().unwrap();
+        let items = self.items.read().unwrap();
         for (i, item) in items.iter().enumerate() {
             if item.equals(value.as_ref()).value {
                 return Box::new(IntegerBox::new(i as i64));
@@ -112,7 +111,7 @@ impl ArrayBox {
     
     /// 指定された値が含まれているか確認
     pub fn contains(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        let items = self.items.lock().unwrap();
+        let items = self.items.read().unwrap();
         for item in items.iter() {
             if item.equals(value.as_ref()).value {
                 return Box::new(BoolBox::new(true));
@@ -123,14 +122,14 @@ impl ArrayBox {
     
     /// 配列を空にする
     pub fn clear(&self) -> Box<dyn NyashBox> {
-        self.items.lock().unwrap().clear();
+        self.items.write().unwrap().clear();
         Box::new(StringBox::new("ok"))
     }
     
     /// 文字列結合
     pub fn join(&self, delimiter: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(sep_box) = delimiter.as_any().downcast_ref::<StringBox>() {
-            let items = self.items.lock().unwrap();
+            let items = self.items.read().unwrap();
             let parts: Vec<String> = items
                 .iter()
                 .map(|item| item.to_string_box().value)
@@ -143,7 +142,7 @@ impl ArrayBox {
     
     /// 配列をソート（昇順）
     pub fn sort(&self) -> Box<dyn NyashBox> {
-        let mut items = self.items.lock().unwrap();
+        let mut items = self.items.write().unwrap();
         
         // Numeric values first, then string values
         items.sort_by(|a, b| {
@@ -191,14 +190,14 @@ impl ArrayBox {
     
     /// 配列を反転
     pub fn reverse(&self) -> Box<dyn NyashBox> {
-        let mut items = self.items.lock().unwrap();
+        let mut items = self.items.write().unwrap();
         items.reverse();
         Box::new(StringBox::new("ok"))
     }
     
     /// 部分配列を取得
     pub fn slice(&self, start: Box<dyn NyashBox>, end: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        let items = self.items.lock().unwrap();
+        let items = self.items.read().unwrap();
         
         // Extract start and end indices
         let start_idx = if let Some(start_int) = start.as_any().downcast_ref::<IntegerBox>() {
@@ -236,6 +235,17 @@ impl ArrayBox {
     }
 }
 
+// Clone implementation for ArrayBox (needed since RwLock doesn't auto-derive Clone)
+impl Clone for ArrayBox {
+    fn clone(&self) -> Self {
+        let items = self.items.read().unwrap();
+        let cloned_items: Vec<Box<dyn NyashBox>> = items.iter()
+            .map(|item| item.clone_box())
+            .collect();
+        ArrayBox::new_with_elements(cloned_items)
+    }
+}
+
 impl BoxCore for ArrayBox {
     fn box_id(&self) -> u64 {
         self.base.id
@@ -246,7 +256,7 @@ impl BoxCore for ArrayBox {
     }
     
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let items = self.items.lock().unwrap();
+        let items = self.items.read().unwrap();
         let strings: Vec<String> = items.iter()
             .map(|item| item.to_string_box().value)
             .collect();
@@ -274,7 +284,7 @@ impl NyashBox for ArrayBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        let items = self.items.lock().unwrap();
+        let items = self.items.read().unwrap();
         let strings: Vec<String> = items.iter()
             .map(|item| item.to_string_box().value)
             .collect();
@@ -289,8 +299,8 @@ impl NyashBox for ArrayBox {
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_array) = other.as_any().downcast_ref::<ArrayBox>() {
-            let self_items = self.items.lock().unwrap();
-            let other_items = other_array.items.lock().unwrap();
+            let self_items = self.items.read().unwrap();
+            let other_items = other_array.items.read().unwrap();
             
             if self_items.len() != other_items.len() {
                 return BoolBox::new(false);
@@ -306,5 +316,16 @@ impl NyashBox for ArrayBox {
         } else {
             BoolBox::new(false)
         }
+    }
+}
+
+// Debug implementation for ArrayBox
+impl std::fmt::Debug for ArrayBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let items = self.items.read().unwrap();
+        f.debug_struct("ArrayBox")
+            .field("id", &self.base.id)
+            .field("length", &items.len())
+            .finish()
     }
 }
