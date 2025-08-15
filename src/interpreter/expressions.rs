@@ -1255,6 +1255,11 @@ impl NyashInterpreter {
     fn execute_builtin_box_method(&mut self, parent: &str, method: &str, mut current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         
+        // 🌟 Phase 8.9: birth method support for builtin boxes
+        if method == "birth" {
+            return self.execute_builtin_birth_method(parent, current_instance, arguments);
+        }
+        
         // ビルトインBoxのインスタンスを作成または取得
         // 現在のインスタンスからビルトインBoxのデータを取得し、ビルトインBoxとしてメソッド実行
         
@@ -1331,6 +1336,83 @@ impl NyashInterpreter {
             _ => {
                 Err(RuntimeError::InvalidOperation {
                     message: format!("Unknown built-in Box type for delegation: {}", parent),
+                })
+            }
+        }
+    }
+    
+    /// 🌟 Phase 8.9: Execute birth method for builtin boxes
+    /// Provides constructor functionality for builtin boxes through explicit birth() calls
+    fn execute_builtin_birth_method(&mut self, builtin_name: &str, current_instance: Box<dyn NyashBox>, arguments: &[ASTNode])
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
+        // 引数を評価
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.execute_expression(arg)?);
+        }
+        
+        // ビルトインBoxの種類に応じて適切なインスタンスを作成して返す
+        match builtin_name {
+            "StringBox" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("StringBox.birth() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                
+                let content = arg_values[0].to_string_box().value;
+                eprintln!("🌟 DEBUG: StringBox.birth() created with content: '{}'", content);
+                let string_box = StringBox::new(content);
+                Ok(Box::new(VoidBox::new())) // Return void to indicate successful initialization
+            }
+            "IntegerBox" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("IntegerBox.birth() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                
+                let value = if let Ok(int_val) = arg_values[0].to_string_box().value.parse::<i64>() {
+                    int_val
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: format!("Cannot convert '{}' to integer", arg_values[0].to_string_box().value),
+                    });
+                };
+                
+                let integer_box = IntegerBox::new(value);
+                eprintln!("🌟 DEBUG: IntegerBox.birth() created with value: {}", value);
+                Ok(Box::new(VoidBox::new()))
+            }
+            "MathBox" => {
+                // MathBoxは引数なしのコンストラクタ
+                if arg_values.len() != 0 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("MathBox.birth() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                
+                let math_box = MathBox::new();
+                eprintln!("🌟 DEBUG: MathBox.birth() created");
+                Ok(Box::new(VoidBox::new()))
+            }
+            "ArrayBox" => {
+                // ArrayBoxも引数なしのコンストラクタ
+                if arg_values.len() != 0 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("ArrayBox.birth() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                
+                let array_box = ArrayBox::new();
+                eprintln!("🌟 DEBUG: ArrayBox.birth() created");
+                Ok(Box::new(VoidBox::new()))
+            }
+            _ => {
+                // 他のビルトインBoxは今後追加
+                Err(RuntimeError::InvalidOperation {
+                    message: format!("birth() method not yet implemented for builtin box '{}'", builtin_name),
                 })
             }
         }

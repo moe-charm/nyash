@@ -506,6 +506,10 @@ impl NyashParser {
                     self.advance();
                     "pack".to_string()
                 }
+                TokenType::BIRTH => {
+                    self.advance();
+                    "birth".to_string()
+                }
                 _ => {
                     let line = self.current_token().line;
                     return Err(ParseError::UnexpectedToken {
