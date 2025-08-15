@@ -283,7 +283,6 @@ impl NyashBox for MapBox {
         };
         Box::new(new_instance)
     }
-}
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_map) = other.as_any().downcast_ref::<MapBox>() {

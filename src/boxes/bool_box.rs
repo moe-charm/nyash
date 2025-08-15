@@ -93,9 +93,6 @@ impl NyashBox for BoolBox {
         self.clone_box()
     }
 }
-    
-    
-}
 
 impl BoxCore for BoolBox {
     fn box_id(&self) -> u64 {

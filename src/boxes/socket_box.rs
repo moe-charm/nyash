@@ -38,7 +38,7 @@ use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::net::{TcpListener, TcpStream};
 use std::io::{Write, BufRead, BufReader};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};  // Arc追加
 use std::time::Duration;
 
 /// TCP/UDP ソケット操作を提供するBox
@@ -46,26 +46,26 @@ use std::time::Duration;
 pub struct SocketBox {
     base: BoxBase,
     // TCP Server
-    listener: RwLock<Option<TcpListener>>,
+    listener: Arc<RwLock<Option<TcpListener>>>,      // Arc追加
     // TCP Client/Connected Socket
-    stream: RwLock<Option<TcpStream>>,
+    stream: Arc<RwLock<Option<TcpStream>>>,          // Arc追加
     // Connection state
-    is_server: RwLock<bool>,
-    is_connected: RwLock<bool>,
+    is_server: Arc<RwLock<bool>>,                    // Arc追加
+    is_connected: Arc<RwLock<bool>>,                 // Arc追加
 }
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
-        // State-preserving clone implementation following RwLock pattern
+        // ディープコピー（独立インスタンス） 
         let is_server_val = *self.is_server.read().unwrap();
         let is_connected_val = *self.is_connected.read().unwrap();
         
         Self {
             base: BoxBase::new(), // New unique ID for clone
-            listener: RwLock::new(None), // Start fresh for clone
-            stream: RwLock::new(None),   // Start fresh for clone
-            is_server: RwLock::new(is_server_val),
-            is_connected: RwLock::new(is_connected_val),
+            listener: Arc::new(RwLock::new(None)),           // 新しいArc
+            stream: Arc::new(RwLock::new(None)),             // 新しいArc
+            is_server: Arc::new(RwLock::new(is_server_val)), // 状態のみコピー
+            is_connected: Arc::new(RwLock::new(is_connected_val)), // 状態のみコピー
         }
     }
 }
@@ -74,10 +74,10 @@ impl SocketBox {
     pub fn new() -> Self {
         Self {
             base: BoxBase::new(),
-            listener: RwLock::new(None),
-            stream: RwLock::new(None),
-            is_server: RwLock::new(false),
-            is_connected: RwLock::new(false),
+            listener: Arc::new(RwLock::new(None)),      // Arc::new追加
+            stream: Arc::new(RwLock::new(None)),        // Arc::new追加
+            is_server: Arc::new(RwLock::new(false)),    // Arc::new追加
+            is_connected: Arc::new(RwLock::new(false)), // Arc::new追加
         }
     }
     
@@ -385,9 +385,16 @@ impl NyashBox for SocketBox {
         Box::new(self.clone())
     }
     
-    /// 仮実装: clone_boxと同じ（後で修正）
+    /// 🎯 状態共有の核心実装 - SocketBox状態保持問題の根本解決
     fn share_box(&self) -> Box<dyn NyashBox> {
-        self.clone_box()
+        let new_instance = SocketBox {
+            base: BoxBase::new(),                                // 新しいID
+            listener: Arc::clone(&self.listener),               // 状態共有
+            stream: Arc::clone(&self.stream),                   // 状態共有
+            is_server: Arc::clone(&self.is_server),             // 状態共有
+            is_connected: Arc::clone(&self.is_connected),       // 状態共有
+        };
+        Box::new(new_instance)
     }
 
     fn to_string_box(&self) -> StringBox {

@@ -89,9 +89,6 @@ impl NyashBox for IntegerBox {
         self.clone_box()
     }
 }
-    
-    
-}
 
 impl BoxCore for IntegerBox {
     fn box_id(&self) -> u64 {
