@@ -14,93 +14,6 @@ use crate::box_trait::{BoolBox, SharedNyashBox};
 // Direct implementation approach to avoid import issues
 use crate::operator_traits::{DynamicAdd, DynamicSub, DynamicMul, DynamicDiv, OperatorError};
 
-// Local helper functions to bypass import issues
-fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
-    // IntegerBox + IntegerBox
-    if let (Some(left_int), Some(right_int)) = (
-        left.as_any().downcast_ref::<IntegerBox>(),
-        right.as_any().downcast_ref::<IntegerBox>()
-    ) {
-        return Some(Box::new(IntegerBox::new(left_int.value + right_int.value)));
-    }
-    
-    // StringBox + anything -> concatenation
-    if let Some(left_str) = left.as_any().downcast_ref::<StringBox>() {
-        let right_str = right.to_string_box();
-        return Some(Box::new(StringBox::new(format!("{}{}", left_str.value, right_str.value))));
-    }
-    
-    // BoolBox + BoolBox -> IntegerBox 
-    if let (Some(left_bool), Some(right_bool)) = (
-        left.as_any().downcast_ref::<BoolBox>(),
-        right.as_any().downcast_ref::<BoolBox>()
-    ) {
-        return Some(Box::new(IntegerBox::new((left_bool.value as i64) + (right_bool.value as i64))));
-    }
-    
-    None
-}
-
-fn try_sub_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
-    // IntegerBox - IntegerBox
-    if let (Some(left_int), Some(right_int)) = (
-        left.as_any().downcast_ref::<IntegerBox>(),
-        right.as_any().downcast_ref::<IntegerBox>()
-    ) {
-        return Some(Box::new(IntegerBox::new(left_int.value - right_int.value)));
-    }
-    None
-}
-
-fn try_mul_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
-    // IntegerBox * IntegerBox
-    if let (Some(left_int), Some(right_int)) = (
-        left.as_any().downcast_ref::<IntegerBox>(),
-        right.as_any().downcast_ref::<IntegerBox>()
-    ) {
-        return Some(Box::new(IntegerBox::new(left_int.value * right_int.value)));
-    }
-    
-    // StringBox * IntegerBox -> repetition
-    if let (Some(str_box), Some(count_int)) = (
-        left.as_any().downcast_ref::<StringBox>(),
-        right.as_any().downcast_ref::<IntegerBox>()
-    ) {
-        return Some(Box::new(StringBox::new(str_box.value.repeat(count_int.value as usize))));
-    }
-    
-    None
-}
-
-fn try_div_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Result<Box<dyn NyashBox>, String> {
-    // IntegerBox / IntegerBox
-    if let (Some(left_int), Some(right_int)) = (
-        left.as_any().downcast_ref::<IntegerBox>(),
-        right.as_any().downcast_ref::<IntegerBox>()
-    ) {
-        if right_int.value == 0 {
-            return Err("Division by zero".to_string());
-        }
-        return Ok(Box::new(IntegerBox::new(left_int.value / right_int.value)));
-    }
-    
-    Err(format!("Division not supported between {} and {}", left.type_name(), right.type_name()))
-}
-
-fn try_mod_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Result<Box<dyn NyashBox>, String> {
-    // IntegerBox % IntegerBox
-    if let (Some(left_int), Some(right_int)) = (
-        left.as_any().downcast_ref::<IntegerBox>(),
-        right.as_any().downcast_ref::<IntegerBox>()
-    ) {
-        if right_int.value == 0 {
-            return Err("Modulo by zero".to_string());
-        }
-        return Ok(Box::new(IntegerBox::new(left_int.value % right_int.value)));
-    }
-    
-    Err(format!("Modulo not supported between {} and {}", left.type_name(), right.type_name()))
-}
 use std::sync::Arc;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
@@ -232,13 +145,21 @@ impl NyashInterpreter {
         }
     }
     
-    /// 二項演算を実行 - Binary operation processing
+    /// 二項演算を実行 - Binary operation processing (delegated to operators module)
     pub(super) fn execute_binary_op(&mut self, op: &BinaryOperator, left: &ASTNode, right: &ASTNode) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let left_val = self.execute_expression(left)?;
-        let right_val = self.execute_expression(right)?;
-        
-        match op {
+        super::operators::NyashInterpreter::execute_binary_op(self, op, left, right)
+    }
+    
+    /// 単項演算を実行 - Unary operation processing (delegated to operators module)
+    pub(super) fn execute_unary_op(&mut self, operator: &UnaryOperator, operand: &ASTNode) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        super::operators::NyashInterpreter::execute_unary_op(self, operator, operand)
+    }
+    
+    /// メソッド呼び出しを実行 - Method call processing
+    pub(super) fn execute_method_call(&mut self, object: &ASTNode, method: &str, arguments: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
             BinaryOperator::Add => {
                 // 🚀 Direct trait-based operator resolution (temporary workaround)
                 // Use helper function instead of trait methods
