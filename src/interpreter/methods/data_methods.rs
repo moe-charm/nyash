@@ -77,6 +77,33 @@ impl NyashInterpreter {
                 let end = self.execute_expression(&arguments[1])?;
                 Ok(buffer_box.slice(start, end))
             }
+            // ⭐ Phase 10: Zero-copy detection APIs
+            "is_shared_with" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("is_shared_with() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let other = self.execute_expression(&arguments[0])?;
+                Ok(buffer_box.is_shared_with(other))
+            }
+            "share_reference" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("share_reference() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let data = self.execute_expression(&arguments[0])?;
+                Ok(buffer_box.share_reference(data))
+            }
+            "memory_footprint" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("memory_footprint() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(buffer_box.memory_footprint())
+            }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for BufferBox", method),
             })

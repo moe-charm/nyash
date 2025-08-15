@@ -1,0 +1,345 @@
+// 🎮 Chip-8 Emulator in Nyash - Phase 10.2
+// Testing fini propagation and weak reference lifecycle
+
+// Chip8CPU - Central processing unit with fini propagation
+static box Chip8CPU {
+    init { memory, graphics, sound, program_counter, registers }
+    
+    pack() {
+        me.program_counter = 512  // 0x200 = 512 decimal - Standard Chip-8 start address
+        me.registers = new ArrayBox() // 16 general registers V0-VF
+        
+        // Initialize 16 registers to 0
+        local i = 0
+        loop(i < 16) {
+            me.registers.push(0)
+            i = i + 1
+        }
+        
+        print("🔧 CPU initialized with 16 registers")
+    }
+    
+    // ⭐ Phase 10: fini propagation test
+    fini() {
+        print("🔄 CPU cleanup triggered - fini propagation starting")
+        
+        // Clean up dependent components in order
+        if (me.memory != null) {
+            me.memory.cleanup()
+            print("📦 Memory cleanup completed")
+        }
+        
+        if (me.graphics != null) {
+            me.graphics.cleanup()
+            print("🖼️ Graphics cleanup completed")
+        }
+        
+        if (me.sound != null) {
+            me.sound.cleanup()
+            print("🔊 Sound cleanup completed")
+        }
+        
+        print("✅ CPU fini propagation complete")
+    }
+    
+    execute_cycle() {
+        // Simplified fetch-decode-execute cycle
+        local opcode = me.fetch_instruction()
+        me.decode_and_execute(opcode)
+        me.update_timers()
+    }
+    
+    fetch_instruction() {
+        // Fetch 2-byte instruction from memory
+        local high_byte = me.memory.read_byte(me.program_counter)
+        local low_byte = me.memory.read_byte(me.program_counter + 1)
+        
+        if (high_byte != null and low_byte != null) {
+            me.program_counter = me.program_counter + 2
+            return (high_byte * 256) + low_byte
+        } else {
+            return 0  // NOP if memory read failed
+        }
+    }
+    
+    decode_and_execute(opcode) {
+        // Simplified instruction decoding
+        local first_nibble = opcode / 4096  // (opcode AND 0xF000) >> 12
+        
+        if (first_nibble == 1) {
+            // 1NNN - Jump to address NNN
+            me.program_counter = opcode % 4096  // opcode AND 0x0FFF
+            print("🦘 Jump to address: " + me.program_counter)
+        } else if (first_nibble == 6) {
+            // 6XNN - Set register VX to NN
+            local reg = (opcode / 256) % 16  // (opcode AND 0x0F00) >> 8
+            local value = opcode % 256        // opcode AND 0x00FF
+            me.registers.set(reg, value)
+            print("📝 Set register V" + reg + " = " + value)
+        } else if (first_nibble == 7) {
+            // 7XNN - Add NN to register VX
+            local reg = (opcode / 256) % 16
+            local value = opcode % 256
+            local current = me.registers.get(reg)
+            me.registers.set(reg, current + value)
+            print("➕ Add " + value + " to register V" + reg)
+        } else {
+            print("❓ Unknown opcode: " + opcode)
+        }
+    }
+    
+    update_timers() {
+        // Timer updates would go here
+        // For demo, just a placeholder
+    }
+}
+
+// Chip8Memory - Memory system with weak CPU reference
+static box Chip8Memory {
+    init { ram, weak cpu_ref }  // CPU reference is weak to prevent cycles
+    
+    pack(cpu_instance) {
+        me.ram = new ArrayBox()
+        
+        // Initialize 4KB of RAM (4096 bytes)
+        local i = 0
+        loop(i < 4096) {
+            me.ram.push(0)
+            i = i + 1
+        }
+        
+        // Create weak reference to CPU
+        me.cpu_ref = weak cpu_instance
+        
+        print("💾 Memory initialized: 4KB RAM + weak CPU reference")
+        me.load_test_program()
+    }
+    
+    // ⭐ Phase 10: weak reference life cycle test
+    read_byte(address) {
+        // Check if CPU is still alive before accessing memory
+        if (me.cpu_ref != null) {
+            if (address >= 0 and address < 4096) {
+                return me.ram.get(address)
+            } else {
+                print("⚠️ Memory access out of bounds: " + address)
+                return null
+            }
+        } else {
+            print("⚠️ CPU destroyed, memory access blocked")
+            return null
+        }
+    }
+    
+    write_byte(address, value) {
+        if (me.cpu_ref != null) {
+            if (address >= 0 and address < 4096) {
+                me.ram.set(address, value)
+                return true
+            } else {
+                print("⚠️ Memory write out of bounds: " + address)
+                return false
+            }
+        } else {
+            print("⚠️ CPU destroyed, memory write blocked")
+            return false
+        }
+    }
+    
+    load_test_program() {
+        // Load a simple test program starting at 0x200
+        local start_addr = 512  // 0x200
+        
+        // Simple test program: Set V0 = 5, Add 3 to V0, Jump to start
+        me.ram.set(start_addr, 96)        // 6005 - Set V0 = 5 (high byte: decimal 96)
+        me.ram.set(start_addr + 1, 5)     // (low byte: decimal 5)
+        me.ram.set(start_addr + 2, 112)   // 7003 - Add 3 to V0 (high byte: decimal 112)
+        me.ram.set(start_addr + 3, 3)     // (low byte: decimal 3)
+        me.ram.set(start_addr + 4, 18)    // 1200 - Jump to address 512 (high byte: decimal 18)
+        me.ram.set(start_addr + 5, 0)     // (low byte: decimal 0)
+        
+        print("🎮 Test program loaded: Set V0=5, Add 3, Loop")
+    }
+    
+    cleanup() {
+        print("🧹 Memory cleanup: clearing RAM")
+        me.ram.clear()
+    }
+}
+
+// Chip8Graphics - Display system  
+static box Chip8Graphics {
+    init { screen, weak cpu_ref }
+    
+    pack(cpu_instance) {
+        me.screen = new ArrayBox()
+        
+        // Initialize 64x32 pixel display (2048 pixels)
+        local i = 0
+        loop(i < 2048) {
+            me.screen.push(0)  // 0 = black, 1 = white
+            i = i + 1
+        }
+        
+        me.cpu_ref = weak cpu_instance
+        print("🖼️ Graphics initialized: 64x32 display + weak CPU reference")
+    }
+    
+    draw_sprite(x, y, sprite_data) {
+        if (me.cpu_ref != null) {
+            print("🎨 Drawing sprite at (" + x + ", " + y + ")")
+            // Sprite drawing logic would go here
+            return true
+        } else {
+            print("⚠️ CPU destroyed, graphics operation blocked")
+            return false
+        }
+    }
+    
+    clear_screen() {
+        if (me.cpu_ref != null) {
+            local i = 0
+            loop(i < 2048) {
+                me.screen.set(i, 0)
+                i = i + 1
+            }
+            print("🧹 Screen cleared")
+            return true
+        } else {
+            print("⚠️ CPU destroyed, screen clear blocked")
+            return false
+        }
+    }
+    
+    cleanup() {
+        print("🧹 Graphics cleanup: clearing display")
+        me.screen.clear()
+    }
+}
+
+// Chip8Sound - Audio system
+static box Chip8Sound {
+    init { beep_timer, weak cpu_ref }
+    
+    pack(cpu_instance) {
+        me.beep_timer = 0
+        me.cpu_ref = weak cpu_instance
+        print("🔊 Sound initialized with weak CPU reference")
+    }
+    
+    play_beep() {
+        if (me.cpu_ref != null) {
+            print("🔔 BEEP! (Sound playing)")
+            me.beep_timer = 60  // 1 second at 60Hz
+            return true
+        } else {
+            print("⚠️ CPU destroyed, sound playback blocked")
+            return false
+        }
+    }
+    
+    update() {
+        if (me.cpu_ref != null) {
+            if (me.beep_timer > 0) {
+                me.beep_timer = me.beep_timer - 1
+                if (me.beep_timer == 0) {
+                    print("🔇 Sound finished")
+                }
+            }
+        }
+    }
+    
+    cleanup() {
+        print("🧹 Sound cleanup: stopping audio")
+        me.beep_timer = 0
+    }
+}
+
+// Main Chip-8 System
+static box Chip8System {
+    init { cpu, memory, graphics, sound }
+    
+    main() {
+        print("🎮 Starting Chip-8 Emulator - Phase 10.2")
+        print("Testing fini propagation and weak reference lifecycle")
+        
+        // Create CPU first
+        me.cpu = new Chip8CPU()
+        me.cpu.pack()
+        
+        // Create subsystems with weak references to CPU
+        me.memory = new Chip8Memory()
+        me.memory.pack(me.cpu)
+        
+        me.graphics = new Chip8Graphics()
+        me.graphics.pack(me.cpu)
+        
+        me.sound = new Chip8Sound()
+        me.sound.pack(me.cpu)
+        
+        // Link components to CPU for fini propagation
+        me.cpu.memory = me.memory
+        me.cpu.graphics = me.graphics
+        me.cpu.sound = me.sound
+        
+        print("🔗 All components linked with weak references")
+        
+        // Run a few emulation cycles
+        me.run_emulation()
+        
+        // Test fini propagation by destroying CPU
+        print("💥 Testing fini propagation - destroying CPU...")
+        me.cpu.fini()
+        me.cpu = null
+        
+        // Test weak reference after CPU destruction
+        print("🧪 Testing weak references after CPU destruction...")
+        me.test_weak_references()
+        
+        return "Chip-8 emulation and memory management test complete"
+    }
+    
+    run_emulation() {
+        print("🚀 Starting emulation cycles...")
+        
+        local cycles = 0
+        loop(cycles < 5) {
+            print("⚡ Cycle " + (cycles + 1))
+            me.cpu.execute_cycle()
+            me.sound.update()
+            cycles = cycles + 1
+        }
+        
+        print("✅ Emulation cycles complete")
+    }
+    
+    test_weak_references() {
+        print("Testing memory access after CPU destruction:")
+        local result = me.memory.read_byte(512)
+        print("Memory read result: " + result)
+        
+        print("Testing graphics operation after CPU destruction:")
+        local gfx_result = me.graphics.clear_screen()
+        print("Graphics operation result: " + gfx_result)
+        
+        print("Testing sound operation after CPU destruction:")
+        local sound_result = me.sound.play_beep()
+        print("Sound operation result: " + sound_result)
+    }
+}
+
+// Entry point
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🚀 Phase 10.2: Chip-8 Emulator Starting")
+        
+        local chip8 = new Chip8System()
+        local result = chip8.main()
+        
+        me.console.log("🏁 Result: " + result)
+        return "Phase 10.2 Complete"
+    }
+}

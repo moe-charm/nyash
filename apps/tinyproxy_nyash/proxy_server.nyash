@@ -1,0 +1,175 @@
+// 🌐 Tinyproxy Nyash - HTTP Proxy Server Implementation
+// Phase 10.1: Zero-copy detection testing with real HTTP traffic
+
+// ProxyServer - Main proxy server implementation
+static box ProxyServer {
+    init { server_socket, upstream_buffer, downstream_buffer, port, running }
+    
+    main() {
+        me.port = 8080
+        me.running = true
+        me.upstream_buffer = new BufferBox()
+        me.downstream_buffer = new BufferBox()
+        me.server_socket = new SocketBox()
+        
+        print("🌐 Tinyproxy Nyash starting on port " + me.port)
+        
+        // Bind to port
+        local bind_result = me.server_socket.bind("127.0.0.1", me.port)
+        print("Bind result: " + bind_result)
+        
+        // Start listening
+        local listen_result = me.server_socket.listen(10)
+        print("Listen result: " + listen_result)
+        
+        // Main proxy loop
+        me.accept_connections()
+        
+        return "Proxy server stopped"
+    }
+    
+    accept_connections() {
+        local connection_count = 0
+        
+        print("🔄 Proxy server ready - waiting for connections...")
+        
+        loop(connection_count < 5 and me.running) {
+            print("Waiting for connection " + (connection_count + 1))
+            
+            local client_socket = me.server_socket.accept()
+            if (client_socket != null) {
+                print("✅ New client connected")
+                me.handle_client(client_socket)
+                connection_count = connection_count + 1
+            } else {
+                print("❌ Failed to accept connection")
+            }
+        }
+        
+        print("🏁 Proxy server finished handling " + connection_count + " connections")
+    }
+    
+    handle_client(client_socket) {
+        // Read HTTP request from client
+        local request_data = client_socket.read()
+        if (request_data == null) {
+            print("❌ Failed to read request from client")
+            return false
+        }
+        
+        print("📥 Received request from client")
+        
+        // Parse HTTP request to extract target server
+        local target_info = me.parse_http_request(request_data)
+        if (target_info == null) {
+            print("❌ Failed to parse HTTP request")
+            me.send_error_response(client_socket)
+            return false
+        }
+        
+        print("🎯 Targeting: " + target_info.get("host") + ":" + target_info.get("port"))
+        
+        // ⭐ Zero-copy test: Check if we can share request data without copying
+        local shared_result = me.relay_data(request_data)
+        print("Zero-copy result: " + shared_result)
+        
+        // Connect to target server
+        local upstream_socket = new SocketBox()
+        local connect_result = upstream_socket.connect(target_info.get("host"), target_info.get("port"))
+        
+        if (connect_result.toString() == "true") {
+            print("✅ Connected to upstream server")
+            
+            // Forward request to upstream server
+            upstream_socket.write(request_data)
+            print("📤 Forwarded request to upstream")
+            
+            // Read response from upstream
+            local response_data = upstream_socket.read()
+            if (response_data != null) {
+                print("📥 Received response from upstream")
+                
+                // Forward response back to client
+                client_socket.write(response_data)
+                print("📤 Forwarded response to client")
+            }
+            
+            upstream_socket.close()
+        } else {
+            print("❌ Failed to connect to upstream server")
+            me.send_error_response(client_socket)
+        }
+        
+        client_socket.close()
+        return true
+    }
+    
+    relay_data(client_data) {
+        // ⭐ Phase 10: Zero-copy detection testing
+        
+        // Test 1: Check if upstream buffer shares data with client data
+        if (me.upstream_buffer.is_shared_with(client_data)) {
+            return "✅ Zero-copy achieved!"
+        } else {
+            print("❌ Unnecessary copy detected in initial check")
+        }
+        
+        // Test 2: Create shared reference and test again
+        local shared_buffer = me.upstream_buffer.share_reference(client_data)
+        if (shared_buffer != null) {
+            print("📊 Created shared reference")
+            
+            // Test if the shared buffer is actually sharing memory
+            if (me.upstream_buffer.is_shared_with(shared_buffer)) {
+                return "✅ Zero-copy sharing successful!"
+            } else {
+                return "❌ Share reference failed to create shared memory"
+            }
+        }
+        
+        return "❌ Share reference operation failed"
+    }
+    
+    parse_http_request(request_data) {
+        // Simple HTTP request parser - extract host and port
+        local request_str = request_data.toString()
+        local result = new MapBox()
+        
+        // Default values
+        result.set("host", "httpbin.org")
+        result.set("port", 80)
+        result.set("method", "GET")
+        
+        // In a real implementation, we would parse the HTTP headers
+        // For this test, we'll use a fixed target
+        return result
+    }
+    
+    send_error_response(client_socket) {
+        local error_response = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n"
+        client_socket.write(error_response)
+    }
+    
+    stop() {
+        me.running = false
+        if (me.server_socket != null) {
+            me.server_socket.close()
+        }
+    }
+}
+
+// Entry point
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🚀 Starting Tinyproxy Nyash - Phase 10.1")
+        
+        local proxy = new ProxyServer()
+        local result = proxy.main()
+        
+        me.console.log("🏁 Proxy result: " + result)
+        return "Phase 10.1 Complete"
+    }
+}

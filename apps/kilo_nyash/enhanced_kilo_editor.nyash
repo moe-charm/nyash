@@ -1,0 +1,256 @@
+// ✏️ Enhanced Kilo Text Editor - Phase 10.4
+// Memory efficiency monitoring and "accidental full copy" detection
+
+// Enhanced TextBuffer with memory monitoring
+box EnhancedTextBuffer {
+    init { lines, undo_stack, initial_memory, operation_count }
+    
+    EnhancedTextBuffer() {
+        me.lines = new ArrayBox()
+        me.undo_stack = new ArrayBox()
+        me.operation_count = 0
+        
+        // Start with one empty line
+        me.lines.push("")
+        
+        // Record initial memory footprint
+        me.initial_memory = me.memory_footprint()
+        print("📊 Initial memory footprint: " + me.initial_memory + " bytes")
+    }
+    
+    // ⭐ Phase 10: Memory efficiency monitoring
+    memory_footprint() {
+        // Calculate total memory usage
+        local total_memory = 100  // Base TextBuffer overhead
+        local line_count = me.lines.length()
+        
+        // Add memory for each line
+        local i = 0
+        loop(i < line_count) {
+            local line = me.lines.get(i)
+            total_memory = total_memory + line.toString().length() + 20  // String overhead
+            i = i + 1
+        }
+        
+        // Add undo stack memory
+        local undo_count = me.undo_stack.length()
+        total_memory = total_memory + (undo_count * 50)  // Estimate for undo operations
+        
+        return total_memory
+    }
+    
+    // ⭐ Phase 10: "Accidental full copy" detection
+    insert_char(row, col, char) {
+        local old_memory = me.memory_footprint()
+        me.operation_count = me.operation_count + 1
+        
+        // Get current line
+        local current_line = me.lines.get(row)
+        local line_str = current_line.toString()
+        
+        // Insert character
+        local left_part = line_str.substring(0, col)
+        local right_part = line_str.substring(col, line_str.length())
+        local new_line = left_part + char + right_part
+        
+        // Replace line
+        me.lines.set(row, new_line)
+        
+        // Save to undo stack
+        local undo_op = "insert_char:" + row + ":" + col + ":" + char
+        me.undo_stack.push(undo_op)
+        
+        // Check for accidental full copy
+        local new_memory = me.memory_footprint()
+        local memory_diff = new_memory - old_memory
+        
+        print("💾 Memory change: " + memory_diff + " bytes for operation " + me.operation_count)
+        
+        // ⭐ Alert if memory increase is suspicious
+        if (memory_diff > 100) {  // 1 character should not increase memory by 100+ bytes
+            print("🚨 INEFFICIENT COPY DETECTED!")
+            print("   Expected: ~20 bytes, Actual: " + memory_diff + " bytes")
+            print("   Operation: Insert '" + char + "' at (" + row + ", " + col + ")")
+            me.log_memory_leak_warning()
+        } else if (memory_diff > 0) {
+            print("✅ Normal memory usage: " + memory_diff + " bytes")
+        }
+        
+        return true
+    }
+    
+    delete_char(row, col) {
+        if (col <= 0) {
+            return false
+        }
+        
+        local old_memory = me.memory_footprint()
+        me.operation_count = me.operation_count + 1
+        
+        // Get current line and remove character
+        local current_line = me.lines.get(row)
+        local line_str = current_line.toString()
+        
+        local left_part = line_str.substring(0, col - 1)
+        local right_part = line_str.substring(col, line_str.length())
+        local new_line = left_part + right_part
+        
+        me.lines.set(row, new_line)
+        
+        // Save to undo stack
+        local undo_op = "delete_char:" + row + ":" + col
+        me.undo_stack.push(undo_op)
+        
+        local new_memory = me.memory_footprint()
+        local memory_diff = new_memory - old_memory
+        
+        print("💾 Memory change: " + memory_diff + " bytes (deletion)")
+        
+        return true
+    }
+    
+    // Search and replace with efficiency monitoring
+    search_and_replace(pattern, replacement) {
+        local initial_memory = me.memory_footprint()
+        local matches_found = 0
+        
+        print("🔍 Starting search and replace: '" + pattern + "' -> '" + replacement + "'")
+        
+        local line_count = me.lines.length()
+        local i = 0
+        loop(i < line_count) {
+            local line = me.lines.get(i)
+            local line_str = line.toString()
+            
+            // Simple search and replace (contains check)
+            if (line_str.indexOf(pattern) >= 0) {
+                // For simplicity, just append replacement to demonstrate memory monitoring
+                local new_line = line_str + " [REPLACED: " + pattern + " -> " + replacement + "]"
+                me.lines.set(i, new_line)
+                matches_found = matches_found + 1
+            }
+            i = i + 1
+        }
+        
+        local final_memory = me.memory_footprint()
+        local memory_ratio = final_memory / initial_memory
+        
+        print("🔍 Search complete: " + matches_found + " matches")
+        print("📊 Memory usage: " + initial_memory + " -> " + final_memory + " bytes")
+        print("📈 Memory ratio: " + memory_ratio)
+        
+        // Check for memory doubling (inefficient algorithm)
+        if (memory_ratio > 2) {
+            print("⚠️ Memory usage doubled during replace operation!")
+            print("   This may indicate inefficient string handling")
+        } else {
+            print("✅ Memory usage within reasonable bounds")
+        }
+        
+        return matches_found
+    }
+    
+    log_memory_leak_warning() {
+        print("⚠️ MEMORY EFFICIENCY WARNING")
+        print("   Current total memory: " + me.memory_footprint())
+        print("   Operations performed: " + me.operation_count)
+        print("   Average memory per operation: " + (me.memory_footprint() / me.operation_count))
+        print("   Consider optimizing string operations")
+    }
+    
+    get_stats() {
+        local current_memory = me.memory_footprint()
+        local line_count = me.lines.length()
+        local undo_count = me.undo_stack.length()
+        
+        return "Lines: " + line_count + ", Undo: " + undo_count + ", Memory: " + current_memory + "B, Ops: " + me.operation_count
+    }
+}
+
+// Enhanced Kilo Editor
+box EnhancedKiloEditor {
+    init { buffer, cursor_row, cursor_col, filename }
+    
+    EnhancedKiloEditor(file_name) {
+        me.buffer = new EnhancedTextBuffer()
+        me.cursor_row = 0
+        me.cursor_col = 0
+        me.filename = file_name
+        print("📝 Enhanced Kilo Editor initialized: " + me.filename)
+    }
+    
+    insert_text(text) {
+        local i = 0
+        local text_len = text.length()
+        
+        loop(i < text_len) {
+            local char = text.substring(i, i + 1)
+            me.buffer.insert_char(me.cursor_row, me.cursor_col, char)
+            me.cursor_col = me.cursor_col + 1
+            i = i + 1
+        }
+    }
+    
+    new_line() {
+        // Insert new line at current position
+        me.cursor_row = me.cursor_row + 1
+        me.cursor_col = 0
+        me.buffer.lines.insert(me.cursor_row, "")
+        print("↩️ New line inserted at row " + me.cursor_row)
+    }
+    
+    backspace() {
+        if (me.cursor_col > 0) {
+            me.buffer.delete_char(me.cursor_row, me.cursor_col)
+            me.cursor_col = me.cursor_col - 1
+        }
+    }
+    
+    show_stats() {
+        print("📊 Editor Stats: " + me.buffer.get_stats())
+        print("📍 Cursor: (" + me.cursor_row + ", " + me.cursor_col + ")")
+    }
+}
+
+// Test suite for memory efficiency
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("✏️ Phase 10.4: Enhanced Kilo Editor - Memory Efficiency Testing")
+        
+        local editor = new EnhancedKiloEditor("test_document.txt")
+        
+        // Test 1: Normal character insertion
+        me.console.log("Test 1: Inserting characters normally")
+        editor.insert_text("Hello World")
+        editor.show_stats()
+        
+        // Test 2: Large text insertion (potential memory stress)
+        me.console.log("Test 2: Large text insertion")
+        editor.new_line()
+        editor.insert_text("This is a longer line of text to test memory efficiency monitoring")
+        editor.show_stats()
+        
+        // Test 3: Search and replace (memory doubling test)
+        me.console.log("Test 3: Search and replace operation")
+        local matches = editor.buffer.search_and_replace("test", "TEST")
+        editor.show_stats()
+        
+        // Test 4: Memory stress test
+        me.console.log("Test 4: Memory stress test - rapid insertions")
+        local stress_count = 0
+        loop(stress_count < 10) {
+            editor.insert_text("X")
+            stress_count = stress_count + 1
+        }
+        editor.show_stats()
+        
+        // Final memory report
+        me.console.log("Final memory footprint: " + editor.buffer.memory_footprint() + " bytes")
+        me.console.log("Total operations: " + editor.buffer.operation_count)
+        
+        return "Enhanced Kilo Editor test complete"
+    }
+}
