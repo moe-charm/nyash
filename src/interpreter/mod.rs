@@ -28,9 +28,14 @@ use std::collections::HashMap;
 
 // Module declarations  
 mod async_methods;
+mod async_ops;
 mod box_methods;
 mod core;
+mod delegation;
 mod expressions;
+mod field_access;
+mod method_dispatch;
+mod operators;
 mod statements;
 mod functions;
 mod objects;
@@ -38,6 +43,7 @@ mod io;
 mod methods;
 mod math_methods;
 mod system_methods;
+mod utils;
 mod web_methods;
 mod special_methods;
 
