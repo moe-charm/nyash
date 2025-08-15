@@ -317,6 +317,11 @@ impl NyashBox for MathBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_math) = other.as_any().downcast_ref::<MathBox>() {
             BoolBox::new(self.box_id() == other_math.box_id())
@@ -382,6 +387,11 @@ impl NyashBox for FloatBox {
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
+    }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
     }
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
@@ -475,6 +485,11 @@ impl NyashBox for RangeBox {
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
+    }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
     }
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {

@@ -1,0 +1,24 @@
+// 🚨 ArrayBox状態保持テスト - コアとなる問題を検証
+static box Main {
+    init { result1, result2, result3 }
+    main() {
+        // テスト1: 基本的な状態保持
+        local arr1
+        arr1 = new ArrayBox()
+        arr1.push("hello")
+        me.result1 = arr1.length()  // 期待値: 1
+
+        // テスト2: 複数操作の状態保持
+        local arr2
+        arr2 = new ArrayBox()
+        arr2.push("first")
+        arr2.push("second")
+        me.result2 = arr2.length()  // 期待値: 2
+        
+        // テスト3: 変数再利用での状態保持
+        arr1.push("world")
+        me.result3 = arr1.length()  // 期待値: 2
+        
+        return me.result1
+    }
+}

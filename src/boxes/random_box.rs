@@ -270,6 +270,11 @@ impl NyashBox for RandomBox {
         Box::new(self.clone())
     }
     
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_random) = other.as_any().downcast_ref::<RandomBox>() {
             BoolBox::new(self.base.id == other_random.base.id)

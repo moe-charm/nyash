@@ -31,18 +31,18 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBase};
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};  // Arc追加
 use std::fmt::{Debug, Display};
 
 pub struct BufferBox {
-    data: RwLock<Vec<u8>>,
+    data: Arc<RwLock<Vec<u8>>>,  // Arc追加
     base: BoxBase,
 }
 
 impl BufferBox {
     pub fn new() -> Self {
         BufferBox { 
-            data: RwLock::new(Vec::new()),
+            data: Arc::new(RwLock::new(Vec::new())),  // Arc::new追加
             base: BoxBase::new(),
         }
     }
@@ -54,7 +54,7 @@ impl BufferBox {
     
     pub fn from_vec(data: Vec<u8>) -> Self {
         BufferBox { 
-            data: RwLock::new(data),
+            data: Arc::new(RwLock::new(data)),  // Arc::new追加
             base: BoxBase::new(),
         }
     }
@@ -155,8 +155,12 @@ impl BufferBox {
 // Clone implementation for BufferBox (needed since RwLock doesn't auto-derive Clone)
 impl Clone for BufferBox {
     fn clone(&self) -> Self {
-        let data = self.data.read().unwrap();
-        BufferBox::from_vec(data.clone())
+        // ディープコピー（独立インスタンス）
+        let data_guard = self.data.read().unwrap();
+        BufferBox {
+            data: Arc::new(RwLock::new(data_guard.clone())),  // 新しいArc
+            base: BoxBase::new(),
+        }
     }
 }
 
@@ -192,6 +196,15 @@ impl Display for BufferBox {
 impl NyashBox for BufferBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
+    }
+    
+    /// 🎯 状态共享的核心实现 
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        let new_instance = BufferBox {
+            data: Arc::clone(&self.data),  // Arcクローンで状態共有
+            base: BoxBase::new(),          // 新しいID
+        };
+        Box::new(new_instance)
     }
 
     fn to_string_box(&self) -> StringBox {
