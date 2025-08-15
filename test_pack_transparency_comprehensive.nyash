@@ -1,0 +1,63 @@
+# 🔥 Phase 8.8: pack透明化システム 包括テスト
+# 全ビルトインBox継承パターンと mixed inheritance のテスト
+
+print("=== pack透明化システム包括テスト開始 ===")
+
+# テスト1: IntegerBox 透明化
+box SmartInteger from IntegerBox {
+    init { isPositive }
+    
+    birth(value) {
+        from IntegerBox(value)  # 透明化システム
+        me.isPositive = value > 0
+    }
+    
+    getInfo() {
+        if me.isPositive {
+            return "正数です"
+        } else {
+            return "負数または0です"
+        }
+    }
+}
+
+local num1 = new SmartInteger(42)
+print("1. " + num1.getInfo())
+
+local num2 = new SmartInteger(-5)  
+print("2. " + num2.getInfo())
+
+# テスト2: 混在テスト - ビルトイン継承 + ユーザー定義
+box AdvancedCalc from MathBox {
+    init { history }
+    
+    birth() {
+        from MathBox()  # 透明化システム
+        me.history = new ArrayBox()
+    }
+    
+    addToHistory(operation) {
+        me.history.push(operation)
+        return "履歴に追加: " + operation
+    }
+}
+
+box SimpleCalculator {
+    init { result }
+    
+    birth() {
+        me.result = 0
+    }
+    
+    getResult() {
+        return "結果: " + me.result
+    }
+}
+
+local calc1 = new AdvancedCalc()     # ビルトイン継承
+local calc2 = new SimpleCalculator() # ユーザー定義
+
+print("3. " + calc1.addToHistory("2+2=4"))
+print("4. " + calc2.getResult())
+
+print("=== pack透明化システム包括テスト完了 ===")

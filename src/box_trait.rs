@@ -23,6 +23,25 @@ pub fn next_box_id() -> u64 {
     COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
+/// 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定リスト
+/// ユーザーは`pack`を一切意識せず、`from BuiltinBox()`で自動的に内部のpack機能が呼ばれる
+pub const BUILTIN_BOXES: &[&str] = &[
+    "StringBox", "IntegerBox", "BoolBox", "NullBox",
+    "ArrayBox", "MapBox", "FileBox", "ResultBox", 
+    "FutureBox", "ChannelBox", "MathBox", "FloatBox",
+    "TimeBox", "DateTimeBox", "TimerBox", "RandomBox", 
+    "SoundBox", "DebugBox", "MethodBox", "ConsoleBox",
+    "BufferBox", "RegexBox", "JSONBox", "StreamBox", 
+    "HTTPClientBox", "IntentBox", "P2PBox", "SocketBox", 
+    "HTTPServerBox", "HTTPRequestBox", "HTTPResponseBox"
+];
+
+/// 🔥 ビルトインBox判定関数 - pack透明化システムの核心
+/// ユーザー側: `from StringBox()` → 内部的に `StringBox.pack()` 自動呼び出し
+pub fn is_builtin_box(box_name: &str) -> bool {
+    BUILTIN_BOXES.contains(&box_name)
+}
+
 /// 🏗️ BoxBase - 全てのBox型の共通基盤構造体
 /// Phase 2: 統一的な基盤データを提供
 /// 🔥 Phase 1: ビルトインBox継承システム - 最小限拡張
