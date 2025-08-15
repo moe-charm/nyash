@@ -41,9 +41,8 @@
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
-use crate::boxes::{SocketBox, MapBox, ArrayBox};
+use crate::boxes::SocketBox;
 use crate::boxes::http_message_box::{HTTPRequestBox, HTTPResponseBox};
-use crate::boxes::future::FutureBox;
 use std::any::Any;
 use std::sync::RwLock;
 use std::collections::HashMap;
@@ -65,13 +64,27 @@ pub struct HTTPServerBox {
 impl Clone for HTTPServerBox {
     fn clone(&self) -> Self {
         // State-preserving clone implementation following PR #87 pattern
-        let socket_val = self.socket.read().unwrap().clone();
-        let routes_val = self.routes.read().unwrap().clone();
-        let middleware_val = self.middleware.read().unwrap().clone();
+        let socket_guard = self.socket.read().unwrap();
+        let socket_val = socket_guard.as_ref().map(|s| s.clone());
+        
+        let routes_guard = self.routes.read().unwrap();
+        let routes_val: HashMap<String, Box<dyn NyashBox>> = routes_guard.iter()
+            .map(|(k, v)| (k.clone(), v.clone_box()))
+            .collect();
+            
+        let middleware_guard = self.middleware.read().unwrap();
+        let middleware_val: Vec<Box<dyn NyashBox>> = middleware_guard.iter()
+            .map(|item| item.clone_box())
+            .collect();
+            
         let running_val = *self.running.read().unwrap();
         let static_path_val = self.static_path.read().unwrap().clone();
         let timeout_val = *self.timeout_seconds.read().unwrap();
-        let connections_val = self.active_connections.read().unwrap().clone();
+        
+        let connections_guard = self.active_connections.read().unwrap();
+        let connections_val: Vec<Box<dyn NyashBox>> = connections_guard.iter()
+            .map(|item| item.clone_box())
+            .collect();
         
         Self {
             base: BoxBase::new(), // New unique ID for clone
@@ -189,7 +202,12 @@ impl HTTPServerBox {
                 // Handle client in separate thread (simulate nowait)
                 // For RwLock pattern, we need to pass the data needed for the thread
                 let routes_snapshot = match self.routes.read() {
-                    Ok(routes_guard) => routes_guard.clone(),
+                    Ok(routes_guard) => {
+                        let routes_clone: HashMap<String, Box<dyn NyashBox>> = routes_guard.iter()
+                            .map(|(k, v)| (k.clone(), v.clone_box()))
+                            .collect();
+                        routes_clone
+                    },
                     Err(_) => continue, // Skip this connection if we can't read routes
                 };
                 

@@ -34,10 +34,10 @@
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
-use std::net::{TcpListener, TcpStream, SocketAddr, ToSocketAddrs};
-use std::io::{Read, Write, BufRead, BufReader};
+use std::net::{TcpListener, TcpStream};
+use std::io::{Write, BufRead, BufReader};
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -98,7 +98,7 @@ impl SocketBox {
                 eprintln!("✅ TCP bind successful");
                 
                 // listener設定
-                match self.listener.lock() {
+                match self.listener.write() {
                     Ok(mut listener_guard) => {
                         *listener_guard = Some(listener);
                         eprintln!("✅ Listener stored successfully");
@@ -110,12 +110,11 @@ impl SocketBox {
                 }
                 
                 // is_server状態設定 - 徹底デバッグ
-                match self.is_server.lock() {
+                match self.is_server.write() {
                     Ok(mut is_server_guard) => {
                         eprintln!("🔥 BEFORE MUTATION:");
                         eprintln!("🔥   is_server value = {}", *is_server_guard);
-                        eprintln!("🔥   Arc strong_count = {}", std::sync::Arc::strong_count(&self.is_server));
-                        eprintln!("🔥   Arc weak_count = {}", std::sync::Arc::weak_count(&self.is_server));
+                        eprintln!("🔥   RwLock pointer = {:p}", &self.is_server);
                         eprintln!("🔥   Guard pointer = {:p}", &*is_server_guard);
                         
                         // 状態変更
@@ -130,7 +129,7 @@ impl SocketBox {
                         eprintln!("✅ is_server guard dropped");
                         
                         // 再確認テスト
-                        match self.is_server.lock() {
+                        match self.is_server.read() {
                             Ok(check_guard) => {
                                 eprintln!("🔥 RECHECK AFTER DROP:");
                                 eprintln!("🔥   is_server value = {}", *check_guard);
@@ -161,7 +160,7 @@ impl SocketBox {
         let _backlog_num = backlog.to_string_box().value.parse::<i32>().unwrap_or(128);
         
         // Check if listener exists and is properly bound
-        let listener_guard = match self.listener.lock() {
+        let listener_guard = match self.listener.read() {
             Ok(guard) => guard,
             Err(_) => return Box::new(BoolBox::new(false)),
         };
@@ -195,8 +194,8 @@ impl SocketBox {
                     
                     // Create new SocketBox for the client connection
                     let client_socket = SocketBox::new();
-                    *client_socket.stream.lock().unwrap() = Some(stream);
-                    *client_socket.is_connected.lock().unwrap() = true;
+                    *client_socket.stream.write().unwrap() = Some(stream);
+                    *client_socket.is_connected.write().unwrap() = true;
                     
                     Box::new(client_socket)
                 },
@@ -361,16 +360,13 @@ impl SocketBox {
     pub fn is_server(&self) -> Box<dyn NyashBox> {
         eprintln!("🔥 SOCKETBOX DEBUG: is_server() called");
         eprintln!("🔥   Socket ID = {}", self.base.id);
-        eprintln!("🔥   Arc pointer = {:p}", &self.is_server);
-        eprintln!("🔥   Arc data pointer = {:p}", self.is_server.as_ref());
+        eprintln!("🔥   RwLock pointer = {:p}", &self.is_server);
         
-        match self.is_server.lock() {
+        match self.is_server.read() {
             Ok(is_server_guard) => {
                 let is_server_value = *is_server_guard;
                 eprintln!("🔥 IS_SERVER READ:");
                 eprintln!("🔥   is_server value = {}", is_server_value);
-                eprintln!("🔥   Arc strong_count = {}", std::sync::Arc::strong_count(&self.is_server));
-                eprintln!("🔥   Arc weak_count = {}", std::sync::Arc::weak_count(&self.is_server));
                 eprintln!("🔥   Guard pointer = {:p}", &*is_server_guard);
                 eprintln!("🔥   Returning BoolBox with value = {}", is_server_value);
                 
@@ -391,26 +387,26 @@ impl NyashBox for SocketBox {
 
     fn to_string_box(&self) -> StringBox {
         eprintln!("🔥 SOCKETBOX to_string_box() called - Socket ID = {}", self.base.id);
-        eprintln!("🔥   Arc pointer = {:p}", &self.is_server);
+        eprintln!("🔥   RwLock pointer = {:p}", &self.is_server);
         
-        let is_server = match self.is_server.lock() {
+        let is_server = match self.is_server.read() {
             Ok(guard) => {
-                eprintln!("✅ is_server.lock() successful");
+                eprintln!("✅ is_server.read() successful");
                 *guard
             },
             Err(e) => {
-                eprintln!("❌ is_server.lock() failed: {}", e);
+                eprintln!("❌ is_server.read() failed: {}", e);
                 false // デフォルト値
             }
         };
         
-        let is_connected = match self.is_connected.lock() {
+        let is_connected = match self.is_connected.read() {
             Ok(guard) => {
-                eprintln!("✅ is_connected.lock() successful");
+                eprintln!("✅ is_connected.read() successful");
                 *guard
             },
             Err(e) => {
-                eprintln!("❌ is_connected.lock() failed: {}", e);
+                eprintln!("❌ is_connected.read() failed: {}", e);
                 false // デフォルト値
             }
         };
@@ -451,18 +447,18 @@ impl BoxCore for SocketBox {
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         eprintln!("🔥 SOCKETBOX fmt_box() called - Socket ID = {}", self.base.id);
         
-        let is_server = match self.is_server.lock() {
+        let is_server = match self.is_server.read() {
             Ok(guard) => *guard,
             Err(e) => {
-                eprintln!("❌ fmt_box: is_server.lock() failed: {}", e);
+                eprintln!("❌ fmt_box: is_server.read() failed: {}", e);
                 false
             }
         };
         
-        let is_connected = match self.is_connected.lock() {
+        let is_connected = match self.is_connected.read() {
             Ok(guard) => *guard,
             Err(e) => {
-                eprintln!("❌ fmt_box: is_connected.lock() failed: {}", e);
+                eprintln!("❌ fmt_box: is_connected.read() failed: {}", e);
                 false
             }
         };

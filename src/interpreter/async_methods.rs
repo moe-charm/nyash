@@ -41,7 +41,7 @@ impl NyashInterpreter {
                         message: format!("ready() expects 0 arguments, got {}", arguments.len()),
                     });
                 }
-                Ok(future_box.ready())
+                Ok(Box::new(BoolBox::new(future_box.ready())))
             }
             "equals" => {
                 if arguments.len() != 1 {

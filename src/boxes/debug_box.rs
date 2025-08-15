@@ -102,12 +102,12 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 use chrono::Local;
-use crate::box_trait::{BoxCore, BoxBase, next_box_id, NyashBox, StringBox, BoolBox, VoidBox};
+use crate::box_trait::{BoxCore, BoxBase, NyashBox, StringBox, BoolBox, VoidBox};
 use crate::interpreter::RuntimeError;
 use crate::instance::InstanceBox;
 use std::any::Any;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DebugBox {
     base: BoxBase,
     tracking_enabled: RwLock<bool>,
@@ -188,7 +188,7 @@ impl DebugBox {
     }
 
     pub fn dump_all(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let tracked = self.tracked_boxes.lock().unwrap();
+        let tracked = self.tracked_boxes.read().unwrap();
         let mut output = String::from("=== Box State Dump ===\n");
         output.push_str(&format!("Time: {}\n", Local::now().format("%Y-%m-%d %H:%M:%S")));
         output.push_str(&format!("Total tracked boxes: {}\n\n", tracked.len()));
@@ -228,7 +228,7 @@ impl DebugBox {
     }
 
     pub fn memory_report(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let tracked = self.tracked_boxes.lock().unwrap();
+        let tracked = self.tracked_boxes.read().unwrap();
         let mut report = String::from("=== Memory Report ===\n");
         report.push_str(&format!("Tracked boxes: {}\n", tracked.len()));
         
@@ -248,14 +248,14 @@ impl DebugBox {
 
     // Advanced features
     pub fn set_breakpoint(&self, function_name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let mut breakpoints = self.breakpoints.lock().unwrap();
+        let mut breakpoints = self.breakpoints.write().unwrap();
         breakpoints.push(function_name.to_string());
         println!("[DEBUG] Breakpoint set at function: {}", function_name);
         Ok(Box::new(VoidBox::new()))
     }
 
     pub fn trace_call(&self, function_name: &str, args: Vec<String>) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let mut stack = self.call_stack.lock().unwrap();
+        let mut stack = self.call_stack.write().unwrap();
         stack.push(CallInfo {
             function_name: function_name.to_string(),
             args,
@@ -271,7 +271,7 @@ impl DebugBox {
     }
 
     pub fn show_call_stack(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let stack = self.call_stack.lock().unwrap();
+        let stack = self.call_stack.read().unwrap();
         let mut output = String::from("=== Call Stack ===\n");
         
         for (i, call) in stack.iter().enumerate() {
@@ -287,10 +287,10 @@ impl DebugBox {
     }
 
     pub fn clear(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let mut tracked = self.tracked_boxes.lock().unwrap();
+        let mut tracked = self.tracked_boxes.write().unwrap();
         tracked.clear();
         
-        let mut stack = self.call_stack.lock().unwrap();
+        let mut stack = self.call_stack.write().unwrap();
         stack.clear();
         
         println!("[DEBUG] Cleared all debug information");
@@ -303,8 +303,26 @@ impl DebugBox {
     }
 
     pub fn get_tracked_count(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let tracked = self.tracked_boxes.lock().unwrap();
+        let tracked = self.tracked_boxes.read().unwrap();
         Ok(Box::new(crate::box_trait::IntegerBox::new(tracked.len() as i64)))
+    }
+}
+
+// Manual Clone implementation for DebugBox (RwLock doesn't auto-derive Clone)
+impl Clone for DebugBox {
+    fn clone(&self) -> Self {
+        let tracked = self.tracked_boxes.read().unwrap();
+        let breakpoints = self.breakpoints.read().unwrap();
+        let call_stack = self.call_stack.read().unwrap();
+        let tracking_enabled = self.tracking_enabled.read().unwrap();
+        
+        DebugBox {
+            base: BoxBase::new(), // New unique ID for cloned instance
+            tracking_enabled: RwLock::new(*tracking_enabled),
+            tracked_boxes: RwLock::new(tracked.clone()),
+            breakpoints: RwLock::new(breakpoints.clone()),
+            call_stack: RwLock::new(call_stack.clone()),
+        }
     }
 }
 
@@ -319,7 +337,7 @@ impl BoxCore for DebugBox {
     }
     
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let tracked = self.tracked_boxes.lock().unwrap();
+        let tracked = self.tracked_boxes.read().unwrap();
         write!(f, "DebugBox[{} tracked]", tracked.len())
     }
     
@@ -342,7 +360,7 @@ impl std::fmt::Display for DebugBox {
 // Implement NyashBox trait for DebugBox
 impl NyashBox for DebugBox {
     fn to_string_box(&self) -> StringBox {
-        let tracked = self.tracked_boxes.lock().unwrap();
+        let tracked = self.tracked_boxes.read().unwrap();
         StringBox::new(format!("DebugBox[{} tracked]", tracked.len()))
     }
     
