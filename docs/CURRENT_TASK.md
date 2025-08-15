@@ -1,77 +1,54 @@
-# 🎯 現在のタスク (2025-08-15 birth()統一設計決定・実装準備)
+# 🎯 現在のタスク (2025-08-15 nyashstd実装完了!)
 
-## ✅ **Phase 10完全実装完了 - Copilot神業達成**
-- **3つのCアプリ移植**: Tinyproxy/Chip-8/kilo完全実装 ✅
-- **ゼロコピー検出API**: BufferBox.is_shared_with()/.share_reference()/.memory_footprint() ✅
-- **テスト実行成功**: test_zero_copy_detection.nyash完全動作 ✅
-- **Arc::ptr_eq()検出**: 真のゼロコピー判定実現 ✅
-- **新API978行追加**: すべて正常ビルド・実行成功 ✅
+## 🎉 **Phase 9.75e完了: using nyashstd実装完全成功!**
 
-## 🎯 **birth()統一設計決定 - Gemini完全承認獲得 (2025-08-15)**
+### ✅ **Phase 9.75e - 100% 完了** 
+- **using文実装**: USINGトークン・パーサー・AST完全実装 ✅
+- **BuiltinStdlib基盤**: 組み込み標準ライブラリ基盤作成 ✅
+- **stdlib統合完了**: `crate::stdlib` import問題解決、ビルド成功 ✅
+- **全機能動作確認**: string.create(), string.upper(), integer.create(), bool.create(), array.create(), console.log() 全て動作確認 ✅
 
-### **🌟 透明化システム廃止 → 明示的birth()統一システム採用** ✅
-
-**Gemini分析結論**: 「birth()統一・内部実装自由案が多くの点で優れており、Nyashの言語設計として非常に妥当で洗練されたもの」
-
-### **🎯 新・明示的birth()統一設計**
-
-**核心方針**: 透明化システム完全廃止・明示的birth()メソッド呼び出しに統一
-
-### **📋 新・明示的birth()構文**
+### 🌟 **実装成果 - 完全動作確認済み**
 ```nyash
-# ✅ 新しい明示的構文（Gemini推奨）
-box EnhancedString from StringBox {
-    init { prefix }
-    
-    birth(content, prefixStr) {
-        from StringBox.birth(content)  # ← 明示的メソッド呼び出し！
-        me.prefix = prefixStr
-    }
-    
-    override toString() {
-        return me.prefix + from StringBox.toString()
-    }
-}
+using nyashstd
+
+// ✅ 実際に動作テスト済み
+local result = string.create("Hello World")  // → "Hello World"
+local upper = string.upper(result)           // → "HELLO WORLD"  
+local number = integer.create(42)            // → 42
+local flag = bool.create(true)               // → true
+local arr = array.create()                   // → []
+console.log("✅ using nyashstd test completed!")  // ✅ 出力成功
 ```
 
-### **🔧 実装側の内部動作**
-```rust
-// from StringBox(content) の解決優先度
-fn resolve_builtin_delegation(builtin: &str, args: Vec<_>) -> String {
-    if is_builtin_box(builtin) {
-        // 1. ビルトインBoxの場合、内部的にpackを呼ぶ
-        builtin_pack_registry.call_pack(builtin, args)
-    } else {
-        // 2. ユーザー定義Boxの場合、birth優先
-        resolve_user_constructor(builtin, args)  // birth > init > Box名
-    }
-}
+## 🚀 **現在進行中: Phase 9.75f** - 文字列リテラル自動変換 & nyashstd拡張
+
+### **🌟 提案: 文字列リテラル自動変換（革命的ユーザビリティ向上）**
+
+**背景**: Everything is Box哲学 + ユーザーフレンドリー性の両立
+**革命提案**: パーサーレベルで文字列リテラルをStringBox自動変換
+
+### **📋 自動変換設計**
+```nyash
+// 現在: 明示的Box生成が必要
+local text = new StringBox("Hello")
+local name = string.create("Alice")
+
+// 提案: パーサーが自動でStringBox生成  
+local text = "Hello"    // ← パーサーがStringBox::new("Hello")に自動変換
+local name = "Alice"    // ← 同様に自動変換
+local age = 30          // ← IntegerBox::new(30)に自動変換
+local active = true     // ← BoolBox::new(true)に自動変換
+
+// Everything is Box哲学維持 + 書きやすさ大幅向上!
 ```
 
-### **🎯 実装すべきこと**
+### **🎯 実装アプローチ**
+1. **パーサー修正**: リテラル解析時にBox生成AST自動挿入
+2. **型推論**: 文脈に応じたBox型自動選択  
+3. **互換性保証**: 既存の明示的Box生成も継続サポート
 
-**1. ビルトインBox自動判定**
-- `is_builtin_box()` 関数実装
-- StringBox, P2PBox, MathBox等をビルトイン登録
-
-**2. pack透明化システム**
-- `from BuiltinBox()` → 内部的に `BuiltinBox.pack()` 呼び出し
-- ユーザーは`pack`という単語を見ない・書かない
-
-**3. デリゲーション解決統一**
-- ビルトインBox: 自動pack呼び出し
-- ユーザー定義Box: birth > init > Box名 優先順位
-
-**4. エラーメッセージ改善**
-- ユーザーには「birth()がありません」と表示
-- packエラーは内部ログのみ
-
-### **🎉 期待される効果**
-- **完全透明化**: ユーザーはpackを一切意識しない
-- **統一体験**: `from Parent()` で全て解決
-- **設計分離**: ビルトインBox内部実装とユーザーAPI完全分離
-
-## 🚨 **緊急実装タスク**
+## 🚨 **緊急実装タスク (Priority High)**
 **GitHub Issue**: Phase 8.9実装
 **ドキュメント**: [phase_8_9_birth_unified_system_copilot_proof.md](docs/予定/native-plan/issues/phase_8_9_birth_unified_system_copilot_proof.md)
 
@@ -93,7 +70,7 @@ fn resolve_builtin_delegation(builtin: &str, args: Vec<_>) -> String {
 - 全テストケース完全PASS ✅
 - Nyash明示性哲学完全復活 ✅
 
-### 📦 **移植対象アプリケーション**
+## 📦 **移植対象アプリケーション**
 1. **🌐 Tinyproxy** - ゼロコピー判定機能実証（HTTPプロキシサーバー）
 2. **🎮 Chip-8エミュレーター** - fini伝播・weak参照実戦テスト  
 3. **✏️ kilo テキストエディター** - 「うっかり全体コピー」検出機能
@@ -108,36 +85,40 @@ fn resolve_builtin_delegation(builtin: &str, args: Vec<_>) -> String {
 - **Phase 8**: MIR/WASM基盤構築、13.5倍高速化実証 ✅
 - **Phase 9**: AOT WASM実装、ExternCall基盤 ✅  
 - **Phase 9.75**: Arc<Mutex>→RwLock全変換完了 ✅
+- **Phase 9.75e**: using nyashstd実装完全成功 ✅ **← NEW!**
 
 ## 🔮 **今後のロードマップ**
-- **Phase 9.5**: HTTPサーバー実用テスト（2週間） ← **現在ここ**
+- **Phase 9.75f**: 文字列リテラル自動変換実装 ← **現在ここ**
+- **Phase 9.5**: HTTPサーバー実用テスト（2週間）
 - **Phase 10**: LLVM Direct AOT（4-6ヶ月、1000倍高速化目標）
 
 ## 📊 **主要実績**
 - **Box統一アーキテクチャ**: Arc<Mutex>二重ロック問題を根本解決
 - **実行性能**: WASM 13.5倍、VM 20.4倍高速化達成
 - **Everything is Box哲学**: 全11個のBox型でRwLock統一完了
+- **標準ライブラリ**: using nyashstd完全実装 ✅ **← NEW!**
 
 ## 🔥 **実装優先度**
 
 ### **🚨 Critical (即時実装)**
-1. **ビルトインBox判定システム** - is_builtin_box()実装（15分）
-2. **pack透明化解決** - from BuiltinBox()自動変換（30分）
-3. **統合テスト作成** - 透明化動作確認（10分）
+1. **文字列リテラル自動変換** - パーサー修正（1時間）
+2. **整数/真偽値リテラル自動変換** - 統一実装（30分）
+3. **nyashstd拡張テスト** - 自動変換動作確認（15分）
 
 ### **⚡ High (今週中)**
-4. **エラーメッセージ改善** - pack隠蔽、birth中心メッセージ
-5. **ドキュメント更新** - CLAUDE.md透明化設計反映
-6. **パフォーマンス最適化** - ビルトイン判定高速化
+4. **ビルトインBox判定システム** - is_builtin_box()実装
+5. **pack透明化解決** - from BuiltinBox()自動変換
+6. **統合テスト作成** - 透明化動作確認
 
 ### **📝 Medium (来週)**  
-7. **既存テスト見直し** - pack直接呼び出し削除
-8. **delegation-system.md更新** - 透明化設計反映
+7. **エラーメッセージ改善** - pack隠蔽、birth中心メッセージ
+8. **ドキュメント更新** - CLAUDE.md文字列リテラル自動変換反映
+9. **既存テスト見直し** - pack直接呼び出し削除
 
 ### **🔮 Future (今後の予定)**
-9. **FFI/ABI統合** - ExternBox経由外部API（Phase 11予定）
-10. **動的ライブラリ読み込み** - 外部ライブラリBox化（Phase 12予定）
-11. **BID自動生成** - YAML→実装自動化（Phase 13予定）
+10. **FFI/ABI統合** - ExternBox経由外部API（Phase 11予定）
+11. **動的ライブラリ読み込み** - 外部ライブラリBox化（Phase 12予定）
+12. **BID自動生成** - YAML→実装自動化（Phase 13予定）
 
 ## 🚀 **Phase 8.8: pack透明化システム実装準備完了**
 
@@ -145,34 +126,24 @@ fn resolve_builtin_delegation(builtin: &str, args: Vec<_>) -> String {
 1. **birth()実装完了** - コンストラクタ統一構文実装 ✅
 2. **ドキュメント矛盾修正完了** - pack機能正しい定義確立 ✅
 3. **pack透明化イシュー作成完了** - Copilot実装仕様書完成 ✅
+4. **using nyashstd実装完了** - 標準ライブラリアクセス実現 ✅ **← NEW!**
 
-### **📋 ドキュメント修正完了リスト**
-- ✅ `delegation-system.md` - pack→birth統一、pack専用セクション追加
-- ✅ `box-design/README.md` - pack専用セクション追加
-- ✅ `LANGUAGE_GUIDE.md` - birth統一、pack専用明記
-- ✅ `CLAUDE.md` - birth哲学、pack専用システム分離
+### **🎯 次のアクション (Phase 9.75f)**
+**優先順位1**: 文字列リテラル自動変換実装
+**優先順位2**: Copilot pack透明化システム実装依頼
 
-### **🎯 次のアクション (Copilot実装待ち)**
-**イシュー**: `phase_8_8_pack_transparency_system.md`
-
-#### **実装内容**
-1. **ビルトインBox判定システム** - `is_builtin_box()` 関数
-2. **pack透明化解決** - `from BuiltinBox()` 自動変換
-3. **エラーメッセージ改善** - pack隠蔽、ユーザーフレンドリー化
-
-#### **必須テストケース (5種類)**
-- ユーザー定義Box基本動作
-- ビルトインBox継承
-- **透明化システム動作** (最重要)
-- 混在テスト  
-- エラーケーステスト
+#### **文字列リテラル自動変換実装内容**
+1. **パーサー修正** - string literal → StringBox自動変換
+2. **整数リテラル対応** - integer literal → IntegerBox自動変換  
+3. **真偽値リテラル対応** - boolean literal → BoolBox自動変換
+4. **型推論システム基盤** - Everything is Box + 使いやすさ
 
 #### **完了条件**
-- 全テストケース PASS
+- リテラル自動変換動作確認
 - 既存機能継続動作
-- パフォーマンス維持
-- ユーザーはpackを一切意識しない
+- Everything is Box哲学維持
+- ユーザビリティ大幅向上
 
 ---
-**現在状況**: pack透明化システム実装準備完了✅ → Copilot実装開始待ち🤖  
-**最終更新**: 2025-08-15 17:00
+**現在状況**: using nyashstd実装完全成功✅ → 文字列リテラル自動変換実装開始🚀  
+**最終更新**: 2025-08-15 22:30

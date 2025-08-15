@@ -110,3 +110,6 @@ pub struct FunctionDeclaration {
 
 // Re-export core interpreter types
 pub use core::*;
+
+// Import and re-export stdlib for interpreter modules  
+pub use crate::stdlib::BuiltinStdlib;

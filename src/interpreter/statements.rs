@@ -7,6 +7,7 @@
  */
 
 use super::*;
+use super::BuiltinStdlib;
 use std::sync::{Arc, Mutex};
 
 impl NyashInterpreter {
@@ -48,6 +49,10 @@ impl NyashInterpreter {
             
             ASTNode::Nowait { variable, expression, .. } => {
                 self.execute_nowait(variable, expression)
+            }
+            
+            ASTNode::UsingStatement { namespace_name, .. } => {
+                self.execute_using_statement(namespace_name)
             }
             
             ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, is_static, static_init, .. } => {
@@ -484,5 +489,35 @@ impl NyashInterpreter {
         
         self.control_flow = super::ControlFlow::Throw(exception);
         Ok(Box::new(VoidBox::new()))
+    }
+    
+    /// using文を実行 - Import namespace
+    pub(super) fn execute_using_statement(&mut self, namespace_name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        eprintln!("🌟 DEBUG: execute_using_statement called with namespace: {}", namespace_name);
+        
+        // Phase 0: nyashstdのみサポート
+        if namespace_name != "nyashstd" {
+            return Err(RuntimeError::InvalidOperation {
+                message: format!("Unsupported namespace '{}'. Only 'nyashstd' is supported in Phase 0.", namespace_name)
+            });
+        }
+        
+        // 標準ライブラリを初期化（存在しない場合）
+        eprintln!("🌟 DEBUG: About to call ensure_stdlib_initialized");
+        self.ensure_stdlib_initialized()?;
+        eprintln!("🌟 DEBUG: ensure_stdlib_initialized completed");
+        
+        // using nyashstdの場合は特に何もしない（既に標準ライブラリが初期化されている）
+        Ok(Box::new(VoidBox::new()))
+    }
+    
+    /// 標準ライブラリの初期化を確保
+    fn ensure_stdlib_initialized(&mut self) -> Result<(), RuntimeError> {
+        if self.stdlib.is_none() {
+            eprintln!("🌟 Initializing BuiltinStdlib...");
+            self.stdlib = Some(BuiltinStdlib::new());
+            eprintln!("✅ BuiltinStdlib initialized successfully");
+        }
+        Ok(())
     }
 }

@@ -451,6 +451,44 @@ impl NyashInterpreter {
                         return Ok(result);
                 }
             }
+            
+            // 📚 nyashstd標準ライブラリのメソッドチェック
+            let stdlib_method = if let Some(ref stdlib) = self.stdlib {
+                if let Some(nyashstd_namespace) = stdlib.namespaces.get("nyashstd") {
+                    if let Some(static_box) = nyashstd_namespace.static_boxes.get(name) {
+                        if let Some(builtin_method) = static_box.methods.get(method) {
+                            Some(*builtin_method) // Copyトレイトで関数ポインターをコピー
+                        } else {
+                            eprintln!("🔍 Method '{}' not found in nyashstd.{}", method, name);
+                            None
+                        }
+                    } else {
+                        eprintln!("🔍 Static box '{}' not found in nyashstd", name);
+                        None
+                    }
+                } else {
+                    eprintln!("🔍 nyashstd namespace not found in stdlib");
+                    None
+                }
+            } else {
+                eprintln!("🔍 stdlib not initialized for method call");
+                None
+            };
+            
+            if let Some(builtin_method) = stdlib_method {
+                eprintln!("🌟 Calling nyashstd method: {}.{}", name, method);
+                
+                // 引数を評価
+                let mut arg_values = Vec::new();
+                for arg in arguments {
+                    arg_values.push(self.execute_expression(arg)?);
+                }
+                
+                // 標準ライブラリのメソッドを実行
+                let result = builtin_method(&arg_values)?;
+                eprintln!("✅ nyashstd method completed: {}.{}", name, method);
+                return Ok(result);
+            }
         }
         
         // オブジェクトを評価（通常のメソッド呼び出し）

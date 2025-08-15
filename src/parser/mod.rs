@@ -80,6 +80,12 @@ pub enum ParseError {
     #[error("🔥 Transparency system removed: {suggestion} at line {line}")]
     TransparencySystemRemoved { suggestion: String, line: usize },
     
+    #[error("Unsupported namespace '{name}' at line {line}. Only 'nyashstd' is supported in Phase 0.")]
+    UnsupportedNamespace { name: String, line: usize },
+    
+    #[error("Expected identifier at line {line}")]
+    ExpectedIdentifier { line: usize },
+    
     #[error("Tokenize error: {0}")]
     TokenizeError(#[from] TokenizeError),
 }

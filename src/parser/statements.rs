@@ -62,6 +62,9 @@ impl NyashParser {
             TokenType::THROW => {
                 self.parse_throw()
             },
+            TokenType::USING => {
+                self.parse_using()
+            },
             TokenType::FROM => {
                 // 🔥 from構文: from Parent.method(args) または from Parent.constructor(args)
                 self.parse_from_call_statement()
@@ -454,5 +457,33 @@ impl NyashParser {
         // FromCallは式でもあるが、文としても使用可能
         // 例: from Animal.constructor() （戻り値を使わない）
         Ok(from_call_expr)
+    }
+    
+    /// using文をパース: using namespace_name
+    pub(super) fn parse_using(&mut self) -> Result<ASTNode, ParseError> {
+        self.advance(); // consume 'using'
+        
+        // 名前空間名を取得
+        if let TokenType::IDENTIFIER(namespace_name) = &self.current_token().token_type {
+            let name = namespace_name.clone();
+            self.advance();
+            
+            // Phase 0では "nyashstd" のみ許可
+            if name != "nyashstd" {
+                return Err(ParseError::UnsupportedNamespace { 
+                    name, 
+                    line: self.current_token().line 
+                });
+            }
+            
+            Ok(ASTNode::UsingStatement {
+                namespace_name: name,
+                span: Span::unknown(),
+            })
+        } else {
+            Err(ParseError::ExpectedIdentifier { 
+                line: self.current_token().line 
+            })
+        }
     }
 }

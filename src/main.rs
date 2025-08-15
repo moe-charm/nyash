@@ -11,6 +11,7 @@
 // Core modules
 pub mod box_trait;
 pub mod boxes;
+pub mod stdlib;
 pub mod environment;
 pub mod tokenizer;
 pub mod ast;
@@ -24,12 +25,18 @@ pub mod method_box;
 pub mod operator_traits;
 pub mod box_arithmetic; // 🚀 Moved from box_trait.rs for better organization
 pub mod value; // 🔥 NyashValue Revolutionary System
+pub mod type_box;  // 🌟 TypeBox revolutionary system
+pub mod messaging; // 🌐 P2P Communication Infrastructure
+pub mod transport; // 🌐 P2P Communication Infrastructure
 
 // 🚀 MIR Infrastructure
 pub mod mir;
 
 // 🚀 Backend Infrastructure  
 pub mod backend;
+
+// 📊 Performance Benchmarks
+pub mod benchmarks;
 
 // 🚀 Refactored modules for better organization
 pub mod cli;

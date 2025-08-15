@@ -9,6 +9,7 @@ use crate::ast::{ASTNode, Span};
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, SharedNyashBox};
 use crate::instance::InstanceBox;
 use crate::parser::ParseError;
+use super::BuiltinStdlib;
 use std::sync::{Arc, Mutex, RwLock};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -208,6 +209,9 @@ pub struct NyashInterpreter {
     
     /// 🔗 Invalidated object IDs for weak reference system
     pub invalidated_ids: Arc<Mutex<HashSet<u64>>>,
+    
+    /// 📚 組み込み標準ライブラリ
+    pub(super) stdlib: Option<BuiltinStdlib>,
 }
 
 impl NyashInterpreter {
@@ -223,6 +227,7 @@ impl NyashInterpreter {
             current_constructor_context: None,
             evaluation_stack: Vec::new(),
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
+            stdlib: None, // 遅延初期化
         }
     }
     
@@ -236,6 +241,7 @@ impl NyashInterpreter {
             current_constructor_context: None,
             evaluation_stack: Vec::new(),
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
+            stdlib: None, // 遅延初期化
         }
     }
     
@@ -393,7 +399,40 @@ impl NyashInterpreter {
             }
         }
         
-        // 5. エラー：見つからない
+        drop(global_box); // lockを解放してからstdlibチェック
+        
+        // 5. nyashstd標準ライブラリ名前空間をチェック  
+        eprintln!("🔍 DEBUG: Checking nyashstd stdlib for '{}'...", name);
+        if let Some(ref stdlib) = self.stdlib {
+            eprintln!("🔍 DEBUG: stdlib is initialized, checking namespaces...");
+            eprintln!("🔍 DEBUG: Available namespaces: {:?}", stdlib.namespaces.keys().collect::<Vec<_>>());
+            
+            if let Some(nyashstd_namespace) = stdlib.namespaces.get("nyashstd") {
+                eprintln!("🔍 DEBUG: nyashstd namespace found, checking static boxes...");
+                eprintln!("🔍 DEBUG: Available static boxes: {:?}", nyashstd_namespace.static_boxes.keys().collect::<Vec<_>>());
+                
+                if let Some(static_box) = nyashstd_namespace.static_boxes.get(name) {
+                    eprintln!("🔍 DEBUG: Found '{}' in nyashstd namespace", name);
+                    
+                    // BuiltinStaticBoxをInstanceBoxとしてラップ
+                    let static_instance = InstanceBox::new(
+                        format!("{}_builtin", name),
+                        vec![], // フィールドなし
+                        HashMap::new(), // メソッドは動的に解決される
+                    );
+                    
+                    return Ok(Arc::new(static_instance));
+                } else {
+                    eprintln!("🔍 DEBUG: '{}' not found in nyashstd namespace", name);
+                }
+            } else {
+                eprintln!("🔍 DEBUG: nyashstd namespace not found in stdlib");
+            }
+        } else {
+            eprintln!("🔍 DEBUG: stdlib not initialized");
+        }
+        
+        // 6. エラー：見つからない
         eprintln!("🔍 DEBUG: '{}' not found anywhere!", name);
         Err(RuntimeError::UndefinedVariable {
             name: name.to_string(),

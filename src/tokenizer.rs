@@ -51,6 +51,7 @@ pub enum TokenType {
     OVERRIDE,        // override (明示的オーバーライド)
     FROM,            // from (親メソッド呼び出し)
     WEAK,            // weak (弱参照修飾子)
+    USING,           // using (名前空間インポート)
     
     // 演算子 (長いものから先に定義)
     ARROW,           // >>
@@ -416,6 +417,7 @@ impl NyashTokenizer {
             "override" => TokenType::OVERRIDE,
             "from" => TokenType::FROM,
             "weak" => TokenType::WEAK,
+            "using" => TokenType::USING,
             "and" => TokenType::AND,
             "or" => TokenType::OR,
             "true" => TokenType::TRUE,

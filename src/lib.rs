@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 
 pub mod box_trait;
 pub mod boxes;
-// pub mod stdlib;
+pub mod stdlib;
 pub mod environment;
 pub mod tokenizer;
 pub mod ast;  // Using old ast.rs for now

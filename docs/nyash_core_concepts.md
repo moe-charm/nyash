@@ -19,17 +19,29 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
   }
   ```
 
-- **コンストラクタ**
-  - **`init` (標準):** 通常のユーザー定義Boxのコンストラクタ。フィールド宣言と初期化を行います。
+- **コンストラクタ** (優先順位: birth > pack > init > Box名形式)
+  - **`birth` (推奨・統一):** 「Boxに生命を与える」直感的コンストラクタ。Everything is Box哲学を体現する最新の統一構文。
+    ```nyash
+    box Life {
+        init { name, energy }  // フィールド宣言
+        
+        birth(lifeName) {  // ← 「生命を与える」哲学的コンストラクタ
+            me.name = lifeName
+            me.energy = 100
+            print("🌟 " + lifeName + " が誕生しました！")
+        }
+    }
+    local alice = new Life("Alice")  // birthが呼び出される
+    ```
+  - **`init` (基本):** 従来のユーザー定義Boxのコンストラクタ。フィールド宣言と基本的な初期化。
     ```nyash
     box User {
-        init { name, email }  // フィールド宣言
-        
-        // initの場合、new時に直接フィールドに値が設定される
+        init { name, email }  // フィールド宣言のみ
+        // new時に直接フィールドに値が設定される
     }
     local user = new User("Alice", "alice@example.com")  // initが呼び出される
     ```
-  - **`pack` (ビルトインBox継承専用):** ビルトインBox（P2PBox、MathBox等）を継承する際の特別なコンストラクタ。
+  - **`pack` (ビルトインBox継承専用):** ビルトインBox（P2PBox、MathBox等）を継承する際の特別なコンストラクタ。ユーザー定義Boxでは使用禁止。
     ```nyash
     box ChatNode from P2PBox {
         init { chatHistory }  // 追加フィールド宣言
@@ -54,6 +66,12 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
   ```nyash
   box AdminUser from User {
       init { permissions }  // 追加フィールド
+      
+      birth(name, email, permissions) {  // birth構文使用
+          from User.birth(name, email)     // 親のbirthを呼び出し
+          me.permissions = permissions     // 追加フィールド初期化
+          print("🎉 管理者 " + name + " が誕生しました")
+      }
       
       override greet() {
           from User.greet()                // 親の処理を実行
@@ -95,7 +113,38 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
   }
   ```
 
-## 3. 構文クイックリファレンス
+## 3. 標準ライブラリアクセス (using & namespace)
+
+Nyashは組み込み標準ライブラリ`nyashstd`と、using文による名前空間インポートをサポートします。
+
+- **using文:** 名前空間をインポートして、短縮記法で標準関数を使用可能にします。
+  ```nyash
+  using nyashstd
+  
+  // 文字列操作
+  local result = string.upper("hello")     // "HELLO"
+  local lower = string.lower("WORLD")      // "world"
+  local parts = string.split("a,b,c", ",") // ["a", "b", "c"]
+  
+  // 数学関数
+  local sin_val = math.sin(3.14159)        // 0.0 (approximately)
+  local sqrt_val = math.sqrt(16)           // 4.0
+  
+  // 配列操作
+  local length = array.length([1,2,3])     // 3
+  local item = array.get([1,2,3], 1)       // 2
+  
+  // I/O操作
+  io.print("Hello")                        // コンソール出力
+  io.println("World")                      // 改行付き出力
+  ```
+
+- **名前空間の特徴:**
+  - **Phase 0**: `nyashstd`のみサポート（将来拡張予定）
+  - **IDE補完対応**: `ny`で標準機能の補完が可能
+  - **明示的インポート**: プレリュード（自動インポート）よりIDE補完に適した設計
+
+## 4. 構文クイックリファレンス
 
 - **厳格な変数宣言:** すべての変数は使用前に宣言が必要です。
   - `local my_var`: ローカル変数を宣言します。
@@ -124,17 +173,37 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
 - **算術演算子:** `+`, `-`, `*`, `/` (ゼロ除算をハンドルします)
 - **比較演算子:** `==`, `!=`, `<`, `>`, `<=`, `>=`
 
-## 5. 主要なビルトインBox
+## 5. 主要なビルトインBox（実装済み）
 
-- コア（環境を選ばず利用できる）
+- **基本型**
+  - **`StringBox`**: 文字列操作
+  - **`IntegerBox`**: 整数値
+  - **`BoolBox`**: 真偽値
+  - **`NullBox`**: null値
+
+- **計算・データ処理系**
+  - **`MathBox`**: 数学関数（sin, cos, sqrt等）
+  - **`RandomBox`**: 乱数生成
+  - **`TimeBox`**: 時間・日付操作
+  - **`ArrayBox`**: 配列操作
+  - **`MapBox`**: 連想配列（辞書）操作
+
+- **I/O・デバッグ系**
   - **`ConsoleBox`**: 基本的なI/O (例: `log()`)
-  - **`ArrayBox` / `MapBox`**: 配列・マップ操作
-  - **`TimeBox` / `RandomBox` / `RegexBox` / `JSONBox` / `StreamBox`**: 汎用ユーティリティ
   - **`DebugBox`**: イントロスペクション/デバッグ (例: `memoryReport()`)
+  - **`SoundBox`**: 音声出力
 
-- 環境依存（実行コンテキストに注意）
-  - **`P2PBox`**: P2P通信
+- **GUI・Web系（環境依存）**
   - **`EguiBox`**: GUI（メインスレッド制約など）
+  - **`WebDisplayBox`**: Web表示
+  - **`WebConsoleBox`**: Webコンソール
+  - **`WebCanvasBox`**: Web Canvas操作
+
+- **通信系**
+  - **`P2PBox`**: P2P通信
+  - **`SimpleIntentBox`**: 簡単なインテント通信
+
+**注意**: using nyashstdで標準ライブラリ経由でのアクセスも可能です。
 
 ## 6. データ構造 (Data Structures)
 
@@ -282,10 +351,12 @@ nyash --compile-wasm program.nyash
 nyash --benchmark --iterations 100
 ```
 
-**性能比較（100回実行平均）:**
-- **WASM**: 0.17ms（280倍高速！）
-- **VM**: 16.97ms（2.9倍高速）
-- **Interpreter**: 48.59ms（ベースライン）
+**性能比較（実行速度）:**
+- **WASM**: 13.5倍高速化（真の実行性能）
+- **VM**: 20.4倍高速化（高速実行・本番環境）
+- **Interpreter**: ベースライン（開発・デバッグ重視）
+
+**注意**: 280倍高速化はコンパイル性能（ビルド時間）であり、実行性能とは異なります。
 
 詳細: [docs/execution-backends.md](execution-backends.md)
 
@@ -294,4 +365,13 @@ nyash --benchmark --iterations 100
 - ビルド: `cargo build --release -j32`
 - 実行: `./target/release/nyash program.nyash`
 - WASM: `./target/release/nyash --compile-wasm program.nyash`
+
+---
+
+**最終更新: 2025年8月15日** - 大幅更新完了
+- ✅ **birth構文追加**: 「生命をBoxに与える」統一コンストラクタ
+- ✅ **using nyashstd追加**: 標準ライブラリアクセス機能
+- ✅ **デリゲーションでのbirth使用法**: `from Parent.birth()`
+- ✅ **性能数値修正**: WASM 13.5倍（実行性能）・280倍（コンパイル性能）
+- ✅ **ビルトインBoxリスト最新化**: 実装済み17種類のBox完全リスト
 

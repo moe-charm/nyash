@@ -414,6 +414,12 @@ pub enum ASTNode {
         span: Span,
     },
     
+    /// using文: using namespace_name
+    UsingStatement {
+        namespace_name: String,
+        span: Span,
+    },
+    
     /// nowait文: nowait variable = expression
     Nowait {
         variable: String,
@@ -609,6 +615,7 @@ impl ASTNode {
             ASTNode::Loop { .. } => "Loop",
             ASTNode::Return { .. } => "Return",
             ASTNode::Break { .. } => "Break",
+            ASTNode::UsingStatement { .. } => "UsingStatement",
             ASTNode::BoxDeclaration { .. } => "BoxDeclaration",
             ASTNode::FunctionDeclaration { .. } => "FunctionDeclaration",
             ASTNode::GlobalVar { .. } => "GlobalVar",
@@ -668,6 +675,7 @@ impl ASTNode {
             ASTNode::Print { .. } => ASTNodeType::Statement,
             ASTNode::Return { .. } => ASTNodeType::Statement,
             ASTNode::Break { .. } => ASTNodeType::Statement,
+            ASTNode::UsingStatement { .. } => ASTNodeType::Statement,
             ASTNode::GlobalVar { .. } => ASTNodeType::Statement,
             ASTNode::Include { .. } => ASTNodeType::Statement,
             ASTNode::Local { .. } => ASTNodeType::Statement,
@@ -716,6 +724,9 @@ impl ASTNode {
                 }
             }
             ASTNode::Break { .. } => "Break".to_string(),
+            ASTNode::UsingStatement { namespace_name, .. } => {
+                format!("UsingStatement({})", namespace_name)
+            }
             ASTNode::BoxDeclaration { name, fields, methods, constructors,  is_interface, extends, implements, .. } => {
                 let mut desc = if *is_interface {
                     format!("InterfaceBox({}, {} methods", name, methods.len())
@@ -821,6 +832,7 @@ impl ASTNode {
             ASTNode::Loop { span, .. } => *span,
             ASTNode::Return { span, .. } => *span,
             ASTNode::Break { span, .. } => *span,
+            ASTNode::UsingStatement { span, .. } => *span,
             ASTNode::Nowait { span, .. } => *span,
             ASTNode::Arrow { span, .. } => *span,
             ASTNode::TryCatch { span, .. } => *span,
