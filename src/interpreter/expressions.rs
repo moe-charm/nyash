@@ -781,6 +781,11 @@ impl NyashInterpreter {
                     }
                 }
                 
+                // 🔗 Phase 8.9: Weak reference invalidation after user fini
+                let target_info = obj_value.to_string_box().value;
+                eprintln!("🔗 DEBUG: Triggering weak reference invalidation for fini: {}", target_info);
+                self.trigger_weak_reference_invalidation(&target_info);
+                
                 // インスタンスの内部的な解放処理
                 instance.fini().map_err(|e| RuntimeError::InvalidOperation {
                     message: e,
@@ -1087,12 +1092,8 @@ impl NyashInterpreter {
             }
         }
         
-        // 🔥 Phase 8.8: pack透明化システム - ビルトイン自動呼び出し (先行チェック)
-        if is_builtin && method == parent {
-            // 透明化: `from StringBox()` → 内部的にビルトインBox作成・統合
-            drop(box_declarations); // ロック解放
-            return self.execute_builtin_constructor_call(parent, current_instance_val.clone_box(), arguments);
-        }
+        // 🔥 Phase 8.9: Transparency system removed - all delegation must be explicit
+        // Removed: if is_builtin && method == parent { ... execute_builtin_constructor_call ... }
         
         if is_builtin {
             // ビルトインBoxの場合、ロックを解放してからメソッド呼び出し
@@ -1250,90 +1251,14 @@ impl NyashInterpreter {
         }
     }
     
-    /// 🔥 Phase 8.8: pack透明化システム - ビルトインBoxコンストラクタ統合
-    /// `from StringBox(content)` の透明処理: StringBoxを作成して現在のインスタンスに統合
-    fn execute_builtin_constructor_call(&mut self, builtin_name: &str, current_instance: Box<dyn NyashBox>, arguments: &[ASTNode])
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
-        
-        // 引数を評価
-        let mut arg_values = Vec::new();
-        for arg in arguments {
-            arg_values.push(self.execute_expression(arg)?);
-        }
-        
-        // ビルトインBoxの種類に応じて適切なインスタンスを作成
-        match builtin_name {
-            "StringBox" => {
-                if arg_values.len() != 1 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("StringBox constructor expects 1 argument, got {}", arg_values.len()),
-                    });
-                }
-                
-                let content = arg_values[0].to_string_box().value;
-                // StringBoxインスタンスを作成
-                let string_box = StringBox::new(content);
-                
-                // 現在のインスタンスが継承Boxの場合、StringBox部分を設定
-                // この処理は、ユーザー定義Box内部にStringBoxデータを埋め込む処理
-                // 実際の実装では、現在のインスタンスの特定フィールドに設定するなど
-                // より複雑な統合処理が必要になる可能性がある
-                
-                // 現在のバージョンでは、成功したことを示すVoidBoxを返す
-                Ok(Box::new(VoidBox::new()))
-            }
-            "IntegerBox" => {
-                if arg_values.len() != 1 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("IntegerBox constructor expects 1 argument, got {}", arg_values.len()),
-                    });
-                }
-                
-                let value = if let Ok(int_val) = arg_values[0].to_string_box().value.parse::<i64>() {
-                    int_val
-                } else {
-                    return Err(RuntimeError::TypeError {
-                        message: format!("Cannot convert '{}' to integer", arg_values[0].to_string_box().value),
-                    });
-                };
-                
-                let integer_box = IntegerBox::new(value);
-                Ok(Box::new(VoidBox::new()))
-            }
-            "MathBox" => {
-                // MathBoxは引数なしのコンストラクタ
-                if arg_values.len() != 0 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("MathBox constructor expects 0 arguments, got {}", arg_values.len()),
-                    });
-                }
-                
-                let math_box = MathBox::new();
-                Ok(Box::new(VoidBox::new()))
-            }
-            "ArrayBox" => {
-                // ArrayBoxも引数なしのコンストラクタ
-                if arg_values.len() != 0 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("ArrayBox constructor expects 0 arguments, got {}", arg_values.len()),
-                    });
-                }
-                
-                let array_box = ArrayBox::new();
-                Ok(Box::new(VoidBox::new()))
-            }
-            _ => {
-                // 他のビルトインBoxは今後追加
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Builtin constructor for '{}' not yet implemented in transparency system", builtin_name),
-                })
-            }
-        }
-    }
-    
     /// 🔥 ビルトインBoxのメソッド呼び出し
     fn execute_builtin_box_method(&mut self, parent: &str, method: &str, mut current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
+        // 🌟 Phase 8.9: birth method support for builtin boxes
+        if method == "birth" {
+            return self.execute_builtin_birth_method(parent, current_instance, arguments);
+        }
         
         // ビルトインBoxのインスタンスを作成または取得
         // 現在のインスタンスからビルトインBoxのデータを取得し、ビルトインBoxとしてメソッド実行
@@ -1411,6 +1336,83 @@ impl NyashInterpreter {
             _ => {
                 Err(RuntimeError::InvalidOperation {
                     message: format!("Unknown built-in Box type for delegation: {}", parent),
+                })
+            }
+        }
+    }
+    
+    /// 🌟 Phase 8.9: Execute birth method for builtin boxes
+    /// Provides constructor functionality for builtin boxes through explicit birth() calls
+    fn execute_builtin_birth_method(&mut self, builtin_name: &str, current_instance: Box<dyn NyashBox>, arguments: &[ASTNode])
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
+        // 引数を評価
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            arg_values.push(self.execute_expression(arg)?);
+        }
+        
+        // ビルトインBoxの種類に応じて適切なインスタンスを作成して返す
+        match builtin_name {
+            "StringBox" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("StringBox.birth() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                
+                let content = arg_values[0].to_string_box().value;
+                eprintln!("🌟 DEBUG: StringBox.birth() created with content: '{}'", content);
+                let string_box = StringBox::new(content);
+                Ok(Box::new(VoidBox::new())) // Return void to indicate successful initialization
+            }
+            "IntegerBox" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("IntegerBox.birth() expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                
+                let value = if let Ok(int_val) = arg_values[0].to_string_box().value.parse::<i64>() {
+                    int_val
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: format!("Cannot convert '{}' to integer", arg_values[0].to_string_box().value),
+                    });
+                };
+                
+                let integer_box = IntegerBox::new(value);
+                eprintln!("🌟 DEBUG: IntegerBox.birth() created with value: {}", value);
+                Ok(Box::new(VoidBox::new()))
+            }
+            "MathBox" => {
+                // MathBoxは引数なしのコンストラクタ
+                if arg_values.len() != 0 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("MathBox.birth() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                
+                let math_box = MathBox::new();
+                eprintln!("🌟 DEBUG: MathBox.birth() created");
+                Ok(Box::new(VoidBox::new()))
+            }
+            "ArrayBox" => {
+                // ArrayBoxも引数なしのコンストラクタ
+                if arg_values.len() != 0 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("ArrayBox.birth() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                
+                let array_box = ArrayBox::new();
+                eprintln!("🌟 DEBUG: ArrayBox.birth() created");
+                Ok(Box::new(VoidBox::new()))
+            }
+            _ => {
+                // 他のビルトインBoxは今後追加
+                Err(RuntimeError::InvalidOperation {
+                    message: format!("birth() method not yet implemented for builtin box '{}'", builtin_name),
                 })
             }
         }

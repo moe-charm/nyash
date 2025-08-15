@@ -1,0 +1,36 @@
+# Phase 8.9: Error case tests
+# These should all produce compile errors after transparency system removal
+
+print("=== Error Test Cases (should all fail after Phase 8.9) ===")
+
+# Error Case 1: Simple transparency syntax
+box BadString from StringBox {
+    init { prefix }
+    
+    birth(content) {
+        from StringBox(content)  # ❌ Should error
+        me.prefix = "bad"
+    }
+}
+
+# Error Case 2: Multiple argument transparency
+box BadInteger from IntegerBox {
+    init { multiplier }
+    
+    birth(value) {
+        from IntegerBox(value)  # ❌ Should error
+        me.multiplier = 2
+    }
+}
+
+# Error Case 3: Zero argument transparency
+box BadMath from MathBox {
+    init { precision }
+    
+    birth() {
+        from MathBox()  # ❌ Should error
+        me.precision = "high"
+    }
+}
+
+print("=== If you see this message, transparency system was NOT properly removed! ===")
