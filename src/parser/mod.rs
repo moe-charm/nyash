@@ -77,6 +77,9 @@ pub enum ParseError {
     #[error("🚨 Infinite loop detected in parser at {location} - token: {token:?} at line {line}")]
     InfiniteLoop { location: String, token: TokenType, line: usize },
     
+    #[error("🔥 Transparency system removed: {suggestion} at line {line}")]
+    TransparencySystemRemoved { suggestion: String, line: usize },
+    
     #[error("Tokenize error: {0}")]
     TokenizeError(#[from] TokenizeError),
 }

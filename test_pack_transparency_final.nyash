@@ -36,7 +36,7 @@ box Calculator from MathBox {
     init { precision }
     
     birth(precisionLevel) {
-        from MathBox()  # 透明化（引数なし）
+        from MathBox.birth()  # Explicit syntax after Phase 8.9
         me.precision = precisionLevel
     }
     
@@ -58,4 +58,4 @@ print("3. MathBox透明化:")
 local calc = new Calculator("高精度")
 print(calc.getPrecision())
 
-print("=== 全テスト成功！pack透明化システム完了 ===")
+print("=== 全テスト成功！pack透明化システム完了 ===")テム完了 ===")

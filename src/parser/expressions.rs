@@ -516,9 +516,13 @@ impl NyashParser {
                 }
             }
         } else {
-            // DOTがない場合: from Parent() 形式 - 透明化システム
-            // 🔥 Pack透明化: Parent名をmethod名として使用
-            parent.clone()
+            // DOTがない場合: from Parent() 形式 - 透明化システム廃止
+            // Phase 8.9: 明示的birth()構文を強制
+            let line = self.current_token().line;
+            return Err(ParseError::TransparencySystemRemoved {
+                suggestion: format!("Use 'from {}.birth()' instead of 'from {}()'", parent, parent),
+                line,
+            });
         };
         
         // 引数リストをパース
