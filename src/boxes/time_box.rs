@@ -197,6 +197,12 @@ impl NyashBox for TimeBox {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+
         Box::new(self.clone())
     }
     
@@ -368,6 +374,12 @@ impl NyashBox for DateTimeBox {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+
         Box::new(self.clone())
     }
     
@@ -452,6 +464,12 @@ impl NyashBox for TimerBox {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+
         Box::new(self.clone())
     }
     

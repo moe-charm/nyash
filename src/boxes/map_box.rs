@@ -269,9 +269,16 @@ impl NyashBox for MapBox {
         StringBox::new(&format!("MapBox(size={})", size))
     }
     
+    
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
+    
+    /// 仮実装: clone_boxと同じ（後で修正）
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+}
     
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_map) = other.as_any().downcast_ref::<MapBox>() {

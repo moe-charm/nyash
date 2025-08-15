@@ -87,6 +87,9 @@ pub trait NyashBox: BoxCore + Debug {
     /// Clone this box (equivalent to Python's copy())
     fn clone_box(&self) -> Box<dyn NyashBox>;
     
+    /// Share this box (state-preserving reference sharing)
+    fn share_box(&self) -> Box<dyn NyashBox>;
+    
     /// Arc参照を返す新しいcloneメソッド（参照共有）
     fn clone_arc(&self) -> SharedNyashBox {
         Arc::from(self.clone_box())
