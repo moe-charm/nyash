@@ -1,4 +1,4 @@
-# 🎯 現在のタスク (2025-08-15 Phase 10実装完了・テスト検証中)
+# 🎯 現在のタスク (2025-08-15 birth()統一設計決定・実装準備)
 
 ## ✅ **Phase 10完全実装完了 - Copilot神業達成**
 - **3つのCアプリ移植**: Tinyproxy/Chip-8/kilo完全実装 ✅
@@ -7,24 +7,24 @@
 - **Arc::ptr_eq()検出**: 真のゼロコピー判定実現 ✅
 - **新API978行追加**: すべて正常ビルド・実行成功 ✅
 
-## 🚨 **コンストラクタ構文統一の緊急実装 (2025-08-15)**
+## 🎯 **birth()統一設計決定 - Gemini完全承認獲得 (2025-08-15)**
 
-### **🌟 birth()実装完了 → pack透明化設計** ✅
+### **🌟 透明化システム廃止 → 明示的birth()統一システム採用** ✅
 
-**birth()統一構文実装完了**！次は**pack透明化システム**の実装が必要
+**Gemini分析結論**: 「birth()統一・内部実装自由案が多くの点で優れており、Nyashの言語設計として非常に妥当で洗練されたもの」
 
-### **🎯 pack透明化設計 - ユーザー完全不可視システム**
+### **🎯 新・明示的birth()統一設計**
 
-**核心方針**: ユーザーは`pack`を一切書かない・意識しない
+**核心方針**: 透明化システム完全廃止・明示的birth()メソッド呼び出しに統一
 
-### **📋 ユーザー側の理想的な書き方**
+### **📋 新・明示的birth()構文**
 ```nyash
-# ✅ ユーザーはこう書く（packを一切意識しない）
+# ✅ 新しい明示的構文（Gemini推奨）
 box EnhancedString from StringBox {
     init { prefix }
     
     birth(content, prefixStr) {
-        from StringBox(content)  # ← シンプルな呼び出し
+        from StringBox.birth(content)  # ← 明示的メソッド呼び出し！
         me.prefix = prefixStr
     }
     
@@ -71,9 +71,27 @@ fn resolve_builtin_delegation(builtin: &str, args: Vec<_>) -> String {
 - **統一体験**: `from Parent()` で全て解決
 - **設計分離**: ビルトインBox内部実装とユーザーAPI完全分離
 
-## 🔄 **次期優先タスク**
-**GitHub Issue**: https://github.com/moe-charm/nyash/issues/98
-**移植計画**: 3つの実用Cアプリケーション同時移植プロジェクト
+## 🚨 **緊急実装タスク**
+**GitHub Issue**: Phase 8.9実装
+**ドキュメント**: [phase_8_9_birth_unified_system_copilot_proof.md](docs/予定/native-plan/issues/phase_8_9_birth_unified_system_copilot_proof.md)
+
+### **🎯 Copilot委託タスク（手抜き対策済み）**
+1. **透明化システム完全削除** - `from StringBox(content)` エラー化
+2. **明示的birth()構文強制** - `from StringBox.birth(content)` 必須化  
+3. **weak参照修正** - fini後の自動null化
+4. **包括テストケース** - 手抜き検出用5段階テスト
+
+### **🔧 修正対象ファイル**
+- `src/parser/expressions.rs:519-522` - パーサー透明化削除
+- `src/interpreter/expressions.rs:1091-1095` - インタープリター修正
+- `src/interpreter/objects.rs` - weak参照ライフサイクル修正
+
+### **✅ 成功条件（妥協なし）**
+- 透明化システム完全根絶 ✅
+- 明示的birth()構文強制 ✅  
+- weak参照ライフサイクル修正 ✅
+- 全テストケース完全PASS ✅
+- Nyash明示性哲学完全復活 ✅
 
 ### 📦 **移植対象アプリケーション**
 1. **🌐 Tinyproxy** - ゼロコピー判定機能実証（HTTPプロキシサーバー）
