@@ -1,0 +1,15 @@
+// シンプルなBufferBoxテスト
+static box Main {
+    main() {
+        print("BufferBox基本テスト開始")
+        
+        local buffer = new BufferBox()
+        print("BufferBox作成完了")
+        
+        // 基本メソッドテスト
+        local len = buffer.length()
+        print("length: " + len)
+        
+        return "complete"
+    }
+}

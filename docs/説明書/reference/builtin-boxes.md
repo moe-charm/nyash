@@ -177,6 +177,59 @@ local map = new MapBox()
 - `has(key)`: キーが存在するかチェック
 - `remove(key)`: キー・バリューを削除
 
+## 📊 BufferBox - バイナリデータ処理Box
+
+バイナリデータの読み書きを効率的に処理するBox。ファイル操作、ネットワーク通信、画像処理で使用。
+
+### コンストラクタ
+```nyash
+// 空のバッファを作成
+local buffer = new BufferBox()
+```
+
+### 基本メソッド
+- `write(data)`: バイトデータ書き込み (ArrayBox[integers])
+- `read(count)`: 指定バイト数読み取り → ArrayBox
+- `readAll()`: 全データ読み取り → ArrayBox
+- `clear()`: バッファクリア → StringBox("ok")
+- `length()`: データサイズ取得 → IntegerBox
+- `append(buffer)`: 他BufferBoxを追加 → IntegerBox(新サイズ)
+- `slice(start, end)`: 部分データ取得 → BufferBox
+
+### ⭐ Phase 10: 高度なメモリ管理API
+
+#### ゼロコピー検出API
+```nyash
+// ゼロコピー共有の検出
+local buffer1 = new BufferBox()
+local shared_buffer = buffer1.share_reference(null)
+
+// 共有検出
+local is_shared = buffer1.is_shared_with(shared_buffer)  // → BoolBox(true)
+```
+
+- `is_shared_with(other)`: 他BufferBoxとのメモリ共有を検出 → BoolBox
+- `share_reference(data)`: Arc参照を共有した新BufferBoxを作成 → BufferBox  
+- `memory_footprint()`: 現在のメモリ使用量を取得 → IntegerBox(bytes)
+
+#### 実装詳細
+- **Arc::ptr_eq()**: 真のポインタ共有検出でゼロコピーを保証
+- **共有状態**: `share_reference()`で作成されたBufferは元のデータを共有
+- **独立性**: `clone_box()`は完全に独立したコピーを作成
+
+### 使用例
+```nyash
+// HTTP転送でのゼロコピー検証
+static box ProxyServer {
+    relay_data(client_data) {
+        if (me.upstream_buffer.is_shared_with(client_data)) {
+            print("✅ Zero-copy achieved!")
+        }
+        return me.upstream_buffer.share_reference(client_data)
+    }
+}
+```
+
 ---
 
-最終更新: 2025年8月11日
+最終更新: 2025年8月15日 (Phase 10: BufferBox高度メモリ管理API追加)

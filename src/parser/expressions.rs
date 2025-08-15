@@ -174,10 +174,11 @@ impl NyashParser {
     fn parse_factor(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_unary()?;
         
-        while self.match_token(&TokenType::MULTIPLY) || self.match_token(&TokenType::DIVIDE) {
+        while self.match_token(&TokenType::MULTIPLY) || self.match_token(&TokenType::DIVIDE) || self.match_token(&TokenType::MODULO) {
             let operator = match &self.current_token().token_type {
                 TokenType::MULTIPLY => BinaryOperator::Multiply,
                 TokenType::DIVIDE => BinaryOperator::Divide,
+                TokenType::MODULO => BinaryOperator::Modulo,
                 _ => unreachable!(),
             };
             self.advance();

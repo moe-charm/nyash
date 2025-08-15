@@ -825,7 +825,7 @@ impl Display for ResultBox {
 // and re-exported from src/boxes/mod.rs as both NyashFutureBox and FutureBox
 
 // Re-export operation boxes from the dedicated operations module
-pub use crate::box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox};
+pub use crate::box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, ModuloBox, CompareBox};
 
 #[cfg(test)]
 mod tests {

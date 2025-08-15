@@ -86,6 +86,21 @@ fn try_div_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Result<Box<dy
     
     Err(format!("Division not supported between {} and {}", left.type_name(), right.type_name()))
 }
+
+fn try_mod_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Result<Box<dyn NyashBox>, String> {
+    // IntegerBox % IntegerBox
+    if let (Some(left_int), Some(right_int)) = (
+        left.as_any().downcast_ref::<IntegerBox>(),
+        right.as_any().downcast_ref::<IntegerBox>()
+    ) {
+        if right_int.value == 0 {
+            return Err("Modulo by zero".to_string());
+        }
+        return Ok(Box::new(IntegerBox::new(left_int.value % right_int.value)));
+    }
+    
+    Err(format!("Modulo not supported between {} and {}", left.type_name(), right.type_name()))
+}
 use std::sync::Arc;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
@@ -294,6 +309,16 @@ impl NyashInterpreter {
             BinaryOperator::Divide => {
                 // Use helper function instead of trait methods
                 match try_div_operation(left_val.as_ref(), right_val.as_ref()) {
+                    Ok(result) => Ok(result),
+                    Err(error_msg) => Err(RuntimeError::InvalidOperation { 
+                        message: error_msg 
+                    })
+                }
+            }
+            
+            BinaryOperator::Modulo => {
+                // Use helper function for modulo operation
+                match try_mod_operation(left_val.as_ref(), right_val.as_ref()) {
                     Ok(result) => Ok(result),
                     Err(error_msg) => Err(RuntimeError::InvalidOperation { 
                         message: error_msg 

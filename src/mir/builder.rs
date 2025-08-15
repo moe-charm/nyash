@@ -780,6 +780,7 @@ impl MirBuilder {
             BinaryOperator::Subtract => Ok(BinaryOpType::Arithmetic(BinaryOp::Sub)),
             BinaryOperator::Multiply => Ok(BinaryOpType::Arithmetic(BinaryOp::Mul)),
             BinaryOperator::Divide => Ok(BinaryOpType::Arithmetic(BinaryOp::Div)),
+            BinaryOperator::Modulo => Ok(BinaryOpType::Arithmetic(BinaryOp::Mod)),
             BinaryOperator::Equal => Ok(BinaryOpType::Comparison(CompareOp::Eq)),
             BinaryOperator::NotEqual => Ok(BinaryOpType::Comparison(CompareOp::Ne)),
             BinaryOperator::Less => Ok(BinaryOpType::Comparison(CompareOp::Lt)),

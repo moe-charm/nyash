@@ -50,7 +50,7 @@ pub mod tests;
 
 // Re-export main types for easy access
 pub use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
-pub use box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox};
+pub use box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, ModuloBox, CompareBox};
 pub use environment::{Environment, PythonCompatEnvironment};
 pub use tokenizer::{NyashTokenizer, TokenType, Token};
 pub use type_box::{TypeBox, TypeRegistry, MethodSignature};  // 🌟 TypeBox exports

@@ -1,0 +1,25 @@
+// 🧪 % Modulo Operator Test - Simple functionality verification
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 Testing % Modulo Operator")
+        
+        // Test 1: Basic modulo operation
+        local result1 = 10 % 3
+        me.console.log("10 % 3 = " + result1)
+        
+        // Test 2: Chip-8 style bit masking 
+        local result2 = 4096 % 4096
+        me.console.log("4096 % 4096 = " + result2)
+        
+        // Test 3: Another typical case
+        local result3 = 256 % 16  
+        me.console.log("256 % 16 = " + result3)
+        
+        me.console.log("✅ % Modulo operator test complete!")
+        return "Modulo test finished"
+    }
+}

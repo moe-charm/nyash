@@ -65,6 +65,7 @@ pub enum TokenType {
     MINUS,           // -
     MULTIPLY,        // *
     DIVIDE,          // /
+    MODULO,          // %
     
     // 記号
     DOT,             // .
@@ -245,6 +246,10 @@ impl NyashTokenizer {
             Some('/') => {
                 self.advance();
                 Ok(Token::new(TokenType::DIVIDE, start_line, start_column))
+            }
+            Some('%') => {
+                self.advance();
+                Ok(Token::new(TokenType::MODULO, start_line, start_column))
             }
             Some('.') => {
                 self.advance();
