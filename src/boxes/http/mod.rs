@@ -8,7 +8,6 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::map_box::MapBox;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct HttpClientBox {
