@@ -1,14 +1,18 @@
 /*!
  * Nyash Parser - Rust Implementation
  * 
- * Python版nyashc_v4.pyのNyashParserをRustで完全再実装
- * Token列をAST (Abstract Syntax Tree) に変換
+ * Token列をAST (Abstract Syntax Tree) に変換するメインパーサー
  * 
- * TODO: リファクタリング計画
- * - expressions.rs: 式パーサー (parse_expression, parse_or, parse_and等)
- * - statements.rs: 文パーサー (parse_statement, parse_if, parse_loop等)
- * - declarations.rs: 宣言パーサー (parse_box_declaration, parse_function_declaration等)
- * - errors.rs: エラー型定義とハンドリング
+ * アーキテクチャ:
+ * - mod.rs: メインパーサー・宣言パース・ユーティリティ
+ * - expressions.rs: 式解析コーディネーター (208行)
+ * - operators.rs: 演算子処理 (208行)
+ * - method_dispatch.rs: メソッド・関数呼び出し (128行)
+ * - async_ops.rs: await処理 (20行)
+ * - delegation.rs: from呼び出し (117行)
+ * - statements.rs: 文解析
+ * - dependency_analysis.rs: 循環依存検出 (106行)
+ * - validation.rs: オーバーライド検証 (55行)
  */
 
 // サブモジュール宣言
@@ -19,6 +23,7 @@ mod async_ops;
 mod delegation;
 mod statements;
 mod dependency_analysis;
+mod validation;
 // mod declarations;
 // mod errors;
 
@@ -169,7 +174,7 @@ impl NyashParser {
         
         Ok(ASTNode::Program { statements, span: Span::unknown() })
     }
-    // Statement parsing methods are now in statements.rs module
+    // === Statement parsing methods are in statements.rs module ===
     
     /// box宣言をパース: box Name { fields... methods... }
     fn parse_box_declaration(&mut self) -> Result<ASTNode, ParseError> {
@@ -805,7 +810,7 @@ impl NyashParser {
         
         Ok(ASTNode::GlobalVar { name, value, span: Span::unknown() })
     }
-    // Statement parsing methods are now in statements.rs module
+    // === Statement parsing methods are in statements.rs module ===
     
     /// function宣言をパース: function name(params) { body }
     fn parse_function_declaration(&mut self) -> Result<ASTNode, ParseError> {
@@ -1288,7 +1293,7 @@ impl NyashParser {
         }
     }
     
-    // Expression parsing methods are now in expressions.rs module
+    // === Expression parsing methods are in expressions.rs module ===
     
     // ===== ユーティリティメソッド =====
     
@@ -1357,59 +1362,9 @@ impl NyashParser {
         self.current >= self.tokens.len() || 
         matches!(self.current_token().token_type, TokenType::EOF)
     }
-    // Include, local, outbox, try/catch/throw parsing methods are now in statements.rs module
-    // Two-phase parser helper methods are no longer needed - simplified to direct parsing
+    // === Include, local, outbox, try/catch/throw parsing methods are in statements.rs module ===
     
-    // ===== 🔥 Dependency Analysis ===== (moved to dependency_analysis.rs)
-    
-    /// 🔍 デリゲーションメソッドチェック：親Boxに存在しないメソッドのoverride検出
-    /// Phase 1: 基本的なoverride構文チェック
-    /// Phase 2 (将来実装): 完全な親Box参照によるメソッド存在チェック
-    fn validate_override_methods(&self, child_name: &str, parent_name: &str, methods: &HashMap<String, ASTNode>) -> Result<(), ParseError> {
-        let mut override_count = 0;
-        
-        // 🚨 override付きメソッドのチェック
-        for (method_name, method_node) in methods {
-            if let ASTNode::FunctionDeclaration { is_override, .. } = method_node {
-                if *is_override {
-                    override_count += 1;
-                    eprintln!("🔍 DEBUG: Found override method '{}' in '{}' extending '{}'", 
-                             method_name, child_name, parent_name);
-                    
-                    // Phase 1: 基本的な危険パターンチェック
-                    // 明らかに存在しないであろうメソッド名をチェック
-                    let suspicious_methods = [
-                        "nonExistentMethod", "invalidMethod", "fakeMethod", 
-                        "notRealMethod", "testFailureMethod"
-                    ];
-                    
-                    if suspicious_methods.contains(&method_name.as_str()) {
-                        return Err(ParseError::UnexpectedToken {
-                            found: TokenType::OVERRIDE,
-                            expected: format!("🚨 OVERRIDE ERROR: Method '{}' appears to be invalid. Check if this method exists in parent '{}'.", method_name, parent_name),
-                            line: 0,
-                        });
-                    }
-                    
-                    // 🎯 基本的なメソッド名バリデーション
-                    if method_name.is_empty() {
-                        return Err(ParseError::UnexpectedToken {
-                            found: TokenType::OVERRIDE,
-                            expected: "🚨 OVERRIDE ERROR: Method name cannot be empty.".to_string(),
-                            line: 0,
-                        });
-                    }
-                }
-            }
-        }
-        
-        // ✅ チェック完了レポート
-        if override_count > 0 {
-            eprintln!("✅ DEBUG: Override validation completed for '{}' extending '{}' - {} override method(s) found", 
-                     child_name, parent_name, override_count);
-        }
-        
-        Ok(())
-    }
+    // === 🔥 Dependency Analysis moved to dependency_analysis.rs ===
+    // === Override validation moved to validation.rs ===
 }
 
