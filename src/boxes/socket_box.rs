@@ -38,7 +38,7 @@ use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBas
 use std::any::Any;
 use std::net::{TcpListener, TcpStream, SocketAddr, ToSocketAddrs};
 use std::io::{Read, Write, BufRead, BufReader};
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 use std::time::Duration;
 
 /// TCP/UDP ソケット操作を提供するBox
@@ -46,35 +46,27 @@ use std::time::Duration;
 pub struct SocketBox {
     base: BoxBase,
     // TCP Server
-    listener: Arc<Mutex<Option<TcpListener>>>,
+    listener: RwLock<Option<TcpListener>>,
     // TCP Client/Connected Socket
-    stream: Arc<Mutex<Option<TcpStream>>>,
+    stream: RwLock<Option<TcpStream>>,
     // Connection state
-    is_server: Arc<Mutex<bool>>,
-    is_connected: Arc<Mutex<bool>>,
+    is_server: RwLock<bool>,
+    is_connected: RwLock<bool>,
 }
 
 impl Clone for SocketBox {
     fn clone(&self) -> Self {
-        eprintln!("🔄 SOCKETBOX CLONE: Creating clone of Socket ID={}", self.base.id);
-        eprintln!("🔄   Original Arc pointer = {:p}", &self.is_server);
-        eprintln!("🔄   Original Arc data pointer = {:p}", self.is_server.as_ref());
-        eprintln!("🔄   Original Arc strong_count = {}", std::sync::Arc::strong_count(&self.is_server));
+        // State-preserving clone implementation following RwLock pattern
+        let is_server_val = *self.is_server.read().unwrap();
+        let is_connected_val = *self.is_connected.read().unwrap();
         
-        let cloned = Self {
-            base: BoxBase::new(), // New unique ID for clone (for debugging/identity)
-            listener: Arc::clone(&self.listener),      // Share the same listener
-            stream: Arc::clone(&self.stream),          // Share the same stream  
-            is_server: Arc::clone(&self.is_server),    // Share the same state container
-            is_connected: Arc::clone(&self.is_connected), // Share the same state container
-        };
-        
-        eprintln!("🔄   New clone ID = {}", cloned.base.id);
-        eprintln!("🔄   New Arc pointer = {:p}", &cloned.is_server);
-        eprintln!("🔄   New Arc data pointer = {:p}", cloned.is_server.as_ref());
-        eprintln!("🔄   New Arc strong_count = {}", std::sync::Arc::strong_count(&cloned.is_server));
-        
-        cloned
+        Self {
+            base: BoxBase::new(), // New unique ID for clone
+            listener: RwLock::new(None), // Start fresh for clone
+            stream: RwLock::new(None),   // Start fresh for clone
+            is_server: RwLock::new(is_server_val),
+            is_connected: RwLock::new(is_connected_val),
+        }
     }
 }
 
@@ -82,10 +74,10 @@ impl SocketBox {
     pub fn new() -> Self {
         Self {
             base: BoxBase::new(),
-            listener: Arc::new(Mutex::new(None)),
-            stream: Arc::new(Mutex::new(None)),
-            is_server: Arc::new(Mutex::new(false)),
-            is_connected: Arc::new(Mutex::new(false)),
+            listener: RwLock::new(None),
+            stream: RwLock::new(None),
+            is_server: RwLock::new(false),
+            is_connected: RwLock::new(false),
         }
     }
     
@@ -195,7 +187,7 @@ impl SocketBox {
     
     /// クライアント接続を受諾（ブロッキング）
     pub fn accept(&self) -> Box<dyn NyashBox> {
-        let listener_guard = self.listener.lock().unwrap();
+        let listener_guard = self.listener.write().unwrap();
         if let Some(ref listener) = *listener_guard {
             match listener.accept() {
                 Ok((stream, _addr)) => {
@@ -231,9 +223,9 @@ impl SocketBox {
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
                 let _ = stream.set_write_timeout(Some(Duration::from_secs(30)));
                 
-                *self.stream.lock().unwrap() = Some(stream);
-                *self.is_connected.lock().unwrap() = true;
-                *self.is_server.lock().unwrap() = false;
+                *self.stream.write().unwrap() = Some(stream);
+                *self.is_connected.write().unwrap() = true;
+                *self.is_server.write().unwrap() = false;
                 Box::new(BoolBox::new(true))
             },
             Err(e) => {
@@ -245,7 +237,7 @@ impl SocketBox {
     
     /// データを読み取り（改行まで or EOF）
     pub fn read(&self) -> Box<dyn NyashBox> {
-        let stream_guard = self.stream.lock().unwrap();
+        let stream_guard = self.stream.write().unwrap();
         if let Some(ref stream) = *stream_guard {
             // Clone the stream to avoid borrowing issues
             match stream.try_clone() {
@@ -284,7 +276,7 @@ impl SocketBox {
     
     /// HTTP request を読み取り（ヘッダーまで含む）
     pub fn read_http_request(&self) -> Box<dyn NyashBox> {
-        let stream_guard = self.stream.lock().unwrap();
+        let stream_guard = self.stream.write().unwrap();
         if let Some(ref stream) = *stream_guard {
             match stream.try_clone() {
                 Ok(stream_clone) => {
@@ -329,7 +321,7 @@ impl SocketBox {
     pub fn write(&self, data: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let data_str = data.to_string_box().value;
         
-        let mut stream_guard = self.stream.lock().unwrap();
+        let mut stream_guard = self.stream.write().unwrap();
         if let Some(ref mut stream) = *stream_guard {
             match stream.write_all(data_str.as_bytes()) {
                 Ok(_) => {
@@ -353,16 +345,16 @@ impl SocketBox {
     
     /// ソケット閉鎖
     pub fn close(&self) -> Box<dyn NyashBox> {
-        *self.stream.lock().unwrap() = None;
-        *self.listener.lock().unwrap() = None;
-        *self.is_connected.lock().unwrap() = false;
-        *self.is_server.lock().unwrap() = false;
+        *self.stream.write().unwrap() = None;
+        *self.listener.write().unwrap() = None;
+        *self.is_connected.write().unwrap() = false;
+        *self.is_server.write().unwrap() = false;
         Box::new(BoolBox::new(true))
     }
     
     /// 接続状態確認
     pub fn is_connected(&self) -> Box<dyn NyashBox> {
-        Box::new(BoolBox::new(*self.is_connected.lock().unwrap()))
+        Box::new(BoolBox::new(*self.is_connected.write().unwrap()))
     }
     
     /// サーバーモード確認

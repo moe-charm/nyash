@@ -6,20 +6,23 @@ use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 
 #[derive(Debug)]
 pub struct NyashFutureBox {
-    pub result: Arc<Mutex<Option<Box<dyn NyashBox>>>>,
-    pub is_ready: Arc<Mutex<bool>>,
+    pub result: RwLock<Option<Box<dyn NyashBox>>>,
+    pub is_ready: RwLock<bool>,
     base: BoxBase,
 }
 
 impl Clone for NyashFutureBox {
     fn clone(&self) -> Self {
+        let result_val = self.result.read().unwrap().clone();
+        let is_ready_val = *self.is_ready.read().unwrap();
+        
         Self {
-            result: Arc::clone(&self.result),
-            is_ready: Arc::clone(&self.is_ready),
+            result: RwLock::new(result_val),
+            is_ready: RwLock::new(is_ready_val),
             base: BoxBase::new(), // Create a new base with unique ID for the clone
         }
     }
@@ -28,17 +31,17 @@ impl Clone for NyashFutureBox {
 impl NyashFutureBox {
     pub fn new() -> Self {
         Self {
-            result: Arc::new(Mutex::new(None)),
-            is_ready: Arc::new(Mutex::new(false)),
+            result: RwLock::new(None),
+            is_ready: RwLock::new(false),
             base: BoxBase::new(),
         }
     }
     
     /// Set the result of the future
     pub fn set_result(&self, value: Box<dyn NyashBox>) {
-        let mut result = self.result.lock().unwrap();
+        let mut result = self.result.write().unwrap();
         *result = Some(value);
-        let mut ready = self.is_ready.lock().unwrap();
+        let mut ready = self.is_ready.write().unwrap();
         *ready = true;
     }
     
@@ -46,7 +49,7 @@ impl NyashFutureBox {
     pub fn get(&self) -> Box<dyn NyashBox> {
         // Simple busy wait (could be improved with condvar)
         loop {
-            let ready = self.is_ready.lock().unwrap();
+            let ready = self.is_ready.read().unwrap();
             if *ready {
                 break;
             }
@@ -54,13 +57,13 @@ impl NyashFutureBox {
             std::thread::yield_now();
         }
         
-        let result = self.result.lock().unwrap();
+        let result = self.result.read().unwrap();
         result.as_ref().unwrap().clone_box()
     }
     
     /// Check if the future is ready
     pub fn ready(&self) -> bool {
-        *self.is_ready.lock().unwrap()
+        *self.is_ready.read().unwrap()
     }
 }
 
@@ -70,9 +73,9 @@ impl NyashBox for NyashFutureBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        let ready = *self.is_ready.lock().unwrap();
+        let ready = *self.is_ready.read().unwrap();
         if ready {
-            let result = self.result.lock().unwrap();
+            let result = self.result.read().unwrap();
             if let Some(value) = result.as_ref() {
                 StringBox::new(format!("Future(ready: {})", value.to_string_box().value))
             } else {
@@ -108,9 +111,9 @@ impl BoxCore for NyashFutureBox {
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ready = *self.is_ready.lock().unwrap();
+        let ready = *self.is_ready.read().unwrap();
         if ready {
-            let result = self.result.lock().unwrap();
+            let result = self.result.read().unwrap();
             if let Some(value) = result.as_ref() {
                 write!(f, "Future(ready: {})", value.to_string_box().value)
             } else {
