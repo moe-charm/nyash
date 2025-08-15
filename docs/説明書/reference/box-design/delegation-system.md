@@ -134,21 +134,22 @@ box MultiChild from ParentA, ParentB {
 }
 ```
 
-## 🎁 pack構文 - Box哲学の具現化
+## 🌟 birth構文 - Box哲学の具現化
 
-### packの優先順位
+### コンストラクタの優先順位
 
 ```nyash
 box User {
     init { name, email }
     
-    // 優先度1: pack（推奨）
-    pack(userName, userEmail) {
+    // 優先度1: birth（推奨）
+    birth(userName, userEmail) {
         me.name = userName
         me.email = userEmail
+        print("🌟 " + userName + " が誕生しました！")
     }
     
-    // 優先度2: init（packがない場合）
+    // 優先度2: init（birthがない場合）
     init(name, email) {
         me.name = name
         me.email = email
@@ -161,33 +162,66 @@ box User {
     }
 }
 
-// packが優先的に使用される
+// birthが優先的に使用される
 local user = new User("Alice", "alice@example.com")
 ```
 
-### packとデリゲーション
+### birth構文とデリゲーション
 
 ```nyash
 box Product {
     init { name, price }
     
-    pack(productName, productPrice) {
+    birth(productName, productPrice) {
         me.name = productName
         me.price = productPrice
+        print("📦 Product created: " + productName)
     }
 }
 
 box DiscountedProduct from Product {
     init { discount }
     
-    pack(name, originalPrice, discountPercent) {
+    birth(name, originalPrice, discountPercent) {
         local discountedPrice = originalPrice * (1 - discountPercent / 100)
-        from Product.pack(name, discountedPrice)
+        from Product.birth(name, discountedPrice)  # 親のbirthを呼ぶ
         me.discount = discountPercent
     }
     
     originalPrice() {
         return me.price / (1 - me.discount / 100)
+    }
+}
+```
+
+### 🚨 pack構文 - ビルトインBox継承専用
+
+**重要**: `pack`構文は**ビルトインBox継承専用**です。ユーザー定義Boxでは使用しません。
+
+```nyash
+# ✅ 正しい使い方（ビルトインBox継承のみ）
+box EnhancedP2P from P2PBox {
+    init { extraFeatures }
+    
+    pack(nodeId, transport) {
+        from P2PBox.pack(nodeId, transport)  # ビルトインBoxの初期化
+        me.extraFeatures = new ArrayBox()
+    }
+}
+
+box CustomMath from MathBox {
+    init { history }
+    
+    pack() {
+        from MathBox.pack()  # ビルトインBoxの初期化
+        me.history = new ArrayBox()
+    }
+}
+
+# ❌ 間違い（ユーザー定義Boxでpack使用）
+box RegularUser {
+    pack(name) {  # これは間違い！birth()を使う
+        me.name = name
     }
 }
 ```

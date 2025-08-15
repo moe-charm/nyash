@@ -713,12 +713,14 @@ impl NyashInterpreter {
         let instance_arc = Arc::from(instance_box);
         
         // コンストラクタを呼び出す
-        // "pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
+        // "birth/引数数"、"pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
+        let birth_key = format!("birth/{}", arguments.len());
         let pack_key = format!("pack/{}", arguments.len());
         let init_key = format!("init/{}", arguments.len());
         let box_name_key = format!("{}/{}", actual_class_name, arguments.len());
         
-        if let Some(constructor) = final_box_decl.constructors.get(&pack_key)
+        if let Some(constructor) = final_box_decl.constructors.get(&birth_key)
+            .or_else(|| final_box_decl.constructors.get(&pack_key))
             .or_else(|| final_box_decl.constructors.get(&init_key))
             .or_else(|| final_box_decl.constructors.get(&box_name_key)) {
             // コンストラクタを実行

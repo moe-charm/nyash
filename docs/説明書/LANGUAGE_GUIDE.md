@@ -65,9 +65,10 @@ not condition, a and b, a or b
 box User {
     init { name, email }  // フィールド宣言
     
-    pack(userName, userEmail) {  // 🎁 Box哲学の具現化！
+    birth(userName, userEmail) {  // 🌟 生命をBoxに与える！
         me.name = userName
-        me.email = userEmail  
+        me.email = userEmail
+        print("🌟 " + userName + " が誕生しました！")
     }
     
     greet() {
@@ -81,14 +82,33 @@ box User {
 box AdminUser from User {  // 🔥 from構文でデリゲーション
     init { permissions }
     
-    pack(adminName, adminEmail, perms) {
-        from User.pack(adminName, adminEmail)  // 親のpack呼び出し
+    birth(adminName, adminEmail, perms) {
+        from User.birth(adminName, adminEmail)  // 親のbirth呼び出し
         me.permissions = perms
     }
     
     override greet() {  // 明示的オーバーライド
         from User.greet()  // 親メソッド呼び出し
         print("Admin privileges: " + me.permissions)
+    }
+}
+```
+
+#### ビルトインBox継承（pack専用）
+```nyash
+// ⚠️ pack構文はビルトインBox継承専用
+box EnhancedP2P from P2PBox {
+    init { features }
+    
+    pack(nodeId, transport) {
+        from P2PBox.pack(nodeId, transport)  // ビルトイン初期化
+        me.features = new ArrayBox()
+        print("🌐 Enhanced P2P Node created: " + nodeId)
+    }
+    
+    override send(intent, data, target) {
+        me.features.push("send:" + intent)
+        return from P2PBox.send(intent, data, target)
     }
 }
 ```

@@ -362,7 +362,38 @@ impl NyashInterpreter {
             return Ok(field_value);
         }
         
-        // 4. エラー：見つからない
+        // 4. statics名前空間内のstatic boxをチェック
+        eprintln!("🔍 DEBUG: Checking statics namespace for '{}'...", name);
+        if let Some(statics_namespace) = global_box.get_field("statics") {
+            eprintln!("🔍 DEBUG: statics namespace type: {}", statics_namespace.type_name());
+            
+            // MapBoxとして試す
+            if let Some(map_box) = statics_namespace.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                eprintln!("🔍 DEBUG: statics is a MapBox, looking for '{}'", name);
+                let key_box: Box<dyn NyashBox> = Box::new(StringBox::new(name));
+                let static_box_result = map_box.get(key_box);
+                
+                // NullBoxでないかチェック（MapBoxは見つからない場合NullBoxを返す）
+                if static_box_result.type_name() != "NullBox" {
+                    eprintln!("🔍 DEBUG: Found '{}' in statics namespace", name);
+                    return Ok(Arc::from(static_box_result));
+                } else {
+                    eprintln!("🔍 DEBUG: '{}' not found in statics MapBox", name);
+                }
+            } else if let Some(instance) = statics_namespace.as_any().downcast_ref::<crate::instance::InstanceBox>() {
+                eprintln!("🔍 DEBUG: statics is an InstanceBox, looking for '{}'", name);
+                if let Some(static_box) = instance.get_field(name) {
+                    eprintln!("🔍 DEBUG: Found '{}' in statics namespace", name);
+                    return Ok(static_box);
+                } else {
+                    eprintln!("🔍 DEBUG: '{}' not found in statics InstanceBox", name);
+                }
+            } else {
+                eprintln!("🔍 DEBUG: statics namespace is neither MapBox nor InstanceBox");
+            }
+        }
+        
+        // 5. エラー：見つからない
         eprintln!("🔍 DEBUG: '{}' not found anywhere!", name);
         Err(RuntimeError::UndefinedVariable {
             name: name.to_string(),

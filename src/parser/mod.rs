@@ -455,14 +455,74 @@ impl NyashParser {
                     let constructor_key = format!("{}/{}", field_or_method, params.len());
                     constructors.insert(constructor_key, constructor);
                 }
+            }
+            
+            // birthトークンをメソッド名として特別処理
+            else if self.match_token(&TokenType::BIRTH) && self.peek_token() == &TokenType::LPAREN {
+                let field_or_method = "birth".to_string();
+                self.advance(); // consume 'birth'
+                
+                // コンストラクタとして処理
+                if self.match_token(&TokenType::LPAREN) {
+                    // birthは常にコンストラクタ
+                    if is_override {
+                        return Err(ParseError::UnexpectedToken {
+                            expected: "method definition, not constructor after override keyword".to_string(),
+                            found: TokenType::BIRTH,
+                            line: self.current_token().line,
+                        });
+                    }
+                    // コンストラクタの処理
+                    self.advance(); // consume '('
+                    
+                    let mut params = Vec::new();
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        must_advance!(self, _unused, "constructor parameter parsing");
+                        
+                        if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
+                            params.push(param.clone());
+                            self.advance();
+                        }
+                        
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
+                    }
+                    
+                    self.consume(TokenType::RPAREN)?;
+                    self.consume(TokenType::LBRACE)?;
+                    
+                    let mut body = Vec::new();
+                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                        self.skip_newlines();
+                        if !self.match_token(&TokenType::RBRACE) {
+                            body.push(self.parse_statement()?);
+                        }
+                    }
+                    
+                    self.consume(TokenType::RBRACE)?;
+                    
+                    let constructor = ASTNode::FunctionDeclaration {
+                        name: field_or_method.clone(),
+                        params: params.clone(),
+                        body,
+                        is_static: false,
+                        is_override: false,
+                        span: Span::unknown(),
+                    };
+                    
+                    // パラメータの数でコンストラクタを区別
+                    let constructor_key = format!("{}/{}", field_or_method, params.len());
+                    constructors.insert(constructor_key, constructor);
+                }
             } else if let TokenType::IDENTIFIER(field_or_method) = &self.current_token().token_type {
                 let field_or_method = field_or_method.clone();
                 self.advance();
                 
                 // メソッド定義またはコンストラクタか？
                 if self.match_token(&TokenType::LPAREN) {
-                    // Box名と同じまたは"init"または"pack"の場合はコンストラクタ
-                    if field_or_method == name || field_or_method == "init" || field_or_method == "pack" {
+                    // Box名と同じまたは"init"または"pack"または"birth"の場合はコンストラクタ
+                    if field_or_method == name || field_or_method == "init" || field_or_method == "pack" || field_or_method == "birth" {
                         // コンストラクタはoverrideできない
                         if is_override {
                             return Err(ParseError::UnexpectedToken {

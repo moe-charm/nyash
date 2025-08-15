@@ -63,9 +63,10 @@ local num = new IntegerBox(42)
 box User {
     init { name, email }
     
-    pack(userName, userEmail) {
+    birth(userName, userEmail) {
         me.name = userName
         me.email = userEmail
+        print("🌟 User " + userName + " が誕生しました！")
     }
 }
 ```
@@ -75,13 +76,31 @@ box User {
 box AdminUser from User {
     init { permissions }
     
-    pack(adminName, adminEmail, perms) {
-        from User.pack(adminName, adminEmail)
+    birth(adminName, adminEmail, perms) {
+        from User.birth(adminName, adminEmail)
         me.permissions = perms
     }
     
     override toString() {
         return "Admin: " + from User.toString()
+    }
+}
+```
+
+### ビルトインBox継承（pack専用）
+```nyash
+// ビルトインBoxを継承する場合のみpackを使用
+box EnhancedP2P from P2PBox {
+    init { features }
+    
+    pack(nodeId, transport) {
+        from P2PBox.pack(nodeId, transport)  // ビルトイン初期化
+        me.features = new ArrayBox()
+    }
+    
+    override send(intent, data, target) {
+        me.features.push("send:" + intent)
+        return from P2PBox.send(intent, data, target)
     }
 }
 ```

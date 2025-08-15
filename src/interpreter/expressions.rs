@@ -1104,8 +1104,8 @@ impl NyashInterpreter {
         
         drop(box_declarations); // ロック早期解放
         
-        // 4. constructorまたはinitまたはpackの場合の特別処理
-        if method == "constructor" || method == "init" || method == "pack" || method == parent {
+        // 4. constructorまたはinitまたはpackまたはbirthの場合の特別処理
+        if method == "constructor" || method == "init" || method == "pack" || method == "birth" || method == parent {
             return self.execute_from_parent_constructor(parent, &parent_box_decl, current_instance_val.clone_box(), arguments);
         }
         
@@ -1177,12 +1177,14 @@ impl NyashInterpreter {
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         
         // 1. 親クラスのコンストラクタを取得（引数の数でキーを作成）
-        // "pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
+        // "birth/引数数"、"pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
+        let birth_key = format!("birth/{}", arguments.len());
         let pack_key = format!("pack/{}", arguments.len());
         let init_key = format!("init/{}", arguments.len());
         let box_name_key = format!("{}/{}", parent, arguments.len());
         
-        let parent_constructor = parent_box_decl.constructors.get(&pack_key)
+        let parent_constructor = parent_box_decl.constructors.get(&birth_key)
+            .or_else(|| parent_box_decl.constructors.get(&pack_key))
             .or_else(|| parent_box_decl.constructors.get(&init_key))
             .or_else(|| parent_box_decl.constructors.get(&box_name_key))
             .ok_or(RuntimeError::InvalidOperation {

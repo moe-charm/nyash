@@ -122,30 +122,56 @@ while condition { }  // 使用不可
 loop() { }          // 使用不可
 ```
 
-### 🎁 pack構文 - Box哲学の具現化（2025-08-11実装）
+### 🌟 birth構文 - 生命をBoxに与える（2025-08-15実装）
 ```nyash
-// 🎁 「箱に詰める」直感的コンストラクタ
-box User {
-    init { name, email }
+// 🌟 「Boxに生命を与える」直感的コンストラクタ
+box Life {
+    init { name, energy }
     
-    pack(userName, userEmail) {  // ← Box哲学を体現！
-        me.name = userName
-        me.email = userEmail
+    birth(lifeName) {  // ← Everything is Box哲学を体現！
+        me.name = lifeName
+        me.energy = 100
+        print("🌟 " + lifeName + " が誕生しました！")
     }
 }
 
-// 🔄 デリゲーションでのpack
-box AdminUser from User {
-    init { permissions }
+// 🔄 デリゲーションでのbirth
+box Human from Life {
+    init { intelligence }
     
-    pack(adminName, adminEmail, perms) {
-        from User.pack(adminName, adminEmail)  // 親のpackを呼び出し
-        me.permissions = perms
+    birth(humanName) {
+        from Life.birth(humanName)  // 親のbirthを呼び出し
+        me.intelligence = 50
     }
 }
 
-// ✅ 優先順位: pack > init > Box名形式
-local user = new User("Alice", "alice@example.com")  // packが使われる
+// ✅ 優先順位: birth > pack > init > Box名形式
+local alice = new Human("Alice")  // birthが使われる
+```
+
+### 🚨 pack構文 - ビルトインBox継承専用
+```nyash
+// ⚠️ pack構文はビルトインBox継承専用！ユーザー定義Boxでは使わない
+box EnhancedP2P from P2PBox {
+    init { features }
+    
+    pack(nodeId, transport) {
+        from P2PBox.pack(nodeId, transport)  // ビルトイン初期化
+        me.features = new ArrayBox()
+    }
+    
+    override send(intent, data, target) {
+        me.features.push("send:" + intent)
+        return from P2PBox.send(intent, data, target)
+    }
+}
+
+// ❌ 間違い: ユーザー定義Boxでpack使用
+box RegularUser {
+    pack(name) {  // これは間違い！birth()を使う
+        me.name = name
+    }
+}
 ```
 
 ### 🎯 正統派Nyashスタイル（2025-08-09実装）
