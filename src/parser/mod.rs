@@ -13,6 +13,10 @@
 
 // サブモジュール宣言
 mod expressions;
+mod operators;
+mod method_dispatch;
+mod async_ops;
+mod delegation;
 mod statements;
 // mod declarations;
 // mod errors;
