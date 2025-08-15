@@ -1,0 +1,6 @@
+# 🎯 Simple WASM vs AOT WASM 比較テスト
+local x
+x = 42
+local y
+y = x + 58
+return y

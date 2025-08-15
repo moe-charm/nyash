@@ -1,0 +1,650 @@
+    Checking nyash-rust v0.1.0 (/mnt/c/git/nyash-project/nyash)
+warning: unused import: `next_box_id`
+  --> src/boxes/math_box.rs:59:84
+   |
+59 | use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase, next_box_id};
+   |                                                                                    ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `next_box_id`
+  --> src/boxes/null_box.rs:87:72
+   |
+87 | use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase, next_box_id};
+   |                                                                        ^^^^^^^^^^^
+
+warning: unused import: `Debug`
+  --> src/boxes/buffer/mod.rs:35:16
+   |
+35 | use std::fmt::{Debug, Display};
+   |                ^^^^^
+
+warning: unused import: `std::future::Future`
+ --> src/boxes/future/mod.rs:7:5
+  |
+7 | use std::future::Future;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::pin::Pin`
+ --> src/boxes/future/mod.rs:8:5
+  |
+8 | use std::pin::Pin;
+  |     ^^^^^^^^^^^^^
+
+warning: unused import: `crate::boxes::map_box::MapBox`
+ --> src/boxes/http/mod.rs:9:5
+  |
+9 | use crate::boxes::map_box::MapBox;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `self`
+  --> src/boxes/intent_box.rs:38:16
+   |
+38 | use std::fmt::{self, Debug};
+   |                ^^^^
+
+warning: unused macro definition: `debug_fuel`
+  --> src/parser/expressions.rs:38:14
+   |
+38 | macro_rules! debug_fuel {
+   |              ^^^^^^^^^^
+   |
+   = note: `#[warn(unused_macros)]` on by default
+
+warning: unused macro definition: `debug_fuel`
+  --> src/parser/mod.rs:51:14
+   |
+51 | macro_rules! debug_fuel {
+   |              ^^^^^^^^^^
+
+warning: unused imports: `AddBox`, `DivideBox`, `MultiplyBox`, and `SubtractBox`
+  --> src/interpreter/mod.rs:10:75
+   |
+10 | use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox, SubtractBox, MultiplyBox, DivideBox, CompareBox, ArrayB...
+   |                                                                           ^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `FloatBox`
+  --> src/interpreter/mod.rs:14:39
+   |
+14 | use crate::boxes::math_box::{MathBox, FloatBox, RangeBox};
+   |                                       ^^^^^^^^
+
+warning: unused import: `DateTimeBox`
+  --> src/interpreter/mod.rs:15:39
+   |
+15 | use crate::boxes::time_box::{TimeBox, DateTimeBox, TimerBox};
+   |                                       ^^^^^^^^^^^
+
+warning: unused import: `file::FileBox`
+  --> src/interpreter/expressions.rs:12:104
+   |
+12 | use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
+   |                                                                                                        ^^^^^^^^^^^^^
+
+warning: unused imports: `DynamicAdd`, `DynamicDiv`, `DynamicMul`, `DynamicSub`, and `OperatorError`
+  --> src/interpreter/expressions.rs:15:30
+   |
+15 | use crate::operator_traits::{DynamicAdd, DynamicSub, DynamicMul, DynamicDiv, OperatorError};
+   |                              ^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^^^^
+
+warning: unused import: `Mutex`
+  --> src/interpreter/statements.rs:10:22
+   |
+10 | use std::sync::{Arc, Mutex};
+   |                      ^^^^^
+
+warning: unused import: `StringBox`
+  --> src/interpreter/methods/collection_methods.rs:11:24
+   |
+11 | use crate::box_trait::{StringBox, IntegerBox, NyashBox, BoolBox};
+   |                        ^^^^^^^^^
+
+warning: unused imports: `IntegerBox` and `StringBox`
+  --> src/interpreter/methods/data_methods.rs:11:34
+   |
+11 | use crate::box_trait::{NyashBox, StringBox, IntegerBox};
+   |                                  ^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `StringBox`
+  --> src/interpreter/methods/network_methods.rs:10:34
+   |
+10 | use crate::box_trait::{NyashBox, StringBox};
+   |                                  ^^^^^^^^^
+
+warning: unused import: `BoolBox`
+ --> src/interpreter/methods/p2p_methods.rs:9:45
+  |
+9 | use crate::box_trait::{NyashBox, StringBox, BoolBox};
+  |                                             ^^^^^^^
+
+warning: unused import: `crate::method_box::MethodBox`
+  --> src/interpreter/methods/p2p_methods.rs:11:5
+   |
+11 | use crate::method_box::MethodBox;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `basic_methods::*`
+  --> src/interpreter/methods/mod.rs:28:9
+   |
+28 | pub use basic_methods::*;
+   |         ^^^^^^^^^^^^^^^^
+
+warning: unused import: `collection_methods::*`
+  --> src/interpreter/methods/mod.rs:29:9
+   |
+29 | pub use collection_methods::*;
+   |         ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `io_methods::*`
+  --> src/interpreter/methods/mod.rs:30:9
+   |
+30 | pub use io_methods::*;
+   |         ^^^^^^^^^^^^^
+
+warning: unused import: `data_methods::*`
+  --> src/interpreter/methods/mod.rs:31:9
+   |
+31 | pub use data_methods::*;
+   |         ^^^^^^^^^^^^^^^
+
+warning: unused import: `network_methods::*`
+  --> src/interpreter/methods/mod.rs:32:9
+   |
+32 | pub use network_methods::*;
+   |         ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `http_methods::*`
+  --> src/interpreter/methods/mod.rs:33:9
+   |
+33 | pub use http_methods::*;
+   |         ^^^^^^^^^^^^^^^
+
+warning: unused import: `Weak`
+  --> src/instance.rs:15:29
+   |
+15 | use std::sync::{Arc, Mutex, Weak};
+   |                             ^^^^
+
+warning: unused import: `crate::box_trait::StringBox`
+   --> src/instance.rs:164:13
+    |
+164 |         use crate::box_trait::StringBox;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> src/operator_traits.rs:16:5
+   |
+16 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `VoidBox`
+ --> src/box_arithmetic.rs:8:75
+  |
+8 | use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox, BoolBox, VoidBox, BoxBase};
+  |                                                                           ^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> src/transport/mod.rs:10:5
+   |
+10 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `UnaryOp`
+ --> src/backend/wasm/codegen.rs:8:91
+  |
+8 | use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId};
+  |                                                                                           ^^^^^^^
+
+warning: unused import: `MirFunction`
+  --> src/backend/wasm/mod.rs:16:29
+   |
+16 | use crate::mir::{MirModule, MirFunction};
+   |                             ^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+  --> src/backend/wasm/mod.rs:17:5
+   |
+17 | use std::collections::HashMap;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_trait.rs:230:1
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+...
+230 | impl NyashBox for StringBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_trait.rs:301:1
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+...
+301 | impl NyashBox for IntegerBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_trait.rs:376:1
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+...
+376 | impl NyashBox for BoolBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_trait.rs:447:1
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+...
+447 | impl NyashBox for VoidBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_trait.rs:553:1
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+...
+553 | impl NyashBox for FileBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_trait.rs:622:1
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+...
+622 | impl NyashBox for ErrorBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_trait.rs:725:1
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+...
+725 | impl NyashBox for ResultBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/instance.rs:435:1
+    |
+435 | impl NyashBox for InstanceBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+    |
+   ::: src/box_trait.rs:91:5
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/channel_box.rs:110:1
+    |
+110 | impl NyashBox for ChannelBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+    |
+   ::: src/box_trait.rs:91:5
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/channel_box.rs:193:1
+    |
+193 | impl NyashBox for MessageBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+    |
+   ::: src/box_trait.rs:91:5
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+  --> src/exception_box.rs:52:1
+   |
+52 | impl NyashBox for ErrorBox {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+   |
+  ::: src/box_trait.rs:91:5
+   |
+91 |     fn share_box(&self) -> Box<dyn NyashBox>;
+   |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+  --> src/method_box.rs:95:1
+   |
+95 | impl NyashBox for MethodBox {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+   |
+  ::: src/box_trait.rs:91:5
+   |
+91 |     fn share_box(&self) -> Box<dyn NyashBox>;
+   |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/type_box.rs:236:1
+    |
+236 | impl NyashBox for TypeBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+    |
+   ::: src/box_trait.rs:91:5
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+  --> src/box_arithmetic.rs:88:1
+   |
+88 | impl NyashBox for AddBox {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+   |
+  ::: src/box_trait.rs:91:5
+   |
+91 |     fn share_box(&self) -> Box<dyn NyashBox>;
+   |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_arithmetic.rs:199:1
+    |
+199 | impl NyashBox for SubtractBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+    |
+   ::: src/box_trait.rs:91:5
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_arithmetic.rs:291:1
+    |
+291 | impl NyashBox for MultiplyBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+    |
+   ::: src/box_trait.rs:91:5
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+
+error[E0046]: not all trait items implemented, missing: `share_box`
+   --> src/box_arithmetic.rs:392:1
+    |
+392 | impl NyashBox for DivideBox {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `share_box` in implementation
+    |
+   ::: src/box_trait.rs:91:5
+    |
+91  |     fn share_box(&self) -> Box<dyn NyashBox>;
+    |     ----------------------------------------- `share_box` from trait
+
+warning: unused import: `Read`
+  --> src/boxes/stream/mod.rs:10:15
+   |
+10 | use std::io::{Read, Write, Result};
+   |               ^^^^
+
+warning: unused import: `Write`
+  --> src/boxes/stream/mod.rs:10:21
+   |
+10 | use std::io::{Read, Write, Result};
+   |                     ^^^^^
+
+warning: unused variable: `url`
+  --> src/boxes/http/mod.rs:25:28
+   |
+25 |     pub fn http_get(&self, url: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                            ^^^ help: if this is intentional, prefix it with an underscore: `_url`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `url`
+  --> src/boxes/http/mod.rs:30:24
+   |
+30 |     pub fn post(&self, url: Box<dyn NyashBox>, body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                        ^^^ help: if this is intentional, prefix it with an underscore: `_url`
+
+warning: unused variable: `body`
+  --> src/boxes/http/mod.rs:30:48
+   |
+30 |     pub fn post(&self, url: Box<dyn NyashBox>, body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                                                ^^^^ help: if this is intentional, prefix it with an underscore: `_body`
+
+warning: unused variable: `url`
+  --> src/boxes/http/mod.rs:35:23
+   |
+35 |     pub fn put(&self, url: Box<dyn NyashBox>, body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                       ^^^ help: if this is intentional, prefix it with an underscore: `_url`
+
+warning: unused variable: `body`
+  --> src/boxes/http/mod.rs:35:47
+   |
+35 |     pub fn put(&self, url: Box<dyn NyashBox>, body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                                               ^^^^ help: if this is intentional, prefix it with an underscore: `_body`
+
+warning: unused variable: `url`
+  --> src/boxes/http/mod.rs:40:26
+   |
+40 |     pub fn delete(&self, url: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                          ^^^ help: if this is intentional, prefix it with an underscore: `_url`
+
+warning: unused variable: `method`
+  --> src/boxes/http/mod.rs:45:27
+   |
+45 |     pub fn request(&self, method: Box<dyn NyashBox>, url: Box<dyn NyashBox>, options: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                           ^^^^^^ help: if this is intentional, prefix it with an underscore: `_method`
+
+warning: unused variable: `url`
+  --> src/boxes/http/mod.rs:45:54
+   |
+45 |     pub fn request(&self, method: Box<dyn NyashBox>, url: Box<dyn NyashBox>, options: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                                                      ^^^ help: if this is intentional, prefix it with an underscore: `_url`
+
+warning: unused variable: `options`
+  --> src/boxes/http/mod.rs:45:78
+   |
+45 |     pub fn request(&self, method: Box<dyn NyashBox>, url: Box<dyn NyashBox>, options: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+   |                                                                              ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_options`
+
+warning: unused variable: `socket`
+   --> src/boxes/http_server_box.rs:143:25
+    |
+143 |         if let Some(ref socket) = *socket_guard {
+    |                         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_socket`
+
+warning: unused variable: `backlog`
+   --> src/boxes/http_server_box.rs:137:26
+    |
+137 |     pub fn listen(&self, backlog: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    |                          ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_backlog`
+
+warning: variable `arg_count` is assigned to, but never used
+   --> src/parser/expressions.rs:246:33
+    |
+246 |                         let mut arg_count = 0;
+    |                                 ^^^^^^^^^
+    |
+    = note: consider using `_arg_count` instead
+
+warning: unused variable: `name`
+  --> src/parser/statements.rs:69:35
+   |
+69 |             TokenType::IDENTIFIER(name) => {
+   |                                   ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: variable `statement_count` is assigned to, but never used
+   --> src/parser/mod.rs:132:17
+    |
+132 |         let mut statement_count = 0;
+    |                 ^^^^^^^^^^^^^^^
+    |
+    = note: consider using `_statement_count` instead
+
+warning: unused variable: `i`
+   --> src/interpreter/expressions.rs:778:22
+    |
+778 |                 for (i, arg) in arguments.iter().enumerate() {
+    |                      ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+warning: variable does not need to be mutable
+    --> src/interpreter/expressions.rs:1053:13
+     |
+1053 |         let mut builtin_boxes = vec![
+     |             ----^^^^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` on by default
+
+warning: variable `result` is assigned to, but never used
+    --> src/interpreter/expressions.rs:1197:21
+     |
+1197 |             let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
+     |                     ^^^^^^
+     |
+     = note: consider using `_result` instead
+
+warning: value assigned to `result` is never read
+    --> src/interpreter/expressions.rs:1199:17
+     |
+1199 |                 result = self.execute_statement(statement)?;
+     |                 ^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` on by default
+
+warning: value assigned to `result` is never read
+    --> src/interpreter/expressions.rs:1203:21
+     |
+1203 |                     result = return_val.clone_box();
+     |                     ^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+
+warning: unused variable: `current_instance`
+    --> src/interpreter/expressions.rs:1222:78
+     |
+1222 |     fn execute_builtin_box_method(&mut self, parent: &str, method: &str, mut current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
+     |                                                                              ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_current_instance`
+
+warning: variable does not need to be mutable
+    --> src/interpreter/expressions.rs:1222:74
+     |
+1222 |     fn execute_builtin_box_method(&mut self, parent: &str, method: &str, mut current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
+     |                                                                          ----^^^^^^^^^^^^^^^^
+     |                                                                          |
+     |                                                                          help: remove this `mut`
+
+warning: unused variable: `node_id`
+   --> src/interpreter/objects.rs:546:21
+    |
+546 |                 let node_id = if let Some(id_str) = node_id_value.as_any().downcast_ref::<StringBox>() {
+    |                     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_node_id`
+
+warning: unused variable: `transport_str`
+   --> src/interpreter/objects.rs:556:21
+    |
+556 |                 let transport_str = if let Some(t_str) = transport_value.as_any().downcast_ref::<StringBox>() {
+    |                     ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_transport_str`
+
+warning: variable does not need to be mutable
+   --> src/interpreter/objects.rs:963:17
+    |
+963 |             let mut builtin_boxes = vec![
+    |                 ----^^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: unused variable: `temp_arc`
+   --> src/instance.rs:113:17
+    |
+113 |             let temp_arc = Arc::new(Mutex::new(VoidBox::new()));
+    |                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_temp_arc`
+
+warning: unused variable: `existing_method`
+   --> src/instance.rs:320:21
+    |
+320 |         if let Some(existing_method) = new_methods.get(&method_name) {
+    |                     ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_existing_method`
+
+warning: unused variable: `block`
+   --> src/mir/function.rs:146:18
+    |
+146 |         for (id, block) in &self.blocks {
+    |                  ^^^^^ help: if this is intentional, prefix it with an underscore: `_block`
+
+warning: variable does not need to be mutable
+  --> src/mir/builder.rs:56:13
+   |
+56 |         let mut module = MirModule::new("main".to_string());
+   |             ----^^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: unused variable: `arguments`
+   --> src/mir/builder.rs:717:55
+    |
+717 |     fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+    |                                                       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_arguments`
+
+warning: unused variable: `name`
+  --> src/mir/verification.rs:71:14
+   |
+71 |         for (name, function) in &module.functions {
+   |              ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `error`
+  --> src/mir/verification.rs:74:21
+   |
+74 |                 for error in &mut func_errors {
+   |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_error`
+
+warning: unused variable: `block_id`
+   --> src/mir/verification.rs:163:14
+    |
+163 |         for (block_id, block) in &function.blocks {
+    |              ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_block_id`
+
+warning: variable does not need to be mutable
+   --> src/mir/verification.rs:160:13
+    |
+160 |         let mut errors = Vec::new();
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `name`
+  --> src/mir/printer.rs:86:14
+   |
+86 |         for (name, function) in &module.functions {
+   |              ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: unused variable: `effects`
+   --> src/mir/printer.rs:215:53
+    |
+215 |             MirInstruction::Call { dst, func, args, effects } => {
+    |                                                     ^^^^^^^ help: try ignoring the field: `effects: _`
+
+warning: unused variable: `effects`
+   --> src/mir/printer.rs:228:67
+    |
+228 |             MirInstruction::BoxCall { dst, box_val, method, args, effects } => {
+    |                                                                   ^^^^^^^ help: try ignoring the field: `effects: _`
+
+warning: unused variable: `field`
+   --> src/backend/wasm/codegen.rs:261:54
+    |
+261 |             MirInstruction::RefGet { dst, reference, field } => {
+    |                                                      ^^^^^ help: try ignoring the field: `field: _`
+
+warning: unused variable: `field`
+   --> src/backend/wasm/codegen.rs:275:49
+    |
+275 |             MirInstruction::RefSet { reference, field, value } => {
+    |                                                 ^^^^^ help: try ignoring the field: `field: _`
+
+For more information about this error, try `rustc --explain E0046`.
+warning: `nyash-rust` (lib) generated 74 warnings
+error: could not compile `nyash-rust` (lib) due to 17 previous errors; 74 warnings emitted
