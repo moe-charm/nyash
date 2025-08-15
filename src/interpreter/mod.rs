@@ -31,6 +31,7 @@ mod async_methods;
 mod box_methods;
 mod core;
 mod expressions;
+mod field_access;
 mod method_dispatch;
 mod operators;
 mod statements;
