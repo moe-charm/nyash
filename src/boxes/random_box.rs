@@ -71,14 +71,25 @@ use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBas
 use crate::boxes::{ArrayBox, FloatBox};
 use std::fmt::{Debug, Display};
 use std::any::Any;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
 
 /// 乱数生成を提供するBox
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RandomBox {
     // 簡易線形合同法による疑似乱数生成器
-    seed: Arc<Mutex<u64>>,
+    seed: RwLock<u64>,
     base: BoxBase,
+}
+
+impl Clone for RandomBox {
+    fn clone(&self) -> Self {
+        let seed_val = *self.seed.read().unwrap();
+        
+        Self {
+            seed: RwLock::new(seed_val),
+            base: BoxBase::new(), // New unique ID for clone
+        }
+    }
 }
 
 impl RandomBox {
@@ -90,7 +101,7 @@ impl RandomBox {
             .as_nanos() as u64;
         
         Self {
-            seed: Arc::new(Mutex::new(seed)),
+            seed: RwLock::new(seed),
             base: BoxBase::new(),
         }
     }
@@ -98,7 +109,7 @@ impl RandomBox {
     /// 種を設定
     pub fn seed(&self, new_seed: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = new_seed.as_any().downcast_ref::<IntegerBox>() {
-            *self.seed.lock().unwrap() = int_box.value as u64;
+            *self.seed.write().unwrap() = int_box.value as u64;
             Box::new(StringBox::new("Seed set"))
         } else {
             Box::new(StringBox::new("Error: seed() requires integer input"))
@@ -107,7 +118,7 @@ impl RandomBox {
     
     /// 次の乱数を生成（線形合同法）
     fn next_random(&self) -> u64 {
-        let mut seed = self.seed.lock().unwrap();
+        let mut seed = self.seed.write().unwrap();
         // 線形合同法の定数（Numerical Recipes より）
         *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
         *seed
