@@ -52,10 +52,9 @@ impl BusEndpoint {
     /// メッセージを配送
     pub fn deliver(&self, intent: IntentBox, from: &str) {
         let handlers = self.handlers.lock().unwrap();
-        let intent_data = intent.lock().unwrap();
-        let intent_name = &intent_data.name;
+        let intent_name = intent.get_name().to_string_box().value;
         
-        if let Some(intent_handlers) = handlers.get(intent_name) {
+        if let Some(intent_handlers) = handlers.get(&intent_name) {
             for handler in intent_handlers {
                 handler(intent.clone(), from);
             }

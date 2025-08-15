@@ -17,7 +17,11 @@ pub struct NyashFutureBox {
 
 impl Clone for NyashFutureBox {
     fn clone(&self) -> Self {
-        let result_val = self.result.read().unwrap().clone();
+        let result_guard = self.result.read().unwrap();
+        let result_val = match result_guard.as_ref() {
+            Some(box_value) => Some(box_value.clone_box()),
+            None => None,
+        };
         let is_ready_val = *self.is_ready.read().unwrap();
         
         Self {

@@ -11,27 +11,22 @@ use crate::boxes::{IntentBox};
 use crate::method_box::MethodBox;
 
 impl NyashInterpreter {
-    /// IntentBoxのメソッド実行 (Arc<Mutex>版)
+    /// IntentBoxのメソッド実行 (RwLock版)
     pub(in crate::interpreter) fn execute_intent_box_method(
         &mut self,
         intent_box: &IntentBox,
         method: &str,
         _arguments: &[ASTNode],
-    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let data = intent_box.lock().map_err(|_| RuntimeError::UndefinedVariable {
-            name: "Failed to lock IntentBox".to_string(),
-        })?;
-        
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {        
         match method {
             // メッセージ名取得
             "getName" | "name" => {
-                Ok(Box::new(StringBox::new(data.name.clone())))
+                Ok(intent_box.get_name())
             }
             
             // ペイロード取得（JSON文字列として）
             "getPayload" | "payload" => {
-                let payload_str = data.payload.to_string();
-                Ok(Box::new(StringBox::new(payload_str)))
+                Ok(intent_box.get_payload())
             }
             
             // 型情報取得
