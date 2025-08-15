@@ -250,6 +250,7 @@ pub enum LiteralValue {
     Integer(i64),
     Float(f64),  // 浮動小数点数サポート追加
     Bool(bool),
+    Null,        // null値
     Void,
 }
 
@@ -264,6 +265,7 @@ impl LiteralValue {
             LiteralValue::Integer(i) => Box::new(IntegerBox::new(*i)),
             LiteralValue::Float(f) => Box::new(FloatBox::new(*f)),
             LiteralValue::Bool(b) => Box::new(BoolBox::new(*b)),
+            LiteralValue::Null => Box::new(crate::boxes::null_box::NullBox::new()),
             LiteralValue::Void => Box::new(VoidBox::new()),
         }
     }
@@ -283,6 +285,8 @@ impl LiteralValue {
             Some(LiteralValue::Float(float_box.value))
         } else if let Some(bool_box) = box_val.as_any().downcast_ref::<BoolBox>() {
             Some(LiteralValue::Bool(bool_box.value))
+        } else if box_val.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+            Some(LiteralValue::Null)
         } else if box_val.as_any().downcast_ref::<VoidBox>().is_some() {
             Some(LiteralValue::Void)
         } else {
@@ -298,6 +302,7 @@ impl fmt::Display for LiteralValue {
             LiteralValue::Integer(i) => write!(f, "{}", i),
             LiteralValue::Float(fl) => write!(f, "{}", fl),
             LiteralValue::Bool(b) => write!(f, "{}", b),
+            LiteralValue::Null => write!(f, "null"),
             LiteralValue::Void => write!(f, "void"),
         }
     }

@@ -166,7 +166,7 @@ static box Main {
         me.console = new ConsoleBox()
         me.console.log("🚀 Starting Tinyproxy Nyash - Phase 10.1")
         
-        local result = statics.ProxyServer.main()
+        local result = ProxyServer.main()
         
         me.console.log("🏁 Proxy result: " + result)
         return "Phase 10.1 Complete"

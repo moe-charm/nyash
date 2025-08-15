@@ -513,6 +513,14 @@ impl BoxCore for ModuloBox {
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "ModuloBox[{}]", self.box_id())
     }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 impl NyashBox for ModuloBox {
