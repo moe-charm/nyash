@@ -18,6 +18,7 @@ mod method_dispatch;
 mod async_ops;
 mod delegation;
 mod statements;
+mod dependency_analysis;
 // mod declarations;
 // mod errors;
 
@@ -1359,127 +1360,7 @@ impl NyashParser {
     // Include, local, outbox, try/catch/throw parsing methods are now in statements.rs module
     // Two-phase parser helper methods are no longer needed - simplified to direct parsing
     
-    // ===== 🔥 Static Box循環依存検出 =====
-    
-    /// Static初期化ブロック内の文から依存関係を抽出
-    fn extract_dependencies_from_statements(&self, statements: &[ASTNode]) -> std::collections::HashSet<String> {
-        let mut dependencies = std::collections::HashSet::new();
-        
-        for stmt in statements {
-            self.extract_dependencies_from_ast(stmt, &mut dependencies);
-        }
-        
-        dependencies
-    }
-    
-    /// AST内から静的Box参照を再帰的に検出
-    fn extract_dependencies_from_ast(&self, node: &ASTNode, dependencies: &mut std::collections::HashSet<String>) {
-        match node {
-            ASTNode::FieldAccess { object, .. } => {
-                // Math.PI のような参照を検出
-                if let ASTNode::Variable { name, .. } = object.as_ref() {
-                    dependencies.insert(name.clone());
-                }
-            }
-            ASTNode::MethodCall { object, .. } => {
-                // Config.getDebug() のような呼び出しを検出
-                if let ASTNode::Variable { name, .. } = object.as_ref() {
-                    dependencies.insert(name.clone());
-                }
-            }
-            ASTNode::Assignment { target, value, .. } => {
-                self.extract_dependencies_from_ast(target, dependencies);
-                self.extract_dependencies_from_ast(value, dependencies);
-            }
-            ASTNode::BinaryOp { left, right, .. } => {
-                self.extract_dependencies_from_ast(left, dependencies);
-                self.extract_dependencies_from_ast(right, dependencies);
-            }
-            ASTNode::UnaryOp { operand, .. } => {
-                self.extract_dependencies_from_ast(operand, dependencies);
-            }
-            ASTNode::If { condition, then_body, else_body, .. } => {
-                self.extract_dependencies_from_ast(condition, dependencies);
-                for stmt in then_body {
-                    self.extract_dependencies_from_ast(stmt, dependencies);
-                }
-                if let Some(else_stmts) = else_body {
-                    for stmt in else_stmts {
-                        self.extract_dependencies_from_ast(stmt, dependencies);
-                    }
-                }
-            }
-            ASTNode::Loop { condition, body, .. } => {
-                self.extract_dependencies_from_ast(condition, dependencies);
-                for stmt in body {
-                    self.extract_dependencies_from_ast(stmt, dependencies);
-                }
-            }
-            ASTNode::Return { value, .. } => {
-                if let Some(val) = value {
-                    self.extract_dependencies_from_ast(val, dependencies);
-                }
-            }
-            ASTNode::Print { expression, .. } => {
-                self.extract_dependencies_from_ast(expression, dependencies);
-            }
-            // 他のAST nodeタイプも必要に応じて追加
-            _ => {}
-        }
-    }
-    
-    /// 循環依存検出（深さ優先探索）
-    fn check_circular_dependencies(&self) -> Result<(), ParseError> {
-        let mut visited = std::collections::HashSet::new();
-        let mut rec_stack = std::collections::HashSet::new();
-        let mut path = Vec::new();
-        
-        for box_name in self.static_box_dependencies.keys() {
-            if !visited.contains(box_name) {
-                if self.has_cycle_dfs(box_name, &mut visited, &mut rec_stack, &mut path)? {
-                    return Ok(()); // エラーは既にhas_cycle_dfs内で返される
-                }
-            }
-        }
-        
-        Ok(())
-    }
-    
-    /// DFS による循環依存検出
-    fn has_cycle_dfs(
-        &self,
-        current: &str,
-        visited: &mut std::collections::HashSet<String>,
-        rec_stack: &mut std::collections::HashSet<String>,
-        path: &mut Vec<String>,
-    ) -> Result<bool, ParseError> {
-        visited.insert(current.to_string());
-        rec_stack.insert(current.to_string());
-        path.push(current.to_string());
-        
-        if let Some(dependencies) = self.static_box_dependencies.get(current) {
-            for dependency in dependencies {
-                if !visited.contains(dependency) {
-                    if self.has_cycle_dfs(dependency, visited, rec_stack, path)? {
-                        return Ok(true);
-                    }
-                } else if rec_stack.contains(dependency) {
-                    // 循環依存を発見！
-                    let cycle_start_pos = path.iter().position(|x| x == dependency).unwrap_or(0);
-                    let cycle_path: Vec<String> = path[cycle_start_pos..].iter().cloned().collect();
-                    let cycle_display = format!("{} -> {}", cycle_path.join(" -> "), dependency);
-                    
-                    return Err(ParseError::CircularDependency { 
-                        cycle: cycle_display 
-                    });
-                }
-            }
-        }
-        
-        rec_stack.remove(current);
-        path.pop();
-        Ok(false)
-    }
+    // ===== 🔥 Dependency Analysis ===== (moved to dependency_analysis.rs)
     
     /// 🔍 デリゲーションメソッドチェック：親Boxに存在しないメソッドのoverride検出
     /// Phase 1: 基本的なoverride構文チェック
