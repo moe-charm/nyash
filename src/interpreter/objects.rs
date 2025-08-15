@@ -961,20 +961,18 @@ impl NyashInterpreter {
         
         // 親クラスの継承チェーンを再帰的に解決 (Multi-delegation) 🚀
         for parent_name in &box_decl.extends {
-            // 🔥 ビルトインBoxかチェック
-            let mut builtin_boxes = vec![
-                "IntegerBox", "StringBox", "BoolBox", "ArrayBox", "MapBox", 
-                "FileBox", "ResultBox", "FutureBox", "ChannelBox", "MathBox", 
-                "TimeBox", "DateTimeBox", "TimerBox", "RandomBox", "SoundBox", 
-                "DebugBox", "MethodBox", "NullBox", "ConsoleBox", "FloatBox",
-                "BufferBox", "RegexBox", "JSONBox", "StreamBox", "HTTPClientBox",
-                "IntentBox", "P2PBox"
-            ];
+            // 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定
+            use crate::box_trait::is_builtin_box;
             
+            let mut is_builtin = is_builtin_box(parent_name);
+            
+            // GUI機能が有効な場合はEguiBoxも追加判定
             #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
-            builtin_boxes.push("EguiBox");
-            
-            let is_builtin = builtin_boxes.contains(&parent_name.as_str());
+            {
+                if parent_name == "EguiBox" {
+                    is_builtin = true;
+                }
+            }
             
             if is_builtin {
                 // ビルトインBoxの場合、フィールドやメソッドは継承しない

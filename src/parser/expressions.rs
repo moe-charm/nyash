@@ -486,32 +486,39 @@ impl NyashParser {
             });
         };
         
-        // DOTを確認
-        self.consume(TokenType::DOT)?;
-        
-        // method名を取得 (IDENTIFIERまたはINITを受け入れ)
-        let method = match &self.current_token().token_type {
-            TokenType::IDENTIFIER(name) => {
-                let name = name.clone();
-                self.advance();
-                name
+        // DOT とmethod名は任意（pack透明化対応）
+        let method = if self.match_token(&TokenType::DOT) {
+            // DOTがある場合: from Parent.method() 形式
+            self.advance(); // consume DOT
+            
+            // method名を取得 (IDENTIFIERまたはINITを受け入れ)
+            match &self.current_token().token_type {
+                TokenType::IDENTIFIER(name) => {
+                    let name = name.clone();
+                    self.advance();
+                    name
+                }
+                TokenType::INIT => {
+                    self.advance();
+                    "init".to_string()
+                }
+                TokenType::PACK => {
+                    self.advance();
+                    "pack".to_string()
+                }
+                _ => {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "method name".to_string(),
+                        line,
+                    });
+                }
             }
-            TokenType::INIT => {
-                self.advance();
-                "init".to_string()
-            }
-            TokenType::PACK => {
-                self.advance();
-                "pack".to_string()
-            }
-            _ => {
-                let line = self.current_token().line;
-                return Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "method name".to_string(),
-                    line,
-                });
-            }
+        } else {
+            // DOTがない場合: from Parent() 形式 - 透明化システム
+            // 🔥 Pack透明化: Parent名をmethod名として使用
+            parent.clone()
         };
         
         // 引数リストをパース
