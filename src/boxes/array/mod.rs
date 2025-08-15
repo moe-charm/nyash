@@ -4,11 +4,11 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBase};
 use std::any::Any;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::fmt::Display;
 
 pub struct ArrayBox {
-    pub items: RwLock<Vec<Box<dyn NyashBox>>>,
+    pub items: Arc<RwLock<Vec<Box<dyn NyashBox>>>>,  // Arc追加
     base: BoxBase,
 }
 
@@ -16,7 +16,7 @@ impl ArrayBox {
     /// 新しいArrayBoxを作成
     pub fn new() -> Self {
         ArrayBox { 
-            items: RwLock::new(Vec::new()),
+            items: Arc::new(RwLock::new(Vec::new())),  // Arc::new追加
             base: BoxBase::new(),
         }
     }
@@ -24,7 +24,7 @@ impl ArrayBox {
     /// 要素を持つArrayBoxを作成
     pub fn new_with_elements(elements: Vec<Box<dyn NyashBox>>) -> Self {
         ArrayBox { 
-            items: RwLock::new(elements),
+            items: Arc::new(RwLock::new(elements)),    // Arc::new追加
             base: BoxBase::new(),
         }
     }
@@ -238,11 +238,16 @@ impl ArrayBox {
 // Clone implementation for ArrayBox (needed since RwLock doesn't auto-derive Clone)
 impl Clone for ArrayBox {
     fn clone(&self) -> Self {
-        let items = self.items.read().unwrap();
-        let cloned_items: Vec<Box<dyn NyashBox>> = items.iter()
-            .map(|item| item.clone_box())
+        // ディープコピー（独立インスタンス）
+        let items_guard = self.items.read().unwrap();
+        let cloned_items: Vec<Box<dyn NyashBox>> = items_guard.iter()
+            .map(|item| item.clone_box())  // 要素もディープコピー
             .collect();
-        ArrayBox::new_with_elements(cloned_items)
+        
+        ArrayBox {
+            items: Arc::new(RwLock::new(cloned_items)),  // 新しいArc
+            base: BoxBase::new(),
+        }
     }
 }
 
@@ -283,9 +288,13 @@ impl NyashBox for ArrayBox {
         Box::new(self.clone())
     }
     
-    /// 仮実装: clone_boxと同じ（後で修正）
+    /// 🎯 状態共有の核心実装
     fn share_box(&self) -> Box<dyn NyashBox> {
-        self.clone_box()
+        let new_instance = ArrayBox {
+            items: Arc::clone(&self.items),  // Arcクローンで状態共有
+            base: BoxBase::new(),            // 新しいID
+        };
+        Box::new(new_instance)
     }
 
     fn to_string_box(&self) -> StringBox {

@@ -105,7 +105,7 @@ impl NyashInterpreter {
                         name: name.clone(), 
                         span: expression.span() 
                     })?;
-                Ok((*shared_var).clone_box())  // Convert for external interface
+                Ok((*shared_var).share_box())  // 🎯 State-sharing instead of cloning
             }
             
             ASTNode::BinaryOp { operator, left, right, .. } => {
