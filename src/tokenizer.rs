@@ -16,6 +16,7 @@ pub enum TokenType {
     FLOAT(f64),  // 浮動小数点数サポート追加
     TRUE,
     FALSE,
+    NULL,        // null リテラル
     
     // キーワード
     BOX,
@@ -417,6 +418,7 @@ impl NyashTokenizer {
             "or" => TokenType::OR,
             "true" => TokenType::TRUE,
             "false" => TokenType::FALSE,
+            "null" => TokenType::NULL,
             _ => TokenType::IDENTIFIER(identifier),
         }
     }

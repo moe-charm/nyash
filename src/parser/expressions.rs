@@ -357,6 +357,14 @@ impl NyashParser {
                 })
             }
             
+            TokenType::NULL => {
+                self.advance();
+                Ok(ASTNode::Literal {
+                    value: LiteralValue::Null,
+                    span: Span::unknown(),
+                })
+            }
+            
             TokenType::THIS => {
                 self.advance();
                 Ok(ASTNode::This { span: Span::unknown() })
