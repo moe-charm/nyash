@@ -7,7 +7,7 @@ use crate::boxes::buffer::BufferBox;
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
 use std::sync::RwLock;
-use std::io::{Read, Write, Result};
+use std::io::Result;
 
 pub struct NyashStreamBox {
     buffer: RwLock<Vec<u8>>,

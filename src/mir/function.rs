@@ -143,7 +143,7 @@ impl MirFunction {
         
         // Check all blocks are reachable from entry
         let reachable = self.compute_reachable_blocks();
-        for (id, block) in &self.blocks {
+        for (id, _block) in &self.blocks {
             if !reachable.contains(id) {
                 eprintln!("Warning: Block {} is unreachable", id);
             }

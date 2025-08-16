@@ -12,6 +12,3 @@ pub mod functions;
 pub mod static_items;
 
 // Re-export for convenience
-pub use global_vars::*;
-pub use functions::*;
-pub use static_items::*;

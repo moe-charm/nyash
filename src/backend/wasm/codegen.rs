@@ -5,7 +5,7 @@
  * Phase 8.3 PoC2: Reference operations (RefNew/RefGet/RefSet)
  */
 
-use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId};
+use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, ValueId, BasicBlockId};
 use super::{WasmError, MemoryManager, RuntimeImports};
 use std::collections::HashMap;
 
@@ -258,7 +258,7 @@ impl WasmCodegen {
                 ])
             },
             
-            MirInstruction::RefGet { dst, reference, field } => {
+            MirInstruction::RefGet { dst, reference, field: _ } => {
                 // Load field value from Box through reference
                 // reference contains Box pointer, field is the field name
                 // For now, assume all fields are at offset 12 (first field after header)
@@ -272,7 +272,7 @@ impl WasmCodegen {
                 ])
             },
             
-            MirInstruction::RefSet { reference, field, value } => {
+            MirInstruction::RefSet { reference, field: _, value } => {
                 // Store field value to Box through reference  
                 // reference contains Box pointer, field is the field name, value is new value
                 // For now, assume all fields are at offset 12 (first field after header)

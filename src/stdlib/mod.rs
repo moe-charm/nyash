@@ -6,7 +6,7 @@
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
-use crate::boxes::{ArrayBox, ConsoleBox};
+use crate::boxes::ArrayBox;
 use crate::interpreter::RuntimeError;
 use std::collections::HashMap;
 

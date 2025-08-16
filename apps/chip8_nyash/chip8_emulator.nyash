@@ -2,10 +2,10 @@
 // Testing fini propagation and reference lifecycle
 
 // Chip8CPU - Central processing unit with fini propagation
-static box Chip8CPU {
+box Chip8CPU {
     init { memory, graphics, sound, program_counter, registers }
     
-    constructor() {
+    initialize() {
         me.program_counter = 512  // 0x200 = 512 decimal - Standard Chip-8 start address
         me.registers = new ArrayBox() // 16 general registers V0-VF
         
@@ -95,10 +95,10 @@ static box Chip8CPU {
 }
 
 // Chip8Memory - Memory system with CPU reference
-static box Chip8Memory {
+box Chip8Memory {
     init { ram, cpu_ref }  // CPU reference is to prevent cycles
     
-    constructor(cpu_instance) {
+    initialize(cpu_instance) {
         me.ram = new ArrayBox()
         
         // Initialize 4KB of RAM (4096 bytes)
@@ -168,10 +168,10 @@ static box Chip8Memory {
 }
 
 // Chip8Graphics - Display system  
-static box Chip8Graphics {
+box Chip8Graphics {
     init { screen, cpu_ref }
     
-    constructor(cpu_instance) {
+    initialize(cpu_instance) {
         me.screen = new ArrayBox()
         
         // Initialize 64x32 pixel display (2048 pixels)
@@ -218,10 +218,10 @@ static box Chip8Graphics {
 }
 
 // Chip8Sound - Audio system
-static box Chip8Sound {
+box Chip8Sound {
     init { beep_timer, cpu_ref }
     
-    constructor(cpu_instance) {
+    initialize(cpu_instance) {
         me.beep_timer = 0
         me.cpu_ref = cpu_instance
         print("🔊 Sound initialized with CPU reference")
@@ -256,7 +256,7 @@ static box Chip8Sound {
 }
 
 // Main Chip-8 System
-static box Chip8System {
+box Chip8System {
     init { cpu, memory, graphics, sound }
     
     main() {
@@ -265,17 +265,17 @@ static box Chip8System {
         
         // Create CPU first
         me.cpu = new Chip8CPU()
-        me.cpu.constructor()
+        me.cpu.initialize()
         
         // Create subsystems with references to CPU
         me.memory = new Chip8Memory()
-        me.memory.constructor(me.cpu)
+        me.memory.initialize(me.cpu)
         
         me.graphics = new Chip8Graphics()
-        me.graphics.constructor(me.cpu)
+        me.graphics.initialize(me.cpu)
         
         me.sound = new Chip8Sound()
-        me.sound.constructor(me.cpu)
+        me.sound.initialize(me.cpu)
         
         // Link components to CPU for fini propagation
         me.cpu.memory = me.memory

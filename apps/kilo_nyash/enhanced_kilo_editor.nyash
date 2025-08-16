@@ -5,7 +5,7 @@
 box EnhancedTextBuffer {
     init { lines, undo_stack, initial_memory, operation_count }
     
-    EnhancedTextBuffer() {
+    birth() {
         me.lines = new ArrayBox()
         me.undo_stack = new ArrayBox()
         me.operation_count = 0
@@ -187,7 +187,7 @@ box EnhancedTextBuffer {
 box EnhancedKiloEditor {
     init { buffer, cursor_row, cursor_col, filename }
     
-    EnhancedKiloEditor(file_name) {
+    birth(file_name) {
         me.buffer = new EnhancedTextBuffer()
         me.cursor_row = 0
         me.cursor_col = 0

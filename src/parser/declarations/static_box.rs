@@ -8,8 +8,7 @@ use crate::tokenizer::TokenType;
 use crate::ast::{ASTNode, Span};
 use crate::parser::{NyashParser, ParseError};
 use crate::parser::common::ParserUtils;
-use crate::{must_advance, debug_fuel};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 impl NyashParser {
     /// static box宣言をパース: static box Name { ... }

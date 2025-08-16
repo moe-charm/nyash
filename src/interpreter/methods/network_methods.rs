@@ -7,7 +7,7 @@
  */
 
 use super::super::*;
-use crate::box_trait::{NyashBox, StringBox};
+use crate::box_trait::NyashBox;
 use crate::boxes::{HttpClientBox, StreamBox};
 
 impl NyashInterpreter {

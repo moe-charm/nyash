@@ -2,11 +2,11 @@
  * Field access operations
  */
 
-use super::*;
+// Removed super::* import - specific imports below
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, SharedNyashBox};
 use crate::boxes::FutureBox;
-use crate::{InstanceBox};
+use crate::instance::InstanceBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use std::sync::Arc;
 

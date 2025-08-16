@@ -1,0 +1,29 @@
+// テスト: 現代的Nyashコンストラクタ構文確認
+
+box SimpleBox {
+    init { value }
+    
+    birth(val) {
+        me.value = val
+        print("SimpleBox生誕: " + val)
+    }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 コンストラクタ構文テスト")
+        
+        local box1 = new SimpleBox("test")
+        local result = box1.getValue()
+        me.console.log("結果: " + result)
+        
+        return "TEST_COMPLETE"
+    }
+}

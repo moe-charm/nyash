@@ -68,10 +68,10 @@ impl MirVerifier {
     pub fn verify_module(&mut self, module: &MirModule) -> Result<(), Vec<VerificationError>> {
         self.errors.clear();
         
-        for (name, function) in &module.functions {
+        for (_name, function) in &module.functions {
             if let Err(mut func_errors) = self.verify_function(function) {
                 // Add function context to errors
-                for error in &mut func_errors {
+                for _error in &mut func_errors {
                     // Could add function name to error context here
                 }
                 self.errors.extend(func_errors);
@@ -157,10 +157,10 @@ impl MirVerifier {
     fn verify_dominance(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
         // This is a simplified dominance check
         // In a full implementation, we would compute the dominator tree
-        let mut errors = Vec::new();
+        let errors = Vec::new();
         
         // For now, just check that values are defined before use in the same block
-        for (block_id, block) in &function.blocks {
+        for (_block_id, block) in &function.blocks {
             let mut defined_in_block = HashSet::new();
             
             for instruction in block.all_instructions() {

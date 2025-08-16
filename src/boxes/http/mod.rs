@@ -6,7 +6,6 @@
 // reqwestクレートの依存関係のため、一時的に無効化されています。
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
-use crate::boxes::map_box::MapBox;
 use std::any::Any;
 
 #[derive(Debug, Clone)]
@@ -22,27 +21,27 @@ impl HttpClientBox {
     }
     
     /// HTTP GETリクエスト（スタブ）
-    pub fn http_get(&self, url: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn http_get(&self, _url: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         Box::new(StringBox::new("HTTP support is currently disabled"))
     }
     
     /// HTTP POSTリクエスト（スタブ）
-    pub fn post(&self, url: Box<dyn NyashBox>, body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn post(&self, _url: Box<dyn NyashBox>, _body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         Box::new(StringBox::new("HTTP support is currently disabled"))
     }
     
     /// HTTP PUT リクエスト（スタブ）
-    pub fn put(&self, url: Box<dyn NyashBox>, body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn put(&self, _url: Box<dyn NyashBox>, _body: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         Box::new(StringBox::new("HTTP support is currently disabled"))
     }
     
     /// HTTP DELETE リクエスト（スタブ）
-    pub fn delete(&self, url: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn delete(&self, _url: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         Box::new(StringBox::new("HTTP support is currently disabled"))
     }
     
     /// ヘッダー付きHTTPリクエスト（スタブ）
-    pub fn request(&self, method: Box<dyn NyashBox>, url: Box<dyn NyashBox>, options: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn request(&self, _method: Box<dyn NyashBox>, _url: Box<dyn NyashBox>, _options: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         Box::new(StringBox::new("HTTP support is currently disabled"))
     }
 }

@@ -34,6 +34,7 @@ pub trait ParserUtils {
     }
     
     /// N個先のトークンを先読み
+    #[allow(dead_code)]
     fn peek_nth_token(&self, n: usize) -> &TokenType {
         if self.current() + n < self.tokens().len() {
             &self.tokens()[self.current() + n].token_type
@@ -80,6 +81,7 @@ pub trait ParserUtils {
     }
     
     /// 複数のトークンタイプのいずれかにマッチするかチェック
+    #[allow(dead_code)]
     fn match_any_token(&self, token_types: &[TokenType]) -> bool {
         let current_discriminant = std::mem::discriminant(&self.current_token().token_type);
         token_types.iter().any(|tt| {
@@ -94,17 +96,20 @@ pub trait ParserUtils {
     }
     
     /// 現在のトークンが行の終わり（NEWLINE or EOF）かチェック
+    #[allow(dead_code)]
     fn is_line_end(&self) -> bool {
         matches!(self.current_token().token_type, TokenType::NEWLINE | TokenType::EOF)
     }
     
     /// エラー報告用の現在位置情報を取得
+    #[allow(dead_code)]
     fn current_position(&self) -> (usize, usize) {
         let token = self.current_token();
         (token.line, token.column)
     }
     
     /// 現在のトークンからSpanを作成
+    #[allow(dead_code)]
     fn current_span(&self) -> Span {
         let token = self.current_token();
         Span {
@@ -117,6 +122,7 @@ pub trait ParserUtils {
 }
 
 /// Helper function to create unknown span
+#[allow(dead_code)]
 pub fn unknown_span() -> Span {
     Span::unknown()
 }

@@ -13,8 +13,7 @@ pub use codegen::{WasmCodegen, WasmModule};
 pub use memory::{MemoryManager, BoxLayout};
 pub use runtime::RuntimeImports;
 
-use crate::mir::{MirModule, MirFunction};
-use std::collections::HashMap;
+use crate::mir::MirModule;
 
 /// WASM compilation error
 #[derive(Debug)]

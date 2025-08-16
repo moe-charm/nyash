@@ -32,7 +32,7 @@ use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, BoxCore, BoxBas
 use crate::boxes::array::ArrayBox;
 use std::any::Any;
 use std::sync::{Arc, RwLock};  // Arc追加
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 
 pub struct BufferBox {
     data: Arc<RwLock<Vec<u8>>>,  // Arc追加

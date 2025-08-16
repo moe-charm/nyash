@@ -163,7 +163,7 @@ impl NyashParser {
     /// プログラム全体をパース
     fn parse_program(&mut self) -> Result<ASTNode, ParseError> {
         let mut statements = Vec::new();
-        let mut statement_count = 0;
+        let mut _statement_count = 0;
         
         while !self.is_at_end() {
             
@@ -180,7 +180,7 @@ impl NyashParser {
             
             let statement = self.parse_statement()?;
             statements.push(statement);
-            statement_count += 1;
+            _statement_count += 1;
         }
         
         

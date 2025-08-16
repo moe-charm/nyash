@@ -12,7 +12,7 @@ use crate::interpreter::NyashInterpreter;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::any::Any;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 
 /// Boxインスタンス - フィールドとメソッドを持つオブジェクト
 #[derive(Debug, Clone)]
@@ -110,7 +110,7 @@ impl InstanceBox {
             // Since we can't easily convert Box<dyn NyashBox> to Arc<Mutex<dyn NyashBox>>
             // We'll use the from_box method which handles this conversion
             // We need to create a temporary Arc to satisfy the method signature
-            let temp_arc = Arc::new(Mutex::new(VoidBox::new()));
+            let _temp_arc = Arc::new(Mutex::new(VoidBox::new()));
             // Unfortunately, there's a type system limitation here
             // For now, let's return a simple converted value
             let string_rep = legacy_box.to_string_box().value;
@@ -130,8 +130,8 @@ impl InstanceBox {
         if self.fields.lock().unwrap().contains_key(&field_name) {
             if let Ok(legacy_box) = value.to_box() {
                 // Convert Arc<Mutex<dyn NyashBox>> to Box<dyn NyashBox>
-                if let Ok(inner_box) = legacy_box.try_lock() {
-                    self.fields.lock().unwrap().insert(field_name, Arc::from(inner_box.clone_box()));
+                if let Ok(_inner_box) = legacy_box.try_lock() {
+                    self.fields.lock().unwrap().insert(field_name, Arc::from(_inner_box.clone_box()));
                 }
             }
         }
@@ -161,7 +161,7 @@ impl InstanceBox {
     pub fn set_weak_field_from_legacy(&self, field_name: String, legacy_box: Box<dyn NyashBox>) -> Result<(), String> {
         // Convert Box<dyn NyashBox> to Arc<Mutex<dyn NyashBox>> via temporary wrapper
         // We create a temporary holder struct that implements NyashBox
-        use crate::box_trait::StringBox;
+        
         
         // Store the object info in a way we can track
         let object_info = legacy_box.to_string_box().value;
@@ -317,7 +317,7 @@ impl InstanceBox {
         let mut new_methods = (*self.methods).clone();
         
         // 🚨 暗黙オーバーライド禁止：既存メソッドの検査
-        if let Some(existing_method) = new_methods.get(&method_name) {
+        if let Some(_existing_method) = new_methods.get(&method_name) {
             // 新しいメソッドのoverride状態を確認
             let is_override = match &method_ast {
                 crate::ast::ASTNode::FunctionDeclaration { is_override, .. } => *is_override,

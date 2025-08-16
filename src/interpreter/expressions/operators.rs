@@ -2,7 +2,7 @@
  * Binary and unary operator evaluation
  */
 
-use super::*;
+// Removed super::* import - specific imports below
 use crate::ast::{ASTNode, BinaryOperator, UnaryOperator};
 use crate::box_trait::{NyashBox, IntegerBox, StringBox, BoolBox, CompareBox};
 use crate::boxes::FloatBox;

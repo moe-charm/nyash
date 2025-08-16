@@ -1,0 +1,41 @@
+// 🌟 シンプルな自動変換テスト
+// リテラル自動変換の基本動作確認
+
+using nyashstd
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // 🎉 革命的な書きやすさ - リテラル自動変換
+        local name = "World"           // 自動でStringBox変換
+        local count = 5                // 自動でIntegerBox変換 
+        local ready = true             // 自動でBoolBox変換
+        
+        me.console.log("🌟 簡単自動変換テスト:")
+        
+        // ✅ nyashstdメソッドで文字列操作
+        local upperName = string.upper(name)
+        me.console.log("Hello " + upperName + "!")
+        
+        // ✅ 整数操作
+        local countStr = integer.create(count)
+        me.console.log("カウント: " + countStr.toString())
+        
+        // ✅ 真偽値表示
+        local readyStr = bool.create(ready)
+        me.console.log("準備完了: " + readyStr.toString())
+        
+        // ✅ 配列操作
+        local items = array.create()
+        items.push(name)
+        items.push(countStr.toString())
+        
+        me.console.log("配列サイズ: " + items.size().toString())
+        
+        me.console.log("🎉 革命完了: Everything is Box + 使いやすさ!")
+        return "SUCCESS"
+    }
+}

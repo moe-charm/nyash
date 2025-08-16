@@ -9,8 +9,8 @@ use crate::tokenizer::TokenType;
 use crate::ast::{ASTNode, Span};
 use crate::parser::{NyashParser, ParseError};
 use crate::parser::common::ParserUtils;
-use crate::{must_advance, debug_fuel};
-use std::collections::{HashMap, HashSet};
+use crate::must_advance;
+use std::collections::HashMap;
 
 impl NyashParser {
     /// box宣言をパース: box Name { fields... methods... }
@@ -252,14 +252,16 @@ impl NyashParser {
                     
                     let constructor = ASTNode::FunctionDeclaration {
                         name: field_or_method.clone(),
-                        params,
+                        params: params.clone(),
                         body,
                         is_static: false,
                         is_override: false, // コンストラクタは常に非オーバーライド
                         span: Span::unknown(),
                     };
                     
-                    constructors.insert(field_or_method, constructor);
+                    // 🔥 init/引数数 形式でキーを作成（インタープリターと一致させる）
+                    let constructor_key = format!("{}/{}", field_or_method, params.len());
+                    constructors.insert(constructor_key, constructor);
                     continue;
                 }
             }
@@ -312,14 +314,16 @@ impl NyashParser {
                 
                 let constructor = ASTNode::FunctionDeclaration {
                     name: field_or_method.clone(),
-                    params,
+                    params: params.clone(),
                     body,
                     is_static: false,
                     is_override: false, // packは常に非オーバーライド
                     span: Span::unknown(),
                 };
                 
-                constructors.insert(field_or_method, constructor);
+                // 🔥 pack/引数数 形式でキーを作成（インタープリターと一致させる）
+                let constructor_key = format!("{}/{}", field_or_method, params.len());
+                constructors.insert(constructor_key, constructor);
                 continue;
             }
             
@@ -371,74 +375,29 @@ impl NyashParser {
                 
                 let constructor = ASTNode::FunctionDeclaration {
                     name: field_or_method.clone(),
-                    params,
+                    params: params.clone(),
                     body,
                     is_static: false,
                     is_override: false, // birthは常に非オーバーライド
                     span: Span::unknown(),
                 };
                 
-                constructors.insert(field_or_method, constructor);
+                // 🔥 birth/引数数 形式でキーを作成（インタープリターと一致させる）
+                let constructor_key = format!("{}/{}", field_or_method, params.len());
+                constructors.insert(constructor_key, constructor);
                 continue;
             }
             
-            // Box名と同じ名前のコンストラクタをチェック
-            if self.match_token(&TokenType::IDENTIFIER(name.clone())) && self.peek_token() == &TokenType::LPAREN {
-                let constructor_name = name.clone();
-                self.advance(); // consume identifier
-                
-                // コンストラクタは常にオーバーライド不可
-                if is_override {
+            // 🚨 birth()統一システム: Box名コンストラクタ無効化
+            // Box名と同じ名前のコンストラクタは禁止（birth()のみ許可）
+            if let TokenType::IDENTIFIER(id) = &self.current_token().token_type {
+                if id == &name && self.peek_token() == &TokenType::LPAREN {
                     return Err(ParseError::UnexpectedToken {
-                        expected: "method definition, not constructor after override keyword".to_string(),
-                        found: TokenType::IDENTIFIER(constructor_name.clone()),
+                        expected: format!("birth() constructor instead of {}(). Nyash uses birth() for unified constructor syntax.", name),
+                        found: TokenType::IDENTIFIER(name.clone()),
                         line: self.current_token().line,
                     });
                 }
-                // Box名コンストラクタの処理
-                self.advance(); // consume '('
-                
-                let mut params = Vec::new();
-                while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
-                    must_advance!(self, _unused, "Box constructor parameter parsing");
-                    
-                    if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
-                        params.push(param.clone());
-                        self.advance();
-                    }
-                    
-                    if self.match_token(&TokenType::COMMA) {
-                        self.advance();
-                    }
-                }
-                
-                self.consume(TokenType::RPAREN)?;
-                self.consume(TokenType::LBRACE)?;
-                
-                let mut body = Vec::new();
-                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                    must_advance!(self, _unused, "Box constructor body parsing");
-                    
-                    self.skip_newlines();
-                    if self.match_token(&TokenType::RBRACE) {
-                        break;
-                    }
-                    body.push(self.parse_statement()?);
-                }
-                
-                self.consume(TokenType::RBRACE)?;
-                
-                let constructor = ASTNode::FunctionDeclaration {
-                    name: constructor_name.clone(),
-                    params,
-                    body,
-                    is_static: false,
-                    is_override: false,
-                    span: Span::unknown(),
-                };
-                
-                constructors.insert(constructor_name, constructor);
-                continue;
             }
             
             // 通常のフィールド名またはメソッド名を読み取り

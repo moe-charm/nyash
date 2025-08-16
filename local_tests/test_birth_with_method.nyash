@@ -1,0 +1,20 @@
+box LifeBox {
+    init { name }
+    
+    birth(lifeName) {
+        me.name = lifeName
+        print("birth called with: " + lifeName)
+    }
+    
+    getInfo() {
+        return me.name
+    }
+}
+
+static box Main {
+    main() {
+        local obj = new LifeBox("Alice")
+        print("Result: " + obj.getInfo())
+        return "done"
+    }
+}

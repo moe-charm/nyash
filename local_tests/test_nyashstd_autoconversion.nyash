@@ -1,0 +1,39 @@
+// 🌟 nyashstd + 文字列リテラル自動変換テスト
+// Everything is Box哲学 + 使いやすさ向上の実証
+
+using nyashstd
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // 🎉 革命的な書きやすさ - リテラル自動変換 + nyashstd
+        local name = "Alice"           // 自動でStringBox変換
+        local age = 25                 // 自動でIntegerBox変換 
+        local active = true            // 自動でBoolBox変換
+        local score = 98.5             // 自動でFloatBox変換
+        
+        me.console.log("🌟 nyashstd + 自動変換テスト:")
+        
+        // ✅ nyashstdメソッドで文字列操作
+        local upperName = string.upper(name)
+        me.console.log("名前(大文字): " + upperName)
+        
+        // ✅ 数値との組み合わせ
+        local doubleAge = integer.create(age.toString() + "0")  // 250
+        me.console.log("年齢x10: " + doubleAge.toString())
+        
+        // ✅ 配列作成と追加
+        local items = array.create()
+        items.push(name)
+        items.push(age.toString())
+        items.push(active.toString())
+        
+        me.console.log("配列サイズ: " + items.size().toString())
+        
+        me.console.log("🎉 Everything is Box + 使いやすさ両立成功!")
+        return "REVOLUTION_COMPLETE"
+    }
+}

@@ -13,7 +13,6 @@
  */
 
 use crate::box_trait::NyashBox;
-use std::sync::Arc;
 
 // Forward declaration - traits defined in this module are implemented in box_operators
 // We need to ensure trait implementations are loaded when this module is used

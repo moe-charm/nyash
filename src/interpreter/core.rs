@@ -205,6 +205,7 @@ pub struct NyashInterpreter {
     pub(super) current_constructor_context: Option<ConstructorContext>,
     
     /// 🔄 評価スタック - 循環参照検出用
+    #[allow(dead_code)]
     pub(super) evaluation_stack: Vec<usize>,
     
     /// 🔗 Invalidated object IDs for weak reference system
@@ -411,7 +412,7 @@ impl NyashInterpreter {
                 eprintln!("🔍 DEBUG: nyashstd namespace found, checking static boxes...");
                 eprintln!("🔍 DEBUG: Available static boxes: {:?}", nyashstd_namespace.static_boxes.keys().collect::<Vec<_>>());
                 
-                if let Some(static_box) = nyashstd_namespace.static_boxes.get(name) {
+                if let Some(_static_box) = nyashstd_namespace.static_boxes.get(name) {
                     eprintln!("🔍 DEBUG: Found '{}' in nyashstd namespace", name);
                     
                     // BuiltinStaticBoxをInstanceBoxとしてラップ

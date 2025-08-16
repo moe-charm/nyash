@@ -10,6 +10,7 @@ use std::fmt::Write;
 /// MIR printer for debug output and visualization
 pub struct MirPrinter {
     /// Indentation level
+    #[allow(dead_code)]
     indent_level: usize,
     
     /// Whether to show detailed information
@@ -83,7 +84,7 @@ impl MirPrinter {
         }
         
         // Functions
-        for (name, function) in &module.functions {
+        for (_name, function) in &module.functions {
             output.push_str(&self.print_function(function));
             output.push('\n');
         }
@@ -212,7 +213,7 @@ impl MirPrinter {
                 format!("store {} -> {}", value, ptr)
             },
             
-            MirInstruction::Call { dst, func, args, effects } => {
+            MirInstruction::Call { dst, func, args, effects: _ } => {
                 let args_str = args.iter()
                     .map(|v| format!("{}", v))
                     .collect::<Vec<_>>()
@@ -225,7 +226,7 @@ impl MirPrinter {
                 }
             },
             
-            MirInstruction::BoxCall { dst, box_val, method, args, effects } => {
+            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
                 let args_str = args.iter()
                     .map(|v| format!("{}", v))
                     .collect::<Vec<_>>()

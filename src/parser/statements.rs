@@ -70,7 +70,7 @@ impl NyashParser {
                 // 🔥 from構文: from Parent.method(args) または from Parent.constructor(args)
                 self.parse_from_call_statement()
             },
-            TokenType::IDENTIFIER(name) => {
+            TokenType::IDENTIFIER(_name) => {
                 // function宣言 または 代入文 または 関数呼び出し
                 self.parse_assignment_or_function_call()
             }

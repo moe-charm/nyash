@@ -5,7 +5,7 @@
  * arithmetic, logical, and comparison operations between different Box types.
  */
 
-use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox, BoolBox, VoidBox, BoxBase};
+use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox, BoolBox, BoxBase};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 

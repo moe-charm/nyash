@@ -1,27 +1,31 @@
-# 🌟 birth() テスト - 生命をBoxに与える！
+// 🌟 birth()統一システムテスト
+// birth()のみが使用可能で、Box名コンストラクタは禁止されていることを確認
 
-box Life {
+box LifeBox {
     init { name, energy }
     
-    birth(lifeName) {  # 生命を誕生させる
+    birth(lifeName) {
         me.name = lifeName
         me.energy = 100
         print("🌟 " + lifeName + " が誕生しました！")
     }
     
-    introduce() {
-        print("私の名前は " + me.name + " です。エネルギーは " + me.energy + " です。")
-        return me.name
+    getInfo() {
+        return me.name + " (energy: " + me.energy + ")"
     }
 }
 
-print("=== birth() 構文テスト開始 ===")
-
-# birth()コンストラクタでLife作成
-local alice = new Life("Alice")
-alice.introduce()
-
-local bob = new Life("Bob") 
-bob.introduce()
-
-print("=== birth() テスト完了 ===")
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🚀 birth()統一システムテスト開始")
+        
+        // ✅ birth()を使った正しい生成
+        local alice = new LifeBox("Alice")
+        me.console.log("結果: " + alice.getInfo())
+        
+        return "birth()統一システム テスト完了"
+    }
+}

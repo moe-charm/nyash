@@ -55,6 +55,7 @@ impl From<wasmtime::Error> for AotError {
 /// Main AOT backend
 pub struct AotBackend {
     compiler: AotCompiler,
+    #[allow(dead_code)]
     config: AotConfig,
 }
 

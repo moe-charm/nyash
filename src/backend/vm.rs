@@ -129,6 +129,7 @@ pub struct VM {
     /// Program counter within current block
     pc: usize,
     /// Return value from last execution
+    #[allow(dead_code)]
     last_result: Option<VMValue>,
     /// Simple field storage for objects (maps reference -> field -> value)
     object_fields: HashMap<ValueId, HashMap<String, VMValue>>,

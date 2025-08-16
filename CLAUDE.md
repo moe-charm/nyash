@@ -301,9 +301,20 @@ gemini -p "Nyashの実装で困っています..."
 ```
 
 ### 🧪 テスト実行
+
+#### 📁 **テストファイル配置ルール（重要！）**
+- **local_testsフォルダを使用**: 一時的なテストファイルは`local_tests/`に配置
+- **ルートディレクトリには置かない**: プロジェクトルートが散らからないように
+- **実行例**: `./target/debug/nyash local_tests/test_example.nyash`
+
 ```bash
 # 基本機能テスト
 cargo test
+
+# テストファイル作成・実行例
+mkdir -p local_tests
+echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
+./target/debug/nyash local_tests/test_hello.nyash
 
 # 演算子統合テスト
 ./target/debug/nyash test_comprehensive_operators.nyash

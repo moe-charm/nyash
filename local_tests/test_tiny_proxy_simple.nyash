@@ -1,0 +1,6 @@
+// Simple test for Tiny proxy server - just test startup
+print("Testing ProxyServer.main() call...")
+
+// Try to call ProxyServer.main()
+local result = ProxyServer.main()
+print("ProxyServer.main() returned: " + result)

@@ -8,7 +8,7 @@
 
 use super::*;
 use super::BuiltinStdlib;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 impl NyashInterpreter {
     /// 文を実行 - Core statement execution engine

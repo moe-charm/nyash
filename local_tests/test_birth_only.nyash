@@ -1,0 +1,25 @@
+// テスト: birth()のみ使用
+
+box LifeBox {
+    birth(name) {
+        print("🌟 " + name + " が誕生しました！")
+    }
+    
+    greet() {
+        print("こんにちは！")
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 birth()専用テスト")
+        
+        local life = new LifeBox("Alice")
+        life.greet()
+        
+        return "TEST_COMPLETE"
+    }
+}

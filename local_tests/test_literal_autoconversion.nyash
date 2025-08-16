@@ -1,0 +1,33 @@
+// 🌟 文字列リテラル自動変換テスト
+// "Hello" → new StringBox("Hello")
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // ✅ 文字列リテラル自動変換テスト
+        local text = "Hello World"
+        me.console.log("文字列自動変換テスト:")
+        me.console.log(text)
+        
+        // ✅ 整数リテラル自動変換テスト
+        local number = 42
+        me.console.log("整数自動変換テスト:")
+        me.console.log(number)
+        
+        // ✅ 真偽値リテラル自動変換テスト
+        local flag = true
+        me.console.log("真偽値自動変換テスト:")
+        me.console.log(flag)
+        
+        // ✅ 浮動小数点リテラル自動変換テスト
+        local pi = 3.14
+        me.console.log("浮動小数点自動変換テスト:")
+        me.console.log(pi)
+        
+        me.console.log("🎉 リテラル自動変換テスト完了!")
+        return "SUCCESS"
+    }
+}

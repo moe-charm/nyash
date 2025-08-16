@@ -35,7 +35,7 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::sync::RwLock;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 
 /// IntentBox - 構造化メッセージBox (RwLock pattern)
 #[derive(Debug)]

@@ -33,6 +33,7 @@ pub struct MirBuilder {
     variable_map: HashMap<String, ValueId>,
     
     /// Pending phi functions to be inserted
+    #[allow(dead_code)]
     pending_phis: Vec<(BasicBlockId, ValueId, String)>,
 }
 
@@ -53,7 +54,7 @@ impl MirBuilder {
     /// Build a complete MIR module from AST
     pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
         // Create a new module
-        let mut module = MirModule::new("main".to_string());
+        let module = MirModule::new("main".to_string());
         
         // Create a main function to contain the AST
         let main_signature = FunctionSignature {
@@ -715,7 +716,7 @@ impl MirBuilder {
     }
     
     /// Build new expression: new ClassName(arguments)
-    fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+    fn build_new_expression(&mut self, class: String, _arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // For Phase 6.1, we'll create a simple RefNew without processing arguments
         // In a full implementation, arguments would be used for constructor calls
         let dst = self.value_gen.next();

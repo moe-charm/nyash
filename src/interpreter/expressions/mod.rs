@@ -13,14 +13,8 @@ mod access;
 mod builtins;
 
 use super::*;
-use crate::ast::UnaryOperator;
-use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
-use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
-use crate::box_trait::{BoolBox, SharedNyashBox};
 // Direct implementation approach to avoid import issues
-use crate::operator_traits::{DynamicAdd, DynamicSub, DynamicMul, DynamicDiv, OperatorError};
 
-use std::sync::Arc;
 // TODO: Fix NullBox import issue later
 // use crate::NullBox;
 
@@ -155,6 +149,7 @@ impl NyashInterpreter {
     
     
     /// 🔄 循環参照検出: オブジェクトの一意IDを取得
+    #[allow(dead_code)]
     fn get_object_id(&self, node: &ASTNode) -> Option<usize> {
         match node {
             ASTNode::Variable { name, .. } => {
@@ -174,6 +169,7 @@ impl NyashInterpreter {
     }
     
     /// 🔄 文字列のシンプルなハッシュ関数
+    #[allow(dead_code)]
     fn hash_string(&self, s: &str) -> usize {
         let mut hash = 0usize;
         for byte in s.bytes() {

@@ -8,7 +8,7 @@
  */
 
 use super::super::*;
-use crate::box_trait::{NyashBox, StringBox, IntegerBox};
+use crate::box_trait::NyashBox;
 use crate::boxes::{buffer::BufferBox, JSONBox, RegexBox};
 
 impl NyashInterpreter {

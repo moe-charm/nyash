@@ -1,0 +1,16 @@
+// Test birth constructor with parameters
+box TestBox {
+    init { name }
+    
+    birth(file_name) {
+        me.name = file_name
+        print("Birth called with: " + me.name)
+    }
+}
+
+static box Main {
+    main() {
+        local test = new TestBox("hello.txt")
+        return "Test complete"
+    }
+}

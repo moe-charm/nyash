@@ -1,0 +1,20 @@
+// Test static box method calls
+static box TestStatic {
+    init { value }
+    
+    main() {
+        print("Static main called!")
+        return "Success"
+    }
+    
+    greet(name) {
+        return "Hello, " + name + "!"
+    }
+}
+
+// Test direct static method calls
+local result = TestStatic.main()
+print("Result: " + result)
+
+local greeting = TestStatic.greet("Nyash")
+print("Greeting: " + greeting)

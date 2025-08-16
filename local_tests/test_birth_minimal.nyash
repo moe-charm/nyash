@@ -1,0 +1,12 @@
+box LifeBox {
+    birth() {
+        print("birth called")
+    }
+}
+
+static box Main {
+    main() {
+        local obj = new LifeBox()
+        return "done"
+    }
+}

@@ -134,13 +134,13 @@ impl HTTPServerBox {
     }
     
     /// 接続待機開始
-    pub fn listen(&self, backlog: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn listen(&self, _backlog: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let socket_guard = match self.socket.read() {
             Ok(guard) => guard,
             Err(_) => return Box::new(StringBox::new("Error: Failed to acquire socket lock".to_string())),
         };
         
-        if let Some(ref socket) = *socket_guard {
+        if let Some(ref _socket) = *socket_guard {
             // For HTTPServerBox, if we have a socket stored, it means bind() was successful
             // and the socket should be in listening state. TcpListener::bind already puts
             // the socket in listening state, so we just need to verify it's working.

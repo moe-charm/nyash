@@ -84,7 +84,7 @@
  * - メソッド呼び出し時のnullチェックでNullPointerException防止
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase, next_box_id};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 

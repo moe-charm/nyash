@@ -7,6 +7,27 @@
 - Nyashの基本原則は「すべてがBoxである」ということです。
 - 単純な整数から複雑な構造体まで、すべてのデータ型は「Box」オブジェクトの一種です。これにより、純粋で一貫性のあるオブジェクトベースのシステムが実現されています。
 
+### 🌟 **革命的改善: 自動リテラル変換（Phase 9.75h完了）**
+
+Nyashでは、Everything is Box哲学を維持しながら、使いやすさを大幅に向上させる自動リテラル変換機能を提供します：
+
+```nyash
+// 🎉 新しい書き方 - 自動変換で超使いやすい！
+local text = "Hello"       // "Hello" → StringBox::new("Hello") に自動変換
+local name = "Alice"       // "Alice" → StringBox::new("Alice") に自動変換  
+local age = 30             // 30 → IntegerBox::new(30) に自動変換
+local active = true        // true → BoolBox::new(true) に自動変換
+local pi = 3.14159         // 3.14159 → FloatBox::new(3.14159) に自動変換
+
+// ❌ 古い書き方（まだサポート）
+local oldText = new StringBox("Hello")
+local oldAge = new IntegerBox(30)
+
+// ✅ Everything is Box哲学 + 書きやすさ革命達成！
+```
+
+**重要**: この自動変換はパーサーレベルで行われるため、実行時オーバーヘッドはありません。すべてが内部的にBoxとして処理されます。
+
 ## 2. オブジェクトモデルとデリゲーション (Nyash独自の方式)
 
 Nyashは古典的な継承ではなく、デリゲーション（委譲）モデルを使用します。これは非常に重要な違いです。
@@ -113,59 +134,148 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
   }
   ```
 
-## 3. 標準ライブラリアクセス (using & namespace)
+## 3. 標準ライブラリアクセス (using & namespace) 🎉 **Phase 9.75e完了**
 
 Nyashは組み込み標準ライブラリ`nyashstd`と、using文による名前空間インポートをサポートします。
 
-- **using文:** 名前空間をインポートして、短縮記法で標準関数を使用可能にします。
+### **🌟 using nyashstd - 完全実装済み**
+
+**基本構文:**
+```nyash
+using nyashstd
+
+// ✅ 実際に動作確認済みの標準ライブラリ機能
+local result = string.create("Hello World")  // → "Hello World"
+local upper = string.upper(result)           // → "HELLO WORLD"  
+local number = integer.create(42)            // → 42
+local flag = bool.create(true)               // → true
+local arr = array.create()                   // → []
+console.log("✅ using nyashstd test completed!")  // ✅ 出力成功
+```
+
+### **🎯 実装済み名前空間モジュール:**
+
+- **string.*** - 文字列操作
   ```nyash
-  using nyashstd
-  
-  // 文字列操作
-  local result = string.upper("hello")     // "HELLO"
-  local lower = string.lower("WORLD")      // "world"
-  local parts = string.split("a,b,c", ",") // ["a", "b", "c"]
-  
-  // 数学関数
-  local sin_val = math.sin(3.14159)        // 0.0 (approximately)
-  local sqrt_val = math.sqrt(16)           // 4.0
-  
-  // 配列操作
-  local length = array.length([1,2,3])     // 3
-  local item = array.get([1,2,3], 1)       // 2
-  
-  // I/O操作
-  io.print("Hello")                        // コンソール出力
-  io.println("World")                      // 改行付き出力
+  string.create("text")     // 文字列Box作成
+  string.upper("hello")     // "HELLO" - 大文字変換
+  string.lower("WORLD")     // "world" - 小文字変換
   ```
 
-- **名前空間の特徴:**
-  - **Phase 0**: `nyashstd`のみサポート（将来拡張予定）
-  - **IDE補完対応**: `ny`で標準機能の補完が可能
-  - **明示的インポート**: プレリュード（自動インポート）よりIDE補完に適した設計
+- **integer.*** - 整数操作
+  ```nyash
+  integer.create(42)        // 整数Box作成
+  // 将来: integer.add(), integer.multiply() 等
+  ```
+
+- **bool.*** - 真偽値操作
+  ```nyash
+  bool.create(true)         // 真偽値Box作成
+  // 将来: bool.and(), bool.or(), bool.not() 等
+  ```
+
+- **array.*** - 配列操作
+  ```nyash
+  array.create()            // 空配列Box作成
+  // 将来: array.push(), array.length() 等
+  ```
+
+- **console.*** - コンソール出力
+  ```nyash
+  console.log("message")    // コンソール出力
+  // 将来: console.error(), console.debug() 等
+  ```
+
+### **⚡ 自動リテラル変換との連携**
+
+using nyashstdと自動リテラル変換を組み合わせると、極めてシンプルなコードが書けます：
+
+```nyash
+using nyashstd
+
+// 🌟 革命的シンプルさ！
+local name = "Nyash"              // 自動StringBox変換
+local year = 2025                 // 自動IntegerBox変換
+local upper = string.upper(name)  // nyashstd + 自動変換連携
+console.log("🚀 " + upper + " " + year.toString() + " Ready!")
+// 出力: "🚀 NYASH 2025 Ready!" ✅
+```
+
+### **📋 名前空間の特徴:**
+- **✅ Phase 9.75e完了**: `nyashstd`完全実装・動作確認済み
+- **IDE補完対応**: `string.`で標準機能の補完が可能（将来）
+- **明示的インポート**: プレリュード（自動インポート）よりIDE補完に適した設計
+- **拡張可能**: 将来的にユーザー定義名前空間もサポート予定
 
 ## 4. 構文クイックリファレンス
 
+### **🎯 現代的Nyash構文（Phase 9.75h対応）**
+
 - **厳格な変数宣言:** すべての変数は使用前に宣言が必要です。
-  - `local my_var`: ローカル変数を宣言します。
-  - `me.field`: 現在のBoxインスタンスのフィールドにアクセスします。
-  - `outbox product`: 静的関数内で使用され、所有権が呼び出し元に移転される変数を宣言します。
+  ```nyash
+  // 🌟 自動リテラル変換 + 宣言
+  local text = "Hello"        // 自動StringBox変換 + ローカル宣言
+  local count = 42            // 自動IntegerBox変換 + ローカル宣言
+  local flag = true           // 自動BoolBox変換 + ローカル宣言
+  
+  // Box内フィールドアクセス
+  me.field = "value"          // 現在のBoxインスタンスのフィールド
+  
+  // 静的関数内での所有権移転
+  outbox product = new Item() // 所有権が呼び出し元に移転
+  ```
 
 - **統一されたループ:** ループ構文は一種類のみです。
   ```nyash
   loop(condition) {
-      // ...
+      // 条件がtrueの間ループ
   }
   ```
 
 - **プログラムのエントリーポイント:** 実行は`static box Main`の`main`メソッドから開始されます。
   ```nyash
+  using nyashstd  // 標準ライブラリインポート
+  
   static box Main {
+      init { console }  // フィールド宣言
+      
       main() {
-          // プログラムはここから開始
+          me.console = new ConsoleBox()
+          
+          // 🌟 現代的Nyash書法
+          local message = "Hello Nyash 2025!"  // 自動変換
+          console.log(message)                 // 標準ライブラリ使用
       }
   }
   ```
+
+### **🎉 実用的なコード例（最新機能活用）**
+
+```nyash
+using nyashstd
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // 🌟 すべて自動変換 + 標準ライブラリ
+        local name = "Nyash"               // 自動StringBox
+        local version = 2025               // 自動IntegerBox  
+        local isStable = true              // 自動BoolBox
+        local pi = 3.14159                 // 自動FloatBox
+        
+        // string標準ライブラリ活用
+        local upper = string.upper(name)
+        
+        // コンソール出力
+        console.log("🚀 " + upper + " " + version.toString() + " Ready!")
+        console.log("円周率: " + pi.toString())
+        console.log("安定版: " + isStable.toString())
+    }
+}
+```
 
 ## 4. 演算子
 
@@ -368,10 +478,17 @@ nyash --benchmark --iterations 100
 
 ---
 
-**最終更新: 2025年8月15日** - 大幅更新完了
+**最終更新: 2025年8月16日** - **Phase 9.75h完了記念 大幅更新**
+- 🌟 **自動リテラル変換実装**: 文字列・数値・真偽値の自動Box変換（革命的ユーザビリティ向上）
+- ✅ **using nyashstd完全実装**: 標準ライブラリアクセス機能完成
 - ✅ **birth構文追加**: 「生命をBoxに与える」統一コンストラクタ
-- ✅ **using nyashstd追加**: 標準ライブラリアクセス機能
-- ✅ **デリゲーションでのbirth使用法**: `from Parent.birth()`
+- ✅ **現代的構文例追加**: 最新機能を活用した実用コード例
 - ✅ **性能数値修正**: WASM 13.5倍（実行性能）・280倍（コンパイル性能）
 - ✅ **ビルトインBoxリスト最新化**: 実装済み17種類のBox完全リスト
+
+### 🚀 **今回の革命的改善**
+**Everything is Box哲学 + 使いやすさ** を完全両立達成！
+- **Before**: `local text = new StringBox("Hello")`（冗長）
+- **After**: `local text = "Hello"`（シンプル、自動変換）
+- **結果**: パーサーレベル変換により実行時オーバーヘッドゼロ
 

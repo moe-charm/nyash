@@ -56,7 +56,7 @@
  * - 整数演算は自動でFloatBoxに変換される場合あり
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase, next_box_id};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
 use std::fmt::{Debug, Display};
 use std::any::Any;
 

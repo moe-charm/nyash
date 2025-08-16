@@ -7,7 +7,6 @@
 pub mod inprocess;
 
 use crate::boxes::IntentBox;
-use std::sync::Arc;
 
 /// Envelope containing message with metadata
 #[derive(Debug, Clone)]

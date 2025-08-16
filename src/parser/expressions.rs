@@ -11,7 +11,7 @@ use super::{NyashParser, ParseError};
 use super::common::ParserUtils;
 
 // Debug macros are now imported from the parent module via #[macro_export]
-use crate::{must_advance, debug_fuel};
+use crate::must_advance;
 
 impl NyashParser {
     /// 式をパース (演算子優先順位あり)
@@ -216,13 +216,13 @@ impl NyashParser {
                         // メソッド呼び出し: obj.method(args)
                         self.advance(); // consume '('
                         let mut arguments = Vec::new();
-                        let mut arg_count = 0;
+                        let mut _arg_count = 0;
                         
                         while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
                             must_advance!(self, _unused, "method call argument parsing");
                             
                             arguments.push(self.parse_expression()?);
-                            arg_count += 1;
+                            _arg_count += 1;
                             
                             if self.match_token(&TokenType::COMMA) {
                                 self.advance();
@@ -289,8 +289,14 @@ impl NyashParser {
             TokenType::STRING(s) => {
                 let value = s.clone();
                 self.advance();
-                Ok(ASTNode::Literal {
-                    value: LiteralValue::String(value),
+                // 🌟 文字列リテラル自動変換: "text" → new StringBox("text")
+                Ok(ASTNode::New {
+                    class: "StringBox".to_string(),
+                    arguments: vec![ASTNode::Literal {
+                        value: LiteralValue::String(value),
+                        span: Span::unknown(),
+                    }],
+                    type_arguments: vec![],
                     span: Span::unknown(),
                 })
             }
@@ -298,8 +304,14 @@ impl NyashParser {
             TokenType::NUMBER(n) => {
                 let value = *n;
                 self.advance();
-                Ok(ASTNode::Literal {
-                    value: LiteralValue::Integer(value),
+                // 🌟 整数リテラル自動変換: 42 → new IntegerBox(42)
+                Ok(ASTNode::New {
+                    class: "IntegerBox".to_string(),
+                    arguments: vec![ASTNode::Literal {
+                        value: LiteralValue::Integer(value),
+                        span: Span::unknown(),
+                    }],
+                    type_arguments: vec![],
                     span: Span::unknown(),
                 })
             }
@@ -307,24 +319,42 @@ impl NyashParser {
             TokenType::FLOAT(f) => {
                 let value = *f;
                 self.advance();
-                Ok(ASTNode::Literal {
-                    value: LiteralValue::Float(value),
+                // 🌟 浮動小数点リテラル自動変換: 3.14 → new FloatBox(3.14)
+                Ok(ASTNode::New {
+                    class: "FloatBox".to_string(),
+                    arguments: vec![ASTNode::Literal {
+                        value: LiteralValue::Float(value),
+                        span: Span::unknown(),
+                    }],
+                    type_arguments: vec![],
                     span: Span::unknown(),
                 })
             }
             
             TokenType::TRUE => {
                 self.advance();
-                Ok(ASTNode::Literal {
-                    value: LiteralValue::Bool(true),
+                // 🌟 真偽値リテラル自動変換: true → new BoolBox(true)
+                Ok(ASTNode::New {
+                    class: "BoolBox".to_string(),
+                    arguments: vec![ASTNode::Literal {
+                        value: LiteralValue::Bool(true),
+                        span: Span::unknown(),
+                    }],
+                    type_arguments: vec![],
                     span: Span::unknown(),
                 })
             }
             
             TokenType::FALSE => {
                 self.advance();
-                Ok(ASTNode::Literal {
-                    value: LiteralValue::Bool(false),
+                // 🌟 真偽値リテラル自動変換: false → new BoolBox(false)
+                Ok(ASTNode::New {
+                    class: "BoolBox".to_string(),
+                    arguments: vec![ASTNode::Literal {
+                        value: LiteralValue::Bool(false),
+                        span: Span::unknown(),
+                    }],
+                    type_arguments: vec![],
                     span: Span::unknown(),
                 })
             }

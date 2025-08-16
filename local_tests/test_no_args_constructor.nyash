@@ -1,0 +1,24 @@
+// テスト: 引数なしコンストラクタ
+
+box SimpleBox {
+    init { value }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 引数なしコンストラクタテスト")
+        
+        // 引数なしで作成
+        local box1 = new SimpleBox()
+        me.console.log("作成成功")
+        
+        // フィールドに値を設定
+        box1.value = "assigned later"
+        me.console.log("値設定: " + box1.value)
+        
+        return "TEST_COMPLETE"
+    }
+}

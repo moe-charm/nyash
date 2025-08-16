@@ -63,7 +63,7 @@ impl EffectMask {
     // Legacy constants for compatibility
     /// Memory read effects
     pub const READ: Self = Self(Effect::ReadHeap as u16);
-    pub const read: Self = Self::READ; // Lowercase alias for compatibility
+    pub const READ_ALIAS: Self = Self::READ; // Uppercase alias for compatibility
     
     /// Memory write effects (includes read)
     pub const WRITE: Self = Self((Effect::WriteHeap as u16) | (Effect::ReadHeap as u16));

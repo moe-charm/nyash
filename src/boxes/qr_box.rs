@@ -229,6 +229,7 @@ impl QRBox {
     }
 
     /// 簡単なハッシュ関数（デモ用）
+    #[allow(dead_code)]
     fn simple_hash(&self, data: &str) -> u32 {
         let mut hash = 5381u32;
         for byte in data.bytes() {

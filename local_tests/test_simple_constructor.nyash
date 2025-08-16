@@ -1,0 +1,20 @@
+// テスト: シンプルコンストラクタ
+
+box SimpleBox {
+    init { value }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 シンプルコンストラクタテスト")
+        
+        // これでSimpleBoxコンストラクタが自動で呼ばれるはず
+        local box1 = new SimpleBox("test")
+        me.console.log("作成成功: " + box1.value)
+        
+        return "TEST_COMPLETE"
+    }
+}

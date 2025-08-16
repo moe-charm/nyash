@@ -4,12 +4,13 @@
 
 use super::*;
 use crate::ast::ASTNode;
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, SharedNyashBox};
-use crate::boxes::{ArrayBox, FloatBox, ConsoleBox, MapBox, FutureBox};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
+use crate::boxes::{ArrayBox, FloatBox, MapBox, FutureBox};
 use crate::boxes::{BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox};
 use crate::boxes::{HTTPServerBox, HTTPRequestBox, HTTPResponseBox, MathBox, TimeBox, DateTimeBox};
 use crate::boxes::{RandomBox, SoundBox, DebugBox};
-use crate::{InstanceBox, ChannelBox};
+use crate::instance::InstanceBox;
+use crate::channel_box::ChannelBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use crate::interpreter::finalization;
 use std::sync::Arc;
@@ -124,6 +125,95 @@ impl NyashInterpreter {
                 let result = builtin_method(&arg_values)?;
                 eprintln!("✅ nyashstd method completed: {}.{}", name, method);
                 return Ok(result);
+            }
+            
+            // 🔥 ユーザー定義のStatic Boxメソッドチェック
+            if self.is_static_box(name) {
+                eprintln!("🔍 Checking user-defined static box: {}", name);
+                
+                // Static Boxの初期化を確実に実行
+                self.ensure_static_box_initialized(name)?;
+                
+                // GlobalBox.statics.{name} からメソッドを取得してクローン
+                let (method_clone, static_instance_clone) = {
+                    let global_box = self.shared.global_box.lock()
+                        .map_err(|_| RuntimeError::RuntimeFailure {
+                            message: "Failed to acquire global box lock".to_string()
+                        })?;
+                        
+                    let statics_box = global_box.get_field("statics")
+                        .ok_or(RuntimeError::RuntimeFailure {
+                            message: "statics namespace not found in GlobalBox".to_string()
+                        })?;
+                        
+                    let statics_instance = statics_box.as_any()
+                        .downcast_ref::<InstanceBox>()
+                        .ok_or(RuntimeError::TypeError {
+                            message: "statics field is not an InstanceBox".to_string()
+                        })?;
+                        
+                    let static_instance = statics_instance.get_field(name)
+                        .ok_or(RuntimeError::InvalidOperation {
+                            message: format!("Static box '{}' not found in statics namespace", name),
+                        })?;
+                        
+                    let instance = static_instance.as_any()
+                        .downcast_ref::<InstanceBox>()
+                        .ok_or(RuntimeError::TypeError {
+                            message: format!("Static box '{}' is not an InstanceBox", name),
+                        })?;
+                    
+                    // メソッドを探す
+                    if let Some(method_node) = instance.get_method(method) {
+                        (method_node.clone(), static_instance.clone_box())
+                    } else {
+                        return Err(RuntimeError::InvalidOperation {
+                            message: format!("Method '{}' not found in static box '{}'", method, name),
+                        });
+                    }
+                }; // lockはここで解放される
+                
+                eprintln!("🌟 Calling static box method: {}.{}", name, method);
+                
+                // 引数を評価
+                let mut arg_values = Vec::new();
+                for arg in arguments {
+                    arg_values.push(self.execute_expression(arg)?);
+                }
+                
+                // メソッドのパラメータと本体を取得
+                if let ASTNode::FunctionDeclaration { params, body, .. } = &method_clone {
+                    // local変数スタックを保存
+                    let saved_locals = self.save_local_vars();
+                    self.local_vars.clear();
+                    
+                    // meをstatic boxインスタンスに設定
+                    self.declare_local_variable("me", static_instance_clone);
+                    
+                    // 引数をlocal変数として設定
+                    for (param, value) in params.iter().zip(arg_values.iter()) {
+                        self.declare_local_variable(param, value.clone_box());
+                    }
+                    
+                    // メソッドの本体を実行
+                    let mut result = Box::new(VoidBox::new()) as Box<dyn NyashBox>;
+                    for statement in body {
+                        result = self.execute_statement(statement)?;
+                        
+                        // return文チェック
+                        if let super::ControlFlow::Return(return_val) = &self.control_flow {
+                            result = return_val.clone_box();
+                            self.control_flow = super::ControlFlow::None;
+                            break;
+                        }
+                    }
+                    
+                    // local変数スタックを復元
+                    self.restore_local_vars(saved_locals);
+                    
+                    eprintln!("✅ Static box method completed: {}.{}", name, method);
+                    return Ok(result);
+                }
             }
         }
         
@@ -571,7 +661,7 @@ impl NyashInterpreter {
         // 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定
         use crate::box_trait::is_builtin_box;
         
-        let mut is_builtin = is_builtin_box(parent);
+        let is_builtin = is_builtin_box(parent);
         
         // GUI機能が有効な場合はEguiBoxも追加判定
         #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]

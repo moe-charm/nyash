@@ -543,7 +543,7 @@ impl NyashInterpreter {
                 
                 // ノードID
                 let node_id_value = self.execute_expression(&arguments[0])?;
-                let node_id = if let Some(id_str) = node_id_value.as_any().downcast_ref::<StringBox>() {
+                let _node_id = if let Some(id_str) = node_id_value.as_any().downcast_ref::<StringBox>() {
                     id_str.value.clone()
                 } else {
                     return Err(RuntimeError::TypeError {
@@ -553,7 +553,7 @@ impl NyashInterpreter {
                 
                 // トランスポート種類
                 let transport_value = self.execute_expression(&arguments[1])?;
-                let transport_str = if let Some(t_str) = transport_value.as_any().downcast_ref::<StringBox>() {
+                let _transport_str = if let Some(t_str) = transport_value.as_any().downcast_ref::<StringBox>() {
                     t_str.value.clone()
                 } else {
                     return Err(RuntimeError::TypeError {
@@ -713,16 +713,10 @@ impl NyashInterpreter {
         let instance_arc = Arc::from(instance_box);
         
         // コンストラクタを呼び出す
-        // "birth/引数数"、"pack/引数数"、"init/引数数"、"Box名/引数数" の順で試す
+        // 🌟 birth()統一システム: "birth/引数数"のみを許可（Box名コンストラクタ無効化）
         let birth_key = format!("birth/{}", arguments.len());
-        let pack_key = format!("pack/{}", arguments.len());
-        let init_key = format!("init/{}", arguments.len());
-        let box_name_key = format!("{}/{}", actual_class_name, arguments.len());
         
-        if let Some(constructor) = final_box_decl.constructors.get(&birth_key)
-            .or_else(|| final_box_decl.constructors.get(&pack_key))
-            .or_else(|| final_box_decl.constructors.get(&init_key))
-            .or_else(|| final_box_decl.constructors.get(&box_name_key)) {
+        if let Some(constructor) = final_box_decl.constructors.get(&birth_key) {
             // コンストラクタを実行
             self.execute_constructor(&instance_arc, constructor, arguments, &final_box_decl)?;
         } else if !arguments.is_empty() {
@@ -810,6 +804,11 @@ impl NyashInterpreter {
         implements: Vec<String>,
         type_parameters: Vec<String>  // 🔥 ジェネリクス型パラメータ追加
     ) -> Result<(), RuntimeError> {
+        
+        // 🐛 DEBUG: birth()コンストラクタキーの確認
+        if !constructors.is_empty() {
+            eprintln!("🐛 DEBUG: Registering Box '{}' with constructors: {:?}", name, constructors.keys().collect::<Vec<_>>());
+        }
         
         // 🚨 コンストラクタオーバーロード禁止：複数コンストラクタ検出
         if constructors.len() > 1 {
@@ -964,7 +963,7 @@ impl NyashInterpreter {
             // 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定
             use crate::box_trait::is_builtin_box;
             
-            let mut is_builtin = is_builtin_box(parent_name);
+            let is_builtin = is_builtin_box(parent_name);
             
             // GUI機能が有効な場合はEguiBoxも追加判定
             #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
