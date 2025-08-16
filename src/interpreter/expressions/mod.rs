@@ -6,6 +6,12 @@
  * Core philosophy: "Everything is Box" with clean expression evaluation
  */
 
+// Module declarations
+mod operators;
+mod calls;
+mod access;
+mod builtins;
+
 use super::*;
 use crate::ast::UnaryOperator;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
