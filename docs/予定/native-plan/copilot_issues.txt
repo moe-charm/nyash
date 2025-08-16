@@ -1,369 +1,57 @@
-# 🤖 Copilot様 作業予定・課題整理 (Phase 9.5以降 重点フォーカス)
-# Generated: 2025-08-15 (Phase 9.5以降に重点整理)
+# 🤖 Copilot様 作業予定・課題整理 (Phase 9.7以降 実用化重点)
+# Generated: 2025-08-16 (インタープリター併用戦略統合)
 # Purpose: Claude×Copilot協調開発のための情報共有
 
 ================================================================================
-🎯 Phase 9.5以降 開発ロードマップ (実用化重点)
+🎯 Nyash実行モード併用戦略
 ================================================================================
 
-## 🌐 Phase 9.5: HTTPサーバー実用テスト（AOT検証）
+## 🌟 インタープリター＋コンパイラ併用の価値
 
-Summary:
-- AOT実装完了後の複雑アプリケーション検証（並行処理・メモリ管理・実用性能）
-
-Scope/Tasks:
-- tiny-web-server実装（HTTP/1.1対応）
-- 同時接続・早期切断・例外経路テスト
-- AOT環境での真の性能測定
-- 配布可能HTTPサーバーデモ
-
-Acceptance Criteria:
-- `http_server.exe`として配布可能
-- 同時100接続でメモリリークなし
-- fini()システム確実動作（I/Oハンドル解放）
-- AOT性能でベンチマーク測定
-
-Priority: High (Phase 9完了直後)
-Expected Duration: 2週間
-
-### 技術的複雑度
-```nyash
-box HTTPServer {
-    init { clients, requests, handlers }
-    
-    acceptConnections() {
-        loop(me.running) {
-            local client = me.socket.accept()
-            nowait me.handleClient(client)  // 非同期並行処理
-        }
-    }
-    
-    handleClient(client) {
-        local request = client.readRequest()
-        local response = me.processRequest(request)
-        client.sendResponse(response)
-        client.fini()  // 重要: 確実なリソース解放
-    }
-}
+### 実行モード使い分け
+```
+開発時: インタープリター（デバッグ・即時実行・非同期フル対応）
+本番時: インタープリター（Pythonのように実用的）
+        OR
+        WASM/AOT（性能要求時）
+配布時: AOT native（最高性能）
+Web時:  WASM（ブラウザ対応）
 ```
 
-### 検証ポイント
-- **並行処理**: nowait/awaitのAOT実行性能
-- **メモリ管理**: Server→Clients→Requests木構造+weak参照
-- **I/Oリソース**: ソケット・ファイルハンドルの確実解放
-- **実用性能**: リアルHTTP負荷でのAOT効果測定
+### インタープリターの強み
+- **即時実行**: コンパイル不要で高速開発
+- **デバッグ容易**: 実行時情報の完全把握
+- **非同期完全対応**: Rust async/awaitで真の並行処理
+- **動的性**: 実行時評価・REPL対応
+- **十分な性能**: 多くのユースケースで実用的（Pythonが証明）
 
-### 🤖 Copilot協力期待
-- Socket・HTTP実装の効率化
-- 複雑なメモリ管理パターン検証
-- 負荷テスト・ベンチマーク整備
-- AOT最適化効果の定量測定
+================================================================================
+🎯 Phase 9.7以降 開発ロードマップ (実用化重点)
+================================================================================
 
-------------------------------------------------------------
-
-
-## 🌐 Phase 9.6: WASM独自実装 - wasmtime依存完全排除（緊急）
+## ⚡ Phase 9.77: WASM緊急復旧 - BoxCall/UTF-8エラー修正（進行中）
 
 Summary:
-- wasmtime依存による互換性問題・BoxCall未実装を根本解決する独自WASM実装
-- Pure WAT Generation による軽量・高性能・依存関係フリーなWASM生成
+- BoxCall命令実装 ✅ 完了
+- wasmtimeバージョン更新 ✅ 完了  
+- UTF-8エラー修正 🔄 進行中（Issue #110）
 
-Priority: **Critical** (Phase 9.5完了後・9.7より先行)
-Expected Duration: 2週間
-GitHub Issue: 予定
-
-### 🚨 現在のwasmtime依存問題
-**バージョン互換性問題**:
-```toml
-# 現在の問題
-wasmtime = "18.0"    # Nyash内部
-wasmtime = "35.0.0"  # システム環境
-# → 完全に動作不可
-```
-
-**機能不完全問題**:
-- ❌ **BoxCall命令未実装**: `toString()`, `print()`等が全て使用不可
-- ❌ **ExternCall未実装**: ブラウザーAPI連携不可
-- ❌ **WASM出力エラー**: WAT→WASM変換でUTF-8エラー
-
-### 🎯 独自実装アプローチ
-**Pure WAT Generation Engine**:
-```rust
-// wasmtime完全排除の独自実装
-struct PureWatGenerator {
-    // wasmtimeなし！純粋なWAT文字列生成
-}
-
-impl PureWatGenerator {
-    fn generate_box_call(&mut self, method: &str) -> String {
-        match method {
-            "toString" => "(call $box_to_string (local.get $box_ptr))",
-            "print" => "(call $print_function (local.get $value))",
-            // 独自実装でwasmtime不要
-        }
-    }
-    
-    fn generate_extern_call(&mut self, interface: &str, method: &str) -> String {
-        match interface {
-            "console" => format!("(call $env_console_{} ...)", method),
-            "canvas" => format!("(call $env_canvas_{} ...)", method),
-            // ブラウザーAPI直接連携
-        }
-    }
-}
-```
-
-### 📋 実装計画
-
-#### Phase 1: Pure WAT Generator基盤（1週間）
-**🔴 Task 1**: wasmtime排除・純粋WAT生成（3日）
-- `src/backend/wasm/pure_wat.rs`: 独自WAT生成エンジン
-- `wabt` crateのみでWASM生成（wasmtime除去）
-- 軽量・高速・依存関係最小化
-
-**🔴 Task 2**: BoxCall独自実装（2日）
-- `toString()`, `equals()`, `clone()` 基本メソッド
-- `StringBox.length()`, `ArrayBox.push()` 等
-- MIR BoxCall → Pure WAT変換
-
-**🔴 Task 3**: ExternCall独自実装（2日）
-- `console.log()`, `canvas.fillRect()` ブラウザーAPI
-- import declaration自動生成
-- ホスト側JavaScript連携
-
-#### Phase 2: 互換性・性能最適化（1週間）
-**🟡 Task 4**: メモリ管理最適化（3日）
-- Box layouts効率化
-- ガベージコレクション最適化
-- メモリ断片化対策
-
-**🟡 Task 5**: 統合テスト・検証（2日）
-- 既存WASMテスト全通過
-- ブラウザー実行検証
-- 性能ベンチマーク
-
-**🟡 Task 6**: CLI統合・移行（2日）
-- `--compile-wasm` 独自実装切り替え
-- 旧実装との後方互換性
-- エラーメッセージ改善
-
-### 🤖 Copilot協力期待
-- Pure WAT生成ロジックの効率実装
-- BoxCall/ExternCall命令の完全対応
-- wasmtime除去に伴うリファクタリング
-- ブラウザー連携テストの自動化
-
-### 成功基準
-- [ ] **wasmtime依存完全排除**: Cargo.tomlからwasmtime除去
-- [ ] **BoxCall完全実装**: 全基本メソッドがWASM実行
-- [ ] **ExternCall動作**: ブラウザーAPIが正常動作
-- [ ] **互換性問題解決**: バージョン非依存WASM生成
-- [ ] **性能向上**: Pure WAT生成による高速化
-- [ ] **軽量化**: 依存関係削減によるビルドサイズ削減
-
-### 期待される効果
-**技術的効果**:
-- **依存関係激減**: `wasmtime` → 不要
-- **互換性問題解決**: バージョン依存完全排除
-- **性能向上**: 軽量・直接的WASM生成
-- **制御完全掌握**: 独自実装による完全制御
-
-**戦略的効果**:
-- **独立性確保**: 外部ランタイム依存なし
-- **Everything is Box哲学実現**: 純粋な実装
-- **メンテナンス容易**: シンプルなアーキテクチャ
-- **将来拡張性**: 独自最適化の基盤確立
-
-### References
-- docs/予定/wasm/current_issues.md（現在の問題分析）
-- docs/予定/wasm/compatibility_matrix.md（wasmtime互換性問題）
-- 調査結果: WASM二重実装方式の分析結果
-
-------------------------------------------------------------
-
-## 🔭 Phase 9.7: Box FFI/ABI基盤 + MIR ExternCall 追加（RuntimeImports対応）
-
-Summary:
-- 「あらゆるライブラリを箱に」を実現するための共通ABI（Box FFI/ABI）とBID（Box Interface Definition）を策定。
-- MIRに `ExternCall` 命令を導入し、WASM/VM/言語出力で外部Box APIを一貫呼び出しできる基盤を整える。
-- WASM向けには RuntimeImports をABI準拠で拡張（console/canvasの最小セットから）。
-
-Why:
-- nyashがRustに依存せずnyasuをビルドできるように（実行時は純WASM＋ホストimport）。
-- MIR→任意言語出力時に、外部ライブラリ（=Box API）をBID→各言語FFIへ写像しやすくする。
-- Everything is BoxのAPI設計を、外部ライブラリにも一貫適用。
-
-Scope/Tasks:
-- [ ] 1) ABI/BIDの策定（最優先）
-  - 型: i32/i64/f32/f64/string(ptr,len)/bool/boxref/array、null/void
-  - 呼出規約: 名前解決（namespace.box.method）、エラー/例外、同期/非同期
-  - 効果: pure/mut/io/control（MIR効果と整合）
-  - 成果物: `docs/予定/native-plan/box_ffi_abi.md`、BIDサンプル（console/canvas）
-- [ ] 2) MIR拡張: `ExternCall`
-  - 命令: `ExternCall(dst, iface_name, method_name, args[])`
-  - Verifier: BIDと型/効果の整合、最適化（pure再順序化/ mut依存）維持
-  - Lowering: 既存のBoxCall/Field opsとの橋渡し
-- [ ] 3) WASM RuntimeImports（ABI準拠）
-  - import群: `env.console.log(ptr,len)`, `env.canvas.fillRect(...)`, `env.canvas.fillText(...)`
-  - Host(JS): importObject実装（DOM解決→Canvas/Console呼び出し）
-- [ ] 4) コード生成: ExternCall→バックエンド写像
-  - WASM: import呼び出し（線形メモリから文字列復元）
-  - VM: ホスト関数テーブルでスタブ実装（最小はログ/ダミー）
-  - 言語出力: TypeScript/Python/Rust等へのFFI雛形（後続）
-- [ ] 5) E2Eデモ
-  - Nyash→MIR(ExternCall)→WASM→ブラウザ（console/canvas）
-
-Acceptance Criteria:
-- `docs/予定/native-plan/box_ffi_abi.md` 初版＋BIDサンプル（console/canvas）が存在
-- MIRに `ExternCall` が追加され、WASMコード生成で import 呼び出しが生成される
-- ブラウザで「直接WASM出力」→Canvas描画/Console出力が成功
-- 既存PlaygroundAPIとABI経由APIが概ね一致
-
-Timeline:
-- Week 1: ABI/BID仕様初版＋MIR `ExternCall` 雛形
-- Week 2: WASM RuntimeImports最小（console/canvas）＋E2Eデモ
-- Week 3: Verifier効果整合＋WASMコード生成の安定化
-- Week 4+: 他ライブラリBID追加、言語FFI生成の着手
-
-References:
-- docs/説明書/reference/box-design/ffi-abi-specification.md
-
-------------------------------------------------------------
-
-## 🔧 Phase 9.75: Box設計根本革命 - Arc<Mutex>責務一元化（緊急）
-
-Summary:
-- SocketBoxで発覚した「責務の二重化」問題を全Box型で根本解決
-- Box内部のArc<Mutex>を除去し、インタープリターが一元管理
-- Everything is Box哲学を守りながらシンプルで正しい設計へ
-
-Priority: Critical (Phase 9.7完了直後・9.8より優先)
-Expected Duration: 2-3週間
-GitHub Issue: #80
-
-### 問題分析
-**現状**: 15個のBox型が二重ロック構造
-```rust
-// 🚨 問題構造
-Box内部:          Arc<Mutex<データ>>      // 内部ロック
-インタープリター:  Arc<Mutex<Box>>        // 外部ロック
-→ デッドロック・状態不整合・デバッグ困難
-```
-
-### 技術的アプローチ
-**新設計**: 純粋データコンテナ + ロック責務一元化
-```rust
-// ✅ 解決策
-pub struct PlainSocketBox {
-    pub listener: Option<TcpListener>,
-    pub is_server: bool,  // Arc<Mutex>完全除去！
-}
-// インタープリターがArc<Mutex<dyn NyashBox>>で一元管理
-```
-
-### 実装計画
-- [ ] Phase A: 設計ガイドライン策定（3日）
-  - Box実装パターンドキュメント作成
-  - 内部Arc<Mutex>禁止ルール明文化
-  - 新Box実装時のテンプレート作成
-
-- [ ] Phase B: 最優先Box修正（1週間）
-  - SocketBox/HTTPServerBox（最も問題顕著）
-  - テストスイート作成（状態保持・並行アクセス）
-  - パフォーマンス計測
-
-- [ ] Phase C: ステートフルBox修正（1週間）
-  - ArrayBox, MapBox, FileBox
-  - P2PBox, IntentBox, StreamBox
-  - weak参照との整合性確認
-
-- [ ] Phase D: 残りのBox統一（3日）
-  - その他9個のBox型
-  - 全体統合テスト
-  - ベンチマーク確認
-
-### 🤖 Copilot協力期待
-- Arc<Mutex>除去の機械的リファクタリング
-- Clone実装の適切な修正
-- テストケース自動生成
-- 並行アクセステスト実装
-
-### 成功基準
-- [ ] 全Box型で内部Arc<Mutex>ゼロ
-- [ ] SocketBox状態保持テスト成功
-- [ ] デッドロック完全排除
-- [ ] パフォーマンス向上（ロック競合削減）
-- [ ] デバッグ容易性向上
-
-### 期待される効果
-- デッドロック・状態不整合の根絶
-- パフォーマンス向上（二重ロック除去）
-- コード可読性・保守性の大幅改善
-- 新Box実装時の混乱防止
-
-References:
-- GitHub Issue #80（SocketBox状態保持問題）
-- CURRENT_TASK.md（Gemini先生の根本原因分析）
-
-------------------------------------------------------------
-
-## ⚡ Phase 9.77: WASM緊急復旧 - BoxCall/wasmtime/基本機能復活（最優先）
-
-Summary:
-- BoxCall命令未実装により基本的なBox操作（toString, print等）がWASMで全停止している緊急事態を解決
-- wasmtimeバージョン互換性問題によるAOT実行失敗を修正
-- WASM出力エラーを根本解決し、実用的なWASM実行環境を復旧
-
-Priority: **Critical** (Phase 9.75完了直後・全Phase前提条件)
+Priority: **Critical** 
 Expected Duration: 1-2週間
-GitHub Issue: 予定
+GitHub Issue: #110 (Phase 9.77a)
 
-### 🚨 緊急問題の現状
-**基本機能全停止**:
-```nyash
-// ❌ 現在WASMで実行不可
-local result = value.toString()  // BoxCall未実装
-print("Hello")                   // 基本出力不可
-```
+### 進捗状況
+- ✅ **Task 1.1**: BoxCall実装（toString, print, equals, clone, log）
+- ✅ **Task 1.2**: wasmtime 18.0 → 35.0.0更新、RuntimeImports追加
+- 🔄 **Task 1.3**: UTF-8エラー原因特定（エラーメッセージ発生元不明）
 
-**エラー例**:
-```bash
-❌ WASM compilation error: Unsupported instruction: BoxCall
-❌ Module was compiled with incompatible Wasmtime version '18.0.4' vs '35.0.0'
-❌ Generated WASM is not valid UTF-8
-```
-
-### 📋 実装計画（段階的復旧）
-
-#### Phase 1: 基本機能復旧（1週間）
-- [ ] **BoxCall命令実装** - toString(), print()等の基本メソッド
-- [ ] **wasmtimeバージョン統一** - Cargo.toml更新、互換性確保
-- [ ] **WASM出力エラー修正** - WAT→WASM変換修正
-
-#### Phase 2: 機能拡充（1週間）
-- [ ] **RuntimeImports完全実装** - Box メモリ管理、型変換
-- [ ] **メモリ管理改善** - レイアウト最適化、ガベージコレクション
-
-### 🤖 Copilot協力期待
-- BoxCall→WASM命令変換の効率実装
-- wasmtimeバージョン管理の自動化
-- WASM出力パイプライン修正
-- メモリ管理最適化
-
-### 成功基準
-- [ ] **基本動作復旧**: toString(), print()がWASMで動作
-- [ ] **AOT実行成功**: .cwasmファイルが正常実行
-- [ ] **WASM出力成功**: バイナリエラーなし
-- [ ] **互換性確保**: バージョン依存問題解決
-
-### 期待される効果
-- **即時価値**: NyashがWASMで実用可能に復帰
-- **開発継続**: 他Phase実装の前提条件満足
-- **ユーザー満足**: 基本機能の確実な動作保証
+### 🤖 Copilot協力中
+- エラーメッセージ「Generated WASM is not valid UTF-8」の発生元調査
+- WAT→WASM変換パイプラインのデバッグ
 
 References:
-- docs/予定/wasm/current_issues.md（現在の問題詳細分析）
-- docs/予定/native-plan/issues/phase_9_77_wasm_emergency.md（詳細実装計画）
+- docs/予定/native-plan/issues/phase_9_77_wasm_emergency.md
+- docs/予定/native-plan/issues/phase_9_77a_utf8_error_fix.md
 
 ------------------------------------------------------------
 
@@ -434,58 +122,61 @@ Acceptance:
 ## 🏆 Phase 10: LLVM Direct AOT（最高性能実現）
 
 Summary:
-- MIR→LLVM IR直接変換による最高性能AOT実現（Cranelift JITスキップ）
-- ExternCallはprintf等へ写像し、段階的にネイティブ最適化を実現
+- MIR→LLVM IR直接変換による最高性能AOT実現
+- インタープリターとの併用で最適な開発・実行体験を提供
+- 非同期処理フルサポート（async/await のネイティブ実装）
 
-Priority: Medium (Phase 9.5完了後)
+Priority: High (Phase 9.77完了後)
 Expected Duration: 4-6ヶ月
 
-### 🏗️ Phase 10.0: LLVM Backend Skeleton（基盤実装）
+### 🌟 インタープリター併用戦略
+```
+開発・デバッグ: インタープリター（即時実行・完全な情報）
+軽量タスク: インタープリター（Pythonライク）
+性能要求時: LLVM AOT（1000倍高速化）
+Web配布: WASM（ブラウザ対応）
+```
+
+### 🏗️ Phase 10.1: 同期版LLVM実装（3ヶ月）
 
 Implementation Steps:
-1) `src/backend/llvm/` 追加（mod.rs/lower.rs/passes.rs/build.rs）
-2) 依存: Cargoへ`llvm-sys`（feature化）、ビルド要件整備
-3) `LLVMBackend::compile_mir`（lower→passes→emit object）
-4) `main`: i32()、voidは0に正規化
-5) 型写像: i32/i64/f32/f64/bool, 文字列は(i8*,i32)、Box参照はi32 or i8*
-6) 命令: Const/BinOp/Compare/Branch/Jump/Phi/Call/Return ほか基本
-7) ExternCall: console.log(ptr,len)→printf("%.*s",len,ptr)、canvasはnoop/ログ
-8) 文字列定数: @.str + getelementptr
-9) 出力: TargetMachineで.o生成、`clang app.o -o app`
-10) CLI: `--backend llvm --emit obj`
-11) 最小テスト: 四則/分岐/ループ/ExternCall出力
+1) `src/backend/llvm/` 基盤構築
+2) MIR→LLVM IR基本変換
+3) Box操作の最適化（エスケープ解析）
+4) ベンチマーク: 100倍目標
+
+### 🌐 Phase 10.2: 非同期拡張（2ヶ月）
+
+非同期サポート戦略:
+- **async/await ネイティブ実装**: Rust風の効率的な非同期
+- **軽量ランタイム**: 独自Future実装
+- **インタープリター互換**: 同じ非同期セマンティクス
+
+```rust
+// Phase 10.2: 非同期LLVM実装
+FutureNew → LLVM coroutine intrinsics
+Await → LLVM suspend/resume points
+FutureSet → completion notification
+```
 
 ### 技術アプローチ
 🤖 Copilot協力期待:
 - **LLVM統合**: MIR→LLVM IR変換基盤
+- **非同期実装**: coroutine/suspend points
 - **エスケープ解析**: Box→スタック値最適化
 - **型特殊化**: コンパイル時型推論・特殊化
-- **LTO統合**: Link-time optimization
-- **PGO対応**: Profile-guided optimization
-
-### Everything is Box最適化戦略
-- **Box回避**: スタック割り当て・直接レジスタ配置
-- **NaN Boxing**: 効率的な値表現
-- **型推論**: コンパイル時型特定・最適化
-- **メモリレイアウト**: 連続配置・キャッシュ効率
 
 ### パフォーマンス目標
-- **実行性能**: 1000倍高速化（現在13.5倍 → 目標13500倍相当）
+- **同期処理**: 100-1000倍高速化
+- **非同期処理**: Tokio並みの効率性
 - **メモリ効率**: Box割当数80%削減
 - **起動時間**: ネイティブレベル（<10ms）
-- **競合比較**: C/C++/Rust並みの性能
 
 ### Acceptance Criteria
-- 1000倍高速化達成
+- インタープリターとの完全な互換性
+- 非同期処理の効率的実装
+- 1000倍高速化達成（同期処理）
 - プロダクションレベル最適化
-- 他言語との競争力確立
-
-### Cranelift JIT位置づけ変更
-**Phase 12以降の将来オプション**:
-- JIT開発体験向上（nyashプログラマー向け）
-- REPL・インタラクティブ実行
-- プロファイル駆動最適化
-- 言語完成後の付加価値機能
 
 References:
 - docs/予定/native-plan/issues/phase_10_x_llvm_backend_skeleton.md
@@ -624,42 +315,39 @@ Acceptance Criteria:
 💡 Copilot様への具体的お願い・相談事項
 ================================================================================
 
-## 🔧 Phase 8.3完了・次期フェーズ準備
+## 🔧 Phase 9.77 緊急対応
 
-### MIRダイエット準備
-❓ 現在35命令→20命令削減のintrinsic戦略実装は？
-❓ ChatGPT5推奨の3-point setアプローチ最適化は？
-❓ Portability Contract v0での互換性確保方法は？
+### UTF-8エラー調査（Issue #110）
+❓ エラーメッセージ「Generated WASM is not valid UTF-8」の発生元は？
+❓ wabt::wat2wasm以外でエラーが出ている可能性は？
+❓ runner.rs/main.rsのエラー処理フローは？
 
-### Phase 9 AOT WASM実装（最優先）
-❓ wasmtime compileの実用配備方法は？
-❓ .cwasm生成・単一バイナリ梱包戦略は？
-❓ 互換性キー管理（CPU機能・wasmtimeバージョン）は？
-❓ 起動時間最適化の実装アプローチは？
-
-### Phase 9.5 HTTPサーバー検証
-❓ Socket・HTTP実装の効率的な設計は？
-❓ 並行処理でのメモリ管理パターンは？
-❓ AOT環境でのI/Oリソース管理は？
-❓ 負荷テスト・ベンチマーク設計は？
-
-### Phase 10 LLVM Direct AOT
-❓ MIR→LLVM IR変換の効率実装は？
-❓ エスケープ解析・ボックス化解除の実装戦略は？
-❓ LTO・PGO統合の技術的ハードルは？
+### WASM基本機能復旧
+❓ 最小テストケース（`local result = 42`）のデバッグ方法は？
+❓ WAT生成パイプラインの問題箇所特定は？
+❓ 効率的なデバッグ戦略は？
 
 ## 🚀 長期戦略相談
+
+### インタープリター併用戦略
+❓ 開発時と本番時の最適な使い分け方法は？
+❓ インタープリターとコンパイラの互換性保証は？
+❓ Pythonライクな実用性の実現方法は？
+
+### Phase 10 LLVM Direct AOT
+❓ 非同期処理のネイティブ実装戦略は？
+❓ LLVM coroutine intrinsicsの活用方法は？
+❓ インタープリターとの非同期セマンティクス統一は？
 
 ### Everything is Box最適化
 ❓ Box操作の根本的高速化戦略は？
 ❓ エスケープ解析によるスタック化判定は？
 ❓ 型特殊化・ボックス化解除の実装戦略は？
 
-### ベンチマーク拡張
-❓ AOT性能測定の追加指標は？
-❓ 1000倍高速化実現のマイルストーン設計は？
-❓ 他言語(JavaScript V8, Rust, C++)との競争力分析は？
-❓ HTTPサーバー負荷テストの効率設計は？
+### ベンチマーク戦略
+❓ インタープリター/VM/WASM/LLVMの性能比較方法は？
+❓ 非同期処理のベンチマーク設計は？
+❓ 実用アプリケーションでの測定指標は？
 
 ================================================================================
 📊 進捗管理・コミュニケーション
@@ -688,25 +376,26 @@ Acceptance Criteria:
 🎯 期待される成果・インパクト
 ================================================================================
 
-## Phase 8完了時の成果 (達成済み)
+## Phase 8-9完了時の成果 (達成済み)
 🏆 RefNew/RefGet/RefSet WASM完全動作
 🏆 Box操作ベンチマーク追加
 🏆 メモリレイアウト最適化効果測定
-🏆 オブジェクト指向プログラミングWASM対応
 🏆 26命令MIR階層化完了（Phase 8.5）
 🏆 VM性能改善完了（Phase 8.6）
+🏆 警告削減100%達成（Phase 9.75j）
+🏆 BoxCall実装・wasmtime更新（Phase 9.77）
 
-## Phase 9-10実用優先展望
-🚀 **AOT WASM実装** (Phase 9 - 2-3週間): 配布可能実行ファイル
-🚀 **HTTPサーバー検証** (Phase 9.5 - 2週間): 実用アプリデモ
-🚀 **LLVM Direct AOT** (Phase 10 - 4-6ヶ月): 1000倍高速化
-🚀 **実用競争力確立**: 他言語との差別化完成
+## Phase 10以降の展望
+🚀 **WASM復旧完了** (Phase 9.77): 基本機能の完全動作
+🚀 **LLVM Direct AOT** (Phase 10): 100-1000倍高速化
+🚀 **非同期ネイティブ実装** (Phase 10.2): async/await完全対応
+🚀 **インタープリター併用** : 開発・本番両対応
 
 ## 言語としての完成度向上
 💎 Everything is Box哲学のネイティブ実現
-💎 開発効率性と実行性能の両立
-💎 4つの実行形態対応（Interpreter/VM/WASM/AOT）+ 将来JIT
-💎 現代的言語としての地位確立
+💎 インタープリター＋コンパイラの最適併用
+💎 4つの実行形態対応（Interpreter/VM/WASM/AOT）
+💎 Pythonライクな実用性＋C++並みの性能
 
 ================================================================================
 📞 連絡・相談方法
@@ -723,13 +412,14 @@ Acceptance Criteria:
 一緒にNyashを最高の言語にしていきましょう🚀
 
 ================================================================================
-最終更新: 2025-08-14 (実用優先戦略・Phase 9-10再設計完了)
-作成者: Claude (AI大会議結果 + 実用優先戦略統合)
+最終更新: 2025-08-16 (インタープリター併用戦略統合・Phase整理)
+作成者: Claude (インタープリター価値認識 + Phase重複削除)
 
 🎯 重要な変更点:
-- Phase 9: JIT planning → AOT WASM実装（最優先）
-- Phase 9.5: HTTPサーバー実用テスト追加（AOT検証）
-- Phase 10: AOT exploration → LLVM Direct AOT（最高性能）
-- Cranelift JIT: Phase 12以降の将来オプションに変更
-- HTTPサーバー: kilo後のタイミングで実用性能検証に特化
+- Phase 9.5: 削除（完了済み）
+- Phase 9.6/9.7: 削除（Phase 9.77と重複）
+- Phase 9.75: 削除（完了済み）
+- Phase 9.77: 進行中（UTF-8エラー修正中、Issue #110）
+- Phase 10: インタープリター併用戦略・非同期ネイティブ実装追加
+- インタープリター: 開発だけでなく本番でも実用的（Pythonライク）
 ================================================================================
