@@ -93,7 +93,6 @@ impl NyashInterpreter {
                         message: format!("Invalid static function declaration for {}.{}", name, method),
                     });
                 }
-                }
             }
         }
         
