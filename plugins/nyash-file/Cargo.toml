@@ -1,0 +1,18 @@
+[package]
+name = "nyash-file"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "nyash_file"
+crate-type = ["cdylib"]  # 動的ライブラリとして生成
+
+[dependencies]
+# C FFI用
+libc = "0.2"
+
+# Nyashの基本的な型定義が必要になるかも（後で検討）
+# nyash-core = { path = "../.." }
+
+[features]
+default = []
