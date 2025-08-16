@@ -1,0 +1,14 @@
+// Basic WASM test with ConsoleBox
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("Hello from Nyash WASM!")
+        
+        local result = 42
+        me.console.log("The answer is: " + result.toString())
+        
+        return "WASM test complete"
+    }
+}

@@ -1,0 +1,7 @@
+// Console WASM test - ExternCall経由でconsole操作
+console.log("Hello from Nyash WASM!")
+
+// 複数の値をテスト
+local result = 42
+console.log("The answer is:")
+console.log(result.toString())

@@ -361,8 +361,72 @@ if let TokenType::IDENTIFIER(id) = &self.current_token().token_type {
 - パフォーマンステスト基盤
 
 ---
-**現在状況**: ✅ **Phase 9.75i完了 - 全アプリ動作確認!** 🎉
-**最終更新**: 2025-08-16 19:15
+**現在状況**: 🔬 **WASM Canvas機能研究中**
+**最終更新**: 2025-08-16 22:30
+
+## 🌐 **WASM研究メモ**
+
+### **実行フロー: MIR → WAT → WASM**
+```
+Nyashソースコード
+    ↓ (Parser/AST)
+MIR (中間表現)
+    ↓ (WasmCodegen)
+WAT (WebAssembly Text形式)
+    ↓ (wabt::wat2wasm)
+WASM (バイナリ形式)
+```
+
+### **現在の実装状況**
+- ✅ **console.log()**: ConsoleBox経由で動作
+- ❌ **canvas操作**: ExternCall定義はあるが、canvasオブジェクトが未実装
+- ✅ **WAT生成**: UTF-8エラー修正済み、正常に出力
+
+### **Canvas実装の選択肢**
+
+#### **Option 1: CanvasBox実装（推奨）**
+```nyash
+// ConsoleBoxと同様のアプローチ
+local canvas = new CanvasBox("canvas_id", 800, 600)
+canvas.fillRect(10, 10, 100, 50, "#FF0000")
+canvas.fillText("Hello", 50, 100, "#000000", "20px Arial")
+```
+
+**メリット**:
+- Everything is Box哲学に合致
+- 既存のBoxパターンと一貫性
+- 型安全性の確保
+
+#### **Option 2: グローバルcanvasオブジェクト**
+```nyash
+// MIRビルダーで特別扱い
+canvas.fillRect(10, 10, 100, 50, 255, 0, 0, 255)
+```
+
+**メリット**: 
+- JavaScriptのCanvas APIに近い
+- 実装が簡単
+
+**デメリット**:
+- Everything is Box哲学から逸脱
+- 特殊ケースの増加
+
+#### **Option 3: 標準ライブラリ拡張**
+```nyash
+using nyashstd
+
+canvas.create("myCanvas", 800, 600)
+canvas.fillRect(10, 10, 100, 50)
+```
+
+**メリット**:
+- 名前空間で整理
+- 拡張性が高い
+
+### **次のステップ**
+1. CanvasBox実装の設計
+2. ExternCall統合
+3. WASMブラウザー実行環境の構築
 
 ## 🔧 **Parser リファクタリング完了報告**
 

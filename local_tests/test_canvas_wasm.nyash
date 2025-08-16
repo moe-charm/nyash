@@ -1,0 +1,14 @@
+// Canvas WASM test - ExternCall経由でCanvas操作
+local result = 42
+
+// 赤い矩形を描画
+canvas.fillRect(10, 10, 100, 50, 255, 0, 0, 255)
+
+// 青い矩形を描画
+canvas.fillRect(120, 10, 100, 50, 0, 0, 255, 255)
+
+// 黒いテキストを描画
+canvas.fillText("Hello Nyash!", 10, 100, 0, 0, 0, 255, 24, "Arial")
+
+// コンソールに出力
+console.log("Canvas drawing complete!")
