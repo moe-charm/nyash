@@ -8,38 +8,10 @@
 use crate::tokenizer::TokenType;
 use crate::ast::{ASTNode, BinaryOperator, LiteralValue, UnaryOperator, Span};
 use super::{NyashParser, ParseError};
+use super::common::ParserUtils;
 
-// ===== 🔥 Debug Macros (copied from parent module) =====
-
-/// Infinite loop detection macro - must be called in every loop that advances tokens
-/// Prevents parser from hanging due to token consumption bugs
-/// Uses parser's debug_fuel field for centralized fuel management
-macro_rules! must_advance {
-    ($parser:expr, $fuel:expr, $location:literal) => {
-        // デバッグ燃料がSomeの場合のみ制限チェック
-        if let Some(ref mut limit) = $parser.debug_fuel {
-            if *limit == 0 {
-                eprintln!("🚨 PARSER INFINITE LOOP DETECTED at {}", $location);
-                eprintln!("🔍 Current token: {:?} at line {}", $parser.current_token().token_type, $parser.current_token().line);
-                eprintln!("🔍 Parser position: {}/{}", $parser.current, $parser.tokens.len());
-                return Err(ParseError::InfiniteLoop { 
-                    location: $location.to_string(),
-                    token: $parser.current_token().token_type.clone(),
-                    line: $parser.current_token().line,
-                });
-            }
-            *limit -= 1;
-        }
-        // None の場合は無制限なのでチェックしない
-    };
-}
-
-/// Initialize debug fuel for loop monitoring
-macro_rules! debug_fuel {
-    () => {
-        100_000 // Default: 100k iterations should be enough for any reasonable program
-    };
-}
+// Debug macros are now imported from the parent module via #[macro_export]
+use crate::{must_advance, debug_fuel};
 
 impl NyashParser {
     /// 式をパース (演算子優先順位あり)

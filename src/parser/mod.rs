@@ -12,10 +12,13 @@
  */
 
 // サブモジュール宣言
+mod common;
 mod expressions;
 mod statements;
 // mod declarations;
 // mod errors;
+
+use common::ParserUtils;
 
 use crate::tokenizer::{Token, TokenType, TokenizeError};
 use crate::ast::{ASTNode, Span};
@@ -27,6 +30,7 @@ use thiserror::Error;
 /// Infinite loop detection macro - must be called in every loop that advances tokens
 /// Prevents parser from hanging due to token consumption bugs
 /// Uses parser's debug_fuel field for centralized fuel management
+#[macro_export]
 macro_rules! must_advance {
     ($parser:expr, $fuel:expr, $location:literal) => {
         // デバッグ燃料がSomeの場合のみ制限チェック
@@ -35,7 +39,7 @@ macro_rules! must_advance {
                 eprintln!("🚨 PARSER INFINITE LOOP DETECTED at {}", $location);
                 eprintln!("🔍 Current token: {:?} at line {}", $parser.current_token().token_type, $parser.current_token().line);
                 eprintln!("🔍 Parser position: {}/{}", $parser.current, $parser.tokens.len());
-                return Err(ParseError::InfiniteLoop { 
+                return Err($crate::parser::ParseError::InfiniteLoop { 
                     location: $location.to_string(),
                     token: $parser.current_token().token_type.clone(),
                     line: $parser.current_token().line,
@@ -48,6 +52,7 @@ macro_rules! must_advance {
 }
 
 /// Initialize debug fuel for loop monitoring
+#[macro_export]
 macro_rules! debug_fuel {
     () => {
         100_000 // Default: 100k iterations should be enough for any reasonable program
@@ -92,12 +97,27 @@ pub enum ParseError {
 
 /// Nyashパーサー - トークン列をASTに変換
 pub struct NyashParser {
-    tokens: Vec<Token>,
-    current: usize,
+    pub(super) tokens: Vec<Token>,
+    pub(super) current: usize,
     /// 🔥 Static box依存関係追跡（循環依存検出用）
-    static_box_dependencies: std::collections::HashMap<String, std::collections::HashSet<String>>,
+    pub(super) static_box_dependencies: std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// 🔥 デバッグ燃料：無限ループ検出用制限値 (None = 無制限)
-    debug_fuel: Option<usize>,
+    pub(super) debug_fuel: Option<usize>,
+}
+
+// Implement ParserUtils trait
+impl ParserUtils for NyashParser {
+    fn tokens(&self) -> &Vec<Token> {
+        &self.tokens
+    }
+    
+    fn current(&self) -> usize {
+        self.current
+    }
+    
+    fn current_mut(&mut self) -> &mut usize {
+        &mut self.current
+    }
 }
 
 impl NyashParser {
@@ -1284,76 +1304,7 @@ impl NyashParser {
     }
     
     // Expression parsing methods are now in expressions.rs module
-    
-    // ===== ユーティリティメソッド =====
-    
-    /// 現在のトークンを取得
-    fn current_token(&self) -> &Token {
-        self.tokens.get(self.current).unwrap_or(&Token {
-            token_type: TokenType::EOF,
-            line: 0,
-            column: 0,
-        })
-    }
-    
-    /// 次のトークンを先読み（位置を進めない）
-    fn peek_token(&self) -> &TokenType {
-        if self.current + 1 < self.tokens.len() {
-            &self.tokens[self.current + 1].token_type
-        } else {
-            &TokenType::EOF
-        }
-    }
-    
-    /// 位置を1つ進める
-    fn advance(&mut self) {
-        if !self.is_at_end() {
-            self.current += 1;
-        }
-    }
-    
-    /// NEWLINEトークンをスキップ
-    fn skip_newlines(&mut self) {
-        let mut skip_count = 0;
-        while matches!(self.current_token().token_type, TokenType::NEWLINE) && !self.is_at_end() {
-            self.advance();
-            skip_count += 1;
-        }
-        if skip_count > 0 {
-        }
-    }
-    
-    /// 指定されたトークンタイプを消費 (期待通りでなければエラー)
-    fn consume(&mut self, expected: TokenType) -> Result<Token, ParseError> {
-        
-        if std::mem::discriminant(&self.current_token().token_type) == 
-           std::mem::discriminant(&expected) {
-            let token = self.current_token().clone();
-            self.advance();
-            Ok(token)
-        } else {
-            let line = self.current_token().line;
-            Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: format!("{:?}", expected),
-                line,
-            })
-        }
-    }
-    
-    /// 現在のトークンが指定されたタイプかチェック
-    fn match_token(&self, token_type: &TokenType) -> bool {
-        std::mem::discriminant(&self.current_token().token_type) == 
-        std::mem::discriminant(token_type)
-    }
-    
-    /// 終端に達したかチェック
-    fn is_at_end(&self) -> bool {
-        self.current >= self.tokens.len() || 
-        matches!(self.current_token().token_type, TokenType::EOF)
-    }
-    // Include, local, outbox, try/catch/throw parsing methods are now in statements.rs module
-    // Two-phase parser helper methods are no longer needed - simplified to direct parsing
+    // Utility methods are now in common.rs module via ParserUtils trait
     
     // ===== 🔥 Static Box循環依存検出 =====
     
