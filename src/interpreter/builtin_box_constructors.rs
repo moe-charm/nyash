@@ -7,6 +7,9 @@
  */
 
 use super::*;
+use crate::NullBox;
+use crate::boxes::console_box::ConsoleBox;
+use crate::boxes::{SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 
 impl NyashInterpreter {
     /// Create builtin box instance - Extracted from execute_new
