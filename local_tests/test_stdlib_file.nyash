@@ -1,0 +1,11 @@
+// Test stdlib file registration
+using nyashstd
+
+// Check available static boxes
+console.log("Testing stdlib file registration...")
+
+// Try to access console (should work)
+console.log("✅ console.log works!")
+
+// Check if file is available
+// For now, just try to verify what's available

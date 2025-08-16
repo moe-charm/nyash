@@ -65,6 +65,9 @@ impl BuiltinStdlib {
         // console static box
         nyashstd.static_boxes.insert("console".to_string(), Self::create_console_box());
         
+        // file static box (FFI-ABI demonstration)
+        nyashstd.static_boxes.insert("file".to_string(), Self::create_file_box());
+        
         self.namespaces.insert("nyashstd".to_string(), nyashstd);
     }
     
@@ -221,5 +224,90 @@ impl BuiltinStdlib {
         });
         
         console_box
+    }
+    
+    /// file static boxを作成 (FFI-ABI demonstration)
+    fn create_file_box() -> BuiltinStaticBox {
+        let mut file_box = BuiltinStaticBox {
+            name: "file".to_string(),
+            methods: HashMap::new(),
+        };
+        
+        // file.read(path) -> string (or null on error)
+        file_box.methods.insert("read".to_string(), |args| {
+            if args.len() != 1 {
+                return Err(RuntimeError::InvalidOperation {
+                    message: "file.read() takes exactly 1 argument".to_string()
+                });
+            }
+            
+            // StringBoxにダウンキャスト
+            if let Some(path_arg) = args[0].as_any().downcast_ref::<StringBox>() {
+                // Rust標準ライブラリでファイル読み込み
+                match std::fs::read_to_string(&path_arg.value) {
+                    Ok(content) => Ok(Box::new(StringBox::new(content))),
+                    Err(_) => {
+                        // エラー時はnullを返す
+                        use crate::boxes::NullBox;
+                        Ok(Box::new(NullBox::new()))
+                    }
+                }
+            } else {
+                Err(RuntimeError::TypeError {
+                    message: format!("file.read() expects string argument, got {:?}", args[0].type_name())
+                })
+            }
+        });
+        
+        // file.write(path, content) -> void
+        file_box.methods.insert("write".to_string(), |args| {
+            if args.len() != 2 {
+                return Err(RuntimeError::InvalidOperation {
+                    message: "file.write() takes exactly 2 arguments".to_string()
+                });
+            }
+            
+            // 両方の引数をStringBoxにダウンキャスト
+            if let (Some(path_arg), Some(content_arg)) = 
+                (args[0].as_any().downcast_ref::<StringBox>(), 
+                 args[1].as_any().downcast_ref::<StringBox>()) {
+                // Rust標準ライブラリでファイル書き込み
+                if let Err(e) = std::fs::write(&path_arg.value, &content_arg.value) {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("Failed to write file: {}", e)
+                    });
+                }
+                
+                // VoidBoxを返す
+                use crate::box_trait::VoidBox;
+                Ok(Box::new(VoidBox::new()))
+            } else {
+                Err(RuntimeError::TypeError {
+                    message: "file.write() expects two string arguments".to_string()
+                })
+            }
+        });
+        
+        // file.exists(path) -> bool
+        file_box.methods.insert("exists".to_string(), |args| {
+            if args.len() != 1 {
+                return Err(RuntimeError::InvalidOperation {
+                    message: "file.exists() takes exactly 1 argument".to_string()
+                });
+            }
+            
+            // StringBoxにダウンキャスト
+            if let Some(path_arg) = args[0].as_any().downcast_ref::<StringBox>() {
+                // Rust標準ライブラリでファイル存在確認
+                let exists = std::path::Path::new(&path_arg.value).exists();
+                Ok(Box::new(BoolBox::new(exists)))
+            } else {
+                Err(RuntimeError::TypeError {
+                    message: format!("file.exists() expects string argument, got {:?}", args[0].type_name())
+                })
+            }
+        });
+        
+        file_box
     }
 }

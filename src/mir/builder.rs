@@ -926,6 +926,48 @@ impl MirBuilder {
                     })?;
                     return Ok(void_id);
                 },
+                ("file", "read") => {
+                    // Generate ExternCall for file.read
+                    let result_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: Some(result_id), // file.read returns string
+                        iface_name: "env.file".to_string(),
+                        method_name: "read".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO, // File operations are I/O
+                    })?;
+                    return Ok(result_id);
+                },
+                ("file", "write") => {
+                    // Generate ExternCall for file.write
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None, // file.write is void
+                        iface_name: "env.file".to_string(),
+                        method_name: "write".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO, // File operations are I/O
+                    })?;
+                    
+                    // Return void value
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: void_id,
+                        value: ConstValue::Void,
+                    })?;
+                    return Ok(void_id);
+                },
+                ("file", "exists") => {
+                    // Generate ExternCall for file.exists
+                    let result_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: Some(result_id), // file.exists returns bool
+                        iface_name: "env.file".to_string(),
+                        method_name: "exists".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO, // File operations are I/O
+                    })?;
+                    return Ok(result_id);
+                },
                 _ => {
                     // Regular method call - continue with BoxCall
                 }
