@@ -1,0 +1,17 @@
+// 🧪 MIR → WASM変換テスト（最小版）
+// メソッド呼び出しを避けて基本演算のみテスト
+
+static box Main {
+    init { result }
+    
+    main() {
+        // 基本演算のみ（メソッド呼び出しなし）
+        local a = 10
+        local b = 20
+        local sum = a + b
+        local product = sum * 3
+        
+        me.result = product
+        return "計算完了"
+    }
+}

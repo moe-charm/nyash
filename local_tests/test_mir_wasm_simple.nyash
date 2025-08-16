@@ -1,0 +1,28 @@
+// 🧪 MIR → WASM変換テスト用シンプルプログラム
+// 基本的な演算とBox操作をテスト
+
+static box Main {
+    init { console, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🚀 MIR → WASM変換テスト開始")
+        
+        // 基本演算テスト
+        local a = 10
+        local b = 20
+        local sum = a + b
+        
+        me.console.log("計算結果: " + sum.toString())
+        
+        // StringBox操作テスト
+        local greeting = "Hello"
+        local name = "WASM"
+        local message = greeting + " " + name + "!"
+        
+        me.console.log("メッセージ: " + message)
+        
+        me.result = sum
+        return "MIR → WASM変換テスト完了"
+    }
+}

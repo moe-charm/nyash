@@ -61,9 +61,36 @@ impl WasmBackend {
         // Generate WAT (WebAssembly Text) first for debugging
         let wat_text = self.compile_to_wat(mir_module)?;
         
-        // Convert WAT to WASM binary using wabt
-        wabt::wat2wasm(&wat_text)
-            .map_err(|e| WasmError::WasmValidationError(format!("WAT to WASM conversion failed: {}", e)))
+        // Phase 9.77 Task 1.3: Fix UTF-8 encoding error in WAT→WASM conversion
+        self.wat_to_wasm(&wat_text)
+    }
+    
+    /// Convert WAT text to WASM binary with proper UTF-8 handling
+    fn wat_to_wasm(&self, wat_source: &str) -> Result<Vec<u8>, WasmError> {
+        // Debug: Print WAT source for analysis
+        eprintln!("🔍 WAT Source Debug (length: {}):", wat_source.len());
+        eprintln!("WAT Content:\n{}", wat_source);
+        
+        // UTF-8 validation to prevent encoding errors
+        if !wat_source.is_ascii() {
+            eprintln!("❌ WAT source contains non-ASCII characters");
+            return Err(WasmError::WasmValidationError(
+                "WAT source contains non-ASCII characters".to_string()
+            ));
+        }
+        
+        eprintln!("✅ WAT source is ASCII-compatible");
+        
+        // Convert to bytes as required by wabt::wat2wasm
+        eprintln!("🔄 Converting WAT to WASM bytes...");
+        let wasm_bytes = wabt::wat2wasm(wat_source.as_bytes())
+            .map_err(|e| {
+                eprintln!("❌ wabt::wat2wasm failed: {}", e);
+                WasmError::WasmValidationError(format!("WAT to WASM conversion failed: {}", e))
+            })?;
+        
+        eprintln!("✅ WASM conversion successful, {} bytes generated", wasm_bytes.len());
+        Ok(wasm_bytes)
     }
     
     /// Compile MIR module to WAT text format (for debugging)

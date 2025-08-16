@@ -1,0 +1,8 @@
+// 🧪 最も単純なWASM生成テスト
+// 変数操作も避けて、純粋な計算のみ
+
+static box Main {
+    main() {
+        return "成功"
+    }
+}

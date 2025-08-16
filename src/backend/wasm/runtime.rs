@@ -89,6 +89,40 @@ impl RuntimeImports {
             result: None,
         });
         
+        // Phase 9.77: BoxCall runtime functions
+        
+        // box_to_string - Convert any Box to string representation
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "box_to_string".to_string(),
+            params: vec!["i32".to_string()], // box_ptr
+            result: Some("i32".to_string()), // string_box_ptr
+        });
+        
+        // box_print - Print any Box to console
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "box_print".to_string(),
+            params: vec!["i32".to_string()], // box_ptr
+            result: None,
+        });
+        
+        // box_equals - Compare two Boxes for equality
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "box_equals".to_string(),
+            params: vec!["i32".to_string(), "i32".to_string()], // box1_ptr, box2_ptr
+            result: Some("i32".to_string()), // bool result
+        });
+        
+        // box_clone - Clone a Box
+        self.imports.push(ImportFunction {
+            module: "env".to_string(),
+            name: "box_clone".to_string(),
+            params: vec!["i32".to_string()], // box_ptr
+            result: Some("i32".to_string()), // cloned_box_ptr
+        });
+        
         // Future: env.file_read, env.file_write for file I/O
         // Future: env.http_request for network access
     }
