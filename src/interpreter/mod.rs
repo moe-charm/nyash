@@ -40,9 +40,15 @@ mod math_methods;
 mod system_methods;
 mod web_methods;
 mod special_methods;
+#[cfg(feature = "dynamic-file")]
+mod plugin_loader;
 
 // Main interpreter implementation - will be moved from interpreter.rs
 pub use core::NyashInterpreter;
+
+// Dynamic plugin support
+#[cfg(feature = "dynamic-file")]
+pub use plugin_loader::{PluginLoader, FileBoxProxy};
 
 
 /// 実行制御フロー

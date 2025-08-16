@@ -96,9 +96,20 @@ impl NyashInterpreter {
                 }
                 let path_value = self.execute_expression(&arguments[0])?;
                 if let Some(path_str) = path_value.as_any().downcast_ref::<StringBox>() {
-                    let file_box = Box::new(FileBox::new(&path_str.value)) as Box<dyn NyashBox>;
-                    // 🌍 革命的実装：Environment tracking廃止
-                    return Ok(file_box);
+                    #[cfg(feature = "dynamic-file")]
+                    {
+                        // 動的ライブラリ経由でFileBoxを作成
+                        use crate::interpreter::plugin_loader::PluginLoader;
+                        let file_box = PluginLoader::create_file_box(&path_str.value)?;
+                        return Ok(file_box);
+                    }
+                    
+                    #[cfg(not(feature = "dynamic-file"))]
+                    {
+                        // 静的リンク版
+                        let file_box = Box::new(FileBox::new(&path_str.value)) as Box<dyn NyashBox>;
+                        return Ok(file_box);
+                    }
                 } else {
                     return Err(RuntimeError::TypeError {
                         message: "FileBox constructor requires string path argument".to_string(),

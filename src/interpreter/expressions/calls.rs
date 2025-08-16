@@ -255,6 +255,14 @@ impl NyashInterpreter {
             return self.execute_file_method(file_box, method, arguments);
         }
         
+        // FileBoxProxy method calls (動的ライブラリ版)
+        #[cfg(feature = "dynamic-file")]
+        {
+            if let Some(file_proxy) = obj_value.as_any().downcast_ref::<crate::interpreter::plugin_loader::FileBoxProxy>() {
+                return self.execute_file_proxy_method(file_proxy, method, arguments);
+            }
+        }
+        
         // ResultBox method calls
         if let Some(result_box) = obj_value.as_any().downcast_ref::<crate::box_trait::ResultBox>() {
             return self.execute_result_method(result_box, method, arguments);

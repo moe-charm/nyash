@@ -1,0 +1,26 @@
+// Test for dynamic FileBox plugin (Phase 9.75f-1)
+using nyashstd
+
+console.log("🔌 Testing Dynamic FileBox Plugin...")
+
+// Create a FileBox through dynamic library
+local file = new FileBox("test_dynamic.txt")
+
+// Write some content
+file.write("Hello from dynamic FileBox!\nこれは動的ライブラリ経由で書かれました。")
+console.log("✅ Write successful")
+
+// Read back the content
+local content = file.read()
+console.log("📖 Read content: " + content)
+
+// Check if file exists
+local exists = file.exists()
+console.log("📁 File exists: " + exists.toString())
+
+// Test with another file
+local file2 = new FileBox("test_dynamic2.txt")
+file2.write("Second test file")
+console.log("✅ Second file created")
+
+console.log("🎉 Dynamic FileBox test completed!")

@@ -10,11 +10,56 @@
 use super::super::*;
 use crate::box_trait::{ResultBox, StringBox, NyashBox};
 use crate::boxes::FileBox;
+#[cfg(feature = "dynamic-file")]
+use crate::interpreter::plugin_loader::FileBoxProxy;
 
 impl NyashInterpreter {
     /// FileBoxのメソッド呼び出しを実行
     /// Handles file I/O operations including read, write, exists, delete, and copy
     pub(in crate::interpreter) fn execute_file_method(&mut self, file_box: &FileBox, method: &str, arguments: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        self.execute_file_method_static(file_box, method, arguments)
+    }
+    
+    /// FileBoxProxyのメソッド呼び出しを実行（動的ライブラリ版）
+    #[cfg(feature = "dynamic-file")]
+    pub(in crate::interpreter) fn execute_file_proxy_method(&mut self, file_box: &FileBoxProxy, method: &str, arguments: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        match method {
+            "read" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("read() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                file_box.read()
+            }
+            "write" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("write() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let content = self.execute_expression(&arguments[0])?;
+                file_box.write(content)
+            }
+            "exists" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("exists() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                file_box.exists()
+            }
+            _ => Err(RuntimeError::UndefinedMethod {
+                method: method.to_string(),
+                box_type: "FileBox".to_string(),
+            }),
+        }
+    }
+    
+    /// 静的FileBoxのメソッド実装
+    fn execute_file_method_static(&mut self, file_box: &FileBox, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "read" => {
