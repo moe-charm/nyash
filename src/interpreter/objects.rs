@@ -13,6 +13,8 @@
  */
 
 use super::*;
+use std::sync::Arc;
+use crate::box_trait::SharedNyashBox;
 
 impl NyashInterpreter {
     /// new式を実行 - Object creation engine  

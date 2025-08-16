@@ -302,8 +302,8 @@ impl NyashRunner {
 
         // Compile to WASM
         let mut wasm_backend = WasmBackend::new();
-        let wasm_code = match wasm_backend.compile_module(compile_result.module) {
-            Ok(wasm) => wasm,
+        let wat_text = match wasm_backend.compile_to_wat(compile_result.module) {
+            Ok(wat) => wat,
             Err(e) => {
                 eprintln!("❌ WASM compilation error: {}", e);
                 process::exit(1);
@@ -321,14 +321,8 @@ impl NyashRunner {
             });
         let output_file = format!("{}.wat", output);
 
-        // Write WASM output
-        let output_str = match std::str::from_utf8(&wasm_code) {
-            Ok(s) => s,
-            Err(_) => {
-                eprintln!("❌ Generated WASM is not valid UTF-8");
-                process::exit(1);
-            }
-        };
+        // Write WAT output (already a string)
+        let output_str = wat_text;
         
         match fs::write(&output_file, output_str) {
             Ok(()) => {
