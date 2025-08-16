@@ -4,11 +4,16 @@
  * Python版nyashc_v4.pyのNyashParserをRustで完全再実装
  * Token列をAST (Abstract Syntax Tree) に変換
  * 
- * TODO: リファクタリング計画
+ * モジュール構造:
+ * - common.rs: 共通ユーティリティとトレイト (ParserUtils)
  * - expressions.rs: 式パーサー (parse_expression, parse_or, parse_and等)
  * - statements.rs: 文パーサー (parse_statement, parse_if, parse_loop等)
- * - declarations.rs: 宣言パーサー (parse_box_declaration, parse_function_declaration等)
- * - errors.rs: エラー型定義とハンドリング
+ * - declarations/: Box宣言パーサー (box_definition, static_box, dependency_helpers)
+ * - items/: トップレベル宣言 (global_vars, functions, static_items)
+ * 
+ * 2025-08-16: 大規模リファクタリング完了
+ * - 1530行 → 227行 (85%削減)
+ * - 機能ごとにモジュール分離で保守性向上
  */
 
 // サブモジュール宣言
@@ -23,7 +28,6 @@ use common::ParserUtils;
 
 use crate::tokenizer::{Token, TokenType, TokenizeError};
 use crate::ast::{ASTNode, Span};
-use std::collections::HashMap;
 use thiserror::Error;
 
 // ===== 🔥 Debug Macros =====
