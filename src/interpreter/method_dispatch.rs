@@ -35,64 +35,64 @@ impl NyashInterpreter {
             if let Some(static_func) = static_func {
                 // static関数を実行
                 if let ASTNode::FunctionDeclaration { params, body, .. } = static_func {
-                        // 引数を評価
-                        let mut arg_values = Vec::new();
-                        for arg in arguments {
-                            arg_values.push(self.execute_expression(arg)?);
-                        }
-                        
-                        // パラメータ数チェック
-                        if arg_values.len() != params.len() {
-                            return Err(RuntimeError::InvalidOperation {
-                                message: format!("Static method {}.{} expects {} arguments, got {}", 
-                                               name, method, params.len(), arg_values.len()),
-                            });
-                        }
-                        
-                        // 🌍 local変数スタックを保存・クリア（static関数呼び出し開始）
-                        let saved_locals = self.save_local_vars();
-                        self.local_vars.clear();
-                        
-                        // 📤 outbox変数スタックも保存・クリア（static関数専用）
-                        let saved_outbox = self.save_outbox_vars();
-                        self.outbox_vars.clear();
-                        
-                        // 引数をlocal変数として設定
-                        for (param, value) in params.iter().zip(arg_values.iter()) {
-                            self.declare_local_variable(param, value.clone_box());
-                        }
-                        
-                        // 関数本体を実行
-                        let mut result = Box::new(VoidBox::new()) as Box<dyn NyashBox>;
-                        for stmt in body {
-                            match self.execute_statement(stmt)? {
-                                ControlFlow::Return(value) => {
-                                    result = value;
-                                    break;
-                                }
-                                ControlFlow::Break => break,
-                                ControlFlow::Throw(error) => {
-                                    // 🌍 static関数例外: local変数とoutbox変数を復元してから再throw
-                                    self.restore_local_vars(saved_locals);
-                                    self.restore_outbox_vars(saved_outbox);
-                                    return Err(RuntimeError::CustomException { value: error });
-                                }
-                                ControlFlow::None => {}
-                            }
-                        }
-                        
-                        // 🌍 local変数スタックを復元（static関数呼び出し終了）
-                        self.restore_local_vars(saved_locals);
-                        
-                        // 📤 outbox変数スタックを復元（static関数終了）
-                        self.restore_outbox_vars(saved_outbox);
-                        
-                        return Ok(result);
-                    } else {
+                    // 引数を評価
+                    let mut arg_values = Vec::new();
+                    for arg in arguments {
+                        arg_values.push(self.execute_expression(arg)?);
+                    }
+                    
+                    // パラメータ数チェック
+                    if arg_values.len() != params.len() {
                         return Err(RuntimeError::InvalidOperation {
-                            message: format!("Invalid static function declaration for {}.{}", name, method),
+                            message: format!("Static method {}.{} expects {} arguments, got {}", 
+                                           name, method, params.len(), arg_values.len()),
                         });
                     }
+                    
+                    // 🌍 local変数スタックを保存・クリア（static関数呼び出し開始）
+                    let saved_locals = self.save_local_vars();
+                    self.local_vars.clear();
+                    
+                    // 📤 outbox変数スタックも保存・クリア（static関数専用）
+                    let saved_outbox = self.save_outbox_vars();
+                    self.outbox_vars.clear();
+                    
+                    // 引数をlocal変数として設定
+                    for (param, value) in params.iter().zip(arg_values.iter()) {
+                        self.declare_local_variable(param, value.clone_box());
+                    }
+                    
+                    // 関数本体を実行
+                    let mut result = Box::new(VoidBox::new()) as Box<dyn NyashBox>;
+                    for stmt in body {
+                        match self.execute_statement(stmt)? {
+                            ControlFlow::Return(value) => {
+                                result = value;
+                                break;
+                            }
+                            ControlFlow::Break => break,
+                            ControlFlow::Throw(error) => {
+                                // 🌍 static関数例外: local変数とoutbox変数を復元してから再throw
+                                self.restore_local_vars(saved_locals);
+                                self.restore_outbox_vars(saved_outbox);
+                                return Err(RuntimeError::CustomException { value: error });
+                            }
+                            ControlFlow::None => {}
+                        }
+                    }
+                    
+                    // 🌍 local変数スタックを復元（static関数呼び出し終了）
+                    self.restore_local_vars(saved_locals);
+                    
+                    // 📤 outbox変数スタックを復元（static関数終了）
+                    self.restore_outbox_vars(saved_outbox);
+                    
+                    return Ok(result);
+                } else {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("Invalid static function declaration for {}.{}", name, method),
+                    });
+                }
                 }
             }
         }
