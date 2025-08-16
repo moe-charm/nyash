@@ -364,26 +364,39 @@ if let TokenType::IDENTIFIER(id) = &self.current_token().token_type {
 **現在状況**: 🚀 **Phase 9.75f ビルトインBox動的ライブラリ分離開始！**
 **最終更新**: 2025-08-17 03:30
 
-## 🔥 **Phase 9.75f: 緊急ビルド時間改善**
+## 🔥 **Phase 9.75f: 緊急ビルド時間改善（Option C段階的実装）**
 
 ### 🎯 **動的ライブラリ化によるビルド革命**
 - **現状**: 16個のビルトインBox静的リンク → 2分以上のビルド
 - **目標**: コア2MB + 動的ライブラリ → 15秒ビルド
 
-### 📋 **Gemini先生の推奨実装**
-1. **C ABI + libloading**: 最も安定した方法
-2. **段階的移行**: インタープリターExternCall → プラグイン化
-3. **メモリ管理**: ハンドルパターンでArc<RwLock>問題解決
+### 📋 **Option C: 段階的移行戦略**
+1. **[9.75f-1]**: FileBox動的化（即実装）
+   - 詳細: [phase_9_75f_1_filebox_dynamic.md](docs/予定/native-plan/issues/phase_9_75f_1_filebox_dynamic.md)
+   - libnyash_file.so作成、C ABI実装
+   - 目標: 15秒のビルド時間短縮
+
+2. **[9.75f-2]**: Math/Time系動的化（今週中）  
+   - 詳細: [phase_9_75f_2_math_time_dynamic.md](docs/予定/native-plan/issues/phase_9_75f_2_math_time_dynamic.md)
+   - 統合プラグイン（Math, Random, Time）
+   - 目標: さらに30秒短縮
+
+3. **[9.75f-3]**: 基本型実験（将来）
+   - 詳細: [phase_9_75f_3_core_types_experiment.md](docs/予定/native-plan/issues/phase_9_75f_3_core_types_experiment.md)
+   - --dynamic-all フラグで完全動的化
+   - 目標: 5秒ビルド（実験的）
 
 ### ✅ **完了タスク**
-- FFI-ABI file実装（stdlib方式）
-- MIRビルダーfile.read/write追加
-- Gemini先生への相談・回答取得
+- FFI-ABI file実装テスト（削除済み）
+- Gemini先生への相談・アドバイス取得
+- FileBox実装確認（存在・利用可能）
+- Option C実装計画策定
 
-### 🚀 **次のステップ**
-1. インタープリターでExternCall直接実行
-2. FileBoxの元実装を探して置き換え
-3. プラグインアーキテクチャ基盤構築
+### 🚀 **現在の作業: 9.75f-1 FileBox動的化**
+1. workspace構成準備
+2. FileBoxプラグイン作成
+3. C ABI関数実装
+4. インタープリター統合
 
 ## 🌐 **WASM研究メモ**
 
