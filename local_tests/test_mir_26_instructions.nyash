@@ -1,0 +1,30 @@
+# MIR 26命令セット完全動作確認テスト
+# Phase 4-3: 新しい26命令セットの基本テスト
+
+# 基本演算テスト
+result = 10 + 5
+print("Basic arithmetic: " + result)
+
+# 比較演算テスト 
+comparison = (result > 12)
+print("Comparison result: " + comparison)
+
+# 条件分岐テスト
+if comparison {
+    print("Conditional branch works")
+}
+
+# ループテスト
+counter = 0
+loop(counter < 3) {
+    print("Loop iteration: " + counter)
+    counter = counter + 1
+}
+
+# Box作成・アクセステスト（基本的なEverything is Box）
+local testBox = new MapBox()
+testBox.set("key1", "value1")
+local value = testBox.get("key1")
+print("Box operation result: " + value)
+
+print("MIR 26 instruction test completed successfully!")

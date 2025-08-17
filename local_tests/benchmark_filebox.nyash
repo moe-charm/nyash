@@ -1,0 +1,87 @@
+// FileBox パフォーマンスベンチマーク
+// 静的版と動的版の速度比較
+
+static box Main {
+    init { console, timer }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.timer = new TimeBox()
+        
+        me.console.log("📊 FileBox パフォーマンスベンチマーク開始")
+        
+        // テスト設定
+        local iterations
+        iterations = 1000
+        local testFile
+        testFile = "benchmark_test.txt"
+        
+        // ベンチマーク1: ファイル作成・削除
+        me.console.log("\n🔧 Test 1: FileBox作成 x " + iterations.toString())
+        local start1
+        start1 = me.timer.now()
+        
+        local i
+        i = 0
+        loop(i < iterations) {
+            local file
+            file = new FileBox(testFile + i.toString())
+            i = i + 1
+        }
+        
+        local elapsed1
+        elapsed1 = me.timer.elapsed(start1)
+        me.console.log("⏱️ 経過時間: " + elapsed1.toString() + "ms")
+        me.console.log("📈 平均: " + (elapsed1 / iterations).toString() + "ms/操作")
+        
+        // ベンチマーク2: 読み書き操作
+        me.console.log("\n🔧 Test 2: 読み書き操作 x " + iterations.toString())
+        local file2
+        file2 = new FileBox(testFile)
+        
+        local start2
+        start2 = me.timer.now()
+        
+        i = 0
+        loop(i < iterations) {
+            file2.write("Test data " + i.toString())
+            local content
+            content = file2.read()
+            i = i + 1
+        }
+        
+        local elapsed2
+        elapsed2 = me.timer.elapsed(start2)
+        me.console.log("⏱️ 経過時間: " + elapsed2.toString() + "ms")
+        me.console.log("📈 平均: " + (elapsed2 / iterations).toString() + "ms/操作")
+        
+        // ベンチマーク3: exists()チェック
+        me.console.log("\n🔧 Test 3: exists()チェック x " + iterations.toString())
+        local start3
+        start3 = me.timer.now()
+        
+        i = 0
+        loop(i < iterations) {
+            local exists
+            exists = file2.exists()
+            i = i + 1
+        }
+        
+        local elapsed3
+        elapsed3 = me.timer.elapsed(start3)
+        me.console.log("⏱️ 経過時間: " + elapsed3.toString() + "ms")
+        me.console.log("📈 平均: " + (elapsed3 / iterations).toString() + "ms/操作")
+        
+        // クリーンアップ
+        i = 0
+        loop(i < iterations) {
+            local fileName
+            fileName = testFile + i.toString()
+            // ファイル削除（手動で行う必要があります）
+            i = i + 1
+        }
+        
+        me.console.log("\n✅ ベンチマーク完了！")
+        return "done"
+    }
+}

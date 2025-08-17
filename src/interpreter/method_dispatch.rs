@@ -8,7 +8,10 @@
 
 use super::*;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
+#[cfg(not(feature = "dynamic-file"))]
 use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
+#[cfg(feature = "dynamic-file")]
+use crate::boxes::{FloatBox, ConsoleBox, SoundBox, DebugBox, MapBox};
 use std::sync::Arc;
 
 impl NyashInterpreter {
@@ -238,8 +241,14 @@ impl NyashInterpreter {
         }
         
         // MathBox method calls
+        #[cfg(not(feature = "dynamic-file"))]
         if let Some(math_box) = obj_value.as_any().downcast_ref::<MathBox>() {
             return self.execute_math_method(math_box, method, arguments);
+        }
+        
+        #[cfg(feature = "dynamic-file")]
+        if let Some(math_proxy) = obj_value.as_any().downcast_ref::<crate::interpreter::plugin_loader::MathBoxProxy>() {
+            return self.execute_math_proxy_method(math_proxy, method, arguments);
         }
         
         // NullBox method calls
@@ -248,13 +257,25 @@ impl NyashInterpreter {
         }
         
         // TimeBox method calls
+        #[cfg(not(feature = "dynamic-file"))]
         if let Some(time_box) = obj_value.as_any().downcast_ref::<TimeBox>() {
             return self.execute_time_method(time_box, method, arguments);
         }
         
+        #[cfg(feature = "dynamic-file")]
+        if let Some(time_proxy) = obj_value.as_any().downcast_ref::<crate::interpreter::plugin_loader::TimeBoxProxy>() {
+            return self.execute_time_proxy_method(time_proxy, method, arguments);
+        }
+        
         // DateTimeBox method calls
+        #[cfg(not(feature = "dynamic-file"))]
         if let Some(datetime_box) = obj_value.as_any().downcast_ref::<DateTimeBox>() {
             return self.execute_datetime_method(datetime_box, method, arguments);
+        }
+        
+        #[cfg(feature = "dynamic-file")]
+        if let Some(datetime_proxy) = obj_value.as_any().downcast_ref::<crate::interpreter::plugin_loader::DateTimeBoxProxy>() {
+            return self.execute_datetime_proxy_method(datetime_proxy, method, arguments);
         }
         
         // TimerBox method calls
@@ -268,8 +289,14 @@ impl NyashInterpreter {
         }
         
         // RandomBox method calls
+        #[cfg(not(feature = "dynamic-file"))]
         if let Some(random_box) = obj_value.as_any().downcast_ref::<RandomBox>() {
             return self.execute_random_method(random_box, method, arguments);
+        }
+        
+        #[cfg(feature = "dynamic-file")]
+        if let Some(random_proxy) = obj_value.as_any().downcast_ref::<crate::interpreter::plugin_loader::RandomBoxProxy>() {
+            return self.execute_random_proxy_method(random_proxy, method, arguments);
         }
         
         // SoundBox method calls

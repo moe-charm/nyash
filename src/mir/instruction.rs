@@ -285,6 +285,80 @@ pub enum MirInstruction {
         args: Vec<ValueId>,
         effects: EffectMask,
     },
+    
+    // === Phase 8.5: MIR 26-instruction reduction (NEW) ===
+    
+    /// Box field load operation (replaces Load)
+    /// `%dst = %box.field`
+    BoxFieldLoad {
+        dst: ValueId,
+        box_val: ValueId,
+        field: String,
+    },
+    
+    /// Box field store operation (replaces Store)
+    /// `%box.field = %value`
+    BoxFieldStore {
+        box_val: ValueId,
+        field: String,
+        value: ValueId,
+    },
+    
+    /// Check weak reference validity
+    /// `%dst = weak_check %weak_ref`
+    WeakCheck {
+        dst: ValueId,
+        weak_ref: ValueId,
+    },
+    
+    /// Send data via Bus
+    /// `send %data -> %target`
+    Send {
+        data: ValueId,
+        target: ValueId,
+    },
+    
+    /// Receive data from Bus
+    /// `%dst = recv %source`
+    Recv {
+        dst: ValueId,
+        source: ValueId,
+    },
+    
+    /// Tail call optimization
+    /// `tail_call %func(%args...)`
+    TailCall {
+        func: ValueId,
+        args: Vec<ValueId>,
+        effects: EffectMask,
+    },
+    
+    /// Adopt ownership (parent takes child)
+    /// `adopt %parent <- %child`
+    Adopt {
+        parent: ValueId,
+        child: ValueId,
+    },
+    
+    /// Release strong ownership
+    /// `release %ref`
+    Release {
+        reference: ValueId,
+    },
+    
+    /// Memory copy optimization
+    /// `memcopy %dst <- %src, %size`
+    MemCopy {
+        dst: ValueId,
+        src: ValueId,
+        size: ValueId,
+    },
+    
+    /// Atomic memory fence
+    /// `atomic_fence %ordering`
+    AtomicFence {
+        ordering: AtomicOrdering,
+    },
 }
 
 /// Constant values in MIR
@@ -342,6 +416,16 @@ pub enum MirType {
     Future(Box<MirType>), // Future containing a type
     Void,
     Unknown,
+}
+
+/// Atomic memory ordering for fence operations
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomicOrdering {
+    Relaxed,
+    Acquire,
+    Release,
+    AcqRel,
+    SeqCst,
 }
 
 impl MirInstruction {
@@ -404,6 +488,18 @@ impl MirInstruction {
             
             // Phase 9.7: External Function Calls
             MirInstruction::ExternCall { effects, .. } => *effects, // Use provided effect mask
+            
+            // Phase 8.5: MIR 26-instruction reduction (NEW)
+            MirInstruction::BoxFieldLoad { .. } => EffectMask::READ, // Box field read
+            MirInstruction::BoxFieldStore { .. } => EffectMask::WRITE, // Box field write
+            MirInstruction::WeakCheck { .. } => EffectMask::PURE, // Check is pure
+            MirInstruction::Send { .. } => EffectMask::IO, // Bus send has IO effects
+            MirInstruction::Recv { .. } => EffectMask::IO, // Bus recv has IO effects
+            MirInstruction::TailCall { effects, .. } => *effects, // Use provided effect mask
+            MirInstruction::Adopt { .. } => EffectMask::WRITE, // Ownership change has write effects
+            MirInstruction::Release { .. } => EffectMask::WRITE, // Ownership release has write effects
+            MirInstruction::MemCopy { .. } => EffectMask::WRITE, // Memory copy has write effects
+            MirInstruction::AtomicFence { .. } => EffectMask::IO.add(Effect::Barrier), // Fence has barrier + IO
         }
     }
     
@@ -432,6 +528,12 @@ impl MirInstruction {
             MirInstruction::BoxCall { dst, .. } |
             MirInstruction::ExternCall { dst, .. } => *dst,
             
+            // Phase 8.5: MIR 26-instruction reduction (NEW)
+            MirInstruction::BoxFieldLoad { dst, .. } |
+            MirInstruction::WeakCheck { dst, .. } |
+            MirInstruction::Recv { dst, .. } |
+            MirInstruction::MemCopy { dst, .. } => Some(*dst),
+            
             MirInstruction::Store { .. } |
             MirInstruction::Branch { .. } |
             MirInstruction::Jump { .. } |
@@ -446,6 +548,14 @@ impl MirInstruction {
             MirInstruction::FutureSet { .. } |
             MirInstruction::Safepoint |
             MirInstruction::Nop => None,
+            
+            // Phase 8.5: Non-value producing instructions
+            MirInstruction::BoxFieldStore { .. } |
+            MirInstruction::Send { .. } |
+            MirInstruction::TailCall { .. } |
+            MirInstruction::Adopt { .. } |
+            MirInstruction::Release { .. } |
+            MirInstruction::AtomicFence { .. } => None,
             
             MirInstruction::Catch { exception_value, .. } => Some(*exception_value),
         }
@@ -519,6 +629,22 @@ impl MirInstruction {
             
             // Phase 9.7: External Function Calls
             MirInstruction::ExternCall { args, .. } => args.clone(),
+            
+            // Phase 8.5: MIR 26-instruction reduction (NEW)
+            MirInstruction::BoxFieldLoad { box_val, .. } => vec![*box_val],
+            MirInstruction::BoxFieldStore { box_val, value, .. } => vec![*box_val, *value],
+            MirInstruction::WeakCheck { weak_ref, .. } => vec![*weak_ref],
+            MirInstruction::Send { data, target } => vec![*data, *target],
+            MirInstruction::Recv { source, .. } => vec![*source],
+            MirInstruction::TailCall { func, args, .. } => {
+                let mut used = vec![*func];
+                used.extend(args);
+                used
+            },
+            MirInstruction::Adopt { parent, child } => vec![*parent, *child],
+            MirInstruction::Release { reference } => vec![*reference],
+            MirInstruction::MemCopy { dst, src, size } => vec![*dst, *src, *size],
+            MirInstruction::AtomicFence { .. } => Vec::new(), // Fence doesn't use values
         }
     }
 }
@@ -602,6 +728,39 @@ impl fmt::Display for MirInstruction {
                            effects)
                 }
             },
+            // Phase 8.5: MIR 26-instruction reduction (NEW)
+            MirInstruction::BoxFieldLoad { dst, box_val, field } => {
+                write!(f, "{} = {}.{}", dst, box_val, field)
+            },
+            MirInstruction::BoxFieldStore { box_val, field, value } => {
+                write!(f, "{}.{} = {}", box_val, field, value)
+            },
+            MirInstruction::WeakCheck { dst, weak_ref } => {
+                write!(f, "{} = weak_check {}", dst, weak_ref)
+            },
+            MirInstruction::Send { data, target } => {
+                write!(f, "send {} -> {}", data, target)
+            },
+            MirInstruction::Recv { dst, source } => {
+                write!(f, "{} = recv {}", dst, source)
+            },
+            MirInstruction::TailCall { func, args, effects } => {
+                write!(f, "tail_call {}({}); effects: {}", func,
+                       args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
+                       effects)
+            },
+            MirInstruction::Adopt { parent, child } => {
+                write!(f, "adopt {} <- {}", parent, child)
+            },
+            MirInstruction::Release { reference } => {
+                write!(f, "release {}", reference)
+            },
+            MirInstruction::MemCopy { dst, src, size } => {
+                write!(f, "memcopy {} <- {}, {}", dst, src, size)
+            },
+            MirInstruction::AtomicFence { ordering } => {
+                write!(f, "atomic_fence {:?}", ordering)
+            },
             _ => write!(f, "{:?}", self), // Fallback for other instructions
         }
     }
@@ -616,6 +775,18 @@ impl fmt::Display for ConstValue {
             ConstValue::String(s) => write!(f, "\"{}\"", s),
             ConstValue::Null => write!(f, "null"),
             ConstValue::Void => write!(f, "void"),
+        }
+    }
+}
+
+impl fmt::Display for AtomicOrdering {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AtomicOrdering::Relaxed => write!(f, "relaxed"),
+            AtomicOrdering::Acquire => write!(f, "acquire"),
+            AtomicOrdering::Release => write!(f, "release"),
+            AtomicOrdering::AcqRel => write!(f, "acq_rel"),
+            AtomicOrdering::SeqCst => write!(f, "seq_cst"),
         }
     }
 }

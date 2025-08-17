@@ -1,0 +1,15 @@
+// 最もシンプルなMathBoxテスト
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("Creating MathBox...")
+        
+        local math = new MathBox()
+        me.console.log("MathBox created!")
+        
+        return "done"
+    }
+}

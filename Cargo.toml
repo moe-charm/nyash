@@ -29,6 +29,11 @@ crate-type = ["cdylib", "rlib"]
 name = "nyash"
 path = "src/main.rs"
 
+# WASM runner executable
+[[bin]]
+name = "nyash-wasm-run"
+path = "src/bin/nyash-wasm-run.rs"
+
 # Examples for development - only available as examples, not bins
 [[example]]
 name = "gui_simple_notepad"
@@ -180,5 +185,6 @@ debug = true
 members = [
     ".",                    # メインのnyash-rustプロジェクト
     "plugins/nyash-file",   # FileBoxプラグイン
+    "plugins/nyash-math",   # Math/Time系プラグイン
 ]
 resolver = "2"

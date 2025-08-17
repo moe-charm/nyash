@@ -7,9 +7,11 @@
  */
 
 use super::*;
-use crate::boxes::{NullBox, ConsoleBox, FloatBox, DateTimeBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
+use crate::boxes::{NullBox, ConsoleBox, FloatBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 #[cfg(not(feature = "dynamic-file"))]
-use crate::boxes::FileBox;
+use crate::boxes::{FileBox, MathBox, RandomBox, TimeBox, DateTimeBox};
+#[cfg(feature = "dynamic-file")]
+use crate::boxes::DateTimeBox;
 // use crate::boxes::intent_box_wrapper::IntentBoxWrapper;
 use crate::box_trait::SharedNyashBox;
 use std::sync::Arc;
@@ -167,9 +169,33 @@ impl NyashInterpreter {
                         message: format!("MathBox constructor expects 0 arguments, got {}", arguments.len()),
                     });
                 }
-                let math_box = Box::new(MathBox::new()) as Box<dyn NyashBox>;
-                // 🌍 革命的実装：Environment tracking廃止
-                return Ok(math_box);
+                
+                println!("🔧 DEBUG: DYNAMIC-FILE feature check...");
+                #[cfg(feature = "dynamic-file")]
+                {
+                    println!("🔌 DEBUG: DYNAMIC-FILE ENABLED - Creating MathBox through dynamic library");
+                    log::debug!("🔌 DEBUG: Creating MathBox through dynamic library");
+                    match super::plugin_loader::PluginLoader::create_math_box() {
+                        Ok(math_box) => {
+                            println!("🔌 DEBUG: MathBox created successfully, type_name: {}", math_box.type_name());
+                            log::debug!("🔌 DEBUG: MathBox created successfully, type_name: {}", math_box.type_name());
+                            return Ok(math_box);
+                        }
+                        Err(e) => {
+                            println!("❌ DEBUG: Failed to create MathBox through dynamic library: {}", e);
+                            log::error!("Failed to create MathBox through dynamic library: {}", e);
+                            // Fall back to static MathBox
+                            let math_box = Box::new(MathBox::new()) as Box<dyn NyashBox>;
+                            return Ok(math_box);
+                        }
+                    }
+                }
+                #[cfg(not(feature = "dynamic-file"))]
+                {
+                    println!("🔌 DEBUG: DYNAMIC-FILE DISABLED - Creating static MathBox");
+                    let math_box = Box::new(MathBox::new()) as Box<dyn NyashBox>;
+                    return Ok(math_box);
+                }
             }
             "NullBox" => {
                 // NullBoxは引数なしで作成
@@ -382,25 +408,65 @@ impl NyashInterpreter {
                         message: format!("TimeBox constructor expects 0 arguments, got {}", arguments.len()),
                     });
                 }
-                let time_box = Box::new(TimeBox::new()) as Box<dyn NyashBox>;
-                // 🌍 革命的実装：Environment tracking廃止
-                return Ok(time_box);
+                #[cfg(feature = "dynamic-file")]
+                {
+                    log::debug!("🔌 DEBUG: Creating TimeBox through dynamic library");
+                    let time_box = super::plugin_loader::PluginLoader::create_time_box()?;
+                    log::debug!("🔌 DEBUG: TimeBox created successfully, type_name: {}", time_box.type_name());
+                    return Ok(time_box);
+                }
+                #[cfg(not(feature = "dynamic-file"))]
+                {
+                    let time_box = Box::new(TimeBox::new()) as Box<dyn NyashBox>;
+                    return Ok(time_box);
+                }
             }
             "DateTimeBox" => {
                 // DateTimeBoxは引数なしで現在時刻、または引数1個でタイムスタンプ
                 match arguments.len() {
                     0 => {
-                        let datetime_box = Box::new(DateTimeBox::now()) as Box<dyn NyashBox>;
-                        // 🌍 革命的実装：Environment tracking廃止
-                        return Ok(datetime_box);
+                        #[cfg(feature = "dynamic-file")]
+                        {
+                            log::debug!("🔌 DEBUG: Creating DateTimeBox (now) through dynamic library");
+                            let datetime_box = super::plugin_loader::PluginLoader::create_datetime_now()?;
+                            log::debug!("🔌 DEBUG: DateTimeBox created successfully, type_name: {}", datetime_box.type_name());
+                            return Ok(datetime_box);
+                        }
+                        #[cfg(not(feature = "dynamic-file"))]
+                        {
+                            let datetime_box = Box::new(DateTimeBox::now()) as Box<dyn NyashBox>;
+                            return Ok(datetime_box);
+                        }
                     }
                     1 => {
                         let timestamp_value = self.execute_expression(&arguments[0])?;
+                        
+                        // Try integer timestamp first
                         if let Some(int_box) = timestamp_value.as_any().downcast_ref::<IntegerBox>() {
-                            let datetime_box = Box::new(DateTimeBox::from_timestamp(int_box.value)) as Box<dyn NyashBox>;
-                            // 🌍 革命的実装：Environment tracking廃止
+                            #[cfg(feature = "dynamic-file")]
+                            {
+                                // TODO: Add timestamp creation to plugin
+                                let datetime_box = Box::new(DateTimeBox::from_timestamp(int_box.value)) as Box<dyn NyashBox>;
+                                return Ok(datetime_box);
+                            }
+                            #[cfg(not(feature = "dynamic-file"))]
+                            {
+                                let datetime_box = Box::new(DateTimeBox::from_timestamp(int_box.value)) as Box<dyn NyashBox>;
+                                return Ok(datetime_box);
+                            }
+                        }
+                        
+                        // Try string parsing
+                        let time_str = timestamp_value.to_string_box().value;
+                        #[cfg(feature = "dynamic-file")]
+                        {
+                            log::debug!("🔌 DEBUG: Creating DateTimeBox from string through dynamic library");
+                            let datetime_box = super::plugin_loader::PluginLoader::create_datetime_from_string(&time_str)?;
+                            log::debug!("🔌 DEBUG: DateTimeBox created successfully, type_name: {}", datetime_box.type_name());
                             return Ok(datetime_box);
-                        } else {
+                        }
+                        #[cfg(not(feature = "dynamic-file"))]
+                        {
                             return Err(RuntimeError::TypeError {
                                 message: "DateTimeBox constructor requires integer timestamp".to_string(),
                             });
@@ -442,9 +508,18 @@ impl NyashInterpreter {
                         message: format!("RandomBox constructor expects 0 arguments, got {}", arguments.len()),
                     });
                 }
-                let random_box = Box::new(RandomBox::new()) as Box<dyn NyashBox>;
-                // 🌍 革命的実装：Environment tracking廃止
-                return Ok(random_box);
+                #[cfg(feature = "dynamic-file")]
+                {
+                    log::debug!("🔌 DEBUG: Creating RandomBox through dynamic library");
+                    let random_box = super::plugin_loader::PluginLoader::create_random_box()?;
+                    log::debug!("🔌 DEBUG: RandomBox created successfully, type_name: {}", random_box.type_name());
+                    return Ok(random_box);
+                }
+                #[cfg(not(feature = "dynamic-file"))]
+                {
+                    let random_box = Box::new(RandomBox::new()) as Box<dyn NyashBox>;
+                    return Ok(random_box);
+                }
             }
             "SoundBox" => {
                 // SoundBoxは引数なしで作成

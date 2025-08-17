@@ -323,6 +323,13 @@ echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
 ./target/debug/nyash app_dice_rpg.nyash
 ```
 
+### ⚠️ **ビルド時間に関する重要な注意**
+**wasmtime依存関係により、フルビルドは2-3分かかります。**
+- タイムアウトエラーを避けるため、ビルドコマンドには十分な時間を設定してください
+- 例: `cargo build --release -j32` （3分以上待つ）
+- プラグインのみのビルドは数秒で完了します
+- Phase 9.75fで動的ライブラリ分離により改善作業中
+
 ### 🐛 デバッグ
 
 #### パーサー無限ループ対策（NEW! 2025-08-09）

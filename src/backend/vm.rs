@@ -435,10 +435,31 @@ impl VM {
             
             // Phase 6: Box reference operations
             MirInstruction::RefNew { dst, box_val } => {
-                // For now, a reference is just the same as the box value
-                // In a real implementation, this would create a proper reference
+                // Get the box type/value from the previous Const instruction
                 let box_value = self.get_value(*box_val)?;
-                self.values.insert(*dst, box_value);
+                
+                // If this is a Box type name (like "StringBox", "IntegerBox"), create an appropriate default value
+                // In the context of Everything is Box, this should create the actual Box instance
+                let ref_value = match &box_value {
+                    VMValue::String(type_name) => {
+                        match type_name.as_str() {
+                            "StringBox" => {
+                                // For StringBox, we need the actual string content from previous context
+                                // For now, create an empty string - this should be improved to use the actual value
+                                VMValue::String(String::new())
+                            },
+                            "IntegerBox" => VMValue::Integer(0),
+                            "BoolBox" => VMValue::Bool(false),
+                            _ => {
+                                // If it's a regular string (not a type name), use it as-is
+                                VMValue::String(type_name.clone())
+                            }
+                        }
+                    },
+                    _ => box_value, // For non-string values, use as-is
+                };
+                
+                self.values.insert(*dst, ref_value);
                 Ok(ControlFlow::Continue)
             },
             

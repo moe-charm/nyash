@@ -492,6 +492,11 @@ impl WasmCodegen {
                 Ok(vec!["nop".to_string()])
             },
             
+            // Phase 4: Call instruction for intrinsic functions
+            MirInstruction::Call { dst, func, args, effects: _ } => {
+                self.generate_call_instruction(dst.as_ref(), *func, args)
+            },
+            
             // Unsupported instructions
             _ => Err(WasmError::UnsupportedInstruction(
                 format!("Instruction not yet supported: {:?}", instruction)
@@ -766,6 +771,36 @@ impl WasmCodegen {
                 "i32.const 0".to_string(), // Void result
                 format!("local.set ${}", self.get_local_index(dst)?),
             ]);
+        }
+        
+        Ok(instructions)
+    }
+    
+    /// Generate Call instruction for intrinsic functions (Phase 4)
+    fn generate_call_instruction(&mut self, dst: Option<&ValueId>, func: ValueId, args: &[ValueId]) -> Result<Vec<String>, WasmError> {
+        // Get the function name from the func ValueId
+        // In MIR, intrinsic function names are stored as string constants
+        let mut instructions = Vec::new();
+        
+        // For intrinsic functions, we handle them based on their name
+        // The func ValueId should contain a string constant like "@print"
+        
+        // For now, assume all calls are @print intrinsic
+        // TODO: Implement proper function name resolution from ValueId
+        
+        // Load all arguments onto stack in order
+        for arg in args {
+            instructions.push(format!("local.get ${}", self.get_local_index(*arg)?));
+        }
+        
+        // Call the print function (assuming it's imported as $print)
+        instructions.push("call $print".to_string());
+        
+        // Store result if destination is provided
+        if let Some(dst) = dst {
+            // Intrinsic functions typically return void, but we provide a dummy value
+            instructions.push("i32.const 0".to_string()); // Void result
+            instructions.push(format!("local.set ${}", self.get_local_index(*dst)?));
         }
         
         Ok(instructions)

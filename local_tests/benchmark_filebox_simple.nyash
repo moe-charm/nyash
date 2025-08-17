@@ -1,0 +1,47 @@
+// FileBox シンプルパフォーマンステスト
+// 動的版と静的版の速度比較用
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("📊 FileBox パフォーマンステスト")
+        
+        // テスト設定
+        local iterations
+        iterations = 100  // 少なめにして手動計測
+        
+        me.console.log("🔧 Test: FileBox作成・読み書き x " + iterations.toString())
+        me.console.log("⏱️ 開始時刻を記録してください...")
+        
+        // FileBox作成・読み書きテスト
+        local i
+        i = 0
+        loop(i < iterations) {
+            local file
+            file = new FileBox("perf_test_" + i.toString() + ".txt")
+            
+            // 書き込み
+            file.write("Performance test data " + i.toString())
+            
+            // 読み込み
+            local content
+            content = file.read()
+            
+            // 存在確認
+            local exists
+            exists = file.exists()
+            
+            i = i + 1
+        }
+        
+        me.console.log("⏱️ 終了！経過時間を確認してください")
+        me.console.log("✅ " + iterations.toString() + " 個のファイル操作完了")
+        
+        // クリーンアップ用コメント
+        me.console.log("\n🧹 クリーンアップ: rm -f perf_test_*.txt")
+        
+        return "done"
+    }
+}

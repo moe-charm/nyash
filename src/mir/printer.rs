@@ -371,6 +371,39 @@ impl MirPrinter {
                     format!("extern_call {}.{}({}) [effects: {}]", iface_name, method_name, args_str, effects)
                 }
             },
+            
+            // Phase 8.5: MIR 26-instruction reduction (NEW)
+            MirInstruction::BoxFieldLoad { dst, box_val, field } => {
+                format!("{} = {}.{}", dst, box_val, field)
+            },
+            MirInstruction::BoxFieldStore { box_val, field, value } => {
+                format!("{}.{} = {}", box_val, field, value)
+            },
+            MirInstruction::WeakCheck { dst, weak_ref } => {
+                format!("{} = weak_check {}", dst, weak_ref)
+            },
+            MirInstruction::Send { data, target } => {
+                format!("send {} -> {}", data, target)
+            },
+            MirInstruction::Recv { dst, source } => {
+                format!("{} = recv {}", dst, source)
+            },
+            MirInstruction::TailCall { func, args, effects } => {
+                let args_str = args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", ");
+                format!("tail_call {}({}) [effects: {}]", func, args_str, effects)
+            },
+            MirInstruction::Adopt { parent, child } => {
+                format!("adopt {} <- {}", parent, child)
+            },
+            MirInstruction::Release { reference } => {
+                format!("release {}", reference)
+            },
+            MirInstruction::MemCopy { dst, src, size } => {
+                format!("memcopy {} <- {}, {}", dst, src, size)
+            },
+            MirInstruction::AtomicFence { ordering } => {
+                format!("atomic_fence {:?}", ordering)
+            },
         }
     }
     

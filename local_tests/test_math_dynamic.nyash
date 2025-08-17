@@ -1,0 +1,60 @@
+// Math系Box動的ライブラリテスト
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧮 Math系Box動的ライブラリテスト")
+        
+        // MathBoxテスト
+        me.console.log("\n📐 MathBox テスト:")
+        local math = new MathBox()
+        me.console.log("math.toString(): " + math.toString())
+        me.console.log("math.sqrt(16): " + math.sqrt(16).toString())
+        me.console.log("math.pow(2, 10): " + math.pow(2, 10).toString())
+        me.console.log("math.sin(1.57): " + math.sin(1.57).toString())
+        me.console.log("math.cos(0): " + math.cos(0).toString())
+        me.console.log("math.abs(-42): " + math.abs(-42).toString())
+        me.console.log("math.floor(3.7): " + math.floor(3.7).toString())
+        me.console.log("math.ceil(3.2): " + math.ceil(3.2).toString())
+        me.console.log("math.round(3.5): " + math.round(3.5).toString())
+        me.console.log("math.min(10, 5): " + math.min(10, 5).toString())
+        me.console.log("math.max(10, 5): " + math.max(10, 5).toString())
+        
+        // RandomBoxテスト
+        me.console.log("\n🎲 RandomBox テスト:")
+        local random = new RandomBox()
+        me.console.log("random.toString(): " + random.toString())
+        me.console.log("random.next(): " + random.next().toString())
+        me.console.log("random.range(1, 10): " + random.range(1, 10).toString())
+        me.console.log("random.int(1, 100): " + random.int(1, 100).toString())
+        
+        // TimeBoxテスト
+        me.console.log("\n⏰ TimeBox テスト:")
+        local time = new TimeBox()
+        me.console.log("time.toString(): " + time.toString())
+        local now = time.now()
+        me.console.log("time.now(): " + now.toString())
+        
+        // DateTimeBoxテスト
+        me.console.log("\n📅 DateTimeBox テスト:")
+        local dt = new DateTimeBox()
+        me.console.log("dt.toString(): " + dt.toString())
+        me.console.log("dt.year(): " + dt.year().toString())
+        me.console.log("dt.month(): " + dt.month().toString())
+        me.console.log("dt.day(): " + dt.day().toString())
+        me.console.log("dt.hour(): " + dt.hour().toString())
+        me.console.log("dt.minute(): " + dt.minute().toString())
+        me.console.log("dt.second(): " + dt.second().toString())
+        me.console.log("dt.timestamp(): " + dt.timestamp().toString())
+        
+        // 文字列からDateTimeBox作成
+        local dt2 = new DateTimeBox("2025-08-17T12:34:56Z")
+        me.console.log("\nDateTimeBox from string: " + dt2.toString())
+        
+        me.console.log("\n✅ 全テスト完了！")
+        
+        return "done"
+    }
+}

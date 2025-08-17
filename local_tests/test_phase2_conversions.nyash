@@ -1,0 +1,23 @@
+// Phase 2 MIR conversion test
+static box Main {
+    init { console, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // Test print statement (should use @print intrinsic)
+        print("Testing Phase 2 conversions!")
+        
+        // Test unary operations (should use @unary_* intrinsics)  
+        local x = 42
+        local negated = -x  // @unary_neg
+        local flag = true
+        local inverted = not flag  // @unary_not
+        
+        me.console.log("Negated: " + negated.toString())
+        me.console.log("Inverted: " + inverted.toString())
+        
+        me.result = "Phase 2 test completed"
+        return me.result
+    }
+}

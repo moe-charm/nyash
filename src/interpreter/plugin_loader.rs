@@ -11,19 +11,20 @@ use std::sync::{Arc, RwLock};
 use libloading::{Library, Symbol};
 
 use crate::interpreter::RuntimeError;
-use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase, IntegerBox};
+use crate::boxes::FloatBox;
 
 lazy_static::lazy_static! {
     /// グローバルプラグインキャッシュ
-    static ref PLUGIN_CACHE: RwLock<HashMap<String, LoadedPlugin>> = 
+    pub(crate) static ref PLUGIN_CACHE: RwLock<HashMap<String, LoadedPlugin>> = 
         RwLock::new(HashMap::new());
 }
 
 /// ロード済みプラグイン情報
 #[cfg(feature = "dynamic-file")]
-struct LoadedPlugin {
-    library: Library,
-    info: PluginInfo,
+pub(crate) struct LoadedPlugin {
+    pub(crate) library: Library,
+    pub(crate) info: PluginInfo,
 }
 
 /// プラグイン情報
@@ -60,6 +61,114 @@ impl Drop for FileBoxHandle {
 
 unsafe impl Send for FileBoxHandle {}
 unsafe impl Sync for FileBoxHandle {}
+
+/// MathBoxハンドル
+#[derive(Debug)]
+struct MathBoxHandle {
+    ptr: *mut c_void,
+}
+
+impl Drop for MathBoxHandle {
+    fn drop(&mut self) {
+        #[cfg(feature = "dynamic-file")]
+        {
+            if !self.ptr.is_null() {
+                let cache = PLUGIN_CACHE.read().unwrap();
+                if let Some(plugin) = cache.get("math") {
+                    unsafe {
+                        if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void)>>(b"nyash_math_free\0") {
+                            free_fn(self.ptr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+unsafe impl Send for MathBoxHandle {}
+unsafe impl Sync for MathBoxHandle {}
+
+/// RandomBoxハンドル
+#[derive(Debug)]
+struct RandomBoxHandle {
+    ptr: *mut c_void,
+}
+
+impl Drop for RandomBoxHandle {
+    fn drop(&mut self) {
+        #[cfg(feature = "dynamic-file")]
+        {
+            if !self.ptr.is_null() {
+                let cache = PLUGIN_CACHE.read().unwrap();
+                if let Some(plugin) = cache.get("math") {
+                    unsafe {
+                        if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void)>>(b"nyash_random_free\0") {
+                            free_fn(self.ptr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+unsafe impl Send for RandomBoxHandle {}
+unsafe impl Sync for RandomBoxHandle {}
+
+/// TimeBoxハンドル
+#[derive(Debug)]
+struct TimeBoxHandle {
+    ptr: *mut c_void,
+}
+
+impl Drop for TimeBoxHandle {
+    fn drop(&mut self) {
+        #[cfg(feature = "dynamic-file")]
+        {
+            if !self.ptr.is_null() {
+                let cache = PLUGIN_CACHE.read().unwrap();
+                if let Some(plugin) = cache.get("math") {
+                    unsafe {
+                        if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void)>>(b"nyash_time_free\0") {
+                            free_fn(self.ptr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+unsafe impl Send for TimeBoxHandle {}
+unsafe impl Sync for TimeBoxHandle {}
+
+/// DateTimeBoxハンドル
+#[derive(Debug)]
+pub(crate) struct DateTimeBoxHandle {
+    pub(crate) ptr: *mut c_void,
+}
+
+impl Drop for DateTimeBoxHandle {
+    fn drop(&mut self) {
+        #[cfg(feature = "dynamic-file")]
+        {
+            if !self.ptr.is_null() {
+                let cache = PLUGIN_CACHE.read().unwrap();
+                if let Some(plugin) = cache.get("math") {
+                    unsafe {
+                        if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void)>>(b"nyash_datetime_free\0") {
+                            free_fn(self.ptr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+unsafe impl Send for DateTimeBoxHandle {}
+unsafe impl Sync for DateTimeBoxHandle {}
 
 /// FileBoxプロキシ - 動的ライブラリのFileBoxをラップ
 #[derive(Debug)]
@@ -251,6 +360,485 @@ impl std::fmt::Display for FileBoxProxy {
     }
 }
 
+// ================== MathBoxProxy ==================
+
+/// MathBoxプロキシ - 動的ライブラリのMathBoxをラップ
+#[derive(Debug)]
+pub struct MathBoxProxy {
+    handle: Arc<MathBoxHandle>,
+    base: BoxBase,
+}
+
+unsafe impl Send for MathBoxProxy {}
+unsafe impl Sync for MathBoxProxy {}
+
+impl MathBoxProxy {
+    pub fn new(handle: *mut c_void) -> Self {
+        MathBoxProxy {
+            handle: Arc::new(MathBoxHandle { ptr: handle }),
+            base: BoxBase::new(),
+        }
+    }
+}
+
+impl BoxCore for MathBoxProxy {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        None // プロキシ型は継承しない
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MathBox")
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl NyashBox for MathBoxProxy {
+    fn type_name(&self) -> &'static str {
+        "MathBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        match PluginLoader::create_math_box() {
+            Ok(new_box) => new_box,
+            Err(_) => Box::new(MathBoxProxy {
+                handle: Arc::clone(&self.handle),
+                base: BoxBase::new(),
+            })
+        }
+    }
+    
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new("MathBox")
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(_) = other.as_any().downcast_ref::<MathBoxProxy>() {
+            BoolBox::new(true)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+}
+
+impl std::fmt::Display for MathBoxProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
+// ================== RandomBoxProxy ==================
+
+/// RandomBoxプロキシ - 動的ライブラリのRandomBoxをラップ
+#[derive(Debug)]
+pub struct RandomBoxProxy {
+    handle: Arc<RandomBoxHandle>,
+    base: BoxBase,
+}
+
+unsafe impl Send for RandomBoxProxy {}
+unsafe impl Sync for RandomBoxProxy {}
+
+impl RandomBoxProxy {
+    pub fn new(handle: *mut c_void) -> Self {
+        RandomBoxProxy {
+            handle: Arc::new(RandomBoxHandle { ptr: handle }),
+            base: BoxBase::new(),
+        }
+    }
+    
+    pub fn next(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        #[cfg(feature = "dynamic-file")]
+        {
+            let cache = PLUGIN_CACHE.read().unwrap();
+            if let Some(plugin) = cache.get("math") {
+                unsafe {
+                    let next_fn: Symbol<unsafe extern "C" fn(*mut c_void) -> f64> = 
+                        plugin.library.get(b"nyash_random_next\0").map_err(|e| {
+                            RuntimeError::InvalidOperation {
+                                message: format!("Failed to get nyash_random_next: {}", e)
+                            }
+                        })?;
+                    
+                    let value = next_fn(self.handle.ptr);
+                    Ok(Box::new(FloatBox::new(value)))
+                }
+            } else {
+                Err(RuntimeError::InvalidOperation {
+                    message: "Math plugin not loaded".to_string()
+                })
+            }
+        }
+        
+        #[cfg(not(feature = "dynamic-file"))]
+        {
+            Err(RuntimeError::InvalidOperation {
+                message: "Dynamic loading not enabled".to_string()
+            })
+        }
+    }
+    
+    pub fn range(&self, min: f64, max: f64) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        #[cfg(feature = "dynamic-file")]
+        {
+            let cache = PLUGIN_CACHE.read().unwrap();
+            if let Some(plugin) = cache.get("math") {
+                unsafe {
+                    let range_fn: Symbol<unsafe extern "C" fn(*mut c_void, f64, f64) -> f64> = 
+                        plugin.library.get(b"nyash_random_range\0").map_err(|e| {
+                            RuntimeError::InvalidOperation {
+                                message: format!("Failed to get nyash_random_range: {}", e)
+                            }
+                        })?;
+                    
+                    let value = range_fn(self.handle.ptr, min, max);
+                    Ok(Box::new(FloatBox::new(value)))
+                }
+            } else {
+                Err(RuntimeError::InvalidOperation {
+                    message: "Math plugin not loaded".to_string()
+                })
+            }
+        }
+        
+        #[cfg(not(feature = "dynamic-file"))]
+        {
+            Err(RuntimeError::InvalidOperation {
+                message: "Dynamic loading not enabled".to_string()
+            })
+        }
+    }
+    
+    pub fn int(&self, min: i64, max: i64) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        #[cfg(feature = "dynamic-file")]
+        {
+            let cache = PLUGIN_CACHE.read().unwrap();
+            if let Some(plugin) = cache.get("math") {
+                unsafe {
+                    let int_fn: Symbol<unsafe extern "C" fn(*mut c_void, i64, i64) -> i64> = 
+                        plugin.library.get(b"nyash_random_int\0").map_err(|e| {
+                            RuntimeError::InvalidOperation {
+                                message: format!("Failed to get nyash_random_int: {}", e)
+                            }
+                        })?;
+                    
+                    let value = int_fn(self.handle.ptr, min, max);
+                    Ok(Box::new(IntegerBox::new(value)))
+                }
+            } else {
+                Err(RuntimeError::InvalidOperation {
+                    message: "Math plugin not loaded".to_string()
+                })
+            }
+        }
+        
+        #[cfg(not(feature = "dynamic-file"))]
+        {
+            Err(RuntimeError::InvalidOperation {
+                message: "Dynamic loading not enabled".to_string()
+            })
+        }
+    }
+}
+
+impl BoxCore for RandomBoxProxy {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        None // プロキシ型は継承しない
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RandomBox")
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl NyashBox for RandomBoxProxy {
+    fn type_name(&self) -> &'static str {
+        "RandomBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        match PluginLoader::create_random_box() {
+            Ok(new_box) => new_box,
+            Err(_) => Box::new(RandomBoxProxy {
+                handle: Arc::clone(&self.handle),
+                base: BoxBase::new(),
+            })
+        }
+    }
+    
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new("RandomBox")
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(_) = other.as_any().downcast_ref::<RandomBoxProxy>() {
+            BoolBox::new(true)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+}
+
+impl std::fmt::Display for RandomBoxProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
+// ================== TimeBoxProxy ==================
+
+/// TimeBoxプロキシ - 動的ライブラリのTimeBoxをラップ
+#[derive(Debug)]
+pub struct TimeBoxProxy {
+    handle: Arc<TimeBoxHandle>,
+    base: BoxBase,
+}
+
+unsafe impl Send for TimeBoxProxy {}
+unsafe impl Sync for TimeBoxProxy {}
+
+impl TimeBoxProxy {
+    pub fn new(handle: *mut c_void) -> Self {
+        TimeBoxProxy {
+            handle: Arc::new(TimeBoxHandle { ptr: handle }),
+            base: BoxBase::new(),
+        }
+    }
+}
+
+impl BoxCore for TimeBoxProxy {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        None // プロキシ型は継承しない
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TimeBox")
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl NyashBox for TimeBoxProxy {
+    fn type_name(&self) -> &'static str {
+        "TimeBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        match PluginLoader::create_time_box() {
+            Ok(new_box) => new_box,
+            Err(_) => Box::new(TimeBoxProxy {
+                handle: Arc::clone(&self.handle),
+                base: BoxBase::new(),
+            })
+        }
+    }
+    
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new("TimeBox")
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(_) = other.as_any().downcast_ref::<TimeBoxProxy>() {
+            BoolBox::new(true)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+}
+
+impl std::fmt::Display for TimeBoxProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
+// ================== DateTimeBoxProxy ==================
+
+/// DateTimeBoxプロキシ - 動的ライブラリのDateTimeBoxをラップ
+#[derive(Debug)]
+pub struct DateTimeBoxProxy {
+    pub(crate) handle: Arc<DateTimeBoxHandle>,
+    base: BoxBase,
+}
+
+unsafe impl Send for DateTimeBoxProxy {}
+unsafe impl Sync for DateTimeBoxProxy {}
+
+impl DateTimeBoxProxy {
+    pub fn new(handle: *mut c_void) -> Self {
+        DateTimeBoxProxy {
+            handle: Arc::new(DateTimeBoxHandle { ptr: handle }),
+            base: BoxBase::new(),
+        }
+    }
+}
+
+impl BoxCore for DateTimeBoxProxy {
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        None // プロキシ型は継承しない
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[cfg(feature = "dynamic-file")]
+        {
+            let cache = PLUGIN_CACHE.read().unwrap();
+            if let Some(plugin) = cache.get("math") {
+                unsafe {
+                    if let Ok(to_string_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void) -> *mut c_char>>(b"nyash_datetime_to_string\0") {
+                        let str_ptr = to_string_fn(self.handle.ptr);
+                        if !str_ptr.is_null() {
+                            let c_str = CStr::from_ptr(str_ptr);
+                            if let Ok(rust_str) = c_str.to_str() {
+                                let result = write!(f, "{}", rust_str);
+                                
+                                // 文字列を解放
+                                if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_char)>>(b"nyash_string_free\0") {
+                                    free_fn(str_ptr);
+                                }
+                                
+                                return result;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        write!(f, "DateTimeBox")
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl NyashBox for DateTimeBoxProxy {
+    fn type_name(&self) -> &'static str {
+        "DateTimeBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        // DateTimeBoxは不変なので、ハンドルを共有
+        Box::new(DateTimeBoxProxy {
+            handle: Arc::clone(&self.handle),
+            base: BoxBase::new(),
+        })
+    }
+    
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
+    
+    fn to_string_box(&self) -> StringBox {
+        #[cfg(feature = "dynamic-file")]
+        {
+            let cache = PLUGIN_CACHE.read().unwrap();
+            if let Some(plugin) = cache.get("math") {
+                unsafe {
+                    if let Ok(to_string_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void) -> *mut c_char>>(b"nyash_datetime_to_string\0") {
+                        let str_ptr = to_string_fn(self.handle.ptr);
+                        if !str_ptr.is_null() {
+                            let c_str = CStr::from_ptr(str_ptr);
+                            if let Ok(rust_str) = c_str.to_str() {
+                                let result = StringBox::new(rust_str);
+                                
+                                // 文字列を解放
+                                if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_char)>>(b"nyash_string_free\0") {
+                                    free_fn(str_ptr);
+                                }
+                                
+                                return result;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        StringBox::new("DateTimeBox")
+    }
+    
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(other_datetime) = other.as_any().downcast_ref::<DateTimeBoxProxy>() {
+            // タイムスタンプで比較
+            #[cfg(feature = "dynamic-file")]
+            {
+                let cache = PLUGIN_CACHE.read().unwrap();
+                if let Some(plugin) = cache.get("math") {
+                    unsafe {
+                        if let Ok(timestamp_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void) -> i64>>(b"nyash_datetime_timestamp\0") {
+                            let this_ts = timestamp_fn(self.handle.ptr);
+                            let other_ts = timestamp_fn(other_datetime.handle.ptr);
+                            return BoolBox::new(this_ts == other_ts);
+                        }
+                    }
+                }
+            }
+            BoolBox::new(false)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+}
+
+impl std::fmt::Display for DateTimeBoxProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_box(f)
+    }
+}
+
 /// プラグインローダー公開API
 pub struct PluginLoader;
 
@@ -399,6 +987,231 @@ impl PluginLoader {
         } else {
             Err(RuntimeError::InvalidOperation {
                 message: "File plugin not loaded".to_string()
+            })
+        }
+    }
+    
+    /// Mathプラグインをロード
+    #[cfg(feature = "dynamic-file")]
+    pub fn load_math_plugin() -> Result<(), RuntimeError> {
+        let mut cache = PLUGIN_CACHE.write().unwrap();
+        
+        if cache.contains_key("math") {
+            return Ok(()); // 既にロード済み
+        }
+        
+        // プラグインパスを決定（複数の場所を試す）
+        let lib_name = if cfg!(target_os = "windows") {
+            "nyash_math.dll"
+        } else if cfg!(target_os = "macos") {
+            "libnyash_math.dylib"
+        } else {
+            "libnyash_math.so"
+        };
+        
+        // 複数のパスを試す
+        let possible_paths = vec![
+            format!("./target/release/{}", lib_name),
+            format!("./target/debug/{}", lib_name),
+            format!("./plugins/{}", lib_name),
+            format!("./{}", lib_name),
+        ];
+        
+        let mut lib_path = None;
+        for path in &possible_paths {
+            if std::path::Path::new(path).exists() {
+                lib_path = Some(path.clone());
+                break;
+            }
+        }
+        
+        let lib_path = lib_path.ok_or_else(|| {
+            RuntimeError::InvalidOperation {
+                message: format!("Failed to find math plugin library. Searched paths: {:?}", possible_paths)
+            }
+        })?;
+        
+        // ライブラリをロード
+        unsafe {
+            let library = Library::new(&lib_path).map_err(|e| {
+                RuntimeError::InvalidOperation {
+                    message: format!("Failed to load math plugin: {}", e)
+                }
+            })?;
+            
+            // プラグイン情報（簡略化）
+            let info = PluginInfo {
+                name: "math".to_string(),
+                version: 1,
+                api_version: 1,
+            };
+            
+            cache.insert("math".to_string(), LoadedPlugin {
+                library,
+                info,
+            });
+        }
+        
+        Ok(())
+    }
+    
+    /// MathBoxを作成
+    #[cfg(feature = "dynamic-file")]
+    pub fn create_math_box() -> Result<Box<dyn NyashBox>, RuntimeError> {
+        Self::load_math_plugin()?;
+        
+        let cache = PLUGIN_CACHE.read().unwrap();
+        if let Some(plugin) = cache.get("math") {
+            unsafe {
+                let create_fn: Symbol<unsafe extern "C" fn() -> *mut c_void> = 
+                    plugin.library.get(b"nyash_math_create\0").map_err(|e| {
+                        RuntimeError::InvalidOperation {
+                            message: format!("Failed to get nyash_math_create: {}", e)
+                        }
+                    })?;
+                
+                let handle = create_fn();
+                if handle.is_null() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "Failed to create MathBox".to_string()
+                    });
+                }
+                
+                Ok(Box::new(MathBoxProxy::new(handle)))
+            }
+        } else {
+            Err(RuntimeError::InvalidOperation {
+                message: "Math plugin not loaded".to_string()
+            })
+        }
+    }
+    
+    /// RandomBoxを作成
+    #[cfg(feature = "dynamic-file")]
+    pub fn create_random_box() -> Result<Box<dyn NyashBox>, RuntimeError> {
+        Self::load_math_plugin()?;
+        
+        let cache = PLUGIN_CACHE.read().unwrap();
+        if let Some(plugin) = cache.get("math") {
+            unsafe {
+                let create_fn: Symbol<unsafe extern "C" fn() -> *mut c_void> = 
+                    plugin.library.get(b"nyash_random_create\0").map_err(|e| {
+                        RuntimeError::InvalidOperation {
+                            message: format!("Failed to get nyash_random_create: {}", e)
+                        }
+                    })?;
+                
+                let handle = create_fn();
+                if handle.is_null() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "Failed to create RandomBox".to_string()
+                    });
+                }
+                
+                Ok(Box::new(RandomBoxProxy::new(handle)))
+            }
+        } else {
+            Err(RuntimeError::InvalidOperation {
+                message: "Math plugin not loaded".to_string()
+            })
+        }
+    }
+    
+    /// TimeBoxを作成
+    #[cfg(feature = "dynamic-file")]
+    pub fn create_time_box() -> Result<Box<dyn NyashBox>, RuntimeError> {
+        Self::load_math_plugin()?;
+        
+        let cache = PLUGIN_CACHE.read().unwrap();
+        if let Some(plugin) = cache.get("math") {
+            unsafe {
+                let create_fn: Symbol<unsafe extern "C" fn() -> *mut c_void> = 
+                    plugin.library.get(b"nyash_time_create\0").map_err(|e| {
+                        RuntimeError::InvalidOperation {
+                            message: format!("Failed to get nyash_time_create: {}", e)
+                        }
+                    })?;
+                
+                let handle = create_fn();
+                if handle.is_null() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "Failed to create TimeBox".to_string()
+                    });
+                }
+                
+                Ok(Box::new(TimeBoxProxy::new(handle)))
+            }
+        } else {
+            Err(RuntimeError::InvalidOperation {
+                message: "Math plugin not loaded".to_string()
+            })
+        }
+    }
+    
+    /// 現在時刻のDateTimeBoxを作成
+    #[cfg(feature = "dynamic-file")]
+    pub fn create_datetime_now() -> Result<Box<dyn NyashBox>, RuntimeError> {
+        Self::load_math_plugin()?;
+        
+        let cache = PLUGIN_CACHE.read().unwrap();
+        if let Some(plugin) = cache.get("math") {
+            unsafe {
+                let now_fn: Symbol<unsafe extern "C" fn() -> *mut c_void> = 
+                    plugin.library.get(b"nyash_time_now\0").map_err(|e| {
+                        RuntimeError::InvalidOperation {
+                            message: format!("Failed to get nyash_time_now: {}", e)
+                        }
+                    })?;
+                
+                let handle = now_fn();
+                if handle.is_null() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "Failed to create DateTimeBox".to_string()
+                    });
+                }
+                
+                Ok(Box::new(DateTimeBoxProxy::new(handle)))
+            }
+        } else {
+            Err(RuntimeError::InvalidOperation {
+                message: "Math plugin not loaded".to_string()
+            })
+        }
+    }
+    
+    /// 文字列からDateTimeBoxを作成
+    #[cfg(feature = "dynamic-file")]
+    pub fn create_datetime_from_string(time_str: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        Self::load_math_plugin()?;
+        
+        let cache = PLUGIN_CACHE.read().unwrap();
+        if let Some(plugin) = cache.get("math") {
+            let c_str = CString::new(time_str).map_err(|_| {
+                RuntimeError::InvalidOperation {
+                    message: "Invalid time string".to_string()
+                }
+            })?;
+            
+            unsafe {
+                let parse_fn: Symbol<unsafe extern "C" fn(*const c_char) -> *mut c_void> = 
+                    plugin.library.get(b"nyash_time_parse\0").map_err(|e| {
+                        RuntimeError::InvalidOperation {
+                            message: format!("Failed to get nyash_time_parse: {}", e)
+                        }
+                    })?;
+                
+                let handle = parse_fn(c_str.as_ptr());
+                if handle.is_null() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("Failed to parse time string: {}", time_str)
+                    });
+                }
+                
+                Ok(Box::new(DateTimeBoxProxy::new(handle)))
+            }
+        } else {
+            Err(RuntimeError::InvalidOperation {
+                message: "Math plugin not loaded".to_string()
             })
         }
     }

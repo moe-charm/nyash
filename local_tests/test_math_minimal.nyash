@@ -1,0 +1,19 @@
+// Math系Box最小テスト
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧮 MathBox最小テスト")
+        
+        local math = new MathBox()
+        me.console.log("MathBox created: " + math.type_name())
+        
+        // 基本的な数学演算テスト
+        local result = math.sqrt(16)
+        me.console.log("sqrt(16) = " + result.toString())
+        
+        return "done"
+    }
+}
