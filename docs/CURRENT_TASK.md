@@ -6,15 +6,23 @@
 **戦略**: 型定義は全部最初に、実装は段階的に（unimplemented!活用）
 **期間**: 1週間（2025-08-17〜2025-08-24）
 **詳細**: 
-- [phase_9_75g_0_revised_type_first_approach.md](../予定/native-plan/issues/phase_9_75g_0_revised_type_first_approach.md)
-- [bid_ffi_ai_final_review_2025-08-17.md](../予定/native-plan/issues/bid_ffi_ai_final_review_2025-08-17.md)
+- [phase_9_75g_0_chatgpt_enhanced_final.md](../予定/native-plan/issues/phase_9_75g_0_chatgpt_enhanced_final.md) ← **ChatGPT最終案採用！**
+- [ffi-abi-specification.md](../説明書/reference/box-design/ffi-abi-specification.md) ← **BID-1仕様に更新完了！**
 
-### 🎯 今週の実装計画
-- **Day 1**: 全型定義（BidType, Transport, Effect, Error）
-- **Day 2**: プラグインローダー（dlopen/dlsym）
-- **Day 3**: 文字列処理（UTF-8, 所有権）
-- **Day 4**: FileBox最小実装
-- **Day 5**: エラー処理とOption/Result
+### 🌟 **Day 1 進捗** (2025-08-17)
+- ✅ ChatGPT先生の最終レビュー完了
+- ✅ ffi-abi-specification.mdをBID-1 Enhanced Editionに更新
+- ✅ Handle設計（type_id + instance_id）確定
+- ✅ BID-1 TLVフォーマット仕様確定
+- ✅ プラグインAPI（nyash_plugin_*）仕様確定
+- 🚀 **実装開始準備完了！**
+
+### 🎯 今週の実装計画（ChatGPT最終案準拠）
+- **Day 1**: BID-1基盤実装（TLV仕様、Handle構造体、エンコード/デコード）← **今日！**
+- **Day 2**: メタデータAPI実装（init/abi/shutdown、HostVtable、レジストリ）
+- **Day 3**: 既存Box統合（StringBox/IntegerBox/FutureBoxブリッジ）
+- **Day 4**: FileBoxプラグイン実装（open/read/write/close）
+- **Day 5**: 統合テスト・最適化（メモリリーク検証、性能測定）
 - **Day 6-7**: ドキュメント・CI・仕上げ
 
 ### 🔑 技術的決定事項
