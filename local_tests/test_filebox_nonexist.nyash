@@ -1,0 +1,34 @@
+// FileBox 存在しないファイルの読み込みテスト
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("📂 存在しないファイルのテスト")
+        
+        // 存在しないファイルを開く
+        local file
+        file = new FileBox("does_not_exist.txt")
+        
+        // 存在確認
+        local exists
+        exists = file.exists()
+        me.console.log("ファイル存在: " + exists.toString())
+        
+        // 読み込み試行
+        local content
+        content = file.read()
+        me.console.log("読み込み結果: " + content.toString())
+        
+        // 書き込んでから再度読み込み
+        file.write("Created by Nyash!")
+        exists = file.exists()
+        me.console.log("書き込み後の存在: " + exists.toString())
+        
+        content = file.read()
+        me.console.log("書き込み後の内容: " + content.toString())
+        
+        return "done"
+    }
+}

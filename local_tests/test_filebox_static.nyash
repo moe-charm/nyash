@@ -1,0 +1,7 @@
+// 静的FileBoxテスト（比較用）
+local file = new FileBox("static_test.txt")
+print("Static FileBox created!")
+
+// 静的FileBoxでtoString()を試す
+local result = file.toString()
+print("toString() called successfully!")

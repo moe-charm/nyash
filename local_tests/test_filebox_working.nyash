@@ -1,0 +1,22 @@
+// Working FileBox test
+using nyashstd
+
+console.log("🔌 Testing FileBox...")
+
+// Create a FileBox
+local file = new FileBox("test_file.txt")
+console.log("✅ FileBox created")
+
+// Write content
+file.write("Hello FileBox!")
+console.log("✅ Write successful")
+
+// Read content
+local content = file.read()
+console.log("📖 Read content: " + content)
+
+// Check exists
+local exists = file.exists()
+console.log("📁 File exists: " + exists.toString())
+
+console.log("🎉 Test completed!")

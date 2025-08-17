@@ -1,0 +1,13 @@
+// FileBox 最小テスト - 動的ライブラリ実装
+
+static box Main {
+    init { }
+    
+    main() {
+        // FileBox作成のみ
+        local file1
+        file1 = new FileBox("minimal.txt")
+        
+        return "done"
+    }
+}

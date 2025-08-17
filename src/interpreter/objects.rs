@@ -8,6 +8,8 @@
 
 use super::*;
 use crate::boxes::{NullBox, ConsoleBox, FloatBox, DateTimeBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
+#[cfg(not(feature = "dynamic-file"))]
+use crate::boxes::FileBox;
 // use crate::boxes::intent_box_wrapper::IntentBoxWrapper;
 use crate::box_trait::SharedNyashBox;
 use std::sync::Arc;
@@ -100,14 +102,21 @@ impl NyashInterpreter {
                     {
                         // 動的ライブラリ経由でFileBoxを作成
                         use crate::interpreter::plugin_loader::PluginLoader;
+                        eprintln!("🔌 DEBUG: Creating FileBox through dynamic library for path: {}", path_str.value);
                         let file_box = PluginLoader::create_file_box(&path_str.value)?;
+                        eprintln!("🔌 DEBUG: FileBox created successfully, type_name: {}", file_box.type_name());
                         return Ok(file_box);
                     }
                     
                     #[cfg(not(feature = "dynamic-file"))]
                     {
                         // 静的リンク版
-                        let file_box = Box::new(FileBox::new(&path_str.value)) as Box<dyn NyashBox>;
+                        let file_box = match FileBox::open(&path_str.value) {
+                            Ok(fb) => Box::new(fb) as Box<dyn NyashBox>,
+                            Err(e) => return Err(RuntimeError::InvalidOperation {
+                                message: format!("Failed to create FileBox: {}", e)
+                            })
+                        };
                         return Ok(file_box);
                     }
                 } else {

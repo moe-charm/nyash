@@ -25,6 +25,7 @@ impl NyashInterpreter {
     #[cfg(feature = "dynamic-file")]
     pub(in crate::interpreter) fn execute_file_proxy_method(&mut self, file_box: &FileBoxProxy, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
+        eprintln!("🔍 DEBUG: execute_file_proxy_method called with method: '{}'", method);
         match method {
             "read" => {
                 if !arguments.is_empty() {
@@ -51,9 +52,16 @@ impl NyashInterpreter {
                 }
                 file_box.exists()
             }
-            _ => Err(RuntimeError::UndefinedMethod {
-                method: method.to_string(),
-                box_type: "FileBox".to_string(),
+            "toString" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(Box::new(file_box.to_string_box()))
+            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Undefined method '{}' for FileBox", method),
             }),
         }
     }
@@ -109,6 +117,14 @@ impl NyashInterpreter {
                         message: "copy() requires string destination path".to_string(),
                     })
                 }
+            }
+            "toString" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toString() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(Box::new(file_box.to_string_box()))
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for FileBox", method),

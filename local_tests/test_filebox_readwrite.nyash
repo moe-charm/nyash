@@ -1,0 +1,41 @@
+// FileBox 実際の読み書きテスト - 動的ライブラリ実装
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("📝 FileBox 読み書きテスト開始")
+        
+        // テストファイル作成
+        local file
+        file = new FileBox("test_readwrite.txt")
+        me.console.log("✅ FileBox作成: test_readwrite.txt")
+        
+        // ファイルに書き込み
+        local writeResult
+        writeResult = file.write("Hello from Nyash!\nThis is a test file.\n動的ライブラリから書き込み！")
+        me.console.log("📝 書き込み結果: " + writeResult.toString())
+        
+        // ファイルから読み込み
+        local content
+        content = file.read()
+        me.console.log("📖 読み込み内容:")
+        me.console.log(content)
+        
+        // ファイル存在確認
+        local exists
+        exists = file.exists()
+        me.console.log("📁 ファイル存在: " + exists.toString())
+        
+        // 追記テスト（上書きになる）
+        file.write("New content!\n新しい内容で上書きされました。")
+        local newContent
+        newContent = file.read()
+        me.console.log("📖 上書き後の内容:")
+        me.console.log(newContent)
+        
+        me.console.log("🎉 FileBox 読み書きテスト完了!")
+        return "success"
+    }
+}

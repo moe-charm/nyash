@@ -1,0 +1,30 @@
+// FileBox シンプルテスト - 動的ライブラリ実装
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("Test 1: FileBox creation")
+        
+        // FileBox作成テスト
+        local file1
+        file1 = new FileBox("test1.txt")
+        me.console.log("FileBox created")
+        
+        // exists()テスト
+        local exists1
+        exists1 = file1.exists()
+        me.console.log("exists() called")
+        
+        // toString()単独テスト（文字列連結なし）
+        local str1
+        str1 = file1.toString()
+        me.console.log("toString() called")
+        
+        // 最後に値を表示
+        me.console.log(str1)
+        
+        return "success"
+    }
+}

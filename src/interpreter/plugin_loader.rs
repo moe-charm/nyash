@@ -5,8 +5,7 @@
 use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::os::raw::c_int;
-use std::sync::RwLock;
-use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "dynamic-file")]
 use libloading::{Library, Symbol};
@@ -35,9 +34,37 @@ struct PluginInfo {
     api_version: u32,
 }
 
+/// FileBoxハンドルの参照カウント管理用構造体
+#[derive(Debug)]
+struct FileBoxHandle {
+    ptr: *mut c_void,
+}
+
+impl Drop for FileBoxHandle {
+    fn drop(&mut self) {
+        #[cfg(feature = "dynamic-file")]
+        {
+            if !self.ptr.is_null() {
+                let cache = PLUGIN_CACHE.read().unwrap();
+                if let Some(plugin) = cache.get("file") {
+                    unsafe {
+                        if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void)>>(b"nyash_file_free\0") {
+                            free_fn(self.ptr);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+unsafe impl Send for FileBoxHandle {}
+unsafe impl Sync for FileBoxHandle {}
+
 /// FileBoxプロキシ - 動的ライブラリのFileBoxをラップ
+#[derive(Debug)]
 pub struct FileBoxProxy {
-    handle: *mut c_void,
+    handle: Arc<FileBoxHandle>,
     path: String,
     base: BoxBase,
 }
@@ -50,7 +77,7 @@ impl FileBoxProxy {
     /// 新しいFileBoxProxyを作成
     pub fn new(handle: *mut c_void, path: String) -> Self {
         FileBoxProxy {
-            handle,
+            handle: Arc::new(FileBoxHandle { ptr: handle }),
             path,
             base: BoxBase::new(),
         }
@@ -70,7 +97,7 @@ impl FileBoxProxy {
                             }
                         })?;
                     
-                    let result_ptr = read_fn(self.handle);
+                    let result_ptr = read_fn(self.handle.ptr);
                     if result_ptr.is_null() {
                         return Err(RuntimeError::InvalidOperation {
                             message: "Failed to read file".to_string()
@@ -126,7 +153,7 @@ impl FileBoxProxy {
                             }
                         })?;
                     
-                    let result = write_fn(self.handle, c_content.as_ptr());
+                    let result = write_fn(self.handle.ptr, c_content.as_ptr());
                     if result == 0 {
                         return Err(RuntimeError::InvalidOperation {
                             message: "Failed to write file".to_string()
@@ -156,23 +183,7 @@ impl FileBoxProxy {
     }
 }
 
-impl Drop for FileBoxProxy {
-    fn drop(&mut self) {
-        #[cfg(feature = "dynamic-file")]
-        {
-            if !self.handle.is_null() {
-                let cache = PLUGIN_CACHE.read().unwrap();
-                if let Some(plugin) = cache.get("file") {
-                    unsafe {
-                        if let Ok(free_fn) = plugin.library.get::<Symbol<unsafe extern "C" fn(*mut c_void)>>(b"nyash_file_free\0") {
-                            free_fn(self.handle);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+// FileBoxProxyのDropは不要 - FileBoxHandleが自動的に管理
 
 impl BoxCore for FileBoxProxy {
     fn box_id(&self) -> u64 {
@@ -202,11 +213,22 @@ impl NyashBox for FileBoxProxy {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        // FileBoxは再オープンで複製
-        Box::new(VoidBox::new())
+        // FileBoxProxyの複製：新しいファイルハンドルを作成
+        match PluginLoader::create_file_box(&self.path) {
+            Ok(new_box) => new_box,
+            Err(_) => {
+                // エラー時は同じハンドルを共有（フォールバック）
+                Box::new(FileBoxProxy {
+                    handle: Arc::clone(&self.handle),
+                    path: self.path.clone(),
+                    base: BoxBase::new(),
+                })
+            }
+        }
     }
     
     fn share_box(&self) -> Box<dyn NyashBox> {
+        // 状態共有：自分自身の複製を返す
         self.clone_box()
     }
     
@@ -242,18 +264,40 @@ impl PluginLoader {
             return Ok(()); // 既にロード済み
         }
         
-        // プラグインパスを決定
-        let lib_path = if cfg!(target_os = "windows") {
-            "./target/debug/nyash_file.dll"
+        // プラグインパスを決定（複数の場所を試す）
+        let lib_name = if cfg!(target_os = "windows") {
+            "nyash_file.dll"
         } else if cfg!(target_os = "macos") {
-            "./target/debug/libnyash_file.dylib"
+            "libnyash_file.dylib"
         } else {
-            "./target/debug/libnyash_file.so"
+            "libnyash_file.so"
         };
+        
+        // 複数のパスを試す
+        let possible_paths = vec![
+            format!("./target/release/{}", lib_name),
+            format!("./target/debug/{}", lib_name),
+            format!("./plugins/{}", lib_name),
+            format!("./{}", lib_name),
+        ];
+        
+        let mut lib_path = None;
+        for path in &possible_paths {
+            if std::path::Path::new(path).exists() {
+                lib_path = Some(path.clone());
+                break;
+            }
+        }
+        
+        let lib_path = lib_path.ok_or_else(|| {
+            RuntimeError::InvalidOperation {
+                message: format!("Failed to find file plugin library. Searched paths: {:?}", possible_paths)
+            }
+        })?;
         
         // ライブラリをロード
         unsafe {
-            let library = Library::new(lib_path).map_err(|e| {
+            let library = Library::new(&lib_path).map_err(|e| {
                 RuntimeError::InvalidOperation {
                     message: format!("Failed to load file plugin: {}", e)
                 }
