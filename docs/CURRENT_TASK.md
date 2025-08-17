@@ -1,4 +1,4 @@
-# 🎯 現在のタスク (2025-08-17 MIR 35→26命令削減プロジェクト Phase 1実装中)
+# 🎯 現在のタスク (2025-08-17 MIR 35→26命令削減プロジェクト Phase 5-4実装中)
 
 ## 🚨 **最重要: MIR 35→26命令削減プロジェクト Phase 1** 
 
@@ -85,30 +85,43 @@ Call { dst, func: "@set_exception_handler", args: [type, handler] }
 ### 🎯 **Phase 1達成度: 100%完了**
 **35→26命令削減プロジェクト Phase 1 完全成功！**
 
-## 🚀 **次期最優先: Phase 3 最適化パス移行** (2025-08-17)
+## ✅ **Phase 3完了: 最適化パス移行** (2025-08-17)
 
-### 🎯 **Phase 3実装目標 (9/1-9/7)**
-Phase 2完了により、AST→MIR生成が新形式のみに完全移行しました。次はPhase 3として最適化パス移行を実装する必要があります。
+### ✅ **Phase 4完了: バックエンド対応** (2025-08-17)
 
-#### **Phase 3実装範囲**
-- [ ] 全最適化パスを新命令対応に修正
-- [ ] Effect分類の正確な実装（pure/mut/io/control）
-- [ ] 所有権森検証ルール実装
-- [ ] `BoxFieldLoad/BoxFieldStore`最適化パス
-- [ ] intrinsic関数最適化（CSE、LICM等）
+## 🚀 **現在進行中: Phase 5 旧命令削除・クリーンアップ** (2025-08-17)
 
-#### **Effect System実装**
-```rust
-// Pure命令の再順序化
-fn optimize_pure_reordering(mir: &mut MirModule) {
-    // BoxFieldLoad, WeakLoad等の安全な再順序化
-}
+### ✅ **Phase 5-1完了: 削除対象17命令にdeprecatedマーク付与**
+- 17個の削除対象命令に`#[deprecated]`アトリビュート追加
+- 移行ガイダンスメッセージ付与
 
-// Mut命令の依存解析
-fn analyze_mut_dependencies(mir: &MirModule) -> DependencyGraph {
-    // BoxFieldStore間の依存関係解析
-}
-```
+### ✅ **Phase 5-2完了: バックエンドから削除対象命令の実装削除**
+- VM: 全17命令を拒否、適切なエラーメッセージ
+- WASM: 全17命令を拒否、移行ガイダンス付き
+
+### ✅ **Phase 5-3完了: フロントエンドから削除対象命令の生成停止**
+- MIRビルダーでRefNewをNewBoxに置き換え
+- 不要なConst生成削除
+- 引数処理の改善
+
+### 🔄 **Phase 5-4進行中: テストとドキュメント更新**
+
+#### **実装内容**
+- ✅ MIR 26命令仕様書作成: `docs/説明書/reference/mir-26-specification.md`
+- ✅ CURRENT_TASK.md更新: Phase 5進捗反映
+- 🔄 テストファイル更新: 削除対象命令を使用するテストの修正
+- 📋 最終ドキュメント整備
+
+#### **残タスク**
+- [ ] MIRテストファイルから削除対象命令を除去
+- [ ] 統合テスト更新
+- [ ] CLAUDE.md更新
+
+### 📋 **Phase 5-5予定: 最終検証とクリーンアップ**
+- [ ] 全バックエンドでの26命令動作確認
+- [ ] パフォーマンステスト
+- [ ] 最終コード品質チェック
+- [ ] deprecation警告の解決
 
 ## 🚀 **Phase 9.75f: BID統合プラグインアーキテクチャ革命** (将来実装)
 
