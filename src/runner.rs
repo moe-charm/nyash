@@ -14,6 +14,7 @@ use crate::{
     interpreter::NyashInterpreter,
     mir::{MirCompiler, MirPrinter},
     backend::{VM, wasm::WasmBackend, aot::AotBackend},
+    runtime::{PluginConfig, get_global_registry},
 };
 use std::{fs, process};
 
@@ -25,7 +26,87 @@ pub struct NyashRunner {
 impl NyashRunner {
     /// Create a new runner with the given configuration
     pub fn new(config: CliConfig) -> Self {
+        // 🔌 プラグインシステム初期化
+        Self::initialize_plugin_system();
+        
         Self { config }
+    }
+    
+    /// プラグインシステム初期化（nyash.toml読み込み）
+    fn initialize_plugin_system() {
+        // nyash.tomlが存在するかチェック
+        if std::path::Path::new("nyash.toml").exists() {
+            match std::fs::read_to_string("nyash.toml") {
+                Ok(toml_content) => {
+                    match PluginConfig::parse(&toml_content) {
+                        Ok(plugin_config) => {
+                            println!("🔌 Loading plugin configuration from nyash.toml");
+                            let registry = get_global_registry();
+                            
+                            // ビルトインBoxを登録（フォールバック用）
+                            Self::register_builtin_boxes(&registry);
+                            
+                            // プラグイン設定を適用
+                            registry.apply_plugin_config(&plugin_config);
+                            
+                            // プラグインライブラリをロード
+                            #[cfg(feature = "dynamic-file")]
+                            {
+                                use crate::runtime::get_global_loader;
+                                let loader = get_global_loader();
+                                
+                                for (box_name, plugin_name) in &plugin_config.plugins {
+                                    // プラグインライブラリパスを構築
+                                    let lib_path = format!("plugins/{}/target/release/lib{}.so", 
+                                                         plugin_name.replace('_', "-"), plugin_name);
+                                    
+                                    println!("🔍 Loading plugin library: {}", lib_path);
+                                    
+                                    if let Err(e) = loader.load_plugin(plugin_name, &lib_path) {
+                                        eprintln!("⚠️  Failed to load plugin {}: {}", plugin_name, e);
+                                    } else {
+                                        println!("✅ Plugin library loaded: {}", plugin_name);
+                                    }
+                                }
+                            }
+                            
+                            println!("✅ Plugin system initialized: {} plugins configured", 
+                                    plugin_config.plugins.len());
+                        }
+                        Err(e) => {
+                            eprintln!("⚠️  Failed to parse nyash.toml: {}", e);
+                            eprintln!("   Using builtin boxes only");
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Failed to read nyash.toml: {}", e);
+                    eprintln!("   Using builtin boxes only");
+                }
+            }
+        } else {
+            // nyash.tomlがない場合はビルトインのみ
+            let registry = get_global_registry();
+            Self::register_builtin_boxes(&registry);
+            println!("📦 Using builtin boxes only (no nyash.toml found)");
+        }
+    }
+    
+    /// ビルトインBox登録（フォールバック用）
+    fn register_builtin_boxes(registry: &crate::runtime::BoxFactoryRegistry) {
+        // FileBox（ビルトイン版）のコンストラクタ
+        fn builtin_filebox_constructor(args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String> {
+            // 簡易実装：StringBoxとして扱う（実際のビルトインFileBoxが必要）
+            if args.is_empty() {
+                Ok(Box::new(StringBox::new("BuiltinFileBox")))
+            } else {
+                let path = args[0].to_string_box().value;
+                Ok(Box::new(StringBox::new(&format!("BuiltinFileBox({})", path))))
+            }
+        }
+        
+        registry.register_builtin("FileBox", builtin_filebox_constructor);
+        println!("   📁 FileBox (builtin) registered");
     }
 
     /// Run Nyash based on the configuration

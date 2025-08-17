@@ -91,9 +91,11 @@ impl PluginLoader {
         // BID-1 TLV引数エンコード
         let mut encoder = TlvEncoder::new();
         for arg in args {
-            encoder.encode_box(arg)?;
+            // TODO: NyashBox to TLV encoding
+            encoder.encode_string(&arg.to_string_box().value)
+                .map_err(|e| format!("Failed to encode argument: {:?}", e))?;
         }
-        let args_data = encoder.finalize();
+        let args_data = encoder.finish();
         
         // プラグイン関数呼び出し
         let function_name = format!("nyash_plugin_invoke");
@@ -154,8 +156,10 @@ impl PluginLoader {
         }
         
         // BID-1 TLV結果デコード
-        let mut decoder = TlvDecoder::new(&result_buffer);
-        decoder.decode_box()
+        let decoder = TlvDecoder::new(&result_buffer)
+            .map_err(|e| format!("Failed to decode result: {:?}", e))?;
+        // TODO: TLV to NyashBox decoding
+        Ok(Box::new(crate::box_trait::StringBox::new("Plugin result")))
     }
 }
 

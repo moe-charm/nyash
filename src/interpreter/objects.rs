@@ -98,34 +98,18 @@ impl NyashInterpreter {
                         message: format!("FileBox constructor expects 1 argument, got {}", arguments.len()),
                     });
                 }
-                let path_value = self.execute_expression(&arguments[0])?;
-                if let Some(path_str) = path_value.as_any().downcast_ref::<StringBox>() {
-                    #[cfg(feature = "dynamic-file")]
-                    {
-                        // 動的ライブラリ経由でFileBoxを作成
-                        use crate::interpreter::plugin_loader::PluginLoader;
-                        eprintln!("🔌 DEBUG: Creating FileBox through dynamic library for path: {}", path_str.value);
-                        let file_box = PluginLoader::create_file_box(&path_str.value)?;
-                        eprintln!("🔌 DEBUG: FileBox created successfully, type_name: {}", file_box.type_name());
-                        return Ok(file_box);
-                    }
-                    
-                    #[cfg(not(feature = "dynamic-file"))]
-                    {
-                        // 静的リンク版
-                        let file_box = match FileBox::open(&path_str.value) {
-                            Ok(fb) => Box::new(fb) as Box<dyn NyashBox>,
-                            Err(e) => return Err(RuntimeError::InvalidOperation {
-                                message: format!("Failed to create FileBox: {}", e)
-                            })
-                        };
-                        return Ok(file_box);
-                    }
-                } else {
-                    return Err(RuntimeError::TypeError {
-                        message: "FileBox constructor requires string path argument".to_string(),
-                    });
+                // BoxFactoryRegistryを使用して作成（プラグイン対応）
+                use crate::runtime::get_global_registry;
+                let registry = get_global_registry();
+                
+                // 引数を評価
+                let mut evaluated_args = Vec::new();
+                for arg in arguments {
+                    evaluated_args.push(self.execute_expression(arg)?);
                 }
+                
+                return registry.create_box("FileBox", &evaluated_args)
+                    .map_err(|e| RuntimeError::InvalidOperation { message: e });
             }
             "ResultBox" => {
                 // ResultBoxは引数1個（成功値）で作成
