@@ -7,6 +7,7 @@ pub mod error;
 pub mod metadata;
 pub mod plugin_api;
 pub mod bridge;
+pub mod plugins;
 
 pub use types::*;
 pub use tlv::*;
