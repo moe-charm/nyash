@@ -90,6 +90,12 @@ pub fn box_to_bid_handle(
             arc_box.clone()
         );
         Ok((BidType::Handle { type_id: 2, instance_id: handle.instance_id }, handle))
+    } else if let Some(_future_box) = arc_box.as_any().downcast_ref::<crate::boxes::future::NyashFutureBox>() {
+        let handle = registry.register_box(
+            crate::bid::types::BoxTypeId::FutureBox as u32,
+            arc_box.clone()
+        );
+        Ok((BidType::Handle { type_id: 7, instance_id: handle.instance_id }, handle))
     } else {
         Err(BidError::InvalidType)
     }
@@ -198,5 +204,39 @@ mod tests {
         let retrieved = bid_handle_to_box(handle, &registry).unwrap();
         let retrieved_value = extract_integer_value(&retrieved).unwrap();
         assert_eq!(retrieved_value, 42);
+    }
+    
+    #[test]
+    fn test_future_box_bid_conversion() {
+        let mut registry = BoxRegistry::new();
+        
+        // Create FutureBox
+        let future_box = crate::boxes::future::NyashFutureBox::new();
+        let arc_box: Arc<dyn NyashBox> = Arc::new(future_box);
+        
+        // Convert to BID handle
+        let (bid_type, handle) = box_to_bid_handle(&arc_box, &mut registry).unwrap();
+        assert_eq!(handle.type_id, 7); // FutureBox type ID
+        match bid_type {
+            BidType::Handle { type_id, .. } => assert_eq!(type_id, 7),
+            _ => panic!("Expected Handle type"),
+        }
+        
+        // Round-trip test
+        let retrieved = bid_handle_to_box(handle, &registry).unwrap();
+        
+        // Verify it's still a FutureBox
+        assert!(retrieved.as_any().downcast_ref::<crate::boxes::future::NyashFutureBox>().is_some());
+        
+        // Test with result set
+        if let Some(future) = arc_box.as_any().downcast_ref::<crate::boxes::future::NyashFutureBox>() {
+            let string_result = crate::boxes::string_box::StringBox::new("Future Result");
+            future.set_result(Box::new(string_result));
+            
+            // Verify state
+            assert!(future.ready());
+            let result = future.get();
+            assert_eq!(result.to_string_box().value, "Future Result");
+        }
     }
 }
