@@ -48,22 +48,27 @@
 ### 🎯 **Day 4 進行中！** (2025-08-17)
 **目標**: FileBoxプラグイン実装（open/read/write/close）
 
-**実装完了** (50%達成！):
+**実装完了** (60%達成！):
 - ✅ FileBoxプラグイン設計: open/read/write/close API設計
 - ✅ FileBoxプラグイン実装: ハンドル管理・ファイル操作実装
 - ✅ FileBoxテスト作成: ファイル操作テスト（1/1合格！）
+- ✅ **プラグインシステム設計統合**: gemini先生とcodex先生の提案を統合
+  - [Box プラグインシステム設計](../説明書/reference/box-design/plugin-system.md) 作成
+  - YAML署名DSL仕様確定
+  - nyash.tomlによる透過的置き換え設計
 
 **残タスク**:
-- ⏳ FileBoxホスト統合: Nyash側からの呼び出し
-- ⏳ プラグインロード機構: 動的ロード実装
+- ⏳ nyash.tomlパーサー実装（シンプル版）
+- ⏳ PluginBoxプロキシ実装（最小版）
+- ⏳ libloadingでプラグイン動的ロード
 
-### 🎯 今週の実装計画（ChatGPT最終案準拠）
+### 🎯 今週の実装計画（シンプル設計版に更新）
 - **Day 1**: ✅ BID-1基盤実装（TLV仕様、Handle構造体、エンコード/デコード）
 - **Day 2**: ✅ メタデータAPI実装（init/abi/shutdown、HostVtable、レジストリ）
 - **Day 3**: ✅ 既存Box統合（StringBox/IntegerBox/FutureBoxブリッジ）**100%完了！**
-- **Day 4**: ⏳ FileBoxプラグイン実装（open/read/write/close）**50%進行中！**
-- **Day 5**: 統合テスト・最適化（メモリリーク検証、性能測定）
-- **Day 6-7**: ドキュメント・CI・仕上げ
+- **Day 4**: ⏳ FileBoxプラグイン実装（open/read/write/close）**60%進行中！**
+- **Day 5**: プラグインロードと統合（libloading、Boxレジストリ、透過的置き換え）
+- **Day 6-7**: 仕上げとドキュメント（使用例、開発ガイド、拡張計画）
 
 ### 🔑 技術的決定事項
 - ポインタ: `usize`（プラットフォーム依存）
@@ -130,5 +135,5 @@ cargo build --release -j32
 ```
 
 ---
-**最終更新**: 2025-08-17 22:00  
+**最終更新**: 2025-08-17 23:30  
 **次回レビュー**: 2025-08-18（Day 4継続時）

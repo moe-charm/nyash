@@ -1,0 +1,94 @@
+Nyashプログラミング言語のプラグインシステムについて相談です。
+
+プラグインのインターフェース定義をYAML/JSONで外部化する設計を検討しています。
+
+【要件】
+- 簡単で分かりやすい
+- 階層が深くならない  
+- 必要な機能は入れる
+- FileBox.open() のような静的メソッドも定義できる
+- Everything is Box哲学を維持
+
+【案1: YAML設計図方式】
+```yaml
+plugin:
+  name: FileBox
+  type_id: 6
+  version: "1.0.0"
+  
+static_methods:
+  open:
+    args: [path: string, mode?: string]
+    returns: FileBox
+    default_args: {mode: "r"}
+    
+  exists:
+    args: [path: string]
+    returns: bool
+    
+methods:
+  read:
+    args: [size?: number]
+    returns: string
+    
+  write:
+    args: [content: string]
+    returns: number
+    
+  close:
+    args: []
+    returns: void
+```
+
+【案2: より簡潔なJSON】
+```json
+{
+  "FileBox": {
+    "static": {
+      "open(path, mode='r')": "FileBox",
+      "exists(path)": "bool"
+    },
+    "methods": {
+      "read(size?)": "string",
+      "write(content)": "number",
+      "close()": "void"
+    }
+  }
+}
+```
+
+【案3: 最小限のTOML】
+```toml
+[FileBox]
+type_id = 6
+
+[FileBox.static]
+open = "path:string, mode:string? -> FileBox"
+exists = "path:string -> bool"
+
+[FileBox.methods]  
+read = "size:number? -> string"
+write = "content:string -> number"
+close = "-> void"
+```
+
+【案4: プラグイン実装に埋め込む】
+Rustコードに属性マクロで定義を埋め込む：
+```rust
+#[plugin_box(type_id = 6)]
+impl FileBoxPlugin {
+    #[static_method]
+    fn open(path: String, mode: Option<String>) -> BidHandle { ... }
+    
+    #[method]
+    fn read(&self, handle: BidHandle, size: Option<usize>) -> Vec<u8> { ... }
+}
+```
+
+【質問】
+1. どの方式が最も実用的でしょうか？
+2. 静的メソッドとインスタンスメソッドの区別をどう表現するのが良いでしょうか？
+3. メンテナンス性と実装の簡単さのバランスはどう取るべきでしょうか？
+4. 他により良い設計パターンはありますか？
+
+プログラミング言語設計の観点から、シンプルさと拡張性のバランスを重視してアドバイスをお願いします。
