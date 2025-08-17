@@ -1,0 +1,7 @@
+// Test simple string creation
+static box Main {
+    main() {
+        local message = "Hello"
+        return message
+    }
+}

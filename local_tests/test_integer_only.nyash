@@ -1,0 +1,7 @@
+// Test without string literals
+static box Main {
+    main() {
+        local x = 42
+        return x
+    }
+}
