@@ -1,0 +1,91 @@
+Nyash BID-FFI実装の型定義ファースト戦略について、特に非同期型の設計に関してレビューをお願いします。
+
+【現在の設計】
+phase_9_75g_0_revised_type_first_approach.mdより抜粋：
+
+```rust
+pub enum BidType {
+    // 基本型
+    Bool, I32, I64, F32, F64, String, Bytes,
+    
+    // 複合型
+    Array(Box<BidType>), Map(Box<BidType>, Box<BidType>),
+    Option(Box<BidType>), Result(Box<BidType>, Box<BidType>),
+    
+    // === 問題のある部分 ===
+    Future(Box<BidType>),  // 非同期結果
+    Stream(Box<BidType>),  // ストリーム
+}
+```
+
+【懸念点】
+1. **Future/StreamはBidTypeに含めるべきか？**
+   - FFI境界でFutureそのものは渡せない
+   - C ABIは基本的に同期的
+   - 非同期は実装の詳細であって値の型ではない？
+
+2. **現在のConnection trait設計**
+```rust
+trait Connection {
+    fn invoke(&self, ...) -> Result<BidValue, BidError>;
+    fn invoke_async(&self, ...) -> Result<FutureHandle, BidError>;
+    fn stream(&self, ...) -> Result<StreamHandle, BidError>;
+}
+```
+
+【代替案の検討】
+
+案A: メソッドのシェイプで表現
+```rust
+pub enum MethodShape {
+    Sync,      // 通常の同期呼び出し
+    Async,     // Future<T>を返す
+    Stream,    // Stream<T>を返す
+}
+
+pub struct Method {
+    pub shape: MethodShape,  // ここで同期/非同期を区別
+    pub returns: BidType,    // 実際の値の型（Future抜き）
+}
+```
+
+案B: ハンドル型として扱う
+```rust
+pub enum BidType {
+    // Future/Stream削除
+    Handle(String),  // "FutureHandle", "StreamHandle"等
+}
+```
+
+案C: 型階層を分ける
+```rust
+pub enum BidType { /* 値型のみ */ }
+pub enum BidAsyncType { 
+    Future(BidType),
+    Stream(BidType),
+}
+```
+
+【質問】
+
+1. **型システム設計**
+   - Future/StreamをBidTypeに含めるのは適切か？
+   - FFI境界での非同期処理の正しい表現方法は？
+   - 値型と実行モデルを混在させることの是非は？
+
+2. **実装戦略**
+   - 型定義ファースト戦略（全型を最初に定義）は妥当か？
+   - unimplemented!()での段階的実装は適切か？
+   - ビルドエラー回避とAPI安定性のトレードオフは？
+
+3. **FFI境界での非同期**
+   - C ABI経由での非同期処理の標準的な方法は？
+   - ポーリング vs コールバック vs ハンドル方式？
+   - WASM Component Modelではどう扱われている？
+
+4. **将来の拡張性**
+   - gRPC/RESTでの非同期は別の話？
+   - TransportTypeごとに非同期モデルが異なる場合の抽象化は？
+   - Rust async/awaitとの統合方法は？
+
+実装者（Rust中級者）が混乱しない、シンプルで拡張可能な設計を教えてください。特に「Future/StreamはBidTypeに含めるべきか」の判断をお願いします。

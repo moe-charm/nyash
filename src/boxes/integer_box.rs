@@ -38,6 +38,7 @@
  */
 
 use crate::box_trait::{NyashBox, BoxCore, BoxBase};
+use crate::bid::{BidBridge, BidHandle, BidType, BidError, BoxRegistry};
 use std::any::Any;
 use std::fmt::Display;
 
@@ -115,5 +116,24 @@ impl BoxCore for IntegerBox {
 impl Display for IntegerBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.fmt_box(f)
+    }
+}
+
+impl BidBridge for IntegerBox {
+    fn to_bid_handle(&self, registry: &mut BoxRegistry) -> Result<BidHandle, BidError> {
+        use std::sync::Arc;
+        let arc_box: Arc<dyn NyashBox> = Arc::new(self.clone());
+        let handle = registry.register_box(
+            crate::bid::types::BoxTypeId::IntegerBox as u32,
+            arc_box
+        );
+        Ok(handle)
+    }
+    
+    fn bid_type(&self) -> BidType {
+        BidType::Handle { 
+            type_id: crate::bid::types::BoxTypeId::IntegerBox as u32,
+            instance_id: 0  // Will be filled by registry
+        }
     }
 }
