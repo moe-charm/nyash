@@ -31,6 +31,8 @@ pub enum MirInstruction {
     
     /// Unary operation
     /// `%dst = op %operand`
+    /// DEPRECATED: Phase 5 - Use BinOp instead (e.g., `not %a` → `%a xor true`, `neg %a` → `0 sub %a`)
+    #[deprecated(since = "Phase 5", note = "Use BinOp instead")]
     UnaryOp {
         dst: ValueId,
         op: UnaryOp,
@@ -50,6 +52,8 @@ pub enum MirInstruction {
     // === Memory Operations ===
     /// Load from memory/variable
     /// `%dst = load %ptr`
+    /// DEPRECATED: Phase 5 - Use BoxFieldLoad instead
+    #[deprecated(since = "Phase 5", note = "Use BoxFieldLoad instead")]
     Load {
         dst: ValueId,
         ptr: ValueId,
@@ -57,6 +61,8 @@ pub enum MirInstruction {
     
     /// Store to memory/variable
     /// `store %value -> %ptr`
+    /// DEPRECATED: Phase 5 - Use BoxFieldStore instead
+    #[deprecated(since = "Phase 5", note = "Use BoxFieldStore instead")]
     Store {
         value: ValueId,
         ptr: ValueId,
@@ -122,6 +128,8 @@ pub enum MirInstruction {
     
     /// Check Box type
     /// `%dst = type_check %box "BoxType"`
+    /// DEPRECATED: Phase 5 - Use Call with @type_check intrinsic
+    #[deprecated(since = "Phase 5", note = "Use Call with @type_check intrinsic")]
     TypeCheck {
         dst: ValueId,
         value: ValueId,
@@ -131,6 +139,8 @@ pub enum MirInstruction {
     // === Type Conversion ===
     /// Convert between types
     /// `%dst = cast %value as Type`
+    /// DEPRECATED: Phase 5 - Use Call with @cast intrinsic
+    #[deprecated(since = "Phase 5", note = "Use Call with @cast intrinsic")]
     Cast {
         dst: ValueId,
         value: ValueId,
@@ -140,6 +150,8 @@ pub enum MirInstruction {
     // === Array Operations ===
     /// Get array element
     /// `%dst = %array[%index]`
+    /// DEPRECATED: Phase 5 - Use BoxFieldLoad or Call with @array_get intrinsic
+    #[deprecated(since = "Phase 5", note = "Use BoxFieldLoad or Call with @array_get intrinsic")]
     ArrayGet {
         dst: ValueId,
         array: ValueId,
@@ -148,6 +160,8 @@ pub enum MirInstruction {
     
     /// Set array element
     /// `%array[%index] = %value`
+    /// DEPRECATED: Phase 5 - Use BoxFieldStore or Call with @array_set intrinsic
+    #[deprecated(since = "Phase 5", note = "Use BoxFieldStore or Call with @array_set intrinsic")]
     ArraySet {
         array: ValueId,
         index: ValueId,
@@ -157,6 +171,8 @@ pub enum MirInstruction {
     // === Special Operations ===
     /// Copy a value (for optimization passes)
     /// `%dst = copy %src`
+    /// DEPRECATED: Phase 5 - Optimization pass only, not needed in IR
+    #[deprecated(since = "Phase 5", note = "Optimization pass only, not needed in IR")]
     Copy {
         dst: ValueId,
         src: ValueId,
@@ -164,6 +180,8 @@ pub enum MirInstruction {
     
     /// Debug/introspection instruction
     /// `debug %value "message"`
+    /// DEPRECATED: Phase 5 - Use Call with @debug intrinsic
+    #[deprecated(since = "Phase 5", note = "Use Call with @debug intrinsic")]
     Debug {
         value: ValueId,
         message: String,
@@ -171,18 +189,24 @@ pub enum MirInstruction {
     
     /// Print instruction for console output
     /// `print %value`
+    /// DEPRECATED: Phase 5 - Use Call with @print intrinsic
+    #[deprecated(since = "Phase 5", note = "Use Call with @print intrinsic")]
     Print {
         value: ValueId,
         effects: EffectMask,
     },
     
     /// No-op instruction (for optimization placeholders)
+    /// DEPRECATED: Phase 5 - Not needed in final IR
+    #[deprecated(since = "Phase 5", note = "Not needed in final IR")]
     Nop,
     
     // === Control Flow & Exception Handling (Phase 5) ===
     
     /// Throw an exception
     /// `throw %exception_value`
+    /// DEPRECATED: Phase 5 - Use Call with @throw intrinsic
+    #[deprecated(since = "Phase 5", note = "Use Call with @throw intrinsic")]
     Throw {
         exception: ValueId,
         effects: EffectMask,
@@ -190,6 +214,8 @@ pub enum MirInstruction {
     
     /// Catch handler setup (landing pad for exceptions)
     /// `catch %exception_type -> %handler_bb`
+    /// DEPRECATED: Phase 5 - Use Call with @catch intrinsic
+    #[deprecated(since = "Phase 5", note = "Use Call with @catch intrinsic")]
     Catch {
         exception_type: Option<String>, // None = catch-all
         exception_value: ValueId,       // Where to store caught exception
@@ -204,6 +230,8 @@ pub enum MirInstruction {
     
     /// Create a new reference to a Box
     /// `%dst = ref_new %box`
+    /// DEPRECATED: Phase 5 - RefGet is sufficient
+    #[deprecated(since = "Phase 5", note = "RefGet is sufficient")]
     RefNew {
         dst: ValueId,
         box_val: ValueId,
@@ -241,12 +269,16 @@ pub enum MirInstruction {
     
     /// Memory barrier read (no-op for now, proper effect annotation)
     /// `barrier_read %ptr`
+    /// DEPRECATED: Phase 5 - Use AtomicFence instead
+    #[deprecated(since = "Phase 5", note = "Use AtomicFence instead")]
     BarrierRead {
         ptr: ValueId,
     },
     
     /// Memory barrier write (no-op for now, proper effect annotation)
     /// `barrier_write %ptr`
+    /// DEPRECATED: Phase 5 - Use AtomicFence instead
+    #[deprecated(since = "Phase 5", note = "Use AtomicFence instead")]
     BarrierWrite {
         ptr: ValueId,
     },
@@ -255,6 +287,8 @@ pub enum MirInstruction {
     
     /// Create a new Future with initial value
     /// `%dst = future_new %value`
+    /// DEPRECATED: Phase 5 - Use NewBox + BoxCall
+    #[deprecated(since = "Phase 5", note = "Use NewBox + BoxCall")]
     FutureNew {
         dst: ValueId,
         value: ValueId,
@@ -262,6 +296,8 @@ pub enum MirInstruction {
     
     /// Set Future value and mark as ready
     /// `future_set %future = %value`
+    /// DEPRECATED: Phase 5 - Use BoxCall
+    #[deprecated(since = "Phase 5", note = "Use BoxCall")]
     FutureSet {
         future: ValueId,
         value: ValueId,
@@ -269,6 +305,8 @@ pub enum MirInstruction {
     
     /// Wait for Future completion and get value
     /// `%dst = await %future`
+    /// DEPRECATED: Phase 5 - Use BoxCall
+    #[deprecated(since = "Phase 5", note = "Use BoxCall")]
     Await {
         dst: ValueId,
         future: ValueId,

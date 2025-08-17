@@ -247,13 +247,12 @@ impl WasmCodegen {
             // Phase 3: Print removed - now handled by Call intrinsic (@print)
             
             // Phase 8.3 PoC2: Reference operations
-            MirInstruction::RefNew { dst, box_val } => {
-                // Create a new reference to a Box by copying the Box value
-                // This assumes box_val contains a Box pointer already
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*box_val)?),
-                    format!("local.set ${}", self.get_local_index(*dst)?),
-                ])
+            // Phase 5: RefNew deprecated - just use the value directly
+            #[allow(deprecated)]
+            MirInstruction::RefNew { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: RefNew deprecated - references are handled implicitly".to_string()
+                ))
             },
             
             // Phase 3: RefGet/RefSet removed - now handled by BoxFieldLoad/BoxFieldStore
@@ -295,29 +294,54 @@ impl WasmCodegen {
             },
             
             // Phase 8.4 PoC3: Extension stubs
-            MirInstruction::WeakNew { dst, box_val } |
-            MirInstruction::FutureNew { dst, value: box_val } => {
-                // Treat as regular reference for now
+            MirInstruction::WeakNew { dst, box_val } => {
+                // WeakNew is still part of 26-instruction set
                 Ok(vec![
                     format!("local.get ${}", self.get_local_index(*box_val)?),
                     format!("local.set ${}", self.get_local_index(*dst)?),
                 ])
             },
             
-            MirInstruction::WeakLoad { dst, weak_ref } |
-            MirInstruction::Await { dst, future: weak_ref } => {
-                // Always succeed for now
+            // Phase 5: FutureNew deprecated - use NewBox "Future"
+            #[allow(deprecated)]
+            MirInstruction::FutureNew { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: FutureNew deprecated - use 'NewBox \"Future\"' instead".to_string()
+                ))
+            },
+            
+            MirInstruction::WeakLoad { dst, weak_ref } => {
+                // WeakLoad is still part of 26-instruction set
                 Ok(vec![
                     format!("local.get ${}", self.get_local_index(*weak_ref)?),
                     format!("local.set ${}", self.get_local_index(*dst)?),
                 ])
             },
             
-            MirInstruction::BarrierRead { .. } |
-            MirInstruction::BarrierWrite { .. } |
-            MirInstruction::FutureSet { .. } |
+            // Phase 5: Await deprecated - use BoxCall Future.await()
+            #[allow(deprecated)]
+            MirInstruction::Await { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: Await deprecated - use 'BoxCall Future.await()' instead".to_string()
+                ))
+            },
+            
+            // Phase 5: BarrierRead/BarrierWrite deprecated - use AtomicFence
+            #[allow(deprecated)]
+            MirInstruction::BarrierRead { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: BarrierRead deprecated - use AtomicFence with acquire ordering".to_string()
+                ))
+            },
+            #[allow(deprecated)]
+            MirInstruction::BarrierWrite { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: BarrierWrite deprecated - use AtomicFence with release ordering".to_string()
+                ))
+            },
+            
             MirInstruction::Safepoint => {
-                // No-op for now
+                // Safepoint is still valid - no-op for now
                 Ok(vec!["nop".to_string()])
             },
             
@@ -495,6 +519,72 @@ impl WasmCodegen {
             // Phase 4: Call instruction for intrinsic functions
             MirInstruction::Call { dst, func, args, effects: _ } => {
                 self.generate_call_instruction(dst.as_ref(), *func, args)
+            },
+            
+            // Phase 5: Removed instructions - TypeCheck, Cast, ArrayGet, ArraySet, Copy, Debug, Nop
+            #[allow(deprecated)]
+            MirInstruction::TypeCheck { .. } |
+            MirInstruction::Cast { .. } |
+            MirInstruction::ArrayGet { .. } |
+            MirInstruction::ArraySet { .. } |
+            MirInstruction::Copy { .. } |
+            MirInstruction::Debug { .. } |
+            MirInstruction::Nop => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: Deprecated instruction - use 26-instruction set replacements".to_string()
+                ))
+            },
+            
+            // Phase 5: Removed instructions - UnaryOp (use BinOp instead)
+            #[allow(deprecated)]
+            MirInstruction::UnaryOp { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: UnaryOp deprecated - use BinOp (e.g., 'not x' -> 'x xor true', 'neg x' -> '0 sub x')".to_string()
+                ))
+            },
+            
+            // Phase 5: Removed instructions - Load/Store (use BoxFieldLoad/BoxFieldStore)
+            #[allow(deprecated)]
+            MirInstruction::Load { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: Load deprecated - use BoxFieldLoad for field access".to_string()
+                ))
+            },
+            #[allow(deprecated)]
+            MirInstruction::Store { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: Store deprecated - use BoxFieldStore for field updates".to_string()
+                ))
+            },
+            
+            // Phase 5: Removed instructions - Print (use Call @print)
+            #[allow(deprecated)]
+            MirInstruction::Print { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: Print deprecated - use 'Call @print' intrinsic function".to_string()
+                ))
+            },
+            
+            // Phase 5: Removed instructions - Throw/Catch (use Call @throw/@catch)
+            #[allow(deprecated)]
+            MirInstruction::Throw { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: Throw deprecated - use 'Call @throw' intrinsic function".to_string()
+                ))
+            },
+            #[allow(deprecated)]
+            MirInstruction::Catch { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: Catch deprecated - use 'Call @catch' intrinsic function".to_string()
+                ))
+            },
+            
+            // Phase 5: Removed FutureSet - use BoxCall instead  
+            #[allow(deprecated)]
+            MirInstruction::FutureSet { .. } => {
+                Err(WasmError::UnsupportedInstruction(
+                    "Phase 5: FutureSet deprecated - use BoxCall method for Future.set()".to_string()
+                ))
             },
             
             // Unsupported instructions

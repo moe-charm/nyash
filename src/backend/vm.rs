@@ -364,67 +364,27 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::TypeCheck { dst, value: _, expected_type: _ } => {
-                // For now, type checks always return true
-                // TODO: Implement proper type checking
-                self.values.insert(*dst, VMValue::Bool(true));
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::Cast { dst, value, target_type: _ } => {
-                // For now, casting just copies the value
-                // TODO: Implement proper type casting
-                let val = self.get_value(*value)?;
-                self.values.insert(*dst, val);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::ArrayGet { dst, array: _, index: _ } => {
-                // For now, array access returns a placeholder
-                // TODO: Implement proper array access
-                self.values.insert(*dst, VMValue::Integer(0));
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::ArraySet { array: _, index: _, value: _ } => {
-                // For now, array setting is a no-op
-                // TODO: Implement proper array setting
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::Copy { dst, src } => {
-                // Copy instruction - duplicate the source value
-                let val = self.get_value(*src)?;
-                self.values.insert(*dst, val);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::Debug { value, message: _ } => {
-                // Debug instruction - print value for debugging
-                let val = self.get_value(*value)?;
-                println!("DEBUG: {}", val.to_string());
-                Ok(ControlFlow::Continue)
-            },
-            
+            // Phase 5: Removed instructions - TypeCheck, Cast, ArrayGet, ArraySet, Copy, Debug, Nop
+            #[allow(deprecated)]
+            MirInstruction::TypeCheck { .. } |
+            MirInstruction::Cast { .. } |
+            MirInstruction::ArrayGet { .. } |
+            MirInstruction::ArraySet { .. } |
+            MirInstruction::Copy { .. } |
+            MirInstruction::Debug { .. } |
             MirInstruction::Nop => {
-                // No-op instruction
-                Ok(ControlFlow::Continue)
+                Err(VMError::InvalidInstruction(
+                    "Phase 5: Deprecated instruction - use 26-instruction set replacements".to_string()
+                ))
             },
             
-            // Phase 5: Control flow & exception handling
-            MirInstruction::Throw { exception, effects: _ } => {
-                let exception_val = self.get_value(*exception)?;
-                // For now, convert throw to error return (simplified exception handling)
-                // In a full implementation, this would unwind the stack looking for catch handlers
-                println!("Exception thrown: {}", exception_val.to_string());
-                Err(VMError::InvalidInstruction(format!("Unhandled exception: {}", exception_val.to_string())))
-            },
-            
-            MirInstruction::Catch { exception_type: _, exception_value, handler_bb: _ } => {
-                // For now, catch is a no-op since we don't have full exception handling
-                // In a real implementation, this would set up exception handling metadata
-                self.values.insert(*exception_value, VMValue::Void);
-                Ok(ControlFlow::Continue)
+            // Phase 5: Removed instructions - Throw, Catch
+            #[allow(deprecated)]
+            MirInstruction::Throw { .. } |
+            MirInstruction::Catch { .. } => {
+                Err(VMError::InvalidInstruction(
+                    "Phase 5: Exception handling via intrinsics - use Call with @throw/@catch".to_string()
+                ))
             },
             
             MirInstruction::Safepoint => {
@@ -433,34 +393,12 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            // Phase 6: Box reference operations
-            MirInstruction::RefNew { dst, box_val } => {
-                // Get the box type/value from the previous Const instruction
-                let box_value = self.get_value(*box_val)?;
-                
-                // If this is a Box type name (like "StringBox", "IntegerBox"), create an appropriate default value
-                // In the context of Everything is Box, this should create the actual Box instance
-                let ref_value = match &box_value {
-                    VMValue::String(type_name) => {
-                        match type_name.as_str() {
-                            "StringBox" => {
-                                // For StringBox, we need the actual string content from previous context
-                                // For now, create an empty string - this should be improved to use the actual value
-                                VMValue::String(String::new())
-                            },
-                            "IntegerBox" => VMValue::Integer(0),
-                            "BoolBox" => VMValue::Bool(false),
-                            _ => {
-                                // If it's a regular string (not a type name), use it as-is
-                                VMValue::String(type_name.clone())
-                            }
-                        }
-                    },
-                    _ => box_value, // For non-string values, use as-is
-                };
-                
-                self.values.insert(*dst, ref_value);
-                Ok(ControlFlow::Continue)
+            // Phase 5: Removed instruction - RefNew
+            #[allow(deprecated)]
+            MirInstruction::RefNew { .. } => {
+                Err(VMError::InvalidInstruction(
+                    "Phase 5: RefNew deprecated - RefGet is sufficient".to_string()
+                ))
             },
             
             // Phase 3: RefGet/RefSet removed - now handled by BoxFieldLoad/BoxFieldStore
@@ -481,61 +419,23 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::BarrierRead { ptr: _ } => {
-                // Memory barrier read is a no-op for now
-                // In a real implementation, this would ensure memory ordering
-                Ok(ControlFlow::Continue)
+            // Phase 5: Removed instructions - BarrierRead, BarrierWrite
+            #[allow(deprecated)]
+            MirInstruction::BarrierRead { .. } |
+            MirInstruction::BarrierWrite { .. } => {
+                Err(VMError::InvalidInstruction(
+                    "Phase 5: Memory barriers deprecated - use AtomicFence".to_string()
+                ))
             },
             
-            MirInstruction::BarrierWrite { ptr: _ } => {
-                // Memory barrier write is a no-op for now
-                // In a real implementation, this would ensure memory ordering
-                Ok(ControlFlow::Continue)
-            },
-            
-            // Phase 7: Async/Future Operations
-            MirInstruction::FutureNew { dst, value } => {
-                let initial_value = self.get_value(*value)?;
-                println!("FutureNew: initial_value = {:?}", initial_value);
-                let future = crate::boxes::future::FutureBox::new();
-                // Convert VMValue to NyashBox and set it in the future
-                let nyash_box = initial_value.to_nyash_box();
-                println!("FutureNew: converted to NyashBox type = {}", nyash_box.type_name());
-                future.set_result(nyash_box);
-                self.values.insert(*dst, VMValue::Future(future));
-                println!("FutureNew: stored Future in dst = {:?}", dst);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::FutureSet { future, value } => {
-                let future_val = self.get_value(*future)?;
-                let new_value = self.get_value(*value)?;
-                
-                if let VMValue::Future(ref future_box) = future_val {
-                    future_box.set_result(new_value.to_nyash_box());
-                    Ok(ControlFlow::Continue)
-                } else {
-                    Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
-                }
-            },
-            
-            MirInstruction::Await { dst, future } => {
-                let future_val = self.get_value(*future)?;
-                println!("Await: future_val = {:?}", future_val);
-                
-                if let VMValue::Future(ref future_box) = future_val {
-                    // This blocks until the future is ready
-                    let result = future_box.get();
-                    println!("Await: future.get() returned type = {}", result.type_name());
-                    println!("Await: future.get() string = {}", result.to_string_box().value);
-                    // Convert NyashBox back to VMValue
-                    let vm_value = VMValue::from_nyash_box(result);
-                    println!("Await: converted back to VMValue = {:?}", vm_value);
-                    self.values.insert(*dst, vm_value);
-                    Ok(ControlFlow::Continue)
-                } else {
-                    Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
-                }
+            // Phase 5: Removed instructions - FutureNew, FutureSet, Await
+            #[allow(deprecated)]
+            MirInstruction::FutureNew { .. } |
+            MirInstruction::FutureSet { .. } |
+            MirInstruction::Await { .. } => {
+                Err(VMError::InvalidInstruction(
+                    "Phase 5: Future operations deprecated - use NewBox + BoxCall".to_string()
+                ))
             },
             
             // Phase 9.7: External Function Calls  
