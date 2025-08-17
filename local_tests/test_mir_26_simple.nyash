@@ -1,0 +1,11 @@
+// Test simple program with MIR 26 instruction set
+static box Main {
+    main() {
+        local console = new ConsoleBox()
+        local message = "Hello from MIR 26!"
+        console.log(message)
+        
+        local result = 42
+        return result
+    }
+}
