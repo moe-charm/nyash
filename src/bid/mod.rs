@@ -4,10 +4,14 @@
 pub mod types;
 pub mod tlv;
 pub mod error;
+pub mod metadata;
+pub mod plugin_api;
 
 pub use types::*;
 pub use tlv::*;
 pub use error::*;
+pub use metadata::*;
+pub use plugin_api::*;
 
 /// BID-1 version constant
 pub const BID_VERSION: u16 = 1;
