@@ -1,0 +1,15 @@
+🚀 Nyash MIR Compiler - Processing file: local_tests/test_simple_string.nyash 🚀
+🔍 build_new_expression: class=StringBox, arguments=[Literal { value: String("Hello"), span: Span { start: 0, end: 0, line: 1, column: 1 } }]
+🔍 build_new_expression: StringBox with literal string: "Hello"
+🚀 MIR Output for local_tests/test_simple_string.nyash:
+; MIR Module: main
+
+define void @main() {
+bb0:
+    0: safepoint
+    1: %0 = const "Hello"
+    2: %1 = ref_new %0
+    3: ret %1
+}
+
+

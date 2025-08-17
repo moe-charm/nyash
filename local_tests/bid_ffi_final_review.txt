@@ -1,0 +1,80 @@
+Nyashプログラミング言語のBID-FFI ABI v0統合計画について、最終レビューをお願いします。
+
+【背景】
+- Phase 9.75g BID（Box Interface Definition）が野心的すぎて複雑
+- 既存のFFI ABI v0仕様はシンプルで実績がある
+- 両者を統合し、段階的に実装可能な設計にしたい
+
+【統合計画の要点】
+
+1. **Phase 9.75g-0: FFI ABI v0準拠（1週間）**
+   - 型システム完全化：i32, i64, f32, f64, bool, string, array(T)
+   - メモリモデル明確化：32ビットポインタ、4バイトアライメント
+   - Effect system：pure/mut/io/controlの4種類
+   - Box layout標準化：[type_id:i32][ref_count:i32][field_count:i32]
+
+2. **実装の簡素化戦略**
+   ```rust
+   // Phase 1: C ABIのみ
+   pub enum TransportType {
+       DynamicLibrary,      // 最初はこれだけ
+       #[allow(dead_code)]
+       Grpc,               // Phase 2で追加
+       Rest,               // Phase 2で追加
+       WasmComponent,      // Phase 3で追加
+   }
+   ```
+
+3. **文字列・配列の統一表現**
+   ```rust
+   // FFI ABI v0準拠
+   BidType::String => vec![WasmType::I32, WasmType::I32], // (ptr, len)
+   BidType::Array(_) => vec![WasmType::I32, WasmType::I32], // (ptr, len)
+   ```
+
+4. **段階的拡張パス**
+   - Phase 1: ローカルC ABI（.so/.dll）のみ
+   - Phase 2: ネットワーク対応（gRPC/REST）
+   - Phase 3: 言語ブリッジ（Python等）
+   - Phase 4: 未来技術対応（量子等）
+
+【設計原則】
+- **Simple First**: 動くものを最速で作る
+- **FFI ABI v0互換**: 実績ある仕様に準拠
+- **拡張可能**: TransportTypeで将来対応を予約
+- **Everything is Box**: Nyash哲学を維持
+
+【質問】
+
+1. **FFI ABI v0準拠は適切か？**
+   - 型システムの統合方針は妥当か？
+   - メモリモデル（32ビット、4バイトアライメント）は現実的か？
+   - WASMとネイティブの両対応は可能か？
+
+2. **段階的実装は現実的か？**
+   - Phase 1でC ABIのみに絞るのは賢明か？
+   - vtableを後回しにして基本型のみから始めるのは？
+   - 1週間でFFI ABI v0準拠は達成可能か？
+
+3. **拡張性は確保されているか？**
+   - UniversalConnectorトレイトは将来のgRPC/REST対応に十分か？
+   - BidTypeは将来の複雑な型（Future/Stream等）に対応できるか？
+   - エラーモデルは異なるトランスポートに対応可能か？
+
+4. **実装の落とし穴は？**
+   - 文字列の(ptr, len)表現で注意すべき点は？
+   - Box layoutのプラットフォーム依存性は？
+   - 既存のNyashコードとの互換性維持は？
+
+5. **NyaMesh（P2Pライブラリ）との整合性**
+   - 将来P2P通信もBIDで統一できるか？
+   - TransportTypeにP2Pを追加する価値は？
+   - 場所透過性の設計は適切か？
+
+【期待する成果】
+- 1週間で動くC ABIプラグインシステム
+- WASM/VM/LLVMすべてで同じBIDが使える
+- 将来のネットワーク対応への明確な道筋
+- Everything is Box哲学の技術的実現
+
+実装者（Rust中級者）が理解でき、確実に動作し、将来拡張可能な設計になっているか、専門的観点からレビューをお願いします。

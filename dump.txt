@@ -1,0 +1,13 @@
+🚀 Nyash MIR Compiler - Processing file: local_tests/test_simple_string.nyash 🚀
+🚀 MIR Output for local_tests/test_simple_string.nyash:
+; MIR Module: main
+
+define void @main() {
+bb0:
+    0: safepoint
+    1: %0 = const "Hello"
+    2: %1 = ref_new %0
+    3: ret %1
+}
+
+
