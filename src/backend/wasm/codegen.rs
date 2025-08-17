@@ -244,9 +244,7 @@ impl WasmCodegen {
                 self.generate_return(value.as_ref())
             },
             
-            MirInstruction::Print { value, .. } => {
-                self.generate_print(*value)
-            },
+            // Phase 3: Print removed - now handled by Call intrinsic (@print)
             
             // Phase 8.3 PoC2: Reference operations
             MirInstruction::RefNew { dst, box_val } => {
@@ -258,33 +256,7 @@ impl WasmCodegen {
                 ])
             },
             
-            MirInstruction::RefGet { dst, reference, field: _ } => {
-                // Load field value from Box through reference
-                // reference contains Box pointer, field is the field name
-                // For now, assume all fields are at offset 12 (first field after header)
-                // TODO: Add proper field offset calculation
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*reference)?),
-                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
-                    "i32.add".to_string(),
-                    "i32.load".to_string(),
-                    format!("local.set ${}", self.get_local_index(*dst)?),
-                ])
-            },
-            
-            MirInstruction::RefSet { reference, field: _, value } => {
-                // Store field value to Box through reference  
-                // reference contains Box pointer, field is the field name, value is new value
-                // For now, assume all fields are at offset 12 (first field after header)
-                // TODO: Add proper field offset calculation
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*reference)?),
-                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
-                    "i32.add".to_string(),
-                    format!("local.get ${}", self.get_local_index(*value)?),
-                    "i32.store".to_string(),
-                ])
-            },
+            // Phase 3: RefGet/RefSet removed - now handled by BoxFieldLoad/BoxFieldStore
             
             MirInstruction::NewBox { dst, box_type, args } => {
                 // Create a new Box using the generic allocator
@@ -406,6 +378,118 @@ impl WasmCodegen {
             // Phase 9.77: BoxCall Implementation - Critical Box method calls
             MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
                 self.generate_box_call(*dst, *box_val, method, args)
+            },
+            
+            // Phase 8.5: MIR 26-instruction reduction (NEW)
+            MirInstruction::BoxFieldLoad { dst, box_val, field: _ } => {
+                // Load field from box (similar to RefGet but with explicit Box semantics)
+                // For now, assume all fields are at offset 12 (first field after header)
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*box_val)?),
+                    "i32.const 12".to_string(), // Box header + first field offset
+                    "i32.add".to_string(),
+                    "i32.load".to_string(),
+                    format!("local.set ${}", self.get_local_index(*dst)?),
+                ])
+            },
+            
+            MirInstruction::BoxFieldStore { box_val, field: _, value } => {
+                // Store field to box (similar to RefSet but with explicit Box semantics)
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*box_val)?),
+                    "i32.const 12".to_string(), // Box header + first field offset
+                    "i32.add".to_string(),
+                    format!("local.get ${}", self.get_local_index(*value)?),
+                    "i32.store".to_string(),
+                ])
+            },
+            
+            MirInstruction::WeakCheck { dst, weak_ref } => {
+                // Check if weak reference is still alive
+                // For now, always return 1 (true) - in full implementation,
+                // this would check actual weak reference validity
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*weak_ref)?), // Touch the ref
+                    "drop".to_string(), // Ignore the actual value
+                    "i32.const 1".to_string(), // Always alive for now
+                    format!("local.set ${}", self.get_local_index(*dst)?),
+                ])
+            },
+            
+            MirInstruction::Send { data, target } => {
+                // Send data via Bus system - no-op for now
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*data)?),
+                    format!("local.get ${}", self.get_local_index(*target)?),
+                    "drop".to_string(), // Drop target
+                    "drop".to_string(), // Drop data
+                    "nop".to_string(),  // No actual send operation
+                ])
+            },
+            
+            MirInstruction::Recv { dst, source } => {
+                // Receive data from Bus system - return constant for now
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*source)?), // Touch source
+                    "drop".to_string(), // Ignore source
+                    "i32.const 42".to_string(), // Placeholder received data
+                    format!("local.set ${}", self.get_local_index(*dst)?),
+                ])
+            },
+            
+            MirInstruction::TailCall { func, args, effects: _ } => {
+                // Tail call optimization - simplified as regular call for now
+                let mut instructions = Vec::new();
+                
+                // Load all arguments
+                for arg in args {
+                    instructions.push(format!("local.get ${}", self.get_local_index(*arg)?));
+                }
+                
+                // Call function (assuming it's a function index)
+                instructions.push(format!("local.get ${}", self.get_local_index(*func)?));
+                instructions.push("call_indirect".to_string());
+                
+                Ok(instructions)
+            },
+            
+            MirInstruction::Adopt { parent, child } => {
+                // Adopt ownership - no-op for now in WASM
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*parent)?),
+                    format!("local.get ${}", self.get_local_index(*child)?),
+                    "drop".to_string(), // Drop child
+                    "drop".to_string(), // Drop parent
+                    "nop".to_string(),  // No actual adoption
+                ])
+            },
+            
+            MirInstruction::Release { reference } => {
+                // Release strong ownership - no-op for now
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*reference)?),
+                    "drop".to_string(), // Drop reference
+                    "nop".to_string(),  // No actual release
+                ])
+            },
+            
+            MirInstruction::MemCopy { dst, src, size } => {
+                // Memory copy optimization - simple copy for now
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*src)?),
+                    format!("local.set ${}", self.get_local_index(*dst)?),
+                    // Size is ignored for now - in full implementation,
+                    // this would use memory.copy instruction
+                    format!("local.get ${}", self.get_local_index(*size)?),
+                    "drop".to_string(),
+                ])
+            },
+            
+            MirInstruction::AtomicFence { ordering: _ } => {
+                // Atomic memory fence - no-op for now
+                // WASM doesn't have direct memory fence instructions
+                // In full implementation, this might use atomic wait/notify
+                Ok(vec!["nop".to_string()])
             },
             
             // Unsupported instructions

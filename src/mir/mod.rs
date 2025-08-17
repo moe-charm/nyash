@@ -13,6 +13,7 @@ pub mod builder;
 pub mod verification;
 pub mod ownership_verifier_simple; // Simple ownership forest verification for current MIR
 pub mod printer;
+pub mod optimizer; // Phase 3: Effect System based optimization passes
 pub mod value_id;
 pub mod effect;
 
@@ -25,6 +26,7 @@ pub use builder::MirBuilder;
 pub use verification::{MirVerifier, VerificationError};
 pub use ownership_verifier_simple::{OwnershipVerifier, OwnershipError, OwnershipStats}; // Simple ownership forest verification
 pub use printer::MirPrinter;
+pub use optimizer::{MirOptimizer, OptimizationStats}; // Phase 3: Effect System optimizations
 pub use value_id::{ValueId, LocalId, ValueIdGenerator};
 pub use effect::{EffectMask, Effect};
 
