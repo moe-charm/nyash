@@ -235,10 +235,12 @@ u32 nyash_plugin_abi(void) {
 
 // Method table
 static const NyashMethodInfo FILE_METHODS[] = {
+    {0, "birth", 0xBEEFCAFE},  // birth(path: string, mode: string) - Constructor
     {1, "open",  0x12345678},  // open(path: string, mode: string) -> Handle
     {2, "read",  0x87654321},  // read(handle: Handle, size: i32) -> Bytes  
     {3, "write", 0x11223344},  // write(handle: Handle, data: Bytes) -> i32
     {4, "close", 0xABCDEF00},  // close(handle: Handle) -> Void
+    {5, "fini",  0xDEADBEEF},  // fini() - Destructor
 };
 
 // Initialize
@@ -299,8 +301,52 @@ static i32 file_open(const u8* args, size_t args_len,
     return NYB_SUCCESS;
 }
 
+// birth implementation - Box constructor
+static i32 file_birth(u32 instance_id, const u8* args, size_t args_len,
+                     u8* result, size_t* result_len) {
+    // Parse constructor arguments
+    BidTLV* tlv = (BidTLV*)args;
+    const char* path = extract_string_arg(tlv, 0);
+    const char* mode = extract_string_arg(tlv, 1);
+    
+    // Create instance
+    FileInstance* instance = malloc(sizeof(FileInstance));
+    instance->fp = fopen(path, mode);
+    instance->buffer = NULL;
+    
+    // Register instance
+    register_instance(instance_id, instance);
+    
+    // No return value for birth
+    *result_len = 0;
+    return NYB_SUCCESS;
+}
+
+// fini implementation - Box destructor  
+static i32 file_fini(u32 instance_id) {
+    FileInstance* instance = get_instance(instance_id);
+    if (!instance) return NYB_E_INVALID_HANDLE;
+    
+    // Free plugin-allocated memory
+    if (instance->buffer) {
+        free(instance->buffer);
+    }
+    
+    // Close file handle
+    if (instance->fp) {
+        fclose(instance->fp);
+    }
+    
+    // Free instance
+    free(instance);
+    unregister_instance(instance_id);
+    
+    return NYB_SUCCESS;
+}
+
 void nyash_plugin_shutdown(void) {
-    // Cleanup resources
+    // Cleanup all remaining instances
+    cleanup_all_instances();
 }
 ```
 
@@ -355,6 +401,20 @@ ABIの確定事項（BID-1, 日本語）
   2. ホストがallocateして結果取得
 - 文字列エンコーディング：UTF-8必須、内部NUL禁止
 - ハンドル再利用対策：generation追加で ABA問題回避（将来）
+
+Boxライフサイクル管理
+- **birth/fini原則**：
+  - method_id=0 は必ず`birth()`（コンストラクタ）
+  - method_id=最大値 は必ず`fini()`（デストラクタ）
+  - birthで割り当てたリソースはfiniで解放
+- **メモリ所有権**：
+  - プラグインがmalloc()したメモリ → プラグインがfree()
+  - ホストが提供したバッファ → ホストが管理
+  - 引数として渡されたメモリ → read-onlyとして扱う
+- **インスタンス管理**：
+  - instance_idはホストが発行・管理
+  - プラグインは内部マップでinstance_id → 実装構造体を管理
+  - nyash_plugin_shutdown()で全インスタンスをクリーンアップ
 
 型と表現（BID-1）
 - `i32`: 32bit 符号付き整数

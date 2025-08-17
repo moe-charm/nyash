@@ -45,6 +45,24 @@ apis:
 - **オプショナル引数**: `arg?: type` - `?`サフィックス
 - **戻り値**: `-> type` - 矢印記法
 
+### 🔄 Boxライフサイクル管理
+
+```yaml
+lifecycle:
+  # コンストラクタ（生命を与える）
+  - sig: "FileBox#birth(path: string, mode?: string)"
+    doc: "Box creation - called after memory allocation"
+    
+  # デストラクタ（生命を終える）  
+  - sig: "FileBox#fini()"
+    doc: "Box destruction - called before memory deallocation"
+```
+
+**重要な原則**：
+- `birth()` - Boxインスタンス作成時に呼ばれる（メモリ割り当て後）
+- `fini()` - Boxインスタンス破棄時に呼ばれる（メモリ解放前）
+- プラグインが割り当てたメモリはプラグインが解放する責任を持つ
+
 ## 🔧 設定ファイル（nyash.toml）
 
 ```toml
@@ -106,22 +124,109 @@ impl NyashBox for PluginBox {
 
 ## 📦 プラグイン実装例
 
-```rust
-// plugins/filebox/src/lib.rs
-#[no_mangle]
-pub extern "C" fn filebox_open(
-    path: *const c_char,
-    mode: *const c_char
-) -> BidHandle {
-    // ファイルを開いてハンドルを返す
+```c
+// plugins/filebox/src/filebox.c
+#include "nyash_plugin_api.h"
+
+// インスタンス管理
+typedef struct {
+    FILE* fp;
+    char* buffer;  // プラグインが管理するバッファ
+} FileBoxInstance;
+
+// birth - Boxに生命を与える
+i32 filebox_birth(u32 instance_id, const u8* args, size_t args_len) {
+    // 引数からpath, modeを取得
+    const char* path = extract_string_arg(args, 0);
+    const char* mode = extract_string_arg(args, 1);
+    
+    // インスタンス作成
+    FileBoxInstance* instance = malloc(sizeof(FileBoxInstance));
+    instance->fp = fopen(path, mode);
+    instance->buffer = NULL;
+    
+    // インスタンスを登録
+    register_instance(instance_id, instance);
+    return NYB_SUCCESS;
 }
 
-#[no_mangle]
-pub extern "C" fn filebox_read(
-    handle: BidHandle,
-    size: i32
-) -> *const u8 {
-    // ファイルを読む
+// fini - Boxの生命を終える
+i32 filebox_fini(u32 instance_id) {
+    FileBoxInstance* instance = get_instance(instance_id);
+    if (!instance) return NYB_E_INVALID_HANDLE;
+    
+    // プラグインが割り当てたメモリを解放
+    if (instance->buffer) {
+        free(instance->buffer);
+    }
+    
+    // ファイルハンドルをクローズ
+    if (instance->fp) {
+        fclose(instance->fp);
+    }
+    
+    // インスタンス自体を解放
+    free(instance);
+    unregister_instance(instance_id);
+    
+    return NYB_SUCCESS;
+}
+
+// read - バッファはプラグインが管理
+i32 filebox_read(u32 instance_id, i32 size, u8** result, size_t* result_len) {
+    FileBoxInstance* instance = get_instance(instance_id);
+    
+    // 既存バッファを解放して新規割り当て
+    if (instance->buffer) free(instance->buffer);
+    instance->buffer = malloc(size + 1);
+    
+    // ファイル読み込み
+    size_t read = fread(instance->buffer, 1, size, instance->fp);
+    instance->buffer[read] = '\0';
+    
+    // プラグインが所有するメモリを返す
+    *result = instance->buffer;
+    *result_len = read;
+    
+    return NYB_SUCCESS;
+}
+```
+
+## 🔐 メモリ管理の原則
+
+### 所有権ルール
+1. **プラグインが割り当てたメモリ**
+   - プラグインが`malloc()`したメモリはプラグインが`free()`する
+   - `fini()`メソッドで確実に解放する
+   - Nyash側は読み取りのみ（書き込み禁止）
+
+2. **Nyashが割り当てたメモリ**
+   - Nyashが提供したバッファはNyashが管理
+   - プラグインは読み書き可能だが解放禁止
+   - 引数として渡されたメモリはread-only
+
+3. **ライフサイクル保証**
+   - `birth()` → 各メソッド呼び出し → `fini()` の順序を保証
+   - `fini()`は必ず呼ばれる（GC時またはプログラム終了時）
+   - 循環参照による`fini()`遅延に注意
+
+### Nyash側の実装
+```rust
+impl Drop for PluginBox {
+    fn drop(&mut self) {
+        // Boxが破棄される時、必ずfiniを呼ぶ
+        let result = self.plugin.invoke(
+            self.handle.type_id,
+            FINI_METHOD_ID,  // 最大値のmethod_id
+            self.handle.instance_id,
+            &[],  // no arguments
+            &mut []
+        );
+        
+        if result.is_err() {
+            eprintln!("Warning: fini failed for instance {}", self.handle.instance_id);
+        }
+    }
 }
 ```
 
