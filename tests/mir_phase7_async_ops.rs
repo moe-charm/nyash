@@ -107,17 +107,17 @@ fn test_mir_phase7_basic_nowait_await() {
         .flat_map(|block| &block.instructions)
         .collect();
     
-    // Should contain FutureNew instruction
-    let has_future_new = instructions.iter().any(|inst| {
-        matches!(inst, nyash_rust::mir::MirInstruction::FutureNew { .. })
+    // Phase 5: FutureNew is deprecated - should contain NewBox "FutureBox" instead
+    let has_future_box = instructions.iter().any(|inst| {
+        matches!(inst, nyash_rust::mir::MirInstruction::NewBox { box_type, .. } if box_type == "FutureBox")
     });
-    assert!(has_future_new, "MIR should contain FutureNew instruction");
+    assert!(has_future_box, "MIR should contain NewBox FutureBox instruction");
     
-    // Should contain Await instruction
-    let has_await = instructions.iter().any(|inst| {
-        matches!(inst, nyash_rust::mir::MirInstruction::Await { .. })
+    // Phase 5: Await is deprecated - should contain BoxCall "await" instead
+    let has_await_call = instructions.iter().any(|inst| {
+        matches!(inst, nyash_rust::mir::MirInstruction::BoxCall { method, .. } if method == "await")
     });
-    assert!(has_await, "MIR should contain Await instruction");
+    assert!(has_await_call, "MIR should contain BoxCall await instruction");
     
     // Test VM execution
     let mut vm = VM::new();
