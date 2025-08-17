@@ -160,8 +160,8 @@ cargo build --release -j32
 ```
 
 ---
-**最終更新**: 2025-08-18 08:30 JST  
-**次回レビュー**: 2025-08-18（BID-FFI再実装開始時）
+**最終更新**: 2025-08-18 09:00 JST  
+**次回レビュー**: 2025-08-18（FileBoxプラグイン作成開始時）
 
 ## 🎯 **現在の状況** (2025-08-18)
 
@@ -177,18 +177,56 @@ cargo build --release -j32
 - **基盤コード**: src/bid/モジュールは削除済み（再実装必要）
 - **プラグイン**: plugins/nyash-filebox-pluginも削除済み（再作成必要）
 
-### 次のステップ
-1. **BID-FFIシステムをクリーンに再実装**
-   - src/bid/モジュール作成
-   - TLVエンコード/デコード実装
-   - プラグインローダー実装
-   
-2. **FileBoxプラグイン作成**
-   - plugins/nyash-filebox-plugin/再作成
-   - C FFI実装
-   - ビルドシステム構築
+### 次のステップ（段階的アプローチ）
 
-3. **統合テスト**
-   - nyash.tomlによる切り替え
-   - プラグイン動的ロード確認
-   - メソッド呼び出し動作確認
+#### 📦 **Step 1: FileBoxプラグイン単体作成**
+- plugins/nyash-filebox-plugin/Cargo.toml作成
+- C FFI実装（birth/fini含む）
+- 単体でビルド確認（.soファイル生成）
+
+#### ⚙️ **Step 2: nyash.toml設定ファイル作成**
+- シンプルな設定ファイル作成
+- FileBox = "filebox"の設定のみ
+- パーサーは後で実装
+
+#### 🔌 **Step 3: プラグインテスター/ローダー作成**
+- **独立したテストツール** `plugin-tester`作成
+- プラグイン開発者向けの診断機能：
+  - プラグインロードチェック
+  - nyash_plugin_init呼び出し確認
+  - メソッド一覧表示
+  - birth/finiライフサイクルテスト
+  - メモリリーク検出（valgrind連携）
+  - TLVエンコード/デコード検証
+- コマンド例：`./plugin-tester check libnyash_filebox_plugin.so`
+- 成功部分を後でNyashに移植
+
+#### 🎯 **Step 4: Nyashとの統合**
+- src/bid/モジュール作成
+- BoxFactoryRegistry実装
+- PluginBoxプロキシ実装
+- 実動作確認
+
+### 仕様更新完了
+- ✅ birth/finiライフサイクル管理を仕様書に追加
+- ✅ メモリ所有権ルールを明確化
+- ✅ プラグインが割り当てたメモリはプラグインが解放する原則
+
+### 予定ディレクトリ構造
+```
+nyash-project/nyash/
+├── plugins/
+│   └── nyash-filebox-plugin/     # Step 1: プラグイン単体
+│       ├── Cargo.toml
+│       └── src/lib.rs
+├── tools/
+│   └── plugin-tester/            # Step 3: テストツール
+│       ├── Cargo.toml
+│       └── src/main.rs
+├── nyash.toml                    # Step 2: 設定ファイル
+└── src/
+    └── bid/                      # Step 4: 統合時に作成
+        ├── mod.rs
+        ├── loader.rs
+        └── registry.rs
+```
