@@ -1,0 +1,4 @@
+// Test that deprecated instructions are not generated
+local result = 42
+local text = new StringBox("Hello MIR")
+print(text.toString())

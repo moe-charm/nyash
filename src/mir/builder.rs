@@ -784,32 +784,33 @@ impl MirBuilder {
                     value: ConstValue::String(s.clone()),
                 })?;
                 
-                // Create RefNew for the StringBox
+                // Phase 5-3: RefNew is deprecated - use NewBox instead
                 let string_box_dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::RefNew {
+                self.emit_instruction(MirInstruction::NewBox {
                     dst: string_box_dst,
-                    box_val: dst,
+                    box_type: "StringBox".to_string(),
+                    args: vec![dst],
                 })?;
                 
                 return Ok(string_box_dst);
             }
         }
         
-        // For Phase 6.1, we'll create a simple RefNew without processing arguments
-        // In a full implementation, arguments would be used for constructor calls
+        // Phase 5-3: Create NewBox with processed arguments
         let dst = self.value_gen.next();
         
-        // For now, create a "box type" value representing the class
-        let type_value = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: type_value,
-            value: ConstValue::String(class),
-        })?;
+        // Process all arguments
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            let arg_value = self.build_expression(arg)?;
+            arg_values.push(arg_value);
+        }
         
-        // Create the reference using RefNew
-        self.emit_instruction(MirInstruction::RefNew {
+        // Create NewBox instruction
+        self.emit_instruction(MirInstruction::NewBox {
             dst,
-            box_val: type_value,
+            box_type: class,
+            args: arg_values,
         })?;
         
         Ok(dst)
