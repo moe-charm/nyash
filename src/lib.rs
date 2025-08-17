@@ -29,12 +29,6 @@ pub mod box_arithmetic; // 🚀 Arithmetic operations moved from box_trait.rs
 // 🔥 NyashValue Revolutionary System (NEW!)
 pub mod value;
 
-// 🚀 BID-FFI: Box Interface Definition with FFI (NEW!)
-pub mod bid;
-
-// 🔌 Runtime: Plugin System and Box Management (NEW!)
-pub mod runtime;
-
 // 🌐 P2P Communication Infrastructure (NEW!)
 pub mod messaging;
 pub mod transport;

@@ -1,0 +1,19 @@
+// 簡単なNyashテストプログラム
+print("🎉 Nyash is working!")
+print("Everything is Box!")
+
+// 基本的な演算
+local a = 10
+local b = 20
+local result = a + b
+print("10 + 20 = " + result.toString())
+
+// StringBox
+local greeting = "Hello, Nyash!"
+print(greeting)
+
+// ArrayBox
+local arr = new ArrayBox()
+arr.push("First")
+arr.push("Second")
+print("Array length: " + arr.length().toString())

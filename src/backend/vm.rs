@@ -231,7 +231,12 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            // Phase 3: UnaryOp removed - now handled by Call intrinsics (@unary_neg, @unary_not, etc.)
+            MirInstruction::UnaryOp { dst, op, operand } => {
+                let operand_val = self.get_value(*operand)?;
+                let result = self.execute_unary_op(op, &operand_val)?;
+                self.values.insert(*dst, result);
+                Ok(ControlFlow::Continue)
+            },
             
             MirInstruction::Compare { dst, op, lhs, rhs } => {
                 let left = self.get_value(*lhs)?;
@@ -241,7 +246,11 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            // Phase 3: Print removed - now handled by Call intrinsic (@print)
+            MirInstruction::Print { value, .. } => {
+                let val = self.get_value(*value)?;
+                println!("{}", val.to_string());
+                Ok(ControlFlow::Continue)
+            },
             
             MirInstruction::Return { value } => {
                 let return_value = if let Some(val_id) = value {
@@ -280,30 +289,26 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            // Phase 3: Load/Store removed - now handled by BoxFieldLoad/BoxFieldStore
+            // Missing instructions that need basic implementations
+            MirInstruction::Load { dst, ptr } => {
+                // For now, loading is the same as getting the value
+                let value = self.get_value(*ptr)?;
+                self.values.insert(*dst, value);
+                Ok(ControlFlow::Continue)
+            },
             
-            MirInstruction::Call { dst, func, args, effects: _ } => {
-                // Phase 2: Handle intrinsic function calls
-                let func_value = self.get_value(*func)?;
-                
-                if let VMValue::String(func_name) = func_value {
-                    if func_name.starts_with('@') {
-                        // This is an intrinsic call
-                        let result = self.execute_intrinsic(&func_name, args)?;
-                        if let Some(dst_id) = dst {
-                            self.values.insert(*dst_id, result);
-                        }
-                    } else {
-                        // Regular function call - not implemented yet
-                        if let Some(dst_id) = dst {
-                            self.values.insert(*dst_id, VMValue::Void);
-                        }
-                    }
-                } else {
-                    // Non-string function - not implemented yet
-                    if let Some(dst_id) = dst {
-                        self.values.insert(*dst_id, VMValue::Void);
-                    }
+            MirInstruction::Store { value, ptr } => {
+                // For now, storing just updates the ptr with the value
+                let val = self.get_value(*value)?;
+                self.values.insert(*ptr, val);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Call { dst, func: _, args: _, effects: _ } => {
+                // For now, function calls return void
+                // TODO: Implement proper function call handling
+                if let Some(dst_id) = dst {
+                    self.values.insert(*dst_id, VMValue::Void);
                 }
                 Ok(ControlFlow::Continue)
             },
@@ -364,27 +369,67 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            // Phase 5: Removed instructions - TypeCheck, Cast, ArrayGet, ArraySet, Copy, Debug, Nop
-            #[allow(deprecated)]
-            MirInstruction::TypeCheck { .. } |
-            MirInstruction::Cast { .. } |
-            MirInstruction::ArrayGet { .. } |
-            MirInstruction::ArraySet { .. } |
-            MirInstruction::Copy { .. } |
-            MirInstruction::Debug { .. } |
-            MirInstruction::Nop => {
-                Err(VMError::InvalidInstruction(
-                    "Phase 5: Deprecated instruction - use 26-instruction set replacements".to_string()
-                ))
+            MirInstruction::TypeCheck { dst, value: _, expected_type: _ } => {
+                // For now, type checks always return true
+                // TODO: Implement proper type checking
+                self.values.insert(*dst, VMValue::Bool(true));
+                Ok(ControlFlow::Continue)
             },
             
-            // Phase 5: Removed instructions - Throw, Catch
-            #[allow(deprecated)]
-            MirInstruction::Throw { .. } |
-            MirInstruction::Catch { .. } => {
-                Err(VMError::InvalidInstruction(
-                    "Phase 5: Exception handling via intrinsics - use Call with @throw/@catch".to_string()
-                ))
+            MirInstruction::Cast { dst, value, target_type: _ } => {
+                // For now, casting just copies the value
+                // TODO: Implement proper type casting
+                let val = self.get_value(*value)?;
+                self.values.insert(*dst, val);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::ArrayGet { dst, array: _, index: _ } => {
+                // For now, array access returns a placeholder
+                // TODO: Implement proper array access
+                self.values.insert(*dst, VMValue::Integer(0));
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::ArraySet { array: _, index: _, value: _ } => {
+                // For now, array setting is a no-op
+                // TODO: Implement proper array setting
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Copy { dst, src } => {
+                // Copy instruction - duplicate the source value
+                let val = self.get_value(*src)?;
+                self.values.insert(*dst, val);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Debug { value, message: _ } => {
+                // Debug instruction - print value for debugging
+                let val = self.get_value(*value)?;
+                println!("DEBUG: {}", val.to_string());
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::Nop => {
+                // No-op instruction
+                Ok(ControlFlow::Continue)
+            },
+            
+            // Phase 5: Control flow & exception handling
+            MirInstruction::Throw { exception, effects: _ } => {
+                let exception_val = self.get_value(*exception)?;
+                // For now, convert throw to error return (simplified exception handling)
+                // In a full implementation, this would unwind the stack looking for catch handlers
+                println!("Exception thrown: {}", exception_val.to_string());
+                Err(VMError::InvalidInstruction(format!("Unhandled exception: {}", exception_val.to_string())))
+            },
+            
+            MirInstruction::Catch { exception_type: _, exception_value, handler_bb: _ } => {
+                // For now, catch is a no-op since we don't have full exception handling
+                // In a real implementation, this would set up exception handling metadata
+                self.values.insert(*exception_value, VMValue::Void);
+                Ok(ControlFlow::Continue)
             },
             
             MirInstruction::Safepoint => {
@@ -393,15 +438,49 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            // Phase 5: Removed instruction - RefNew
-            #[allow(deprecated)]
-            MirInstruction::RefNew { .. } => {
-                Err(VMError::InvalidInstruction(
-                    "Phase 5: RefNew deprecated - RefGet is sufficient".to_string()
-                ))
+            // Phase 6: Box reference operations
+            MirInstruction::RefNew { dst, box_val } => {
+                // For now, a reference is just the same as the box value
+                // In a real implementation, this would create a proper reference
+                let box_value = self.get_value(*box_val)?;
+                self.values.insert(*dst, box_value);
+                Ok(ControlFlow::Continue)
             },
             
-            // Phase 3: RefGet/RefSet removed - now handled by BoxFieldLoad/BoxFieldStore
+            MirInstruction::RefGet { dst, reference, field } => {
+                // Get field value from object
+                let field_value = if let Some(fields) = self.object_fields.get(reference) {
+                    if let Some(value) = fields.get(field) {
+                        value.clone()
+                    } else {
+                        // Field not set yet, return default
+                        VMValue::Integer(0)
+                    }
+                } else {
+                    // Object has no fields yet, return default
+                    VMValue::Integer(0)
+                };
+                
+                self.values.insert(*dst, field_value);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::RefSet { reference, field, value } => {
+                // Get the value to set
+                let new_value = self.get_value(*value)?;
+                
+                // Ensure object has field storage
+                if !self.object_fields.contains_key(reference) {
+                    self.object_fields.insert(*reference, HashMap::new());
+                }
+                
+                // Set the field
+                if let Some(fields) = self.object_fields.get_mut(reference) {
+                    fields.insert(field.clone(), new_value);
+                }
+                
+                Ok(ControlFlow::Continue)
+            },
             
             MirInstruction::WeakNew { dst, box_val } => {
                 // For now, a weak reference is just a copy of the value
@@ -419,23 +498,61 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            // Phase 5: Removed instructions - BarrierRead, BarrierWrite
-            #[allow(deprecated)]
-            MirInstruction::BarrierRead { .. } |
-            MirInstruction::BarrierWrite { .. } => {
-                Err(VMError::InvalidInstruction(
-                    "Phase 5: Memory barriers deprecated - use AtomicFence".to_string()
-                ))
+            MirInstruction::BarrierRead { ptr: _ } => {
+                // Memory barrier read is a no-op for now
+                // In a real implementation, this would ensure memory ordering
+                Ok(ControlFlow::Continue)
             },
             
-            // Phase 5: Removed instructions - FutureNew, FutureSet, Await
-            #[allow(deprecated)]
-            MirInstruction::FutureNew { .. } |
-            MirInstruction::FutureSet { .. } |
-            MirInstruction::Await { .. } => {
-                Err(VMError::InvalidInstruction(
-                    "Phase 5: Future operations deprecated - use NewBox + BoxCall".to_string()
-                ))
+            MirInstruction::BarrierWrite { ptr: _ } => {
+                // Memory barrier write is a no-op for now
+                // In a real implementation, this would ensure memory ordering
+                Ok(ControlFlow::Continue)
+            },
+            
+            // Phase 7: Async/Future Operations
+            MirInstruction::FutureNew { dst, value } => {
+                let initial_value = self.get_value(*value)?;
+                println!("FutureNew: initial_value = {:?}", initial_value);
+                let future = crate::boxes::future::FutureBox::new();
+                // Convert VMValue to NyashBox and set it in the future
+                let nyash_box = initial_value.to_nyash_box();
+                println!("FutureNew: converted to NyashBox type = {}", nyash_box.type_name());
+                future.set_result(nyash_box);
+                self.values.insert(*dst, VMValue::Future(future));
+                println!("FutureNew: stored Future in dst = {:?}", dst);
+                Ok(ControlFlow::Continue)
+            },
+            
+            MirInstruction::FutureSet { future, value } => {
+                let future_val = self.get_value(*future)?;
+                let new_value = self.get_value(*value)?;
+                
+                if let VMValue::Future(ref future_box) = future_val {
+                    future_box.set_result(new_value.to_nyash_box());
+                    Ok(ControlFlow::Continue)
+                } else {
+                    Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
+                }
+            },
+            
+            MirInstruction::Await { dst, future } => {
+                let future_val = self.get_value(*future)?;
+                println!("Await: future_val = {:?}", future_val);
+                
+                if let VMValue::Future(ref future_box) = future_val {
+                    // This blocks until the future is ready
+                    let result = future_box.get();
+                    println!("Await: future.get() returned type = {}", result.type_name());
+                    println!("Await: future.get() string = {}", result.to_string_box().value);
+                    // Convert NyashBox back to VMValue
+                    let vm_value = VMValue::from_nyash_box(result);
+                    println!("Await: converted back to VMValue = {:?}", vm_value);
+                    self.values.insert(*dst, vm_value);
+                    Ok(ControlFlow::Continue)
+                } else {
+                    Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
+                }
             },
             
             // Phase 9.7: External Function Calls  
@@ -467,134 +584,6 @@ impl VM {
                 }
                 
                 Ok(ControlFlow::Continue)
-            },
-            
-            // Phase 8.5: MIR 26-instruction reduction (NEW)
-            MirInstruction::BoxFieldLoad { dst, box_val, field } => {
-                // Load field from box (Everything is Box principle)
-                let box_value = self.get_value(*box_val)?;
-                
-                // For now, simulate field access - in full implementation,
-                // this would access actual Box structure fields
-                let field_value = match field.as_str() {
-                    "value" => box_value.clone(), // Default field
-                    "type" => VMValue::String(format!("{}Field", box_val)),
-                    _ => VMValue::String(format!("field_{}", field)),
-                };
-                
-                self.values.insert(*dst, field_value);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::BoxFieldStore { box_val, field: _, value } => {
-                // Store field in box (Everything is Box principle)
-                let _box_value = self.get_value(*box_val)?;
-                let _store_value = self.get_value(*value)?;
-                
-                // For now, this is a no-op - in full implementation,
-                // this would modify actual Box structure fields
-                // println!("Storing {} in {}.{}", store_value, box_val, field);
-                
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::WeakCheck { dst, weak_ref } => {
-                // Check if weak reference is still alive
-                let _weak_value = self.get_value(*weak_ref)?;
-                
-                // For now, always return true - in full implementation,
-                // this would check actual weak reference validity
-                self.values.insert(*dst, VMValue::Bool(true));
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::Send { data, target } => {
-                // Send data via Bus system
-                let _data_value = self.get_value(*data)?;
-                let _target_value = self.get_value(*target)?;
-                
-                // For now, this is a no-op - in full implementation,
-                // this would use the Bus communication system
-                // println!("Sending {} to {}", data_value, target_value);
-                
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::Recv { dst, source } => {
-                // Receive data from Bus system
-                let _source_value = self.get_value(*source)?;
-                
-                // For now, return a placeholder - in full implementation,
-                // this would receive from actual Bus communication
-                self.values.insert(*dst, VMValue::String("received_data".to_string()));
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::TailCall { func, args, effects: _ } => {
-                // Tail call optimization - call function and return immediately
-                let _func_value = self.get_value(*func)?;
-                let _arg_values: Result<Vec<_>, _> = args.iter().map(|arg| self.get_value(*arg)).collect();
-                
-                // For now, this is simplified - in full implementation,
-                // this would optimize the call stack
-                // println!("Tail calling function with {} args", args.len());
-                
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::Adopt { parent, child } => {
-                // Adopt ownership (parent takes child)
-                let _parent_value = self.get_value(*parent)?;
-                let _child_value = self.get_value(*child)?;
-                
-                // For now, this is a no-op - in full implementation,
-                // this would modify ownership relationships
-                // println!("Parent {} adopts child {}", parent, child);
-                
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::Release { reference } => {
-                // Release strong ownership
-                let _ref_value = self.get_value(*reference)?;
-                
-                // For now, this is a no-op - in full implementation,
-                // this would release strong ownership and potentially weak-ify
-                // println!("Releasing ownership of {}", reference);
-                
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::MemCopy { dst, src, size } => {
-                // Memory copy optimization
-                let src_value = self.get_value(*src)?;
-                let _size_value = self.get_value(*size)?;
-                
-                // For now, just copy the source value
-                self.values.insert(*dst, src_value);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::AtomicFence { ordering: _ } => {
-                // Atomic memory fence
-                
-                // For now, this is a no-op - in full implementation,
-                // this would ensure proper memory ordering for parallel execution
-                // println!("Memory fence with ordering: {:?}", ordering);
-                
-                Ok(ControlFlow::Continue)
-            },
-            
-            // Phase 3: Removed instructions that are no longer generated by frontend
-            MirInstruction::UnaryOp { .. } |
-            MirInstruction::Print { .. } |
-            MirInstruction::Load { .. } |
-            MirInstruction::Store { .. } |
-            MirInstruction::RefGet { .. } |
-            MirInstruction::RefSet { .. } => {
-                Err(VMError::InvalidInstruction(
-                    "Old instruction format no longer supported - use new intrinsic/BoxField format".to_string()
-                ))
             },
         }
     }
@@ -801,86 +790,6 @@ impl VM {
         
         // Default: return void for any unrecognized box type or method
         Ok(Box::new(VoidBox::new()))
-    }
-    
-    /// Execute intrinsic function call (Phase 2 addition)
-    fn execute_intrinsic(&mut self, intrinsic_name: &str, args: &[ValueId]) -> Result<VMValue, VMError> {
-        match intrinsic_name {
-            "@print" => {
-                // Print intrinsic - output the first argument
-                if let Some(arg_id) = args.first() {
-                    let value = self.get_value(*arg_id)?;
-                    match value {
-                        VMValue::String(s) => println!("{}", s),
-                        VMValue::Integer(i) => println!("{}", i),
-                        VMValue::Float(f) => println!("{}", f),
-                        VMValue::Bool(b) => println!("{}", b),
-                        VMValue::Void => println!("void"),
-                        VMValue::Future(_) => println!("Future"),
-                    }
-                }
-                Ok(VMValue::Void) // Print returns void
-            },
-            
-            "@unary_neg" => {
-                // Unary negation intrinsic
-                if let Some(arg_id) = args.first() {
-                    let value = self.get_value(*arg_id)?;
-                    match value {
-                        VMValue::Integer(i) => Ok(VMValue::Integer(-i)),
-                        VMValue::Float(f) => Ok(VMValue::Float(-f)),
-                        _ => Err(VMError::TypeError(format!("Cannot negate {:?}", value))),
-                    }
-                } else {
-                    Err(VMError::TypeError("@unary_neg requires 1 argument".to_string()))
-                }
-            },
-            
-            "@unary_not" => {
-                // Unary logical NOT intrinsic
-                if let Some(arg_id) = args.first() {
-                    let value = self.get_value(*arg_id)?;
-                    match value {
-                        VMValue::Bool(b) => Ok(VMValue::Bool(!b)),
-                        VMValue::Integer(i) => Ok(VMValue::Bool(i == 0)), // 0 is false, non-zero is true
-                        _ => Err(VMError::TypeError(format!("Cannot apply NOT to {:?}", value))),
-                    }
-                } else {
-                    Err(VMError::TypeError("@unary_not requires 1 argument".to_string()))
-                }
-            },
-            
-            "@unary_bitnot" => {
-                // Unary bitwise NOT intrinsic
-                if let Some(arg_id) = args.first() {
-                    let value = self.get_value(*arg_id)?;
-                    match value {
-                        VMValue::Integer(i) => Ok(VMValue::Integer(!i)),
-                        _ => Err(VMError::TypeError(format!("Cannot apply bitwise NOT to {:?}", value))),
-                    }
-                } else {
-                    Err(VMError::TypeError("@unary_bitnot requires 1 argument".to_string()))
-                }
-            },
-            
-            "@throw" => {
-                // Throw intrinsic - for now just print the exception
-                if let Some(arg_id) = args.first() {
-                    let value = self.get_value(*arg_id)?;
-                    println!("Exception thrown: {:?}", value);
-                }
-                Err(VMError::InvalidInstruction("Exception thrown".to_string()))
-            },
-            
-            "@set_exception_handler" => {
-                // Exception handler setup - for now just return success
-                Ok(VMValue::Void)
-            },
-            
-            _ => {
-                Err(VMError::InvalidInstruction(format!("Unknown intrinsic: {}", intrinsic_name)))
-            }
-        }
     }
 }
 

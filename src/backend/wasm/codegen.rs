@@ -244,18 +244,47 @@ impl WasmCodegen {
                 self.generate_return(value.as_ref())
             },
             
-            // Phase 3: Print removed - now handled by Call intrinsic (@print)
-            
-            // Phase 8.3 PoC2: Reference operations
-            // Phase 5: RefNew deprecated - just use the value directly
-            #[allow(deprecated)]
-            MirInstruction::RefNew { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: RefNew deprecated - references are handled implicitly".to_string()
-                ))
+            MirInstruction::Print { value, .. } => {
+                self.generate_print(*value)
             },
             
-            // Phase 3: RefGet/RefSet removed - now handled by BoxFieldLoad/BoxFieldStore
+            // Phase 8.3 PoC2: Reference operations
+            MirInstruction::RefNew { dst, box_val } => {
+                // Create a new reference to a Box by copying the Box value
+                // This assumes box_val contains a Box pointer already
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*box_val)?),
+                    format!("local.set ${}", self.get_local_index(*dst)?),
+                ])
+            },
+            
+            MirInstruction::RefGet { dst, reference, field: _ } => {
+                // Load field value from Box through reference
+                // reference contains Box pointer, field is the field name
+                // For now, assume all fields are at offset 12 (first field after header)
+                // TODO: Add proper field offset calculation
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*reference)?),
+                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
+                    "i32.add".to_string(),
+                    "i32.load".to_string(),
+                    format!("local.set ${}", self.get_local_index(*dst)?),
+                ])
+            },
+            
+            MirInstruction::RefSet { reference, field: _, value } => {
+                // Store field value to Box through reference  
+                // reference contains Box pointer, field is the field name, value is new value
+                // For now, assume all fields are at offset 12 (first field after header)
+                // TODO: Add proper field offset calculation
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(*reference)?),
+                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
+                    "i32.add".to_string(),
+                    format!("local.get ${}", self.get_local_index(*value)?),
+                    "i32.store".to_string(),
+                ])
+            },
             
             MirInstruction::NewBox { dst, box_type, args } => {
                 // Create a new Box using the generic allocator
@@ -294,54 +323,29 @@ impl WasmCodegen {
             },
             
             // Phase 8.4 PoC3: Extension stubs
-            MirInstruction::WeakNew { dst, box_val } => {
-                // WeakNew is still part of 26-instruction set
+            MirInstruction::WeakNew { dst, box_val } |
+            MirInstruction::FutureNew { dst, value: box_val } => {
+                // Treat as regular reference for now
                 Ok(vec![
                     format!("local.get ${}", self.get_local_index(*box_val)?),
                     format!("local.set ${}", self.get_local_index(*dst)?),
                 ])
             },
             
-            // Phase 5: FutureNew deprecated - use NewBox "Future"
-            #[allow(deprecated)]
-            MirInstruction::FutureNew { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: FutureNew deprecated - use 'NewBox \"Future\"' instead".to_string()
-                ))
-            },
-            
-            MirInstruction::WeakLoad { dst, weak_ref } => {
-                // WeakLoad is still part of 26-instruction set
+            MirInstruction::WeakLoad { dst, weak_ref } |
+            MirInstruction::Await { dst, future: weak_ref } => {
+                // Always succeed for now
                 Ok(vec![
                     format!("local.get ${}", self.get_local_index(*weak_ref)?),
                     format!("local.set ${}", self.get_local_index(*dst)?),
                 ])
             },
             
-            // Phase 5: Await deprecated - use BoxCall Future.await()
-            #[allow(deprecated)]
-            MirInstruction::Await { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: Await deprecated - use 'BoxCall Future.await()' instead".to_string()
-                ))
-            },
-            
-            // Phase 5: BarrierRead/BarrierWrite deprecated - use AtomicFence
-            #[allow(deprecated)]
-            MirInstruction::BarrierRead { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: BarrierRead deprecated - use AtomicFence with acquire ordering".to_string()
-                ))
-            },
-            #[allow(deprecated)]
-            MirInstruction::BarrierWrite { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: BarrierWrite deprecated - use AtomicFence with release ordering".to_string()
-                ))
-            },
-            
+            MirInstruction::BarrierRead { .. } |
+            MirInstruction::BarrierWrite { .. } |
+            MirInstruction::FutureSet { .. } |
             MirInstruction::Safepoint => {
-                // Safepoint is still valid - no-op for now
+                // No-op for now
                 Ok(vec!["nop".to_string()])
             },
             
@@ -402,189 +406,6 @@ impl WasmCodegen {
             // Phase 9.77: BoxCall Implementation - Critical Box method calls
             MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
                 self.generate_box_call(*dst, *box_val, method, args)
-            },
-            
-            // Phase 8.5: MIR 26-instruction reduction (NEW)
-            MirInstruction::BoxFieldLoad { dst, box_val, field: _ } => {
-                // Load field from box (similar to RefGet but with explicit Box semantics)
-                // For now, assume all fields are at offset 12 (first field after header)
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*box_val)?),
-                    "i32.const 12".to_string(), // Box header + first field offset
-                    "i32.add".to_string(),
-                    "i32.load".to_string(),
-                    format!("local.set ${}", self.get_local_index(*dst)?),
-                ])
-            },
-            
-            MirInstruction::BoxFieldStore { box_val, field: _, value } => {
-                // Store field to box (similar to RefSet but with explicit Box semantics)
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*box_val)?),
-                    "i32.const 12".to_string(), // Box header + first field offset
-                    "i32.add".to_string(),
-                    format!("local.get ${}", self.get_local_index(*value)?),
-                    "i32.store".to_string(),
-                ])
-            },
-            
-            MirInstruction::WeakCheck { dst, weak_ref } => {
-                // Check if weak reference is still alive
-                // For now, always return 1 (true) - in full implementation,
-                // this would check actual weak reference validity
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*weak_ref)?), // Touch the ref
-                    "drop".to_string(), // Ignore the actual value
-                    "i32.const 1".to_string(), // Always alive for now
-                    format!("local.set ${}", self.get_local_index(*dst)?),
-                ])
-            },
-            
-            MirInstruction::Send { data, target } => {
-                // Send data via Bus system - no-op for now
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*data)?),
-                    format!("local.get ${}", self.get_local_index(*target)?),
-                    "drop".to_string(), // Drop target
-                    "drop".to_string(), // Drop data
-                    "nop".to_string(),  // No actual send operation
-                ])
-            },
-            
-            MirInstruction::Recv { dst, source } => {
-                // Receive data from Bus system - return constant for now
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*source)?), // Touch source
-                    "drop".to_string(), // Ignore source
-                    "i32.const 42".to_string(), // Placeholder received data
-                    format!("local.set ${}", self.get_local_index(*dst)?),
-                ])
-            },
-            
-            MirInstruction::TailCall { func, args, effects: _ } => {
-                // Tail call optimization - simplified as regular call for now
-                let mut instructions = Vec::new();
-                
-                // Load all arguments
-                for arg in args {
-                    instructions.push(format!("local.get ${}", self.get_local_index(*arg)?));
-                }
-                
-                // Call function (assuming it's a function index)
-                instructions.push(format!("local.get ${}", self.get_local_index(*func)?));
-                instructions.push("call_indirect".to_string());
-                
-                Ok(instructions)
-            },
-            
-            MirInstruction::Adopt { parent, child } => {
-                // Adopt ownership - no-op for now in WASM
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*parent)?),
-                    format!("local.get ${}", self.get_local_index(*child)?),
-                    "drop".to_string(), // Drop child
-                    "drop".to_string(), // Drop parent
-                    "nop".to_string(),  // No actual adoption
-                ])
-            },
-            
-            MirInstruction::Release { reference } => {
-                // Release strong ownership - no-op for now
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*reference)?),
-                    "drop".to_string(), // Drop reference
-                    "nop".to_string(),  // No actual release
-                ])
-            },
-            
-            MirInstruction::MemCopy { dst, src, size } => {
-                // Memory copy optimization - simple copy for now
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*src)?),
-                    format!("local.set ${}", self.get_local_index(*dst)?),
-                    // Size is ignored for now - in full implementation,
-                    // this would use memory.copy instruction
-                    format!("local.get ${}", self.get_local_index(*size)?),
-                    "drop".to_string(),
-                ])
-            },
-            
-            MirInstruction::AtomicFence { ordering: _ } => {
-                // Atomic memory fence - no-op for now
-                // WASM doesn't have direct memory fence instructions
-                // In full implementation, this might use atomic wait/notify
-                Ok(vec!["nop".to_string()])
-            },
-            
-            // Phase 4: Call instruction for intrinsic functions
-            MirInstruction::Call { dst, func, args, effects: _ } => {
-                self.generate_call_instruction(dst.as_ref(), *func, args)
-            },
-            
-            // Phase 5: Removed instructions - TypeCheck, Cast, ArrayGet, ArraySet, Copy, Debug, Nop
-            #[allow(deprecated)]
-            MirInstruction::TypeCheck { .. } |
-            MirInstruction::Cast { .. } |
-            MirInstruction::ArrayGet { .. } |
-            MirInstruction::ArraySet { .. } |
-            MirInstruction::Copy { .. } |
-            MirInstruction::Debug { .. } |
-            MirInstruction::Nop => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: Deprecated instruction - use 26-instruction set replacements".to_string()
-                ))
-            },
-            
-            // Phase 5: Removed instructions - UnaryOp (use BinOp instead)
-            #[allow(deprecated)]
-            MirInstruction::UnaryOp { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: UnaryOp deprecated - use BinOp (e.g., 'not x' -> 'x xor true', 'neg x' -> '0 sub x')".to_string()
-                ))
-            },
-            
-            // Phase 5: Removed instructions - Load/Store (use BoxFieldLoad/BoxFieldStore)
-            #[allow(deprecated)]
-            MirInstruction::Load { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: Load deprecated - use BoxFieldLoad for field access".to_string()
-                ))
-            },
-            #[allow(deprecated)]
-            MirInstruction::Store { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: Store deprecated - use BoxFieldStore for field updates".to_string()
-                ))
-            },
-            
-            // Phase 5: Removed instructions - Print (use Call @print)
-            #[allow(deprecated)]
-            MirInstruction::Print { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: Print deprecated - use 'Call @print' intrinsic function".to_string()
-                ))
-            },
-            
-            // Phase 5: Removed instructions - Throw/Catch (use Call @throw/@catch)
-            #[allow(deprecated)]
-            MirInstruction::Throw { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: Throw deprecated - use 'Call @throw' intrinsic function".to_string()
-                ))
-            },
-            #[allow(deprecated)]
-            MirInstruction::Catch { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: Catch deprecated - use 'Call @catch' intrinsic function".to_string()
-                ))
-            },
-            
-            // Phase 5: Removed FutureSet - use BoxCall instead  
-            #[allow(deprecated)]
-            MirInstruction::FutureSet { .. } => {
-                Err(WasmError::UnsupportedInstruction(
-                    "Phase 5: FutureSet deprecated - use BoxCall method for Future.set()".to_string()
-                ))
             },
             
             // Unsupported instructions
@@ -861,36 +682,6 @@ impl WasmCodegen {
                 "i32.const 0".to_string(), // Void result
                 format!("local.set ${}", self.get_local_index(dst)?),
             ]);
-        }
-        
-        Ok(instructions)
-    }
-    
-    /// Generate Call instruction for intrinsic functions (Phase 4)
-    fn generate_call_instruction(&mut self, dst: Option<&ValueId>, func: ValueId, args: &[ValueId]) -> Result<Vec<String>, WasmError> {
-        // Get the function name from the func ValueId
-        // In MIR, intrinsic function names are stored as string constants
-        let mut instructions = Vec::new();
-        
-        // For intrinsic functions, we handle them based on their name
-        // The func ValueId should contain a string constant like "@print"
-        
-        // For now, assume all calls are @print intrinsic
-        // TODO: Implement proper function name resolution from ValueId
-        
-        // Load all arguments onto stack in order
-        for arg in args {
-            instructions.push(format!("local.get ${}", self.get_local_index(*arg)?));
-        }
-        
-        // Call the print function (assuming it's imported as $print)
-        instructions.push("call $print".to_string());
-        
-        // Store result if destination is provided
-        if let Some(dst) = dst {
-            // Intrinsic functions typically return void, but we provide a dummy value
-            instructions.push("i32.const 0".to_string()); // Void result
-            instructions.push(format!("local.set ${}", self.get_local_index(*dst)?));
         }
         
         Ok(instructions)

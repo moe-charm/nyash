@@ -7,9 +7,7 @@
 
 // Import all necessary dependencies
 use crate::ast::{ASTNode, CatchClause};
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, ArrayBox, ResultBox, ErrorBox, BoxCore};
-#[cfg(not(feature = "dynamic-file"))]
-use crate::box_trait::FileBox;
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, ArrayBox, FileBox, ResultBox, ErrorBox, BoxCore};
 use crate::boxes::FutureBox;
 use crate::instance::InstanceBox;
 use crate::channel_box::ChannelBox;
@@ -42,15 +40,9 @@ mod math_methods;
 mod system_methods;
 mod web_methods;
 mod special_methods;
-#[cfg(feature = "dynamic-file")]
-mod plugin_loader;
 
 // Main interpreter implementation - will be moved from interpreter.rs
 pub use core::NyashInterpreter;
-
-// Dynamic plugin support
-#[cfg(feature = "dynamic-file")]
-pub use plugin_loader::{PluginLoader, FileBoxProxy};
 
 
 /// 実行制御フロー

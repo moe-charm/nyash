@@ -145,7 +145,6 @@ impl NyashInterpreter {
                     if let Some(Some(init_expr)) = initial_values.get(i) {
                         // 🚀 初期化付きlocal宣言: local x = value
                         let init_value = self.execute_expression(init_expr)?;
-                        eprintln!("🔍 DEBUG: Local variable '{}' initialized with type: {}", var_name, init_value.type_name());
                         self.declare_local_variable(var_name, init_value);
                     } else {
                         // 従来のlocal宣言: local x

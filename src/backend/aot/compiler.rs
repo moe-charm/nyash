@@ -53,8 +53,6 @@ impl AotCompiler {
                 WasmError::UnsupportedInstruction(msg) => AotError::CompilationError(format!("Unsupported MIR instruction: {}", msg)),
                 WasmError::WasmValidationError(msg) => AotError::CompilationError(format!("WASM validation failed: {}", msg)),
                 WasmError::IOError(msg) => AotError::IOError(msg),
-                WasmError::RuntimeError(msg) => AotError::RuntimeError(msg),
-                WasmError::CompilationError(msg) => AotError::CompilationError(msg),
             })?;
         
         self.stats.wasm_size = wasm_bytes.len();

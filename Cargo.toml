@@ -16,8 +16,6 @@ cli = []
 gui = ["dep:egui", "dep:eframe", "dep:egui_extras", "dep:image"]
 gui-examples = ["gui"]
 all-examples = ["gui-examples"]
-# 動的ライブラリサポート
-dynamic-file = ["dep:libloading"]
 
 [lib]
 name = "nyash_rust"
@@ -28,11 +26,6 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "nyash"
 path = "src/main.rs"
-
-# WASM runner executable
-[[bin]]
-name = "nyash-wasm-run"
-path = "src/bin/nyash-wasm-run.rs"
 
 # Examples for development - only available as examples, not bins
 [[example]]
@@ -120,9 +113,6 @@ js-sys = "0.3"
 wabt = "0.10"
 wasmtime = "35.0.0"
 
-# 動的ライブラリロード（Phase 9.75f）
-libloading = { version = "0.8", optional = true }
-
 # GUI フレームワーク - only when gui feature is enabled
 egui = { version = "0.29", optional = true }
 eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"], optional = true }
@@ -179,12 +169,3 @@ panic = "abort"
 # 開発用設定
 opt-level = 0
 debug = true
-
-# Workspace configuration
-[workspace]
-members = [
-    ".",                    # メインのnyash-rustプロジェクト
-    "plugins/nyash-file",   # FileBoxプラグイン
-    "plugins/nyash-math",   # Math/Time系プラグイン
-]
-resolver = "2"

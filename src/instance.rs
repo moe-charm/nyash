@@ -516,7 +516,7 @@ mod tests {
         
         // フィールドに値を設定
         let int_value = Box::new(IntegerBox::new(42)) as Box<dyn NyashBox>;
-        instance.set_field("value", int_value.into()).unwrap();
+        instance.set_field("value", int_value).unwrap();
         
         // フィールドの値を取得
         let retrieved = instance.get_field("value").unwrap();

@@ -3,7 +3,6 @@
 // 参考: 既存Boxの設計思想
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
-use crate::bid::{BidBridge, BidHandle, BidType, BidError, BoxRegistry};
 use std::any::Any;
 use std::sync::RwLock;
 
@@ -144,25 +143,6 @@ impl BoxCore for NyashFutureBox {
 impl std::fmt::Display for NyashFutureBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.fmt_box(f)
-    }
-}
-
-impl BidBridge for NyashFutureBox {
-    fn to_bid_handle(&self, registry: &mut BoxRegistry) -> Result<BidHandle, BidError> {
-        use std::sync::Arc;
-        let arc_box: Arc<dyn NyashBox> = Arc::new(self.clone());
-        let handle = registry.register_box(
-            crate::bid::types::BoxTypeId::FutureBox as u32,
-            arc_box
-        );
-        Ok(handle)
-    }
-    
-    fn bid_type(&self) -> BidType {
-        BidType::Handle { 
-            type_id: crate::bid::types::BoxTypeId::FutureBox as u32,
-            instance_id: 0  // Will be filled by registry
-        }
     }
 }
 

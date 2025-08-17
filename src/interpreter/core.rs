@@ -350,13 +350,13 @@ impl NyashInterpreter {
         
         // 2. local変数をチェック
         if let Some(local_value) = self.local_vars.get(name) {
-            eprintln!("🔍 DEBUG: Found '{}' in local_vars, type: {}", name, local_value.type_name());
+            eprintln!("🔍 DEBUG: Found '{}' in local_vars", name);
             
             // 🔧 修正：clone_box() → Arc::clone() で参照共有
             let shared_value = Arc::clone(local_value);
             
-            eprintln!("✅ RESOLVE_VARIABLE shared reference: {} id={}, type: {}", 
-                     name, shared_value.box_id(), shared_value.type_name());
+            eprintln!("✅ RESOLVE_VARIABLE shared reference: {} id={}", 
+                     name, shared_value.box_id());
             
             return Ok(shared_value);
         }
@@ -478,12 +478,7 @@ impl NyashInterpreter {
     
     /// local変数を宣言（関数内でのみ有効）
     pub(super) fn declare_local_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
-        eprintln!("🔍 DEBUG: declare_local_variable '{}' with type: {}, id: {}", 
-                 name, value.type_name(), value.box_id());
-        let arc_value: Arc<dyn NyashBox> = Arc::from(value);
-        eprintln!("🔍 DEBUG: After Arc::from, type: {}, id: {}", 
-                 arc_value.type_name(), arc_value.box_id());
-        self.local_vars.insert(name.to_string(), arc_value);
+        self.local_vars.insert(name.to_string(), Arc::from(value));
     }
     
     /// outbox変数を宣言（static関数内で所有権移転）

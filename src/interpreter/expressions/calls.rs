@@ -13,8 +13,6 @@ use crate::instance::InstanceBox;
 use crate::channel_box::ChannelBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use crate::interpreter::finalization;
-#[cfg(feature = "dynamic-file")]
-use crate::interpreter::plugin_loader::FileBoxProxy;
 use std::sync::Arc;
 
 impl NyashInterpreter {
@@ -255,18 +253,6 @@ impl NyashInterpreter {
         // FileBox method calls
         if let Some(file_box) = obj_value.as_any().downcast_ref::<crate::boxes::file::FileBox>() {
             return self.execute_file_method(file_box, method, arguments);
-        }
-        
-        // FileBoxProxy method calls (動的ライブラリ版)
-        #[cfg(feature = "dynamic-file")]
-        {
-            eprintln!("🔍 DEBUG: Checking if object is FileBoxProxy, type_name: {}", obj_value.type_name());
-            if let Some(file_proxy) = obj_value.as_any().downcast_ref::<crate::interpreter::plugin_loader::FileBoxProxy>() {
-                eprintln!("✅ DEBUG: Object is FileBoxProxy, calling execute_file_proxy_method");
-                return self.execute_file_proxy_method(file_proxy, method, arguments);
-            } else {
-                eprintln!("❌ DEBUG: Object is NOT FileBoxProxy");
-            }
         }
         
         // ResultBox method calls

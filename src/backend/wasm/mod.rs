@@ -8,13 +8,10 @@
 mod codegen;
 mod memory;
 mod runtime;
-mod host;
-mod executor;
 
 pub use codegen::{WasmCodegen, WasmModule};
 pub use memory::{MemoryManager, BoxLayout};
 pub use runtime::RuntimeImports;
-pub use executor::WasmExecutor;
 
 use crate::mir::MirModule;
 
@@ -26,8 +23,6 @@ pub enum WasmError {
     UnsupportedInstruction(String),
     WasmValidationError(String),
     IOError(String),
-    RuntimeError(String),
-    CompilationError(String),
 }
 
 impl std::fmt::Display for WasmError {
@@ -38,8 +33,6 @@ impl std::fmt::Display for WasmError {
             WasmError::UnsupportedInstruction(msg) => write!(f, "Unsupported instruction: {}", msg),
             WasmError::WasmValidationError(msg) => write!(f, "WASM validation error: {}", msg),
             WasmError::IOError(msg) => write!(f, "IO error: {}", msg),
-            WasmError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
-            WasmError::CompilationError(msg) => write!(f, "Compilation error: {}", msg),
         }
     }
 }

@@ -6,10 +6,10 @@
 
 use nyash_rust::mir::{
     MirModule, MirFunction, FunctionSignature, MirType, EffectMask,
-    BasicBlock, BasicBlockId, ValueId, MirInstruction, ConstValue, AtomicOrdering
+    BasicBlock, BasicBlockId, ValueId, MirInstruction, ConstValue
 };
-use nyash_rust::backend::VM;
-use nyash_rust::box_trait::IntegerBox;
+use nyash_rust::backend::{VM, VMValue};
+use nyash_rust::box_trait::{IntegerBox, NyashBox};
 
 #[test]
 fn test_mir_phase6_vm_ref_ops() {
@@ -45,7 +45,6 @@ fn test_mir_phase6_vm_ref_ops() {
     let obj_ref = ValueId::new(1);
     let one_val = ValueId::new(2);
     let x_val = ValueId::new(3);
-    let print_func = ValueId::new(4);
     
     // Add instructions
     
@@ -55,18 +54,10 @@ fn test_mir_phase6_vm_ref_ops() {
         value: ConstValue::String("Obj".to_string()),
     });
     
-    // %4 = const "@print" (for intrinsic call)
-    block.add_instruction(MirInstruction::Const {
-        dst: print_func,
-        value: ConstValue::String("@print".to_string()),
-    });
-    
-    // %1 = new Obj()
-    // Phase 5: RefNew is deprecated - use NewBox instead
-    block.add_instruction(MirInstruction::NewBox {
+    // %1 = ref_new %0
+    block.add_instruction(MirInstruction::RefNew {
         dst: obj_ref,
-        box_type: "Obj".to_string(),
-        args: vec![],
+        box_val: obj_type_val,
     });
     
     // %2 = const 1
@@ -75,34 +66,28 @@ fn test_mir_phase6_vm_ref_ops() {
         value: ConstValue::Integer(1),
     });
     
-    // atomic_fence release
-    // Phase 5: BarrierWrite is deprecated - use AtomicFence instead
-    block.add_instruction(MirInstruction::AtomicFence {
-        ordering: AtomicOrdering::Release,
+    // barrier_write %1
+    block.add_instruction(MirInstruction::BarrierWrite {
+        ptr: obj_ref,
     });
     
-    // %1.x = %2
-    // Phase 5: RefSet is deprecated - use BoxFieldStore instead
-    block.add_instruction(MirInstruction::BoxFieldStore {
-        box_val: obj_ref,
+    // ref_set %1, "x", %2
+    block.add_instruction(MirInstruction::RefSet {
+        reference: obj_ref,
         field: "x".to_string(),
         value: one_val,
     });
     
-    // %3 = %1.x
-    // Phase 5: RefGet is deprecated - use BoxFieldLoad instead
-    block.add_instruction(MirInstruction::BoxFieldLoad {
+    // %3 = ref_get %1, "x"
+    block.add_instruction(MirInstruction::RefGet {
         dst: x_val,
-        box_val: obj_ref,
+        reference: obj_ref,
         field: "x".to_string(),
     });
     
-    // call @print(%3)
-    // Phase 5: Print is deprecated - use Call @print instead
-    block.add_instruction(MirInstruction::Call {
-        dst: None,
-        func: print_func,
-        args: vec![x_val],
+    // print %3
+    block.add_instruction(MirInstruction::Print {
+        value: x_val,
         effects: EffectMask::IO,
     });
     
@@ -183,14 +168,13 @@ fn test_barrier_no_op() {
         value: ConstValue::Integer(42),
     });
     
-    // Test atomic fence instructions (replace barriers)
-    // Phase 5: BarrierRead/BarrierWrite are deprecated - use AtomicFence
-    block.add_instruction(MirInstruction::AtomicFence {
-        ordering: AtomicOrdering::Acquire,
+    // Test barrier instructions (should be no-ops)
+    block.add_instruction(MirInstruction::BarrierRead {
+        ptr: test_val,
     });
     
-    block.add_instruction(MirInstruction::AtomicFence {
-        ordering: AtomicOrdering::Release,
+    block.add_instruction(MirInstruction::BarrierWrite {
+        ptr: test_val,
     });
     
     block.add_instruction(MirInstruction::Return {

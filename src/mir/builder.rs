@@ -291,28 +291,12 @@ impl MirBuilder {
         let operand_val = self.build_expression(operand)?;
         let dst = self.value_gen.next();
         
-        // Phase 2: Convert UnaryOp to intrinsic call
-        // Create intrinsic function name based on operator
-        let intrinsic_name = match operator.as_str() {
-            "-" => "@unary_neg",
-            "!" | "not" => "@unary_not", 
-            "~" => "@unary_bitnot",
-            _ => return Err(format!("Unsupported unary operator: {}", operator)),
-        };
+        let mir_op = self.convert_unary_operator(operator)?;
         
-        // Create string constant for intrinsic function name
-        let func_name_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: func_name_id,
-            value: ConstValue::String(intrinsic_name.to_string()),
-        })?;
-        
-        // Emit intrinsic call
-        self.emit_instruction(MirInstruction::Call {
-            dst: Some(dst),
-            func: func_name_id,
-            args: vec![operand_val],
-            effects: EffectMask::PURE, // Unary operations are pure
+        self.emit_instruction(MirInstruction::UnaryOp {
+            dst,
+            op: mir_op,
+            operand: operand_val,
         })?;
         
         Ok(dst)
@@ -369,20 +353,10 @@ impl MirBuilder {
     fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         let value = self.build_expression(expression)?;
         
-        // Phase 2: Convert Print to intrinsic call (@print)
-        // Create string constant for intrinsic function name
-        let func_name_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: func_name_id,
-            value: ConstValue::String("@print".to_string()),
-        })?;
-        
-        // Emit intrinsic call (print returns void)
-        self.emit_instruction(MirInstruction::Call {
-            dst: None, // Print has no return value
-            func: func_name_id,
-            args: vec![value],
-            effects: EffectMask::PURE.add(Effect::Io), // IO effect for print
+        // For now, use a special Print instruction (minimal scope)
+        self.emit_instruction(MirInstruction::Print {
+            value,
+            effects: EffectMask::PURE.add(Effect::Io),
         })?;
         
         // Return the value that was printed
@@ -556,35 +530,15 @@ impl MirBuilder {
         let finally_block = if finally_body.is_some() { Some(self.block_gen.next()) } else { None };
         let exit_block = self.block_gen.next();
         
-        // Phase 2: Convert Catch to intrinsic call (@set_exception_handler)
+        // Set up exception handler for the try block (before we enter it)
         if let Some(catch_clause) = catch_clauses.first() {
             let exception_value = self.value_gen.next();
             
-            // Create string constants for intrinsic function name and exception type
-            let func_name_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: func_name_id,
-                value: ConstValue::String("@set_exception_handler".to_string()),
-            })?;
-            
-            let exception_type_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: exception_type_id,
-                value: ConstValue::String(catch_clause.exception_type.clone().unwrap_or("*".to_string())),
-            })?;
-            
-            let handler_bb_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: handler_bb_id,
-                value: ConstValue::Integer(catch_block.as_u32() as i64),
-            })?;
-            
-            // Register catch handler via intrinsic call
-            self.emit_instruction(MirInstruction::Call {
-                dst: Some(exception_value),
-                func: func_name_id,
-                args: vec![exception_type_id, handler_bb_id],
-                effects: EffectMask::CONTROL, // Exception handling has control effects
+            // Register catch handler for exceptions that may occur in try block
+            self.emit_instruction(MirInstruction::Catch {
+                exception_type: catch_clause.exception_type.clone(),
+                exception_value,
+                handler_bb: catch_block,
             })?;
         }
         
@@ -655,20 +609,10 @@ impl MirBuilder {
     fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         let exception_value = self.build_expression(expression)?;
         
-        // Phase 2: Convert Throw to intrinsic call (@throw)
-        // Create string constant for intrinsic function name
-        let func_name_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: func_name_id,
-            value: ConstValue::String("@throw".to_string()),
-        })?;
-        
-        // Emit intrinsic call (throw has PANIC effect and doesn't return)
-        self.emit_instruction(MirInstruction::Call {
-            dst: None, // Throw never returns
-            func: func_name_id,
-            args: vec![exception_value],
-            effects: EffectMask::PANIC, // PANIC effect for throw
+        // Emit throw instruction with PANIC effect (this is a terminator)
+        self.emit_instruction(MirInstruction::Throw {
+            exception: exception_value,
+            effects: EffectMask::PANIC,
         })?;
         
         // Throw doesn't return normally, but we need to return a value for the type system
@@ -760,11 +704,11 @@ impl MirBuilder {
         // First, build the object expression to get its ValueId
         let object_value = self.build_expression(object)?;
         
-        // Get the field from the object using BoxFieldLoad (Phase 8.5 new instruction)
+        // Get the field from the object using RefGet
         let result_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::BoxFieldLoad {
+        self.emit_instruction(MirInstruction::RefGet {
             dst: result_id,
-            box_val: object_value,
+            reference: object_value,
             field,
         })?;
         
@@ -772,45 +716,22 @@ impl MirBuilder {
     }
     
     /// Build new expression: new ClassName(arguments)
-    fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
-        // Special handling for StringBox - if it has a string literal argument,
-        // treat it as a string constant, not a box creation
-        if class == "StringBox" && arguments.len() == 1 {
-            if let ASTNode::Literal { value: LiteralValue::String(s), .. } = &arguments[0] {
-                // Just create a string constant
-                let dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const {
-                    dst,
-                    value: ConstValue::String(s.clone()),
-                })?;
-                
-                // Phase 5-3: RefNew is deprecated - use NewBox instead
-                let string_box_dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::NewBox {
-                    dst: string_box_dst,
-                    box_type: "StringBox".to_string(),
-                    args: vec![dst],
-                })?;
-                
-                return Ok(string_box_dst);
-            }
-        }
-        
-        // Phase 5-3: Create NewBox with processed arguments
+    fn build_new_expression(&mut self, class: String, _arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+        // For Phase 6.1, we'll create a simple RefNew without processing arguments
+        // In a full implementation, arguments would be used for constructor calls
         let dst = self.value_gen.next();
         
-        // Process all arguments
-        let mut arg_values = Vec::new();
-        for arg in arguments {
-            let arg_value = self.build_expression(arg)?;
-            arg_values.push(arg_value);
-        }
+        // For now, create a "box type" value representing the class
+        let type_value = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: type_value,
+            value: ConstValue::String(class),
+        })?;
         
-        // Create NewBox instruction
-        self.emit_instruction(MirInstruction::NewBox {
+        // Create the reference using RefNew
+        self.emit_instruction(MirInstruction::RefNew {
             dst,
-            box_type: class,
-            args: arg_values,
+            box_val: type_value,
         })?;
         
         Ok(dst)
@@ -822,9 +743,9 @@ impl MirBuilder {
         let object_value = self.build_expression(object)?;
         let value_result = self.build_expression(value)?;
         
-        // Set the field using BoxFieldStore (Phase 8.5 new instruction)
-        self.emit_instruction(MirInstruction::BoxFieldStore {
-            box_val: object_value,
+        // Set the field using RefSet
+        self.emit_instruction(MirInstruction::RefSet {
+            reference: object_value,
             field,
             value: value_result,
         })?;
@@ -888,12 +809,11 @@ impl MirBuilder {
         // Evaluate the expression
         let expression_value = self.build_expression(expression)?;
         
-        // Phase 2: Convert FutureNew to NewBox + BoxCall implementation
+        // Create a new Future with the evaluated expression as the initial value
         let future_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::NewBox {
+        self.emit_instruction(MirInstruction::FutureNew {
             dst: future_id,
-            box_type: "FutureBox".to_string(),
-            args: vec![expression_value],
+            value: expression_value,
         })?;
         
         // Store the future in the variable
@@ -907,16 +827,13 @@ impl MirBuilder {
         // Evaluate the expression (should be a Future)
         let future_value = self.build_expression(expression)?;
         
-        // Phase 2: Convert Await to BoxCall implementation
+        // Create destination for await result
         let result_id = self.value_gen.next();
         
-        // Emit await as a method call on the future box
-        self.emit_instruction(MirInstruction::BoxCall {
-            dst: Some(result_id),
-            box_val: future_value,
-            method: "await".to_string(),
-            args: vec![],
-            effects: EffectMask::IO.add(Effect::Control), // Await has IO and control effects
+        // Emit await instruction
+        self.emit_instruction(MirInstruction::Await {
+            dst: result_id,
+            future: future_value,
         })?;
         
         Ok(result_id)

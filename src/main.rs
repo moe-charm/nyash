@@ -38,12 +38,6 @@ pub mod backend;
 // 📊 Performance Benchmarks
 pub mod benchmarks;
 
-// 🚀 BID-FFI: Box Interface Definition with FFI
-pub mod bid;
-
-// 🔌 Runtime: Plugin System (Day 5)
-pub mod runtime;
-
 // 🚀 Refactored modules for better organization
 pub mod cli;
 pub mod runner;
