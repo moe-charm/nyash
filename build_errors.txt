@@ -1,0 +1,1363 @@
+    Checking nyash-rust v0.1.0 (/mnt/c/git/nyash-project/nyash)
+warning: unused import: `crate::box_trait::FileBox`
+  --> src/interpreter/mod.rs:12:5
+   |
+12 | use crate::box_trait::FileBox;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `TimeBox`
+  --> src/interpreter/mod.rs:17:30
+   |
+17 | use crate::boxes::time_box::{TimeBox, TimerBox};
+   |                              ^^^^^^^
+
+warning: unused import: `crate::ast::ASTNode`
+ --> src/interpreter/methods/math_methods.rs:9:5
+  |
+9 | use crate::ast::ASTNode;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BoolBox` and `StringBox`
+  --> src/interpreter/methods/math_methods.rs:10:46
+   |
+10 | use crate::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
+   |                                              ^^^^^^^  ^^^^^^^^^
+
+warning: unused imports: `DateTimeBox`, `MathBox`, `RandomBox`, and `TimeBox`
+  --> src/interpreter/methods/math_methods.rs:17:20
+   |
+17 | use crate::boxes::{MathBox, RandomBox, TimeBox, DateTimeBox};
+   |                    ^^^^^^^  ^^^^^^^^^  ^^^^^^^  ^^^^^^^^^^^
+
+warning: unused import: `super::Usize`
+ --> src/bid/types.rs:1:5
+  |
+1 | use super::Usize;
+  |     ^^^^^^^^^^^^
+
+warning: unused import: `std::os::raw::c_char`
+ --> src/bid/plugin_api.rs:2:5
+  |
+2 | use std::os::raw::c_char;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `NyashHostVtable`, `NyashMethodInfo`, and `NyashPluginInfo`
+ --> src/bid/plugins/filebox/mod.rs:7:18
+  |
+7 | use crate::bid::{NyashPluginInfo, NyashMethodInfo, NyashHostVtable};
+  |                  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused imports: `SeekFrom` and `Seek`
+  --> src/bid/plugins/filebox/mod.rs:10:28
+   |
+10 | use std::io::{Read, Write, Seek, SeekFrom};
+   |                            ^^^^  ^^^^^^^^
+
+warning: unused imports: `c_char` and `c_void`
+  --> src/bid/plugins/filebox/mod.rs:11:20
+   |
+11 | use std::os::raw::{c_char, c_void};
+   |                    ^^^^^^  ^^^^^^
+
+warning: unused imports: `CStr` and `CString`
+  --> src/bid/plugins/filebox/mod.rs:13:16
+   |
+13 | use std::ffi::{CStr, CString};
+   |                ^^^^  ^^^^^^^
+
+warning: unused imports: `BidError`, `TlvDecoder`, and `TlvEncoder`
+ --> src/runtime/plugin_loader.rs:5:29
+  |
+5 | use crate::bid::{BidHandle, BidError, TlvEncoder, TlvDecoder};
+  |                             ^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused imports: `BoolBox` and `StringBox`
+ --> src/runtime/plugin_loader.rs:6:34
+  |
+6 | use crate::box_trait::{NyashBox, StringBox, BoolBox};
+  |                                  ^^^^^^^^^  ^^^^^^^
+
+warning: unused import: `crate::runtime::plugin_box::PluginBox`
+ --> src/runtime/plugin_loader.rs:7:5
+  |
+7 | use crate::runtime::plugin_box::PluginBox;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `EffectMask` and `Effect`
+  --> src/mir/optimizer.rs:11:62
+   |
+11 | use super::{MirModule, MirFunction, MirInstruction, ValueId, EffectMask, Effect};
+   |                                                              ^^^^^^^^^^  ^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::UnaryOp`: Use BinOp instead
+   --> src/mir/instruction.rs:476:29
+    |
+476 |             MirInstruction::UnaryOp { .. } |
+    |                             ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Cast`: Use Call with @cast intrinsic
+   --> src/mir/instruction.rs:478:29
+    |
+478 |             MirInstruction::Cast { .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Copy`: Optimization pass only, not needed in IR
+   --> src/mir/instruction.rs:479:29
+    |
+479 |             MirInstruction::Copy { .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::TypeCheck`: Use Call with @type_check intrinsic
+   --> src/mir/instruction.rs:481:29
+    |
+481 |             MirInstruction::TypeCheck { .. } |
+    |                             ^^^^^^^^^
+
+warning: use of deprecated unit variant `mir::instruction::MirInstruction::Nop`: Not needed in final IR
+   --> src/mir/instruction.rs:482:29
+    |
+482 |             MirInstruction::Nop => EffectMask::PURE,
+    |                             ^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Load`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:485:29
+    |
+485 |             MirInstruction::Load { .. } => EffectMask::READ,
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Store`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:486:29
+    |
+486 |             MirInstruction::Store { .. } |
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArraySet`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/instruction.rs:487:29
+    |
+487 |             MirInstruction::ArraySet { .. } => EffectMask::WRITE,
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArrayGet`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/instruction.rs:488:29
+    |
+488 |             MirInstruction::ArrayGet { .. } => EffectMask::READ,
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Debug`: Use Call with @debug intrinsic
+   --> src/mir/instruction.rs:503:29
+    |
+503 |             MirInstruction::Debug { .. } => EffectMask::PURE.add(Effect::Debug),
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Print`: Use Call with @print intrinsic
+   --> src/mir/instruction.rs:506:29
+    |
+506 |             MirInstruction::Print { effects, .. } => *effects,
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Throw`: Use Call with @throw intrinsic
+   --> src/mir/instruction.rs:509:29
+    |
+509 |             MirInstruction::Throw { effects, .. } => *effects,
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Catch`: Use Call with @catch intrinsic
+   --> src/mir/instruction.rs:510:29
+    |
+510 |             MirInstruction::Catch { .. } => EffectMask::PURE, // Setting up handler is pure
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::RefNew`: RefGet is sufficient
+   --> src/mir/instruction.rs:514:29
+    |
+514 |             MirInstruction::RefNew { .. } => EffectMask::PURE, // Creating reference is pure
+    |                             ^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierRead`: Use AtomicFence instead
+   --> src/mir/instruction.rs:519:29
+    |
+519 |             MirInstruction::BarrierRead { .. } => EffectMask::READ.add(Effect::Barrier), // Memory barrier with read
+    |                             ^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierWrite`: Use AtomicFence instead
+   --> src/mir/instruction.rs:520:29
+    |
+520 |             MirInstruction::BarrierWrite { .. } => EffectMask::WRITE.add(Effect::Barrier), // Memory barrier with write
+    |                             ^^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureNew`: Use NewBox + BoxCall
+   --> src/mir/instruction.rs:523:29
+    |
+523 |             MirInstruction::FutureNew { .. } => EffectMask::PURE.add(Effect::Alloc), // Creating future may allocate
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureSet`: Use BoxCall
+   --> src/mir/instruction.rs:524:29
+    |
+524 |             MirInstruction::FutureSet { .. } => EffectMask::WRITE, // Setting future has write effects
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Await`: Use BoxCall
+   --> src/mir/instruction.rs:525:29
+    |
+525 |             MirInstruction::Await { .. } => EffectMask::READ.add(Effect::Async), // Await blocks and reads
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::UnaryOp`: Use BinOp instead
+   --> src/mir/instruction.rs:549:29
+    |
+549 |             MirInstruction::UnaryOp { dst, .. } |
+    |                             ^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Load`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:551:29
+    |
+551 |             MirInstruction::Load { dst, .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::TypeCheck`: Use Call with @type_check intrinsic
+   --> src/mir/instruction.rs:554:29
+    |
+554 |             MirInstruction::TypeCheck { dst, .. } |
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Cast`: Use Call with @cast intrinsic
+   --> src/mir/instruction.rs:555:29
+    |
+555 |             MirInstruction::Cast { dst, .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArrayGet`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/instruction.rs:556:29
+    |
+556 |             MirInstruction::ArrayGet { dst, .. } |
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Copy`: Optimization pass only, not needed in IR
+   --> src/mir/instruction.rs:557:29
+    |
+557 |             MirInstruction::Copy { dst, .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::RefNew`: RefGet is sufficient
+   --> src/mir/instruction.rs:558:29
+    |
+558 |             MirInstruction::RefNew { dst, .. } |
+    |                             ^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureNew`: Use NewBox + BoxCall
+   --> src/mir/instruction.rs:562:29
+    |
+562 |             MirInstruction::FutureNew { dst, .. } |
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Await`: Use BoxCall
+   --> src/mir/instruction.rs:563:29
+    |
+563 |             MirInstruction::Await { dst, .. } => Some(*dst),
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Store`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:575:29
+    |
+575 |             MirInstruction::Store { .. } |
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArraySet`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/instruction.rs:579:29
+    |
+579 |             MirInstruction::ArraySet { .. } |
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Debug`: Use Call with @debug intrinsic
+   --> src/mir/instruction.rs:580:29
+    |
+580 |             MirInstruction::Debug { .. } |
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Print`: Use Call with @print intrinsic
+   --> src/mir/instruction.rs:581:29
+    |
+581 |             MirInstruction::Print { .. } |
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Throw`: Use Call with @throw intrinsic
+   --> src/mir/instruction.rs:582:29
+    |
+582 |             MirInstruction::Throw { .. } |
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierRead`: Use AtomicFence instead
+   --> src/mir/instruction.rs:584:29
+    |
+584 |             MirInstruction::BarrierRead { .. } |
+    |                             ^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierWrite`: Use AtomicFence instead
+   --> src/mir/instruction.rs:585:29
+    |
+585 |             MirInstruction::BarrierWrite { .. } |
+    |                             ^^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureSet`: Use BoxCall
+   --> src/mir/instruction.rs:586:29
+    |
+586 |             MirInstruction::FutureSet { .. } |
+    |                             ^^^^^^^^^
+
+warning: use of deprecated unit variant `mir::instruction::MirInstruction::Nop`: Not needed in final IR
+   --> src/mir/instruction.rs:588:29
+    |
+588 |             MirInstruction::Nop => None,
+    |                             ^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Catch`: Use Call with @catch intrinsic
+   --> src/mir/instruction.rs:598:29
+    |
+598 |             MirInstruction::Catch { exception_value, .. } => Some(*exception_value),
+    |                             ^^^^^
+
+warning: use of deprecated unit variant `mir::instruction::MirInstruction::Nop`: Not needed in final IR
+   --> src/mir/instruction.rs:607:29
+    |
+607 |             MirInstruction::Nop => Vec::new(),
+    |                             ^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::UnaryOp`: Use BinOp instead
+   --> src/mir/instruction.rs:609:29
+    |
+609 |             MirInstruction::UnaryOp { operand, .. } |
+    |                             ^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Load`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:610:29
+    |
+610 |             MirInstruction::Load { ptr: operand, .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::TypeCheck`: Use Call with @type_check intrinsic
+   --> src/mir/instruction.rs:611:29
+    |
+611 |             MirInstruction::TypeCheck { value: operand, .. } |
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Cast`: Use Call with @cast intrinsic
+   --> src/mir/instruction.rs:612:29
+    |
+612 |             MirInstruction::Cast { value: operand, .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Copy`: Optimization pass only, not needed in IR
+   --> src/mir/instruction.rs:613:29
+    |
+613 |             MirInstruction::Copy { src: operand, .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Debug`: Use Call with @debug intrinsic
+   --> src/mir/instruction.rs:614:29
+    |
+614 |             MirInstruction::Debug { value: operand, .. } |
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Print`: Use Call with @print intrinsic
+   --> src/mir/instruction.rs:615:29
+    |
+615 |             MirInstruction::Print { value: operand, .. } => vec![*operand],
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Store`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:619:29
+    |
+619 |             MirInstruction::Store { value: lhs, ptr: rhs, .. } => vec![*lhs, *rhs],
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArrayGet`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/instruction.rs:621:29
+    |
+621 |             MirInstruction::ArrayGet { array, index, .. } => vec![*array, *index],
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArraySet`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/instruction.rs:623:29
+    |
+623 |             MirInstruction::ArraySet { array, index, value } => vec![*array, *index, *value],
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Throw`: Use Call with @throw intrinsic
+   --> src/mir/instruction.rs:650:29
+    |
+650 |             MirInstruction::Throw { exception, .. } => vec![*exception],
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Catch`: Use Call with @catch intrinsic
+   --> src/mir/instruction.rs:651:29
+    |
+651 |             MirInstruction::Catch { .. } => Vec::new(), // Handler setup doesn't use values
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::RefNew`: RefGet is sufficient
+   --> src/mir/instruction.rs:655:29
+    |
+655 |             MirInstruction::RefNew { box_val, .. } => vec![*box_val],
+    |                             ^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierRead`: Use AtomicFence instead
+   --> src/mir/instruction.rs:660:29
+    |
+660 |             MirInstruction::BarrierRead { ptr } => vec![*ptr],
+    |                             ^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierWrite`: Use AtomicFence instead
+   --> src/mir/instruction.rs:661:29
+    |
+661 |             MirInstruction::BarrierWrite { ptr } => vec![*ptr],
+    |                             ^^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureNew`: Use NewBox + BoxCall
+   --> src/mir/instruction.rs:664:29
+    |
+664 |             MirInstruction::FutureNew { value, .. } => vec![*value],
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureSet`: Use BoxCall
+   --> src/mir/instruction.rs:665:29
+    |
+665 |             MirInstruction::FutureSet { future, value } => vec![*future, *value],
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Await`: Use BoxCall
+   --> src/mir/instruction.rs:666:29
+    |
+666 |             MirInstruction::Await { future, .. } => vec![*future],
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::UnaryOp`: Use BinOp instead
+   --> src/mir/instruction.rs:728:29
+    |
+728 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                             ^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Load`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:734:29
+    |
+734 |             MirInstruction::Load { dst, ptr } => {
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Store`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:737:29
+    |
+737 |             MirInstruction::Store { value, ptr } => {
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Throw`: Use Call with @throw intrinsic
+   --> src/mir/basic_block.rs:107:29
+    |
+107 |             MirInstruction::Throw { .. }
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Throw`: Use Call with @throw intrinsic
+   --> src/mir/basic_block.rs:127:33
+    |
+127 |                 MirInstruction::Throw { .. } => {
+    |                                 ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Catch`: Use Call with @catch intrinsic
+   --> src/mir/verification.rs:240:55
+    |
+240 |                         if let super::MirInstruction::Catch { handler_bb, .. } = instruction {
+    |                                                       ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Catch`: Use Call with @catch intrinsic
+   --> src/mir/verification.rs:249:55
+    |
+249 |                         if let super::MirInstruction::Catch { handler_bb, .. } = terminator {
+    |                                                       ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::UnaryOp`: Use BinOp instead
+   --> src/mir/printer.rs:200:29
+    |
+200 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                             ^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Load`: Use BoxFieldLoad instead
+   --> src/mir/printer.rs:208:29
+    |
+208 |             MirInstruction::Load { dst, ptr } => {
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Store`: Use BoxFieldStore instead
+   --> src/mir/printer.rs:212:29
+    |
+212 |             MirInstruction::Store { value, ptr } => {
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::TypeCheck`: Use Call with @type_check intrinsic
+   --> src/mir/printer.rs:274:29
+    |
+274 |             MirInstruction::TypeCheck { dst, value, expected_type } => {
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Cast`: Use Call with @cast intrinsic
+   --> src/mir/printer.rs:278:29
+    |
+278 |             MirInstruction::Cast { dst, value, target_type } => {
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArrayGet`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/printer.rs:282:29
+    |
+282 |             MirInstruction::ArrayGet { dst, array, index } => {
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::ArraySet`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/printer.rs:286:29
+    |
+286 |             MirInstruction::ArraySet { array, index, value } => {
+    |                             ^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Copy`: Optimization pass only, not needed in IR
+   --> src/mir/printer.rs:290:29
+    |
+290 |             MirInstruction::Copy { dst, src } => {
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Debug`: Use Call with @debug intrinsic
+   --> src/mir/printer.rs:294:29
+    |
+294 |             MirInstruction::Debug { value, message } => {
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Print`: Use Call with @print intrinsic
+   --> src/mir/printer.rs:298:29
+    |
+298 |             MirInstruction::Print { value, effects: _ } => {
+    |                             ^^^^^
+
+warning: use of deprecated unit variant `mir::instruction::MirInstruction::Nop`: Not needed in final IR
+   --> src/mir/printer.rs:302:29
+    |
+302 |             MirInstruction::Nop => {
+    |                             ^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Throw`: Use Call with @throw intrinsic
+   --> src/mir/printer.rs:307:29
+    |
+307 |             MirInstruction::Throw { exception, effects: _ } => {
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Catch`: Use Call with @catch intrinsic
+   --> src/mir/printer.rs:311:29
+    |
+311 |             MirInstruction::Catch { exception_type, exception_value, handler_bb } => {
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::RefNew`: RefGet is sufficient
+   --> src/mir/printer.rs:324:29
+    |
+324 |             MirInstruction::RefNew { dst, box_val } => {
+    |                             ^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierRead`: Use AtomicFence instead
+   --> src/mir/printer.rs:344:29
+    |
+344 |             MirInstruction::BarrierRead { ptr } => {
+    |                             ^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::BarrierWrite`: Use AtomicFence instead
+   --> src/mir/printer.rs:348:29
+    |
+348 |             MirInstruction::BarrierWrite { ptr } => {
+    |                             ^^^^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureNew`: Use NewBox + BoxCall
+   --> src/mir/printer.rs:353:29
+    |
+353 |             MirInstruction::FutureNew { dst, value } => {
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::FutureSet`: Use BoxCall
+   --> src/mir/printer.rs:357:29
+    |
+357 |             MirInstruction::FutureSet { future, value } => {
+    |                             ^^^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Await`: Use BoxCall
+   --> src/mir/printer.rs:361:29
+    |
+361 |             MirInstruction::Await { dst, future } => {
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::UnaryOp`: Use BinOp instead
+   --> src/backend/vm.rs:589:29
+    |
+589 |             MirInstruction::UnaryOp { .. } |
+    |                             ^^^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Print`: Use Call with @print intrinsic
+   --> src/backend/vm.rs:590:29
+    |
+590 |             MirInstruction::Print { .. } |
+    |                             ^^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Load`: Use BoxFieldLoad instead
+   --> src/backend/vm.rs:591:29
+    |
+591 |             MirInstruction::Load { .. } |
+    |                             ^^^^
+
+warning: use of deprecated variant `mir::instruction::MirInstruction::Store`: Use BoxFieldStore instead
+   --> src/backend/vm.rs:592:29
+    |
+592 |             MirInstruction::Store { .. } |
+    |                             ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Print::effects`: Use Call with @print intrinsic
+   --> src/mir/instruction.rs:506:37
+    |
+506 |             MirInstruction::Print { effects, .. } => *effects,
+    |                                     ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Throw::effects`: Use Call with @throw intrinsic
+   --> src/mir/instruction.rs:509:37
+    |
+509 |             MirInstruction::Throw { effects, .. } => *effects,
+    |                                     ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::dst`: Use BinOp instead
+   --> src/mir/instruction.rs:549:39
+    |
+549 |             MirInstruction::UnaryOp { dst, .. } |
+    |                                       ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Load::dst`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:551:36
+    |
+551 |             MirInstruction::Load { dst, .. } |
+    |                                    ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::TypeCheck::dst`: Use Call with @type_check intrinsic
+   --> src/mir/instruction.rs:554:41
+    |
+554 |             MirInstruction::TypeCheck { dst, .. } |
+    |                                         ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Cast::dst`: Use Call with @cast intrinsic
+   --> src/mir/instruction.rs:555:36
+    |
+555 |             MirInstruction::Cast { dst, .. } |
+    |                                    ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArrayGet::dst`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/instruction.rs:556:40
+    |
+556 |             MirInstruction::ArrayGet { dst, .. } |
+    |                                        ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Copy::dst`: Optimization pass only, not needed in IR
+   --> src/mir/instruction.rs:557:36
+    |
+557 |             MirInstruction::Copy { dst, .. } |
+    |                                    ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::RefNew::dst`: RefGet is sufficient
+   --> src/mir/instruction.rs:558:38
+    |
+558 |             MirInstruction::RefNew { dst, .. } |
+    |                                      ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureNew::dst`: Use NewBox + BoxCall
+   --> src/mir/instruction.rs:562:41
+    |
+562 |             MirInstruction::FutureNew { dst, .. } |
+    |                                         ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Await::dst`: Use BoxCall
+   --> src/mir/instruction.rs:563:37
+    |
+563 |             MirInstruction::Await { dst, .. } => Some(*dst),
+    |                                     ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Catch::exception_value`: Use Call with @catch intrinsic
+   --> src/mir/instruction.rs:598:37
+    |
+598 |             MirInstruction::Catch { exception_value, .. } => Some(*exception_value),
+    |                                     ^^^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::operand`: Use BinOp instead
+   --> src/mir/instruction.rs:609:39
+    |
+609 |             MirInstruction::UnaryOp { operand, .. } |
+    |                                       ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Load::ptr`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:610:36
+    |
+610 |             MirInstruction::Load { ptr: operand, .. } |
+    |                                    ^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::TypeCheck::value`: Use Call with @type_check intrinsic
+   --> src/mir/instruction.rs:611:41
+    |
+611 |             MirInstruction::TypeCheck { value: operand, .. } |
+    |                                         ^^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Cast::value`: Use Call with @cast intrinsic
+   --> src/mir/instruction.rs:612:36
+    |
+612 |             MirInstruction::Cast { value: operand, .. } |
+    |                                    ^^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Copy::src`: Optimization pass only, not needed in IR
+   --> src/mir/instruction.rs:613:36
+    |
+613 |             MirInstruction::Copy { src: operand, .. } |
+    |                                    ^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Debug::value`: Use Call with @debug intrinsic
+   --> src/mir/instruction.rs:614:37
+    |
+614 |             MirInstruction::Debug { value: operand, .. } |
+    |                                     ^^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Print::value`: Use Call with @print intrinsic
+   --> src/mir/instruction.rs:615:37
+    |
+615 |             MirInstruction::Print { value: operand, .. } => vec![*operand],
+    |                                     ^^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Store::value`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:619:37
+    |
+619 |             MirInstruction::Store { value: lhs, ptr: rhs, .. } => vec![*lhs, *rhs],
+    |                                     ^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Store::ptr`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:619:49
+    |
+619 |             MirInstruction::Store { value: lhs, ptr: rhs, .. } => vec![*lhs, *rhs],
+    |                                                 ^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArrayGet::array`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/instruction.rs:621:40
+    |
+621 |             MirInstruction::ArrayGet { array, index, .. } => vec![*array, *index],
+    |                                        ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArrayGet::index`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/instruction.rs:621:47
+    |
+621 |             MirInstruction::ArrayGet { array, index, .. } => vec![*array, *index],
+    |                                               ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArraySet::array`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/instruction.rs:623:40
+    |
+623 |             MirInstruction::ArraySet { array, index, value } => vec![*array, *index, *value],
+    |                                        ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArraySet::index`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/instruction.rs:623:47
+    |
+623 |             MirInstruction::ArraySet { array, index, value } => vec![*array, *index, *value],
+    |                                               ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArraySet::value`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/instruction.rs:623:54
+    |
+623 |             MirInstruction::ArraySet { array, index, value } => vec![*array, *index, *value],
+    |                                                      ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Throw::exception`: Use Call with @throw intrinsic
+   --> src/mir/instruction.rs:650:37
+    |
+650 |             MirInstruction::Throw { exception, .. } => vec![*exception],
+    |                                     ^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::RefNew::box_val`: RefGet is sufficient
+   --> src/mir/instruction.rs:655:38
+    |
+655 |             MirInstruction::RefNew { box_val, .. } => vec![*box_val],
+    |                                      ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::BarrierRead::ptr`: Use AtomicFence instead
+   --> src/mir/instruction.rs:660:43
+    |
+660 |             MirInstruction::BarrierRead { ptr } => vec![*ptr],
+    |                                           ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::BarrierWrite::ptr`: Use AtomicFence instead
+   --> src/mir/instruction.rs:661:44
+    |
+661 |             MirInstruction::BarrierWrite { ptr } => vec![*ptr],
+    |                                            ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureNew::value`: Use NewBox + BoxCall
+   --> src/mir/instruction.rs:664:41
+    |
+664 |             MirInstruction::FutureNew { value, .. } => vec![*value],
+    |                                         ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureSet::future`: Use BoxCall
+   --> src/mir/instruction.rs:665:41
+    |
+665 |             MirInstruction::FutureSet { future, value } => vec![*future, *value],
+    |                                         ^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureSet::value`: Use BoxCall
+   --> src/mir/instruction.rs:665:49
+    |
+665 |             MirInstruction::FutureSet { future, value } => vec![*future, *value],
+    |                                                 ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Await::future`: Use BoxCall
+   --> src/mir/instruction.rs:666:37
+    |
+666 |             MirInstruction::Await { future, .. } => vec![*future],
+    |                                     ^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::dst`: Use BinOp instead
+   --> src/mir/instruction.rs:728:39
+    |
+728 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                                       ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::op`: Use BinOp instead
+   --> src/mir/instruction.rs:728:44
+    |
+728 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                                            ^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::operand`: Use BinOp instead
+   --> src/mir/instruction.rs:728:48
+    |
+728 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                                                ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Load::dst`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:734:36
+    |
+734 |             MirInstruction::Load { dst, ptr } => {
+    |                                    ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Load::ptr`: Use BoxFieldLoad instead
+   --> src/mir/instruction.rs:734:41
+    |
+734 |             MirInstruction::Load { dst, ptr } => {
+    |                                         ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Store::value`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:737:37
+    |
+737 |             MirInstruction::Store { value, ptr } => {
+    |                                     ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Store::ptr`: Use BoxFieldStore instead
+   --> src/mir/instruction.rs:737:44
+    |
+737 |             MirInstruction::Store { value, ptr } => {
+    |                                            ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Catch::handler_bb`: Use Call with @catch intrinsic
+   --> src/mir/verification.rs:240:63
+    |
+240 |                         if let super::MirInstruction::Catch { handler_bb, .. } = instruction {
+    |                                                               ^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Catch::handler_bb`: Use Call with @catch intrinsic
+   --> src/mir/verification.rs:249:63
+    |
+249 |                         if let super::MirInstruction::Catch { handler_bb, .. } = terminator {
+    |                                                               ^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::dst`: Use BinOp instead
+   --> src/mir/printer.rs:200:39
+    |
+200 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                                       ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::op`: Use BinOp instead
+   --> src/mir/printer.rs:200:44
+    |
+200 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                                            ^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::UnaryOp::operand`: Use BinOp instead
+   --> src/mir/printer.rs:200:48
+    |
+200 |             MirInstruction::UnaryOp { dst, op, operand } => {
+    |                                                ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Load::dst`: Use BoxFieldLoad instead
+   --> src/mir/printer.rs:208:36
+    |
+208 |             MirInstruction::Load { dst, ptr } => {
+    |                                    ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Load::ptr`: Use BoxFieldLoad instead
+   --> src/mir/printer.rs:208:41
+    |
+208 |             MirInstruction::Load { dst, ptr } => {
+    |                                         ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Store::value`: Use BoxFieldStore instead
+   --> src/mir/printer.rs:212:37
+    |
+212 |             MirInstruction::Store { value, ptr } => {
+    |                                     ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Store::ptr`: Use BoxFieldStore instead
+   --> src/mir/printer.rs:212:44
+    |
+212 |             MirInstruction::Store { value, ptr } => {
+    |                                            ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::TypeCheck::dst`: Use Call with @type_check intrinsic
+   --> src/mir/printer.rs:274:41
+    |
+274 |             MirInstruction::TypeCheck { dst, value, expected_type } => {
+    |                                         ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::TypeCheck::value`: Use Call with @type_check intrinsic
+   --> src/mir/printer.rs:274:46
+    |
+274 |             MirInstruction::TypeCheck { dst, value, expected_type } => {
+    |                                              ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::TypeCheck::expected_type`: Use Call with @type_check intrinsic
+   --> src/mir/printer.rs:274:53
+    |
+274 |             MirInstruction::TypeCheck { dst, value, expected_type } => {
+    |                                                     ^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Cast::dst`: Use Call with @cast intrinsic
+   --> src/mir/printer.rs:278:36
+    |
+278 |             MirInstruction::Cast { dst, value, target_type } => {
+    |                                    ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Cast::value`: Use Call with @cast intrinsic
+   --> src/mir/printer.rs:278:41
+    |
+278 |             MirInstruction::Cast { dst, value, target_type } => {
+    |                                         ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Cast::target_type`: Use Call with @cast intrinsic
+   --> src/mir/printer.rs:278:48
+    |
+278 |             MirInstruction::Cast { dst, value, target_type } => {
+    |                                                ^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArrayGet::dst`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/printer.rs:282:40
+    |
+282 |             MirInstruction::ArrayGet { dst, array, index } => {
+    |                                        ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArrayGet::array`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/printer.rs:282:45
+    |
+282 |             MirInstruction::ArrayGet { dst, array, index } => {
+    |                                             ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArrayGet::index`: Use BoxFieldLoad or Call with @array_get intrinsic
+   --> src/mir/printer.rs:282:52
+    |
+282 |             MirInstruction::ArrayGet { dst, array, index } => {
+    |                                                    ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArraySet::array`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/printer.rs:286:40
+    |
+286 |             MirInstruction::ArraySet { array, index, value } => {
+    |                                        ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArraySet::index`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/printer.rs:286:47
+    |
+286 |             MirInstruction::ArraySet { array, index, value } => {
+    |                                               ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::ArraySet::value`: Use BoxFieldStore or Call with @array_set intrinsic
+   --> src/mir/printer.rs:286:54
+    |
+286 |             MirInstruction::ArraySet { array, index, value } => {
+    |                                                      ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Copy::dst`: Optimization pass only, not needed in IR
+   --> src/mir/printer.rs:290:36
+    |
+290 |             MirInstruction::Copy { dst, src } => {
+    |                                    ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Copy::src`: Optimization pass only, not needed in IR
+   --> src/mir/printer.rs:290:41
+    |
+290 |             MirInstruction::Copy { dst, src } => {
+    |                                         ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Debug::value`: Use Call with @debug intrinsic
+   --> src/mir/printer.rs:294:37
+    |
+294 |             MirInstruction::Debug { value, message } => {
+    |                                     ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Debug::message`: Use Call with @debug intrinsic
+   --> src/mir/printer.rs:294:44
+    |
+294 |             MirInstruction::Debug { value, message } => {
+    |                                            ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Print::value`: Use Call with @print intrinsic
+   --> src/mir/printer.rs:298:37
+    |
+298 |             MirInstruction::Print { value, effects: _ } => {
+    |                                     ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Print::effects`: Use Call with @print intrinsic
+   --> src/mir/printer.rs:298:44
+    |
+298 |             MirInstruction::Print { value, effects: _ } => {
+    |                                            ^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Throw::exception`: Use Call with @throw intrinsic
+   --> src/mir/printer.rs:307:37
+    |
+307 |             MirInstruction::Throw { exception, effects: _ } => {
+    |                                     ^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Throw::effects`: Use Call with @throw intrinsic
+   --> src/mir/printer.rs:307:48
+    |
+307 |             MirInstruction::Throw { exception, effects: _ } => {
+    |                                                ^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Catch::exception_type`: Use Call with @catch intrinsic
+   --> src/mir/printer.rs:311:37
+    |
+311 |             MirInstruction::Catch { exception_type, exception_value, handler_bb } => {
+    |                                     ^^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Catch::exception_value`: Use Call with @catch intrinsic
+   --> src/mir/printer.rs:311:53
+    |
+311 |             MirInstruction::Catch { exception_type, exception_value, handler_bb } => {
+    |                                                     ^^^^^^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Catch::handler_bb`: Use Call with @catch intrinsic
+   --> src/mir/printer.rs:311:70
+    |
+311 |             MirInstruction::Catch { exception_type, exception_value, handler_bb } => {
+    |                                                                      ^^^^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::RefNew::dst`: RefGet is sufficient
+   --> src/mir/printer.rs:324:38
+    |
+324 |             MirInstruction::RefNew { dst, box_val } => {
+    |                                      ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::RefNew::box_val`: RefGet is sufficient
+   --> src/mir/printer.rs:324:43
+    |
+324 |             MirInstruction::RefNew { dst, box_val } => {
+    |                                           ^^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::BarrierRead::ptr`: Use AtomicFence instead
+   --> src/mir/printer.rs:344:43
+    |
+344 |             MirInstruction::BarrierRead { ptr } => {
+    |                                           ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::BarrierWrite::ptr`: Use AtomicFence instead
+   --> src/mir/printer.rs:348:44
+    |
+348 |             MirInstruction::BarrierWrite { ptr } => {
+    |                                            ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureNew::dst`: Use NewBox + BoxCall
+   --> src/mir/printer.rs:353:41
+    |
+353 |             MirInstruction::FutureNew { dst, value } => {
+    |                                         ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureNew::value`: Use NewBox + BoxCall
+   --> src/mir/printer.rs:353:46
+    |
+353 |             MirInstruction::FutureNew { dst, value } => {
+    |                                              ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureSet::future`: Use BoxCall
+   --> src/mir/printer.rs:357:41
+    |
+357 |             MirInstruction::FutureSet { future, value } => {
+    |                                         ^^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::FutureSet::value`: Use BoxCall
+   --> src/mir/printer.rs:357:49
+    |
+357 |             MirInstruction::FutureSet { future, value } => {
+    |                                                 ^^^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Await::dst`: Use BoxCall
+   --> src/mir/printer.rs:361:37
+    |
+361 |             MirInstruction::Await { dst, future } => {
+    |                                     ^^^
+
+warning: use of deprecated field `mir::instruction::MirInstruction::Await::future`: Use BoxCall
+   --> src/mir/printer.rs:361:42
+    |
+361 |             MirInstruction::Await { dst, future } => {
+    |                                          ^^^^^^
+
+warning: unused variable: `time_str`
+   --> src/interpreter/objects.rs:460:29
+    |
+460 |                         let time_str = timestamp_value.to_string_box().value;
+    |                             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_time_str`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:167:36
+    |
+167 |     pub fn with_alloc<F>(mut self, f: F) -> Self
+    |                                    ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:167:26
+    |
+167 |     pub fn with_alloc<F>(mut self, f: F) -> Self
+    |                          ----^^^^
+    |                          |
+    |                          help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:176:35
+    |
+176 |     pub fn with_free<F>(mut self, f: F) -> Self
+    |                                   ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:176:25
+    |
+176 |     pub fn with_free<F>(mut self, f: F) -> Self
+    |                         ----^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:183:34
+    |
+183 |     pub fn with_log<F>(mut self, f: F) -> Self
+    |                                  ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:183:24
+    |
+183 |     pub fn with_log<F>(mut self, f: F) -> Self
+    |                        ----^^^^
+    |                        |
+    |                        help: remove this `mut`
+
+warning: unused variable: `loader`
+  --> src/runtime/box_registry.rs:83:13
+   |
+83 |         let loader = get_global_loader();
+   |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_loader`
+
+warning: unused variable: `args`
+  --> src/runtime/box_registry.rs:79:68
+   |
+79 |     fn create_plugin_box(&self, plugin_name: &str, box_name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String> {
+   |                                                                    ^^^^ help: if this is intentional, prefix it with an underscore: `_args`
+
+warning: unused variable: `library_path`
+  --> src/runtime/plugin_loader.rs:38:50
+   |
+38 |     pub fn load_plugin(&self, plugin_name: &str, library_path: &str) -> Result<(), String> {
+   |                                                  ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_library_path`
+
+warning: unused variable: `handle`
+  --> src/runtime/plugin_loader.rs:63:9
+   |
+63 |         handle: BidHandle,
+   |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_handle`
+
+warning: unused variable: `args`
+  --> src/runtime/plugin_loader.rs:65:9
+   |
+65 |         args: &[Box<dyn NyashBox>]
+   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_args`
+
+warning: unused variable: `func`
+   --> src/backend/wasm/codegen.rs:870:68
+    |
+870 |     fn generate_call_instruction(&mut self, dst: Option<&ValueId>, func: ValueId, args: &[ValueId]) -> Result<Vec<String>, WasmError> {
+    |                                                                    ^^^^ help: if this is intentional, prefix it with an underscore: `_func`
+
+warning: unused variable: `module_name`
+  --> src/backend/wasm/executor.rs:47:14
+   |
+47 |         for (module_name, func_name, func) in host_functions {
+   |              ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_module_name`
+
+warning: unused variable: `func_name`
+  --> src/backend/wasm/executor.rs:47:27
+   |
+47 |         for (module_name, func_name, func) in host_functions {
+   |                           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_func_name`
+
+warning: unused variable: `results`
+  --> src/backend/wasm/executor.rs:61:13
+   |
+61 |         let results = main_func
+   |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_results`
+
+warning: unused variable: `module_name`
+  --> src/backend/wasm/executor.rs:93:14
+   |
+93 |         for (module_name, func_name, func) in host_functions {
+   |              ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_module_name`
+
+warning: unused variable: `func_name`
+  --> src/backend/wasm/executor.rs:93:27
+   |
+93 |         for (module_name, func_name, func) in host_functions {
+   |                           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_func_name`
+
+warning: unused variable: `results`
+   --> src/backend/wasm/executor.rs:107:13
+    |
+107 |         let results = main_func
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_results`
+
+warning: type `FileMode` is more private than the item `FileBoxRegistry::open`
+  --> src/bid/plugins/filebox/mod.rs:44:5
+   |
+44 |     pub fn open(&mut self, path: &str, mode: FileMode) -> Result<BidHandle, std::io::Error> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `FileBoxRegistry::open` is reachable at visibility `pub`
+   |
+note: but type `FileMode` is only usable at visibility `pub(self)`
+  --> src/bid/plugins/filebox/mod.rs:29:1
+   |
+29 | enum FileMode {
+   | ^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: methods `to_float` and `to_integer` are never used
+   --> src/interpreter/methods/math_methods.rs:356:8
+    |
+19  | impl NyashInterpreter {
+    | --------------------- methods in this implementation
+...
+356 |     fn to_float(&self, value: &Box<dyn NyashBox>) -> Result<f64, RuntimeError> {
+    |        ^^^^^^^^
+...
+368 |     fn to_integer(&self, value: &Box<dyn NyashBox>) -> Result<i64, RuntimeError> {
+    |        ^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: fields `type_name_holder` and `method_holders` are never read
+   --> src/bid/metadata.rs:154:5
+    |
+149 | pub struct PluginMetadata {
+    |            -------------- fields in this struct
+...
+154 |     type_name_holder: Option<CString>,
+    |     ^^^^^^^^^^^^^^^^
+155 |     method_holders: Vec<(NyashMethodInfo, CString)>,
+    |     ^^^^^^^^^^^^^^
+
+warning: fields `path` and `mode` are never read
+  --> src/bid/plugins/filebox/mod.rs:24:5
+   |
+22 | struct FileBoxState {
+   |        ------------ fields in this struct
+23 |     file: File,
+24 |     path: String,
+   |     ^^^^
+25 |     mode: FileMode,
+   |     ^^^^
+
+warning: field `libraries` is never read
+  --> src/runtime/plugin_loader.rs:26:5
+   |
+24 | pub struct PluginLoader {
+   |            ------------ field in this struct
+25 |     /// プラグイン名 → ライブラリのマッピング
+26 |     libraries: RwLock<HashMap<String, Arc<PluginLibrary>>>,
+   |     ^^^^^^^^^
+
+warning: method `convert_unary_operator` is never used
+   --> src/mir/builder.rs:877:8
+    |
+40  | impl MirBuilder {
+    | --------------- method in this implementation
+...
+877 |     fn convert_unary_operator(&self, op: String) -> Result<UnaryOp, String> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `object_fields` is never read
+   --> src/backend/vm.rs:135:5
+    |
+122 | pub struct VM {
+    |            -- field in this struct
+...
+135 |     object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
+    |     ^^^^^^^^^^^^^
+
+warning: method `execute_unary_op` is never used
+   --> src/backend/vm.rs:649:8
+    |
+138 | impl VM {
+    | ------- method in this implementation
+...
+649 |     fn execute_unary_op(&self, op: &UnaryOp, operand: &VMValue) -> Result<VMValue, VMError> {
+    |        ^^^^^^^^^^^^^^^^
+
+warning: method `generate_print` is never used
+   --> src/backend/wasm/codegen.rs:706:8
+    |
+84  | impl WasmCodegen {
+    | ---------------- method in this implementation
+...
+706 |     fn generate_print(&self, value: ValueId) -> Result<Vec<String>, WasmError> {
+    |        ^^^^^^^^^^^^^^
+
+warning: field `output` is never read
+  --> src/backend/wasm/host.rs:14:9
+   |
+12 | pub struct HostState {
+   |            --------- field in this struct
+13 |     /// Output buffer for captured prints
+14 |     pub output: Arc<Mutex<String>>,
+   |         ^^^^^^
+
+warning: creating a shared reference to mutable static
+   --> src/bid/plugins/filebox/mod.rs:102:12
+    |
+102 |         if FILEBOX_REGISTRY.is_none() {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: `#[warn(static_mut_refs)]` on by default
+
+warning: creating a shared reference to mutable static
+   --> src/bid/plugins/filebox/mod.rs:105:9
+    |
+105 |         FILEBOX_REGISTRY.as_ref().unwrap().clone()
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: `nyash-rust` (lib) generated 216 warnings (run `cargo fix --lib -p nyash-rust` to apply 18 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.04s

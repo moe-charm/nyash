@@ -42,6 +42,13 @@ impl PluginBox {
     pub fn handle(&self) -> BidHandle {
         self.handle
     }
+    
+    /// プラグインメソッド呼び出し（内部使用）
+    fn call_plugin_method(&self, method_name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String> {
+        use crate::runtime::get_global_loader;
+        let loader = get_global_loader();
+        loader.invoke_plugin_method(&self.plugin_name, self.handle, method_name, args)
+    }
 }
 
 impl BoxCore for PluginBox {
@@ -79,8 +86,14 @@ impl NyashBox for PluginBox {
     }
     
     fn to_string_box(&self) -> StringBox {
-        // TODO: FFI経由でプラグインにtoString呼び出し
-        StringBox::new(&format!("PluginBox({}, {:?})", self.plugin_name, self.handle))
+        // FFI経由でプラグインのtoStringメソッド呼び出し
+        match self.call_plugin_method("toString", &[]) {
+            Ok(result) => result.to_string_box(),
+            Err(_) => {
+                // エラー時はフォールバック
+                StringBox::new(&format!("PluginBox({}, {:?})", self.plugin_name, self.handle))
+            }
+        }
     }
     
     fn type_name(&self) -> &'static str {

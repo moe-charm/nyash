@@ -69,10 +69,32 @@ impl BoxFactoryRegistry {
                 constructor(args)
             }
             BoxProvider::Plugin(plugin_name) => {
-                // TODO: プラグインローダーと連携
-                Err(format!("Plugin loading not yet implemented: {}", plugin_name))
+                // プラグインローダーと連携してプラグインBoxを生成
+                self.create_plugin_box(&plugin_name, name, args)
             }
         }
+    }
+    
+    /// プラグインBoxを生成（内部使用）
+    fn create_plugin_box(&self, plugin_name: &str, box_name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String> {
+        use crate::runtime::{get_global_loader, PluginBox};
+        use crate::bid::{BidHandle, BoxTypeId};
+        
+        let loader = get_global_loader();
+        
+        // プラグインの"new"メソッドを呼び出してハンドルを取得
+        // TODO: 引数をBID-1 TLVでエンコードして渡す
+        let type_id = match box_name {
+            "FileBox" => BoxTypeId::FileBox as u32,
+            "StringBox" => BoxTypeId::StringBox as u32,
+            _ => return Err(format!("Unknown plugin box type: {}", box_name)),
+        };
+        
+        // とりあえずダミーハンドルで作成（実際は"new"メソッド呼び出し結果を使用）
+        let handle = BidHandle::new(type_id, 1); // TODO: 実際のinstance_id取得
+        
+        // PluginBoxプロキシを作成
+        Ok(Box::new(PluginBox::new(plugin_name.to_string(), handle)))
     }
 }
 
