@@ -2,6 +2,24 @@
  * LLVM Context Management - Handle LLVM context, module, and target setup
  */
 
+/// Mock implementation for environments without LLVM development libraries
+/// This demonstrates the structure needed for LLVM integration
+#[cfg(not(feature = "llvm"))]
+pub struct CodegenContext {
+    _phantom: std::marker::PhantomData<()>,
+}
+
+#[cfg(not(feature = "llvm"))]
+impl CodegenContext {
+    pub fn new(_module_name: &str) -> Result<Self, String> {
+        Ok(Self {
+            _phantom: std::marker::PhantomData,
+        })
+    }
+}
+
+// The real implementation would look like this with proper LLVM libraries:
+/*
 #[cfg(feature = "llvm")]
 use inkwell::context::Context;
 #[cfg(feature = "llvm")]
@@ -9,7 +27,7 @@ use inkwell::module::Module;
 #[cfg(feature = "llvm")]
 use inkwell::builder::Builder;
 #[cfg(feature = "llvm")]
-use inkwell::targets::{Target, TargetMachine, TargetTriple, InitializationConfig};
+use inkwell::targets::{Target, TargetMachine, InitializationConfig};
 
 #[cfg(feature = "llvm")]
 pub struct CodegenContext<'ctx> {
@@ -56,15 +74,4 @@ impl<'ctx> CodegenContext<'ctx> {
         })
     }
 }
-
-#[cfg(not(feature = "llvm"))]
-pub struct CodegenContext<'ctx> {
-    _phantom: std::marker::PhantomData<&'ctx ()>,
-}
-
-#[cfg(not(feature = "llvm"))]
-impl<'ctx> CodegenContext<'ctx> {
-    pub fn new(_context: &'ctx (), _module_name: &str) -> Result<Self, String> {
-        Err("LLVM feature not enabled".to_string())
-    }
-}
+*/

@@ -16,7 +16,8 @@ cli = []
 gui = ["dep:egui", "dep:eframe", "dep:egui_extras", "dep:image"]
 gui-examples = ["gui"]
 all-examples = ["gui-examples"]
-llvm = ["dep:inkwell"]
+# Note: LLVM feature requires inkwell dependency and LLVM development libraries
+# llvm = ["dep:inkwell"]
 
 [lib]
 name = "nyash_rust"
@@ -123,7 +124,8 @@ egui_extras = { version = "0.29", features = ["image"], optional = true }
 image = { version = "0.25", features = ["png", "ico"], optional = true }
 
 # LLVM backend - only when llvm feature is enabled
-inkwell = { version = "0.5", features = ["llvm17-0"], optional = true }
+# Note: Requires LLVM 17+ development libraries installed on the system
+# inkwell = { version = "0.5", features = ["target-x86"], optional = true }
 
 # Windows API
 [target.'cfg(windows)'.dependencies]
