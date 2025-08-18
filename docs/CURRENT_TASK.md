@@ -1,4 +1,4 @@
-# 🎯 現在のタスク (2025-08-20 更新)
+# 🎯 現在のタスク (2025-08-21 更新)
 
 ## 🎊 **Phase 9.75g-0 BID-FFI Plugin System - 完全完了！** 🎊
 
@@ -39,24 +39,61 @@ local gpu = new CudaBox()         // 将来: プラグイン提供
   - **性能向上率: 50.94倍** 🚀
 - **詳細**: `docs/予定/native-plan/issues/phase_8_6_vm_performance_improvement.md`
 
-## 🎯 **後続開発計画（戦略的更新済み）**
+## 🚀 **Phase 9.78: LLVM PoC → Phase 9.8: BID Registry移行決定！**
 
-### **🆕 Phase 9.78: LLVM Proof of Concept（挿入案）**
-- **目的**: LLVM実現可能性を3週間で検証
-- **タイミング**: Phase 8.6完了直後
-- **成功時**: Phase 9.8(完全版) → Phase 10.2(本格LLVM)
-- **失敗時**: Phase 9.8(3バックエンド版) → Box統合
-- **戦略文書**: `docs/予定/native-plan/Phase-9.78-LLVM-PoC-Strategy.md`
+### **戦略的転換**（2025-08-21）
+- ✅ LLVM PoC基盤完成（MIR生成修正、モック実装）
+- ✅ Phase 9.8 BIDレジストリへの移行決定
+- ✅ 重要な発見：**nyash.tomlが既に完璧な型情報を持っている！**
+- 🔄 新方針：nyash.tomlを拡張してBID機能を統合
 
-### **Phase 9.78後の展開**
-1. **Phase 9.8**: BIDレジストリ自動化（LLVM対応込み or 3バックエンド版）
-2. **Phase 9.9**: ExternCall権限管理（Sandbox/Allowlist）  
-3. **Phase 10**: LLVM Direct AOT（実現可能と判定した場合）
+### **技術的成果**
+- **モックLLVM統合**: `--backend llvm`オプション動作確認
+- **アーキテクチャ実証**: MIR → LLVM変換パス確立
+- **CI/CD対応**: 外部依存なしでテスト可能
+
+### **革命的Windows戦略**
+- **1回のIR生成で全OS対応**: Bitcodeキャッシュ戦略
+- **PAL設計**: Platform Abstraction Layer構想
+- **将来: APE単一バイナリ**: 小規模ツール向け
+
+## 📦 **Phase 9.8: BID Registry + Code Generation - 開始！**
+
+### **革命的発見：nyash.toml活用戦略**（2025-08-21）
+既存のnyash.tomlに必要な型情報がほぼ完備されていることが判明！
+
+#### 現在のnyash.toml
+```toml
+[plugins.FileBox.methods]
+read = { args = [] }
+write = { args = [{ from = "string", to = "bytes" }] }
+open = { args = [
+    { name = "path", from = "string", to = "string" },
+    { name = "mode", from = "string", to = "string" }
+] }
+```
+
+#### 拡張案（Phase 9.8 + 9.9統合）
+```toml
+[plugins.FileBox.methods]
+read = { 
+    args = [],
+    returns = "string",
+    permissions = ["storage:read"],
+    effects = ["io"],
+    description = "Read file contents"
+}
+```
+
+### **実装方針**
+1. nyash.tomlを段階的に拡張（後方互換維持）
+2. 拡張されたnyash.tomlから各バックエンド用コード生成
+3. BID YAMLは大規模プラグイン用のオプションとして提供
 
 ### **🌟 重要な戦略的決定**
-- **ネームスペース統合**: LLVM完成後に実施（4バックエンド全体最適化のため）
-- **Box統合**: LLVM実現可能性確定後に実施（アーキテクチャ最適化のため）
-- **優先順位**: VM性能 → LLVM PoC → BIDレジストリ → 本格実装
+- **BID実装方針**: nyash.toml拡張を優先（新規YAML不要）
+- **Phase 9.8 + 9.9統合**: FileBoxがVMで権限制御付きで動作することをゴールに
+- **優先順位**: VM性能（完了） → BIDレジストリ → 権限モデル → LLVM本格実装
 
 ### **最終目標**
 - **インタープリター併用戦略**: 開発時（即時実行）+ 本番時（AOT高性能）
@@ -74,29 +111,41 @@ local gpu = new CudaBox()         // 将来: プラグイン提供
 - [phase_8_6_vm_performance_improvement.md](../予定/native-plan/issues/phase_8_6_vm_performance_improvement.md) - 詳細技術分析
 - [copilot_issues.txt](../予定/native-plan/copilot_issues.txt) - 全体開発計画
 
-## 📋 **今日の重要決定事項（2025年8月20日）**
+## 📋 **今日の重要決定事項（2025年8月21日）**
 
-### **1. Phase 8.6 VM性能改善 - 完了！**
-- **達成**: VM 50.94倍高速化（目標の25倍以上！）
-- **成果**: Copilotによる段階的最適化が大成功
-- **次**: Phase 9.78 LLVM PoCへ移行
+### **1. Phase 9.8戦略転換**
+- ✅ nyash.tomlに既存の型情報が豊富に存在することを発見
+- ✅ BID用の新規YAMLファイル不要と判断
+- ✅ nyash.toml拡張によるBID機能実装を決定
+- ✅ GitHub Issue #116作成（Phase 9.8実装計画）
 
-### **2. Phase 9.78 LLVM PoC 開始準備**
-- VM最適化完了により、LLVM実現可能性検証へ
-- 3週間の検証期間で実装可能性を判定
-- AI大会議（Gemini/Codex）で戦略精緻化予定
+### **2. 技術的洞察：JIT vs AOT**
+- **MIRの存在により難易度が同等に**
+- VM最適化でネイティブ速度に迫る可能性
+- 将来: VM JIT化も選択肢に
 
 ### **3. 開発優先順位の更新**
 ```
-1. ✅ Phase 8.6 VM性能改善（完了！）
-2. → Phase 9.78 LLVM PoC（次期開始）
-3. → Phase 9.8 BIDレジストリ（LLVM対応込み）
-4. → Box統合・ネームスペース統合（最適化後）
+1. ✅ Phase 8.6 VM性能改善（完了！50.94倍達成）
+2. ✅ Phase 9.78 LLVM PoC基盤（MIR修正完了）
+3. 🔄 Phase 9.8 BIDレジストリ（nyash.toml拡張方式）
+4. → Phase 9.9 権限モデル（FileBoxで実証）
+5. → Phase 10 LLVM本格実装（将来検討）
 ```
+
+### **4. Windows戦略の具体化**
+- Bitcodeキャッシュで1回生成→全OS対応
+- mingw-gnuで即座にWindows対応可能
+- APEは小規模ツール専用として位置づけ
 
 ---
 
-**最終更新**: 2025年8月20日  
-**次回レビュー**: Phase 9.78 LLVM PoC開始時  
-**開発状況**: Phase 9.75g-0完了 → Phase 8.6完了 → Phase 9.78準備中
+**最終更新**: 2025年8月21日  
+**次回レビュー**: Phase 9.8実装開始時  
+**開発状況**: Phase 9.75g-0完了 → Phase 8.6完了 → Phase 9.78基盤完了 → Phase 9.8開始
+
+### 🎯 **次のアクション**
+1. nyash.toml拡張仕様の設計
+2. VMバックエンドでのFileBox統合テスト準備
+3. 権限モデル（Phase 9.9）の実装計画
 
