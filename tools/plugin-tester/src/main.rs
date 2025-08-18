@@ -64,6 +64,14 @@ enum Commands {
         /// Path to plugin .so file
         plugin: PathBuf,
     },
+    /// Debug TLV encoding/decoding with detailed output
+    TlvDebug {
+        /// Path to plugin .so file
+        plugin: PathBuf,
+        /// Test message to encode/decode
+        #[arg(short, long, default_value = "Hello TLV Debug!")]
+        message: String,
+    },
 }
 
 // ============ Host Functions (テスト用実装) ============
@@ -114,6 +122,7 @@ fn main() {
         Commands::Check { plugin } => check_plugin(&plugin),
         Commands::Lifecycle { plugin } => test_lifecycle(&plugin),
         Commands::Io { plugin } => test_file_io(&plugin),
+        Commands::TlvDebug { plugin, message } => test_tlv_debug(&plugin, &message),
     }
 }
 
@@ -479,5 +488,182 @@ fn test_file_io(path: &PathBuf) {
         let mut clen2: usize = 0; let _=invoke(info.type_id,4,instance_id,std::ptr::null(),0,std::ptr::null_mut(),&mut clen2 as *mut usize);
         shutdown();
         println!("\n{}", "File I/O test completed!".green().bold());
+    }
+}
+
+fn test_tlv_debug(path: &PathBuf, message: &str) {
+    println!("{}", "=== TLV Debug Test ===".bold());
+    println!("Testing TLV encoding/decoding with: '{}'", message);
+    
+    // Load plugin
+    let library = match unsafe { Library::new(path) } {
+        Ok(lib) => lib,
+        Err(e) => {
+            eprintln!("{}: Failed to load plugin: {}", "ERROR".red(), e);
+            return;
+        }
+    };
+    
+    unsafe {
+        let abi: Symbol<unsafe extern "C" fn() -> u32> = library.get(b"nyash_plugin_abi").unwrap();
+        println!("{}: ABI version: {}", "✓".green(), abi());
+        
+        let init: Symbol<unsafe extern "C" fn(*const NyashHostVtable, *mut NyashPluginInfo) -> i32> = library.get(b"nyash_plugin_init").unwrap();
+        let mut info = std::mem::zeroed::<NyashPluginInfo>();
+        assert_eq!(0, init(&HOST_VTABLE, &mut info));
+        
+        let invoke: Symbol<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = library.get(b"nyash_plugin_invoke").unwrap();
+        let shutdown: Symbol<unsafe extern "C" fn()> = library.get(b"nyash_plugin_shutdown").unwrap();
+        
+        // Test TLV encoding
+        println!("\n{}", "--- Encoding Test ---".cyan());
+        let mut encoded = Vec::new();
+        tlv_encode_string(message, &mut encoded);
+        
+        println!("Original message: '{}'", message);
+        println!("Encoded TLV ({} bytes): {:02x?}", encoded.len(), encoded);
+        
+        // Hex dump for readability
+        print!("Hex dump: ");
+        for (i, byte) in encoded.iter().enumerate() {
+            if i % 16 == 0 && i > 0 { print!("\n          "); }
+            print!("{:02x} ", byte);
+        }
+        println!();
+        
+        // Test TLV decoding  
+        println!("\n{}", "--- Decoding Test ---".cyan());
+        if let Some((tag, payload)) = tlv_decode_first(&encoded) {
+            println!("Decoded tag: {} ({})", tag, 
+                match tag {
+                    6 => "String",
+                    7 => "Bytes", 
+                    _ => "Unknown"
+                });
+            println!("Decoded payload ({} bytes): {:02x?}", payload.len(), payload);
+            
+            if tag == Tag::String as u8 || tag == Tag::Bytes as u8 {
+                let decoded_str = String::from_utf8_lossy(payload);
+                println!("Decoded string: '{}'", decoded_str);
+                
+                if decoded_str == message {
+                    println!("{}: TLV round-trip successful!", "✓".green());
+                } else {
+                    println!("{}: TLV round-trip failed! Expected: '{}', Got: '{}'", 
+                             "✗".red(), message, decoded_str);
+                }
+            }
+        } else {
+            println!("{}: Failed to decode TLV!", "✗".red());
+        }
+        
+        // Test with plugin write/read
+        println!("\n{}", "--- Plugin Round-trip Test ---".cyan());
+        
+        // birth
+        let mut buf_len: usize = 0;
+        let rc = invoke(info.type_id, 0, 0, std::ptr::null(), 0, std::ptr::null_mut(), &mut buf_len);
+        assert!(rc == -1 && buf_len >= 4);
+        let mut out = vec![0u8; buf_len];
+        let mut out_len = buf_len;
+        assert_eq!(0, invoke(info.type_id, 0, 0, std::ptr::null(), 0, out.as_mut_ptr(), &mut out_len));
+        let instance_id = u32::from_le_bytes(out[0..4].try_into().unwrap());
+        println!("{}: birth → instance_id={}", "✓".green(), instance_id);
+        
+        // Test file write
+        let test_path = "plugins/nyash-filebox-plugin/target/tlv_debug_test.txt";
+        let mut args = Vec::new();
+        tlv_encode_two_strings(test_path, "w", &mut args);
+        println!("Write args TLV ({} bytes): {:02x?}", args.len(), &args[..args.len().min(32)]);
+        
+        let mut need: usize = 0;
+        let _ = invoke(info.type_id, 1, instance_id, args.as_ptr(), args.len(), std::ptr::null_mut(), &mut need);
+        let mut obuf = vec![0u8; need.max(4)];
+        let mut olen = need;
+        let _ = invoke(info.type_id, 1, instance_id, args.as_ptr(), args.len(), obuf.as_mut_ptr(), &mut olen);
+        println!("{}: open(w) successful", "✓".green());
+        
+        // Write test message
+        let mut write_args = Vec::new();
+        tlv_encode_string(message, &mut write_args);
+        println!("Write message TLV ({} bytes): {:02x?}", write_args.len(), &write_args[..write_args.len().min(32)]);
+        
+        let mut wneed: usize = 0;
+        let _ = invoke(info.type_id, 3, instance_id, write_args.as_ptr(), write_args.len(), std::ptr::null_mut(), &mut wneed);
+        let mut wbuf = vec![0u8; wneed.max(4)];
+        let mut wlen = wneed;
+        let _ = invoke(info.type_id, 3, instance_id, write_args.as_ptr(), write_args.len(), wbuf.as_mut_ptr(), &mut wlen);
+        println!("{}: write successful", "✓".green());
+        
+        // Close
+        let mut clen: usize = 0;
+        let _ = invoke(info.type_id, 4, instance_id, std::ptr::null(), 0, std::ptr::null_mut(), &mut clen);
+        let mut cb = vec![0u8; clen.max(4)];
+        let mut cbl = clen;
+        let _ = invoke(info.type_id, 4, instance_id, std::ptr::null(), 0, cb.as_mut_ptr(), &mut cbl);
+        println!("{}: close successful", "✓".green());
+        
+        // Reopen for read
+        let mut read_args = Vec::new();
+        tlv_encode_two_strings(test_path, "r", &mut read_args);
+        let mut rneed: usize = 0;
+        let _ = invoke(info.type_id, 1, instance_id, read_args.as_ptr(), read_args.len(), std::ptr::null_mut(), &mut rneed);
+        let mut robuf = vec![0u8; rneed.max(4)];
+        let mut rolen = rneed;
+        let _ = invoke(info.type_id, 1, instance_id, read_args.as_ptr(), read_args.len(), robuf.as_mut_ptr(), &mut rolen);
+        println!("{}: open(r) successful", "✓".green());
+        
+        // Read back
+        let mut size_args = Vec::new();
+        tlv_encode_i32(1024, &mut size_args);
+        let mut read_need: usize = 0;
+        let rc = invoke(info.type_id, 2, instance_id, size_args.as_ptr(), size_args.len(), std::ptr::null_mut(), &mut read_need);
+        println!("Read preflight: rc={}, need={} bytes", rc, read_need);
+        
+        let mut read_buf = vec![0u8; read_need.max(16)];
+        let mut read_len = read_need;
+        let rc2 = invoke(info.type_id, 2, instance_id, size_args.as_ptr(), size_args.len(), read_buf.as_mut_ptr(), &mut read_len);
+        println!("Read actual: rc={}, got={} bytes", rc2, read_len);
+        
+        if read_len > 0 {
+            println!("Read result TLV ({} bytes): {:02x?}", read_len, &read_buf[..read_len.min(32)]);
+            
+            // Try to decode
+            if let Some((tag, payload)) = tlv_decode_first(&read_buf[..read_len]) {
+                println!("Read decoded tag: {} ({})", tag, 
+                    match tag {
+                        6 => "String",
+                        7 => "Bytes",
+                        _ => "Unknown"
+                    });
+                let read_message = String::from_utf8_lossy(payload);
+                println!("Read decoded message: '{}'", read_message);
+                
+                if read_message == message {
+                    println!("{}: Plugin round-trip successful!", "✓".green());
+                } else {
+                    println!("{}: Plugin round-trip failed! Expected: '{}', Got: '{}'", 
+                             "✗".red(), message, read_message);
+                }
+            } else {
+                println!("{}: Failed to decode read result!", "✗".red());
+                // Show detailed hex analysis
+                if read_len >= 4 {
+                    let version = u16::from_le_bytes([read_buf[0], read_buf[1]]);
+                    let argc = u16::from_le_bytes([read_buf[2], read_buf[3]]);
+                    println!("TLV Header analysis: version={}, argc={}", version, argc);
+                    
+                    if read_len >= 8 {
+                        let entry_tag = read_buf[4];
+                        let entry_reserved = read_buf[5];
+                        let entry_len = u16::from_le_bytes([read_buf[6], read_buf[7]]);
+                        println!("First entry: tag={}, reserved={}, len={}", entry_tag, entry_reserved, entry_len);
+                    }
+                }
+            }
+        }
+        
+        shutdown();
+        println!("\n{}", "TLV Debug test completed!".green().bold());
     }
 }

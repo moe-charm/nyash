@@ -297,6 +297,10 @@ pub extern "C" fn nyash_plugin_invoke(
                                     if let Some(file) = inst.file.as_mut() {
                                         match file.write(&data) {
                                             Ok(n) => {
+                                                // ファイルバッファをフラッシュ（重要！）
+                                                if let Err(_) = file.flush() {
+                                                    return NYB_E_PLUGIN_ERROR;
+                                                }
                                                 log_info(&format!("WRITE {} bytes", n));
                                                 return write_tlv_i32(n as i32, _result, _result_len);
                                             }
@@ -433,7 +437,8 @@ fn tlv_parse_bytes(data: &[u8]) -> Result<Vec<u8>, ()> {
     if pos + 4 > data.len() { return Err(()); }
     let tag = data[pos]; let _res = data[pos+1];
     let size = u16::from_le_bytes([data[pos+2], data[pos+3]]) as usize; pos += 4;
-    if tag != 7 || pos + size > data.len() { return Err(()); }
+    // StringタグもBytesタグも受け付ける（互換性のため）
+    if (tag != 6 && tag != 7) || pos + size > data.len() { return Err(()); }
     Ok(data[pos..pos+size].to_vec())
 }
 
