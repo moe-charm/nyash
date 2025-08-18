@@ -1,0 +1,30 @@
+// Test script to validate the migration guide examples
+// This demonstrates the FileBox plugin functionality described in the guide
+
+static box Main {
+    init { console, file, result }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 Testing migration guide examples...")
+        
+        // Test FileBox plugin functionality
+        me.file = new FileBox()
+        
+        // Test the examples from the migration guide
+        me.file.open("local_tests/test_file.txt", "w")
+        me.file.write("Hello from plugin!")
+        me.file.close()
+        
+        // Read back the content
+        me.file.open("local_tests/test_file.txt", "r")
+        local content
+        content = me.file.read()
+        me.file.close()
+        
+        me.console.log("✅ FileBox plugin test successful!")
+        me.console.log("Content: " + content.toString())
+        
+        return "Migration guide validation complete!"
+    }
+}
