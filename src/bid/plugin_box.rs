@@ -111,6 +111,48 @@ impl PluginFileBox {
     pub fn read_bytes(&self, size: usize) -> BidResult<Vec<u8>> { self.inner.read(size) }
     pub fn write_bytes(&self, data: &[u8]) -> BidResult<i32> { self.inner.write(data) }
     pub fn close(&self) -> BidResult<()> { self.inner.close() }
+
+    /// 汎用メソッド呼び出し（動的ディスパッチ）
+    pub fn call_method(&self, method_name: &str, args: &[u8]) -> BidResult<Vec<u8>> {
+        eprintln!("🔍 call_method: method_name='{}', args_len={}", method_name, args.len());
+        
+        // プラグインからメソッドIDを動的取得
+        match self.inner.plugin.find_method(method_name) {
+            Ok(Some((method_id, signature))) => {
+                eprintln!("🔍 Found method '{}': ID={}, signature=0x{:08X}", method_name, method_id, signature);
+                let mut out = Vec::new();
+                match self.inner.plugin.handle.invoke(
+                    self.inner.plugin.type_id,
+                    method_id,
+                    self.inner.instance_id,
+                    args,
+                    &mut out
+                ) {
+                    Ok(()) => {
+                        eprintln!("🔍 Plugin invoke succeeded, output_len={}", out.len());
+                        Ok(out)
+                    }
+                    Err(e) => {
+                        eprintln!("🔍 Plugin invoke failed: {:?}", e);
+                        Err(e)
+                    }
+                }
+            }
+            Ok(None) => {
+                eprintln!("🔍 Method '{}' not found in plugin", method_name);
+                Err(BidError::InvalidArgs) // メソッドが見つからない
+            }
+            Err(e) => {
+                eprintln!("🔍 Error looking up method '{}': {:?}", method_name, e);
+                Err(e)
+            }
+        }
+    }
+
+    /// プラグインのメソッド一覧を取得
+    pub fn get_available_methods(&self) -> BidResult<Vec<(u32, String, u32)>> {
+        self.inner.plugin.get_methods()
+    }
 }
 
 impl BoxCore for PluginFileBox {

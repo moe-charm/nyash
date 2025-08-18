@@ -8,6 +8,7 @@ pub struct LoadedPlugin {
     pub library: Library,
     pub handle: PluginHandle,
     pub type_id: u32,
+    pub plugin_info: NyashPluginInfo, // プラグイン情報を保存
 }
 
 impl LoadedPlugin {
@@ -48,8 +49,45 @@ impl LoadedPlugin {
             handle.initialize(&host, &mut info)?;
             let type_id = info.type_id;
 
-            Ok(Self { library, handle, type_id })
+            Ok(Self { library, handle, type_id, plugin_info: info })
         }
+    }
+
+    /// Get the plugin's Box type name
+    pub fn get_type_name(&self) -> BidResult<&str> {
+        unsafe { self.plugin_info.name() }
+    }
+
+    /// Get all available methods for this plugin
+    pub fn get_methods(&self) -> BidResult<Vec<(u32, String, u32)>> {
+        let mut methods = Vec::new();
+        
+        unsafe {
+            let methods_slice = self.plugin_info.methods_slice()?;
+            for method_info in methods_slice {
+                let method_name = method_info.name()?.to_string();
+                methods.push((
+                    method_info.method_id,
+                    method_name,
+                    method_info.signature_hash,
+                ));
+            }
+        }
+        
+        Ok(methods)
+    }
+
+    /// Find a method by name and return its info
+    pub fn find_method(&self, method_name: &str) -> BidResult<Option<(u32, u32)>> {
+        unsafe {
+            let methods_slice = self.plugin_info.methods_slice()?;
+            for method_info in methods_slice {
+                if method_info.name()? == method_name {
+                    return Ok(Some((method_info.method_id, method_info.signature_hash)));
+                }
+            }
+        }
+        Ok(None)
     }
 }
 

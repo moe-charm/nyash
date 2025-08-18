@@ -35,6 +35,11 @@ pub struct NyashMethodInfo {
     pub signature_hash: u32,
 }
 
+// SAFETY: The C pointers in NyashMethodInfo are read-only after initialization
+// and point to valid memory managed by the plugin system
+unsafe impl Send for NyashMethodInfo {}
+unsafe impl Sync for NyashMethodInfo {}
+
 impl NyashMethodInfo {
     /// Create method info with safe string handling
     pub fn new(method_id: u32, method_name: &str, signature_hash: u32) -> BidResult<(Self, CString)> {
@@ -77,6 +82,11 @@ pub struct NyashPluginInfo {
     /// Method information array
     pub methods: *const NyashMethodInfo,
 }
+
+// SAFETY: The C pointers in NyashPluginInfo are read-only after initialization
+// and point to valid memory managed by the plugin system
+unsafe impl Send for NyashPluginInfo {}
+unsafe impl Sync for NyashPluginInfo {}
 
 impl NyashPluginInfo {
     /// Create an empty plugin info
