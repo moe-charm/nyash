@@ -91,8 +91,8 @@ impl LoadedPlugin {
     }
 }
 
-/// Build a minimal host vtable for plugins
-fn default_host_vtable() -> NyashHostVtable {
+// Static host vtable to ensure lifetime
+static HOST_VTABLE_STORAGE: std::sync::LazyLock<NyashHostVtable> = std::sync::LazyLock::new(|| {
     unsafe extern "C" fn host_alloc(size: usize) -> *mut u8 {
         let layout = std::alloc::Layout::from_size_align(size, 8).unwrap();
         std::alloc::alloc(layout)
@@ -101,9 +101,22 @@ fn default_host_vtable() -> NyashHostVtable {
         // In this prototype we cannot deallocate without size. No-op.
     }
     unsafe extern "C" fn host_wake(_id: u64) {}
-    unsafe extern "C" fn host_log(_level: i32, _msg: *const i8) {}
+    unsafe extern "C" fn host_log(_level: i32, _msg: *const i8) {
+        // Debug output for plugin logs
+        if !_msg.is_null() {
+            let msg = unsafe { std::ffi::CStr::from_ptr(_msg) };
+            if let Ok(s) = msg.to_str() {
+                eprintln!("🔌 Plugin log [{}]: {}", _level, s);
+            }
+        }
+    }
 
     NyashHostVtable { alloc: host_alloc, free: host_free, wake: host_wake, log: host_log }
+});
+
+/// Build a minimal host vtable for plugins
+fn default_host_vtable() -> &'static NyashHostVtable {
+    &*HOST_VTABLE_STORAGE
 }
 
 /// Helper: find plugin file path by name and candidate directories

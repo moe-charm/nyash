@@ -72,6 +72,14 @@ enum Commands {
         #[arg(short, long, default_value = "Hello TLV Debug!")]
         message: String,
     },
+    /// Validate plugin type information against nyash.toml
+    Typecheck {
+        /// Path to plugin .so file
+        plugin: PathBuf,
+        /// Path to nyash.toml configuration file
+        #[arg(short, long, default_value = "../../nyash.toml")]
+        config: PathBuf,
+    },
 }
 
 // ============ Host Functions (テスト用実装) ============

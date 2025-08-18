@@ -8,10 +8,12 @@
 mod codegen;
 mod memory;
 mod runtime;
+// mod executor; // TODO: Fix WASM executor build errors
 
 pub use codegen::{WasmCodegen, WasmModule};
 pub use memory::{MemoryManager, BoxLayout};
 pub use runtime::RuntimeImports;
+// pub use executor::WasmExecutor; // TODO: Fix WASM executor build errors
 
 use crate::mir::MirModule;
 

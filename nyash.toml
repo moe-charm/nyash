@@ -9,6 +9,26 @@ FileBox = "nyash-filebox-plugin"
 # StringBox = "my-string-plugin"
 # IntegerBox = "my-integer-plugin"
 
+# FileBoxの型情報定義
+[plugins.FileBox.methods]
+# readは引数なし
+read = { args = [] }
+
+# writeは文字列をbytesとして送る
+write = { args = [{ from = "string", to = "bytes" }] }
+
+# openは2つの文字列引数
+open = { args = [
+    { name = "path", from = "string", to = "string" },
+    { name = "mode", from = "string", to = "string" }
+] }
+
+# closeは引数なし、戻り値なし
+close = { args = [] }
+
+# existsは引数なし、戻り値はbool（将来拡張）
+exists = { args = [], returns = "bool" }
+
 [plugin_paths]
 # プラグインの検索パス（デフォルト）
 search_paths = [

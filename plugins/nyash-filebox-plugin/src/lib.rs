@@ -253,36 +253,30 @@ pub extern "C" fn nyash_plugin_invoke(
                 }
             }
             METHOD_READ => {
-                // args: TLV { I32 size }
-                let args = unsafe { std::slice::from_raw_parts(_args, _args_len) };
-                match tlv_parse_i32(args) {
-                    Ok(sz) => {
-                        // Preflight for Bytes TLV: header(4) + entry(4) + sz
-                        let need = 8usize.saturating_add(sz as usize);
-                        if preflight(_result, _result_len, need) { return NYB_E_SHORT_BUFFER; }
-                        if let Some(ref mutex) = INSTANCES {
-                            if let Ok(mut map) = mutex.lock() {
-                                if let Some(inst) = map.get_mut(&_instance_id) {
-                                    if let Some(file) = inst.file.as_mut() {
-                                        let mut buf = vec![0u8; sz as usize];
-                                        // Read from beginning for simple semantics
-                                        let _ = file.seek(SeekFrom::Start(0));
-                                        match file.read(&mut buf) {
-                                             Ok(n) => {
-                                                 buf.truncate(n);
-                                                 log_info(&format!("READ {} bytes", n));
-                                                 return write_tlv_bytes(&buf, _result, _result_len);
-                                             }
-                                            Err(_) => return NYB_E_PLUGIN_ERROR,
-                                        }
-                                    } else { return NYB_E_INVALID_HANDLE; }
-                                } else { return NYB_E_PLUGIN_ERROR; }
-                            } else { return NYB_E_PLUGIN_ERROR; }
-                        }
-                        NYB_E_PLUGIN_ERROR
-                    }
-                    Err(_) => NYB_E_INVALID_ARGS,
+                // args: None (Nyash spec: read() has no arguments)
+                // Read entire file content
+                if let Some(ref mutex) = INSTANCES {
+                    if let Ok(mut map) = mutex.lock() {
+                        if let Some(inst) = map.get_mut(&_instance_id) {
+                            if let Some(file) = inst.file.as_mut() {
+                                // Read entire file from beginning
+                                let _ = file.seek(SeekFrom::Start(0));
+                                let mut buf = Vec::new();
+                                match file.read_to_end(&mut buf) {
+                                    Ok(n) => {
+                                        log_info(&format!("READ {} bytes (entire file)", n));
+                                        // Preflight for Bytes TLV: header(4) + entry(4) + content
+                                        let need = 8usize.saturating_add(buf.len());
+                                        if preflight(_result, _result_len, need) { return NYB_E_SHORT_BUFFER; }
+                                        return write_tlv_bytes(&buf, _result, _result_len);
+                                    }
+                                    Err(_) => return NYB_E_PLUGIN_ERROR,
+                                }
+                            } else { return NYB_E_INVALID_HANDLE; }
+                        } else { return NYB_E_PLUGIN_ERROR; }
+                    } else { return NYB_E_PLUGIN_ERROR; }
                 }
+                NYB_E_PLUGIN_ERROR
             }
             METHOD_WRITE => {
                 // args: TLV { Bytes data }

@@ -145,54 +145,134 @@ impl NyashInterpreter {
         }
     }
 
-    /// 引数をTLVエンコード（メソッドに応じて特殊処理）
+    /// 引数をTLVエンコード（型情報に基づく美しい実装！）
     fn encode_arguments_to_tlv(&mut self, arguments: &[ASTNode], method_name: &str) -> Result<Vec<u8>, RuntimeError> {
         use crate::bid::tlv::TlvEncoder;
+        use crate::bid::registry;
         
         let mut encoder = TlvEncoder::new();
         
-        // 特殊ケース: readメソッドは引数がなくても、サイズ引数が必要
-        if method_name == "read" && arguments.is_empty() {
-            // デフォルトで8192バイト読み取り
-            encoder.encode_i32(8192)
-                .map_err(|e| RuntimeError::InvalidOperation {
-                    message: format!("TLV i32 encoding failed: {:?}", e),
-                })?;
+        // 型情報を取得（FileBoxのみ対応、後で拡張）
+        let type_info = registry::global()
+            .and_then(|reg| reg.get_method_type_info("FileBox", method_name));
+        
+        // 型情報がある場合は、それに従って変換
+        if let Some(type_info) = type_info {
+            eprintln!("✨ Using type info for method '{}'", method_name);
+            
+            // 引数の数をチェック
+            if arguments.len() != type_info.args.len() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("{} expects {} arguments, got {}", 
+                                   method_name, type_info.args.len(), arguments.len()),
+                });
+            }
+            
+            // 各引数を型情報に従ってエンコード
+            for (i, (arg, mapping)) in arguments.iter().zip(&type_info.args).enumerate() {
+                eprintln!("  🔄 Arg[{}]: {} -> {} conversion", i, mapping.from, mapping.to);
+                let value = self.execute_expression(arg)?;
+                self.encode_value_with_mapping(&mut encoder, value, mapping)?;
+            }
         } else {
-            // 通常の引数エンコード
+            // 型情報がない場合は、従来のデフォルト動作
+            eprintln!("⚠️ No type info for method '{}', using default encoding", method_name);
             for arg in arguments {
                 let value = self.execute_expression(arg)?;
-                
-                // 型に応じてエンコード
-                if let Some(str_box) = value.as_any().downcast_ref::<StringBox>() {
-                    // 🔍 writeメソッドなど、文字列データはBytesとしてエンコード
-                    // プラグインは通常、文字列データをBytesタグ（7）で期待する
-                    encoder.encode_bytes(str_box.value.as_bytes())
-                        .map_err(|e| RuntimeError::InvalidOperation {
-                            message: format!("TLV bytes encoding failed: {:?}", e),
-                        })?;
-                } else if let Some(int_box) = value.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-                    encoder.encode_i32(int_box.value as i32)
-                        .map_err(|e| RuntimeError::InvalidOperation {
-                            message: format!("TLV integer encoding failed: {:?}", e),
-                        })?;
-                } else if let Some(bool_box) = value.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
-                    encoder.encode_bool(bool_box.value)
-                        .map_err(|e| RuntimeError::InvalidOperation {
-                            message: format!("TLV bool encoding failed: {:?}", e),
-                        })?;
-                } else {
-                    // デフォルト: バイトデータとして扱う
-                    let str_val = value.to_string_box().value;
-                    encoder.encode_bytes(str_val.as_bytes())
-                        .map_err(|e| RuntimeError::InvalidOperation {
-                            message: format!("TLV default bytes encoding failed: {:?}", e),
-                        })?;
-                }
+                self.encode_value_default(&mut encoder, value)?;
             }
         }
         
         Ok(encoder.finish())
+    }
+    
+    /// 型マッピングに基づいて値をエンコード（美しい！）
+    fn encode_value_with_mapping(
+        &self, 
+        encoder: &mut crate::bid::tlv::TlvEncoder, 
+        value: Box<dyn NyashBox>, 
+        mapping: &crate::bid::ArgTypeMapping
+    ) -> Result<(), RuntimeError> {
+        // determine_bid_tag()を使って適切なタグを決定
+        let tag = mapping.determine_bid_tag()
+            .ok_or_else(|| RuntimeError::InvalidOperation {
+                message: format!("Unsupported type mapping: {} -> {}", mapping.from, mapping.to),
+            })?;
+        
+        // タグに応じてエンコード
+        match tag {
+            crate::bid::BidTag::String => {
+                let str_val = value.to_string_box().value;
+                encoder.encode_string(&str_val)
+                    .map_err(|e| RuntimeError::InvalidOperation {
+                        message: format!("TLV string encoding failed: {:?}", e),
+                    })
+            }
+            crate::bid::BidTag::Bytes => {
+                let str_val = value.to_string_box().value;
+                encoder.encode_bytes(str_val.as_bytes())
+                    .map_err(|e| RuntimeError::InvalidOperation {
+                        message: format!("TLV bytes encoding failed: {:?}", e),
+                    })
+            }
+            crate::bid::BidTag::I32 => {
+                if let Some(int_box) = value.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    encoder.encode_i32(int_box.value as i32)
+                        .map_err(|e| RuntimeError::InvalidOperation {
+                            message: format!("TLV i32 encoding failed: {:?}", e),
+                        })
+                } else {
+                    Err(RuntimeError::TypeError {
+                        message: format!("Expected integer for {} -> i32 conversion", mapping.from),
+                    })
+                }
+            }
+            crate::bid::BidTag::Bool => {
+                if let Some(bool_box) = value.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                    encoder.encode_bool(bool_box.value)
+                        .map_err(|e| RuntimeError::InvalidOperation {
+                            message: format!("TLV bool encoding failed: {:?}", e),
+                        })
+                } else {
+                    Err(RuntimeError::TypeError {
+                        message: format!("Expected bool for {} -> bool conversion", mapping.from),
+                    })
+                }
+            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unsupported BID tag: {:?}", tag),
+            })
+        }
+    }
+    
+    /// デフォルトエンコード（型情報がない場合のフォールバック）
+    fn encode_value_default(
+        &self,
+        encoder: &mut crate::bid::tlv::TlvEncoder,
+        value: Box<dyn NyashBox>
+    ) -> Result<(), RuntimeError> {
+        if let Some(str_box) = value.as_any().downcast_ref::<StringBox>() {
+            encoder.encode_bytes(str_box.value.as_bytes())
+                .map_err(|e| RuntimeError::InvalidOperation {
+                    message: format!("TLV bytes encoding failed: {:?}", e),
+                })
+        } else if let Some(int_box) = value.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            encoder.encode_i32(int_box.value as i32)
+                .map_err(|e| RuntimeError::InvalidOperation {
+                    message: format!("TLV integer encoding failed: {:?}", e),
+                })
+        } else if let Some(bool_box) = value.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            encoder.encode_bool(bool_box.value)
+                .map_err(|e| RuntimeError::InvalidOperation {
+                    message: format!("TLV bool encoding failed: {:?}", e),
+                })
+        } else {
+            let str_val = value.to_string_box().value;
+            encoder.encode_bytes(str_val.as_bytes())
+                .map_err(|e| RuntimeError::InvalidOperation {
+                    message: format!("TLV default bytes encoding failed: {:?}", e),
+                })
+        }
     }
     
     /// TLVレスポンスをNyashBoxに変換

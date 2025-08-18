@@ -128,6 +128,76 @@ pub enum BoxTypeId {
     // ... more box types
 }
 
+// ========== Type Information Management ==========
+// nyash.tomlでの型情報管理のための構造体
+// ハードコーディングを避け、動的な型変換を実現
+
+/// メソッドの型情報
+#[derive(Debug, Clone)]
+pub struct MethodTypeInfo {
+    /// 引数の型マッピング情報
+    pub args: Vec<ArgTypeMapping>,
+    /// 戻り値の型（将来拡張用）
+    pub returns: Option<String>,
+}
+
+/// 引数の型マッピング情報
+#[derive(Debug, Clone)]
+pub struct ArgTypeMapping {
+    /// 引数名（ドキュメント用、オプション）
+    pub name: Option<String>,
+    /// Nyash側の型名（"string", "integer", "bool" など）
+    pub from: String,
+    /// プラグインが期待する型名（"string", "bytes", "i32" など）
+    pub to: String,
+}
+
+impl ArgTypeMapping {
+    /// 新しい型マッピングを作成
+    pub fn new(from: String, to: String) -> Self {
+        Self {
+            name: None,
+            from,
+            to,
+        }
+    }
+    
+    /// 名前付きの型マッピングを作成
+    pub fn with_name(name: String, from: String, to: String) -> Self {
+        Self {
+            name: Some(name),
+            from,
+            to,
+        }
+    }
+    
+    /// Nyash型からBIDタグへの変換を決定
+    /// ハードコーディングを避けるため、型名の組み合わせで判定
+    pub fn determine_bid_tag(&self) -> Option<BidTag> {
+        match (self.from.as_str(), self.to.as_str()) {
+            // 文字列の変換パターン
+            ("string", "string") => Some(BidTag::String),
+            ("string", "bytes") => Some(BidTag::Bytes),
+            
+            // 数値の変換パターン
+            ("integer", "i32") => Some(BidTag::I32),
+            ("integer", "i64") => Some(BidTag::I64),
+            ("float", "f32") => Some(BidTag::F32),
+            ("float", "f64") => Some(BidTag::F64),
+            
+            // ブール値
+            ("bool", "bool") => Some(BidTag::Bool),
+            
+            // バイナリデータ
+            ("bytes", "bytes") => Some(BidTag::Bytes),
+            ("array", "bytes") => Some(BidTag::Bytes), // 配列をシリアライズ
+            
+            // 未対応の組み合わせ
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +218,25 @@ mod tests {
         assert_eq!(BidType::Bool.tag(), BidTag::Bool);
         assert_eq!(BidType::String.tag(), BidTag::String);
         assert_eq!(BidType::Handle { type_id: 6, instance_id: 0 }.tag(), BidTag::Handle);
+    }
+    
+    #[test]
+    fn test_arg_type_mapping() {
+        // string → bytes 変換のテスト（writeメソッドで使用）
+        let mapping = ArgTypeMapping::new("string".to_string(), "bytes".to_string());
+        assert_eq!(mapping.determine_bid_tag(), Some(BidTag::Bytes));
+        
+        // integer → i32 変換のテスト
+        let mapping = ArgTypeMapping::new("integer".to_string(), "i32".to_string());
+        assert_eq!(mapping.determine_bid_tag(), Some(BidTag::I32));
+        
+        // 名前付きマッピングのテスト
+        let mapping = ArgTypeMapping::with_name(
+            "content".to_string(),
+            "string".to_string(),
+            "string".to_string()
+        );
+        assert_eq!(mapping.name, Some("content".to_string()));
+        assert_eq!(mapping.determine_bid_tag(), Some(BidTag::String));
     }
 }
