@@ -1,6 +1,117 @@
-# Nyash言語コアコンセプト AI向け速習ガイド
+# 🚀 Nyash言語 - 一目でわかる速習ガイド
 
-このドキュメントは、AIアシスタントがNyashプログラミング言語を迅速に理解するために、そのコアコンセプトを凝縮して提供します。
+**Nyash**は「Everything is Box」哲学に基づく革新的プログラミング言語です。このドキュメントで、Nyashのコアコンセプトを素早く理解できます。
+
+## 🎯 **5分で動かす！クイックスタート**
+
+```bash
+# ビルド & 実行
+cargo build --release -j32
+./target/release/nyash program.nyash
+
+# プラグイン対応FileBox実行例
+./target/release/nyash local_tests/test_plugin_filebox.nyash
+```
+
+### 🌟 **実際に動く！Nyashコード例**
+
+```nyash
+using nyashstd
+
+static box Main {
+    init { console }
+    
+    main() {
+        // 🎉 自動リテラル変換 - 超簡単！
+        local name = "Nyash"              // → StringBox
+        local year = 2025                 // → IntegerBox
+        local pi = 3.14159               // → FloatBox
+        
+        // 🚀 プラグインシステム
+        local f = new FileBox("data.txt") // プラグイン実装
+        f.write("Hello from plugin!")
+        print("読み取り: " + f.read())
+        
+        // 📚 標準ライブラリ
+        local upper = string.upper(name)
+        console.log("🎉 " + upper + " " + year + " Ready!")
+    }
+}
+```
+
+**実行結果:**
+```
+読み取り: Hello from plugin!
+🎉 NYASH 2025 Ready!
+```
+
+## 🔌 **BID-FFIプラグインシステム** - Phase 9.75g-0の革命！
+
+Nyashの最新の革命的機能：**プラグインによるBox拡張システム**
+
+### 🎯 **プラグインの威力**
+
+```nyash
+// プラグイン設定（nyash.toml）
+[plugins]
+FileBox = "nyash-filebox-plugin"
+
+// Nyashコード - 透過的にプラグイン使用
+local f = new FileBox("important.txt")  // プラグイン実装を自動選択
+f.write("機密データ")                    // プラグインのwrite()
+local data = f.read()                   // プラグインのread()
+```
+
+### ✨ **型情報管理システム**
+
+```toml
+# nyash.toml - 型情報で自動変換
+[plugins.FileBox.methods]
+write = { args = [{ from = "string", to = "bytes" }] }  # 自動変換
+read = { args = [] }                                    # 引数なし
+```
+
+### 🛡️ **メモリ安全性**
+
+- **HostVtable**: プラグイン↔ホスト間の安全なインターフェース
+- **生存期間管理**: birth/finiライフサイクル完全実装
+- **valgrind検証済み**: セグフォルト完全解消
+
+### 📋 **プラグイン診断ツール**
+
+```bash
+# プラグインの健全性チェック
+./tools/plugin-tester/target/release/plugin-tester check plugin.so
+./tools/plugin-tester/target/release/plugin-tester io plugin.so
+```
+
+**詳細**: [BID-FFI仕様書](説明書/reference/box-design/ffi-abi-specification.md)
+
+## ⚡ **実行バックエンド選択** - 開発から本番まで
+
+Nyashは用途に応じて最適な実行方式を選択可能：
+
+```bash
+# 開発・デバッグ（即時実行）
+./target/release/nyash program.nyash
+
+# 高速実行（本番用）
+./target/release/nyash --backend vm program.nyash
+
+# Web配布用
+./target/release/nyash --compile-wasm program.nyash
+
+# 性能比較
+./target/release/nyash --benchmark --iterations 100
+```
+
+### 🚀 **性能実績**
+- **VM**: 20.4倍高速化
+- **WASM**: 13.5倍高速化  
+- **LLVM AOT**: 100-1000倍高速化（Phase 10計画中）
+- **インタープリター**: 開発に最適、本番でも実用的
+
+**詳細**: [実行バックエンド完全ガイド](execution-backends.md)
 
 ## 1. 基本哲学: Everything is a Box (すべてはBoxである)
 
@@ -460,71 +571,42 @@ r3 = await f3
   }
   ```
 
-## 11. 実行バックエンド選択とハイブリッド戦略 (2025-08-16更新)
+## 11. クイック実行コマンド
 
-Nyashは4つの実行方式をサポート。**インタープリターは開発だけでなく本番でも実用的**（Pythonのように）：
-
-### 🌟 **インタープリター併用戦略**
-```
-開発時: インタープリター（即時実行・デバッグ・非同期フル対応）
-本番時: インタープリター（多くのユースケースで十分高速）
-        OR
-        コンパイラ（性能要求時）
-配布時: AOT native（最高性能）
-Web時:  WASM（ブラウザ対応）
-```
-
-### 実行方法
 ```bash
-# インタープリター実行（開発・本番両対応）
-nyash program.nyash
+# ビルド & 基本実行
+cargo build --release -j32
+./target/release/nyash program.nyash
 
-# VM実行（高速実行）
-nyash --backend vm program.nyash
+# プラグイン診断
+./tools/plugin-tester/target/release/plugin-tester check plugin.so
 
-# WASM生成（Web配布）
-nyash --compile-wasm program.nyash
-
-# ベンチマーク実行（性能比較）
-nyash --benchmark --iterations 100
+# 性能比較
+./target/release/nyash --benchmark --iterations 100
 ```
-
-### **性能比較（実行速度）:**
-- **WASM**: 13.5倍高速化
-- **VM**: 20.4倍高速化
-- **Interpreter**: ベースライン（多くの場合十分高速）
-- **LLVM AOT**: 100-1000倍高速化（Phase 10計画中）
-
-### **インタープリターの価値:**
-- **即時実行**: コンパイル不要で素早い開発サイクル
-- **完全な非同期**: Rust async/awaitで真の並行処理
-- **デバッグ容易**: 実行時情報の完全把握
-- **実用的性能**: PythonやRubyが証明する十分な速度
-
-詳細: [docs/execution-backends.md](execution-backends.md)
-
-## 12. クイック実行（ローカル）
-
-- ビルド: `cargo build --release -j32`
-- 実行: `./target/release/nyash program.nyash`
-- WASM: `./target/release/nyash --compile-wasm program.nyash`
 
 ---
 
-**最終更新: 2025年8月16日** - **インタープリター併用戦略統合**
-- 🌟 **インタープリター併用戦略**: 開発・本番両対応の実用的実行モデル
-- ✅ **静的boxメソッド呼び出し追加**: Phase 9.75i実装機能
-- ✅ **ビルトインBox追加**: FloatBox, SocketBox, BufferBox
-- ✅ **実行バックエンド説明更新**: インタープリターの本番価値明記
+**最終更新: 2025年8月19日** - **🚀 Phase 9.75g-0 BID-FFI完全実装！**
 
-**前回の革命的改善（Phase 9.75h）:**
-- 🌟 **自動リテラル変換実装**: 文字列・数値・真偽値の自動Box変換
-- ✅ **using nyashstd完全実装**: 標準ライブラリアクセス機能完成
-- ✅ **birth構文追加**: 「生命をBoxに与える」統一コンストラクタ
+### 🎉 **最新の革命的成果**
+- 🔌 **BID-FFIプラグインシステム**: プラグインによるBox拡張完全実装
+- ✨ **型情報管理システム**: nyash.tomlベースの自動型変換
+- 🛡️ **メモリ安全性確保**: HostVtable生存期間問題解決、valgrind検証済み
+- 🧪 **plugin-tester**: 汎用プラグイン診断ツール完成
+
+### 🌟 **過去の革命的改善**
+- **Phase 9.75h**: 自動リテラル変換、using nyashstd、birth構文
+- **Phase 9.75i**: 静的boxメソッド、SocketBox、BufferBox
+- **Phase 9.75j**: 警告削減（106個→0個）
 
 ### 🚀 **Nyashの実用的価値**
-**Everything is Box哲学 + 使いやすさ + 実用的性能** の三位一体！
-- **開発時**: インタープリターで即時実行・完全デバッグ
-- **本番時**: インタープリター（十分高速）またはコンパイラ（最高性能）
-- **将来**: LLVM AOTで100-1000倍高速化（Phase 10）
+**Everything is Box哲学 + プラグイン拡張 + 実用的性能** の革新的言語！
+
+- **🔌 拡張性**: プラグインで無限にBox機能拡張
+- **🛡️ 安全性**: メモリ安全性とvalgrind検証済み
+- **⚡ 性能**: VM 20倍、WASM 13倍、将来AOT 1000倍高速化
+- **📚 使いやすさ**: 自動変換、標準ライブラリ、直感的構文
+
+**詳しいdocs**: [完全リファレンス](説明書/reference/) | [開発ガイド](../CLAUDE.md) | [Phase計画](予定/native-plan/copilot_issues.txt)
 

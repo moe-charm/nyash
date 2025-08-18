@@ -1,5 +1,5 @@
-# 🤖 Copilot様 作業予定・課題整理 (Phase 9.7以降 実用化重点)
-# Generated: 2025-08-16 (インタープリター併用戦略統合)
+# 🤖 Copilot様 作業予定・課題整理 (Phase 8.6-10 重点フェーズ)
+# Generated: 2025-08-19 (Phase 9.75g-0完了・VM性能改善移行)
 # Purpose: Claude×Copilot協調開発のための情報共有
 
 ================================================================================
@@ -26,47 +26,91 @@ Web時:  WASM（ブラウザ対応）
 - **十分な性能**: 多くのユースケースで実用的（Pythonが証明）
 
 ================================================================================
-🎯 Phase 9.7以降 開発ロードマップ (実用化重点)
+🎯 Phase 8.6-10 開発ロードマップ (性能最適化・LLVM実装重点)
 ================================================================================
 
-## ⚡ Phase 9.77: WASM緊急復旧 - BoxCall/UTF-8エラー修正（進行中）
+## 🎊 Phase 9.75g-0: BID-FFI Plugin System - 完全完了！ ✅
 
 Summary:
-- BoxCall命令実装 ✅ 完了
-- wasmtimeバージョン更新 ✅ 完了  
-- UTF-8エラー修正 🔄 進行中（Issue #110）
+- ✅ **動的プラグインシステム完成**: FileBoxプラグインで実証
+- ✅ **BID-FFI基盤確立**: 型安全なFFIインターフェース  
+- ✅ **plugin-tester完成**: 汎用プラグイン診断ツール
+- ✅ **型情報管理システム**: nyash.toml外部化、セグフォルト修正
 
-Priority: **Critical** 
-Expected Duration: 1-2週間
-GitHub Issue: #110 (Phase 9.77a)
+**革命的成果**: NyashがプラグインでBox型を動的拡張可能に！
 
-### 進捗状況
-- ✅ **Task 1.1**: BoxCall実装（toString, print, equals, clone, log）
-- ✅ **Task 1.2**: wasmtime 18.0 → 35.0.0更新、RuntimeImports追加
-- 🔄 **Task 1.3**: UTF-8エラー原因特定（エラーメッセージ発生元不明）
-
-### 🤖 Copilot協力中
-- エラーメッセージ「Generated WASM is not valid UTF-8」の発生元調査
-- WAT→WASM変換パイプラインのデバッグ
+```nyash
+// これが現実になった！
+local file = new FileBox()        // プラグイン提供
+local db = new PostgreSQLBox()    // 将来: プラグイン提供  
+local gpu = new CudaBox()         // 将来: プラグイン提供
+```
 
 References:
-- docs/予定/native-plan/issues/phase_9_77_wasm_emergency.md
-- docs/予定/native-plan/issues/phase_9_77a_utf8_error_fix.md
+- docs/Phase-9.75g-0-BID-FFI-Developer-Guide.md (包括的開発者ガイド)
+- tools/plugin-tester/ (プラグイン診断ツール)
 
 ------------------------------------------------------------
 
-## 📦 Phase 9.8: BIDレジストリ + 自動コード生成ツール（WASM/VM/LLVM/言語）
+## 🚨 Phase 8.6: VM性能改善 - 最優先課題（進行中）
 
 Summary:
-- BIDレジストリと、BID→各ターゲットのスタブ生成（import/extern宣言）を自動化。
+- **緊急問題**: VMがインタープリターより0.9倍遅い（性能回帰！）
+- **目標**: 2倍以上高速化でVM実行を実用レベルに引き上げ
+- **担当**: Copilot主導（GitHub Issue #112）
 
-Scope/Tasks:
+Priority: **Critical** 
+Expected Duration: 1-2週間
+GitHub Issue: #112 (Phase 8.6 VM性能改善)
+
+### 技術的課題
+```bash
+# 現状のベンチマーク結果
+Interpreter: 110.10ms (ベースライン)
+VM:          119.80ms (0.9倍 - 遅い...)
+Target:       55.00ms (2倍高速化目標)
+```
+
+### 推定原因と対策
+- **デバッグ出力過多**: `println!`による性能劣化
+- **HashMap操作重い**: ValueId → VM値の変換コスト
+- **命令ディスパッチ非効率**: switch文ベースディスパッチ
+
+### 🤖 Copilot協力期待
+- VM実行時間詳細測定・プロファイリング
+- 命令ディスパッチ最適化（direct threading等）
+- Box操作インライン化・メモリレイアウト最適化
+
+References:
+- docs/予定/native-plan/issues/phase_8_6_vm_performance_improvement.md
+
+------------------------------------------------------------
+
+## 📦 Phase 9.8: BIDレジストリ + 自動コード生成ツール - MIR統合の要 
+
+Summary:
+- **Phase 9.75g-0完了により準備完了**: プラグインがMIR経由で全バックエンド利用可能に
+- BIDレジストリと、BID→各ターゲットのスタブ生成（import/extern宣言）を自動化
+
+Priority: **High** (Phase 8.6完了直後)
+Expected Duration: 2-3週間
+
+### 🌟 革命的価値
+```bash
+# 🎯 1つのプラグインが4バックエンド全対応！
+nyash bid gen --target wasm   bid.yaml  # WASM用import生成
+nyash bid gen --target vm     bid.yaml  # VM用関数テーブル生成  
+nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
+```
+
+### Scope/Tasks
 - BIDレジストリ仕様（署名・効果・バージョン・依存関係）
 - 生成: WASM(importObject), VM(関数テーブル), LLVM(declare), TS/Python(RTEラッパ)
 - CLI: `nyash bid gen --target wasm|vm|llvm|ts|py bid.yaml`
 
-Acceptance:
+### Acceptance
 - console/canvasのBIDから各ターゲットの骨子が自動生成される
+- **FileBoxプラグインがVM・WASM・AOT全てで動作**
 
 ------------------------------------------------------------
 
@@ -119,15 +163,22 @@ Acceptance:
 
 ------------------------------------------------------------
 
-## 🏆 Phase 10: LLVM Direct AOT（最高性能実現）
+## 🏆 Phase 10: LLVM Direct AOT - 実現可能性検証中
 
 Summary:
-- MIR→LLVM IR直接変換による最高性能AOT実現
+- **調査・実証段階**: MIR→LLVM IR直接変換による最高性能AOT実現を目指す
 - インタープリターとの併用で最適な開発・実行体験を提供
 - 非同期処理フルサポート（async/await のネイティブ実装）
 
-Priority: High (Phase 9.77完了後)
-Expected Duration: 4-6ヶ月
+Priority: **Research** (Phase 9.8完了後に実現可能性評価)
+Expected Duration: **調査3週間 + 実装3-6ヶ月**（実現可能性次第）
+
+### 🔍 実現可能性チェック項目
+- ✅ **技術的基盤**: MIR 26命令セット（LLVM IR変換可能）
+- ✅ **AOTスケルトン**: 基本構造完成済み
+- ✅ **型情報システム**: 最適化に必要な情報完備
+- 🔄 **Proof of Concept**: 基本的なMIR→LLVM変換の実証
+- ❓ **実装工数**: 現実的な期間での完成可能性
 
 ### 🌟 インタープリター併用戦略
 ```
@@ -137,7 +188,15 @@ Expected Duration: 4-6ヶ月
 Web配布: WASM（ブラウザ対応）
 ```
 
-### 🏗️ Phase 10.1: 同期版LLVM実装（3ヶ月）
+### 🏗️ Phase 10.1: Proof of Concept（3週間）**実現可能性評価**
+
+Investigation Steps:
+1) **MIR→LLVM IR変換調査**: 基本命令の変換可能性検証
+2) **Box型表現調査**: LLVM IRでのBox型効率的実装方法
+3) **C-ABI統合調査**: プラグインとの連携可能性  
+4) **性能予測**: 理論的な高速化効果の算出
+
+### 🏗️ Phase 10.2: 基本実装（3ヶ月）**実現可能と判断した場合**
 
 Implementation Steps:
 1) `src/backend/llvm/` 基盤構築
@@ -145,17 +204,17 @@ Implementation Steps:
 3) Box操作の最適化（エスケープ解析）
 4) ベンチマーク: 100倍目標
 
-### 🌐 Phase 10.2: 非同期拡張（2ヶ月）
+### 🌐 Phase 10.3: 非同期拡張（2ヶ月）**基本実装完了後**
 
 非同期サポート戦略:
-- **async/await ネイティブ実装**: Rust風の効率的な非同期
+- **async/await ネイティブ実装**: Rust風の効率的な非同期  
 - **軽量ランタイム**: 独自Future実装
 - **インタープリター互換**: 同じ非同期セマンティクス
 
 ```rust
-// Phase 10.2: 非同期LLVM実装
+// Phase 10.3: 非同期LLVM実装（予定）
 FutureNew → LLVM coroutine intrinsics
-Await → LLVM suspend/resume points
+Await → LLVM suspend/resume points  
 FutureSet → completion notification
 ```
 
@@ -180,6 +239,22 @@ FutureSet → completion notification
 
 References:
 - docs/予定/native-plan/issues/phase_10_x_llvm_backend_skeleton.md
+
+### 🌟 戦略的決定: ネームスペース統合はLLVM後に実施
+
+**理由**: 4バックエンド（Interpreter/VM/WASM/LLVM）全体の知見蓄積後に、最適化された統合設計を一回で実現するため
+
+**効果**: 後戻り・再設計なしで完璧な統合ネームスペースを実装可能
+
+```rust  
+// Phase 10完了後: 4バックエンド対応統合ネームスペース
+pub struct UniversalNamespaceManager {
+    interpreter_cache: BuiltinCache,
+    vm_function_table: VmFunctionTable, 
+    wasm_import_object: WasmImports,
+    llvm_module_linking: LlvmLinker,  // LLVM完成後追加
+}
+```
 
 ------------------------------------------------------------
 
@@ -315,17 +390,17 @@ Acceptance Criteria:
 💡 Copilot様への具体的お願い・相談事項
 ================================================================================
 
-## 🔧 Phase 9.77 緊急対応
+## 🔧 Phase 8.6 VM性能改善 (最優先)
 
-### UTF-8エラー調査（Issue #110）
-❓ エラーメッセージ「Generated WASM is not valid UTF-8」の発生元は？
-❓ wabt::wat2wasm以外でエラーが出ている可能性は？
-❓ runner.rs/main.rsのエラー処理フローは？
+### VM実行時間詳細測定・プロファイリング
+❓ 命令ディスパッチのボトルネック特定方法は？
+❓ HashMap操作の最適化戦略は？  
+❓ デバッグ出力削除による性能改善測定は？
 
-### WASM基本機能復旧
-❓ 最小テストケース（`local result = 42`）のデバッグ方法は？
-❓ WAT生成パイプラインの問題箇所特定は？
-❓ 効率的なデバッグ戦略は？
+### VM最適化実装
+❓ Direct threading実装の現実的アプローチは？
+❓ Register-based VM への移行可能性は？
+❓ Box操作インライン化の効果的な実装は？
 
 ## 🚀 長期戦略相談
 
@@ -334,10 +409,11 @@ Acceptance Criteria:
 ❓ インタープリターとコンパイラの互換性保証は？
 ❓ Pythonライクな実用性の実現方法は？
 
-### Phase 10 LLVM Direct AOT
-❓ 非同期処理のネイティブ実装戦略は？
-❓ LLVM coroutine intrinsicsの活用方法は？
-❓ インタープリターとの非同期セマンティクス統一は？
+### Phase 10 LLVM実現可能性調査 (研究段階)
+❓ MIR→LLVM IR変換の基本的な実装戦略は？
+❓ Box型のLLVM表現として最適なアプローチは？  
+❓ C-ABIとの統合によるプラグイン連携可能性は？
+❓ 現実的な開発期間での完成可能性評価は？
 
 ### Everything is Box最適化
 ❓ Box操作の根本的高速化戦略は？
@@ -376,12 +452,13 @@ Acceptance Criteria:
 🎯 期待される成果・インパクト
 ================================================================================
 
-## Phase 8-9完了時の成果 (達成済み)
+## Phase 8-9完了時の成果 (達成済み・進行中)
 🏆 RefNew/RefGet/RefSet WASM完全動作
 🏆 Box操作ベンチマーク追加
 🏆 メモリレイアウト最適化効果測定
 🏆 26命令MIR階層化完了（Phase 8.5）
-🏆 VM性能改善完了（Phase 8.6）
+🔄 **VM性能改善進行中（Phase 8.6）** - GitHub Issue #112
+🏆 **Phase 9.75g-0 BID-FFI Plugin System完全完了**
 🏆 警告削減100%達成（Phase 9.75j）
 🏆 BoxCall実装・wasmtime更新（Phase 9.77）
 
@@ -412,14 +489,14 @@ Acceptance Criteria:
 一緒にNyashを最高の言語にしていきましょう🚀
 
 ================================================================================
-最終更新: 2025-08-16 (インタープリター併用戦略統合・Phase整理)
-作成者: Claude (インタープリター価値認識 + Phase重複削除)
+最終更新: 2025-08-19 (Phase 9.75g-0完了・VM性能改善最優先・LLVM調査段階化)
+作成者: Claude (BID-FFIプラグインシステム完了 + 最新優先順位反映)
 
 🎯 重要な変更点:
-- Phase 9.5: 削除（完了済み）
-- Phase 9.6/9.7: 削除（Phase 9.77と重複）
-- Phase 9.75: 削除（完了済み）
-- Phase 9.77: 進行中（UTF-8エラー修正中、Issue #110）
-- Phase 10: インタープリター併用戦略・非同期ネイティブ実装追加
-- インタープリター: 開発だけでなく本番でも実用的（Pythonライク）
+- ✅ **Phase 9.75g-0 BID-FFI Plugin System完全完了** (動的プラグインシステム実現)
+- 🔄 **Phase 8.6 VM性能改善を最優先** (進行中 - GitHub Issue #112)
+- 📦 **Phase 9.8 BIDレジストリ** (Phase 8.6完了後の次期重点)
+- 🔍 **Phase 10 LLVM** (実現可能性調査・検証段階として位置づけ)
+- 🌟 **ネームスペース統合戦略変更** (LLVM完成後に4バックエンド統合設計)
+- 📅 **優先順位明確化**: VM性能 → BIDレジストリ → LLVM調査 の順序
 ================================================================================

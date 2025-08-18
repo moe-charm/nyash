@@ -1,0 +1,8 @@
+// Simplest possible test
+static box Main {
+    init { }
+    
+    main() {
+        return 42
+    }
+}

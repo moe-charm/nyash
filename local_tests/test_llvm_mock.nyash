@@ -1,0 +1,11 @@
+// Test LLVM mock interpreter
+static box Main {
+    init { result }
+    
+    main() {
+        local a = 10
+        local b = 32
+        local sum = a + b
+        return sum  // Should return 42
+    }
+}
