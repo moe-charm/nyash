@@ -1,0 +1,25 @@
+// Windows VM Test Program
+// 超シンプルなプログラムでVMの動作確認
+
+print("🎉 Hello from Nyash VM on Windows!")
+print("=====================================")
+
+// 基本的な計算
+local x = 10
+local y = 20
+local result = x + y
+print("10 + 20 = " + result)
+
+// ループテスト
+print("\nCounting to 5:")
+local i = 1
+loop(i <= 5) {
+    print("  Count: " + i)
+    i = i + 1
+}
+
+// Box生成テスト
+local str = new StringBox("Nyash")
+print("\nStringBox created: " + str)
+
+print("\n✅ VM test completed successfully!")

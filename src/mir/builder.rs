@@ -316,7 +316,15 @@ impl MirBuilder {
         let value_id = self.build_expression(value)?;
         
         // In SSA form, each assignment creates a new value
-        self.variable_map.insert(var_name, value_id);
+        self.variable_map.insert(var_name.clone(), value_id);
+        
+        // Generate a Store instruction to ensure VM can track the assignment
+        // For now, we use the variable name as a simple pointer identifier
+        let var_ptr = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Store {
+            value: value_id,
+            ptr: var_ptr,
+        })?;
         
         Ok(value_id)
     }
