@@ -180,10 +180,8 @@ impl VM {
             
             // Execute instructions in this block (including terminator)
             let all_instructions: Vec<_> = block.all_instructions().collect();
-            println!("Executing block {} with {} instructions", current_block, all_instructions.len());
             for (index, instruction) in all_instructions.iter().enumerate() {
                 self.pc = index;
-                println!("  Instruction {}: {:?}", index, instruction);
                 
                 match self.execute_instruction(instruction)? {
                     ControlFlow::Continue => continue,
@@ -197,8 +195,6 @@ impl VM {
                     },
                 }
             }
-            
-            println!("Block execution finished. should_return: {:?}, next_block: {:?}", should_return.is_some(), next_block.is_some());
             
             // Handle control flow
             if let Some(return_value) = should_return {
@@ -215,7 +211,6 @@ impl VM {
     
     /// Execute a single instruction
     fn execute_instruction(&mut self, instruction: &MirInstruction) -> Result<ControlFlow, VMError> {
-        println!("Executing instruction: {:?}", instruction);
         match instruction {
             MirInstruction::Const { dst, value } => {
                 let vm_value = VMValue::from(value);
@@ -255,10 +250,8 @@ impl VM {
             MirInstruction::Return { value } => {
                 let return_value = if let Some(val_id) = value {
                     let val = self.get_value(*val_id)?;
-                    println!("Return: returning value from {:?} = {:?}", val_id, val);
                     val
                 } else {
-                    println!("Return: returning void (no value specified)");
                     VMValue::Void
                 };
                 Ok(ControlFlow::Return(return_value))
@@ -404,10 +397,8 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::Debug { value, message: _ } => {
-                // Debug instruction - print value for debugging
-                let val = self.get_value(*value)?;
-                println!("DEBUG: {}", val.to_string());
+            MirInstruction::Debug { value: _, message: _ } => {
+                // Debug instruction - skip debug output for performance
                 Ok(ControlFlow::Continue)
             },
             
@@ -513,14 +504,11 @@ impl VM {
             // Phase 7: Async/Future Operations
             MirInstruction::FutureNew { dst, value } => {
                 let initial_value = self.get_value(*value)?;
-                println!("FutureNew: initial_value = {:?}", initial_value);
                 let future = crate::boxes::future::FutureBox::new();
                 // Convert VMValue to NyashBox and set it in the future
                 let nyash_box = initial_value.to_nyash_box();
-                println!("FutureNew: converted to NyashBox type = {}", nyash_box.type_name());
                 future.set_result(nyash_box);
                 self.values.insert(*dst, VMValue::Future(future));
-                println!("FutureNew: stored Future in dst = {:?}", dst);
                 Ok(ControlFlow::Continue)
             },
             
@@ -538,16 +526,12 @@ impl VM {
             
             MirInstruction::Await { dst, future } => {
                 let future_val = self.get_value(*future)?;
-                println!("Await: future_val = {:?}", future_val);
                 
                 if let VMValue::Future(ref future_box) = future_val {
                     // This blocks until the future is ready
                     let result = future_box.get();
-                    println!("Await: future.get() returned type = {}", result.type_name());
-                    println!("Await: future.get() string = {}", result.to_string_box().value);
                     // Convert NyashBox back to VMValue
                     let vm_value = VMValue::from_nyash_box(result);
-                    println!("Await: converted back to VMValue = {:?}", vm_value);
                     self.values.insert(*dst, vm_value);
                     Ok(ControlFlow::Continue)
                 } else {
