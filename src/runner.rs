@@ -36,23 +36,33 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
-        // Try to initialize BID plugins from nyash.toml (best-effort)
-        self.init_bid_plugins();
-        // Benchmark mode - can run without a file
-        if self.config.benchmark {
-            println!("📊 Nyash Performance Benchmark Suite");
-            println!("====================================");
-            println!("Running {} iterations per test...", self.config.iterations);
-            println!();
-            
-            self.execute_benchmark_mode();
-            return;
-        }
+        match &self.config.command {
+            crate::cli::NyashCommand::Run { 
+                file, benchmark, iterations, .. 
+            } => {
+                // Try to initialize BID plugins from nyash.toml (best-effort)
+                self.init_bid_plugins();
+                
+                // Benchmark mode - can run without a file
+                if *benchmark {
+                    println!("📊 Nyash Performance Benchmark Suite");
+                    println!("====================================");
+                    println!("Running {} iterations per test...", iterations);
+                    println!();
+                    
+                    self.execute_benchmark_mode(*iterations);
+                    return;
+                }
 
-        if let Some(ref filename) = self.config.file {
-            self.execute_file_mode(filename);
-        } else {
-            self.execute_demo_mode();
+                if let Some(ref filename) = file {
+                    self.execute_file_mode(filename);
+                } else {
+                    self.execute_demo_mode();
+                }
+            },
+            crate::cli::NyashCommand::Bid { subcommand } => {
+                self.execute_bid_command(subcommand);
+            }
         }
     }
 
@@ -72,33 +82,119 @@ impl NyashRunner {
         }
     }
 
+    /// Execute BID commands
+    fn execute_bid_command(&self, subcommand: &crate::cli::BidSubcommand) {
+        use crate::cli::BidSubcommand;
+        
+        match subcommand {
+            BidSubcommand::Gen { target, bid_file, output_dir, force, dry_run } => {
+                self.execute_bid_gen(target, bid_file, output_dir.as_deref(), *force, *dry_run);
+            }
+        }
+    }
+    
+    /// Execute BID code generation
+    fn execute_bid_gen(&self, target: &str, bid_file: &str, output_dir: Option<&str>, force: bool, dry_run: bool) {
+        use crate::bid::{BidDefinition, CodeGenerator, CodeGenTarget, CodeGenOptions};
+        use std::path::{Path, PathBuf};
+        
+        println!("🚀 BID Code Generator");
+        println!("Target: {}", target);
+        println!("BID file: {}", bid_file);
+        
+        // Parse target
+        let target = match CodeGenTarget::from_str(target) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("❌ Error: {}", e);
+                std::process::exit(1);
+            }
+        };
+        
+        // Load BID definition
+        let bid_path = Path::new(bid_file);
+        let bid = match BidDefinition::load_from_file(bid_path) {
+            Ok(bid) => bid,
+            Err(e) => {
+                eprintln!("❌ Failed to load BID file '{}': {}", bid_file, e);
+                std::process::exit(1);
+            }
+        };
+        
+        println!("✅ Loaded BID definition: {}", bid.name());
+        
+        // Determine output directory
+        let output_dir = match output_dir {
+            Some(dir) => PathBuf::from(dir),
+            None => {
+                let base_name = bid_path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("output");
+                PathBuf::from("out").join(target.as_str()).join(base_name)
+            }
+        };
+        
+        println!("📁 Output directory: {}", output_dir.display());
+        
+        // Create generation options
+        let options = CodeGenOptions::new(target.clone(), output_dir)
+            .with_force(force)
+            .with_dry_run(dry_run);
+        
+        // Generate code
+        match CodeGenerator::generate(&bid, &options) {
+            Ok(result) => {
+                if dry_run {
+                    println!("\n🔍 Dry run - preview of generated files:");
+                    CodeGenerator::preview_files(&result);
+                } else {
+                    println!("\n✅ Code generation successful!");
+                    println!("Generated {} files for target '{}':", result.files.len(), target.as_str());
+                    for file in &result.files {
+                        println!("  📄 {}", file.path.display());
+                    }
+                }
+            },
+            Err(e) => {
+                eprintln!("❌ Code generation failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     /// Execute file-based mode with backend selection
     fn execute_file_mode(&self, filename: &str) {
-        if self.config.dump_mir || self.config.verify_mir {
-            println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
-            self.execute_mir_mode(filename);
-        } else if self.config.compile_wasm {
-            println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
-            self.execute_wasm_mode(filename);
-        } else if self.config.compile_native {
-            println!("🚀 Nyash AOT Compiler - Processing file: {} 🚀", filename);
-            self.execute_aot_mode(filename);
-        } else if self.config.backend == "vm" {
-            println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
-            self.execute_vm_mode(filename);
-        } else if self.config.backend == "llvm" {
-            println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
-            self.execute_llvm_mode(filename);
-        } else {
-            println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
-            if let Some(fuel) = self.config.debug_fuel {
-                println!("🔥 Debug fuel limit: {} iterations", fuel);
-            } else {
-                println!("🔥 Debug fuel limit: unlimited");
-            }
-            println!("====================================================");
+        // Extract run configuration from the command
+        if let crate::cli::NyashCommand::Run { 
+            dump_mir, verify_mir, compile_wasm, compile_native, backend, debug_fuel, output_file, ..
+        } = &self.config.command {
             
-            self.execute_nyash_file(filename);
+            if *dump_mir || *verify_mir {
+                println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
+                self.execute_mir_mode(filename, *dump_mir, *verify_mir, *debug_fuel);
+            } else if *compile_wasm {
+                println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
+                self.execute_wasm_mode(filename, output_file.as_deref());
+            } else if *compile_native {
+                println!("🚀 Nyash AOT Compiler - Processing file: {} 🚀", filename);
+                self.execute_aot_mode(filename, output_file.as_deref());
+            } else if backend == "vm" {
+                println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
+                self.execute_vm_mode(filename);
+            } else if backend == "llvm" {
+                println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
+                self.execute_llvm_mode(filename);
+            } else {
+                println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
+                if let Some(fuel) = debug_fuel {
+                    println!("🔥 Debug fuel limit: {} iterations", fuel);
+                } else {
+                    println!("🔥 Debug fuel limit: unlimited");
+                }
+                println!("====================================================");
+                
+                self.execute_nyash_file(filename, *debug_fuel);
+            }
         }
     }
 
@@ -133,7 +229,7 @@ impl NyashRunner {
     }
 
     /// Execute Nyash file with interpreter
-    fn execute_nyash_file(&self, filename: &str) {
+    fn execute_nyash_file(&self, filename: &str, debug_fuel: Option<usize>) {
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,
@@ -151,8 +247,8 @@ impl NyashRunner {
         std::fs::write("development/debug_hang_issue/test.txt", "START").ok();
         
         // Parse the code with debug fuel limit
-        eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", self.config.debug_fuel);
-        let ast = match NyashParser::parse_from_string_with_fuel(&code, self.config.debug_fuel) {
+        eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", debug_fuel);
+        let ast = match NyashParser::parse_from_string_with_fuel(&code, debug_fuel) {
             Ok(ast) => {
                 eprintln!("🔍 DEBUG: Parse completed, AST created");
                 ast
@@ -197,7 +293,7 @@ impl NyashRunner {
     }
 
     /// Execute MIR compilation and processing mode
-    fn execute_mir_mode(&self, filename: &str) {
+    fn execute_mir_mode(&self, filename: &str, dump_mir: bool, verify_mir: bool, debug_fuel: Option<usize>) {
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,
@@ -227,7 +323,7 @@ impl NyashRunner {
         };
 
         // Verify MIR if requested
-        if self.config.verify_mir {
+        if verify_mir {
             println!("🔍 Verifying MIR...");
             match &compile_result.verification_result {
                 Ok(()) => println!("✅ MIR verification passed!"),
@@ -242,8 +338,15 @@ impl NyashRunner {
         }
 
         // Dump MIR if requested
-        if self.config.dump_mir {
-            let mut printer = if self.config.mir_verbose {
+        if dump_mir {
+            // Extract mir_verbose from the command if needed
+            let mir_verbose = if let crate::cli::NyashCommand::Run { mir_verbose, .. } = &self.config.command {
+                *mir_verbose
+            } else {
+                false
+            };
+            
+            let mut printer = if mir_verbose {
                 MirPrinter::verbose()
             } else {
                 MirPrinter::new()
@@ -299,7 +402,7 @@ impl NyashRunner {
     }
 
     /// Execute WASM compilation mode
-    fn execute_wasm_mode(&self, filename: &str) {
+    fn execute_wasm_mode(&self, filename: &str, output_file: Option<&str>) {
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,
@@ -339,7 +442,7 @@ impl NyashRunner {
         };
 
         // Determine output file
-        let output = self.config.output_file.as_deref()
+        let output = output_file
             .unwrap_or_else(|| {
                 if filename.ends_with(".nyash") {
                     filename.strip_suffix(".nyash").unwrap_or(filename)
@@ -365,7 +468,7 @@ impl NyashRunner {
     }
 
     /// Execute AOT compilation mode
-    fn execute_aot_mode(&self, filename: &str) {
+    fn execute_aot_mode(&self, filename: &str, output_file: Option<&str>) {
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,
@@ -403,7 +506,7 @@ impl NyashRunner {
             }
         };
 
-        let output = self.config.output_file.as_deref()
+        let output = output_file
             .unwrap_or_else(|| {
                 if filename.ends_with(".nyash") {
                     filename.strip_suffix(".nyash").unwrap_or(filename)
@@ -519,8 +622,8 @@ impl NyashRunner {
     }
 
     /// Execute benchmark mode
-    fn execute_benchmark_mode(&self) {
-        println!("🏁 Running benchmark mode with {} iterations", self.config.iterations);
+    fn execute_benchmark_mode(&self, iterations: u32) {
+        println!("🏁 Running benchmark mode with {} iterations", iterations);
         
         // Simple benchmark test file
         let test_code = r#"
@@ -537,7 +640,7 @@ impl NyashRunner {
         // Benchmark interpreter
         println!("\n⚡ Interpreter Backend:");
         let start = std::time::Instant::now();
-        for _ in 0..self.config.iterations {
+        for _ in 0..iterations {
             if let Ok(ast) = NyashParser::parse_from_string(test_code) {
                 let mut interpreter = NyashInterpreter::new();
                 let _ = interpreter.execute(ast);
@@ -545,13 +648,13 @@ impl NyashRunner {
         }
         let interpreter_time = start.elapsed();
         println!("  {} iterations in {:?} ({:.2} ops/sec)", 
-            self.config.iterations, interpreter_time, 
-            self.config.iterations as f64 / interpreter_time.as_secs_f64());
+            iterations, interpreter_time, 
+            iterations as f64 / interpreter_time.as_secs_f64());
 
         // Benchmark VM if available
         println!("\n🚀 VM Backend:");
         let start = std::time::Instant::now();
-        for _ in 0..self.config.iterations {
+        for _ in 0..iterations {
             if let Ok(ast) = NyashParser::parse_from_string(test_code) {
                 let mut mir_compiler = MirCompiler::new();
                 if let Ok(compile_result) = mir_compiler.compile(ast) {
@@ -562,8 +665,8 @@ impl NyashRunner {
         }
         let vm_time = start.elapsed();
         println!("  {} iterations in {:?} ({:.2} ops/sec)", 
-            self.config.iterations, vm_time, 
-            self.config.iterations as f64 / vm_time.as_secs_f64());
+            iterations, vm_time, 
+            iterations as f64 / vm_time.as_secs_f64());
 
         // Performance comparison
         let speedup = interpreter_time.as_secs_f64() / vm_time.as_secs_f64();
@@ -808,20 +911,29 @@ mod tests {
     #[test]
     fn test_runner_creation() {
         let config = CliConfig {
-            file: None,
-            debug_fuel: Some(100000),
-            dump_mir: false,
-            verify_mir: false,
-            mir_verbose: false,
-            backend: "interpreter".to_string(),
-            compile_wasm: false,
-            compile_native: false,
-            output_file: None,
-            benchmark: false,
-            iterations: 10,
+            command: crate::cli::NyashCommand::Run {
+                file: None,
+                debug_fuel: Some(100000),
+                dump_mir: false,
+                verify_mir: false,
+                mir_verbose: false,
+                backend: "interpreter".to_string(),
+                compile_wasm: false,
+                compile_native: false,
+                output_file: None,
+                benchmark: false,
+                iterations: 10,
+            },
         };
         
         let runner = NyashRunner::new(config);
-        assert_eq!(runner.config.backend, "interpreter");
+        
+        // Test that we can access the command structure
+        match &runner.config.command {
+            crate::cli::NyashCommand::Run { backend, .. } => {
+                assert_eq!(backend, "interpreter");
+            },
+            _ => panic!("Expected Run command"),
+        }
     }
 }
