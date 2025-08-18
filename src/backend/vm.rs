@@ -120,8 +120,8 @@ impl From<&ConstValue> for VMValue {
 
 /// Virtual Machine state
 pub struct VM {
-    /// Value storage (maps ValueId to actual values)
-    values: HashMap<ValueId, VMValue>,
+    /// Value storage (uses ValueId as direct index into Vec for O(1) access)
+    values: Vec<Option<VMValue>>,
     /// Current function being executed
     current_function: Option<String>,
     /// Current basic block
@@ -139,7 +139,7 @@ impl VM {
     /// Create a new VM instance
     pub fn new() -> Self {
         Self {
-            values: HashMap::new(),
+            values: Vec::new(),
             current_function: None,
             current_block: None,
             pc: 0,
@@ -214,7 +214,7 @@ impl VM {
         match instruction {
             MirInstruction::Const { dst, value } => {
                 let vm_value = VMValue::from(value);
-                self.values.insert(*dst, vm_value);
+                self.set_value(*dst, vm_value);
                 Ok(ControlFlow::Continue)
             },
             
@@ -222,14 +222,14 @@ impl VM {
                 let left = self.get_value(*lhs)?;
                 let right = self.get_value(*rhs)?;
                 let result = self.execute_binary_op(op, &left, &right)?;
-                self.values.insert(*dst, result);
+                self.set_value(*dst, result);
                 Ok(ControlFlow::Continue)
             },
             
             MirInstruction::UnaryOp { dst, op, operand } => {
                 let operand_val = self.get_value(*operand)?;
                 let result = self.execute_unary_op(op, &operand_val)?;
-                self.values.insert(*dst, result);
+                self.set_value(*dst, result);
                 Ok(ControlFlow::Continue)
             },
             
@@ -237,7 +237,7 @@ impl VM {
                 let left = self.get_value(*lhs)?;
                 let right = self.get_value(*rhs)?;
                 let result = self.execute_compare_op(op, &left, &right)?;
-                self.values.insert(*dst, VMValue::Bool(result));
+                self.set_value(*dst, VMValue::Bool(result));
                 Ok(ControlFlow::Continue)
             },
             
@@ -277,7 +277,7 @@ impl VM {
                 // In a real implementation, we'd need to track which block we came from
                 if let Some((_, value_id)) = inputs.first() {
                     let value = self.get_value(*value_id)?;
-                    self.values.insert(*dst, value);
+                    self.set_value(*dst, value);
                 }
                 Ok(ControlFlow::Continue)
             },
@@ -286,14 +286,14 @@ impl VM {
             MirInstruction::Load { dst, ptr } => {
                 // For now, loading is the same as getting the value
                 let value = self.get_value(*ptr)?;
-                self.values.insert(*dst, value);
+                self.set_value(*dst, value);
                 Ok(ControlFlow::Continue)
             },
             
             MirInstruction::Store { value, ptr } => {
                 // For now, storing just updates the ptr with the value
                 let val = self.get_value(*value)?;
-                self.values.insert(*ptr, val);
+                self.set_value(*ptr, val);
                 Ok(ControlFlow::Continue)
             },
             
@@ -301,7 +301,7 @@ impl VM {
                 // For now, function calls return void
                 // TODO: Implement proper function call handling
                 if let Some(dst_id) = dst {
-                    self.values.insert(*dst_id, VMValue::Void);
+                    self.set_value(*dst_id, VMValue::Void);
                 }
                 Ok(ControlFlow::Continue)
             },
@@ -324,7 +324,7 @@ impl VM {
                 // Store result if destination is specified
                 if let Some(dst_id) = dst {
                     let vm_result = VMValue::from_nyash_box(result);
-                    self.values.insert(*dst_id, vm_result);
+                    self.set_value(*dst_id, vm_result);
                 }
                 Ok(ControlFlow::Continue)
             },
@@ -358,14 +358,14 @@ impl VM {
                     }
                 };
                 
-                self.values.insert(*dst, result);
+                self.set_value(*dst, result);
                 Ok(ControlFlow::Continue)
             },
             
             MirInstruction::TypeCheck { dst, value: _, expected_type: _ } => {
                 // For now, type checks always return true
                 // TODO: Implement proper type checking
-                self.values.insert(*dst, VMValue::Bool(true));
+                self.set_value(*dst, VMValue::Bool(true));
                 Ok(ControlFlow::Continue)
             },
             
@@ -373,14 +373,14 @@ impl VM {
                 // For now, casting just copies the value
                 // TODO: Implement proper type casting
                 let val = self.get_value(*value)?;
-                self.values.insert(*dst, val);
+                self.set_value(*dst, val);
                 Ok(ControlFlow::Continue)
             },
             
             MirInstruction::ArrayGet { dst, array: _, index: _ } => {
                 // For now, array access returns a placeholder
                 // TODO: Implement proper array access
-                self.values.insert(*dst, VMValue::Integer(0));
+                self.set_value(*dst, VMValue::Integer(0));
                 Ok(ControlFlow::Continue)
             },
             
@@ -393,7 +393,7 @@ impl VM {
             MirInstruction::Copy { dst, src } => {
                 // Copy instruction - duplicate the source value
                 let val = self.get_value(*src)?;
-                self.values.insert(*dst, val);
+                self.set_value(*dst, val);
                 Ok(ControlFlow::Continue)
             },
             
@@ -419,7 +419,7 @@ impl VM {
             MirInstruction::Catch { exception_type: _, exception_value, handler_bb: _ } => {
                 // For now, catch is a no-op since we don't have full exception handling
                 // In a real implementation, this would set up exception handling metadata
-                self.values.insert(*exception_value, VMValue::Void);
+                self.set_value(*exception_value, VMValue::Void);
                 Ok(ControlFlow::Continue)
             },
             
@@ -434,7 +434,7 @@ impl VM {
                 // For now, a reference is just the same as the box value
                 // In a real implementation, this would create a proper reference
                 let box_value = self.get_value(*box_val)?;
-                self.values.insert(*dst, box_value);
+                self.set_value(*dst, box_value);
                 Ok(ControlFlow::Continue)
             },
             
@@ -452,7 +452,7 @@ impl VM {
                     VMValue::Integer(0)
                 };
                 
-                self.values.insert(*dst, field_value);
+                self.set_value(*dst, field_value);
                 Ok(ControlFlow::Continue)
             },
             
@@ -477,7 +477,7 @@ impl VM {
                 // For now, a weak reference is just a copy of the value
                 // In a real implementation, this would create a proper weak reference
                 let box_value = self.get_value(*box_val)?;
-                self.values.insert(*dst, box_value);
+                self.set_value(*dst, box_value);
                 Ok(ControlFlow::Continue)
             },
             
@@ -485,7 +485,7 @@ impl VM {
                 // For now, loading from weak ref is the same as getting the value
                 // In a real implementation, this would check if the weak ref is still valid
                 let weak_value = self.get_value(*weak_ref)?;
-                self.values.insert(*dst, weak_value);
+                self.set_value(*dst, weak_value);
                 Ok(ControlFlow::Continue)
             },
             
@@ -508,7 +508,7 @@ impl VM {
                 // Convert VMValue to NyashBox and set it in the future
                 let nyash_box = initial_value.to_nyash_box();
                 future.set_result(nyash_box);
-                self.values.insert(*dst, VMValue::Future(future));
+                self.set_value(*dst, VMValue::Future(future));
                 Ok(ControlFlow::Continue)
             },
             
@@ -532,7 +532,7 @@ impl VM {
                     let result = future_box.get();
                     // Convert NyashBox back to VMValue
                     let vm_value = VMValue::from_nyash_box(result);
-                    self.values.insert(*dst, vm_value);
+                    self.set_value(*dst, vm_value);
                     Ok(ControlFlow::Continue)
                 } else {
                     Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
@@ -564,7 +564,7 @@ impl VM {
                 
                 // Store void result if destination is provided
                 if let Some(dst) = dst {
-                    self.values.insert(*dst, VMValue::Void);
+                    self.set_value(*dst, VMValue::Void);
                 }
                 
                 Ok(ControlFlow::Continue)
@@ -574,9 +574,26 @@ impl VM {
     
     /// Get a value from storage
     fn get_value(&self, value_id: ValueId) -> Result<VMValue, VMError> {
-        self.values.get(&value_id)
-            .cloned()
-            .ok_or_else(|| VMError::InvalidValue(format!("Value {} not found", value_id)))
+        let index = value_id.to_usize();
+        if index < self.values.len() {
+            if let Some(ref value) = self.values[index] {
+                Ok(value.clone())
+            } else {
+                Err(VMError::InvalidValue(format!("Value {} not set", value_id)))
+            }
+        } else {
+            Err(VMError::InvalidValue(format!("Value {} out of bounds", value_id)))
+        }
+    }
+    
+    /// Set a value in the VM storage
+    fn set_value(&mut self, value_id: ValueId, value: VMValue) {
+        let index = value_id.to_usize();
+        // Resize Vec if necessary
+        if index >= self.values.len() {
+            self.values.resize(index + 1, None);
+        }
+        self.values[index] = Some(value);
     }
     
     /// Execute binary operation
@@ -817,8 +834,8 @@ mod tests {
         let mut vm = VM::new();
         
         // Load constants
-        vm.values.insert(ValueId(1), VMValue::Integer(10));
-        vm.values.insert(ValueId(2), VMValue::Integer(32));
+        vm.set_value(ValueId(1), VMValue::Integer(10));
+        vm.set_value(ValueId(2), VMValue::Integer(32));
         
         // Test addition
         let add_instr = MirInstruction::BinOp {
