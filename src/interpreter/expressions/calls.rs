@@ -255,10 +255,12 @@ impl NyashInterpreter {
             return self.execute_file_method(file_box, method, arguments);
         }
         
+        /* legacy - PluginFileBox専用
         // PluginFileBox method calls (BID-FFI system)
         if let Some(plugin_file_box) = obj_value.as_any().downcast_ref::<crate::bid::plugin_box::PluginFileBox>() {
             return self.execute_plugin_file_method(plugin_file_box, method, arguments);
         }
+        */
         
         // ResultBox method calls
         if let Some(result_box) = obj_value.as_any().downcast_ref::<crate::box_trait::ResultBox>() {

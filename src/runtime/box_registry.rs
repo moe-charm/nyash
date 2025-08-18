@@ -75,26 +75,11 @@ impl BoxFactoryRegistry {
         }
     }
     
-    /// プラグインBoxを生成（内部使用）
+    /// プラグインBoxを生成（v2への移行中の一時的スタブ）
     fn create_plugin_box(&self, plugin_name: &str, box_name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String> {
-        use crate::runtime::{get_global_loader, PluginBox};
-        use crate::bid::{BidHandle, BoxTypeId};
-        
-        let loader = get_global_loader();
-        
-        // プラグインの"new"メソッドを呼び出してハンドルを取得
-        // TODO: 引数をBID-1 TLVでエンコードして渡す
-        let type_id = match box_name {
-            "FileBox" => BoxTypeId::FileBox as u32,
-            "StringBox" => BoxTypeId::StringBox as u32,
-            _ => return Err(format!("Unknown plugin box type: {}", box_name)),
-        };
-        
-        // とりあえずダミーハンドルで作成（実際は"new"メソッド呼び出し結果を使用）
-        let handle = BidHandle::new(type_id, 1); // TODO: 実際のinstance_id取得
-        
-        // PluginBoxプロキシを作成
-        Ok(Box::new(PluginBox::new(plugin_name.to_string(), handle)))
+        // TODO: v2プラグインシステムへの実装
+        // 現在は一時的にエラーを返す
+        Err(format!("Plugin system v2 migration in progress. Cannot create {} from plugin {}", box_name, plugin_name))
     }
 }
 

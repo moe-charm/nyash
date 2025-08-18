@@ -10,7 +10,7 @@
 use super::super::*;
 use crate::box_trait::{ResultBox, StringBox, NyashBox};
 use crate::boxes::FileBox;
-use crate::bid::plugin_box::PluginFileBox;
+// use crate::bid::plugin_box::PluginFileBox;  // legacy - FileBox専用
 
 impl NyashInterpreter {
     /// FileBoxのメソッド呼び出しを実行
@@ -107,6 +107,7 @@ impl NyashInterpreter {
         }
     }
 
+    /* legacy - PluginFileBox専用
     /// 汎用プラグインメソッド呼び出し実行 (BID-FFI system)
     /// Handles generic plugin method calls via dynamic method discovery
     pub(in crate::interpreter) fn execute_plugin_method_generic(&mut self, plugin_box: &PluginFileBox, method: &str, arguments: &[ASTNode]) 
@@ -329,7 +330,9 @@ impl NyashInterpreter {
             Ok(Box::new(StringBox::new("".to_string())))
         }
     }
+    */
 
+    /* legacy - PluginFileBox専用
     /// PluginFileBoxのメソッド呼び出しを実行 (BID-FFI system) - LEGACY HARDCODED VERSION
     /// Handles plugin-backed file I/O operations via FFI interface
     /// 🚨 DEPRECATED: This method has hardcoded method names and violates BID-FFI principles
@@ -339,4 +342,5 @@ impl NyashInterpreter {
         // 🎯 新しい汎用システムにリダイレクト
         self.execute_plugin_method_generic(plugin_file_box, method, arguments)
     }
+    */
 }

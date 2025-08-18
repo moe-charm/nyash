@@ -10,7 +10,7 @@ pub mod bridge;
 pub mod plugins;
 pub mod loader;
 pub mod registry;
-pub mod plugin_box;
+// pub mod plugin_box;  // legacy - FileBox専用実装
 pub mod generic_plugin_box;
 
 pub use types::*;
@@ -21,7 +21,7 @@ pub use plugin_api::*;
 pub use bridge::*;
 pub use loader::*;
 pub use registry::*;
-pub use plugin_box::*;
+// pub use plugin_box::*;  // legacy
 pub use generic_plugin_box::*;
 
 /// BID-1 version constant
