@@ -3,35 +3,17 @@ name = "nyash-filebox-plugin"
 version = "0.1.0"
 edition = "2021"
 
-# 独立プラグインとして設定
-[workspace]
-
 [lib]
-name = "nyash_filebox_plugin"
-crate-type = ["cdylib"]  # 動的ライブラリ生成
+crate-type = ["cdylib"]  # 動的ライブラリとしてビルド
 
 [dependencies]
-# BID-FFI基盤
-libc = "0.2"
-once_cell = "1.19"
-
-# 簡単なError処理
-thiserror = "1.0"
-
-# ログ（デバッグ用）
-log = { version = "0.4", optional = true }
+# 最小限の依存関係のみ
 
 [features]
 default = []
-debug = ["log"]
 
+# プロファイル設定
 [profile.release]
-# プラグイン最適化
-opt-level = 3
 lto = true
-codegen-units = 1
-panic = "abort"
-
-[package.metadata]
-description = "Nyash FileBox Plugin - BID-FFI Reference Implementation"
-license = "MIT"
+strip = true
+opt-level = "z"  # サイズ最適化

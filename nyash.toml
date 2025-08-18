@@ -1,0 +1,19 @@
+# Nyash Configuration File
+# プラグインによるBox実装の置き換え設定
+
+[plugins]
+# FileBoxをプラグイン版に置き換え
+FileBox = "nyash-filebox-plugin"
+
+# 他のBoxはビルトインを使用（コメントアウト = ビルトイン）
+# StringBox = "my-string-plugin"
+# IntegerBox = "my-integer-plugin"
+
+[plugin_paths]
+# プラグインの検索パス（デフォルト）
+search_paths = [
+    "./plugins/*/target/release",
+    "./plugins/*/target/debug",
+    "/usr/local/lib/nyash/plugins",
+    "~/.nyash/plugins"
+]
