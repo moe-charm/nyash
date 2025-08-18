@@ -112,7 +112,7 @@ $ ./target/debug/nyash local_tests/test_plugin_filebox.nyash
 - ✅ libloadingプラグイン動的ロード基盤
 - ✅ **プラグインシステム統合テスト（14/14合格！）** 🎉
 
-### 🎯 **Day 5 一時中断** (2025-08-18)
+### ✅ **Day 5 完了！** (2025-08-18)
 **目標**: 実際のプラグインライブラリ作成と統合
 
 **実装戦略**:
@@ -125,25 +125,34 @@ $ ./target/debug/nyash local_tests/test_plugin_filebox.nyash
 - ✅ C API実装とエクスポート（libnyash_filebox_plugin.so生成）
 - ✅ Nyashインタープリターのプラグインロード統合
 - ✅ 透過的切り替え実動作確認（PluginBox生成確認）
+- ✅ **プラグインメソッド呼び出し実装** - execute_plugin_file_method
+- ✅ **完全動作確認** - `f.write()`, `f.read()` 完全成功
 
-**中断理由**: 
-- 🚨 **古いプラグインシステムのコードが混在していた**
-- 🔧 ソースコードをcommit 3f7d71f（古いプラグイン実装前）に巻き戻し
-- 📚 docsフォルダは最新状態を維持
-- ✅ nyashバイナリの基本動作確認完了
+**重要な発見と対応**:
+- 🔍 **セグフォルト調査**: 実際はセグフォルトではなく型エラーが原因
+- 🎯 **真の問題**: PluginFileBoxのメソッド呼び出し処理が未実装
+- ✅ **解決**: calls.rsにPluginFileBox処理追加、io_methods.rsに実装
 
-**再開時の作業**:
-- ⏳ BID-FFIシステムをクリーンに再実装
-- ⏳ PluginBoxのtoString等メソッド実装
-- ⏳ 実際のファイル操作メソッド（open/read/write）動作確認
+**Day 5 最終テスト結果**:
+```bash
+$ ./target/release/nyash local_tests/test_plugin_filebox.nyash
+READ=Hello from Nyash via plugin!
+✅ Execution completed successfully!
+```
+
+**🚨 発見した設計課題（Day 6対応予定）**:
+- **問題**: メソッド名がハードコード（read/write/exists/close）
+- **課題**: プラグインからメソッド情報を動的取得すべき
+- **目標**: 汎用的なプラグインメソッド呼び出しシステム実装
 
 ### 🎯 今週の実装計画（段階的戦略に更新）
 - **Day 1**: ✅ BID-1基盤実装（TLV仕様、Handle構造体、エンコード/デコード）
 - **Day 2**: ✅ メタデータAPI実装（init/abi/shutdown、HostVtable、レジストリ）
 - **Day 3**: ✅ 既存Box統合（StringBox/IntegerBox/FutureBoxブリッジ）**100%完了！**
 - **Day 4**: ✅ プラグインシステム基盤（nyash.toml、PluginBox、BoxFactory）**100%完了！**
-- **Day 5**: ⏳ 実際のプラグインライブラリ作成（.so/.dll、Nyash統合）**進行中！**
-- **Day 6-7**: 実動作実証とドキュメント（透過的切り替え、開発ガイド）
+- **Day 5**: ✅ 実際のプラグインライブラリ作成（.so/.dll、Nyash統合）**完了！**
+- **Day 6**: 🎯 動的メソッド呼び出しシステム実装（メソッド名脱ハードコード）
+- **Day 7**: 実動作実証とドキュメント（透過的切り替え、開発ガイド）
 
 ### 🔑 技術的決定事項
 - ポインタ: `usize`（プラットフォーム依存）
@@ -338,14 +347,30 @@ $ plugin-tester lifecycle libnyash_filebox_plugin.so
 ✓: fini  → instance 1 cleaned
 ```
 
-## 🎯 次アクション（Phase 9.75g-1 続き）
+## 🎯 **次アクション（Day 6: 動的メソッド呼び出し革命）**
 
-1. Nyash起動時に `nyash.toml` を読み、プラグインレジストリ初期化（Runnerに最小結線）
-2. `new FileBox(...)` の作成経路に、プラグイン版を優先する分岐を暫定追加
-3. TLVで `open/read/write/close` をtester側に追加して先にE2E検証を強化
-4. PluginBoxにメソッド転送（TLV encode/decode）を実装し、Nyash本体から呼べる形に拡張
+### 🚨 **緊急課題**: メソッド名脱ハードコード化
+現在の実装は `read/write/exists/close` がソースコードに決め打ちされており、BID-FFI理念に反している。
 
-必要なら、この順で段階的にPRを分ける。
+### 🎯 **Day 6 実装計画**
+1. **プラグインメタデータからメソッド情報取得**
+   - プラグインが持つメソッド一覧を動的に取得
+   - メソッドID・シグネチャ・引数情報の活用
+
+2. **汎用プラグインメソッド呼び出しシステム**
+   - `execute_plugin_file_method` → `execute_plugin_method_generic`
+   - Box型特化処理の廃止
+   - TLVエンコード/デコードの汎用化
+
+3. **完全動的システム実現**
+   - 新しいプラグインBox追加時のソースコード修正不要
+   - nyash.tomlでの設定のみで新Box型対応
+
+### 🔧 **実装順序**
+1. プラグインメタデータ取得API強化
+2. 汎用メソッド呼び出し処理実装
+3. 既存execute_plugin_file_method置き換え
+4. テスト・動作確認
 ```
 
 ### 重要な技術的決定
