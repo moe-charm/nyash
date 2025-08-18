@@ -1,0 +1,29 @@
+# Test Configuration for plugin-tester
+# Valid TOML structure
+
+# Plugin name mappings (simple version)
+[plugin_names]
+FileBox = "nyash-filebox-plugin"
+
+# Plugin configurations with method type information
+[plugins.FileBox]
+plugin_name = "nyash-filebox-plugin"
+
+[plugins.FileBox.methods]
+# readは引数なし
+read = { args = [] }
+
+# writeは文字列をbytesとして送る
+write = { args = [{ from = "string", to = "bytes" }] }
+
+# openは2つの文字列引数
+open = { args = [
+    { name = "path", from = "string", to = "string" },
+    { name = "mode", from = "string", to = "string" }
+] }
+
+# closeは引数なし、戻り値なし
+close = { args = [] }
+
+# existsは引数なし、戻り値はbool（将来拡張）
+exists = { args = [], returns = "bool" }

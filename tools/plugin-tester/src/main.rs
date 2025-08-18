@@ -6,7 +6,10 @@
 use clap::Parser;
 use colored::*;
 use libloading::{Library, Symbol};
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+use std::fs;
 use std::os::raw::{c_char, c_void};
 use std::path::PathBuf;
 use std::io::Write;
@@ -34,6 +37,32 @@ pub struct NyashPluginInfo {
     pub type_name: *const c_char,
     pub method_count: usize,
     pub methods: *const NyashMethodInfo,
+}
+
+// ============ TOML Configuration Types ============
+
+#[derive(Debug)]
+struct NyashConfig {
+    plugins: HashMap<String, String>,
+    plugin_configs: HashMap<String, PluginConfig>,
+}
+
+#[derive(Debug)]
+struct PluginConfig {
+    methods: Option<HashMap<String, MethodConfig>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct MethodConfig {
+    args: Vec<TypeConversion>,
+    returns: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+struct TypeConversion {
+    name: Option<String>,
+    from: String,
+    to: String,
 }
 
 // ============ CLI Arguments ============
@@ -131,6 +160,7 @@ fn main() {
         Commands::Lifecycle { plugin } => test_lifecycle(&plugin),
         Commands::Io { plugin } => test_file_io(&plugin),
         Commands::TlvDebug { plugin, message } => test_tlv_debug(&plugin, &message),
+        Commands::Typecheck { plugin, config } => typecheck_plugin(&plugin, &config),
     }
 }
 
@@ -673,5 +703,318 @@ fn test_tlv_debug(path: &PathBuf, message: &str) {
         
         shutdown();
         println!("\n{}", "TLV Debug test completed!".green().bold());
+    }
+}
+
+fn typecheck_plugin(plugin_path: &PathBuf, config_path: &PathBuf) {
+    println!("{}", "=== Type Information Validation ===".bold());
+    println!("Plugin: {}", plugin_path.display());
+    println!("Config: {}", config_path.display());
+    
+    // Load and parse configuration
+    let config = match load_nyash_config(config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}: Failed to load configuration: {}", "ERROR".red(), e);
+            return;
+        }
+    };
+    
+    // Load plugin
+    let library = match unsafe { Library::new(plugin_path) } {
+        Ok(lib) => lib,
+        Err(e) => {
+            eprintln!("{}: Failed to load plugin: {}", "ERROR".red(), e);
+            return;
+        }
+    };
+    
+    unsafe {
+        // ABI version check
+        let abi_fn: Symbol<unsafe extern "C" fn() -> u32> = match library.get(b"nyash_plugin_abi") {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("{}: nyash_plugin_abi not found: {}", "ERROR".red(), e);
+                return;
+            }
+        };
+        let abi_version = abi_fn();
+        println!("{}: ABI version: {}", "✓".green(), abi_version);
+        
+        // Initialize plugin
+        let init_fn: Symbol<unsafe extern "C" fn(*const NyashHostVtable, *mut NyashPluginInfo) -> i32> = 
+            match library.get(b"nyash_plugin_init") {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("{}: nyash_plugin_init not found: {}", "ERROR".red(), e);
+                    return;
+                }
+            };
+        
+        let mut plugin_info = std::mem::zeroed::<NyashPluginInfo>();
+        let result = init_fn(&HOST_VTABLE, &mut plugin_info);
+        
+        if result != 0 {
+            eprintln!("{}: nyash_plugin_init failed with code {}", "ERROR".red(), result);
+            return;
+        }
+        
+        // Get Box type name from plugin
+        let box_name = if plugin_info.type_name.is_null() {
+            eprintln!("{}: Plugin did not provide type name", "ERROR".red());
+            return;
+        } else {
+            CStr::from_ptr(plugin_info.type_name).to_string_lossy().to_string()
+        };
+        
+        println!("{}: Plugin Box type: {}", "✓".green(), box_name.cyan());
+        
+        // Validate type configuration
+        validate_type_configuration(&config, &box_name, &plugin_info);
+        
+        // Validate method signatures
+        validate_method_signatures(&config, &box_name, &plugin_info);
+        
+        // Check for duplicate method names (Nyash doesn't support overloading)
+        check_duplicate_methods(&plugin_info);
+        
+        // Shutdown plugin
+        if let Ok(shutdown_fn) = library.get::<Symbol<unsafe extern "C" fn()>>(b"nyash_plugin_shutdown") {
+            shutdown_fn();
+            println!("{}: Plugin shutdown completed", "✓".green());
+        }
+    }
+    
+    println!("\n{}", "Type validation completed!".green().bold());
+}
+
+fn load_nyash_config(config_path: &PathBuf) -> Result<NyashConfig, Box<dyn std::error::Error>> {
+    let config_content = fs::read_to_string(config_path)?;
+    let config: toml::Value = toml::from_str(&config_content)?;
+    
+    let mut plugin_map = HashMap::new();
+    let mut plugin_configs = HashMap::new();
+    
+    if let Some(config_table) = config.as_table() {
+        
+        // Parse [plugin_names] section (alternative structure)
+        if let Some(plugin_names) = config_table.get("plugin_names").and_then(|p| p.as_table()) {
+            for (box_type, plugin_name) in plugin_names {
+                if let Some(name) = plugin_name.as_str() {
+                    plugin_map.insert(box_type.clone(), name.to_string());
+                }
+            }
+        }
+        
+        // Parse [plugins] section for both mappings and nested configs
+        if let Some(plugins) = config_table.get("plugins").and_then(|p| p.as_table()) {
+            for (box_type, value) in plugins {
+                if let Some(name) = value.as_str() {
+                    // Simple string mapping: FileBox = "plugin-name"
+                    plugin_map.insert(box_type.clone(), name.to_string());
+                } else if let Some(nested) = value.as_table() {
+                    // Nested table structure: [plugins.FileBox]
+                    if let Some(plugin_name) = nested.get("plugin_name").and_then(|n| n.as_str()) {
+                        plugin_map.insert(box_type.clone(), plugin_name.to_string());
+                    }
+                    
+                    if let Some(methods_table) = nested.get("methods").and_then(|m| m.as_table()) {
+                        let method_configs = parse_methods_table(methods_table)?;
+                        plugin_configs.insert(
+                            format!("plugins.{}", box_type),
+                            PluginConfig { methods: Some(method_configs) }
+                        );
+                    }
+                }
+            }
+        }
+        
+        // Also handle the problematic current structure by manual parsing
+        // This is a workaround for the TOML structure issue
+        for (section_name, section_value) in config_table {
+            if section_name.starts_with("plugins.") && section_name.contains(".methods") {
+                if let Some(methods_table) = section_value.as_table() {
+                    let box_type_part = section_name.replace("plugins.", "").replace(".methods", "");
+                    let method_configs = parse_methods_table(methods_table)?;
+                    plugin_configs.insert(
+                        format!("plugins.{}", box_type_part),
+                        PluginConfig { methods: Some(method_configs) }
+                    );
+                }
+            }
+        }
+    }
+    
+    Ok(NyashConfig {
+        plugins: plugin_map,
+        plugin_configs,
+    })
+}
+
+fn parse_methods_table(methods_table: &toml::map::Map<String, toml::Value>) -> Result<HashMap<String, MethodConfig>, Box<dyn std::error::Error>> {
+    let mut method_configs = HashMap::new();
+    
+    for (method_name, method_value) in methods_table {
+        if let Some(method_table) = method_value.as_table() {
+            let mut args = Vec::new();
+            let mut returns = None;
+            
+            // Parse args array
+            if let Some(args_array) = method_table.get("args").and_then(|v| v.as_array()) {
+                for arg_value in args_array {
+                    if let Some(arg_table) = arg_value.as_table() {
+                        let from = arg_table.get("from")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let to = arg_table.get("to")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let name = arg_table.get("name")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        
+                        args.push(TypeConversion { from, to, name });
+                    }
+                }
+            }
+            
+            // Parse returns field
+            if let Some(returns_str) = method_table.get("returns").and_then(|v| v.as_str()) {
+                returns = Some(returns_str.to_string());
+            }
+            
+            method_configs.insert(method_name.clone(), MethodConfig { args, returns });
+        }
+    }
+    
+    Ok(method_configs)
+}
+
+fn validate_type_configuration(config: &NyashConfig, box_name: &str, plugin_info: &NyashPluginInfo) {
+    println!("\n{}", "--- Type Configuration Validation ---".cyan());
+    
+    // Check if this Box type is configured in nyash.toml
+    if let Some(plugin_name) = config.plugins.get(box_name) {
+        println!("{}: Box type '{}' is configured to use plugin '{}'", 
+                 "✓".green(), box_name, plugin_name);
+    } else {
+        println!("{}: Box type '{}' is not configured in nyash.toml", 
+                 "WARNING".yellow(), box_name);
+        println!("  Consider adding: {} = \"plugin-name\"", box_name);
+    }
+    
+    // Check if method configuration exists
+    let config_key = format!("plugins.{}", box_name);
+    if let Some(plugin_config) = config.plugin_configs.get(&config_key) {
+        if let Some(methods) = &plugin_config.methods {
+            println!("{}: Found method configuration for {} methods", 
+                     "✓".green(), methods.len());
+        } else {
+            println!("{}: No method configuration found for {}", 
+                     "WARNING".yellow(), box_name);
+        }
+    } else {
+        println!("{}: No method configuration section [plugins.{}.methods] found", 
+                 "WARNING".yellow(), box_name);
+    }
+}
+
+fn validate_method_signatures(config: &NyashConfig, box_name: &str, plugin_info: &NyashPluginInfo) {
+    println!("\n{}", "--- Method Signature Validation ---".cyan());
+    
+    if plugin_info.method_count == 0 || plugin_info.methods.is_null() {
+        println!("{}: Plugin has no methods to validate", "INFO".blue());
+        return;
+    }
+    
+    let config_key = format!("plugins.{}", box_name);
+    let plugin_config = config.plugin_configs.get(&config_key);
+    let method_configs = plugin_config.and_then(|c| c.methods.as_ref());
+    
+    unsafe {
+        let methods = std::slice::from_raw_parts(plugin_info.methods, plugin_info.method_count);
+        
+        for method in methods {
+            let method_name = if method.name.is_null() {
+                "<unnamed>".to_string()
+            } else {
+                CStr::from_ptr(method.name).to_string_lossy().to_string()
+            };
+            
+            println!("Validating method: {}", method_name.cyan());
+            
+            // Check if method is configured
+            if let Some(configs) = method_configs {
+                if let Some(method_config) = configs.get(&method_name) {
+                    println!("  {}: Method configuration found", "✓".green());
+                    
+                    // Validate argument types
+                    if method_config.args.is_empty() {
+                        println!("  {}: No arguments configured", "✓".green());
+                    } else {
+                        println!("  {}: {} argument(s) configured", "✓".green(), method_config.args.len());
+                        for (i, arg) in method_config.args.iter().enumerate() {
+                            println!("    Arg {}: {} → {}", i, arg.from, arg.to);
+                            if let Some(name) = &arg.name {
+                                println!("      Name: {}", name);
+                            }
+                        }
+                    }
+                    
+                    // Validate return type
+                    if let Some(returns) = &method_config.returns {
+                        println!("  {}: Return type: {}", "✓".green(), returns);
+                    }
+                } else {
+                    println!("  {}: Method not configured in nyash.toml", "WARNING".yellow());
+                    println!("    Consider adding configuration for method '{}'", method_name);
+                }
+            } else {
+                println!("  {}: No method configurations available", "WARNING".yellow());
+            }
+        }
+    }
+}
+
+fn check_duplicate_methods(plugin_info: &NyashPluginInfo) {
+    println!("\n{}", "--- Duplicate Method Check ---".cyan());
+    
+    if plugin_info.method_count == 0 || plugin_info.methods.is_null() {
+        println!("{}: Plugin has no methods to check", "INFO".blue());
+        return;
+    }
+    
+    let mut method_names = HashMap::new();
+    let mut duplicates_found = false;
+    
+    unsafe {
+        let methods = std::slice::from_raw_parts(plugin_info.methods, plugin_info.method_count);
+        
+        for method in methods {
+            let method_name = if method.name.is_null() {
+                "<unnamed>".to_string()
+            } else {
+                CStr::from_ptr(method.name).to_string_lossy().to_string()
+            };
+            
+            if let Some(existing_id) = method_names.get(&method_name) {
+                println!("{}: Duplicate method name '{}' found!", "ERROR".red(), method_name);
+                println!("  Method ID {} and {} both use the same name", existing_id, method.method_id);
+                println!("  Nyash does not support function overloading");
+                duplicates_found = true;
+            } else {
+                method_names.insert(method_name.clone(), method.method_id);
+                println!("{}: Method '{}' [ID: {}]", "✓".green(), method_name, method.method_id);
+            }
+        }
+    }
+    
+    if duplicates_found {
+        println!("\n{}: Duplicate method names detected!", "ERROR".red());
+        println!("  Please ensure all method names are unique in your plugin.");
+    } else {
+        println!("\n{}: No duplicate method names found", "✓".green());
     }
 }
