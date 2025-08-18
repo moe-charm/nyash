@@ -20,8 +20,8 @@ use crate::{
 use crate::backend::{llvm_compile_and_execute};
 use std::{fs, process};
 
-// BID prototype imports
-use crate::bid::{PluginRegistry, PluginBoxInstance};
+// v2 plugin system imports
+use crate::runtime::init_global_loader_v2;
 
 /// Main execution coordinator
 pub struct NyashRunner {
@@ -58,18 +58,34 @@ impl NyashRunner {
 
     fn init_bid_plugins(&self) {
         // Best-effort init; do not fail the program if missing
-        eprintln!("🔍 DEBUG: init_bid_plugins called");
-        if let Ok(()) = crate::bid::registry::init_global_from_config("nyash.toml") {
-            let reg = crate::bid::registry::global().unwrap();
-            // If FileBox plugin is present, try a birth/fini cycle as a smoke test
-            if let Some(plugin) = reg.get_by_name("FileBox") {
-                if let Ok(inst) = PluginBoxInstance::birth(plugin) {
-                    println!("🔌 BID plugin loaded: FileBox (instance_id={})", inst.instance_id);
-                    // Drop will call fini
-                    return;
+        eprintln!("🔍 DEBUG: Initializing v2 plugin system");
+        
+        // Try to load nyash.toml configuration
+        if let Ok(()) = init_global_loader_v2("nyash.toml") {
+            println!("🔌 v2 plugin system initialized from nyash.toml");
+            
+            // Apply plugin configuration to the box registry
+            use crate::runtime::{get_global_registry, get_global_loader_v2};
+            
+            let loader = get_global_loader_v2();
+            let loader = loader.read().unwrap();
+            
+            if let Some(config) = &loader.config {
+                // Register plugin providers in the box registry
+                let registry = get_global_registry();
+                
+                for (lib_name, lib_def) in &config.libraries {
+                    for box_name in &lib_def.boxes {
+                        eprintln!("  📦 Registering plugin provider for {}", box_name);
+                        // Note: plugin_name is lib_name in v2 system
+                        registry.apply_plugin_config(&crate::runtime::PluginConfig {
+                            plugins: [(box_name.clone(), lib_name.clone())].into(),
+                        });
+                    }
                 }
             }
-            println!("🔌 BID registry initialized");
+        } else {
+            eprintln!("⚠️ Failed to load nyash.toml - plugins disabled");
         }
     }
 

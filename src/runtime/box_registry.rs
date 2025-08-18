@@ -75,11 +75,17 @@ impl BoxFactoryRegistry {
         }
     }
     
-    /// プラグインBoxを生成（v2への移行中の一時的スタブ）
+    /// プラグインBoxを生成（v2実装）
     fn create_plugin_box(&self, plugin_name: &str, box_name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String> {
-        // TODO: v2プラグインシステムへの実装
-        // 現在は一時的にエラーを返す
-        Err(format!("Plugin system v2 migration in progress. Cannot create {} from plugin {}", box_name, plugin_name))
+        use crate::runtime::get_global_loader_v2;
+        
+        // v2ローダーを取得
+        let loader = get_global_loader_v2();
+        let loader = loader.read().unwrap();
+        
+        // プラグインからBoxを生成
+        loader.create_box(box_name, args)
+            .map_err(|e| format!("Failed to create {} from plugin {}: {:?}", box_name, plugin_name, e))
     }
 }
 
