@@ -1,0 +1,6 @@
+local file
+file = new FileBox()
+file.open("test.txt", "w")
+file.write("Hello nyash.toml\!")
+file.close()
+print("FileBox test completed\!")

@@ -3,35 +3,30 @@
 
 [plugins]
 # FileBoxをプラグイン版に置き換え
-FileBox = "nyash-filebox-plugin"
+FileBox = "./target/release/libnyash_filebox_plugin.so"
 
 # 他のBoxはビルトインを使用（コメントアウト = ビルトイン）
 # StringBox = "my-string-plugin"
 # IntegerBox = "my-integer-plugin"
 
-# FileBoxの型情報定義
+# FileBoxの型情報定義（Single Source of Truth）
+[plugins.FileBox]
+type_id = 6
+
 [plugins.FileBox.methods]
-# readは引数なし
-read = { args = [] }
-
-# writeは文字列をbytesとして送る
-write = { args = [{ from = "string", to = "bytes" }] }
-
-# openは2つの文字列引数
-open = { args = [
-    { name = "path", from = "string", to = "string" },
-    { name = "mode", from = "string", to = "string" }
-] }
-
-# closeは引数なし、戻り値なし
-close = { args = [] }
-
-# existsは引数なし、戻り値はbool（将来拡張）
-exists = { args = [], returns = "bool" }
+# 全メソッドをmethod_idと共に定義
+birth = { method_id = 0, args = [] }
+open = { method_id = 1, args = ["path", "mode"] }
+read = { method_id = 2, args = [] }
+write = { method_id = 3, args = ["data"] }
+close = { method_id = 4, args = [] }
+fini = { method_id = 4294967295, args = [] }
 
 [plugin_paths]
 # プラグインの検索パス（デフォルト）
 search_paths = [
+    "./target/release",
+    "./target/debug",
     "./plugins/*/target/release",
     "./plugins/*/target/debug",
     "/usr/local/lib/nyash/plugins",

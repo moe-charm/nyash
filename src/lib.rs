@@ -45,6 +45,12 @@ pub mod benchmarks;
 // BID-FFI / Plugin system (prototype)
 pub mod bid;
 
+// Configuration system
+pub mod config;
+
+// Runtime system (plugins, registry, etc.)
+pub mod runtime;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
 

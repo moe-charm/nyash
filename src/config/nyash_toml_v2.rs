@@ -8,24 +8,28 @@ use std::collections::HashMap;
 /// Root configuration structure
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NyashConfigV2 {
-    /// Legacy single-box plugins (for backward compatibility)
+    /// Plugins section (contains both legacy and new format)
     #[serde(default)]
-    pub plugins: HashMap<String, String>,
-    
-    /// Plugin-specific configurations (legacy)
+    pub plugins: PluginsSection,
+}
+
+/// Plugins section (both legacy and v2)
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct PluginsSection {
+    /// Legacy single-box plugins (box_name -> plugin_name)
     #[serde(flatten)]
-    pub plugin_configs: HashMap<String, toml::Value>,
+    pub legacy_plugins: HashMap<String, String>,
     
     /// New multi-box plugin libraries
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub libraries: Option<PluginLibraries>,
+    pub libraries: Option<HashMap<String, LibraryDefinition>>,
     
     /// Box type definitions
     #[serde(skip_serializing_if = "Option::is_none")]
     pub types: Option<HashMap<String, BoxTypeDefinition>>,
 }
 
-/// Plugin libraries section
+/// Plugin libraries section (not used in new structure)
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PluginLibraries {
     #[serde(flatten)]
@@ -77,13 +81,13 @@ impl NyashConfigV2 {
     
     /// Check if using v2 format
     pub fn is_v2_format(&self) -> bool {
-        self.libraries.is_some() || self.types.is_some()
+        self.plugins.libraries.is_some() || self.plugins.types.is_some()
     }
     
     /// Get all box types provided by a library
     pub fn get_box_types_for_library(&self, library_name: &str) -> Vec<String> {
-        if let Some(libs) = &self.libraries {
-            if let Some(lib_def) = libs.libraries.get(library_name) {
+        if let Some(libs) = &self.plugins.libraries {
+            if let Some(lib_def) = libs.get(library_name) {
                 return lib_def.provides.clone();
             }
         }
@@ -93,14 +97,19 @@ impl NyashConfigV2 {
     /// Get library name for a box type
     pub fn get_library_for_box_type(&self, box_type: &str) -> Option<String> {
         // Check v2 format first
-        if let Some(types) = &self.types {
+        if let Some(types) = &self.plugins.types {
             if let Some(type_def) = types.get(box_type) {
                 return Some(type_def.library.clone());
             }
         }
         
         // Fall back to legacy format
-        self.plugins.get(box_type).cloned()
+        self.plugins.legacy_plugins.get(box_type).cloned()
+    }
+    
+    /// Access legacy plugins directly (for backward compatibility)
+    pub fn get_legacy_plugins(&self) -> &HashMap<String, String> {
+        &self.plugins.legacy_plugins
     }
 }
 

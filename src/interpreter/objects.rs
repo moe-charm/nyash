@@ -87,35 +87,6 @@ impl NyashInterpreter {
                 // 🌍 革命的実装：Environment tracking廃止
                 return Ok(array_box);
             }
-            "FileBox" => {
-                // FileBoxは引数1個（ファイルパス）で作成
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("FileBox constructor expects 1 argument, got {}", arguments.len()),
-                    });
-                }
-                let path_value = self.execute_expression(&arguments[0])?;
-                let path_str = if let Some(s) = path_value.as_any().downcast_ref::<StringBox>() {
-                    s.value.clone()
-                } else {
-                    return Err(RuntimeError::TypeError { message: "FileBox constructor requires string path argument".to_string() });
-                };
-
-                // プラグイン優先（nyash.tomlに設定がある場合）
-                if let Some(reg) = crate::bid::registry::global() {
-                    if let Some(plugin) = reg.get_by_name("FileBox") {
-                        if let Ok(p) = crate::bid::plugin_box::PluginFileBox::new(plugin, path_str.clone()) {
-                            return Ok(Box::new(p) as Box<dyn NyashBox>);
-                        }
-                    }
-                }
-
-                // フォールバック: ビルトインFileBox
-                return match crate::boxes::file::FileBox::open(&path_str) {
-                    Ok(fb) => Ok(Box::new(fb) as Box<dyn NyashBox>),
-                    Err(e) => Err(RuntimeError::InvalidOperation { message: format!("Failed to open file '{}': {}", path_str, e) }),
-                };
-            }
             "ResultBox" => {
                 // ResultBoxは引数1個（成功値）で作成
                 if arguments.len() != 1 {
@@ -669,28 +640,70 @@ impl NyashInterpreter {
             });
         }
         
-        // ユーザー定義Box宣言を探す
-        let box_decl = {
-            let box_decls = self.shared.box_declarations.read().unwrap();
-            box_decls.get(class)
-                .ok_or(RuntimeError::UndefinedClass { name: class.to_string() })?
-                .clone()
+        // 🚀 プラグインレジストリをチェック（nyash.tomlから動的）
+        let plugin_exists = if let Some(reg) = crate::bid::registry::global() {
+            reg.get_by_name(class).is_some()
+        } else {
+            false
         };
         
-        // 🔥 ジェネリクス型引数の検証
-        if !box_decl.type_parameters.is_empty() || !type_arguments.is_empty() {
-            self.validate_generic_arguments(&box_decl, type_arguments)?;
-        }
+        // ユーザー定義Box宣言をチェック
+        let user_defined_exists = {
+            let box_decls = self.shared.box_declarations.read().unwrap();
+            box_decls.contains_key(class)
+        };
         
-        // インターフェースはインスタンス化できない
-        if box_decl.is_interface {
+        // 🚨 重複チェック - プラグインとユーザー定義の両方に存在したらエラー
+        if plugin_exists && user_defined_exists {
             return Err(RuntimeError::InvalidOperation {
-                message: format!("Cannot instantiate interface '{}'", class),
+                message: format!("Box type '{}' is defined both as a plugin and user-defined class. This is not allowed.", class),
             });
         }
         
-        // 🚀 ジェネリクス型の特殊化処理
-        let (final_box_decl, actual_class_name) = if !type_arguments.is_empty() {
+        // プラグイン版の処理
+        if plugin_exists {
+            if let Some(reg) = crate::bid::registry::global() {
+                if let Some(plugin) = reg.get_by_name(class) {
+                    // プラグイン版：引数なしでbirthメソッド呼び出し（nyash.tomlに従う）
+                    if arguments.len() == 0 {
+                        // 汎用プラグインBox生成システム
+                        if let Ok(generic_box) = crate::bid::GenericPluginBox::birth(plugin, class.to_string()) {
+                            return Ok(Box::new(generic_box) as Box<dyn NyashBox>);
+                        } else {
+                            return Err(RuntimeError::InvalidOperation {
+                                message: format!("Failed to create plugin Box '{}'", class),
+                            });
+                        }
+                    } else {
+                        return Err(RuntimeError::InvalidOperation {
+                            message: format!("Plugin Box '{}' expects 0 arguments for birth(), got {}", class, arguments.len()),
+                        });
+                    }
+                }
+            }
+        }
+        
+        // ユーザー定義Box宣言を探す
+        if user_defined_exists {
+            let box_decl = {
+                let box_decls = self.shared.box_declarations.read().unwrap();
+                box_decls.get(class).unwrap().clone()
+            };
+            
+            // 🔥 ジェネリクス型引数の検証
+            if !box_decl.type_parameters.is_empty() || !type_arguments.is_empty() {
+                self.validate_generic_arguments(&box_decl, type_arguments)?;
+            }
+            
+            // インターフェースはインスタンス化できない
+            if box_decl.is_interface {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("Cannot instantiate interface '{}'", class),
+                });
+            }
+            
+            // 🚀 ジェネリクス型の特殊化処理
+            let (final_box_decl, actual_class_name) = if !type_arguments.is_empty() {
             // ジェネリクス型を特殊化
             let specialized = self.specialize_generic_class(&box_decl, type_arguments)?;
             let specialized_name = specialized.name.clone();
@@ -736,7 +749,11 @@ impl NyashInterpreter {
             });
         }
         
-        Ok((*instance_arc).clone_box())  // Convert Arc back to Box for external interface
+            return Ok((*instance_arc).clone_box());  // Convert Arc back to Box for external interface
+        }
+        
+        // プラグインもユーザー定義も見つからなかった場合
+        return Err(RuntimeError::UndefinedClass { name: class.to_string() });
     }
     
     /// コンストラクタを実行 - Constructor execution

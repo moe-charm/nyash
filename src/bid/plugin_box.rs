@@ -108,6 +108,13 @@ impl PluginFileBox {
         Ok(Self { base: BoxBase::new(), inner: inst, path })
     }
 
+    /// 引数なしでFileBoxインスタンスを作成（birth専用）
+    pub fn birth(plugin: &'static LoadedPlugin) -> BidResult<Self> {
+        let inst = PluginBoxInstance::birth(plugin)?;
+        // パスなしでインスタンス作成（後でopenで指定）
+        Ok(Self { base: BoxBase::new(), inner: inst, path: String::new() })
+    }
+
     pub fn read_bytes(&self, size: usize) -> BidResult<Vec<u8>> { self.inner.read(size) }
     pub fn write_bytes(&self, data: &[u8]) -> BidResult<i32> { self.inner.write(data) }
     pub fn close(&self) -> BidResult<()> { self.inner.close() }

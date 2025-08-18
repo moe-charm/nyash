@@ -36,7 +36,11 @@ impl PluginRegistry {
 
     /// Load plugins based on nyash.toml minimal parsing
     pub fn load_from_config(path: &str) -> BidResult<Self> {
-        let content = fs::read_to_string(path).map_err(|_| BidError::PluginError)?;
+        eprintln!("🔍 DEBUG: load_from_config called with path: {}", path);
+        let content = fs::read_to_string(path).map_err(|e| {
+            eprintln!("🔍 DEBUG: Failed to read file {}: {}", path, e);
+            BidError::PluginError
+        })?;
 
         // Very small parser: look for lines like `FileBox = "nyash-filebox-plugin"`
         let mut mappings: HashMap<String, String> = HashMap::new();
@@ -82,7 +86,9 @@ impl PluginRegistry {
         }
 
         // 型情報をパース（ベストエフォート）
+        eprintln!("🔍 DEBUG: About to call parse_type_info");
         reg.parse_type_info(&content);
+        eprintln!("🔍 DEBUG: parse_type_info completed");
         
         // デバッグ出力：型情報の読み込み状況
         eprintln!("🔍 Type info loaded:");
@@ -99,17 +105,68 @@ impl PluginRegistry {
     /// 型情報をパース（簡易実装）
     /// [plugins.FileBox.methods] セクションを探してパース
     fn parse_type_info(&mut self, content: &str) {
+        eprintln!("🔍 DEBUG: parse_type_info called!");
+        // 安全に文字列をトリミング（文字境界考慮）
+        let preview = if content.len() <= 500 {
+            content
+        } else {
+            // 文字境界を考慮して安全にトリミング
+            content.char_indices()
+                .take_while(|(idx, _)| *idx < 500)
+                .last()
+                .map(|(idx, ch)| &content[..idx + ch.len_utf8()])
+                .unwrap_or("")
+        };
+        eprintln!("📄 TOML content preview:\n{}", preview);
+        
         // FileBoxの型情報を探す（簡易実装、後で汎用化）
         if let Some(methods_start) = content.find("[plugins.FileBox.methods]") {
+            println!("✅ Found [plugins.FileBox.methods] section at position {}", methods_start);
             let methods_section = &content[methods_start..];
             
-            // 各メソッドの型情報をパース
-            self.parse_method_type_info("FileBox", "read", methods_section);
-            self.parse_method_type_info("FileBox", "write", methods_section);
-            self.parse_method_type_info("FileBox", "open", methods_section);
-            self.parse_method_type_info("FileBox", "close", methods_section);
-            self.parse_method_type_info("FileBox", "exists", methods_section);
+            // 🔄 動的にメソッド名を抽出（決め打ちなし！）
+            let method_names = self.extract_method_names_from_toml(methods_section);
+            
+            // 抽出されたメソッドそれぞれを処理
+            for method_name in method_names {
+                self.parse_method_type_info("FileBox", &method_name, methods_section);
+            }
+        } else {
+            eprintln!("❌ [plugins.FileBox.methods] section not found in TOML!");
+            // TOMLの全内容をダンプ
+            eprintln!("📄 Full TOML content:\n{}", content);
         }
+    }
+    
+    /// TOMLセクションからメソッド名を動的に抽出
+    fn extract_method_names_from_toml(&self, section: &str) -> Vec<String> {
+        let mut method_names = Vec::new();
+        
+        println!("🔍 DEBUG: Extracting methods from TOML section:");
+        println!("📄 Section content:\n{}", section);
+        
+        for line in section.lines() {
+            let line = line.trim();
+            println!("🔍 Processing line: '{}'", line);
+            
+            // "method_name = { ... }" の形式を探す
+            if let Some(eq_pos) = line.find(" = {") {
+                let method_name = line[..eq_pos].trim();
+                
+                // セクション名やコメントは除外
+                if !method_name.starts_with('[') && !method_name.starts_with('#') && !method_name.is_empty() {
+                    println!("✅ Found method: '{}'", method_name);
+                    method_names.push(method_name.to_string());
+                } else {
+                    println!("❌ Skipped line (section/comment): '{}'", method_name);
+                }
+            } else {
+                println!("❌ Line doesn't match pattern: '{}'", line);
+            }
+        }
+        
+        println!("🎯 Total extracted methods: {:?}", method_names);
+        method_names
     }
     
     /// 特定メソッドの型情報をパース
@@ -161,6 +218,7 @@ static PLUGIN_REGISTRY: OnceCell<PluginRegistry> = OnceCell::new();
 
 /// Initialize global plugin registry from config
 pub fn init_global_from_config(path: &str) -> BidResult<()> {
+    eprintln!("🔍 DEBUG: init_global_from_config called with path: {}", path);
     let reg = PluginRegistry::load_from_config(path)?;
     let _ = PLUGIN_REGISTRY.set(reg);
     Ok(())

@@ -58,6 +58,7 @@ impl NyashRunner {
 
     fn init_bid_plugins(&self) {
         // Best-effort init; do not fail the program if missing
+        eprintln!("🔍 DEBUG: init_bid_plugins called");
         if let Ok(()) = crate::bid::registry::init_global_from_config("nyash.toml") {
             let reg = crate::bid::registry::global().unwrap();
             // If FileBox plugin is present, try a birth/fini cycle as a smoke test

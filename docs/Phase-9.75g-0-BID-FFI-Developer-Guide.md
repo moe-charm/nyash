@@ -1,53 +1,63 @@
-# 🚀 Phase 9.75g-0 Complete: BID-FFI Plugin System Developer Guide
+# 🚀 Phase 9.75h-0 Complete: Unified Plugin System Developer Guide
 
-**Completion Date**: 2025-08-19  
+**Completion Date**: 2025-08-18  
 **Status**: ✅ **PRODUCTION READY**  
-**Revolutionary Achievement**: Nyash Dynamic Plugin Ecosystem
+**Revolutionary Achievement**: nyash.toml-Centered Plugin Architecture
 
 ---
 
 ## 📋 Executive Summary
 
-Phase 9.75g-0 has successfully delivered a **revolutionary plugin system** that enables Nyash to dynamically load and execute external libraries as first-class Box types. This achievement represents a fundamental breakthrough in programming language extensibility.
+Phase 9.75h-0 has successfully delivered a **revolutionary unified plugin system** based on **nyash.toml-centered design**. This eliminates metadata duplication and creates a Single Source of Truth for all plugin information, dramatically simplifying plugin development.
 
 ### 🎯 Key Achievements
 
 | Component | Status | Impact |
 |-----------|--------|---------|
-| **BID-FFI Protocol** | ✅ Complete | Binary Interface Definition for safe plugin communication |
-| **HostVtable System** | ✅ Complete | Memory-safe host ↔ plugin interface |
-| **Type Information Management** | ✅ Complete | Automatic type conversion via nyash.toml configuration |
-| **Plugin Tester Tool** | ✅ Complete | Comprehensive plugin diagnostic and validation |
-| **Memory Safety** | ✅ Complete | valgrind-verified memory management |
-| **FileBox Plugin** | ✅ Complete | Production-ready reference implementation |
+| **nyash.toml-Centered Design** | ✅ Complete | Single Source of Truth for all plugin metadata |
+| **Metadata Duplication Elimination** | ✅ Complete | No more redundant plugin information definition |
+| **Super-Simplified Plugins** | ✅ Complete | Plugins contain only processing logic |
+| **Unified Plugin API** | ✅ Complete | One consistent interface for all plugins |
+| **FileBox Reference Implementation** | ✅ Complete | Production-ready example of new architecture |
+| **Complete Documentation** | ✅ Complete | Updated guides and architectural documentation |
 
 ---
 
-## 🏗️ System Architecture Overview
+## 🏗️ Unified System Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Nyash Interpreter                       │
 ├─────────────────┬─────────────────┬─────────────────────────┤
-│   Box Registry  │  Type Manager   │    Memory Manager       │
-│  (Built-ins +   │  (nyash.toml    │   (Arc<Mutex> +         │
-│   Plugins)      │   + TLV)        │    HostVtable)          │
+│   Box Registry  │  nyash.toml     │    Plugin Loader        │
+│  (Built-ins +   │  (Single Source │   (Unified API)         │
+│   Plugins)      │   of Truth)     │                         │
 └─────────┬───────┴─────┬───────────┴─────────────────────────┘
           │             │
-          ▼             ▼
+          │             ▼ Metadata Read
+          │    ┌─────────────────────┐
+          │    │    nyash.toml       │
+          │    │ [plugins.FileBox]   │
+          │    │ method_id = 1       │
+          │    │ args = ["path"]     │
+          │    └─────────────────────┘
+          │
+          ▼ Function Call Only
 ┌─────────────────────────────────────────────────────────────┐
-│                 BID-FFI Interface                          │
+│              Simplified Plugin Interface                   │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │            C ABI Functions                          │   │
-│  │  • nyash_plugin_abi()    • nyash_plugin_init()     │   │
-│  │  • nyash_plugin_invoke() • nyash_plugin_shutdown()  │   │
+│  │         Core Functions Only                         │   │
+│  │  • nyash_plugin_abi()                              │   │
+│  │  • nyash_plugin_init() (basic setup only)          │   │
+│  │  • nyash_plugin_invoke() (pure processing)         │   │
+│  │  • nyash_plugin_shutdown()                         │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                Dynamic Plugin Library                      │
-│                  (.so / .dll / .dylib)                     │
+│           Super-Simple Plugin Library                      │
+│        (.so / .dll / .dylib) - Processing Only             │
 │                                                             │
 │  Implementation Examples:                                   │
 │  • FileBox Plugin (File I/O operations)                    │

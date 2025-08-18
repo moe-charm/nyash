@@ -1,0 +1,23 @@
+# 正しいFileBoxプラグイン動作確認テスト
+# 過去の実績に基づく引数付きテスト
+
+print("🧪 正しいFileBoxプラグインテスト開始")
+
+# 正しいパターン1: ファイルパス指定
+print("📦 Test 1: 引数付きFileBox作成")
+local file1
+file1 = new FileBox("test_correct.txt")
+print("✅ FileBox作成成功: " + file1.toString())
+
+# 書き込みテスト
+print("📝 Test 2: 書き込みテスト")
+file1.write("Hello from correct usage!")
+print("✅ 書き込み完了")
+
+# 読み取りテスト
+print("📖 Test 3: 読み取りテスト") 
+local content
+content = file1.read()
+print("📄 読み取り内容: " + content)
+
+print("🎉 正しい使い方での基本テスト完了")

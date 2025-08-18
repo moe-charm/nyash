@@ -1,0 +1,18 @@
+# FileBoxプラグイン実動作テスト
+# 基本的なインスタンス化から始める
+
+print("🧪 FileBoxプラグイン実動作テスト開始")
+
+# Step 1: FileBoxインスタンス化
+print("📦 Step 1: FileBoxインスタンス化テスト")
+local file
+file = new FileBox()
+print("✅ FileBox作成成功: " + file.toString())
+print("")
+
+# Step 2: 簡単なプロパティ確認
+print("📦 Step 2: 基本プロパティ確認")
+print("FileBox ID: " + file.box_id().toString())
+print("")
+
+print("🎉 基本テスト完了")

@@ -1,0 +1,13 @@
+// 汎用プラグインBox生成システムのテスト
+print("=== Testing Generic Plugin Box Creation ===")
+
+// FileBoxプラグインをテスト
+local file
+file = new FileBox()  // 汎用システムでFileBoxを生成
+print("✅ FileBox created successfully!")
+
+// 将来的に他のプラグインBoxも同じ仕組みで動作
+// local db = new DatabaseBox()
+// local http = new HttpBox()
+
+print("=== Test Complete ===")

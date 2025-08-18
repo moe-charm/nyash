@@ -1,0 +1,24 @@
+# Nyash v2 configuration test file
+
+# Legacy single-box plugins (for backward compatibility)
+[plugins]
+FileBox = "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so"
+
+# New multi-box plugin libraries
+[plugins.libraries]
+"nyash-test-multibox" = { plugin_path = "plugins/nyash-test-multibox/target/release/libnyash_test_multibox.so", provides = ["TestBoxA", "TestBoxB"] }
+
+# Box type definitions
+[plugins.types.TestBoxA]
+library = "nyash-test-multibox"
+type_id = 200
+
+[plugins.types.TestBoxA.methods]
+hello = { args = [] }
+
+[plugins.types.TestBoxB]
+library = "nyash-test-multibox"
+type_id = 201
+
+[plugins.types.TestBoxB.methods]
+greet = { args = [] }

@@ -11,6 +11,7 @@ pub mod plugins;
 pub mod loader;
 pub mod registry;
 pub mod plugin_box;
+pub mod generic_plugin_box;
 
 pub use types::*;
 pub use tlv::*;
@@ -21,6 +22,7 @@ pub use bridge::*;
 pub use loader::*;
 pub use registry::*;
 pub use plugin_box::*;
+pub use generic_plugin_box::*;
 
 /// BID-1 version constant
 pub const BID_VERSION: u16 = 1;

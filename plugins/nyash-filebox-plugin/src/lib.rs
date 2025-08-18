@@ -74,83 +74,20 @@ pub extern "C" fn nyash_plugin_abi() -> u32 {
     1  // BID-1 support
 }
 
-/// Plugin initialization
+/// Plugin initialization (simplified - no metadata)
 #[no_mangle]
 pub extern "C" fn nyash_plugin_init(
     host: *const NyashHostVtable,
-    info: *mut NyashPluginInfo,
 ) -> i32 {
-    if host.is_null() || info.is_null() {
+    if host.is_null() {
         return NYB_E_INVALID_ARGS;
     }
     
     unsafe {
         HOST_VTABLE = Some(&*host);
         
-        // インスタンス管理初期化
+        // インスタンス管理初期化のみ
         INSTANCES = Some(Mutex::new(HashMap::new()));
-        
-        // Method table
-        static TYPE_NAME: &[u8] = b"FileBox\0";
-        
-        (*info).type_id = 6;  // FileBox type ID
-        (*info).type_name = TYPE_NAME.as_ptr() as *const c_char;
-        
-        // メソッドテーブルは動的に作成（Syncトレイト問題回避）
-        static METHOD_STORAGE: &'static [[u8; 7]] = &[
-            *b"birth\0\0",
-            *b"open\0\0\0",
-            *b"read\0\0\0",
-            *b"write\0\0",
-            *b"close\0\0",
-            *b"fini\0\0\0",
-        ];
-        
-        static mut METHODS: [NyashMethodInfo; 6] = [
-            NyashMethodInfo { method_id: 0, name: ptr::null(), signature: 0 },
-            NyashMethodInfo { method_id: 0, name: ptr::null(), signature: 0 },
-            NyashMethodInfo { method_id: 0, name: ptr::null(), signature: 0 },
-            NyashMethodInfo { method_id: 0, name: ptr::null(), signature: 0 },
-            NyashMethodInfo { method_id: 0, name: ptr::null(), signature: 0 },
-            NyashMethodInfo { method_id: 0, name: ptr::null(), signature: 0 },
-        ];
-        
-        // 初回のみメソッドテーブルを初期化
-        if METHODS[0].name.is_null() {
-            METHODS[0] = NyashMethodInfo {
-                method_id: METHOD_BIRTH,
-                name: METHOD_STORAGE[0].as_ptr() as *const c_char,
-                signature: 0xBEEFCAFE,
-            };
-            METHODS[1] = NyashMethodInfo {
-                method_id: METHOD_OPEN,
-                name: METHOD_STORAGE[1].as_ptr() as *const c_char,
-                signature: 0x12345678,
-            };
-            METHODS[2] = NyashMethodInfo {
-                method_id: METHOD_READ,
-                name: METHOD_STORAGE[2].as_ptr() as *const c_char,
-                signature: 0x87654321,
-            };
-            METHODS[3] = NyashMethodInfo {
-                method_id: METHOD_WRITE,
-                name: METHOD_STORAGE[3].as_ptr() as *const c_char,
-                signature: 0x11223344,
-            };
-            METHODS[4] = NyashMethodInfo {
-                method_id: METHOD_CLOSE,
-                name: METHOD_STORAGE[4].as_ptr() as *const c_char,
-                signature: 0xABCDEF00,
-            };
-            METHODS[5] = NyashMethodInfo {
-                method_id: METHOD_FINI,
-                name: METHOD_STORAGE[5].as_ptr() as *const c_char,
-                signature: 0xDEADBEEF,
-            };
-        }
-        
-        (*info).method_count = METHODS.len();
-        (*info).methods = METHODS.as_ptr();
     }
     
     NYB_SUCCESS
@@ -454,3 +391,8 @@ pub extern "C" fn nyash_plugin_shutdown() {
         INSTANCES = None;
     }
 }
+
+// ============ Unified Plugin API ============
+// Note: Metadata (Box types, methods) now comes from nyash.toml
+// This plugin provides only the actual processing functions
+

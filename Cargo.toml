@@ -16,6 +16,7 @@ cli = []
 gui = ["dep:egui", "dep:eframe", "dep:egui_extras", "dep:image"]
 gui-examples = ["gui"]
 all-examples = ["gui-examples"]
+dynamic-file = []
 # Note: LLVM feature requires inkwell dependency and LLVM development libraries
 # llvm = ["dep:inkwell"]
 
@@ -28,6 +29,12 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "nyash"
 path = "src/main.rs"
+
+# Test binary for multi-box plugin loader
+[[bin]]
+name = "test-plugin-loader-v2"
+path = "src/bin/test_plugin_loader_v2.rs"
+required-features = ["dynamic-file"]
 
 # Examples for development - only available as examples, not bins
 [[example]]

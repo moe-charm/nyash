@@ -1,0 +1,28 @@
+# 正しいプラグインFileBox使用法テスト
+# birth()→open()→操作→close() の2ステップ方式
+
+print("🧪 プラグインFileBox正式仕様テスト開始")
+
+print("📦 Step 1: FileBox birth（引数なし）")
+local file
+file = new FileBox()  # birthメソッド（引数なし）
+print("✅ FileBox birth成功")
+
+print("📂 Step 2: open でファイル指定")  
+file.open("test_plugin_correct.txt", "rw")
+print("✅ ファイルopen成功")
+
+print("📝 Step 3: write でデータ書き込み")
+file.write("Hello from correct plugin usage!")
+print("✅ 書き込み成功")
+
+print("📖 Step 4: read でデータ読み取り")
+local content
+content = file.read()
+print("📄 読み取り内容: " + content)
+
+print("🔒 Step 5: close でファイル閉じる") 
+file.close()
+print("✅ クローズ成功")
+
+print("🎉 正しいプラグイン仕様でのテスト完了！")
