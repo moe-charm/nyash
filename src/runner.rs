@@ -15,6 +15,9 @@ use crate::{
     mir::{MirCompiler, MirPrinter},
     backend::{VM, wasm::WasmBackend, aot::AotBackend},
 };
+
+#[cfg(feature = "llvm")]
+use crate::backend::{llvm_compile_and_execute};
 use std::{fs, process};
 
 // BID prototype imports
@@ -83,6 +86,9 @@ impl NyashRunner {
         } else if self.config.backend == "vm" {
             println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             self.execute_vm_mode(filename);
+        } else if self.config.backend == "llvm" {
+            println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
+            self.execute_llvm_mode(filename);
         } else {
             println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
             if let Some(fuel) = self.config.debug_fuel {
@@ -415,6 +421,71 @@ impl NyashRunner {
                 eprintln!("❌ AOT compilation error: {}", e);
                 process::exit(1);
             }
+        }
+    }
+
+    /// Execute LLVM mode
+    fn execute_llvm_mode(&self, filename: &str) {
+        #[cfg(feature = "llvm")]
+        {
+            // Read the file
+            let code = match fs::read_to_string(filename) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!("❌ Error reading file {}: {}", filename, e);
+                    process::exit(1);
+                }
+            };
+
+            // Parse to AST
+            let ast = match NyashParser::parse_from_string(&code) {
+                Ok(ast) => ast,
+                Err(e) => {
+                    eprintln!("❌ Parse error: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            // Compile to MIR
+            let mut mir_compiler = MirCompiler::new();
+            let compile_result = match mir_compiler.compile(ast) {
+                Ok(result) => result,
+                Err(e) => {
+                    eprintln!("❌ MIR compilation error: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            println!("📊 MIR Module compiled successfully!");
+            println!("📊 Functions: {}", compile_result.module.functions.len());
+
+            // Execute via LLVM backend
+            let temp_path = "nyash_llvm_temp";
+            match llvm_compile_and_execute(&compile_result.module, temp_path) {
+                Ok(result) => {
+                    if let Some(int_result) = result.as_any().downcast_ref::<IntegerBox>() {
+                        let exit_code = int_result.value;
+                        println!("✅ LLVM execution completed!");
+                        println!("📊 Exit code: {}", exit_code);
+                        
+                        // Exit with the same code for testing
+                        process::exit(exit_code as i32);
+                    } else {
+                        println!("✅ LLVM execution completed (non-integer result)!");
+                        println!("📊 Result: {}", result.to_string_box().value);
+                    }
+                },
+                Err(e) => {
+                    eprintln!("❌ LLVM execution error: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        #[cfg(not(feature = "llvm"))]
+        {
+            eprintln!("❌ LLVM backend not available. Please build with --features llvm");
+            eprintln!("💡 Try: cargo run --features llvm -- --backend llvm {}", filename);
+            process::exit(1);
         }
     }
 

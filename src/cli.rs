@@ -71,7 +71,7 @@ impl CliConfig {
                 Arg::new("backend")
                     .long("backend")
                     .value_name("BACKEND")
-                    .help("Choose execution backend: 'interpreter' (default) or 'vm'")
+                    .help("Choose execution backend: 'interpreter' (default), 'vm', or 'llvm'")
                     .default_value("interpreter")
             )
             .arg(
