@@ -3,6 +3,7 @@
  */
 
 pub mod vm;
+pub mod vm_phi;
 pub mod wasm;
 pub mod aot;
 

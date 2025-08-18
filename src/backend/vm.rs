@@ -7,6 +7,7 @@
 use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId};
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
 use std::collections::HashMap;
+use super::vm_phi::LoopExecutor;
 
 /// VM execution error
 #[derive(Debug)]
@@ -126,6 +127,8 @@ pub struct VM {
     current_function: Option<String>,
     /// Current basic block
     current_block: Option<BasicBlockId>,
+    /// Previous basic block (for phi node resolution)
+    previous_block: Option<BasicBlockId>,
     /// Program counter within current block
     pc: usize,
     /// Return value from last execution
@@ -133,6 +136,8 @@ pub struct VM {
     last_result: Option<VMValue>,
     /// Simple field storage for objects (maps reference -> field -> value)
     object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
+    /// Loop executor for handling phi nodes and loop-specific logic
+    loop_executor: LoopExecutor,
 }
 
 impl VM {
@@ -142,9 +147,11 @@ impl VM {
             values: Vec::new(),
             current_function: None,
             current_block: None,
+            previous_block: None,
             pc: 0,
             last_result: None,
             object_fields: HashMap::new(),
+            loop_executor: LoopExecutor::new(),
         }
     }
     
@@ -164,6 +171,9 @@ impl VM {
     /// Execute a single function
     fn execute_function(&mut self, function: &MirFunction) -> Result<VMValue, VMError> {
         self.current_function = Some(function.signature.name.clone());
+        
+        // Initialize loop executor for this function
+        self.loop_executor.initialize();
         
         // Start at entry block
         let mut current_block = function.entry_block;
@@ -200,6 +210,10 @@ impl VM {
             if let Some(return_value) = should_return {
                 return Ok(return_value);
             } else if let Some(target) = next_block {
+                // Update previous block before jumping
+                self.previous_block = Some(current_block);
+                // Record the transition in loop executor
+                self.loop_executor.record_transition(current_block, target);
                 current_block = target;
             } else {
                 // Block ended without terminator - this shouldn't happen in well-formed MIR
@@ -273,12 +287,29 @@ impl VM {
             },
             
             MirInstruction::Phi { dst, inputs } => {
-                // For now, simplified phi - use first available input
-                // In a real implementation, we'd need to track which block we came from
-                if let Some((_, value_id)) = inputs.first() {
-                    let value = self.get_value(*value_id)?;
-                    self.set_value(*dst, value);
-                }
+                // Create a closure that captures self immutably
+                let values = &self.values;
+                let get_value_fn = |value_id: ValueId| -> Result<VMValue, VMError> {
+                    let index = value_id.to_usize();
+                    if index < values.len() {
+                        if let Some(ref value) = values[index] {
+                            Ok(value.clone())
+                        } else {
+                            Err(VMError::InvalidValue(format!("Value {} not set", value_id)))
+                        }
+                    } else {
+                        Err(VMError::InvalidValue(format!("Value {} out of bounds", value_id)))
+                    }
+                };
+                
+                // Delegate phi node execution to loop executor
+                let selected_value = self.loop_executor.execute_phi(
+                    *dst,
+                    inputs,
+                    get_value_fn
+                )?;
+                
+                self.set_value(*dst, selected_value);
                 Ok(ControlFlow::Continue)
             },
             

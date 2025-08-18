@@ -63,6 +63,9 @@ pub struct BasicBlock {
     
     /// Whether this block is reachable from the entry block
     pub reachable: bool,
+    
+    /// Is this block sealed? (all predecessors are known)
+    pub sealed: bool,
 }
 
 impl BasicBlock {
@@ -76,6 +79,7 @@ impl BasicBlock {
             successors: HashSet::new(),
             effects: EffectMask::PURE,
             reachable: false,
+            sealed: false,
         }
     }
     
@@ -210,6 +214,16 @@ impl BasicBlock {
     /// Mark this block as reachable
     pub fn mark_reachable(&mut self) {
         self.reachable = true;
+    }
+    
+    /// Seal this block (all predecessors are known)
+    pub fn seal(&mut self) {
+        self.sealed = true;
+    }
+    
+    /// Check if this block is sealed
+    pub fn is_sealed(&self) -> bool {
+        self.sealed
     }
     
     /// Check if this block dominates another block (simplified check)

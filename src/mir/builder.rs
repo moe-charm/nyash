@@ -15,26 +15,26 @@ use std::collections::HashMap;
 /// MIR builder for converting AST to SSA form
 pub struct MirBuilder {
     /// Current module being built
-    current_module: Option<MirModule>,
+    pub(super) current_module: Option<MirModule>,
     
     /// Current function being built
-    current_function: Option<MirFunction>,
+    pub(super) current_function: Option<MirFunction>,
     
     /// Current basic block being built
-    current_block: Option<BasicBlockId>,
+    pub(super) current_block: Option<BasicBlockId>,
     
     /// Value ID generator
-    value_gen: ValueIdGenerator,
+    pub(super) value_gen: ValueIdGenerator,
     
     /// Basic block ID generator
-    block_gen: BasicBlockIdGenerator,
+    pub(super) block_gen: BasicBlockIdGenerator,
     
     /// Variable name to ValueId mapping (for SSA conversion)
-    variable_map: HashMap<String, ValueId>,
+    pub(super) variable_map: HashMap<String, ValueId>,
     
     /// Pending phi functions to be inserted
     #[allow(dead_code)]
-    pending_phis: Vec<(BasicBlockId, ValueId, String)>,
+    pub(super) pending_phis: Vec<(BasicBlockId, ValueId, String)>,
 }
 
 impl MirBuilder {
@@ -101,7 +101,7 @@ impl MirBuilder {
     }
     
     /// Build an expression and return its value ID
-    fn build_expression(&mut self, ast: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_expression(&mut self, ast: ASTNode) -> Result<ValueId, String> {
         match ast {
             ASTNode::Literal { value, .. } => {
                 self.build_literal(value)
@@ -318,14 +318,6 @@ impl MirBuilder {
         // In SSA form, each assignment creates a new value
         self.variable_map.insert(var_name.clone(), value_id);
         
-        // Generate a Store instruction to ensure VM can track the assignment
-        // For now, we use the variable name as a simple pointer identifier
-        let var_ptr = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Store {
-            value: value_id,
-            ptr: var_ptr,
-        })?;
-        
         Ok(value_id)
     }
     
@@ -449,7 +441,7 @@ impl MirBuilder {
     }
     
     /// Emit an instruction to the current basic block
-    fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
+    pub(super) fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
         let block_id = self.current_block.ok_or("No current basic block")?;
         
         if let Some(ref mut function) = self.current_function {
@@ -465,7 +457,7 @@ impl MirBuilder {
     }
     
     /// Ensure a basic block exists in the current function
-    fn ensure_block_exists(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+    pub(super) fn ensure_block_exists(&mut self, block_id: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut function) = self.current_function {
             if !function.blocks.contains_key(&block_id) {
                 let block = BasicBlock::new(block_id);
@@ -479,56 +471,9 @@ impl MirBuilder {
     
     /// Build a loop statement: loop(condition) { body }
     fn build_loop_statement(&mut self, condition: ASTNode, body: Vec<ASTNode>) -> Result<ValueId, String> {
-        // Add safepoint at loop entry
-        self.emit_instruction(MirInstruction::Safepoint)?;
-        
-        let loop_header = self.block_gen.next();
-        let loop_body = self.block_gen.next();
-        let loop_exit = self.block_gen.next();
-        
-        // Jump to loop header
-        self.emit_instruction(MirInstruction::Jump { target: loop_header })?;
-        
-        // Create loop header block
-        self.start_new_block(loop_header)?;
-        
-        // Evaluate condition
-        let condition_value = self.build_expression(condition)?;
-        
-        // Branch based on condition
-        self.emit_instruction(MirInstruction::Branch {
-            condition: condition_value,
-            then_bb: loop_body,
-            else_bb: loop_exit,
-        })?;
-        
-        // Create loop body block
-        self.start_new_block(loop_body)?;
-        
-        // Add safepoint at loop body start
-        self.emit_instruction(MirInstruction::Safepoint)?;
-        
-        // Build loop body
-        let body_ast = ASTNode::Program {
-            statements: body,
-            span: crate::ast::Span::unknown(),
-        };
-        self.build_expression(body_ast)?;
-        
-        // Jump back to loop header
-        self.emit_instruction(MirInstruction::Jump { target: loop_header })?;
-        
-        // Create exit block
-        self.start_new_block(loop_exit)?;
-        
-        // Return void value
-        let void_dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: void_dst,
-            value: ConstValue::Void,
-        })?;
-        
-        Ok(void_dst)
+        // Use the specialized LoopBuilder for proper SSA loop construction
+        let mut loop_builder = super::loop_builder::LoopBuilder::new(self);
+        loop_builder.build_loop(condition, body)
     }
     
     /// Build a try/catch statement
@@ -817,7 +762,7 @@ impl MirBuilder {
     }
     
     /// Start a new basic block
-    fn start_new_block(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+    pub(super) fn start_new_block(&mut self, block_id: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut function) = self.current_function {
             function.add_block(BasicBlock::new(block_id));
             self.current_block = Some(block_id);

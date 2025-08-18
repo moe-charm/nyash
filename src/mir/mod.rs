@@ -10,6 +10,7 @@ pub mod instruction_v2; // New 25-instruction specification
 pub mod basic_block;
 pub mod function;
 pub mod builder;
+pub mod loop_builder; // SSA loop construction with phi nodes
 pub mod verification;
 pub mod ownership_verifier_simple; // Simple ownership forest verification for current MIR
 pub mod printer;
