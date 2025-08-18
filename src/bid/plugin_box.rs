@@ -20,7 +20,7 @@ impl<'a> PluginBoxInstance<'a> {
             u32::from_le_bytes([out[0], out[1], out[2], out[3]])
         } else {
             // Try to decode TLV handle (future-proof)
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         };
         Ok(Self { plugin, instance_id })
     }
@@ -48,10 +48,10 @@ impl<'a> PluginBoxInstance<'a> {
         self.plugin.handle.invoke(self.plugin.type_id, method, self.instance_id, &args, &mut out)?;
         let mut dec = TlvDecoder::new(&out)?;
         if let Some((tag, payload)) = dec.decode_next()? {
-            if tag != BidTag::I32 { return Err(BidError::InvalidType); }
+            if tag != BidTag::I32 { return Err(BidError::invalid_type()); }
             return Ok(TlvDecoder::decode_i32(payload)?);
         }
-        Err(BidError::PluginError)
+        Err(BidError::plugin_error())
     }
 
     pub fn read(&self, size: usize) -> BidResult<Vec<u8>> {
@@ -63,10 +63,10 @@ impl<'a> PluginBoxInstance<'a> {
         self.plugin.handle.invoke(self.plugin.type_id, method, self.instance_id, &args, &mut out)?;
         let mut dec = TlvDecoder::new(&out)?;
         if let Some((tag, payload)) = dec.decode_next()? {
-            if tag != BidTag::Bytes { return Err(BidError::InvalidType); }
+            if tag != BidTag::Bytes { return Err(BidError::invalid_type()); }
             return Ok(payload.to_vec());
         }
-        Err(BidError::PluginError)
+        Err(BidError::plugin_error())
     }
 
     pub fn close(&self) -> BidResult<()> {
@@ -140,7 +140,7 @@ impl PluginFileBox {
             }
             Ok(None) => {
                 eprintln!("🔍 Method '{}' not found in plugin", method_name);
-                Err(BidError::InvalidArgs) // メソッドが見つからない
+                Err(BidError::invalid_args()) // メソッドが見つからない
             }
             Err(e) => {
                 eprintln!("🔍 Error looking up method '{}': {:?}", method_name, e);

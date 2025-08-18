@@ -16,22 +16,22 @@ impl LoadedPlugin {
     pub fn load_from_file(path: &Path) -> BidResult<Self> {
         // Load library
         let library = unsafe { Library::new(path) }
-            .map_err(|_| BidError::PluginError)?;
+            .map_err(|_| BidError::plugin_error())?;
 
         // Resolve symbols
         unsafe {
             let abi: Symbol<unsafe extern "C" fn() -> u32> = library
                 .get(PLUGIN_ABI_SYMBOL.as_bytes())
-                .map_err(|_| BidError::PluginError)?;
+                .map_err(|_| BidError::plugin_error())?;
             let init: Symbol<unsafe extern "C" fn(*const NyashHostVtable, *mut NyashPluginInfo) -> i32> = library
                 .get(PLUGIN_INIT_SYMBOL.as_bytes())
-                .map_err(|_| BidError::PluginError)?;
+                .map_err(|_| BidError::plugin_error())?;
             let invoke: Symbol<unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32> = library
                 .get(PLUGIN_INVOKE_SYMBOL.as_bytes())
-                .map_err(|_| BidError::PluginError)?;
+                .map_err(|_| BidError::plugin_error())?;
             let shutdown: Symbol<unsafe extern "C" fn()> = library
                 .get(PLUGIN_SHUTDOWN_SYMBOL.as_bytes())
-                .map_err(|_| BidError::PluginError)?;
+                .map_err(|_| BidError::plugin_error())?;
 
             let handle = PluginHandle {
                 abi: *abi,

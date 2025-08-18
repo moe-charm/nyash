@@ -97,7 +97,7 @@ pub fn box_to_bid_handle(
         );
         Ok((BidType::Handle { type_id: 7, instance_id: handle.instance_id }, handle))
     } else {
-        Err(BidError::InvalidType)
+        Err(BidError::invalid_type())
     }
 }
 
@@ -107,7 +107,7 @@ pub fn bid_handle_to_box(
     registry: &BoxRegistry,
 ) -> Result<Arc<dyn NyashBox>, BidError> {
     registry.get_box(handle)
-        .ok_or(BidError::InvalidHandle)
+        .ok_or(BidError::invalid_handle())
 }
 
 /// Extract string value from a Box for TLV encoding
@@ -115,7 +115,7 @@ pub fn extract_string_value(arc_box: &Arc<dyn NyashBox>) -> Result<String, BidEr
     if let Some(string_box) = arc_box.as_any().downcast_ref::<crate::boxes::string_box::StringBox>() {
         Ok(string_box.value.clone())
     } else {
-        Err(BidError::InvalidType)
+        Err(BidError::invalid_type())
     }
 }
 
@@ -124,7 +124,7 @@ pub fn extract_integer_value(arc_box: &Arc<dyn NyashBox>) -> Result<i64, BidErro
     if let Some(integer_box) = arc_box.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>() {
         Ok(integer_box.value)
     } else {
-        Err(BidError::InvalidType)
+        Err(BidError::invalid_type())
     }
 }
 

@@ -62,7 +62,7 @@ impl PluginHandle {
     pub fn check_abi(&self) -> BidResult<()> {
         let version = unsafe { (self.abi)() };
         if version != super::BID_VERSION as u32 {
-            return Err(BidError::VersionMismatch);
+            return Err(BidError::version_mismatch());
         }
         Ok(())
     }

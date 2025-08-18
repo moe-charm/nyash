@@ -36,7 +36,7 @@ impl PluginRegistry {
 
     /// Load plugins based on nyash.toml minimal parsing
     pub fn load_from_config(path: &str) -> BidResult<Self> {
-        let content = fs::read_to_string(path).map_err(|_| BidError::PluginError)?;
+        let content = fs::read_to_string(path).map_err(|_| BidError::plugin_error())?;
 
         // Very small parser: look for lines like `FileBox = "nyash-filebox-plugin"`
         let mut mappings: HashMap<String, String> = HashMap::new();

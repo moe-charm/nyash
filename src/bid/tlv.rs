@@ -67,7 +67,7 @@ impl TlvEncoder {
     pub fn encode_string(&mut self, value: &str) -> BidResult<()> {
         let bytes = value.as_bytes();
         if bytes.len() > u16::MAX as usize {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         self.encode_entry(BidTag::String, bytes)
     }
@@ -75,7 +75,7 @@ impl TlvEncoder {
     /// Encode binary data
     pub fn encode_bytes(&mut self, value: &[u8]) -> BidResult<()> {
         if value.len() > u16::MAX as usize {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         self.encode_entry(BidTag::Bytes, value)
     }
@@ -136,7 +136,7 @@ impl<'a> TlvDecoder<'a> {
     /// Create a new TLV decoder
     pub fn new(data: &'a [u8]) -> BidResult<Self> {
         if data.len() < mem::size_of::<BidTlvHeader>() {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         
         // Read header safely
@@ -145,7 +145,7 @@ impl<'a> TlvDecoder<'a> {
         let header = BidTlvHeader { version, argc };
         
         if header.version != BID_VERSION {
-            return Err(BidError::VersionMismatch);
+            return Err(BidError::version_mismatch());
         }
         
         Ok(Self {
@@ -168,7 +168,7 @@ impl<'a> TlvDecoder<'a> {
         
         // Read entry header
         if self.position + mem::size_of::<TlvEntry>() > self.data.len() {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         
         // Read entry safely
@@ -184,7 +184,7 @@ impl<'a> TlvDecoder<'a> {
         // Read payload
         let payload_end = self.position + entry.size as usize;
         if payload_end > self.data.len() {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         
         let payload = &self.data[self.position..payload_end];
@@ -204,7 +204,7 @@ impl<'a> TlvDecoder<'a> {
             20 => BidTag::Result,
             21 => BidTag::Option,
             22 => BidTag::Array,
-            _ => return Err(BidError::InvalidType),
+            _ => return Err(BidError::invalid_type()),
         };
         
         Ok(Some((tag, payload)))
@@ -213,7 +213,7 @@ impl<'a> TlvDecoder<'a> {
     /// Decode a boolean from payload
     pub fn decode_bool(payload: &[u8]) -> BidResult<bool> {
         if payload.len() != 1 {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         Ok(payload[0] != 0)
     }
@@ -221,7 +221,7 @@ impl<'a> TlvDecoder<'a> {
     /// Decode an i32 from payload
     pub fn decode_i32(payload: &[u8]) -> BidResult<i32> {
         if payload.len() != 4 {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         Ok(i32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]))
     }
@@ -229,7 +229,7 @@ impl<'a> TlvDecoder<'a> {
     /// Decode an i64 from payload
     pub fn decode_i64(payload: &[u8]) -> BidResult<i64> {
         if payload.len() != 8 {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(payload);
@@ -239,7 +239,7 @@ impl<'a> TlvDecoder<'a> {
     /// Decode a handle from payload
     pub fn decode_handle(payload: &[u8]) -> BidResult<BidHandle> {
         if payload.len() != 8 {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(payload);
@@ -249,7 +249,7 @@ impl<'a> TlvDecoder<'a> {
     /// Decode an f32 from payload
     pub fn decode_f32(payload: &[u8]) -> BidResult<f32> {
         if payload.len() != 4 {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         Ok(f32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]))
     }
@@ -257,7 +257,7 @@ impl<'a> TlvDecoder<'a> {
     /// Decode an f64 from payload
     pub fn decode_f64(payload: &[u8]) -> BidResult<f64> {
         if payload.len() != 8 {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         let mut bytes = [0u8; 8];
         bytes.copy_from_slice(payload);
@@ -266,7 +266,7 @@ impl<'a> TlvDecoder<'a> {
     
     /// Decode a string from payload
     pub fn decode_string(payload: &[u8]) -> BidResult<&str> {
-        std::str::from_utf8(payload).map_err(|_| BidError::InvalidUtf8)
+        std::str::from_utf8(payload).map_err(|_| BidError::invalid_utf8())
     }
 }
 

@@ -44,7 +44,7 @@ impl NyashMethodInfo {
     /// Create method info with safe string handling
     pub fn new(method_id: u32, method_name: &str, signature_hash: u32) -> BidResult<(Self, CString)> {
         let c_name = CString::new(method_name)
-            .map_err(|_| BidError::InvalidUtf8)?;
+            .map_err(|_| BidError::invalid_utf8())?;
         
         let info = Self {
             method_id,
@@ -58,12 +58,12 @@ impl NyashMethodInfo {
     /// Get method name as string (unsafe: requires valid pointer)
     pub unsafe fn name(&self) -> BidResult<&str> {
         if self.method_name.is_null() {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         
         CStr::from_ptr(self.method_name)
             .to_str()
-            .map_err(|_| BidError::InvalidUtf8)
+            .map_err(|_| BidError::invalid_utf8())
     }
 }
 
@@ -102,12 +102,12 @@ impl NyashPluginInfo {
     /// Get type name as string (unsafe: requires valid pointer)
     pub unsafe fn name(&self) -> BidResult<&str> {
         if self.type_name.is_null() {
-            return Err(BidError::InvalidArgs);
+            return Err(BidError::invalid_args());
         }
         
         CStr::from_ptr(self.type_name)
             .to_str()
-            .map_err(|_| BidError::InvalidUtf8)
+            .map_err(|_| BidError::invalid_utf8())
     }
     
     /// Get methods as slice (unsafe: requires valid pointer and count)
@@ -158,7 +158,7 @@ impl PluginMetadata {
     ) -> BidResult<Self> {
         // Create type name
         let type_name_holder = CString::new(type_name)
-            .map_err(|_| BidError::InvalidUtf8)?;
+            .map_err(|_| BidError::invalid_utf8())?;
         
         // Create method infos
         let mut method_holders = Vec::new();
