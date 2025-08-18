@@ -34,141 +34,217 @@
 
 ## 📋 実装フェーズ
 
-### Phase 9.75g-1: BID基盤実装（3日）
+### ✅ Phase 9.75g-0: プロトタイプ実装（Day 1-5 完了！）
 
-#### 1.1 BIDパーサー実装（Day 1）
+#### 実装完了項目（2025-08-18）
+1. **仕様策定完了**
+   - birth/finiライフサイクル管理追加
+   - メモリ所有権ルール明確化
+   - プラグインが自らBox名を宣言する設計
+
+2. **基盤実装（Step 1-3）**
+   - ✅ FileBoxプラグイン（293KB .so、6メソッド実装）
+   - ✅ nyash.toml設定ファイル
+   - ✅ plugin-tester診断ツール（汎用設計）
+
+3. **重要な設計原則達成**
+   - Box名非決め打ち（プラグインが宣言）
+   - 汎用的設計（任意のプラグインに対応）
+   - birth/finiライフサイクル実装
+
+#### 実装詳細
+
+##### FileBoxプラグイン（plugins/nyash-filebox-plugin/）
 ```rust
-// src/bid/parser.rs
-pub struct BidDefinition {
-    pub version: u32,
-    pub transport: Transport,
-    pub interfaces: Vec<Interface>,
-}
+// 4つのFFI関数エクスポート
+#[no_mangle] pub extern "C" fn nyash_plugin_abi() -> i32 { 1 }
+#[no_mangle] pub extern "C" fn nyash_plugin_init(host: *const NyashHostVtable, info: *mut NyashPluginInfo) -> i32
+#[no_mangle] pub extern "C" fn nyash_plugin_invoke(method_id: u32, args: *const u8, result: *mut u8) -> i32
+#[no_mangle] pub extern "C" fn nyash_plugin_shutdown()
 
-pub struct Interface {
-    pub namespace: String,
-    pub name: String,
-    pub version: String,
-    pub methods: Vec<Method>,
-}
-
-pub struct Method {
-    pub name: String,
-    pub params: Vec<Param>,
-    pub returns: Option<Type>,
-    pub effects: Vec<Effect>,
-}
-
-// YAMLパーサー（serde_yaml使用）
-pub fn parse_bid(yaml_content: &str) -> Result<BidDefinition, BidError> {
-    // 実装
-}
+// 自己宣言型設計
+static TYPE_NAME: &[u8] = b"FileBox\0";
+(*info).type_id = 6;  // FileBoxのID
+(*info).type_name = TYPE_NAME.as_ptr() as *const c_char;
 ```
 
-#### 1.2 統一型システム（Day 1）
+##### plugin-tester診断ツール（tools/plugin-tester/）
 ```rust
-// src/bid/types.rs
-#[derive(Clone, Debug)]
-pub enum BidType {
-    // 基本型（Phase 1）
-    Bool,
-    I32,
-    I64,
-    F64,
-    String,
-    Bytes,
-    Handle(String),  // resource<T>
-    
-    // 将来の拡張用
-    List(Box<BidType>),
-    Map(Box<BidType>, Box<BidType>),
-    Optional(Box<BidType>),
-    Result(Box<BidType>, Box<BidType>),
+// 汎用的設計 - Box名を決め打ちしない
+let box_name = if plugin_info.type_name.is_null() {
+    "<unknown>".to_string()
+} else {
+    CStr::from_ptr(plugin_info.type_name).to_string_lossy().to_string()
+};
+
+// 診断出力
+println!("Plugin Information:");
+println!("  Box Type: {} (ID: {})", box_name, plugin_info.type_id);
+println!("  Methods: {}", plugin_info.method_count);
+```
+
+##### 実行結果
+```
+$ cargo run -- ../../plugins/nyash-filebox-plugin/target/debug/libnyash_filebox_plugin.so
+Plugin loaded successfully!
+Plugin Information:
+  Box Type: FileBox (ID: 6)
+  Methods: 6
+  - birth [ID: 0, Sig: 0xBEEFCAFE] (constructor)
+  - open [ID: 1, Sig: 0x12345678]
+  - read [ID: 2, Sig: 0x87654321]
+  - write [ID: 3, Sig: 0x11223344]
+  - close [ID: 4, Sig: 0xABCDEF00]
+  - fini [ID: 4294967295, Sig: 0xDEADBEEF] (destructor)
+```
+
+### 🎯 Phase 9.75g-1: Nyash統合実装（Step 4 - 段階的アプローチ）
+
+実際のplugin-tester成功実装を基に、以下の順序でNyashに統合：
+
+#### Step 4.1: TLVエンコード/デコード実装（src/bid/tlv.rs）
+```rust
+// プラグインとの通信プロトコル基盤
+// plugin-testerで検証済みの仕様を実装
+
+pub struct BidTLV {
+    pub version: u8,
+    pub flags: u8,
+    pub argc: u16,
+    pub entries: Vec<TLVEntry>,
 }
 
-// MirValueとの相互変換
-impl BidType {
-    pub fn to_mir_type(&self) -> MirType {
-        match self {
-            BidType::I64 => MirType::Integer,
-            BidType::F64 => MirType::Float,
-            BidType::String => MirType::String,
-            BidType::Bool => MirType::Bool,
-            BidType::Handle(name) => MirType::Box(name.clone()),
-            _ => todo!("Phase 2で実装")
+pub struct TLVEntry {
+    pub type_id: u8,
+    pub reserved: u8,
+    pub length: u16,
+    pub data: Vec<u8>,
+}
+
+// エンコード/デコード実装
+impl BidTLV {
+    pub fn encode_string(s: &str) -> TLVEntry {
+        TLVEntry {
+            type_id: 0x03,  // STRING
+            reserved: 0,
+            length: s.len() as u16,
+            data: s.as_bytes().to_vec(),
         }
+    }
+    
+    pub fn decode_string(entry: &TLVEntry) -> Result<String, BidError> {
+        String::from_utf8(entry.data.clone())
+            .map_err(|_| BidError::InvalidEncoding)
     }
 }
 ```
 
-#### 1.3 UniversalConnectorトレイト（Day 2）
+#### Step 4.2: プラグインローダー実装（src/bid/loader.rs）
 ```rust
-// src/bid/connector.rs
-pub trait UniversalConnector: Send + Sync {
-    /// BID定義から接続を確立
-    fn connect(&self, bid: &BidDefinition) -> Result<Box<dyn Connection>, BidError>;
-    
-    /// サポートするトランスポートタイプ
-    fn supported_transport(&self) -> TransportType;
+// plugin-testerの成功部分を移植
+// nyash.tomlパーサー（簡易版）
+
+pub struct PluginLoader {
+    plugins: HashMap<String, Arc<Plugin>>,
 }
 
-pub trait Connection: Send + Sync {
-    /// インターフェースのvtableを取得（高速パス用）
-    fn get_vtable(&self, interface: &str) -> Option<InterfaceVTable>;
-    
-    /// 汎用呼び出し（リモート/ブリッジ用）
-    fn invoke(&self, 
-        interface: &str, 
-        method: &str, 
-        args: &[BidValue]
-    ) -> Result<BidValue, BidError>;
+struct Plugin {
+    library: Library,
+    info: NyashPluginInfo,
+    invoke_fn: unsafe extern "C" fn(u32, *const u8, *mut u8) -> i32,
+}
+
+impl PluginLoader {
+    pub fn load_from_config(config_path: &str) -> Result<Self, BidError> {
+        // nyash.tomlを読み込み
+        let config = parse_nyash_toml(config_path)?;
+        
+        // 各プラグインをロード
+        for (box_name, plugin_name) in config.plugins {
+            self.load_plugin(&box_name, &plugin_name)?;
+        }
+        
+        Ok(self)
+    }
 }
 ```
 
-#### 1.4 統一エラーモデル（Day 2）
+#### Step 4.3: BoxFactoryRegistry実装（src/bid/registry.rs）
 ```rust
-// src/bid/error.rs
-use thiserror::Error;
+// ビルトイン vs プラグインの透過的切り替え
+// new FileBox()時の動的ディスパッチ
 
-#[derive(Error, Debug)]
-pub enum BidError {
-    #[error("Transport error: {0}")]
-    Transport(String),
-    
-    #[error("Interface error in {interface}: {message}")]
-    Interface { interface: String, message: String },
-    
-    #[error("Method not found: {interface}.{method}")]
-    MethodNotFound { interface: String, method: String },
-    
-    #[error("Type mismatch: expected {expected}, got {actual}")]
-    TypeMismatch { expected: String, actual: String },
-    
-    #[error("Remote execution error: {0}")]
-    Remote(String),
-    
-    // カテゴリー別エラー（ChatGPT提案）
-    #[error("{category} error: {message}")]
-    Categorized { 
-        category: ErrorCategory,
-        message: String,
-        retryable: bool,
-    },
+pub struct BoxFactoryRegistry {
+    builtin_factories: HashMap<String, BoxFactory>,
+    plugin_factories: HashMap<String, PluginBoxFactory>,
 }
 
-#[derive(Debug)]
-pub enum ErrorCategory {
-    Invalid,
-    NotFound,
-    Conflict,
-    Unavailable,
-    Timeout,
-    Cancelled,
-    Internal,
-    Permission,
-    Resource,
+impl BoxFactoryRegistry {
+    pub fn create_box(&self, box_name: &str, args: Vec<BidValue>) 
+        -> Result<Box<dyn NyashBox>, BidError> 
+    {
+        // プラグイン優先で検索
+        if let Some(plugin_factory) = self.plugin_factories.get(box_name) {
+            return plugin_factory.create(args);
+        }
+        
+        // ビルトインにフォールバック
+        if let Some(builtin_factory) = self.builtin_factories.get(box_name) {
+            return builtin_factory.create(args);
+        }
+        
+        Err(BidError::BoxTypeNotFound(box_name.to_string()))
+    }
 }
 ```
+
+#### Step 4.4: PluginBoxプロキシ実装（src/bid/plugin_box.rs）
+```rust
+// NyashBoxトレイト実装
+// Dropトレイトでfini()呼び出し保証
+
+pub struct PluginBox {
+    plugin: Arc<Plugin>,
+    handle: BidHandle,
+}
+
+impl NyashBox for PluginBox {
+    fn type_name(&self) -> &'static str {
+        // プラグインから取得した名前を返す
+        &self.plugin.info.type_name
+    }
+    
+    fn invoke_method(&self, method: &str, args: Vec<BidValue>) 
+        -> Result<BidValue, BidError> 
+    {
+        // TLVエンコード → FFI呼び出し → TLVデコード
+        let tlv_args = encode_to_tlv(args)?;
+        let mut result_buf = vec![0u8; 4096];
+        
+        let status = unsafe {
+            (self.plugin.invoke_fn)(
+                method_id,
+                tlv_args.as_ptr(),
+                result_buf.as_mut_ptr()
+            )
+        };
+        
+        if status == 0 {
+            decode_from_tlv(&result_buf)
+        } else {
+            Err(BidError::PluginError(status))
+        }
+    }
+}
+
+impl Drop for PluginBox {
+    fn drop(&mut self) {
+        // fini()メソッドを呼び出してリソース解放
+        let _ = self.invoke_method("fini", vec![]);
+    }
+}
+```
+
 
 ### Phase 9.75g-2: C ABI動的ライブラリConnector（3日）
 

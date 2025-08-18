@@ -323,6 +323,30 @@ echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
 ./target/debug/nyash app_dice_rpg.nyash
 ```
 
+#### 🔌 **プラグインテスター（BID-FFI診断ツール）**
+```bash
+# プラグインテスターのビルド
+cd tools/plugin-tester
+cargo build --release
+
+# プラグインの診断実行
+./target/release/plugin-tester ../../plugins/nyash-filebox-plugin/target/debug/libnyash_filebox_plugin.so
+
+# 出力例：
+# Plugin Information:
+#   Box Type: FileBox (ID: 6)  ← プラグインが自己宣言！
+#   Methods: 6
+#   - birth [ID: 0] (constructor)
+#   - open, read, write, close
+#   - fini [ID: 4294967295] (destructor)
+```
+
+**plugin-testerの特徴**:
+- Box名を決め打ちしない汎用設計
+- プラグインのFFI関数4つ（abi/init/invoke/shutdown）を検証
+- birth/finiライフサイクル確認
+- 将来の拡張: TLV検証、メモリリーク検出
+
 ### ⚠️ **ビルド時間に関する重要な注意**
 **wasmtime依存関係により、フルビルドは2-3分かかります。**
 - タイムアウトエラーを避けるため、ビルドコマンドには十分な時間を設定してください
@@ -450,10 +474,10 @@ docs/
 
 ---
 
-最終更新: 2025年8月14日 - **🚀 Phase 8完了・真の性能測定達成！**
-- **Phase 8.3完了**: Copilot×Claude協調でBox操作WASM実装完成
-- **真の性能判明**: WASM 13.5倍実行高速化（280倍はコンパイル性能）
-- **wasmtime統合**: 真のWASM実行性能測定環境完成
-- **VM性能問題発見**: インタープリターより0.9倍遅い問題特定
-- **copilot_issues.txt**: Phase順開発計画の軸として確立
+最終更新: 2025年8月18日 - **🚀 Phase 9.75g-0 BID-FFI基盤完成！**
+- **Phase 9.75g-0完了**: BID-FFI Step 1-3実装成功（プラグイン・テスター・設定）
+- **plugin-tester**: 汎用プラグイン診断ツール完成（CLAUDE.mdに追加）
+- **設計原則達成**: Box名非決め打ち・birth/finiライフサイクル・メモリ管理明確化
+- **次のステップ**: Step 4 - Nyashとの統合（src/bid/モジュール実装）
+- **copilot_issues.txt**: Phase順開発計画の軸として継続
 - **次期最優先**: AST→MIR Lowering完全実装（Phase 8.4）
