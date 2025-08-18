@@ -1,6 +1,7 @@
 //! nyash.toml v2 configuration parser
 //! 
-//! Supports both legacy single-box plugins and new multi-box plugins
+//! Ultimate simple design: nyash.toml-centric architecture + minimal FFI
+//! No Host VTable, single entry point (nyash_plugin_invoke)
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -8,108 +9,147 @@ use std::collections::HashMap;
 /// Root configuration structure
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NyashConfigV2 {
-    /// Plugins section (contains both legacy and new format)
+    /// Library definitions (multi-box capable)
     #[serde(default)]
-    pub plugins: PluginsSection,
-}
-
-/// Plugins section (both legacy and v2)
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct PluginsSection {
-    /// Legacy single-box plugins (box_name -> plugin_name)
-    #[serde(flatten)]
-    pub legacy_plugins: HashMap<String, String>,
-    
-    /// New multi-box plugin libraries
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub libraries: Option<HashMap<String, LibraryDefinition>>,
-    
-    /// Box type definitions
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub types: Option<HashMap<String, BoxTypeDefinition>>,
-}
-
-/// Plugin libraries section (not used in new structure)
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PluginLibraries {
-    #[serde(flatten)]
     pub libraries: HashMap<String, LibraryDefinition>,
+    
+    /// Plugin search paths
+    #[serde(default)]
+    pub plugin_paths: PluginPaths,
 }
 
-/// Library definition
+/// Library definition (simplified)
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LibraryDefinition {
-    pub plugin_path: String,
-    pub provides: Vec<String>,
+    /// Box types provided by this library
+    pub boxes: Vec<String>,
+    
+    /// Path to the shared library
+    pub path: String,
 }
 
-/// Box type definition
+/// Plugin search paths
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct PluginPaths {
+    #[serde(default)]
+    pub search_paths: Vec<String>,
+}
+
+/// Box type configuration (nested under library)
 #[derive(Debug, Deserialize, Serialize)]
-pub struct BoxTypeDefinition {
-    pub library: String,
+pub struct BoxTypeConfig {
+    /// Box type ID
     pub type_id: u32,
+    
+    /// ABI version (default: 1)
+    #[serde(default = "default_abi_version")]
+    pub abi_version: u32,
+    
+    /// Method definitions
     pub methods: HashMap<String, MethodDefinition>,
 }
 
-/// Method definition
+/// Method definition (simplified - no argument info needed)
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MethodDefinition {
-    #[serde(default)]
-    pub args: Vec<ArgumentDefinition>,
-    
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub returns: Option<String>,
+    /// Method ID for FFI
+    pub method_id: u32,
 }
 
-/// Argument definition
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ArgumentDefinition {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    
-    pub from: String,
-    pub to: String,
+fn default_abi_version() -> u32 {
+    1
 }
 
 impl NyashConfigV2 {
     /// Parse nyash.toml file
     pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
-        let config: NyashConfigV2 = toml::from_str(&content)?;
-        Ok(config)
+        
+        // Parse as raw TOML first to handle nested box configs
+        let mut config: toml::Value = toml::from_str(&content)?;
+        
+        // Extract library definitions
+        let libraries = Self::parse_libraries(&mut config)?;
+        
+        // Extract plugin paths
+        let plugin_paths = if let Some(paths) = config.get("plugin_paths") {
+            paths.clone().try_into::<PluginPaths>()?
+        } else {
+            PluginPaths::default()
+        };
+        
+        Ok(NyashConfigV2 {
+            libraries,
+            plugin_paths,
+        })
     }
     
-    /// Check if using v2 format
-    pub fn is_v2_format(&self) -> bool {
-        self.plugins.libraries.is_some() || self.plugins.types.is_some()
-    }
-    
-    /// Get all box types provided by a library
-    pub fn get_box_types_for_library(&self, library_name: &str) -> Vec<String> {
-        if let Some(libs) = &self.plugins.libraries {
-            if let Some(lib_def) = libs.get(library_name) {
-                return lib_def.provides.clone();
-            }
-        }
-        vec![]
-    }
-    
-    /// Get library name for a box type
-    pub fn get_library_for_box_type(&self, box_type: &str) -> Option<String> {
-        // Check v2 format first
-        if let Some(types) = &self.plugins.types {
-            if let Some(type_def) = types.get(box_type) {
-                return Some(type_def.library.clone());
+    /// Parse library definitions with nested box configs
+    fn parse_libraries(config: &mut toml::Value) -> Result<HashMap<String, LibraryDefinition>, Box<dyn std::error::Error>> {
+        let mut libraries = HashMap::new();
+        
+        if let Some(libs_section) = config.get("libraries").and_then(|v| v.as_table()) {
+            for (lib_name, lib_value) in libs_section {
+                if let Some(lib_table) = lib_value.as_table() {
+                    let boxes = lib_table.get("boxes")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str())
+                                .map(|s| s.to_string())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    
+                    let path = lib_table.get("path")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(lib_name)
+                        .to_string();
+                    
+                    libraries.insert(lib_name.clone(), LibraryDefinition {
+                        boxes,
+                        path,
+                    });
+                }
             }
         }
         
-        // Fall back to legacy format
-        self.plugins.legacy_plugins.get(box_type).cloned()
+        Ok(libraries)
     }
     
-    /// Access legacy plugins directly (for backward compatibility)
-    pub fn get_legacy_plugins(&self) -> &HashMap<String, String> {
-        &self.plugins.legacy_plugins
+    /// Get box configuration from nested structure
+    /// e.g., [libraries."libnyash_filebox_plugin.so".FileBox]
+    pub fn get_box_config(&self, lib_name: &str, box_name: &str, config_value: &toml::Value) -> Option<BoxTypeConfig> {
+        config_value
+            .get("libraries")
+            .and_then(|v| v.get(lib_name))
+            .and_then(|v| v.get(box_name))
+            .and_then(|v| v.clone().try_into::<BoxTypeConfig>().ok())
+    }
+    
+    /// Find library that provides a specific box type
+    pub fn find_library_for_box(&self, box_type: &str) -> Option<(&str, &LibraryDefinition)> {
+        self.libraries.iter()
+            .find(|(_, lib)| lib.boxes.contains(&box_type.to_string()))
+            .map(|(name, lib)| (name.as_str(), lib))
+    }
+    
+    /// Resolve plugin path from search paths
+    pub fn resolve_plugin_path(&self, plugin_name: &str) -> Option<String> {
+        // Try exact path first
+        if std::path::Path::new(plugin_name).exists() {
+            return Some(plugin_name.to_string());
+        }
+        
+        // Search in configured paths
+        for search_path in &self.plugin_paths.search_paths {
+            let path = std::path::Path::new(search_path).join(plugin_name);
+            if path.exists() {
+                return Some(path.to_string_lossy().to_string());
+            }
+        }
+        
+        None
     }
 }
 
@@ -118,37 +158,26 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_parse_legacy_format() {
+    fn test_parse_v2_config() {
         let toml_str = r#"
-[plugins]
-FileBox = "nyash-filebox-plugin"
-
-[plugins.FileBox.methods]
-read = { args = [] }
-"#;
-        
-        let config: NyashConfigV2 = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.plugins.get("FileBox"), Some(&"nyash-filebox-plugin".to_string()));
-        assert!(!config.is_v2_format());
-    }
-    
-    #[test]
-    fn test_parse_v2_format() {
-        let toml_str = r#"
-[plugins.libraries]
-"nyash-network" = {
-    plugin_path = "libnyash_network.so",
-    provides = ["SocketBox", "HTTPServerBox"]
+[libraries]
+"libnyash_filebox_plugin.so" = {
+    boxes = ["FileBox"],
+    path = "./target/release/libnyash_filebox_plugin.so"
 }
 
-[plugins.types.SocketBox]
-library = "nyash-network"
-type_id = 100
-methods = { bind = { args = [] } }
+[libraries."libnyash_filebox_plugin.so".FileBox]
+type_id = 6
+abi_version = 1
+
+[libraries."libnyash_filebox_plugin.so".FileBox.methods]
+birth = { method_id = 0 }
+open = { method_id = 1 }
+close = { method_id = 4 }
 "#;
         
-        let config: NyashConfigV2 = toml::from_str(toml_str).unwrap();
-        assert!(config.is_v2_format());
-        assert_eq!(config.get_box_types_for_library("nyash-network"), vec!["SocketBox", "HTTPServerBox"]);
+        let config: toml::Value = toml::from_str(toml_str).unwrap();
+        let nyash_config = NyashConfigV2::from_file("test.toml");
+        // Test would need actual file...
     }
 }

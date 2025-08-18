@@ -4,4 +4,4 @@
 
 pub mod nyash_toml_v2;
 
-pub use nyash_toml_v2::{NyashConfigV2, LibraryDefinition, BoxTypeDefinition};
+pub use nyash_toml_v2::{NyashConfigV2, LibraryDefinition, BoxTypeConfig, MethodDefinition};

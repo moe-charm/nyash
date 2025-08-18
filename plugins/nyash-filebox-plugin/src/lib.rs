@@ -4,19 +4,13 @@
 
 use std::collections::HashMap;
 use std::os::raw::c_char;
-use std::ptr;
+// std::ptr削除（未使用）
 use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
 use std::io::{Read, Write, Seek, SeekFrom};
 
 // ============ FFI Types ============
 
-#[repr(C)]
-pub struct NyashHostVtable {
-    pub alloc: unsafe extern "C" fn(size: usize) -> *mut u8,
-    pub free: unsafe extern "C" fn(ptr: *mut u8),
-    pub wake: unsafe extern "C" fn(handle: u64),
-    pub log: unsafe extern "C" fn(level: i32, msg: *const c_char),
-}
+// Host VTable廃止 - 不要
 
 #[repr(C)]
 pub struct NyashMethodInfo {
@@ -58,10 +52,12 @@ struct FileBoxInstance {
 }
 
 // グローバルインスタンス管理（実際の実装ではより安全な方法を使用）
-static mut INSTANCES: Option<Mutex<HashMap<u32, FileBoxInstance>>> = None;
+use once_cell::sync::Lazy;
+static INSTANCES: Lazy<Mutex<HashMap<u32, FileBoxInstance>>> = Lazy::new(|| {
+    Mutex::new(HashMap::new())
+});
 
-// ホスト関数テーブル（初期化時に設定）
-static mut HOST_VTABLE: Option<&'static NyashHostVtable> = None;
+// ホスト関数テーブルは使用しない（Host VTable廃止）
 
 // インスタンスIDカウンタ（1開始）
 static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -74,22 +70,11 @@ pub extern "C" fn nyash_plugin_abi() -> u32 {
     1  // BID-1 support
 }
 
-/// Plugin initialization (simplified - no metadata)
+/// Plugin initialization (optional - global setup)
 #[no_mangle]
-pub extern "C" fn nyash_plugin_init(
-    host: *const NyashHostVtable,
-) -> i32 {
-    if host.is_null() {
-        return NYB_E_INVALID_ARGS;
-    }
-    
-    unsafe {
-        HOST_VTABLE = Some(&*host);
-        
-        // インスタンス管理初期化のみ
-        INSTANCES = Some(Mutex::new(HashMap::new()));
-    }
-    
+pub extern "C" fn nyash_plugin_init() -> i32 {
+    // グローバル初期化（Lazy staticのため特に必要なし）
+    eprintln!("[FileBox] Plugin initialized");
     NYB_SUCCESS
 }
 
@@ -130,16 +115,12 @@ pub extern "C" fn nyash_plugin_invoke(
 
                 // 新しいインスタンスを作成
                 let instance_id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if let Some(ref mutex) = INSTANCES {
-                    if let Ok(mut map) = mutex.lock() {
-                        map.insert(instance_id, FileBoxInstance {
-                            file: None,
-                            path: String::new(),
-                            buffer: None,
-                        });
-                    } else {
-                        return NYB_E_PLUGIN_ERROR;
-                    }
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.insert(instance_id, FileBoxInstance {
+                        file: None,
+                        path: String::new(),
+                        buffer: None,
+                    });
                 } else {
                     return NYB_E_PLUGIN_ERROR;
                 }
@@ -152,39 +133,33 @@ pub extern "C" fn nyash_plugin_invoke(
             }
             METHOD_FINI => {
                 // 指定インスタンスを解放
-                if let Some(ref mutex) = INSTANCES {
-                    if let Ok(mut map) = mutex.lock() {
-                        map.remove(&_instance_id);
-                        return NYB_SUCCESS;
-                    } else {
-                        return NYB_E_PLUGIN_ERROR;
-                    }
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.remove(&_instance_id);
+                    return NYB_SUCCESS;
+                } else {
+                    return NYB_E_PLUGIN_ERROR;
                 }
-                NYB_E_PLUGIN_ERROR
             }
             METHOD_OPEN => {
                 // args: TLV { String path, String mode }
-                let args = unsafe { std::slice::from_raw_parts(_args, _args_len) };
+                let args = std::slice::from_raw_parts(_args, _args_len);
                 match tlv_parse_two_strings(args) {
                     Ok((path, mode)) => {
                         // Preflight for Void TLV: header(4) + entry(4)
                         if preflight(_result, _result_len, 8) { return NYB_E_SHORT_BUFFER; }
                         log_info(&format!("OPEN path='{}' mode='{}'", path, mode));
-                        if let Some(ref mutex) = INSTANCES {
-                            if let Ok(mut map) = mutex.lock() {
-                                if let Some(inst) = map.get_mut(&_instance_id) {
-                                    match open_file(&mode, &path) {
-                                        Ok(file) => {
-                                            inst.file = Some(file);
-                                            // return TLV Void
-                                            return write_tlv_void(_result, _result_len);
-                                        }
-                                        Err(_) => return NYB_E_PLUGIN_ERROR,
+                        if let Ok(mut map) = INSTANCES.lock() {
+                            if let Some(inst) = map.get_mut(&_instance_id) {
+                                match open_file(&mode, &path) {
+                                    Ok(file) => {
+                                        inst.file = Some(file);
+                                        // return TLV Void
+                                        return write_tlv_void(_result, _result_len);
                                     }
-                                } else { return NYB_E_PLUGIN_ERROR; }
+                                    Err(_) => return NYB_E_PLUGIN_ERROR,
+                                }
                             } else { return NYB_E_PLUGIN_ERROR; }
-                        }
-                        NYB_E_PLUGIN_ERROR
+                        } else { return NYB_E_PLUGIN_ERROR; }
                     }
                     Err(_) => NYB_E_INVALID_ARGS,
                 }
@@ -192,56 +167,50 @@ pub extern "C" fn nyash_plugin_invoke(
             METHOD_READ => {
                 // args: None (Nyash spec: read() has no arguments)
                 // Read entire file content
-                if let Some(ref mutex) = INSTANCES {
-                    if let Ok(mut map) = mutex.lock() {
-                        if let Some(inst) = map.get_mut(&_instance_id) {
-                            if let Some(file) = inst.file.as_mut() {
-                                // Read entire file from beginning
-                                let _ = file.seek(SeekFrom::Start(0));
-                                let mut buf = Vec::new();
-                                match file.read_to_end(&mut buf) {
-                                    Ok(n) => {
-                                        log_info(&format!("READ {} bytes (entire file)", n));
-                                        // Preflight for Bytes TLV: header(4) + entry(4) + content
-                                        let need = 8usize.saturating_add(buf.len());
-                                        if preflight(_result, _result_len, need) { return NYB_E_SHORT_BUFFER; }
-                                        return write_tlv_bytes(&buf, _result, _result_len);
-                                    }
-                                    Err(_) => return NYB_E_PLUGIN_ERROR,
+                if let Ok(mut map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get_mut(&_instance_id) {
+                        if let Some(file) = inst.file.as_mut() {
+                            // Read entire file from beginning
+                            let _ = file.seek(SeekFrom::Start(0));
+                            let mut buf = Vec::new();
+                            match file.read_to_end(&mut buf) {
+                                Ok(n) => {
+                                    log_info(&format!("READ {} bytes (entire file)", n));
+                                    // Preflight for Bytes TLV: header(4) + entry(4) + content
+                                    let need = 8usize.saturating_add(buf.len());
+                                    if preflight(_result, _result_len, need) { return NYB_E_SHORT_BUFFER; }
+                                    return write_tlv_bytes(&buf, _result, _result_len);
                                 }
-                            } else { return NYB_E_INVALID_HANDLE; }
-                        } else { return NYB_E_PLUGIN_ERROR; }
+                                Err(_) => return NYB_E_PLUGIN_ERROR,
+                            }
+                        } else { return NYB_E_INVALID_HANDLE; }
                     } else { return NYB_E_PLUGIN_ERROR; }
-                }
-                NYB_E_PLUGIN_ERROR
+                } else { return NYB_E_PLUGIN_ERROR; }
             }
             METHOD_WRITE => {
                 // args: TLV { Bytes data }
-                let args = unsafe { std::slice::from_raw_parts(_args, _args_len) };
+                let args = std::slice::from_raw_parts(_args, _args_len);
                 match tlv_parse_bytes(args) {
                     Ok(data) => {
                         // Preflight for I32 TLV: header(4) + entry(4) + 4
                         if preflight(_result, _result_len, 12) { return NYB_E_SHORT_BUFFER; }
-                        if let Some(ref mutex) = INSTANCES {
-                            if let Ok(mut map) = mutex.lock() {
-                                if let Some(inst) = map.get_mut(&_instance_id) {
-                                    if let Some(file) = inst.file.as_mut() {
-                                        match file.write(&data) {
-                                            Ok(n) => {
-                                                // ファイルバッファをフラッシュ（重要！）
-                                                if let Err(_) = file.flush() {
-                                                    return NYB_E_PLUGIN_ERROR;
-                                                }
-                                                log_info(&format!("WRITE {} bytes", n));
-                                                return write_tlv_i32(n as i32, _result, _result_len);
+                        if let Ok(mut map) = INSTANCES.lock() {
+                            if let Some(inst) = map.get_mut(&_instance_id) {
+                                if let Some(file) = inst.file.as_mut() {
+                                    match file.write(&data) {
+                                        Ok(n) => {
+                                            // ファイルバッファをフラッシュ（重要！）
+                                            if let Err(_) = file.flush() {
+                                                return NYB_E_PLUGIN_ERROR;
                                             }
-                                            Err(_) => return NYB_E_PLUGIN_ERROR,
+                                            log_info(&format!("WRITE {} bytes", n));
+                                            return write_tlv_i32(n as i32, _result, _result_len);
                                         }
-                                    } else { return NYB_E_INVALID_HANDLE; }
-                                } else { return NYB_E_PLUGIN_ERROR; }
+                                        Err(_) => return NYB_E_PLUGIN_ERROR,
+                                    }
+                                } else { return NYB_E_INVALID_HANDLE; }
                             } else { return NYB_E_PLUGIN_ERROR; }
-                        }
-                        NYB_E_PLUGIN_ERROR
+                        } else { return NYB_E_PLUGIN_ERROR; }
                     }
                     Err(_) => NYB_E_INVALID_ARGS,
                 }
@@ -250,15 +219,16 @@ pub extern "C" fn nyash_plugin_invoke(
                 // Preflight for Void TLV
                 if preflight(_result, _result_len, 8) { return NYB_E_SHORT_BUFFER; }
                 log_info("CLOSE");
-                if let Some(ref mutex) = INSTANCES {
-                    if let Ok(mut map) = mutex.lock() {
-                        if let Some(inst) = map.get_mut(&_instance_id) {
-                            inst.file = None;
-                            return write_tlv_void(_result, _result_len);
-                        } else { return NYB_E_PLUGIN_ERROR; }
-                    } else { return NYB_E_PLUGIN_ERROR; }
+                if let Ok(mut map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get_mut(&_instance_id) {
+                        inst.file = None;
+                        return write_tlv_void(_result, _result_len);
+                    } else { 
+                        return NYB_E_PLUGIN_ERROR; 
+                    }
+                } else { 
+                    return NYB_E_PLUGIN_ERROR; 
                 }
-                NYB_E_PLUGIN_ERROR
             }
             _ => NYB_SUCCESS
         }
@@ -374,22 +344,17 @@ fn tlv_parse_bytes(data: &[u8]) -> Result<Vec<u8>, ()> {
 }
 
 fn log_info(message: &str) {
-    unsafe {
-        if let Some(vt) = HOST_VTABLE {
-            let log_fn = vt.log;
-            if let Ok(c) = std::ffi::CString::new(message) {
-                log_fn(1, c.as_ptr());
-            }
-        }
-    }
+    eprintln!("[FileBox] {}", message);
 }
 
 /// Plugin shutdown
 #[no_mangle]
 pub extern "C" fn nyash_plugin_shutdown() {
-    unsafe {
-        INSTANCES = None;
+    // インスタンスをクリア
+    if let Ok(mut map) = INSTANCES.lock() {
+        map.clear();
     }
+    eprintln!("[FileBox] Plugin shutdown");
 }
 
 // ============ Unified Plugin API ============
