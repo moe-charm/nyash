@@ -45,6 +45,12 @@ pub mod runner;
 // BID-FFI / Plugin System (prototype)
 pub mod bid;
 
+// Configuration system
+pub mod config;
+
+// Runtime system (plugins, registry, etc.)
+pub mod runtime;
+
 use nyash_rust::cli::CliConfig;
 use runner::NyashRunner;
 

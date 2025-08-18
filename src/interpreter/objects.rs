@@ -762,6 +762,26 @@ impl NyashInterpreter {
             return Ok((*instance_arc).clone_box());  // Convert Arc back to Box for external interface
         }
         
+        // 🔌 v2プラグインシステム: BoxFactoryRegistryをチェック
+        use crate::runtime::get_global_registry;
+        let registry = get_global_registry();
+        
+        if let Some(_provider) = registry.get_provider(class) {
+            // BoxFactoryRegistry経由でBoxを生成（v2プラグインシステム）
+            let nyash_args: Vec<Box<dyn NyashBox>> = arguments.iter()
+                .map(|arg| self.execute_expression(arg))
+                .collect::<Result<Vec<_>, _>>()?;
+            
+            match registry.create_box(class, &nyash_args) {
+                Ok(plugin_box) => return Ok(plugin_box),
+                Err(e) => {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("Failed to create {} via plugin: {}", class, e),
+                    });
+                }
+            }
+        }
+        
         // プラグインもユーザー定義も見つからなかった場合
         return Err(RuntimeError::UndefinedClass { name: class.to_string() });
     }
