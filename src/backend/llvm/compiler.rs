@@ -3,20 +3,23 @@
  */
 
 use crate::mir::function::MirModule;
-use crate::mir::instruction::MirInstruction;
-use crate::box_trait::{NyashBox, IntegerBox};
+use crate::mir::instruction::{MirInstruction, ConstValue, BinaryOp, UnaryOp, CompareOp};
+use crate::mir::ValueId;
+use crate::box_trait::{NyashBox, IntegerBox, FloatBox, StringBox, BoolBox, NullBox};
 use super::context::CodegenContext;
+use std::collections::HashMap;
 
-/// Mock LLVM Compiler for demonstration (no inkwell dependency)
-/// This demonstrates the API structure needed for LLVM integration
+/// Mock LLVM Compiler with MIR interpreter for demonstration
+/// This simulates LLVM behavior by interpreting MIR instructions
 pub struct LLVMCompiler {
-    _phantom: std::marker::PhantomData<()>,
+    /// Values stored during mock execution
+    values: HashMap<ValueId, Box<dyn NyashBox>>,
 }
 
 impl LLVMCompiler {
     pub fn new() -> Result<Self, String> {
         Ok(Self {
-            _phantom: std::marker::PhantomData,
+            values: HashMap::new(),
         })
     }
     
@@ -49,56 +52,108 @@ impl LLVMCompiler {
     }
     
     pub fn compile_and_execute(
-        &self,
+        &mut self,
         mir_module: &MirModule,
         temp_path: &str,
     ) -> Result<Box<dyn NyashBox>, String> {
-        // Mock implementation - simulates the complete compilation and execution pipeline
+        // Mock implementation - interprets MIR instructions to simulate execution
         
-        println!("🚀 Mock LLVM Compile & Execute:");
+        println!("🚀 Mock LLVM Compile & Execute (MIR Interpreter Mode):");
         
         // 1. Mock object file generation
         let obj_path = format!("{}.o", temp_path);
         self.compile_module(mir_module, &obj_path)?;
         
-        // 2. Mock linking (would use system cc in real implementation)
-        println!("   🔗 Mock linking...");
-        let executable_path = format!("{}_exec", temp_path);
+        // 2. Find and execute main function
+        let main_func = mir_module.functions.get("Main.main")
+            .ok_or("Main.main function not found")?;
         
-        // 3. Mock execution - hardcoded return 42 for PoC
-        println!("   ⚡ Mock execution...");
+        println!("   ⚡ Interpreting MIR instructions...");
         
-        // Find main function and analyze return instructions
-        if let Some(main_func) = mir_module.functions.get("Main.main") {
-            for (_block_id, block) in &main_func.blocks {
-                for inst in &block.instructions {
-                    match inst {
-                        MirInstruction::Return { value: Some(_value_id) } => {
-                            println!("   📊 Found return instruction - simulating exit code 42");
-                            
-                            // 4. Cleanup mock files
-                            let _ = std::fs::remove_file(&obj_path);
-                            
-                            return Ok(Box::new(IntegerBox::new(42)));
+        // 3. Execute MIR instructions
+        let result = self.interpret_function(main_func)?;
+        
+        // 4. Cleanup mock files
+        let _ = std::fs::remove_file(&obj_path);
+        
+        Ok(result)
+    }
+    
+    /// Interpret a MIR function by executing its instructions
+    fn interpret_function(
+        &mut self,
+        func: &crate::mir::function::MirFunction,
+    ) -> Result<Box<dyn NyashBox>, String> {
+        // Clear value storage
+        self.values.clear();
+        
+        // For now, just execute the entry block
+        if let Some(entry_block) = func.blocks.get(&0) {
+            for inst in &entry_block.instructions {
+                match inst {
+                    MirInstruction::Const { dst, value } => {
+                        let nyash_value = match value {
+                            ConstValue::Integer(i) => Box::new(IntegerBox::new(*i)) as Box<dyn NyashBox>,
+                            ConstValue::Float(f) => Box::new(FloatBox::new(*f)) as Box<dyn NyashBox>,
+                            ConstValue::String(s) => Box::new(StringBox::new(s.clone())) as Box<dyn NyashBox>,
+                            ConstValue::Bool(b) => Box::new(BoolBox::new(*b)) as Box<dyn NyashBox>,
+                            ConstValue::Null => Box::new(NullBox::new()) as Box<dyn NyashBox>,
+                        };
+                        self.values.insert(*dst, nyash_value);
+                        println!("   📝 %{} = const {:?}", dst.0, value);
+                    }
+                    
+                    MirInstruction::BinOp { dst, op, lhs, rhs } => {
+                        // Get operands
+                        let left = self.values.get(lhs)
+                            .ok_or_else(|| format!("Value %{} not found", lhs.0))?;
+                        let right = self.values.get(rhs)
+                            .ok_or_else(|| format!("Value %{} not found", rhs.0))?;
+                        
+                        // Simple integer arithmetic for now
+                        if let (Some(l), Some(r)) = (left.as_any().downcast_ref::<IntegerBox>(), 
+                                                      right.as_any().downcast_ref::<IntegerBox>()) {
+                            let result = match op {
+                                BinaryOp::Add => l.value() + r.value(),
+                                BinaryOp::Sub => l.value() - r.value(),
+                                BinaryOp::Mul => l.value() * r.value(),
+                                BinaryOp::Div => {
+                                    if r.value() == 0 {
+                                        return Err("Division by zero".to_string());
+                                    }
+                                    l.value() / r.value()
+                                }
+                                BinaryOp::Mod => l.value() % r.value(),
+                            };
+                            self.values.insert(*dst, Box::new(IntegerBox::new(result)));
+                            println!("   📊 %{} = %{} {:?} %{} = {}", dst.0, lhs.0, op, rhs.0, result);
+                        } else {
+                            return Err("Binary operation on non-integer values not supported in mock".to_string());
                         }
-                        MirInstruction::Return { value: None } => {
-                            println!("   📊 Found void return - simulating exit code 0");
-                            
-                            // 4. Cleanup mock files
-                            let _ = std::fs::remove_file(&obj_path);
-                            
+                    }
+                    
+                    MirInstruction::Return { value } => {
+                        if let Some(val_id) = value {
+                            let result = self.values.get(val_id)
+                                .ok_or_else(|| format!("Return value %{} not found", val_id.0))?
+                                .clone_box();
+                            println!("   ✅ Returning value from %{}", val_id.0);
+                            return Ok(result);
+                        } else {
+                            println!("   ✅ Void return");
                             return Ok(Box::new(IntegerBox::new(0)));
                         }
-                        _ => {
-                            // Other instructions would be processed here
-                        }
+                    }
+                    
+                    _ => {
+                        // Other instructions not yet implemented
+                        println!("   ⚠️  Skipping instruction: {:?}", inst);
                     }
                 }
             }
         }
         
-        // Default case
-        let _ = std::fs::remove_file(&obj_path);
+        // Default return
         Ok(Box::new(IntegerBox::new(0)))
     }
 }

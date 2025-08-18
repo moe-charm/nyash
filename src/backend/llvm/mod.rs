@@ -16,7 +16,7 @@ pub fn compile_and_execute(
     mir_module: &MirModule,
     output_path: &str,
 ) -> Result<Box<dyn NyashBox>, String> {
-    let compiler = compiler::LLVMCompiler::new()?;
+    let mut compiler = compiler::LLVMCompiler::new()?;
     compiler.compile_and_execute(mir_module, output_path)
 }
 
