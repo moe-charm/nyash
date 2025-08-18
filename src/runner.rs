@@ -5,8 +5,8 @@
  * separated from CLI parsing and the main entry point.
  */
 
-use crate::cli::CliConfig;
-use crate::{
+use nyash_rust::cli::CliConfig;
+use nyash_rust::{
     box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, AddBox, BoxCore},
     tokenizer::{NyashTokenizer},
     ast::ASTNode,
@@ -17,11 +17,11 @@ use crate::{
 };
 
 #[cfg(feature = "llvm")]
-use crate::backend::{llvm_compile_and_execute};
+use nyash_rust::backend::{llvm_compile_and_execute};
 use std::{fs, process};
 
 // v2 plugin system imports
-use crate::runtime::init_global_loader_v2;
+use nyash_rust::runtime::{init_global_loader_v2, get_global_registry, get_global_loader_v2, PluginConfig};
 
 /// Main execution coordinator
 pub struct NyashRunner {
@@ -57,7 +57,7 @@ impl NyashRunner {
     }
 
     fn init_bid_plugins(&self) {
-        // Best-effort init; do not fail the program if missing
+        // v2プラグインシステムを初期化
         eprintln!("🔍 DEBUG: Initializing v2 plugin system");
         
         // Try to load nyash.toml configuration
@@ -65,8 +65,6 @@ impl NyashRunner {
             println!("🔌 v2 plugin system initialized from nyash.toml");
             
             // Apply plugin configuration to the box registry
-            use crate::runtime::{get_global_registry, get_global_loader_v2};
-            
             let loader = get_global_loader_v2();
             let loader = loader.read().unwrap();
             
@@ -78,11 +76,13 @@ impl NyashRunner {
                     for box_name in &lib_def.boxes {
                         eprintln!("  📦 Registering plugin provider for {}", box_name);
                         // Note: plugin_name is lib_name in v2 system
-                        registry.apply_plugin_config(&crate::runtime::PluginConfig {
+                        registry.apply_plugin_config(&PluginConfig {
                             plugins: [(box_name.clone(), lib_name.clone())].into(),
                         });
                     }
                 }
+                
+                println!("✅ v2 plugin system fully configured");
             }
         } else {
             eprintln!("⚠️ Failed to load nyash.toml - plugins disabled");

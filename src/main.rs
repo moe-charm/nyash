@@ -45,7 +45,7 @@ pub mod runner;
 // BID-FFI / Plugin System (prototype)
 pub mod bid;
 
-use cli::CliConfig;
+use nyash_rust::cli::CliConfig;
 use runner::NyashRunner;
 
 /// Thin entry point - delegates to CLI parsing and runner execution

@@ -640,6 +640,7 @@ impl NyashInterpreter {
             });
         }
         
+        /* v2 plugin system migration - old BID registry disabled
         // 🚀 プラグインレジストリをチェック（nyash.tomlから動的）
         let plugin_exists = if let Some(reg) = crate::bid::registry::global() {
             reg.get_by_name(class).is_some()
@@ -664,6 +665,14 @@ impl NyashInterpreter {
         if plugin_exists {
             if let Some(reg) = crate::bid::registry::global() {
                 if let Some(plugin) = reg.get_by_name(class) {
+        */
+        
+        // ユーザー定義Box宣言をチェック
+        let user_defined_exists = {
+            let box_decls = self.shared.box_declarations.read().unwrap();
+            box_decls.contains_key(class)
+        };
+        /* continuing old BID registry code - disabled for v2
                     // プラグイン版：引数なしでbirthメソッド呼び出し（nyash.tomlに従う）
                     if arguments.len() == 0 {
                         // 汎用プラグインBox生成システム
@@ -682,6 +691,7 @@ impl NyashInterpreter {
                 }
             }
         }
+        */
         
         // ユーザー定義Box宣言を探す
         if user_defined_exists {

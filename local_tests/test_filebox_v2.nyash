@@ -1,0 +1,13 @@
+// FileBox v2プラグインシステムテスト
+print("=== FileBox v2 Plugin Test ===")
+
+// FileBoxを生成してみる
+print("Creating FileBox instance...")
+local fileBox
+fileBox = new FileBox()
+
+// ファイル情報を表示
+print("FileBox created: " + fileBox.toString())
+
+// とりあえずここまでで動作確認
+print("=== Test completed ===")

@@ -109,15 +109,9 @@ impl NyashBox for GenericPluginBox {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        // 新しいインスタンスを作成
-        if let Some(reg) = crate::bid::registry::global() {
-            if let Some(plugin) = reg.get_by_name(&self.box_name) {
-                if let Ok(new_box) = GenericPluginBox::birth(plugin, self.box_name.clone()) {
-                    return Box::new(new_box);
-                }
-            }
-        }
-        Box::new(StringBox::new("<plugin clone failed>"))
+        // v2 plugin system migration: simplified clone for now
+        // TODO: Implement proper cloning through v2 plugin loader
+        Box::new(StringBox::new(format!("{}(plugin-clone)", self.box_name)))
     }
     
     fn share_box(&self) -> Box<dyn NyashBox> {

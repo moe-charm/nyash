@@ -48,6 +48,9 @@ pub mod bid;
 // Configuration system
 pub mod config;
 
+// CLI system
+pub mod cli;
+
 // Runtime system (plugins, registry, etc.)
 pub mod runtime;
 
