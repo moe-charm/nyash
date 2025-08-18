@@ -160,73 +160,118 @@ cargo build --release -j32
 ```
 
 ---
-**最終更新**: 2025-08-18 09:00 JST  
-**次回レビュー**: 2025-08-18（FileBoxプラグイン作成開始時）
+**最終更新**: 2025-08-18 10:00 JST  
+**次回レビュー**: 2025-08-18（Nyash統合開始時）
 
 ## 🎯 **現在の状況** (2025-08-18)
 
-### クリーンアップ完了
-1. **古いプラグインシステム削除**: ソースコードをcommit 3f7d71fに巻き戻し ✅
-2. **ドキュメント保持**: docs/は最新の状態を維持 ✅  
-3. **基本動作確認**: nyashバイナリが正常動作 ✅
-4. **ビルド成功**: `cargo build --release --bin nyash` 完了 ✅
+### ✅ Step 1-3 完了！BID-FFI基盤実装成功
 
-### BID-FFI実装状況
-- **仕様**: 完成済み（docs/説明書/reference/box-design/ffi-abi-specification.md）
-- **設計**: 完成済み（docs/説明書/reference/box-design/plugin-system.md）
-- **基盤コード**: src/bid/モジュールは削除済み（再実装必要）
-- **プラグイン**: plugins/nyash-filebox-pluginも削除済み（再作成必要）
+#### 達成した重要な設計原則
+1. **Box名非決め打ち**: プラグインが「私はFileBoxです」と宣言
+2. **汎用的設計**: plugin-testerは任意のプラグインに対応
+3. **メモリ管理明確化**: birth/finiライフサイクル実装
 
-### 次のステップ（段階的アプローチ）
+#### 実装完了項目
+- ✅ **FileBoxプラグイン**: 293KB .soファイル生成、6メソッド実装
+- ✅ **nyash.toml**: プラグイン設定ファイル（FileBox = "nyash-filebox-plugin"）
+- ✅ **plugin-tester**: 診断ツール完成、メソッド一覧表示機能付き
 
-#### 📦 **Step 1: FileBoxプラグイン単体作成**
-- plugins/nyash-filebox-plugin/Cargo.toml作成
-- C FFI実装（birth/fini含む）
-- 単体でビルド確認（.soファイル生成）
+### テスト結果
+```
+Plugin Information:
+  Box Type: FileBox (ID: 6)  ← プラグインから取得！
+  Methods: 6
+  - birth [ID: 0, Sig: 0xBEEFCAFE] (constructor)
+  - open [ID: 1, Sig: 0x12345678]
+  - read [ID: 2, Sig: 0x87654321]
+  - write [ID: 3, Sig: 0x11223344]
+  - close [ID: 4, Sig: 0xABCDEF00]
+  - fini [ID: 4294967295, Sig: 0xDEADBEEF] (destructor)
+```
 
-#### ⚙️ **Step 2: nyash.toml設定ファイル作成**
-- シンプルな設定ファイル作成
-- FileBox = "filebox"の設定のみ
-- パーサーは後で実装
+### 実装完了ステップ
 
-#### 🔌 **Step 3: プラグインテスター/ローダー作成**
-- **独立したテストツール** `plugin-tester`作成
-- プラグイン開発者向けの診断機能：
-  - プラグインロードチェック
-  - nyash_plugin_init呼び出し確認
-  - メソッド一覧表示
+#### ✅ **Step 1: FileBoxプラグイン単体作成** 
+- ✅ plugins/nyash-filebox-plugin/Cargo.toml作成
+- ✅ C FFI実装（birth/fini含む）
+- ✅ 単体でビルド確認（293KB .soファイル生成）
+
+#### ✅ **Step 2: nyash.toml設定ファイル作成**
+- ✅ シンプルな設定ファイル作成
+- ✅ FileBox = "nyash-filebox-plugin"の設定
+- ✅ プラグイン検索パス定義
+
+#### ✅ **Step 3: プラグインテスター/ローダー作成**
+- ✅ **独立したテストツール** `plugin-tester`作成
+- ✅ Box名を決め打ちしない汎用設計
+- ✅ 実装済み機能：
+  - プラグインロードチェック ✅
+  - nyash_plugin_init呼び出し確認 ✅
+  - メソッド一覧表示 ✅
+  - ABI version確認 ✅
+- ⏳ 今後の拡張予定：
   - birth/finiライフサイクルテスト
   - メモリリーク検出（valgrind連携）
   - TLVエンコード/デコード検証
-- コマンド例：`./plugin-tester check libnyash_filebox_plugin.so`
-- 成功部分を後でNyashに移植
 
-#### 🎯 **Step 4: Nyashとの統合**
-- src/bid/モジュール作成
-- BoxFactoryRegistry実装
-- PluginBoxプロキシ実装
-- 実動作確認
+### 🎯 **次のステップ: Step 4 - Nyashとの統合**
+
+#### 実装計画
+1. **src/bid/モジュール作成**
+   - TLVエンコード/デコード実装
+   - BidHandle構造体定義
+   - エラーコード定義
+
+2. **プラグインローダー実装**
+   - nyash.tomlパーサー（簡易版）
+   - libloadingによる動的ロード
+   - プラグイン初期化・シャットダウン管理
+
+3. **BoxFactoryRegistry実装**
+   - ビルトインBox vs プラグインBoxの透過的切り替え
+   - Box名 → プラグイン名マッピング
+   - new FileBox()時の動的ディスパッチ
+
+4. **PluginBoxプロキシ実装**
+   - NyashBoxトレイト実装
+   - メソッド呼び出しをFFI経由で転送
+   - birth/finiライフサイクル管理（Dropトレイト）
+
+5. **統合テスト**
+   - FileBoxのビルトイン版とプラグイン版の動作比較
+   - nyash.tomlありなしでの切り替え確認
+   - メモリリークチェック
 
 ### 仕様更新完了
 - ✅ birth/finiライフサイクル管理を仕様書に追加
 - ✅ メモリ所有権ルールを明確化
 - ✅ プラグインが割り当てたメモリはプラグインが解放する原則
 
-### 予定ディレクトリ構造
+### 現在のディレクトリ構造
 ```
 nyash-project/nyash/
 ├── plugins/
-│   └── nyash-filebox-plugin/     # Step 1: プラグイン単体
+│   └── nyash-filebox-plugin/     # ✅ 実装済み
 │       ├── Cargo.toml
-│       └── src/lib.rs
+│       ├── src/lib.rs            # birth/fini含む6メソッド
+│       └── .gitignore
 ├── tools/
-│   └── plugin-tester/            # Step 3: テストツール
+│   └── plugin-tester/            # ✅ 実装済み
 │       ├── Cargo.toml
-│       └── src/main.rs
-├── nyash.toml                    # Step 2: 設定ファイル
+│       ├── src/main.rs           # 汎用プラグインチェッカー
+│       └── .gitignore
+├── nyash.toml                    # ✅ 実装済み
 └── src/
-    └── bid/                      # Step 4: 統合時に作成
-        ├── mod.rs
-        ├── loader.rs
-        └── registry.rs
+    └── bid/                      # ⏳ Step 4で作成予定
+        ├── mod.rs                # TLV、エラーコード定義
+        ├── loader.rs             # プラグインローダー
+        ├── registry.rs           # BoxFactoryRegistry
+        └── plugin_box.rs         # PluginBoxプロキシ
 ```
+
+### 重要な技術的決定
+1. **プラグイン識別**: プラグインが自らBox名を宣言（type_name）
+2. **メソッドID**: 0=birth, MAX=fini、他は任意
+3. **メモリ管理**: プラグインが割り当てたメモリはプラグインが解放
+4. **エラーコード**: -1〜-5の標準エラーコード定義済み
