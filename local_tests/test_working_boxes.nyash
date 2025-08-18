@@ -1,0 +1,42 @@
+// 動作するBox型のテスト
+static box Main {
+    init { 
+        StringBox console,
+        IntegerBox count,
+        ArrayBox list,
+        MapBox data
+    }
+    
+    main() {
+        // ConsoleBoxで出力
+        me.console = new ConsoleBox()
+        me.console.log("🎉 動作するBoxのテスト開始！")
+        
+        // StringBox
+        local text = new StringBox("Hello Nyash!")
+        me.console.log("StringBox: " + text.toString())
+        
+        // IntegerBox
+        me.count = new IntegerBox(42)
+        me.console.log("IntegerBox: " + me.count.toString())
+        
+        // ArrayBox
+        me.list = new ArrayBox()
+        me.list.push("item1")
+        me.list.push("item2")
+        me.console.log("ArrayBox size: " + me.list.size().toString())
+        
+        // MapBox
+        me.data = new MapBox()
+        me.data.set("name", "Nyash")
+        me.data.set("version", "1.0")
+        me.console.log("MapBox keys: " + me.data.keys().toString())
+        
+        // MathBox
+        local math = new MathBox()
+        local result = math.sqrt(16)
+        me.console.log("MathBox sqrt(16): " + result.toString())
+        
+        return "✅ テスト完了！"
+    }
+}

@@ -1,0 +1,14 @@
+// HttpClientBox最小テスト
+static box Main {
+    init { http }
+    
+    main() {
+        me.http = new HttpClientBox()
+        
+        // GET test
+        local result = me.http.get("https://httpbin.org/get")
+        print(result)
+        
+        return "done"
+    }
+}

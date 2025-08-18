@@ -1,0 +1,25 @@
+// HTTPServerBoxの動作テスト
+static box Main {
+    init { 
+        ConsoleBox console,
+        HTTPServerBox server
+    }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🌐 HTTPServerBoxテスト開始...")
+        
+        // HTTPServerBoxを作成
+        me.server = new HTTPServerBox()
+        me.console.log("✅ HTTPServerBox作成成功")
+        
+        // 基本情報を表示
+        me.console.log("HTTPServerBox: " + me.server.toString())
+        
+        // bind設定（実際のサーバー起動はしない）
+        me.server.bind("127.0.0.1", 8080)
+        me.console.log("✅ Bind設定完了: 127.0.0.1:8080")
+        
+        return "完了"
+    }
+}

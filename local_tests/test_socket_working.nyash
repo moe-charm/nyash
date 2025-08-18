@@ -1,0 +1,21 @@
+// SocketBoxの動作テスト
+static box Main {
+    init { 
+        ConsoleBox console,
+        SocketBox socket
+    }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔌 SocketBoxテスト開始...")
+        
+        // SocketBoxを作成
+        me.socket = new SocketBox()
+        me.console.log("✅ SocketBox作成成功")
+        
+        // 基本情報を表示
+        me.console.log("SocketBox: " + me.socket.toString())
+        
+        return "完了"
+    }
+}

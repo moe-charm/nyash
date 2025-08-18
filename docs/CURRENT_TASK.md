@@ -144,25 +144,39 @@ read = {
 - [phase_8_6_vm_performance_improvement.md](../予定/native-plan/issues/phase_8_6_vm_performance_improvement.md) - 詳細技術分析
 - [copilot_issues.txt](../予定/native-plan/copilot_issues.txt) - 全体開発計画
 
-## 🔧 **現在進行中：ビルトインBoxプラグイン化プロジェクト**（2025-08-18開始）
+## 🔧 **現在進行中：マルチBox型プラグイン対応**（2025-08-18開始）
 
 ### **目的**
+- **依存関係の解決**: HTTPServerBoxとSocketBoxを同一プラグインに
+- **効率的な配布**: 関連Box群を1つのライブラリで提供
 - **ビルド時間短縮**: 3分 → 30秒以下
-- **バイナリサイズ削減**: 最小構成で500KB以下
-- **保守性向上**: 各プラグイン独立開発
 
-### **対象Box（13種類）**
+### **nyash.toml v2設計**
+```toml
+[plugins.libraries]
+"nyash-network" = {
+    plugin_path = "libnyash_network.so",
+    provides = ["SocketBox", "HTTPServerBox", "HTTPRequestBox", "HTTPResponseBox", "HttpClientBox"]
+}
 ```
-Phase 1: ネットワーク系（HttpBox系、SocketBox）
-Phase 2: GUI系（EguiBox、Canvas系、Web系）  
-Phase 3: 特殊用途系（AudioBox、QRBox、StreamBox等）
-```
+
+### **実装フェーズ**
+1. **Phase 1**: plugin-tester拡張（進行中）
+   - 複数Box型の検出機能
+   - 各Box型のメソッド検証
+   
+2. **Phase 2**: テストプラグイン作成
+   - 簡単な複数Box型プラグイン
+   - FFI実装確認
+   
+3. **Phase 3**: Nyash本体対応
+   - nyash.toml v2パーサー
+   - マルチBox型ローダー
 
 ### **進捗状況**
-- ✅ プラグイン移行依頼書作成（`docs/plugin-migration-request.md`）
-- ✅ CopilotのBID変換コード抽出（`src/bid-converter-copilot/`）
-- ✅ CopilotのBIDコード生成機能抽出（`src/bid-codegen-from-copilot/`）
-- 🔄 HttpBoxプラグイン化作業をCopilotに依頼中
+- ✅ nyash.toml v2仕様策定完了
+- ✅ plugin-system.mdドキュメント更新
+- 🔄 plugin-tester拡張作業開始
 
 ## 📋 **今日の重要決定事項（2025年8月18日）**
 
@@ -192,11 +206,12 @@ Phase 3: 特殊用途系（AudioBox、QRBox、StreamBox等）
 ---
 
 **最終更新**: 2025年8月18日  
-**次回レビュー**: HttpBoxプラグイン完成時  
-**開発状況**: ビルトインBoxプラグイン化進行中
+**次回レビュー**: マルチBox型プラグイン対応完了時  
+**開発状況**: nyash.toml v2（マルチBox型）対応開始
 
 ### 🎯 **次のアクション**
-1. HttpBoxプラグイン化の完成待ち（Copilot作業中）
-2. plugin-testerでの動作確認
-3. 次のプラグイン化対象（EguiBox等）の準備
+1. plugin-testerを複数Box型対応に拡張
+2. 簡単な複数Box型プラグインのテスト作成
+3. Nyash本体のローダーを複数Box型対応に拡張
+4. 複数Box型の読み込みテスト実施
 

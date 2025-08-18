@@ -1,0 +1,22 @@
+// 🔌 SocketBox簡単テスト（TCP通信）
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🔌 TCP通信テスト...")
+        
+        // シンプルなTCPクライアント
+        local socket = new SocketBox()
+        
+        // Google DNSに接続してテスト
+        socket.connect("8.8.8.8", 53)
+        me.console.log("✅ 接続成功: 8.8.8.8:53")
+        
+        // 切断
+        socket.close()
+        me.console.log("✅ 切断完了")
+        
+        return "ソケットテスト完了"
+    }
+}

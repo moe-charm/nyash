@@ -1,0 +1,33 @@
+// 🌐 HTTPServerBox簡単テスト
+static box Main {
+    init { server, console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🚀 HTTPサーバーテスト開始...")
+        
+        // HTTPServerBoxを作成
+        me.server = new HTTPServerBox()
+        
+        // サーバー設定
+        me.server.port(8080)
+        
+        // ルートハンドラー設定
+        me.server.route("/", "GET", function(request) {
+            return "Welcome to Nyash HTTP Server!"
+        })
+        
+        // JSONレスポンス
+        me.server.route("/api/hello", "GET", function(request) {
+            local response = new MapBox()
+            response.set("message", "Hello from Nyash!")
+            response.set("timestamp", new TimeBox().now())
+            return response
+        })
+        
+        me.console.log("🌍 サーバー起動: http://localhost:8080")
+        me.server.start()
+        
+        return "サーバー実行中..."
+    }
+}

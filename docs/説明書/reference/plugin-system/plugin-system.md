@@ -65,32 +65,158 @@ lifecycle:
 
 ## 🔧 設定ファイル（nyash.toml）
 
+### 基本形式（v1） - 単一Box型プラグイン
+
 ```toml
 # プロジェクトルートのnyash.toml
 [plugins]
-FileBox = "filebox"      # FileBoxはプラグイン版を使用
-# StringBox = "mystring" # コメントアウト = ビルトイン使用
+FileBox = "nyash-filebox-plugin"      # FileBoxはプラグイン版を使用
+# StringBox = "mystring"                # コメントアウト = ビルトイン使用
+
+# FileBoxの型情報定義
+[plugins.FileBox.methods]
+read = { args = [] }
+write = { args = [{ from = "string", to = "bytes" }] }
+open = { args = [
+    { name = "path", from = "string", to = "string" },
+    { name = "mode", from = "string", to = "string" }
+] }
+close = { args = [] }
+exists = { args = [], returns = "bool" }
+```
+
+### 拡張形式（v2） - マルチBox型プラグイン
+
+```toml
+# 1つのプラグインで複数のBox型を提供
+[plugins.libraries]
+"nyash-network" = {
+    plugin_path = "libnyash_network.so",
+    provides = ["SocketBox", "HTTPServerBox", "HTTPRequestBox", "HTTPResponseBox", "HttpClientBox"]
+}
+
+"nyash-stdlib" = {
+    plugin_path = "libnyash_stdlib.so",
+    provides = ["MathBox", "TimeBox", "RandomBox"]
+}
+
+# 各Box型の詳細定義
+[plugins.types.SocketBox]
+library = "nyash-network"
+type_id = 100
+methods = {
+    bind = { args = [
+        { name = "address", from = "string", to = "string" },
+        { name = "port", from = "integer", to = "u16" }
+    ]},
+    connect = { args = [
+        { name = "address", from = "string", to = "string" },
+        { name = "port", from = "integer", to = "u16" }
+    ]},
+    read = { args = [], returns = "string" },
+    write = { args = [{ from = "string", to = "bytes" }] },
+    close = { args = [] }
+}
+
+[plugins.types.HTTPServerBox]
+library = "nyash-network"
+type_id = 101
+methods = {
+    bind = { args = [
+        { name = "address", from = "string", to = "string" },
+        { name = "port", from = "integer", to = "u16" }
+    ]},
+    route = { args = [
+        { name = "path", from = "string", to = "string" },
+        { name = "method", from = "string", to = "string" }
+    ]},
+    start = { args = [] }
+}
+
+[plugins.types.HttpClientBox]
+library = "nyash-network"
+type_id = 102
+methods = {
+    get = { args = [{ name = "url", from = "string", to = "string" }], returns = "string" },
+    post = { args = [
+        { name = "url", from = "string", to = "string" },
+        { name = "body", from = "string", to = "string" }
+    ], returns = "string" }
+}
+```
+
+### 型マッピング仕様
+
+#### 基本型
+| Nyash型 | FFI型 | TLVタグ | 説明 |
+|---------|-------|---------|------|
+| `string` | `string` | 0x01 | UTF-8文字列 |
+| `integer` | `i64` | 0x02 | 64ビット整数 |
+| `float` | `f64` | 0x03 | 64ビット浮動小数点 |
+| `bool` | `bool` | 0x04 | 真偽値 |
+| `bytes` | `Vec<u8>` | 0x05 | バイト配列 |
+
+
+### プラグイン検索パス
+
+```toml
+[plugin_paths]
+search_paths = [
+    "./plugins/*/target/release",      # 開発時リリースビルド
+    "./plugins/*/target/debug",        # 開発時デバッグビルド
+    "/usr/local/lib/nyash/plugins",    # システムインストール
+    "~/.nyash/plugins"                 # ユーザーローカル
+]
 ```
 
 ## 🏗️ アーキテクチャ
 
-### 1. Boxレジストリ
+### 1. Boxレジストリ（v2対応版）
 
 ```rust
 // 起動時の動作
 let mut registry = HashMap::new();
+let mut loaded_plugins = HashMap::new();
 
 // 1. ビルトインBoxを登録
 registry.insert("FileBox", BoxProvider::Builtin(native_filebox));
 registry.insert("StringBox", BoxProvider::Builtin(native_stringbox));
 
 // 2. nyash.toml読み込み
-let config = parse_nyash_toml()?;
+let config = parse_nyash_toml_v2()?;
 
-// 3. プラグイン設定で上書き
+// 3a. v1形式：単一Box型プラグイン
 for (box_name, plugin_name) in config.plugins {
     registry.insert(box_name, BoxProvider::Plugin(plugin_name));
 }
+
+// 3b. v2形式：マルチBox型プラグイン
+if let Some(libraries) = config.libraries {
+    for (lib_name, lib_def) in libraries.libraries {
+        // プラグインを一度だけロード
+        let plugin = load_plugin(&lib_def.plugin_path)?;
+        loaded_plugins.insert(lib_name.clone(), plugin);
+        
+        // 提供する全Box型を登録
+        for box_type in &lib_def.provides {
+            registry.insert(box_type, BoxProvider::MultiPlugin(lib_name.clone()));
+        }
+    }
+}
+```
+
+### マルチBox型プラグインFFI
+
+```c
+// v2プラグインの追加エクスポート関数
+// 提供するBox型の数を返す
+extern "C" u32 nyash_plugin_get_box_count();
+
+// 各Box型の情報を取得
+extern "C" NyashPluginInfo* nyash_plugin_get_box_info(u32 index);
+
+// Box型名からtype_idを解決
+extern "C" u32 nyash_plugin_get_type_id(const char* box_name);
 ```
 
 ### 2. 透過的なディスパッチ
@@ -232,29 +358,67 @@ impl Drop for PluginBox {
 
 ## 🚀 段階的導入計画
 
-### Phase 1: 基本実装（現在）
+### Phase 1: 基本実装（完了）
 - [x] BID-FFI基盤
 - [x] FileBoxプラグイン実装
-- [ ] nyash.tomlパーサー
-- [ ] PluginBoxプロキシ
-- [ ] 手動プラグインロード
+- [x] nyash.toml v1パーサー
+- [x] PluginBoxプロキシ
+- [x] プラグインロード機能
 
-### Phase 2: 開発体験向上
+### Phase 2: マルチBox型対応（進行中）
+- [ ] nyash.toml v2パーサー実装
+- [ ] マルチBox型プラグインFFI拡張
+- [ ] plugin-testerの複数Box型対応
+- [ ] ネットワーク系プラグイン統合
+  - HttpClientBox（新規実装）
+  - SocketBox（既存移行）
+  - HTTPServerBox（既存移行）
+  - HTTPRequestBox（既存移行）
+  - HTTPResponseBox（既存移行）
+
+### Phase 3: 開発体験向上
 - [ ] YAMLからFFIコード自動生成
 - [ ] エラーメッセージ改善
 - [ ] プラグインテンプレート
+- [ ] ホットリロード対応
 
-### Phase 3: エコシステム
+### Phase 4: エコシステム
 - [ ] プラグインレジストリ
 - [ ] バージョン管理
 - [ ] 依存関係解決
+- [ ] プラグイン間通信
 
 ## 🎉 利点
 
+### v1形式の利点
 1. **ビルド時間短縮** - 使わないBoxはコンパイル不要
 2. **動的拡張** - 再コンパイルなしで新Box追加
 3. **Everything is Box維持** - 哲学は変わらない
 4. **段階的移行** - 1つずつBoxをプラグイン化
+
+### v2形式の追加利点
+5. **依存関係の解決** - 関連Box群を1つのプラグインに
+6. **効率的な配布** - 複数Box型を1ライブラリで提供
+7. **メモリ効率** - 共有ライブラリは1度だけロード
+8. **内部連携** - 同一プラグイン内で直接通信可能
+
+### 実例：HTTPServerBoxの依存問題解決
+
+```toml
+# v1では困難だった構成
+# HTTPServerBoxはSocketBoxに依存するが...
+[plugins]
+SocketBox = "socket-plugin"      # 別プラグイン
+HTTPServerBox = "http-plugin"    # SocketBoxが使えない！
+
+# v2なら簡単に解決
+[plugins.libraries]
+"nyash-network" = {
+    plugin_path = "libnyash_network.so",
+    provides = ["SocketBox", "HTTPServerBox", "HTTPRequestBox", "HTTPResponseBox"]
+}
+# HTTPServerBoxは同じプラグイン内でSocketBoxを直接使用可能
+```
 
 ## 📚 関連ドキュメント
 

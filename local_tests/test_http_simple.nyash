@@ -1,0 +1,28 @@
+// 🌐 HttpClientBox簡単テスト
+static box Main {
+    init { http, console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🌐 HTTP通信テスト開始...")
+        
+        // HttpClientBoxを作成
+        me.http = new HttpClientBox()
+        
+        // 1. 簡単なGETリクエスト
+        me.console.log("📥 GET: https://httpbin.org/get")
+        local getResult = me.http.get("https://httpbin.org/get")
+        me.console.log("結果: " + getResult.toString())
+        
+        // 2. POSTリクエスト
+        me.console.log("")
+        me.console.log("📤 POST: https://httpbin.org/post")
+        local postResult = me.http.post(
+            "https://httpbin.org/post",
+            "Hello from Nyash!"
+        )
+        me.console.log("結果: " + postResult.toString())
+        
+        return "✅ HTTPテスト完了"
+    }
+}
