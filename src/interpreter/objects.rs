@@ -95,15 +95,26 @@ impl NyashInterpreter {
                     });
                 }
                 let path_value = self.execute_expression(&arguments[0])?;
-                if let Some(path_str) = path_value.as_any().downcast_ref::<StringBox>() {
-                    let file_box = Box::new(FileBox::new(&path_str.value)) as Box<dyn NyashBox>;
-                    // 🌍 革命的実装：Environment tracking廃止
-                    return Ok(file_box);
+                let path_str = if let Some(s) = path_value.as_any().downcast_ref::<StringBox>() {
+                    s.value.clone()
                 } else {
-                    return Err(RuntimeError::TypeError {
-                        message: "FileBox constructor requires string path argument".to_string(),
-                    });
+                    return Err(RuntimeError::TypeError { message: "FileBox constructor requires string path argument".to_string() });
+                };
+
+                // プラグイン優先（nyash.tomlに設定がある場合）
+                if let Some(reg) = crate::bid::registry::global() {
+                    if let Some(plugin) = reg.get_by_name("FileBox") {
+                        if let Ok(p) = crate::bid::plugin_box::PluginFileBox::new(plugin, path_str.clone()) {
+                            return Ok(Box::new(p) as Box<dyn NyashBox>);
+                        }
+                    }
                 }
+
+                // フォールバック: ビルトインFileBox
+                return match crate::boxes::file::FileBox::open(&path_str) {
+                    Ok(fb) => Ok(Box::new(fb) as Box<dyn NyashBox>),
+                    Err(e) => Err(RuntimeError::InvalidOperation { message: format!("Failed to open file '{}': {}", path_str, e) }),
+                };
             }
             "ResultBox" => {
                 // ResultBoxは引数1個（成功値）で作成

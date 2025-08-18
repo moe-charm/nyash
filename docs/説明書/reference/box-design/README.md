@@ -28,6 +28,9 @@ Arc<Mutex>一元管理、fini()システム、weak参照による循環参照回
 #### [ffi-abi-specification.md](ffi-abi-specification.md)
 Box FFI/ABI完全仕様。外部ライブラリを「箱に詰める」ための統一インターフェース。
 
+#### FileBox マッピング
+- [filebox-bid-mapping.md](filebox-bid-mapping.md) — Nyash APIとBID-FFIプラグインABIの対応表（メソッドID/TLV/戻り値）
+
 ### 🔧 実装ノート
 
 #### [implementation-notes/](implementation-notes/)

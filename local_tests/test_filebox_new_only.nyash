@@ -1,0 +1,3 @@
+local f
+f = new FileBox("plugins/nyash-filebox-plugin/target/test_integration_runtime.txt")
+print("OK")

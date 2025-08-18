@@ -17,6 +17,9 @@ use crate::{
 };
 use std::{fs, process};
 
+// BID prototype imports
+use crate::bid::{PluginRegistry, PluginBoxInstance};
+
 /// Main execution coordinator
 pub struct NyashRunner {
     config: CliConfig,
@@ -30,6 +33,8 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // Try to initialize BID plugins from nyash.toml (best-effort)
+        self.init_bid_plugins();
         // Benchmark mode - can run without a file
         if self.config.benchmark {
             println!("📊 Nyash Performance Benchmark Suite");
@@ -45,6 +50,22 @@ impl NyashRunner {
             self.execute_file_mode(filename);
         } else {
             self.execute_demo_mode();
+        }
+    }
+
+    fn init_bid_plugins(&self) {
+        // Best-effort init; do not fail the program if missing
+        if let Ok(()) = crate::bid::registry::init_global_from_config("nyash.toml") {
+            let reg = crate::bid::registry::global().unwrap();
+            // If FileBox plugin is present, try a birth/fini cycle as a smoke test
+            if let Some(plugin) = reg.get_by_name("FileBox") {
+                if let Ok(inst) = PluginBoxInstance::birth(plugin) {
+                    println!("🔌 BID plugin loaded: FileBox (instance_id={})", inst.instance_id);
+                    // Drop will call fini
+                    return;
+                }
+            }
+            println!("🔌 BID registry initialized");
         }
     }
 
@@ -119,8 +140,9 @@ impl NyashRunner {
         println!("📝 File contents:\n{}", code);
         println!("\n🚀 Parsing and executing...\n");
         
-        // Test: immediate file creation
-        std::fs::write("/mnt/c/git/nyash/development/debug_hang_issue/test.txt", "START").ok();
+        // Test: immediate file creation (use relative path to avoid sandbox issues)
+        std::fs::create_dir_all("development/debug_hang_issue").ok();
+        std::fs::write("development/debug_hang_issue/test.txt", "START").ok();
         
         // Parse the code with debug fuel limit
         eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", self.config.debug_fuel);
@@ -143,7 +165,7 @@ impl NyashRunner {
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("/mnt/c/git/nyash/development/debug_hang_issue/debug_trace.log") 
+            .open("development/debug_hang_issue/debug_trace.log") 
         {
             use std::io::Write;
             let _ = writeln!(file, "=== MAIN: Parse successful ===");

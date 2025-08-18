@@ -1,4 +1,32 @@
-# 🎯 現在のタスク (2025-08-17)
+# 🎯 現在のタスク (2025-08-18 更新)
+
+## 🆕 今取り組むタスク（最優先）
+- plugin-tester: open/read/write のTLVテスト追加（E2E強化）✅ 完了
+- FileBoxプラグイン: invokeに open/read/write/close 実装（BID-1 TLV準拠）✅ 完了
+- Nyash本体: `new FileBox(...)` をプラグイン優先で生成（暫定フック）⏳ 次に着手
+- PluginBox: メソッド転送（TLV encode/decode）最小実装 ⏳ 次に着手
+
+### 本日の成果（2025-08-18 午後）
+- plugin-tester `io` サブコマンド追加（open→write→close→open→read 一連動作）
+- プラグイン側 `nyash_plugin_invoke` に open/read/write/close 実装＋2段階応答のプリフライト時は副作用なしで必須サイズ返却に修正
+- 説明書を追加: `docs/説明書/reference/plugin-tester.md`（使い方・TLV・エラーコード・トラブルシュート）
+- FileBox API対応表: `docs/説明書/reference/box-design/filebox-bid-mapping.md` 追加（Nyash API ↔ BID-FFI マッピング）
+
+### 簡易実行テスト状況（CLIサンドボックス）
+- `nyash` 本体実行（引数なし/単純スクリプト）: ✅ 実行OK
+- `plugin-tester io` による FileBox E2E: ✅ open→write→close→open→read でOK
+- `nyash` からプラグイン FileBox を new して利用: ⚠️ サンドボックス制約により実行中にSIGKILL（dlopen系の制約）
+  - ローカル実行（手元環境）では `cargo build --bin nyash` → `./target/debug/nyash local_tests/test_plugin_filebox.nyash` で動作見込み
+  - 期待出力: `READ=Hello from Nyash via plugin!`
+- 実行ログ例:
+```
+INFO: OPEN path='.../test_io.txt' mode='w'
+INFO: WRITE 25 bytes
+INFO: CLOSE
+INFO: OPEN path='.../test_io.txt' mode='r'
+INFO: READ 25 bytes
+✓: read 25 bytes → 'Hello from plugin-tester!'
+```
 
 ## 🚀 **現在進行中: Phase 9.75g-0 型定義ファースト BID-FFI実装**
 
@@ -219,14 +247,14 @@ Plugin Information:
 
 #### 実装計画
 1. **src/bid/モジュール作成**
-   - TLVエンコード/デコード実装
-   - BidHandle構造体定義
-   - エラーコード定義
+   - TLVエンコード/デコード実装 ✅ `src/bid/tlv.rs`
+   - BidHandle構造体定義 ✅ `src/bid/types.rs`
+   - エラーコード定義 ✅ `src/bid/error.rs`
 
 2. **プラグインローダー実装**
-   - nyash.tomlパーサー（簡易版）
-   - libloadingによる動的ロード
-   - プラグイン初期化・シャットダウン管理
+   - nyash.tomlパーサー（簡易版）✅ `src/bid/registry.rs`
+   - libloadingによる動的ロード ✅ `src/bid/loader.rs`
+   - プラグイン初期化・シャットダウン管理 ✅ `src/bid/loader.rs`
 
 3. **BoxFactoryRegistry実装**
    - ビルトインBox vs プラグインBoxの透過的切り替え
@@ -234,9 +262,9 @@ Plugin Information:
    - new FileBox()時の動的ディスパッチ
 
 4. **PluginBoxプロキシ実装**
-   - NyashBoxトレイト実装
-   - メソッド呼び出しをFFI経由で転送
-   - birth/finiライフサイクル管理（Dropトレイト）
+   - NyashBoxトレイト実装（準備段階、最小のインスタンス管理）
+   - メソッド呼び出しをFFI経由で転送（未）
+   - birth/finiライフサイクル管理（Dropトレイト）✅ `src/bid/plugin_box.rs`
 
 5. **統合テスト**
    - FileBoxのビルトイン版とプラグイン版の動作比較
@@ -263,11 +291,38 @@ nyash-project/nyash/
 │       └── .gitignore
 ├── nyash.toml                    # ✅ 実装済み
 └── src/
-    └── bid/                      # ⏳ Step 4で作成予定
-        ├── mod.rs                # TLV、エラーコード定義
-        ├── loader.rs             # プラグインローダー
-        ├── registry.rs           # BoxFactoryRegistry
-        └── plugin_box.rs         # PluginBoxプロキシ
+    └── bid/                      # ✅ Step 4の基盤作成済み
+        ├── mod.rs                # モジュール公開
+        ├── loader.rs             # プラグインローダー（libloading, init, ABI検証）
+        ├── registry.rs           # 簡易nyash.toml読取＋ロード
+        └── plugin_box.rs         # PluginBoxインスタンス（birth/fini）
+
+## ✅ 直近の進捗（2025-08-18 午前）
+
+- plugin-tester: `lifecycle` サブコマンド実装（birth→finiまでE2E確認）
+- FileBoxプラグイン: `nyash_plugin_invoke` をBID-1の2段階応答（ShortBuffer=-1）に準拠、birth/fini実装
+- Nyash側: `loader/registry/plugin_box` 追加、ビルド通過
+
+### 実行結果（抜粋）
+```
+$ plugin-tester check libnyash_filebox_plugin.so
+✓: ABI version: 1
+✓: Plugin initialized
+Plugin Information: FileBox(ID:6), Methods: 6
+
+$ plugin-tester lifecycle libnyash_filebox_plugin.so
+✓: birth → instance_id=1
+✓: fini  → instance 1 cleaned
+```
+
+## 🎯 次アクション（Phase 9.75g-1 続き）
+
+1. Nyash起動時に `nyash.toml` を読み、プラグインレジストリ初期化（Runnerに最小結線）
+2. `new FileBox(...)` の作成経路に、プラグイン版を優先する分岐を暫定追加
+3. TLVで `open/read/write/close` をtester側に追加して先にE2E検証を強化
+4. PluginBoxにメソッド転送（TLV encode/decode）を実装し、Nyash本体から呼べる形に拡張
+
+必要なら、この順で段階的にPRを分ける。
 ```
 
 ### 重要な技術的決定

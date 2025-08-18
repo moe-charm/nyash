@@ -1,40 +1,24 @@
 use super::{BidError, BidResult};
-use std::os::raw::{c_char, c_void};
+use std::os::raw::{c_char};
 use std::ffi::{CStr, CString};
 
 /// Host function table provided to plugins
 #[repr(C)]
 pub struct NyashHostVtable {
-    /// Allocate memory
-    pub alloc: Option<extern "C" fn(size: usize) -> *mut c_void>,
-    
-    /// Free memory
-    pub free: Option<extern "C" fn(ptr: *mut c_void)>,
-    
-    /// Wake a future (for FutureBox support)
-    pub wake: Option<extern "C" fn(future_id: u32)>,
-    
-    /// Log a message
-    pub log: Option<extern "C" fn(msg: *const c_char)>,
+    pub alloc: unsafe extern "C" fn(size: usize) -> *mut u8,
+    pub free: unsafe extern "C" fn(ptr: *mut u8),
+    pub wake: unsafe extern "C" fn(handle: u64),
+    pub log: unsafe extern "C" fn(level: i32, msg: *const c_char),
 }
 
 impl NyashHostVtable {
-    /// Create an empty vtable
+    /// Create a vtable with no-op stubs (for tests)
     pub fn empty() -> Self {
-        Self {
-            alloc: None,
-            free: None,
-            wake: None,
-            log: None,
-        }
-    }
-    
-    /// Check if all required functions are present
-    pub fn is_complete(&self) -> bool {
-        self.alloc.is_some() && 
-        self.free.is_some() && 
-        self.log.is_some()
-        // wake is optional for async support
+        unsafe extern "C" fn a(_size: usize) -> *mut u8 { std::ptr::null_mut() }
+        unsafe extern "C" fn f(_ptr: *mut u8) {}
+        unsafe extern "C" fn w(_h: u64) {}
+        unsafe extern "C" fn l(_level: i32, _m: *const c_char) {}
+        Self { alloc: a, free: f, wake: w, log: l }
     }
 }
 
@@ -225,24 +209,10 @@ mod tests {
     
     #[test]
     fn test_host_vtable() {
-        let vtable = NyashHostVtable::empty();
-        assert!(!vtable.is_complete());
-        
-        // In real usage, would set actual function pointers
-        let vtable = NyashHostVtable {
-            alloc: Some(dummy_alloc),
-            free: Some(dummy_free),
-            wake: None,
-            log: Some(dummy_log),
-        };
-        assert!(vtable.is_complete());
+        unsafe extern "C" fn a(_size: usize) -> *mut u8 { std::ptr::null_mut() }
+        unsafe extern "C" fn f(_p: *mut u8) {}
+        unsafe extern "C" fn w(_h: u64) {}
+        unsafe extern "C" fn l(_level: i32, _m: *const c_char) {}
+        let _v = NyashHostVtable { alloc: a, free: f, wake: w, log: l };
     }
-    
-    extern "C" fn dummy_alloc(_size: usize) -> *mut c_void {
-        std::ptr::null_mut()
-    }
-    
-    extern "C" fn dummy_free(_ptr: *mut c_void) {}
-    
-    extern "C" fn dummy_log(_msg: *const c_char) {}
 }

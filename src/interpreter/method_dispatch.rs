@@ -9,6 +9,7 @@
 use super::*;
 use crate::boxes::{buffer::BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 use crate::boxes::{FloatBox, MathBox, ConsoleBox, TimeBox, DateTimeBox, RandomBox, SoundBox, DebugBox, file::FileBox, MapBox};
+use crate::bid::plugin_box::PluginFileBox;
 use std::sync::Arc;
 
 impl NyashInterpreter {
@@ -201,6 +202,10 @@ impl NyashInterpreter {
         if let Some(file_box) = obj_value.as_any().downcast_ref::<crate::boxes::file::FileBox>() {
             return self.execute_file_method(file_box, method, arguments);
         }
+        // Plugin-backed FileBox method calls
+        if let Some(pfile) = obj_value.as_any().downcast_ref::<PluginFileBox>() {
+            return self.execute_plugin_file_method(pfile, method, arguments);
+        }
         
         // ResultBox method calls
         if let Some(result_box) = obj_value.as_any().downcast_ref::<ResultBox>() {
@@ -350,6 +355,37 @@ impl NyashInterpreter {
 
         // ユーザー定義Boxのメソッド呼び出し
         self.execute_user_defined_method(obj_value, method, arguments)
+    }
+
+    fn execute_plugin_file_method(
+        &mut self,
+        pfile: &PluginFileBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        match method {
+            "write" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation { message: "FileBox.write expects 1 argument".into() });
+                }
+                let arg0 = self.execute_expression(&arguments[0])?;
+                let data = arg0.to_string_box().value;
+                pfile.write_bytes(data.as_bytes()).map_err(|e| RuntimeError::RuntimeFailure { message: format!("plugin write error: {:?}", e) })?;
+                Ok(Box::new(StringBox::new("ok")))
+            }
+            "read" => {
+                // Default read size
+                let size = 1_048_576usize; // 1MB max
+                let bytes = pfile.read_bytes(size).map_err(|e| RuntimeError::RuntimeFailure { message: format!("plugin read error: {:?}", e) })?;
+                let s = String::from_utf8_lossy(&bytes).to_string();
+                Ok(Box::new(StringBox::new(s)))
+            }
+            "close" => {
+                pfile.close().map_err(|e| RuntimeError::RuntimeFailure { message: format!("plugin close error: {:?}", e) })?;
+                Ok(Box::new(StringBox::new("ok")))
+            }
+            _ => Err(RuntimeError::InvalidOperation { message: format!("Unknown method FileBox.{} (plugin)", method) })
+        }
     }
 
     /// SocketBoxの状態変更を反映

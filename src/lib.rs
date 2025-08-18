@@ -42,6 +42,9 @@ pub mod backend;
 // 📊 Performance Benchmarks (NEW!)
 pub mod benchmarks;
 
+// BID-FFI / Plugin system (prototype)
+pub mod bid;
+
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
 

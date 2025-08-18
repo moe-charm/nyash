@@ -1,35 +1,5 @@
-// Nyash FileBoxプラグイン透過的切り替えテスト
-// nyash.tomlの設定によってビルトイン/プラグインが切り替わる
-
-static box Main {
-    init { console, file, result }
-    
-    main() {
-        me.console = new ConsoleBox()
-        me.console.log("🎯 FileBox Plugin Switching Test")
-        me.console.log("================================")
-        
-        // FileBox作成（透過的切り替え対象）
-        me.file = new FileBox("test_plugin_output.txt")
-        me.console.log("📁 FileBox created: " + me.file.toString())
-        
-        // 現在使用されているFileBox実装を確認
-        me.console.log("🔍 FileBox type: " + me.file.toString())
-        
-        // 簡単なファイル操作テスト
-        local testPath
-        testPath = "test_plugin_output.txt"
-        
-        me.console.log("📝 Testing file operations...")
-        
-        // TODO: ファイル操作API呼び出し
-        // file.open(testPath)
-        // file.write("Hello from " + file.toString())
-        // file.close()
-        
-        me.result = "Plugin switching test completed!"
-        me.console.log("✅ " + me.result)
-        
-        return me.result
-    }
-}
+// Plugin-backed FileBox integration test
+local f
+f = new FileBox("plugins/nyash-filebox-plugin/target/test_integration.txt")
+f.write("Hello from Nyash via plugin!")
+print("READ=" + f.read())

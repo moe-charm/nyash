@@ -8,6 +8,9 @@ pub mod metadata;
 pub mod plugin_api;
 pub mod bridge;
 pub mod plugins;
+pub mod loader;
+pub mod registry;
+pub mod plugin_box;
 
 pub use types::*;
 pub use tlv::*;
@@ -15,6 +18,9 @@ pub use error::*;
 pub use metadata::*;
 pub use plugin_api::*;
 pub use bridge::*;
+pub use loader::*;
+pub use registry::*;
+pub use plugin_box::*;
 
 /// BID-1 version constant
 pub const BID_VERSION: u16 = 1;

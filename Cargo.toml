@@ -94,6 +94,8 @@ once_cell = "1.20"
 # デバッグ・ログ
 log = "0.4"
 env_logger = "0.11"
+libloading = "0.8"
+toml = "0.8"
 
 # 日時処理
 chrono = "0.4"

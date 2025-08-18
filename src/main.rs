@@ -42,6 +42,9 @@ pub mod benchmarks;
 pub mod cli;
 pub mod runner;
 
+// BID-FFI / Plugin System (prototype)
+pub mod bid;
+
 use cli::CliConfig;
 use runner::NyashRunner;
 

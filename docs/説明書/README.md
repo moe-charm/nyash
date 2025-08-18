@@ -18,6 +18,7 @@ Nyash 説明書（ユーザー向けガイド）
 - docs/説明書/reference/builtin-boxes.md (ビルトイン一覧)
 - docs/説明書/reference/p2p_spec.md (P2P仕様)
 - docs/説明書/reference/language-specification/ (詳細仕様)
+- docs/説明書/reference/plugin-tester.md (プラグインテスター使用ガイド)
 
 その他ガイド:
 - docs/説明書/guides/1_getting_started.md
