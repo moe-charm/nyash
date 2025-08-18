@@ -111,41 +111,59 @@ read = {
 - [phase_8_6_vm_performance_improvement.md](../予定/native-plan/issues/phase_8_6_vm_performance_improvement.md) - 詳細技術分析
 - [copilot_issues.txt](../予定/native-plan/copilot_issues.txt) - 全体開発計画
 
-## 📋 **今日の重要決定事項（2025年8月21日）**
+## 🔧 **現在進行中：ビルトインBoxプラグイン化プロジェクト**（2025-08-18開始）
 
-### **1. Phase 9.8戦略転換**
-- ✅ nyash.tomlに既存の型情報が豊富に存在することを発見
-- ✅ BID用の新規YAMLファイル不要と判断
-- ✅ nyash.toml拡張によるBID機能実装を決定
-- ✅ GitHub Issue #116作成（Phase 9.8実装計画）
+### **目的**
+- **ビルド時間短縮**: 3分 → 30秒以下
+- **バイナリサイズ削減**: 最小構成で500KB以下
+- **保守性向上**: 各プラグイン独立開発
 
-### **2. 技術的洞察：JIT vs AOT**
-- **MIRの存在により難易度が同等に**
-- VM最適化でネイティブ速度に迫る可能性
-- 将来: VM JIT化も選択肢に
-
-### **3. 開発優先順位の更新**
+### **対象Box（13種類）**
 ```
-1. ✅ Phase 8.6 VM性能改善（完了！50.94倍達成）
-2. ✅ Phase 9.78 LLVM PoC基盤（MIR修正完了）
-3. 🔄 Phase 9.8 BIDレジストリ（nyash.toml拡張方式）
-4. → Phase 9.9 権限モデル（FileBoxで実証）
-5. → Phase 10 LLVM本格実装（将来検討）
+Phase 1: ネットワーク系（HttpBox系、SocketBox）
+Phase 2: GUI系（EguiBox、Canvas系、Web系）  
+Phase 3: 特殊用途系（AudioBox、QRBox、StreamBox等）
 ```
 
-### **4. Windows戦略の具体化**
-- Bitcodeキャッシュで1回生成→全OS対応
-- mingw-gnuで即座にWindows対応可能
-- APEは小規模ツール専用として位置づけ
+### **進捗状況**
+- ✅ プラグイン移行依頼書作成（`docs/plugin-migration-request.md`）
+- ✅ CopilotのBID変換コード抽出（`src/bid-converter-copilot/`）
+- ✅ CopilotのBIDコード生成機能抽出（`src/bid-codegen-from-copilot/`）
+- 🔄 HttpBoxプラグイン化作業をCopilotに依頼中
+
+## 📋 **今日の重要決定事項（2025年8月18日）**
+
+### **1. CopilotのPR管理戦略**
+- ✅ 大規模変更（1,735行）を含むPR #117をrevert
+- ✅ 必要な新規ファイルのみ選択的に抽出・保存
+- ✅ cli.rs/runner.rsへの大幅変更は取り込まない方針
+
+### **2. Copilot成果物の保存**
+- **BID変換部分**: `src/bid-converter-copilot/` （TLV、型変換）
+- **コード生成部分**: `src/bid-codegen-from-copilot/` （各言語向け生成）
+- **活用方針**: 将来的にnyash2.toml実装時に参考資料として使用
+
+### **3. 開発優先順位の明確化**
+```
+1. 🔄 ビルトインBoxプラグイン化（HttpBox系から開始）
+2. → Phase 9.8 BIDレジストリ（nyash.toml拡張方式）
+3. → Phase 9.9 権限モデル（FileBoxで実証）
+4. → Phase 10 LLVM本格実装（将来検討）
+```
+
+### **4. 選択的pull戦略の確立**
+- **原則**: 必要な機能だけを取り込む
+- **判断基準**: 現在の目標との関連性、複雑性、保守性
+- **実践**: 新規ファイルは別フォルダに保存、既存ファイルの大幅変更は慎重に
 
 ---
 
-**最終更新**: 2025年8月21日  
-**次回レビュー**: Phase 9.8実装開始時  
-**開発状況**: Phase 9.75g-0完了 → Phase 8.6完了 → Phase 9.78基盤完了 → Phase 9.8開始
+**最終更新**: 2025年8月18日  
+**次回レビュー**: HttpBoxプラグイン完成時  
+**開発状況**: ビルトインBoxプラグイン化進行中
 
 ### 🎯 **次のアクション**
-1. nyash.toml拡張仕様の設計
-2. VMバックエンドでのFileBox統合テスト準備
-3. 権限モデル（Phase 9.9）の実装計画
+1. HttpBoxプラグイン化の完成待ち（Copilot作業中）
+2. plugin-testerでの動作確認
+3. 次のプラグイン化対象（EguiBox等）の準備
 
