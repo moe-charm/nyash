@@ -4,24 +4,33 @@
 
 // Removed super::* import - specific imports below
 use crate::ast::{ASTNode, BinaryOperator, UnaryOperator};
-use crate::box_trait::{NyashBox, IntegerBox, StringBox, BoolBox, CompareBox};
+use crate::box_trait::{NyashBox, IntegerBox, BoolBox, CompareBox};
+use crate::boxes::StringBox;  // 🔧 統一レジストリと一致させる
 use crate::boxes::FloatBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 
 // Local helper functions to bypass import issues
 pub(super) fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+    // 🔍 デバッグ出力追加
+    eprintln!("🔍 try_add_operation: left={}, right={}", left.type_name(), right.type_name());
+    
     // IntegerBox + IntegerBox
     if let (Some(left_int), Some(right_int)) = (
         left.as_any().downcast_ref::<IntegerBox>(),
         right.as_any().downcast_ref::<IntegerBox>()
     ) {
+        eprintln!("🔍 IntegerBox + IntegerBox detected");
         return Some(Box::new(IntegerBox::new(left_int.value + right_int.value)));
     }
     
     // StringBox + anything -> concatenation
+    eprintln!("🔍 Checking StringBox downcast...");
     if let Some(left_str) = left.as_any().downcast_ref::<StringBox>() {
+        eprintln!("🔍 StringBox downcast SUCCESS!");
         let right_str = right.to_string_box();
         return Some(Box::new(StringBox::new(format!("{}{}", left_str.value, right_str.value))));
+    } else {
+        eprintln!("🔍 StringBox downcast FAILED!");
     }
     
     // BoolBox + BoolBox -> IntegerBox 
