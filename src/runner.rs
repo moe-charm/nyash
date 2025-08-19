@@ -25,6 +25,7 @@ use std::{fs, process};
 
 // v2 plugin system imports
 use nyash_rust::runtime::{init_global_loader_v2, get_global_registry, get_global_loader_v2, PluginConfig};
+use crate::runtime;
 
 /// Main execution coordinator
 pub struct NyashRunner {
@@ -40,7 +41,7 @@ impl NyashRunner {
     /// Run Nyash based on the configuration
     pub fn run(&self) {
         // 🏭 Phase 9.78b: Initialize unified registry
-        nyash_rust::runtime::init_global_unified_registry();
+        runtime::init_global_unified_registry();
         
         // Try to initialize BID plugins from nyash.toml (best-effort)
         self.init_bid_plugins();

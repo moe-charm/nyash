@@ -7,7 +7,7 @@
 
 use super::BoxFactory;
 use crate::box_trait::NyashBox;
-use crate::RuntimeError;
+use crate::interpreter::RuntimeError;
 use crate::boxes::*;
 use std::collections::HashMap;
 

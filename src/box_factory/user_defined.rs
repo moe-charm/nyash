@@ -7,7 +7,7 @@
 
 use super::BoxFactory;
 use crate::box_trait::NyashBox;
-use crate::RuntimeError;
+use crate::interpreter::RuntimeError;
 
 /// Factory for user-defined Box types
 pub struct UserDefinedBoxFactory {

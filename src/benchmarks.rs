@@ -12,7 +12,9 @@ use std::fs;
 use crate::parser::NyashParser;
 use crate::interpreter::NyashInterpreter;
 use crate::mir::MirCompiler;
-use crate::backend::{VM, WasmBackend};
+use crate::backend::VM;
+#[cfg(feature = "wasm-backend")]
+use crate::backend::WasmBackend;
 
 #[derive(Debug)]
 pub struct BenchmarkResult {
@@ -56,6 +58,7 @@ impl BenchmarkSuite {
                     results.push(vm_result);
                 }
                 
+                #[cfg(feature = "wasm-backend")]
                 if let Ok(wasm_result) = self.run_wasm_benchmark(name, &source) {
                     results.push(wasm_result);
                 }
@@ -128,6 +131,7 @@ impl BenchmarkSuite {
     }
     
     /// Run benchmark on WASM backend
+    #[cfg(feature = "wasm-backend")]
     fn run_wasm_benchmark(&self, name: &str, source: &str) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
         let mut total_duration = 0.0;
         

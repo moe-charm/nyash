@@ -11,7 +11,7 @@
  */
 
 use crate::box_trait::NyashBox;
-use crate::RuntimeError;
+use crate::interpreter::RuntimeError;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 

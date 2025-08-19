@@ -29,7 +29,7 @@ impl NyashInterpreter {
         match nyash_args {
             Ok(args) => {
                 // Try unified registry
-                use crate::runtime::get_global_unified_registry;
+                use super::super::runtime::get_global_unified_registry;
                 let registry = get_global_unified_registry();
                 let registry_lock = registry.lock().unwrap();
                 

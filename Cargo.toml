@@ -17,6 +17,7 @@ gui = ["dep:egui", "dep:eframe", "dep:egui_extras", "dep:image"]
 gui-examples = ["gui"]
 all-examples = ["gui-examples"]
 dynamic-file = []
+wasm-backend = ["dep:wasmtime", "dep:wabt"]
 # Note: LLVM feature requires inkwell dependency and LLVM development libraries
 # llvm = ["dep:inkwell"]
 
@@ -120,9 +121,9 @@ wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 
-# WASM backend dependencies (Phase 8)
-wabt = "0.10"
-wasmtime = "35.0.0"
+# WASM backend dependencies (Phase 8) - optional for faster builds
+wabt = { version = "0.10", optional = true }
+wasmtime = { version = "35.0.0", optional = true }
 
 # GUI フレームワーク - only when gui feature is enabled
 egui = { version = "0.29", optional = true }

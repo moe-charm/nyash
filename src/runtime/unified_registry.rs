@@ -5,7 +5,7 @@
  * Integrates all Box creation sources (builtin, user-defined, plugin)
  */
 
-use super::super::box_factory::{UnifiedBoxRegistry, builtin::BuiltinBoxFactory, plugin::PluginBoxFactory};
+use crate::box_factory::{UnifiedBoxRegistry, builtin::BuiltinBoxFactory, plugin::PluginBoxFactory};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Global registry instance
@@ -35,7 +35,7 @@ pub fn get_global_unified_registry() -> Arc<Mutex<UnifiedBoxRegistry>> {
 }
 
 /// Register a user-defined Box factory (called by interpreter)
-pub fn register_user_defined_factory(factory: Arc<dyn super::super::box_factory::BoxFactory>) {
+pub fn register_user_defined_factory(factory: Arc<dyn crate::box_factory::BoxFactory>) {
     let registry = get_global_unified_registry();
     let mut registry_lock = registry.lock().unwrap();
     
