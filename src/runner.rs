@@ -13,8 +13,11 @@ use nyash_rust::{
     parser::NyashParser,
     interpreter::NyashInterpreter,
     mir::{MirCompiler, MirPrinter, MirInstruction},
-    backend::{VM, wasm::WasmBackend, aot::AotBackend},
+    backend::VM,
 };
+
+#[cfg(feature = "wasm-backend")]
+use nyash_rust::backend::{wasm::WasmBackend, aot::AotBackend};
 
 #[cfg(feature = "llvm")]
 use nyash_rust::backend::{llvm_compile_and_execute};
@@ -36,6 +39,9 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // 🏭 Phase 9.78b: Initialize unified registry
+        nyash_rust::runtime::init_global_unified_registry();
+        
         // Try to initialize BID plugins from nyash.toml (best-effort)
         self.init_bid_plugins();
         // Benchmark mode - can run without a file
@@ -95,11 +101,27 @@ impl NyashRunner {
             println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             self.execute_mir_mode(filename);
         } else if self.config.compile_wasm {
-            println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
-            self.execute_wasm_mode(filename);
+            #[cfg(feature = "wasm-backend")]
+            {
+                println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
+                self.execute_wasm_mode(filename);
+            }
+            #[cfg(not(feature = "wasm-backend"))]
+            {
+                eprintln!("❌ WASM backend not available. Please rebuild with: cargo build --features wasm-backend");
+                process::exit(1);
+            }
         } else if self.config.compile_native {
-            println!("🚀 Nyash AOT Compiler - Processing file: {} 🚀", filename);
-            self.execute_aot_mode(filename);
+            #[cfg(feature = "wasm-backend")]
+            {
+                println!("🚀 Nyash AOT Compiler - Processing file: {} 🚀", filename);
+                self.execute_aot_mode(filename);
+            }
+            #[cfg(not(feature = "wasm-backend"))]
+            {
+                eprintln!("❌ AOT backend not available. Please rebuild with: cargo build --features wasm-backend");
+                process::exit(1);
+            }
         } else if self.config.backend == "vm" {
             println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             self.execute_vm_mode(filename);
@@ -316,6 +338,7 @@ impl NyashRunner {
     }
 
     /// Execute WASM compilation mode
+    #[cfg(feature = "wasm-backend")]
     fn execute_wasm_mode(&self, filename: &str) {
         // Read the file
         let code = match fs::read_to_string(filename) {
@@ -382,6 +405,7 @@ impl NyashRunner {
     }
 
     /// Execute AOT compilation mode
+    #[cfg(feature = "wasm-backend")]
     fn execute_aot_mode(&self, filename: &str) {
         // Read the file
         let code = match fs::read_to_string(filename) {

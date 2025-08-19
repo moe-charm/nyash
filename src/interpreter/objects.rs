@@ -18,6 +18,41 @@ impl NyashInterpreter {
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         eprintln!("🔍 execute_new called for class: {}, with {} arguments", class, arguments.len());
         
+        // 🏭 Phase 9.78b: Try unified registry first
+        eprintln!("🔍 Trying unified registry for class: {}", class);
+        
+        // Convert ASTNode arguments to Box<dyn NyashBox>
+        let nyash_args: Result<Vec<Box<dyn NyashBox>>, RuntimeError> = arguments.iter()
+            .map(|arg| self.execute_expression(arg))
+            .collect();
+        
+        match nyash_args {
+            Ok(args) => {
+                // Try unified registry
+                use crate::runtime::get_global_unified_registry;
+                let registry = get_global_unified_registry();
+                let registry_lock = registry.lock().unwrap();
+                
+                match registry_lock.create_box(class, &args) {
+                    Ok(box_instance) => {
+                        eprintln!("🏭 Unified registry created: {}", class);
+                        return Ok(box_instance);
+                    },
+                    Err(e) => {
+                        eprintln!("🔍 Unified registry failed for {}: {}", class, e);
+                        // Fall through to legacy match statement
+                    }
+                }
+            },
+            Err(e) => {
+                eprintln!("🔍 Argument evaluation failed: {}", e);
+                // Fall through to legacy match statement which will re-evaluate args
+            }
+        }
+        
+        // 🚧 Legacy implementation (will be removed in Phase 9.78e)
+        eprintln!("🔍 Falling back to legacy match statement for: {}", class);
+        
         // 組み込みBox型のチェック
         eprintln!("🔍 Starting built-in Box type checks...");
         match class {

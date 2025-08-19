@@ -1,0 +1,16 @@
+# Phase 9.78b: Unified BoxFactory Registry test
+
+# Test basic Box creation through unified registry
+local str = new StringBox("Hello UnifiedBox!")
+print(str.to_string_box().value)
+
+local num = new IntegerBox(42)
+print(num.to_string_box().value)
+
+local flag = new BoolBox(true)
+print(flag.to_string_box().value)
+
+local arr = new ArrayBox()
+print("ArrayBox created: " + arr.type_name())
+
+print("🎉 All unified registry tests passed!")
