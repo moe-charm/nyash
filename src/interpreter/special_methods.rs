@@ -15,6 +15,7 @@
 use super::*;
 use crate::boxes::SoundBox;
 use crate::method_box::MethodBox;
+use crate::instance_v2::InstanceBox;
 
 impl NyashInterpreter {
     /// SoundBoxのメソッド呼び出しを実行
@@ -159,7 +160,7 @@ impl NyashInterpreter {
         let instance = instance_arc.lock().unwrap();
         
         // InstanceBoxにダウンキャスト
-        if let Some(instance_box) = instance.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+        if let Some(instance_box) = instance.as_any().downcast_ref::<InstanceBox>() {
             // メソッドを取得
             let method_ast = instance_box.get_method(&method_box.method_name)
                 .ok_or(RuntimeError::InvalidOperation {

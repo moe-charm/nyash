@@ -220,6 +220,13 @@ impl NyashInterpreter {
     pub fn new() -> Self {
         let shared = SharedState::new();
         
+        // Register user-defined box factory with unified registry
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        use crate::runtime::register_user_defined_factory;
+        
+        let factory = UserDefinedBoxFactory::new(shared.clone());
+        register_user_defined_factory(Arc::new(factory));
+        
         Self {
             shared,
             local_vars: HashMap::new(),
@@ -387,7 +394,7 @@ impl NyashInterpreter {
                 } else {
                     eprintln!("🔍 DEBUG: '{}' not found in statics MapBox", name);
                 }
-            } else if let Some(instance) = statics_namespace.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+            } else if let Some(instance) = statics_namespace.as_any().downcast_ref::<InstanceBox>() {
                 eprintln!("🔍 DEBUG: statics is an InstanceBox, looking for '{}'", name);
                 if let Some(static_box) = instance.get_field(name) {
                     eprintln!("🔍 DEBUG: Found '{}' in statics namespace", name);

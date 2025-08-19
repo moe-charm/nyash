@@ -36,6 +36,44 @@ impl NyashInterpreter {
                 match registry_lock.create_box(class, &args) {
                     Ok(box_instance) => {
                         eprintln!("🏭 Unified registry created: {}", class);
+                        
+                        // Check if this is a user-defined box that needs constructor execution
+                        if let Some(_instance_box) = box_instance.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                            // This is a user-defined box, we need to execute its constructor
+                            eprintln!("🔍 User-defined box detected, executing constructor");
+                            
+                            // Check if we have a box declaration for this class
+                            let (box_decl_opt, constructor_opt) = {
+                                let box_decls = self.shared.box_declarations.read().unwrap();
+                                if let Some(box_decl) = box_decls.get(class) {
+                                    // Find the appropriate constructor
+                                    let constructor_name = format!("init/{}", arguments.len());
+                                    let constructor = box_decl.constructors.get(&constructor_name).cloned();
+                                    (Some(box_decl.clone()), constructor)
+                                } else {
+                                    (None, None)
+                                }
+                            };
+                            
+                            if let Some(box_decl) = box_decl_opt {
+                                if let Some(constructor) = constructor_opt {
+                                    // Execute the constructor
+                                    let instance_arc: SharedNyashBox = Arc::from(box_instance);
+                                    drop(registry_lock); // Release lock before executing constructor
+                                    self.execute_constructor(&instance_arc, &constructor, arguments, &box_decl)?;
+                                    return Ok((*instance_arc).clone_box());
+                                } else if arguments.is_empty() {
+                                    // No constructor needed for zero arguments
+                                    return Ok(box_instance);
+                                } else {
+                                    return Err(RuntimeError::InvalidOperation {
+                                        message: format!("No constructor found for {} with {} arguments", class, arguments.len()),
+                                    });
+                                }
+                            }
+                        }
+                        
+                        // Not a user-defined box or no constructor needed
                         return Ok(box_instance);
                     },
                     Err(e) => {

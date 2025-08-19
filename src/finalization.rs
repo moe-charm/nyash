@@ -11,6 +11,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::fmt;
 use crate::box_trait::NyashBox;
+use crate::instance_v2::InstanceBox;
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -67,7 +68,7 @@ impl BoxFinalizer {
             
             if !is_finalized(*box_id) {
                 // fini()メソッドを呼び出す（存在する場合）
-                if let Some(instance) = nyash_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                if let Some(instance) = nyash_box.as_any().downcast_ref::<InstanceBox>() {
                     let _ = instance.fini();
                 }
                 mark_as_finalized(*box_id);

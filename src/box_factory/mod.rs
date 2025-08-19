@@ -90,10 +90,22 @@ impl UnifiedBoxRegistry {
         }
         drop(cache);
         
-        // Fallback: linear search through all factories
+        // Linear search through all factories
         for factory in &self.factories {
-            if factory.box_types().contains(&name) && factory.is_available() {
-                return factory.create_box(name, args);
+            if !factory.is_available() {
+                continue;
+            }
+            
+            // For factories that advertise types, check if they support this type
+            let box_types = factory.box_types();
+            if !box_types.is_empty() && !box_types.contains(&name) {
+                continue;
+            }
+            
+            // Try to create the box (factories with empty box_types() will always be tried)
+            match factory.create_box(name, args) {
+                Ok(boxed) => return Ok(boxed),
+                Err(_) => continue, // Try next factory
             }
         }
         

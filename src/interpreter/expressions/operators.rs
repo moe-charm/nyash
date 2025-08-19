@@ -8,8 +8,20 @@ use crate::box_trait::{NyashBox, IntegerBox, BoolBox, CompareBox};
 use crate::boxes::StringBox;  // 🔧 統一レジストリと一致させる
 use crate::boxes::FloatBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
+use crate::instance_v2::InstanceBox;
 
 // Local helper functions to bypass import issues
+
+/// InstanceBoxでラップされている場合、内部のBoxを取得する
+/// シンプルなヘルパー関数で型地獄を回避
+fn unwrap_instance(boxed: &dyn NyashBox) -> &dyn NyashBox {
+    if let Some(instance) = boxed.as_any().downcast_ref::<InstanceBox>() {
+        if let Some(ref inner) = instance.inner_content {
+            return inner.as_ref();
+        }
+    }
+    boxed
+}
 pub(super) fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
     // 🔍 デバッグ出力追加
     eprintln!("🔍 try_add_operation: left={}, right={}", left.type_name(), right.type_name());
