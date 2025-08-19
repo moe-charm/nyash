@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::*;
 
 pub mod box_trait;
 pub mod boxes;
+pub mod box_factory; // 🏭 Unified Box Factory Architecture (Phase 9.78)
 pub mod stdlib;
 pub mod environment;
 pub mod tokenizer;
