@@ -66,3 +66,26 @@ stats_output.txt
 *.o
 *.exe
 a.out
+
+# Nekocode analysis files (大きなJSONファイル)
+.nekocode_sessions/
+analysis.json
+nekocode-temp/
+
+# Build outputs and logs
+build_*.txt
+test_*.txt
+*_output.txt
+*_results.txt
+
+# Local test files
+local_tests/
+
+# Windows build artifacts
+*.pdb
+*.exp
+*.lib
+
+# Font files (already in assets/)
+*.ttf
+*.otf
