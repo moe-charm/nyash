@@ -4,7 +4,8 @@
  * Comprehensive test suite for the ChatGPT5 + AI Council designed MIR system
  */
 
-use crate::mir::{
+#![cfg(feature = "mir-v2")]
+use nyash_rust::mir::{
     MirInstructionV2, ConstValue, BinaryOp, CompareOp, AtomicOrdering,
     EffectMask, Effect, ValueIdGenerator, BasicBlockIdGenerator,
     OwnershipVerifier, OwnershipError,

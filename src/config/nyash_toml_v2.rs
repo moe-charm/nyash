@@ -64,24 +64,25 @@ impl NyashConfigV2 {
     /// Parse nyash.toml file
     pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
-        
+        Self::from_str(&content)
+    }
+
+    /// Parse nyash.toml content from string (test/helper)
+    pub fn from_str(content: &str) -> Result<Self, Box<dyn std::error::Error>> {
         // Parse as raw TOML first to handle nested box configs
-        let mut config: toml::Value = toml::from_str(&content)?;
-        
+        let mut config: toml::Value = toml::from_str(content)?;
+
         // Extract library definitions
         let libraries = Self::parse_libraries(&mut config)?;
-        
+
         // Extract plugin paths
         let plugin_paths = if let Some(paths) = config.get("plugin_paths") {
             paths.clone().try_into::<PluginPaths>()?
         } else {
             PluginPaths::default()
         };
-        
-        Ok(NyashConfigV2 {
-            libraries,
-            plugin_paths,
-        })
+
+        Ok(NyashConfigV2 { libraries, plugin_paths })
     }
     
     /// Parse library definitions with nested box configs
@@ -161,10 +162,9 @@ mod tests {
     fn test_parse_v2_config() {
         let toml_str = r#"
 [libraries]
-"libnyash_filebox_plugin.so" = {
-    boxes = ["FileBox"],
-    path = "./target/release/libnyash_filebox_plugin.so"
-}
+[libraries."libnyash_filebox_plugin.so"]
+boxes = ["FileBox"]
+path = "./target/release/libnyash_filebox_plugin.so"
 
 [libraries."libnyash_filebox_plugin.so".FileBox]
 type_id = 6
@@ -175,9 +175,14 @@ birth = { method_id = 0 }
 open = { method_id = 1 }
 close = { method_id = 4 }
 "#;
-        
-        let config: toml::Value = toml::from_str(toml_str).unwrap();
-        let nyash_config = NyashConfigV2::from_file("test.toml");
-        // Test would need actual file...
+        let nyash_config = NyashConfigV2::from_str(toml_str).unwrap();
+        assert!(nyash_config.libraries.contains_key("libnyash_filebox_plugin.so"));
+        let (lib_name, lib_def) = nyash_config.find_library_for_box("FileBox").unwrap();
+        assert_eq!(lib_name, "libnyash_filebox_plugin.so");
+        assert_eq!(lib_def.boxes, vec!["FileBox".to_string()]);
+        // Nested box config should be retrievable
+        let raw: toml::Value = toml::from_str(toml_str).unwrap();
+        let box_conf = nyash_config.get_box_config("libnyash_filebox_plugin.so", "FileBox", &raw).unwrap();
+        assert_eq!(box_conf.type_id, 6);
     }
 }

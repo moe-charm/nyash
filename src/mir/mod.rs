@@ -113,7 +113,7 @@ mod tests {
         let mir_dump = compiler.dump_mir(&result.module);
         
         assert!(!mir_dump.is_empty(), "MIR dump should not be empty");
-        assert!(mir_dump.contains("function"), "MIR dump should contain function information");
+        assert!(mir_dump.contains("define"), "MIR dump should contain function definition");
     }
     
     #[test]

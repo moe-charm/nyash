@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod array_state_sharing_tests {
-    use crate::interpreter::Interpreter;
-    use crate::boxes::array::ArrayBox;
-    use crate::box_trait::{NyashBox, IntegerBox, StringBox};
+    use nyash_rust::interpreter::NyashInterpreter;
+    use nyash_rust::parser::NyashParser;
+    use nyash_rust::boxes::array::ArrayBox;
+    use nyash_rust::box_trait::{NyashBox, IntegerBox, StringBox};
 
     #[test]
     fn test_arraybox_state_sharing_bug_fix() {
         // 🚨 問題再現テスト
-        let mut interpreter = Interpreter::new();
+        let mut interpreter = NyashInterpreter::new();
         let program = r#"
             static box Main {
                 init { result }
@@ -21,7 +22,8 @@ mod array_state_sharing_tests {
             }
         "#;
         
-        let result = interpreter.execute_program(program).unwrap();
+        let ast = NyashParser::parse_from_string(program).unwrap();
+        let result = interpreter.execute(ast).unwrap();
         let int_result = result.as_any().downcast_ref::<IntegerBox>().unwrap();
         assert_eq!(int_result.value, 1);  // 🎯 0ではなく1を返すべき
     }
@@ -47,7 +49,7 @@ mod array_state_sharing_tests {
 
     #[test]
     fn test_multiple_operations_state_preservation() {
-        let mut interpreter = Interpreter::new();
+        let mut interpreter = NyashInterpreter::new();
         let program = r#"
             static box Main {
                 init { result }
@@ -63,7 +65,8 @@ mod array_state_sharing_tests {
             }
         "#;
         
-        let result = interpreter.execute_program(program).unwrap();
+        let ast = NyashParser::parse_from_string(program).unwrap();
+        let result = interpreter.execute(ast).unwrap();
         let int_result = result.as_any().downcast_ref::<IntegerBox>().unwrap();
         assert_eq!(int_result.value, 3);  // 3要素が正しく保持されるべき
     }

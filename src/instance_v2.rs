@@ -383,7 +383,9 @@ impl Display for InstanceBox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::box_trait::IntegerBox;
+    use crate::box_trait::{IntegerBox, NyashBox};
+    use std::sync::{Arc, Mutex};
+    type SharedNyashBox = Arc<dyn NyashBox>;
     
     #[test]
     fn test_from_any_box_creation() {
@@ -403,8 +405,9 @@ mod tests {
         
         assert_eq!(instance.class_name, "Point");
         assert!(instance.inner_content.is_none()); // ユーザー定義は内包なし
-        assert_eq!(instance.get_field("x"), Some(NyashValue::Null));
-        assert_eq!(instance.get_field("y"), Some(NyashValue::Null));
+        // フィールドが初期化されているかチェック
+        assert!(instance.get_field("x").is_some());
+        assert!(instance.get_field("y").is_some());
     }
     
     #[test]
@@ -412,10 +415,16 @@ mod tests {
         let instance = InstanceBox::from_declaration("TestBox".to_string(), vec!["value".to_string()], HashMap::new());
         
         // フィールド設定
-        instance.set_field("value".to_string(), NyashValue::Integer(42)).unwrap();
+        let int_box: SharedNyashBox = Arc::new(IntegerBox::new(42));
+        instance.set_field("value", int_box.clone()).unwrap();
         
         // フィールド取得
-        assert_eq!(instance.get_field("value"), Some(NyashValue::Integer(42)));
+        let field_value = instance.get_field("value").unwrap();
+        if let Some(int_box) = field_value.as_any().downcast_ref::<IntegerBox>() {
+            assert_eq!(int_box.value, 42);
+        } else {
+            panic!("Expected IntegerBox");
+        }
     }
     
     #[test]

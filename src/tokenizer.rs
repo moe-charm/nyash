@@ -396,6 +396,8 @@ impl NyashTokenizer {
             "break" => TokenType::BREAK,
             "return" => TokenType::RETURN,
             "function" => TokenType::FUNCTION,
+            // Alias support: `fn` as shorthand for function
+            "fn" => TokenType::FUNCTION,
             "print" => TokenType::PRINT,
             "this" => TokenType::THIS,
             "me" => TokenType::ME,
@@ -437,7 +439,7 @@ impl NyashTokenizer {
         }
     }
     
-    /// 空白文字をスキップ（改行は除く）
+    /// 空白文字をスキップ（改行は除く：改行はNEWLINEトークンとして扱う）
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.current_char() {
             if c.is_whitespace() && c != '\n' {
@@ -596,10 +598,12 @@ mod tests {
         let code = "box\ntest\nvalue";
         let mut tokenizer = NyashTokenizer::new(code);
         let tokens = tokenizer.tokenize().unwrap();
-        
-        assert_eq!(tokens[0].line, 1); // box
-        assert_eq!(tokens[1].line, 2); // test  
-        assert_eq!(tokens[2].line, 3); // value
+
+        // NEWLINEトークンを除外して確認
+        let non_newline: Vec<&Token> = tokens.iter().filter(|t| !matches!(t.token_type, TokenType::NEWLINE)).collect();
+        assert_eq!(non_newline[0].line, 1); // box
+        assert_eq!(non_newline[1].line, 2); // test
+        assert_eq!(non_newline[2].line, 3); // value
     }
     
     #[test]
@@ -612,7 +616,10 @@ value"#;
         let tokens = tokenizer.tokenize().unwrap();
         
         // コメントは除外されている
-        let token_types: Vec<_> = tokens.iter().map(|t| &t.token_type).collect();
+        let token_types: Vec<_> = tokens.iter()
+            .filter(|t| !matches!(t.token_type, TokenType::NEWLINE))
+            .map(|t| &t.token_type)
+            .collect();
         assert_eq!(token_types.len(), 4); // box, Test, value, EOF
     }
     

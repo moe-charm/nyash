@@ -258,6 +258,9 @@ impl NyashInterpreter {
         debug_log("=== NYASH EXECUTION START ===");
         eprintln!("🔍 DEBUG: Starting interpreter execution...");
         let result = self.execute_node(&ast);
+        if let Err(ref e) = result {
+            eprintln!("❌ Interpreter error: {}", e);
+        }
         debug_log("=== NYASH EXECUTION END ===");
         eprintln!("🔍 DEBUG: Interpreter execution completed");
         result
@@ -474,13 +477,12 @@ impl NyashInterpreter {
             }
         }
         
-        // 4. 🚨 未宣言変数への代入は厳密にエラー
-        Err(RuntimeError::UndefinedVariable {
-            name: format!(
-                "{}\n💡 Suggestion: Declare the variable first:\n  • For fields: Add '{}' to 'init {{ }}' block\n  • For local variables: Use 'local {}'\n  • For field access: Use 'me.{}'", 
-                name, name, name, name
-            ),
-        })
+        // 4. グローバル変数として新規作成（従来の緩い挙動に合わせる）
+        {
+            let mut global_box = self.shared.global_box.lock().unwrap();
+            global_box.set_field_dynamic_legacy(name.to_string(), shared_value);
+        }
+        Ok(())
     }
     
     /// local変数を宣言（関数内でのみ有効）

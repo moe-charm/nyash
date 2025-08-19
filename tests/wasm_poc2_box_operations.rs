@@ -1,3 +1,4 @@
+#![cfg(feature = "wasm-backend")]
 /*!
  * Phase 8.3 PoC2 Integration Test - Box Operations in WASM
  * 

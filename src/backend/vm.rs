@@ -46,6 +46,22 @@ pub enum VMValue {
     Void,
 }
 
+// Manual PartialEq implementation to avoid requiring PartialEq on FutureBox
+impl PartialEq for VMValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (VMValue::Integer(a), VMValue::Integer(b)) => a == b,
+            (VMValue::Float(a), VMValue::Float(b)) => a == b,
+            (VMValue::Bool(a), VMValue::Bool(b)) => a == b,
+            (VMValue::String(a), VMValue::String(b)) => a == b,
+            (VMValue::Void, VMValue::Void) => true,
+            // Future equality semantics are not defined; treat distinct futures as not equal
+            (VMValue::Future(_), VMValue::Future(_)) => false,
+            _ => false,
+        }
+    }
+}
+
 impl VMValue {
     /// Convert to NyashBox for output
     pub fn to_nyash_box(&self) -> Box<dyn NyashBox> {

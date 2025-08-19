@@ -1,3 +1,4 @@
+#![cfg(feature = "wasm-backend")]
 /*!
  * Phase 8.2 PoC1 Integration Test - Basic WASM Arithmetic Operations
  * 

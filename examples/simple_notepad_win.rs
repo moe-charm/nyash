@@ -1,8 +1,10 @@
 // Nyash + egui Windows Notepad App
 // Simple GUI application with text input functionality
 
+#[cfg(target_os = "windows")]
 use eframe::egui;
 
+#[cfg(target_os = "windows")]
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -22,6 +24,7 @@ fn main() -> eframe::Result {
     )
 }
 
+#[cfg(target_os = "windows")]
 fn setup_custom_fonts(ctx: &egui::Context) {
     // Start with the default fonts
     let mut fonts = egui::FontDefinitions::default();
@@ -66,6 +69,7 @@ impl NyashNotepad {
     }
 }
 
+#[cfg(target_os = "windows")]
 impl eframe::App for NyashNotepad {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Menu bar
@@ -174,3 +178,7 @@ impl eframe::App for NyashNotepad {
         });
     }
 }
+
+// For non-Windows targets, provide a stub main to avoid build failures in CI/tests
+#[cfg(not(target_os = "windows"))]
+fn main() {}

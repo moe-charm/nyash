@@ -68,7 +68,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use box_trait::{StringBox, BoxCore};
+    use box_trait::{StringBox, BoxCore, NyashBox};
     
     #[test]
     fn test_main_functionality() {

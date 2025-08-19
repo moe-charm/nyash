@@ -142,10 +142,16 @@ impl NyashParser {
     pub(super) fn parse_loop(&mut self) -> Result<ASTNode, ParseError> {
         self.advance(); // consume 'loop'
         
-        // 条件部分を取得
-        self.consume(TokenType::LPAREN)?;
-        let condition = Some(Box::new(self.parse_expression()?));
-        self.consume(TokenType::RPAREN)?;
+        // 条件部分を取得（省略可: `loop { ... }` は無条件ループとして扱う）
+        let condition = if self.match_token(&TokenType::LPAREN) {
+            self.advance(); // consume '('
+            let cond = Box::new(self.parse_expression()?);
+            self.consume(TokenType::RPAREN)?;
+            cond
+        } else {
+            // default: true
+            Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::Bool(true), span: Span::unknown() })
+        };
         
         // body部分を取得
         self.consume(TokenType::LBRACE)?;
@@ -159,7 +165,7 @@ impl NyashParser {
         self.consume(TokenType::RBRACE)?;
         
         Ok(ASTNode::Loop {
-            condition: condition.unwrap(),
+            condition,
             body,
             span: Span::unknown(),
         })

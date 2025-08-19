@@ -1,3 +1,4 @@
+#![cfg(feature = "wasm-backend")]
 /*!
  * WASM String Constants Test - Validates Issue #65 implementation
  * 

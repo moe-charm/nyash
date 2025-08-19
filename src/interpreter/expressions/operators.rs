@@ -4,9 +4,8 @@
 
 // Removed super::* import - specific imports below
 use crate::ast::{ASTNode, BinaryOperator, UnaryOperator};
-use crate::box_trait::{NyashBox, IntegerBox, BoolBox, CompareBox};
-use crate::boxes::StringBox;  // 🔧 統一レジストリと一致させる
-use crate::boxes::FloatBox;
+use crate::box_trait::{NyashBox, BoolBox, CompareBox};
+use crate::boxes::{IntegerBox, StringBox, FloatBox};  // 🔧 算術は boxes::* 実体に統一
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use crate::instance_v2::InstanceBox;
 
@@ -140,6 +139,7 @@ impl NyashInterpreter {
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         let left_val = self.execute_expression(left)?;
         let right_val = self.execute_expression(right)?;
+        eprintln!("🔧 execute_binary_op: op={:?}, left={}, right={}", op, left_val.type_name(), right_val.type_name());
         
         match op {
             BinaryOperator::Add => {
