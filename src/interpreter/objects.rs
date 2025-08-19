@@ -40,7 +40,6 @@ impl NyashInterpreter {
                         // Check if this is a user-defined box that needs constructor execution
                         if let Some(_instance_box) = box_instance.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                             // This is a user-defined box, we need to execute its constructor
-                            eprintln!("🔍 User-defined box detected, executing constructor");
                             
                             // Check if we have a box declaration for this class
                             let (box_decl_opt, constructor_opt) = {

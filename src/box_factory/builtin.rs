@@ -9,8 +9,6 @@ use super::BoxFactory;
 use crate::box_trait::NyashBox;
 use crate::interpreter::RuntimeError;
 use crate::boxes::*;
-// 🎯 最軽量アプローチ: 直接instance_v2から
-use crate::instance_v2::InstanceBox;
 use std::collections::HashMap;
 
 type BoxCreator = Box<dyn Fn(&[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, RuntimeError> + Send + Sync>;
@@ -49,10 +47,8 @@ impl BuiltinBoxFactory {
                 Some(arg) => arg.to_string_box().value,
                 None => String::new(),
             };
-            // 🎯 シンプルアプローチ: instance_v2統合
-            let inner = StringBox::new(value);
-            let instance = InstanceBox::from_any_box("StringBox".to_string(), Box::new(inner));
-            Ok(Box::new(instance) as Box<dyn NyashBox>)
+            // Return StringBox directly without InstanceBox wrapper
+            Ok(Box::new(StringBox::new(value)) as Box<dyn NyashBox>)
         });
         
         // IntegerBox

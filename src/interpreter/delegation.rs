@@ -7,6 +7,8 @@
  */
 
 use super::*;
+use std::sync::{Arc, Mutex};
+use crate::interpreter::SharedNyashBox;
 
 impl NyashInterpreter {
     /// from呼び出しを実行 - 完全明示デリゲーション
@@ -61,7 +63,12 @@ impl NyashInterpreter {
         // ビルトインBoxの場合、専用メソッドで処理
         if is_builtin {
             drop(box_declarations);
-            return self.execute_builtin_box_method(parent, method, current_instance_val.clone_box(), arguments);
+            // Pass the Arc reference directly for builtin boxes
+            let me_ref = self.resolve_variable("me")
+                .map_err(|_| RuntimeError::InvalidOperation {
+                    message: "'from' can only be used inside methods".to_string(),
+                })?;
+            return self.execute_builtin_box_method(parent, method, (*me_ref).clone_box(), arguments);
         }
         
         // 3. 親クラスのBox宣言を取得（ユーザー定義Boxの場合）
@@ -138,9 +145,6 @@ impl NyashInterpreter {
                     break;
                 }
             }
-            
-            // 🔍 DEBUG: FromCall実行結果をログ出力
-            eprintln!("🔍 DEBUG: FromCall {}.{} result: {}", parent, method, result.to_string_box().value);
             
             // local変数スタックを復元
             self.restore_local_vars(saved_locals);
@@ -287,9 +291,24 @@ impl NyashInterpreter {
                     });
                 }
                 
-                let content = arg_values[0].to_string_box().value;
-                eprintln!("🌟 DEBUG: StringBox.birth() created with content: '{}'", content);
+                // StringBoxの内容を正しく取得
+                let content = if let Some(string_box) = arg_values[0].as_any().downcast_ref::<StringBox>() {
+                    // 引数が既にStringBoxの場合、その値を直接取得
+                    string_box.value.clone()
+                } else {
+                    // それ以外の場合は、to_string_box()で変換
+                    arg_values[0].to_string_box().value
+                };
                 let string_box = StringBox::new(content);
+                
+                // 現在のインスタンスがInstanceBoxの場合、StringBoxを特別なフィールドに保存
+                if let Some(instance) = current_instance.as_any().downcast_ref::<InstanceBox>() {
+                    // 特別な内部フィールド "__builtin_content" にStringBoxを保存
+                    let string_box_arc: Arc<dyn NyashBox> = Arc::new(string_box);
+                    instance.set_field_dynamic("__builtin_content".to_string(), 
+                        crate::value::NyashValue::Box(string_box_arc.clone()));
+                }
+                
                 Ok(Box::new(VoidBox::new())) // Return void to indicate successful initialization
             }
             "IntegerBox" => {
@@ -308,7 +327,14 @@ impl NyashInterpreter {
                 };
                 
                 let integer_box = IntegerBox::new(value);
-                eprintln!("🌟 DEBUG: IntegerBox.birth() created with value: {}", value);
+                
+                // 現在のインスタンスがInstanceBoxの場合、IntegerBoxを特別なフィールドに保存
+                if let Some(instance) = current_instance.as_any().downcast_ref::<InstanceBox>() {
+                    let integer_box_arc: Arc<dyn NyashBox> = Arc::new(integer_box);
+                    instance.set_field_dynamic("__builtin_content".to_string(), 
+                        crate::value::NyashValue::Box(integer_box_arc.clone()));
+                }
+                
                 Ok(Box::new(VoidBox::new()))
             }
             "MathBox" => {
@@ -320,7 +346,6 @@ impl NyashInterpreter {
                 }
                 
                 let math_box = MathBox::new();
-                eprintln!("🌟 DEBUG: MathBox.birth() created");
                 Ok(Box::new(VoidBox::new()))
             }
             // 他のビルトインBoxは必要に応じて追加

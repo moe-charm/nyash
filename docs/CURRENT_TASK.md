@@ -110,7 +110,64 @@ fn unwrap_instance(boxed: &dyn NyashBox) -> &dyn NyashBox {
 - **透過デリゲーションによる美しい継承システム**
 - シンプルで保守可能な実装
 
-## 🚀 次のステップ: レガシー互換層のクリーンアップ
+### 🎯 **ビルトインBoxメソッド継承問題修正完了！**
+
+**✅ 修正内容**：
+- `execute_builtin_birth_method`で`__builtin_content`フィールドに正しく保存
+- ビルトインBoxは直接返す（InstanceBoxラップ不要）
+- メソッド解決時に`__builtin_content`をチェックしてビルトインメソッド呼び出し
+
+**🧪 テスト結果**：
+```bash
+📝 EnhancedString誕生: 【Hello】
+結果: 【Hello】✨
+✅ Execution completed successfully!
+```
+
+### 📱 **appsフォルダ動作確認結果**
+
+**テスト済みアプリ**：
+1. **chip8_emulator.nyash** - ✅ 起動成功（CHIP-8エミュレータ）
+2. **enhanced_kilo_editor.nyash** - ✅ 起動成功（エディタ実装）
+3. **proxy_server.nyash** - ⚠️ BufferBox/SocketBox未実装（プラグイン移行予定）
+
+**既知の問題**：
+- BufferBox/SocketBoxはプラグイン形式への移行待ち
+- 出力が途中で切れる場合があるが、実行自体は成功
+
+## 🚨 **発見された重要な問題**
+
+### 🔍 **1. Pack透明化システム調査結果**
+
+**✅ 成功確認**：
+- **from統一構文**: ユーザーは`from StringBox.birth()`と記述
+- **内部透過処理**: `is_builtin_box()`判定 → `execute_builtin_box_method()`  
+- **pack自動変換**: ビルトインBox専用処理が透過的に動作
+- **デバッグ証拠**: `🌟 DEBUG: StringBox.birth() created` 出力成功
+
+**❌ 発見された重大エラー**：
+```bash
+❌ Runtime error: Method 'toString' not found in EnhancedString
+```
+
+**問題の本質**：
+- ✅ **birth継承**: ビルトインBoxコンストラクタは動作  
+- ❌ **メソッド継承**: ビルトインBoxメソッドが継承されない
+- 結果：`me.toString()`等のビルトインメソッドが利用不可
+
+### 🔍 **2. デリゲーション2系統の完全理解**
+
+**正しい設計**：
+1. **ユーザーBox → ユーザーBox**: `from` 構文（直接処理）
+2. **ユーザーBox → ビルトインBox**: `from` 構文（**透過的にpack変換**）
+
+**透過化の仕組み**：
+- ユーザー記述: `from StringBox.method()`
+- 内部判定: `BUILTIN_BOXES.contains("StringBox")` → `true`
+- 自動変換: `execute_builtin_box_method()` でpack相当処理
+- ユーザー体験: 完全にfrom統一、packを意識不要
+
+## 🚀 次のステップ: 重要問題の修正
 
 ### 🎯 **instance_v2の純粋化**
 **現状**: instance_v2にレガシー互換層が残存（段階的削除予定）

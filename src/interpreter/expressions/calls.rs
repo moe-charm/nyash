@@ -571,15 +571,12 @@ impl NyashInterpreter {
                 return Ok(Box::new(VoidBox::new()));
             }
             
-            // メソッドを取得
-            let method_ast = instance.get_method(method)
-                .ok_or(RuntimeError::InvalidOperation {
-                    message: format!("Method '{}' not found in {}", method, instance.class_name),
-                })?
-                .clone();
-            
-            // メソッドが関数宣言の形式であることを確認
-            if let ASTNode::FunctionDeclaration { params, body, .. } = method_ast {
+            // メソッドを取得（まずローカルメソッドを確認）
+            if let Some(method_ast) = instance.get_method(method) {
+                let method_ast = method_ast.clone();
+                
+                // メソッドが関数宣言の形式であることを確認
+                if let ASTNode::FunctionDeclaration { params, body, .. } = method_ast {
                 // 🚨 FIX: 引数評価を完全に現在のコンテキストで完了させる
                 let mut arg_values = Vec::new();
                 for (_i, arg) in arguments.iter().enumerate() {
@@ -624,9 +621,70 @@ impl NyashInterpreter {
                 self.restore_local_vars(saved_locals);
                 
                 Ok(result)
+                } else {
+                    Err(RuntimeError::InvalidOperation {
+                        message: format!("Method '{}' is not a valid function declaration", method),
+                    })
+                }
             } else {
+                // ローカルメソッドが見つからない場合、親のビルトインBoxメソッドを確認
+                let box_declarations = self.shared.box_declarations.read().unwrap();
+                let parent_names = if let Some(box_decl) = box_declarations.get(&instance.class_name) {
+                    box_decl.extends.clone()
+                } else {
+                    vec![]
+                };
+                drop(box_declarations);
+                
+                // 親がビルトインBoxか確認
+                for parent_name in &parent_names {
+                    if crate::box_trait::is_builtin_box(parent_name) {
+                        // ビルトインBoxメソッドを実行
+                        match parent_name.as_str() {
+                            "StringBox" => {
+                                // ユーザー定義BoxがStringBoxを継承している場合
+                                // __builtin_contentフィールドからStringBoxを取得
+                                if let Some(builtin_value) = instance.get_field_ng("__builtin_content") {
+                                    if let crate::value::NyashValue::Box(boxed) = builtin_value {
+                                        let boxed_guard = boxed.lock().unwrap();
+                                        if let Some(string_box) = boxed_guard.as_any().downcast_ref::<StringBox>() {
+                                            return self.execute_string_method(string_box, method, arguments);
+                                        }
+                                    }
+                                } else {
+                                }
+                                // フィールドが見つからない場合は空のStringBoxを使用（互換性のため）
+                                let string_box = StringBox::new("");
+                                return self.execute_string_method(&string_box, method, arguments);
+                            },
+                            "IntegerBox" => {
+                                // __builtin_contentフィールドからIntegerBoxを取得
+                                if let Some(builtin_value) = instance.get_field_ng("__builtin_content") {
+                                    if let crate::value::NyashValue::Box(boxed) = builtin_value {
+                                        let boxed_guard = boxed.lock().unwrap();
+                                        if let Some(integer_box) = boxed_guard.as_any().downcast_ref::<IntegerBox>() {
+                                            return self.execute_integer_method(integer_box, method, arguments);
+                                        }
+                                    }
+                                }
+                                // フィールドが見つからない場合は0のIntegerBoxを使用
+                                let integer_box = IntegerBox::new(0);
+                                return self.execute_integer_method(&integer_box, method, arguments);
+                            },
+                            "MathBox" => {
+                                // MathBoxはステートレスなので、新しいインスタンスを作成
+                                let math_box = MathBox::new();
+                                return self.execute_math_method(&math_box, method, arguments);
+                            },
+                            // 他のビルトインBoxも必要に応じて追加
+                            _ => {}
+                        }
+                    }
+                }
+                
+                // メソッドが見つからない
                 Err(RuntimeError::InvalidOperation {
-                    message: format!("Method '{}' is not a valid function declaration", method),
+                    message: format!("Method '{}' not found in {}", method, instance.class_name),
                 })
             }
         } else {

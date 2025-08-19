@@ -7,6 +7,7 @@ use crate::box_trait::{NyashBox, StringBox, IntegerBox, VoidBox};
 use crate::boxes::{ArrayBox, MapBox, MathBox, ConsoleBox, TimeBox, RandomBox, DebugBox, SoundBox, SocketBox};
 use crate::boxes::{HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
+use std::sync::{Arc, Mutex};
 
 impl NyashInterpreter {
     /// 🔥 ビルトインBoxのメソッド呼び出し
@@ -101,7 +102,7 @@ impl NyashInterpreter {
     
     /// 🌟 Phase 8.9: Execute birth method for builtin boxes
     /// Provides constructor functionality for builtin boxes through explicit birth() calls
-    pub(super) fn execute_builtin_birth_method(&mut self, builtin_name: &str, _current_instance: Box<dyn NyashBox>, arguments: &[ASTNode])
+    pub(super) fn execute_builtin_birth_method(&mut self, builtin_name: &str, current_instance: Box<dyn NyashBox>, arguments: &[ASTNode])
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         
         // 引数を評価
@@ -120,8 +121,16 @@ impl NyashInterpreter {
                 }
                 
                 let content = arg_values[0].to_string_box().value;
-                eprintln!("🌟 DEBUG: StringBox.birth() created with content: '{}'", content);
-                let _string_box = StringBox::new(content);
+                let string_box = StringBox::new(content.clone());
+                
+                // 現在のインスタンスがInstanceBoxの場合、StringBoxを特別なフィールドに保存
+                if let Some(instance) = current_instance.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    // 特別な内部フィールド "__builtin_content" にStringBoxを保存
+                    let string_box_arc: Arc<Mutex<dyn NyashBox>> = Arc::new(Mutex::new(string_box));
+                    instance.set_field_dynamic("__builtin_content".to_string(), 
+                        crate::value::NyashValue::Box(string_box_arc));
+                }
+                
                 Ok(Box::new(VoidBox::new())) // Return void to indicate successful initialization
             }
             "IntegerBox" => {
@@ -140,7 +149,6 @@ impl NyashInterpreter {
                 };
                 
                 let _integer_box = IntegerBox::new(value);
-                eprintln!("🌟 DEBUG: IntegerBox.birth() created with value: {}", value);
                 Ok(Box::new(VoidBox::new()))
             }
             "MathBox" => {
@@ -152,7 +160,6 @@ impl NyashInterpreter {
                 }
                 
                 let _math_box = MathBox::new();
-                eprintln!("🌟 DEBUG: MathBox.birth() created");
                 Ok(Box::new(VoidBox::new()))
             }
             "ArrayBox" => {

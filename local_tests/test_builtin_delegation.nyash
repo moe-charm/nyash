@@ -1,0 +1,30 @@
+// 🎯 ビルトインBox継承透過テスト
+
+box EnhancedString from StringBox {
+    init { prefix, suffix }
+    
+    birth(text) {
+        from StringBox.birth(text)  // 🔥 これが透過的にpackに変換される
+        me.prefix = "【"
+        me.suffix = "】"
+        print("📝 EnhancedString誕生: " + me.prefix + text + me.suffix)
+    }
+    
+    enhanced() {
+        return me.prefix + me.toString() + me.suffix + "✨"
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 ビルトインBox継承透過テスト開始")
+        
+        local enhanced = new EnhancedString("Hello")
+        print("結果: " + enhanced.enhanced())
+        
+        return "透過テスト完了"
+    }
+}
