@@ -1,28 +1,80 @@
 # 🎯 現在のタスク (2025-08-19 更新)
 
-## 🔥 最優先タスク：nyash.toml v2対応
+## 🎉 FileBox v2プラグインシステム完全動作達成！
 
-### 📍 問題の本質
-**nyash.toml v2（マルチBox型）に誰も対応していない！**
+### 📍 本日の成果
+**FileBoxプラグインの全機能が正常動作！**
 
-1. **プラグインテスター** - 古い単一Box型前提
-2. **Nyash本体のレジストリ** - 古い単一Box型前提  
-3. **結果** - プラグインが正しく読み込まれない
+1. **✅ 重複実装の解消**
+   - `method_dispatch.rs` を削除（使われていないコード）
+   - `calls.rs` が実際の実装であることを確認
 
-### 🎯 正しい実装順序
-1. **プラグインテスターをnyash.toml v2対応にする**
-   - マルチBox型プラグイン対応
-   - nyash.tomlから型情報読み取り
+2. **✅ TLVエンコーディング修正**
+   ```rust
+   // Header: version(2 bytes) + argc(2 bytes)
+   tlv_data.extend_from_slice(&1u16.to_le_bytes());
+   tlv_data.extend_from_slice(&(arg_values.len() as u16).to_le_bytes());
    
-2. **プラグインテスターで動作確認**
-   - FileBoxプラグインが正しく認識されるか
-   - メソッド情報が正しく取得できるか
-   
-3. **Nyash本体のレジストリに移植**
-   - プラグインテスターの実装をコピー
-   - 汎用プラグインBox生成が動作
+   // TLV entry: tag(1) + reserved(1) + size(2) + data
+   tlv_data.push(6);  // tag = 6 (String)
+   tlv_data.push(0);  // reserved
+   tlv_data.extend_from_slice(&(arg_bytes.len() as u16).to_le_bytes());
+   ```
 
-### 📝 nyash.toml v2形式（確認）
+3. **✅ FileBox全機能テスト成功**
+   - open("file.txt", "w") - 書き込みモードで開く
+   - write("data") - データ書き込み（バイト数返却）
+   - read() - ファイル内容読み込み
+   - close() - ファイルクローズ
+   - 実際のファイル作成・読み書き確認済み
+
+### 🔥 今日の重要な発見
+**コードフローの正確な追跡の重要性**
+
+「深く考える」ことで、以下を発見：
+- execute_method_callの実行パスを追跡
+- interpreter/expressions/mod.rs → calls.rs が実際の実行パス
+- method_dispatch.rsは未使用のレガシーコード
+
+**教訓**: 推測せず、実際のコードフローを追跡することが重要！
+
+---
+
+## 🎯 次のステップ
+
+### Phase 9.8 - プラグイン設定のnyash.toml拡張
+- ✅ v2形式のnyash.toml対応完了
+- ✅ FileBoxプラグイン完全動作
+- 次: 他のプラグイン（MathBox、StringManipulatorBox等）の移行
+
+### Phase 8.4 - AST→MIR Lowering
+- copilot_issues.txtに従って実装継続
+
+---
+
+## ✅ 完了したタスク（要約）
+
+### FileBox v2プラグインシステム ✅
+- プラグインローダーv2実装
+- TLVエンコーディング修正
+- 全機能動作確認
+
+### 汎用プラグインBox生成システム ✅
+- `src/bid/generic_plugin_box.rs` 実装完了
+- FileBox決め打ちコードを削除
+
+### Phase 9.75g-0 BID-FFI Plugin System ✅
+- プラグインシステム基盤完成
+- plugin-tester診断ツール実装
+
+### Phase 8.6 VM性能改善 ✅
+- VM 50.94倍高速化達成！
+
+---
+
+## 📋 技術詳細・参考資料
+
+### nyash.toml v2仕様
 ```toml
 [libraries]
 "libnyash_filebox_plugin.so" = {
@@ -42,54 +94,10 @@ close = { method_id = 4 }
 fini = { method_id = 4294967295 }
 ```
 
-### 🚨 現在の間違った形式
-```toml
-[plugins]
-FileBox = "./target/release/libnyash_filebox_plugin.so"  # ← 古い形式！
-
-[plugins.FileBox]  # ← パーサーエラーの原因
-type_id = 6
-```
-
----
-
-## 🚀 Phase 9.75h-0: プラグインシステム完全統一（進行中）
-
-### 進捗状況
-- ✅ 設計方針決定（nyash.toml中心設計）
-- ✅ FileBox決め打ちコード削除完了
-- ✅ 汎用プラグインBox（GenericPluginBox）実装完了
-- 🔄 **nyash.toml v2対応が必要！**
-
----
-
-## ✅ 完了したタスク（要約）
-
-### 汎用プラグインBox生成システム ✅
-- `src/bid/generic_plugin_box.rs` 実装完了
-- FileBox決め打ちコードを削除
-- `new FileBox()`が汎用システムで動作する仕組み完成
-
-### Phase 9.75g-0 BID-FFI Plugin System ✅
-- プラグインシステム基盤完成
-- plugin-tester診断ツール実装
-
-### Phase 8.6 VM性能改善 ✅
-- VM 50.94倍高速化達成！
-
----
-
-## 📋 技術詳細・参考資料
-
-### nyash.toml v2仕様
-- [config/nyash_toml_v2.rs](../src/config/nyash_toml_v2.rs)
-- マルチBox型プラグイン対応
-- ライブラリベースの設定形式
-
 ### 開発計画
-- [copilot_issues.txt](../予定/native-plan/copilot_issues.txt)
+- [copilot_issues.txt](../docs/予定/native-plan/copilot_issues.txt)
 
 ---
 
 **最終更新**: 2025年8月19日  
-**次回マイルストーン**: プラグインテスターのnyash.toml v2対応
+**次回マイルストーン**: 他のプラグインのv2移行

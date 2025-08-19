@@ -29,9 +29,10 @@ pub struct LoadedPluginV2 {
 /// v2 Plugin Box wrapper - temporary implementation
 #[derive(Debug)]
 pub struct PluginBoxV2 {
-    box_type: String,
-    invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
-    instance_id: u32,
+    pub box_type: String,
+    pub type_id: u32,
+    pub invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+    pub instance_id: u32,
 }
 
 impl BoxCore for PluginBoxV2 {
@@ -58,11 +59,54 @@ impl BoxCore for PluginBoxV2 {
 
 impl NyashBox for PluginBoxV2 {
     fn type_name(&self) -> &'static str {
-        "PluginBoxV2"
+        // Return the actual box type name for proper method dispatch
+        match self.box_type.as_str() {
+            "FileBox" => "FileBox",
+            _ => "PluginBoxV2",
+        }
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(StringBox::new(format!("Cannot clone plugin box {}", self.box_type)))
+        eprintln!("🔍 DEBUG: PluginBoxV2::clone_box called for {} (id={})", self.box_type, self.instance_id);
+        
+        // Clone means creating a new instance by calling birth()
+        let mut output_buffer = vec![0u8; 1024];
+        let mut output_len = output_buffer.len();
+        let tlv_args = vec![1u8, 0, 0, 0]; // version=1, argc=0
+        
+        let result = unsafe {
+            (self.invoke_fn)(
+                self.type_id,
+                0,                 // method_id=0 (birth)
+                0,                 // instance_id=0 (static call)
+                tlv_args.as_ptr(),
+                tlv_args.len(),
+                output_buffer.as_mut_ptr(),
+                &mut output_len,
+            )
+        };
+        
+        if result == 0 && output_len >= 4 {
+            // Extract new instance_id from output
+            let new_instance_id = u32::from_le_bytes([
+                output_buffer[0], output_buffer[1], 
+                output_buffer[2], output_buffer[3]
+            ]);
+            
+            eprintln!("🎉 clone_box success: created new {} instance_id={}", self.box_type, new_instance_id);
+            
+            // Return new PluginBoxV2 with new instance_id
+            Box::new(PluginBoxV2 {
+                box_type: self.box_type.clone(),
+                type_id: self.type_id,
+                invoke_fn: self.invoke_fn,
+                instance_id: new_instance_id,
+            })
+        } else {
+            eprintln!("❌ clone_box failed: birth() returned error code {}", result);
+            // Fallback: return error message as StringBox
+            Box::new(StringBox::new(format!("Clone failed for {}", self.box_type)))
+        }
     }
     
     fn to_string_box(&self) -> crate::box_trait::StringBox {
@@ -74,7 +118,15 @@ impl NyashBox for PluginBoxV2 {
     }
     
     fn share_box(&self) -> Box<dyn NyashBox> {
-        Box::new(StringBox::new(format!("Cannot share plugin box {}", self.box_type)))
+        eprintln!("🔍 DEBUG: PluginBoxV2::share_box called for {} (id={})", self.box_type, self.instance_id);
+        
+        // Share means returning a new Box with the same instance_id
+        Box::new(PluginBoxV2 {
+            box_type: self.box_type.clone(),
+            type_id: self.type_id,
+            invoke_fn: self.invoke_fn,
+            instance_id: self.instance_id,  // Same instance_id - this is sharing!
+        })
     }
 }
 
@@ -272,6 +324,7 @@ impl PluginLoaderV2 {
         // Create v2 plugin box wrapper with actual instance_id
         let plugin_box = PluginBoxV2 {
             box_type: box_type.to_string(),
+            type_id,
             invoke_fn: plugin.invoke_fn,
             instance_id,
         };

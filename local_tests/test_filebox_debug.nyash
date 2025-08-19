@@ -1,0 +1,9 @@
+// Debug test for FileBox type checking
+local file
+file = new FileBox()
+print("Created FileBox")
+
+// Try method call
+local result
+result = file.open("test.txt", "w")
+print("Open result: " + result)

@@ -1,0 +1,36 @@
+// Complete FileBox test
+local file
+file = new FileBox()
+print("Created FileBox")
+
+// Open file for writing
+local openResult
+openResult = file.open("test_output.txt", "w")
+print("Open result: " + openResult)
+
+// Write some data
+local writeResult
+writeResult = file.write("Hello from Nyash!\n")
+print("Write result: " + writeResult)
+
+// Write more data
+writeResult = file.write("FileBox is working! 🎉\n")
+print("Write result 2: " + writeResult)
+
+// Close the file
+local closeResult
+closeResult = file.close()
+print("Close result: " + closeResult)
+
+// Open for reading
+openResult = file.open("test_output.txt", "r")
+print("Open for read result: " + openResult)
+
+// Read the content
+local content
+content = file.read()
+print("Read content: " + content)
+
+// Close again
+closeResult = file.close()
+print("Final close result: " + closeResult)
