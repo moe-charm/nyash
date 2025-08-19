@@ -16,7 +16,10 @@ impl NyashInterpreter {
     /// new式を実行 - Object creation engine  
     pub(super) fn execute_new(&mut self, class: &str, arguments: &[ASTNode], type_arguments: &[String]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
+        eprintln!("🔍 execute_new called for class: {}, with {} arguments", class, arguments.len());
+        
         // 組み込みBox型のチェック
+        eprintln!("🔍 Starting built-in Box type checks...");
         match class {
             // Basic Box constructors (CRITICAL - these were missing!)
             "StringBox" => {
@@ -763,24 +766,36 @@ impl NyashInterpreter {
         }
         
         // 🔌 v2プラグインシステム: BoxFactoryRegistryをチェック
+        eprintln!("🔍 Checking v2 plugin system for class: {}", class);
         use crate::runtime::get_global_registry;
         let registry = get_global_registry();
+        eprintln!("🔍 Got global registry");
         
         if let Some(_provider) = registry.get_provider(class) {
+            eprintln!("🔍 Found provider for {}, processing {} arguments", class, arguments.len());
             // BoxFactoryRegistry経由でBoxを生成（v2プラグインシステム）
             let nyash_args: Vec<Box<dyn NyashBox>> = arguments.iter()
-                .map(|arg| self.execute_expression(arg))
+                .map(|arg| {
+                    eprintln!("🔍 Processing argument: {:?}", arg);
+                    self.execute_expression(arg)
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             
+            eprintln!("🔍 Arguments processed, calling registry.create_box");
             match registry.create_box(class, &nyash_args) {
-                Ok(plugin_box) => return Ok(plugin_box),
+                Ok(plugin_box) => {
+                    eprintln!("🔍 Plugin box created successfully!");
+                    return Ok(plugin_box);
+                },
                 Err(e) => {
+                    eprintln!("🔍 Plugin box creation failed: {}", e);
                     return Err(RuntimeError::InvalidOperation {
                         message: format!("Failed to create {} via plugin: {}", class, e),
                     });
                 }
             }
         }
+        eprintln!("🔍 No provider found for {}", class);
         
         // プラグインもユーザー定義も見つからなかった場合
         return Err(RuntimeError::UndefinedClass { name: class.to_string() });

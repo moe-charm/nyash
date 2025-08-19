@@ -1,13 +1,6 @@
-// FileBox 最小テスト - 動的ライブラリ実装
-
-static box Main {
-    init { }
-    
-    main() {
-        // FileBox作成のみ
-        local file1
-        file1 = new FileBox("minimal.txt")
-        
-        return "done"
-    }
-}
+// Minimal FileBox test
+print("Starting minimal test...")
+print("About to create FileBox...")
+local fileBox
+fileBox = new FileBox()
+print("FileBox created successfully!")

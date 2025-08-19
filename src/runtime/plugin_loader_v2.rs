@@ -182,8 +182,12 @@ impl PluginLoaderV2 {
     
     /// Create a Box instance
     pub fn create_box(&self, box_type: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
+        eprintln!("🔍 create_box called for: {}", box_type);
+        
         let config = self.config.as_ref()
             .ok_or(BidError::PluginError)?;
+        
+        eprintln!("🔍 Config loaded successfully");
         
         // Find library that provides this box type
         let (lib_name, _lib_def) = config.find_library_for_box(box_type)
@@ -191,6 +195,8 @@ impl PluginLoaderV2 {
                 eprintln!("No plugin provides box type: {}", box_type);
                 BidError::InvalidType
             })?;
+        
+        eprintln!("🔍 Found library: {} for box type: {}", lib_name, box_type);
         
         // Get loaded plugin
         let plugins = self.plugins.read().unwrap();
@@ -200,14 +206,70 @@ impl PluginLoaderV2 {
                 BidError::PluginError
             })?;
         
-        // Create v2 plugin box wrapper
+        eprintln!("🔍 Plugin loaded successfully");
+        
+        // Get type_id from config - read actual nyash.toml content
+        eprintln!("🔍 Reading nyash.toml for type configuration...");
+        let type_id = if let Ok(toml_content) = std::fs::read_to_string("nyash.toml") {
+            eprintln!("🔍 nyash.toml read successfully");
+            if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
+                eprintln!("🔍 nyash.toml parsed successfully");
+                if let Some(box_config) = config.get_box_config(lib_name, box_type, &toml_value) {
+                    eprintln!("🔍 Found box config for {} with type_id: {}", box_type, box_config.type_id);
+                    box_config.type_id
+                } else {
+                    eprintln!("No type configuration for {} in {}", box_type, lib_name);
+                    return Err(BidError::InvalidType);
+                }
+            } else {
+                eprintln!("Failed to parse nyash.toml");
+                return Err(BidError::PluginError);
+            }
+        } else {
+            eprintln!("Failed to read nyash.toml");
+            return Err(BidError::PluginError);
+        };
+        
+        // Call birth constructor (method_id = 0) via TLV encoding
+        eprintln!("🔍 Preparing to call birth() with type_id: {}", type_id);
+        let mut output_buffer = vec![0u8; 1024]; // 1KB buffer for output
+        eprintln!("🔍 Output buffer allocated, about to call plugin invoke_fn...");
+        
+        let birth_result = unsafe {
+            eprintln!("🔍 Calling invoke_fn(type_id={}, method_id=0, input=null, input_size=0, output_buf, output_size={})", type_id, output_buffer.len());
+            (plugin.invoke_fn)(
+                type_id,           // Box type ID
+                0,                 // method_id for birth
+                std::ptr::null(),  // input data (no args for now)
+                0,                 // input size
+                output_buffer.as_mut_ptr(), // output buffer
+                output_buffer.len() as u32, // output buffer size
+            )
+        };
+        
+        eprintln!("🔍 invoke_fn returned with result: {}", birth_result);
+        
+        if birth_result != 0 {
+            eprintln!("birth() failed with code: {}", birth_result);
+            return Err(BidError::PluginError);
+        }
+        
+        // Parse instance_id from output (first 4 bytes as u32)
+        let instance_id = if output_buffer.len() >= 4 {
+            u32::from_le_bytes([output_buffer[0], output_buffer[1], output_buffer[2], output_buffer[3]])
+        } else {
+            eprintln!("birth() returned insufficient data");
+            return Err(BidError::PluginError);
+        };
+        
+        eprintln!("🎉 birth() success: {} instance_id={}", box_type, instance_id);
+        
+        // Create v2 plugin box wrapper with actual instance_id
         let plugin_box = PluginBoxV2 {
             box_type: box_type.to_string(),
             invoke_fn: plugin.invoke_fn,
-            instance_id: 0, // Will be set after birth call
+            instance_id,
         };
-        
-        // TODO: Call birth constructor with args via TLV encoding
         
         Ok(Box::new(plugin_box))
     }
