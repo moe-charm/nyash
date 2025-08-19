@@ -167,7 +167,15 @@ impl NyashBox for InstanceBox {
     }
     
     fn type_name(&self) -> &'static str {
-        "InstanceBox"
+        // 内包Boxがあれば、その型名を返す（ビルトインBox用）
+        if let Some(inner) = &self.inner_content {
+            inner.type_name()
+        } else {
+            // ユーザー定義Boxの場合はclass_nameを使用したいが、
+            // &'static strを要求されているので一時的に"InstanceBox"を返す
+            // TODO: type_nameの戻り値型をStringに変更することを検討
+            "InstanceBox"
+        }
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {

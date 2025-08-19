@@ -9,8 +9,8 @@ use super::BoxFactory;
 use crate::box_trait::NyashBox;
 use crate::interpreter::RuntimeError;
 use crate::boxes::*;
-// 🎯 最軽量アプローチ: lib.rsのpub useを活用
-use crate::InstanceBox;
+// 🎯 最軽量アプローチ: 直接instance_v2から
+use crate::instance_v2::InstanceBox;
 use std::collections::HashMap;
 
 type BoxCreator = Box<dyn Fn(&[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, RuntimeError> + Send + Sync>;

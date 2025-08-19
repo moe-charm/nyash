@@ -1,0 +1,70 @@
+Nyash Programming Language - InstanceBox メソッド呼び出し統合設計相談
+
+【現在の達成状況】
+✅ Phase 9.78d 主要マイルストーン達成:
+- StringBox → InstanceBox統合完了
+- BuiltinBoxFactory経由でInstanceBox::from_any_box()による作成成功
+- type_name()委譲実装: 内包Boxの型名を正しく返す
+- 基本機能（文字列作成・連結）は正常動作
+- 🏭 統一レジストリでのBox生成確認済み
+
+【現在の課題】
+❌ メソッド呼び出し統合エラー
+```nyash
+local str
+str = new StringBox("Hello")  // ✅ 正常動作
+print("StringBox created: " + str)  // ✅ 正常動作  
+print("Type: " + str.type_name())  // ❌ エラー: Cannot call method 'type_name' on non-instance type
+```
+
+【デバッグ情報からの分析】
+- ✅ RESOLVE_VARIABLE shared reference: str id=8, type_name='StringBox'
+  → InstanceBoxのtype_name()修正が動作、内包StringBoxの型名を正しく返している
+- ❌ Cannot call method 'type_name' on non-instance type
+  → インタープリターのメソッド呼び出し解決部分で問題発生
+
+【技術的背景】
+- Everything is Box哲学: すべてがBoxオブジェクト
+- InstanceBox統一設計: ビルトイン・ユーザー定義・プラグインBox統一
+- Arc<Mutex>統一アーキテクチャ: スレッドセーフ設計
+- Rust実装: メモリ安全性重視
+
+【InstanceBox内部構造】
+```rust
+pub struct InstanceBox {
+    pub class_name: String,
+    pub fields_ng: Arc<Mutex<HashMap<String, NyashValue>>>,  
+    pub methods: Arc<HashMap<String, ASTNode>>,  // ユーザー定義メソッド
+    pub inner_content: Option<Box<dyn NyashBox>>,  // ビルトイン内包
+    base: BoxBase,
+}
+
+impl NyashBox for InstanceBox {
+    fn type_name(&self) -> &'static str {
+        // 内包Boxがあれば、その型名を返す（ビルトインBox用）
+        if let Some(inner) = &self.inner_content {
+            inner.type_name()  // ← 修正済み：委譲実装
+        } else {
+            "InstanceBox"
+        }
+    }
+}
+```
+
+【実装済みコンストラクタ】
+- InstanceBox::from_any_box(): ビルトインBox用（StringBox等を内包）
+- InstanceBox::from_declaration(): ユーザー定義Box用
+
+【質問】
+1. **メソッド解決戦略**: インタープリターでInstanceBoxのメソッド呼び出しを認識させる設計は？
+2. **委譲パターン**: InstanceBox内の内包BoxのNyashBoxメソッドを透過的に呼び出す実装方法は？
+3. **統一呼び出し**: ビルトイン（内包）とユーザー定義（直接）メソッドの統一処理方法は？
+4. **インタープリター統合**: 既存のメソッド呼び出しロジックとの整合性確保は？
+5. **実装優先度**: type_name()から始めて段階的にすべてのNyashBoxメソッドに拡張する戦略は？
+
+【期待する設計方針】
+- デコレータパターン: InstanceBoxを内包Boxへの透過的プロキシとして機能
+- 段階的実装: まずtype_name()、次にequals()、clone_box()等の基本メソッド
+- 保守性重視: 複雑すぎない、理解しやすい実装
+
+プログラミング言語実装の専門的観点から、実装しやすく保守性の高い設計を提案してください。
