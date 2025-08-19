@@ -18,7 +18,7 @@ pub mod tokenizer;
 pub mod ast;
 pub mod parser;
 pub mod interpreter;
-pub mod instance;
+pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
 pub mod channel_box;
 pub mod finalization;
 pub mod exception_box;
