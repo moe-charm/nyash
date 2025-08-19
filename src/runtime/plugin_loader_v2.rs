@@ -23,14 +23,14 @@ pub struct LoadedPluginV2 {
     init_fn: Option<unsafe extern "C" fn() -> i32>,
     
     /// Required invoke function  
-    invoke_fn: unsafe extern "C" fn(u32, u32, *const u8, u32, *mut u8, u32) -> i32,
+    invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
 }
 
 /// v2 Plugin Box wrapper - temporary implementation
 #[derive(Debug)]
 pub struct PluginBoxV2 {
     box_type: String,
-    invoke_fn: unsafe extern "C" fn(u32, u32, *const u8, u32, *mut u8, u32) -> i32,
+    invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     instance_id: u32,
 }
 
@@ -141,7 +141,7 @@ impl PluginLoaderV2 {
         
         // Get required invoke function and dereference it
         let invoke_fn = unsafe {
-            let symbol: libloading::Symbol<unsafe extern "C" fn(u32, u32, *const u8, u32, *mut u8, u32) -> i32> = 
+            let symbol: libloading::Symbol<unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32> = 
                 lib.get(b"nyash_plugin_invoke")
                     .map_err(|e| {
                         eprintln!("Missing nyash_plugin_invoke: {}", e);
@@ -233,17 +233,22 @@ impl PluginLoaderV2 {
         // Call birth constructor (method_id = 0) via TLV encoding
         eprintln!("🔍 Preparing to call birth() with type_id: {}", type_id);
         let mut output_buffer = vec![0u8; 1024]; // 1KB buffer for output
+        let mut output_len = output_buffer.len();
+        
+        // Create TLV-encoded empty arguments (version=1, argc=0)
+        let tlv_args = vec![1u8, 0, 0, 0]; // version=1, argc=0
         eprintln!("🔍 Output buffer allocated, about to call plugin invoke_fn...");
         
         let birth_result = unsafe {
-            eprintln!("🔍 Calling invoke_fn(type_id={}, method_id=0, input=null, input_size=0, output_buf, output_size={})", type_id, output_buffer.len());
+            eprintln!("🔍 Calling invoke_fn(type_id={}, method_id=0, instance_id=0, tlv_args={:?}, output_buf, output_size={})", type_id, tlv_args, output_buffer.len());
             (plugin.invoke_fn)(
                 type_id,           // Box type ID
                 0,                 // method_id for birth
-                std::ptr::null(),  // input data (no args for now)
-                0,                 // input size
+                0,                 // instance_id = 0 for birth (static call)
+                tlv_args.as_ptr(), // TLV-encoded input data
+                tlv_args.len(),    // input size
                 output_buffer.as_mut_ptr(), // output buffer
-                output_buffer.len() as u32, // output buffer size
+                &mut output_len,   // output buffer size (mutable)
             )
         };
         
@@ -255,10 +260,10 @@ impl PluginLoaderV2 {
         }
         
         // Parse instance_id from output (first 4 bytes as u32)
-        let instance_id = if output_buffer.len() >= 4 {
+        let instance_id = if output_len >= 4 {
             u32::from_le_bytes([output_buffer[0], output_buffer[1], output_buffer[2], output_buffer[3]])
         } else {
-            eprintln!("birth() returned insufficient data");
+            eprintln!("birth() returned insufficient data (got {} bytes, need 4)", output_len);
             return Err(BidError::PluginError);
         };
         
