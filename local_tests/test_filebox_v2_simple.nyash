@@ -1,0 +1,20 @@
+// Simple FileBox v2 Plugin Test - no string concatenation
+print("Testing FileBox v2 plugin...")
+
+local file
+file = new FileBox()
+
+// Test open without string concatenation
+local result
+result = file.open("test.txt", "w")
+print("Open succeeded")
+
+// Test write
+result = file.write("Hello Nyash!")
+print("Write succeeded")
+
+// Test close
+result = file.close()
+print("Close succeeded")
+
+print("Test completed!")

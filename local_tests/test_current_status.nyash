@@ -1,0 +1,29 @@
+// 🔍 現状確認テスト
+
+// ビルトインBox作成テスト
+local str_box = new StringBox("Hello")
+local int_box = new IntegerBox(42)
+
+print("ビルトインBox作成: OK")
+
+// ユーザー定義Boxテスト
+box TestBox {
+    init { value, name }
+    
+    testMethod() {
+        return me.value + 100
+    }
+}
+
+local test_instance = new TestBox()
+test_instance.value = 10
+test_instance.name = "test"
+
+local result = test_instance.testMethod()
+print("ユーザー定義Box: " + result)
+
+// 文字列連結テスト
+local concat_test = "Hello" + " " + "World"
+print("文字列連結: " + concat_test)
+
+print("現状確認テスト完了")

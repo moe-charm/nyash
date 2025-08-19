@@ -1,0 +1,49 @@
+// FileBox v2プラグイン メソッドテスト
+print("=== FileBox Methods Test ===")
+
+// FileBoxを作成
+print("\n1. Creating FileBox...")
+local fileBox
+fileBox = new FileBox()
+print("✅ FileBox created: " + fileBox.toString())
+
+// ファイルを開く
+print("\n2. Opening file for writing...")
+local success
+success = fileBox.open("test_output.txt", "w")
+print("✅ File opened: " + success.toString())
+
+// ファイルに書き込む
+print("\n3. Writing to file...")
+local writeResult
+writeResult = fileBox.write("Hello from Nyash FileBox v2!\n")
+print("✅ Written bytes: " + writeResult.toString())
+
+// もう一行書き込む
+writeResult = fileBox.write("Everything is Box! 🎉\n")
+print("✅ Written more bytes: " + writeResult.toString())
+
+// ファイルを閉じる
+print("\n4. Closing file...")
+local closeResult
+closeResult = fileBox.close()
+print("✅ File closed: " + closeResult.toString())
+
+// ファイルを読み込みモードで開く
+print("\n5. Opening file for reading...")
+success = fileBox.open("test_output.txt", "r")
+print("✅ File opened for reading: " + success.toString())
+
+// ファイル内容を読む
+print("\n6. Reading from file...")
+local content
+content = fileBox.read()
+print("✅ File content:")
+print(content)
+
+// 最後にファイルを閉じる
+print("\n7. Closing file again...")
+closeResult = fileBox.close()
+print("✅ File closed: " + closeResult.toString())
+
+print("\n=== Test completed successfully! ===")

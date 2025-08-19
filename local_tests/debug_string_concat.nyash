@@ -1,0 +1,13 @@
+// 🔍 文字列連結デバッグテスト
+
+// 単純な文字列作成
+local str1 = "Hello"
+local str2 = "World"  
+
+print("str1 created")
+print("str2 created")
+
+// 文字列連結テスト（この行でエラーが出るはず）
+local result = str1 + str2
+
+print("Test completed WITH concatenation")

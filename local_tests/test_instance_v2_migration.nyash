@@ -1,0 +1,49 @@
+// Phase 9.78e: instance_v2移行テスト
+
+// 基本的なBoxクラス定義
+box Person {
+    init { name, age }
+    
+    init(name, age) {
+        me.name = name
+        me.age = age
+        print("Person created: " + name)
+    }
+    
+    greet() {
+        print("Hello, I'm " + me.name + " and I'm " + me.age + " years old")
+    }
+}
+
+// インスタンス作成
+local alice = new Person("Alice", 25)
+alice.greet()
+
+// フィールドアクセス
+print("Name field: " + alice.name)
+print("Age field: " + alice.age)
+
+// フィールド更新
+alice.age = 26
+print("Updated age: " + alice.age)
+
+// デリゲーションテスト
+box Employee from Person {
+    init { company }
+    
+    init(name, age, company) {
+        from Person.init(name, age)
+        me.company = company
+        print("Employee created at " + company)
+    }
+    
+    override greet() {
+        from Person.greet()
+        print("I work at " + me.company)
+    }
+}
+
+local bob = new Employee("Bob", 30, "TechCorp")
+bob.greet()
+
+print("All tests passed!")

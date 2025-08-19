@@ -104,7 +104,7 @@ use std::sync::RwLock;
 use chrono::Local;
 use crate::box_trait::{BoxCore, BoxBase, NyashBox, StringBox, BoolBox, VoidBox};
 use crate::interpreter::RuntimeError;
-use crate::instance::InstanceBox;
+use crate::instance_v2::InstanceBox;
 use std::any::Any;
 
 #[derive(Debug)]
@@ -179,8 +179,10 @@ impl DebugBox {
     fn get_box_fields(&self, box_value: &dyn NyashBox) -> String {
         // Try to downcast to InstanceBox to get fields
         if let Some(instance) = box_value.as_any().downcast_ref::<InstanceBox>() {
-            let fields = instance.fields.lock().unwrap();
-            let field_names: Vec<String> = fields.keys().cloned().collect();
+            // instance_v2では get_fields()メソッドを使用
+            let fields = instance.get_fields();
+            let fields_locked = fields.lock().unwrap();
+            let field_names: Vec<String> = fields_locked.keys().cloned().collect();
             field_names.join(", ")
         } else {
             "N/A".to_string()

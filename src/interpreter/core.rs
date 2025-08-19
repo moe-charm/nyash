@@ -7,7 +7,7 @@
 
 use crate::ast::{ASTNode, Span};
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, SharedNyashBox};
-use crate::instance::InstanceBox;
+use crate::instance_v2::InstanceBox;
 use crate::parser::ParseError;
 use super::BuiltinStdlib;
 use std::sync::{Arc, Mutex, RwLock};
@@ -387,7 +387,7 @@ impl NyashInterpreter {
                 } else {
                     eprintln!("🔍 DEBUG: '{}' not found in statics MapBox", name);
                 }
-            } else if let Some(instance) = statics_namespace.as_any().downcast_ref::<crate::instance::InstanceBox>() {
+            } else if let Some(instance) = statics_namespace.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                 eprintln!("🔍 DEBUG: statics is an InstanceBox, looking for '{}'", name);
                 if let Some(static_box) = instance.get_field(name) {
                     eprintln!("🔍 DEBUG: Found '{}' in statics namespace", name);
@@ -462,7 +462,7 @@ impl NyashInterpreter {
             if global_box.get_field(name).is_some() {
                 drop(global_box); // lockを解放
                 let mut global_box = self.shared.global_box.lock().unwrap();
-                global_box.set_field_dynamic(name.to_string(), shared_value);
+                global_box.set_field_dynamic_legacy(name.to_string(), shared_value);
                 return Ok(());
             }
         }
@@ -792,8 +792,9 @@ impl NyashInterpreter {
         
         // GlobalBoxのfieldsに直接挿入
         {
-            let mut fields = global_box.fields.lock().unwrap();
-            fields.insert("statics".to_string(), Arc::new(statics_box));
+            let fields = global_box.get_fields();
+            let mut fields_locked = fields.lock().unwrap();
+            fields_locked.insert("statics".to_string(), Arc::new(statics_box));
         }
             
         eprintln!("🌍 statics namespace created in GlobalBox successfully");
@@ -821,8 +822,9 @@ impl NyashInterpreter {
         
         // statics InstanceBoxのfieldsに直接挿入（動的フィールド追加）
         {
-            let mut fields = statics_instance.fields.lock().unwrap();
-            fields.insert(name.to_string(), Arc::new(instance));
+            let fields = statics_instance.get_fields();
+            let mut fields_locked = fields.lock().unwrap();
+            fields_locked.insert(name.to_string(), Arc::new(instance));
         }
         
         eprintln!("🔥 Static box '{}' instance registered in statics namespace", name);

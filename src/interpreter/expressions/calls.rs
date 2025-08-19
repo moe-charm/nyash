@@ -9,7 +9,7 @@ use crate::boxes::{ArrayBox, FloatBox, MapBox, FutureBox};
 use crate::boxes::{BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox};
 use crate::boxes::{HTTPServerBox, HTTPRequestBox, HTTPResponseBox, MathBox, TimeBox, DateTimeBox};
 use crate::boxes::{RandomBox, SoundBox, DebugBox};
-use crate::instance::InstanceBox;
+use crate::instance_v2::InstanceBox;
 use crate::channel_box::ChannelBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use crate::interpreter::finalization;

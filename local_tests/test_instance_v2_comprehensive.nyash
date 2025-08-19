@@ -1,0 +1,80 @@
+// 🧪 InstanceBox v2包括テスト（文字列演算なし）
+
+// 複雑なネストしたBox階層のテスト
+box DatabaseConnection {
+    init { host, port, status }
+    
+    connect(hostname, portnum) {
+        me.host = hostname
+        me.port = portnum  
+        me.status = 1
+        return me.status
+    }
+    
+    isConnected() {
+        return me.status
+    }
+}
+
+box UserService {
+    init { db_connection, user_cache }
+    
+    initialize() {
+        me.db_connection = new DatabaseConnection()
+        me.user_cache = new MapBox()
+        
+        local result = me.db_connection.connect("localhost", 5432)
+        return result
+    }
+    
+    getConnectionStatus() {
+        return me.db_connection.isConnected()
+    }
+    
+    addUser(userId, userData) {
+        me.user_cache.set(userId, userData)
+        return me.user_cache.size()
+    }
+}
+
+box Application {
+    init { user_service, logger }
+    
+    startup() {
+        me.user_service = new UserService()
+        me.logger = new ConsoleBox()
+        
+        local init_result = me.user_service.initialize()
+        return init_result
+    }
+    
+    testComplexOperations() {
+        // 複雑なネストしたメソッド呼び出し
+        local status = me.user_service.getConnectionStatus()
+        
+        // MapBoxとの連携
+        local cache_size = me.user_service.addUser("user1", "data1")
+        
+        // ログ出力
+        me.logger.log("Application test completed")
+        
+        return cache_size
+    }
+}
+
+// メインテスト
+static box Main {
+    init { app, test_result }
+    
+    main() {
+        me.app = new Application()
+        
+        // 段階的初期化テスト
+        local startup_result = me.app.startup()
+        
+        // 複雑な操作テスト  
+        me.test_result = me.app.testComplexOperations()
+        
+        return me.test_result
+    }
+}

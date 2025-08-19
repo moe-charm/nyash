@@ -1,0 +1,33 @@
+// 🔍 3つのBox型統一テスト - 深いフロー確認
+
+// 1. ビルトインBox
+print("=== ビルトインBox ===")
+local builtin_box = new StringBox("Hello")
+print("ビルトイン型名: " + builtin_box.type_name())
+
+// 2. ユーザー定義Box
+print("=== ユーザー定義Box ===")
+box UserBox {
+    init { value }
+    
+    getValue() {
+        return me.value
+    }
+}
+
+local user_box = new UserBox()
+user_box.value = "User Value"
+print("ユーザー定義型名: " + user_box.type_name())
+
+// 3. プラグインBox
+print("=== プラグインBox ===")
+local plugin_box = new FileBox()
+print("プラグイン型名: " + plugin_box.type_name())
+
+// 統一性テスト
+print("=== 統一性確認 ===")
+print("ビルトインBoxはInstanceBox?: " + (builtin_box.type_name() == "InstanceBox"))
+print("ユーザーBoxはInstanceBox?: " + (user_box.type_name() == "InstanceBox"))  
+print("プラグインBoxはInstanceBox?: " + (plugin_box.type_name() == "InstanceBox"))
+
+print("テスト完了")

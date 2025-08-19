@@ -17,26 +17,29 @@
   - メソッドシグネチャの不一致（`set_field`等）
   - 型変換の複雑化（Box ↔ Arc<Mutex> ↔ NyashValue）
 
-### 🔧 **新戦略: ラッパーによる段階的移行**
-**方針**: instance.rsをラッパーとして、instance_v2.rsに移譲
+### 🔧 **新戦略: instance_v2を主体とした段階的移行**
+**方針**: instance_v2.rsに旧instance.rsの機能を内包（上からのフロー）
 
-1. **Phase 1**: instance.rsにラッパー実装
-   - 内部にinstance_v2::InstanceBoxを持つ
-   - 既存インターフェースを維持
-   - 型変換を内部で処理
+1. **Phase 1**: instance_v2にレガシー互換レイヤー追加 ✅
+   - レガシーフィールド（fields, weak_fields_union等）を追加
+   - 互換メソッド実装（get_field_legacy, set_field_legacy等）
+   - ビルドエラー解消
 
-2. **Phase 2**: 段階的移行
-   - 呼び出し元を徐々に新APIに変更
-   - ビルドを保ちながら進行
+2. **Phase 2**: 型変換の実装 🚧
+   - **TODO**: SharedNyashBox → NyashValue の適切な変換実装
+   - 現在は一時的にNullを設定（instance_v2.rs:218, 238）
+   - Arc<dyn NyashBox> → Arc<Mutex<dyn NyashBox>> の変換方法検討
 
-3. **Phase 3**: 最終統合
-   - instance.rsを完全削除
-   - instance_v2.rsのみの構成へ
+3. **Phase 3**: インタープリター移行
+   - instance.rs → instance_v2.rs への参照切り替え
+   - テストによる動作確認
 
 ### ⚠️ **次のアクション**
-1. Git変更を一旦リセット
-2. ビルドが通る状態を確認
-3. 段階的にラッパー実装を開始
+1. ✅ Git変更を一旦リセット
+2. ✅ ビルドが通る状態を確認  
+3. ✅ instance_v2にレガシー互換実装
+4. 🚧 型変換の適切な実装（重要TODO）
+5. インタープリターでinstance_v2使用開始
 
 ---
 
@@ -87,4 +90,4 @@ cargo build --release -j32 --features wasm-backend
 - レジスタ割り当て最適化
 - インライン展開
 
-最終更新: 2025-08-19 - Phase 9.78e型変換問題とラッパー戦略決定
+最終更新: 2025-08-19 - Phase 9.78e instance_v2主体の移行戦略に変更、型変換TODO追加

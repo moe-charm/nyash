@@ -6,7 +6,7 @@
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, SharedNyashBox};
 use crate::boxes::FutureBox;
-use crate::instance::InstanceBox;
+use crate::instance_v2::InstanceBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use std::sync::Arc;
 

@@ -7,7 +7,7 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::ast::ASTNode;
-use crate::instance::InstanceBox;
+use crate::instance_v2::InstanceBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::sync::{Arc, Mutex};

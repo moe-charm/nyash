@@ -67,7 +67,7 @@ impl BoxFinalizer {
             
             if !is_finalized(*box_id) {
                 // fini()メソッドを呼び出す（存在する場合）
-                if let Some(instance) = nyash_box.as_any().downcast_ref::<crate::instance::InstanceBox>() {
+                if let Some(instance) = nyash_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                     let _ = instance.fini();
                 }
                 mark_as_finalized(*box_id);

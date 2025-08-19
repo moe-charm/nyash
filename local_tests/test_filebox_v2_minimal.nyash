@@ -1,0 +1,14 @@
+// Minimal FileBox v2 Plugin Test
+print("Testing FileBox v2...")
+
+local file
+file = new FileBox()
+print("Created FileBox")
+
+// Debug: Check type
+print("Type: " + file)
+
+// Try method call
+local result
+result = file.open("test.txt", "w")
+print("Open result: " + result)

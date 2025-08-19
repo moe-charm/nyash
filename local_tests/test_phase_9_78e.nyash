@@ -1,0 +1,10 @@
+// Phase 9.78e test - InstanceBox with StringBox
+
+local str
+str = new StringBox("Hello, Nyash!")
+print("Created StringBox: " + str)
+
+// Try to call methods - this should fail with the current implementation
+// print("Type: " + str.type_name())  // This would error without call_method integration
+
+print("Test completed successfully")

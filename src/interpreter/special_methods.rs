@@ -159,7 +159,7 @@ impl NyashInterpreter {
         let instance = instance_arc.lock().unwrap();
         
         // InstanceBoxにダウンキャスト
-        if let Some(instance_box) = instance.as_any().downcast_ref::<crate::instance::InstanceBox>() {
+        if let Some(instance_box) = instance.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
             // メソッドを取得
             let method_ast = instance_box.get_method(&method_box.method_name)
                 .ok_or(RuntimeError::InvalidOperation {

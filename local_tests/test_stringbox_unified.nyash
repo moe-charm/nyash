@@ -1,0 +1,16 @@
+// 🎯 StringBox統一テスト
+
+print("=== StringBox統一テスト ===")
+
+// StringBox作成
+local str = new StringBox("Hello World")
+
+// 統一確認
+print("type_name: " + str.type_name())
+print("content: " + str.toString()) 
+
+// フィールドアクセステスト（統一後の機能）
+str.custom_field = "Added Field"
+print("custom_field: " + str.custom_field)
+
+print("StringBox統一テスト完了")

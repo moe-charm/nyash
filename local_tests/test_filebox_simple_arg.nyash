@@ -1,0 +1,9 @@
+// Simple test with debug
+local file
+file = new FileBox()
+
+// Check argument count
+print("Calling open with 2 args...")
+local result
+result = file.open("test.txt", "w")
+print("Done!")

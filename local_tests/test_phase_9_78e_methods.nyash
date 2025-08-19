@@ -1,0 +1,46 @@
+// Phase 9.78e test - Method calls on StringBox through InstanceBox
+
+local str
+str = new StringBox("Hello, Nyash!")
+print("Created StringBox: " + str)
+
+// Test basic methods that should work with call_method
+local len
+len = str.length()
+print("Length: " + len)
+
+local upper
+upper = str.toUpperCase()
+print("Uppercase: " + upper)
+
+local lower
+lower = str.toLowerCase()
+print("Lowercase: " + lower)
+
+local trimmed
+trimmed = str.trim()
+print("Trimmed: " + trimmed)
+
+// Test methods with arguments
+local index
+index = str.indexOf("Nyash")
+print("Index of 'Nyash': " + index)
+
+local replaced
+replaced = str.replace("Hello", "Hi")
+print("Replaced: " + replaced)
+
+local char
+char = str.charAt(0)
+print("First character: " + char)
+
+local substr
+substr = str.substring(0, 5)
+print("Substring(0,5): " + substr)
+
+// Test concatenation
+local concat
+concat = str.concat(" How are you?")
+print("Concatenated: " + concat)
+
+print("All method tests completed!")

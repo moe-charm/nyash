@@ -1,0 +1,14 @@
+// Test FileBox with no-argument methods
+local file
+file = new FileBox()
+print("Created FileBox")
+
+// Try read() - no arguments
+local content
+content = file.read()
+print("Read result: " + content)
+
+// Try close() - no arguments
+local close_result
+close_result = file.close()
+print("Close result: " + close_result)
