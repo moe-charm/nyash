@@ -1,0 +1,71 @@
+
+running 8 tests
+test mir::instruction_v2::tests::test_instruction_count ... ok
+test mir::instruction_v2::tests::test_ownership_operations ... ok
+test mir::instruction_v2::tests::test_effect_categories ... ok
+test instance_v2::tests::test_from_declaration_creation ... ok
+test instance_v2::tests::test_from_any_box_creation ... ok
+test instance_v2::tests::test_unified_approach ... ok
+test instance_v2::tests::test_field_operations ... ok
+test config::nyash_toml_v2::tests::test_parse_v2_config ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 148 filtered out; finished in 0.04s
+
+
+running 8 tests
+test mir::instruction_v2::tests::test_ownership_operations ... ok
+test mir::instruction_v2::tests::test_instruction_count ... ok
+test mir::instruction_v2::tests::test_effect_categories ... ok
+test instance_v2::tests::test_field_operations ... ok
+test instance_v2::tests::test_from_declaration_creation ... ok
+test instance_v2::tests::test_from_any_box_creation ... ok
+test instance_v2::tests::test_unified_approach ... ok
+test config::nyash_toml_v2::tests::test_parse_v2_config ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 137 filtered out; finished in 0.04s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

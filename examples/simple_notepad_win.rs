@@ -29,26 +29,8 @@ fn setup_custom_fonts(ctx: &egui::Context) {
     // Start with the default fonts
     let mut fonts = egui::FontDefinitions::default();
     
-    // Use default system fonts for better Windows compatibility
-    fonts.font_data.insert(
-        "system".to_owned(),
-        std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
-            "C:/Windows/Fonts/arial.ttf"
-        ))),
-    );
-    
-    // Configure font families
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .push("system".to_owned());
-    
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .push("system".to_owned());
+    // Use built-in fonts for cross-platform compatibility
+    // Note: On Windows, egui will automatically use system fonts
     
     // Tell egui to use these fonts
     ctx.set_fonts(fonts);

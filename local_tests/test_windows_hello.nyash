@@ -1,0 +1,15 @@
+// Windows実行テスト
+local console = new ConsoleBox()
+console.log("🎉 Hello from Windows Nyash!")
+console.log("Everything is Box on Windows too! 🐱")
+
+// 基本的な計算テスト
+local math = new MathBox()
+local result = math.add(10, 32)
+console.log("10 + 32 = " + result)
+
+// StringBoxテスト
+local str = new StringBox("Windows")
+console.log("Running on: " + str.value)
+
+print("✨ Nyash works perfectly on Windows! ✨")

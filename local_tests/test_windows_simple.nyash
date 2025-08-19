@@ -1,0 +1,26 @@
+// シンプルなWindowsテスト
+print("🎉 Nyash on Windows!")
+print("Everything is Box!")
+
+// 基本的な文字列操作
+local str1 = new StringBox("Hello")
+local str2 = new StringBox("Windows")
+print(str1.value + " " + str2.value + "!")
+
+// 数値演算（直接）
+local num1 = new IntegerBox(42)
+local num2 = new IntegerBox(8)
+print("Answer: " + num1.value + " + " + num2.value + " = " + (num1.value + num2.value))
+
+// ArrayBoxテスト
+local arr = new ArrayBox()
+arr.push("First")
+arr.push("Second")
+arr.push("Third")
+print("Array length: " + arr.length())
+
+// MapBoxテスト
+local map = new MapBox()
+map.set("os", "Windows")
+map.set("arch", "x86_64")
+print("Running on: " + map.get("os"))

@@ -1,0 +1,13 @@
+// 最もシンプルなWindowsテスト
+print("Hello Windows!")
+print("1 + 1 = " + (1 + 1))
+print("Nyash is running!")
+
+// ループテスト
+local i = 0
+loop(i < 3) {
+    print("Count: " + i)
+    i = i + 1
+}
+
+print("Done!")
