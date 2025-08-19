@@ -1,0 +1,1104 @@
+warning: unused imports: `BasicBlockIdGenerator`, `BasicBlock`, `CompareOp`, `EffectMask`, `MirFunction`, and `ValueIdGenerator`
+  --> src/mir/loop_builder.rs:9:21
+   |
+9  |     MirInstruction, BasicBlock, BasicBlockId, MirFunction, ValueId, 
+   |                     ^^^^^^^^^^                ^^^^^^^^^^^
+10 |     ConstValue, CompareOp, BasicBlockIdGenerator, ValueIdGenerator, EffectMask
+   |                 ^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `HashSet`
+  --> src/mir/loop_builder.rs:13:33
+   |
+13 | use std::collections::{HashMap, HashSet};
+   |                                 ^^^^^^^
+
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/backend/mod.rs:13:7
+   |
+13 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/backend/mod.rs:23:7
+   |
+23 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `MirInstruction`
+ --> src/backend/vm_phi.rs:9:41
+  |
+9 | use crate::mir::{BasicBlockId, ValueId, MirInstruction};
+  |                                         ^^^^^^^^^^^^^^
+
+warning: unused import: `super::Usize`
+ --> src/bid/types.rs:1:5
+  |
+1 | use super::Usize;
+  |     ^^^^^^^^^^^^
+
+warning: unused import: `std::os::raw::c_char`
+ --> src/bid/plugin_api.rs:2:5
+  |
+2 | use std::os::raw::c_char;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `NyashHostVtable`, `NyashMethodInfo`, and `NyashPluginInfo`
+ --> src/bid/plugins/filebox/mod.rs:7:18
+  |
+7 | use crate::bid::{NyashPluginInfo, NyashMethodInfo, NyashHostVtable};
+  |                  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused imports: `SeekFrom` and `Seek`
+  --> src/bid/plugins/filebox/mod.rs:10:28
+   |
+10 | use std::io::{Read, Write, Seek, SeekFrom};
+   |                            ^^^^  ^^^^^^^^
+
+warning: unused imports: `c_char` and `c_void`
+  --> src/bid/plugins/filebox/mod.rs:11:20
+   |
+11 | use std::os::raw::{c_char, c_void};
+   |                    ^^^^^^  ^^^^^^
+
+warning: unused imports: `CStr` and `CString`
+  --> src/bid/plugins/filebox/mod.rs:13:16
+   |
+13 | use std::ffi::{CStr, CString};
+   |                ^^^^  ^^^^^^^
+
+warning: unused import: `std::ffi::c_void`
+ --> src/bid/loader.rs:3:5
+  |
+3 | use std::ffi::c_void;
+  |     ^^^^^^^^^^^^^^^^
+
+warning: unused imports: `TlvDecoder` and `TlvEncoder`
+ --> src/bid/generic_plugin_box.rs:2:23
+  |
+2 | use crate::bid::tlv::{TlvEncoder, TlvDecoder};
+  |                       ^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `crate::bid::types::BidTag`
+ --> src/bid/generic_plugin_box.rs:3:5
+  |
+3 | use crate::bid::types::BidTag;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BoxBase`
+ --> src/runtime/plugin_loader_v2.rs:7:43
+  |
+7 | use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox};
+  |                                           ^^^^^^^
+
+warning: unused import: `std::ffi::c_void`
+  --> src/runtime/plugin_loader_v2.rs:11:5
+   |
+11 | use std::ffi::c_void;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused variable: `registry`
+  --> src/box_factory/plugin.rs:53:13
+   |
+53 |         let registry = get_global_registry();
+   |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_registry`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `args`
+   --> src/instance_v2.rs:147:28
+    |
+147 |     pub fn init(&mut self, args: &[Box<dyn NyashBox>]) -> Result<(), String> {
+    |                            ^^^^ help: if this is intentional, prefix it with an underscore: `_args`
+
+warning: unused variable: `nyash_value`
+   --> src/instance_v2.rs:289:21
+    |
+289 |         if let Some(nyash_value) = self.fields_ng.lock().unwrap().get(field_name) {
+    |                     ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_nyash_value`
+
+warning: unused variable: `block_id`
+   --> src/mir/loop_builder.rs:246:39
+    |
+246 |     fn mark_block_unsealed(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+    |                                       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_block_id`
+
+warning: unused variable: `block_id`
+   --> src/mir/loop_builder.rs:273:49
+    |
+273 |     fn get_variable_at_block(&self, name: &str, block_id: BasicBlockId) -> Option<ValueId> {
+    |                                                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_block_id`
+
+warning: unused variable: `dst`
+  --> src/backend/vm_phi.rs:48:9
+   |
+48 |         dst: ValueId,
+   |         ^^^ help: if this is intentional, prefix it with an underscore: `_dst`
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:167:36
+    |
+167 |     pub fn with_alloc<F>(mut self, f: F) -> Self
+    |                                    ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:167:26
+    |
+167 |     pub fn with_alloc<F>(mut self, f: F) -> Self
+    |                          ----^^^^
+    |                          |
+    |                          help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:176:35
+    |
+176 |     pub fn with_free<F>(mut self, f: F) -> Self
+    |                                   ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:176:25
+    |
+176 |     pub fn with_free<F>(mut self, f: F) -> Self
+    |                         ----^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:183:34
+    |
+183 |     pub fn with_log<F>(mut self, f: F) -> Self
+    |                                  ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:183:24
+    |
+183 |     pub fn with_log<F>(mut self, f: F) -> Self
+    |                        ----^^^^
+    |                        |
+    |                        help: remove this `mut`
+
+warning: unused variable: `args`
+   --> src/runtime/plugin_loader_v2.rs:236:46
+    |
+236 |     pub fn create_box(&self, box_type: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
+    |                                              ^^^^ help: if this is intentional, prefix it with an underscore: `_args`
+
+warning: type `FileMode` is more private than the item `FileBoxRegistry::open`
+  --> src/bid/plugins/filebox/mod.rs:44:5
+   |
+44 |     pub fn open(&mut self, path: &str, mode: FileMode) -> Result<BidHandle, std::io::Error> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `FileBoxRegistry::open` is reachable at visibility `pub`
+   |
+note: but type `FileMode` is only usable at visibility `pub(self)`
+  --> src/bid/plugins/filebox/mod.rs:29:1
+   |
+29 | enum FileMode {
+   | ^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: field `block_var_maps` is never read
+  --> src/mir/loop_builder.rs:35:5
+   |
+27 | pub struct LoopBuilder<'a> {
+   |            ----------- field in this struct
+...
+35 |     block_var_maps: HashMap<BasicBlockId, HashMap<String, ValueId>>,
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: fields `type_name_holder` and `method_holders` are never read
+   --> src/bid/metadata.rs:148:5
+    |
+143 | pub struct PluginMetadata {
+    |            -------------- fields in this struct
+...
+148 |     type_name_holder: Option<CString>,
+    |     ^^^^^^^^^^^^^^^^
+149 |     method_holders: Vec<(NyashMethodInfo, CString)>,
+    |     ^^^^^^^^^^^^^^
+
+warning: fields `path` and `mode` are never read
+  --> src/bid/plugins/filebox/mod.rs:24:5
+   |
+22 | struct FileBoxState {
+   |        ------------ fields in this struct
+23 |     file: File,
+24 |     path: String,
+   |     ^^^^
+25 |     mode: FileMode,
+   |     ^^^^
+
+warning: fields `box_types` and `init_fn` are never read
+  --> src/runtime/plugin_loader_v2.rs:20:5
+   |
+15 | pub struct LoadedPluginV2 {
+   |            -------------- fields in this struct
+...
+20 |     box_types: Vec<String>,
+   |     ^^^^^^^^^
+...
+23 |     init_fn: Option<unsafe extern "C" fn() -> i32>,
+   |     ^^^^^^^
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:62:9
+   |
+62 |         self.add_predecessor(header_id, preheader_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+   = note: `#[warn(unused_must_use)]` on by default
+help: use `let _ = ...` to ignore the resulting value
+   |
+62 |         let _ = self.add_predecessor(header_id, preheader_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:66:9
+   |
+66 |         self.mark_block_unsealed(header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+66 |         let _ = self.mark_block_unsealed(header_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:78:9
+   |
+78 |         self.add_predecessor(body_id, header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+78 |         let _ = self.add_predecessor(body_id, header_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:79:9
+   |
+79 |         self.add_predecessor(after_loop_id, header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+79 |         let _ = self.add_predecessor(after_loop_id, header_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:93:9
+   |
+93 |         self.add_predecessor(header_id, latch_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+93 |         let _ = self.add_predecessor(header_id, latch_id);
+   |         +++++++
+
+warning: creating a shared reference to mutable static
+   --> src/bid/plugins/filebox/mod.rs:102:12
+    |
+102 |         if FILEBOX_REGISTRY.is_none() {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: `#[warn(static_mut_refs)]` on by default
+
+warning: creating a shared reference to mutable static
+   --> src/bid/plugins/filebox/mod.rs:105:9
+    |
+105 |         FILEBOX_REGISTRY.as_ref().unwrap().clone()
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: unused imports: `BoolBox`, `IntegerBox`, and `StringBox`
+   --> src/ast.rs:885:28
+    |
+885 |     use crate::box_trait::{StringBox, IntegerBox, BoolBox};
+    |                            ^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `Mutex`
+   --> src/instance_v2.rs:387:26
+    |
+387 |     use std::sync::{Arc, Mutex};
+    |                          ^^^^^
+
+warning: unused imports: `BasicBlockIdGenerator`, `BasicBlock`, `CompareOp`, `EffectMask`, `MirFunction`, and `ValueIdGenerator`
+  --> src/mir/loop_builder.rs:9:21
+   |
+9  |     MirInstruction, BasicBlock, BasicBlockId, MirFunction, ValueId, 
+   |                     ^^^^^^^^^^                ^^^^^^^^^^^
+10 |     ConstValue, CompareOp, BasicBlockIdGenerator, ValueIdGenerator, EffectMask
+   |                 ^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `BasicBlock`
+   --> src/mir/verification.rs:311:75
+    |
+311 |     use crate::mir::{MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
+    |                                                                           ^^^^^^^^^^
+
+warning: unused imports: `BasicBlock`, `EffectMask`, `FunctionSignature`, `MirFunction`, `MirModule`, and `MirType`
+   --> src/backend/vm.rs:860:22
+    |
+860 |     use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
+    |                      ^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused imports: `BidHandle` and `BoxTypeId`
+  --> src/runtime/tests.rs:10:22
+   |
+10 |     use crate::bid::{BidHandle, BoxTypeId};
+   |                      ^^^^^^^^^  ^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/mir/basic_block.rs:314:13
+    |
+314 |         let mut bb = BasicBlock::new(bb_id);
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `child`
+   --> src/mir/ownership_verifier_simple.rs:313:13
+    |
+313 |         let child = value_gen.next();
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_child`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:167:26
+    |
+167 |     pub fn with_alloc<F>(mut self, f: F) -> Self
+    |                          ----^^^^
+    |                          |
+    |                          help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/tests/box_tests.rs:11:13
+   |
+11 |         let mut array = ArrayBox::new();
+   |             ----^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/tests/box_tests.rs:90:13
+   |
+90 |         let mut stream = NyashStreamBox::from_data(vec![72, 101, 108, 108, 111]); // "Hello"
+   |             ----^^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: `nyash-rust` (lib) generated 41 warnings (run `cargo fix --lib -p nyash-rust` to apply 17 suggestions)
+warning: `nyash-rust` (lib test) generated 50 warnings (39 duplicates) (run `cargo fix --lib -p nyash-rust --tests` to apply 10 suggestions)
+warning: unused import: `VMValue`
+  --> tests/mir_phase6_vm_ref_ops.rs:11:31
+   |
+11 | use nyash_rust::backend::{VM, VMValue};
+   |                               ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `NyashBox`
+  --> tests/mir_phase6_vm_ref_ops.rs:12:41
+   |
+12 | use nyash_rust::box_trait::{IntegerBox, NyashBox};
+   |                                         ^^^^^^^^
+
+warning: unused variable: `vm`
+   --> tests/mir_phase6_vm_ref_ops.rs:139:13
+    |
+139 |     let mut vm = VM::new();
+    |             ^^ help: if this is intentional, prefix it with an underscore: `_vm`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> tests/mir_phase6_vm_ref_ops.rs:139:9
+    |
+139 |     let mut vm = VM::new();
+    |         ----^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unexpected `cfg` condition value: `mir-v2`
+ --> tests/mir_phase8_5_hierarchical_25_instructions.rs:7:8
+  |
+7 | #![cfg(feature = "mir-v2")]
+  |        ^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+  = help: consider adding `mir-v2` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unused import: `std::collections::HashMap`
+ --> tests/integration_tests.rs:9:5
+  |
+9 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: function `execute_nyash_code` is never used
+  --> tests/integration_tests.rs:12:4
+   |
+12 | fn execute_nyash_code(code: &str) -> Result<String, String> {
+   |    ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/runner.rs:22:7
+   |
+22 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `llvm`
+   --> src/runner.rs:503:15
+    |
+503 |         #[cfg(feature = "llvm")]
+    |               ^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+    = help: consider adding `llvm` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `llvm`
+   --> src/runner.rs:526:19
+    |
+526 |         #[cfg(not(feature = "llvm"))]
+    |                   ^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+    = help: consider adding `llvm` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `BoxCore`
+  --> src/main.rs:71:32
+   |
+71 |     use box_trait::{StringBox, BoxCore, NyashBox};
+   |                                ^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src/runner.rs:286:17
+    |
+286 |             let mut printer = if self.config.mir_verbose {
+    |                 ----^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: type `FileMode` is more private than the item `bid::plugins::filebox::FileBoxRegistry::open`
+  --> src/bid/plugins/filebox/mod.rs:44:5
+   |
+44 |     pub fn open(&mut self, path: &str, mode: FileMode) -> Result<BidHandle, std::io::Error> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `bid::plugins::filebox::FileBoxRegistry::open` is reachable at visibility `pub`
+   |
+note: but type `FileMode` is only usable at visibility `pub(self)`
+  --> src/bid/plugins/filebox/mod.rs:29:1
+   |
+29 | enum FileMode {
+   | ^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: unused `std::result::Result` that must be used
+  --> src/mir/loop_builder.rs:62:9
+   |
+62 |         self.add_predecessor(header_id, preheader_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+   = note: `#[warn(unused_must_use)]` on by default
+help: use `let _ = ...` to ignore the resulting value
+   |
+62 |         let _ = self.add_predecessor(header_id, preheader_id);
+   |         +++++++
+
+warning: unused `std::result::Result` that must be used
+  --> src/mir/loop_builder.rs:66:9
+   |
+66 |         self.mark_block_unsealed(header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+66 |         let _ = self.mark_block_unsealed(header_id);
+   |         +++++++
+
+warning: unused `std::result::Result` that must be used
+  --> src/mir/loop_builder.rs:78:9
+   |
+78 |         self.add_predecessor(body_id, header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+78 |         let _ = self.add_predecessor(body_id, header_id);
+   |         +++++++
+
+warning: unused `std::result::Result` that must be used
+  --> src/mir/loop_builder.rs:79:9
+   |
+79 |         self.add_predecessor(after_loop_id, header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+79 |         let _ = self.add_predecessor(after_loop_id, header_id);
+   |         +++++++
+
+warning: unused `std::result::Result` that must be used
+  --> src/mir/loop_builder.rs:93:9
+   |
+93 |         self.add_predecessor(header_id, latch_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+93 |         let _ = self.add_predecessor(header_id, latch_id);
+   |         +++++++
+
+warning: variable does not need to be mutable
+   --> src/runner.rs:286:17
+    |
+286 |             let mut printer = if self.config.mir_verbose {
+    |                 ----^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: struct `NyashNotepad` is never constructed
+  --> examples/simple_notepad_win.rs:58:8
+   |
+58 | struct NyashNotepad {
+   |        ^^^^^^^^^^^^
+   |
+   = note: `NyashNotepad` has a derived impl for the trait `Default`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` on by default
+
+warning: associated function `new` is never used
+  --> examples/simple_notepad_win.rs:64:8
+   |
+63 | impl NyashNotepad {
+   | ----------------- associated function in this implementation
+64 |     fn new() -> Self {
+   |        ^^^
+
+warning: `nyash-rust` (test "mir_phase6_vm_ref_ops") generated 4 warnings (run `cargo fix --test "mir_phase6_vm_ref_ops"` to apply 2 suggestions)
+warning: `nyash-rust` (test "mir_phase8_5_hierarchical_25_instructions") generated 1 warning
+warning: `nyash-rust` (test "integration_tests") generated 2 warnings (run `cargo fix --test "integration_tests"` to apply 1 suggestion)
+warning: `nyash-rust` (bin "nyash" test) generated 53 warnings (42 duplicates) (run `cargo fix --bin "nyash" --tests` to apply 2 suggestions)
+warning: `nyash-rust` (bin "nyash") generated 45 warnings (44 duplicates) (run `cargo fix --bin "nyash"` to apply 1 suggestion)
+warning: `nyash-rust` (example "simple_notepad_win") generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.33s
+     Running unittests src/lib.rs (target/debug/deps/nyash_rust-027bd4c76143e77b)
+
+running 156 tests
+test box_arithmetic::tests::test_compare_box ... ok
+test bid::metadata::tests::test_host_vtable ... ok
+test box_arithmetic::tests::test_add_box_integers ... ok
+test box_operators::tests::test_boolean_arithmetic ... ok
+🚀 Running benchmark: bench_light
+test box_arithmetic::tests::test_subtract_box ... ok
+test box_arithmetic::tests::test_modulo_box ... ok
+test box_arithmetic::tests::test_modulo_chip8_pattern ... ok
+test box_operators::tests::test_integer_addition ... ok
+test bid::types::tests::test_handle_packing ... ok
+test bid::metadata::tests::test_plugin_metadata_creation ... ok
+test bid::tlv::tests::test_encode_decode_handle ... ok
+test box_factory::tests::test_registry_creation ... ok
+test backend::vm_phi::tests::test_phi_selection ... ok
+test ast::tests::test_ast_node_creation ... ok
+test bid::tlv::tests::test_encode_decode_primitives ... ok
+test box_operators::tests::test_string_repetition ... ok
+test ast::tests::test_method_call ... ok
+test bid::plugin_api::tests::test_plugin_handle ... ok
+test box_arithmetic::tests::test_add_box_strings ... ok
+test box_arithmetic::tests::test_multiply_box ... ok
+test box_operators::tests::test_dynamic_addition ... ok
+test box_operators::tests::test_can_add_with ... ok
+test backend::vm::tests::test_binary_operations ... ok
+test box_operators::tests::test_string_concatenation ... ok
+test box_trait::tests::test_add_box_integers ... ok
+test backend::vm::tests::test_basic_vm_execution ... ok
+test bid::types::tests::test_type_tags ... ok
+test ast::tests::test_binary_operation ... ok
+test ast::tests::test_binary_operator ... ok
+test box_arithmetic::tests::test_modulo_by_zero ... ok🔍 DEBUG: Starting interpreter execution...
+🔍 DEBUG: execute_node called with node type: 
+Program
+test box_arithmetic::tests::test_divide_by_zero ... ok🔍 DEBUG: Executing program with 1
+ statements
+🔍 DEBUG: Executing statement test box_trait::tests::test_add_box_strings ... ok1
+ of 1test box_arithmetic::tests::test_divide_box ... ok: BoxDeclaration
+
+🔍 execute_statement called with node type: test bid::types::tests::test_arg_type_mapping ... ok"BoxDeclaration
+"
+test box_trait::tests::test_bool_box_creation ... 🌍 statics namespace created in GlobalBox successfully
+🔥 Static Box 'okMain' definition registered in statics namespace
+
+🔍 DEBUG: Statement 1Instance: StringBox
+ completed
+Instance: MyBox
+🔍 DEBUG: Starting interpreter execution...
+test box_trait::tests::test_box_equality ... ok🔍 DEBUG: execute_node called with node type: Program
+
+test ast::tests::test_complex_ast ... ok🔍 DEBUG: Executing program with 1
+ statements
+test box_trait::tests::test_box_ids_unique ... ok🔍 DEBUG: Executing statement 1
+ of 1test box_trait::tests::test_integer_box_creation ... ok: Assignment
+
+test bid::bridge::tests::test_integer_box_bid_conversion ... ok🔍 execute_statement called with node type: "
+Assignment"test box_trait::tests::test_string_box_creation ... ok
+
+🔍 About to call execute_assignment...
+test bid::bridge::tests::test_box_registry ... ok🔍 execute_assignment called, evaluating value expression...
+
+🔍 execute_new called for class: IntegerBoxtest bid::bridge::tests::test_string_box_bid_conversion ... ok, with 1
+ arguments
+test box_trait::tests::test_void_box ... ok🔍 Trying unified registry for class: IntegerBox
+
+test bid::bridge::tests::test_future_box_bid_conversion ... ok🌍 statics namespace already exists - skipping creation
+
+🔍 DEBUG: Starting interpreter execution...
+test boxes::null_box::tests::test_get_or_default ... ok🔍 DEBUG: execute_node called with node type: Program
+
+test boxes::null_box::tests::test_null_check ... ok🔍 DEBUG: Executing program with 2
+ statements
+test boxes::null_box::tests::test_null_creation ... ok🔍 DEBUG: Executing statement 1
+ of 2test boxes::null_box::tests::test_null_equality ... ok: Assignment
+
+test cli::tests::test_default_config ... ok🔍 execute_statement called with node type: "
+Assignment"test cli::tests::test_parse_debug_fuel ... ok
+
+🔍 About to call execute_assignment...
+test environment::tests::test_error_handling ... ok🔍 execute_assignment called, evaluating value expression...
+
+🔍 execute_new called for class: BoolBoxtest environment::tests::test_global_environment ... ok, with 1
+ arguments
+test environment::tests::test_nested_scopes ... ok🔍 Trying unified registry for class: BoolBox
+
+test environment::tests::test_python_compat ... ok🔍 DEBUG: Starting interpreter execution...
+
+🔍 DEBUG: execute_node called with node type: Programtest environment::tests::test_scope_info ... ok
+
+🔍 DEBUG: Executing program with 2test environment::tests::test_variable_setting ... ok statements
+
+🔍 DEBUG: Executing statement 1test environment::tests::test_variable_shadowing ... ok of 2
+: Assignmenttest finalization::tests::test_finalization_tracking ... ok
+
+🔍 execute_statement called with node type: "test instance_v2::tests::test_field_operations ... okAssignment"
+
+test instance_v2::tests::test_from_any_box_creation ... ok🔍 About to call execute_assignment...
+
+🔍 execute_assignment called, evaluating value expression...
+test instance_v2::tests::test_from_declaration_creation ... ok🔍 execute_new called for class: IntegerBox
+, with 1test instance_v2::tests::test_unified_approach ... ok arguments
+
+🔍 Trying unified registry for class: IntegerBoxtest config::nyash_toml_v2::tests::test_parse_v2_config ... ok
+
+🔥 Static box 'Maintest bid::plugins::filebox::tests::test_filebox_plugin ... ok' instance registered in statics namespace
+
+🔍 DEBUG: Starting interpreter execution...
+test mir::basic_block::tests::test_basic_block_creation ... ok🔍 DEBUG: execute_node called with node type: Program
+
+test mir::basic_block::tests::test_basic_block_id_generator ... ok🔍 DEBUG: Executing program with 4
+ statements
+test mir::basic_block::tests::test_branch_successors ... ok🔍 DEBUG: Executing statement 1
+ of 4test mir::basic_block::tests::test_instruction_addition ... ok: 
+BoxDeclaration
+test mir::basic_block::tests::test_phi_instruction_ordering ... ok🔍 execute_statement called with node type: "
+BoxDeclaration"test mir::basic_block::tests::test_terminator_addition ... ok
+
+🏭 Unified registry created: IntegerBoxtest mir::basic_block::tests::test_value_tracking ... ok
+
+🔍 execute_statement called with node type: "test mir::builder::tests::test_binary_op_building ... okMethodCall"
+
+test mir::builder::tests::test_if_statement_building ... ok🔍 DEBUG: Statement 1
+ completed
+test mir::builder::tests::test_literal_building ... ok🔍 DEBUG: Executing statement 2
+ of 4test mir::effect::tests::test_effect_combination ... ok: Assignment
+
+test mir::effect::tests::test_effect_display ... ok🔍 execute_statement called with node type: "
+Assignment"test mir::effect::tests::test_effect_mask_creation ... ok
+
+🔍 About to call execute_assignment...
+test mir::effect::tests::test_effect_names ... ok🔍 execute_assignment called, evaluating value expression...
+
+🔍 execute_new called for class: TestBoxtest mir::effect::tests::test_effect_union ... ok, with 0
+ arguments
+test mir::effect::tests::test_parallel_safety ... 🔍 Trying unified registry for class: TestBoxok
+
+test mir::function::tests::test_function_creation ... ok🔍 execute_new called for class: IntegerBox
+, with 1test mir::function::tests::test_function_stats ... ok arguments
+
+🔍 Trying unified registry for class: IntegerBoxtest mir::function::tests::test_module_creation ... 
+ok
+🔍 DEBUG: resolve_variable: name='statics', local_vars=[]test mir::function::tests::test_value_id_generation ... ok
+
+🔍 DEBUG: Checking GlobalBox for 'staticstest mir::instruction::tests::test_barrier_instructions ... ok'...
+
+🔍 DEBUG: Found 'staticstest mir::instruction::tests::test_binop_instruction ... ok' in GlobalBox
+
+🏭 Unified registry created: BoolBoxtest mir::instruction::tests::test_call_instruction ... ok
+
+✅ FIELD ACCESS: Returning shared reference id=143test mir::instruction::tests::test_const_instruction ... ok
+
+🔍 execute_assignment: value expression evaluated successfully
+test mir::instruction::tests::test_extern_call_instruction ... ok🏭 Unified registry created: IntegerBox
+
+test mir::instruction::tests::test_ref_get_instruction ... ok🔍 execute_statement called with node type: "
+Local"test mir::instruction::tests::test_ref_new_instruction ... ok
+
+🔍 DEBUG: Interpreter execution completed
+test mir::instruction::tests::test_ref_set_instruction ... ok🔍 execute_assignment: value expression evaluated successfully
+
+thread 'interpreter::core::tests::test_if_statement' panicked at src/interpreter/core.rs:608:34:
+called `Result::unwrap()` on an `Err` value: UndefinedVariable { name: "x\n💡 Suggestion: Declare the variable first:\n  • For fields: Add 'x' to 'init { }' block\n  • For local variables: Use 'local x'\n  • For field access: Use 'me.x'" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+🏭 Unified registry created: TestBoxtest mir::instruction::tests::test_weak_load_instruction ... ok
+
+🔍 execute_statement called with node type: "test mir::instruction::tests::test_weak_new_instruction ... okAssignment"
+
+test mir::instruction_v2::tests::test_effect_categories ... ok🔍 About to call execute_assignment...
+
+🔍 execute_assignment called, evaluating value expression...
+test mir::instruction_v2::tests::test_instruction_count ... ok🔍 execute_new called for class: IntegerBox
+, with 1test mir::instruction_v2::tests::test_ownership_operations ... ok arguments
+
+🔍 Trying unified registry for class: IntegerBoxtest mir::ownership_verifier_simple::tests::test_basic_ref_set ... ok
+
+🔍 execute_assignment: value expression evaluated successfully
+test mir::ownership_verifier_simple::tests::test_ownership_forest_basic ... ok🏭 Unified registry created: IntegerBox
+
+test mir::ownership_verifier_simple::tests::test_weak_reference_tracking ... ok🔍 DEBUG: Interpreter execution completed
+
+
+thread 'interpreter::core::tests::test_simple_execution' panicked at src/interpreter/core.rs:577:9:
+assertion failed: result.is_ok()
+🔍 DEBUG: Interpreter execution completed
+test mir::printer::tests::test_empty_module_printing ... ok🔍 try_add_operation: left=IntegerBox
+thread 'interpreter::core::tests::test_box_instance_creation' panicked at src/interpreter/core.rs:637:34:
+called `Result::unwrap()` on an `Err` value: UndefinedVariable { name: "obj\n💡 Suggestion: Declare the variable first:\n  • For fields: Add 'obj' to 'init { }' block\n  • For local variables: Use 'local obj'\n  • For field access: Use 'me.obj'" }
+
+, right=IntegerBoxtest mir::printer::tests::test_function_printing ... ok
+
+🔍 After unwrap: left=IntegerBoxtest mir::printer::tests::test_verbose_printing ... ok, right=IntegerBox
+
+test mir::tests::test_basic_mir_compilation ... ok🔍 Checking StringBox downcast...
+
+🔍 StringBox downcast FAILED!
+test mir::tests::test_loop_compilation ... ok🏭 Unified registry created: IntegerBox
+
+test mir::tests::test_mir_dump ... ok🔍 execute_assignment: value expression evaluated successfully
+
+🔍 DEBUG: Interpreter execution completed
+test mir::tests::test_throw_compilation ... ok
+thread 'interpreter::core::tests::test_arithmetic' panicked at src/interpreter/core.rs:588:34:
+called `Result::unwrap()` on an `Err` value: InvalidOperation { message: "Addition not supported between IntegerBox and IntegerBox" }
+🔍 execute_statement called with node type: "
+Assignment"test mir::tests::test_try_catch_compilation ... ok
+🔍 About to call execute_assignment...
+
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: test mir::value_id::tests::test_local_id_creation ... okIntegerBox, with 
+1 arguments
+test mir::value_id::tests::test_local_id_generator ... ok🔍 Trying unified registry for class: IntegerBox
+
+test mir::value_id::tests::test_value_id_creation ... ok🏭 Unified registry created: IntegerBox
+
+🔍 execute_assignment: value expression evaluated successfully
+test mir::value_id::tests::test_value_id_generator ... ok🔍 execute_statement called with node type: "
+Assignment"test mir::value_id::tests::test_value_id_ordering ... ok
+🔍 About to call execute_assignment...
+
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: test mir::verification::tests::test_undefined_value_detection ... okIntegerBox, with 
+1 arguments
+test mir::verification::tests::test_valid_function_verification ... ok🔍 Trying unified registry for class: IntegerBox
+
+test runtime::box_registry::tests::test_builtin_registration ... ok🏭 Unified registry created: IntegerBox
+
+🔍 execute_assignment: value expression evaluated successfully
+test runtime::box_registry::tests::test_plugin_override ... ok🔍 execute_statement called with node type: "
+Assignment"test runtime::plugin_config::tests::test_parse_empty_config ... ok
+🔍 About to call execute_assignment...
+
+🔍 execute_assignment called, evaluating value expression...
+test runtime::plugin_config::tests::test_parse_simple_config ... ok
+🔍 DEBUG: resolve_variable: name='a', local_vars=["a", "b", "c", "result", "me"]test runtime::plugin_config::tests::test_parse_with_comments ... ok
+🔍 DEBUG: Found '
+a' in local_vars
+test runtime::tests::tests::test_box_registry_builtin ... ok✅ RESOLVE_VARIABLE shared reference: a
+ id=180test runtime::tests::tests::test_box_registry_plugin_override ... ok
+
+🔍 DEBUG: resolve_variable: name='b', local_vars=["a", "b", "c", "result", "me"]test runtime::tests::tests::test_multiple_plugin_types ... ok
+🔍 DEBUG: Found '
+b' in local_vars
+test runtime::tests::tests::test_plugin_config_parsing ... ok✅ RESOLVE_VARIABLE shared reference: b
+test runtime::tests::tests::test_transparent_box_switching ...  id=206ok
+
+🔍 try_add_operation: left=test tests::box_tests::tests::test_array_box_nyash_trait ... okIntegerBox, right=
+test tests::box_tests::tests::test_box_id_uniqueness ... IntegerBox
+ok
+🔍 After unwrap: left=IntegerBoxtest tests::box_tests::tests::test_buffer_box_nyash_trait ... ok, right=IntegerBox
+
+🔍 Checking StringBox downcast...
+test tests::box_tests::tests::test_future_box_nyash_trait ... ok🔍 StringBox downcast FAILED!
+
+test tests::box_tests::tests::test_result_box_nyash_trait ... ok🔍 DEBUG: Interpreter execution completed
+
+test tests::box_tests::tests::test_stream_box_nyash_trait ... ok
+test tokenizer::tests::test_comments ... ok
+test interpreter::core::tests::test_simple_execution ... FAILED
+test interpreter::core::tests::test_box_instance_creation ... FAILED
+test interpreter::core::tests::test_arithmetic ... FAILED
+test interpreter::core::tests::test_if_statement ... FAILED
+test tests::box_tests::tests::test_json_box_nyash_trait ... ok
+test tokenizer::tests::test_complex_code ... ok
+test tokenizer::tests::test_error_handling ... ok
+test tokenizer::tests::test_identifier ... ok
+test tokenizer::tests::test_line_numbers ... ok
+test tokenizer::tests::test_number_literal ... ok
+88
+  🏎️ VM: First run completed
+test tokenizer::tests::test_operators ... ok
+88
+test tokenizer::tests::test_simple_tokens ... ok
+88
+test tokenizer::tests::test_string_literal ... 🚀 Running benchmark: bench_medium
+ok
+test value::tests::test_basic_creation ... ok
+test value::tests::test_cross_type_equality ... ok
+test value::tests::test_object_creation ... ok
+test value::tests::test_type_conversion ... ok
+test value::tests::test_type_names ... ok🔍 DEBUG: Starting interpreter execution...
+🔍 DEBUG: execute_node called with node type: 
+Program
+test value::tests::test_weak_reference_basic ... ok🔍 DEBUG: Executing program with 1
+ statements
+🔍 DEBUG: Executing statement test value::tests::test_weak_reference_drop ... ok1 of 
+1: test value::tests::test_weak_reference_equality ... okBoxDeclaration
+
+🔍 execute_statement called with node type: "test value::tests::test_weak_reference_string_representation ... okBoxDeclaration"
+
+🌍 statics namespace created in GlobalBox successfully
+🔥 Static Box 'Main' definition registered in statics namespace
+🔍 DEBUG: Statement 1 completed
+🌍 statics namespace already exists - skipping creation
+🔥 Static box 'Main' instance registered in statics namespace
+🔍 execute_statement called with node type: "MethodCall"
+🔍 DEBUG: resolve_variable: name='statics', local_vars=[]
+🔍 DEBUG: Checking GlobalBox for 'statics'...
+🔍 DEBUG: Found 'statics' in GlobalBox
+✅ FIELD ACCESS: Returning shared reference id=223
+🔍 execute_statement called with node type: "Local"
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔗 DEBUG: Variable 'sum' set to 0 - simulating object drop
+🔍 DEBUG: resolve_variable: name='sum', local_vars=["temp", "i", "sum", "me"]
+🔍 DEBUG: Found 'sum' in local_vars
+✅ RESOLVE_VARIABLE shared reference: sum id=225
+🔗 DEBUG: Old value being dropped: void
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 DEBUG: resolve_variable: name='i', local_vars=["temp", "i", "sum", "me"]
+🔍 DEBUG: Found 'i' in local_vars
+✅ RESOLVE_VARIABLE shared reference: i id=236
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 DEBUG: Interpreter execution completed
+140
+  🏎️ VM: First run completed
+140
+140
+🚀 Running benchmark: bench_heavy
+🔍 DEBUG: Starting interpreter execution...
+🔍 DEBUG: execute_node called with node type: Program
+🔍 DEBUG: Executing program with 1 statements
+🔍 DEBUG: Executing statement 1 of 1: BoxDeclaration
+🔍 execute_statement called with node type: "BoxDeclaration"
+🌍 statics namespace created in GlobalBox successfully
+🔥 Static Box 'Main' definition registered in statics namespace
+🔍 DEBUG: Statement 1 completed
+🌍 statics namespace already exists - skipping creation
+🔥 Static box 'Main' instance registered in statics namespace
+🔍 execute_statement called with node type: "MethodCall"
+🔍 DEBUG: resolve_variable: name='statics', local_vars=[]
+🔍 DEBUG: Checking GlobalBox for 'statics'...
+🔍 DEBUG: Found 'statics' in GlobalBox
+✅ FIELD ACCESS: Returning shared reference id=248
+🔍 execute_statement called with node type: "Local"
+🔍 execute_statement called with node type: "Local"
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_assignment: value expression evaluated successfully
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 DEBUG: resolve_variable: name='a', local_vars=["c", "b", "d", "result1", "me", "result2", "result5", "h", "g", "result4", "a", "j", "i", "f", "result3", "e"]
+🔍 DEBUG: Found 'a' in local_vars
+✅ RESOLVE_VARIABLE shared reference: a id=269
+🔍 DEBUG: resolve_variable: name='b', local_vars=["c", "b", "d", "result1", "me", "result2", "result5", "h", "g", "result4", "a", "j", "i", "f", "result3", "e"]
+🔍 DEBUG: Found 'b' in local_vars
+✅ RESOLVE_VARIABLE shared reference: b id=273
+🔍 DEBUG: Interpreter execution completed
+6301391
+  🏎️ VM: First run completed
+6301391
+6301391
+
+📊 Nyash Performance Benchmark Results
+=====================================
+Iterations per test: 3
+
+🎯 bench_light
+  Backend       | Avg Time (ms) | Total Time (ms) | Speed Ratio
+  --------------|---------------|-----------------|------------
+  VM           |       2.013 |           6.0 |     1.00x
+
+🎯 bench_medium
+  Backend       | Avg Time (ms) | Total Time (ms) | Speed Ratio
+  --------------|---------------|-----------------|------------
+  VM           |       0.640 |           1.9 |     1.00x
+
+🎯 bench_heavy
+  Backend       | Avg Time (ms) | Total Time (ms) | Speed Ratio
+  --------------|---------------|-----------------|------------
+  VM           |       0.550 |           1.6 |     1.00x
+
+💡 Performance Summary:
+  📈 Average across all benchmarks:
+     Interpreter: NaN ms
+     VM:          1.07 ms (NaNx faster than interpreter)
+     WASM:        NaN ms (NaNx faster than interpreter)
+test benchmarks::tests::test_benchmark_light ... ok
+
+failures:
+
+failures:
+    interpreter::core::tests::test_arithmetic
+    interpreter::core::tests::test_box_instance_creation
+    interpreter::core::tests::test_if_statement
+    interpreter::core::tests::test_simple_execution
+
+test result: FAILED. 152 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+error: test failed, to rerun pass `--lib`

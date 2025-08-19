@@ -1,0 +1,434 @@
+warning: unused imports: `BoolBox`, `IntegerBox`, and `StringBox`
+   --> src/ast.rs:885:28
+    |
+885 |     use crate::box_trait::{StringBox, IntegerBox, BoolBox};
+    |                            ^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `Mutex`
+   --> src/instance_v2.rs:387:26
+    |
+387 |     use std::sync::{Arc, Mutex};
+    |                          ^^^^^
+
+warning: unused imports: `BasicBlockIdGenerator`, `BasicBlock`, `CompareOp`, `EffectMask`, `MirFunction`, and `ValueIdGenerator`
+  --> src/mir/loop_builder.rs:9:21
+   |
+9  |     MirInstruction, BasicBlock, BasicBlockId, MirFunction, ValueId, 
+   |                     ^^^^^^^^^^                ^^^^^^^^^^^
+10 |     ConstValue, CompareOp, BasicBlockIdGenerator, ValueIdGenerator, EffectMask
+   |                 ^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `HashSet`
+  --> src/mir/loop_builder.rs:13:33
+   |
+13 | use std::collections::{HashMap, HashSet};
+   |                                 ^^^^^^^
+
+warning: unused import: `BasicBlock`
+   --> src/mir/verification.rs:311:75
+    |
+311 |     use crate::mir::{MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
+    |                                                                           ^^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/backend/mod.rs:13:7
+   |
+13 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/backend/mod.rs:23:7
+   |
+23 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused imports: `BasicBlock`, `EffectMask`, `FunctionSignature`, `MirFunction`, `MirModule`, and `MirType`
+   --> src/backend/vm.rs:860:22
+    |
+860 |     use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
+    |                      ^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^  ^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `MirInstruction`
+ --> src/backend/vm_phi.rs:9:41
+  |
+9 | use crate::mir::{BasicBlockId, ValueId, MirInstruction};
+  |                                         ^^^^^^^^^^^^^^
+
+warning: unused import: `super::Usize`
+ --> src/bid/types.rs:1:5
+  |
+1 | use super::Usize;
+  |     ^^^^^^^^^^^^
+
+warning: unused import: `std::os::raw::c_char`
+ --> src/bid/plugin_api.rs:2:5
+  |
+2 | use std::os::raw::c_char;
+  |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `NyashHostVtable`, `NyashMethodInfo`, and `NyashPluginInfo`
+ --> src/bid/plugins/filebox/mod.rs:7:18
+  |
+7 | use crate::bid::{NyashPluginInfo, NyashMethodInfo, NyashHostVtable};
+  |                  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused imports: `SeekFrom` and `Seek`
+  --> src/bid/plugins/filebox/mod.rs:10:28
+   |
+10 | use std::io::{Read, Write, Seek, SeekFrom};
+   |                            ^^^^  ^^^^^^^^
+
+warning: unused imports: `c_char` and `c_void`
+  --> src/bid/plugins/filebox/mod.rs:11:20
+   |
+11 | use std::os::raw::{c_char, c_void};
+   |                    ^^^^^^  ^^^^^^
+
+warning: unused imports: `CStr` and `CString`
+  --> src/bid/plugins/filebox/mod.rs:13:16
+   |
+13 | use std::ffi::{CStr, CString};
+   |                ^^^^  ^^^^^^^
+
+warning: unused import: `std::ffi::c_void`
+ --> src/bid/loader.rs:3:5
+  |
+3 | use std::ffi::c_void;
+  |     ^^^^^^^^^^^^^^^^
+
+warning: unused imports: `TlvDecoder` and `TlvEncoder`
+ --> src/bid/generic_plugin_box.rs:2:23
+  |
+2 | use crate::bid::tlv::{TlvEncoder, TlvDecoder};
+  |                       ^^^^^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `crate::bid::types::BidTag`
+ --> src/bid/generic_plugin_box.rs:3:5
+  |
+3 | use crate::bid::types::BidTag;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BoxBase`
+ --> src/runtime/plugin_loader_v2.rs:7:43
+  |
+7 | use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox};
+  |                                           ^^^^^^^
+
+warning: unused import: `std::ffi::c_void`
+  --> src/runtime/plugin_loader_v2.rs:11:5
+   |
+11 | use std::ffi::c_void;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BidHandle` and `BoxTypeId`
+  --> src/runtime/tests.rs:10:22
+   |
+10 |     use crate::bid::{BidHandle, BoxTypeId};
+   |                      ^^^^^^^^^  ^^^^^^^^^
+
+warning: unused variable: `registry`
+  --> src/box_factory/plugin.rs:53:13
+   |
+53 |         let registry = get_global_registry();
+   |             ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_registry`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `args`
+   --> src/instance_v2.rs:147:28
+    |
+147 |     pub fn init(&mut self, args: &[Box<dyn NyashBox>]) -> Result<(), String> {
+    |                            ^^^^ help: if this is intentional, prefix it with an underscore: `_args`
+
+warning: unused variable: `nyash_value`
+   --> src/instance_v2.rs:289:21
+    |
+289 |         if let Some(nyash_value) = self.fields_ng.lock().unwrap().get(field_name) {
+    |                     ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_nyash_value`
+
+warning: variable does not need to be mutable
+   --> src/mir/basic_block.rs:314:13
+    |
+314 |         let mut bb = BasicBlock::new(bb_id);
+    |             ----^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: unused variable: `block_id`
+   --> src/mir/loop_builder.rs:246:39
+    |
+246 |     fn mark_block_unsealed(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+    |                                       ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_block_id`
+
+warning: unused variable: `block_id`
+   --> src/mir/loop_builder.rs:273:49
+    |
+273 |     fn get_variable_at_block(&self, name: &str, block_id: BasicBlockId) -> Option<ValueId> {
+    |                                                 ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_block_id`
+
+warning: unused variable: `child`
+   --> src/mir/ownership_verifier_simple.rs:313:13
+    |
+313 |         let child = value_gen.next();
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_child`
+
+warning: unused variable: `dst`
+  --> src/backend/vm_phi.rs:48:9
+   |
+48 |         dst: ValueId,
+   |         ^^^ help: if this is intentional, prefix it with an underscore: `_dst`
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:167:36
+    |
+167 |     pub fn with_alloc<F>(mut self, f: F) -> Self
+    |                                    ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:167:26
+    |
+167 |     pub fn with_alloc<F>(mut self, f: F) -> Self
+    |                          ----^^^^
+    |                          |
+    |                          help: remove this `mut`
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:176:35
+    |
+176 |     pub fn with_free<F>(mut self, f: F) -> Self
+    |                                   ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:176:25
+    |
+176 |     pub fn with_free<F>(mut self, f: F) -> Self
+    |                         ----^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: unused variable: `f`
+   --> src/bid/plugin_api.rs:183:34
+    |
+183 |     pub fn with_log<F>(mut self, f: F) -> Self
+    |                                  ^ help: if this is intentional, prefix it with an underscore: `_f`
+
+warning: variable does not need to be mutable
+   --> src/bid/plugin_api.rs:183:24
+    |
+183 |     pub fn with_log<F>(mut self, f: F) -> Self
+    |                        ----^^^^
+    |                        |
+    |                        help: remove this `mut`
+
+warning: unused variable: `args`
+   --> src/runtime/plugin_loader_v2.rs:236:46
+    |
+236 |     pub fn create_box(&self, box_type: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
+    |                                              ^^^^ help: if this is intentional, prefix it with an underscore: `_args`
+
+warning: variable does not need to be mutable
+  --> src/tests/box_tests.rs:11:13
+   |
+11 |         let mut array = ArrayBox::new();
+   |             ----^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src/tests/box_tests.rs:90:13
+   |
+90 |         let mut stream = NyashStreamBox::from_data(vec![72, 101, 108, 108, 111]); // "Hello"
+   |             ----^^^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: type `FileMode` is more private than the item `FileBoxRegistry::open`
+  --> src/bid/plugins/filebox/mod.rs:44:5
+   |
+44 |     pub fn open(&mut self, path: &str, mode: FileMode) -> Result<BidHandle, std::io::Error> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `FileBoxRegistry::open` is reachable at visibility `pub`
+   |
+note: but type `FileMode` is only usable at visibility `pub(self)`
+  --> src/bid/plugins/filebox/mod.rs:29:1
+   |
+29 | enum FileMode {
+   | ^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: field `block_var_maps` is never read
+  --> src/mir/loop_builder.rs:35:5
+   |
+27 | pub struct LoopBuilder<'a> {
+   |            ----------- field in this struct
+...
+35 |     block_var_maps: HashMap<BasicBlockId, HashMap<String, ValueId>>,
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: fields `type_name_holder` and `method_holders` are never read
+   --> src/bid/metadata.rs:148:5
+    |
+143 | pub struct PluginMetadata {
+    |            -------------- fields in this struct
+...
+148 |     type_name_holder: Option<CString>,
+    |     ^^^^^^^^^^^^^^^^
+149 |     method_holders: Vec<(NyashMethodInfo, CString)>,
+    |     ^^^^^^^^^^^^^^
+
+warning: fields `path` and `mode` are never read
+  --> src/bid/plugins/filebox/mod.rs:24:5
+   |
+22 | struct FileBoxState {
+   |        ------------ fields in this struct
+23 |     file: File,
+24 |     path: String,
+   |     ^^^^
+25 |     mode: FileMode,
+   |     ^^^^
+
+warning: fields `box_types` and `init_fn` are never read
+  --> src/runtime/plugin_loader_v2.rs:20:5
+   |
+15 | pub struct LoadedPluginV2 {
+   |            -------------- fields in this struct
+...
+20 |     box_types: Vec<String>,
+   |     ^^^^^^^^^
+...
+23 |     init_fn: Option<unsafe extern "C" fn() -> i32>,
+   |     ^^^^^^^
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:62:9
+   |
+62 |         self.add_predecessor(header_id, preheader_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+   = note: `#[warn(unused_must_use)]` on by default
+help: use `let _ = ...` to ignore the resulting value
+   |
+62 |         let _ = self.add_predecessor(header_id, preheader_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:66:9
+   |
+66 |         self.mark_block_unsealed(header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+66 |         let _ = self.mark_block_unsealed(header_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:78:9
+   |
+78 |         self.add_predecessor(body_id, header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+78 |         let _ = self.add_predecessor(body_id, header_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:79:9
+   |
+79 |         self.add_predecessor(after_loop_id, header_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+79 |         let _ = self.add_predecessor(after_loop_id, header_id);
+   |         +++++++
+
+warning: unused `Result` that must be used
+  --> src/mir/loop_builder.rs:93:9
+   |
+93 |         self.add_predecessor(header_id, latch_id);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+   |
+93 |         let _ = self.add_predecessor(header_id, latch_id);
+   |         +++++++
+
+warning: creating a shared reference to mutable static
+   --> src/bid/plugins/filebox/mod.rs:102:12
+    |
+102 |         if FILEBOX_REGISTRY.is_none() {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: `#[warn(static_mut_refs)]` on by default
+
+warning: creating a shared reference to mutable static
+   --> src/bid/plugins/filebox/mod.rs:105:9
+    |
+105 |         FILEBOX_REGISTRY.as_ref().unwrap().clone()
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: for more information, see <https://doc.rust-lang.org/nightly/edition-guide/rust-2024/static-mut-references.html>
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+
+warning: `nyash-rust` (lib test) generated 50 warnings (run `cargo fix --lib -p nyash-rust --tests` to apply 25 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.81s
+     Running unittests src/lib.rs (target/debug/deps/nyash_rust-027bd4c76143e77b)
+
+running 1 test
+🔍 DEBUG: Starting interpreter execution...
+🔍 DEBUG: execute_node called with node type: Program
+🔍 DEBUG: Executing program with 1 statements
+🔍 DEBUG: Executing statement 1 of 1: Assignment
+🔍 execute_statement called with node type: "Assignment"
+🔍 About to call execute_assignment...
+🔍 execute_assignment called, evaluating value expression...
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔍 execute_new called for class: IntegerBox, with 1 arguments
+🔍 Trying unified registry for class: IntegerBox
+🏭 Unified registry created: IntegerBox
+🔧 execute_binary_op: op=Add, left=IntegerBox, right=IntegerBox
+🔍 try_add_operation: left=IntegerBox, right=IntegerBox
+🔍 After unwrap: left=IntegerBox, right=IntegerBox
+🔍 Checking StringBox downcast...
+🔍 StringBox downcast FAILED!
+❌ Interpreter error: Invalid operation: Addition not supported between IntegerBox and IntegerBox
+🔍 DEBUG: Interpreter execution completed
+
+thread 'interpreter::core::tests::test_arithmetic' panicked at src/interpreter/core.rs:590:34:
+called `Result::unwrap()` on an `Err` value: InvalidOperation { message: "Addition not supported between IntegerBox and IntegerBox" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test interpreter::core::tests::test_arithmetic ... FAILED
+
+failures:
+
+failures:
+    interpreter::core::tests::test_arithmetic
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 155 filtered out; finished in 0.19s
+
+error: test failed, to rerun pass `--lib`

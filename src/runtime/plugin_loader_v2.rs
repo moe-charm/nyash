@@ -1,18 +1,22 @@
 //! Nyash v2 Plugin Loader
-//! 
-//! nyash.toml v2ベースの新しいプラグインローダー
-//! Single FFI entry point (nyash_plugin_invoke) + optional init
+//!
+//! cfg/features で2パスを提供:
+//! - enabled: plugins feature 有効 かつ 非wasm32 ターゲット
+//! - stub   : それ以外（WASMやplugins無効）
 
-use crate::bid::{BidResult, BidError};
-use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox};
-use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::ffi::c_void;
-use std::any::Any;
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+mod enabled {
+    use crate::bid::{BidResult, BidError};
+    use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox};
+    use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
+    use std::collections::HashMap;
+    use std::sync::{Arc, RwLock};
+    use std::ffi::c_void;
+    use std::any::Any;
+    use once_cell::sync::Lazy;
 
 /// Loaded plugin information
-pub struct LoadedPluginV2 {
+    pub struct LoadedPluginV2 {
     /// Library handle
     _lib: Arc<libloading::Library>,
     
@@ -28,14 +32,16 @@ pub struct LoadedPluginV2 {
 
 /// v2 Plugin Box wrapper - temporary implementation
 #[derive(Debug)]
-pub struct PluginBoxV2 {
-    pub box_type: String,
-    pub type_id: u32,
-    pub invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
-    pub instance_id: u32,
-}
+    pub struct PluginBoxV2 {
+        pub box_type: String,
+        pub type_id: u32,
+        pub invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+        pub instance_id: u32,
+        /// Optional fini method_id from nyash.toml (None if not provided)
+        pub fini_method_id: Option<u32>,
+    }
 
-impl BoxCore for PluginBoxV2 {
+    impl BoxCore for PluginBoxV2 {
     fn box_id(&self) -> u64 {
         self.instance_id as u64
     }
@@ -57,7 +63,7 @@ impl BoxCore for PluginBoxV2 {
     }
 }
 
-impl NyashBox for PluginBoxV2 {
+    impl NyashBox for PluginBoxV2 {
     fn type_name(&self) -> &'static str {
         // Return the actual box type name for proper method dispatch
         match self.box_type.as_str() {
@@ -101,6 +107,7 @@ impl NyashBox for PluginBoxV2 {
                 type_id: self.type_id,
                 invoke_fn: self.invoke_fn,
                 instance_id: new_instance_id,
+                fini_method_id: self.fini_method_id,
             })
         } else {
             eprintln!("❌ clone_box failed: birth() returned error code {}", result);
@@ -126,12 +133,39 @@ impl NyashBox for PluginBoxV2 {
             type_id: self.type_id,
             invoke_fn: self.invoke_fn,
             instance_id: self.instance_id,  // Same instance_id - this is sharing!
+            fini_method_id: self.fini_method_id,
         })
     }
 }
 
+impl PluginBoxV2 {
+    /// Call fini() on this plugin instance if configured
+    pub fn call_fini(&self) {
+        if let Some(fini_id) = self.fini_method_id {
+            // Empty TLV args
+            let tlv_args: [u8; 4] = [1, 0, 0, 0];
+            let mut out: [u8; 4] = [0; 4];
+            let mut out_len: usize = out.len();
+            let rc = unsafe {
+                (self.invoke_fn)(
+                    self.type_id,
+                    fini_id,
+                    self.instance_id,
+                    tlv_args.as_ptr(),
+                    tlv_args.len(),
+                    out.as_mut_ptr(),
+                    &mut out_len,
+                )
+            };
+            if rc != 0 {
+                eprintln!("⚠️ PluginBoxV2::fini failed for {} id={} rc={}", self.box_type, self.instance_id, rc);
+            }
+        }
+    }
+}
+
 /// Plugin loader v2
-pub struct PluginLoaderV2 {
+    pub struct PluginLoaderV2 {
     /// Loaded plugins (library name -> plugin info)
     plugins: RwLock<HashMap<String, Arc<LoadedPluginV2>>>,
     
@@ -139,7 +173,7 @@ pub struct PluginLoaderV2 {
     pub config: Option<NyashConfigV2>,
 }
 
-impl PluginLoaderV2 {
+    impl PluginLoaderV2 {
     /// Create new loader
     pub fn new() -> Self {
         Self {
@@ -262,13 +296,14 @@ impl PluginLoaderV2 {
         
         // Get type_id from config - read actual nyash.toml content
         eprintln!("🔍 Reading nyash.toml for type configuration...");
-        let type_id = if let Ok(toml_content) = std::fs::read_to_string("nyash.toml") {
+        let (type_id, fini_method_id) = if let Ok(toml_content) = std::fs::read_to_string("nyash.toml") {
             eprintln!("🔍 nyash.toml read successfully");
             if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
                 eprintln!("🔍 nyash.toml parsed successfully");
                 if let Some(box_config) = config.get_box_config(lib_name, box_type, &toml_value) {
                     eprintln!("🔍 Found box config for {} with type_id: {}", box_type, box_config.type_id);
-                    box_config.type_id
+                    let fini_id = box_config.methods.get("fini").map(|m| m.method_id);
+                    (box_config.type_id, fini_id)
                 } else {
                     eprintln!("No type configuration for {} in {}", box_type, lib_name);
                     return Err(BidError::InvalidType);
@@ -327,6 +362,7 @@ impl PluginLoaderV2 {
             type_id,
             invoke_fn: plugin.invoke_fn,
             instance_id,
+            fini_method_id,
         };
         
         Ok(Box::new(plugin_box))
@@ -334,25 +370,53 @@ impl PluginLoaderV2 {
 }
 
 // Global loader instance
-use once_cell::sync::Lazy;
+    static GLOBAL_LOADER_V2: Lazy<Arc<RwLock<PluginLoaderV2>>> =
+        Lazy::new(|| Arc::new(RwLock::new(PluginLoaderV2::new())));
 
-static GLOBAL_LOADER_V2: Lazy<Arc<RwLock<PluginLoaderV2>>> = 
-    Lazy::new(|| Arc::new(RwLock::new(PluginLoaderV2::new())));
+    /// Get global v2 loader
+    pub fn get_global_loader_v2() -> Arc<RwLock<PluginLoaderV2>> {
+        GLOBAL_LOADER_V2.clone()
+    }
 
-/// Get global v2 loader
-pub fn get_global_loader_v2() -> Arc<RwLock<PluginLoaderV2>> {
-    GLOBAL_LOADER_V2.clone()
+    /// Initialize global loader with config
+    pub fn init_global_loader_v2(config_path: &str) -> BidResult<()> {
+        let loader = get_global_loader_v2();
+        let mut loader = loader.write().unwrap();
+        loader.load_config(config_path)?;
+        drop(loader); // Release write lock
+
+        // Load all plugins
+        let loader = get_global_loader_v2();
+        let loader = loader.read().unwrap();
+        loader.load_all_plugins()
+    }
 }
 
-/// Initialize global loader with config
-pub fn init_global_loader_v2(config_path: &str) -> BidResult<()> {
-    let loader = get_global_loader_v2();
-    let mut loader = loader.write().unwrap();
-    loader.load_config(config_path)?;
-    drop(loader); // Release write lock
-    
-    // Load all plugins
-    let loader = get_global_loader_v2();
-    let loader = loader.read().unwrap();
-    loader.load_all_plugins()
+#[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
+mod stub {
+    use crate::bid::{BidResult, BidError};
+    use crate::box_trait::NyashBox;
+    use once_cell::sync::Lazy;
+    use std::sync::{Arc, RwLock};
+
+    pub struct PluginLoaderV2;
+    impl PluginLoaderV2 { pub fn new() -> Self { Self } }
+    impl PluginLoaderV2 {
+        pub fn load_config(&mut self, _p: &str) -> BidResult<()> { Ok(()) }
+        pub fn load_all_plugins(&self) -> BidResult<()> { Ok(()) }
+        pub fn create_box(&self, _t: &str, _a: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
+            Err(BidError::PluginError)
+        }
+    }
+
+    static GLOBAL_LOADER_V2: Lazy<Arc<RwLock<PluginLoaderV2>>> =
+        Lazy::new(|| Arc::new(RwLock::new(PluginLoaderV2::new())));
+
+    pub fn get_global_loader_v2() -> Arc<RwLock<PluginLoaderV2>> { GLOBAL_LOADER_V2.clone() }
+    pub fn init_global_loader_v2(_config_path: &str) -> BidResult<()> { Ok(()) }
 }
+
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+pub use enabled::*;
+#[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
+pub use stub::*;

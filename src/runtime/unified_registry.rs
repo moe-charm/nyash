@@ -5,7 +5,9 @@
  * Integrates all Box creation sources (builtin, user-defined, plugin)
  */
 
-use crate::box_factory::{UnifiedBoxRegistry, builtin::BuiltinBoxFactory, plugin::PluginBoxFactory};
+use crate::box_factory::{UnifiedBoxRegistry, builtin::BuiltinBoxFactory};
+#[cfg(feature = "plugins")]
+use crate::box_factory::plugin::PluginBoxFactory;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Global registry instance
@@ -20,7 +22,10 @@ pub fn init_global_unified_registry() {
         registry.register(Arc::new(BuiltinBoxFactory::new()));
         
         // Register plugin Box factory (lowest priority)
-        registry.register(Arc::new(PluginBoxFactory::new()));
+        #[cfg(feature = "plugins")]
+        {
+            registry.register(Arc::new(PluginBoxFactory::new()));
+        }
         
         // TODO: User-defined Box factory will be registered by interpreter
         

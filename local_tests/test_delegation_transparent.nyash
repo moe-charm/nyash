@@ -1,0 +1,66 @@
+// 🎯 デリゲーション透過テスト
+
+// 通常のユーザー定義Box継承
+box Parent {
+    init { name, power }
+    
+    birth(parentName) {
+        me.name = parentName
+        me.power = 100
+        print("👨‍👩‍👧‍👦 Parent誕生: " + me.name + " (power:" + me.power + ")")
+    }
+    
+    attack() {
+        print("💥 " + me.name + "の攻撃！ダメージ:" + me.power)
+    }
+}
+
+box Child from Parent {
+    init { skill }
+    
+    birth(childName) {
+        from Parent.birth(childName)
+        me.skill = "必殺技"
+        print("🧒 Child誕生完了！スキル: " + me.skill)
+    }
+    
+    override attack() {
+        print("⚡ " + me.skill + "発動！")
+        from Parent.attack()
+    }
+}
+
+// ビルトインBox継承（pack透過テスト）
+box EnhancedString from StringBox {
+    init { prefix, suffix }
+    
+    birth(text) {
+        pack StringBox(text)  // ビルトイン継承（透過的）
+        me.prefix = "【"
+        me.suffix = "】"
+        print("📝 EnhancedString誕生: " + me.prefix + text + me.suffix)
+    }
+    
+    enhanced() {
+        return me.prefix + me.toString() + me.suffix + "✨"
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 デリゲーション透過テスト開始")
+        
+        // ユーザー定義 → ユーザー定義
+        local child = new Child("太郎")
+        child.attack()
+        
+        // ユーザー定義 → ビルトイン（pack透過）  
+        local enhanced = new EnhancedString("Hello")
+        print("結果: " + enhanced.enhanced())
+        
+        return "全テスト完了"
+    }
+}

@@ -305,11 +305,15 @@ impl NyashInterpreter {
                         }
                     }
                     
-                    // 既存のフィールド値があればfini()を呼ぶ
+                    // 既存のフィールド値があれば fini() を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
                         if let Some(old_instance) = (*old_field_value).as_any().downcast_ref::<InstanceBox>() {
                             let _ = old_instance.fini();
                             finalization::mark_as_finalized(old_instance.box_id());
+                        }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(old_plugin) = (*old_field_value).as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                            old_plugin.call_fini();
                         }
                     }
                     
@@ -338,11 +342,15 @@ impl NyashInterpreter {
                         });
                     }
                     
-                    // 既存のthis.field値があればfini()を呼ぶ
+                    // 既存のthis.field値があれば fini() を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
                         if let Some(old_instance) = (*old_field_value).as_any().downcast_ref::<InstanceBox>() {
                             let _ = old_instance.fini();
                             finalization::mark_as_finalized(old_instance.box_id());
+                        }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(old_plugin) = (*old_field_value).as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                            old_plugin.call_fini();
                         }
                     }
                     
@@ -371,11 +379,15 @@ impl NyashInterpreter {
                         });
                     }
                     
-                    // 既存のme.field値があればfini()を呼ぶ
+                    // 既存のme.field値があれば fini() を呼ぶ
                     if let Some(old_field_value) = instance.get_field(field) {
                         if let Some(old_instance) = (*old_field_value).as_any().downcast_ref::<InstanceBox>() {
                             let _ = old_instance.fini();
                             finalization::mark_as_finalized(old_instance.box_id());
+                        }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(old_plugin) = (*old_field_value).as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                            old_plugin.call_fini();
                         }
                     }
                     
