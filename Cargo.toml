@@ -165,6 +165,19 @@ features = [
   "CanvasGradient",
   "CanvasPattern",
   "Path2d",
+  "Performance",
+  "MouseEvent",
+  "TouchEvent",
+  "KeyboardEvent",
+  "AudioContext",
+  "AudioContextState",
+  "AudioBuffer",
+  "AudioBufferSourceNode",
+  "GainNode",
+  "AnalyserNode",
+  "AudioDestinationNode",
+  "PeriodicWave",
+  "OscillatorNode",
 ]
 
 [dev-dependencies]

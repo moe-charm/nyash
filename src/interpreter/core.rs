@@ -503,6 +503,30 @@ impl NyashInterpreter {
     }
     
     pub(super) fn restore_local_vars(&mut self, saved: HashMap<String, Box<dyn NyashBox>>) {
+        // 🎯 スコープ離脱時：現在のローカル変数に対してfiniを呼ぶ
+        // ただし「me」は特別扱い（インスタンス自身なのでfiniしない）
+        for (name, value) in &self.local_vars {
+            // 「me」はインスタンス自身なのでスコープ離脱時にfiniしない
+            if name == "me" {
+                continue;
+            }
+            
+            // ユーザー定義Box（InstanceBox）の場合
+            if let Some(instance) = (**value).as_any().downcast_ref::<InstanceBox>() {
+                let _ = instance.fini();
+                eprintln!("🔄 Scope exit: Called fini() on local variable '{}' (InstanceBox)", name);
+            }
+            // プラグインBoxの場合
+            #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+            if let Some(plugin) = (**value).as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                plugin.call_fini();
+                eprintln!("🔄 Scope exit: Called fini() on local variable '{}' (PluginBox)", name);
+            }
+            // ビルトインBoxは元々finiメソッドを持たないので呼ばない
+            // （StringBox、IntegerBox等はリソース管理不要）
+        }
+        
+        // その後、保存されていた変数で復元
         self.local_vars = saved.into_iter()
             .map(|(k, v)| (k, Arc::from(v)))  // Convert Box to Arc
             .collect();
@@ -516,6 +540,23 @@ impl NyashInterpreter {
     }
     
     pub(super) fn restore_outbox_vars(&mut self, saved: HashMap<String, Box<dyn NyashBox>>) {
+        // 🎯 スコープ離脱時：現在のoutbox変数に対してもfiniを呼ぶ
+        for (name, value) in &self.outbox_vars {
+            // ユーザー定義Box（InstanceBox）の場合
+            if let Some(instance) = (**value).as_any().downcast_ref::<InstanceBox>() {
+                let _ = instance.fini();
+                eprintln!("🔄 Scope exit: Called fini() on outbox variable '{}' (InstanceBox)", name);
+            }
+            // プラグインBoxの場合
+            #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+            if let Some(plugin) = (**value).as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                plugin.call_fini();
+                eprintln!("🔄 Scope exit: Called fini() on outbox variable '{}' (PluginBox)", name);
+            }
+            // ビルトインBoxは元々finiメソッドを持たないので呼ばない（要修正）
+        }
+        
+        // その後、保存されていた変数で復元
         self.outbox_vars = saved.into_iter()
             .map(|(k, v)| (k, Arc::from(v)))  // Convert Box to Arc
             .collect();

@@ -231,18 +231,60 @@ Nyashは古典的な継承ではなく、デリゲーション（委譲）モデ
   ```
 
 - **ファイナライズ (`fini`キーワード):**
-  - `fini()`は「論理的な解放フック」として機能する特別なメソッドです。
-  - インスタンスに対して呼び出されると、そのインスタンスがもはや使用されるべきではないことを示します。
-  - クリーンアップ処理を実行し、所有するすべてのフィールドに対して再帰的に`fini()`を呼び出します。
-  - ファイナライズされたオブジェクトを使用しようとすると（`fini`の再呼び出しを除く）、実行時エラーが発生します。
+  - `fini()`は「リソース解放フック」として機能する特別なメソッドです。
+  - **Nyashの明示的哲学**: 自動的な解放は最小限に留め、プログラマーが制御します。
+  
+  **🎯 finiが呼ばれる3つのタイミング：**
+  
+  1. **スコープ離脱時（自動）**
+     - ローカル変数がスコープを抜ける時に自動的に呼ばれます
+     - ただし`me`（インスタンス自身）は除外されます
+     ```nyash
+     function test() {
+         local resource = new FileBox("data.txt")
+         // 関数終了時、resourceのfini()が自動的に呼ばれる
+     }
+     ```
+  
+  2. **明示的呼び出し（推奨）**
+     - プログラマーが必要に応じて明示的に呼び出します
+     ```nyash
+     local file = new FileBox("temp.txt")
+     file.write("data")
+     file.fini()  // 明示的にリソースを解放
+     ```
+  
+  3. **インスタンスのfini時（カスケード）**
+     - インスタンスがfiniされる時、そのフィールドもfiniされます
+     - ただしweakフィールドは除外されます
+  
+  **⚠️ 重要な注意点：**
+  - **フィールド差し替え時にはfiniは呼ばれません**（GC的な「おせっかい」を避ける設計）
+  - ファイナライズ後のオブジェクト使用は実行時エラーになります
+  - `fini()`の重複呼び出しは安全（何もしない）
+  - **すべてのBox型（ビルトイン含む）にfini実装が必要**（設計統一性）
+  
   ```nyash
   box ManagedResource {
-      init { handle }
+      init { handle, weak observer }  // observerはweakなのでfiniされない
+      
       fini() {
-          // ハンドルを解放したり、他のクリーンアップ処理を実行
+          // リソースのクリーンアップ
           me.console.log("リソースをファイナライズしました。")
+          // handleは自動的にfiniされる（weakでない限り）
       }
   }
+  
+  // 使用例
+  local res = new ManagedResource()
+  res.handle = new FileBox("data.txt")
+  
+  // ❌ これではfiniは呼ばれない（明示的管理）
+  res.handle = new FileBox("other.txt")  // 古いhandleは解放されない！
+  
+  // ✅ 正しい方法
+  res.handle.fini()  // 明示的に古いリソースを解放
+  res.handle = new FileBox("other.txt")
   ```
 
 ## 3. 標準ライブラリアクセス (using & namespace) 🎉 **Phase 9.75e完了**

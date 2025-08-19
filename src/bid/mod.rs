@@ -8,6 +8,7 @@ pub mod metadata;
 pub mod plugin_api;
 pub mod bridge;
 pub mod plugins;
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 pub mod loader;
 // pub mod registry;  // legacy - v2 plugin system uses BoxFactoryRegistry instead
 // pub mod plugin_box;  // legacy - FileBox専用実装
@@ -19,6 +20,7 @@ pub use error::*;
 pub use metadata::*;
 pub use plugin_api::*;
 pub use bridge::*;
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 pub use loader::*;
 // pub use registry::*;  // legacy - v2 plugin system uses BoxFactoryRegistry instead
 // pub use plugin_box::*;  // legacy

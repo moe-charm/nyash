@@ -275,6 +275,9 @@ impl BoxCore for WebCanvasBox {
         write!(f, "WebCanvasBox({}, {}x{})", self.canvas_id, self.width, self.height)
     }
     
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self

@@ -399,8 +399,14 @@ mod stub {
     use once_cell::sync::Lazy;
     use std::sync::{Arc, RwLock};
 
-    pub struct PluginLoaderV2;
-    impl PluginLoaderV2 { pub fn new() -> Self { Self } }
+    pub struct PluginLoaderV2 {
+        pub config: Option<()>,  // Dummy config for compatibility
+    }
+    impl PluginLoaderV2 { 
+        pub fn new() -> Self { 
+            Self { config: None } 
+        } 
+    }
     impl PluginLoaderV2 {
         pub fn load_config(&mut self, _p: &str) -> BidResult<()> { Ok(()) }
         pub fn load_all_plugins(&self) -> BidResult<()> { Ok(()) }

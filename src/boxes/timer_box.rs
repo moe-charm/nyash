@@ -52,25 +52,18 @@ use std::any::Any;
 use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use web_sys::{window, Performance};
+use web_sys::window;
 
 /// タイマー管理Box
 #[derive(Debug, Clone)]
 pub struct TimerBox {
     base: BoxBase,
-    #[cfg(target_arch = "wasm32")]
-    performance: Option<Performance>,
 }
 
 impl TimerBox {
     pub fn new() -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let performance = window().and_then(|w| w.performance().ok());
-        
         Self {
             base: BoxBase::new(),
-            #[cfg(target_arch = "wasm32")]
-            performance,
         }
     }
 
@@ -78,8 +71,12 @@ impl TimerBox {
     pub fn now(&self) -> f64 {
         #[cfg(target_arch = "wasm32")]
         {
-            if let Some(perf) = &self.performance {
-                perf.now()
+            if let Some(window) = window() {
+                if let Ok(perf) = window.performance() {
+                    perf.now()
+                } else {
+                    js_sys::Date::now()
+                }
             } else {
                 js_sys::Date::now()
             }

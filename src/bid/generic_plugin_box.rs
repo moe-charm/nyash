@@ -1,3 +1,6 @@
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+mod plugin_impl {
+
 use crate::bid::{BidError, BidResult, LoadedPlugin};
 use crate::bid::tlv::{TlvEncoder, TlvDecoder};
 use crate::bid::types::BidTag;
@@ -130,3 +133,8 @@ impl fmt::Display for GenericPluginBox {
         self.fmt_box(f)
     }
 }
+
+} // mod plugin_impl
+
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+pub use plugin_impl::*;

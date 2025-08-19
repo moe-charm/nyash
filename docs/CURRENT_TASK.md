@@ -223,6 +223,40 @@ cargo build --release -j32 --features wasm-backend
 
 ## 🎯 今後の優先事項（copilot_issues.txt参照）
 
+### 🌐 **WASMブラウザー版ビルド修正**
+- **問題**: projects/nyash-wasmのビルドが失敗（28個のコンパイルエラー）
+- **原因と解決策（3ステップ）**: 
+
+#### **Step 1: プラグイン関連の条件コンパイル修正**
+- **問題箇所**:
+  - `src/interpreter/expressions/calls.rs`: `use PluginBoxV2` が無条件
+  - `src/bid/loader.rs`: `use libloading` が無条件
+- **修正内容**:
+  ```rust
+  #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+  use crate::runtime::plugin_loader_v2::PluginBoxV2;
+  ```
+
+#### **Step 2: web-sysフィーチャー追加**
+- **不足フィーチャー**: 
+  - Performance
+  - MouseEvent, TouchEvent, KeyboardEvent
+  - AudioContext, AudioBuffer, GainNode 等
+- **修正内容**: Cargo.tomlの`[dependencies.web-sys]`に追加
+
+#### **Step 3: wasm-pack buildコマンド修正**
+- **現在**: デフォルトフィーチャー（plugins含む）でビルド
+- **修正**: `wasm-pack build --target web --no-default-features --out-dir projects/nyash-wasm/pkg`
+- **または**: WASM専用フィーチャー作成
+
+- **最終確認**: `wasm-pack build`成功 → `nyash_playground.html`で動作確認
+
+### 🚨 **緊急修正: finiシステムの統一**
+- **問題**: ビルトインBoxにfiniメソッドがない（設計の不統一）
+- **解決**: 全Box型（ビルトイン含む）にfiniメソッド追加
+- **理由**: スコープ離脱時の統一的リソース管理
+- **影響**: StringBox、IntegerBox等16種類のビルトインBox
+
 ### Phase 8.4: AST→MIR Lowering完全実装
 - MIR命令セット設計済み（35命令）
 - Lowering実装開始準備

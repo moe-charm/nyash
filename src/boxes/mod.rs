@@ -60,10 +60,16 @@ pub mod math_box;
 pub mod time_box;
 pub mod debug_box;
 pub mod random_box;
+// These boxes use web APIs that require special handling in WASM
+#[cfg(not(target_arch = "wasm32"))]
 pub mod timer_box;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod canvas_event_box;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod canvas_loop_box;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod audio_box;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod qr_box;
 pub mod sound_box;
 pub mod map_box;
@@ -85,10 +91,15 @@ pub use math_box::{MathBox, FloatBox};
 pub use time_box::{TimeBox, DateTimeBox};
 pub use debug_box::DebugBox;
 pub use random_box::RandomBox;
+#[cfg(not(target_arch = "wasm32"))]
 pub use timer_box::TimerBox;
+#[cfg(not(target_arch = "wasm32"))]
 pub use canvas_event_box::CanvasEventBox;
+#[cfg(not(target_arch = "wasm32"))]
 pub use canvas_loop_box::CanvasLoopBox;
+#[cfg(not(target_arch = "wasm32"))]
 pub use audio_box::AudioBox;
+#[cfg(not(target_arch = "wasm32"))]
 pub use qr_box::QRBox;
 pub use sound_box::SoundBox;
 pub use map_box::MapBox;

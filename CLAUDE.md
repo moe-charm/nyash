@@ -54,11 +54,24 @@ target/x86_64-pc-windows-msvc/release/nyash.exe
 
 ### 🌐 WebAssembly版
 ```bash
-# ブラウザープレイグラウンド
+# WASMビルド方法1: nyash-wasmプロジェクトで直接ビルド
+cd projects/nyash-wasm
+wasm-pack build --target web
+
+# WASMビルド方法2: build.shスクリプト使用（古い方法）
 cd projects/nyash-wasm
 ./build.sh
-# nyash_playground.html をブラウザーで開く
+
+# 開発サーバー起動（ポート8010推奨）
+python3 -m http.server 8010
+
+# ブラウザでアクセス
+# http://localhost:8010/nyash_playground.html
+# http://localhost:8010/enhanced_playground.html
+# http://localhost:8010/canvas_playground.html
 ```
+
+**注意**: WASMビルドでは一部のBox（TimerBox、AudioBox等）は除外されます。
 
 ## 📚 ドキュメント構造
 

@@ -13,6 +13,7 @@ use crate::instance_v2::InstanceBox;
 use crate::channel_box::ChannelBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use crate::interpreter::finalization;
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
 use std::sync::Arc;
 
@@ -489,6 +490,7 @@ impl NyashInterpreter {
         // RangeBox method calls (将来的に追加予定)
         
         // PluginBoxV2 method calls
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
         if let Some(plugin_box) = obj_value.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
             return self.execute_plugin_box_v2_method(plugin_box, method, arguments);
         }
@@ -902,6 +904,7 @@ impl NyashInterpreter {
     }
     
     /// Execute method call on PluginBoxV2
+    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
     fn execute_plugin_box_v2_method(
         &mut self,
         plugin_box: &PluginBoxV2,

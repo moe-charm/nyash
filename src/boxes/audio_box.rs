@@ -66,38 +66,14 @@ use web_sys::{
 #[derive(Debug, Clone)]
 pub struct AudioBox {
     base: BoxBase,
-    #[cfg(target_arch = "wasm32")]
-    context: Option<AudioContext>,
-    #[cfg(target_arch = "wasm32")]
-    gain_node: Option<GainNode>,
-    #[cfg(target_arch = "wasm32")]
-    analyser_node: Option<AnalyserNode>,
     volume: f64,
     is_playing: bool,
 }
 
 impl AudioBox {
     pub fn new() -> Self {
-        #[cfg(target_arch = "wasm32")]
-        let context = AudioContext::new().ok();
-        
-        #[cfg(target_arch = "wasm32")]
-        let (gain_node, analyser_node) = if let Some(ctx) = &context {
-            let gain = ctx.create_gain().ok();
-            let analyser = ctx.create_analyser().ok();
-            (gain, analyser)
-        } else {
-            (None, None)
-        };
-
         Self {
             base: BoxBase::new(),
-            #[cfg(target_arch = "wasm32")]
-            context,
-            #[cfg(target_arch = "wasm32")]
-            gain_node,
-            #[cfg(target_arch = "wasm32")]
-            analyser_node,
             volume: 1.0,
             is_playing: false,
         }

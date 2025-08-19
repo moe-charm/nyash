@@ -1,4 +1,5 @@
 use crate::bid::{BidError, BidResult, NyashHostVtable, NyashPluginInfo, PluginHandle, PLUGIN_ABI_SYMBOL, PLUGIN_INIT_SYMBOL, PLUGIN_INVOKE_SYMBOL, PLUGIN_SHUTDOWN_SYMBOL};
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 use libloading::{Library, Symbol};
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};

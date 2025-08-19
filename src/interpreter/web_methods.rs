@@ -15,6 +15,8 @@
 use super::*;
 #[cfg(target_arch = "wasm32")]
 use crate::boxes::web::{WebDisplayBox, WebConsoleBox, WebCanvasBox};
+#[cfg(target_arch = "wasm32")]
+use crate::boxes::FloatBox;
 
 #[cfg(target_arch = "wasm32")]
 impl NyashInterpreter {
