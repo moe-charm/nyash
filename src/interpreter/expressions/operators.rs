@@ -26,6 +26,11 @@ pub(super) fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Op
     // 🔍 デバッグ出力追加
     eprintln!("🔍 try_add_operation: left={}, right={}", left.type_name(), right.type_name());
     
+    // 🎯 InstanceBoxのunwrap処理
+    let left = unwrap_instance(left);
+    let right = unwrap_instance(right);
+    eprintln!("🔍 After unwrap: left={}, right={}", left.type_name(), right.type_name());
+    
     // IntegerBox + IntegerBox
     if let (Some(left_int), Some(right_int)) = (
         left.as_any().downcast_ref::<IntegerBox>(),
@@ -57,6 +62,10 @@ pub(super) fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Op
 }
 
 pub(super) fn try_sub_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+    // 🎯 InstanceBoxのunwrap処理
+    let left = unwrap_instance(left);
+    let right = unwrap_instance(right);
+    
     // IntegerBox - IntegerBox
     if let (Some(left_int), Some(right_int)) = (
         left.as_any().downcast_ref::<IntegerBox>(),
@@ -68,6 +77,10 @@ pub(super) fn try_sub_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Op
 }
 
 pub(super) fn try_mul_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+    // 🎯 InstanceBoxのunwrap処理
+    let left = unwrap_instance(left);
+    let right = unwrap_instance(right);
+    
     // IntegerBox * IntegerBox
     if let (Some(left_int), Some(right_int)) = (
         left.as_any().downcast_ref::<IntegerBox>(),
@@ -88,6 +101,10 @@ pub(super) fn try_mul_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Op
 }
 
 pub(super) fn try_div_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Result<Box<dyn NyashBox>, String> {
+    // 🎯 InstanceBoxのunwrap処理
+    let left = unwrap_instance(left);
+    let right = unwrap_instance(right);
+    
     // IntegerBox / IntegerBox
     if let (Some(left_int), Some(right_int)) = (
         left.as_any().downcast_ref::<IntegerBox>(),
