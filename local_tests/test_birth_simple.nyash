@@ -1,17 +1,16 @@
-// 🌟 birth()統一システムテスト
-// birth()のみが使用可能で、Box名コンストラクタは禁止されていることを確認
+// 🎯 birth構文シンプルテスト
 
-box LifeBox {
-    init { name, energy }
+box TestBox {
+    init { name, value }
     
-    birth(lifeName) {
-        me.name = lifeName
-        me.energy = 100
-        print("🌟 " + lifeName + " が誕生しました！")
+    birth(test_name) {
+        me.name = test_name
+        me.value = 42
+        print("🌟 TestBox誕生: " + me.name)
     }
     
-    getInfo() {
-        return me.name + " (energy: " + me.energy + ")"
+    greet() {
+        print("こんにちは、" + me.name + "です！値は " + me.value + " です")
     }
 }
 
@@ -20,12 +19,11 @@ static box Main {
     
     main() {
         me.console = new ConsoleBox()
-        me.console.log("🚀 birth()統一システムテスト開始")
+        me.console.log("🧪 birth構文テスト開始")
         
-        // ✅ birth()を使った正しい生成
-        local alice = new LifeBox("Alice")
-        me.console.log("結果: " + alice.getInfo())
+        local test = new TestBox("テスト太郎")
+        test.greet()
         
-        return "birth()統一システム テスト完了"
+        return "テスト完了"
     }
 }

@@ -46,9 +46,10 @@ impl NyashInterpreter {
                             let (box_decl_opt, constructor_opt) = {
                                 let box_decls = self.shared.box_declarations.read().unwrap();
                                 if let Some(box_decl) = box_decls.get(class) {
-                                    // Find the appropriate constructor
-                                    let constructor_name = format!("init/{}", arguments.len());
-                                    let constructor = box_decl.constructors.get(&constructor_name).cloned();
+                                    // Find the birth constructor (unified constructor system)
+                                    let birth_key = format!("birth/{}", arguments.len());
+                                    let constructor = box_decl.constructors.get(&birth_key).cloned();
+                                    
                                     (Some(box_decl.clone()), constructor)
                                 } else {
                                     (None, None)
@@ -1072,13 +1073,10 @@ impl NyashInterpreter {
                 .clone()
         };
             
-        // 親コンストラクタを探す
-        // まず "init/引数数" を試し、なければ "Box名/引数数" を試す
-        let init_key = format!("init/{}", arguments.len());
-        let box_name_key = format!("{}/{}", parent_class, arguments.len());
+        // 親コンストラクタを探す (birth統一システム)
+        let birth_key = format!("birth/{}", arguments.len());
         
-        if let Some(parent_constructor) = parent_decl.constructors.get(&init_key)
-            .or_else(|| parent_decl.constructors.get(&box_name_key)) {
+        if let Some(parent_constructor) = parent_decl.constructors.get(&birth_key) {
             // 現在のthis参照を取得
             // 🌍 革命的this取得：local変数から
             let this_instance = self.resolve_variable("me")

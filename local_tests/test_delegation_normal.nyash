@@ -1,0 +1,44 @@
+// 🎯 通常デリゲーションテスト
+
+box Parent {
+    init { name, power }
+    
+    birth(parentName) {
+        me.name = parentName
+        me.power = 100
+        print("👨‍👩‍👧‍👦 Parent誕生: " + me.name + " (power:" + me.power + ")")
+    }
+    
+    attack() {
+        print("💥 " + me.name + "の攻撃！ダメージ:" + me.power)
+    }
+}
+
+box Child from Parent {
+    init { skill }
+    
+    birth(childName) {
+        from Parent.birth(childName)
+        me.skill = "必殺技" 
+        print("🧒 Child誕生完了！スキル: " + me.skill)
+    }
+    
+    override attack() {
+        print("⚡ " + me.skill + "発動！")
+        from Parent.attack()
+    }
+}
+
+static box Main {
+    init { console }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🧪 通常デリゲーションテスト開始")
+        
+        local child = new Child("太郎")
+        child.attack()
+        
+        return "テスト完了"
+    }
+}
