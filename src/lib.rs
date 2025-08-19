@@ -71,8 +71,8 @@ pub use type_box::{TypeBox, TypeRegistry, MethodSignature};  // 🌟 TypeBox exp
 pub use ast::{ASTNode, BinaryOperator, LiteralValue};
 pub use parser::{NyashParser, ParseError};
 pub use interpreter::{NyashInterpreter, RuntimeError};
-// pub use instance::InstanceBox;  // 旧実装
-pub use instance_v2::InstanceBox;  // 🎯 新実装テスト
+// pub use instance::InstanceBox;  // 旧実装  
+pub use instance_v2::InstanceBox;  // 🎯 新実装テスト（nyash_rustパス使用）
 pub use channel_box::{ChannelBox, MessageBox};
 pub use boxes::math_box::{MathBox, FloatBox, RangeBox};
 pub use boxes::time_box::{TimeBox, DateTimeBox, TimerBox};

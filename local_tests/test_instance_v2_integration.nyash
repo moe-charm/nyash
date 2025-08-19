@@ -1,0 +1,12 @@
+// 🎯 Phase 9.78d: InstanceBox統合動作テスト
+
+// StringBoxがInstanceBoxとして作成されることを確認
+local str
+str = new StringBox("Hello InstanceBox\!")
+print("StringBox created: " + str)
+
+// 基本メソッドテスト
+print("Type: " + str.type_name())
+print("String value: " + str.toString())
+
+print("✅ InstanceBox統合テスト完了")
