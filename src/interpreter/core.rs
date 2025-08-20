@@ -29,6 +29,15 @@ fn debug_log(msg: &str) {
     }
 }
 
+// Conditional debug macro - only outputs if NYASH_DEBUG=1 environment variable is set
+macro_rules! debug_trace {
+    ($($arg:tt)*) => {
+        if std::env::var("NYASH_DEBUG").unwrap_or_default() == "1" {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
 /// 実行時エラー
 #[derive(Error, Debug)]
 pub enum RuntimeError {
