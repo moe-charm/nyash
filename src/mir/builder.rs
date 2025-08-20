@@ -35,6 +35,10 @@ pub struct MirBuilder {
     /// Pending phi functions to be inserted
     #[allow(dead_code)]
     pub(super) pending_phis: Vec<(BasicBlockId, ValueId, String)>,
+
+    /// Origin tracking for simple optimizations (e.g., object.method after new)
+    /// Maps a ValueId to the class name if it was produced by NewBox of that class
+    pub(super) value_origin_newbox: HashMap<ValueId, String>,
 }
 
 impl MirBuilder {
@@ -48,6 +52,7 @@ impl MirBuilder {
             block_gen: BasicBlockIdGenerator::new(),
             variable_map: HashMap::new(),
             pending_phis: Vec::new(),
+            value_origin_newbox: HashMap::new(),
         }
     }
 
@@ -796,9 +801,12 @@ impl MirBuilder {
         // VM will handle optimization for basic types internally
         self.emit_instruction(MirInstruction::NewBox {
             dst,
-            box_type: class,
+            box_type: class.clone(),
             args: arg_values.clone(),
         })?;
+
+        // Record origin for optimization: dst was created by NewBox of class
+        self.value_origin_newbox.insert(dst, class);
 
         // Immediately call birth(...) on the created instance to run constructor semantics.
         // birth typically returns void; we don't capture the result here (dst: None)
@@ -1001,15 +1009,32 @@ impl MirBuilder {
             })?;
             Ok(result_id)
         } else {
-            // Fallback: Emit a BoxCall instruction for regular method calls
-            self.emit_instruction(MirInstruction::BoxCall {
-                dst: Some(result_id),
-                box_val: object_value,
-                method,
-                args: arg_values,
-                effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
-            })?;
-            Ok(result_id)
+            // If the object originates from a NewBox in this function, we can lower to Call as well
+            if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+                let func_name = format!("{}.{}{}", class_name, method, format!("/{}", arg_values.len()));
+                let func_val = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const { dst: func_val, value: ConstValue::String(func_name) })?;
+                let mut call_args = Vec::with_capacity(arg_values.len() + 1);
+                call_args.push(object_value);
+                call_args.extend(arg_values);
+                self.emit_instruction(MirInstruction::Call {
+                    dst: Some(result_id),
+                    func: func_val,
+                    args: call_args,
+                    effects: EffectMask::READ.add(Effect::ReadHeap),
+                })?;
+                Ok(result_id)
+            } else {
+                // Fallback: Emit a BoxCall instruction for regular method calls
+                self.emit_instruction(MirInstruction::BoxCall {
+                    dst: Some(result_id),
+                    box_val: object_value,
+                    method,
+                    args: arg_values,
+                    effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
+                })?;
+                Ok(result_id)
+            }
         }
     }
     

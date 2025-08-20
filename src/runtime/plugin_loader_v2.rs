@@ -11,7 +11,7 @@ mod enabled {
     use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
     use std::collections::HashMap;
     use std::sync::{Arc, RwLock};
-    use std::ffi::c_void;
+    // use std::ffi::c_void; // unused
     use std::any::Any;
     use once_cell::sync::Lazy;
 

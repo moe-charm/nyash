@@ -1,0 +1,11 @@
+- おすすめの次手（どれを先にやる？）
+  - BoxCall→Callの最適化範囲拡大（変数に束縛したnewの直後メソッドもCall化）
+  - プラグインTLVの型拡張（Float/配列/Boxリファレンスの扱いなど）
+  - ビルトインメソッドのMIR関数化（Dispatchの簡素化・最適化に寄与）
+  - E2Eの拡張（throw/catch、pluginメソッドの戻り値ありケース、fini観察）
+
+VMガイドの場所（Windows）
+- `C:\git\nyash-project\nyash\docs\説明書\VM\README.md`
+
+このまま、BoxCall→Callの最適化拡大から着手しますか？それともプラグインのTLV拡張
+（引数/戻り値の型追加）を先にやる？

@@ -817,7 +817,27 @@ impl NyashInterpreter {
         // 🌍 革命的実装：Environment tracking廃止
         
         // Create Arc outside if block so it's available in all scopes
-        let instance_arc = Arc::from(instance_box);
+        let instance_arc: Arc<dyn NyashBox> = Arc::from(instance_box);
+
+        // プラグイン親（extendsに含まれる場合）の生成と保持（__plugin_content）
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+        {
+            use crate::runtime::get_global_loader_v2;
+            use crate::box_trait::SharedNyashBox;
+            let loader = get_global_loader_v2();
+            let loader = loader.read().unwrap();
+            if !final_box_decl.extends.is_empty() {
+                for parent in &final_box_decl.extends {
+                    if let Ok(plugin_box) = loader.create_box(parent, &[]) {
+                        if let Some(inst) = (&*instance_arc).as_any().downcast_ref::<InstanceBox>() {
+                            let shared: SharedNyashBox = Arc::from(plugin_box);
+                            let _ = inst.set_field_legacy("__plugin_content", shared);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
         
         // コンストラクタを呼び出す
         // 🌟 birth()統一システム: "birth/引数数"のみを許可（Box名コンストラクタ無効化）

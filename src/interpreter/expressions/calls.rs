@@ -680,6 +680,27 @@ impl NyashInterpreter {
                     }
                 }
                 
+                // プラグイン親のメソッド呼び出し（__plugin_content）
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                {
+                    if let Some(plugin_shared) = instance.get_field_legacy("__plugin_content") {
+                        let plugin_ref = &*plugin_shared;
+                        if let Some(plugin) = plugin_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                            let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
+                            for arg in arguments {
+                                arg_values.push(self.execute_expression(arg)?);
+                            }
+                            let loader = crate::runtime::get_global_loader_v2();
+                            let loader = loader.read().unwrap();
+                            match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
+                                Ok(Some(result_box)) => return Ok(result_box),
+                                Ok(None) => return Ok(Box::new(VoidBox::new())),
+                                Err(_) => {}
+                            }
+                        }
+                    }
+                }
+                
                 // メソッドが見つからない
                 Err(RuntimeError::InvalidOperation {
                     message: format!("Method '{}' not found in {}", method, instance.class_name),
@@ -710,16 +731,16 @@ impl NyashInterpreter {
         
         // 2. 現在のクラスのデリゲーション関係を検証
         let current_class = &current_instance.class_name;
-        let box_declarations = self.shared.box_declarations.read().unwrap();
-        
-        let current_box_decl = box_declarations.get(current_class)
-            .ok_or(RuntimeError::UndefinedClass { 
-                name: current_class.clone() 
-            })?;
-        
+        // ここでは短期ロックで必要な情報だけ抜き出してすぐ解放する
+        let (has_parent_in_ext, has_parent_in_impl) = {
+            let box_declarations = self.shared.box_declarations.read().unwrap();
+            let current_box_decl = box_declarations.get(current_class)
+                .ok_or(RuntimeError::UndefinedClass { name: current_class.clone() })?;
+            (current_box_decl.extends.contains(&parent.to_string()),
+             current_box_decl.implements.contains(&parent.to_string()))
+        };
         // extendsまたはimplementsでparentが指定されているか確認 (Multi-delegation) 🚀
-        let is_valid_delegation = current_box_decl.extends.contains(&parent.to_string()) || 
-                                 current_box_decl.implements.contains(&parent.to_string());
+        let is_valid_delegation = has_parent_in_ext || has_parent_in_impl;
         
         if !is_valid_delegation {
             return Err(RuntimeError::InvalidOperation {
@@ -730,34 +751,53 @@ impl NyashInterpreter {
         
         // 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定
         use crate::box_trait::is_builtin_box;
-        
-        let mut is_builtin = is_builtin_box(parent);
-        
-        // GUI機能が有効な場合はEguiBoxも追加判定
+        // GUI機能が有効な場合はEguiBoxも追加判定（mut不要の形に）
         #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
-        {
-            if parent == "EguiBox" {
-                is_builtin = true;
-            }
-        }
+        let is_builtin = is_builtin_box(parent) || parent == "EguiBox";
+        #[cfg(not(all(feature = "gui", not(target_arch = "wasm32"))))]
+        let is_builtin = is_builtin_box(parent);
         
         // 🔥 Phase 8.9: Transparency system removed - all delegation must be explicit
         // Removed: if is_builtin && method == parent { ... execute_builtin_constructor_call ... }
         
         if is_builtin {
-            // ビルトインBoxの場合、ロックを解放してからメソッド呼び出し
-            drop(box_declarations);
+            // ビルトインBoxの場合、直接ビルトインメソッドを実行
             return self.execute_builtin_box_method(parent, method, current_instance_val.clone_box(), arguments);
         }
         
+        // プラグイン親（__plugin_content）
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+        {
+            // 親がユーザー定義に見つからない場合は、プラグインとして試行
+            // 現在のインスタンスから __plugin_content を参照
+            if let Some(plugin_shared) = current_instance.get_field_legacy("__plugin_content") {
+                // 引数を評価（ロックは既に解放済みの設計）
+                let plugin_ref = &*plugin_shared;
+                if let Some(plugin) = plugin_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
+                    for arg in arguments {
+                        arg_values.push(self.execute_expression(arg)?);
+                    }
+                    let loader = crate::runtime::get_global_loader_v2();
+                    let loader = loader.read().unwrap();
+                    match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
+                        Ok(Some(result_box)) => return Ok(result_box),
+                        Ok(None) => return Ok(Box::new(VoidBox::new())),
+                        Err(_) => {}
+                    }
+                }
+            }
+        }
+        
         // 3. 親クラスのBox宣言を取得（ユーザー定義Boxの場合）
-        let parent_box_decl = box_declarations.get(parent)
+        let parent_box_decl = {
+            let box_declarations = self.shared.box_declarations.read().unwrap();
+            box_declarations.get(parent)
             .ok_or(RuntimeError::UndefinedClass { 
                 name: parent.to_string() 
             })?
-            .clone();
-        
-        drop(box_declarations); // ロック早期解放
+            .clone()
+        };
         
         // 4. constructorまたはinitまたはpackまたはbirthの場合の特別処理
         if method == "constructor" || method == "init" || method == "pack" || method == "birth" || method == parent {
