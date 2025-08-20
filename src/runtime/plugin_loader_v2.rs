@@ -7,7 +7,7 @@
 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 mod enabled {
     use crate::bid::{BidResult, BidError};
-    use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox};
+    use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox, IntegerBox, BoolBox};
     use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
     use std::collections::HashMap;
     use std::sync::{Arc, RwLock};
@@ -265,9 +265,34 @@ impl PluginBoxV2 {
             let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
             let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
             let type_id = box_conf.type_id;
-            // TLV args: version=1, argc=0
-            let tlv_args: [u8; 4] = [1, 0, 0, 0];
-            let mut out: [u8; 4] = [0; 4];
+            // TLV args: encode provided arguments
+            let tlv_args = {
+                // minimal local encoder (duplicates of encode_tlv_args not accessible here)
+                let mut buf = Vec::with_capacity(4 + args.len() * 12);
+                buf.extend_from_slice(&[1u8, args.len() as u8, 0, 0]);
+                for a in args {
+                    if let Some(i) = a.as_any().downcast_ref::<IntegerBox>() {
+                        buf.push(1);
+                        buf.extend_from_slice(&(i.value as i64).to_le_bytes());
+                    } else if let Some(b) = a.as_any().downcast_ref::<BoolBox>() {
+                        buf.push(3);
+                        buf.push(if b.value {1} else {0});
+                    } else if let Some(s) = a.as_any().downcast_ref::<StringBox>() {
+                        let bytes = s.value.as_bytes();
+                        buf.push(2);
+                        buf.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+                        buf.extend_from_slice(bytes);
+                    } else {
+                        let s = a.to_string_box().value;
+                        let bytes = s.as_bytes();
+                        buf.push(2);
+                        buf.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+                        buf.extend_from_slice(bytes);
+                    }
+                }
+                buf
+            };
+            let mut out = vec![0u8; 1024];
             let mut out_len: usize = out.len();
             let rc = unsafe {
                 (plugin.invoke_fn)(
@@ -283,7 +308,31 @@ impl PluginBoxV2 {
             if rc != 0 {
                 return Err(BidError::InvalidMethod);
             }
-            Ok(None)
+            // minimal decode: tag=1 int, tag=2 string, tag=3 bool, otherwise None
+            let result = if out_len == 0 { None } else {
+                let data = &out[..out_len];
+                match data[0] {
+                    1 if data.len() >= 9 => {
+                        let mut arr = [0u8;8];
+                        arr.copy_from_slice(&data[1..9]);
+                        Some(Box::new(IntegerBox::new(i64::from_le_bytes(arr))) as Box<dyn NyashBox>)
+                    }
+                    2 if data.len() >= 5 => {
+                        let mut larr = [0u8;4];
+                        larr.copy_from_slice(&data[1..5]);
+                        let len = u32::from_le_bytes(larr) as usize;
+                        if data.len() >= 5+len {
+                            let s = String::from_utf8_lossy(&data[5..5+len]).to_string();
+                            Some(Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
+                        } else { None }
+                    }
+                    3 if data.len() >= 2 => {
+                        Some(Box::new(BoolBox::new(data[1] != 0)) as Box<dyn NyashBox>)
+                    }
+                    _ => None,
+                }
+            };
+            Ok(result)
         }
     
     /// Load single plugin
