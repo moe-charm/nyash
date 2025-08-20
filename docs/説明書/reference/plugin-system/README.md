@@ -12,6 +12,11 @@
   - FileBoxプラグインで実証済み
   - プラグイン開発者はここから始める
 
+- **[vm-plugin-integration.md](./vm-plugin-integration.md)** - **VM統合仕様書** 🆕
+  - VMバックエンドとプラグインシステムの統合
+  - BoxRef型による統一アーキテクチャ
+  - パフォーマンス最適化とエラーハンドリング
+
 - **[plugin-tester.md](./plugin-tester.md)** - プラグイン診断ツール
   - プラグインの動作確認とデバッグに使用
   - `tools/plugin-tester`ツールの使用方法

@@ -1,4 +1,4 @@
-# 🎯 現在のタスク (2025-08-20 更新)
+# 🎯 現在のタスク (2025-08-21 更新)
 
 ## 🏆 **LEGENDARY SUCCESS! birth構文革命 + デリゲーション完全勝利！**
 
@@ -355,6 +355,8 @@ cargo build --release -j32 --features wasm-backend
 - **Copilot PR #124**: インタープリタ性能問題完全解決（2500倍以上高速化）
 - **toIntegerメソッド**: StringBoxに実装完了
 - **乗算演算子**: IntegerBox同士の乗算実装完了
+- **substringメソッド**: StringBoxに実装完了
+- **fini複数回呼び出し**: エラーにならないよう修正完了
 
 ### ✅ **解決済み: レガシーコード問題**
 
@@ -363,9 +365,74 @@ cargo build --release -j32 --features wasm-backend
 - ✅ `src/box_trait.rs`のtoInteger()メソッドを修正（box_trait::IntegerBoxを使用）
 - ✅ 乗算演算子が正常動作確認
 - ✅ toInteger()結果の乗算も動作確認
+- ✅ substring(start, end)メソッド実装完了
+- ✅ fini後のアクセスエラー削除（is_finalized()チェック削除）
 
-**新たに発見された問題**:
-- ❌ StringBoxに`substring`メソッドが未実装
-- Kiloエディタで`str.substring(i, i + 1)`使用箇所でエラー
+## 🚀 **次期実装計画: VM Plugin System統合**
 
-最終更新: 2025-08-20 - レガシーコード問題解決、substring未実装エラー発見
+### 🎯 **目標: FileBoxプラグインをVMから呼び出す**
+
+**現在の状況**:
+- ✅ プラグインシステム（BID-FFI v1）は動作中
+- ✅ FileBoxプラグインは完成・テスト済み
+- ❌ VM（MIR）からプラグイン呼び出しが未実装
+
+### 📊 **実装フェーズ**
+
+#### **Phase 1: VM ExternCall実装** (優先度: 最高)
+1. **現在のスタブを実装に置き換え**
+   ```rust
+   // src/backend/vm.rs
+   MirInstruction::ExternCall { iface_name, method_name, args, result } => {
+       // 現在: println!("External call stub")
+       // TODO: plugin_loader_v2との接続
+   }
+   ```
+
+2. **プラグインローダー統合**
+   - VMにplugin_loader_v2への参照を持たせる
+   - ExternCallでプラグインメソッドを呼び出し
+   - 結果をレジスタに格納
+
+#### **Phase 2: 型変換レイヤー実装** (優先度: 高)
+1. **MIRValue ↔ NyashValue変換**
+   - VM内部のMIRValue型
+   - プラグインが期待するNyashValue型
+   - 相互変換関数の実装
+
+2. **メモリ管理**
+   - プラグインから返されたBoxの所有権管理
+   - Arc<Mutex>の適切な処理
+
+#### **Phase 3: FileBoxテストケース作成** (優先度: 中)
+1. **VM経由のFileBoxテスト**
+   ```nyash
+   // VMバックエンドで実行
+   local file = new FileBox("test.txt")
+   file.write("Hello from VM!")
+   local content = file.read()
+   print(content)
+   file.close()
+   ```
+
+2. **パフォーマンス測定**
+   - インタープリター vs VM比較
+   - プラグイン呼び出しオーバーヘッド測定
+
+### 🔧 **技術的課題と解決策**
+
+**課題1: プラグインローダーへのアクセス**
+- 解決: VMインスタンスにplugin_loaderフィールド追加
+
+**課題2: 非同期プラグイン呼び出し**
+- 解決: 現在は同期呼び出しのみ対応、将来的に非同期対応
+
+**課題3: エラーハンドリング**
+- 解決: プラグインエラーをMIRレベルで適切に処理
+
+### 📈 **期待される成果**
+- ✅ VM経由でのプラグイン実行
+- ✅ 高速なファイル操作
+- ✅ 将来的な拡張性（他のプラグインも同様に統合可能）
+
+最終更新: 2025-08-21 - VM Plugin System統合計画追加
