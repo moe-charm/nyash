@@ -126,6 +126,42 @@ impl NyashInterpreter {
                 }
                 Ok(string_box.to_lower())
             }
+            "toInteger" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("toInteger() expects 0 arguments, got {}", arguments.len()),
+                    });
+                }
+                Ok(string_box.to_integer())
+            }
+            "substring" => {
+                if arguments.len() != 2 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("substring() expects 2 arguments, got {}", arguments.len()),
+                    });
+                }
+                let start = self.execute_expression(&arguments[0])?;
+                let end = self.execute_expression(&arguments[1])?;
+                
+                // Convert arguments to integers
+                let start_int = if let Some(int_box) = start.as_any().downcast_ref::<IntegerBox>() {
+                    int_box.value as usize
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: "substring() expects integer arguments".to_string(),
+                    });
+                };
+                
+                let end_int = if let Some(int_box) = end.as_any().downcast_ref::<IntegerBox>() {
+                    int_box.value as usize
+                } else {
+                    return Err(RuntimeError::TypeError {
+                        message: "substring() expects integer arguments".to_string(),
+                    });
+                };
+                
+                Ok(string_box.substring(start_int, end_int))
+            }
             _ => {
                 Err(RuntimeError::InvalidOperation {
                     message: format!("Unknown method '{}' for StringBox", method),

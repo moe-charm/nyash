@@ -5,7 +5,8 @@
 // Removed super::* import - specific imports below
 use crate::ast::{ASTNode, BinaryOperator, UnaryOperator};
 use crate::box_trait::{NyashBox, BoolBox, CompareBox};
-use crate::boxes::{IntegerBox, StringBox, FloatBox};  // 🔧 算術は boxes::* 実体に統一
+use crate::box_trait::{IntegerBox, StringBox};  // 🔧 修正: box_trait::*に統一
+use crate::boxes::FloatBox;  // FloatBoxはboxesのみに存在
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use crate::instance_v2::InstanceBox;
 
@@ -14,11 +15,15 @@ use crate::instance_v2::InstanceBox;
 /// InstanceBoxでラップされている場合、内部のBoxを取得する
 /// シンプルなヘルパー関数で型地獄を回避
 fn unwrap_instance(boxed: &dyn NyashBox) -> &dyn NyashBox {
+    eprintln!("🔍 DEBUG unwrap_instance: input type = {}", boxed.type_name());
     if let Some(instance) = boxed.as_any().downcast_ref::<InstanceBox>() {
+        eprintln!("  ✅ Is InstanceBox");
         if let Some(ref inner) = instance.inner_content {
+            eprintln!("  📦 Inner content type = {}", inner.type_name());
             return inner.as_ref();
         }
     }
+    eprintln!("  ❌ Not InstanceBox, returning as is");
     boxed
 }
 pub(super) fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
@@ -71,11 +76,28 @@ pub(super) fn try_mul_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Op
     let left = unwrap_instance(left);
     let right = unwrap_instance(right);
     
+    // デバッグ出力
+    eprintln!("🔍 DEBUG try_mul: left type = {}, right type = {}", left.type_name(), right.type_name());
+    
     // IntegerBox * IntegerBox
     if let (Some(left_int), Some(right_int)) = (
         left.as_any().downcast_ref::<IntegerBox>(),
         right.as_any().downcast_ref::<IntegerBox>()
     ) {
+        eprintln!("✅ IntegerBox downcast success: {} * {}", left_int.value, right_int.value);
+        return Some(Box::new(IntegerBox::new(left_int.value * right_int.value)));
+    }
+    
+    // box_trait::IntegerBoxも試す
+    eprintln!("❌ box_trait::IntegerBox downcast failed, trying boxes::integer_box::IntegerBox");
+    
+    // boxes::integer_box::IntegerBoxを試す
+    use crate::boxes::integer_box::IntegerBox as BoxesIntegerBox;
+    if let (Some(left_int), Some(right_int)) = (
+        left.as_any().downcast_ref::<BoxesIntegerBox>(),
+        right.as_any().downcast_ref::<BoxesIntegerBox>()
+    ) {
+        eprintln!("✅ boxes::IntegerBox downcast success: {} * {}", left_int.value, right_int.value);
         return Some(Box::new(IntegerBox::new(left_int.value * right_int.value)));
     }
     

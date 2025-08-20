@@ -1,4 +1,4 @@
-# 🎯 現在のタスク (2025-08-19 更新)
+# 🎯 現在のタスク (2025-08-20 更新)
 
 ## 🏆 **LEGENDARY SUCCESS! birth構文革命 + デリゲーション完全勝利！**
 
@@ -167,10 +167,70 @@ fn unwrap_instance(boxed: &dyn NyashBox) -> &dyn NyashBox {
 - 自動変換: `execute_builtin_box_method()` でpack相当処理
 - ユーザー体験: 完全にfrom統一、packを意識不要
 
-## 🚀 次のステップ: 重要問題の修正
+## 🚀 次のステップ: plugin-systemドキュメント整理
 
-### 🎯 **instance_v2の純粋化**
-**現状**: instance_v2にレガシー互換層が残存（段階的削除予定）
+### 🎯 **緊急タスク: plugin-systemドキュメント4世代混在問題**
+
+**🚨 発見された問題**:
+- **4つの異なる仕様書が混在**、実装と乖離
+- **MIR→プラグイン呼び出しがスタブのみ**（VM実装不完全）
+- **API仕様の矛盾**（ドキュメント vs 実装）
+
+**📊 混在している4世代**:
+1. `ffi-abi-specification.md` - 理想的だが未実装
+2. `plugin-system.md` - YAML DSL、使われていない
+3. `nyash-toml-v2-spec.md` - 現実に近い仕様
+4. 実際の実装 - 今動いている形式
+
+### 🎯 **整理方針: 実装ベース統一**
+
+#### **Phase 1: 現実調査** (優先度: 最高)
+1. **実装の完全調査**
+   - `src/runtime/plugin_loader_v2.rs` 仕様確認
+   - 現在のnyash.toml実際の形式確認  
+   - TLV実装詳細確認
+
+2. **正確な仕様書作成**
+   - 現在動いている実装をベースとした仕様書
+   - FileBoxプラグインの実証実装を参考資料化
+
+#### **✅ Phase 2: ドキュメント整理** (優先度: 高) - **完了**
+1. **✅ 古いドキュメント非推奨化完了**
+   - ✅ `ffi-abi-specification.md` → 「理想案、未実装」明記完了
+   - ✅ `plugin-system.md` → 「将来構想」明記完了
+   - ✅ `nyash-toml-v2-spec.md` → 「部分的に古い」明記完了
+
+2. **✅ 実装ベース仕様書作成完了**
+   - ✅ `bid-ffi-v1-actual-specification.md` - 現在の実装仕様（作成済み）
+   - ✅ `builtin-to-plugin-conversion.md` - 変換手順書（作成済み）
+   - ✅ `migration-guide.md` - 古いドキュメントからの移行ガイド（新規作成）
+   - ✅ `plugin-system/README.md` - ナビゲーション用インデックス（新規作成）
+
+#### **Phase 3: MIR接続実装** (優先度: 中)
+1. **ExternCall実装修正**
+   ```rust
+   // backend/vm.rs の修正
+   MirInstruction::ExternCall { ... } => {
+       // 現在: printlnスタブ
+       // 修正後: プラグインシステムと接続
+       let plugin_result = plugin_loader.invoke(
+           iface_name, method_name, args
+       )?;
+   }
+   ```
+
+2. **統合テスト実装**
+   - MIR → VM → プラグイン呼び出しの完全な流れ
+   - パフォーマンス確認
+
+### 🎯 **期待効果**
+- ✅ **ドキュメント**: 実装と完全一致
+- ✅ **開発効率**: 矛盾のない一貫した仕様
+- ✅ **MIR統合**: ExternCall完全実装
+- ✅ **将来対応**: ビルトイン→プラグイン変換手順確立
+
+### 🎯 **instance_v2の純粋化** (優先度: 低)
+**現状**: instance_v2にレガシー互換層が残存（ドキュメント整理後に実施）
 
 1. **クリーンアップ対象**:
    - レガシーfields → fields_ngに完全統一
@@ -268,4 +328,44 @@ cargo build --release -j32 --features wasm-backend
 - レジスタ割り当て最適化
 - インライン展開
 
-最終更新: 2025-08-19 - Phase 9.78e完全勝利！instance.rs削除成功、instance_v2が唯一の実装に
+## 🚨 **緊急修正タスク: CHIP-8/Kiloアプリ実行エラー**
+
+### 🔧 **修正タスク1: 乗算演算子実装**
+
+**問題**: Kiloエディタで `undo_count * 50` が失敗
+```
+❌ Invalid operation: Multiplication not supported between IntegerBox and IntegerBox
+```
+
+**修正箇所**: `src/interpreter/expressions/operators.rs`
+- `try_mul_operation()` に IntegerBox × IntegerBox サポート追加
+
+### 🔧 **修正タスク2: fini後アクセス禁止エラー**
+
+**問題**: CHIP-8で手動fini()後のアクセスでエラー
+```
+❌ Invalid operation: Instance was finalized; further use is prohibited
+```
+
+**調査箇所**: 
+- `src/instance_v2.rs` - is_finalized()チェックが必要な箇所
+- `src/interpreter/expressions/access.rs` - フィールドアクセス時のチェック
+
+### ✅ **解決済み**
+- **Copilot PR #124**: インタープリタ性能問題完全解決（2500倍以上高速化）
+- **toIntegerメソッド**: StringBoxに実装完了
+- **乗算演算子**: IntegerBox同士の乗算実装完了
+
+### ✅ **解決済み: レガシーコード問題**
+
+**StringBox/IntegerBox型重複問題の解決**:
+- ✅ `src/boxes/mod.rs`からレガシーエクスポートを削除
+- ✅ `src/box_trait.rs`のtoInteger()メソッドを修正（box_trait::IntegerBoxを使用）
+- ✅ 乗算演算子が正常動作確認
+- ✅ toInteger()結果の乗算も動作確認
+
+**新たに発見された問題**:
+- ❌ StringBoxに`substring`メソッドが未実装
+- Kiloエディタで`str.substring(i, i + 1)`使用箇所でエラー
+
+最終更新: 2025-08-20 - レガシーコード問題解決、substring未実装エラー発見

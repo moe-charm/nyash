@@ -221,10 +221,15 @@ impl NyashInterpreter {
         
         // オブジェクトを評価（通常のメソッド呼び出し）
         let obj_value = self.execute_expression(object)?;
+        eprintln!("🔍 DEBUG: execute_method_call - object type: {}, method: {}", obj_value.type_name(), method);
         
         // StringBox method calls
+        eprintln!("🔍 DEBUG: Checking StringBox downcast for type: {}", obj_value.type_name());
         if let Some(string_box) = obj_value.as_any().downcast_ref::<StringBox>() {
+            eprintln!("🔍 DEBUG: StringBox detected, calling execute_string_method");
             return self.execute_string_method(string_box, method, arguments);
+        } else {
+            eprintln!("🔍 DEBUG: StringBox downcast failed");
         }
         
         // IntegerBox method calls
@@ -495,7 +500,7 @@ impl NyashInterpreter {
             return self.execute_plugin_box_v2_method(plugin_box, method, arguments);
         }
         
-        // InstanceBox method calls
+        // ⚠️ InstanceBox method calls (最後にチェック、ビルトインBoxの後)
         if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
             // 🔥 Usage prohibition guard - check if instance is finalized
             if instance.is_finalized() {
@@ -690,6 +695,7 @@ impl NyashInterpreter {
                 })
             }
         } else {
+            eprintln!("🔍 DEBUG: Reached non-instance type error for type: {}, method: {}", obj_value.type_name(), method);
             Err(RuntimeError::TypeError {
                 message: format!("Cannot call method '{}' on non-instance type", method),
             })

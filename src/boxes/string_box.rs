@@ -68,7 +68,7 @@ impl StringBox {
     
     /// Find substring and return position (or -1 if not found)
     pub fn find(&self, search: &str) -> Box<dyn NyashBox> {
-        use crate::boxes::IntegerBox;
+        use crate::boxes::integer_box::IntegerBox;
         match self.value.find(search) {
             Some(pos) => Box::new(IntegerBox::new(pos as i64)),
             None => Box::new(IntegerBox::new(-1)),
@@ -97,19 +97,19 @@ impl StringBox {
     
     /// Check if string contains substring
     pub fn contains(&self, search: &str) -> Box<dyn NyashBox> {
-        use crate::boxes::BoolBox;
+        use crate::boxes::bool_box::BoolBox;
         Box::new(BoolBox::new(self.value.contains(search)))
     }
     
     /// Check if string starts with prefix
     pub fn starts_with(&self, prefix: &str) -> Box<dyn NyashBox> {
-        use crate::boxes::BoolBox;
+        use crate::boxes::bool_box::BoolBox;
         Box::new(BoolBox::new(self.value.starts_with(prefix)))
     }
     
     /// Check if string ends with suffix
     pub fn ends_with(&self, suffix: &str) -> Box<dyn NyashBox> {
-        use crate::boxes::BoolBox;
+        use crate::boxes::bool_box::BoolBox;
         Box::new(BoolBox::new(self.value.ends_with(suffix)))
     }
     
@@ -125,6 +125,18 @@ impl StringBox {
         } else {
             // If not an ArrayBox, treat as single element
             Box::new(StringBox::new(array_box.to_string_box().value))
+        }
+    }
+    
+    /// Convert string to integer (parse as i64)
+    pub fn to_integer(&self) -> Box<dyn NyashBox> {
+        use crate::boxes::integer_box::IntegerBox;
+        match self.value.trim().parse::<i64>() {
+            Ok(n) => Box::new(IntegerBox::new(n)),
+            Err(_) => {
+                // If parsing fails, return 0 (JavaScript-like behavior)
+                Box::new(IntegerBox::new(0))
+            }
         }
     }
 }

@@ -84,9 +84,9 @@ pub mod web;
 pub mod egui_box;
 
 // 共通で使う型とトレイトを再エクスポート
-pub use string_box::StringBox;
-pub use integer_box::IntegerBox;
-pub use bool_box::BoolBox;
+// pub use string_box::StringBox; // レガシー実装、box_trait::StringBoxを使用すること
+// pub use integer_box::IntegerBox; // レガシー実装、box_trait::IntegerBoxを使用すること  
+// pub use bool_box::BoolBox; // レガシー実装、box_trait::BoolBoxを使用すること
 pub use math_box::{MathBox, FloatBox};
 pub use time_box::{TimeBox, DateTimeBox};
 pub use debug_box::DebugBox;

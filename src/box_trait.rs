@@ -214,6 +214,17 @@ impl StringBox {
         Box::new(IntegerBox::new(self.value.len() as i64))
     }
     
+    /// Convert string to integer (parse as i64)
+    pub fn to_integer(&self) -> Box<dyn NyashBox> {
+        match self.value.trim().parse::<i64>() {
+            Ok(n) => Box::new(IntegerBox::new(n)),
+            Err(_) => {
+                // If parsing fails, return 0 (JavaScript-like behavior)
+                Box::new(IntegerBox::new(0))
+            }
+        }
+    }
+    
     /// Get character at index
     pub fn get(&self, index: usize) -> Option<Box<dyn NyashBox>> {
         if let Some(ch) = self.value.chars().nth(index) {
@@ -221,6 +232,15 @@ impl StringBox {
         } else {
             None
         }
+    }
+    
+    /// Get substring from start to end (exclusive)
+    pub fn substring(&self, start: usize, end: usize) -> Box<dyn NyashBox> {
+        let chars: Vec<char> = self.value.chars().collect();
+        let actual_end = end.min(chars.len());
+        let actual_start = start.min(actual_end);
+        let substring: String = chars[actual_start..actual_end].iter().collect();
+        Box::new(StringBox::new(substring))
     }
 }
 

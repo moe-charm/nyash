@@ -6,7 +6,7 @@
  */
 
 use super::BoxFactory;
-use crate::box_trait::NyashBox;
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
 use crate::interpreter::RuntimeError;
 use crate::boxes::*;
 use std::collections::HashMap;

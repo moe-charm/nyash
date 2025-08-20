@@ -1,5 +1,15 @@
 # Box FFI/ABI v0 (BID-1 Enhanced Edition)
 
+> ⚠️ **DEPRECATED - 理想案、未実装**
+> 
+> この文書は将来の理想的なプラグインシステム設計案です。
+> **現在の実装とは異なります。**
+> 
+> **実際に動作している仕様については、以下を参照してください：**
+> - [BID-FFI v1 実装仕様書](./bid-ffi-v1-actual-specification.md) - 現在動作中の仕様
+> - [nyash.toml設定例](../../../../nyash.toml) - 実際の設定形式
+> - [plugin_loader_v2.rs](../../../../src/runtime/plugin_loader_v2.rs) - 実装詳細
+
 Purpose
 - Define a language-agnostic ABI to call external libraries as Boxes.
 - Serve as a single source of truth for MIR ExternCall, WASM RuntimeImports, VM stubs, and future language codegens (TS/Python/Rust/LLVM IR).

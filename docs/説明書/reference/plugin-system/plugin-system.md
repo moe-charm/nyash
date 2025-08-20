@@ -1,5 +1,15 @@
 # Nyash Box プラグインシステム設計
 
+> ⚠️ **DEPRECATED - 将来構想**
+> 
+> この文書はYAML DSLを使った将来的なプラグインシステム構想です。
+> **現在の実装とは異なります。**
+> 
+> **実際に動作している仕様については、以下を参照してください：**
+> - [BID-FFI v1 実装仕様書](./bid-ffi-v1-actual-specification.md) - 現在動作中の仕様
+> - [nyash.toml設定例](../../../../nyash.toml) - 実際の設定形式
+> - [plugin_loader_v2.rs](../../../../src/runtime/plugin_loader_v2.rs) - 実装詳細
+
 ## 概要
 
 Nyashの「Everything is Box」哲学を維持しながら、Boxの実装をプラグイン化できるシステム。ビルトインBoxとプラグインBoxを透過的に切り替え可能。
