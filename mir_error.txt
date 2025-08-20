@@ -1,0 +1,57 @@
+🔍 DEBUG: Initializing v2 plugin system
+[FileBox] Plugin initialized
+🔌 v2 plugin system initialized from nyash.toml
+  📦 Registering plugin provider for FileBox
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: docs/examples/visibility_error.nyash 🚀
+🚀 MIR Output for docs/examples/visibility_error.nyash:
+; MIR Module: main
+
+define void @User.birth/2(box<User> %0, ? %1, ? %2) effects(read) {
+bb1:
+    0: ref_set %0.name = %1
+    1: ref_set %0.age = %2
+    2: %3 = const void
+    3: ret %3
+}
+
+define void @main() {
+bb0:
+    0: safepoint
+    1: %0 = const "__me__"
+    2: %1 = new ConsoleBox()
+    3: call %1.birth()
+    4: ref_set %0.console = %1
+    5: %2 = const "__box_type_User"
+    6: %3 = const "__field_User_age"
+    7: %4 = const "__field_User_passwordHash"
+    8: %5 = const "__field_User_name"
+    9: %6 = const void
+   10: %7 = const "Alice"
+   11: %8 = new StringBox(%7)
+   12: call %8.birth(%7)
+   13: %9 = const 20
+   14: %10 = new IntegerBox(%9)
+   15: call %10.birth(%9)
+   16: %11 = new User(%8, %10)
+   17: call %11.birth(%8, %10)
+   18: %12 = const "__me__"
+   19: %13 = ref_get %12.console
+   20: %14 = const "name(public)="
+   21: %15 = new StringBox(%14)
+   22: call %15.birth(%14)
+   23: %16 = ref_get %11.name
+   24: %17 = %15 Add %16
+   25: %18 = call %13.log(%17)
+   26: %19 = const 30
+   27: %20 = new IntegerBox(%19)
+   28: call %20.birth(%19)
+   29: ref_set %11.age = %20
+   30: %21 = const "__me__"
+   31: %22 = ref_get %21.console
+   32: %23 = ref_get %11.age
+   33: %24 = call %22.log(%23)
+   34: ret %24
+}
+
+

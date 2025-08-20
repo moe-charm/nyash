@@ -175,6 +175,8 @@ pub struct VM {
     object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
     /// Class name mapping for objects (for visibility checks)
     object_class: HashMap<ValueId, String>,
+    /// Marks ValueIds that represent internal (me/this) references within the current function
+    object_internal: std::collections::HashSet<ValueId>,
     /// Loop executor for handling phi nodes and loop-specific logic
     loop_executor: LoopExecutor,
     /// Shared runtime for box creation and declarations
@@ -208,6 +210,7 @@ impl VM {
             last_result: None,
             object_fields: HashMap::new(),
             object_class: HashMap::new(),
+            object_internal: std::collections::HashSet::new(),
             loop_executor: LoopExecutor::new(),
             runtime: NyashRuntime::new(),
             scope_tracker: ScopeTracker::new(),
@@ -232,6 +235,7 @@ impl VM {
             last_result: None,
             object_fields: HashMap::new(),
             object_class: HashMap::new(),
+            object_internal: std::collections::HashSet::new(),
             loop_executor: LoopExecutor::new(),
             runtime,
             scope_tracker: ScopeTracker::new(),
@@ -297,6 +301,16 @@ impl VM {
         for (i, param_id) in function.params.iter().enumerate() {
             if let Some(arg) = args.get(i) {
                 self.set_value(*param_id, arg.clone());
+            }
+        }
+
+        // Heuristic: map `me` (first param) to class name parsed from function name (e.g., User.method/N)
+        if let Some(first) = function.params.get(0) {
+            if let Some((class_part, _rest)) = func_name.split_once('.') {
+                // Record class for internal field visibility checks
+                self.object_class.insert(*first, class_part.to_string());
+                // Mark internal reference
+                self.object_internal.insert(*first);
             }
         }
 
@@ -657,6 +671,14 @@ impl VM {
                 // Copy instruction - duplicate the source value
                 let val = self.get_value(*src)?;
                 self.set_value(*dst, val);
+                // Propagate class mapping for references (helps track `me` copies)
+                if let Some(class_name) = self.object_class.get(src).cloned() {
+                    self.object_class.insert(*dst, class_name);
+                }
+                // Propagate internal marker (me/this lineage)
+                if self.object_internal.contains(src) {
+                    self.object_internal.insert(*dst);
+                }
                 Ok(ControlFlow::Continue)
             },
             
@@ -702,13 +724,16 @@ impl VM {
             },
             
             MirInstruction::RefGet { dst, reference, field } => {
-                // Visibility check (if class known and visibility declared)
-                if let Some(class_name) = self.object_class.get(reference) {
-                    if let Ok(decls) = self.runtime.box_declarations.read() {
-                        if let Some(decl) = decls.get(class_name) {
-                            let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
-                            if has_vis && !decl.public_fields.contains(field) {
-                                return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
+                // Visibility check (if class known and visibility declared). Skip for internal refs.
+                let is_internal = self.object_internal.contains(reference);
+                if !is_internal {
+                    if let Some(class_name) = self.object_class.get(reference) {
+                        if let Ok(decls) = self.runtime.box_declarations.read() {
+                            if let Some(decl) = decls.get(class_name) {
+                                let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
+                                if has_vis && !decl.public_fields.contains(field) {
+                                    return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
+                                }
                             }
                         }
                     }
@@ -733,13 +758,16 @@ impl VM {
             MirInstruction::RefSet { reference, field, value } => {
                 // Get the value to set
                 let new_value = self.get_value(*value)?;
-                // Visibility check (treat all RefSet as external writes)
-                if let Some(class_name) = self.object_class.get(reference) {
-                    if let Ok(decls) = self.runtime.box_declarations.read() {
-                        if let Some(decl) = decls.get(class_name) {
-                            let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
-                            if has_vis && !decl.public_fields.contains(field) {
-                                return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
+                // Visibility check (Skip for internal refs; otherwise enforce public)
+                let is_internal = self.object_internal.contains(reference);
+                if !is_internal {
+                    if let Some(class_name) = self.object_class.get(reference) {
+                        if let Ok(decls) = self.runtime.box_declarations.read() {
+                            if let Some(decl) = decls.get(class_name) {
+                                let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
+                                if has_vis && !decl.public_fields.contains(field) {
+                                    return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
+                                }
                             }
                         }
                     }

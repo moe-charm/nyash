@@ -1,0 +1,91 @@
+🔍 DEBUG: Initializing v2 plugin system
+[FileBox] Plugin initialized
+🔌 v2 plugin system initialized from nyash.toml
+  📦 Registering plugin provider for FileBox
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: docs/examples/visibility_ok.nyash 🚀
+🚀 MIR Output for docs/examples/visibility_ok.nyash:
+; MIR Module: main
+
+define void @User.birth/2(box<User> %0, ? %1, ? %2) effects(read) {
+bb1:
+    0: ref_set %0.name = %1
+    1: ref_set %0.age = %2
+    2: %3 = const void
+    3: ret %3
+}
+
+define void @User.setAge/1(box<User> %0, ? %1) effects(read) {
+bb3:
+    0: ref_set %0.age = %1
+    1: %2 = const void
+    2: ret %2
+}
+
+define ? @User.getAge/0(box<User> %0) effects(read) {
+bb2:
+    0: %1 = ref_get %0.age
+    1: ret %1
+}
+
+define void @main() {
+bb0:
+    0: safepoint
+    1: %0 = const "__me__"
+    2: %1 = new ConsoleBox()
+    3: call %1.birth()
+    4: ref_set %0.console = %1
+    5: %2 = const "__box_type_User"
+    6: %3 = const "__field_User_age"
+    7: %4 = const "__field_User_passwordHash"
+    8: %5 = const "__field_User_name"
+    9: %6 = const "__method_User_getAge"
+   10: %7 = const "__method_User_setAge"
+   11: %8 = const void
+   12: %9 = const "Alice"
+   13: %10 = new StringBox(%9)
+   14: call %10.birth(%9)
+   15: %11 = const 20
+   16: %12 = new IntegerBox(%11)
+   17: call %12.birth(%11)
+   18: %13 = new User(%10, %12)
+   19: call %13.birth(%10, %12)
+   20: %14 = const "__me__"
+   21: %15 = ref_get %14.console
+   22: %16 = const "name(public)="
+   23: %17 = new StringBox(%16)
+   24: call %17.birth(%16)
+   25: %18 = ref_get %13.name
+   26: %19 = %17 Add %18
+   27: %20 = call %15.log(%19)
+   28: %21 = const "Bob"
+   29: %22 = new StringBox(%21)
+   30: call %22.birth(%21)
+   31: ref_set %13.name = %22
+   32: %23 = const "__me__"
+   33: %24 = ref_get %23.console
+   34: %25 = const "age(private, internal)="
+   35: %26 = new StringBox(%25)
+   36: call %26.birth(%25)
+   37: %28 = const "User.getAge/0"
+   38: %27 = call %28(%13)
+   39: %29 = %26 Add %27
+   40: %30 = call %24.log(%29)
+   41: %31 = const 21
+   42: %32 = new IntegerBox(%31)
+   43: call %32.birth(%31)
+   44: %33 = const 21
+   45: %34 = new IntegerBox(%33)
+   46: call %34.birth(%33)
+   47: %36 = const "User.setAge/1"
+   48: %35 = call %36(%13, %34)
+   49: %37 = const "__me__"
+   50: %38 = ref_get %37.console
+   51: %39 = const "done"
+   52: %40 = new StringBox(%39)
+   53: call %40.birth(%39)
+   54: %41 = call %38.log(%40)
+   55: ret %41
+}
+
+
