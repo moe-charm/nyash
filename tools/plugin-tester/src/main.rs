@@ -11,7 +11,7 @@ use libloading::{Library, Symbol};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // ============ nyash.toml v2 Types ============
 
@@ -86,6 +86,20 @@ fn tlv_encode_empty() -> Vec<u8> {
     vec![1, 0, 0, 0]  // version=1, argc=0
 }
 
+fn tlv_encode_one_handle(type_id: u32, instance_id: u32) -> Vec<u8> {
+    // BID-1 TLV header: u16 ver=1, u16 argc=1
+    // Entry: tag=8(Handle), rsv=0, size=u16(8), payload=[type_id(4), instance_id(4)]
+    let mut buf = Vec::with_capacity(4 + 4 + 8);
+    buf.extend_from_slice(&1u16.to_le_bytes()); // ver
+    buf.extend_from_slice(&1u16.to_le_bytes()); // argc
+    buf.push(8u8); // tag=Handle
+    buf.push(0u8); // reserved
+    buf.extend_from_slice(&(8u16).to_le_bytes()); // size
+    buf.extend_from_slice(&type_id.to_le_bytes());
+    buf.extend_from_slice(&instance_id.to_le_bytes());
+    buf
+}
+
 fn tlv_decode_u32(data: &[u8]) -> Result<u32, String> {
     if data.len() >= 4 {
         Ok(u32::from_le_bytes([data[0], data[1], data[2], data[3]]))
@@ -137,6 +151,9 @@ fn check_v2(config_path: &PathBuf, library_filter: Option<&str>) {
         }
     };
     
+    // Base dir for relative plugin paths
+    let config_base = config_path.parent().unwrap_or(Path::new("."));
+
     // Check each library
     for (lib_name, lib_def) in &config.libraries {
         if let Some(filter) = library_filter {
@@ -150,10 +167,15 @@ fn check_v2(config_path: &PathBuf, library_filter: Option<&str>) {
         println!("  Box types: {:?}", lib_def.boxes);
         
         // Try to load the plugin
-        let library = match unsafe { Library::new(&lib_def.path) } {
+        let lib_path = if Path::new(&lib_def.path).is_absolute() {
+            PathBuf::from(&lib_def.path)
+        } else {
+            config_base.join(&lib_def.path)
+        };
+        let library = match unsafe { Library::new(&lib_path) } {
             Ok(lib) => lib,
             Err(e) => {
-                eprintln!("  {}: Failed to load: {}", "ERROR".red(), e);
+                eprintln!("  {}: Failed to load: {} (path: {})", "ERROR".red(), e, lib_path.display());
                 continue;
             }
         };
@@ -249,11 +271,17 @@ fn test_lifecycle_v2(config_path: &PathBuf, box_type: &str) {
     
     println!("Type ID: {}", box_config.type_id);
     
+    // Resolve plugin path relative to config dir
+    let config_base = config_path.parent().unwrap_or(Path::new("."));
+    let lib_path = if Path::new(&lib_def.path).is_absolute() {
+        PathBuf::from(&lib_def.path)
+    } else { config_base.join(&lib_def.path) };
+
     // Load plugin
-    let library = match unsafe { Library::new(&lib_def.path) } {
+    let library = match unsafe { Library::new(&lib_path) } {
         Ok(lib) => lib,
         Err(e) => {
-            eprintln!("{}: Failed to load plugin: {}", "ERROR".red(), e);
+            eprintln!("{}: Failed to load plugin: {} (path: {})", "ERROR".red(), e, lib_path.display());
             return;
         }
     };
@@ -301,6 +329,80 @@ fn test_lifecycle_v2(config_path: &PathBuf, box_type: &str) {
         };
         
         println!("{}: Birth successful, instance_id = {}", "✓".green(), instance_id);
+
+        // Optional: If method 'copyFrom' exists, create another instance and pass it as Box arg
+        if box_config.methods.contains_key("copyFrom") {
+            println!("\n{}", "1b. Testing method with Box arg: copyFrom(other) ...".cyan());
+
+            // Birth another instance to serve as argument handle
+            let args2 = tlv_encode_empty();
+            let mut out2 = vec![0u8; 1024];
+            let mut out2_len = out2.len();
+            let rc2 = invoke_fn(
+                box_config.type_id,
+                0,
+                0,
+                args2.as_ptr(),
+                args2.len(),
+                out2.as_mut_ptr(),
+                &mut out2_len,
+            );
+            if rc2 == 0 {
+                if let Ok(other_id) = tlv_decode_u32(&out2[..out2_len]) {
+                    // Encode one Box handle as argument
+                    let arg_buf = tlv_encode_one_handle(box_config.type_id, other_id);
+                    let mut ret = vec![0u8; 1024];
+                    let mut ret_len = ret.len();
+                    let method_id = box_config.methods.get("copyFrom").unwrap().method_id;
+                    let rc_call = invoke_fn(
+                        box_config.type_id,
+                        method_id,
+                        instance_id,
+                        arg_buf.as_ptr(),
+                        arg_buf.len(),
+                        ret.as_mut_ptr(),
+                        &mut ret_len,
+                    );
+                    if rc_call == 0 {
+                        println!("{}: copyFrom call succeeded (arg=BoxRef)", "✓".green());
+                    } else {
+                        eprintln!("{}: copyFrom call failed (rc={})", "WARN".yellow(), rc_call);
+                    }
+                } else {
+                    eprintln!("{}: Failed to decode other instance_id", "WARN".yellow());
+                }
+            } else {
+                eprintln!("{}: Failed to create other instance for copyFrom (rc={})", "WARN".yellow(), rc2);
+            }
+        }
+
+        // Optional: If method 'cloneSelf' exists, call it and verify Handle return
+        if box_config.methods.contains_key("cloneSelf") {
+            println!("\n{}", "1c. Testing method returning Box: cloneSelf() ...".cyan());
+            let args0 = tlv_encode_empty();
+            let mut out = vec![0u8; 1024];
+            let mut out_len = out.len();
+            let method_id = box_config.methods.get("cloneSelf").unwrap().method_id;
+            let rc = invoke_fn(
+                box_config.type_id,
+                method_id,
+                instance_id,
+                args0.as_ptr(),
+                args0.len(),
+                out.as_mut_ptr(),
+                &mut out_len,
+            );
+            if rc == 0 {
+                // Parse TLV header + entry, expecting tag=8 size=8
+                if out_len >= 12 && out[4] == 8 && out[7] as usize == 8 { // simplistic check
+                    println!("{}: cloneSelf returned a Handle (tag=8)", "✓".green());
+                } else {
+                    eprintln!("{}: cloneSelf returned unexpected format", "WARN".yellow());
+                }
+            } else {
+                eprintln!("{}: cloneSelf call failed (rc={})", "WARN".yellow(), rc);
+            }
+        }
         
         // Test fini
         println!("\n{}", "2. Testing fini (destructor)...".cyan());

@@ -1,0 +1,29 @@
+# プラグインBoxの返り値がBoxの例（v2.2）
+
+static box Main {
+    init { console }
+
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("[Example] Plugin BoxRef return demo")
+
+        # FileBoxのインスタンスを生成
+        local f = new FileBox()
+
+        # cloneSelf() は Box を返す（BoxRef/Handle）
+        local g = f.cloneSelf()
+
+        # 以降、通常のBoxと同じように扱える
+        f.open("example.txt", "w")
+        f.write("hello nyash")
+
+        # 引数にBoxを渡す（v2.1）
+        g.copyFrom(f)
+
+        f.close()
+        g.close()
+
+        me.console.log("done")
+    }
+}
+

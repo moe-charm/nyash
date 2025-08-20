@@ -1,37 +1,67 @@
 # 📚 Nyash Documentation
 
-最初に確認:
-- 現在のタスク: docs/CURRENT_TASK.md
-- コア概念の速習: docs/nyash_core_concepts.md
+## 🚀 はじめに
+- **現在のタスク**: [development/current/CURRENT_TASK.md](development/current/CURRENT_TASK.md)
+- **コア概念の速習**: [reference/architecture/nyash_core_concepts.md](reference/architecture/nyash_core_concepts.md)
 
 ---
 
-## 構成（最小3系）
-- 説明書: docs/説明書/README.md
-  - ネイティブビルド: docs/説明書/native-build/README.md
-  - WASM: docs/説明書/wasm/
-  - 入門/言語ガイド/P2P/リファレンス: docs/説明書/*, docs/説明書/reference/*
-- 予定: docs/予定/README.md
-  - CURRENT_TASK, ネイティブ計画、フェーズ課題
-- archive: docs/archive/
-  - 旧資料・議事録・試験メモ
+## 📂 新しいドキュメント構造（2025年8月20日再編成）
+
+### 📖 [reference/](reference/) - 正式な技術仕様
+- **language/** - 言語仕様（構文、型システム、Box仕様）
+- **architecture/** - システムアーキテクチャ（MIR、VM、実行バックエンド）
+- **api/** - ビルトインBoxのAPI仕様
+- **plugin-system/** - プラグインシステム、BID-FFI仕様
+
+### 📚 [guides/](guides/) - 利用者向けガイド
+- **getting-started.md** - はじめに（統一版）
+- **tutorials/** - ステップバイステップのチュートリアル
+- **examples/** - 実践的なサンプルコード
+- **wasm-guide/** - WebAssemblyビルドガイド
+
+### 🔧 [development/](development/) - 開発者向け
+- **current/** - 現在進行中のタスク（CURRENT_TASK.md等）
+- **roadmap/** - 開発計画
+  - phases/ - Phase 8～10の詳細計画
+  - native-plan/ - ネイティブビルド計画
+- **proposals/** - RFC、新機能提案
+
+### 🗄️ [archive/](archive/) - アーカイブ
+- **consultations/** - AI相談記録（gemini/chatgpt/codex）
+- **decisions/** - 過去の設計決定
+- **build-logs/** - ビルドログ、ベンチマーク結果
+- **old-versions/** - 古いドキュメント
 
 ---
 
-## すぐ始める
-- Getting Started: docs/説明書/GETTING_STARTED.md
-- Language Guide: docs/説明書/LANGUAGE_GUIDE.md
-- P2P Guide: docs/説明書/P2P_GUIDE.md
+## 🎯 クイックアクセス
+
+### すぐ始める
+- [Getting Started](guides/getting-started.md)
+- [Language Guide](guides/language-guide.md)
+- [P2P Guide](guides/p2p-guide.md)
+
+### 技術リファレンス
+- [言語リファレンス](reference/language/LANGUAGE_REFERENCE_2025.md)
+- [アーキテクチャ概要](reference/architecture/TECHNICAL_ARCHITECTURE_2025.md)
+- [実行バックエンド](reference/architecture/execution-backends.md)
+- [プラグインシステム](reference/plugin-system/)
+
+### 開発状況
+- [現在のタスク](development/current/CURRENT_TASK.md)
+- [開発ロードマップ](development/roadmap/)
+- [Phase別計画](development/roadmap/phases/)
 
 ---
 
-## 参考資料（Reference）
-- 言語リファレンス: docs/説明書/reference/language-reference.md
-- デリゲーション構文: docs/説明書/reference/override-delegation-syntax.md
-- 設計思想: docs/説明書/reference/design-philosophy.md
-- ビルトイン一覧: docs/説明書/reference/builtin-boxes.md
-- P2P仕様: docs/説明書/reference/p2p_spec.md
-- 詳細仕様フォルダ: docs/説明書/reference/language-specification/
+## 📋 再編成について
+ドキュメントは2025年8月20日に再編成されました。詳細は[REORGANIZATION_REPORT.md](REORGANIZATION_REPORT.md)を参照してください。
+
+旧パスから新パスへの主な変更：
+- `説明書/` → `guides/` と `reference/` に分割
+- `予定/` → `development/roadmap/`
+- 散在していたファイル → 適切なカテゴリに整理
 
 ---
 

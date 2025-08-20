@@ -42,6 +42,8 @@ const METHOD_OPEN: u32 = 1;
 const METHOD_READ: u32 = 2;
 const METHOD_WRITE: u32 = 3;
 const METHOD_CLOSE: u32 = 4;
+const METHOD_COPY_FROM: u32 = 7; // New: copyFrom(other: Handle)
+const METHOD_CLONE_SELF: u32 = 8; // New: cloneSelf() -> Handle
 const METHOD_FINI: u32 = u32::MAX;  // Destructor
 
 // ============ FileBox Instance ============
@@ -204,6 +206,8 @@ pub extern "C" fn nyash_plugin_invoke(
                                                 return NYB_E_PLUGIN_ERROR;
                                             }
                                             log_info(&format!("WRITE {} bytes", n));
+                                            // バッファも更新（copyFromなどのため）
+                                            inst.buffer = Some(data.clone());
                                             return write_tlv_i32(n as i32, _result, _result_len);
                                         }
                                         Err(_) => return NYB_E_PLUGIN_ERROR,
@@ -229,6 +233,63 @@ pub extern "C" fn nyash_plugin_invoke(
                 } else { 
                     return NYB_E_PLUGIN_ERROR; 
                 }
+            }
+            METHOD_COPY_FROM => {
+                // args: TLV { Handle (tag=8, size=8) }
+                let args = std::slice::from_raw_parts(_args, _args_len);
+                match tlv_parse_handle(args) {
+                    Ok((type_id, other_id)) => {
+                        if type_id != _type_id { return NYB_E_INVALID_TYPE; }
+                        if preflight(_result, _result_len, 8) { return NYB_E_SHORT_BUFFER; }
+                        if let Ok(mut map) = INSTANCES.lock() {
+                            // 1) まずsrcからデータを取り出す（不変参照のみ）
+                            let mut data: Vec<u8> = Vec::new();
+                            if let Some(src) = map.get(&other_id) {
+                                let mut read_ok = false;
+                                if let Some(file) = src.file.as_ref() {
+                                    if let Ok(mut f) = file.try_clone() {
+                                        let _ = f.seek(SeekFrom::Start(0));
+                                        if f.read_to_end(&mut data).is_ok() {
+                                            read_ok = true;
+                                        }
+                                    }
+                                }
+                                if !read_ok {
+                                    if let Some(buf) = src.buffer.as_ref() {
+                                        data.extend_from_slice(buf);
+                                        read_ok = true;
+                                    }
+                                }
+                                if !read_ok { return NYB_E_PLUGIN_ERROR; }
+                            } else { return NYB_E_INVALID_HANDLE; }
+
+                            // 2) dstへ書き込み（可変参照）
+                            if let Some(dst) = map.get_mut(&_instance_id) {
+                                if let Some(fdst) = dst.file.as_mut() {
+                                    let _ = fdst.seek(SeekFrom::Start(0));
+                                    if fdst.write_all(&data).is_err() { return NYB_E_PLUGIN_ERROR; }
+                                    let _ = fdst.set_len(data.len() as u64);
+                                    let _ = fdst.flush();
+                                }
+                                dst.buffer = Some(data);
+                                return write_tlv_void(_result, _result_len);
+                            } else { return NYB_E_INVALID_HANDLE; }
+                        } else { return NYB_E_PLUGIN_ERROR; }
+                    }
+                    Err(_) => NYB_E_INVALID_ARGS,
+                }
+            }
+            METHOD_CLONE_SELF => {
+                // Return a new instance (handle) as TLV Handle
+                // Preflight for Handle TLV: header(4) + entry(4) + payload(8)
+                if preflight(_result, _result_len, 16) { return NYB_E_SHORT_BUFFER; }
+                let new_id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut map) = INSTANCES.lock() { map.insert(new_id, FileBoxInstance { file: None, path: String::new(), buffer: None }); }
+                // Build TLV result
+                let mut payload = [0u8;8];
+                payload[0..4].copy_from_slice(&_type_id.to_le_bytes());
+                payload[4..8].copy_from_slice(&new_id.to_le_bytes());
+                return write_tlv_result(&[(8u8, &payload)], _result, _result_len);
             }
             _ => NYB_SUCCESS
         }
@@ -343,6 +404,18 @@ fn tlv_parse_bytes(data: &[u8]) -> Result<Vec<u8>, ()> {
     Ok(data[pos..pos+size].to_vec())
 }
 
+fn tlv_parse_handle(data: &[u8]) -> Result<(u32, u32), ()> {
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    if argc < 1 { return Err(()); }
+    if pos + 4 > data.len() { return Err(()); }
+    let tag = data[pos]; let _res = data[pos+1];
+    let size = u16::from_le_bytes([data[pos+2], data[pos+3]]) as usize; pos += 4;
+    if tag != 8 || size != 8 || pos + size > data.len() { return Err(()); }
+    let mut t = [0u8;4]; t.copy_from_slice(&data[pos..pos+4]);
+    let mut i = [0u8;4]; i.copy_from_slice(&data[pos+4..pos+8]);
+    Ok((u32::from_le_bytes(t), u32::from_le_bytes(i)))
+}
+
 fn log_info(message: &str) {
     eprintln!("[FileBox] {}", message);
 }
@@ -360,4 +433,3 @@ pub extern "C" fn nyash_plugin_shutdown() {
 // ============ Unified Plugin API ============
 // Note: Metadata (Box types, methods) now comes from nyash.toml
 // This plugin provides only the actual processing functions
-

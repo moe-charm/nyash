@@ -949,6 +949,20 @@ impl NyashInterpreter {
         arguments: &[ASTNode],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         eprintln!("🔍 execute_plugin_box_v2_method called: {}.{}", plugin_box.box_type, method);
+        // Route via loader for proper TLV/Handle handling (early return)
+        {
+            let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
+            for arg in arguments {
+                arg_values.push(self.execute_expression(arg)?);
+            }
+            let loader_guard = crate::runtime::plugin_loader_v2::get_global_loader_v2();
+            let loader = loader_guard.read().map_err(|_| RuntimeError::RuntimeFailure { message: "Plugin loader lock poisoned".into() })?;
+            match loader.invoke_instance_method(&plugin_box.box_type, method, plugin_box.instance_id, &arg_values) {
+                Ok(Some(result_box)) => return Ok(result_box),
+                Ok(None) => return Ok(Box::new(VoidBox::new())),
+                Err(e) => return Err(RuntimeError::RuntimeFailure { message: format!("Plugin method {} failed: {:?}", method, e) }),
+            }
+        }
         
         // Get global loader to access configuration
         let loader = crate::runtime::plugin_loader_v2::get_global_loader_v2();
@@ -1084,6 +1098,33 @@ impl NyashInterpreter {
                             let data = &output_buffer[8..8+size];
                             let string = String::from_utf8_lossy(data).to_string();
                             Ok(Box::new(StringBox::new(string)))
+                        }
+                        8 => {
+                            // Handle type - contains type_id and instance_id
+                            if size == 8 {
+                                let type_id = u32::from_le_bytes([
+                                    output_buffer[8], output_buffer[9], 
+                                    output_buffer[10], output_buffer[11]
+                                ]);
+                                let instance_id = u32::from_le_bytes([
+                                    output_buffer[12], output_buffer[13], 
+                                    output_buffer[14], output_buffer[15]
+                                ]);
+                                eprintln!("🔍 Received Handle: type_id={}, instance_id={}", type_id, instance_id);
+                                
+                                // Create a new PluginBoxV2 instance with the returned handle
+                                let new_plugin_box = PluginBoxV2 {
+                                    box_type: plugin_box.box_type.clone(),
+                                    type_id: plugin_box.type_id,
+                                    invoke_fn: plugin_box.invoke_fn,
+                                    instance_id: instance_id,
+                                    fini_method_id: plugin_box.fini_method_id,
+                                };
+                                Ok(Box::new(new_plugin_box))
+                            } else {
+                                eprintln!("🔍 Invalid Handle size: {} (expected 8)", size);
+                                Ok(Box::new(VoidBox::new()))
+                            }
                         }
                         9 => {
                             // Void type

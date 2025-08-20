@@ -485,9 +485,48 @@ docs/
 - 「どこまで進んだか」→ `git log`で確認
 - 「次は何か」→ **ユーザーに明示的に確認**
 
+## 🔌 プラグインBox開発時の重要な注意点
+
+### ⚠️ **TLV Handle処理の正しい実装方法**
+
+プラグインメソッドがBoxRef（Handle）を返す場合、以下の点に注意：
+
+#### 🛑 **よくある間違い**
+```rust
+// ❌ 間違い: 元のplugin_boxの値を流用
+let new_plugin_box = PluginBoxV2 {
+    type_id: plugin_box.type_id,        // ❌ 返り値のtype_idを使うべき
+    fini_method_id: plugin_box.fini_method_id,  // ❌ 返り値の型に対応する値を使うべき
+    ...
+};
+```
+
+#### ✅ **正しい実装**
+```rust
+// ✅ 正解: 返されたHandleから正しい値を取得
+let type_id = /* TLVから取得したtype_id */;
+let instance_id = /* TLVから取得したinstance_id */;
+
+// 返り値のtype_idに対応する正しいfini_method_idを取得
+let fini_method_id = /* configから返り値type_idに対応するfini_method_idを検索 */;
+
+let new_plugin_box = PluginBoxV2 {
+    type_id: type_id,           // ✅ 返り値のtype_id
+    instance_id: instance_id,   // ✅ 返り値のinstance_id
+    fini_method_id: fini_method_id,  // ✅ 返り値の型に対応するfini
+    ...
+};
+```
+
+#### 📝 **重要ポイント**
+1. **type_idの正確性**: cloneSelfが返すHandleは必ずしも元のBoxと同じ型ではない
+2. **fini_method_idの対応**: 各Box型は独自のfini_method_idを持つ可能性がある
+3. **ローダー経由の処理**: 可能な限りplugin_loader_v2経由でメソッドを呼び出す
+
 ---
 
-最終更新: 2025年8月18日 - **🚀 Phase 9.75g-0 BID-FFI基盤完成！**
+最終更新: 2025年8月20日 - **📝 プラグインBox開発の注意点追加**
+- **TLV Handle処理**: type_idとfini_method_idの正しい扱い方を追記
 - **Phase 9.75g-0完了**: BID-FFI Step 1-3実装成功（プラグイン・テスター・設定）
 - **plugin-tester**: 汎用プラグイン診断ツール完成（CLAUDE.mdに追加）
 - **設計原則達成**: Box名非決め打ち・birth/finiライフサイクル・メモリ管理明確化

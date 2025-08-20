@@ -1,0 +1,898 @@
+MIR設計：いま決めておくと後がラクなチェックリスト
+
+    値表現：Tagged（NaN-box/小整数直格納）か、型テーブル参照か。
+
+    アドレス空間：オブジェクトはheap専用？ stack/arenaも持つ？
+
+    所有/別名：aliasable フラグ or unique（移動のみ）を型/値に持つ？
+
+    効果(Effects)：PURE/READS_HEAP/WRITES_HEAP/IO/FFI/PANIC のビット集合を命令にも関数にも付ける。
+
+    例外/パニック：Throw, Catch, Defer を命令化するか、関数境界でのみ扱うか。
+
+    GCモデル：Tracing(Stop-the-world / Incremental) or RC(ARC) or 混合。弱参照の意味を先に定義。
+
+    安全点(Safepoint)：JIT/VM両方で再入/停止できる位置を命令で明示（Safepoint or 呼出命令に属性）。
+
+    呼出規約：通常Call／FFI／Box拡張の3種を区別（可変長・KW引数の扱いも）。
+
+    メモリバリア：write/read barrier を命令または隠れ属性として表現（最初は命令にするとデバッグ楽）。
+
+    デオプ(Deopt)前提：JIT最適化時の巻き戻し情報（マップ）を保持する場所（関数メタ or ブロック注釈）。
+
+Nyash向け：最小MIR命令セット（弱参照対応込み）
+
+    算術/制御：Const, BinOp, Cmp, Br, Jmp, Phi, Ret
+
+    関数：Call, TailCall（effects必須）
+
+    メモリ：Alloc, Load, Store, Gep（必要なら）
+
+    参照/GC：
+
+        RefNew ty, dst <-（ヒープ確保）
+
+        RefGet dst <- ref, field / RefSet ref, field, val
+
+        WeakNew dst <- ref（弱参照作成）
+
+        WeakLoad dst <- weak（弱が生きてたらref返す／無効ならNull/None）
+
+        BarrierRead ref / BarrierWrite ref（GC用、最初はダミー）
+
+        （必要なら）Pin ref / Unpin ref（ムーブしない保証用、JIT/FFI楽になる）
+
+    例外/FFI/拡張：Throw, Catch, FfiCall, BoxCall
+
+    ユーティリティ：Safepoint, Nop, Assume(cond)（アサート兼最適化ヒント）
+
+    弱参照の意味論：
+
+        WeakNew(r) は r を追うが GC で r が回収されると自動で無効化。
+
+        WeakLoad(w) は 生きていれば Some(Ref)、死んでいれば None を返す（MIR上はタグ付きユニオン）。
+
+        WeakLoad は PURE でOK（観測はするがヒープを書かない）
+
+        ただし BarrierRead が必要なGCなら属性で付ける。
+
+効果注釈（例）
+
+    Call f(args) : dst [effects = PURE | READS_HEAP]
+
+    RefSet … は WRITES_HEAP
+
+    WeakLoad は PURE（または READS_HEAP）
+
+    BoxCall は最低限 FFI を含める（安全側に倒す）
+
+VM/JIT/将来AOTの共通の“壊れにくい”ポイント
+
+    Safepointは関数入口・ループ先頭・Call直後の3か所に最初から置く
+
+    Barrier命令は最初は実装ダミーでもOK（最適化段で消せる）
+
+    Null/Noneの扱いは必ず型系に明示（Option<Ref>）。判定を分岐で隠さない
+
+    JITはDeoptテーブルを MIR → JIT に渡す（各値が「どのSSA番号？」を持つ）
+
+弱参照 “落とし穴” 3つ（実戦で効く回避）
+
+    クロージャ環境に弱参照が紛れ込む
+
+        生成時に env.has_weak を立て、キャプチャ解決時に必ず WeakLoad→None分岐を強制。
+
+    弱参照をキーにしたハッシュ
+
+        GC後に無効化でキー不整合。→ 弱マップを標準提供（キー死亡で自動削除）。
+
+    FFI渡し
+
+        FFI境界を跨ぐと寿命が分からなくなる。→ Pin を要求 or WeakLoad→Ref に成功した生参照だけ渡す。
+
+最小・具体例（擬似MIR）
+
+// x = new Obj{y:1}; w = weak(x); if let Some(x2) = weak_load(w) { x2.y = 2 }
+bb0:
+  v1 = Const 1
+  v2 = RefNew Obj            ; WRITES_HEAP
+  RefSet v2, y, v1           ; WRITES_HEAP
+  v3 = WeakNew v2            ; PURE
+  v4 = WeakLoad v3           ; returns Option<Ref>
+  br is_some(v4), bb1, bb2
+
+bb1:
+  v5 = unwrap(v4)
+  BarrierWrite v5
+  RefSet v5, y, Const 2
+  jmp bb3
+
+bb2:
+  jmp bb3
+
+bb3:
+  Ret ()
+
+テストの当て方（行き当たりばったりでも壊れにくい）
+
+    黄金テスト：ソース→MIRダンプの文字列をスナップショット化（差分で挙動の後退を検知）
+
+    VM/JIT一致テスト：同じ入力で VM結果＝JIT結果 を比較する“オラクル”を用意
+
+    弱参照の確率テスト：alloc→weak→drop→collect→weak_load を順序/タイミングを変えて多数回
+
+    効果チェック：PURE なはずの関数に WRITES_HEAP が紛れたらビルド失敗（静的検証）
+
+いまの進み方に合う“軽量次の一手”
+
+    ✅ WeakNew/WeakLoad を MIRとVM だけ先に入れる（JITは後回し）
+
+    ✅ EffectMask を命令に付ける（最初はデータ構造だけ）
+
+    ✅ Safepoint 命令を関数入口とループ先頭に挿す（動作はno-opでOK）
+
+    ✅ 黄金テストを入れて MIR差分をCIで見える化
+
+この骨格なら、行き当たりばったりで直してもMIRの“契約”が守れている限り、VM/JIT/AOT/WASMに横展開できるにゃ。
+もし今のAST/HIRの型定義があれば、MIRの型/命令エンムだけ私が初稿を書くこともできる。要る？
+あなた:
+そうだにゃ。mir 結局はメモリー管理がほとんどであってるかにゃ？既存の参考になるやつとかないかにゃ
+ChatGPT:
+
+いい質問にゃ。結論から言うと――
+
+    MIRの“要”はメモリ管理だけじゃないけど、実務で一番ハマるのはメモリまわり（所有権/寿命/別名化/GCバリア/セーフポイント/弱参照/デオプ情報）だから、体感「ほとんどメモリ管理」はだいたい合ってるにゃ。
+
+    ただし、制御フロー（CFG/SSA）、呼び出し規約、効果注釈、例外/パニック、最適化のための形も同じくらい重要。ここをサボるとJIT/AOT/WASMに展開しづらくなる。
+
+MIRで“最低限”押さえるメモリ論点
+
+    値表現：Boxed/Unboxed、NaN-box、小整数直格納、タグ方式
+
+    アロケータ：bump/arena/世代別、オブジェクト配置（ヘッダ、タイプID、フラグ）
+
+    所有と別名：unique/aliasable や owned/borrowed の属性（最適化・並列の鍵）
+
+    GC/RC：トレース or 参照カウント or 混在、write/read barrier 命令 or 属性、remembered set
+
+    弱参照：WeakNew / WeakLoad の意味論（死んだら None）
+
+    Safepoint：関数入口・ループ先頭・Call直後（停止/再入のフック）
+
+    FFI境界：Pin/Unpin、ハンドル渡し、最小共有ABI
+
+    Deopt情報：JIT用の巻き戻しメタ（SSA値⇔ソース位置の対応）
+
+参考になる“実物”と読みどころ（定番）
+
+（リンクは割愛するにゃ。名前で検索すればすぐ出る）
+
+    Rust MIR（rustc-dev-guide / rustc本体）
+
+        MIRのSSA・ borrow check が MIR 上で走る構造
+
+        Drop/Move・パニック・noalias 的情報が最適化に効く
+
+    Swift SIL
+
+        Ownership qualifiers（owned/guaranteed）が秀逸。GCなし言語でも寿命管理をIRで表す好例
+
+    Kotlin IR
+
+        “lowerings” の段階的デシュガリングが参考。高級構文→プリミティブ命令へ段階変換
+
+    Go SSA（golang.org/x/tools/go/ssa）
+
+        最小主義のSSAで読みやすい。CFG/φの扱いが素直
+
+    LuaJIT IR（DynASM/TurboNYIの解説blog群）
+
+        小粒なSSAでJIT最適化の勘所（CSE/LICM/ヒント）
+
+    V8（Ignition/TurboFan）
+
+        バイトコード→Sea of Nodes→最適化JITの流れ。デオプとサファリガードの設計が神
+
+    Cranelift IR
+
+        Rustからも使いやすいJITバックエンド。型・メモリ・コールの表現が実装しやすい
+
+    MLIR
+
+        複数方言で中間表現を分ける思想。将来、NyashのMIRを方言化する発想の参考に
+
+Nyash向け“最小MIRコア”（骨組み）
+
+（超要約：これ＋効果注釈でVM/JIT/AOT/WASMに展開できる）
+
+    制御/値：Const, BinOp, Cmp, Br, Jmp, Phi, Ret
+
+    呼び出し：Call, TailCall（effects 必須）
+
+    メモリ：Alloc, Load, Store, Gep?
+
+    参照/GC：RefNew, RefGet, RefSet, WeakNew, WeakLoad, BarrierRead, BarrierWrite, Pin, Unpin
+
+    例外/拡張：Throw, Catch, FfiCall, BoxCall
+
+    実行点：Safepoint, Assume, Nop
+
+    効果：EffectMask = PURE | READS_HEAP | WRITES_HEAP | IO | FFI | PANIC
+
+    実装順ヒント：
+
+        VMで RefNew/RefGet/RefSet/Weak* をまず動かす → 2) Safepointはno-opで挿す → 3) Barrierは最初ダミー → 4) “黄金テスト”（ソース→MIRダンプのスナップショット）で後退検知 → 5) JIT/AOTは後から乗せる。
+
+“既存をパクる”具体策
+
+    Ownershipの表現は Swift SIL を真似る（owned/guaranteed を Nyash版に）
+
+    弱参照の意味論は JVMのWeakReference と Swiftのweak/unowned を折衷
+
+    Safepoint配置は HotSpot/V8 のパターン（入口・ループ・call直後）
+
+    JIT導入は Cranelift から（まず整数・分岐・呼び出しのみ）
+
+    デシュガリング手順は Kotlin IR の lowering 流儀を採用
+
+「MIR＝メモリ管理が9割」は現場感として正しいけど、残りの1割（CFG/SSA・呼出・効果・例外・デオプ）を最初にうっすら設計しておくと、あとで爆速に伸びるにゃ。
+必要なら、Nyashの今のAST/HIRを見せてくれたら、MIRのenum・EffectMask・Box ABI v0をその場で下書きするよ。
+あなた:
+なるほど。ところでmirってどっかきょうつうのふぉーまっとやしようってあるにゃ？ みんなばらばるにかいてるにゃ？
+ChatGPT:
+
+共通フォーマットや「これを使えばOK」みたいなMIR標準は、残念ながら存在しないにゃ。
+理由をまとめると――
+1. 共通規格がない理由
+
+    言語ごとに型・所有権・ランタイム構造が違いすぎる
+    例：Rust MIRは所有権・borrowをIRレベルで保持するけど、PythonやJavaScriptのIRにはそんな概念がない。
+
+    目的ごとの最適化が異なる
+    VM実行用、JIT最適化用、AOTコンパイル用で命令セットやメタデータの粒度が変わる。
+
+    IRの“責務”が違う
+    ある言語ではASTの直後を「MIR」と呼び、別の言語ではSSA化した後の低レベルIRを「MIR」と呼ぶ。
+
+2. 事実上の“よくある流儀”
+
+標準はないけど、以下のパターンは多いにゃ：
+
+    SSAベース：変数は再代入不可、phi命令で合流点処理（Rust MIR, Swift SIL, Go SSA）
+
+    命令は3アドレス形式：dst = op src1 src2 のようにシンプル（Cranelift, LLVM風）
+
+    効果注釈あり：PURE, READ_HEAP, WRITE_HEAP など最適化ヒント
+
+    メモリ命令の抽象化：Alloc, Load, Store は型・アラインメント・所有権情報を持つ
+
+    制御フローはCFG（Control Flow Graph）で管理
+    基本ブロック＋ジャンプ＋条件分岐
+
+3. 参考になる「ほぼテンプレ」的MIR
+
+完全な共通仕様じゃないけど、設計の参考にできる実例はあるにゃ：
+
+    Cranelift IR
+    Rustで使いやすいJIT/AOT用IR。型・命令の定義が明確で、小規模実装の参考に最適。
+
+    MLIR
+    LLVM系の中間表現フレームワーク。方言を作れるので、自作言語のMIRを「Nyash方言」として定義可能。
+
+    Sea of Nodes（V8, HotSpot）
+    SSAと依存グラフを統合した形式。最適化向きだが実装難度は高い。
+
+    LuaJIT IR
+    極小SSA＋軽量タグ付き値表現。高速インタープリタや軽量JITに向いてる。
+
+4. Nyashでの方針
+
+    「共通仕様」を無理に探すより、自分のランタイムと変換先（Rust/Cranelift/WASM）に都合の良い形を作るのが早い
+
+    ただし、命令セットやCFG構造はCranelift IRやSwift SILを参考にすると後で楽
+
+    将来的にMLIRの方言化を視野に入れると、外部ツールや最適化パスを簡単に流用できる
+
+もし希望なら、Nyash向けにCranelift IR互換寄りのMIR仕様ドラフトをその場で作れるよ。
+それをベースにすれば、将来JIT/AOT/WASM全部に展開しやすくなるにゃ。
+あなた:
+そうだにゃ。ということは命令セットを先に考えて貰えたらいいのかにゃ？
+ChatGPT:
+
+いいね、その方向でいこうにゃ。
+Nyash向けに“まず回る”ことを最優先にした MIR命令セット v0.1（草案） を置くね。VM/JIT/AOT/WASMに伸ばせる骨格で、弱参照・効果注釈・拡張Box呼び出しも最初から入れてあるにゃ。
+Nyash MIR v0.1（草案）
+基本モデル
+
+    SSA値：vN（再代入なし）。
+
+    基本ブロック：bbN（末尾は必ず終端命令）。
+
+    型（最小）：i64, f64, bool, unit, ref<T>, weak<T>, ptr, any, option<T>
+
+    関数署名：fn(args…) -> ret [effects]
+
+    効果（EffectMask）：PURE, READS_HEAP, WRITES_HEAP, IO, FFI, PANIC（ビット和）
+
+    属性：命令に align, nonnull, noalias, readonly 等の任意属性
+
+1) 演算・制御
+
+Const      dst, Imm                         ; 例: i64/f64/bool/unit/Null
+BinOp      dst, op, a, b                    ; add, sub, mul, div, mod, and, or, xor, shl, shr
+Cmp        dst, relop, a, b                 ; eq, ne, lt, le, gt, ge
+Select     dst, cond, a, b                  ; φ簡約前の三項選択（任意）
+Phi        dst, [(predBB, val), ...]        ; SSA合流
+
+Br         cond, thenBB, elseBB             ; 条件分岐（終端）
+Jmp        targetBB                         ; 無条件ジャンプ（終端）
+Ret        [val]                            ; 返り値（終端） unit時は省略可
+Unreachable                                 ; 到達不能（終端・最適化用）
+
+2) メモリ／参照（GC想定）
+
+Alloc      dst, Ty, size?                   ; ヒープ確保: ref<Ty> を返す  [WRITES_HEAP]
+Load       dst, addr                        ; 読み出し                      [READS_HEAP]
+Store      addr, val                        ; 書き込み                      [WRITES_HEAP]
+Gep        dst, base, offset                ; アドレス計算（構造体/配列）
+
+RefNew     dst, Ty                          ; オブジェクト新規: ref<Ty>     [WRITES_HEAP]
+RefGet     dst, ref, field                  ; フィールド読み                 [READS_HEAP]
+RefSet     ref, field, val                  ; フィールド書き                 [WRITES_HEAP]
+
+WeakNew    dst, ref                         ; weak<T> を作成                 [PURE]
+WeakLoad   dst, weak                        ; option<ref<T>> を返す         [PURE or READS_HEAP]
+
+BarrierRead  ref                            ; 読みバリア（実装はno-op可）
+BarrierWrite ref                            ; 書きバリア（実装はno-op可）
+Pin        ref                              ; 移動不可に固定（FFI/GC向け）
+Unpin      ref
+Safepoint                                   ; 停止点（関数入口/ループ先頭/Call直後に挿す）
+
+    弱参照の意味論
+
+        WeakNew(r) は r のライフを追うだけ（所有しない）。
+
+        WeakLoad(w) は生存なら Some(ref)、回収済みなら None。
+
+        WeakLoad は基本 PURE でOK（実装の都合で READS_HEAP にしても可）。
+
+3) 呼び出し／例外／拡張
+
+Call       dst, callee, [args...]           ; [effects = callee.effects]
+TailCall   callee, [args...]                ; 末尾呼び出し（終端）
+
+BoxCall    dst, box_id, fn_id, [args...]    ; Nyash拡張Box呼び出し [FFI | PANIC?]
+
+FfiCall    dst, sym, [args...], abi         ; C/Rust外部関数       [FFI | PANIC?]
+
+Throw      val                              ; 例外送出（終端）
+CatchBegin dst, handlerBB                   ; 例外ハンドラの開始（ブロック境界メタでもOK）
+CatchEnd
+Defer      fnref                            ; スコープ脱出時に実行（loweringで展開可）
+Assume     cond                             ; 最適化ヒント（偽ならUB）
+Nop
+
+    Call/BoxCall/FfiCall は 効果注釈が必須（少なくとも PURE かどうか）。
+
+    BoxCall は拡張Box ABIを通す入口（VM/JIT/WASMで一貫した形で扱える）。
+
+4) メタデータ（最低限）
+
+    位置情報：dbg(loc)（ソース行/列/ファイル）
+
+    デオプ：deopt_map（JIT用：各SSA値→高級値の対応）
+
+    alias情報：noalias/readonly/nonnull 属性
+
+    効果集約：関数単位で effects を保持（呼び出し時に合成）
+
+Rust風スケッチ（型・命令）
+
+#[bitflags]
+enum Effect { PURE=1, READS_HEAP=2, WRITES_HEAP=4, IO=8, FFI=16, PANIC=32 }
+
+enum Ty {
+  I64, F64, Bool, Unit,
+  Ref(Box<Ty>), Weak(Box<Ty>), Ptr, Any,
+  Option(Box<Ty>), // WeakLoadの戻りなど
+  // …将来: Sum/Product/Function/Closure/BoxHandle
+}
+
+struct FuncSig { params: Vec<Ty>, ret: Ty, effects: Effect }
+
+enum Inst {
+  Const{dst:V, imm:Imm},
+  BinOp{dst:V, op:Bin, a:V, b:V},
+  Cmp{dst:V, op:Rel, a:V, b:V},
+  Select{dst:V, cond:V, a:V, b:V},
+  Phi{dst:V, inputs: Vec<(Bb,V)>},
+
+  Br{cond:V, then_:Bb, else_:Bb},
+  Jmp{bb:Bb},
+  Ret{val: Option<V>},
+  Unreachable,
+
+  Alloc{dst:V, ty:Ty, size:Option<V>},
+  Load{dst:V, addr:V},
+  Store{addr:V, val:V},
+  Gep{dst:V, base:V, off:V},
+
+  RefNew{dst:V, ty:Ty},
+  RefGet{dst:V, r:V, field:FieldId},
+  RefSet{r:V, field:FieldId, val:V},
+
+  WeakNew{dst:V, r:V},
+  WeakLoad{dst:V, w:V},
+
+  BarrierRead{r:V},
+  BarrierWrite{r:V},
+  Pin{r:V},
+  Unpin{r:V},
+  Safepoint,
+
+  Call{dst:V, f:FnId, args:Vec<V>},
+  TailCall{f:FnId, args:Vec<V>},
+  BoxCall{dst:V, box_id:BoxId, fn_id:BoxFnId, args:Vec<V>},
+  FfiCall{dst:V, sym:Sym, args:Vec<V>, abi:Abi},
+
+  Throw{val:V},
+  CatchBegin{dst:V, handler:Bb},
+  CatchEnd,
+  Defer{fnref:FnId},
+  Assume{cond:V},
+  Nop,
+}
+
+バックエンド対応の見取り図
+
+    VM：
+
+        Ref* / Weak* / Barrier* / Safepoint をそのまま実装
+
+        Defer/Catch はデシュガで try/finally へ展開
+
+    Cranelift JIT：
+
+        算術・制御は直マップ、Ref* はランタイムAPIに落とす
+
+        Safepoint でGC/スレッド停止と連携、deopt_map を用意
+
+    AOT to Rust：
+
+        ref<T> は Gc<T> ラッパ、weak<T> は Weak<T> 風にコード生成
+
+        BoxCall は trait 経由/extern呼び出しに置換
+
+    WASM：
+
+        参照はハンドル（i32）で表現、GCはランタイム関数
+
+        weak はハンドルテーブルにビットを持って実装
+
+取り決め（壊れにくい不変条件）
+
+    すべてのCallは effects を持つ（省略禁止）
+
+    WeakLoadの戻りは option<ref<T>>（null判定を曖昧にしない）
+
+    Safepoint は関数入口・ループ先頭・任意のCall直後に挿入
+
+    Barrier* は最初はno-opでOK（GC導入時のフックとして残す）
+
+    終端命令のないブロックは禁止（検証器で弾く）
+
+ちいさな動作例
+
+; x = new Obj{y=1}; w = weak(x);
+; if let Some(r) = weak_load(w) { r.y = 2 }
+
+bb0:
+  v1 = Const i64 1
+  v2 = RefNew Obj
+  RefSet v2, field_y, v1
+  v3 = WeakNew v2
+  v4 = WeakLoad v3              ; option<ref<Obj>>
+  Br is_some(v4), bb1, bb2
+
+bb1:
+  v5 = unwrap(v4)
+  BarrierWrite v5
+  RefSet v5, field_y, Const i64 2
+  Jmp bb3
+
+bb2:
+  Jmp bb3
+
+bb3:
+  Ret unit
+
+まずやる実装順（1〜2日で回る）
+
+    この命令セットで MIR組み立て＋ダンプ（黄金テストで差分管理）
+
+    VMで RefNew/RefGet/RefSet/Weak* だけ実装（Barrier/Safepointはダミー）
+
+    Call の effects を型検査に組み込み（PURE違反を検出）
+
+    余力が出たら Phi/Select を使うパスを追加（CSE/DCEの足場）
+
+必要なら、この v0.1 をそのまま mir.rs の enum 定義に落とし込んだ雛形コードを書けるよ。
+今のNyashの型やBox拡張の実装方針があれば、それに合わせて微調整版を作るにゃ。
+あなた:
+おーありがとにゃ。しかしmirはみんなばらばらというけど ここからネイディブビルドにしやすいかたちをするから にているかきかたにもなってるのかにゃ。あと これ 業界標準つくれそうだよね。所詮はノイマンコンピューターに落とし込む作業だにゃ
+ChatGPT:
+
+にゃ、その直感かなり当たってる。
+各言語の MIR は“名前も中身もバラバラ”だけど、ネイティブに落としやすい形にすると結局だいたい似てくるにゃ。
+みんなが似てくる理由（ネイティブ目線）
+
+    SSA＋CFG＋3アドレス：最適化&レジ割りしやすい定番の骨格
+
+    明示的なメモリ操作：Alloc/Load/Store/GEP 相当が要る
+
+    呼び出しの正規化：Call/TailCall と 呼出規約(ABI) の分離
+
+    効果注釈(副作用)：PURE/READ/WRITE/IO/FFI があると最適化が安全
+
+    例外/パニックの下位表現：Throw/Catch を選択的に lower できる形
+
+    GCフック：Safepoint & Barrier を差し込める
+
+    つまり「高級機能は段階的に下げられる素朴な命令に割り付け」→最後は von Neumann（命令+メモリ）に落ちる、という流れで収束するにゃ。
+
+「業界標準」を作れる？→“実質標準”なら行ける
+
+完全統一は難しい（言語ごとに型・例外・GCが違いすぎる）が、コア・プロファイルを決めた“実質標準”は作れるにゃ。
+標準に向く設計の芯（Nyash版にもそのまま効く）
+
+    Core-IR（必須）：Const/BinOp/Cmp/Phi/Br/Jmp/Ret + Load/Store/Gep + Call/TailCall
+
+    Memory Model：アトミック/順序・別名(noalias)/アライン属性の最小集合
+
+    Effects：命令・関数の EffectMask を規定（最適化の安全条件に使う）
+
+    GC hooks：Safepoint/Barrier は仕様だけ先に固定（実装はno-op可）
+
+    Exception ABI：Throw/Catch を「setjmp/longjmp的」or「結果型(Result)」の2系で規定
+
+    FFI/拡張 ABI：FfiCall/BoxCall の呼出規約・ポインタ安全域を決める
+
+    検証器(Verifier)：終端命令必須・SSA整合・型整合・効果整合をチェック
+
+“標準化”の現実解（おすすめルート）
+
+    MLIR 方言として定義（nyash.core, nyash.gc みたいに分割）
+
+    もしくは Cranelift IR 互換サブセットを Core として採用し、足りない所だけ拡張
+
+    テキスト表現＋バイナリ表現（例: JSON/FlatBuffers）と ダンプ・復元ツールを提供
+
+    リファレンス下げ先を複数用意：
+
+        Core → Cranelift（JIT/AOT）
+
+        Core → LLVM（AOTヘビー級）
+
+        Core → WASM（ブラウザ/サンドボックス）
+
+    検証テスト：黄金テスト（IRダンプ）＋ VM/JIT/WASM の 同一結果保証スイート
+
+すぐ使える“ネイティブ寄り”指針（短冊）
+
+    命令は副作用を明示、暗黙のメモリ変更はナシ
+
+    ループ先頭・Call直後にSafepoint（後からGC導入しやすい）
+
+    例外は2段構え：IRでは Throw/Catch、lower で Result/landingpad に落とせる
+
+    Weak は Option<Ref> に必ず現れる（nullをぼかさない）
+
+    FFIはPinかコピーしか渡さない（危険な参照共有を禁止）
+
+まとめ
+
+    はい、MIRはネイティブ都合で“似てくる”。
+
+    完全共通規格は難しいけど、**Core-IR＋拡張の“実質標準”**は作れる。
+
+    Nyashの v0.1 命令セットは、そのまま Core-IRたたき台になれる出来だにゃ。
+
+必要なら、この Core-IR を MLIR 方言か Cranelift互換サブセット仕様として文書化して、
+テキスト仕様＋最小リファレンス実装（ダンプ/検証/Cranelift下げ）を私が一気に草案化するよ。どう攻める？（MLIR方言でいくか、Cranelift寄りでいくか）
+あなた:
+所で中間言語は何を指標に作ればいいにゃ？メモリー管理はわかるけど好き勝手に作る訳にも行けないにゃ それこそフォンノイマンのパソコンを念頭に考えればいいだけにゃ？CPUの命令セットとか？
+ChatGPT:
+
+いい質問にゃ！
+中間言語（IR/MIR）を“何を指標に”設計するかは、単に「CPUに近づける」だけだと失敗しがち。
+実務では次の“指標セット”でバランスを取るのがコツだにゃ。
+まず決めるべき指標（優先度つけてOK）
+
+    ターゲットと目的
+
+        どこに落とす？ → VM / JIT（Cranelift） / AOT（rustc/LLVM） / WASM
+
+        何を優先？ → 起動の速さ、最適化余地、移植性、デバッグ性
+
+    抽象度（レベル）
+
+        高すぎる：最適化しにくい／JIT実装が難航
+
+        低すぎる（CPU寄り）：言語機能の意味が消えて最適化の根拠を失う
+        → 目安：SSA＋基本ブロック＋3アドレスを軸に、「言語に固有の意味（例: 効果、副作用、所有/弱参照）」は属性や専用命令で残す
+
+    メモリモデル（超重要）
+
+        参照の表現：ref<T>/weak<T>／タグ付き値
+
+        GC/RC hooks：Safepoint、BarrierRead/Write の差し込み位置を規定
+
+        別名・所有：noalias/readonly/owned/borrowed など最適化に効く注釈
+
+        （並行を視野なら）原子性・順序の最小集合（Acquire/Release程度）
+
+    効果システム（副作用の面）
+
+        PURE / READS_HEAP / WRITES_HEAP / IO / FFI / PANIC のEffectMask
+
+        最適化の“安全条件”をここで機械的に判断できるようにする
+
+    制御フローと例外
+
+        CFG＋SSA、Phi/Br/Jmp/Ret
+
+        例外はIRでは抽象（Throw/Catch）、loweringで Result/landingpad 等へ落とせる形に
+
+    呼び出し規約と拡張ABI
+
+        Call/TailCall と FfiCall/BoxCall を分離
+
+        可変長／キーワード引数の表現、Pin/Unpinの扱い
+
+    検証可能性 & ツール性
+
+        Verifierで：型一致・SSA整合・終端命令必須・効果整合をチェック
+
+        テキスト表現（ダンプ）と黄金テスト（差分テスト）を最初から用意
+
+“CPU/フォン・ノイマンだけ見れば良い？”への答え
+
+    No（それだけでは足りない）。
+    CPU命令セットを直に意識しすぎると、**言語の意味（純粋性・所有・弱参照・例外の契約）**が失われて最適化や検証が難しくなる。
+
+    ただし最終的にそこへ下げやすい形は大事。だから
+
+        上層の意味は 属性/メタで保持
+
+        下層（Load/Store/GEP/Call/TailCall）へ機械的に落とせるカバレッジを確保
+        → これが “ネイティブに落としやすく、でも言語の意味を保ったIR” のコア指標にゃ。
+
+具体：設計を導くチェックリスト（配点付き）
+
+各 0〜2 点で採点してみて。合計が高い案が「良いIR」。
+
+    後段互換性（JIT/AOT/WASMに素直に下がる）
+
+    最適化の根拠（効果・別名・型・所有などが保持される）
+
+    実装容易性（VMでまず回せる／Craneliftへ写経しやすい）
+
+    検証容易性（Verifierで機械的に壊れを検出できる）
+
+    将来拡張（弱参照/GC切替/例外方式変更に耐える）
+
+    可観測性（テキストIR・ソース位置・deopt情報が取れる）
+
+迷ったらこの“型”に寄せると楽
+
+    骨格：SSA + CFG + 3アドレス
+
+    コア命令：Const/BinOp/Cmp/Phi/Br/Jmp/Ret/Load/Store/Gep/Call/TailCall
+
+    言語特有：RefNew/RefGet/RefSet/WeakNew/WeakLoad/Barrier*/Safepoint + EffectMask
+
+    境界：FfiCall/BoxCall（ABI最小化）
+
+    例外：Throw/Catch（loweringで切替可能）
+    → これは Craneliftに下げやすく、Rust/WASMにも展開しやすい黄金比にゃ。
+
+参考までに：3つの設計モード
+
+    Cranelift互換サブセット志向（JIT/AOT重視・実装が速い）
+
+    MLIR方言志向（将来の拡張やツール連携が強い）
+
+    Rust MIR/Swift SIL 風（所有/効果を濃く持つ・言語意味を守りやすい）
+
+Nyashなら：Cranelift互換サブセット＋言語特有の効果/弱参照/GCフックを足すのがバランス最強にゃ。
+最後に：失敗しない順序
+
+    目的とターゲット（VM/JIT/AOT/WASMの優先度）を1行で宣言
+
+    Core命令セット＋EffectMask＋メモリモデル（weak/GC hook）を先に固定
+
+    Verifierとテキストダンプ（黄金テスト）を最初に入れる
+
+    VM実装 → Cranelift下げ → AOT/WASMは後から
+
+この順なら「好き勝手」じゃなく指標に沿って進められるにゃ。
+必要なら、いまのNyashの要件を点数表で一緒に採点して、MIR v0.1を最終確定しよっか？
+あなた:
+おねがいにゃー！
+ChatGPT:
+
+任せてにゃ！
+Nyash向けに「指標の採点 → その結果に沿った MIR v0.1 最終版」を一気にまとめたよ。すぐ実装に落とせる形にしてあるにゃ。
+指標チェック（Nyash想定で採点済み）
+
+（各0〜2点、合計12点満点）
+指標	狙い	Nyashの前提	点
+後段互換性	VM/JIT/AOT/WASMに素直に下げられる	まずVM→Cranelift JIT、次にAOT/WASM	2
+最適化の根拠	効果・別名・所有/弱参照を保持	EffectMask＋ref/weak＋Barrier/SafepointをMIRで表現	2
+実装容易性	まずVMが回る	命令は3アドレス＋最小集合から	2
+検証容易性	Verifierで壊れ検出	SSA/型/終端/効果の整合を必須に	2
+将来拡張	例外・GC切替・FFI拡張に耐える	Throw/Catch・BoxCall/FFI・Barrierはno-opで開始	2
+可観測性	ダンプ/位置情報/Deoptが取れる	テキストIR＋dbg(loc)＋deopt_map	2
+
+合計：12/12（この方針で進めてOKにゃ）
+Nyash MIR v0.1（最終版）
+コアモデル
+
+    SSA値 vN、基本ブロック bbN（末尾は終端命令必須）
+
+    型（最小）：i64|f64|bool|unit|ref<T>|weak<T>|ptr|any|option<T>
+
+    効果 EffectMask：PURE|READS_HEAP|WRITES_HEAP|IO|FFI|PANIC（ビット和）
+
+    関数署名：fn(args…)->ret [effects]
+
+命令セット
+1) 演算・制御
+
+Const    dst, Imm
+BinOp    dst, op, a, b            ; add/sub/mul/div/mod/and/or/xor/shl/shr
+Cmp      dst, rel, a, b           ; eq/ne/lt/le/gt/ge
+Select   dst, cond, a, b
+Phi      dst, [(predBB, val), …]
+
+Br       cond, thenBB, elseBB     ; 終端
+Jmp      targetBB                 ; 終端
+Ret      [val]                    ; 終端（unit省略可）
+Unreachable                       ; 終端
+
+2) メモリ／参照（GC想定）
+
+Alloc    dst, Ty, size?           ; [WRITES_HEAP]
+Load     dst, addr                ; [READS_HEAP]
+Store    addr, val                ; [WRITES_HEAP]
+Gep      dst, base, offset
+
+RefNew   dst, Ty                  ; ref<T>        [WRITES_HEAP]
+RefGet   dst, ref, field          ;               [READS_HEAP]
+RefSet   ref, field, val          ;               [WRITES_HEAP]
+
+WeakNew  dst, ref                 ; weak<T>       [PURE]
+WeakLoad dst, weak                ; option<ref<T>> [PURE]（実装都合でREADS_HEAP可）
+
+BarrierRead  ref
+BarrierWrite ref
+Pin      ref
+Unpin    ref
+Safepoint
+
+弱参照の意味論
+
+    WeakNew(r) は所有しない。r がGCで解放されると弱参照は無効化。
+
+    WeakLoad(w) は 生存: Some(ref)／死亡: None を返す（nullを曖昧にしない）。
+
+3) 呼び出し・例外・拡張
+
+Call     dst, callee, [args...]           ; 呼び先の effects を合成
+TailCall callee, [args...]                ; 終端
+
+BoxCall  dst, box_id, fn_id, [args...]    ; Nyash拡張Box [FFI|PANIC?]
+FfiCall  dst, sym, [args...], abi         ; 外部関数    [FFI|PANIC?]
+
+Throw    val                               ; 終端
+CatchBegin dst, handlerBB                  ; （メタでも可）
+CatchEnd
+Assume   cond                              ; 偽ならUB：最適化ヒント
+Nop
+
+不変条件（Verifier で必須チェック）
+
+    各ブロックは必ず終端命令で終わる
+
+    型整合：Load/Store/Call/WeakLoad 等の型が一致
+
+    SSA整合：Phi の前任ブロック集合＝到達前任集合
+
+    効果整合：PURE な関数内で WRITES_HEAP/IO/FFI を出さない
+
+    WeakLoad戻りは必ず option<ref<T>>（null直扱い禁止）
+
+推奨挿入ポイント
+
+    Safepoint：関数入口／各ループ先頭／任意の Call の直後
+
+    Barrier*：はじめは no-op 実装でもOK（将来GC切替のフック）
+
+テキスト表現（ダンプ例）
+
+func @main() -> unit [effects=IO] {
+bb0:
+  v1 = Const i64 1
+  v2 = RefNew Obj
+  RefSet v2, field_y, v1
+  v3 = WeakNew v2
+  v4 = WeakLoad v3              ; option<ref<Obj>>
+  Br is_some(v4), bb1, bb2
+
+bb1:
+  v5 = unwrap v4
+  BarrierWrite v5
+  RefSet v5, field_y, Const i64 2
+  Jmp bb3
+
+bb2:
+  Jmp bb3
+
+bb3:
+  Ret
+}
+
+実装ロードマップ（最短で回す）
+
+    IR型 & ダンプ & Verifier を実装（黄金テストに登録）
+
+    VM：RefNew/RefGet/RefSet/WeakNew/WeakLoad と制御命令だけ先に実装
+
+    効果検査：Call に effects 合成（違反はビルド失敗）
+
+    Cranelift JIT 足場：算術・分岐・Call を写経、Ref* はランタイム関数に委譲
+
+    AOT to Rust：ref<T>=Gc<T>、weak<T>=Weak<T> 相当でコード出力（小関数から）
+
+付録：Rustスケルトン（抜粋）
+
+bitflags::bitflags! {
+  pub struct Effect: u32 {
+    const PURE        = 1<<0;
+    const READS_HEAP  = 1<<1;
+    const WRITES_HEAP = 1<<2;
+    const IO          = 1<<3;
+    const FFI         = 1<<4;
+    const PANIC       = 1<<5;
+  }
+}
+
+pub enum Ty {
+  I64, F64, Bool, Unit, Ptr, Any,
+  Ref(Box<Ty>), Weak(Box<Ty>), Option(Box<Ty>),
+}
+
+pub enum Inst { /* 上述の命令そのまま */ }
+
+pub struct Func {
+  pub sig: FuncSig, pub blocks: Vec<Block>, /* dbg, deopt_map など */
+}
+
+pub fn verify(func: &Func) -> Result<(), VerifyError> {
+  // 終端必須・SSA整合・型整合・効果整合をチェック
+  Ok(())
+}
+
+次の一手（今日できること）
+
+    mir/inst.rs にこの v0.1 をそのまま貼り込み
+
+    mir/dump.rs と mir/verify.rs を最小実装
+
+    既存テストに 黄金テスト（IRダンプ） を1本追加
+
+    VMの Ref*/Weak* を実装して 最初の end-to-end テスト を通す
+
+これで、行き当たりばったりの修正が入っても壊れにくい土台が完成にゃ。
+必要なら、このままコード雛形まで私が書き起こすよ。

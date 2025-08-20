@@ -50,10 +50,37 @@ pub struct BoxTypeConfig {
 }
 
 /// Method definition (simplified - no argument info needed)
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MethodDefinition {
     /// Method ID for FFI
     pub method_id: u32,
+    /// Optional argument declarations (v2.1+)
+    #[serde(default)]
+    pub args: Option<Vec<ArgDecl>>, 
+}
+
+/// Method argument declaration (v2.1+)
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(untagged)]
+pub enum ArgDecl {
+    /// Backward-compatible string form (treated as kind="string")
+    Name(String),
+    /// Typed declaration
+    Typed {
+        kind: String,
+        #[serde(default)]
+        category: Option<String>,
+    },
+}
+
+impl ArgDecl {
+    /// Returns a canonical kind string ("string", "box", etc.)
+    pub fn kind_str(&self) -> &str {
+        match self {
+            ArgDecl::Name(_) => "string",
+            ArgDecl::Typed { kind, .. } => kind.as_str(),
+        }
+    }
 }
 
 fn default_abi_version() -> u32 {

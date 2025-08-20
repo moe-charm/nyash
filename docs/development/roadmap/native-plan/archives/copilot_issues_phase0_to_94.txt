@@ -1,0 +1,657 @@
+# 🤖 Copilot様 作業予定・課題整理 (Phase 0-9.4 アーカイブ版)
+# Generated: 2025-08-14 (Git履歴から復元・更新)
+# Purpose: Claude×Copilot協調開発のための情報共有
+# Status: Phase 9.5より前のアーカイブ版（2025-08-15分割）
+
+================================================================================
+🎯 次期最優先タスク (Phase 8.5以降)
+================================================================================
+
+## 🚀 Phase 8.4完了報告 (2025-08-14)
+Status: ✅ 完了 (Copilot PR #56マージ済み)
+
+### ✅ AST→MIR Lowering完全実装
+- User-defined Box: `box DataBox { init { value } }`
+- Object creation: `new DataBox(42)`
+- Field access: `obj.value` 
+- Method calls: `c.increment()`
+- Delegation: `from Parent.greet()`
+- Static Main互換性維持
+
+### 🧪 統合テスト結果（2025-08-14）
+- ✅ **AST→MIR**: 完全動作
+- ✅ **インタープリター**: 完全動作（結果30）
+- 🚨 **VM**: 動作するが結果が`void`（要修正）
+- 🚨 **WASM**: String constant未対応（Phase 8.5で解決）
+
+### 📋 発見された課題
+- VM実行結果問題: BoxCall後の戻り値が正しく返らない
+- WASM対応不足: 複雑なMIR命令（String constant, BoxCall）に未対応
+- 次期Phase 8.5での25命令MIR階層化が必要
+
+================================================================================
+
+## 🔧 Phase 8.5: MIR 26命令階層化（最優先）
+Status: ⭐ **CRITICAL** 
+Priority: **最重要** (Phase 8.4完了直後の次期目標)
+
+### 🎯 実装目標
+ChatGPT5 + AI大会議決定版26命令MIR実装（ExternCall追加）
+- 期間: 3週間
+- 効果: VM/WASM問題根本解決
+- 詳細仕様: `/docs/予定/native-plan/issues/phase_8_5_mir_25_instruction_specification.md`
+
+### 📋 26命令セマンティック階層化
+**Tier-0: 普遍コア（8命令）**
+```mir
+Const, BinOp, Compare, Branch, Jump, Phi, Call, Return
+```
+
+**Tier-1: Nyashセマンティクス（13命令）**
+```mir
+NewBox, BoxFieldLoad, BoxFieldStore, BoxCall, ExternCall, Safepoint,
+RefGet, RefSet, WeakNew, WeakLoad, WeakCheck, Send, Recv
+```
+
+**Tier-2: 実装補助・最適化友好（5命令）**
+```mir
+TailCall, Adopt, Release, MemCopy, AtomicFence
+```
+
+### 🎯 期待される効果
+- **VM問題解決**: BoxCallの正しい実装で戻り値問題修正
+- **WASM対応**: 階層化により複雑MIR→単純WASM変換
+- **Everything is Box**: BoxFieldLoad/Storeで明確なBox中心設計
+- **JIT準備**: セマンティクス保持で高度最適化基盤確立
+
+================================================================================
+
+## 🏎️ Phase 8.6: VM性能改善（緊急）
+Status: 🚨 **緊急** 
+Priority: **High** (Phase 8.5完了後)
+
+### 🚨 緊急問題
+**現状**: VM（119.80ms）< Interpreter（110.10ms）= 0.9倍の性能劣化
+**新問題**: VM BoxCall後の戻り値が`void`（Phase 8.4テストで発見）
+
+### 📋 技術的課題
+- VM実行エンジンのプロファイリング
+- 命令ディスパッチ最適化（threaded code等）
+- レジスタベースVM化検討  
+- メモリプール最適化
+- BoxCall実装修正（戻り値問題）
+
+### 🎯 成功基準
+- VM性能 > Interpreter性能（最低2倍目標）
+- BoxCall戻り値の正常動作
+- MIR→VM変換時間の短縮
+
+================================================================================
+
+## 🧪 Phase 8.7: Real-world Memory Testing
+Status: 📋 **計画済み**
+Priority: **High** (Phase 8.5-8.6完了後)
+
+### 🎯 実装目標
+kilo（テキストエディタ）実装によるfini/weak参照システム実証
+- 期間: 2週間
+- 詳細仕様: `/docs/予定/native-plan/issues/phase_8_7_real_world_memory_testing.md`
+
+### 📋 検証項目
+- 1000+オブジェクト管理テスト
+- 循環参照回避確認（weak参照）
+- fini()伝播の正確性確認
+- WASM環境での動作確認
+
+================================================================================
+🗺️ Phase 0-14 全体ロードマップ (復元完了)
+================================================================================
+
+## Phase 0: Stabilize native CLI build (Linux/Windows)
+
+Summary:
+- CLIバイナリ nyash を最小構成で安定ビルド・実行できる状態にする。
+- examples/GUI をデフォルトのビルド対象から外し、開発の足場を固める。
+
+Why:
+- 以降の MIR/VM/JIT 開発を素早く検証できる基盤づくり。
+
+Scope:
+- Cargo の features で GUI/examples 等を切り分け、デフォルトは CLI 最小にする。
+- CLI オプションの動作点検（--dump-mir / --verify）。
+- ローカル実行導線を README に明記（docs/guides/how-to-build-native/README.md）。
+
+Tasks:
+- Cargo.toml: examples/GUI を feature でガード（default は CLI 最小）。
+- ビルド検証: `cargo build --bin nyash`（Linux/Windows）。
+- 実行検証: `cargo run -- ./local_tests/sample.nyash`。
+- ドキュメント: 上記手順を how-to-build-native に追記/点検。
+
+Acceptance Criteria:
+- Linux/Windows で `cargo build --bin nyash` が成功する。
+- `local_tests/` 配下の簡単な .nyash が実行できる。
+- 他 bin/examples が壊れていても `--bin nyash` だけで通る。
+
+Out of Scope:
+- examples/GUI の修理・最適化。
+- JIT/AOT/WASM。
+
+References:
+- docs/guides/how-to-build-native/README.md
+- docs/nativebuild大作戦/chatgptネイティブビルド大作戦.txt（Phase 0）
+- CURRENT_TASK.md
+
+Copilot Notes:
+- まずは features 分離と `--bin nyash` でビルドが通る状態を作る。README の手順確認まで含めて PR に反映。
+
+------------------------------------------------------------
+
+## Phase 1: Minimal MIR + VM backend (lowering + runner)
+
+Summary:
+- AST → MIR の最小 lowering と、VM バックエンドでの実行を通す。
+
+Scope:
+- MIR: Const, BinOp, Compare, Branch, Jump, Phi, Return の最小命令
+- Lowering: リテラル/二項演算/if/loop/return のみ
+- VM: 上記命令の最小実装
+
+Tasks:
+- instruction.rs: 最小命令の定義
+- builder.rs: 上記 AST 範囲を lowering
+- vm.rs: 実装 + stats（命令数）
+
+Acceptance Criteria:
+- `--dump-mir` が最小サンプルで期待通り
+- `--backend vm` で実行して結果一致
+
+Out of Scope:
+- 例外/関数/Box 参照/弱参照
+
+------------------------------------------------------------
+
+## Phase 2: Control-flow coverage (if/else/loop/phi correctness)
+
+Summary:
+- 制御フローの網羅と Phi の整合性検証を拡充。
+
+Scope/Tasks:
+- if/else nested, loop with breaks, nested loops のスナップショット
+- Phi の入力ブロック/値の対応を Verifier で強化
+
+Acceptance Criteria:
+- 代表制御フローの snapshot が安定し、verify も通る
+
+------------------------------------------------------------
+
+## Phase 3: Exceptions (throw/try/catch/finally) minimal lowering
+
+Summary:
+- 例外機構の最小 lowering を導入（詳細設計は簡素）。
+
+Scope/Tasks:
+- MIR: Throw, TryBegin/TryEnd, Catch, FinallyBegin/End（最小）
+- builder.rs: try/catch/finally ノードの下ろし
+- VM: 例外伝播を最小で（未捕捉はエラー）
+
+Acceptance Criteria:
+- 代表 try/catch/finally のスナップショットと VM 実行
+
+Out of Scope:
+- 例外の型体系、詳細な stack map
+
+------------------------------------------------------------
+
+## Phase 4: Functions and calls (BoxCall minimal)
+
+Summary:
+- 関数呼び出し/BoxCall を最小導入（効果注釈は保守的）。
+
+Scope/Tasks:
+- MIR: Call, BoxCall（effects = READS_HEAP など保守）
+- builder.rs: FunctionCall/MethodCall の最小対応
+- VM: 呼び出し/戻り値
+
+Acceptance Criteria:
+- 簡単な関数定義/呼び出しの MIR/VM が通る
+
+Out of Scope:
+- 可変長/キーワード引数、FFI
+
+------------------------------------------------------------
+
+## Phase 5.0: Parser/AST stabilization for lowering
+
+Summary:
+- lowering 対象 AST の表現ぶれを修正、安定化。
+
+Scope/Tasks:
+- AST: If/Loop/Return/Assignment/Local などの統一
+- Parser: エラー復帰/スパン情報の見直し
+
+Acceptance Criteria:
+- builder.rs の分岐がシンプル化、テストが安定
+
+------------------------------------------------------------
+
+## Phase 5.1: Control-flow edge cases + verifier hardening
+
+Summary:
+- ブロック未終端/未到達/自己分岐等の検証強化でクラッシュ回避。
+
+Scope/Tasks:
+- Verifier: 未終端ブロック検出、到達不能検出
+- Builder: Jump/Branch の生成前後の状態管理改善
+
+Acceptance Criteria:
+- 不正ケースを含むスナップショット/verify が緑
+
+------------------------------------------------------------
+
+## Phase 5.2: Lowering for static box Main (BoxDeclaration → main body)
+
+Summary:
+- static box Main { main() { ... } } を MirBuilder で受け、main() の body を Program として lowering する経路を実装。
+
+Scope/Tasks:
+- AST: BoxDeclaration(is_static=true, name=Main) を検出 → main() を抽出
+- Lowering: body を Program に変換して既存経路に渡す
+- Tests: local_tests/mir_loop_no_local.nyash で dump/VM が通る
+
+Acceptance Criteria:
+- `--dump-mir` が static Main サンプルで成功
+- `--backend vm` で実行成功
+
+References:
+- docs/guides/how-to-build-native/issues/phase5_2_static_main_lowering.md
+
+------------------------------------------------------------
+
+## Phase 6: Box ops minimal (Ref/Weak + Barriers no-op)
+
+Summary:
+- 参照/弱参照/バリア（no-op）を最小導入。
+
+Scope/Tasks:
+- MIR: RefNew/RefGet/RefSet/WeakNew/WeakLoad/BarrierRead/Write
+- Lowering: New/FieldAccess/MethodCall の最小対応
+- VM: 参照テーブル/weak テーブルで動作（fini 不変は維持）
+
+Acceptance Criteria:
+- 代表サンプルで dump/VM/verify が通る
+
+References:
+- docs/guides/how-to-build-native/issues/phase6_box_ops_minimal.md
+
+------------------------------------------------------------
+
+## Phase 7: Async model (nowait/await) in MIR
+
+Summary:
+- nowait/await を MIR に導入し、現行 FutureBox と連携。
+
+Scope/Tasks:
+- MIR: FutureNew/FutureSet/Await（スレッドベース）
+- Lowering: nowait→Future 作成、await→wait_and_get
+- VM: FutureBox 実装を利用
+
+Acceptance Criteria:
+- 代表ケースで正しく並行実行→await 回収
+
+References:
+- docs/guides/how-to-build-native/issues/phase7_async_mir.md
+
+------------------------------------------------------------
+
+## Phase 8: MIR→WASM codegen (browser/wasmtime; sandboxed; Rust runtime free)
+
+Summary:
+- MIR から素の WebAssembly を生成し、ブラウザ/wasmtime（WASI）でサンドボックス実行する。
+- Rust はコンパイラ本体のみ。実行は純WASM＋ホストimport（env.print など）。
+
+Scope/Tasks:
+- ABI/Imports/Exports 定義（exports: main/memory、imports: env.print(i32) 等の最小）
+- 線形メモリと簡易ヒープ（bump/自由リスト）
+- 命令カバレッジ（段階導入）: 算術/比較/分岐/loop/return/print、RefNew/RefSet/RefGet（Phase 6 整合）、Weak/Barrier はダミー
+
+Acceptance Criteria:
+- wasmtime 実行で戻り値/print が期待通り（PoC1–2）
+- Ref 系がメモリ上で正しく動作（PoC2）
+- Weak/Barrier のダミー実装を含むWASMが生成・実行（PoC3）
+- CLI `--backend wasm` は未実装でもよいが、実装する場合は明瞭にエラーメッセージ/誘導
+
+References:
+- docs/予定/native-plan/README.md（Phase 8 節）
+- docs/説明書/wasm/*（ユーザー向けメモ）
+
+### Phase 8.3 完了状況 (2025-08-14)
+✅ Box操作WASM実装 (RefNew/RefGet/RefSet)
+✅ ベンチマークシステム統合 (13.5倍実行高速化実証)
+✅ CLI統合完了
+
+------------------------------------------------------------
+
+## 🔧 Phase 8.4: AST→MIR Lowering完全実装 (最優先)
+
+Summary:
+- ユーザー定義Box、フィールドアクセス等の未実装部分を完成
+- Phase 8.3のBox操作WASMを実際にテスト可能にする
+
+Priority: **Critical** (現在の最優先事項)
+Expected Duration: 1週間
+
+### 実装範囲
+- [ ] ユーザー定義Box: `box DataBox { init { field } }`
+- [ ] オブジェクト生成: `new DataBox()`  
+- [ ] フィールドアクセス: `obj.field`
+- [ ] フィールド代入: `obj.field = value`
+- [ ] from構文: `from Parent.method()`
+- [ ] override構文: `override method() { ... }`
+
+### 成功基準
+- Phase 8.3のBox操作WASMが実際に動作
+- test_wasm_box_ops.nyash が正常実行
+- ユーザー定義Boxの完全サポート
+
+------------------------------------------------------------
+
+## 🧠 Phase 8.5: MIRセマンティック階層化（AI大会議決定版）
+
+Summary:
+- 方針転換: ChatGPT5の20命令intrinsic戦略 → Gemini+Codex一致推奨の26命令階層化（ExternCall追加）
+- 理由: JIT/AOT最適化阻害・Everything is Box意味喪失・長期コスト増の問題判明
+- 二相ロワリング: 26命令維持パス（VM/JIT/AOT）+ 21+intrinsic降格パス（WASM/最小実装）
+
+Priority: High (Phase 8.4完了後)
+Expected Duration: 3週間
+
+### AI大会議分析結果
+**Gemini先生（理論）**: 「賢いコンパイラは、賢いMIRから生まれる」
+- RefNew/WeakLoadのintrinsic化は最適化機会を失う悪手
+- セマンティック階層化で意味保持が最適化の鍵
+
+**Codex先生（実装）**: 二相ロワリング戦略が実用的最適解
+- 実装コスト: 5命令追加で10-20人日（intrinsic戦略より安い）
+- マイクロベンチ実測でパフォーマンス検証
+
+### 確定版MIR（26命令）- ChatGPT5完全仕様 + ExternCall統合
+**Tier-0: 普遍的コア（8命令）**
+```mir
+Const, BinOp, Compare, Branch, Jump, Phi, Call, Return
+```
+
+**Tier-1: Nyashセマンティクス（13命令）**
+```mir
+NewBox,        // 強所有のBox生成（所有森のノード）
+BoxFieldLoad,  // Boxのフィールド読み（Everything is Box核心）
+BoxFieldStore, // Boxのフィールド書き（mut効果）
+BoxCall,       // Boxのメソッド呼び出し（動的/静的両方）
+ExternCall,    // 外部ライブラリをBoxとして呼び出し（Universal Exchange）
+Safepoint,     // 分割finiや割込み許可ポイント
+RefGet,        // 参照（強/弱を問わず）を値として取得
+RefSet,        // 参照の差し替え（所有規則検証付き）
+WeakNew,       // weak ハンドル生成（非所有リンク作成）
+WeakLoad,      // weak から生存チェック付きで強参照取得（失効時null）
+WeakCheck,     // weak の生存確認（bool）
+Send,          // Bus送信（io効果）
+Recv           // Bus受信（io効果）
+```
+
+**Tier-2: 実装補助・最適化友好（5命令）**
+```mir
+TailCall,      // 末尾呼び出し（スタック節約）
+Adopt,         // 所有移管: this が子を強所有に取り込む
+Release,       // 強所有を解除（weak化 or null化）
+MemCopy,       // 小さなメモリ移動（構造体/配列最適化フック）
+AtomicFence    // 並行時の順序保証（Actor/Port境界で使用）
+```
+
+### 二相ロワリング戦略
+- パスA: VM/JIT/AOT向け（26命令のまま最適化）
+- パスB: WASM/最小実装向け（26→21+intrinsic降格）
+- バックエンド能力に応じて最適形式選択
+
+### 効果（Effect）システム（ChatGPT5設計 + ExternCall統合）
+- **pure**: Const, BinOp, Compare, Phi, RefGet, WeakNew, WeakLoad, WeakCheck
+- **mut**: BoxFieldStore, RefSet, Adopt, Release, MemCopy
+- **io**: Send, Recv, Safepoint, AtomicFence
+- **control**: Branch, Jump, Return, TailCall
+- **context依存**: Call, BoxCall, ExternCall（呼び先効果に従属・BID定義に基づく）
+
+**最適化ルール**: 「pure同士の再順序化OK」「mutは同一Box/同一Fieldで依存保持」「ioは再順序化禁止」
+
+### 検証（Verifier）要件
+- **所有森**: `strong in-degree ≤ 1`（NewBox/Adopt/Release/RefSetで常時検査）
+- **強循環禁止**: 強エッジのみ辿ってDAG（森）であること
+- **weak/強相互**: 双方向とも強 → エラー（片側はWeakNew経由で弱化）
+- **WeakLoad/WeakCheck**: 失効時はnull/falseを返す（例外禁止、決定的挙動）
+
+### 🤖 Copilot協力期待
+- **Tier-0/1実装**: Everything is Box哲学の完璧なIR化（BoxFieldLoad/Store核心）
+- **weak参照システム**: WeakNew/WeakLoad/WeakCheck三位一体実装
+- **所有移管**: Adopt/Release命令による安全で効率的なメモリ管理
+- **効果システム**: pure/mut/io/control効果の正確な実装とVerifier統合
+- **最適化フック**: TailCall/MemCopy/AtomicFenceの実装補助
+- **二相ロワリング**: 25命令維持パス + 20+intrinsic降格パス構築
+
+### 成功基準
+- [ ] **26命令完全実装**: ChatGPT5仕様 + ExternCall統合の完璧な実装
+- [ ] **効果システム動作**: pure再順序化・mut依存保持・io順序保証
+- [ ] **Verifier動作**: 所有森・strong循環・安全性検証
+- [ ] **Golden MIRテスト**: 全バックエンドでMIR一致
+- [ ] **行動一致テスト**: 同入力→同出力（weak失効時null/false含む）
+- [ ] **性能要件**: VM≥Interpreter、WASM≥VM継続検証
+
+### バックエンド指針（ChatGPT5設計 + ExternCall統合）
+- **Interpreter**: 26命令を素直に実装（正しさの基準）
+- **VM**: Register-VM + direct-threading。Send/Recvはローカル判定時にインライン化
+- **WASM**: Send/Recvはhost import。MemCopyはmemory.copyに対応
+- **JIT（将来）**: TailCall最適化、WeakLoadは世代タグでO(1)生存チェック
+
+References:
+- docs/予定/native-plan/MIR仕様書.txt（ChatGPT5完全仕様）
+- docs/予定/native-plan/issues/phase_8_5_mir_25_instruction_specification.md
+
+------------------------------------------------------------
+
+## 🏎️ Phase 8.6: VM性能改善 (緊急)
+
+Summary:
+- VMがインタープリターより遅い問題（0.9倍）を解決
+- MIR→VM実行の最適化でインタープリターを上回る性能へ
+
+Priority: High (Phase 8.5完了後)
+Expected Duration: 2週間
+
+### 問題分析
+**現状**: VM (119.80ms) < Interpreter (110.10ms)
+**推定原因**:
+- MIR変換オーバーヘッド
+- VM命令ディスパッチの非効率性
+- メモリ管理コスト
+
+### 技術的アプローチ
+- [ ] VM実行エンジンのプロファイリング
+- [ ] 命令ディスパッチ最適化（threaded code等）
+- [ ] レジスタベースVM化検討
+- [ ] メモリプール最適化
+
+### 🤖 Copilot協力期待
+- VM実装のボトルネック特定
+- 効率的な命令ディスパッチ実装
+- スタックマシン vs レジスタマシン判断
+
+### 成功基準
+- VM性能 > Interpreter性能（最低2倍目標）
+- MIR→VM変換時間の短縮
+- メモリ使用量の削減
+
+------------------------------------------------------------
+
+## 🧪 Phase 8.7: Real-world Memory Management Testing (ChatGPT協調設計)
+
+Summary:
+- 実用アプリケーション開発によるNyashメモリ管理システムの実証テスト
+- finiシステム・weak参照の実用性を複雑なアプリケーションで検証
+
+Priority: High (Phase 8.4-8.6完了直後)
+Expected Duration: 2週間
+
+### Phase 8.7A: kilo（テキストエディタ）
+**技術的特徴**:
+- サイズ: <1k LOC（超小型、最初の成功体験）
+- メモリパターン: Editor -> (Rows -> Syntax) 木構造＋相互参照
+- ChatGPT設計: Editor削除でRows自動解放、逆参照をweak化
+
+**実装範囲**:
+- [ ] Editor/Row/EditorState基本構造実装
+- [ ] weak参照による循環参照回避（`me.editor = weak editor_ref`）
+- [ ] fini()システムによる自動メモリ解放
+- [ ] 大量オブジェクト（1000+ Rows）管理テスト
+
+**検証ポイント**:
+- [ ] Editor削除でRows自動解放確認
+- [ ] 相互参照でメモリリークなし確認  
+- [ ] weak参照の自動null化確認
+- [ ] fini()伝播の正確性確認
+
+### Phase 9.5予定: tiny-web-server（HTTPサーバ）
+**将来実装**（JIT実装後）:
+- 複雑度: 中〜高（Server -> Clients -> Requests並行処理）
+- I/O管理: ソケット・ファイルハンドルの確実解放
+- 同時接続・早期切断・例外経路でのfini伝播テスト
+
+### 🤖 Copilot協力期待
+- 実用的なメモリ管理パターンの実装
+- weak参照構文の適切な使用
+- デバッグ支援機能（--debug-memory, --trace-weak）
+- WASM環境でのメモリ管理互換性
+
+### 成功基準
+- [ ] 全テストケースでメモリリークなし
+- [ ] 循環参照でも正常解放確認
+- [ ] WASM実行でもメモリ管理正常
+- [ ] ベンチマーク性能劣化なし
+
+### 期待される効果
+- Nyashメモリ管理システムの実用性実証
+- Everything is Box哲学の実用レベル確認  
+- メモリ安全なプログラミングパターン確立
+
+References:
+- docs/予定/native-plan/issues/phase_8_7_real_world_memory_testing.md
+
+------------------------------------------------------------
+
+## 🚀 Phase 9: AOT WASM実装（最優先）
+
+Summary:
+- wasmtime compileによるAOT実行ファイル生成で確実なユーザー価値提供
+
+Scope/Tasks:
+- `wasmtime compile` 統合実装
+- `--compile-native` / `--aot` CLI追加
+- 単一バイナリ梱包（`include_bytes!`）
+- 起動時間・配布サイズ最適化
+
+Acceptance Criteria:
+- `nyash --compile-native app.nyash -o app.exe` 動作
+- 起動時間大幅短縮（JIT起動コスト除去）
+- 配布可能実行ファイル生成
+
+Priority: **Critical** (Phase 8.6完了直後)
+Expected Duration: 2-3週間
+
+### 技術的実装詳細
+🤖 Copilot協力期待:
+- wasmtime::Config統一実装
+- .cwasm生成・実行パイプライン  
+- 互換性キー管理（CPU機能・wasmtimeバージョン）
+- パッケージング（単一バイナリ梱包）
+
+### パフォーマンス目標
+- 現在のWASM JIT (13.5倍実行) → AOT (500倍目標：起動含む)
+- 配布ファイルサイズ: <10MB目標
+- 起動時間: <100ms目標
+
+### 期待される効果
+- **即座実用価値**: 配布可能実行ファイル生成
+- **差別化優位**: Everything is BoxのネイティブAOT実現
+- **LLVM準備**: AOT基盤確立でLLVM移行準備
+
+------------------------------------------------------------
+
+## 🔴 Phase 9.51: WASM Jump/Branch実装とHTTPサーバー実用化 **【緊急修正】**
+
+Status: 🔴 **Critical Issue**（Phase 9実用化ブロッカー）
+Summary:
+- Phase 9 (PR #67) 完了後に判明した重大制約の修正
+- WASM/AOT実用化の最終仕上げ
+
+### 🚨 現在の問題（実用化を阻害）
+
+1. **WASM/AOT コンパイルエラー（最重要）**
+   ```bash
+   $ ./target/release/nyash --compile-wasm test_simple_loop.nyash
+   ❌ Unsupported instruction: Jump { target: BasicBlockId(1) }
+   ```
+   **影響**: ループ・条件分岐を含む全プログラムがWASM/AOT化不可
+
+2. **HTTPServerBox listen()常に失敗**  
+   - server.bind() ✅, server.listen() ❌ always false
+   **影響**: HTTPサーバーが実際には動作しない
+
+3. **エラーハンドリング脆弱性**
+   - unwrap()使用箇所: 26箇所 → パニック多発リスク
+
+### Scope/Tasks:
+**🔴 Task 1**: WASM Jump/Branch命令実装（2日）
+- `src/backend/wasm/codegen.rs`にJump/Branch追加
+- ブロック深度管理（`get_block_depth`メソッド）
+- ループ構造のblock/loop/end生成
+
+**🔴 Task 2**: SocketBox listen()修正（1日）  
+- `src/boxes/socket_box.rs`の実装修正
+- SocketStatus::Listening状態管理
+
+**🟡 Task 3**: エラーハンドリング改善（2日）
+- HTTPServerBox/SocketBoxのunwrap()除去
+- Result<T,E>ベースのエラー処理
+
+**🟡 Task 4**: HTTPサーバー実用化（2日）
+- スレッドプール実装（固定サイズワーカー）
+- グレースフルシャットダウン
+
+Acceptance Criteria:
+- ✅ `nyash --compile-wasm test_loop.nyash` 成功
+- ✅ HTTPサーバー実動作（curl http://localhost:8080/）
+- ✅ unwrap()使用箇所: 26 → 5以下
+- ✅ WASM性能: 11.5倍 → 13.5倍達成
+
+Priority: **🔴 Critical** (Phase 9.5開始前の必須修正)
+Expected Duration: 1週間
+
+### 詳細設計・実装指示
+📋 **完全実装ガイド**: `docs/予定/native-plan/issues/phase9_51_wasm_jump_http_fixes.md`
+
+🤖 **Copilot協力依頼**:
+- WASM br/br_if命令実装
+- HTTPサーバーリファクタリング  
+- エラーハンドリング統一
+
+### 期待される効果
+- **実用性達成**: ループ・HTTPサーバーのWASM/AOT化
+- **安定性向上**: パニックフリーな実装
+- **Phase 9.5準備**: 複雑アプリケーションテストの基盤確立
+
+------------------------------------------------------------
+
+================================================================================
+最終更新: 2025-08-15 (Phase 9.5より前をアーカイブ分割)
+作成者: Claude (ドキュメント分割・整理)
+
+🎯 分割理由:
+- copilot_issues.txtの肥大化対策（1200行→600行程度に削減）
+- Phase 9.5以降の現行計画と完了済み部分の明確分離
+- ドキュメント検索性・保守性の向上
+================================================================================

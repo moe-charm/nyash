@@ -171,20 +171,41 @@ impl PluginBoxV2 {
     
     /// Configuration
     pub config: Option<NyashConfigV2>,
+    /// Path to the loaded nyash.toml (absolute), used for consistent re-reads
+    config_path: Option<String>,
 }
 
     impl PluginLoaderV2 {
+    fn find_box_by_type_id<'a>(&'a self, config: &'a NyashConfigV2, toml_value: &'a toml::Value, type_id: u32) -> Option<(&'a str, &'a str)> {
+        for (lib_name, lib_def) in &config.libraries {
+            for box_name in &lib_def.boxes {
+                if let Some(box_conf) = config.get_box_config(lib_name, box_name, toml_value) {
+                    if box_conf.type_id == type_id {
+                        return Some((lib_name.as_str(), box_name.as_str()));
+                    }
+                }
+            }
+        }
+        None
+    }
     /// Create new loader
     pub fn new() -> Self {
         Self {
             plugins: RwLock::new(HashMap::new()),
             config: None,
+            config_path: None,
         }
     }
     
     /// Load configuration from nyash.toml
     pub fn load_config(&mut self, config_path: &str) -> BidResult<()> {
-        self.config = Some(NyashConfigV2::from_file(config_path)
+        // Canonicalize path for later re-reads
+        let canonical = std::fs::canonicalize(config_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| config_path.to_string());
+        self.config_path = Some(canonical.clone());
+
+        self.config = Some(NyashConfigV2::from_file(&canonical)
             .map_err(|e| {
                 eprintln!("Failed to load config: {}", e);
                 BidError::PluginError
@@ -236,10 +257,15 @@ impl PluginBoxV2 {
             let config = self.config.as_ref().ok_or(BidError::PluginError)?;
             let (lib_name, _lib_def) = config.find_library_for_box(box_type)
                 .ok_or(BidError::InvalidType)?;
-            let toml_content = std::fs::read_to_string("nyash.toml").map_err(|_| BidError::PluginError)?;
+            let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
+            let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
             let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
             let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
-            let method = box_conf.methods.get(method_name).ok_or(BidError::InvalidMethod)?;
+            let method = box_conf.methods.get(method_name).ok_or_else(|| {
+                eprintln!("[PluginLoaderV2] Method '{}' not found for box '{}' in {}", method_name, box_type, cfg_path);
+                eprintln!("[PluginLoaderV2] Available methods: {:?}", box_conf.methods.keys().collect::<Vec<_>>());
+                BidError::InvalidMethod
+            })?;
             Ok(method.method_id)
         }
 
@@ -251,43 +277,112 @@ impl PluginBoxV2 {
             instance_id: u32,
             args: &[Box<dyn NyashBox>],
         ) -> BidResult<Option<Box<dyn NyashBox>>> {
-            // Only support zero-argument methods for now (minimal viable)
-            if !args.is_empty() {
-                return Err(BidError::InvalidMethod);
-            }
+            // v2.1: 引数ありのメソッドを許可（BoxRef/基本型/文字列化フォールバック）
             let method_id = self.resolve_method_id_from_file(box_type, method_name)?;
             // Find plugin and type_id
             let config = self.config.as_ref().ok_or(BidError::PluginError)?;
             let (lib_name, _lib_def) = config.find_library_for_box(box_type).ok_or(BidError::InvalidType)?;
             let plugins = self.plugins.read().unwrap();
             let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
-            let toml_content = std::fs::read_to_string("nyash.toml").map_err(|_| BidError::PluginError)?;
+            let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
+            let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
             let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
             let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
             let type_id = box_conf.type_id;
-            // TLV args: encode provided arguments
+            eprintln!("[PluginLoaderV2] Invoke {}.{}: resolving and encoding args (argc={})", box_type, method_name, args.len());
+            // TLV args: encode using BID-1 style (u16 ver, u16 argc, then entries)
             let tlv_args = {
-                // minimal local encoder (duplicates of encode_tlv_args not accessible here)
-                let mut buf = Vec::with_capacity(4 + args.len() * 12);
-                buf.extend_from_slice(&[1u8, args.len() as u8, 0, 0]);
-                for a in args {
+                let mut buf = Vec::with_capacity(4 + args.len() * 16);
+                // Header: ver=1, argc=args.len()
+                buf.extend_from_slice(&1u16.to_le_bytes());
+                buf.extend_from_slice(&(args.len() as u16).to_le_bytes());
+                // Validate against nyash.toml method args schema if present
+                let expected_args = box_conf.methods.get(method_name).and_then(|m| m.args.clone());
+                if let Some(exp) = expected_args.as_ref() {
+                    if exp.len() != args.len() {
+                        return Err(BidError::InvalidArgs);
+                    }
+                }
+
+                for (idx, a) in args.iter().enumerate() {
+                    // If schema exists, validate per expected kind
+                    if let Some(exp) = expected_args.as_ref() {
+                        let decl = &exp[idx];
+                        match decl {
+                            crate::config::nyash_toml_v2::ArgDecl::Typed { kind, category } => {
+                                match kind.as_str() {
+                                    "box" => {
+                                        // Only plugin box supported for now
+                                        if category.as_deref() != Some("plugin") {
+                                            return Err(BidError::InvalidArgs);
+                                        }
+                                        if a.as_any().downcast_ref::<PluginBoxV2>().is_none() {
+                                            return Err(BidError::InvalidArgs);
+                                        }
+                                    }
+                                    "string" => {
+                                        if a.as_any().downcast_ref::<StringBox>().is_none() {
+                                            return Err(BidError::InvalidArgs);
+                                        }
+                                    }
+                                    _ => {
+                                        // Unsupported kind in this minimal implementation
+                                        return Err(BidError::InvalidArgs);
+                                    }
+                                }
+                            }
+                            crate::config::nyash_toml_v2::ArgDecl::Name(_) => {
+                                // Back-compat: expect string
+                                if a.as_any().downcast_ref::<StringBox>().is_none() {
+                                    return Err(BidError::InvalidArgs);
+                                }
+                            }
+                        }
+                    }
+
+                    // Plugin Handle (BoxRef): tag=8, size=8
+                    if let Some(p) = a.as_any().downcast_ref::<PluginBoxV2>() {
+                        eprintln!("[PluginLoaderV2]  arg[{}]: PluginBoxV2({}, id={}) -> Handle(tag=8)", idx, p.box_type, p.instance_id);
+                        buf.push(8u8); // tag
+                        buf.push(0u8); // reserved
+                        buf.extend_from_slice(&(8u16).to_le_bytes());
+                        buf.extend_from_slice(&p.type_id.to_le_bytes());
+                        buf.extend_from_slice(&p.instance_id.to_le_bytes());
+                        continue;
+                    }
+                    // Integer: prefer i32
                     if let Some(i) = a.as_any().downcast_ref::<IntegerBox>() {
-                        buf.push(1);
-                        buf.extend_from_slice(&(i.value as i64).to_le_bytes());
-                    } else if let Some(b) = a.as_any().downcast_ref::<BoolBox>() {
-                        buf.push(3);
-                        buf.push(if b.value {1} else {0});
-                    } else if let Some(s) = a.as_any().downcast_ref::<StringBox>() {
+                        eprintln!("[PluginLoaderV2]  arg[{}]: Integer({}) -> I32(tag=2)", idx, i.value);
+                        buf.push(2u8); // tag=I32
+                        buf.push(0u8);
+                        buf.extend_from_slice(&(4u16).to_le_bytes());
+                        let v = i.value as i32;
+                        buf.extend_from_slice(&v.to_le_bytes());
+                        continue;
+                    }
+                    // String: tag=6
+                    if let Some(s) = a.as_any().downcast_ref::<StringBox>() {
+                        eprintln!("[PluginLoaderV2]  arg[{}]: String(len={}) -> String(tag=6)", idx, s.value.len());
                         let bytes = s.value.as_bytes();
-                        buf.push(2);
-                        buf.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
-                        buf.extend_from_slice(bytes);
+                        let len = std::cmp::min(bytes.len(), u16::MAX as usize);
+                        buf.push(6u8);
+                        buf.push(0u8);
+                        buf.extend_from_slice(&((len as u16).to_le_bytes()));
+                        buf.extend_from_slice(&bytes[..len]);
+                        continue;
+                    }
+                    // No schema or unsupported type: only allow fallback when schema is None
+                    if expected_args.is_none() {
+                        eprintln!("[PluginLoaderV2]  arg[{}]: fallback stringify", idx);
+                        let sv = a.to_string_box().value;
+                        let bytes = sv.as_bytes();
+                        let len = std::cmp::min(bytes.len(), u16::MAX as usize);
+                        buf.push(6u8);
+                        buf.push(0u8);
+                        buf.extend_from_slice(&((len as u16).to_le_bytes()));
+                        buf.extend_from_slice(&bytes[..len]);
                     } else {
-                        let s = a.to_string_box().value;
-                        let bytes = s.as_bytes();
-                        buf.push(2);
-                        buf.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
-                        buf.extend_from_slice(bytes);
+                        return Err(BidError::InvalidArgs);
                     }
                 }
                 buf
@@ -306,29 +401,59 @@ impl PluginBoxV2 {
                 )
             };
             if rc != 0 {
-                return Err(BidError::InvalidMethod);
+                let be = BidError::from_raw(rc);
+                eprintln!("[PluginLoaderV2] invoke rc={} ({}) for {}.{}", rc, be.message(), box_type, method_name);
+                return Err(be);
             }
-            // minimal decode: tag=1 int, tag=2 string, tag=3 bool, otherwise None
+            // Decode: BID-1 style header + first entry
             let result = if out_len == 0 { None } else {
                 let data = &out[..out_len];
-                match data[0] {
-                    1 if data.len() >= 9 => {
-                        let mut arr = [0u8;8];
-                        arr.copy_from_slice(&data[1..9]);
-                        Some(Box::new(IntegerBox::new(i64::from_le_bytes(arr))) as Box<dyn NyashBox>)
+                if data.len() < 4 { return Ok(None); }
+                let _ver = u16::from_le_bytes([data[0], data[1]]);
+                let argc = u16::from_le_bytes([data[2], data[3]]);
+                if argc == 0 { return Ok(None); }
+                if data.len() < 8 { return Ok(None); }
+                let tag = data[4];
+                let _rsv = data[5];
+                let size = u16::from_le_bytes([data[6], data[7]]) as usize;
+                if data.len() < 8 + size { return Ok(None); }
+                let payload = &data[8..8+size];
+                match tag {
+                    8 if size == 8 => { // Handle -> PluginBoxV2
+                        let mut t = [0u8;4]; t.copy_from_slice(&payload[0..4]);
+                        let mut i = [0u8;4]; i.copy_from_slice(&payload[4..8]);
+                        let r_type = u32::from_le_bytes(t);
+                        let r_inst = u32::from_le_bytes(i);
+                        // Map type_id -> (lib_name, box_name)
+                        if let Some((ret_lib, ret_box)) = self.find_box_by_type_id(config, &toml_value, r_type) {
+                            // Get plugin for ret_lib
+                            let plugins = self.plugins.read().unwrap();
+                            if let Some(ret_plugin) = plugins.get(ret_lib) {
+                                // Need fini_method_id from config
+                                if let Some(ret_conf) = config.get_box_config(ret_lib, ret_box, &toml_value) {
+                                    let fini_id = ret_conf.methods.get("fini").map(|m| m.method_id);
+                                    let pbox = PluginBoxV2 {
+                                        box_type: ret_box.to_string(),
+                                        type_id: r_type,
+                                        invoke_fn: ret_plugin.invoke_fn,
+                                        instance_id: r_inst,
+                                        fini_method_id: fini_id,
+                                    };
+                                    return Ok(Some(Box::new(pbox) as Box<dyn NyashBox>));
+                                }
+                            }
+                        }
+                        None
                     }
-                    2 if data.len() >= 5 => {
-                        let mut larr = [0u8;4];
-                        larr.copy_from_slice(&data[1..5]);
-                        let len = u32::from_le_bytes(larr) as usize;
-                        if data.len() >= 5+len {
-                            let s = String::from_utf8_lossy(&data[5..5+len]).to_string();
-                            Some(Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
-                        } else { None }
+                    2 if size == 4 => { // I32
+                        let mut b = [0u8;4]; b.copy_from_slice(payload);
+                        Some(Box::new(IntegerBox::new(i32::from_le_bytes(b) as i64)) as Box<dyn NyashBox>)
                     }
-                    3 if data.len() >= 2 => {
-                        Some(Box::new(BoolBox::new(data[1] != 0)) as Box<dyn NyashBox>)
+                    6 | 7 => { // String/Bytes
+                        let s = String::from_utf8_lossy(payload).to_string();
+                        Some(Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
                     }
+                    9 => None, // Void
                     _ => None,
                 }
             };
@@ -425,7 +550,8 @@ impl PluginBoxV2 {
         
         // Get type_id from config - read actual nyash.toml content
         eprintln!("🔍 Reading nyash.toml for type configuration...");
-        let (type_id, fini_method_id) = if let Ok(toml_content) = std::fs::read_to_string("nyash.toml") {
+        let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
+        let (type_id, fini_method_id) = if let Ok(toml_content) = std::fs::read_to_string(cfg_path) {
             eprintln!("🔍 nyash.toml read successfully");
             if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
                 eprintln!("🔍 nyash.toml parsed successfully");

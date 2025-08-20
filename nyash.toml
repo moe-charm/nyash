@@ -26,6 +26,12 @@ write = { method_id = 3, args = ["data"] }
 close = { method_id = 4 }
 fini = { method_id = 4294967295 }
 
+# v2.1: Box引数を受け取るメソッド宣言（FileBox: copyFrom(other: Handle)）
+copyFrom = { method_id = 7, args = [ { kind = "box", category = "plugin" } ] }
+
+# v2.2: BoxRef(Handle)を返すメソッド宣言
+cloneSelf = { method_id = 8 }
+
 [plugin_paths]
 # プラグインの検索パス（デフォルト）
 search_paths = [
