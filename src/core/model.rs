@@ -15,6 +15,8 @@ use crate::ast::ASTNode;
 pub struct BoxDeclaration {
     pub name: String,
     pub fields: Vec<String>,
+    pub public_fields: Vec<String>,
+    pub private_fields: Vec<String>,
     pub methods: HashMap<String, ASTNode>,
     pub constructors: HashMap<String, ASTNode>,
     pub init_fields: Vec<String>,
@@ -26,4 +28,3 @@ pub struct BoxDeclaration {
     /// Generic type parameters
     pub type_parameters: Vec<String>,
 }
-

@@ -365,10 +365,23 @@ impl NyashRunner {
                 ASTNode::Program { statements, .. } => {
                     for st in statements { walk(st, runtime); }
                 }
-                ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
+                ASTNode::FunctionDeclaration { body, .. } => {
+                    // Walk into function bodies to find nested box declarations
+                    for st in body { walk(st, runtime); }
+                }
+                ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
+                    // Walk into methods/constructors to find nested box declarations
+                    for (_mname, mnode) in methods {
+                        walk(mnode, runtime);
+                    }
+                    for (_ckey, cnode) in constructors {
+                        walk(cnode, runtime);
+                    }
                     let decl = CoreBoxDecl {
                         name: name.clone(),
                         fields: fields.clone(),
+                        public_fields: public_fields.clone(),
+                        private_fields: private_fields.clone(),
                         methods: methods.clone(),
                         constructors: constructors.clone(),
                         init_fields: init_fields.clone(),

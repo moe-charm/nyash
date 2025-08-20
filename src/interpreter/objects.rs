@@ -958,6 +958,8 @@ impl NyashInterpreter {
         &mut self, 
         name: String, 
         fields: Vec<String>, 
+        public_fields: Vec<String>,
+        private_fields: Vec<String>,
         methods: HashMap<String, ASTNode>,
         constructors: HashMap<String, ASTNode>,
         init_fields: Vec<String>,
@@ -991,6 +993,8 @@ impl NyashInterpreter {
         let box_decl = super::BoxDeclaration { 
             name: name.clone(), 
             fields, 
+            public_fields,
+            private_fields,
             methods,
             constructors,
             init_fields,

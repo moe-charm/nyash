@@ -460,6 +460,10 @@ pub enum ASTNode {
     BoxDeclaration {
         name: String,
         fields: Vec<String>,
+        /// 公開フィールド（public { ... }）
+        public_fields: Vec<String>,
+        /// 非公開フィールド（private { ... }）
+        private_fields: Vec<String>,
         methods: HashMap<String, ASTNode>, // method_name -> FunctionDeclaration
         constructors: HashMap<String, ASTNode>, // constructor_key -> FunctionDeclaration
         init_fields: Vec<String>,         // initブロック内のフィールド定義

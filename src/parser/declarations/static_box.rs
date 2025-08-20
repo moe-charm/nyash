@@ -273,6 +273,8 @@ impl NyashParser {
         Ok(ASTNode::BoxDeclaration {
             name,
             fields,
+            public_fields: vec![],
+            private_fields: vec![],
             methods,
             constructors,
             init_fields,

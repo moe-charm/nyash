@@ -137,6 +137,8 @@ impl NyashParser {
         
         let mut fields = Vec::new();
         let mut methods = HashMap::new();
+        let mut public_fields: Vec<String> = Vec::new();
+        let mut private_fields: Vec<String> = Vec::new();
         let mut constructors = HashMap::new();
         let mut init_fields = Vec::new();
         let mut weak_fields = Vec::new();  // 🔗 Track weak fields
@@ -404,6 +406,35 @@ impl NyashParser {
             if let TokenType::IDENTIFIER(field_or_method) = &self.current_token().token_type {
                 let field_or_method = field_or_method.clone();
                 self.advance();
+
+                // 可視性ブロック: public { ... } / private { ... }
+                if field_or_method == "public" || field_or_method == "private" {
+                    self.consume(TokenType::LBRACE)?;
+                    self.skip_newlines();
+                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                        if let TokenType::IDENTIFIER(fname) = &self.current_token().token_type {
+                            let fname = fname.clone();
+                            // ブロックに追加
+                            if field_or_method == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
+                            // 互換性のため、全体fieldsにも追加
+                            fields.push(fname);
+                            self.advance();
+                            // カンマ/改行をスキップ
+                            if self.match_token(&TokenType::COMMA) { self.advance(); }
+                            self.skip_newlines();
+                            continue;
+                        }
+                        // 予期しないトークン
+                        return Err(ParseError::UnexpectedToken {
+                            expected: "identifier in visibility block".to_string(),
+                            found: self.current_token().token_type.clone(),
+                            line: self.current_token().line,
+                        });
+                    }
+                    self.consume(TokenType::RBRACE)?;
+                    self.skip_newlines();
+                    continue;
+                }
                 
                 // メソッドかフィールドかを判定
                 if self.match_token(&TokenType::LPAREN) {
@@ -473,6 +504,8 @@ impl NyashParser {
         Ok(ASTNode::BoxDeclaration {
             name,
             fields,
+            public_fields,
+            private_fields,
             methods,
             constructors,
             init_fields,
@@ -571,6 +604,8 @@ impl NyashParser {
         Ok(ASTNode::BoxDeclaration {
             name,
             fields: vec![], // インターフェースはフィールドなし
+            public_fields: vec![],
+            private_fields: vec![],
             methods,
             constructors: HashMap::new(), // インターフェースにコンストラクタなし
             init_fields: vec![], // インターフェースにinitブロックなし

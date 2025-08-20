@@ -173,6 +173,8 @@ pub struct VM {
     last_result: Option<VMValue>,
     /// Simple field storage for objects (maps reference -> field -> value)
     object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
+    /// Class name mapping for objects (for visibility checks)
+    object_class: HashMap<ValueId, String>,
     /// Loop executor for handling phi nodes and loop-specific logic
     loop_executor: LoopExecutor,
     /// Shared runtime for box creation and declarations
@@ -205,6 +207,7 @@ impl VM {
             pc: 0,
             last_result: None,
             object_fields: HashMap::new(),
+            object_class: HashMap::new(),
             loop_executor: LoopExecutor::new(),
             runtime: NyashRuntime::new(),
             scope_tracker: ScopeTracker::new(),
@@ -228,6 +231,7 @@ impl VM {
             pc: 0,
             last_result: None,
             object_fields: HashMap::new(),
+            object_class: HashMap::new(),
             loop_executor: LoopExecutor::new(),
             runtime,
             scope_tracker: ScopeTracker::new(),
@@ -611,6 +615,8 @@ impl VM {
                         // Register for scope-based finalization (share; keep same instance)
                         let reg_arc = std::sync::Arc::from(b.share_box());
                         self.scope_tracker.register_box(reg_arc);
+                        // Record class name for visibility checks
+                        self.object_class.insert(*dst, box_type.clone());
                         // Store value in VM
                         self.set_value(*dst, VMValue::from_nyash_box(b));
                         Ok(ControlFlow::Continue)
@@ -696,6 +702,17 @@ impl VM {
             },
             
             MirInstruction::RefGet { dst, reference, field } => {
+                // Visibility check (if class known and visibility declared)
+                if let Some(class_name) = self.object_class.get(reference) {
+                    if let Ok(decls) = self.runtime.box_declarations.read() {
+                        if let Some(decl) = decls.get(class_name) {
+                            let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
+                            if has_vis && !decl.public_fields.contains(field) {
+                                return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
+                            }
+                        }
+                    }
+                }
                 // Get field value from object
                 let field_value = if let Some(fields) = self.object_fields.get(reference) {
                     if let Some(value) = fields.get(field) {
@@ -716,6 +733,17 @@ impl VM {
             MirInstruction::RefSet { reference, field, value } => {
                 // Get the value to set
                 let new_value = self.get_value(*value)?;
+                // Visibility check (treat all RefSet as external writes)
+                if let Some(class_name) = self.object_class.get(reference) {
+                    if let Ok(decls) = self.runtime.box_declarations.read() {
+                        if let Some(decl) = decls.get(class_name) {
+                            let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
+                            if has_vis && !decl.public_fields.contains(field) {
+                                return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
+                            }
+                        }
+                    }
+                }
                 
                 // Ensure object has field storage
                 if !self.object_fields.contains_key(reference) {
@@ -1127,10 +1155,12 @@ mod tests {
                 crate::ast::ASTNode::Program { statements, .. } => {
                     for st in statements { walk(st, runtime); }
                 }
-                crate::ast::ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
+                crate::ast::ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
                     let decl = CoreBoxDecl {
                         name: name.clone(),
                         fields: fields.clone(),
+                        public_fields: public_fields.clone(),
+                        private_fields: private_fields.clone(),
                         methods: methods.clone(),
                         constructors: constructors.clone(),
                         init_fields: init_fields.clone(),

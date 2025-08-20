@@ -1,0 +1,27 @@
+static box Main {
+    init { console }
+
+    main() {
+        me.console = new ConsoleBox()
+        
+        box User {
+            private { age, passwordHash }
+            public  { name }
+
+            init { name, age }
+
+            birth(n, a) {
+                me.name = n
+                me.age = a
+            }
+        }
+
+        local u = new User("Alice", 20)
+        me.console.log("name(public)=" + u.name)   # OK: public
+        
+        # 以下は外部からprivateフィールドへのアクセス → エラーになる想定
+        u.age = 30                 # 外部からの代入（NG）
+        me.console.log(u.age)      # 外部からの参照（NG）
+    }
+}
+

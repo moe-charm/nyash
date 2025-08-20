@@ -64,7 +64,7 @@ impl NyashInterpreter {
                 self.execute_using_statement(namespace_name)
             }
             
-            ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, is_static, static_init, .. } => {
+            ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, is_static, static_init, .. } => {
                 if *is_static {
                     // 🔥 Static Box宣言の処理
                     self.register_static_box_declaration(
@@ -83,6 +83,8 @@ impl NyashInterpreter {
                     self.register_box_declaration(
                         name.clone(), 
                         fields.clone(), 
+                        public_fields.clone(),
+                        private_fields.clone(),
                         methods.clone(),
                         constructors.clone(),
                         init_fields.clone(),
@@ -286,9 +288,28 @@ impl NyashInterpreter {
             
             ASTNode::FieldAccess { object, field, .. } => {
                 // フィールドへの代入
+                // 内部（me/this）からの代入かどうか
+                let is_internal = match &**object {
+                    ASTNode::This { .. } | ASTNode::Me { .. } => true,
+                    ASTNode::Variable { name, .. } if name == "me" => true,
+                    _ => false,
+                };
+
                 let obj_value = self.execute_expression(object)?;
                 
                 if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
+                    // 可視性チェック（外部アクセスの場合のみ）
+                    if !is_internal {
+                        let box_decls = self.shared.box_declarations.read().unwrap();
+                        if let Some(box_decl) = box_decls.get(&instance.class_name) {
+                            let has_visibility = !box_decl.public_fields.is_empty() || !box_decl.private_fields.is_empty();
+                            if has_visibility && !box_decl.public_fields.contains(&field.to_string()) {
+                                return Err(RuntimeError::InvalidOperation {
+                                    message: format!("Field '{}' is private in {}", field, instance.class_name),
+                                });
+                            }
+                        }
+                    }
                     // 🔥 finiは何回呼ばれてもエラーにしない（ユーザー要求）
                     // is_finalized()チェックを削除
                     

@@ -1,0 +1,36 @@
+static box Main {
+    init { console }
+
+    main() {
+        me.console = new ConsoleBox()
+        
+        box User {
+            private { age, passwordHash }
+            public  { name }
+
+            init { name, age }
+
+            birth(n, a) {
+                me.name = n
+                me.age = a
+            }
+
+            setAge(a) {
+                me.age = a   # private だが内部からなのでOK
+            }
+
+            getAge() {
+                return me.age   # private を内部参照（OK）
+            }
+        }
+
+        local u = new User("Alice", 20)
+        me.console.log("name(public)=" + u.name)   # OK: public
+        u.name = "Bob"                             # OK: public set
+
+        me.console.log("age(private, internal)=" + u.getAge())  # OK: 内部アクセス
+        u.setAge(21)                                            # OK: 内部でprivate set
+        me.console.log("done")
+    }
+}
+

@@ -34,6 +34,13 @@ impl NyashInterpreter {
         }
         
         
+        // 外からのフィールドアクセスか（me/this以外）を判定
+        let is_internal_access = match object {
+            ASTNode::This { .. } | ASTNode::Me { .. } => true,
+            ASTNode::Variable { name, .. } if name == "me" => true,
+            _ => false,
+        };
+
         // オブジェクトを評価（通常のフィールドアクセス）  
         let obj_value = self.execute_expression(object);
         
@@ -41,6 +48,20 @@ impl NyashInterpreter {
         
         // InstanceBoxにキャスト
         if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
+            // 可視性チェック（互換性: public/privateのどちらかが定義されていれば強制）
+            if !is_internal_access {
+                let box_decls = self.shared.box_declarations.read().unwrap();
+                if let Some(box_decl) = box_decls.get(&instance.class_name) {
+                    let has_visibility = !box_decl.public_fields.is_empty() || !box_decl.private_fields.is_empty();
+                    if has_visibility {
+                        if !box_decl.public_fields.contains(&field.to_string()) {
+                            return Err(RuntimeError::InvalidOperation {
+                                message: format!("Field '{}' is private in {}", field, instance.class_name),
+                            });
+                        }
+                    }
+                }
+            }
             // 🔥 finiは何回呼ばれてもエラーにしない（ユーザー要求）
             // is_finalized()チェックを削除
             
