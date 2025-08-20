@@ -67,10 +67,18 @@ impl MirBuilder {
         for _ in &params {
             param_types.push(MirType::Unknown);
         }
+        // Lightweight return type inference: if there is an explicit `return <expr>`
+        // in the top-level body, mark return type as Unknown; otherwise Void.
+        let mut returns_value = false;
+        for st in &body {
+            if let ASTNode::Return { value: Some(_), .. } = st { returns_value = true; break; }
+        }
+        let ret_ty = if returns_value { MirType::Unknown } else { MirType::Void };
+
         let signature = FunctionSignature {
             name: func_name,
             params: param_types,
-            return_type: MirType::Void,
+            return_type: ret_ty,
             effects: EffectMask::READ.add(Effect::ReadHeap), // conservative
         };
         let entry = self.block_gen.next();
@@ -925,80 +933,53 @@ impl MirBuilder {
     
     /// Build method call: object.method(arguments)
     fn build_method_call(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+        // ExternCall判定はobjectの変数解決より先に行う（未定義変数で落とさない）
+        if let ASTNode::Variable { name: object_name, .. } = object.clone() {
+            // Build argument expressions first (externはobject自体を使わない)
+            let mut arg_values = Vec::new();
+            for arg in &arguments {
+                arg_values.push(self.build_expression(arg.clone())?);
+            }
+            match (object_name.as_str(), method.as_str()) {
+                ("console", "log") => {
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None,
+                        iface_name: "env.console".to_string(),
+                        method_name: "log".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO,
+                    })?;
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
+                    return Ok(void_id);
+                },
+                ("canvas", "fillRect") | ("canvas", "fillText") => {
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None,
+                        iface_name: "env.canvas".to_string(),
+                        method_name: method,
+                        args: arg_values,
+                        effects: EffectMask::IO,
+                    })?;
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
+                    return Ok(void_id);
+                },
+                _ => {}
+            }
+        }
+
         // Build the object expression
         let object_value = self.build_expression(object.clone())?;
-        
+
         // Build argument expressions
         let mut arg_values = Vec::new();
         for arg in &arguments {
             arg_values.push(self.build_expression(arg.clone())?);
         }
-        
+
         // Create result value
         let result_id = self.value_gen.next();
-        
-        // Check if this is an external call (console.log, canvas.fillRect, etc.)
-        if let ASTNode::Variable { name: object_name, .. } = object.clone() {
-            match (object_name.as_str(), method.as_str()) {
-                ("console", "log") => {
-                    // Generate ExternCall for console.log
-                    self.emit_instruction(MirInstruction::ExternCall {
-                        dst: None, // console.log is void
-                        iface_name: "env.console".to_string(),
-                        method_name: "log".to_string(),
-                        args: arg_values,
-                        effects: EffectMask::IO, // Console output is I/O
-                    })?;
-                    
-                    // Return void value
-                    let void_id = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: void_id,
-                        value: ConstValue::Void,
-                    })?;
-                    return Ok(void_id);
-                },
-                ("canvas", "fillRect") => {
-                    // Generate ExternCall for canvas.fillRect
-                    self.emit_instruction(MirInstruction::ExternCall {
-                        dst: None, // canvas.fillRect is void
-                        iface_name: "env.canvas".to_string(),
-                        method_name: "fillRect".to_string(),
-                        args: arg_values,
-                        effects: EffectMask::IO, // Canvas operations are I/O
-                    })?;
-                    
-                    // Return void value
-                    let void_id = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: void_id,
-                        value: ConstValue::Void,
-                    })?;
-                    return Ok(void_id);
-                },
-                ("canvas", "fillText") => {
-                    // Generate ExternCall for canvas.fillText
-                    self.emit_instruction(MirInstruction::ExternCall {
-                        dst: None, // canvas.fillText is void
-                        iface_name: "env.canvas".to_string(),
-                        method_name: "fillText".to_string(),
-                        args: arg_values,
-                        effects: EffectMask::IO, // Canvas operations are I/O
-                    })?;
-                    
-                    // Return void value
-                    let void_id = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: void_id,
-                        value: ConstValue::Void,
-                    })?;
-                    return Ok(void_id);
-                },
-                _ => {
-                    // Regular method call - continue with BoxCall
-                }
-            }
-        }
         
         // Optimization: If the object is a direct `new ClassName(...)`, lower to a direct Call
         if let ASTNode::New { class, .. } = object {

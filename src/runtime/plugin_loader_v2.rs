@@ -209,11 +209,11 @@ impl PluginBoxV2 {
     /// Perform an external host call (env.* namespace) or return an error if unsupported
     /// Returns Some(Box) for a value result, or None for void-like calls
     pub fn extern_call(
-        &self,
-        iface_name: &str,
-        method_name: &str,
-        args: &[Box<dyn NyashBox>],
-    ) -> BidResult<Option<Box<dyn NyashBox>>> {
+            &self,
+            iface_name: &str,
+            method_name: &str,
+            args: &[Box<dyn NyashBox>],
+        ) -> BidResult<Option<Box<dyn NyashBox>>> {
         match (iface_name, method_name) {
             ("env.console", "log") => {
                 for a in args {
@@ -231,6 +231,60 @@ impl PluginBoxV2 {
             }
         }
     }
+
+        fn resolve_method_id_from_file(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
+            let config = self.config.as_ref().ok_or(BidError::PluginError)?;
+            let (lib_name, _lib_def) = config.find_library_for_box(box_type)
+                .ok_or(BidError::InvalidType)?;
+            let toml_content = std::fs::read_to_string("nyash.toml").map_err(|_| BidError::PluginError)?;
+            let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
+            let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+            let method = box_conf.methods.get(method_name).ok_or(BidError::InvalidMethod)?;
+            Ok(method.method_id)
+        }
+
+        /// Invoke an instance method on a plugin box by name (minimal TLV encoding)
+        pub fn invoke_instance_method(
+            &self,
+            box_type: &str,
+            method_name: &str,
+            instance_id: u32,
+            args: &[Box<dyn NyashBox>],
+        ) -> BidResult<Option<Box<dyn NyashBox>>> {
+            // Only support zero-argument methods for now (minimal viable)
+            if !args.is_empty() {
+                return Err(BidError::InvalidMethod);
+            }
+            let method_id = self.resolve_method_id_from_file(box_type, method_name)?;
+            // Find plugin and type_id
+            let config = self.config.as_ref().ok_or(BidError::PluginError)?;
+            let (lib_name, _lib_def) = config.find_library_for_box(box_type).ok_or(BidError::InvalidType)?;
+            let plugins = self.plugins.read().unwrap();
+            let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+            let toml_content = std::fs::read_to_string("nyash.toml").map_err(|_| BidError::PluginError)?;
+            let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
+            let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+            let type_id = box_conf.type_id;
+            // TLV args: version=1, argc=0
+            let tlv_args: [u8; 4] = [1, 0, 0, 0];
+            let mut out: [u8; 4] = [0; 4];
+            let mut out_len: usize = out.len();
+            let rc = unsafe {
+                (plugin.invoke_fn)(
+                    type_id,
+                    method_id,
+                    instance_id,
+                    tlv_args.as_ptr(),
+                    tlv_args.len(),
+                    out.as_mut_ptr(),
+                    &mut out_len,
+                )
+            };
+            if rc != 0 {
+                return Err(BidError::InvalidMethod);
+            }
+            Ok(None)
+        }
     
     /// Load single plugin
     pub fn load_plugin(&self, lib_name: &str, lib_def: &LibraryDefinition) -> BidResult<()> {
@@ -432,7 +486,7 @@ mod stub {
         pub fn new() -> Self { 
             Self { config: None } 
         } 
-    }
+    } 
     impl PluginLoaderV2 {
         pub fn load_config(&mut self, _p: &str) -> BidResult<()> { Ok(()) }
         pub fn load_all_plugins(&self) -> BidResult<()> { Ok(()) }
@@ -444,6 +498,16 @@ mod stub {
             &self,
             _iface_name: &str,
             _method_name: &str,
+            _args: &[Box<dyn NyashBox>],
+        ) -> BidResult<Option<Box<dyn NyashBox>>> {
+            Err(BidError::PluginError)
+        }
+
+        pub fn invoke_instance_method(
+            &self,
+            _box_type: &str,
+            _method_name: &str,
+            _instance_id: u32,
             _args: &[Box<dyn NyashBox>],
         ) -> BidResult<Option<Box<dyn NyashBox>>> {
             Err(BidError::PluginError)

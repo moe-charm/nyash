@@ -540,6 +540,29 @@ impl VM {
                     arg_values.push(arg_vm_value.to_nyash_box());
                 }
                 
+                // PluginBoxV2 method dispatch via BID-FFI (zero-arg minimal)
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(plugin) = box_nyash.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    let loader = crate::runtime::get_global_loader_v2();
+                    let loader = loader.read().map_err(|_| VMError::InvalidInstruction("Plugin loader lock poisoned".into()))?;
+                    match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
+                        Ok(Some(result_box)) => {
+                            if let Some(dst_id) = dst {
+                                self.set_value(*dst_id, VMValue::from_nyash_box(result_box));
+                            }
+                        }
+                        Ok(None) => {
+                            if let Some(dst_id) = dst {
+                                self.set_value(*dst_id, VMValue::Void);
+                            }
+                        }
+                        Err(_) => {
+                            return Err(VMError::InvalidInstruction(format!("Plugin method call failed: {}", method)));
+                        }
+                    }
+                    return Ok(ControlFlow::Continue);
+                }
+
                 // Call the method - unified dispatch for all Box types
                 // If user-defined InstanceBox: dispatch to lowered MIR function `{Class}.{method}/{argc}`
                 if let Some(instance) = box_nyash.as_any().downcast_ref::<InstanceBox>() {
@@ -1170,5 +1193,51 @@ return new Person("Alice").greet()
         let mut vm = VM::with_runtime(runtime);
         let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
         assert_eq!(result.to_string_box().value, "Hello, Alice");
+    }
+
+    #[test]
+    fn test_vm_user_box_var_then_method() {
+        let code = r#"
+box Counter {
+  init { x }
+  birth(n) { me.x = n }
+  inc() { me.x = me.x + 1 }
+  get() { return me.x }
+}
+
+local c
+c = new Counter(10)
+c.inc()
+c.get()
+"#;
+        let ast = NyashParser::parse_from_string(code).expect("parse failed");
+        let runtime = {
+            let rt = NyashRuntime::new();
+            collect_box_declarations(&ast, &rt);
+            let mut shared = SharedState::new();
+            shared.box_declarations = rt.box_declarations.clone();
+            let udf = Arc::new(UserDefinedBoxFactory::new(shared));
+            if let Ok(mut reg) = rt.box_registry.lock() { reg.register(udf); }
+            rt
+        };
+        let mut compiler = crate::mir::MirCompiler::new();
+        let compile_result = compiler.compile(ast).expect("mir compile failed");
+        let mut vm = VM::with_runtime(runtime);
+        let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+        assert_eq!(result.to_string_box().value, "11");
+    }
+
+    #[test]
+    fn test_vm_extern_console_log() {
+        let code = r#"
+console.log("ok")
+"#;
+        let ast = NyashParser::parse_from_string(code).expect("parse failed");
+        let runtime = NyashRuntime::new();
+        let mut compiler = crate::mir::MirCompiler::new();
+        let compile_result = compiler.compile(ast).expect("mir compile failed");
+        let mut vm = VM::with_runtime(runtime);
+        let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+        assert_eq!(result.to_string_box().value, "void");
     }
 }
