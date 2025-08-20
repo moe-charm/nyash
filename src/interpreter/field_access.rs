@@ -60,12 +60,8 @@ impl NyashInterpreter {
     fn execute_instance_field_access(&mut self, instance: &InstanceBox, field: &str) 
         -> Result<SharedNyashBox, RuntimeError> {
         
-        // 🔥 Usage prohibition guard - check if instance is finalized
-        if instance.is_finalized() {
-            return Err(RuntimeError::InvalidOperation {
-                message: "Instance was finalized; further use is prohibited".to_string(),
-            });
-        }
+        // 🔥 finiは何回呼ばれてもエラーにしない（ユーザー要求）
+        // is_finalized()チェックを削除
         
         // フィールドの値を取得
         let field_value = instance.get_field(field)

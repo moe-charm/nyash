@@ -502,12 +502,8 @@ impl NyashInterpreter {
         
         // ⚠️ InstanceBox method calls (最後にチェック、ビルトインBoxの後)
         if let Some(instance) = obj_value.as_any().downcast_ref::<InstanceBox>() {
-            // 🔥 Usage prohibition guard - check if instance is finalized
-            if instance.is_finalized() {
-                return Err(RuntimeError::InvalidOperation {
-                    message: "Instance was finalized; further use is prohibited".to_string(),
-                });
-            }
+            // 🔥 finiは何回呼ばれてもエラーにしない（ユーザー要求）
+            // is_finalized()チェックを削除
             
             // fini()は特別処理
             if method == "fini" {
