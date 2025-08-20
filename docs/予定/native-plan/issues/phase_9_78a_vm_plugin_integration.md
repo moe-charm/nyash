@@ -238,15 +238,68 @@ print %5
 3. パフォーマンス劣化が10%以内
 4. 既存のテストがすべてパス
 
+## 🔧 実装箇所の詳細分析
+
+### 1. MIR生成部分（mir/builder.rs）
+
+**現在の実装**：
+```rust
+fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) {
+    match class.as_str() {
+        "IntegerBox" | "StringBox" | "BoolBox" => {
+            // 基本型は最適化（直接値を返す）
+            emit(MirInstruction::Const { ... })
+        }
+        _ => {
+            // その他はRefNew（不適切）
+            emit(MirInstruction::RefNew { ... })
+        }
+    }
+}
+```
+
+**必要な修正**：
+```rust
+// すべてのnew式に対してNewBox命令を生成
+let arg_values = arguments.iter()
+    .map(|arg| self.build_expression(arg))
+    .collect::<Result<Vec<_>, _>>()?;
+
+emit(MirInstruction::NewBox {
+    dst,
+    box_type: class,
+    args: arg_values
+})
+```
+
+### 2. VM実行部分（backend/vm.rs）
+
+**主要な修正箇所**：
+- `NewBox`処理 - BoxFactory統合、birth実行
+- `BoxCall`処理 - 統一メソッドディスパッチ
+- スコープ管理 - ScopeTracker実装
+- VM初期化 - BoxFactory、PluginLoader注入
+
+### 3. 共有コンポーネント
+
+**VMでも使用する既存コンポーネント**：
+- `BoxFactory` - src/box_factory.rs
+- `BoxDeclaration` - src/ast.rs
+- `PluginLoaderV2` - src/runtime/plugin_loader_v2.rs
+- `InstanceBox` - src/instance_v2.rs
+
 ## 📅 実装スケジュール
 
-1. **Week 1**: VMValue拡張とテスト
-2. **Week 2**: プラグインローダー統合
-3. **Week 3**: ExternCall実装
-4. **Week 4**: FileBoxテストと最適化
+1. **Step 1**: MIR生成修正（NewBox命令）
+2. **Step 2**: VM構造体拡張（BoxFactory統合）
+3. **Step 3**: NewBox実装（birth実行含む）
+4. **Step 4**: BoxCall統一実装
+5. **Step 5**: スコープ管理とfini実装
+6. **Step 6**: テストとデバッグ
 
 ---
 
 **作成日**: 2025-08-21  
+**更新日**: 2025-08-21（実装箇所詳細追加）
 **優先度**: 高（Phase 8.4 AST→MIR Loweringの次）  
 **前提条件**: Phase 9.78 BoxFactory統一実装完了

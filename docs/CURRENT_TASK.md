@@ -368,71 +368,71 @@ cargo build --release -j32 --features wasm-backend
 - ✅ substring(start, end)メソッド実装完了
 - ✅ fini後のアクセスエラー削除（is_finalized()チェック削除）
 
-## 🚀 **次期実装計画: VM Plugin System統合**
+## 🚀 **実装中: Phase 9.78a VM統一Box処理**
 
-### 🎯 **目標: FileBoxプラグインをVMから呼び出す**
+### 🎯 **目標: すべてのBox型をVMで統一的に処理**
 
-**現在の状況**:
-- ✅ プラグインシステム（BID-FFI v1）は動作中
-- ✅ FileBoxプラグインは完成・テスト済み
-- ❌ VM（MIR）からプラグイン呼び出しが未実装
+**発見された問題**:
+- ❌ ユーザー定義Box未対応（NewBoxで文字列返すだけ）
+- ❌ birth/finiライフサイクル欠落
+- ❌ メソッド呼び出しハードコード
 
-### 📊 **実装フェーズ**
+**解決策**: インタープリターと同等の統一処理を実装
 
-#### **Phase 1: VM ExternCall実装** (優先度: 最高)
-1. **現在のスタブを実装に置き換え**
-   ```rust
-   // src/backend/vm.rs
-   MirInstruction::ExternCall { iface_name, method_name, args, result } => {
-       // 現在: println!("External call stub")
-       // TODO: plugin_loader_v2との接続
-   }
-   ```
+### 📊 **実装ステップ（詳細分析済み）**
 
-2. **プラグインローダー統合**
-   - VMにplugin_loader_v2への参照を持たせる
-   - ExternCallでプラグインメソッドを呼び出し
-   - 結果をレジスタに格納
+#### **Step 1: MIR生成修正** ✅ 分析完了
+**場所**: `src/mir/builder.rs` - `build_new_expression()`
+```rust
+// 現在: RefNew命令（不適切）
+// 修正: NewBox命令を生成
+emit(MirInstruction::NewBox {
+    dst,
+    box_type: class,
+    args: arg_values
+})
+```
 
-#### **Phase 2: 型変換レイヤー実装** (優先度: 高)
-1. **MIRValue ↔ NyashValue変換**
-   - VM内部のMIRValue型
-   - プラグインが期待するNyashValue型
-   - 相互変換関数の実装
+#### **Step 2: VM構造体拡張** 🔄 実装予定
+**場所**: `src/backend/vm.rs`
+```rust
+pub struct VM {
+    // 追加
+    box_factory: Arc<BoxFactory>,
+    plugin_loader: Option<Arc<PluginLoaderV2>>,
+    scope_tracker: ScopeTracker,
+    box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
+}
+```
 
-2. **メモリ管理**
-   - プラグインから返されたBoxの所有権管理
-   - Arc<Mutex>の適切な処理
+#### **Step 3: NewBox統一実装** 🔄 実装予定
+- BoxFactory経由で作成
+- ユーザー定義Boxのbirth実行
+- スコープ登録（fini用）
 
-#### **Phase 3: FileBoxテストケース作成** (優先度: 中)
-1. **VM経由のFileBoxテスト**
-   ```nyash
-   // VMバックエンドで実行
-   local file = new FileBox("test.txt")
-   file.write("Hello from VM!")
-   local content = file.read()
-   print(content)
-   file.close()
-   ```
+#### **Step 4: BoxCall統一実装** 🔄 実装予定
+- ビルトイン/ユーザー定義/プラグイン統一処理
+- メソッドディスパッチ共通化
 
-2. **パフォーマンス測定**
-   - インタープリター vs VM比較
-   - プラグイン呼び出しオーバーヘッド測定
+#### **Step 5: ライフサイクル管理** 🔄 実装予定
+- ScopeTracker実装
+- スコープ終了時の自動fini
+- 逆順実行（作成順と逆）
 
-### 🔧 **技術的課題と解決策**
-
-**課題1: プラグインローダーへのアクセス**
-- 解決: VMインスタンスにplugin_loaderフィールド追加
-
-**課題2: 非同期プラグイン呼び出し**
-- 解決: 現在は同期呼び出しのみ対応、将来的に非同期対応
-
-**課題3: エラーハンドリング**
-- 解決: プラグインエラーをMIRレベルで適切に処理
+### 🔧 **共有コンポーネント**
+- `BoxFactory` - すでに存在、VMでも使用
+- `InstanceBox` - ユーザー定義Box表現
+- `PluginLoaderV2` - プラグイン統合
 
 ### 📈 **期待される成果**
-- ✅ VM経由でのプラグイン実行
-- ✅ 高速なファイル操作
-- ✅ 将来的な拡張性（他のプラグインも同様に統合可能）
+- ✅ すべてのBox型が同じライフサイクル
+- ✅ birth → 使用 → fini の一貫性
+- ✅ プラグインBoxもVMで動作
+- ✅ 保守性とバグの削減
 
-最終更新: 2025-08-21 - VM Plugin System統合計画追加
+### 📚 **関連ドキュメント**
+- [Phase 9.78a計画書](./予定/native-plan/issues/phase_9_78a_vm_plugin_integration.md)
+- [深層分析](./予定/native-plan/issues/phase_9_78a_vm_plugin_integration_deep_analysis.md)
+- [VM統合仕様書](./説明書/reference/plugin-system/vm-plugin-integration.md)
+
+最終更新: 2025-08-21 - Phase 9.78a VM統一Box処理開始
