@@ -61,20 +61,8 @@ pub struct ConstructorContext {
     pub parent_class: Option<String>,
 }
 
-/// Box宣言を保持する構造体
-#[derive(Debug, Clone)]
-pub struct BoxDeclaration {
-    pub name: String,
-    pub fields: Vec<String>,
-    pub methods: HashMap<String, ASTNode>,
-    pub constructors: HashMap<String, ASTNode>,
-    pub init_fields: Vec<String>,
-    pub weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
-    pub is_interface: bool,
-    pub extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
-    pub implements: Vec<String>,
-    pub type_parameters: Vec<String>,  // 🔥 ジェネリクス型パラメータ
-}
+// Re-export core model so existing interpreter modules keep working
+pub use crate::core::model::BoxDeclaration;
 
 /// 🔥 Static Box定義を保持する構造体
 #[derive(Debug, Clone)]

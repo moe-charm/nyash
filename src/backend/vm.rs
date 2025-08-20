@@ -8,6 +8,10 @@ use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, C
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
 use std::collections::HashMap;
 use std::sync::Arc;
+use crate::runtime::NyashRuntime;
+use crate::scope_tracker::ScopeTracker;
+// MirModule is already imported via crate::mir at top
+use crate::instance_v2::InstanceBox;
 use super::vm_phi::LoopExecutor;
 
 // Phase 9.78a: Import necessary components for unified Box handling
@@ -171,6 +175,12 @@ pub struct VM {
     object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
     /// Loop executor for handling phi nodes and loop-specific logic
     loop_executor: LoopExecutor,
+    /// Shared runtime for box creation and declarations
+    runtime: NyashRuntime,
+    /// Scope tracker for calling fini on scope exit
+    scope_tracker: ScopeTracker,
+    /// Active MIR module during execution (for function calls)
+    module: Option<MirModule>,
     // Phase 9.78a: Add unified Box handling components
     // TODO: Re-enable when interpreter refactoring is complete
     // /// Box registry for creating all Box types
@@ -196,12 +206,32 @@ impl VM {
             last_result: None,
             object_fields: HashMap::new(),
             loop_executor: LoopExecutor::new(),
+            runtime: NyashRuntime::new(),
+            scope_tracker: ScopeTracker::new(),
+            module: None,
             // TODO: Re-enable when interpreter refactoring is complete
             // box_registry: Arc::new(UnifiedBoxRegistry::new()),
             // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
             // plugin_loader: None,
             // scope_tracker: ScopeTracker::new(),
             // box_declarations: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Create a VM with an external runtime (dependency injection)
+    pub fn with_runtime(runtime: NyashRuntime) -> Self {
+        Self {
+            values: Vec::new(),
+            current_function: None,
+            current_block: None,
+            previous_block: None,
+            pc: 0,
+            last_result: None,
+            object_fields: HashMap::new(),
+            loop_executor: LoopExecutor::new(),
+            runtime,
+            scope_tracker: ScopeTracker::new(),
+            module: None,
         }
     }
     
@@ -230,6 +260,8 @@ impl VM {
     
     /// Execute a MIR module
     pub fn execute_module(&mut self, module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
+        // Store module for nested calls
+        self.module = Some(module.clone());
         // Find main function
         let main_function = module.get_function("main")
             .ok_or_else(|| VMError::InvalidInstruction("No main function found".to_string()))?;
@@ -240,6 +272,43 @@ impl VM {
         // Convert result to NyashBox
         Ok(result.to_nyash_box())
     }
+
+    /// Call a MIR function by name with VMValue arguments
+    fn call_function_by_name(&mut self, func_name: &str, args: Vec<VMValue>) -> Result<VMValue, VMError> {
+        let module_ref = self.module.as_ref().ok_or_else(|| VMError::InvalidInstruction("No active module".to_string()))?;
+        let function_ref = module_ref.get_function(func_name)
+            .ok_or_else(|| VMError::InvalidInstruction(format!("Function '{}' not found", func_name)))?;
+        // Clone function to avoid borrowing conflicts during execution
+        let function = function_ref.clone();
+
+        // Save current frame
+        let saved_values = std::mem::take(&mut self.values);
+        let saved_current_function = self.current_function.clone();
+        let saved_current_block = self.current_block;
+        let saved_previous_block = self.previous_block;
+        let saved_pc = self.pc;
+        let saved_last_result = self.last_result.clone();
+
+        // Bind parameters
+        for (i, param_id) in function.params.iter().enumerate() {
+            if let Some(arg) = args.get(i) {
+                self.set_value(*param_id, arg.clone());
+            }
+        }
+
+        // Execute the function
+        let result = self.execute_function(&function);
+
+        // Restore frame
+        self.values = saved_values;
+        self.current_function = saved_current_function;
+        self.current_block = saved_current_block;
+        self.previous_block = saved_previous_block;
+        self.pc = saved_pc;
+        self.last_result = saved_last_result;
+
+        result
+    }
     
     /// Execute a single function
     fn execute_function(&mut self, function: &MirFunction) -> Result<VMValue, VMError> {
@@ -248,8 +317,8 @@ impl VM {
         // Initialize loop executor for this function
         self.loop_executor.initialize();
         
-        // Phase 9.78a: Enter a new scope for this function
-        // self.scope_tracker.push_scope();
+        // Enter a new scope for this function
+        self.scope_tracker.push_scope();
         
         // Start at entry block
         let mut current_block = function.entry_block;
@@ -284,8 +353,8 @@ impl VM {
             
             // Handle control flow
             if let Some(return_value) = should_return {
-                // Phase 9.78a: Exit scope before returning
-                // self.scope_tracker.pop_scope();
+                // Exit scope before returning
+                self.scope_tracker.pop_scope();
                 return Ok(return_value);
             } else if let Some(target) = next_block {
                 // Update previous block before jumping
@@ -296,8 +365,8 @@ impl VM {
             } else {
                 // Block ended without terminator - this shouldn't happen in well-formed MIR
                 // but let's handle it gracefully by returning void
-                // Phase 9.78a: Exit scope before returning
-                // self.scope_tracker.pop_scope();
+                // Exit scope before returning
+                self.scope_tracker.pop_scope();
                 return Ok(VMValue::Void);
             }
         }
@@ -429,6 +498,31 @@ impl VM {
                     _ => box_vm_value.to_nyash_box(),
                 };
                 
+                // Fast path: birth() for user-defined boxes is lowered to a MIR function
+                if method == "birth" {
+                    if let Some(instance) = box_nyash.as_any().downcast_ref::<InstanceBox>() {
+                        let class_name = instance.class_name.clone();
+                        let func_name = format!("{}.birth/{}", class_name, args.len());
+
+                        // Prepare VMValue args: me + evaluated arguments
+                        let mut vm_args: Vec<VMValue> = Vec::new();
+                        vm_args.push(VMValue::from_nyash_box(box_nyash.clone_box()));
+                        for arg_id in args {
+                            let arg_vm_value = self.get_value(*arg_id)?;
+                            vm_args.push(arg_vm_value);
+                        }
+
+                        // Call the lowered function (ignore return)
+                        let _ = self.call_function_by_name(&func_name, vm_args)?;
+
+                        // birth returns void; only set dst if specified (rare for birth)
+                        if let Some(dst_id) = dst {
+                            self.set_value(*dst_id, VMValue::Void);
+                        }
+                        return Ok(ControlFlow::Continue);
+                    }
+                }
+
                 // Evaluate arguments
                 let mut arg_values = Vec::new();
                 for arg_id in args {
@@ -437,6 +531,24 @@ impl VM {
                 }
                 
                 // Call the method - unified dispatch for all Box types
+                // If user-defined InstanceBox: dispatch to lowered MIR function `{Class}.{method}/{argc}`
+                if let Some(instance) = box_nyash.as_any().downcast_ref::<InstanceBox>() {
+                    let class_name = instance.class_name.clone();
+                    let func_name = format!("{}.{}{}", class_name, method, format!("/{}", args.len()));
+                    // Prepare VMValue args: me + evaluated arguments (use original VM args for value-level fidelity)
+                    let mut vm_args: Vec<VMValue> = Vec::new();
+                    vm_args.push(VMValue::from_nyash_box(box_nyash.clone_box()));
+                    for arg_id in args {
+                        let arg_vm_value = self.get_value(*arg_id)?;
+                        vm_args.push(arg_vm_value);
+                    }
+                    let call_result = self.call_function_by_name(&func_name, vm_args)?;
+                    if let Some(dst_id) = dst {
+                        self.set_value(*dst_id, call_result);
+                    }
+                    return Ok(ControlFlow::Continue);
+                }
+
                 let result = self.call_unified_method(box_nyash, method, arg_values)?;
                 
                 // Store result if destination is specified
@@ -448,58 +560,29 @@ impl VM {
             },
             
             MirInstruction::NewBox { dst, box_type, args } => {
-                // Phase 9.78a: Simplified Box creation (temporary until interpreter refactoring)
-                
-                // Evaluate arguments
-                let mut arg_values = Vec::new();
+                // Evaluate arguments into NyashBox for unified factory
+                let mut nyash_args: Vec<Box<dyn NyashBox>> = Vec::new();
                 for arg_id in args {
                     let arg_value = self.get_value(*arg_id)?;
-                    arg_values.push(arg_value);
+                    nyash_args.push(arg_value.to_nyash_box());
                 }
-                
-                // Basic Box creation for common types
-                let result = match box_type.as_str() {
-                    "StringBox" => {
-                        // Get first argument as string, or empty string
-                        let value = if let Some(arg) = arg_values.first() {
-                            arg.to_string()
-                        } else {
-                            String::new()
-                        };
-                        VMValue::String(value)
-                    },
-                    "IntegerBox" => {
-                        // Get first argument as integer, or 0
-                        let value = if let Some(arg) = arg_values.first() {
-                            arg.as_integer().unwrap_or(0)
-                        } else {
-                            0
-                        };
-                        VMValue::Integer(value)
-                    },
-                    "BoolBox" => {
-                        // Get first argument as bool, or false
-                        let value = if let Some(arg) = arg_values.first() {
-                            arg.as_bool().unwrap_or(false)
-                        } else {
-                            false
-                        };
-                        VMValue::Bool(value)
-                    },
-                    "ArrayBox" => {
-                        // Create empty ArrayBox
-                        let array_box = Box::new(crate::boxes::array::ArrayBox::new());
-                        VMValue::from_nyash_box(array_box)
-                    },
-                    _ => {
-                        // For unknown types, create a placeholder
-                        // TODO: Implement proper user-defined Box creation after refactoring
-                        VMValue::String(format!("{}[placeholder]", box_type))
-                    }
+                // Create via unified registry from runtime
+                let registry = self.runtime.box_registry.clone();
+                let created = {
+                    let guard = registry.lock().map_err(|_| VMError::InvalidInstruction("Registry lock poisoned".into()))?;
+                    guard.create_box(box_type, &nyash_args)
                 };
-                
-                self.set_value(*dst, result);
-                Ok(ControlFlow::Continue)
+                match created {
+                    Ok(b) => {
+                        // Register for scope-based finalization (clone for registration)
+                        let reg_arc = std::sync::Arc::from(b.clone_box());
+                        self.scope_tracker.register_box(reg_arc);
+                        // Store value in VM
+                        self.set_value(*dst, VMValue::from_nyash_box(b));
+                        Ok(ControlFlow::Continue)
+                    }
+                    Err(e) => Err(VMError::InvalidInstruction(format!("NewBox failed for {}: {}", box_type, e)))
+                }
             },
             
             MirInstruction::TypeCheck { dst, value: _, expected_type: _ } => {

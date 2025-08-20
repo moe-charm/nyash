@@ -1120,7 +1120,7 @@ impl NyashInterpreter {
                 let parent_decl = {
                     let box_decls = self.shared.box_declarations.read().unwrap();
                     box_decls.get(parent_name)
-                        .ok_or(RuntimeError::UndefinedClass { name: parent_name.clone() })?
+                        .ok_or(RuntimeError::UndefinedClass { name: parent_name.to_string() })?
                         .clone()
                 };
                 

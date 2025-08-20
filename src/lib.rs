@@ -18,6 +18,7 @@ pub mod tokenizer;
 pub mod ast;  // Using old ast.rs for now
 pub mod parser;  // Using old parser.rs for now
 pub mod interpreter;
+pub mod core; // Core models shared by backends
 pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
 pub mod channel_box;
 pub mod finalization;

@@ -10,6 +10,7 @@ use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, Shared
 use crate::instance_v2::InstanceBox;
 use crate::parser::ParseError;
 use super::BuiltinStdlib;
+use crate::runtime::{NyashRuntime, NyashRuntimeBuilder};
 use std::sync::{Arc, Mutex, RwLock};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -222,6 +223,9 @@ pub struct NyashInterpreter {
     
     /// 📚 組み込み標準ライブラリ
     pub(super) stdlib: Option<BuiltinStdlib>,
+
+    /// 共有ランタイム（Boxレジストリ等）
+    pub(super) runtime: NyashRuntime,
 }
 
 impl NyashInterpreter {
@@ -229,12 +233,15 @@ impl NyashInterpreter {
     pub fn new() -> Self {
         let shared = SharedState::new();
         
-        // Register user-defined box factory with unified registry
+        // ランタイムを構築し、ユーザー定義Boxファクトリを注入（グローバル登録を避ける）
         use crate::box_factory::user_defined::UserDefinedBoxFactory;
-        use crate::runtime::register_user_defined_factory;
-        
-        let factory = UserDefinedBoxFactory::new(shared.clone());
-        register_user_defined_factory(Arc::new(factory));
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        let runtime = NyashRuntimeBuilder::new().with_factory(udf).build();
+
+        // Step 5: SharedState分解の第一歩として、
+        // box_declarationsの保管先をRuntimeに寄せる
+        let mut shared = shared; // 可変化
+        shared.box_declarations = runtime.box_declarations.clone();
         
         Self {
             shared,
@@ -245,11 +252,21 @@ impl NyashInterpreter {
             evaluation_stack: Vec::new(),
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
             stdlib: None, // 遅延初期化
+            runtime,
         }
     }
     
     /// 共有状態から新しいインタープリターを作成（非同期実行用）
     pub fn with_shared(shared: SharedState) -> Self {
+        // 共有状態に紐づいたランタイムを構築
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        let runtime = NyashRuntimeBuilder::new().with_factory(udf).build();
+
+        // Step 5: Runtimeのbox_declarationsに寄せ替え
+        let mut shared = shared; // 可変化
+        shared.box_declarations = runtime.box_declarations.clone();
+        
         Self {
             shared,
             local_vars: HashMap::new(),
@@ -259,6 +276,7 @@ impl NyashInterpreter {
             evaluation_stack: Vec::new(),
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
             stdlib: None, // 遅延初期化
+            runtime,
         }
     }
     

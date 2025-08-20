@@ -6,6 +6,9 @@
 
 use std::sync::Arc;
 use crate::box_trait::NyashBox;
+use crate::instance_v2::InstanceBox;
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
 /// Tracks Box instances created in different scopes for proper fini calls
 pub struct ScopeTracker {
@@ -31,11 +34,18 @@ impl ScopeTracker {
         if let Some(scope) = self.scopes.pop() {
             // Call fini in reverse order of creation
             for arc_box in scope.into_iter().rev() {
-                // For now, fini handling is simplified
-                // In a full implementation, we would check if the Box has a fini method
-                // and call it appropriately
-                // TODO: Implement proper fini dispatch
-                let _ = arc_box; // Suppress unused warning
+                // InstanceBox: call fini()
+                if let Some(instance) = arc_box.as_any().downcast_ref::<InstanceBox>() {
+                    let _ = instance.fini();
+                    continue;
+                }
+                // PluginBox: call plugin fini
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(plugin) = arc_box.as_any().downcast_ref::<PluginBoxV2>() {
+                    plugin.call_fini();
+                    continue;
+                }
+                // Builtin and others: no-op for now
             }
         }
         

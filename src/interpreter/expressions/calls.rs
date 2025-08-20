@@ -643,8 +643,7 @@ impl NyashInterpreter {
                 for parent_name in &parent_names {
                     if crate::box_trait::is_builtin_box(parent_name) {
                         // ビルトインBoxメソッドを実行
-                        match parent_name.as_str() {
-                            "StringBox" => {
+                        if parent_name == "StringBox" {
                                 // ユーザー定義BoxがStringBoxを継承している場合
                                 // __builtin_contentフィールドからStringBoxを取得
                                 if let Some(builtin_value) = instance.get_field_ng("__builtin_content") {
@@ -659,8 +658,7 @@ impl NyashInterpreter {
                                 // フィールドが見つからない場合は空のStringBoxを使用（互換性のため）
                                 let string_box = StringBox::new("");
                                 return self.execute_string_method(&string_box, method, arguments);
-                            },
-                            "IntegerBox" => {
+                        } else if parent_name == "IntegerBox" {
                                 // __builtin_contentフィールドからIntegerBoxを取得
                                 if let Some(builtin_value) = instance.get_field_ng("__builtin_content") {
                                     if let crate::value::NyashValue::Box(boxed) = builtin_value {
@@ -673,15 +671,12 @@ impl NyashInterpreter {
                                 // フィールドが見つからない場合は0のIntegerBoxを使用
                                 let integer_box = IntegerBox::new(0);
                                 return self.execute_integer_method(&integer_box, method, arguments);
-                            },
-                            "MathBox" => {
+                        } else if parent_name == "MathBox" {
                                 // MathBoxはステートレスなので、新しいインスタンスを作成
                                 let math_box = MathBox::new();
                                 return self.execute_math_method(&math_box, method, arguments);
-                            },
-                            // 他のビルトインBoxも必要に応じて追加
-                            _ => {}
                         }
+                        // 他のビルトインBoxも必要に応じて追加
                     }
                 }
                 

@@ -15,6 +15,12 @@ use nyash_rust::{
     mir::{MirCompiler, MirPrinter, MirInstruction},
     backend::VM,
 };
+use nyash_rust::runtime::NyashRuntime;
+use nyash_rust::interpreter::SharedState;
+use nyash_rust::box_factory::user_defined::UserDefinedBoxFactory;
+use nyash_rust::core::model::BoxDeclaration as CoreBoxDecl;
+use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
 
 #[cfg(feature = "wasm-backend")]
 use nyash_rust::backend::{wasm::WasmBackend, aot::AotBackend};
@@ -314,6 +320,20 @@ impl NyashRunner {
             }
         };
 
+        // Prepare runtime and collect Box declarations for VM user-defined types
+        let runtime = {
+            let rt = NyashRuntime::new();
+            self.collect_box_declarations(&ast, &rt);
+            // Register UserDefinedBoxFactory backed by the same declarations
+            let mut shared = SharedState::new();
+            shared.box_declarations = rt.box_declarations.clone();
+            let udf = Arc::new(UserDefinedBoxFactory::new(shared));
+            if let Ok(mut reg) = rt.box_registry.lock() {
+                reg.register(udf);
+            }
+            rt
+        };
+
         // Compile to MIR
         let mut mir_compiler = MirCompiler::new();
         let compile_result = match mir_compiler.compile(ast) {
@@ -324,8 +344,8 @@ impl NyashRunner {
             }
         };
 
-        // Execute with VM
-        let mut vm = VM::new();
+        // Execute with VM using prepared runtime
+        let mut vm = VM::with_runtime(runtime);
         match vm.execute_module(&compile_result.module) {
             Ok(result) => {
                 println!("✅ VM execution completed successfully!");
@@ -336,6 +356,36 @@ impl NyashRunner {
                 process::exit(1);
             }
         }
+    }
+
+    /// Collect Box declarations from AST and register into runtime
+    fn collect_box_declarations(&self, ast: &ASTNode, runtime: &NyashRuntime) {
+        fn walk(node: &ASTNode, runtime: &NyashRuntime) {
+            match node {
+                ASTNode::Program { statements, .. } => {
+                    for st in statements { walk(st, runtime); }
+                }
+                ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
+                    let decl = CoreBoxDecl {
+                        name: name.clone(),
+                        fields: fields.clone(),
+                        methods: methods.clone(),
+                        constructors: constructors.clone(),
+                        init_fields: init_fields.clone(),
+                        weak_fields: weak_fields.clone(),
+                        is_interface: *is_interface,
+                        extends: extends.clone(),
+                        implements: implements.clone(),
+                        type_parameters: type_parameters.clone(),
+                    };
+                    if let Ok(mut map) = runtime.box_declarations.write() {
+                        map.insert(name.clone(), decl);
+                    }
+                }
+                _ => {}
+            }
+        }
+        walk(ast, runtime);
     }
 
     /// Execute WASM compilation mode

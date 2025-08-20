@@ -50,6 +50,84 @@ impl MirBuilder {
             pending_phis: Vec::new(),
         }
     }
+
+    /// Lower a box method (e.g., birth) into a standalone MIR function
+    /// func_name: Fully-qualified name like "Person.birth/1"
+    /// box_name: Owning box type name (used for 'me' param type)
+    fn lower_method_as_function(
+        &mut self,
+        func_name: String,
+        box_name: String,
+        params: Vec<String>,
+        body: Vec<ASTNode>,
+    ) -> Result<(), String> {
+        // Prepare function signature: (me: Box(box_name), args: Unknown...)-> Void
+        let mut param_types = Vec::new();
+        param_types.push(MirType::Box(box_name.clone())); // me
+        for _ in &params {
+            param_types.push(MirType::Unknown);
+        }
+        let signature = FunctionSignature {
+            name: func_name,
+            params: param_types,
+            return_type: MirType::Void,
+            effects: EffectMask::READ.add(Effect::ReadHeap), // conservative
+        };
+        let entry = self.block_gen.next();
+        let mut function = MirFunction::new(signature, entry);
+
+        // Save current builder state
+        let saved_function = self.current_function.take();
+        let saved_block = self.current_block.take();
+        let saved_var_map = std::mem::take(&mut self.variable_map);
+
+        // Switch context to new function
+        self.current_function = Some(function);
+        self.current_block = Some(entry);
+        self.ensure_block_exists(entry)?;
+
+        // Create parameter value ids and bind variable names
+        if let Some(ref mut f) = self.current_function {
+            // 'me' parameter
+            let me_id = self.value_gen.next();
+            f.params.push(me_id);
+            self.variable_map.insert("me".to_string(), me_id);
+            // user parameters
+            for p in &params {
+                let pid = self.value_gen.next();
+                f.params.push(pid);
+                self.variable_map.insert(p.clone(), pid);
+            }
+        }
+
+        // Lower body as a Program block
+        let program_ast = ASTNode::Program { statements: body, span: crate::ast::Span::unknown() };
+        let _last = self.build_expression(program_ast)?;
+
+        // Ensure function is properly terminated
+        if let Some(ref mut f) = self.current_function {
+            if let Some(block) = f.get_block(self.current_block.unwrap()) {
+                if !block.is_terminated() {
+                    let void_val = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: void_val, value: ConstValue::Void })?;
+                    self.emit_instruction(MirInstruction::Return { value: Some(void_val) })?;
+                }
+            }
+        }
+
+        // Take the function out and add to module
+        let finalized_function = self.current_function.take().unwrap();
+        if let Some(ref mut module) = self.current_module {
+            module.add_function(finalized_function);
+        }
+
+        // Restore builder state
+        self.current_function = saved_function;
+        self.current_block = saved_block;
+        self.variable_map = saved_var_map;
+
+        Ok(())
+    }
     
     /// Build a complete MIR module from AST
     pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
@@ -199,12 +277,32 @@ impl MirBuilder {
                 self.build_local_statement(variables.clone(), initial_values.clone())
             },
             
-            ASTNode::BoxDeclaration { name, methods, is_static, fields, .. } => {
+            ASTNode::BoxDeclaration { name, methods, is_static, fields, constructors, .. } => {
                 if is_static && name == "Main" {
                     self.build_static_main_box(methods.clone())
                 } else {
                     // Support user-defined boxes - handle as statement, return void
                     self.build_box_declaration(name.clone(), methods.clone(), fields.clone())?;
+
+                    // Phase 2: Lower constructors (birth/N) into MIR functions
+                    // Function name pattern: "{BoxName}.{constructor_key}" (e.g., "Person.birth/1")
+                    for (ctor_key, ctor_ast) in constructors.clone() {
+                        if let ASTNode::FunctionDeclaration { params, body, .. } = ctor_ast {
+                            let func_name = format!("{}.{}", name, ctor_key);
+                            self.lower_method_as_function(func_name, name.clone(), params.clone(), body.clone())?;
+                        }
+                    }
+
+                    // Phase 3: Lower instance methods into MIR functions
+                    // Function name pattern: "{BoxName}.{method}/{N}"
+                    for (method_name, method_ast) in methods.clone() {
+                        if let ASTNode::FunctionDeclaration { params, body, is_static, .. } = method_ast {
+                            if !is_static {
+                                let func_name = format!("{}.{}{}", name, method_name, format!("/{}", params.len()));
+                                self.lower_method_as_function(func_name, name.clone(), params.clone(), body.clone())?;
+                            }
+                        }
+                    }
                     
                     // Return a void value since this is a statement
                     let void_val = self.value_gen.next();
@@ -687,7 +785,17 @@ impl MirBuilder {
         self.emit_instruction(MirInstruction::NewBox {
             dst,
             box_type: class,
+            args: arg_values.clone(),
+        })?;
+
+        // Immediately call birth(...) on the created instance to run constructor semantics.
+        // birth typically returns void; we don't capture the result here (dst: None)
+        self.emit_instruction(MirInstruction::BoxCall {
+            dst: None,
+            box_val: dst,
+            method: "birth".to_string(),
             args: arg_values,
+            effects: EffectMask::READ.add(Effect::ReadHeap),
         })?;
         
         Ok(dst)

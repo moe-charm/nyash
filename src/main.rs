@@ -19,10 +19,12 @@ pub mod ast;
 pub mod parser;
 pub mod interpreter;
 pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
+pub mod core; // core::model (shared models)
 pub mod channel_box;
 pub mod finalization;
 pub mod exception_box;
 pub mod method_box;
+pub mod scope_tracker; // VM scope lifecycle
 pub mod operator_traits;
 pub mod box_arithmetic; // 🚀 Moved from box_trait.rs for better organization
 pub mod value; // 🔥 NyashValue Revolutionary System
