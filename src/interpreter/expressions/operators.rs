@@ -22,31 +22,22 @@ fn unwrap_instance(boxed: &dyn NyashBox) -> &dyn NyashBox {
     boxed
 }
 pub(super) fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
-    // 🔍 デバッグ出力追加
-    eprintln!("🔍 try_add_operation: left={}, right={}", left.type_name(), right.type_name());
-    
     // 🎯 InstanceBoxのunwrap処理
     let left = unwrap_instance(left);
     let right = unwrap_instance(right);
-    eprintln!("🔍 After unwrap: left={}, right={}", left.type_name(), right.type_name());
     
     // IntegerBox + IntegerBox
     if let (Some(left_int), Some(right_int)) = (
         left.as_any().downcast_ref::<IntegerBox>(),
         right.as_any().downcast_ref::<IntegerBox>()
     ) {
-        eprintln!("🔍 IntegerBox + IntegerBox detected");
         return Some(Box::new(IntegerBox::new(left_int.value + right_int.value)));
     }
     
     // StringBox + anything -> concatenation
-    eprintln!("🔍 Checking StringBox downcast...");
     if let Some(left_str) = left.as_any().downcast_ref::<StringBox>() {
-        eprintln!("🔍 StringBox downcast SUCCESS!");
         let right_str = right.to_string_box();
         return Some(Box::new(StringBox::new(format!("{}{}", left_str.value, right_str.value))));
-    } else {
-        eprintln!("🔍 StringBox downcast FAILED!");
     }
     
     // BoolBox + BoolBox -> IntegerBox 
@@ -139,7 +130,7 @@ impl NyashInterpreter {
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         let left_val = self.execute_expression(left)?;
         let right_val = self.execute_expression(right)?;
-        eprintln!("🔧 execute_binary_op: op={:?}, left={}, right={}", op, left_val.type_name(), right_val.type_name());
+        // Binary operation execution
         
         match op {
             BinaryOperator::Add => {

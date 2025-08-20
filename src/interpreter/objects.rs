@@ -16,10 +16,8 @@ impl NyashInterpreter {
     /// new式を実行 - Object creation engine  
     pub(super) fn execute_new(&mut self, class: &str, arguments: &[ASTNode], type_arguments: &[String]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
-        eprintln!("🔍 execute_new called for class: {}, with {} arguments", class, arguments.len());
         
         // 🏭 Phase 9.78b: Try unified registry first
-        eprintln!("🔍 Trying unified registry for class: {}", class);
         
         // Convert ASTNode arguments to Box<dyn NyashBox>
         let nyash_args: Result<Vec<Box<dyn NyashBox>>, RuntimeError> = arguments.iter()
@@ -35,7 +33,6 @@ impl NyashInterpreter {
                 
                 match registry_lock.create_box(class, &args) {
                     Ok(box_instance) => {
-                        eprintln!("🏭 Unified registry created: {}", class);
                         
                         // Check if this is a user-defined box that needs constructor execution
                         if let Some(_instance_box) = box_instance.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {

@@ -45,13 +45,10 @@ impl NyashInterpreter {
                     message: format!("Field '{}' not found in {}", field, instance.class_name),
                 })?;
             
-            eprintln!("✅ FIELD ACCESS: Returning shared reference id={}", field_value.box_id());
-            
             // 🔗 Weak Reference Check: Use unified accessor for weak fields
             let box_decls = self.shared.box_declarations.read().unwrap();
             if let Some(box_decl) = box_decls.get(&instance.class_name) {
                 if box_decl.weak_fields.contains(&field.to_string()) {
-                    eprintln!("🔗 DEBUG: Accessing weak field '{}' in class '{}'", field, instance.class_name);
                     
                     // 🎯 PHASE 2: Use unified accessor for auto-nil weak reference handling
                     if let Some(weak_value) = instance.get_weak_field(field, self) { // Pass self

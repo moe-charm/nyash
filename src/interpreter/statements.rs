@@ -13,10 +13,8 @@ use std::sync::Arc;
 impl NyashInterpreter {
     /// 文を実行 - Core statement execution engine
     pub(super) fn execute_statement(&mut self, statement: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        eprintln!("🔍 execute_statement called with node type: {:?}", statement.node_type());
         match statement {
             ASTNode::Assignment { target, value, .. } => {
-                eprintln!("🔍 About to call execute_assignment...");
                 self.execute_assignment(target, value)
             }
             
@@ -246,9 +244,7 @@ impl NyashInterpreter {
     
     /// 代入処理を実行 - Assignment processing
     pub(super) fn execute_assignment(&mut self, target: &ASTNode, value: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        eprintln!("🔍 execute_assignment called, evaluating value expression...");
         let val = self.execute_expression(value)?;
-        eprintln!("🔍 execute_assignment: value expression evaluated successfully");
         
         match target {
             ASTNode::Variable { name, .. } => {
