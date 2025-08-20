@@ -29,6 +29,15 @@ fn debug_log(msg: &str) {
     }
 }
 
+// Conditional debug macro - only outputs if NYASH_DEBUG=1 environment variable is set
+macro_rules! debug_trace {
+    ($($arg:tt)*) => {
+        if std::env::var("NYASH_DEBUG").unwrap_or_default() == "1" {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
 /// 実行時エラー
 #[derive(Error, Debug)]
 pub enum RuntimeError {
@@ -256,28 +265,22 @@ impl NyashInterpreter {
     /// ASTを実行
     pub fn execute(&mut self, ast: ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
         debug_log("=== NYASH EXECUTION START ===");
-        eprintln!("🔍 DEBUG: Starting interpreter execution...");
         let result = self.execute_node(&ast);
         if let Err(ref e) = result {
             eprintln!("❌ Interpreter error: {}", e);
         }
         debug_log("=== NYASH EXECUTION END ===");
-        eprintln!("🔍 DEBUG: Interpreter execution completed");
         result
     }
     
     /// ノードを実行
     fn execute_node(&mut self, node: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        eprintln!("🔍 DEBUG: execute_node called with node type: {}", node.node_type());
         match node {
             ASTNode::Program { statements, .. } => {
-                eprintln!("🔍 DEBUG: Executing program with {} statements", statements.len());
                 let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
                 
-                for (i, statement) in statements.iter().enumerate() {
-                    eprintln!("🔍 DEBUG: Executing statement {} of {}: {}", i + 1, statements.len(), statement.node_type());
+                for statement in statements.iter() {
                     result = self.execute_statement(statement)?;
-                    eprintln!("🔍 DEBUG: Statement {} completed", i + 1);
                     
                     // 制御フローチェック
                     match &self.control_flow {
@@ -343,88 +346,51 @@ impl NyashInterpreter {
         let log_msg = format!("resolve_variable: name='{}', local_vars={:?}", 
                              name, self.local_vars.keys().collect::<Vec<_>>());
         debug_log(&log_msg);
-        eprintln!("🔍 DEBUG: {}", log_msg);
-        
         // 1. outbox変数を最初にチェック（static関数内で優先）
         if let Some(outbox_value) = self.outbox_vars.get(name) {
-            eprintln!("🔍 DEBUG: Found '{}' in outbox_vars", name);
-            
             // 🔧 修正：clone_box() → Arc::clone() で参照共有
             let shared_value = Arc::clone(outbox_value);
-            
-            eprintln!("✅ RESOLVE_VARIABLE shared reference: {} id={}", 
-                     name, shared_value.box_id());
-            
             return Ok(shared_value);
         }
         
         // 2. local変数をチェック
         if let Some(local_value) = self.local_vars.get(name) {
-            eprintln!("🔍 DEBUG: Found '{}' in local_vars", name);
-            
             // 🔧 修正：clone_box() → Arc::clone() で参照共有
             let shared_value = Arc::clone(local_value);
-            
-            eprintln!("✅ RESOLVE_VARIABLE shared reference: {} id={}", 
-                     name, shared_value.box_id());
-            
             return Ok(shared_value);
         }
         
         // 3. GlobalBoxのフィールドをチェック
-        eprintln!("🔍 DEBUG: Checking GlobalBox for '{}'...", name);
         let global_box = self.shared.global_box.lock().unwrap();
         if let Some(field_value) = global_box.get_field(name) {
-            eprintln!("🔍 DEBUG: Found '{}' in GlobalBox", name);
             return Ok(field_value);
         }
         
         // 4. statics名前空間内のstatic boxをチェック
-        eprintln!("🔍 DEBUG: Checking statics namespace for '{}'...", name);
         if let Some(statics_namespace) = global_box.get_field("statics") {
-            eprintln!("🔍 DEBUG: statics namespace type: {}", statics_namespace.type_name());
             
             // MapBoxとして試す
             if let Some(map_box) = statics_namespace.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                eprintln!("🔍 DEBUG: statics is a MapBox, looking for '{}'", name);
                 let key_box: Box<dyn NyashBox> = Box::new(StringBox::new(name));
                 let static_box_result = map_box.get(key_box);
                 
                 // NullBoxでないかチェック（MapBoxは見つからない場合NullBoxを返す）
                 if static_box_result.type_name() != "NullBox" {
-                    eprintln!("🔍 DEBUG: Found '{}' in statics namespace", name);
                     return Ok(Arc::from(static_box_result));
-                } else {
-                    eprintln!("🔍 DEBUG: '{}' not found in statics MapBox", name);
                 }
             } else if let Some(instance) = statics_namespace.as_any().downcast_ref::<InstanceBox>() {
-                eprintln!("🔍 DEBUG: statics is an InstanceBox, looking for '{}'", name);
                 if let Some(static_box) = instance.get_field(name) {
-                    eprintln!("🔍 DEBUG: Found '{}' in statics namespace", name);
                     return Ok(static_box);
-                } else {
-                    eprintln!("🔍 DEBUG: '{}' not found in statics InstanceBox", name);
                 }
-            } else {
-                eprintln!("🔍 DEBUG: statics namespace is neither MapBox nor InstanceBox");
             }
         }
         
         drop(global_box); // lockを解放してからstdlibチェック
         
         // 5. nyashstd標準ライブラリ名前空間をチェック  
-        eprintln!("🔍 DEBUG: Checking nyashstd stdlib for '{}'...", name);
         if let Some(ref stdlib) = self.stdlib {
-            eprintln!("🔍 DEBUG: stdlib is initialized, checking namespaces...");
-            eprintln!("🔍 DEBUG: Available namespaces: {:?}", stdlib.namespaces.keys().collect::<Vec<_>>());
-            
             if let Some(nyashstd_namespace) = stdlib.namespaces.get("nyashstd") {
-                eprintln!("🔍 DEBUG: nyashstd namespace found, checking static boxes...");
-                eprintln!("🔍 DEBUG: Available static boxes: {:?}", nyashstd_namespace.static_boxes.keys().collect::<Vec<_>>());
-                
                 if let Some(_static_box) = nyashstd_namespace.static_boxes.get(name) {
-                    eprintln!("🔍 DEBUG: Found '{}' in nyashstd namespace", name);
-                    
                     // BuiltinStaticBoxをInstanceBoxとしてラップ
                     let static_instance = InstanceBox::new(
                         format!("{}_builtin", name),
@@ -433,14 +399,8 @@ impl NyashInterpreter {
                     );
                     
                     return Ok(Arc::new(static_instance));
-                } else {
-                    eprintln!("🔍 DEBUG: '{}' not found in nyashstd namespace", name);
                 }
-            } else {
-                eprintln!("🔍 DEBUG: nyashstd namespace not found in stdlib");
             }
-        } else {
-            eprintln!("🔍 DEBUG: stdlib not initialized");
         }
         
         // 6. エラー：見つからない

@@ -10,6 +10,15 @@ use crate::instance_v2::InstanceBox;
 use crate::interpreter::core::{NyashInterpreter, RuntimeError};
 use std::sync::Arc;
 
+// Conditional debug macro - only outputs if NYASH_DEBUG=1 environment variable is set
+macro_rules! debug_trace {
+    ($($arg:tt)*) => {
+        if std::env::var("NYASH_DEBUG").unwrap_or_default() == "1" {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
 impl NyashInterpreter {
     /// フィールドアクセスを実行 - Field access processing with weak reference support
     pub(super) fn execute_field_access(&mut self, object: &ASTNode, field: &str) 
@@ -45,24 +54,21 @@ impl NyashInterpreter {
                     message: format!("Field '{}' not found in {}", field, instance.class_name),
                 })?;
             
-            eprintln!("✅ FIELD ACCESS: Returning shared reference id={}", field_value.box_id());
-            
             // 🔗 Weak Reference Check: Use unified accessor for weak fields
             let box_decls = self.shared.box_declarations.read().unwrap();
             if let Some(box_decl) = box_decls.get(&instance.class_name) {
                 if box_decl.weak_fields.contains(&field.to_string()) {
-                    eprintln!("🔗 DEBUG: Accessing weak field '{}' in class '{}'", field, instance.class_name);
                     
                     // 🎯 PHASE 2: Use unified accessor for auto-nil weak reference handling
                     if let Some(weak_value) = instance.get_weak_field(field, self) { // Pass self
                         match &weak_value {
                             crate::value::NyashValue::Null => {
-                                eprintln!("🔗 DEBUG: Weak field '{}' is null (reference dropped)", field);
+                                debug_trace!("🔗 DEBUG: Weak field '{}' is null (reference dropped)", field);
                                 // Return null box for compatibility
                                 return Ok(Arc::new(crate::boxes::null_box::NullBox::new()));
                             }
                             _ => {
-                                eprintln!("🔗 DEBUG: Weak field '{}' still has valid reference", field);
+                                debug_trace!("🔗 DEBUG: Weak field '{}' still has valid reference", field);
                                 // Convert back to Box<dyn NyashBox> for now
                                 if let Ok(box_value) = weak_value.to_box() {
                                     if let Ok(inner_box) = box_value.try_lock() {

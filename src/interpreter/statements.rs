@@ -10,13 +10,20 @@ use super::*;
 use super::BuiltinStdlib;
 use std::sync::Arc;
 
+// Conditional debug macro - only outputs if NYASH_DEBUG=1 environment variable is set
+macro_rules! debug_trace {
+    ($($arg:tt)*) => {
+        if std::env::var("NYASH_DEBUG").unwrap_or_default() == "1" {
+            eprintln!($($arg)*);
+        }
+    };
+}
+
 impl NyashInterpreter {
     /// 文を実行 - Core statement execution engine
     pub(super) fn execute_statement(&mut self, statement: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        eprintln!("🔍 execute_statement called with node type: {:?}", statement.node_type());
         match statement {
             ASTNode::Assignment { target, value, .. } => {
-                eprintln!("🔍 About to call execute_assignment...");
                 self.execute_assignment(target, value)
             }
             
@@ -246,9 +253,7 @@ impl NyashInterpreter {
     
     /// 代入処理を実行 - Assignment processing
     pub(super) fn execute_assignment(&mut self, target: &ASTNode, value: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        eprintln!("🔍 execute_assignment called, evaluating value expression...");
         let val = self.execute_expression(value)?;
-        eprintln!("🔍 execute_assignment: value expression evaluated successfully");
         
         match target {
             ASTNode::Variable { name, .. } => {
@@ -257,17 +262,17 @@ impl NyashInterpreter {
                 // 🔗 DEMO: Weak Reference Invalidation Simulation
                 // If we're setting a variable to 0, simulate "dropping" the previous value
                 if val.to_string_box().value == "0" {
-                    eprintln!("🔗 DEBUG: Variable '{}' set to 0 - simulating object drop", name);
+                    debug_trace!("🔗 DEBUG: Variable '{}' set to 0 - simulating object drop", name);
                     
                     // Get the current value before dropping it
                     if let Ok(old_value) = self.resolve_variable(name) {
                         let old_value_str = old_value.to_string_box().value;
-                        eprintln!("🔗 DEBUG: Old value being dropped: {}", old_value_str);
+                        debug_trace!("🔗 DEBUG: Old value being dropped: {}", old_value_str);
                         
                         // For demo purposes, if we're dropping a "parent" variable,
                         // manually invalidate weak references to Parent instances
                         if name.contains("parent") && old_value_str.contains("instance #") {
-                            eprintln!("🔗 DEBUG: Triggering weak reference invalidation for: {}", old_value_str);
+                            debug_trace!("🔗 DEBUG: Triggering weak reference invalidation for: {}", old_value_str);
                             
                             // Call the interpreter method with actual object info
                             self.trigger_weak_reference_invalidation(&old_value_str);
@@ -295,7 +300,7 @@ impl NyashInterpreter {
                     let box_decls = self.shared.box_declarations.read().unwrap();
                     if let Some(box_decl) = box_decls.get(&instance.class_name) {
                         if box_decl.weak_fields.contains(&field.to_string()) {
-                            eprintln!("🔗 DEBUG: Assigning to weak field '{}' in class '{}'", field, instance.class_name);
+                            debug_trace!("🔗 DEBUG: Assigning to weak field '{}' in class '{}'", field, instance.class_name);
                             
                             // 🎯 PHASE 2: Use the new legacy conversion helper
                             instance.set_weak_field_from_legacy(field.to_string(), val.clone_box())
