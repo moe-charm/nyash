@@ -11,6 +11,7 @@ use super::{
 };
 use crate::ast::{ASTNode, LiteralValue, BinaryOperator};
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// MIR builder for converting AST to SSA form
 pub struct MirBuilder {
@@ -39,6 +40,9 @@ pub struct MirBuilder {
     /// Origin tracking for simple optimizations (e.g., object.method after new)
     /// Maps a ValueId to the class name if it was produced by NewBox of that class
     pub(super) value_origin_newbox: HashMap<ValueId, String>,
+
+    /// Names of user-defined boxes declared in the current module
+    pub(super) user_defined_boxes: HashSet<String>,
 }
 
 impl MirBuilder {
@@ -53,6 +57,7 @@ impl MirBuilder {
             variable_map: HashMap::new(),
             pending_phis: Vec::new(),
             value_origin_newbox: HashMap::new(),
+            user_defined_boxes: HashSet::new(),
         }
     }
 
@@ -299,6 +304,8 @@ impl MirBuilder {
                     self.build_static_main_box(methods.clone())
                 } else {
                     // Support user-defined boxes - handle as statement, return void
+                    // Track as user-defined (eligible for method lowering)
+                    self.user_defined_boxes.insert(name.clone());
                     self.build_box_declaration(name.clone(), methods.clone(), fields.clone())?;
 
                     // Phase 2: Lower constructors (birth/N) into MIR functions
@@ -993,7 +1000,8 @@ impl MirBuilder {
         if let ASTNode::New { class, .. } = object {
             // Build function name and only lower to Call if the function exists (user-defined)
             let func_name = format!("{}.{}{}", class, method, format!("/{}", arg_values.len()));
-            let can_lower = if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
+            let can_lower = self.user_defined_boxes.contains(&class)
+                && if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
             if can_lower {
                 let func_val = self.value_gen.next();
                 self.emit_instruction(MirInstruction::Const { dst: func_val, value: ConstValue::String(func_name) })?;
@@ -1013,7 +1021,8 @@ impl MirBuilder {
             // If the object originates from a NewBox in this function, we can lower to Call as well
             if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
                 let func_name = format!("{}.{}{}", class_name, method, format!("/{}", arg_values.len()));
-                let can_lower = if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
+                let can_lower = self.user_defined_boxes.contains(&class_name)
+                    && if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
                 if can_lower {
                     let func_val = self.value_gen.next();
                     self.emit_instruction(MirInstruction::Const { dst: func_val, value: ConstValue::String(func_name) })?;

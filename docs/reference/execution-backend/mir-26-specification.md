@@ -87,6 +87,21 @@ This document specifies the official 26-instruction set for Nyash MIR (Machine I
     %dst = call %box.method(%arg1, %arg2, ...)
     ```
     Effect: context-dependent
+    
+    **重要な識別方法：**
+    - BoxCall形式: `call %値.メソッド名(引数)` - 値（%7など）に対してメソッドを直接呼ぶ
+    - 通常のCall形式: `call %関数値(%me, 引数)` - 関数値を呼び、第1引数にmeを渡す
+    
+    例：
+    ```mir
+    ; BoxCall（プラグイン/ビルトインBoxのメソッド）
+    %17 = call %7.open(%14, %16)
+    %22 = call %7.write(%21)
+    
+    ; 通常のCall（ユーザー定義Boxのメソッド）
+    %func = const "UserBox.method/2"
+    %result = call %func(%me, %arg1)
+    ```
 
 13. **ExternCall** - Call external function
     ```mir

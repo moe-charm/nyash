@@ -100,6 +100,33 @@ fn tlv_encode_one_handle(type_id: u32, instance_id: u32) -> Vec<u8> {
     buf
 }
 
+fn tlv_encode_two_strings(a: &str, b: &str) -> Vec<u8> {
+    let ab = a.as_bytes();
+    let bb = b.as_bytes();
+    let mut buf = Vec::with_capacity(4 + 2 * (4 + ab.len().min(u16::MAX as usize)));
+    buf.extend_from_slice(&1u16.to_le_bytes()); // ver
+    buf.extend_from_slice(&2u16.to_le_bytes()); // argc=2
+    // first string
+    buf.push(6u8); buf.push(0u8);
+    buf.extend_from_slice(&((ab.len().min(u16::MAX as usize) as u16).to_le_bytes()));
+    buf.extend_from_slice(ab);
+    // second string
+    buf.push(6u8); buf.push(0u8);
+    buf.extend_from_slice(&((bb.len().min(u16::MAX as usize) as u16).to_le_bytes()));
+    buf.extend_from_slice(bb);
+    buf
+}
+
+fn tlv_encode_bytes(data: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(4 + 4 + data.len());
+    buf.extend_from_slice(&1u16.to_le_bytes()); // ver
+    buf.extend_from_slice(&1u16.to_le_bytes()); // argc=1
+    buf.push(7u8); buf.push(0u8);
+    buf.extend_from_slice(&((data.len().min(u16::MAX as usize) as u16).to_le_bytes()));
+    buf.extend_from_slice(data);
+    buf
+}
+
 fn tlv_decode_u32(data: &[u8]) -> Result<u32, String> {
     if data.len() >= 4 {
         Ok(u32::from_le_bytes([data[0], data[1], data[2], data[3]]))
@@ -330,50 +357,73 @@ fn test_lifecycle_v2(config_path: &PathBuf, box_type: &str) {
         
         println!("{}: Birth successful, instance_id = {}", "✓".green(), instance_id);
 
-        // Optional: If method 'copyFrom' exists, create another instance and pass it as Box arg
-        if box_config.methods.contains_key("copyFrom") {
-            println!("\n{}", "1b. Testing method with Box arg: copyFrom(other) ...".cyan());
+        // 1b. Open the first instance (if open exists)
+        if let Some(open_def) = box_config.methods.get("open") {
+            println!("\n{}", "1b. Opening src FileBox (id=instance_id) ...".cyan());
+            let args_open = tlv_encode_two_strings("test_lifecycle.txt", "w");
+            let mut out = vec![0u8; 1024];
+            let mut out_len = out.len();
+            let rc = invoke_fn(box_config.type_id, open_def.method_id, instance_id, args_open.as_ptr(), args_open.len(), out.as_mut_ptr(), &mut out_len);
+            if rc == 0 { println!("{}: open ok", "✓".green()); } else { eprintln!("{}: open rc={}", "WARN".yellow(), rc); }
+        }
 
-            // Birth another instance to serve as argument handle
-            let args2 = tlv_encode_empty();
-            let mut out2 = vec![0u8; 1024];
-            let mut out2_len = out2.len();
-            let rc2 = invoke_fn(
-                box_config.type_id,
-                0,
-                0,
-                args2.as_ptr(),
-                args2.len(),
-                out2.as_mut_ptr(),
-                &mut out2_len,
-            );
-            if rc2 == 0 {
-                if let Ok(other_id) = tlv_decode_u32(&out2[..out2_len]) {
-                    // Encode one Box handle as argument
-                    let arg_buf = tlv_encode_one_handle(box_config.type_id, other_id);
-                    let mut ret = vec![0u8; 1024];
-                    let mut ret_len = ret.len();
-                    let method_id = box_config.methods.get("copyFrom").unwrap().method_id;
-                    let rc_call = invoke_fn(
-                        box_config.type_id,
-                        method_id,
-                        instance_id,
-                        arg_buf.as_ptr(),
-                        arg_buf.len(),
-                        ret.as_mut_ptr(),
-                        &mut ret_len,
-                    );
-                    if rc_call == 0 {
-                        println!("{}: copyFrom call succeeded (arg=BoxRef)", "✓".green());
-                    } else {
-                        eprintln!("{}: copyFrom call failed (rc={})", "WARN".yellow(), rc_call);
-                    }
-                } else {
-                    eprintln!("{}: Failed to decode other instance_id", "WARN".yellow());
-                }
-            } else {
-                eprintln!("{}: Failed to create other instance for copyFrom (rc={})", "WARN".yellow(), rc2);
+        // 1c. Write some bytes (if write exists)
+        if let Some(write_def) = box_config.methods.get("write") {
+            println!("\n{}", "1c. Writing to src FileBox ...".cyan());
+            let args_write = tlv_encode_bytes(b"hello nyash");
+            let mut out = vec![0u8; 1024];
+            let mut out_len = out.len();
+            let rc = invoke_fn(box_config.type_id, write_def.method_id, instance_id, args_write.as_ptr(), args_write.len(), out.as_mut_ptr(), &mut out_len);
+            if rc == 0 { println!("{}: write ok", "✓".green()); } else { eprintln!("{}: write rc={}", "WARN".yellow(), rc); }
+        }
+
+        // 1d. Create destination instance via cloneSelf() if available; else birth
+        let mut dst_id = None;
+        if let Some(clone_def) = box_config.methods.get("cloneSelf") {
+            println!("\n{}", "1d. Cloning via cloneSelf() ...".cyan());
+            let args0 = tlv_encode_empty();
+            let mut out = vec![0u8; 1024];
+            let mut out_len = out.len();
+            let rc = invoke_fn(box_config.type_id, clone_def.method_id, instance_id, args0.as_ptr(), args0.len(), out.as_mut_ptr(), &mut out_len);
+            if rc == 0 && out_len >= 16 && out[4] == 8 { // Handle
+                // parse handle payload at bytes 8..16
+                let t = u32::from_le_bytes([out[8],out[9],out[10],out[11]]);
+                let i = u32::from_le_bytes([out[12],out[13],out[14],out[15]]);
+                if t == box_config.type_id { dst_id = Some(i); println!("{}: cloneSelf returned id={}", "✓".green(), i); }
+            } else { eprintln!("{}: cloneSelf rc={}", "WARN".yellow(), rc); }
+        }
+        if dst_id.is_none() {
+            println!("\n{}", "1d. Cloning fallback via birth() ...".cyan());
+            let args0 = tlv_encode_empty();
+            let mut out = vec![0u8; 1024];
+            let mut out_len = out.len();
+            let rc = invoke_fn(box_config.type_id, 0, 0, args0.as_ptr(), args0.len(), out.as_mut_ptr(), &mut out_len);
+            if rc == 0 { dst_id = tlv_decode_u32(&out[..out_len]).ok(); }
+            if let Some(i) = dst_id { println!("{}: birth dst id={}", "✓".green(), i); } else { eprintln!("{}: birth dst failed rc={}", "WARN".yellow(), rc); }
+        }
+
+        // 1e. copyFrom(dst <- src)
+        if let (Some(copy_def), Some(dst)) = (box_config.methods.get("copyFrom"), dst_id) {
+            println!("\n{}", "1e. Testing copyFrom(dst <- src) ...".cyan());
+            let arg_buf = tlv_encode_one_handle(box_config.type_id, instance_id);
+            let mut out = vec![0u8; 1024];
+            let mut out_len = out.len();
+            let rc = invoke_fn(box_config.type_id, copy_def.method_id, dst, arg_buf.as_ptr(), arg_buf.len(), out.as_mut_ptr(), &mut out_len);
+            if rc == 0 { println!("{}: copyFrom ok", "✓".green()); } else { eprintln!("{}: copyFrom rc={}", "WARN".yellow(), rc); }
+        }
+
+        // 1f. close both
+        if let Some(close_def) = box_config.methods.get("close") {
+            println!("\n{}", "1f. Closing both instances ...".cyan());
+            let args0 = tlv_encode_empty();
+            let mut out = vec![0u8; 64];
+            let mut out_len = out.len();
+            let _ = invoke_fn(box_config.type_id, close_def.method_id, instance_id, args0.as_ptr(), args0.len(), out.as_mut_ptr(), &mut out_len);
+            if let Some(dst) = dst_id {
+                out_len = out.len();
+                let _ = invoke_fn(box_config.type_id, close_def.method_id, dst, args0.as_ptr(), args0.len(), out.as_mut_ptr(), &mut out_len);
             }
+            println!("{}: close done", "✓".green());
         }
 
         // Optional: If method 'cloneSelf' exists, call it and verify Handle return

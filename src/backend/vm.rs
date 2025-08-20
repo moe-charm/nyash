@@ -90,8 +90,8 @@ impl VMValue {
             VMValue::String(s) => Box::new(StringBox::new(s)),
             VMValue::Future(f) => Box::new(f.clone()),
             VMValue::Void => Box::new(VoidBox::new()),
-            // Phase 9.78a: BoxRef returns cloned Box
-            VMValue::BoxRef(arc_box) => arc_box.clone_box(),
+            // BoxRef returns a shared handle (do NOT birth a new instance)
+            VMValue::BoxRef(arc_box) => arc_box.share_box(),
         }
     }
     
@@ -504,7 +504,8 @@ impl VM {
                 
                 // Handle BoxRef for proper method dispatch
                 let box_nyash = match &box_vm_value {
-                    VMValue::BoxRef(arc_box) => arc_box.clone_box(),
+                    // Use shared handle to avoid unintended constructor calls
+                    VMValue::BoxRef(arc_box) => arc_box.share_box(),
                     _ => box_vm_value.to_nyash_box(),
                 };
                 
@@ -607,8 +608,8 @@ impl VM {
                 };
                 match created {
                     Ok(b) => {
-                        // Register for scope-based finalization (clone for registration)
-                        let reg_arc = std::sync::Arc::from(b.clone_box());
+                        // Register for scope-based finalization (share; keep same instance)
+                        let reg_arc = std::sync::Arc::from(b.share_box());
                         self.scope_tracker.register_box(reg_arc);
                         // Store value in VM
                         self.set_value(*dst, VMValue::from_nyash_box(b));
