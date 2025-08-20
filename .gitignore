@@ -71,6 +71,7 @@ a.out
 .nekocode_sessions/
 analysis.json
 nekocode-temp/
+tools/nekocode-rust/
 
 # Build outputs and logs
 build_*.txt
