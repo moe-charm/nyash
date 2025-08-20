@@ -148,11 +148,10 @@ mod integration_tests {
     fn test_box_instance_creation() {
         let code = r#"
         box Point {
-            x
-            y
+            init { x, y }
             
             getX() {
-                return this.x
+                return me.x
             }
         }
         
@@ -172,16 +171,16 @@ mod integration_tests {
             value
             
             setValue(v) {
-                this.value = v
+                me.value = v
             }
             
             getValue() {
-                return this.value
+                return me.value
             }
             
             add(amount) {
-                this.value = this.value + amount
-                return this.value
+                me.value = me.value + amount
+                return me.value
             }
         }
         
@@ -199,25 +198,23 @@ mod integration_tests {
     fn test_method_chaining_concept() {
         let code = r#"
         box Counter {
-            count
+            init { count }
             
-            init() {
-                this.count = 0
-                return this
+            birth() {
+                me.count = 0
             }
             
             increment() {
-                this.count = this.count + 1
-                return this.count
+                me.count = me.count + 1
+                return me.count
             }
             
             getCount() {
-                return this.count
+                return me.count
             }
         }
         
         c = new Counter()
-        c.init()
         c.increment()
         c.increment()
         c.increment()
@@ -232,14 +229,14 @@ mod integration_tests {
     fn test_multiple_instances() {
         let code = r#"
         box Data {
-            value
+            init { value }
             
             setValue(v) {
-                this.value = v
+                me.value = v
             }
             
             getValue() {
-                return this.value
+                return me.value
             }
         }
         
@@ -295,27 +292,27 @@ mod integration_tests {
     fn test_nested_method_calls() {
         let code = r#"
         box Wrapper {
-            inner
+            init { inner }
             
             setInner(value) {
-                this.inner = value
+                me.inner = value
             }
             
             getInner() {
-                return this.inner
+                return me.inner
             }
         }
         
         box Container {
-            wrapper
+            init { wrapper }
             
             createWrapper() {
-                this.wrapper = new Wrapper()
-                return this.wrapper
+                me.wrapper = new Wrapper()
+                return me.wrapper
             }
             
             getWrapper() {
-                return this.wrapper
+                return me.wrapper
             }
         }
         
@@ -359,10 +356,10 @@ mod integration_tests {
         // 元のdebug_this_problem.nyashと同等のテスト
         let code = r#"
         box TestBox {
-            value
+            init { value }
             
             getValue() {
-                return this.value
+                return me.value
             }
         }
         
