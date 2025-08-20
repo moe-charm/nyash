@@ -1049,6 +1049,13 @@ impl Default for VM {
 mod tests {
     use super::*;
     use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
+    use crate::NyashParser;
+    use crate::runtime::NyashRuntime;
+    use crate::core::model::BoxDeclaration as CoreBoxDecl;
+    use crate::interpreter::SharedState;
+    use crate::box_factory::user_defined::UserDefinedBoxFactory;
+    use std::sync::Arc;
+    use std::collections::HashMap;
     
     #[test]
     fn test_basic_vm_execution() {
@@ -1088,5 +1095,80 @@ mod tests {
         
         let value = vm.get_value(ValueId(3)).unwrap();
         assert_eq!(value.as_integer().unwrap(), 42);
+    }
+
+    fn collect_box_declarations(ast: &crate::ast::ASTNode, runtime: &NyashRuntime) {
+        fn walk(node: &crate::ast::ASTNode, runtime: &NyashRuntime) {
+            match node {
+                crate::ast::ASTNode::Program { statements, .. } => {
+                    for st in statements { walk(st, runtime); }
+                }
+                crate::ast::ASTNode::BoxDeclaration { name, fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
+                    let decl = CoreBoxDecl {
+                        name: name.clone(),
+                        fields: fields.clone(),
+                        methods: methods.clone(),
+                        constructors: constructors.clone(),
+                        init_fields: init_fields.clone(),
+                        weak_fields: weak_fields.clone(),
+                        is_interface: *is_interface,
+                        extends: extends.clone(),
+                        implements: implements.clone(),
+                        type_parameters: type_parameters.clone(),
+                    };
+                    if let Ok(mut map) = runtime.box_declarations.write() {
+                        map.insert(name.clone(), decl);
+                    }
+                }
+                _ => {}
+            }
+        }
+        walk(ast, runtime);
+    }
+
+    #[test]
+    fn test_vm_user_box_birth_and_method() {
+        let code = r#"
+box Person {
+  init { name }
+  birth(n) {
+    me.name = n
+  }
+  greet() {
+    return "Hello, " + me.name
+  }
+}
+
+return new Person("Alice").greet()
+"#;
+
+        // Parse to AST
+        let ast = NyashParser::parse_from_string(code).expect("parse failed");
+
+        // Prepare runtime with user-defined declarations and factory
+        let runtime = {
+            let rt = NyashRuntime::new();
+            collect_box_declarations(&ast, &rt);
+            let mut shared = SharedState::new();
+            shared.box_declarations = rt.box_declarations.clone();
+            let udf = Arc::new(UserDefinedBoxFactory::new(shared));
+            if let Ok(mut reg) = rt.box_registry.lock() { reg.register(udf); }
+            rt
+        };
+
+        // Compile to MIR
+        let mut compiler = crate::mir::MirCompiler::new();
+        let compile_result = compiler.compile(ast).expect("mir compile failed");
+
+        // Debug: Print MIR
+        println!("=== MIR Output ===");
+        let mut printer = crate::mir::MirPrinter::verbose();
+        println!("{}", printer.print_module(&compile_result.module));
+        println!("==================");
+
+        // Execute with VM
+        let mut vm = VM::with_runtime(runtime);
+        let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+        assert_eq!(result.to_string_box().value, "Hello, Alice");
     }
 }

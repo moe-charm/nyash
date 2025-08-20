@@ -80,6 +80,9 @@ impl MirBuilder {
         let saved_function = self.current_function.take();
         let saved_block = self.current_block.take();
         let saved_var_map = std::mem::take(&mut self.variable_map);
+        let saved_value_gen = self.value_gen.clone();
+        // Reset value id generator so that params start from %0, %1, ...
+        self.value_gen.reset();
 
         // Switch context to new function
         self.current_function = Some(function);
@@ -88,11 +91,11 @@ impl MirBuilder {
 
         // Create parameter value ids and bind variable names
         if let Some(ref mut f) = self.current_function {
-            // 'me' parameter
+            // 'me' parameter will be %0
             let me_id = self.value_gen.next();
             f.params.push(me_id);
             self.variable_map.insert("me".to_string(), me_id);
-            // user parameters
+            // user parameters continue as %1..N
             for p in &params {
                 let pid = self.value_gen.next();
                 f.params.push(pid);
@@ -125,6 +128,7 @@ impl MirBuilder {
         self.current_function = saved_function;
         self.current_block = saved_block;
         self.variable_map = saved_var_map;
+        self.value_gen = saved_value_gen;
 
         Ok(())
     }
@@ -905,17 +909,17 @@ impl MirBuilder {
     
     /// Build me expression: me
     fn build_me_expression(&mut self) -> Result<ValueId, String> {
-        // For now, return a reference to the current instance
-        // In a full implementation, this would resolve to the actual instance reference
+        // If lowering a method/birth function, "me" should be a parameter
+        if let Some(id) = self.variable_map.get("me").cloned() {
+            return Ok(id);
+        }
+
+        // Fallback: use a symbolic constant (legacy behavior)
         let me_value = self.value_gen.next();
-        
-        // For simplicity, emit a constant representing "me"
-        // In practice, this should resolve to the current instance context
         self.emit_instruction(MirInstruction::Const {
             dst: me_value,
             value: ConstValue::String("__me__".to_string()),
         })?;
-        
         Ok(me_value)
     }
     
