@@ -477,11 +477,21 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::Call { dst, func: _, args: _, effects: _ } => {
-                // For now, function calls return void
-                // TODO: Implement proper function call handling
+            MirInstruction::Call { dst, func, args, effects: _ } => {
+                // Resolve function name from func value (expects Const String)
+                let func_val = self.get_value(*func)?;
+                let func_name = match func_val {
+                    VMValue::String(s) => s,
+                    _ => return Err(VMError::InvalidInstruction("Call expects func to be a String name".to_string())),
+                };
+                // Gather argument VM values
+                let mut vm_args = Vec::new();
+                for arg_id in args {
+                    vm_args.push(self.get_value(*arg_id)?);
+                }
+                let result = self.call_function_by_name(&func_name, vm_args)?;
                 if let Some(dst_id) = dst {
-                    self.set_value(*dst_id, VMValue::Void);
+                    self.set_value(*dst_id, result);
                 }
                 Ok(ControlFlow::Continue)
             },
@@ -764,32 +774,30 @@ impl VM {
             
             // Phase 9.7: External Function Calls  
             MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
-                // For VM backend, we implement a stub that logs the call
-                // Real implementation would route to native host functions
-                let arg_values: Result<Vec<_>, _> = args.iter().map(|id| self.get_value(*id)).collect();
-                let arg_values = arg_values?;
-                
-                println!("ExternCall: {}.{}({:?})", iface_name, method_name, arg_values);
-                
-                // For console.log, print the message
-                if iface_name == "env.console" && method_name == "log" {
-                    for arg in &arg_values {
-                        if let VMValue::String(s) = arg {
-                            println!("Console: {}", s);
+                // Evaluate arguments as NyashBox for loader
+                let mut nyash_args: Vec<Box<dyn NyashBox>> = Vec::new();
+                for arg_id in args {
+                    let arg_value = self.get_value(*arg_id)?;
+                    nyash_args.push(arg_value.to_nyash_box());
+                }
+                // Route through plugin loader v2 (also handles env.* stubs)
+                let loader = crate::runtime::get_global_loader_v2();
+                let loader = loader.read().map_err(|_| VMError::InvalidInstruction("Plugin loader lock poisoned".into()))?;
+                match loader.extern_call(iface_name, method_name, &nyash_args) {
+                    Ok(Some(result_box)) => {
+                        if let Some(dst_id) = dst {
+                            self.set_value(*dst_id, VMValue::from_nyash_box(result_box));
                         }
                     }
+                    Ok(None) => {
+                        if let Some(dst_id) = dst {
+                            self.set_value(*dst_id, VMValue::Void);
+                        }
+                    }
+                    Err(_) => {
+                        return Err(VMError::InvalidInstruction(format!("ExternCall failed: {}.{}", iface_name, method_name)));
+                    }
                 }
-                
-                // For canvas operations, just log them for now
-                if iface_name == "env.canvas" {
-                    println!("Canvas operation: {}", method_name);
-                }
-                
-                // Store void result if destination is provided
-                if let Some(dst) = dst {
-                    self.set_value(*dst, VMValue::Void);
-                }
-                
                 Ok(ControlFlow::Continue)
             },
         }

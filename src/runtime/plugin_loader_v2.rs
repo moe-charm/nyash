@@ -193,7 +193,7 @@ impl PluginBoxV2 {
     }
     
     /// Load all plugins from config
-    pub fn load_all_plugins(&self) -> BidResult<()> {
+        pub fn load_all_plugins(&self) -> BidResult<()> {
         let config = self.config.as_ref()
             .ok_or(BidError::PluginError)?;
         
@@ -204,6 +204,32 @@ impl PluginBoxV2 {
         }
         
         Ok(())
+    }
+
+    /// Perform an external host call (env.* namespace) or return an error if unsupported
+    /// Returns Some(Box) for a value result, or None for void-like calls
+    pub fn extern_call(
+        &self,
+        iface_name: &str,
+        method_name: &str,
+        args: &[Box<dyn NyashBox>],
+    ) -> BidResult<Option<Box<dyn NyashBox>>> {
+        match (iface_name, method_name) {
+            ("env.console", "log") => {
+                for a in args {
+                    println!("{}", a.to_string_box().value);
+                }
+                Ok(None)
+            }
+            ("env.canvas", _) => {
+                eprintln!("[env.canvas] {} invoked (stub)", method_name);
+                Ok(None)
+            }
+            _ => {
+                // Future: route to plugin-defined extern interfaces via config
+                Err(BidError::InvalidMethod)
+            }
+        }
     }
     
     /// Load single plugin
@@ -411,6 +437,15 @@ mod stub {
         pub fn load_config(&mut self, _p: &str) -> BidResult<()> { Ok(()) }
         pub fn load_all_plugins(&self) -> BidResult<()> { Ok(()) }
         pub fn create_box(&self, _t: &str, _a: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
+            Err(BidError::PluginError)
+        }
+
+        pub fn extern_call(
+            &self,
+            _iface_name: &str,
+            _method_name: &str,
+            _args: &[Box<dyn NyashBox>],
+        ) -> BidResult<Option<Box<dyn NyashBox>>> {
             Err(BidError::PluginError)
         }
     }

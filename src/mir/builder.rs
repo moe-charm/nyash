@@ -926,15 +926,15 @@ impl MirBuilder {
         
         // Build argument expressions
         let mut arg_values = Vec::new();
-        for arg in arguments {
-            arg_values.push(self.build_expression(arg)?);
+        for arg in &arguments {
+            arg_values.push(self.build_expression(arg.clone())?);
         }
         
         // Create result value
         let result_id = self.value_gen.next();
         
         // Check if this is an external call (console.log, canvas.fillRect, etc.)
-        if let ASTNode::Variable { name: object_name, .. } = object {
+        if let ASTNode::Variable { name: object_name, .. } = object.clone() {
             match (object_name.as_str(), method.as_str()) {
                 ("console", "log") => {
                     // Generate ExternCall for console.log
@@ -996,16 +996,36 @@ impl MirBuilder {
             }
         }
         
-        // Emit a BoxCall instruction for regular method calls
-        self.emit_instruction(MirInstruction::BoxCall {
-            dst: Some(result_id),
-            box_val: object_value,
-            method,
-            args: arg_values,
-            effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
-        })?;
-        
-        Ok(result_id)
+        // Optimization: If the object is a direct `new ClassName(...)`, lower to a direct Call
+        if let ASTNode::New { class, .. } = object {
+            // Build function name: "{Class}.{method}/{argc}"
+            let func_name = format!("{}.{}{}", class, method, format!("/{}", arg_values.len()));
+            // Create a constant for the function name
+            let func_val = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: func_val, value: ConstValue::String(func_name) })?;
+            // Prepare args: me + user args
+            let mut call_args = Vec::with_capacity(arg_values.len() + 1);
+            call_args.push(object_value);
+            call_args.extend(arg_values);
+            // Emit direct Call
+            self.emit_instruction(MirInstruction::Call {
+                dst: Some(result_id),
+                func: func_val,
+                args: call_args,
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
+            Ok(result_id)
+        } else {
+            // Fallback: Emit a BoxCall instruction for regular method calls
+            self.emit_instruction(MirInstruction::BoxCall {
+                dst: Some(result_id),
+                box_val: object_value,
+                method,
+                args: arg_values,
+                effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
+            })?;
+            Ok(result_id)
+        }
     }
     
     /// Build from expression: from Parent.method(arguments)
