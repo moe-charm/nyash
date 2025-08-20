@@ -991,27 +991,10 @@ impl MirBuilder {
         
         // Optimization: If the object is a direct `new ClassName(...)`, lower to a direct Call
         if let ASTNode::New { class, .. } = object {
-            // Build function name: "{Class}.{method}/{argc}"
+            // Build function name and only lower to Call if the function exists (user-defined)
             let func_name = format!("{}.{}{}", class, method, format!("/{}", arg_values.len()));
-            // Create a constant for the function name
-            let func_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: func_val, value: ConstValue::String(func_name) })?;
-            // Prepare args: me + user args
-            let mut call_args = Vec::with_capacity(arg_values.len() + 1);
-            call_args.push(object_value);
-            call_args.extend(arg_values);
-            // Emit direct Call
-            self.emit_instruction(MirInstruction::Call {
-                dst: Some(result_id),
-                func: func_val,
-                args: call_args,
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
-            Ok(result_id)
-        } else {
-            // If the object originates from a NewBox in this function, we can lower to Call as well
-            if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
-                let func_name = format!("{}.{}{}", class_name, method, format!("/{}", arg_values.len()));
+            let can_lower = if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
+            if can_lower {
                 let func_val = self.value_gen.next();
                 self.emit_instruction(MirInstruction::Const { dst: func_val, value: ConstValue::String(func_name) })?;
                 let mut call_args = Vec::with_capacity(arg_values.len() + 1);
@@ -1023,19 +1006,40 @@ impl MirBuilder {
                     args: call_args,
                     effects: EffectMask::READ.add(Effect::ReadHeap),
                 })?;
-                Ok(result_id)
-            } else {
-                // Fallback: Emit a BoxCall instruction for regular method calls
-                self.emit_instruction(MirInstruction::BoxCall {
-                    dst: Some(result_id),
-                    box_val: object_value,
-                    method,
-                    args: arg_values,
-                    effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
-                })?;
-                Ok(result_id)
+                return Ok(result_id);
+            }
+            // else fall through to BoxCall below
+        } else {
+            // If the object originates from a NewBox in this function, we can lower to Call as well
+            if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+                let func_name = format!("{}.{}{}", class_name, method, format!("/{}", arg_values.len()));
+                let can_lower = if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
+                if can_lower {
+                    let func_val = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: func_val, value: ConstValue::String(func_name) })?;
+                    let mut call_args = Vec::with_capacity(arg_values.len() + 1);
+                    call_args.push(object_value);
+                    call_args.extend(arg_values);
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(result_id),
+                        func: func_val,
+                        args: call_args,
+                        effects: EffectMask::READ.add(Effect::ReadHeap),
+                    })?;
+                    return Ok(result_id);
+                }
             }
         }
+
+        // Fallback: Emit a BoxCall instruction for regular or plugin/builtin method calls
+        self.emit_instruction(MirInstruction::BoxCall {
+            dst: Some(result_id),
+            box_val: object_value,
+            method,
+            args: arg_values,
+            effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
+        })?;
+        Ok(result_id)
     }
     
     /// Build from expression: from Parent.method(arguments)

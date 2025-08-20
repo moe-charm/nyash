@@ -1072,7 +1072,7 @@ impl Default for VM {
 mod tests {
     use super::*;
     use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
-    use crate::NyashParser;
+    use crate::parser::NyashParser;
     use crate::runtime::NyashRuntime;
     use crate::core::model::BoxDeclaration as CoreBoxDecl;
     use crate::interpreter::SharedState;
