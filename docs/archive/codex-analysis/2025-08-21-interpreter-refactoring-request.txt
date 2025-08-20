@@ -1,0 +1,91 @@
+Nyashプログラミング言語のインタープリター・VM統合アーキテクチャ再設計について深い分析をお願いします。
+
+【背景】
+Nyashは「Everything is Box」哲学のプログラミング言語で、現在インタープリターとVM（Phase 9.78a）の統合で設計上の問題に直面しています。
+
+【現在の問題点】
+
+1. **依存関係の逆転**
+   - BoxDeclarationがinterpreter::BoxDeclarationとして定義
+   - VMがインタープリターに依存してしまう
+   - 本来はAST層に属すべきデータ構造
+
+2. **SharedState中心の設計**
+   ```rust
+   pub struct SharedState {
+       pub global_box: Arc<Mutex<InstanceBox>>,
+       pub box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
+       pub static_functions: Arc<RwLock<HashMap<String, HashMap<String, ASTNode>>>>,
+       pub static_box_definitions: Arc<RwLock<HashMap<String, StaticBoxDefinition>>>,
+       pub included_files: Arc<Mutex<HashSet<String>>>,
+   }
+   ```
+   - インタープリター固有の実装詳細に依存
+   - VMから使いにくい構造
+
+3. **BoxFactory設計の混乱**
+   - BoxFactoryがtraitとして定義されている
+   - UserDefinedBoxFactoryがSharedStateに依存
+   - VMではArc<BoxFactory>でコンパイルエラー（dynが必要）
+
+4. **グローバル副作用**
+   ```rust
+   let factory = UserDefinedBoxFactory::new(shared.clone());
+   register_user_defined_factory(Arc::new(factory));
+   ```
+   - グローバルレジストリへの登録
+   - テストや並行実行で問題
+
+5. **VM実装の困難**
+   - インタープリターの実装詳細に依存
+   - 統一的なBox管理ができない
+   - birth/finiライフサイクルの不統一
+
+【要求事項】
+1. インタープリターとVMで共通のBox管理メカニズム
+2. 依存関係の整理（AST → Runtime → Interpreter/VM）
+3. テスタブルで並行実行可能な設計
+4. シンプルで美しい実装
+5. Everything is Box哲学の維持
+
+【質問】
+
+1. **アーキテクチャ全体の再設計**
+   - どのような層構造が最も美しく保守しやすいか？
+   - 依存関係をどう整理すべきか？
+
+2. **BoxDeclarationの適切な配置**
+   - AST層に移動すべきか、それとも別の共通層を作るべきか？
+   - 必要な情報は何か？不要な情報は何か？
+
+3. **SharedStateの解体**
+   - どの部分を共通ランタイムに移すべきか？
+   - インタープリター固有の部分はどう分離すべきか？
+
+4. **BoxFactory/Registryの統一設計**
+   - traitベースか、具体的な構造体ベースか？
+   - プラグインシステムとの統合方法は？
+
+5. **具体的な実装手順**
+   - 最小限の変更で最大の効果を得る順序は？
+   - 既存コードとの互換性を保ちながら進める方法は？
+
+【理想の設計】
+```rust
+// 例：こんな感じ？
+pub struct NyashRuntime {
+    box_registry: BoxRegistry,
+    type_definitions: HashMap<String, TypeDefinition>,
+}
+
+// インタープリターもVMも同じランタイムを使用
+impl NyashInterpreter {
+    pub fn new(runtime: NyashRuntime) -> Self { ... }
+}
+
+impl VM {
+    pub fn new(runtime: NyashRuntime) -> Self { ... }
+}
+```
+
+Nyashの「Everything is Box」哲学を活かしつつ、最もシンプルで美しく、保守しやすいアーキテクチャを提案してください。特に、天才的な洞察で問題の本質を見抜き、エレガントな解決策を示してください。

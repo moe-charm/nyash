@@ -7,7 +7,17 @@
 use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId};
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
 use std::collections::HashMap;
+use std::sync::Arc;
 use super::vm_phi::LoopExecutor;
+
+// Phase 9.78a: Import necessary components for unified Box handling
+// TODO: Re-enable when interpreter refactoring is complete
+// use crate::box_factory::UnifiedBoxRegistry;
+// use crate::instance_v2::InstanceBox;
+// use crate::interpreter::BoxDeclaration;
+// use crate::scope_tracker::ScopeTracker;
+// #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+// use crate::runtime::plugin_loader_v2::PluginLoaderV2;
 
 /// VM execution error
 #[derive(Debug)]
@@ -44,6 +54,8 @@ pub enum VMValue {
     String(String),
     Future(crate::boxes::future::FutureBox),
     Void,
+    // Phase 9.78a: Add BoxRef for complex Box types
+    BoxRef(Arc<dyn NyashBox>),
 }
 
 // Manual PartialEq implementation to avoid requiring PartialEq on FutureBox
@@ -57,6 +69,8 @@ impl PartialEq for VMValue {
             (VMValue::Void, VMValue::Void) => true,
             // Future equality semantics are not defined; treat distinct futures as not equal
             (VMValue::Future(_), VMValue::Future(_)) => false,
+            // BoxRef equality by reference
+            (VMValue::BoxRef(_), VMValue::BoxRef(_)) => false,
             _ => false,
         }
     }
@@ -72,6 +86,8 @@ impl VMValue {
             VMValue::String(s) => Box::new(StringBox::new(s)),
             VMValue::Future(f) => Box::new(f.clone()),
             VMValue::Void => Box::new(VoidBox::new()),
+            // Phase 9.78a: BoxRef returns cloned Box
+            VMValue::BoxRef(arc_box) => arc_box.clone_box(),
         }
     }
     
@@ -84,6 +100,7 @@ impl VMValue {
             VMValue::String(s) => s.clone(),
             VMValue::Future(f) => f.to_string_box().value,
             VMValue::Void => "void".to_string(),
+            VMValue::BoxRef(arc_box) => arc_box.to_string_box().value,
         }
     }
     
@@ -106,7 +123,7 @@ impl VMValue {
     
     /// Convert from NyashBox to VMValue  
     pub fn from_nyash_box(nyash_box: Box<dyn crate::box_trait::NyashBox>) -> VMValue {
-        // Try to downcast to known types
+        // Try to downcast to known types for optimization
         if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
             VMValue::Integer(int_box.value)
         } else if let Some(bool_box) = nyash_box.as_any().downcast_ref::<BoolBox>() {
@@ -116,8 +133,8 @@ impl VMValue {
         } else if let Some(future_box) = nyash_box.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
             VMValue::Future(future_box.clone())
         } else {
-            // For any other type, convert to string representation
-            VMValue::String(nyash_box.to_string_box().value)
+            // Phase 9.78a: For all other Box types (user-defined, plugin), store as BoxRef
+            VMValue::BoxRef(Arc::from(nyash_box))
         }
     }
 }
@@ -154,6 +171,17 @@ pub struct VM {
     object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
     /// Loop executor for handling phi nodes and loop-specific logic
     loop_executor: LoopExecutor,
+    // Phase 9.78a: Add unified Box handling components
+    // TODO: Re-enable when interpreter refactoring is complete
+    // /// Box registry for creating all Box types
+    // box_registry: Arc<UnifiedBoxRegistry>,
+    // /// Plugin loader for external Box types
+    // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+    // plugin_loader: Option<Arc<PluginLoaderV2>>,
+    // Scope tracker for lifecycle management
+    // scope_tracker: ScopeTracker,
+    // /// Box declarations from the AST
+    // box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
 }
 
 impl VM {
@@ -168,8 +196,37 @@ impl VM {
             last_result: None,
             object_fields: HashMap::new(),
             loop_executor: LoopExecutor::new(),
+            // TODO: Re-enable when interpreter refactoring is complete
+            // box_registry: Arc::new(UnifiedBoxRegistry::new()),
+            // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+            // plugin_loader: None,
+            // scope_tracker: ScopeTracker::new(),
+            // box_declarations: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+    
+    // TODO: Re-enable when interpreter refactoring is complete
+    /*
+    /// Create a new VM instance with Box registry and declarations
+    pub fn new_with_registry(
+        box_registry: Arc<UnifiedBoxRegistry>, 
+        box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>
+    ) -> Self {
+        // Implementation pending interpreter refactoring
+        unimplemented!()
+    }
+    
+    /// Phase 9.78a: Create VM with plugin support
+    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+    pub fn new_with_plugins(
+        box_registry: Arc<UnifiedBoxRegistry>,
+        plugin_loader: Arc<PluginLoaderV2>,
+        box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
+    ) -> Self {
+        // Implementation pending interpreter refactoring
+        unimplemented!()
+    }
+    */
     
     /// Execute a MIR module
     pub fn execute_module(&mut self, module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
@@ -190,6 +247,9 @@ impl VM {
         
         // Initialize loop executor for this function
         self.loop_executor.initialize();
+        
+        // Phase 9.78a: Enter a new scope for this function
+        // self.scope_tracker.push_scope();
         
         // Start at entry block
         let mut current_block = function.entry_block;
@@ -224,6 +284,8 @@ impl VM {
             
             // Handle control flow
             if let Some(return_value) = should_return {
+                // Phase 9.78a: Exit scope before returning
+                // self.scope_tracker.pop_scope();
                 return Ok(return_value);
             } else if let Some(target) = next_block {
                 // Update previous block before jumping
@@ -234,6 +296,8 @@ impl VM {
             } else {
                 // Block ended without terminator - this shouldn't happen in well-formed MIR
                 // but let's handle it gracefully by returning void
+                // Phase 9.78a: Exit scope before returning
+                // self.scope_tracker.pop_scope();
                 return Ok(VMValue::Void);
             }
         }
@@ -354,9 +418,16 @@ impl VM {
             },
             
             MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
+                // Phase 9.78a: Unified method dispatch for all Box types
+                
                 // Get the box value
                 let box_vm_value = self.get_value(*box_val)?;
-                let box_nyash = box_vm_value.to_nyash_box();
+                
+                // Handle BoxRef for proper method dispatch
+                let box_nyash = match &box_vm_value {
+                    VMValue::BoxRef(arc_box) => arc_box.clone_box(),
+                    _ => box_vm_value.to_nyash_box(),
+                };
                 
                 // Evaluate arguments
                 let mut arg_values = Vec::new();
@@ -365,8 +436,8 @@ impl VM {
                     arg_values.push(arg_vm_value.to_nyash_box());
                 }
                 
-                // Call the method - this mimics interpreter method dispatch
-                let result = self.call_box_method(box_nyash, method, arg_values)?;
+                // Call the method - unified dispatch for all Box types
+                let result = self.call_unified_method(box_nyash, method, arg_values)?;
                 
                 // Store result if destination is specified
                 if let Some(dst_id) = dst {
@@ -376,32 +447,54 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::NewBox { dst, box_type, args: _ } => {
-                // Implement basic box creation for common types
+            MirInstruction::NewBox { dst, box_type, args } => {
+                // Phase 9.78a: Simplified Box creation (temporary until interpreter refactoring)
+                
+                // Evaluate arguments
+                let mut arg_values = Vec::new();
+                for arg_id in args {
+                    let arg_value = self.get_value(*arg_id)?;
+                    arg_values.push(arg_value);
+                }
+                
+                // Basic Box creation for common types
                 let result = match box_type.as_str() {
                     "StringBox" => {
-                        // Create empty StringBox - in real implementation would use args
-                        let string_box = Box::new(StringBox::new(""));
-                        VMValue::from_nyash_box(string_box)
+                        // Get first argument as string, or empty string
+                        let value = if let Some(arg) = arg_values.first() {
+                            arg.to_string()
+                        } else {
+                            String::new()
+                        };
+                        VMValue::String(value)
+                    },
+                    "IntegerBox" => {
+                        // Get first argument as integer, or 0
+                        let value = if let Some(arg) = arg_values.first() {
+                            arg.as_integer().unwrap_or(0)
+                        } else {
+                            0
+                        };
+                        VMValue::Integer(value)
+                    },
+                    "BoolBox" => {
+                        // Get first argument as bool, or false
+                        let value = if let Some(arg) = arg_values.first() {
+                            arg.as_bool().unwrap_or(false)
+                        } else {
+                            false
+                        };
+                        VMValue::Bool(value)
                     },
                     "ArrayBox" => {
-                        // Create empty ArrayBox - in real implementation would use args
+                        // Create empty ArrayBox
                         let array_box = Box::new(crate::boxes::array::ArrayBox::new());
                         VMValue::from_nyash_box(array_box)
                     },
-                    "IntegerBox" => {
-                        // Create IntegerBox with default value
-                        let int_box = Box::new(IntegerBox::new(0));
-                        VMValue::from_nyash_box(int_box)
-                    },
-                    "BoolBox" => {
-                        // Create BoolBox with default value
-                        let bool_box = Box::new(BoolBox::new(false));
-                        VMValue::from_nyash_box(bool_box)
-                    },
                     _ => {
-                        // For unknown types, create a placeholder string
-                        VMValue::String(format!("NewBox[{}]", box_type))
+                        // For unknown types, create a placeholder
+                        // TODO: Implement proper user-defined Box creation after refactoring
+                        VMValue::String(format!("{}[placeholder]", box_type))
                     }
                 };
                 
@@ -720,6 +813,13 @@ impl VM {
             
             _ => Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right))),
         }
+    }
+    
+    /// Phase 9.78a: Unified method dispatch for all Box types
+    fn call_unified_method(&self, box_value: Box<dyn NyashBox>, method: &str, args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
+        // For now, we use the simplified method dispatch
+        // In a full implementation, this would check for InstanceBox and dispatch appropriately
+        self.call_box_method(box_value, method, args)
     }
     
     /// Call a method on a Box - simplified version of interpreter method dispatch

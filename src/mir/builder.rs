@@ -670,75 +670,24 @@ impl MirBuilder {
     
     /// Build new expression: new ClassName(arguments)
     fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
-        // Special handling for built-in Box types that have single literal arguments
-        match class.as_str() {
-            "IntegerBox" => {
-                if arguments.len() == 1 {
-                    if let ASTNode::Literal { value: LiteralValue::Integer(n), .. } = &arguments[0] {
-                        // For built-in boxes, just return the value directly
-                        // The VM/interpreter will handle boxing when needed
-                        let dst = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::Const {
-                            dst,
-                            value: ConstValue::Integer(*n),
-                        })?;
-                        return Ok(dst);
-                    }
-                }
-            }
-            "StringBox" => {
-                if arguments.len() == 1 {
-                    if let ASTNode::Literal { value: LiteralValue::String(s), .. } = &arguments[0] {
-                        let dst = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::Const {
-                            dst,
-                            value: ConstValue::String(s.clone()),
-                        })?;
-                        return Ok(dst);
-                    }
-                }
-            }
-            "FloatBox" => {
-                if arguments.len() == 1 {
-                    if let ASTNode::Literal { value: LiteralValue::Float(f), .. } = &arguments[0] {
-                        let dst = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::Const {
-                            dst,
-                            value: ConstValue::Float(*f),
-                        })?;
-                        return Ok(dst);
-                    }
-                }
-            }
-            "BoolBox" => {
-                if arguments.len() == 1 {
-                    if let ASTNode::Literal { value: LiteralValue::Bool(b), .. } = &arguments[0] {
-                        let dst = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::Const {
-                            dst,
-                            value: ConstValue::Bool(*b),
-                        })?;
-                        return Ok(dst);
-                    }
-                }
-            }
-            _ => {}
+        // Phase 9.78a: Unified Box creation using NewBox instruction
+        
+        // First, evaluate all arguments to get their ValueIds
+        let mut arg_values = Vec::new();
+        for arg in arguments {
+            let arg_value = self.build_expression(arg)?;
+            arg_values.push(arg_value);
         }
         
-        // For other classes, use the original implementation
+        // Generate the destination ValueId
         let dst = self.value_gen.next();
         
-        // For now, create a "box type" value representing the class
-        let type_value = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: type_value,
-            value: ConstValue::String(class),
-        })?;
-        
-        // Create the reference using RefNew
-        self.emit_instruction(MirInstruction::RefNew {
+        // Emit NewBox instruction for all Box types
+        // VM will handle optimization for basic types internally
+        self.emit_instruction(MirInstruction::NewBox {
             dst,
-            box_val: type_value,
+            box_type: class,
+            args: arg_values,
         })?;
         
         Ok(dst)

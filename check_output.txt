@@ -1,0 +1,53 @@
+src/interpreter/core.rs:33:14: warning: unused macro definition: `debug_trace`
+src/mir/loop_builder.rs:9:21: warning: unused imports: `BasicBlockIdGenerator`, `BasicBlock`, `CompareOp`, `EffectMask`, `MirFunction`, and `ValueIdGenerator`
+src/mir/loop_builder.rs:13:33: warning: unused import: `HashSet`
+src/backend/mod.rs:13:7: warning: unexpected `cfg` condition value: `llvm`
+src/backend/mod.rs:23:7: warning: unexpected `cfg` condition value: `llvm`
+src/backend/vm_phi.rs:9:41: warning: unused import: `MirInstruction`
+src/bid/types.rs:1:5: warning: unused import: `super::Usize`
+src/bid/plugin_api.rs:2:5: warning: unused import: `std::os::raw::c_char`
+src/bid/plugins/filebox/mod.rs:7:18: warning: unused imports: `NyashHostVtable`, `NyashMethodInfo`, and `NyashPluginInfo`
+src/bid/plugins/filebox/mod.rs:10:28: warning: unused imports: `SeekFrom` and `Seek`
+src/bid/plugins/filebox/mod.rs:11:20: warning: unused imports: `c_char` and `c_void`
+src/bid/plugins/filebox/mod.rs:13:16: warning: unused imports: `CStr` and `CString`
+src/bid/loader.rs:4:5: warning: unused import: `std::ffi::c_void`
+src/bid/generic_plugin_box.rs:5:23: warning: unused imports: `TlvDecoder` and `TlvEncoder`
+src/bid/generic_plugin_box.rs:6:5: warning: unused import: `crate::bid::types::BidTag`
+src/runtime/plugin_loader_v2.rs:10:47: warning: unused import: `BoxBase`
+src/runtime/plugin_loader_v2.rs:14:9: warning: unused import: `std::ffi::c_void`
+src/box_factory/plugin.rs:53:13: warning: unused variable: `registry`: help: if this is intentional, prefix it with an underscore: `_registry`
+src/interpreter/expressions/calls.rs:739:13: warning: variable does not need to be mutable
+src/interpreter/objects.rs:1106:17: warning: variable does not need to be mutable
+src/instance_v2.rs:147:28: warning: unused variable: `args`: help: if this is intentional, prefix it with an underscore: `_args`
+src/instance_v2.rs:289:21: warning: unused variable: `nyash_value`: help: if this is intentional, prefix it with an underscore: `_nyash_value`
+src/mir/loop_builder.rs:246:39: warning: unused variable: `block_id`: help: if this is intentional, prefix it with an underscore: `_block_id`
+src/mir/loop_builder.rs:273:49: warning: unused variable: `block_id`: help: if this is intentional, prefix it with an underscore: `_block_id`
+src/backend/vm_phi.rs:48:9: warning: unused variable: `dst`: help: if this is intentional, prefix it with an underscore: `_dst`
+src/bid/plugin_api.rs:167:36: warning: unused variable: `f`: help: if this is intentional, prefix it with an underscore: `_f`
+src/bid/plugin_api.rs:167:26: warning: variable does not need to be mutable
+src/bid/plugin_api.rs:176:35: warning: unused variable: `f`: help: if this is intentional, prefix it with an underscore: `_f`
+src/bid/plugin_api.rs:176:25: warning: variable does not need to be mutable
+src/bid/plugin_api.rs:183:34: warning: unused variable: `f`: help: if this is intentional, prefix it with an underscore: `_f`
+src/bid/plugin_api.rs:183:24: warning: variable does not need to be mutable
+src/runtime/plugin_loader_v2.rs:270:46: warning: unused variable: `args`: help: if this is intentional, prefix it with an underscore: `_args`
+src/bid/plugins/filebox/mod.rs:44:5: warning: type `FileMode` is more private than the item `FileBoxRegistry::open`: method `FileBoxRegistry::open` is reachable at visibility `pub`
+src/mir/loop_builder.rs:35:5: warning: field `block_var_maps` is never read
+src/bid/metadata.rs:148:5: warning: fields `type_name_holder` and `method_holders` are never read
+src/bid/plugins/filebox/mod.rs:24:5: warning: fields `path` and `mode` are never read
+src/runtime/plugin_loader_v2.rs:24:5: warning: fields `box_types` and `init_fn` are never read
+src/mir/loop_builder.rs:62:9: warning: unused `Result` that must be used
+src/mir/loop_builder.rs:66:9: warning: unused `Result` that must be used
+src/mir/loop_builder.rs:78:9: warning: unused `Result` that must be used
+src/mir/loop_builder.rs:79:9: warning: unused `Result` that must be used
+src/mir/loop_builder.rs:93:9: warning: unused `Result` that must be used
+src/bid/plugins/filebox/mod.rs:102:12: warning: creating a shared reference to mutable static: shared reference to mutable static
+src/bid/plugins/filebox/mod.rs:105:9: warning: creating a shared reference to mutable static: shared reference to mutable static
+warning: `nyash-rust` (lib) generated 44 warnings (run `cargo fix --lib -p nyash-rust` to apply 19 suggestions)
+    Checking nyash-rust v0.1.0 (/mnt/c/git/nyash-project/nyash)
+src/backend/vm.rs:18:12: error[E0432]: unresolved import `crate::scope_tracker`: unresolved import, help: a similar path exists: `nyash_rust::scope_tracker`
+src/runner.rs:22:7: warning: unexpected `cfg` condition value: `llvm`
+src/runner.rs:503:15: warning: unexpected `cfg` condition value: `llvm`
+src/runner.rs:526:19: warning: unexpected `cfg` condition value: `llvm`
+src/runner.rs:286:17: warning: variable does not need to be mutable
+warning: `nyash-rust` (bin "nyash") generated 36 warnings (32 duplicates)
+error: could not compile `nyash-rust` (bin "nyash") due to 1 previous error; 36 warnings emitted

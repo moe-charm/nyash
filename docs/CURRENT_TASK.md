@@ -368,56 +368,54 @@ cargo build --release -j32 --features wasm-backend
 - ✅ substring(start, end)メソッド実装完了
 - ✅ fini後のアクセスエラー削除（is_finalized()チェック削除）
 
-## 🚀 **実装中: Phase 9.78a VM統一Box処理**
+## 🛑 **一時停止: Phase 9.78a VM統一Box処理**
 
-### 🎯 **目標: すべてのBox型をVMで統一的に処理**
+### 📊 **完了した作業 (2025-08-21)**
 
-**発見された問題**:
-- ❌ ユーザー定義Box未対応（NewBoxで文字列返すだけ）
-- ❌ birth/finiライフサイクル欠落
-- ❌ メソッド呼び出しハードコード
+#### ✅ **Step 1: MIR生成修正** - 完了・保持
+`src/mir/builder.rs`の変更:
+- すべてのBox型に対してNewBox命令を生成
+- RefNew命令の使用を廃止
+- **評価**: 良い変更、そのまま保持
 
-**解決策**: インタープリターと同等の統一処理を実装
+#### ✅ **VM実装準備** - ビルド可能な状態で一時停止
+- ScopeTrackerモジュール追加
+- VM構造体の拡張（コメントアウト状態）
+- NewBox/BoxCall実装の簡易版
+- **状態**: コンパイル成功、警告のみ
 
-### 📊 **実装ステップ（詳細分析済み）**
+### 🔄 **次のステップ: インタープリター整理**
 
-#### **Step 1: MIR生成修正** ✅ 分析完了
-**場所**: `src/mir/builder.rs` - `build_new_expression()`
-```rust
-// 現在: RefNew命令（不適切）
-// 修正: NewBox命令を生成
-emit(MirInstruction::NewBox {
-    dst,
-    box_type: class,
-    args: arg_values
-})
-```
+#### **整理計画**
+1. **BoxDeclarationをAST層へ移動**
+   - 現在: `interpreter::BoxDeclaration`
+   - 目標: `ast::BoxDeclaration`
 
-#### **Step 2: VM構造体拡張** 🔄 実装予定
-**場所**: `src/backend/vm.rs`
-```rust
-pub struct VM {
-    // 追加
-    box_factory: Arc<BoxFactory>,
-    plugin_loader: Option<Arc<PluginLoaderV2>>,
-    scope_tracker: ScopeTracker,
-    box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
-}
-```
+2. **SharedState依存の削減**
+   - 現在: インタープリター固有の設計
+   - 目標: VM/MIRと共有可能な設計
 
-#### **Step 3: NewBox統一実装** 🔄 実装予定
-- BoxFactory経由で作成
-- ユーザー定義Boxのbirth実行
-- スコープ登録（fini用）
+3. **統一ランタイム基盤の作成**
+   ```rust
+   pub struct NyashRuntime {
+       box_registry: Arc<UnifiedBoxRegistry>,
+       box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
+   }
+   ```
 
-#### **Step 4: BoxCall統一実装** 🔄 実装予定
-- ビルトイン/ユーザー定義/プラグイン統一処理
-- メソッドディスパッチ共通化
+### 📝 **保存された変更の概要**
 
-#### **Step 5: ライフサイクル管理** 🔄 実装予定
-- ScopeTracker実装
-- スコープ終了時の自動fini
-- 逆順実行（作成順と逆）
+**保持している良い変更**:
+- ✅ MIR生成のNewBox命令統一
+- ✅ ScopeTrackerの基本実装
+- ✅ VM拡張の方向性（TODOコメント付き）
+
+**一時的にコメントアウト**:
+- BoxFactory/UnifiedBoxRegistry使用部分
+- interpreter::BoxDeclaration依存
+- プラグインローダー統合
+
+**ビルド状態**: ✅ 正常（警告44個、エラー0個）
 
 ### 🔧 **共有コンポーネント**
 - `BoxFactory` - すでに存在、VMでも使用
