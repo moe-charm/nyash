@@ -1,0 +1,24 @@
+ChatGPT5ŸÅkˆ‹ÓëÉ¨éü:
+
+1. [E0599] no method named `call_fini` found for reference `&enabled::PluginBoxV2`
+   4@: src/scope_tracker.rs:45:28
+   ¨éü: plugin.call_fini() - á½ÃÉLX(WjD
+
+2. [E0308] mismatched types (2‡@)
+   4@: src/interpreter/core.rs:579:45, 618:45
+   ¨éü: &**v - expected `&Box<dyn NyashBox>`, found `&dyn NyashBox`
+
+3. [E0615] attempted to take value of method `instance_id` (3‡@)
+   4@: 
+   - src/interpreter/expressions/calls.rs:695:98
+   - src/interpreter/expressions/calls.rs:785:98  
+   - src/backend/vm.rs:567:90
+   ¨éü: plugin.instance_id - á½ÃÉ’Õ£üëÉhWf(
+   îcH: plugin.instance_id() k	ô
+
+4. [E0609] no field `invoke_fn` on type `&enabled::PluginBoxV2`
+   4@: src/runtime/plugin_loader_v2.rs:139:19
+   ¨éü: self.invoke_fn - X(WjDÕ£üëÉ
+   îcH: self.inner.invoke_fn
+
+: 7n³óÑ¤ë¨éü

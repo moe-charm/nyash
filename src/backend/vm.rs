@@ -564,7 +564,7 @@ impl VM {
                 if let Some(plugin) = box_nyash.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
                     let loader = crate::runtime::get_global_loader_v2();
                     let loader = loader.read().map_err(|_| VMError::InvalidInstruction("Plugin loader lock poisoned".into()))?;
-                    match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
+                    match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id(), &arg_values) {
                         Ok(Some(result_box)) => {
                             if let Some(dst_id) = dst {
                                 self.set_value(*dst_id, VMValue::from_nyash_box(result_box));

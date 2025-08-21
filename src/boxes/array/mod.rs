@@ -59,7 +59,13 @@ impl ArrayBox {
             let idx = idx_box.value as usize;
             let items = self.items.read().unwrap();
             match items.get(idx) {
-                Some(item) => item.clone_box(),
+                Some(item) => {
+                    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                    if item.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                        return item.share_box();
+                    }
+                    item.clone_box()
+                }
                 None => Box::new(crate::boxes::null_box::NullBox::new()),
             }
         } else {
@@ -228,7 +234,13 @@ impl ArrayBox {
         // Create slice
         let slice_items: Vec<Box<dyn NyashBox>> = items[start_idx..end_idx]
             .iter()
-            .map(|item| item.clone_box())
+            .map(|item| {
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if item.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                    return item.share_box();
+                }
+                item.clone_box()
+            })
             .collect();
             
         Box::new(ArrayBox::new_with_elements(slice_items))
@@ -241,7 +253,13 @@ impl Clone for ArrayBox {
         // ディープコピー（独立インスタンス）
         let items_guard = self.items.read().unwrap();
         let cloned_items: Vec<Box<dyn NyashBox>> = items_guard.iter()
-            .map(|item| item.clone_box())  // 要素もディープコピー
+            .map(|item| {
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if item.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                    return item.share_box();
+                }
+                item.clone_box()
+            })  // 要素もディープコピー（ハンドルは共有）
             .collect();
         
         ArrayBox {

@@ -1,6 +1,6 @@
-# プラグインBoxのライフサイクルと nyash.toml methods 定義
+# プラグインBoxのライフサイクル（v2）と nyash.toml 定義
 
-本書は、プラグインBox（PluginBoxV2）の生成（birth）と終了（fini）の流れ、ならびに nyash.toml v2 における `methods` 定義の役割をまとめたものです。
+本書は、プラグインBox（PluginBoxV2）の生成（birth）と終了（fini）の流れ、`singleton` オプション、ならびに nyash.toml v2 における `methods` 定義の役割をまとめたものです。
 
 ---
 
@@ -15,26 +15,26 @@
 1. `unified registry` が `PluginLoaderV2::create_box(box_type, args)` を呼び出す。
 2. `PluginLoaderV2` は `nyash.toml` から `type_id` と `methods` を読み込む。
 3. `invoke_fn(type_id, method_id=0 /* birth */, instance_id=0, ...)` を呼び、戻り値（出力TLV）の先頭4バイトから `instance_id` を取得。
-4. `PluginBoxV2 { type_id, instance_id, invoke_fn, fini_method_id }` を生成して返す。
+4. `PluginBoxV2 { box_type, inner: Arc<PluginHandleInner> }` を生成して返す。
+   - `PluginHandleInner` は `{ type_id, instance_id, invoke_fn, fini_method_id, finalized }` を保持し、参照カウント（Arc）で共有される。
 
 補足:
 - `fini_method_id` は `nyash.toml` の `methods` から `fini` の `method_id` を取り出して保持します。未定義の場合は `None`。
 
 ---
 
-## 3. 終了（fini）の流れ（現状）
+## 3. 終了（fini）の流れ（現在）
 - フィールド差し替え時（代入で旧値を置き換えるとき）:
   - 旧値が `InstanceBox` の場合: インタプリタが `fini()` を呼び、finalized としてマーキングします。
   - 旧値が `PluginBoxV2` の場合: `fini_method_id` が設定されていれば `invoke_fn(type_id, fini_method_id, instance_id, ...)` を呼びます。
-- 破棄（Drop）時:
-  - RustのDropでFFIを呼ぶのは安全性の観点でリスクがあるため、現状は「明示タイミング（フィールド差し替えなど）」での fini 呼び出しを優先しています。
-
-注意:
-- ローカル変数のスコープ終了時に自動で fini を呼ぶ実装は、現時点では入っていません（将来検討）。
+- プラグインBox（PluginBoxV2）:
+  - すべての参照（Arc）がDropされ「最後の参照が解放」された時、`Drop`で一度だけ `fini` を呼ぶ（RAII、二重呼び出し防止）。
+  - 明示finiが必要な場合は `PluginBoxV2::finalize_now()` を使える（内部的に一度だけfini実行）。
+  - 代入/フィールド代入/Map.get/Array.get/slice/退避などは「PluginBoxV2は共有（share）、それ以外は複製（clone）」で統一。
 
 ---
 
-## 4. nyash.toml v2 の定義例
+## 4. nyash.toml v2 の定義例（methods + singleton）
 
 ```toml
 [libraries]
@@ -57,6 +57,24 @@ fini  = { method_id = 4294967295 } # 任意の終端ID
 要点:
 - `methods` に `fini` を定義すれば、差し替え時などに fini が呼ばれます。
 - `fini` 未定義の場合、プラグインBoxの終了処理は呼ばれません（フォールバック動作）。
+
+### singleton例
+
+```toml
+[libraries."libnyash_counter_plugin.so".CounterBox]
+type_id = 7
+singleton = true
+
+[libraries."libnyash_counter_plugin.so".CounterBox.methods]
+birth = { method_id = 0 }
+inc = { method_id = 1 }
+get = { method_id = 2 }
+fini = { method_id = 4294967295 }
+```
+
+- `singleton = true` を設定すると、ローダー初期化時に事前birthし、ローダーが共有ハンドルを保持します。
+- `create_box()` は保持中の共有ハンドルを返すため、複数回の `new` でも同一インスタンスを共有できます。
+- Nyash終了時（または明示要求時）に `shutdown_plugins_v2()` を呼ぶと、ローダーが保持する全シングルトンの `fini` を実行し、クリーンに解放されます。
 
 ---
 

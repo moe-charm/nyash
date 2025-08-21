@@ -47,6 +47,10 @@ pub struct BoxTypeConfig {
     
     /// Method definitions
     pub methods: HashMap<String, MethodDefinition>,
+
+    /// Singleton service flag (keep one shared instance alive in loader)
+    #[serde(default)]
+    pub singleton: bool,
 }
 
 /// Method definition (simplified - no argument info needed)

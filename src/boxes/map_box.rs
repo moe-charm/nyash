@@ -135,7 +135,13 @@ impl MapBox {
     pub fn get(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
         match self.data.read().unwrap().get(&key_str) {
-            Some(value) => value.clone_box(),
+            Some(value) => {
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if value.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                    return value.share_box();
+                }
+                value.clone_box()
+            }
             None => Box::new(StringBox::new(&format!("Key not found: {}", key_str))),
         }
     }

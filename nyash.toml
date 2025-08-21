@@ -38,6 +38,7 @@ cloneSelf = { method_id = 8 }
 
 [libraries."libnyash_counter_plugin.so".CounterBox]
 type_id = 7
+singleton = true
 
 [libraries."libnyash_counter_plugin.so".CounterBox.methods]
 birth = { method_id = 0 }

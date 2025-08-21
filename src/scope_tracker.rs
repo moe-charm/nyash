@@ -39,10 +39,9 @@ impl ScopeTracker {
                     let _ = instance.fini();
                     continue;
                 }
-                // PluginBox: call plugin fini
+                // PluginBoxV2: do not auto-finalize (shared handle may be referenced elsewhere)
                 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
-                if let Some(plugin) = arc_box.as_any().downcast_ref::<PluginBoxV2>() {
-                    plugin.call_fini();
+                if arc_box.as_any().downcast_ref::<PluginBoxV2>().is_some() {
                     continue;
                 }
                 // Builtin and others: no-op for now

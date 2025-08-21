@@ -34,18 +34,71 @@ mod enabled {
 
 /// v2 Plugin Box wrapper - temporary implementation
 #[derive(Debug)]
-    pub struct PluginBoxV2 {
-        pub box_type: String,
+    pub struct PluginHandleInner {
         pub type_id: u32,
         pub invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
         pub instance_id: u32,
-        /// Optional fini method_id from nyash.toml (None if not provided)
         pub fini_method_id: Option<u32>,
+        finalized: std::sync::atomic::AtomicBool,
+    }
+
+    impl Drop for PluginHandleInner {
+        fn drop(&mut self) {
+            // Finalize exactly once when the last shared handle is dropped
+            if let Some(fini_id) = self.fini_method_id {
+                if !self.finalized.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    let tlv_args: [u8; 4] = [1, 0, 0, 0];
+                    let mut out: [u8; 4] = [0; 4];
+                    let mut out_len: usize = out.len();
+                    unsafe {
+                        (self.invoke_fn)(
+                            self.type_id,
+                            fini_id,
+                            self.instance_id,
+                            tlv_args.as_ptr(),
+                            tlv_args.len(),
+                            out.as_mut_ptr(),
+                            &mut out_len,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    impl PluginHandleInner {
+        /// Explicitly finalize this handle now (idempotent)
+        pub fn finalize_now(&self) {
+            if let Some(fini_id) = self.fini_method_id {
+                if !self.finalized.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    let tlv_args: [u8; 4] = [1, 0, 0, 0];
+                    let mut out: [u8; 4] = [0; 4];
+                    let mut out_len: usize = out.len();
+                    unsafe {
+                        (self.invoke_fn)(
+                            self.type_id,
+                            fini_id,
+                            self.instance_id,
+                            tlv_args.as_ptr(),
+                            tlv_args.len(),
+                            out.as_mut_ptr(),
+                            &mut out_len,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+#[derive(Debug, Clone)]
+    pub struct PluginBoxV2 {
+        pub box_type: String,
+        pub inner: std::sync::Arc<PluginHandleInner>,
     }
 
     impl BoxCore for PluginBoxV2 {
     fn box_id(&self) -> u64 {
-        self.instance_id as u64
+        self.inner.instance_id as u64
     }
     
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
@@ -53,7 +106,7 @@ mod enabled {
     }
     
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}({})", self.box_type, self.instance_id)
+        write!(f, "{}({})", self.box_type, self.inner.instance_id)
     }
     
     fn as_any(&self) -> &dyn Any {
@@ -75,7 +128,7 @@ mod enabled {
     }
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        eprintln!("🔍 DEBUG: PluginBoxV2::clone_box called for {} (id={})", self.box_type, self.instance_id);
+        eprintln!("🔍 DEBUG: PluginBoxV2::clone_box called for {} (id={})", self.box_type, self.inner.instance_id);
         
         // Clone means creating a new instance by calling birth()
         let mut output_buffer = vec![0u8; 1024];
@@ -83,8 +136,8 @@ mod enabled {
         let tlv_args = vec![1u8, 0, 0, 0]; // version=1, argc=0
         
         let result = unsafe {
-            (self.invoke_fn)(
-                self.type_id,
+            (self.inner.invoke_fn)(
+                self.inner.type_id,
                 0,                 // method_id=0 (birth)
                 0,                 // instance_id=0 (static call)
                 tlv_args.as_ptr(),
@@ -103,13 +156,16 @@ mod enabled {
             
             eprintln!("🎉 clone_box success: created new {} instance_id={}", self.box_type, new_instance_id);
             
-            // Return new PluginBoxV2 with new instance_id
+            // Return new PluginBoxV2 with new instance_id (separate inner handle)
             Box::new(PluginBoxV2 {
                 box_type: self.box_type.clone(),
-                type_id: self.type_id,
-                invoke_fn: self.invoke_fn,
-                instance_id: new_instance_id,
-                fini_method_id: self.fini_method_id,
+                inner: std::sync::Arc::new(PluginHandleInner {
+                    type_id: self.inner.type_id,
+                    invoke_fn: self.inner.invoke_fn,
+                    instance_id: new_instance_id,
+                    fini_method_id: self.inner.fini_method_id,
+                    finalized: std::sync::atomic::AtomicBool::new(false),
+                }),
             })
         } else {
             eprintln!("❌ clone_box failed: birth() returned error code {}", result);
@@ -119,7 +175,7 @@ mod enabled {
     }
     
     fn to_string_box(&self) -> crate::box_trait::StringBox {
-        StringBox::new(format!("{}({})", self.box_type, self.instance_id))
+        StringBox::new(format!("{}({})", self.box_type, self.inner.instance_id))
     }
     
     fn equals(&self, _other: &dyn NyashBox) -> crate::box_trait::BoolBox {
@@ -127,43 +183,19 @@ mod enabled {
     }
     
     fn share_box(&self) -> Box<dyn NyashBox> {
-        eprintln!("🔍 DEBUG: PluginBoxV2::share_box called for {} (id={})", self.box_type, self.instance_id);
+        eprintln!("🔍 DEBUG: PluginBoxV2::share_box called for {} (id={})", self.box_type, self.inner.instance_id);
         
         // Share means returning a new Box with the same instance_id
         Box::new(PluginBoxV2 {
             box_type: self.box_type.clone(),
-            type_id: self.type_id,
-            invoke_fn: self.invoke_fn,
-            instance_id: self.instance_id,  // Same instance_id - this is sharing!
-            fini_method_id: self.fini_method_id,
+            inner: self.inner.clone(),
         })
     }
 }
 
 impl PluginBoxV2 {
-    /// Call fini() on this plugin instance if configured
-    pub fn call_fini(&self) {
-        if let Some(fini_id) = self.fini_method_id {
-            // Empty TLV args
-            let tlv_args: [u8; 4] = [1, 0, 0, 0];
-            let mut out: [u8; 4] = [0; 4];
-            let mut out_len: usize = out.len();
-            let rc = unsafe {
-                (self.invoke_fn)(
-                    self.type_id,
-                    fini_id,
-                    self.instance_id,
-                    tlv_args.as_ptr(),
-                    tlv_args.len(),
-                    out.as_mut_ptr(),
-                    &mut out_len,
-                )
-            };
-            if rc != 0 {
-                eprintln!("⚠️ PluginBoxV2::fini failed for {} id={} rc={}", self.box_type, self.instance_id, rc);
-            }
-        }
-    }
+    pub fn instance_id(&self) -> u32 { self.inner.instance_id }
+    pub fn finalize_now(&self) { self.inner.finalize_now() }
 }
 
 /// Plugin loader v2
@@ -175,6 +207,9 @@ impl PluginBoxV2 {
     pub config: Option<NyashConfigV2>,
     /// Path to the loaded nyash.toml (absolute), used for consistent re-reads
     config_path: Option<String>,
+
+    /// Singleton instances: (lib_name, box_type) -> shared handle
+    singletons: RwLock<HashMap<(String,String), std::sync::Arc<PluginHandleInner>>>,
 }
 
     impl PluginLoaderV2 {
@@ -196,6 +231,7 @@ impl PluginBoxV2 {
             plugins: RwLock::new(HashMap::new()),
             config: None,
             config_path: None,
+            singletons: RwLock::new(HashMap::new()),
         }
     }
     
@@ -225,7 +261,56 @@ impl PluginBoxV2 {
                 eprintln!("Warning: Failed to load plugin {}: {:?}", lib_name, e);
             }
         }
+        // Pre-birth singletons configured in nyash.toml
+        let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
+        let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
+        let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
+        for (lib_name, lib_def) in &config.libraries {
+            for box_name in &lib_def.boxes {
+                if let Some(bc) = config.get_box_config(lib_name, box_name, &toml_value) {
+                    if bc.singleton {
+                        let _ = self.ensure_singleton_handle(lib_name, box_name);
+                    }
+                }
+            }
+        }
         
+        Ok(())
+    }
+
+    /// Ensure a singleton handle is created and stored
+    fn ensure_singleton_handle(&self, lib_name: &str, box_type: &str) -> BidResult<()> {
+        // Fast path: already present
+        if self.singletons.read().unwrap().contains_key(&(lib_name.to_string(), box_type.to_string())) {
+            return Ok(());
+        }
+        // Create via birth
+        let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
+        let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
+        let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
+        let config = self.config.as_ref().ok_or(BidError::PluginError)?;
+        let plugins = self.plugins.read().unwrap();
+        let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+        let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+        let type_id = box_conf.type_id;
+        // Call birth
+        let mut output_buffer = vec![0u8; 1024];
+        let mut output_len = output_buffer.len();
+        let tlv_args = vec![1u8, 0, 0, 0];
+        let birth_result = unsafe {
+            (plugin.invoke_fn)(type_id, 0, 0, tlv_args.as_ptr(), tlv_args.len(), output_buffer.as_mut_ptr(), &mut output_len)
+        };
+        if birth_result != 0 || output_len < 4 { return Err(BidError::PluginError); }
+        let instance_id = u32::from_le_bytes([output_buffer[0], output_buffer[1], output_buffer[2], output_buffer[3]]);
+        let fini_id = box_conf.methods.get("fini").map(|m| m.method_id);
+        let handle = std::sync::Arc::new(PluginHandleInner {
+            type_id,
+            invoke_fn: plugin.invoke_fn,
+            instance_id,
+            fini_method_id: fini_id,
+            finalized: std::sync::atomic::AtomicBool::new(false),
+        });
+        self.singletons.write().unwrap().insert((lib_name.to_string(), box_type.to_string()), handle);
         Ok(())
     }
 
@@ -344,12 +429,12 @@ impl PluginBoxV2 {
 
                     // Plugin Handle (BoxRef): tag=8, size=8
                     if let Some(p) = a.as_any().downcast_ref::<PluginBoxV2>() {
-                        eprintln!("[PluginLoaderV2]  arg[{}]: PluginBoxV2({}, id={}) -> Handle(tag=8)", idx, p.box_type, p.instance_id);
+                        eprintln!("[PluginLoaderV2]  arg[{}]: PluginBoxV2({}, id={}) -> Handle(tag=8)", idx, p.box_type, p.inner.instance_id);
                         buf.push(8u8); // tag
                         buf.push(0u8); // reserved
                         buf.extend_from_slice(&(8u16).to_le_bytes());
-                        buf.extend_from_slice(&p.type_id.to_le_bytes());
-                        buf.extend_from_slice(&p.instance_id.to_le_bytes());
+                        buf.extend_from_slice(&p.inner.type_id.to_le_bytes());
+                        buf.extend_from_slice(&p.inner.instance_id.to_le_bytes());
                         continue;
                     }
                     // Integer: prefer i32
@@ -436,10 +521,13 @@ impl PluginBoxV2 {
                                     let fini_id = ret_conf.methods.get("fini").map(|m| m.method_id);
                                     let pbox = PluginBoxV2 {
                                         box_type: ret_box.to_string(),
-                                        type_id: r_type,
-                                        invoke_fn: ret_plugin.invoke_fn,
-                                        instance_id: r_inst,
-                                        fini_method_id: fini_id,
+                                        inner: std::sync::Arc::new(PluginHandleInner {
+                                            type_id: r_type,
+                                            invoke_fn: ret_plugin.invoke_fn,
+                                            instance_id: r_inst,
+                                            fini_method_id: fini_id,
+                                            finalized: std::sync::atomic::AtomicBool::new(false),
+                                        }),
                                     };
                                     return Ok(Some(Box::new(pbox) as Box<dyn NyashBox>));
                                 }
@@ -521,7 +609,7 @@ impl PluginBoxV2 {
         
         Ok(())
     }
-    
+
     /// Create a Box instance
     pub fn create_box(&self, box_type: &str, _args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
         eprintln!("🔍 create_box called for: {}", box_type);
@@ -538,6 +626,23 @@ impl PluginBoxV2 {
                 BidError::InvalidType
             })?;
         
+        // If singleton, return the pre-birthed shared handle
+        let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
+        if let Ok(toml_content) = std::fs::read_to_string(cfg_path) {
+            if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
+                if let Some(bc) = config.get_box_config(lib_name, box_type, &toml_value) {
+                    if bc.singleton {
+                        // ensure created
+                        let _ = self.ensure_singleton_handle(lib_name, box_type);
+                        if let Some(inner) = self.singletons.read().unwrap().get(&(lib_name.to_string(), box_type.to_string())) {
+                            let plugin_box = PluginBoxV2 { box_type: box_type.to_string(), inner: inner.clone() };
+                            return Ok(Box::new(plugin_box));
+                        }
+                    }
+                }
+            }
+        }
+        
         eprintln!("🔍 Found library: {} for box type: {}", lib_name, box_type);
         
         // Get loaded plugin
@@ -552,7 +657,6 @@ impl PluginBoxV2 {
         
         // Get type_id from config - read actual nyash.toml content
         eprintln!("🔍 Reading nyash.toml for type configuration...");
-        let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
         let (type_id, fini_method_id) = if let Ok(toml_content) = std::fs::read_to_string(cfg_path) {
             eprintln!("🔍 nyash.toml read successfully");
             if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
@@ -616,13 +720,24 @@ impl PluginBoxV2 {
         // Create v2 plugin box wrapper with actual instance_id
         let plugin_box = PluginBoxV2 {
             box_type: box_type.to_string(),
-            type_id,
-            invoke_fn: plugin.invoke_fn,
-            instance_id,
-            fini_method_id,
+            inner: std::sync::Arc::new(PluginHandleInner {
+                type_id,
+                invoke_fn: plugin.invoke_fn,
+                instance_id,
+                fini_method_id,
+                finalized: std::sync::atomic::AtomicBool::new(false),
+            }),
         };
         
         Ok(Box::new(plugin_box))
+    }
+
+    /// Shutdown singletons: finalize and clear all singleton handles
+    pub fn shutdown_singletons(&self) {
+        let mut map = self.singletons.write().unwrap();
+        for (_, handle) in map.drain() {
+            handle.finalize_now();
+        }
     }
 }
 
@@ -646,6 +761,14 @@ impl PluginBoxV2 {
         let loader = get_global_loader_v2();
         let loader = loader.read().unwrap();
         loader.load_all_plugins()
+    }
+
+    /// Gracefully shutdown plugins (finalize singletons)
+    pub fn shutdown_plugins_v2() -> BidResult<()> {
+        let loader = get_global_loader_v2();
+        let loader = loader.read().unwrap();
+        loader.shutdown_singletons();
+        Ok(())
     }
 }
 
@@ -696,6 +819,7 @@ mod stub {
 
     pub fn get_global_loader_v2() -> Arc<RwLock<PluginLoaderV2>> { GLOBAL_LOADER_V2.clone() }
     pub fn init_global_loader_v2(_config_path: &str) -> BidResult<()> { Ok(()) }
+    pub fn shutdown_plugins_v2() -> BidResult<()> { Ok(()) }
 }
 
 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]

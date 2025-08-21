@@ -692,7 +692,7 @@ impl NyashInterpreter {
                             }
                             let loader = crate::runtime::get_global_loader_v2();
                             let loader = loader.read().unwrap();
-                            match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
+                            match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id(), &arg_values) {
                                 Ok(Some(result_box)) => return Ok(result_box),
                                 Ok(None) => return Ok(Box::new(VoidBox::new())),
                                 Err(_) => {}
@@ -782,7 +782,7 @@ impl NyashInterpreter {
                         if let Some(plugin) = plugin_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
                             let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
                             for arg in arguments { arg_values.push(self.execute_expression(arg)?); }
-                            match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
+                            match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id(), &arg_values) {
                                 Ok(Some(result_box)) => return Ok(result_box),
                                 Ok(None) => return Ok(Box::new(crate::box_trait::VoidBox::new())),
                                 Err(e) => {
@@ -818,23 +818,23 @@ impl NyashInterpreter {
         {
             // 親がユーザー定義に見つからない場合は、プラグインとして試行
             // 現在のインスタンスから __plugin_content を参照
-            if let Some(plugin_shared) = current_instance.get_field_legacy("__plugin_content") {
-                // 引数を評価（ロックは既に解放済みの設計）
-                let plugin_ref = &*plugin_shared;
-                if let Some(plugin) = plugin_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                    let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
-                    for arg in arguments {
-                        arg_values.push(self.execute_expression(arg)?);
+                    if let Some(plugin_shared) = current_instance.get_field_legacy("__plugin_content") {
+                        // 引数を評価（ロックは既に解放済みの設計）
+                        let plugin_ref = &*plugin_shared;
+                        if let Some(plugin) = plugin_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                            let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
+                            for arg in arguments {
+                                arg_values.push(self.execute_expression(arg)?);
+                            }
+                            let loader = crate::runtime::get_global_loader_v2();
+                            let loader = loader.read().unwrap();
+                            match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id(), &arg_values) {
+                                Ok(Some(result_box)) => return Ok(result_box),
+                                Ok(None) => return Ok(Box::new(VoidBox::new())),
+                                Err(_) => {}
+                            }
+                        }
                     }
-                    let loader = crate::runtime::get_global_loader_v2();
-                    let loader = loader.read().unwrap();
-                    match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
-                        Ok(Some(result_box)) => return Ok(result_box),
-                        Ok(None) => return Ok(Box::new(VoidBox::new())),
-                        Err(_) => {}
-                    }
-                }
-            }
         }
         
         // 3. 親クラスのBox宣言を取得（ユーザー定義Boxの場合）
@@ -1003,7 +1003,7 @@ impl NyashInterpreter {
         }
         let loader_guard = crate::runtime::plugin_loader_v2::get_global_loader_v2();
         let loader = loader_guard.read().map_err(|_| RuntimeError::RuntimeFailure { message: "Plugin loader lock poisoned".into() })?;
-        match loader.invoke_instance_method(&plugin_box.box_type, method, plugin_box.instance_id, &arg_values) {
+        match loader.invoke_instance_method(&plugin_box.box_type, method, plugin_box.instance_id(), &arg_values) {
             Ok(Some(result_box)) => Ok(result_box),
             Ok(None) => Ok(Box::new(VoidBox::new())),
             Err(e) => Err(RuntimeError::RuntimeFailure { message: format!("Plugin method {} failed: {:?}", method, e) }),

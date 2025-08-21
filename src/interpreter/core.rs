@@ -575,7 +575,14 @@ impl NyashInterpreter {
     /// local変数スタックを保存・復元（関数呼び出し時）
     pub(super) fn save_local_vars(&self) -> HashMap<String, Box<dyn NyashBox>> {
         self.local_vars.iter()
-            .map(|(k, v)| (k.clone(), (**v).clone_box()))  // Deref Arc to get the Box
+            .map(|(k, v)| {
+                let b: &dyn NyashBox = &**v;
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                    return (k.clone(), b.share_box());
+                }
+                (k.clone(), b.clone_box())
+            })
             .collect()
     }
     
@@ -593,12 +600,7 @@ impl NyashInterpreter {
                 let _ = instance.fini();
                 eprintln!("🔄 Scope exit: Called fini() on local variable '{}' (InstanceBox)", name);
             }
-            // プラグインBoxの場合
-            #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
-            if let Some(plugin) = (**value).as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                plugin.call_fini();
-                eprintln!("🔄 Scope exit: Called fini() on local variable '{}' (PluginBox)", name);
-            }
+            // プラグインBoxは共有ハンドルの可能性が高いため自動finiしない（明示呼び出しのみ）
             // ビルトインBoxは元々finiメソッドを持たないので呼ばない
             // （StringBox、IntegerBox等はリソース管理不要）
         }
@@ -612,7 +614,14 @@ impl NyashInterpreter {
     /// outbox変数スタックを保存・復元（static関数呼び出し時）
     pub(super) fn save_outbox_vars(&self) -> HashMap<String, Box<dyn NyashBox>> {
         self.outbox_vars.iter()
-            .map(|(k, v)| (k.clone(), (**v).clone_box()))  // Deref Arc to get the Box
+            .map(|(k, v)| {
+                let b: &dyn NyashBox = &**v;
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                    return (k.clone(), b.share_box());
+                }
+                (k.clone(), b.clone_box())
+            })
             .collect()
     }
     
@@ -624,12 +633,7 @@ impl NyashInterpreter {
                 let _ = instance.fini();
                 eprintln!("🔄 Scope exit: Called fini() on outbox variable '{}' (InstanceBox)", name);
             }
-            // プラグインBoxの場合
-            #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
-            if let Some(plugin) = (**value).as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                plugin.call_fini();
-                eprintln!("🔄 Scope exit: Called fini() on outbox variable '{}' (PluginBox)", name);
-            }
+            // プラグインBoxは共有ハンドルの可能性が高いため自動finiしない
             // ビルトインBoxは元々finiメソッドを持たないので呼ばない（要修正）
         }
         

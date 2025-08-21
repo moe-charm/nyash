@@ -72,3 +72,29 @@ v
         Err(e) => panic!("Counter assignment test failed: {:?}", e),
     }
 }
+
+#[test]
+fn e2e_counter_mapbox_shares_handle() {
+    if !try_init_plugins() { return; }
+
+    let code = r#"
+local c, m, v
+c = new CounterBox()
+m = new MapBox()
+m.set("k", c)
+v = m.get("k")
+v.inc()
+// c should reflect the increment if handle is shared
+v = c.get()
+v
+"#;
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
+
+    match interpreter.execute(ast) {
+        Ok(result) => {
+            assert_eq!(result.to_string_box().value, "1");
+        }
+        Err(e) => panic!("Counter MapBox share test failed: {:?}", e),
+    }
+}
