@@ -37,8 +37,7 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::IntentBox;
-use crate::transport::{Transport, InProcessTransport, TransportError};
-use crate::messaging::IntentHandler;
+use crate::transport::{Transport, InProcessTransport};
 use std::any::Any;
 use std::sync::RwLock;
 use std::collections::HashMap;
@@ -135,6 +134,7 @@ impl P2PBox {
         let mut handlers = self.handlers.write().unwrap();
         handlers.insert(intent_str, handler);
         Box::new(BoolBox::new(true))
+    }
     /// ノードが到達可能かチェック
     pub fn is_reachable(&self, node_id: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let node_str = node_id.to_string_box().value;

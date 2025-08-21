@@ -131,8 +131,7 @@ pub mod http_server_box;
 
 // P2P通信Box群 (NEW! - Completely rewritten)
 pub mod intent_box;
-// Temporarily commented out until transport/messaging import issues are fixed
-// pub mod p2p_box;
+pub mod p2p_box;
 
 // null関数も再エクスポート
 pub use null_box::{NullBox, null};
@@ -153,5 +152,4 @@ pub use http_server_box::HTTPServerBox;
 
 // P2P通信Boxの再エクスポート
 pub use intent_box::IntentBox;
-// Temporarily commented out until transport/messaging import issues are fixed
-// pub use p2p_box::P2PBox;
+pub use p2p_box::P2PBox;

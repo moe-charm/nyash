@@ -34,7 +34,7 @@ pub enum TransportError {
 }
 
 /// Abstract transport trait for different communication methods
-pub trait Transport: Send + Sync {
+pub trait Transport: Send + Sync + std::fmt::Debug {
     /// Get the node ID of this transport
     fn node_id(&self) -> &str;
     

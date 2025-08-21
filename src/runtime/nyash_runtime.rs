@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use crate::core::model::BoxDeclaration;
 use crate::box_factory::{UnifiedBoxRegistry, BoxFactory};
-use crate::box_factory::builtin::BuiltinBoxFactory;
+use crate::box_factory::builtin::{BuiltinBoxFactory, BuiltinGroups};
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
 
@@ -34,11 +34,12 @@ impl NyashRuntime {
 pub struct NyashRuntimeBuilder {
     box_registry: Option<Arc<Mutex<UnifiedBoxRegistry>>>,
     box_declarations: Option<Arc<RwLock<HashMap<String, BoxDeclaration>>>>,
+    builtin_groups: Option<BuiltinGroups>,
 }
 
 impl NyashRuntimeBuilder {
     pub fn new() -> Self {
-        Self { box_registry: None, box_declarations: None }
+        Self { box_registry: None, box_declarations: None, builtin_groups: None }
     }
 
     /// Inject a BoxFactory implementation directly into a private registry
@@ -60,19 +61,40 @@ impl NyashRuntimeBuilder {
     }
 
     pub fn build(self) -> NyashRuntime {
+        let registry = match self.box_registry {
+            Some(reg) => reg,
+            None => match self.builtin_groups {
+                Some(groups) => create_registry_with_groups(groups),
+                None => create_default_registry(),
+            }
+        };
+
         NyashRuntime {
-            box_registry: self.box_registry.unwrap_or_else(|| create_default_registry()),
+            box_registry: registry,
             box_declarations: self.box_declarations.unwrap_or_else(|| Arc::new(RwLock::new(HashMap::new()))),
         }
     }
 }
 
 fn create_default_registry() -> Arc<Mutex<UnifiedBoxRegistry>> {
+    create_registry_with_groups(BuiltinGroups::default())
+}
+
+fn create_registry_with_groups(groups: BuiltinGroups) -> Arc<Mutex<UnifiedBoxRegistry>> {
     let mut registry = UnifiedBoxRegistry::new();
-    registry.register(Arc::new(BuiltinBoxFactory::new()));
+    registry.register(Arc::new(BuiltinBoxFactory::new_with_groups(groups)));
     #[cfg(feature = "plugins")]
     {
         registry.register(Arc::new(PluginBoxFactory::new()));
     }
     Arc::new(Mutex::new(registry))
+}
+
+impl NyashRuntimeBuilder {
+    /// Configure which builtin groups are registered in the registry.
+    /// If a custom box_registry is already provided, this setting is ignored.
+    pub fn with_builtin_groups(mut self, groups: BuiltinGroups) -> Self {
+        self.builtin_groups = Some(groups);
+        self
+    }
 }

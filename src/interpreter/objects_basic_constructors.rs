@@ -5,8 +5,8 @@ use crate::ast::ASTNode;
 use crate::box_trait::*;
 use crate::interpreter::core::{NyashInterpreter as Interpreter, RuntimeError};
 use crate::boxes::FloatBox;
-use crate::NullBox;
-use crate::MapBox;
+use crate::boxes::null_box::NullBox;
+use crate::boxes::map_box::MapBox;
 
 impl Interpreter {
     /// Create basic type boxes (StringBox, IntegerBox, BoolBox, etc.)

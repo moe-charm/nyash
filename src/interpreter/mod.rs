@@ -7,7 +7,7 @@
 
 // Import all necessary dependencies
 use crate::ast::{ASTNode, CatchClause};
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, ArrayBox, ResultBox, ErrorBox, BoxCore};
+use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, ErrorBox, BoxCore};
 use crate::boxes::FutureBox;
 use crate::instance_v2::InstanceBox;
 use crate::channel_box::ChannelBox;

@@ -7,6 +7,8 @@
 // 🌐 WebAssembly support
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use crate::box_factory::builtin::BuiltinGroups;
 
 pub mod box_trait;
 pub mod boxes;
@@ -109,7 +111,7 @@ impl NyashWasm {
         console_error_panic_hook::set_once();
         
         // Create interpreter with browser-specific setup
-        let interpreter = NyashInterpreter::new();
+        let interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::wasm_playground());
         
         // Register browser-specific boxes
         // ConsoleBox is available as a constructor: console = new ConsoleBox()

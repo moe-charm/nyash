@@ -15,7 +15,8 @@ use nyash_rust::{
     mir::{MirCompiler, MirPrinter, MirInstruction},
     backend::VM,
 };
-use nyash_rust::runtime::NyashRuntime;
+use nyash_rust::runtime::{NyashRuntime, NyashRuntimeBuilder};
+use nyash_rust::box_factory::builtin::BuiltinGroups;
 use nyash_rust::interpreter::SharedState;
 use nyash_rust::box_factory::user_defined::UserDefinedBoxFactory;
 use nyash_rust::core::model::BoxDeclaration as CoreBoxDecl;
@@ -226,7 +227,7 @@ impl NyashRunner {
         eprintln!("🔍 DEBUG: Creating interpreter...");
         
         // Execute the AST
-        let mut interpreter = NyashInterpreter::new();
+        let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
         eprintln!("🔍 DEBUG: Starting execution...");
         match interpreter.execute(ast) {
             Ok(result) => {
@@ -321,7 +322,9 @@ impl NyashRunner {
 
         // Prepare runtime and collect Box declarations for VM user-defined types
         let runtime = {
-            let rt = NyashRuntime::new();
+            let rt = NyashRuntimeBuilder::new()
+                .with_builtin_groups(BuiltinGroups::native_full())
+                .build();
             self.collect_box_declarations(&ast, &rt);
             // Register UserDefinedBoxFactory backed by the same declarations
             let mut shared = SharedState::new();
@@ -643,7 +646,7 @@ impl NyashRunner {
         let start = std::time::Instant::now();
         for _ in 0..self.config.iterations {
             if let Ok(ast) = NyashParser::parse_from_string(test_code) {
-                let mut interpreter = NyashInterpreter::new();
+                let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
                 let _ = interpreter.execute(ast);
             }
         }
@@ -866,7 +869,7 @@ fn demo_interpreter_system() {
     
     match NyashParser::parse_from_string(simple_code) {
         Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new();
+            let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
             match interpreter.execute(ast) {
                 Ok(result) => {
                     println!("    ✅ Result: {}", result.to_string_box().value);
@@ -891,7 +894,7 @@ fn demo_interpreter_system() {
     
     match NyashParser::parse_from_string(expr_code) {
         Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new();
+            let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
             match interpreter.execute(ast) {
                 Ok(result) => {
                     println!("    ✅ Result: {}", result.to_string_box().value);

@@ -26,12 +26,32 @@ impl NyashInterpreter {
         
         match nyash_args {
             Ok(args) => {
-                // Try unified registry
-                use super::super::runtime::get_global_unified_registry;
-                let registry = get_global_unified_registry();
+                // Handle generics: if user-defined and type arguments provided, specialize declaration
+                let mut target_class = class.to_string();
+                let user_defined_exists = {
+                    let box_decls = self.shared.box_declarations.read().unwrap();
+                    box_decls.contains_key(class)
+                };
+                if user_defined_exists && !type_arguments.is_empty() {
+                    let generic_decl = {
+                        let box_decls = self.shared.box_declarations.read().unwrap();
+                        box_decls.get(class).cloned()
+                    };
+                    if let Some(generic_decl) = generic_decl {
+                        // Validate and specialize
+                        self.validate_generic_arguments(&generic_decl, type_arguments)?;
+                        let specialized = self.specialize_generic_class(&generic_decl, type_arguments)?;
+                        target_class = specialized.name.clone();
+                        // Insert specialized declaration so registry can create it
+                        let mut box_decls = self.shared.box_declarations.write().unwrap();
+                        box_decls.insert(target_class.clone(), specialized);
+                    }
+                }
+
+                // Try unified registry (use interpreter's runtime registry to include user-defined boxes)
+                let registry = self.runtime.box_registry.clone();
                 let registry_lock = registry.lock().unwrap();
-                
-                match registry_lock.create_box(class, &args) {
+                match registry_lock.create_box(&target_class, &args) {
                     Ok(box_instance) => {
                         
                         // Check if this is a user-defined box that needs constructor execution
@@ -41,7 +61,7 @@ impl NyashInterpreter {
                             // Check if we have a box declaration for this class
                             let (box_decl_opt, constructor_opt) = {
                                 let box_decls = self.shared.box_declarations.read().unwrap();
-                                if let Some(box_decl) = box_decls.get(class) {
+                                if let Some(box_decl) = box_decls.get(&target_class) {
                                     // Find the birth constructor (unified constructor system)
                                     let birth_key = format!("birth/{}", arguments.len());
                                     let constructor = box_decl.constructors.get(&birth_key).cloned();
@@ -64,7 +84,7 @@ impl NyashInterpreter {
                                     return Ok(box_instance);
                                 } else {
                                     return Err(RuntimeError::InvalidOperation {
-                                        message: format!("No constructor found for {} with {} arguments", class, arguments.len()),
+                                        message: format!("No constructor found for {} with {} arguments", target_class, arguments.len()),
                                     });
                                 }
                             }
@@ -74,19 +94,19 @@ impl NyashInterpreter {
                         return Ok(box_instance);
                     },
                     Err(e) => {
-                        eprintln!("🔍 Unified registry failed for {}: {}", class, e);
-                        // Fall through to legacy match statement
+                        // Stop here: use unified registry result as source of truth
+                        return Err(e);
                     }
                 }
             },
             Err(e) => {
-                eprintln!("🔍 Argument evaluation failed: {}", e);
-                // Fall through to legacy match statement which will re-evaluate args
+                // Argument evaluation failed; propagate error
+                return Err(e);
             }
         }
         
-        // 🚧 Legacy implementation (will be removed in Phase 9.78e)
-        eprintln!("🔍 Falling back to legacy match statement for: {}", class);
+        // Unified registry is authoritative; legacy implementation removed
+        return Err(RuntimeError::UndefinedClass { name: class.to_string() });
         
         // Try basic type constructors first
         if let Ok(basic_box) = self.create_basic_box(class, arguments) {
@@ -103,7 +123,8 @@ impl NyashInterpreter {
                 unreachable!("Basic type {} should have been handled by create_basic_box()", class);
             }
             
-            /* Basic types are now handled by create_basic_box() - keeping for reference
+            /* Basic types are now handled by create_basic_box() - keeping for reference */
+            /*
             "IntegerBox" => {
                 // IntegerBoxは引数1個（整数値）で作成
                 if arguments.len() != 1 {
@@ -195,6 +216,7 @@ impl NyashInterpreter {
                     });
                 }
             }
+            */
             "MathBox" => {
                 // MathBoxは引数なしで作成
                 if !arguments.is_empty() {

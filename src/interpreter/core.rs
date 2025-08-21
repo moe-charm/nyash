@@ -256,6 +256,33 @@ impl NyashInterpreter {
             runtime,
         }
     }
+
+    /// グループ構成を指定して新しいインタープリターを作成
+    pub fn new_with_groups(groups: crate::box_factory::builtin::BuiltinGroups) -> Self {
+        let shared = SharedState::new();
+
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        let runtime = NyashRuntimeBuilder::new()
+            .with_builtin_groups(groups)
+            .with_factory(udf)
+            .build();
+
+        let mut shared = shared; // 可変化
+        shared.box_declarations = runtime.box_declarations.clone();
+
+        Self {
+            shared,
+            local_vars: HashMap::new(),
+            outbox_vars: HashMap::new(),
+            control_flow: ControlFlow::None,
+            current_constructor_context: None,
+            evaluation_stack: Vec::new(),
+            invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
+            stdlib: None,
+            runtime,
+        }
+    }
     
     /// 共有状態から新しいインタープリターを作成（非同期実行用）
     pub fn with_shared(shared: SharedState) -> Self {
@@ -277,6 +304,31 @@ impl NyashInterpreter {
             evaluation_stack: Vec::new(),
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
             stdlib: None, // 遅延初期化
+            runtime,
+        }
+    }
+
+    /// 共有状態＋グループ構成を指定して新しいインタープリターを作成（非同期実行用）
+    pub fn with_shared_and_groups(shared: SharedState, groups: crate::box_factory::builtin::BuiltinGroups) -> Self {
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        let runtime = NyashRuntimeBuilder::new()
+            .with_builtin_groups(groups)
+            .with_factory(udf)
+            .build();
+
+        let mut shared = shared; // 可変化
+        shared.box_declarations = runtime.box_declarations.clone();
+
+        Self {
+            shared,
+            local_vars: HashMap::new(),
+            outbox_vars: HashMap::new(),
+            control_flow: ControlFlow::None,
+            current_constructor_context: None,
+            evaluation_stack: Vec::new(),
+            invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
+            stdlib: None,
             runtime,
         }
     }

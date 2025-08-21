@@ -24,6 +24,17 @@ pub struct InProcessTransport {
     receive_callback: Arc<Mutex<Option<Box<dyn Fn(IntentEnvelope) + Send + Sync>>>>,
 }
 
+impl std::fmt::Debug for InProcessTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InProcessTransport")
+            .field("node_id", &self.node_id)
+            .field("bus", &"MessageBus")
+            .field("endpoint", &"BusEndpoint")
+            .field("receive_callback", &"<callback>")
+            .finish()
+    }
+}
+
 impl InProcessTransport {
     /// 新しいInProcessTransportを作成
     pub fn new(node_id: String) -> Self {
