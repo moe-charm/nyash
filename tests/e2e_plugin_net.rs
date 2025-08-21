@@ -20,6 +20,8 @@ fn try_init_plugins() -> bool {
 
 #[test]
 fn e2e_http_stub_end_to_end() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
     if !try_init_plugins() { return; }
 
     let code = r#"
@@ -28,7 +30,7 @@ srv = new HttpServerBox()
 srv.start(8080)
 
 cli = new HttpClientBox()
-r = cli.get("http://localhost/hello")
+r = cli.get("http://localhost:8080/hello")
 
 req = srv.accept()
 resp = new HttpResponseBox()
@@ -48,6 +50,8 @@ body
 
 #[test]
 fn e2e_http_server_restart() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
     if !try_init_plugins() { return; }
 
     let code = r#"
@@ -56,7 +60,7 @@ srv = new HttpServerBox()
 srv.start(8081)
 
 cli = new HttpClientBox()
-r = cli.get("http://localhost/test1")
+r = cli.get("http://localhost:8081/test1")
 req = srv.accept()
 resp = new HttpResponseBox()
 resp.write("A")
@@ -65,7 +69,7 @@ req.respond(resp)
 srv.stop()
 srv.start(8081)
 
-r = cli.get("http://localhost/test2")
+r = cli.get("http://localhost:8081/test2")
 req = srv.accept()
 resp = new HttpResponseBox()
 resp.write("B")
@@ -83,6 +87,8 @@ body
 
 #[test]
 fn e2e_http_server_shutdown_and_restart() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
     if !try_init_plugins() { return; }
 
     // First run: start and respond
@@ -91,7 +97,7 @@ local srv, cli, r, req, resp
 srv = new HttpServerBox()
 srv.start(8082)
 cli = new HttpClientBox()
-r = cli.get("http://localhost/first")
+r = cli.get("http://localhost:8082/first")
 req = srv.accept()
 resp = new HttpResponseBox()
 resp.write("X")
@@ -111,7 +117,7 @@ local srv, cli, r, req, resp, body
 srv = new HttpServerBox()
 srv.start(8083)
 cli = new HttpClientBox()
-r = cli.get("http://localhost/second")
+r = cli.get("http://localhost:8083/second")
 req = srv.accept()
 resp = new HttpResponseBox()
 resp.write("Y")
@@ -127,6 +133,8 @@ body
 
 #[test]
 fn e2e_http_post_and_headers() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
     if !try_init_plugins() { return; }
 
     let code = r#"
@@ -135,7 +143,7 @@ srv = new HttpServerBox()
 srv.start(8090)
 
 cli = new HttpClientBox()
-r = cli.post("http://localhost/api", "DATA")
+r = cli.post("http://localhost:8090/api", "DATA")
 
 req = srv.accept()
 // check server saw body
@@ -158,4 +166,33 @@ st.toString() + ":" + hv + ":" + body
     let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
     let result = interpreter.execute(ast).expect("exec failed");
     assert_eq!(result.to_string_box().value, "201:V:R");
+}
+
+#[test]
+fn e2e_http_multiple_requests_order() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
+    if !try_init_plugins() { return; }
+
+    let code = r#"
+local srv, cli, r1, r2, r3, q1, q2, q3
+srv = new HttpServerBox()
+srv.start(8091)
+
+cli = new HttpClientBox()
+r1 = cli.get("http://localhost:8091/a")
+r2 = cli.get("http://localhost:8091/b")
+r3 = cli.get("http://localhost:8091/c")
+
+q1 = srv.accept().path()
+q2 = srv.accept().path()
+q3 = srv.accept().path()
+
+q1 + "," + q2 + "," + q3
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
+    let result = interpreter.execute(ast).expect("exec failed");
+    assert_eq!(result.to_string_box().value, "/a,/b,/c");
 }

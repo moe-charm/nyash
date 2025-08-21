@@ -57,12 +57,11 @@ search_paths = [
     "~/.nyash/plugins"
 ]
 [libraries."libnyash_net_plugin.so"]
-boxes = ["HttpServerBox", "HttpRequestBox", "HttpResponseBox", "HttpClientBox"]
+boxes = ["HttpServerBox", "HttpRequestBox", "HttpResponseBox", "HttpClientBox", "SocketServerBox", "SocketClientBox", "SocketConnBox"]
 path = "./plugins/nyash-net-plugin/target/release/libnyash_net_plugin.so"
 
 [libraries."libnyash_net_plugin.so".HttpServerBox]
 type_id = 20
-singleton = true
 
 [libraries."libnyash_net_plugin.so".HttpServerBox.methods]
 birth = { method_id = 0 }
@@ -101,4 +100,34 @@ type_id = 23
 birth = { method_id = 0 }
 get = { method_id = 1 }
 post = { method_id = 2 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".SocketServerBox]
+type_id = 30
+
+[libraries."libnyash_net_plugin.so".SocketServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 1, args = ["port"] }
+stop = { method_id = 2 }
+accept = { method_id = 3 }
+acceptTimeout = { method_id = 4, args = ["timeout_ms"] }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".SocketClientBox]
+type_id = 32
+
+[libraries."libnyash_net_plugin.so".SocketClientBox.methods]
+birth = { method_id = 0 }
+connect = { method_id = 1, args = ["host", "port"] }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".SocketConnBox]
+type_id = 31
+
+[libraries."libnyash_net_plugin.so".SocketConnBox.methods]
+birth = { method_id = 0 }
+send = { method_id = 1 }
+recv = { method_id = 2 }
+close = { method_id = 3 }
+recvTimeout = { method_id = 4, args = ["timeout_ms"] }
 fini = { method_id = 4294967295 }
