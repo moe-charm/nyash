@@ -65,9 +65,9 @@ type_id = 20
 
 [libraries."libnyash_net_plugin.so".HttpServerBox.methods]
 birth = { method_id = 0 }
-start = { method_id = 1, args = ["port"] }
-stop  = { method_id = 2 }
-accept = { method_id = 3 }
+start = { method_id = 1, args = ["port"], returns_result = true }
+stop  = { method_id = 2, returns_result = true }
+accept = { method_id = 3, returns_result = true }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".HttpRequestBox]

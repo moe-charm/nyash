@@ -36,8 +36,8 @@ r1 = c.get("http://localhost:8101/a")
 r2 = c.get("http://localhost:8102/b")
 
 // accept once per pending request and keep handles
-req1 = s1.accept()
-req2 = s2.accept()
+req1 = s1.accept().get_value()
+req2 = s2.accept().get_value()
 p1 = req1.path()
 p2 = req2.path()
 
@@ -78,7 +78,7 @@ s.start(8103)
 c = new HttpClientBox()
 r = c.post("http://localhost:8103/long", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
-q = s.accept()
+q = s.accept().get_value()
 body = q.readBody()
 resp = new HttpResponseBox()
 resp.setStatus(202)

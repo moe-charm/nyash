@@ -32,7 +32,7 @@ srv.start(8080)
 cli = new HttpClientBox()
 r = cli.get("http://localhost:8080/hello")
 
-req = srv.accept()
+req = srv.accept().get_value()
 resp = new HttpResponseBox()
 resp.setStatus(200)
 resp.write("OK")
@@ -62,7 +62,7 @@ srv.start(8081)
 
 cli = new HttpClientBox()
 r = cli.get("http://localhost:8081/test1")
-req = srv.accept()
+req = srv.accept().get_value()
 resp = new HttpResponseBox()
 resp.write("A")
 req.respond(resp)
@@ -74,7 +74,7 @@ resp = r.get_value()
 _ = resp.readBody()  # consume first response (optional)
 
 r = cli.get("http://localhost:8081/test2")
-req = srv.accept()
+req = srv.accept().get_value()
 resp = new HttpResponseBox()
 resp.write("B")
 req.respond(resp)
@@ -103,7 +103,7 @@ srv = new HttpServerBox()
 srv.start(8082)
 cli = new HttpClientBox()
 r = cli.get("http://localhost:8082/first")
-req = srv.accept()
+req = srv.accept().get_value()
 resp = new HttpResponseBox()
 resp.write("X")
 req.respond(resp)
@@ -123,7 +123,7 @@ srv = new HttpServerBox()
 srv.start(8083)
 cli = new HttpClientBox()
 r = cli.get("http://localhost:8083/second")
-req = srv.accept()
+req = srv.accept().get_value()
 resp = new HttpResponseBox()
 resp.write("Y")
 req.respond(resp)
@@ -151,7 +151,7 @@ srv.start(8090)
 cli = new HttpClientBox()
 r = cli.post("http://localhost:8090/api", "DATA")
 
-req = srv.accept()
+req = srv.accept().get_value()
 // check server saw body
 body = req.readBody()
 // prepare response
@@ -182,7 +182,7 @@ fn e2e_http_multiple_requests_order() {
     if !try_init_plugins() { return; }
 
     let code = r#"
-local srv, cli, r1, r2, r3, q1, q2, q3
+local srv, cli, r1, r2, r3, req1, req2, req3, q1, q2, q3
 srv = new HttpServerBox()
 srv.start(8091)
 
@@ -191,9 +191,12 @@ r1 = cli.get("http://localhost:8091/a")
 r2 = cli.get("http://localhost:8091/b")
 r3 = cli.get("http://localhost:8091/c")
 
-q1 = srv.accept().path()
-q2 = srv.accept().path()
-q3 = srv.accept().path()
+req1 = srv.accept().get_value()
+q1 = req1.path()
+req2 = srv.accept().get_value()
+q2 = req2.path()
+req3 = srv.accept().get_value()
+q3 = req3.path()
 
 q1 + "," + q2 + "," + q3
 "#;
