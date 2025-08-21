@@ -34,6 +34,7 @@ mod expressions;
 mod statements;
 mod functions;
 mod objects;
+mod objects_basic_constructors;
 mod io;
 mod methods;
 mod math_methods;

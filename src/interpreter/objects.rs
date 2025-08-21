@@ -88,22 +88,22 @@ impl NyashInterpreter {
         // 🚧 Legacy implementation (will be removed in Phase 9.78e)
         eprintln!("🔍 Falling back to legacy match statement for: {}", class);
         
-        // 組み込みBox型のチェック
+        // Try basic type constructors first
+        if let Ok(basic_box) = self.create_basic_box(class, arguments) {
+            return Ok(basic_box);
+        }
+        
+        // 組み込みBox型のチェック (基本型以外)
         eprintln!("🔍 Starting built-in Box type checks...");
         match class {
-            // Basic Box constructors (CRITICAL - these were missing!)
-            "StringBox" => {
-                // StringBoxは引数1個（文字列値）で作成
-                if arguments.len() != 1 {
-                    return Err(RuntimeError::InvalidOperation {
-                        message: format!("StringBox constructor expects 1 argument, got {}", arguments.len()),
-                    });
-                }
-                let value = self.execute_expression(&arguments[0])?;
-                let string_value = value.to_string_box().value;
-                let string_box = Box::new(StringBox::new(string_value)) as Box<dyn NyashBox>;
-                return Ok(string_box);
+            // Basic types are handled by create_basic_box() above
+            "StringBox" | "IntegerBox" | "BoolBox" | "ArrayBox" | "ResultBox" | 
+            "ErrorBox" | "NullBox" | "FloatBox" | "MapBox" => {
+                // These are handled by create_basic_box(), should not reach here
+                unreachable!("Basic type {} should have been handled by create_basic_box()", class);
             }
+            
+            /* Basic types are now handled by create_basic_box() - keeping for reference
             "IntegerBox" => {
                 // IntegerBoxは引数1個（整数値）で作成
                 if arguments.len() != 1 {
