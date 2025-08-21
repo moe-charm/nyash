@@ -228,6 +228,9 @@ pub struct NyashInterpreter {
     /// 共有ランタイム（Boxレジストリ等）
     #[allow(dead_code)]
     pub(super) runtime: NyashRuntime,
+
+    /// 現在の文脈で式結果が破棄されるか（must_use警告用）
+    pub(super) discard_context: bool,
 }
 
 impl NyashInterpreter {
@@ -259,6 +262,7 @@ impl NyashInterpreter {
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
             stdlib: None, // 遅延初期化
             runtime,
+            discard_context: false,
         }
     }
 
@@ -292,6 +296,7 @@ impl NyashInterpreter {
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
             stdlib: None,
             runtime,
+            discard_context: false,
         }
     }
     
@@ -321,6 +326,7 @@ impl NyashInterpreter {
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
             stdlib: None, // 遅延初期化
             runtime,
+            discard_context: false,
         }
     }
 
@@ -351,6 +357,7 @@ impl NyashInterpreter {
             invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
             stdlib: None,
             runtime,
+            discard_context: false,
         }
     }
     
@@ -379,8 +386,12 @@ impl NyashInterpreter {
             ASTNode::Program { statements, .. } => {
                 let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
                 
-                for statement in statements.iter() {
+                let last = statements.len().saturating_sub(1);
+                for (i, statement) in statements.iter().enumerate() {
+                    let prev = self.discard_context;
+                    self.discard_context = i != last; // 最終文以外は値が破棄される
                     result = self.execute_statement(statement)?;
+                    self.discard_context = prev;
                     
                     // 制御フローチェック
                     match &self.control_flow {

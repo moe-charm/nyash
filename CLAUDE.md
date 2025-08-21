@@ -3,9 +3,11 @@
 Nyashプログラミング言語開発に必要な情報をまとめたクイックリファレンス。
 
 ## 🧭 Start Here (最初に見る)
-- **🎯 主軸タスク**: [docs/予定/native-plan/copilot_issues.txt](docs/予定/native-plan/copilot_issues.txt) **← 最重要！**
-- 現在のタスク: [docs/CURRENT_TASK.md](docs/CURRENT_TASK.md)
-- コア概念（速習）: [docs/nyash_core_concepts.md](docs/nyash_core_concepts.md)
+- **🎯 主軸タスク**: [docs/development/roadmap/native-plan/copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt) **← 最重要！**
+- 現在のタスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+- ドキュメント入口: [docs/README.md](docs/README.md)
+- コア概念（速習）: [docs/reference/architecture/nyash_core_concepts.md](docs/reference/architecture/nyash_core_concepts.md)
+- Netプラグイン（HTTP/TCP）: [docs/reference/plugin-system/net-plugin.md](docs/reference/plugin-system/net-plugin.md)
 
 ## 🤖 **Claude×Copilot協調開発の主軸**
 ### 📋 **copilot_issues.txt - 開発の軸となるファイル**
@@ -22,7 +24,7 @@ Nyashプログラミング言語開発に必要な情報をまとめたクイッ
 ## 🚀 クイックスタート
 
 ### 🎯 実行方式選択 (重要!)
-- **実行バックエンド完全ガイド**: [docs/execution-backends.md](docs/execution-backends.md) 
+- **実行バックエンド完全ガイド**: [docs/reference/architecture/execution-backends.md](docs/reference/architecture/execution-backends.md) 
   - インタープリター（開発・デバッグ）/ VM（高速実行）/ WASM（Web配布）
   - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較（13.5倍実行高速化実証済み！）
 
@@ -76,33 +78,34 @@ python3 -m http.server 8010
 ## 📚 ドキュメント構造
 
 ### 🎯 **最重要ドキュメント（開発者向け）**
-- **[copilot_issues.txt](docs/予定/native-plan/copilot_issues.txt)** - **Phase順開発計画の軸**
-- **[CURRENT_TASK.md](docs/CURRENT_TASK.md)** - 現在進行状況詳細
-- **[native-plan/README.md](docs/予定/native-plan/README.md)** - ネイティブビルド計画
+- **[copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt)** - **Phase順開発計画の軸**
+- **[CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)** - 現在進行状況詳細
+- **[native-plan/README.md](docs/development/roadmap/native-plan/README.md)** - ネイティブビルド計画
 
 ### 📖 利用者向けドキュメント
-- 説明書: docs/説明書/README.md
-  - ネイティブビルド: docs/説明書/native-build/README.md
-  - WASM: docs/説明書/wasm/
-  - リファレンス: docs/説明書/reference/
-- 予定: docs/予定/README.md
-  - CURRENT_TASK, ネイティブ計画, フェーズ課題
-- archive: docs/archive/
+- 入口: [docs/README.md](docs/README.md)
+  - Getting Started: [docs/guides/getting-started.md](docs/guides/getting-started.md)
+  - Language Guide: [docs/guides/language-guide.md](docs/guides/language-guide.md)
+  - Reference: [docs/reference/](docs/reference/)
+- 開発計画/進捗: [docs/development/](docs/development/)
+  - 現在タスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+  - ネイティブ計画: [docs/development/roadmap/native-plan/](docs/development/roadmap/native-plan/)
+  - フェーズ課題: [docs/development/roadmap/](docs/development/roadmap/)
+- アーカイブ: [docs/archive/](docs/archive/)
 ### 🎯 よく使う情報
-- Getting Started: docs/説明書/GETTING_STARTED.md
-- Language Guide: docs/説明書/LANGUAGE_GUIDE.md
-- Playground Guide: docs/説明書/guides/playground_guide.md
+- Getting Started: [docs/guides/getting-started.md](docs/guides/getting-started.md)
+- Language Guide: [docs/guides/language-guide.md](docs/guides/language-guide.md)
+- Playground Guide: [docs/guides/tutorials/playground_guide.md](docs/guides/tutorials/playground_guide.md)
 ### 📊 最新開発状況
-- 現在のタスク: docs/CURRENT_TASK.md
-- 予定インデックス: docs/予定/README.md
+- 現在のタスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+- ロードマップ: [docs/development/roadmap/](docs/development/roadmap/)
 ### 📖 詳細リファレンス
-- リファレンス: docs/説明書/reference/
-  - 言語: docs/説明書/reference/language-reference.md
-  - デリゲーション構文: docs/説明書/reference/override-delegation-syntax.md
-  - ビルトイン: docs/説明書/reference/builtin-boxes.md
-  - fini/弱参照: docs/説明書/reference/finalization-system.md
+- リファレンス: [docs/reference/](docs/reference/)
+  - 言語仕様: [docs/reference/language/LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
+  - 可視性/デリゲーション: [docs/reference/language/field-visibility-and-delegation.md](docs/reference/language/field-visibility-and-delegation.md)
+  - Box/プラグイン: [docs/reference/boxes-system/](docs/reference/boxes-system/), [docs/reference/plugin-system/](docs/reference/plugin-system/)
 ### 🎮 実用例・アプリ
-- **[実用例](docs/説明書/guides/)** - サンプルコード・パターン集
+- **[実用例](docs/guides/)** - サンプルコード・パターン集
 - **実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
 
 ## ⚡ 重要な設計原則
@@ -285,12 +288,12 @@ app.setSize(800, 600)
 
 #### 🔤 言語仕様
 - **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
-- **[完全リファレンス](docs/説明書/reference/)** - 言語仕様詳細
-- **[予約語一覧](docs/説明書/reference/keywords.md)** - from, override, pack等
+- **[完全リファレンス](docs/reference/)** - 言語仕様詳細
+- 予約語や構文: [docs/reference/language/LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
 
 #### 📦 主要BOXのAPI
-- **[ビルトイン型](docs/説明書/reference/built-in-boxes.md)** - 全Box型API仕様
-- **P2PBox & IntentBox** - docs/説明書/reference/built-in-boxes.md内
+- **[Box/プラグイン関連](docs/reference/boxes-system/)** - APIと設計
+- **P2PBox & IntentBox** - `docs/reference/boxes-system/` を参照
 - **StringBox, IntegerBox, ConsoleBox** - 基本Box API
 - **EguiBox, DebugBox, MathBox** - 特殊Box API
 
@@ -300,7 +303,7 @@ app.setSize(800, 600)
 Read src/boxes/p2p_box.rs  # 直接ソース参照
 
 # ✅ 良い例：ドキュメント優先
-Read docs/説明書/reference/built-in-boxes.md  # まずドキュメント
+Read docs/reference/  # まずドキュメント（API/言語仕様の入口）
 # → 古い/不足 → ドキュメント更新
 # → それでも不明 → ソース確認
 ```

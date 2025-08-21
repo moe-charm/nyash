@@ -5,6 +5,7 @@
 pub mod plugin_config;
 pub mod box_registry;
 pub mod plugin_loader_v2;
+pub mod leak_tracker;
 pub mod unified_registry;
 pub mod nyash_runtime;
 // pub mod plugin_box;  // legacy - 古いPluginBox

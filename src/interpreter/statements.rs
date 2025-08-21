@@ -20,6 +20,26 @@ macro_rules! debug_trace {
 }
 
 impl NyashInterpreter {
+    fn warn_if_must_use(&self, value: &Box<dyn NyashBox>) {
+        if std::env::var("NYASH_LINT_MUSTUSE").unwrap_or_default() != "1" { return; }
+        if !self.discard_context { return; }
+        // 重資源のヒューリスティクス: プラグインBox、またはHTTP/Socket/File系の型名
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+        {
+            if value.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                eprintln!("[lint:must_use] Discarded resource value (plugin box). Consider assigning it or calling fini().");
+                return;
+            }
+        }
+        let ty = value.type_name();
+        let heavy = matches!(ty,
+            "FileBox" | "SocketBox" | "SocketServerBox" | "SocketClientBox" | "SocketConnBox" |
+            "HTTPServerBox" | "HTTPRequestBox" | "HTTPResponseBox" | "HttpClientBox"
+        );
+        if heavy {
+            eprintln!("[lint:must_use] Discarded {} value. Consider assigning it or calling fini().", ty);
+        }
+    }
     /// 文を実行 - Core statement execution engine
     pub(super) fn execute_statement(&mut self, statement: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match statement {
@@ -180,8 +200,12 @@ impl NyashInterpreter {
                 Ok(Box::new(VoidBox::new()))
             }
             
-            // 式文
-            _ => self.execute_expression(statement),
+            // 式文（結果は多くの場合破棄されるため、must_use警告を出力）
+            _ => {
+                let v = self.execute_expression(statement)?;
+                self.warn_if_must_use(&v);
+                Ok(v)
+            },
         }
     }
     

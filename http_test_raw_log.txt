@@ -1,0 +1,459 @@
+warning: unused macro definition: `debug_trace`
+  --> src/interpreter/core.rs:35:14
+   |
+35 | macro_rules! debug_trace {
+   |              ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_macros)]` on by default
+
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/backend/mod.rs:13:7
+   |
+13 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, `plugins`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/backend/mod.rs:23:7
+   |
+23 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, `plugins`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unreachable statement
+   --> src/interpreter/objects.rs:109:9
+    |
+27  | /         match nyash_args {
+28  | |             Ok(args) => {
+29  | |                 // Handle generics: if user-defined and type arguments provided, specialize declaration
+30  | |                 let mut target_class = class.to_string();
+...   |
+106 | |         }
+    | |_________- any code following this `match` expression is unreachable, as all arms diverge
+...
+109 |           return Err(RuntimeError::UndefinedClass { name: class.to_string() });
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable statement
+    |
+    = note: `#[warn(unreachable_code)]` on by default
+
+warning: unreachable pattern
+   --> src/interpreter/objects.rs:231:13
+    |
+120 | /             "StringBox" | "IntegerBox" | "BoolBox" | "ArrayBox" | "ResultBox" | 
+121 | |             "ErrorBox" | "NullBox" | "FloatBox" | "MapBox" => {
+    | |__________________________________________________________- matches all the relevant values
+...
+231 |               "NullBox" => {
+    |               ^^^^^^^^^ no value can reach this
+    |
+    = note: `#[warn(unreachable_patterns)]` on by default
+
+warning: unreachable pattern
+   --> src/interpreter/objects.rs:384:13
+    |
+120 | /             "StringBox" | "IntegerBox" | "BoolBox" | "ArrayBox" | "ResultBox" | 
+121 | |             "ErrorBox" | "NullBox" | "FloatBox" | "MapBox" => {
+    | |__________________________________________________________- matches all the relevant values
+...
+384 |               "FloatBox" => {
+    |               ^^^^^^^^^^ no value can reach this
+
+warning: unreachable pattern
+   --> src/interpreter/objects.rs:484:13
+    |
+120 | /             "StringBox" | "IntegerBox" | "BoolBox" | "ArrayBox" | "ResultBox" | 
+121 | |             "ErrorBox" | "NullBox" | "FloatBox" | "MapBox" => {
+    | |__________________________________________________________- matches all the relevant values
+...
+484 |               "MapBox" => {
+    |               ^^^^^^^^ no value can reach this
+
+warning: `nyash-rust` (lib) generated 7 warnings
+warning: unexpected `cfg` condition value: `llvm`
+  --> src/runner.rs:28:7
+   |
+28 | #[cfg(feature = "llvm")]
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, `plugins`, and `wasm-backend`
+   = help: consider adding `llvm` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `llvm`
+   --> src/runner.rs:568:15
+    |
+568 |         #[cfg(feature = "llvm")]
+    |               ^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, `plugins`, and `wasm-backend`
+    = help: consider adding `llvm` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `llvm`
+   --> src/runner.rs:591:19
+    |
+591 |         #[cfg(not(feature = "llvm"))]
+    |                   ^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `all-examples`, `cli`, `default`, `dynamic-file`, `gui`, `gui-examples`, `plugins`, and `wasm-backend`
+    = help: consider adding `llvm` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: `nyash-rust` (bin "nyash") generated 3 warnings (1 duplicate)
+
+running 5 tests
+🔍 create_box called for: HttpServerBox
+🔍 Config loaded successfully
+🔍 create_box called for: HttpServerBox
+🔍 Config loaded successfully
+🔍 create_box called for: HttpServerBox
+🔍 Config loaded successfully
+🔍 create_box called for: HttpServerBox
+🔍 Config loaded successfully
+🔍 create_box called for: HttpServerBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpServerBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 Found library: libnyash_net_plugin.so for box type: HttpServerBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 Found library: libnyash_net_plugin.so for box type: HttpServerBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 Found library: libnyash_net_plugin.so for box type: HttpServerBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 Found library: libnyash_net_plugin.so for box type: HttpServerBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml read successfully
+🔍 nyash.toml read successfully
+🔍 nyash.toml read successfully
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpServerBox with type_id: 20
+🔍 Preparing to call birth() with type_id: 20
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=20, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpServerBox instance_id=1
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=1)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=1)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: start
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.start
+[PluginLoaderV2] Invoke HttpServerBox.start: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(8099) -> Integer(tag=5)
+🔍 stdlib not initialized for method call
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpServerBox with type_id: 20
+🔍 Preparing to call birth() with type_id: 20
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=20, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpServerBox instance_id=2
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=2)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=2)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: start
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.start
+[PluginLoaderV2] Invoke HttpServerBox.start: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(8095) -> Integer(tag=5)
+🔍 stdlib not initialized for method call
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpServerBox with type_id: 20
+🔍 Preparing to call birth() with type_id: 20
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=20, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpServerBox instance_id=3
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=3)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=3)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: start
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.start
+[PluginLoaderV2] Invoke HttpServerBox.start: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(8096) -> Integer(tag=5)
+🔍 stdlib not initialized for method call
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpServerBox with type_id: 20
+🔍 Preparing to call birth() with type_id: 20
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=20, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpServerBox instance_id=4
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=4)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=4)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: start
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.start
+[PluginLoaderV2] Invoke HttpServerBox.start: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(8097) -> Integer(tag=5)
+🔍 stdlib not initialized for method call
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpServerBox with type_id: 20
+🔍 Preparing to call birth() with type_id: 20
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=20, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpServerBox instance_id=5
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=5)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=5)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: start
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.start
+[PluginLoaderV2] Invoke HttpServerBox.start: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(8098) -> Integer(tag=5)
+🔍 stdlib not initialized for method call
+🔍 create_box called for: HttpClientBox
+🔍 Config loaded successfully
+🔍 create_box called for: HttpClientBox
+🔍 Config loaded successfully
+🔍 create_box called for: HttpClientBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpClientBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 Found library: libnyash_net_plugin.so for box type: HttpClientBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 Found library: libnyash_net_plugin.so for box type: HttpClientBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml read successfully
+🔍 nyash.toml read successfully
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: accept
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.accept
+[PluginLoaderV2] Invoke HttpServerBox.accept: resolving and encoding args (argc=0)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: accept
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.accept
+[PluginLoaderV2] Invoke HttpServerBox.accept: resolving and encoding args (argc=0)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: accept
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.accept
+[PluginLoaderV2] Invoke HttpServerBox.accept: resolving and encoding args (argc=0)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: accept
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.accept
+[PluginLoaderV2] Invoke HttpServerBox.accept: resolving and encoding args (argc=0)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: accept
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.accept
+[PluginLoaderV2] Invoke HttpServerBox.accept: resolving and encoding args (argc=0)
+🔍 stdlib not initialized for method call
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpClientBox with type_id: 23
+🔍 Preparing to call birth() with type_id: 23
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=23, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpClientBox instance_id=6
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=6)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=6)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: get
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpClientBox.get
+[PluginLoaderV2] Invoke HttpClientBox.get: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=27) -> String(tag=6)
+🔍 stdlib not initialized for method call
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpClientBox with type_id: 23
+🔍 Preparing to call birth() with type_id: 23
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=23, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpClientBox instance_id=7
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=7)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=7)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: post
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpClientBox.post
+[PluginLoaderV2] Invoke HttpClientBox.post: resolving and encoding args (argc=2)
+[PluginLoaderV2]  arg[0]: String(len=35) -> String(tag=6)
+[PluginLoaderV2]  arg[1]: String(len=15) -> String(tag=6)
+🔍 stdlib not initialized for method call
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpClientBox with type_id: 23
+🔍 Preparing to call birth() with type_id: 23
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=23, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpClientBox instance_id=8
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=8)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=8)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: get
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpClientBox.get
+[PluginLoaderV2] Invoke HttpClientBox.get: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=21) -> String(tag=6)
+🔍 stdlib not initialized for method call
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 Plugin invoke completed with result: 0
+🔍 plugin_invoke_v2 returned result: 0
+🔍 TLV output from plugin (len=4): [1, 0, 0, 0]
+🔍 create_box called for: VoidBox
+VoidBox is not a plugin box type
+🔍 DEBUG: execute_method_call - object type: VoidBox, method: respond
+🔍 DEBUG: Checking StringBox downcast for type: VoidBox
+🔍 DEBUG: StringBox downcast failed
+🔍 DEBUG: Reached non-instance type error for type: VoidBox, method: respond
+❌ Interpreter error: Type error: Cannot call method 'respond' on non-instance type
+🔍 create_box called for: VoidBox
+VoidBox is not a plugin box type
+🔍 create_box called for: VoidBox
+VoidBox is not a plugin box type
+🔍 DEBUG: execute_method_call - object type: VoidBox, method: readBody
+🔍 DEBUG: Checking StringBox downcast for type: VoidBox
+🔍 DEBUG: StringBox downcast failed
+🔍 DEBUG: Reached non-instance type error for type: VoidBox, method: readBody
+❌ Interpreter error: Type error: Cannot call method 'readBody' on non-instance type
+🔍 create_box called for: HttpResponseBox
+🔍 Config loaded successfully
+🔍 create_box called for: HttpResponseBox
+🔍 Config loaded successfully
+
+thread 'e2e_http_post_and_headers' panicked at tests/e2e_plugin_net.rs:159:43:
+exec failed: TypeError { message: "Cannot call method 'readBody' on non-instance type" }
+🔍 Found library: libnyash_net_plugin.so for box type: HttpResponseBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 Found library: libnyash_net_plugin.so for box type: HttpResponseBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpResponseBox with type_id: 22
+🔍 Preparing to call birth() with type_id: 22
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=22, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpResponseBox instance_id=9
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=9)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=9)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: write
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpResponseBox.write
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpResponseBox with type_id: 22
+🔍 Preparing to call birth() with type_id: 22
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=22, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpResponseBox instance_id=10
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=10)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=10)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: write
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpResponseBox.write
+🔍 DEBUG: execute_method_call - object type: VoidBox, method: path
+🔍 DEBUG: Checking StringBox downcast for type: VoidBox
+🔍 DEBUG: StringBox downcast failed
+🔍 DEBUG: Reached non-instance type error for type: VoidBox, method: path
+❌ Interpreter error: Type error: Cannot call method 'path' on non-instance type
+
+thread 'e2e_http_multiple_requests_order' panicked at tests/e2e_plugin_net.rs:186:43:
+exec failed: TypeError { message: "Cannot call method 'path' on non-instance type" }
+[PluginLoaderV2] Invoke HttpResponseBox.write: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=1) -> String(tag=6)
+🔍 stdlib not initialized for method call
+[PluginLoaderV2] Invoke HttpResponseBox.write: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=1) -> String(tag=6)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: execute_method_call - object type: VoidBox, method: respond
+🔍 DEBUG: Checking StringBox downcast for type: VoidBox
+🔍 DEBUG: StringBox downcast failed
+🔍 DEBUG: Reached non-instance type error for type: VoidBox, method: respond
+🔍 DEBUG: execute_method_call - object type: VoidBox, method: respond
+🔍 DEBUG: Checking StringBox downcast for type: VoidBox
+🔍 DEBUG: StringBox downcast failed
+🔍 DEBUG: Reached non-instance type error for type: VoidBox, method: respond
+❌ Interpreter error: Type error: Cannot call method 'respond' on non-instance type
+❌ Interpreter error: Type error: Cannot call method 'respond' on non-instance type
+
+thread 'e2e_http_server_shutdown_and_restart' panicked at tests/e2e_plugin_net.rs:102:22:
+exec1: TypeError { message: "Cannot call method 'respond' on non-instance type" }
+
+thread 'e2e_http_server_restart' panicked at tests/e2e_plugin_net.rs:80:43:
+exec failed: TypeError { message: "Cannot call method 'respond' on non-instance type" }
+error: test failed, to rerun pass `--test e2e_plugin_net`
+
+
+running 5 tests
+test e2e_http_stub_end_to_end ... FAILED
+test e2e_http_post_and_headers ... FAILED
+test e2e_http_multiple_requests_order ... FAILED
+test e2e_http_server_shutdown_and_restart ... FAILED
+test e2e_http_server_restart ... FAILED
+
+failures:
+
+failures:
+    e2e_http_multiple_requests_order
+    e2e_http_post_and_headers
+    e2e_http_server_restart
+    e2e_http_server_shutdown_and_restart
+    e2e_http_stub_end_to_end
+
+test result: FAILED. 0 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s

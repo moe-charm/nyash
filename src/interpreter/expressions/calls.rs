@@ -996,6 +996,10 @@ impl NyashInterpreter {
         method: &str,
         arguments: &[ASTNode],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // Guard: use-after-fini is a runtime error (明示ライフサイクル)
+        if plugin_box.is_finalized() {
+            return Err(RuntimeError::RuntimeFailure { message: format!("Use after fini: {}", plugin_box.box_type) });
+        }
         eprintln!("🔍 execute_plugin_box_v2_method called: {}.{}", plugin_box.box_type, method);
         let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
         for arg in arguments {

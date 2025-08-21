@@ -21,6 +21,25 @@
   - プラグインの動作確認とデバッグに使用
   - `tools/plugin-tester`ツールの使用方法
 
+- **[plugin_lifecycle.md](./plugin_lifecycle.md)** - ライフサイクル/RAII/シングルトン/ログ
+  - 共有ハンドル、scope終了時の扱い、`shutdown_plugins_v2()` の動作
+  - NetPlugin（HTTP/TCP）の並列E2E時の注意点
+
+- **[net-plugin.md](./net-plugin.md)** - Netプラグイン（HTTP/TCP PoC）
+  - GET/POST、ヘッダ、Content-Length、環境変数によるログ
+
+### ⚙️ 戻り値のResult化（B案サポート）
+- `nyash.toml` のメソッド定義に `returns_result = true` を付けると、
+  - 成功: `Ok(value)` の `ResultBox` に包んで返す
+  - 失敗（BID負エラー）: `Err(ErrorBox(message))` を返す（例外にはしない）
+
+```toml
+[libraries."libnyash_example.so".ExampleBox.methods]
+dangerousOp = { method_id = 10, returns_result = true }
+```
+
+未指定の場合は従来通り（成功=生値、失敗=例外として伝播）。
+
 - **[filebox-bid-mapping.md](./filebox-bid-mapping.md)** - 参考資料
   - FileBox APIとプラグイン実装の対応表
   - API設計の参考として有用

@@ -61,6 +61,9 @@ pub struct MethodDefinition {
     /// Optional argument declarations (v2.1+)
     #[serde(default)]
     pub args: Option<Vec<ArgDecl>>, 
+    /// Optional: wrap return and errors into ResultBox when true
+    #[serde(default)]
+    pub returns_result: bool,
 }
 
 /// Method argument declaration (v2.1+)

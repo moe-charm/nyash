@@ -28,6 +28,9 @@
   - native-plan/ - ネイティブビルド計画
 - **proposals/** - RFC、新機能提案
 
+### 🔌 Net Plugin（HTTP/TCP）
+- 使い方と仕様: `reference/plugin-system/net-plugin.md`
+
 ### 🗄️ [archive/](archive/) - アーカイブ
 - **consultations/** - AI相談記録（gemini/chatgpt/codex）
 - **decisions/** - 過去の設計決定

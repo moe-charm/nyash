@@ -14,6 +14,7 @@ mod enabled {
     // use std::ffi::c_void; // unused
     use std::any::Any;
     use once_cell::sync::Lazy;
+    use crate::runtime::leak_tracker;
 
 /// Loaded plugin information
     pub struct LoadedPluginV2 {
@@ -71,6 +72,7 @@ mod enabled {
         pub fn finalize_now(&self) {
             if let Some(fini_id) = self.fini_method_id {
                 if !self.finalized.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                    leak_tracker::finalize_plugin("PluginBox", self.instance_id);
                     let tlv_args: [u8; 4] = [1, 0, 0, 0];
                     let mut out: [u8; 4] = [0; 4];
                     let mut out_len: usize = out.len();
@@ -196,6 +198,7 @@ mod enabled {
 impl PluginBoxV2 {
     pub fn instance_id(&self) -> u32 { self.inner.instance_id }
     pub fn finalize_now(&self) { self.inner.finalize_now() }
+    pub fn is_finalized(&self) -> bool { self.inner.finalized.load(std::sync::atomic::Ordering::SeqCst) }
 }
 
 /// Plugin loader v2
@@ -376,6 +379,7 @@ impl PluginBoxV2 {
             let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
             let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
             let type_id = box_conf.type_id;
+            let returns_result = box_conf.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false);
             eprintln!("[PluginLoaderV2] Invoke {}.{}: resolving and encoding args (argc={})", box_type, method_name, args.len());
             // TLV args: encode using BID-1 style (u16 ver, u16 argc, then entries)
             let tlv_args = {
@@ -497,15 +501,29 @@ impl PluginBoxV2 {
             if rc != 0 {
                 let be = BidError::from_raw(rc);
                 eprintln!("[PluginLoaderV2] invoke rc={} ({}) for {}.{}", rc, be.message(), box_type, method_name);
+                if returns_result {
+                    let err = crate::exception_box::ErrorBox::new(&format!("{} (code: {})", be.message(), rc));
+                    return Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_err(Box::new(err)))));
+                }
                 return Err(be);
             }
             // Decode: BID-1 style header + first entry
-            let result = if out_len == 0 { None } else {
+            let result = if out_len == 0 {
+                if returns_result {
+                    Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(Box::new(crate::box_trait::VoidBox::new()))) as Box<dyn NyashBox>)
+                } else { None }
+            } else {
                 let data = &out[..out_len];
                 if data.len() < 4 { return Ok(None); }
                 let _ver = u16::from_le_bytes([data[0], data[1]]);
                 let argc = u16::from_le_bytes([data[2], data[3]]);
-                if argc == 0 { return Ok(None); }
+                if argc == 0 {
+                    if returns_result {
+                        return Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(Box::new(crate::box_trait::VoidBox::new())))));
+                    } else {
+                        return Ok(None);
+                    }
+                }
                 if data.len() < 8 { return Ok(None); }
                 let tag = data[4];
                 let _rsv = data[5];
@@ -536,7 +554,12 @@ impl PluginBoxV2 {
                                             finalized: std::sync::atomic::AtomicBool::new(false),
                                         }),
                                     };
-                                    return Ok(Some(Box::new(pbox) as Box<dyn NyashBox>));
+                                    let val: Box<dyn NyashBox> = Box::new(pbox);
+                                    if returns_result {
+                                        return Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val))));
+                                    } else {
+                                        return Ok(Some(val));
+                                    }
                                 }
                             }
                         }
@@ -544,13 +567,17 @@ impl PluginBoxV2 {
                     }
                     2 if size == 4 => { // I32
                         let mut b = [0u8;4]; b.copy_from_slice(payload);
-                        Some(Box::new(IntegerBox::new(i32::from_le_bytes(b) as i64)) as Box<dyn NyashBox>)
+                        let val: Box<dyn NyashBox> = Box::new(IntegerBox::new(i32::from_le_bytes(b) as i64));
+                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
                     6 | 7 => { // String/Bytes
                         let s = String::from_utf8_lossy(payload).to_string();
-                        Some(Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
+                        let val: Box<dyn NyashBox> = Box::new(StringBox::new(s));
+                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
-                    9 => None, // Void
+                    9 => {
+                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(Box::new(crate::box_trait::VoidBox::new()))) as Box<dyn NyashBox>) } else { None }
+                    },
                     _ => None,
                 }
             };
@@ -723,7 +750,7 @@ impl PluginBoxV2 {
         };
         
         eprintln!("🎉 birth() success: {} instance_id={}", box_type, instance_id);
-        
+
         // Create v2 plugin box wrapper with actual instance_id
         let plugin_box = PluginBoxV2 {
             box_type: box_type.to_string(),
@@ -735,6 +762,8 @@ impl PluginBoxV2 {
                 finalized: std::sync::atomic::AtomicBool::new(false),
             }),
         };
+        leak_tracker::init();
+        leak_tracker::register_plugin(&plugin_box.box_type, instance_id);
         
         Ok(Box::new(plugin_box))
     }

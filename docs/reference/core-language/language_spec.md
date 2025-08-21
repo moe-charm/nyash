@@ -97,6 +97,28 @@ box ClassName {
 }
 ```
 
+#### フィールドの可視性（public/private）
+- `init { ... }` で宣言したフィールドは既定で public（外部から参照・代入可能）
+- 追加で private フィールドを宣言する場合は `private { ... }` ブロックを使用
+- 外部から private フィールドへ直接アクセスすることはできません（ゲッター/セッター経由）
+
+```nyash
+box User {
+    // 既定: init は public フィールド宣言
+    init { name }
+
+    // private フィールド宣言
+    private { age, passwordHash }
+
+    birth(n, a) { me.name = n; me.age = a }
+
+    setAge(a) { me.age = a }
+    getAge() { return me.age }
+}
+```
+
+補足: 旧仕様では `init` の可視性が明確ではありませんでしたが、現在は「public」に統一されています。
+
 #### **デリゲーションBox**
 ```nyash
 box Child from Parent interface Comparable {
