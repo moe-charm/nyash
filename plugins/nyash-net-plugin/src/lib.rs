@@ -45,6 +45,7 @@ const M_CLIENT_GET: u32 = 1; // arg: url -> Handle(Response)
 
 // Global State
 static SERVER_INSTANCES: Lazy<Mutex<HashMap<u32, ServerState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static ACTIVE_SERVER_ID: Lazy<Mutex<Option<u32>>> = Lazy::new(|| Mutex::new(None));
 static REQUESTS: Lazy<Mutex<HashMap<u32, RequestState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static RESPONSES: Lazy<Mutex<HashMap<u32, ResponseState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static CLIENTS: Lazy<Mutex<HashMap<u32, ClientState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -114,12 +115,17 @@ unsafe fn server_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
             if let Some(s) = SERVER_INSTANCES.lock().unwrap().get_mut(&id) {
                 s.running = true; s.port = port;
             }
+            // mark active server
+            *ACTIVE_SERVER_ID.lock().unwrap() = Some(id);
             write_tlv_void(res, res_len)
         }
         M_SERVER_STOP => {
             if let Some(s) = SERVER_INSTANCES.lock().unwrap().get_mut(&id) {
                 s.running = false;
             }
+            // clear active if this server was active
+            let mut active = ACTIVE_SERVER_ID.lock().unwrap();
+            if active.map(|v| v == id).unwrap_or(false) { *active = None; }
             write_tlv_void(res, res_len)
         }
         M_SERVER_ACCEPT => {
@@ -228,9 +234,11 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
             // Create Request
             let req_id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
             REQUESTS.lock().unwrap().insert(req_id, RequestState { path, body: vec![], response_id: None });
-            // Enqueue to server 1 (singleton) if present
-            if let Some((_sid, s)) = SERVER_INSTANCES.lock().unwrap().iter_mut().next() {
-                s.pending.push_back(req_id);
+            // Enqueue to last started (active) server if running
+            if let Some(sid) = *ACTIVE_SERVER_ID.lock().unwrap() {
+                if let Some(s) = SERVER_INSTANCES.lock().unwrap().get_mut(&sid) {
+                    if s.running { s.pending.push_back(req_id); }
+                }
             }
             // Create Response handle for client side to read later
             let resp_id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
