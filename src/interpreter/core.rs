@@ -234,17 +234,21 @@ impl NyashInterpreter {
     /// 新しいインタープリターを作成
     pub fn new() -> Self {
         let shared = SharedState::new();
-        
-        // ランタイムを構築し、ユーザー定義Boxファクトリを注入（グローバル登録を避ける）
-        use crate::box_factory::user_defined::UserDefinedBoxFactory;
-        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
-        let runtime = NyashRuntimeBuilder::new().with_factory(udf).build();
 
-        // Step 5: SharedState分解の第一歩として、
-        // box_declarationsの保管先をRuntimeに寄せる
+        // 先にランタイムを構築（UDFは後から同一SharedStateで注入）
+        let runtime = NyashRuntimeBuilder::new().build();
+
+        // Runtimeのbox_declarationsを共有状態に差し替え、同一の参照を保つ
         let mut shared = shared; // 可変化
         shared.box_declarations = runtime.box_declarations.clone();
-        
+
+        // ユーザー定義Boxファクトリを、差し替え済みSharedStateで登録
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        if let Ok(mut reg) = runtime.box_registry.lock() {
+            reg.register(udf);
+        }
+
         Self {
             shared,
             local_vars: HashMap::new(),
@@ -262,15 +266,21 @@ impl NyashInterpreter {
     pub fn new_with_groups(groups: crate::box_factory::builtin::BuiltinGroups) -> Self {
         let shared = SharedState::new();
 
-        use crate::box_factory::user_defined::UserDefinedBoxFactory;
-        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        // 先にランタイム（組み込みグループのみ）を構築
         let runtime = NyashRuntimeBuilder::new()
             .with_builtin_groups(groups)
-            .with_factory(udf)
             .build();
 
+        // Runtimeのbox_declarationsを共有状態に差し替え
         let mut shared = shared; // 可変化
         shared.box_declarations = runtime.box_declarations.clone();
+
+        // 差し替え済みSharedStateでUDFを登録
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        if let Ok(mut reg) = runtime.box_registry.lock() {
+            reg.register(udf);
+        }
 
         Self {
             shared,
@@ -287,15 +297,20 @@ impl NyashInterpreter {
     
     /// 共有状態から新しいインタープリターを作成（非同期実行用）
     pub fn with_shared(shared: SharedState) -> Self {
-        // 共有状態に紐づいたランタイムを構築
-        use crate::box_factory::user_defined::UserDefinedBoxFactory;
-        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
-        let runtime = NyashRuntimeBuilder::new().with_factory(udf).build();
+        // 共有状態に紐づいたランタイムを先に構築
+        let runtime = NyashRuntimeBuilder::new().build();
 
-        // Step 5: Runtimeのbox_declarationsに寄せ替え
+        // Runtimeのbox_declarationsに寄せ替え
         let mut shared = shared; // 可変化
         shared.box_declarations = runtime.box_declarations.clone();
-        
+
+        // 差し替え済みSharedStateでUDFを登録
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        if let Ok(mut reg) = runtime.box_registry.lock() {
+            reg.register(udf);
+        }
+
         Self {
             shared,
             local_vars: HashMap::new(),
@@ -311,15 +326,20 @@ impl NyashInterpreter {
 
     /// 共有状態＋グループ構成を指定して新しいインタープリターを作成（非同期実行用）
     pub fn with_shared_and_groups(shared: SharedState, groups: crate::box_factory::builtin::BuiltinGroups) -> Self {
-        use crate::box_factory::user_defined::UserDefinedBoxFactory;
-        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        // 先にランタイム（組み込みグループのみ）を構築
         let runtime = NyashRuntimeBuilder::new()
             .with_builtin_groups(groups)
-            .with_factory(udf)
             .build();
 
         let mut shared = shared; // 可変化
         shared.box_declarations = runtime.box_declarations.clone();
+
+        // 差し替え済みSharedStateでUDFを登録
+        use crate::box_factory::user_defined::UserDefinedBoxFactory;
+        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
+        if let Ok(mut reg) = runtime.box_registry.lock() {
+            reg.register(udf);
+        }
 
         Self {
             shared,

@@ -1,0 +1,31 @@
+NEW ERROR AFTER FIX:
+
+running 2 tests
+test e2e_create_echo_box_and_return_string ... FAILED
+test e2e_create_adder_box_and_return_sum ... FAILED
+
+failures:
+
+---- e2e_create_echo_box_and_return_string stdout ----
+❌ Interpreter error: Return outside of function
+
+thread 'e2e_create_echo_box_and_return_string' panicked at tests/e2e_plugin_echo.rs:102:33:
+exec ok: ReturnOutsideFunction
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- e2e_create_adder_box_and_return_sum stdout ----
+❌ Interpreter error: Return outside of function
+
+thread 'e2e_create_adder_box_and_return_sum' panicked at tests/e2e_plugin_echo.rs:114:33:
+exec ok: ReturnOutsideFunction
+
+
+failures:
+    e2e_create_adder_box_and_return_sum
+    e2e_create_echo_box_and_return_string
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+PROGRESS: The Box types (EchoBox, AdderBox) are now recognized! 
+The error changed from "Unknown Box type" to "Return outside of function".
+This suggests the unified registry is working correctly after ChatGPT5's fix.

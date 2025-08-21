@@ -51,10 +51,9 @@ f.close()
     
     match interpreter.execute(ast) {
         Ok(result) => {
-            // close() returns void
+            // close() returns void (BID-1 tag=9)
             let result_str = result.to_string_box().value;
-            // FileBoxの戻り値は現在 "ok" を返すので、それで確認
-            assert_eq!(result_str, "ok", "Expected 'ok' result from close()");
+            assert_eq!(result_str, "void", "Expected 'void' result from close()");
             println!("✅ E2E Plugin FileBox Interpreter test passed!");
         }
         Err(e) => {
@@ -122,3 +121,34 @@ f.close()
     assert_eq!(result.to_string_box().value, "void");
 }
 
+#[test]
+fn e2e_interpreter_plugin_filebox_copy_from_handle() {
+    if !try_init_plugins() { return; }
+
+    // Prepare two files and copy contents via plugin Handle argument
+    let p1 = "./test_out_src.txt";
+    let p2 = "./test_out_dst.txt";
+
+    // Nyash program: open two FileBox, write to src, copy to dst via copyFrom, then read dst
+    let code = format!(r#"
+local a, b, data
+a = new FileBox()
+b = new FileBox()
+a.open("{}", "w")
+b.open("{}", "rw")
+a.write("HELLO")
+b.copyFrom(a)
+data = b.read()
+data
+"#, p1, p2);
+
+    let ast = NyashParser::parse_from_string(&code).expect("parse failed");
+    let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
+
+    match interpreter.execute(ast) {
+        Ok(result) => {
+            assert_eq!(result.to_string_box().value, "HELLO");
+        }
+        Err(e) => panic!("Failed to execute copyFrom test: {:?}", e),
+    }
+}

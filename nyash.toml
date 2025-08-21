@@ -7,6 +7,10 @@
 boxes = ["FileBox"]
 path = "./plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so"
 
+[libraries."libnyash_counter_plugin.so"]
+boxes = ["CounterBox"]
+path = "./plugins/nyash-counter-plugin/target/release/libnyash_counter_plugin.so"
+
 # 将来の拡張例:
 # "libnyash_database_plugin.so" = {
 #     boxes = ["PostgreSQLBox", "MySQLBox", "SQLiteBox"],
@@ -31,6 +35,15 @@ copyFrom = { method_id = 7, args = [ { kind = "box", category = "plugin" } ] }
 
 # v2.2: BoxRef(Handle)を返すメソッド宣言
 cloneSelf = { method_id = 8 }
+
+[libraries."libnyash_counter_plugin.so".CounterBox]
+type_id = 7
+
+[libraries."libnyash_counter_plugin.so".CounterBox.methods]
+birth = { method_id = 0 }
+inc = { method_id = 1 }
+get = { method_id = 2 }
+fini = { method_id = 4294967295 }
 
 [plugin_paths]
 # プラグインの検索パス（デフォルト）

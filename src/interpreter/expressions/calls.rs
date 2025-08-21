@@ -749,6 +749,54 @@ impl NyashInterpreter {
             });
         }
         
+        // 先にプラグイン親のコンストラクタ/メソッドを優先的に処理（v2プラグイン対応）
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+        {
+            let loader_guard = crate::runtime::get_global_loader_v2();
+            let loader = loader_guard.read().unwrap();
+            // 親がプラグインで提供されているかを確認
+            if loader.config.as_ref().and_then(|c| c.find_library_for_box(parent)).is_some() {
+                // コンストラクタ相当（birth もしくは 親名と同名）の場合は、
+                // プラグインBoxを生成して __plugin_content に格納
+                if method == "birth" || method == parent {
+                    let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
+                    for arg in arguments {
+                        arg_values.push(self.execute_expression(arg)?);
+                    }
+                    match loader.create_box(parent, &arg_values) {
+                        Ok(pbox) => {
+                            use std::sync::Arc;
+                            let _ = current_instance.set_field_legacy("__plugin_content", Arc::from(pbox));
+                            return Ok(Box::new(crate::box_trait::VoidBox::new()));
+                        }
+                        Err(e) => {
+                            return Err(RuntimeError::InvalidOperation {
+                                message: format!("Failed to construct plugin parent '{}': {:?}", parent, e),
+                            });
+                        }
+                    }
+                } else {
+                    // 非コンストラクタ: 既存の __plugin_content を通じてメソッド呼び出し
+                    if let Some(plugin_shared) = current_instance.get_field_legacy("__plugin_content") {
+                        let plugin_ref = &*plugin_shared;
+                        if let Some(plugin) = plugin_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                            let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
+                            for arg in arguments { arg_values.push(self.execute_expression(arg)?); }
+                            match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id, &arg_values) {
+                                Ok(Some(result_box)) => return Ok(result_box),
+                                Ok(None) => return Ok(Box::new(crate::box_trait::VoidBox::new())),
+                                Err(e) => {
+                                    return Err(RuntimeError::InvalidOperation {
+                                        message: format!("Plugin call {}.{} failed: {:?}", parent, method, e),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定
         use crate::box_trait::is_builtin_box;
         // GUI機能が有効な場合はEguiBoxも追加判定（mut不要の形に）
