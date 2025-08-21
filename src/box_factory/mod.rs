@@ -36,6 +36,11 @@ pub trait BoxFactory: Send + Sync {
     fn supports_birth(&self) -> bool {
         true
     }
+
+    /// Identify builtin factory to enforce reserved-name protections
+    fn is_builtin_factory(&self) -> bool {
+        false
+    }
 }
 
 /// Registry that manages all BoxFactory implementations
@@ -64,10 +69,41 @@ impl UnifiedBoxRegistry {
         
         // Update cache
         let mut cache = self.type_cache.write().unwrap();
+        // Reserved core types that must remain builtin-owned
+        fn is_reserved_type(name: &str) -> bool {
+            matches!(
+                name,
+                // Core value types
+                "StringBox" | "IntegerBox" | "BoolBox" | "FloatBox" | "NullBox"
+                    // Core containers and result
+                    | "ArrayBox" | "MapBox" | "ResultBox"
+                    // Core method indirection
+                    | "MethodBox"
+            )
+        }
         for type_name in types {
+            // Enforce reserved names: only builtin factory may claim them
+            if is_reserved_type(type_name) && !factory.is_builtin_factory() {
+                eprintln!(
+                    "[UnifiedBoxRegistry] ❌ Rejecting registration of reserved type '{}' by non-builtin factory #{}",
+                    type_name, factory_index
+                );
+                continue;
+            }
+
             // First registered factory wins (priority order)
-            cache.entry(type_name.to_string())
-                .or_insert(factory_index);
+            let entry = cache.entry(type_name.to_string());
+            use std::collections::hash_map::Entry;
+            match entry {
+                Entry::Occupied(existing) => {
+                    // Collision: type already claimed by earlier factory
+                    eprintln!("[UnifiedBoxRegistry] ⚠️ Duplicate registration for '{}': keeping factory #{}, ignoring later factory #{}",
+                              existing.key(), existing.get(), factory_index);
+                }
+                Entry::Vacant(v) => {
+                    v.insert(factory_index);
+                }
+            }
         }
         
         self.factories.push(factory);
@@ -112,6 +148,26 @@ impl UnifiedBoxRegistry {
         Err(RuntimeError::InvalidOperation {
             message: format!("Unknown Box type: {}", name),
         })
+    }
+
+    /// Check whether a type name is known to the registry
+    pub fn has_type(&self, name: &str) -> bool {
+        // Check cache first
+        {
+            let cache = self.type_cache.read().unwrap();
+            if let Some(&idx) = cache.get(name) {
+                if let Some(factory) = self.factories.get(idx) {
+                    if factory.is_available() { return true; }
+                }
+            }
+        }
+        // Fallback: scan factories that can enumerate types
+        for factory in &self.factories {
+            if !factory.is_available() { continue; }
+            let types = factory.box_types();
+            if !types.is_empty() && types.contains(&name) { return true; }
+        }
+        false
     }
     
     /// Get all available Box types

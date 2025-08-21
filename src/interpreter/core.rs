@@ -11,6 +11,7 @@ use crate::instance_v2::InstanceBox;
 use crate::parser::ParseError;
 use super::BuiltinStdlib;
 use crate::runtime::{NyashRuntime, NyashRuntimeBuilder};
+use crate::box_factory::BoxFactory;
 use std::sync::{Arc, Mutex, RwLock};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -342,6 +343,14 @@ impl NyashInterpreter {
         }
         debug_log("=== NYASH EXECUTION END ===");
         result
+    }
+
+    /// Register an additional BoxFactory into this interpreter's runtime registry.
+    /// This allows tests or embedders to inject custom factories without globals.
+    pub fn register_box_factory(&mut self, factory: Arc<dyn BoxFactory>) {
+        if let Ok(mut reg) = self.runtime.box_registry.lock() {
+            reg.register(factory);
+        }
     }
     
     /// ノードを実行

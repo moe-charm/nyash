@@ -1077,30 +1077,11 @@ impl NyashInterpreter {
     
     /// 型が有効かどうかをチェック
     fn is_valid_type(&self, type_name: &str) -> bool {
-        // 基本的なビルトイン型
-        let is_builtin = matches!(type_name, 
-            "IntegerBox" | "StringBox" | "BoolBox" | "ArrayBox" | "MapBox" | 
-            "FileBox" | "ResultBox" | "FutureBox" | "ChannelBox" | "MathBox" | 
-            "TimeBox" | "DateTimeBox" | "TimerBox" | "RandomBox" | "SoundBox" | 
-            "DebugBox" | "MethodBox" | "NullBox" | "ConsoleBox" | "FloatBox" |
-            "BufferBox" | "RegexBox" | "JSONBox" | "StreamBox" | "HTTPClientBox" |
-            "IntentBox" | "P2PBox"
-        );
-        
-        // Web専用Box（WASM環境のみ）
-        #[cfg(target_arch = "wasm32")]
-        let is_web_box = matches!(type_name, "WebDisplayBox" | "WebConsoleBox" | "WebCanvasBox");
-        #[cfg(not(target_arch = "wasm32"))]
-        let is_web_box = false;
-        
-        // GUI専用Box（非WASM環境のみ）
-        #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
-        let is_gui_box = matches!(type_name, "EguiBox");
-        #[cfg(not(all(feature = "gui", not(target_arch = "wasm32"))))]
-        let is_gui_box = false;
-        
-        is_builtin || is_web_box || is_gui_box ||
-        // または登録済みのユーザー定義Box
+        // Check unified registry for builtin/plugin/user factories
+        if let Ok(reg) = self.runtime.box_registry.lock() {
+            if reg.has_type(type_name) { return true; }
+        }
+        // Or user-declared boxes in current program
         self.shared.box_declarations.read().unwrap().contains_key(type_name)
     }
     

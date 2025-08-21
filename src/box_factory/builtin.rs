@@ -581,6 +581,8 @@ impl BoxFactory for BuiltinBoxFactory {
     fn box_types(&self) -> Vec<&str> {
         self.creators.keys().map(|s| s.as_str()).collect()
     }
+
+    fn is_builtin_factory(&self) -> bool { true }
 }
 
 /// Declarative macro for registering multiple Box types at once
