@@ -25,7 +25,7 @@ fn e2e_http_two_servers_parallel() {
     if !try_init_plugins() { return; }
 
     let code = r#"
-local s1, s2, c, r1, r2, req1, req2, p1, p2, x, y
+local s1, s2, c, r1, r2, resp1, resp2, req1, req2, p1, p2, x, y
 s1 = new HttpServerBox()
 s2 = new HttpServerBox()
 s1.start(8101)
@@ -51,8 +51,10 @@ req1.respond(x)
 req2.respond(y)
 
 // read results
-x = r1.readBody()
-y = r2.readBody()
+resp1 = r1.get_value()
+resp2 = r2.get_value()
+x = resp1.readBody()
+y = resp2.readBody()
 x + ":" + y
 "#;
 
@@ -69,7 +71,7 @@ fn e2e_http_long_body_and_headers() {
     if !try_init_plugins() { return; }
 
     let code = r#"
-local s, c, r, q, resp, body, hv
+local s, c, r, resp, q, body, hv
 s = new HttpServerBox()
 s.start(8103)
 
@@ -85,8 +87,9 @@ resp.setHeader("X-Beta", "B")
 resp.write("OK-LONG")
 q.respond(resp)
 
-body = r.readBody()
-hv = r.getHeader("X-Alpha")
+resp = r.get_value()
+body = resp.readBody()
+hv = resp.getHeader("X-Alpha")
 hv + ":" + body
 "#;
 

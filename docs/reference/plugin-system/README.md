@@ -28,6 +28,9 @@
 - **[net-plugin.md](./net-plugin.md)** - Netプラグイン（HTTP/TCP PoC）
   - GET/POST、ヘッダ、Content-Length、環境変数によるログ
 
+- **[returns-result.md](./returns-result.md)** - 可選のResultBox正規化
+  - `returns_result = true` で成功/失敗を `Ok/Err` に統一（段階導入推奨）
+
 ### ⚙️ 戻り値のResult化（B案サポート）
 - `nyash.toml` のメソッド定義に `returns_result = true` を付けると、
   - 成功: `Ok(value)` の `ResultBox` に包んで返す

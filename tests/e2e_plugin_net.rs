@@ -25,7 +25,7 @@ fn e2e_http_stub_end_to_end() {
     if !try_init_plugins() { return; }
 
     let code = r#"
-local srv, cli, r, req, resp, body
+local srv, cli, r, resp, req, body
 srv = new HttpServerBox()
 srv.start(8080)
 
@@ -38,7 +38,8 @@ resp.setStatus(200)
 resp.write("OK")
 req.respond(resp)
 
-body = r.readBody()
+resp = r.get_value()
+body = resp.readBody()
 body
 "#;
 
@@ -55,7 +56,7 @@ fn e2e_http_server_restart() {
     if !try_init_plugins() { return; }
 
     let code = r#"
-local srv, cli, r, req, resp, body
+local srv, cli, r, resp, req, body
 srv = new HttpServerBox()
 srv.start(8081)
 
@@ -69,13 +70,17 @@ req.respond(resp)
 srv.stop()
 srv.start(8081)
 
+resp = r.get_value()
+_ = resp.readBody()  # consume first response (optional)
+
 r = cli.get("http://localhost:8081/test2")
 req = srv.accept()
 resp = new HttpResponseBox()
 resp.write("B")
 req.respond(resp)
 
-body = r.readBody()
+resp = r.get_value()
+body = resp.readBody()
 body
 "#;
 
@@ -93,7 +98,7 @@ fn e2e_http_server_shutdown_and_restart() {
 
     // First run: start and respond
     let code1 = r#"
-local srv, cli, r, req, resp
+local srv, cli, r, resp, req
 srv = new HttpServerBox()
 srv.start(8082)
 cli = new HttpClientBox()
@@ -122,7 +127,8 @@ req = srv.accept()
 resp = new HttpResponseBox()
 resp.write("Y")
 req.respond(resp)
-body = r.readBody()
+resp = r.get_value()
+body = resp.readBody()
 body
 "#;
     let ast2 = NyashParser::parse_from_string(code2).expect("parse2");
@@ -138,7 +144,7 @@ fn e2e_http_post_and_headers() {
     if !try_init_plugins() { return; }
 
     let code = r#"
-local srv, cli, r, req, resp, body, st, hv
+local srv, cli, r, resp, req, body, st, hv
 srv = new HttpServerBox()
 srv.start(8090)
 
@@ -156,9 +162,10 @@ resp.write("R")
 req.respond(resp)
 
 // client reads status, header, body
-st = r.getStatus()
-hv = r.getHeader("X-Test")
-body = r.readBody()
+resp = r.get_value()
+st = resp.getStatus()
+hv = resp.getHeader("X-Test")
+body = resp.readBody()
 st.toString() + ":" + hv + ":" + body
 "#;
 
