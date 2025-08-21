@@ -13,6 +13,7 @@
 - **architecture/** - システムアーキテクチャ（MIR、VM、実行バックエンド）
 - **api/** - ビルトインBoxのAPI仕様
 - **plugin-system/** - プラグインシステム、BID-FFI仕様
+  - まずはこちら: `reference/boxes-system/plugin_lifecycle.md`（PluginBoxV2のライフサイクル、singleton、nyash.tomlの要点）
 
 ### 📚 [guides/](guides/) - 利用者向けガイド
 - **getting-started.md** - はじめに（統一版）

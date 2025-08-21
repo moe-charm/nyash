@@ -412,6 +412,11 @@ impl PluginBoxV2 {
                                             return Err(BidError::InvalidArgs);
                                         }
                                     }
+                                    "int" | "i32" => {
+                                        if a.as_any().downcast_ref::<IntegerBox>().is_none() {
+                                            return Err(BidError::InvalidArgs);
+                                        }
+                                    }
                                     _ => {
                                         // Unsupported kind in this minimal implementation
                                         return Err(BidError::InvalidArgs);
@@ -419,8 +424,10 @@ impl PluginBoxV2 {
                                 }
                             }
                             crate::config::nyash_toml_v2::ArgDecl::Name(_) => {
-                                // Back-compat: expect string
-                                if a.as_any().downcast_ref::<StringBox>().is_none() {
+                                // Back-compat: allow common primitives (string or int)
+                                let is_string = a.as_any().downcast_ref::<StringBox>().is_some();
+                                let is_int = a.as_any().downcast_ref::<IntegerBox>().is_some();
+                                if !(is_string || is_int) {
                                     return Err(BidError::InvalidArgs);
                                 }
                             }

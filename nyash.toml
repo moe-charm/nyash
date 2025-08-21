@@ -56,3 +56,46 @@ search_paths = [
     "/usr/local/lib/nyash/plugins",
     "~/.nyash/plugins"
 ]
+[libraries."libnyash_net_plugin.so"]
+boxes = ["HttpServerBox", "HttpRequestBox", "HttpResponseBox", "HttpClientBox"]
+path = "./plugins/nyash-net-plugin/target/release/libnyash_net_plugin.so"
+
+[libraries."libnyash_net_plugin.so".HttpServerBox]
+type_id = 20
+singleton = true
+
+[libraries."libnyash_net_plugin.so".HttpServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 1, args = ["port"] }
+stop  = { method_id = 2 }
+accept = { method_id = 3 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".HttpRequestBox]
+type_id = 21
+
+[libraries."libnyash_net_plugin.so".HttpRequestBox.methods]
+birth = { method_id = 0 }
+path = { method_id = 1 }
+readBody = { method_id = 2 }
+respond = { method_id = 3, args = [ { kind = "box", category = "plugin" } ] }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".HttpResponseBox]
+type_id = 22
+
+[libraries."libnyash_net_plugin.so".HttpResponseBox.methods]
+birth = { method_id = 0 }
+setStatus = { method_id = 1 }
+setHeader = { method_id = 2 }
+write = { method_id = 3 }
+readBody = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".HttpClientBox]
+type_id = 23
+
+[libraries."libnyash_net_plugin.so".HttpClientBox.methods]
+birth = { method_id = 0 }
+get = { method_id = 1 }
+fini = { method_id = 4294967295 }
