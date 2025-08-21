@@ -124,3 +124,38 @@ body
     let result = i2.execute(ast2).expect("exec2");
     assert_eq!(result.to_string_box().value, "Y");
 }
+
+#[test]
+fn e2e_http_post_and_headers() {
+    if !try_init_plugins() { return; }
+
+    let code = r#"
+local srv, cli, r, req, resp, body, st, hv
+srv = new HttpServerBox()
+srv.start(8090)
+
+cli = new HttpClientBox()
+r = cli.post("http://localhost/api", "DATA")
+
+req = srv.accept()
+// check server saw body
+body = req.readBody()
+// prepare response
+resp = new HttpResponseBox()
+resp.setStatus(201)
+resp.setHeader("X-Test", "V")
+resp.write("R")
+req.respond(resp)
+
+// client reads status, header, body
+st = r.getStatus()
+hv = r.getHeader("X-Test")
+body = r.readBody()
+st.toString() + ":" + hv + ":" + body
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
+    let result = interpreter.execute(ast).expect("exec failed");
+    assert_eq!(result.to_string_box().value, "201:V:R");
+}

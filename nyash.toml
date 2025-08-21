@@ -90,6 +90,8 @@ setStatus = { method_id = 1 }
 setHeader = { method_id = 2 }
 write = { method_id = 3 }
 readBody = { method_id = 4 }
+getStatus = { method_id = 5 }
+getHeader = { method_id = 6, args = ["name"] }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".HttpClientBox]
@@ -98,4 +100,5 @@ type_id = 23
 [libraries."libnyash_net_plugin.so".HttpClientBox.methods]
 birth = { method_id = 0 }
 get = { method_id = 1 }
+post = { method_id = 2 }
 fini = { method_id = 4294967295 }

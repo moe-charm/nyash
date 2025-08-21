@@ -39,9 +39,12 @@ const M_RESP_SET_STATUS: u32 = 1; // arg: i32
 const M_RESP_SET_HEADER: u32 = 2; // args: name, value (string)
 const M_RESP_WRITE: u32 = 3;      // arg: bytes/string
 const M_RESP_READ_BODY: u32 = 4;  // -> Bytes
+const M_RESP_GET_STATUS: u32 = 5; // -> i32
+const M_RESP_GET_HEADER: u32 = 6; // arg: name -> string (or empty)
 
 // Client
-const M_CLIENT_GET: u32 = 1; // arg: url -> Handle(Response)
+const M_CLIENT_GET: u32 = 1;   // arg: url -> Handle(Response)
+const M_CLIENT_POST: u32 = 2;  // args: url, body(bytes/string) -> Handle(Response)
 
 // Global State
 static SERVER_INSTANCES: Lazy<Mutex<HashMap<u32, ServerState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -216,6 +219,18 @@ unsafe fn response_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res
         M_RESP_READ_BODY => {
             if let Some(rp) = RESPONSES.lock().unwrap().get(&id) { write_tlv_bytes(&rp.body, res, res_len) } else { E_INV_HANDLE }
         }
+        M_RESP_GET_STATUS => {
+            if let Some(rp) = RESPONSES.lock().unwrap().get(&id) { write_tlv_i32(rp.status, res, res_len) } else { E_INV_HANDLE }
+        }
+        M_RESP_GET_HEADER => {
+            if let Ok(name) = tlv_parse_string(slice(args, args_len)) {
+                if let Some(rp) = RESPONSES.lock().unwrap().get(&id) {
+                    let v = rp.headers.get(&name).cloned().unwrap_or_default();
+                    return write_tlv_string(&v, res, res_len);
+                } else { return E_INV_HANDLE; }
+            }
+            E_INV_ARGS
+        }
         _ => E_INV_METHOD,
     }
 }
@@ -246,6 +261,33 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
             // Link
             if let Some(rq) = REQUESTS.lock().unwrap().get_mut(&req_id) { rq.response_id = Some(resp_id); }
             // Return Handle(Response)
+            write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
+        }
+        M_CLIENT_POST => {
+            // args: TLV String(url), Bytes body
+            let data = slice(args, args_len);
+            let (_, argc, mut pos) = tlv_parse_header(data).map_err(|_| ()).or(Err(())).unwrap_or((1,0,4));
+            if argc < 2 { return E_INV_ARGS; }
+            let (_t1, s1, p1) = tlv_parse_entry_hdr(data, pos).map_err(|_| ()).or(Err(())).unwrap_or((0,0,0));
+            if data[pos] != 6 { return E_INV_ARGS; }
+            let url = std::str::from_utf8(&data[p1..p1+s1]).map_err(|_| ()).or(Err(())) .unwrap_or("").to_string();
+            pos = p1 + s1;
+            let (t2, s2, p2) = tlv_parse_entry_hdr(data, pos).map_err(|_| ()).or(Err(())).unwrap_or((0,0,0));
+            if t2 != 6 && t2 != 7 { return E_INV_ARGS; }
+            let body = data[p2..p2+s2].to_vec();
+
+            let path = parse_path(&url);
+            // Create Request
+            let req_id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+            REQUESTS.lock().unwrap().insert(req_id, RequestState { path, body, response_id: None });
+            // Enqueue to active server if running
+            if let Some(sid) = *ACTIVE_SERVER_ID.lock().unwrap() {
+                if let Some(s) = SERVER_INSTANCES.lock().unwrap().get_mut(&sid) { if s.running { s.pending.push_back(req_id); } }
+            }
+            // Create paired client Response
+            let resp_id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
+            RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 200, headers: HashMap::new(), body: vec![] });
+            if let Some(rq) = REQUESTS.lock().unwrap().get_mut(&req_id) { rq.response_id = Some(resp_id); }
             write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
         }
         _ => E_INV_METHOD,
