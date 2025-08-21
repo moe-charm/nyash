@@ -50,7 +50,7 @@ v2
 }
 
 #[test]
-fn e2e_counter_assignment_clones_not_shares() {
+fn e2e_counter_assignment_shares_handle() {
     if !try_init_plugins() { return; }
 
     let code = r#"
@@ -66,10 +66,9 @@ v
 
     match interpreter.execute(ast) {
         Ok(result) => {
-            // Current semantics: assignment clones (not shares), so c remains 0
-            assert_eq!(result.to_string_box().value, "0");
+            // New semantics: plugin handle assign shares, so c reflects x.inc()
+            assert_eq!(result.to_string_box().value, "1");
         }
         Err(e) => panic!("Counter assignment test failed: {:?}", e),
     }
 }
-

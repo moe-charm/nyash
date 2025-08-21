@@ -547,12 +547,29 @@ impl NyashInterpreter {
     
     /// local変数を宣言（関数内でのみ有効）
     pub(super) fn declare_local_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
-        self.local_vars.insert(name.to_string(), Arc::from(value));
+        // Pass-by-share for plugin handle types; by-value (clone) semantics can be applied at call sites
+        #[allow(unused_mut)]
+        let mut store_value = value;
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+        {
+            if store_value.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                store_value = store_value.share_box();
+            }
+        }
+        self.local_vars.insert(name.to_string(), Arc::from(store_value));
     }
     
     /// outbox変数を宣言（static関数内で所有権移転）
     pub(super) fn declare_outbox_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
-        self.outbox_vars.insert(name.to_string(), Arc::from(value));
+        #[allow(unused_mut)]
+        let mut store_value = value;
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+        {
+            if store_value.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                store_value = store_value.share_box();
+            }
+        }
+        self.outbox_vars.insert(name.to_string(), Arc::from(store_value));
     }
     
     /// local変数スタックを保存・復元（関数呼び出し時）

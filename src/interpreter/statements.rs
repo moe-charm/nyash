@@ -282,7 +282,22 @@ impl NyashInterpreter {
                     }
                 }
                 
-                self.set_variable(name, val.clone_box())?;
+                // Assign-by-share for plugin handle types; clone for others
+                let assigned = {
+                    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                    {
+                        if val.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                            val.share_box()
+                        } else {
+                            val.clone_box()
+                        }
+                    }
+                    #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
+                    {
+                        val.clone_box()
+                    }
+                };
+                self.set_variable(name, assigned)?;
                 Ok(val)
             }
             
@@ -330,7 +345,18 @@ impl NyashInterpreter {
                     // 🚨 フィールド差し替え時の自動finiは削除（Nyashの明示的哲学）
                     // プログラマーが必要なら明示的にfini()を呼ぶべき
                     
-                    instance.set_field(field, Arc::from(val.clone_box()))
+                    // Store-by-share for plugin handle types; clone for others
+                    let stored = {
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        {
+                            if val.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                                val.share_box()
+                            } else { val.clone_box() }
+                        }
+                        #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
+                        { val.clone_box() }
+                    };
+                    instance.set_field(field, Arc::from(stored))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)
                 } else {
@@ -354,7 +380,17 @@ impl NyashInterpreter {
                     // 🚨 フィールド差し替え時の自動finiは削除（Nyashの明示的哲学）
                     // プログラマーが必要なら明示的にfini()を呼ぶべき
                     
-                    instance.set_field(field, Arc::from(val.clone_box()))
+                    let stored = {
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        {
+                            if val.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                                val.share_box()
+                            } else { val.clone_box() }
+                        }
+                        #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
+                        { val.clone_box() }
+                    };
+                    instance.set_field(field, Arc::from(stored))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)
                 } else {
@@ -378,7 +414,17 @@ impl NyashInterpreter {
                     // 🚨 フィールド差し替え時の自動finiは削除（Nyashの明示的哲学）
                     // プログラマーが必要なら明示的にfini()を呼ぶべき
                     
-                    instance.set_field(field, Arc::from(val.clone_box()))
+                    let stored = {
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        {
+                            if val.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                                val.share_box()
+                            } else { val.clone_box() }
+                        }
+                        #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
+                        { val.clone_box() }
+                    };
+                    instance.set_field(field, Arc::from(stored))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)
                 } else {
