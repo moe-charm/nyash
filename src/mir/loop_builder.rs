@@ -6,11 +6,11 @@
  */
 
 use super::{
-    MirInstruction, BasicBlock, BasicBlockId, MirFunction, ValueId, 
-    ConstValue, CompareOp, BasicBlockIdGenerator, ValueIdGenerator, EffectMask
+    MirInstruction, BasicBlockId, ValueId, 
+    ConstValue
 };
 use crate::ast::ASTNode;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// 不完全なPhi nodeの情報
 #[derive(Debug, Clone)]
@@ -32,6 +32,7 @@ pub struct LoopBuilder<'a> {
     incomplete_phis: HashMap<BasicBlockId, Vec<IncompletePhi>>,
     
     /// ブロックごとの変数マップ（スコープ管理）
+    #[allow(dead_code)]
     block_var_maps: HashMap<BasicBlockId, HashMap<String, ValueId>>,
 }
 
@@ -59,11 +60,11 @@ impl<'a> LoopBuilder<'a> {
         
         // 2. Preheader -> Header へのジャンプ
         self.emit_jump(header_id)?;
-        self.add_predecessor(header_id, preheader_id);
+        let _ = self.add_predecessor(header_id, preheader_id);
         
         // 3. Headerブロックの準備（unsealed状態）
         self.set_current_block(header_id)?;
-        self.mark_block_unsealed(header_id);
+        let _ = self.mark_block_unsealed(header_id);
         
         // 4. ループ変数のPhi nodeを準備
         // ここでは、ループ内で変更される可能性のある変数を事前に検出するか、
@@ -75,8 +76,8 @@ impl<'a> LoopBuilder<'a> {
         
         // 6. 条件分岐
         self.emit_branch(condition_value, body_id, after_loop_id)?;
-        self.add_predecessor(body_id, header_id);
-        self.add_predecessor(after_loop_id, header_id);
+        let _ = self.add_predecessor(body_id, header_id);
+        let _ = self.add_predecessor(after_loop_id, header_id);
         
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
@@ -90,7 +91,7 @@ impl<'a> LoopBuilder<'a> {
         // 8. Latchブロック（ボディの最後）からHeaderへ戻る
         let latch_id = self.current_block()?;
         self.emit_jump(header_id)?;
-        self.add_predecessor(header_id, latch_id);
+        let _ = self.add_predecessor(header_id, latch_id);
         
         // 9. Headerブロックをシール（全predecessors確定）
         self.seal_block(header_id, latch_id)?;
@@ -243,7 +244,7 @@ impl<'a> LoopBuilder<'a> {
         }
     }
     
-    fn mark_block_unsealed(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+    fn mark_block_unsealed(&mut self, _block_id: BasicBlockId) -> Result<(), String> {
         // ブロックはデフォルトでunsealedなので、特に何もしない
         // （既にBasicBlock::newでsealed: falseに初期化されている）
         Ok(())
@@ -270,7 +271,7 @@ impl<'a> LoopBuilder<'a> {
         self.parent_builder.variable_map.insert(name, value);
     }
     
-    fn get_variable_at_block(&self, name: &str, block_id: BasicBlockId) -> Option<ValueId> {
+    fn get_variable_at_block(&self, name: &str, _block_id: BasicBlockId) -> Option<ValueId> {
         // 簡易実装：現在の変数マップから取得
         // TODO: 本来はブロックごとの変数マップを管理すべき
         self.parent_builder.variable_map.get(name).copied()

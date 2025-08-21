@@ -1,5 +1,3 @@
-use super::Usize;
-
 /// BID-1 Type System (ChatGPT Enhanced Edition)
 #[derive(Clone, Debug, PartialEq)]
 pub enum BidType {

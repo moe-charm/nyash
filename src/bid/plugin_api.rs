@@ -1,5 +1,4 @@
 use super::{BidError, BidResult, NyashHostVtable, NyashPluginInfo};
-use std::os::raw::c_char;
 
 /// Plugin API function signatures for C FFI
 ///
@@ -164,7 +163,7 @@ impl HostVtableBuilder {
         }
     }
     
-    pub fn with_alloc<F>(mut self, f: F) -> Self
+    pub fn with_alloc<F>(self, _f: F) -> Self
     where
         F: Fn(usize) -> *mut std::os::raw::c_void + 'static,
     {
@@ -173,14 +172,14 @@ impl HostVtableBuilder {
         self
     }
     
-    pub fn with_free<F>(mut self, f: F) -> Self
+    pub fn with_free<F>(self, _f: F) -> Self
     where
         F: Fn(*mut std::os::raw::c_void) + 'static,
     {
         self
     }
     
-    pub fn with_log<F>(mut self, f: F) -> Self
+    pub fn with_log<F>(self, _f: F) -> Self
     where
         F: Fn(&str) + 'static,
     {

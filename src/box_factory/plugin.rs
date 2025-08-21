@@ -50,7 +50,7 @@ impl BoxFactory for PluginBoxFactory {
     
     fn is_available(&self) -> bool {
         // Check if any plugins are loaded
-        let registry = get_global_registry();
+        let _registry = get_global_registry();
         // TODO: Add method to check if registry has any providers
         true
     }

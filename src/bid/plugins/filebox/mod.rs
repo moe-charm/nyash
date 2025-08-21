@@ -4,13 +4,11 @@
 //! Everything is Box philosophy applied to file operations!
 
 use crate::bid::{BidHandle, BoxTypeId};
-use crate::bid::{NyashPluginInfo, NyashMethodInfo, NyashHostVtable};
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write, Seek, SeekFrom};
-use std::os::raw::{c_char, c_void};
+use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
-use std::ffi::{CStr, CString};
 
 /// FileBox handle management
 pub struct FileBoxRegistry {
@@ -21,12 +19,14 @@ pub struct FileBoxRegistry {
 /// State of an open file
 struct FileBoxState {
     file: File,
+    #[allow(dead_code)]
     path: String,
+    #[allow(dead_code)]
     mode: FileMode,
 }
 
 #[derive(Debug, Clone, Copy)]
-enum FileMode {
+pub enum FileMode {
     Read,
     Write,
     Append,
@@ -94,16 +94,12 @@ impl FileBoxRegistry {
 }
 
 /// Global registry instance
-static mut FILEBOX_REGISTRY: Option<Arc<Mutex<FileBoxRegistry>>> = None;
+static FILEBOX_REGISTRY: Lazy<Arc<Mutex<FileBoxRegistry>>> = 
+    Lazy::new(|| Arc::new(Mutex::new(FileBoxRegistry::new())));
 
 /// Get or create the global registry
 fn get_registry() -> Arc<Mutex<FileBoxRegistry>> {
-    unsafe {
-        if FILEBOX_REGISTRY.is_none() {
-            FILEBOX_REGISTRY = Some(Arc::new(Mutex::new(FileBoxRegistry::new())));
-        }
-        FILEBOX_REGISTRY.as_ref().unwrap().clone()
-    }
+    FILEBOX_REGISTRY.clone()
 }
 
 /// FileBox plugin interface for Nyash

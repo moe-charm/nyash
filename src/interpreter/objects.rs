@@ -1127,7 +1127,7 @@ impl NyashInterpreter {
             // 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定
             use crate::box_trait::is_builtin_box;
             
-            let mut is_builtin = is_builtin_box(parent_name);
+            let is_builtin = is_builtin_box(parent_name);
             
             // GUI機能が有効な場合はEguiBoxも追加判定
             #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]

@@ -225,6 +225,7 @@ pub struct NyashInterpreter {
     pub(super) stdlib: Option<BuiltinStdlib>,
 
     /// 共有ランタイム（Boxレジストリ等）
+    #[allow(dead_code)]
     pub(super) runtime: NyashRuntime,
 }
 

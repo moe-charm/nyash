@@ -6,7 +6,7 @@
  */
 
 use super::vm::{VMValue, VMError};
-use crate::mir::{BasicBlockId, ValueId, MirInstruction};
+use crate::mir::{BasicBlockId, ValueId};
 use std::collections::HashMap;
 
 /// Phi nodeの実行ヘルパー
@@ -45,7 +45,7 @@ impl PhiHandler {
     /// Phi命令を実行
     pub fn execute_phi(
         &mut self,
-        dst: ValueId,
+        _dst: ValueId,
         inputs: &[(BasicBlockId, ValueId)],
         get_value_fn: impl Fn(ValueId) -> Result<VMValue, VMError>,
     ) -> Result<VMValue, VMError> {

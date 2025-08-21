@@ -19,8 +19,7 @@ use nyash_rust::runtime::NyashRuntime;
 use nyash_rust::interpreter::SharedState;
 use nyash_rust::box_factory::user_defined::UserDefinedBoxFactory;
 use nyash_rust::core::model::BoxDeclaration as CoreBoxDecl;
-use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
+use std::sync::Arc;
 
 #[cfg(feature = "wasm-backend")]
 use nyash_rust::backend::{wasm::WasmBackend, aot::AotBackend};
@@ -289,7 +288,7 @@ impl NyashRunner {
 
         // Dump MIR if requested
         if self.config.dump_mir {
-            let mut printer = if self.config.mir_verbose {
+            let printer = if self.config.mir_verbose {
                 MirPrinter::verbose()
             } else {
                 MirPrinter::new()

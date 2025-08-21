@@ -92,7 +92,7 @@ impl MirBuilder {
             effects: EffectMask::READ.add(Effect::ReadHeap), // conservative
         };
         let entry = self.block_gen.next();
-        let mut function = MirFunction::new(signature, entry);
+        let function = MirFunction::new(signature, entry);
 
         // Save current builder state
         let saved_function = self.current_function.take();

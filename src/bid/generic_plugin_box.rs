@@ -2,8 +2,6 @@
 mod plugin_impl {
 
 use crate::bid::{BidError, BidResult, LoadedPlugin};
-use crate::bid::tlv::{TlvEncoder, TlvDecoder};
-use crate::bid::types::BidTag;
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 use std::fmt;

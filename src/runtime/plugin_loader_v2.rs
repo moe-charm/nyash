@@ -7,7 +7,7 @@
 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 mod enabled {
     use crate::bid::{BidResult, BidError};
-    use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox, IntegerBox, BoolBox};
+    use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox};
     use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
     use std::collections::HashMap;
     use std::sync::{Arc, RwLock};
@@ -21,9 +21,11 @@ mod enabled {
     _lib: Arc<libloading::Library>,
     
     /// Box types provided by this plugin
+    #[allow(dead_code)]
     box_types: Vec<String>,
     
     /// Optional init function
+    #[allow(dead_code)]
     init_fn: Option<unsafe extern "C" fn() -> i32>,
     
     /// Required invoke function  
@@ -521,7 +523,7 @@ impl PluginBoxV2 {
     }
     
     /// Create a Box instance
-    pub fn create_box(&self, box_type: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
+    pub fn create_box(&self, box_type: &str, _args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
         eprintln!("🔍 create_box called for: {}", box_type);
         
         let config = self.config.as_ref()

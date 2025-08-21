@@ -144,7 +144,7 @@ impl InstanceBox {
     }
     
     /// 🎯 統一初期化処理
-    pub fn init(&mut self, args: &[Box<dyn NyashBox>]) -> Result<(), String> {
+    pub fn init(&mut self, _args: &[Box<dyn NyashBox>]) -> Result<(), String> {
         match &self.inner_content {
             Some(_) => Ok(()), // ビルトイン・プラグインは初期化済み
             None => {
@@ -286,7 +286,7 @@ impl InstanceBox {
         }
         
         // fields_ngから取得して変換を試みる
-        if let Some(nyash_value) = self.fields_ng.lock().unwrap().get(field_name) {
+        if let Some(_nyash_value) = self.fields_ng.lock().unwrap().get(field_name) {
             // NyashValue -> SharedNyashBox 変換（簡易実装）
             // TODO: 適切な変換実装
             None
