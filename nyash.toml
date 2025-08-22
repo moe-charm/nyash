@@ -109,10 +109,10 @@ type_id = 30
 
 [libraries."libnyash_net_plugin.so".SocketServerBox.methods]
 birth = { method_id = 0 }
-start = { method_id = 1, args = ["port"] }
-stop = { method_id = 2 }
-accept = { method_id = 3 }
-acceptTimeout = { method_id = 4, args = ["timeout_ms"] }
+start = { method_id = 1, args = ["port"], returns_result = true }
+stop = { method_id = 2, returns_result = true }
+accept = { method_id = 3, returns_result = true }
+acceptTimeout = { method_id = 4, args = ["timeout_ms"], returns_result = true }
 fini = { method_id = 4294967295 }
 
 # Optional: ResultBox normalization (recommendation)
@@ -125,7 +125,7 @@ type_id = 32
 
 [libraries."libnyash_net_plugin.so".SocketClientBox.methods]
 birth = { method_id = 0 }
-connect = { method_id = 1, args = ["host", "port"] }
+connect = { method_id = 1, args = ["host", "port"], returns_result = true }
 fini = { method_id = 4294967295 }
 
 # Optional: ResultBox normalization (recommendation)
@@ -139,5 +139,5 @@ birth = { method_id = 0 }
 send = { method_id = 1 }
 recv = { method_id = 2 }
 close = { method_id = 3 }
-recvTimeout = { method_id = 4, args = ["timeout_ms"] }
+recvTimeout = { method_id = 4, args = ["timeout_ms"], returns_result = true }
 fini = { method_id = 4294967295 }

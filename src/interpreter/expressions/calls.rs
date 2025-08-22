@@ -270,7 +270,7 @@ impl NyashInterpreter {
         */
         
         // ResultBox method calls
-        if let Some(result_box) = obj_value.as_any().downcast_ref::<crate::box_trait::ResultBox>() {
+        if let Some(result_box) = obj_value.as_any().downcast_ref::<crate::boxes::ResultBox>() {
             return self.execute_result_method(result_box, method, arguments);
         }
         
