@@ -1098,7 +1098,24 @@ impl VM {
     fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
         // For now, implement basic methods for common box types
         // This is a simplified version - real implementation would need full method dispatch
-        
+
+        // ResultBox (NyashResultBox) methods
+        if let Some(result_box) = box_value.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
+            match method {
+                // Rust側の公開APIメソッド名に合わせたバリアントを許容
+                "is_ok" | "isOk" => {
+                    return Ok(result_box.is_ok());
+                }
+                "get_value" | "getValue" => {
+                    return Ok(result_box.get_value());
+                }
+                "get_error" | "getError" => {
+                    return Ok(result_box.get_error());
+                }
+                _ => return Ok(Box::new(VoidBox::new())),
+            }
+        }
+
         // StringBox methods
         if let Some(string_box) = box_value.as_any().downcast_ref::<StringBox>() {
             match method {

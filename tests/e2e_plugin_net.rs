@@ -85,6 +85,47 @@ body
 }
 
 #[test]
+fn e2e_vm_http_post_and_headers() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin3.log");
+    if !try_init_plugins() { return; }
+
+    let code = r#"
+local srv, cli, r, resp, req, body, st, hv
+srv = new HttpServerBox()
+srv.start(8086)
+
+cli = new HttpClientBox()
+r = cli.post("http://localhost:8086/api", "DATA")
+
+req = srv.accept().get_value()
+// check server saw body
+body = req.readBody()
+// prepare response
+resp = new HttpResponseBox()
+resp.setStatus(201)
+resp.setHeader("X-Test", "V")
+resp.write("R")
+req.respond(resp)
+
+// client reads status, header, body
+resp = r.get_value()
+st = resp.getStatus()
+hv = resp.getHeader("X-Test")
+body = resp.readBody()
+st.toString() + ":" + hv + ":" + body
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let runtime = NyashRuntime::new();
+    let mut compiler = nyash_rust::mir::MirCompiler::new();
+    let compile_result = compiler.compile(ast).expect("mir compile failed");
+    let mut vm = VM::with_runtime(runtime);
+    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    assert_eq!(result.to_string_box().value, "201:V:R");
+}
+
+#[test]
 fn e2e_http_server_restart() {
     std::env::set_var("NYASH_NET_LOG", "1");
     std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");

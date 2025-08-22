@@ -115,3 +115,17 @@
 次ステップ:
 - サンプル/テストをVMで実行し、`vm-stats`結果から実使用命令セットを抽出。
 - 上記案に対し互換影響を洗い出し、段階移行（エイリアス→削除）を設計。
+
+---
+
+## E2E更新（VM経由の実働確認）
+
+成功ケース（VM）:
+- FileBox.open/write/read: 引数2個のTLVエンコード（String, String）で成功（HELLO往復）
+- FileBox.copyFrom(handle): Handle引数（tag=8, size=8, type_id+instance_id）で成功
+- HttpClientBox.get + HttpServerBox: 基本GETの往復（ResultBox経由でResponse取得）
+- HttpClientBox.post + headers: Status/ヘッダー/ボディをVMで往復確認
+
+デバッグ小技:
+- `NYASH_DEBUG_PLUGIN=1` で VM→Plugin 呼び出しTLVの ver/argc/先頭バイトをダンプ
+- Netプラグインの内部ログ: `NYASH_NET_LOG=1 NYASH_NET_LOG_FILE=net_plugin.log`
