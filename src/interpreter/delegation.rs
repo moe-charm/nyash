@@ -126,11 +126,11 @@ impl NyashInterpreter {
             self.local_vars.clear();
             
             // 'me'を現在のインスタンスに設定（重要：現在のインスタンスを維持）
-            self.declare_local_variable("me", current_instance_val.clone_box());
+            self.declare_local_variable("me", current_instance_val.clone_or_share());
             
             // 引数をlocal変数として設定
             for (param, value) in params.iter().zip(arg_values.iter()) {
-                self.declare_local_variable(param, value.clone_box());
+                self.declare_local_variable(param, value.clone_or_share());
             }
             
             // 親メソッドの本体を実行
@@ -199,11 +199,11 @@ impl NyashInterpreter {
             self.local_vars.clear();
             
             // 'me'を現在のインスタンスに設定
-            self.declare_local_variable("me", current_instance.clone_box());
+            self.declare_local_variable("me", current_instance.clone_or_share());
             
             // 引数をlocal変数として設定
             for (param, value) in params.iter().zip(arg_values.iter()) {
-                self.declare_local_variable(param, value.clone_box());
+                self.declare_local_variable(param, value.clone_or_share());
             }
             
             // 親コンストラクタの本体を実行

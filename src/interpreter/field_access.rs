@@ -48,7 +48,7 @@ impl NyashInterpreter {
                     message: format!("Field '{}' not found in static box '{}'", field, box_name),
                 })?;
             
-            Ok((*field_value).clone_box())
+            Ok((*field_value).clone_or_share())
         } else {
             Err(RuntimeError::InvalidOperation {
                 message: format!("Static box '{}' not found", box_name),

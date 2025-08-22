@@ -29,9 +29,9 @@ ss = new SocketServerBox()
 ss.start(9100)
 
 sc = new SocketClientBox()
-c = sc.connect("127.0.0.1", 9100)
+c = sc.connect("127.0.0.1", 9100).get_value()
 
-s = ss.accept()
+s = ss.accept().get_value()
 
 c.send("ping")
 r = s.recv()
@@ -56,19 +56,20 @@ local ss, sc, c, s, r
 ss = new SocketServerBox()
 ss.start(9101)
 
-// before any client, acceptTimeout returns void
+// before any client, acceptTimeout returns Err (timeout)
 r = ss.acceptTimeout(50)
 // now connect
 sc = new SocketClientBox()
-c = sc.connect("127.0.0.1", 9101)
-s = ss.acceptTimeout(500)
+c = sc.connect("127.0.0.1", 9101).get_value()
+s = ss.acceptTimeout(500).get_value()
 
-// recvTimeout with no data should be empty
+// recvTimeout with no data should be Err (timeout)
 r = s.recvTimeout(50)
 
 // send then recvTimeout should get data
 c.send("hello")
 r = s.recvTimeout(200)
+r = r.get_value()
 r
 "#;
 
@@ -77,4 +78,3 @@ r
     let result = interpreter.execute(ast).expect("exec failed");
     assert_eq!(result.to_string_box().value, "hello");
 }
-

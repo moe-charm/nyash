@@ -1,2 +1,197 @@
-Hello from Nyash!
-FileBox is working! 🎉
+🔍 DEBUG: Initializing v2 plugin system
+[net] Net plugin initialized, LOG_ON=true, LOG_PATH=net_plugin.log
+Net plugin: LOG_ON=true, LOG_PATH=net_plugin.log
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_net_plugin.so
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_counter_plugin.so
+[FileBox] Plugin initialized
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_filebox_plugin.so
+🔌 v2 plugin system initialized from nyash.toml
+  📦 Registering plugin provider for HttpServerBox
+  📦 Registering plugin provider for HttpClientBox
+  📦 Registering plugin provider for HttpResponseBox
+  📦 Registering plugin provider for HttpRequestBox
+  📦 Registering plugin provider for SocketServerBox
+  📦 Registering plugin provider for SocketClientBox
+  📦 Registering plugin provider for SocketConnBox
+  📦 Registering plugin provider for CounterBox
+  📦 Registering plugin provider for FileBox
+✅ v2 plugin system fully configured
+🦀 Nyash Rust Implementation - Executing file: local_tests/test_http_simple_e2e.nyash 🦀
+🔥 Debug fuel limit: 100000 iterations
+====================================================
+📝 File contents:
+// Very simple HTTP test
+local srv, cli, r, resp
+srv = new HttpServerBox()
+print("HttpServerBox created")
+
+// Start server
+local startResult = srv.start(8090)
+print("Server start result:")
+print(startResult)
+
+// Create client
+cli = new HttpClientBox()
+print("HttpClientBox created")
+
+// Make request
+r = cli.get("http://localhost:8090/test")
+print("Request made")
+
+// Accept connection
+local acceptResult = srv.accept()
+print("Accept result:")
+print(acceptResult)
+
+// Get value from accept result
+local req = acceptResult.get_value()
+print("Got request value")
+
+// Create response
+resp = new HttpResponseBox()
+resp.write("Hello!")
+print("Response created and written")
+
+// Send response
+req.respond(resp)
+print("Response sent")
+
+// Get response on client side
+local clientResp = r.get_value()
+print("Got client response")
+
+// Read body
+local body = clientResp.readBody()
+print("Body: " + body)
+
+🚀 Parsing and executing...
+
+🔍 DEBUG: Starting parse with fuel: Some(100000)...
+🔍 DEBUG: Parse completed, AST created
+🔍 DEBUG: About to print parse success message...
+✅ Parse successful!
+🔍 DEBUG: Parse success message printed
+🔍 DEBUG: Creating interpreter...
+🔍 DEBUG: Starting execution...
+🔍 create_box called for: HttpServerBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpServerBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpServerBox with type_id: 20
+🔍 Preparing to call birth() with type_id: 20
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=20, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpServerBox instance_id=1
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=1)
+HttpServerBox created
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=1)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: start
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.start
+[PluginLoaderV2] Invoke HttpServerBox.start: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(8090) -> I32(tag=2)
+[net] http:listener bound 127.0.0.1:8090
+Server start result:
+Ok(void)
+🔍 create_box called for: HttpClientBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpClientBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpClientBox with type_id: 23
+🔍 Preparing to call birth() with type_id: 23
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=23, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpClientBox instance_id=1
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=1)
+HttpClientBox created
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpClientBox (id=1)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: get
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpClientBox.get
+[PluginLoaderV2] Invoke HttpClientBox.get: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=26) -> String(tag=6)
+[net] client.get: url=http://localhost:8090/test resp_id=1 tcp_ok=true conn_id=1
+[net] http:accept linked resp_id hint=1 for req_id=1 conn_id=2
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=1)
+Request made
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpServerBox (id=1)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: accept
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpServerBox.accept
+[PluginLoaderV2] Invoke HttpServerBox.accept: resolving and encoding args (argc=0)
+[net] server.accept: return req_id=1 srv_id=1
+Accept result:
+🔍 DEBUG: PluginBoxV2::share_box called for HttpRequestBox (id=1)
+Ok(HttpRequestBox(1))
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpRequestBox (id=1)
+🔍 DEBUG: execute_method_call - object type: NyashResultBox, method: get_value
+🔍 DEBUG: Checking StringBox downcast for type: NyashResultBox
+🔍 DEBUG: StringBox downcast failed
+🔍 DEBUG: PluginBoxV2::share_box called for HttpRequestBox (id=1)
+🔍 DEBUG: PluginBoxV2::share_box called for HttpRequestBox (id=1)
+Got request value
+🔍 create_box called for: HttpResponseBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpResponseBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpResponseBox with type_id: 22
+🔍 Preparing to call birth() with type_id: 22
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=22, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpResponseBox instance_id=2
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=2)
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=2)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: write
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpResponseBox.write
+[PluginLoaderV2] Invoke HttpResponseBox.write: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=6) -> String(tag=6)
+[net] HttpResponse.write: id=2 bytes_len=6
+[net] HttpResponse.write: body now has 6 bytes
+Response created and written
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpRequestBox (id=1)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: respond
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpRequestBox.respond
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=2)
+[PluginLoaderV2] Invoke HttpRequestBox.respond: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: PluginBoxV2(HttpResponseBox, id=2) -> Handle(tag=8)
+Response sent
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=1)
+🔍 DEBUG: execute_method_call - object type: NyashResultBox, method: get_value
+🔍 DEBUG: Checking StringBox downcast for type: NyashResultBox
+🔍 DEBUG: StringBox downcast failed
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=1)
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=1)
+Got client response
+🔍 stdlib not initialized for method call
+🔍 DEBUG: PluginBoxV2::share_box called for HttpResponseBox (id=1)
+🔍 DEBUG: execute_method_call - object type: PluginBoxV2, method: readBody
+🔍 DEBUG: Checking StringBox downcast for type: PluginBoxV2
+🔍 DEBUG: StringBox downcast failed
+🔍 execute_plugin_box_v2_method called: HttpResponseBox.readBody
+[PluginLoaderV2] Invoke HttpResponseBox.readBody: resolving and encoding args (argc=0)

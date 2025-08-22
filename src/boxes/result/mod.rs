@@ -39,14 +39,17 @@ impl NyashResultBox {
 impl NyashBox for NyashResultBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         match self {
-            NyashResultBox::Ok(val) => Box::new(NyashResultBox::Ok(val.clone_box())),
-            NyashResultBox::Err(err) => Box::new(NyashResultBox::Err(err.clone_box())),
+            NyashResultBox::Ok(val) => Box::new(NyashResultBox::Ok(val.clone_or_share())),
+            NyashResultBox::Err(err) => Box::new(NyashResultBox::Err(err.clone_or_share())),
         }
     }
     
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
-        self.clone_box()
+        match self {
+            NyashResultBox::Ok(val) => Box::new(NyashResultBox::Ok(val.share_box())),
+            NyashResultBox::Err(err) => Box::new(NyashResultBox::Err(err.share_box())),
+        }
     }
 
     fn to_string_box(&self) -> StringBox {
@@ -126,7 +129,14 @@ impl ResultBox {
     /// getValue()の実装 - Ok値を取得
     pub fn get_value(&self) -> Box<dyn NyashBox> {
         match self {
-            NyashResultBox::Ok(val) => val.clone_box(),
+            NyashResultBox::Ok(val) => {
+                // Preserve identity for plugin-backed boxes
+                if val.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                    val.share_box()
+                } else {
+                    val.clone_box()
+                }
+            }
             NyashResultBox::Err(_) => Box::new(StringBox::new("Error: Result is Err")),
         }
     }

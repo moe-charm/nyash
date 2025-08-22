@@ -121,6 +121,7 @@ mod enabled {
 }
 
     impl NyashBox for PluginBoxV2 {
+    fn is_identity(&self) -> bool { true }
     fn type_name(&self) -> &'static str {
         // Return the actual box type name for proper method dispatch
         match self.box_type.as_str() {
@@ -131,12 +132,11 @@ mod enabled {
     
     fn clone_box(&self) -> Box<dyn NyashBox> {
         eprintln!("🔍 DEBUG: PluginBoxV2::clone_box called for {} (id={})", self.box_type, self.inner.instance_id);
-        
-        // Clone means creating a new instance by calling birth()
+        // Clone means creating a new instance by calling birth() on the plugin
         let mut output_buffer = vec![0u8; 1024];
         let mut output_len = output_buffer.len();
-        let tlv_args = vec![1u8, 0, 0, 0]; // version=1, argc=0
-        
+        let tlv_args = [1u8, 0, 0, 0]; // version=1, argc=0
+
         let result = unsafe {
             (self.inner.invoke_fn)(
                 self.inner.type_id,
@@ -148,17 +148,12 @@ mod enabled {
                 &mut output_len,
             )
         };
-        
+
         if result == 0 && output_len >= 4 {
-            // Extract new instance_id from output
             let new_instance_id = u32::from_le_bytes([
-                output_buffer[0], output_buffer[1], 
-                output_buffer[2], output_buffer[3]
+                output_buffer[0], output_buffer[1], output_buffer[2], output_buffer[3]
             ]);
-            
             eprintln!("🎉 clone_box success: created new {} instance_id={}", self.box_type, new_instance_id);
-            
-            // Return new PluginBoxV2 with new instance_id (separate inner handle)
             Box::new(PluginBoxV2 {
                 box_type: self.box_type.clone(),
                 inner: std::sync::Arc::new(PluginHandleInner {
@@ -171,7 +166,6 @@ mod enabled {
             })
         } else {
             eprintln!("❌ clone_box failed: birth() returned error code {}", result);
-            // Fallback: return error message as StringBox
             Box::new(StringBox::new(format!("Clone failed for {}", self.box_type)))
         }
     }
@@ -485,6 +479,7 @@ impl PluginBoxV2 {
                 }
                 buf
             };
+            eprintln!("[VM→Plugin] call {}.{} recv_id={} returns_result={}", box_type, method_name, instance_id, returns_result);
             let mut out = vec![0u8; 1024];
             let mut out_len: usize = out.len();
             let rc = unsafe {
@@ -536,6 +531,7 @@ impl PluginBoxV2 {
                         let mut i = [0u8;4]; i.copy_from_slice(&payload[4..8]);
                         let r_type = u32::from_le_bytes(t);
                         let r_inst = u32::from_le_bytes(i);
+                        eprintln!("[Plugin→VM] return handle type_id={} inst={} (returns_result={})", r_type, r_inst, returns_result);
                         // Map type_id -> (lib_name, box_name)
                         if let Some((ret_lib, ret_box)) = self.find_box_by_type_id(config, &toml_value, r_type) {
                             // Get plugin for ret_lib
@@ -568,14 +564,17 @@ impl PluginBoxV2 {
                     2 if size == 4 => { // I32
                         let mut b = [0u8;4]; b.copy_from_slice(payload);
                         let val: Box<dyn NyashBox> = Box::new(IntegerBox::new(i32::from_le_bytes(b) as i64));
+                        eprintln!("[Plugin→VM] return i32 value={} (returns_result={})", i32::from_le_bytes(b), returns_result);
                         if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
                     6 | 7 => { // String/Bytes
                         let s = String::from_utf8_lossy(payload).to_string();
                         let val: Box<dyn NyashBox> = Box::new(StringBox::new(s));
+                        eprintln!("[Plugin→VM] return str/bytes len={} (returns_result={})", size, returns_result);
                         if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
                     9 => {
+                        eprintln!("[Plugin→VM] return void (returns_result={})", returns_result);
                         if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(Box::new(crate::box_trait::VoidBox::new()))) as Box<dyn NyashBox>) } else { None }
                     },
                     _ => None,
@@ -623,10 +622,13 @@ impl PluginBoxV2 {
         // Call init if available
         if let Some(init) = init_fn {
             let result = unsafe { init() };
+            eprintln!("[PluginLoaderV2] nyash_plugin_init rc={} for {}", result, lib_name);
             if result != 0 {
                 eprintln!("Plugin init failed with code: {}", result);
                 return Err(BidError::PluginError);
             }
+        } else {
+            eprintln!("[PluginLoaderV2] nyash_plugin_init not found for {} (optional)", lib_name);
         }
         
         // Store plugin with Arc-wrapped library

@@ -158,7 +158,7 @@ impl NyashInterpreter {
             ASTNode::GlobalVar { name, value, .. } => {
                 let val = self.execute_expression(value)?;
                 // 🌍 革命的グローバル変数：GlobalBoxのフィールドとして設定
-                self.set_variable(name, val.clone_box())?;
+                self.set_variable(name, val.clone_or_share())?;
                 Ok(Box::new(VoidBox::new()))
             }
             

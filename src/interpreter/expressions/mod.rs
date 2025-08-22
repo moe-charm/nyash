@@ -55,7 +55,7 @@ impl NyashInterpreter {
             
             ASTNode::FieldAccess { object, field, .. } => {
                 let shared_result = self.execute_field_access(object, field)?;
-                Ok((*shared_result).clone_box())  // Convert Arc to Box for external interface
+                Ok((*shared_result).clone_or_share())
             }
             
             ASTNode::New { class, arguments, type_arguments, .. } => {
@@ -68,7 +68,7 @@ impl NyashInterpreter {
                     .map_err(|_| RuntimeError::InvalidOperation {
                         message: "'this' is only available inside methods".to_string(),
                     })?;
-                Ok((*shared_this).clone_box())  // Convert for external interface
+                Ok((*shared_this).clone_or_share())
             }
             
             ASTNode::Me { .. } => {
@@ -79,7 +79,7 @@ impl NyashInterpreter {
                         message: "'me' is only available inside methods".to_string(),
                     })?;
                     
-                Ok((*shared_me).clone_box())  // Convert for external interface
+                Ok((*shared_me).clone_or_share())
             }
             
             ASTNode::ThisField { field, .. } => {
@@ -94,7 +94,7 @@ impl NyashInterpreter {
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on this", field)
                         })?;
-                    Ok((*shared_field).clone_box())  // Convert for external interface
+                    Ok((*shared_field).clone_or_share())
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),
@@ -114,7 +114,7 @@ impl NyashInterpreter {
                         .ok_or_else(|| RuntimeError::InvalidOperation { 
                             message: format!("Field '{}' not found on me", field)
                         })?;
-                    Ok((*shared_field).clone_box())  // Convert for external interface
+                    Ok((*shared_field).clone_or_share())
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "'this' is not an instance".to_string(),

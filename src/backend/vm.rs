@@ -535,7 +535,7 @@ impl VM {
 
                         // Prepare VMValue args: me + evaluated arguments
                         let mut vm_args: Vec<VMValue> = Vec::new();
-                        vm_args.push(VMValue::from_nyash_box(box_nyash.clone_box()));
+                        vm_args.push(VMValue::from_nyash_box(box_nyash.clone_or_share()));
                         for arg_id in args {
                             let arg_vm_value = self.get_value(*arg_id)?;
                             vm_args.push(arg_vm_value);
@@ -589,7 +589,7 @@ impl VM {
                     let func_name = format!("{}.{}{}", class_name, method, format!("/{}", args.len()));
                     // Prepare VMValue args: me + evaluated arguments (use original VM args for value-level fidelity)
                     let mut vm_args: Vec<VMValue> = Vec::new();
-                    vm_args.push(VMValue::from_nyash_box(box_nyash.clone_box()));
+                    vm_args.push(VMValue::from_nyash_box(box_nyash.clone_or_share()));
                     for arg_id in args {
                         let arg_vm_value = self.get_value(*arg_id)?;
                         vm_args.push(arg_vm_value);

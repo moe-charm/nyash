@@ -882,7 +882,7 @@ impl NyashInterpreter {
             };
             
             // 🌍 this変数をバインドしてstatic初期化実行（me構文のため）
-            self.declare_local_variable("me", (*static_instance).clone_box());
+            self.declare_local_variable("me", (*static_instance).clone_or_share());
             
             for stmt in init_statements {
                 self.execute_statement(stmt)?;

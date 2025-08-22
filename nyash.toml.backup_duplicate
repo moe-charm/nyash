@@ -1,0 +1,215 @@
+# Nyash Configuration File v2
+# マルチBox型プラグイン対応
+
+[libraries]
+# ライブラリ定義（1つのプラグインで複数のBox型を提供可能）
+[libraries."libnyash_filebox_plugin.so"]
+boxes = ["FileBox"]
+path = "./plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so"
+
+[libraries."libnyash_counter_plugin.so"]
+boxes = ["CounterBox"]
+path = "./plugins/nyash-counter-plugin/target/release/libnyash_counter_plugin.so"
+
+[libraries."libnyash_net_plugin.so"]
+boxes = ["HttpServerBox", "HttpClientBox", "HttpResponseBox", "HttpRequestBox", "SocketServerBox", "SocketClientBox"]
+path = "./plugins/nyash-net-plugin/target/release/libnyash_net_plugin.so"
+
+# 将来の拡張例:
+# "libnyash_database_plugin.so" = {
+#     boxes = ["PostgreSQLBox", "MySQLBox", "SQLiteBox"],
+#     path = "./target/release/libnyash_database_plugin.so"  
+# }
+
+# FileBoxの型情報定義
+[libraries."libnyash_filebox_plugin.so".FileBox]
+type_id = 6
+
+[libraries."libnyash_filebox_plugin.so".FileBox.methods]
+# 全メソッドをmethod_idと共に定義
+birth = { method_id = 0 }
+open = { method_id = 1, args = ["path", "mode"] }
+read = { method_id = 2 }
+write = { method_id = 3, args = ["data"] }
+close = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+# v2.1: Box引数を受け取るメソッド宣言（FileBox: copyFrom(other: Handle)）
+copyFrom = { method_id = 7, args = [ { kind = "box", category = "plugin" } ] }
+
+# v2.2: BoxRef(Handle)を返すメソッド宣言
+cloneSelf = { method_id = 8 }
+
+[libraries."libnyash_counter_plugin.so".CounterBox]
+type_id = 7
+singleton = true
+
+[libraries."libnyash_counter_plugin.so".CounterBox.methods]
+birth = { method_id = 0 }
+inc = { method_id = 1 }
+get = { method_id = 2 }
+fini = { method_id = 4294967295 }
+
+# HttpServerBox
+[libraries."libnyash_net_plugin.so".HttpServerBox]
+type_id = 10
+
+[libraries."libnyash_net_plugin.so".HttpServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 1, args = ["port"], returns_result = true }
+stop  = { method_id = 2, returns_result = true }
+accept = { method_id = 3, returns_result = true }
+fini = { method_id = 4294967295 }
+
+# HttpClientBox
+[libraries."libnyash_net_plugin.so".HttpClientBox]
+type_id = 11
+
+[libraries."libnyash_net_plugin.so".HttpClientBox.methods]
+birth = { method_id = 0 }
+get = { method_id = 1, args = ["url"] }
+post = { method_id = 2, args = ["url", "body"] }
+fini = { method_id = 4294967295 }
+
+# HttpResponseBox
+[libraries."libnyash_net_plugin.so".HttpResponseBox]
+type_id = 12
+
+[libraries."libnyash_net_plugin.so".HttpResponseBox.methods]
+birth = { method_id = 0 }
+setStatus = { method_id = 1, args = ["status"] }
+setHeader = { method_id = 2, args = ["key", "value"] }
+write = { method_id = 3, args = ["body"] }
+readBody = { method_id = 4 }
+getStatus = { method_id = 5 }
+getHeader = { method_id = 6, args = ["key"] }
+fini = { method_id = 4294967295 }
+
+# HttpRequestBox
+[libraries."libnyash_net_plugin.so".HttpRequestBox]
+type_id = 13
+
+[libraries."libnyash_net_plugin.so".HttpRequestBox.methods]
+birth = { method_id = 0 }
+respond = { method_id = 1, args = [{ kind = "box", category = "plugin" }] }
+path = { method_id = 2 }
+readBody = { method_id = 3 }
+fini = { method_id = 4294967295 }
+
+# SocketServerBox
+[libraries."libnyash_net_plugin.so".SocketServerBox]
+type_id = 14
+
+[libraries."libnyash_net_plugin.so".SocketServerBox.methods]
+birth = { method_id = 0 }
+bind = { method_id = 1, args = ["port"] }
+accept = { method_id = 2 }
+fini = { method_id = 4294967295 }
+
+# SocketClientBox
+[libraries."libnyash_net_plugin.so".SocketClientBox]
+type_id = 15
+
+[libraries."libnyash_net_plugin.so".SocketClientBox.methods]
+birth = { method_id = 0 }
+connect = { method_id = 1, args = ["host", "port"] }
+send = { method_id = 2, args = ["data"] }
+receive = { method_id = 3 }
+close = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+[plugin_paths]
+# プラグインの検索パス（デフォルト）
+search_paths = [
+    "./target/release",
+    "./target/debug",
+    "./plugins/*/target/release",
+    "./plugins/*/target/debug",
+    "/usr/local/lib/nyash/plugins",
+    "~/.nyash/plugins"
+]
+[libraries."libnyash_net_plugin.so"]
+boxes = ["HttpServerBox", "HttpRequestBox", "HttpResponseBox", "HttpClientBox", "SocketServerBox", "SocketClientBox", "SocketConnBox"]
+path = "./plugins/nyash-net-plugin/target/release/libnyash_net_plugin.so"
+
+[libraries."libnyash_net_plugin.so".HttpServerBox]
+type_id = 20
+
+[libraries."libnyash_net_plugin.so".HttpServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 1, args = ["port"], returns_result = true }
+stop  = { method_id = 2, returns_result = true }
+accept = { method_id = 3, returns_result = true }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".HttpRequestBox]
+type_id = 21
+
+[libraries."libnyash_net_plugin.so".HttpRequestBox.methods]
+birth = { method_id = 0 }
+path = { method_id = 1 }
+readBody = { method_id = 2 }
+respond = { method_id = 3, args = [ { kind = "box", category = "plugin" } ] }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".HttpResponseBox]
+type_id = 22
+
+[libraries."libnyash_net_plugin.so".HttpResponseBox.methods]
+birth = { method_id = 0 }
+setStatus = { method_id = 1 }
+setHeader = { method_id = 2 }
+write = { method_id = 3 }
+readBody = { method_id = 4 }
+getStatus = { method_id = 5 }
+getHeader = { method_id = 6, args = ["name"] }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".HttpClientBox]
+type_id = 23
+
+[libraries."libnyash_net_plugin.so".HttpClientBox.methods]
+birth = { method_id = 0 }
+get = { method_id = 1, returns_result = true }
+post = { method_id = 2, returns_result = true }
+fini = { method_id = 4294967295 }
+
+## ResultBox normalization enabled above for get/post
+
+[libraries."libnyash_net_plugin.so".SocketServerBox]
+type_id = 30
+
+[libraries."libnyash_net_plugin.so".SocketServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 1, args = ["port"], returns_result = true }
+stop = { method_id = 2, returns_result = true }
+accept = { method_id = 3, returns_result = true }
+acceptTimeout = { method_id = 4, args = ["timeout_ms"], returns_result = true }
+fini = { method_id = 4294967295 }
+
+# Optional: ResultBox normalization (recommendation)
+# start  = { method_id = 1, args = ["port"], returns_result = true }
+# stop   = { method_id = 2, returns_result = true }
+# accept = { method_id = 3, returns_result = true }
+
+[libraries."libnyash_net_plugin.so".SocketClientBox]
+type_id = 32
+
+[libraries."libnyash_net_plugin.so".SocketClientBox.methods]
+birth = { method_id = 0 }
+connect = { method_id = 1, args = ["host", "port"], returns_result = true }
+fini = { method_id = 4294967295 }
+
+# Optional: ResultBox normalization (recommendation)
+# connect = { method_id = 1, args = ["host", "port"], returns_result = true }
+
+[libraries."libnyash_net_plugin.so".SocketConnBox]
+type_id = 31
+
+[libraries."libnyash_net_plugin.so".SocketConnBox.methods]
+birth = { method_id = 0 }
+send = { method_id = 1 }
+recv = { method_id = 2 }
+close = { method_id = 3 }
+recvTimeout = { method_id = 4, args = ["timeout_ms"], returns_result = true }
+fini = { method_id = 4294967295 }

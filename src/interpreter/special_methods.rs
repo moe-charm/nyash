@@ -183,11 +183,11 @@ impl NyashInterpreter {
                 self.local_vars.clear();
                 
                 // meをlocal変数として設定（インスタンス自体）
-                self.declare_local_variable("me", instance.clone_box());
+                self.declare_local_variable("me", instance.clone_or_share());
                 
                 // パラメータをlocal変数として設定
                 for (param, arg) in params.iter().zip(args.iter()) {
-                    self.declare_local_variable(param, arg.clone_box());
+                    self.declare_local_variable(param, arg.clone_or_share());
                 }
                 
                 // メソッド本体を実行

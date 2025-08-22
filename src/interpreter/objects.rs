@@ -941,11 +941,11 @@ impl NyashInterpreter {
             
             // パラメータをlocal変数として設定
             for (param, value) in params.iter().zip(arg_values.iter()) {
-                self.declare_local_variable(param, value.clone_box());
+                self.declare_local_variable(param, value.clone_or_share());
             }
             
             // this（me）をlocal変数として設定
-            self.declare_local_variable("me", instance.clone_box());
+            self.declare_local_variable("me", instance.clone_or_share());
             
             // コンストラクタコンテキストを設定
             let old_context = self.current_constructor_context.clone();

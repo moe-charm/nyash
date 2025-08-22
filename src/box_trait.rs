@@ -109,6 +109,14 @@ pub trait NyashBox: BoxCore + Debug {
     /// Share this box (state-preserving reference sharing)
     fn share_box(&self) -> Box<dyn NyashBox>;
     
+    /// Identity hint: boxes that wrap external/stateful handles should override to return true.
+    fn is_identity(&self) -> bool { false }
+    
+    /// Helper: pick share or clone based on identity semantics.
+    fn clone_or_share(&self) -> Box<dyn NyashBox> {
+        if self.is_identity() { self.share_box() } else { self.clone_box() }
+    }
+    
     /// Arc参照を返す新しいcloneメソッド（参照共有）
     fn clone_arc(&self) -> SharedNyashBox {
         Arc::from(self.clone_box())

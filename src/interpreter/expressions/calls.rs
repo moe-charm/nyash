@@ -65,7 +65,7 @@ impl NyashInterpreter {
                         
                         // 引数をlocal変数として設定
                         for (param, value) in params.iter().zip(arg_values.iter()) {
-                            self.declare_local_variable(param, value.clone_box());
+                            self.declare_local_variable(param, value.clone_or_share());
                         }
                         
                         // static関数の本体を実行
@@ -194,7 +194,7 @@ impl NyashInterpreter {
                     
                     // 引数をlocal変数として設定
                     for (param, value) in params.iter().zip(arg_values.iter()) {
-                        self.declare_local_variable(param, value.clone_box());
+                        self.declare_local_variable(param, value.clone_or_share());
                     }
                     
                     // メソッドの本体を実行
@@ -542,7 +542,7 @@ impl NyashInterpreter {
                         self.local_vars.clear();
                         
                         // thisをlocal変数として設定
-                        self.declare_local_variable("me", obj_value.clone_box());
+                        self.declare_local_variable("me", obj_value.clone_or_share());
                         
                         // fini()メソッドの本体を実行
                         let mut _result = Box::new(VoidBox::new()) as Box<dyn NyashBox>;
@@ -600,11 +600,11 @@ impl NyashInterpreter {
                 self.local_vars.clear();
                 
                 // thisをlocal変数として設定
-                self.declare_local_variable("me", obj_value.clone_box());
+                self.declare_local_variable("me", obj_value.clone_or_share());
                 
                 // パラメータをlocal変数として設定
                 for (param, value) in params.iter().zip(arg_values.iter()) {
-                    self.declare_local_variable(param, value.clone_box());
+                    self.declare_local_variable(param, value.clone_or_share());
                 }
                 
                 // メソッド本体を実行
@@ -880,11 +880,11 @@ impl NyashInterpreter {
             self.local_vars.clear();
             
             // 'me'を現在のインスタンスに設定（重要：現在のインスタンスを維持）
-            self.declare_local_variable("me", current_instance_val.clone_box());
+            self.declare_local_variable("me", current_instance_val.clone_or_share());
             
             // 引数をlocal変数として設定
             for (param, value) in params.iter().zip(arg_values.iter()) {
-                self.declare_local_variable(param, value.clone_box());
+                self.declare_local_variable(param, value.clone_or_share());
             }
             
             // 親メソッドの本体を実行
@@ -956,11 +956,11 @@ impl NyashInterpreter {
             self.local_vars.clear();
             
             // 'me'を現在のインスタンスに設定
-            self.declare_local_variable("me", current_instance.clone_box());
+            self.declare_local_variable("me", current_instance.clone_or_share());
             
             // 引数をlocal変数として設定
             for (param, value) in params.iter().zip(arg_values.iter()) {
-                self.declare_local_variable(param, value.clone_box());
+                self.declare_local_variable(param, value.clone_or_share());
             }
             
             // 親コンストラクタの本体を実行

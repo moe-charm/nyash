@@ -51,7 +51,7 @@ impl NyashInterpreter {
             
             // パラメータをlocal変数として設定
             for (param, value) in params.iter().zip(arg_values.iter()) {
-                self.declare_local_variable(param, value.clone_box());
+                self.declare_local_variable(param, value.clone_or_share());
             }
             
             // 関数本体を実行

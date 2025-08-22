@@ -95,6 +95,7 @@ const M_CONN_RECV_TIMEOUT: u32 = 4; // ms -> bytes (empty if timeout)
 static SERVER_INSTANCES: Lazy<Mutex<HashMap<u32, ServerState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static SERVER_START_SEQ: AtomicU32 = AtomicU32::new(1);
 static ACTIVE_SERVER_ID: Lazy<Mutex<Option<u32>>> = Lazy::new(|| Mutex::new(None));
+static LAST_ACCEPTED_REQ: Lazy<Mutex<Option<u32>>> = Lazy::new(|| Mutex::new(None));
 static REQUESTS: Lazy<Mutex<HashMap<u32, RequestState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static RESPONSES: Lazy<Mutex<HashMap<u32, ResponseState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static CLIENTS: Lazy<Mutex<HashMap<u32, ClientState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -121,8 +122,7 @@ struct RequestState {
     response_id: Option<u32>,
     // For HTTP-over-TCP server: map to an active accepted socket to respond on
     server_conn_id: Option<u32>,
-    // Which logical HttpServer instance this request belongs to
-    server_id: Option<u32>,
+    responded: bool,
 }
 
 struct ResponseState {
@@ -132,8 +132,6 @@ struct ResponseState {
     // For HTTP-over-TCP client: associated socket connection id to read from
     client_conn_id: Option<u32>,
     parsed: bool,
-    // Which server this response is expected from (by server instance id)
-    server_id: Option<u32>,
 }
 
 struct ClientState;
@@ -231,7 +229,7 @@ unsafe fn server_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                                         SOCK_CONNS.lock().unwrap().insert(conn_id, SockConnState { stream: Mutex::new(stream) });
 
                                         let req_id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-                                        REQUESTS.lock().unwrap().insert(req_id, RequestState { path, body, response_id: resp_hint, server_conn_id: Some(conn_id), server_id: Some(server_id_copy) });
+                                        REQUESTS.lock().unwrap().insert(req_id, RequestState { path, body, response_id: resp_hint, server_conn_id: Some(conn_id), responded: false });
                                         if let Some(h) = resp_hint { netlog!("http:accept linked resp_id hint={} for req_id={} conn_id={}", h, req_id, conn_id); }
                                         pending.lock().unwrap().push_back(req_id);
                                     } else {
@@ -281,6 +279,7 @@ unsafe fn server_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                     } else { None }
                 } {
                     netlog!("server.accept: return req_id={} srv_id={}", req_id, id);
+                    *LAST_ACCEPTED_REQ.lock().unwrap() = Some(req_id);
                     return write_tlv_handle(T_REQUEST, req_id, res, res_len);
                 }
                 std::thread::sleep(Duration::from_millis(5));
@@ -295,7 +294,7 @@ unsafe fn request_invoke(m: u32, id: u32, _args: *const u8, _args_len: usize, re
     match m {
         M_BIRTH => {
             let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-            REQUESTS.lock().unwrap().insert(id, RequestState { path: String::new(), body: vec![], response_id: None, server_conn_id: None, server_id: None });
+            REQUESTS.lock().unwrap().insert(id, RequestState { path: String::new(), body: vec![], response_id: None, server_conn_id: None, responded: false });
             write_u32(id, res, res_len)
         }
         M_REQ_PATH => {
@@ -363,29 +362,42 @@ unsafe fn request_invoke(m: u32, id: u32, _args: *const u8, _args_len: usize, re
                         rq_map2.get(&id).and_then(|rq2| rq2.response_id)
                     } {
                         let mut resp_map = RESPONSES.lock().unwrap();
-                        let dst = resp_map.entry(target_id).or_insert(ResponseState { status: 200, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: true, server_id: None });
+                        let dst = resp_map.entry(target_id).or_insert(ResponseState { status: 200, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: true });
                         dst.status = status;
                         dst.headers = headers.clone();
                         dst.body = body.clone();
                         netlog!("Request.respond: mirrored client handle id={} body_len={} headers={} status={}", target_id, dst.body.len(), dst.headers.len(), dst.status);
                     }
+                    // mark responded
+                    {
+                        let mut rq_map3 = REQUESTS.lock().unwrap();
+                        if let Some(rq3) = rq_map3.get_mut(&id) { rq3.responded = true; }
+                    }
                     return write_tlv_void(res, res_len);
                 }
 
-                // Not backed by a socket: attempt to locate the active TCP-backed request for the same server and respond on it
-                let this_server = rq.server_id;
-                drop(rq_map); // release before taking REQUESTS again
-                let alt = REQUESTS.lock().unwrap().iter()
-                    .filter_map(|(rid, rqs)| {
-                        if rqs.server_conn_id.is_some() && rqs.server_id == this_server { Some((*rid, rqs.server_conn_id.unwrap(), rqs.response_id)) } else { None }
-                    })
-                    .max_by_key(|(rid, _, _)| *rid);
-                if let Some((rid_alt, conn_id_alt, resp_hint_alt)) = alt {
+                // Not backed by a socket: attempt reroute to last accepted or latest TCP-backed unresponded request
+                drop(rq_map);
+                let candidate_req = {
+                    if let Some(last_id) = *LAST_ACCEPTED_REQ.lock().unwrap() {
+                        if let Some(r) = REQUESTS.lock().unwrap().get(&last_id) {
+                            if r.server_conn_id.is_some() && !r.responded { Some(last_id) } else { None }
+                        } else { None }
+                    } else { None }
+                }.or_else(|| {
+                    REQUESTS.lock().unwrap().iter()
+                        .filter_map(|(rid, rqs)| if rqs.server_conn_id.is_some() && !rqs.responded { Some(*rid) } else { None })
+                        .max()
+                });
+                if let Some(target_req_id) = candidate_req {
+                    let (conn_id_alt, resp_hint_alt) = {
+                        let map = REQUESTS.lock().unwrap();
+                        let r = map.get(&target_req_id).unwrap();
+                        (r.server_conn_id.unwrap(), r.response_id)
+                    };
                     let (status, headers, body) = {
                         let resp_map = RESPONSES.lock().unwrap();
-                        if let Some(src) = resp_map.get(&provided_resp_id) {
-                            (src.status, src.headers.clone(), src.body.clone())
-                        } else { return E_INV_HANDLE }
+                        if let Some(src) = resp_map.get(&provided_resp_id) { (src.status, src.headers.clone(), src.body.clone()) } else { return E_INV_HANDLE }
                     };
                     let reason = match status { 200 => "OK", 201 => "Created", 204 => "No Content", 400 => "Bad Request", 404 => "Not Found", 500 => "Internal Server Error", _ => "OK" };
                     let mut buf = Vec::new();
@@ -393,47 +405,22 @@ unsafe fn request_invoke(m: u32, id: u32, _args: *const u8, _args_len: usize, re
                     let mut has_len = false;
                     for (k,v) in &headers { if k.eq_ignore_ascii_case("Content-Length") { has_len = true; } buf.extend_from_slice(format!("{}: {}\r\n", k, v).as_bytes()); }
                     if !has_len { buf.extend_from_slice(format!("Content-Length: {}\r\n", body.len()).as_bytes()); }
-                    buf.extend_from_slice(b"Connection: close\r\n\r\n");
-                    buf.extend_from_slice(&body);
-                    netlog!("Request.respond: reroute TCP send via req_id={} conn_id={}", rid_alt, conn_id_alt);
+                    buf.extend_from_slice(b"Connection: close\r\n\r\n"); buf.extend_from_slice(&body);
+                    netlog!("Request.respond: reroute TCP send via req_id={} conn_id={}", target_req_id, conn_id_alt);
                     if let Some(conn) = SOCK_CONNS.lock().unwrap().remove(&conn_id_alt) {
                         if let Ok(mut s) = conn.stream.lock() { let _ = s.write_all(&buf); let _ = s.flush(); }
                     }
                     if let Some(target_id) = resp_hint_alt {
                         let mut resp_map = RESPONSES.lock().unwrap();
-                        let dst = resp_map.entry(target_id).or_insert(ResponseState { status: 200, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: true, server_id: None });
+                        let dst = resp_map.entry(target_id).or_insert(ResponseState { status: 200, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: true });
                         dst.status = status; dst.headers = headers.clone(); dst.body = body.clone();
                         netlog!("Request.respond: mirrored client handle id={} body_len={} headers={} status={}", target_id, dst.body.len(), dst.headers.len(), dst.status);
                     }
+                    if let Some(rq4) = REQUESTS.lock().unwrap().get_mut(&target_req_id) { rq4.responded = true; }
                     return write_tlv_void(res, res_len);
                 }
-
-                // Stub fallback: copy into paired client-side response
-                // If this request has no hint, try to find a concurrent TCP-backed request's hint
-                // Re-acquire to compute fallback target_id within same server and update stub rq.response_id
-                let mut target_id_opt: Option<u32> = None;
-                if let Some((_rid_alt, _conn_id_alt, resp_hint_alt)) = {
-                    REQUESTS.lock().unwrap().iter()
-                        .filter_map(|(rid, rqs)| { if rqs.server_conn_id.is_some() && rqs.server_id == this_server { Some((*rid, rqs.server_conn_id.unwrap(), rqs.response_id)) } else { None } })
-                        .max_by_key(|(rid,_,_)| *rid)
-                } { if let Some(h) = resp_hint_alt { target_id_opt = Some(h); } }
-                let target_id = target_id_opt.unwrap_or(provided_resp_id);
-                {
-                    let mut rq_map2 = REQUESTS.lock().unwrap();
-                    if let Some(rq2) = rq_map2.get_mut(&id) { rq2.response_id = Some(target_id); }
-                }
-                let mut resp_map = RESPONSES.lock().unwrap();
-                let (src_status, src_headers, src_body) = if let Some(src) = resp_map.get(&provided_resp_id) {
-                    (src.status, src.headers.clone(), src.body.clone())
-                } else { return E_INV_HANDLE };
-                let dst = resp_map.entry(target_id).or_insert(ResponseState { status: 200, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: true, server_id: None });
-                dst.status = src_status;
-                dst.headers = src_headers;
-                dst.body = src_body;
-                dst.parsed = true;
-                dst.client_conn_id = None;
-                netlog!("Request.respond: fallback copy to client handle id={} body_len={}", target_id, dst.body.len());
-                return write_tlv_void(res, res_len);
+                netlog!("Request.respond: no suitable TCP-backed request found for reroute; invalid handle");
+                return E_INV_HANDLE;
             }
             E_INV_HANDLE
         }
@@ -445,7 +432,8 @@ unsafe fn response_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res
     match m {
         M_BIRTH => {
             let id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
-            RESPONSES.lock().unwrap().insert(id, ResponseState { status: 200, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: false, server_id: None });
+            RESPONSES.lock().unwrap().insert(id, ResponseState { status: 200, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: false });
+            netlog!("Response.birth: new id={}", id);
             write_u32(id, res, res_len)
         }
         M_RESP_SET_STATUS => {
@@ -471,6 +459,7 @@ unsafe fn response_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res
             write_tlv_void(res, res_len)
         }
         M_RESP_READ_BODY => {
+            netlog!("HttpResponse.readBody: enter id={}", id);
             // If bound to a client connection, lazily read and parse (with short retries)
             for _ in 0..50 {
                 let need_parse = {
@@ -483,22 +472,10 @@ unsafe fn response_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res
                     std::thread::sleep(Duration::from_millis(5));
                 } else { break; }
             }
-            // If this response is empty but another response from the same server has data, mirror it for robustness
-            let mut body_to_return: Option<Vec<u8>> = None;
-            {
-                let map = RESPONSES.lock().unwrap();
-                if let Some(rp) = map.get(&id) {
-                    if !rp.body.is_empty() { body_to_return = Some(rp.body.clone()); }
-                    else if let Some(sid) = rp.server_id {
-                        if let Some((_other_id, other)) = map.iter().filter(|(rid, r)| r.server_id == Some(sid) && !r.body.is_empty()).max_by_key(|(rid, _)| **rid) {
-                            body_to_return = Some(other.body.clone());
-                        }
-                    }
-                } else { return E_INV_HANDLE; }
-            }
-            let data = body_to_return.unwrap_or_default();
-            netlog!("HttpResponse.readBody: id={} body_len={}", id, data.len());
-            write_tlv_bytes(&data, res, res_len)
+            if let Some(rp) = RESPONSES.lock().unwrap().get(&id) { 
+                netlog!("HttpResponse.readBody: id={} body_len={}", id, rp.body.len());
+                write_tlv_bytes(&rp.body, res, res_len) 
+            } else { E_INV_HANDLE }
         }
         M_RESP_GET_STATUS => {
             for _ in 0..50 {
@@ -566,7 +543,7 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                     let servers = SERVER_INSTANCES.lock().unwrap();
                     servers.iter().find(|(_, s)| s.port == port).map(|(sid, _)| *sid)
                 };
-                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: Some(conn_id), parsed: false, server_id: server_id_for_port });
+                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: Some(conn_id), parsed: false });
                 tcp_ok = true;
                 netlog!("client.get: url={} resp_id={} tcp_ok=true conn_id={}", url, resp_id, conn_id);
             } else {
@@ -574,27 +551,10 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                     let servers = SERVER_INSTANCES.lock().unwrap();
                     servers.iter().find(|(_, s)| s.port == port).map(|(sid, _)| *sid)
                 };
-                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: false, server_id: server_id_for_port });
+                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: false });
                 netlog!("client.get: url={} resp_id={} tcp_ok=false", url, resp_id);
             }
-            // Only enqueue stub request if TCP failed
-            if !tcp_ok {
-                let req_id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-                // Determine target server id we enqueue into
-                let mut target_server_id: Option<u32> = None;
-                {
-                    let mut servers = SERVER_INSTANCES.lock().unwrap();
-                    if let Some((sid, s)) = servers.iter_mut().find(|(_, s)| s.port == port) {
-                        s.pending.lock().unwrap().push_back(req_id);
-                        target_server_id = Some(*sid);
-                    } else if let Some((sid, s)) = servers.iter_mut().filter(|(_, s)| s.running.load(Ordering::SeqCst)).max_by_key(|(_, s)| s.start_seq) {
-                        s.pending.lock().unwrap().push_back(req_id);
-                        target_server_id = Some(*sid);
-                    }
-                }
-                REQUESTS.lock().unwrap().insert(req_id, RequestState { path, body: vec![], response_id: Some(resp_id), server_conn_id: None, server_id: target_server_id });
-                netlog!("client.get: enqueued stub req_id={} for resp_id={} server_id={:?}", req_id, resp_id, target_server_id);
-            }
+            // No stub enqueue in TCP-only design
             write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
         }
         M_CLIENT_POST => {
@@ -626,7 +586,7 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                     let servers = SERVER_INSTANCES.lock().unwrap();
                     servers.iter().find(|(_, s)| s.port == port).map(|(sid, _)| *sid)
                 };
-                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: Some(conn_id), parsed: false, server_id: server_id_for_port });
+                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: Some(conn_id), parsed: false });
                 tcp_ok = true;
                 netlog!("client.post: url={} resp_id={} tcp_ok=true conn_id={} body_len={}", url, resp_id, conn_id, body.len());
             } else {
@@ -634,26 +594,10 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                     let servers = SERVER_INSTANCES.lock().unwrap();
                     servers.iter().find(|(_, s)| s.port == port).map(|(sid, _)| *sid)
                 };
-                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: false, server_id: server_id_for_port });
+                RESPONSES.lock().unwrap().insert(resp_id, ResponseState { status: 0, headers: HashMap::new(), body: vec![], client_conn_id: None, parsed: false });
                 netlog!("client.post: url={} resp_id={} tcp_ok=false body_len={}", url, resp_id, body.len());
             }
-            // Enqueue stub request only if TCP failed
-            if !tcp_ok {
-                let req_id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-                let mut target_server_id: Option<u32> = None;
-                {
-                    let mut servers = SERVER_INSTANCES.lock().unwrap();
-                    if let Some((sid, s)) = servers.iter_mut().find(|(_, s)| s.port == port) {
-                        s.pending.lock().unwrap().push_back(req_id);
-                        target_server_id = Some(*sid);
-                    } else if let Some((sid, s)) = servers.iter_mut().filter(|(_, s)| s.running.load(Ordering::SeqCst)).max_by_key(|(_, s)| s.start_seq) {
-                        s.pending.lock().unwrap().push_back(req_id);
-                        target_server_id = Some(*sid);
-                    }
-                }
-                REQUESTS.lock().unwrap().insert(req_id, RequestState { path, body, response_id: Some(resp_id), server_conn_id: None, server_id: target_server_id });
-                netlog!("client.post: enqueued stub req_id={} for resp_id={} body_len={} server_id={:?}", req_id, resp_id, body_len, target_server_id);
-            }
+            // No stub enqueue in TCP-only design
             write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
         }
         _ => E_INV_METHOD,

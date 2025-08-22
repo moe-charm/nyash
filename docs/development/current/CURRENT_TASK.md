@@ -23,20 +23,25 @@
    - デリゲーションテスト: ❓ 未実装の可能性
    - VMテスト: ❌ 失敗（VMはまだプラグインBox未対応）
 
-### 🎯 次のタスク (Phase 9.78b)
+### 🎯 次のタスク（MIR→VM チェック / 命令最適化）
 
-#### Step 3: BoxFactory dyn化（優先度: 高）
-- 現在: `HashMap<String, Box<dyn Fn() -> Arc<dyn NyashBox>>>`
-- 目標: `HashMap<String, Arc<dyn BoxFactory>>`
-- 利点: プラグインBoxもVMで統一処理可能
+1) MIR→VM 変換の健全性チェック（短期）
+- 現行 MIR 命令 → VM 命令のマッピング表を作成
+- E2E/サンプルを VM バックエンドで実行し、MIR→VM 変換ログを収集
+- 例外系・Result正規化（returns_result）の経路を VM で確認
 
-#### Step 4: グローバル排除
-- `get_global_registry()` → `runtime.registry`
-- `get_global_loader_v2()` → `runtime.plugin_loader`
+2) 命令使用実績の計測（短期）
+- 実際に使用されている VM 命令を計測（実行ログ/カウンタ）
+- 現行宣言33命令 → 実使用コア命令の抽出
 
-#### Step 5: SharedState分解
-- 巨大なSharedState構造体を分割
-- Box管理、メソッド管理、スコープ管理を分離
+3) 命令セットのダイエット検討（中期）
+- 目標: 26命令（docsの合意値）
+- 代替可能/統合可能な命令の提案と互換性影響の洗い出し
+- 実験フラグで26命令版のVMを試作（段階移行）
+
+4) ドキュメント更新（短期）
+- 現状の命令一覧と目標26命令の整合（reference/architecture/）
+- 計測結果（使用頻度）と統合方針を追記
 
 ### 📝 メモ
 - ChatGPT5がプラグインBoxメソッド呼び出しに引数/戻り値サポートを追加
@@ -44,10 +49,10 @@
 - Rustの借用チェッカーとの格闘の跡が見られる（複数回の修正）
 
 ### 🔧 推奨アクション
-1. セッション再起動してBashコマンドを復活
-2. ビルド実行: `cargo build --release -j32`
-3. E2Eテスト実行: `cargo test e2e_plugin_filebox --features plugins -- --show-output`
-4. VMプラグイン統合の実装開始（Phase 9.78b Step 3）
+1. VMバックエンドでの実行ログ化（命令発行ログ/カウンタ）
+2. マッピング表作成（MIR→VM）と欠落/冗長命令の洗い出し
+3. 26命令案のPoCブランチ作成→E2Eで回帰確認
+4. docs更新（命令一覧、設計意図、移行戦略）
 
 ---
-最終更新: 2025年8月20日 22:45
+最終更新: 2025年8月22日 03:30（MIR→VM/命令最適化タスク追加）

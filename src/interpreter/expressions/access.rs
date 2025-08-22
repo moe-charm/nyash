@@ -89,7 +89,7 @@ impl NyashInterpreter {
                                 // Convert back to Box<dyn NyashBox> for now
                                 if let Ok(box_value) = weak_value.to_box() {
                                     if let Ok(inner_box) = box_value.try_lock() {
-                                        return Ok(Arc::from(inner_box.clone_box()));
+                                        return Ok(Arc::from(inner_box.clone_or_share()));
                                     }
                                 }
                             }
@@ -149,7 +149,7 @@ impl NyashInterpreter {
             })?;
         
         // Convert Arc to Box for compatibility
-        Ok((*shared_field).clone_box())
+        Ok((*shared_field).clone_or_share())
     }
     
     

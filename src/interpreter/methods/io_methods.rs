@@ -8,7 +8,8 @@
  */
 
 use super::super::*;
-use crate::box_trait::{ResultBox, StringBox, NyashBox};
+use crate::boxes::ResultBox;
+use crate::box_trait::{StringBox, NyashBox};
 use crate::boxes::FileBox;
 // use crate::bid::plugin_box::PluginFileBox;  // legacy - FileBox専用
 
@@ -77,7 +78,7 @@ impl NyashInterpreter {
     pub(in crate::interpreter) fn execute_result_method(&mut self, result_box: &ResultBox, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
-            "isOk" => {
+            "isOk" | "is_ok" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
                         message: format!("isOk() expects 0 arguments, got {}", arguments.len()),
@@ -85,7 +86,7 @@ impl NyashInterpreter {
                 }
                 Ok(result_box.is_ok())
             }
-            "getValue" => {
+            "getValue" | "get_value" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
                         message: format!("getValue() expects 0 arguments, got {}", arguments.len()),
@@ -93,7 +94,7 @@ impl NyashInterpreter {
                 }
                 Ok(result_box.get_value())
             }
-            "getError" => {
+            "getError" | "get_error" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
                         message: format!("getError() expects 0 arguments, got {}", arguments.len()),

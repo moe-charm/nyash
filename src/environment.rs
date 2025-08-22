@@ -81,7 +81,7 @@ impl Environment {
     pub fn get(&self, name: &str) -> Result<Box<dyn NyashBox>, EnvironmentError> {
         // 現在のスコープから検索
         if let Some(value) = self.bindings.lock().unwrap().get(name) {
-            return Ok(value.clone_box());
+            return Ok(value.clone_or_share());
         }
         
         // 親スコープから検索
@@ -107,7 +107,7 @@ impl Environment {
         
         // 親スコープで再帰的に検索・設定
         if let Some(parent) = &self.parent {
-            match parent.lock().unwrap().set(&name, value.clone_box()) {
+            match parent.lock().unwrap().set(&name, value.clone_or_share()) {
                 Ok(()) => return Ok(()),
                 Err(EnvironmentError::UndefinedVariable { .. }) => {
                     // 親にもない場合は現在のスコープに新規定義
