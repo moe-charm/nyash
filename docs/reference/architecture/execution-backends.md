@@ -126,6 +126,40 @@ bb0:
 - **基本ブロック**: 制御フロー最適化
 - **効果追跡**: 副作用の管理
 - **型安全**: 実行時型チェック
+ - **対応状況**: 命令ごとの実装は「MIR → VM Mapping」を参照（欠落・暫定箇所の把握に）
+   - docs/reference/architecture/mir-to-vm-mapping.md
+
+### 🧮 VM実行統計（命令カウント・時間計測）
+VMバックエンドは命令ごとの実行回数と総実行時間(ms)を出力できます。
+
+有効化方法（CLI推奨）:
+```bash
+# 人間向け表示
+nyash --backend vm --vm-stats program.nyash
+
+# JSON出力（機械可読）
+nyash --backend vm --vm-stats --vm-stats-json program.nyash
+```
+
+環境変数でも制御可能:
+```bash
+NYASH_VM_STATS=1 ./target/release/nyash --backend vm program.nyash
+NYASH_VM_STATS=1 NYASH_VM_STATS_JSON=1 ./target/release/nyash --backend vm program.nyash
+# もしくは NYASH_VM_STATS_FORMAT=json でも可
+```
+
+JSON出力例:
+```json
+{
+  "total": 1234,
+  "elapsed_ms": 5.123,
+  "counts": { "Const": 200, "BinOp": 300, "Return": 100 },
+  "top20": [ { "op": "BinOp", "count": 300 } ],
+  "timestamp_ms": 1724371200000
+}
+```
+
+ベンチマークと併用して、ホット命令の抽出・命令セット最適化に活用できます。
 
 ## 🌐 WASM実行（Web対応）
 

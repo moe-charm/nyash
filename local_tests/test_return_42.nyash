@@ -1,5 +1,2 @@
-static box Main {
-    main() {
-        return 42
-    }
-}
+// Simple return test
+return 42

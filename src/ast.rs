@@ -958,6 +958,8 @@ mod tests {
         let box_decl = ASTNode::BoxDeclaration {
             name: "TestBox".to_string(),
             fields: vec!["value".to_string()],
+            public_fields: vec![],
+            private_fields: vec![],
             methods,
             constructors: HashMap::new(),
             init_fields: vec![],

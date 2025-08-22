@@ -122,6 +122,57 @@ f.close()
 }
 
 #[test]
+fn e2e_vm_plugin_filebox_open_rw() {
+    if !try_init_plugins() { return; }
+
+    // Open, write, read via VM backend
+    let code = r#"
+local f, data
+f = new FileBox()
+f.open("./test_write.txt", "rw")
+f.write("HELLO")
+data = f.read()
+data
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let runtime = NyashRuntime::new();
+    let mut compiler = nyash_rust::mir::MirCompiler::new();
+    let compile_result = compiler.compile(ast).expect("mir compile failed");
+    let mut vm = VM::with_runtime(runtime);
+    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    assert_eq!(result.to_string_box().value, "HELLO");
+}
+
+#[test]
+fn e2e_vm_plugin_filebox_copy_from_handle() {
+    if !try_init_plugins() { return; }
+
+    let p1 = "./test_out_src.txt";
+    let p2 = "./test_out_dst.txt";
+
+    let code = format!(r#"
+local a, b, data
+a = new FileBox()
+b = new FileBox()
+a.open("{}", "w")
+b.open("{}", "rw")
+a.write("HELLO")
+b.copyFrom(a)
+data = b.read()
+data
+"#, p1, p2);
+
+    let ast = NyashParser::parse_from_string(&code).expect("parse failed");
+    let runtime = NyashRuntime::new();
+    let mut compiler = nyash_rust::mir::MirCompiler::new();
+    let compile_result = compiler.compile(ast).expect("mir compile failed");
+    let mut vm = VM::with_runtime(runtime);
+    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    assert_eq!(result.to_string_box().value, "HELLO");
+}
+
+#[test]
 fn e2e_interpreter_plugin_filebox_copy_from_handle() {
     if !try_init_plugins() { return; }
 

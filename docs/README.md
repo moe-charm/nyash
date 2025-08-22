@@ -51,6 +51,7 @@
 - [アーキテクチャ概要](reference/architecture/TECHNICAL_ARCHITECTURE_2025.md)
 - [実行バックエンド](reference/architecture/execution-backends.md)
 - [プラグインシステム](reference/plugin-system/)
+ - [CLIオプション早見表](tools/cli-options.md)
 
 ### 開発状況
 - [現在のタスク](development/current/CURRENT_TASK.md)

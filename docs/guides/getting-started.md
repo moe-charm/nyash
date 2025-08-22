@@ -238,6 +238,20 @@ print("(3 * 4) + (20 / 4) = " + complex1)
 calc.showHistory()
 ```
 
+## 📊 VM性能計測（オプション）
+
+VMバックエンドの命令統計を有効化すると、性能分析に役立つ集計が得られます。
+
+```bash
+# 人間向け表示
+nyash --backend vm --vm-stats hello.nyash
+
+# JSON出力（ツール連携向け）
+nyash --backend vm --vm-stats --vm-stats-json hello.nyash
+```
+
+環境変数での制御も可能です（`NYASH_VM_STATS`, `NYASH_VM_STATS_JSON`）。
+
 ## ⚡ 並行処理の実践
 
 ```nyash
