@@ -21,6 +21,8 @@ pub struct CliConfig {
     pub output_file: Option<String>,
     pub benchmark: bool,
     pub iterations: u32,
+    pub vm_stats: bool,
+    pub vm_stats_json: bool,
 }
 
 impl CliConfig {
@@ -112,6 +114,18 @@ impl CliConfig {
                     .help("Number of iterations for benchmarks (default: 10)")
                     .default_value("10")
             )
+            .arg(
+                Arg::new("vm-stats")
+                    .long("vm-stats")
+                    .help("Enable VM instruction statistics (equivalent to NYASH_VM_STATS=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("vm-stats-json")
+                    .long("vm-stats-json")
+                    .help("Output VM statistics in JSON format")
+                    .action(clap::ArgAction::SetTrue)
+            )
     }
 
     /// Convert ArgMatches to CliConfig
@@ -128,6 +142,8 @@ impl CliConfig {
             output_file: matches.get_one::<String>("output").cloned(),
             benchmark: matches.get_flag("benchmark"),
             iterations: matches.get_one::<String>("iterations").unwrap().parse().unwrap_or(10),
+            vm_stats: matches.get_flag("vm-stats"),
+            vm_stats_json: matches.get_flag("vm-stats-json"),
         }
     }
 }
@@ -168,6 +184,8 @@ mod tests {
             output_file: None,
             benchmark: false,
             iterations: 10,
+            vm_stats: false,
+            vm_stats_json: false,
         };
         
         assert_eq!(config.backend, "interpreter");

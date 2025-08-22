@@ -13,6 +13,7 @@ use crate::scope_tracker::ScopeTracker;
 // MirModule is already imported via crate::mir at top
 use crate::instance_v2::InstanceBox;
 use super::vm_phi::LoopExecutor;
+use std::time::Instant;
 
 // Phase 9.78a: Import necessary components for unified Box handling
 // TODO: Re-enable when interpreter refactoring is complete
@@ -185,6 +186,10 @@ pub struct VM {
     scope_tracker: ScopeTracker,
     /// Active MIR module during execution (for function calls)
     module: Option<MirModule>,
+    /// Instruction execution counters (by MIR opcode)
+    instr_counter: std::collections::HashMap<&'static str, usize>,
+    /// Execution start time for optional stats
+    exec_start: Option<Instant>,
     // Phase 9.78a: Add unified Box handling components
     // TODO: Re-enable when interpreter refactoring is complete
     // /// Box registry for creating all Box types
@@ -215,6 +220,8 @@ impl VM {
             runtime: NyashRuntime::new(),
             scope_tracker: ScopeTracker::new(),
             module: None,
+            instr_counter: std::collections::HashMap::new(),
+            exec_start: None,
             // TODO: Re-enable when interpreter refactoring is complete
             // box_registry: Arc::new(UnifiedBoxRegistry::new()),
             // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
@@ -240,6 +247,8 @@ impl VM {
             runtime,
             scope_tracker: ScopeTracker::new(),
             module: None,
+            instr_counter: std::collections::HashMap::new(),
+            exec_start: None,
         }
     }
     
@@ -270,6 +279,9 @@ impl VM {
     pub fn execute_module(&mut self, module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
         // Store module for nested calls
         self.module = Some(module.clone());
+        // Reset stats
+        self.instr_counter.clear();
+        self.exec_start = Some(Instant::now());
         // Find main function
         let main_function = module.get_function("main")
             .ok_or_else(|| VMError::InvalidInstruction("No main function found".to_string()))?;
@@ -277,6 +289,9 @@ impl VM {
         // Execute main function
         let result = self.execute_function(main_function)?;
         
+        // Optional: print VM stats
+        self.maybe_print_stats();
+
         // Convert result to NyashBox
         Ok(result.to_nyash_box())
     }
@@ -392,6 +407,8 @@ impl VM {
     
     /// Execute a single instruction
     fn execute_instruction(&mut self, instruction: &MirInstruction) -> Result<ControlFlow, VMError> {
+        // Record instruction for stats
+        self.record_instruction(instruction);
         match instruction {
             MirInstruction::Const { dst, value } => {
                 let vm_value = VMValue::from(value);
@@ -983,6 +1000,90 @@ impl VM {
             },
             
             _ => Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right))),
+        }
+    }
+
+    /// Record an instruction execution for statistics
+    fn record_instruction(&mut self, instruction: &MirInstruction) {
+        let key: &'static str = match instruction {
+            MirInstruction::Const { .. } => "Const",
+            MirInstruction::BinOp { .. } => "BinOp",
+            MirInstruction::UnaryOp { .. } => "UnaryOp",
+            MirInstruction::Compare { .. } => "Compare",
+            MirInstruction::Load { .. } => "Load",
+            MirInstruction::Store { .. } => "Store",
+            MirInstruction::Call { .. } => "Call",
+            MirInstruction::BoxCall { .. } => "BoxCall",
+            MirInstruction::Branch { .. } => "Branch",
+            MirInstruction::Jump { .. } => "Jump",
+            MirInstruction::Return { .. } => "Return",
+            MirInstruction::Phi { .. } => "Phi",
+            MirInstruction::NewBox { .. } => "NewBox",
+            MirInstruction::TypeCheck { .. } => "TypeCheck",
+            MirInstruction::Cast { .. } => "Cast",
+            MirInstruction::ArrayGet { .. } => "ArrayGet",
+            MirInstruction::ArraySet { .. } => "ArraySet",
+            MirInstruction::Copy { .. } => "Copy",
+            MirInstruction::Debug { .. } => "Debug",
+            MirInstruction::Print { .. } => "Print",
+            MirInstruction::Nop => "Nop",
+            MirInstruction::Throw { .. } => "Throw",
+            MirInstruction::Catch { .. } => "Catch",
+            MirInstruction::Safepoint => "Safepoint",
+            MirInstruction::RefNew { .. } => "RefNew",
+            MirInstruction::RefGet { .. } => "RefGet",
+            MirInstruction::RefSet { .. } => "RefSet",
+            MirInstruction::WeakNew { .. } => "WeakNew",
+            MirInstruction::WeakLoad { .. } => "WeakLoad",
+            MirInstruction::BarrierRead { .. } => "BarrierRead",
+            MirInstruction::BarrierWrite { .. } => "BarrierWrite",
+            MirInstruction::FutureNew { .. } => "FutureNew",
+            MirInstruction::FutureSet { .. } => "FutureSet",
+            MirInstruction::Await { .. } => "Await",
+            MirInstruction::ExternCall { .. } => "ExternCall",
+        };
+        *self.instr_counter.entry(key).or_insert(0) += 1;
+    }
+
+    /// Print simple VM execution statistics when enabled via env var
+    fn maybe_print_stats(&mut self) {
+        let enabled = std::env::var("NYASH_VM_STATS").ok().map(|v| v != "0").unwrap_or(false);
+        if !enabled { return; }
+
+        let elapsed_ms = self.exec_start.map(|t| t.elapsed().as_secs_f64() * 1000.0).unwrap_or(0.0);
+        let mut items: Vec<(&str, usize)> = self.instr_counter.iter().map(|(k,v)| (*k, *v)).collect();
+        items.sort_by(|a,b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        let total: usize = items.iter().map(|(_,v)| *v).sum();
+
+        let json_enabled = std::env::var("NYASH_VM_STATS_JSON").ok().map(|v| v != "0").unwrap_or(false)
+            || std::env::var("NYASH_VM_STATS_FORMAT").map(|v| v == "json").unwrap_or(false);
+
+        if json_enabled {
+            // Build JSON structure: { total, elapsed_ms, counts: {op: n, ...}, top20: [{op, count}], timestamp_ms }
+            let counts_obj: std::collections::BTreeMap<&str, usize> = self.instr_counter.iter().map(|(k,v)| (*k, *v)).collect();
+            let top20: Vec<_> = items.iter().take(20).map(|(op,cnt)| {
+                serde_json::json!({ "op": op, "count": cnt })
+            }).collect();
+            let now_ms = {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+            };
+            let payload = serde_json::json!({
+                "total": total,
+                "elapsed_ms": elapsed_ms,
+                "counts": counts_obj,
+                "top20": top20,
+                "timestamp_ms": now_ms
+            });
+            match serde_json::to_string_pretty(&payload) {
+                Ok(s) => println!("{}", s),
+                Err(_) => println!("{{\"total\":{},\"elapsed_ms\":{:.3}}}", total, elapsed_ms),
+            }
+        } else {
+            println!("\n🧮 VM Stats: {} instructions in {:.3} ms", total, elapsed_ms);
+            for (k, v) in items.into_iter().take(20) {
+                println!("  {:>10}: {:>8}", k, v);
+            }
         }
     }
     

@@ -386,6 +386,14 @@ impl PluginBoxV2 {
                 let expected_args = box_conf.methods.get(method_name).and_then(|m| m.args.clone());
                 if let Some(exp) = expected_args.as_ref() {
                     if exp.len() != args.len() {
+                        eprintln!(
+                            "[PluginLoaderV2] InvalidArgs: {}.{} expects {} args, got {} (schema={:?})",
+                            box_type,
+                            method_name,
+                            exp.len(),
+                            args.len(),
+                            exp.iter().map(|a| a.kind_str()).collect::<Vec<_>>()
+                        );
                         return Err(BidError::InvalidArgs);
                     }
                 }
@@ -417,7 +425,8 @@ impl PluginBoxV2 {
                                         }
                                     }
                                     _ => {
-                                        // Unsupported kind in this minimal implementation
+                                        eprintln!("[PluginLoaderV2] InvalidArgs: unsupported kind '{}' for {}.{} arg[{}]",
+                                            kind, box_type, method_name, idx);
                                         return Err(BidError::InvalidArgs);
                                     }
                                 }
@@ -427,6 +436,8 @@ impl PluginBoxV2 {
                                 let is_string = a.as_any().downcast_ref::<StringBox>().is_some();
                                 let is_int = a.as_any().downcast_ref::<IntegerBox>().is_some();
                                 if !(is_string || is_int) {
+                                    eprintln!("[PluginLoaderV2] InvalidArgs: expected string/int for {}.{} arg[{}]",
+                                        box_type, method_name, idx);
                                     return Err(BidError::InvalidArgs);
                                 }
                             }
@@ -481,7 +492,15 @@ impl PluginBoxV2 {
                 buf
             };
             eprintln!("[VM→Plugin] call {}.{} recv_id={} returns_result={}", box_type, method_name, instance_id, returns_result);
-            if dbg_on() { eprintln!("[VM→Plugin] call {}.{} recv_id={} returns_result={}", box_type, method_name, instance_id, returns_result); }
+            if dbg_on() {
+                // Dump compact TLV header and first few bytes for diagnostics
+                let hdr_ver = u16::from_le_bytes([tlv_args[0], tlv_args[1]]);
+                let hdr_argc = u16::from_le_bytes([tlv_args[2], tlv_args[3]]);
+                let preview_len = std::cmp::min(tlv_args.len(), 64);
+                let preview: Vec<String> = tlv_args[..preview_len].iter().map(|b| format!("{:02X}", b)).collect();
+                eprintln!("[VM→Plugin] TLV ver={} argc={} bytes={} preview={}...",
+                    hdr_ver, hdr_argc, tlv_args.len(), preview.join(" "));
+            }
             let mut out = vec![0u8; 1024];
             let mut out_len: usize = out.len();
             let rc = unsafe {

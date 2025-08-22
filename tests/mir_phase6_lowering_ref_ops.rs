@@ -110,6 +110,8 @@ fn test_mir_phase6_lowering_ref_ops() {
     let ast = ASTNode::BoxDeclaration {
         name: "Main".to_string(),
         fields: vec![],
+        public_fields: vec![],
+        private_fields: vec![],
         methods: main_methods,
         constructors: HashMap::new(),
         init_fields: vec![],

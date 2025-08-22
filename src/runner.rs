@@ -51,6 +51,15 @@ impl NyashRunner {
         
         // Try to initialize BID plugins from nyash.toml (best-effort)
         self.init_bid_plugins();
+
+        // Optional: enable VM stats via CLI flags
+        if self.config.vm_stats {
+            std::env::set_var("NYASH_VM_STATS", "1");
+        }
+        if self.config.vm_stats_json {
+            // Prefer explicit JSON flag over any default
+            std::env::set_var("NYASH_VM_STATS_JSON", "1");
+        }
         // Benchmark mode - can run without a file
         if self.config.benchmark {
             println!("📊 Nyash Performance Benchmark Suite");
@@ -926,6 +935,8 @@ mod tests {
             output_file: None,
             benchmark: false,
             iterations: 10,
+            vm_stats: false,
+            vm_stats_json: false,
         };
         
         let runner = NyashRunner::new(config);

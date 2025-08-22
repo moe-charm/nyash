@@ -1,58 +1,51 @@
-# 🎯 CURRENT TASK - 2025年8月20日
+# 🎯 CURRENT TASK - 2025年8月23日（刷新）
 
-## 📊 現在の状況
+## ✅ 直近の完了
+1. ドキュメント再編成の完了（構造刷新）
+2. プラグインBox（FileBox）基本実装とインタープリター統合
+3. VM命令カウンタ＋時間計測のCLI化（`--vm-stats`, `--vm-stats-json`）とJSON出力対応
 
-### ✅ 完了したタスク
-1. **ドキュメント再編成** - 完全完了！
-   - 283ファイル → 4大カテゴリに整理
-   - Phaseファイルも統合済み
-   - 説明書/予定フォルダ削除済み
+## 🚧 次にやること（再開方針）
 
-2. **プラグインBox基本実装** (Phase 9.78c)
-   - FileBoxプラグイン実装済み
-   - インタープリター経由の呼び出し成功
-   - 基本的な引数/戻り値サポート追加（ChatGPT5による）
+1) MIR→VMの健全化（短期・最優先）
+- 現行MIR→VMのマッピング表を作成（欠落/冗長/重複を可視化）
+- サンプル/テストをVMで実行し、差分ログ（例外系・returns_result）を確認
+- 成果物: `docs/reference/architecture/mir-to-vm-mapping.md`（暫定）
 
-### 🚧 現在の課題
-1. **Bashコマンドエラー問題**
-   - docs整理で現在のディレクトリが削除された影響
-   - セッション再起動が必要かも
+2) VM×プラグインシステムのE2E検証（短期）
+- `tests/e2e_plugin_filebox.rs` をVMでも通す（`--features plugins`）
+- ケース: `new/close`, `open/read/write`, `copyFrom(handle)`、デリゲーション from Parent
+- 成果物: テストグリーン＋既知の制約を `VM_README.md` に明記
 
-2. **E2Eテスト状況**（tests/e2e_plugin_filebox.rs）
-   - インタープリターテスト: ✅ 成功（FileBox.close()が"ok"を返す）
-   - デリゲーションテスト: ❓ 未実装の可能性
-   - VMテスト: ❌ 失敗（VMはまだプラグインBox未対応）
+3) 命令セットのダイエット（中期：目標26命令）
+- 実行統計（`--vm-stats --vm-stats-json`）でホット命令を特定
+- 統合方針（例: TypeCheck/Castの整理、Array/Ref周りの集約、ExternCall→BoxCall移行）
+- 段階移行（互換エイリアス→削除）と回帰テスト整備
+- 成果物: 26命令案ドラフト＋移行計画
 
-### 🎯 次のタスク（MIR→VM チェック / 命令最適化）
+## ▶ 実行コマンド例
 
-1) MIR→VM 変換の健全性チェック（短期）
-- 現行 MIR 命令 → VM 命令のマッピング表を作成
-- E2E/サンプルを VM バックエンドで実行し、MIR→VM 変換ログを収集
-- 例外系・Result正規化（returns_result）の経路を VM で確認
+計測実行:
+```bash
+nyash --backend vm --vm-stats --vm-stats-json local_tests/test_hello.nyash > vm_stats.json
+```
 
-2) 命令使用実績の計測（短期）
-- 実際に使用されている VM 命令を計測（実行ログ/カウンタ）
-- 現行宣言33命令 → 実使用コア命令の抽出
+VM×プラグインE2E:
+```bash
+cargo test -q --features plugins e2e_interpreter_plugin_filebox_close_void
+cargo test -q --features plugins e2e_vm_plugin_filebox_close_void
+```
 
-3) 命令セットのダイエット検討（中期）
-- 目標: 26命令（docsの合意値）
-- 代替可能/統合可能な命令の提案と互換性影響の洗い出し
-- 実験フラグで26命令版のVMを試作（段階移行）
+MIRダンプ/検証:
+```bash
+nyash --dump-mir --mir-verbose examples/plugin_box_sample.nyash
+nyash --verify examples/plugin_box_sample.nyash
+```
 
-4) ドキュメント更新（短期）
-- 現状の命令一覧と目標26命令の整合（reference/architecture/）
-- 計測結果（使用頻度）と統合方針を追記
+## 🔭 26命令ターゲット（ドラフトの方向性）
+コア（候補）: Const / Copy / Load / Store / BinOp / UnaryOp / Compare / Jump / Branch / Phi / Call / BoxCall / NewBox / ArrayGet / ArraySet / RefNew / RefGet / RefSet / WeakNew / WeakLoad / BarrierRead / BarrierWrite / Return / Print or ExternCall(→BoxCall集約) + 2枠（例外/await系のどちらか）
 
-### 📝 メモ
-- ChatGPT5がプラグインBoxメソッド呼び出しに引数/戻り値サポートを追加
-- TLV (Type-Length-Value) エンコーディングで引数をプラグインに渡す実装
-- Rustの借用チェッカーとの格闘の跡が見られる（複数回の修正）
-
-### 🔧 推奨アクション
-1. VMバックエンドでの実行ログ化（命令発行ログ/カウンタ）
-2. マッピング表作成（MIR→VM）と欠落/冗長命令の洗い出し
-3. 26命令案のPoCブランチ作成→E2Eで回帰確認
-4. docs更新（命令一覧、設計意図、移行戦略）
+補助: Debug/Nop/Safepointはビルドモードで有効化（命令としては非中核に降格）
 
 ---
-最終更新: 2025年8月22日 03:30（MIR→VM/命令最適化タスク追加）
+最終更新: 2025年8月23日（MIR/VM再フォーカス、26命令ダイエットへ）
