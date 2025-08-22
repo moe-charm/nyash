@@ -555,7 +555,13 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                 netlog!("client.get: url={} resp_id={} tcp_ok=false", url, resp_id);
             }
             // No stub enqueue in TCP-only design
-            write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
+            if tcp_ok {
+                write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
+            } else {
+                // Encode error string; loader interprets returns_result=true methods' string payload as Err
+                let msg = format!("connect failed for {}:{}{}", host, port, if path.is_empty() { "" } else { &path });
+                write_tlv_string(&msg, res, res_len)
+            }
         }
         M_CLIENT_POST => {
             // args: TLV String(url), Bytes body
@@ -598,7 +604,12 @@ unsafe fn client_invoke(m: u32, id: u32, args: *const u8, args_len: usize, res: 
                 netlog!("client.post: url={} resp_id={} tcp_ok=false body_len={}", url, resp_id, body.len());
             }
             // No stub enqueue in TCP-only design
-            write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
+            if tcp_ok {
+                write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
+            } else {
+                let msg = format!("connect failed for {}:{}{} (body_len={})", host, port, if path.is_empty() { "" } else { &path }, body_len);
+                write_tlv_string(&msg, res, res_len)
+            }
         }
         _ => E_INV_METHOD,
     }

@@ -590,9 +590,14 @@ impl PluginBoxV2 {
                     }
                     6 | 7 => { // String/Bytes
                         let s = String::from_utf8_lossy(payload).to_string();
-                        let val: Box<dyn NyashBox> = Box::new(StringBox::new(s));
                         if dbg_on() { eprintln!("[Plugin→VM] return str/bytes len={} (returns_result={})", size, returns_result); }
-                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
+                        if returns_result {
+                            // Heuristic: for Result-returning methods, string payload represents an error message
+                            let err = crate::exception_box::ErrorBox::new(&s);
+                            Some(Box::new(crate::boxes::result::NyashResultBox::new_err(Box::new(err))) as Box<dyn NyashBox>)
+                        } else {
+                            Some(Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
+                        }
                     }
                     9 => {
                         if dbg_on() { eprintln!("[Plugin→VM] return void (returns_result={})", returns_result); }

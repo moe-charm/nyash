@@ -4,6 +4,8 @@ use nyash_rust::parser::NyashParser;
 use nyash_rust::runtime::plugin_loader_v2::{init_global_loader_v2, get_global_loader_v2};
 use nyash_rust::runtime::box_registry::get_global_registry;
 use nyash_rust::runtime::PluginConfig;
+use nyash_rust::runtime::NyashRuntime;
+use nyash_rust::backend::VM;
 
 fn try_init_plugins() -> bool {
     if !std::path::Path::new("nyash.toml").exists() { return false; }
@@ -99,4 +101,69 @@ hv + ":" + body
     let s = result.to_string_box().value;
     assert!(s.starts_with("A:"));
     assert!(s.contains("OK-LONG"));
+}
+
+
+#[test]
+fn e2e_vm_http_client_error_result() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
+    if !try_init_plugins() { return; }
+
+    // No server on 8099 → should produce Err result
+    let code = r#"
+local cli, r, ok, result
+cli = new HttpClientBox()
+r = cli.get("http://127.0.0.1:8099/nope")
+ok = r.isOk()
+if ok {
+    result = "unexpected_ok"
+} else {
+    result = r.getError().toString()
+}
+result
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let runtime = NyashRuntime::new();
+    let mut compiler = nyash_rust::mir::MirCompiler::new();
+    let compile_result = compiler.compile(ast).expect("mir compile failed");
+    let mut vm = VM::with_runtime(runtime);
+    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    let s = result.to_string_box().value;
+    assert!(s.contains("Error") || s.contains("unexpected_ok") == false);
+}
+
+#[test]
+fn e2e_vm_http_empty_body() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
+    if !try_init_plugins() { return; }
+
+    let code = r#"
+local srv, cli, r, resp, req, body
+srv = new HttpServerBox()
+srv.start(8087)
+
+cli = new HttpClientBox()
+r = cli.get("http://localhost:8087/empty")
+
+req = srv.accept().get_value()
+resp = new HttpResponseBox()
+resp.setStatus(204)
+// no body written
+req.respond(resp)
+
+resp = r.get_value()
+body = resp.readBody()
+body
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let runtime = NyashRuntime::new();
+    let mut compiler = nyash_rust::mir::MirCompiler::new();
+    let compile_result = compiler.compile(ast).expect("mir compile failed");
+    let mut vm = VM::with_runtime(runtime);
+    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    assert_eq!(result.to_string_box().value, "");
 }

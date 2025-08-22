@@ -523,6 +523,8 @@ impl MirBuilder {
         // Build then branch
         self.current_block = Some(then_block);
         self.ensure_block_exists(then_block)?;
+        // Keep a copy of AST for analysis (phi for variable reassignment)
+        let then_ast_for_analysis = then_branch.clone();
         let then_value = self.build_expression(then_branch)?;
         if !self.is_current_block_terminated() {
             self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
@@ -531,8 +533,9 @@ impl MirBuilder {
         // Build else branch
         self.current_block = Some(else_block);
         self.ensure_block_exists(else_block)?;
-        let else_value = if let Some(else_ast) = else_branch {
-            self.build_expression(else_ast)?
+        let (else_value, else_ast_for_analysis) = if let Some(else_ast) = else_branch {
+            let val = self.build_expression(else_ast.clone())?;
+            (val, Some(else_ast))
         } else {
             // No else branch, use void
             let void_val = self.value_gen.next();
@@ -540,7 +543,7 @@ impl MirBuilder {
                 dst: void_val,
                 value: ConstValue::Void,
             })?;
-            void_val
+            (void_val, None)
         };
         if !self.is_current_block_terminated() {
             self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
@@ -558,8 +561,32 @@ impl MirBuilder {
                 (else_block, else_value),
             ],
         })?;
-        
+
+        // Heuristic: If both branches assign the same variable name, bind that variable to the phi result
+        let assigned_var_then = Self::extract_assigned_var(&then_ast_for_analysis);
+        let assigned_var_else = else_ast_for_analysis.as_ref().and_then(|a| Self::extract_assigned_var(a));
+        if let (Some(a), Some(b)) = (assigned_var_then, assigned_var_else) {
+            if a == b {
+                self.variable_map.insert(a, result_val);
+            }
+        }
+
         Ok(result_val)
+    }
+
+    /// Extract assigned variable name from an AST node if it represents an assignment to a variable.
+    /// Handles direct Assignment and Program with trailing single-statement Assignment.
+    fn extract_assigned_var(ast: &ASTNode) -> Option<String> {
+        match ast {
+            ASTNode::Assignment { target, .. } => {
+                if let ASTNode::Variable { name, .. } = target.as_ref() { Some(name.clone()) } else { None }
+            }
+            ASTNode::Program { statements, .. } => {
+                // Inspect the last statement as the resulting value of the block
+                statements.last().and_then(|st| Self::extract_assigned_var(st))
+            }
+            _ => None,
+        }
     }
     
     /// Emit an instruction to the current basic block

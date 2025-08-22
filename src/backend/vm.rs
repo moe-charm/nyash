@@ -1116,6 +1116,11 @@ impl VM {
             }
         }
 
+        // Generic fallback: toString for any Box type
+        if method == "toString" {
+            return Ok(Box::new(StringBox::new(box_value.to_string_box().value)));
+        }
+
         // StringBox methods
         if let Some(string_box) = box_value.as_any().downcast_ref::<StringBox>() {
             match method {
