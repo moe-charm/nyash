@@ -477,7 +477,67 @@ impl VM {
                     }
                     crate::mir::TypeOpKind::Cast => {
                         let v = self.get_value(*value)?;
-                        self.set_value(*dst, v);
+                        let casted = match ty {
+                            crate::mir::MirType::Integer => match v {
+                                VMValue::Integer(_) => v,
+                                VMValue::Float(f) => VMValue::Integer(f as i64),
+                                other => {
+                                    return Err(VMError::TypeError(format!(
+                                        "Cannot cast {:?} to Integer",
+                                        other
+                                    )));
+                                }
+                            },
+                            crate::mir::MirType::Float => match v {
+                                VMValue::Float(_) => v,
+                                VMValue::Integer(i) => VMValue::Float(i as f64),
+                                other => {
+                                    return Err(VMError::TypeError(format!(
+                                        "Cannot cast {:?} to Float",
+                                        other
+                                    )));
+                                }
+                            },
+                            // For other types, only allow no-op cast when already same category
+                            crate::mir::MirType::Bool => match v {
+                                VMValue::Bool(_) => v,
+                                other => {
+                                    return Err(VMError::TypeError(format!(
+                                        "Cannot cast {:?} to Bool",
+                                        other
+                                    )));
+                                }
+                            },
+                            crate::mir::MirType::String => match v {
+                                VMValue::String(_) => v,
+                                other => {
+                                    return Err(VMError::TypeError(format!(
+                                        "Cannot cast {:?} to String",
+                                        other
+                                    )));
+                                }
+                            },
+                            crate::mir::MirType::Void => match v {
+                                VMValue::Void => v,
+                                other => {
+                                    return Err(VMError::TypeError(format!(
+                                        "Cannot cast {:?} to Void",
+                                        other
+                                    )));
+                                }
+                            },
+                            crate::mir::MirType::Box(name) => match v {
+                                VMValue::BoxRef(ref arc) if arc.type_name() == name => v,
+                                other => {
+                                    return Err(VMError::TypeError(format!(
+                                        "Cannot cast {:?} to Box<{}>",
+                                        other, name
+                                    )));
+                                }
+                            },
+                            _ => v,
+                        };
+                        self.set_value(*dst, casted);
                     }
                 }
                 Ok(ControlFlow::Continue)
@@ -640,8 +700,11 @@ impl VM {
                     return Ok(ControlFlow::Continue);
                 }
 
-                // Fast-path for ArrayBox methods using original BoxRef (preserve state)
+                // Fast-path for common Box methods (Array/Map/String-like)
+                let fastpath_disabled = std::env::var("NYASH_VM_DISABLE_FASTPATH").is_ok();
+                if !fastpath_disabled {
                 if let VMValue::BoxRef(ref arc_any) = box_vm_value {
+                    // ArrayBox: get/set/push
                     if let Some(arr) = arc_any.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
                         match method.as_str() {
                             "get" => {
@@ -660,9 +723,52 @@ impl VM {
                                     return Ok(ControlFlow::Continue);
                                 }
                             }
+                            "push" => {
+                                if let Some(arg0) = arg_values.get(0) {
+                                    let res = arr.push((*arg0).clone_or_share());
+                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
+                                    return Ok(ControlFlow::Continue);
+                                }
+                            }
                             _ => {}
                         }
                     }
+                    // MapBox: get/set/has
+                    if let Some(map) = arc_any.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                        match method.as_str() {
+                            "get" => {
+                                if let Some(arg0) = arg_values.get(0) {
+                                    let res = map.get((*arg0).clone_or_share());
+                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
+                                    return Ok(ControlFlow::Continue);
+                                }
+                            }
+                            "set" => {
+                                if arg_values.len() >= 2 {
+                                    let k = (*arg_values.get(0).unwrap()).clone_or_share();
+                                    let vval = (*arg_values.get(1).unwrap()).clone_or_share();
+                                    let res = map.set(k, vval);
+                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
+                                    return Ok(ControlFlow::Continue);
+                                }
+                            }
+                            "has" => {
+                                if let Some(arg0) = arg_values.get(0) {
+                                    let res = map.has((*arg0).clone_or_share());
+                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
+                                    return Ok(ControlFlow::Continue);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    // toString(): generic fast-path for any BoxRef (0-arg)
+                    if method == "toString" && arg_values.is_empty() {
+                        let res = box_nyash.to_string_box();
+                        if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(Box::new(res)); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                }
                 }
 
                 // Call the method - unified dispatch for all Box types

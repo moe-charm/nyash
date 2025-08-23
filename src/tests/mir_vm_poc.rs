@@ -45,6 +45,61 @@ mod tests {
     }
 
     #[test]
+    fn vm_exec_typeop_cast_int_float() {
+        let mut func = make_main();
+        let bb = func.entry_block;
+
+        let v0 = func.next_value_id();
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: v0, value: ConstValue::Integer(3) });
+
+        let v1 = func.next_value_id();
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::TypeOp { dst: v1, op: crate::mir::TypeOpKind::Cast, value: v0, ty: MirType::Float });
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: None });
+
+        let mut module = MirModule::new("test".to_string());
+        module.add_function(func);
+        let mut vm = VM::new();
+        let _ = vm.execute_module(&module).expect("int->float cast should succeed");
+    }
+
+    #[test]
+    fn vm_exec_typeop_cast_float_int() {
+        let mut func = make_main();
+        let bb = func.entry_block;
+
+        let v0 = func.next_value_id();
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: v0, value: ConstValue::Float(3.7) });
+
+        let v1 = func.next_value_id();
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::TypeOp { dst: v1, op: crate::mir::TypeOpKind::Cast, value: v0, ty: MirType::Integer });
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: None });
+
+        let mut module = MirModule::new("test".to_string());
+        module.add_function(func);
+        let mut vm = VM::new();
+        let _ = vm.execute_module(&module).expect("float->int cast should succeed");
+    }
+
+    #[test]
+    fn vm_exec_typeop_cast_invalid_should_error() {
+        let mut func = make_main();
+        let bb = func.entry_block;
+
+        let v0 = func.next_value_id();
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: v0, value: ConstValue::String("x".to_string()) });
+
+        let v1 = func.next_value_id();
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::TypeOp { dst: v1, op: crate::mir::TypeOpKind::Cast, value: v0, ty: MirType::Integer });
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: None });
+
+        let mut module = MirModule::new("test".to_string());
+        module.add_function(func);
+        let mut vm = VM::new();
+        let res = vm.execute_module(&module);
+        assert!(res.is_err(), "invalid cast should return error");
+    }
+
+    #[test]
     fn vm_exec_legacy_typecheck_cast() {
         let mut func = make_main();
         let bb = func.entry_block;

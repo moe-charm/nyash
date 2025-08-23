@@ -54,6 +54,20 @@ pub enum VerificationError {
         merge_block: BasicBlockId,
         pred_block: BasicBlockId,
     },
+    /// WeakRef(load) must originate from a WeakNew/WeakRef(new)
+    InvalidWeakRefSource {
+        weak_ref: ValueId,
+        block: BasicBlockId,
+        instruction_index: usize,
+        reason: String,
+    },
+    /// Barrier pointer must not be a void constant
+    InvalidBarrierPointer {
+        ptr: ValueId,
+        block: BasicBlockId,
+        instruction_index: usize,
+        reason: String,
+    },
 }
 
 /// MIR verifier for SSA form and semantic correctness
@@ -113,12 +127,99 @@ impl MirVerifier {
         if let Err(mut merge_errors) = self.verify_merge_uses(function) {
             local_errors.append(&mut merge_errors);
         }
+        // 5. Minimal checks for WeakRef/Barrier
+        if let Err(mut weak_barrier_errors) = self.verify_weakref_and_barrier(function) {
+            local_errors.append(&mut weak_barrier_errors);
+        }
         
         if local_errors.is_empty() {
             Ok(())
         } else {
             Err(local_errors)
         }
+    }
+
+    /// Verify WeakRef/Barrier minimal semantics
+    fn verify_weakref_and_barrier(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        use super::MirInstruction;
+        let mut errors = Vec::new();
+        // Build def map value -> (block, idx, &inst)
+        let mut def_map: HashMap<ValueId, (BasicBlockId, usize, &MirInstruction)> = HashMap::new();
+        for (bid, block) in &function.blocks {
+            for (idx, inst) in block.all_instructions().enumerate() {
+                if let Some(dst) = inst.dst_value() {
+                    def_map.insert(dst, (*bid, idx, inst));
+                }
+            }
+        }
+
+        for (bid, block) in &function.blocks {
+            for (idx, inst) in block.all_instructions().enumerate() {
+                match inst {
+                    MirInstruction::WeakRef { op: super::WeakRefOp::Load, value, .. } => {
+                        match def_map.get(value) {
+                            Some((_db, _di, def_inst)) => match def_inst {
+                                MirInstruction::WeakRef { op: super::WeakRefOp::New, .. } | MirInstruction::WeakNew { .. } => {}
+                                _ => {
+                                    errors.push(VerificationError::InvalidWeakRefSource {
+                                        weak_ref: *value,
+                                        block: *bid,
+                                        instruction_index: idx,
+                                        reason: "weakref.load source is not a weakref.new/weak_new".to_string(),
+                                    });
+                                }
+                            },
+                            None => {
+                                errors.push(VerificationError::InvalidWeakRefSource {
+                                    weak_ref: *value,
+                                    block: *bid,
+                                    instruction_index: idx,
+                                    reason: "weakref.load source is undefined".to_string(),
+                                });
+                            }
+                        }
+                    }
+                    MirInstruction::WeakLoad { weak_ref, .. } => {
+                        match def_map.get(weak_ref) {
+                            Some((_db, _di, def_inst)) => match def_inst {
+                                MirInstruction::WeakNew { .. } | MirInstruction::WeakRef { op: super::WeakRefOp::New, .. } => {}
+                                _ => {
+                                    errors.push(VerificationError::InvalidWeakRefSource {
+                                        weak_ref: *weak_ref,
+                                        block: *bid,
+                                        instruction_index: idx,
+                                        reason: "weak_load source is not a weak_new/weakref.new".to_string(),
+                                    });
+                                }
+                            },
+                            None => {
+                                errors.push(VerificationError::InvalidWeakRefSource {
+                                    weak_ref: *weak_ref,
+                                    block: *bid,
+                                    instruction_index: idx,
+                                    reason: "weak_load source is undefined".to_string(),
+                                });
+                            }
+                        }
+                    }
+                    MirInstruction::Barrier { ptr, .. } | MirInstruction::BarrierRead { ptr } | MirInstruction::BarrierWrite { ptr } => {
+                        if let Some((_db, _di, def_inst)) = def_map.get(ptr) {
+                            if let MirInstruction::Const { value: super::ConstValue::Void, .. } = def_inst {
+                                errors.push(VerificationError::InvalidBarrierPointer {
+                                    ptr: *ptr,
+                                    block: *bid,
+                                    instruction_index: idx,
+                                    reason: "barrier pointer is void".to_string(),
+                                });
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
     
     /// Verify SSA form properties
@@ -418,6 +519,12 @@ impl std::fmt::Display for VerificationError {
             VerificationError::MergeUsesPredecessorValue { value, merge_block, pred_block } => {
                 write!(f, "Merge block {} uses predecessor-defined value {} from block {} without Phi",
                        merge_block, value, pred_block)
+            },
+            VerificationError::InvalidWeakRefSource { weak_ref, block, instruction_index, reason } => {
+                write!(f, "Invalid WeakRef source {} in block {} at {}: {}", weak_ref, block, instruction_index, reason)
+            },
+            VerificationError::InvalidBarrierPointer { ptr, block, instruction_index, reason } => {
+                write!(f, "Invalid Barrier pointer {} in block {} at {}: {}", ptr, block, instruction_index, reason)
             },
         }
     }
