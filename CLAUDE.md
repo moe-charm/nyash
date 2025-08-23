@@ -308,6 +308,135 @@ Read docs/reference/  # まずドキュメント（API/言語仕様の入口）
 # → それでも不明 → ソース確認
 ```
 
+## 🏗️ 開発設計原則（綺麗で破綻しない作り）
+
+### 📦 Everything is Box - 内部実装でも箱原理を貫く
+
+#### 1. **単一責任の箱**
+```rust
+// ✅ 良い例：各モジュールが単一の責任を持つ
+MirBuilder: AST → MIR変換のみ（最適化しない）
+MirOptimizer: MIRの最適化のみ（変換しない）
+VM: 実行のみ（最適化しない）
+
+// ❌ 悪い例：複数の責任が混在
+BuilderOptimizer: 変換も最適化も実行も...
+```
+
+#### 2. **明確なインターフェース**
+```rust
+// ✅ エフェクトは単純に
+enum Effect {
+    Pure,       // 副作用なし
+    ReadOnly,   // 読み取りのみ  
+    SideEffect  // 書き込み/IO/例外
+}
+
+// ❌ 複雑な組み合わせは避ける
+PURE.add(IO) // これがpureかどうか分からない！
+```
+
+#### 3. **段階的な処理パイプライン**
+```
+AST → Builder → MIR → Optimizer → VM
+  ↑      ↑       ↑        ↑         ↑
+明確な入力  明確な出力  不変保証  最適化のみ  実行のみ
+```
+
+### 🎯 カプセル化の徹底
+
+#### 1. **内部状態を隠蔽**
+```rust
+// ✅ 良い例：内部実装を隠す
+pub struct MirOptimizer {
+    debug: bool,              // 設定のみ公開
+    enable_typeop_net: bool,  // 設定のみ公開
+    // 内部の複雑な状態は隠蔽
+}
+
+impl MirOptimizer {
+    pub fn new() -> Self { ... }
+    pub fn with_debug(self) -> Self { ... }
+    pub fn optimize(&mut self, module: &mut MirModule) { ... }
+}
+```
+
+#### 2. **変更の局所化**
+- 新機能追加時：1つのモジュールのみ変更
+- バグ修正時：影響範囲が明確
+- テスト：各モジュール独立でテスト可能
+
+### 🌟 美しさの基準
+
+#### 1. **読みやすさ > 賢さ**
+```rust
+// ✅ 単純で分かりやすい
+if effect == Effect::Pure {
+    can_eliminate = true;
+}
+
+// ❌ 賢いが分かりにくい
+can_eliminate = effect.0 & 0x01 == 0x01 && !(effect.0 & 0xFE);
+```
+
+#### 2. **一貫性**
+- 命名規則の統一
+- エラー処理の統一
+- コメントスタイルの統一
+
+### 🚀 大規模化への備え
+
+#### 1. **モジュール分割の原則**
+```
+src/
+├── ast/        # AST定義のみ
+├── parser/     # パース処理のみ
+├── mir/        # MIR定義と基本操作
+│   ├── builder.rs      # AST→MIR変換
+│   └── optimizer.rs    # MIR最適化
+├── backend/    # 実行バックエンド
+│   ├── interpreter.rs  # インタープリター
+│   ├── vm.rs          # VM実行
+│   └── codegen_c.rs   # C言語生成
+```
+
+#### 2. **テストの階層化**
+- 単体テスト：各モジュール内で完結
+- 統合テスト：モジュール間の連携
+- E2Eテスト：全体の動作確認
+
+#### 3. **設定の外部化**
+```rust
+// ✅ フラグで挙動を制御（再コンパイル不要）
+optimizer.enable_typeop_safety_net(flag);
+
+// ❌ ハードコードされた挙動
+#[cfg(feature = "typeop_safety_net")]
+```
+
+### 💡 デバッグとメンテナンス
+
+#### 1. **段階的なデバッグ出力**
+```bash
+NYASH_BUILDER_DEBUG=1   # Builder のみ
+NYASH_OPT_DEBUG=1      # Optimizer のみ
+NYASH_VM_DEBUG=1       # VM のみ
+```
+
+#### 2. **問題の早期発見**
+- 各段階でのアサーション
+- 不変条件の明示的チェック
+- 診断機能の組み込み
+
+### 🎭 複雑さの管理
+
+**複雑さは避けられないが、管理はできる**
+1. 複雑な部分を局所化
+2. インターフェースは単純に
+3. ドキュメントで意図を明示
+
+**判断基準：3ヶ月後の自分が理解できるか？**
+
 ## 🔧 開発サポート
 
 ### 🤖 AI相談

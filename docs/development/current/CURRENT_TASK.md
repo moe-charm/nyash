@@ -45,6 +45,8 @@
 2) Builder適用拡大（短期〜中期）
    - 言語 `is/as` 導線（最小でも擬似ノード）→ `emit_type_check/emit_cast` へ配線
    - 弱参照: 既存の `RefGet/RefSet` パスは弱フィールドで `WeakLoad/WeakNew`＋Barrier（flag ONで統合命令）
+   - 関数スタイル `isType/asType` の早期loweringを強化（`Literal("T")` と `new StringBox("T")` を確実に検出）
+   - `print(isType(...))` の未定義SSA回避（print直前で必ず `TypeOp` のdstを生成）
 
 3) VM/Verifierの補強（中期）
    - `TypeOp(Cast)` の数値キャスト（Int/Float）安全化、誤用時TypeError整備
@@ -56,6 +58,44 @@
 
 5) BoxCall高速化（性能段階）
    - `--vm-stats` ホットパス特定後、Fast-path/キャッシュ適用
+
+## 🐛 既知の問題（要フォロー）
+- 関数スタイル `isType(value, "Integer")` が一部ケースで `TypeOp` にloweringされず、`print %X` が未定義参照になる事象
+  - 現状: `asType` は `typeop cast` に変換されるが、`isType` が欠落するケースあり
+  - 仮対処: Interpreterに `is/isType/as/asType` のフォールバックを実装済（実行エラー回避）
+  - 恒久対処（次回対応）:
+    - Builderの早期loweringをFunctionCall分岐で強化（`Literal`/`StringBox`両対応、`print(...)` 内でも確実にdst生成）
+    - Optimizerの安全ネット（BoxCall/Call→TypeOp）を `isType` パターンでも確実に発火させる（テーブル駆動の判定）
+
+## ⏸️ セッション再開メモ（次にやること）
+- [ ] Builder: `extract_string_literal` の `StringBox`対応は導入済 → `FunctionCall` 早期loweringの再検証（`print(isType(...))` 直下）
+- [ ] Optimizer: `Call` 形式（関数呼び出し）でも `isType/asType` を検出して `TypeOp(Check/Cast)` に置換する安全ネットの強化とテスト
+- [ ] MIRダンプの確認：`local_tests/typeop_is_as_func_poc.nyash` に `typeop check/cast` が両方出ることを確認
+- [ ] スナップショット化：`typeop_is_as_*_poc.nyash` のダンプを固定し回帰検出
+
+## ▶ 補助コマンド（検証系）
+```bash
+# リビルド
+cargo build --release -j32
+
+# 関数スタイルのMIRダンプ確認（isType/asType）
+./target/release/nyash --dump-mir --mir-verbose local_tests/typeop_is_as_func_poc.nyash | sed -n '1,200p'
+
+# メソッドスタイルのMIRダンプ確認（is/as）
+./target/release/nyash --dump-mir --mir-verbose local_tests/typeop_is_as_poc.nyash | sed -n '1,200p'
+```
+
+### 🆕 開発時の可視化・診断（最小追加）
+- `--mir-verbose-effects`: MIRダンプ行末に効果カテゴリを表示（`pure|readonly|side`）
+  - 例: `nyash --dump-mir --mir-verbose --mir-verbose-effects local_tests/typeop_is_as_func_poc.nyash`
+- `NYASH_OPT_DIAG_FAIL=1`: Optimizer診断で未lowering（`is|isType|as|asType`）検知時にエラー終了（CI向け）
+  - 例: `NYASH_OPT_DIAG_FAIL=1 nyash --dump-mir --mir-verbose local_tests/typeop_diag_fail.nyash`
+- Builder生MIRスナップショット: `tools/snapshot_mir.sh <input.nyash> [output.txt]`
+  - 例: `tools/snapshot_mir.sh local_tests/typeop_is_as_func_poc.nyash docs/status/golden/typeop_is_as_func_poc.mir.txt`
+- ゴールデン比較（ローカル/CI）: `tools/ci_check_golden.sh`（代表2ケースを比較）
+  - 例: `./tools/ci_check_golden.sh`（差分があれば非ゼロ終了）
+  
+補足: ASTの形状確認は `--dump-ast` を使用。
 
 ## ▶ 実行コマンド例
 

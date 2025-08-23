@@ -129,7 +129,8 @@ impl EffectMask {
     
     /// Check if the computation is pure (no side effects)
     pub fn is_pure(self) -> bool {
-        self.contains(Effect::Pure) || self.0 == 0
+        // 純粋性は一次カテゴリで判定（Pureビットが立っていてもIO/WRITE/CONTROL等があれば純粋ではない）
+        self.primary_category() == Effect::Pure
     }
     
     /// Check if the computation is mutable (modifies state)
@@ -346,5 +347,9 @@ mod tests {
         let display = format!("{}", read_io);
         assert!(display.contains("read"));
         assert!(display.contains("io"));
+
+        // is_pure should be false when IO is present, even if PURE bit was set initially
+        let mixed = EffectMask::PURE | EffectMask::IO;
+        assert!(!mixed.is_pure());
     }
 }

@@ -42,6 +42,7 @@ pub struct MirCompileResult {
 pub struct MirCompiler {
     builder: MirBuilder,
     verifier: MirVerifier,
+    optimize: bool,
 }
 
 impl MirCompiler {
@@ -50,6 +51,15 @@ impl MirCompiler {
         Self {
             builder: MirBuilder::new(),
             verifier: MirVerifier::new(),
+            optimize: true,
+        }
+    }
+    /// Create with options
+    pub fn with_options(optimize: bool) -> Self {
+        Self {
+            builder: MirBuilder::new(),
+            verifier: MirVerifier::new(),
+            optimize,
         }
     }
     
@@ -58,9 +68,13 @@ impl MirCompiler {
         // Convert AST to MIR using builder
         let mut module = self.builder.build_module(ast)?;
         
-        // Optimize (safety net lowering for is/as → TypeOp 等)
-        let mut optimizer = MirOptimizer::new();
-        let _ = optimizer.optimize_module(&mut module);
+        if self.optimize {
+            let mut optimizer = MirOptimizer::new();
+            let stats = optimizer.optimize_module(&mut module);
+            if std::env::var("NYASH_OPT_DIAG_FAIL").is_ok() && stats.diagnostics_reported > 0 {
+                return Err(format!("Diagnostic failure: {} unlowered type-op calls detected", stats.diagnostics_reported));
+            }
+        }
         
         // Verify the generated MIR
         let verification_result = self.verifier.verify_module(&module);

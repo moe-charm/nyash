@@ -1,0 +1,28 @@
+name: MIR Golden CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-compare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Make tools executable
+        run: chmod +x tools/*.sh
+
+      - name: Compare MIR against golden snapshots
+        run: bash tools/ci_check_golden.sh
+

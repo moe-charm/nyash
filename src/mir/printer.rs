@@ -18,6 +18,9 @@ pub struct MirPrinter {
     
     /// Whether to show line numbers
     show_line_numbers: bool,
+
+    /// Whether to show per-instruction effect category
+    show_effects_inline: bool,
 }
 
 impl MirPrinter {
@@ -27,6 +30,7 @@ impl MirPrinter {
             indent_level: 0,
             verbose: false,
             show_line_numbers: true,
+            show_effects_inline: false,
         }
     }
     
@@ -36,6 +40,7 @@ impl MirPrinter {
             indent_level: 0,
             verbose: true,
             show_line_numbers: true,
+            show_effects_inline: false,
         }
     }
     
@@ -48,6 +53,12 @@ impl MirPrinter {
     /// Set line number display
     pub fn set_show_line_numbers(&mut self, show: bool) -> &mut Self {
         self.show_line_numbers = show;
+        self
+    }
+
+    /// Show per-instruction effect category (pure/readonly/side)
+    pub fn set_show_effects_inline(&mut self, show: bool) -> &mut Self {
+        self.show_effects_inline = show;
         self
     }
     
@@ -127,6 +138,70 @@ impl MirPrinter {
             if stats.is_pure {
                 writeln!(output, "  ;   Pure: yes").unwrap();
             }
+            // Verbose: highlight MIR26-unified ops presence for snapshotting (TypeOp/WeakRef/Barrier)
+            let mut type_check = 0usize;
+            let mut type_cast = 0usize;
+            let mut weak_new = 0usize;
+            let mut weak_load = 0usize;
+            let mut barrier_read = 0usize;
+            let mut barrier_write = 0usize;
+            for block in function.blocks.values() {
+                for inst in &block.instructions {
+                    match inst {
+                        MirInstruction::TypeCheck { .. } => type_check += 1,
+                        MirInstruction::Cast { .. } => type_cast += 1,
+                        MirInstruction::TypeOp { op, .. } => match op {
+                            super::TypeOpKind::Check => type_check += 1,
+                            super::TypeOpKind::Cast => type_cast += 1,
+                        },
+                        MirInstruction::WeakNew { .. } => weak_new += 1,
+                        MirInstruction::WeakLoad { .. } => weak_load += 1,
+                        MirInstruction::WeakRef { op, .. } => match op {
+                            super::WeakRefOp::New => weak_new += 1,
+                            super::WeakRefOp::Load => weak_load += 1,
+                        },
+                        MirInstruction::BarrierRead { .. } => barrier_read += 1,
+                        MirInstruction::BarrierWrite { .. } => barrier_write += 1,
+                        MirInstruction::Barrier { op, .. } => match op {
+                            super::BarrierOp::Read => barrier_read += 1,
+                            super::BarrierOp::Write => barrier_write += 1,
+                        },
+                        _ => {}
+                    }
+                }
+                if let Some(term) = &block.terminator {
+                    match term {
+                        MirInstruction::TypeCheck { .. } => type_check += 1,
+                        MirInstruction::Cast { .. } => type_cast += 1,
+                        MirInstruction::TypeOp { op, .. } => match op {
+                            super::TypeOpKind::Check => type_check += 1,
+                            super::TypeOpKind::Cast => type_cast += 1,
+                        },
+                        MirInstruction::WeakNew { .. } => weak_new += 1,
+                        MirInstruction::WeakLoad { .. } => weak_load += 1,
+                        MirInstruction::WeakRef { op, .. } => match op {
+                            super::WeakRefOp::New => weak_new += 1,
+                            super::WeakRefOp::Load => weak_load += 1,
+                        },
+                        MirInstruction::BarrierRead { .. } => barrier_read += 1,
+                        MirInstruction::BarrierWrite { .. } => barrier_write += 1,
+                        MirInstruction::Barrier { op, .. } => match op {
+                            super::BarrierOp::Read => barrier_read += 1,
+                            super::BarrierOp::Write => barrier_write += 1,
+                        },
+                        _ => {}
+                    }
+                }
+            }
+            if type_check + type_cast > 0 {
+                writeln!(output, "  ;   TypeOp: {} (check: {}, cast: {})", type_check + type_cast, type_check, type_cast).unwrap();
+            }
+            if weak_new + weak_load > 0 {
+                writeln!(output, "  ;   WeakRef: {} (new: {}, load: {})", weak_new + weak_load, weak_new, weak_load).unwrap();
+            }
+            if barrier_read + barrier_write > 0 {
+                writeln!(output, "  ;   Barrier: {} (read: {}, write: {})", barrier_read + barrier_write, barrier_read, barrier_write).unwrap();
+            }
             writeln!(output).unwrap();
         }
         
@@ -174,7 +249,13 @@ impl MirPrinter {
                 write!(output, "    ").unwrap();
             }
             
-            writeln!(output, "{}", self.format_instruction(instruction)).unwrap();
+            let mut line = self.format_instruction(instruction);
+            if self.show_effects_inline {
+                let eff = instruction.effects();
+                let cat = if eff.is_pure() { "pure" } else if eff.is_read_only() { "readonly" } else { "side" };
+                line.push_str(&format!("    ; eff: {}", cat));
+            }
+            writeln!(output, "{}", line).unwrap();
             line_num += 1;
         }
         

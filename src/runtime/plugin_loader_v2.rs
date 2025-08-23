@@ -843,6 +843,20 @@ mod stub {
     use once_cell::sync::Lazy;
     use std::sync::{Arc, RwLock};
 
+    // Stub implementation of PluginBoxV2 for WASM/non-plugin builds
+    #[derive(Debug, Clone)]
+    pub struct PluginBoxV2 {
+        pub box_type: String,
+        pub inner: std::sync::Arc<PluginHandleInner>,
+    }
+
+    #[derive(Debug)]
+    pub struct PluginHandleInner {
+        pub type_id: u32,
+        pub instance_id: u32,
+        pub fini_method_id: Option<u32>,
+    }
+
     pub struct PluginLoaderV2 {
         pub config: Option<()>,  // Dummy config for compatibility
     }

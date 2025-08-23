@@ -113,6 +113,25 @@ impl NyashRunner {
 
     /// Execute file-based mode with backend selection
     fn execute_file_mode(&self, filename: &str) {
+        if self.config.dump_ast {
+            println!("🧠 Nyash AST Dump - Processing file: {}", filename);
+            let code = match fs::read_to_string(filename) {
+                Ok(content) => content,
+                Err(e) => {
+                    eprintln!("❌ Error reading file {}: {}", filename, e);
+                    process::exit(1);
+                }
+            };
+            let ast = match NyashParser::parse_from_string(&code) {
+                Ok(ast) => ast,
+                Err(e) => {
+                    eprintln!("❌ Parse error: {}", e);
+                    process::exit(1);
+                }
+            };
+            println!("{:#?}", ast);
+            return;
+        }
         if self.config.dump_mir || self.config.verify_mir {
             println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             self.execute_mir_mode(filename);
@@ -271,8 +290,8 @@ impl NyashRunner {
             }
         };
 
-        // Compile to MIR
-        let mut mir_compiler = MirCompiler::new();
+        // Compile to MIR (opt passes configurable)
+        let mut mir_compiler = MirCompiler::with_options(!self.config.no_optimize);
         let compile_result = match mir_compiler.compile(ast) {
             Ok(result) => result,
             Err(e) => {
@@ -298,11 +317,8 @@ impl NyashRunner {
 
         // Dump MIR if requested
         if self.config.dump_mir {
-            let printer = if self.config.mir_verbose {
-                MirPrinter::verbose()
-            } else {
-                MirPrinter::new()
-            };
+            let mut printer = if self.config.mir_verbose { MirPrinter::verbose() } else { MirPrinter::new() };
+            if self.config.mir_verbose_effects { printer.set_show_effects_inline(true); }
             
             println!("🚀 MIR Output for {}:", filename);
             println!("{}", printer.print_module(&compile_result.module));
@@ -345,8 +361,8 @@ impl NyashRunner {
             rt
         };
 
-        // Compile to MIR
-        let mut mir_compiler = MirCompiler::new();
+        // Compile to MIR (opt passes configurable)
+        let mut mir_compiler = MirCompiler::with_options(!self.config.no_optimize);
         let compile_result = match mir_compiler.compile(ast) {
             Ok(result) => result,
             Err(e) => {

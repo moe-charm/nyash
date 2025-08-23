@@ -31,6 +31,7 @@ impl MirOptimizer {
         self
     }
     
+    
     /// Run all optimization passes on a MIR module
     pub fn optimize_module(&mut self, module: &mut MirModule) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
@@ -51,8 +52,7 @@ impl MirOptimizer {
         // Pass 4: Intrinsic function optimization
         stats.merge(self.optimize_intrinsic_calls(module));
 
-        // Pass 4.5: Lower well-known intrinsics (is/as → TypeOp) as a safety net
-        stats.merge(self.lower_type_ops(module));
+        // Safety-net passesは削除（Phase 2: 変換の一本化）。診断のみ後段で実施。
         
         // Pass 5: BoxField dependency optimization
         stats.merge(self.optimize_boxfield_operations(module));
@@ -60,6 +60,9 @@ impl MirOptimizer {
         if self.debug {
             println!("✅ Optimization complete: {}", stats);
         }
+        // Diagnostics (informational): report unlowered patterns
+        let diag = self.diagnose_unlowered_type_ops(module);
+        stats.merge(diag);
         
         stats
     }
@@ -128,11 +131,12 @@ impl MirOptimizer {
         
         // Remove unused pure instructions
         let mut eliminated = 0;
-        for (_, block) in &mut function.blocks {
+        for (bbid, block) in &mut function.blocks {
             block.instructions.retain(|instruction| {
                 if instruction.effects().is_pure() {
                     if let Some(dst) = instruction.dst_value() {
                         if !used_values.contains(&dst) {
+                            opt_debug(&format!("DCE drop @{}: {:?}", bbid.as_u32(), instruction));
                             eliminated += 1;
                             return false;
                         }
@@ -258,101 +262,6 @@ impl MirOptimizer {
         0
     }
 
-    /// Safety-net lowering: convert known is/as patterns into TypeOp when possible
-    fn lower_type_ops(&mut self, module: &mut MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
-        for (_name, function) in &mut module.functions {
-            stats.intrinsic_optimizations += self.lower_type_ops_in_function(function);
-        }
-        stats
-    }
-
-    fn lower_type_ops_in_function(&mut self, function: &mut MirFunction) -> usize {
-        // Build a simple definition map: ValueId -> (block_id, index)
-        let mut def_map: std::collections::HashMap<ValueId, (super::basic_block::BasicBlockId, usize)> = std::collections::HashMap::new();
-        for (bb_id, block) in &function.blocks {
-            for (i, inst) in block.instructions.iter().enumerate() {
-                if let Some(dst) = inst.dst_value() {
-                    def_map.insert(dst, (*bb_id, i));
-                }
-            }
-            if let Some(term) = &block.terminator {
-                if let Some(dst) = term.dst_value() {
-                    def_map.insert(dst, (*bb_id, usize::MAX));
-                }
-            }
-        }
-
-        let mut lowered = 0;
-        
-        // Collect replacements first to avoid borrow checker issues
-        let mut replacements: Vec<(super::basic_block::BasicBlockId, usize, MirInstruction)> = Vec::new();
-        
-        // First pass: identify replacements
-        for (bb_id, block) in &function.blocks {
-            for i in 0..block.instructions.len() {
-                let replace = match &block.instructions[i] {
-                    MirInstruction::BoxCall { dst, box_val, method, args, .. } => {
-                        let is_is = method == "is" || method == "isType";
-                        let is_as = method == "as" || method == "asType";
-                        if (is_is || is_as) && args.len() == 1 {
-                            // Try to resolve type name from arg
-                            let arg_id = args[0];
-                            if let Some((def_bb, def_idx)) = def_map.get(&arg_id).copied() {
-                                // Look for pattern: NewBox StringBox(Const String)
-                                if let Some(def_block) = function.blocks.get(&def_bb) {
-                                    if def_idx < def_block.instructions.len() {
-                                        if let MirInstruction::NewBox { box_type, args: sb_args, .. } = &def_block.instructions[def_idx] {
-                                            if box_type == "StringBox" && sb_args.len() == 1 {
-                                                let str_id = sb_args[0];
-                                                if let Some((sbb, sidx)) = def_map.get(&str_id).copied() {
-                                                    if let Some(sblock) = function.blocks.get(&sbb) {
-                                                        if sidx < sblock.instructions.len() {
-                                                            if let MirInstruction::Const { value, .. } = &sblock.instructions[sidx] {
-                                                                if let super::instruction::ConstValue::String(s) = value {
-                                                                    // Build TypeOp to replace
-                                                                    let ty = map_type_name(s);
-                                                                    let op = if is_is { TypeOpKind::Check } else { TypeOpKind::Cast };
-                                                                    let new_inst = MirInstruction::TypeOp {
-                                                                        dst: dst.unwrap_or(*box_val),
-                                                                        op,
-                                                                        value: *box_val,
-                                                                        ty,
-                                                                    };
-                                                                    Some(new_inst)
-                                                                } else { None }
-                                                            } else { None }
-                                                        } else { None }
-                                                    } else { None }
-                                                } else { None }
-                                            } else { None }
-                                        } else { None }
-                                    } else { None }
-                                } else { None }
-                            } else { None }
-                        } else { None }
-                    }
-                    _ => None,
-                };
-
-                if let Some(new_inst) = replace {
-                    replacements.push((*bb_id, i, new_inst));
-                }
-            }
-        }
-        
-        // Second pass: apply replacements
-        for (bb_id, idx, new_inst) in replacements {
-            if let Some(block) = function.blocks.get_mut(&bb_id) {
-                if idx < block.instructions.len() {
-                    block.instructions[idx] = new_inst;
-                    lowered += 1;
-                }
-            }
-        }
-        
-        lowered
-    }
     
     /// Optimize BoxField operations
     fn optimize_boxfield_operations(&mut self, module: &mut MirModule) -> OptimizationStats {
@@ -392,6 +301,44 @@ fn map_type_name(name: &str) -> MirType {
     }
 }
 
+fn opt_debug_enabled() -> bool { std::env::var("NYASH_OPT_DEBUG").is_ok() }
+fn opt_debug(msg: &str) { if opt_debug_enabled() { eprintln!("[OPT] {}", msg); } }
+
+/// Resolve a MIR type from a value id that should represent a type name
+/// Supports: Const String("T") and NewBox(StringBox, Const String("T"))
+fn resolve_type_from_value(
+    function: &MirFunction,
+    def_map: &std::collections::HashMap<ValueId, (super::basic_block::BasicBlockId, usize)>,
+    id: ValueId,
+) -> Option<MirType> {
+    use super::instruction::ConstValue;
+    if let Some((bb, idx)) = def_map.get(&id).copied() {
+        if let Some(block) = function.blocks.get(&bb) {
+            if idx < block.instructions.len() {
+                match &block.instructions[idx] {
+                    MirInstruction::Const { value: ConstValue::String(s), .. } => {
+                        return Some(map_type_name(s));
+                    }
+                    MirInstruction::NewBox { box_type, args, .. } if box_type == "StringBox" && args.len() == 1 => {
+                        let inner = args[0];
+                        if let Some((sbb, sidx)) = def_map.get(&inner).copied() {
+                            if let Some(sblock) = function.blocks.get(&sbb) {
+                                if sidx < sblock.instructions.len() {
+                                    if let MirInstruction::Const { value: ConstValue::String(s), .. } = &sblock.instructions[sidx] {
+                                        return Some(map_type_name(s));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
+}
+
 impl Default for MirOptimizer {
     fn default() -> Self {
         Self::new()
@@ -406,6 +353,7 @@ pub struct OptimizationStats {
     pub reorderings: usize,
     pub intrinsic_optimizations: usize,
     pub boxfield_optimizations: usize,
+    pub diagnostics_reported: usize,
 }
 
 impl OptimizationStats {
@@ -419,6 +367,7 @@ impl OptimizationStats {
         self.reorderings += other.reorderings;
         self.intrinsic_optimizations += other.intrinsic_optimizations;
         self.boxfield_optimizations += other.boxfield_optimizations;
+        self.diagnostics_reported += other.diagnostics_reported;
     }
     
     pub fn total_optimizations(&self) -> usize {
@@ -438,6 +387,51 @@ impl std::fmt::Display for OptimizationStats {
             self.boxfield_optimizations,
             self.total_optimizations()
         )
+    }
+}
+
+impl MirOptimizer {
+    /// Diagnostic: detect unlowered is/as/isType/asType after Builder
+    fn diagnose_unlowered_type_ops(&mut self, module: &MirModule) -> OptimizationStats {
+        let mut stats = OptimizationStats::new();
+        let diag_on = self.debug || std::env::var("NYASH_OPT_DIAG").is_ok();
+        for (fname, function) in &module.functions {
+            // def map for resolving constants
+            let mut def_map: std::collections::HashMap<ValueId, (super::basic_block::BasicBlockId, usize)> = std::collections::HashMap::new();
+            for (bb_id, block) in &function.blocks {
+                for (i, inst) in block.instructions.iter().enumerate() {
+                    if let Some(dst) = inst.dst_value() { def_map.insert(dst, (*bb_id, i)); }
+                }
+                if let Some(term) = &block.terminator { if let Some(dst) = term.dst_value() { def_map.insert(dst, (*bb_id, usize::MAX)); } }
+            }
+            let mut count = 0usize;
+            for (_bb, block) in &function.blocks {
+                for inst in &block.instructions {
+                    match inst {
+                        MirInstruction::BoxCall { method, .. } if method == "is" || method == "as" || method == "isType" || method == "asType" => { count += 1; }
+                        MirInstruction::Call { func, .. } => {
+                            if let Some((bb, idx)) = def_map.get(func).copied() {
+                                if let Some(b) = function.blocks.get(&bb) {
+                                    if idx < b.instructions.len() {
+                                        if let MirInstruction::Const { value: super::instruction::ConstValue::String(s), .. } = &b.instructions[idx] {
+                                            if s == "isType" || s == "asType" { count += 1; }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            if count > 0 {
+                stats.diagnostics_reported += count;
+                if diag_on {
+                    eprintln!("[OPT][DIAG] Function '{}' has {} unlowered type-op calls", fname, count);
+                }
+            }
+        }
+        stats
     }
 }
 
@@ -488,5 +482,37 @@ mod tests {
         let key = optimizer.instruction_to_key(&const_instr);
         assert!(key.contains("const"));
         assert!(key.contains("42"));
+    }
+
+    #[test]
+    fn test_dce_does_not_drop_typeop_used_by_print() {
+        // Build a simple function: %v=TypeOp(check); print %v; ensure TypeOp remains after optimize
+        let signature = FunctionSignature {
+            name: "main".to_string(),
+            params: vec![],
+            return_type: MirType::Void,
+            effects: super::super::effect::EffectMask::PURE,
+        };
+        let mut func = MirFunction::new(signature, BasicBlockId::new(0));
+        let bb0 = BasicBlockId::new(0);
+        let mut b0 = BasicBlock::new(bb0);
+        let v0 = ValueId::new(0);
+        let v1 = ValueId::new(1);
+        b0.add_instruction(MirInstruction::NewBox { dst: v0, box_type: "IntegerBox".to_string(), args: vec![] });
+        b0.add_instruction(MirInstruction::TypeOp { dst: v1, op: TypeOpKind::Check, value: v0, ty: MirType::Integer });
+        b0.add_instruction(MirInstruction::Print { value: v1, effects: super::super::effect::EffectMask::IO });
+        b0.add_instruction(MirInstruction::Return { value: None });
+        func.add_block(b0);
+        let mut module = MirModule::new("test".to_string());
+        module.add_function(func);
+
+        let mut opt = MirOptimizer::new();
+        let _stats = opt.optimize_module(&mut module);
+
+        // Ensure TypeOp remains in bb0
+        let f = module.get_function("main").unwrap();
+        let block = f.get_block(&bb0).unwrap();
+        let has_typeop = block.all_instructions().any(|i| matches!(i, MirInstruction::TypeOp { .. }));
+        assert!(has_typeop, "TypeOp should not be dropped by DCE when used by print");
     }
 }

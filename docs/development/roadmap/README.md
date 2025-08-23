@@ -45,6 +45,8 @@
 - AOT WASMネイティブ化
 - MIR最適化基盤
 - エスケープ解析実装
+- MIR/Builder/Optimizer簡略化計画（責務分離・効果正規化・可視化）
+  - [Phase 8.x: MIRパイプライン簡略化計画](phases/phase-8/phase_8_x_mir_pipeline_simplification.md)
 
 ## 📚 関連ドキュメント
 

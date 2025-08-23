@@ -12,9 +12,12 @@ use clap::{Arg, Command, ArgMatches};
 pub struct CliConfig {
     pub file: Option<String>,
     pub debug_fuel: Option<usize>,
+    pub dump_ast: bool,
     pub dump_mir: bool,
     pub verify_mir: bool,
     pub mir_verbose: bool,
+    pub mir_verbose_effects: bool,
+    pub no_optimize: bool,
     pub backend: String,
     pub compile_wasm: bool,
     pub compile_native: bool,
@@ -52,6 +55,12 @@ impl CliConfig {
                     .default_value("100000")
             )
             .arg(
+                Arg::new("dump-ast")
+                    .long("dump-ast")
+                    .help("Dump parsed AST and exit")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
                 Arg::new("dump-mir")
                     .long("dump-mir")
                     .help("Dump MIR (Mid-level Intermediate Representation) instead of executing")
@@ -67,6 +76,18 @@ impl CliConfig {
                 Arg::new("mir-verbose")
                     .long("mir-verbose")
                     .help("Show verbose MIR output with statistics")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("mir-verbose-effects")
+                    .long("mir-verbose-effects")
+                    .help("Show per-instruction effect category (pure/readonly/side)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("no-optimize")
+                    .long("no-optimize")
+                    .help("Disable MIR optimizer passes (dump raw Builder MIR)")
                     .action(clap::ArgAction::SetTrue)
             )
             .arg(
@@ -133,9 +154,12 @@ impl CliConfig {
         Self {
             file: matches.get_one::<String>("file").cloned(),
             debug_fuel: parse_debug_fuel(matches.get_one::<String>("debug-fuel").unwrap()),
+            dump_ast: matches.get_flag("dump-ast"),
             dump_mir: matches.get_flag("dump-mir"),
             verify_mir: matches.get_flag("verify"),
             mir_verbose: matches.get_flag("mir-verbose"),
+            mir_verbose_effects: matches.get_flag("mir-verbose-effects"),
+            no_optimize: matches.get_flag("no-optimize"),
             backend: matches.get_one::<String>("backend").unwrap().clone(),
             compile_wasm: matches.get_flag("compile-wasm"),
             compile_native: matches.get_flag("compile-native") || matches.get_flag("aot"),

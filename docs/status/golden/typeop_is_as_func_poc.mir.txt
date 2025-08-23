@@ -1,0 +1,34 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: local_tests/typeop_is_as_func_poc.nyash 🚀
+🚀 MIR Output for local_tests/typeop_is_as_func_poc.nyash:
+; MIR Module: main
+
+; Module Statistics:
+;   Functions: 1
+;   Globals: 0
+;   Total Blocks: 1
+;   Total Instructions: 9
+;   Pure Functions: 1
+
+define void @main() {
+  ; Function Statistics:
+  ;   Blocks: 1
+  ;   Instructions: 9
+  ;   Values: 0
+  ;   Phi Functions: 0
+  ;   Pure: yes
+  ;   TypeOp: 2 (check: 1, cast: 1)
+
+bb0:
+    0: safepoint
+    1: %1 = const 42
+    2: %2 = new IntegerBox(%1)
+    3: call %2.birth(%1)
+    4: %3 = typeop check %2 Integer
+    5: print %3
+    6: %4 = typeop cast %2 Integer
+    7: print %4
+    8: ret %4
+    ; effects: pure|io|read|alloc
+}

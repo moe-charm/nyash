@@ -13,6 +13,16 @@ use crate::ast::{ASTNode, LiteralValue, BinaryOperator};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+fn builder_debug_enabled() -> bool {
+    std::env::var("NYASH_BUILDER_DEBUG").is_ok()
+}
+
+fn builder_debug_log(msg: &str) {
+    if builder_debug_enabled() {
+        eprintln!("[BUILDER] {}", msg);
+    }
+}
+
 /// MIR builder for converting AST to SSA form
 pub struct MirBuilder {
     /// Current module being built
@@ -606,25 +616,46 @@ impl MirBuilder {
     
     /// Build print statement - converts to console output
     fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
-        // Early lowering for print(isType(...)) / print(asType(...)) to avoid undefined SSA when optimizations run
-        if let ASTNode::FunctionCall { name, arguments, .. } = &expression {
-            if (name == "isType" || name == "asType") && arguments.len() == 2 {
+        builder_debug_log("enter build_print_statement");
+        // 根治: print(isType(...)) / print(asType(...)) / print(obj.is(...)) / print(obj.as(...)) は必ずTypeOpを先に生成してからprintする
+        match &expression {
+            ASTNode::FunctionCall { name, arguments, .. } if (name == "isType" || name == "asType") && arguments.len() == 2 => {
+                builder_debug_log("pattern: print(FunctionCall isType|asType)");
                 if let Some(type_name) = Self::extract_string_literal(&arguments[1]) {
+                    builder_debug_log(&format!("extract_string_literal OK: {}", type_name));
                     let val = self.build_expression(arguments[0].clone())?;
                     let ty = Self::parse_type_name_to_mir(&type_name);
                     let dst = self.value_gen.next();
                     let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                    builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
-                    self.emit_instruction(MirInstruction::Print {
-                        value: dst,
-                        effects: EffectMask::PURE.add(Effect::Io),
-                    })?;
+                    self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;
                     return Ok(dst);
+                } else {
+                    builder_debug_log("extract_string_literal FAIL");
                 }
             }
+            ASTNode::MethodCall { object, method, arguments, .. } if (method == "is" || method == "as") && arguments.len() == 1 => {
+                builder_debug_log("pattern: print(MethodCall is|as)");
+                if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
+                    builder_debug_log(&format!("extract_string_literal OK: {}", type_name));
+                    let obj_val = self.build_expression(*object.clone())?;
+                    let ty = Self::parse_type_name_to_mir(&type_name);
+                    let dst = self.value_gen.next();
+                    let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                    builder_debug_log(&format!("emit TypeOp {:?} obj={} dst= {}", op, obj_val, dst));
+                    self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
+                    self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;
+                    return Ok(dst);
+                } else {
+                    builder_debug_log("extract_string_literal FAIL");
+                }
+            }
+            _ => {}
         }
 
         let value = self.build_expression(expression)?;
+        builder_debug_log(&format!("fallback print value={}", value));
         
         // For now, use a special Print instruction (minimal scope)
         self.emit_instruction(MirInstruction::Print {
@@ -746,6 +777,19 @@ impl MirBuilder {
         
         if let Some(ref mut function) = self.current_function {
             if let Some(block) = function.get_block_mut(block_id) {
+                if builder_debug_enabled() {
+                    eprintln!("[BUILDER] emit @bb{} -> {}", block_id, match &instruction {
+                        MirInstruction::TypeOp { dst, op, value, ty } => format!("typeop {:?} {} {:?} -> {}", op, value, ty, dst),
+                        MirInstruction::Print { value, .. } => format!("print {}", value),
+                        MirInstruction::BoxCall { box_val, method, args, dst, .. } => format!("boxcall {}.{}({:?}) -> {:?}", box_val, method, args, dst),
+                        MirInstruction::Call { func, args, dst, .. } => format!("call {}({:?}) -> {:?}", func, args, dst),
+                        MirInstruction::NewBox { dst, box_type, args } => format!("new {}({:?}) -> {}", box_type, args, dst),
+                        MirInstruction::Const { dst, value } => format!("const {:?} -> {}", value, dst),
+                        MirInstruction::Branch { condition, then_bb, else_bb } => format!("br {}, {}, {}", condition, then_bb, else_bb),
+                        MirInstruction::Jump { target } => format!("br {}", target),
+                        _ => format!("{:?}", instruction),
+                    });
+                }
                 block.add_instruction(instruction);
                 Ok(())
             } else {
@@ -1178,11 +1222,11 @@ impl MirBuilder {
     fn build_method_call(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // Minimal TypeOp wiring via method-style syntax: value.is("Type") / value.as("Type")
         if (method == "is" || method == "as") && arguments.len() == 1 {
-            if let ASTNode::Literal { value: crate::ast::LiteralValue::String(type_name), .. } = &arguments[0] {
+            if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
                 // Build the object expression
                 let object_value = self.build_expression(object.clone())?;
                 // Map string to MIR type
-                let mir_ty = Self::parse_type_name_to_mir(type_name);
+                let mir_ty = Self::parse_type_name_to_mir(&type_name);
                 let dst = self.value_gen.next();
                 let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
                 self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
@@ -1230,8 +1274,8 @@ impl MirBuilder {
 
         // Secondary interception for is/as in case early path did not trigger
         if (method == "is" || method == "as") && arguments.len() == 1 {
-            if let ASTNode::Literal { value: crate::ast::LiteralValue::String(type_name), .. } = &arguments[0] {
-                let mir_ty = Self::parse_type_name_to_mir(type_name);
+            if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
+                let mir_ty = Self::parse_type_name_to_mir(&type_name);
                 let dst = self.value_gen.next();
                 let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
                 self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
@@ -1318,17 +1362,16 @@ impl MirBuilder {
     /// Extract string literal from AST node if possible
     /// Supports: Literal("Type") and new StringBox("Type")
     fn extract_string_literal(node: &ASTNode) -> Option<String> {
-        match node {
-            ASTNode::Literal { value: crate::ast::LiteralValue::String(s), .. } => Some(s.clone()),
-            ASTNode::New { class, arguments, .. } if class == "StringBox" => {
-                if arguments.len() == 1 {
-                    if let ASTNode::Literal { value: crate::ast::LiteralValue::String(s), .. } = &arguments[0] {
-                        return Some(s.clone());
-                    }
+        let mut cur = node;
+        loop {
+            match cur {
+                ASTNode::Literal { value: crate::ast::LiteralValue::String(s), .. } => return Some(s.clone()),
+                ASTNode::New { class, arguments, .. } if class == "StringBox" && arguments.len() == 1 => {
+                    cur = &arguments[0];
+                    continue;
                 }
-                None
+                _ => return None,
             }
-            _ => None,
         }
     }
     
