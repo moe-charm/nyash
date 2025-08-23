@@ -122,6 +122,18 @@ impl VMValue {
         match self {
             VMValue::Bool(b) => Ok(*b),
             VMValue::Integer(i) => Ok(*i != 0),
+            // Pragmatic coercions for dynamic boxes
+            VMValue::BoxRef(b) => {
+                // BoolBox → bool
+                if let Some(bb) = b.as_any().downcast_ref::<BoolBox>() {
+                    return Ok(bb.value);
+                }
+                // VoidBox → false (nullish false)
+                if b.as_any().downcast_ref::<VoidBox>().is_some() {
+                    return Ok(false);
+                }
+                Err(VMError::TypeError(format!("Expected bool, got BoxRef({})", b.type_name())))
+            }
             _ => Err(VMError::TypeError(format!("Expected bool, got {:?}", self))),
         }
     }
@@ -959,6 +971,22 @@ impl VM {
                 }
             },
             
+            // String + BoxRef concatenation
+            (VMValue::String(l), VMValue::BoxRef(r)) => {
+                match op {
+                    BinaryOp::Add => Ok(VMValue::String(format!("{}{}", l, r.to_string_box().value))),
+                    _ => Err(VMError::TypeError("String-BoxRef operations only support addition".to_string())),
+                }
+            },
+            
+            // BoxRef + String concatenation  
+            (VMValue::BoxRef(l), VMValue::String(r)) => {
+                match op {
+                    BinaryOp::Add => Ok(VMValue::String(format!("{}{}", l.to_string_box().value, r))),
+                    _ => Err(VMError::TypeError("BoxRef-String operations only support addition".to_string())),
+                }
+            },
+            
             _ => Err(VMError::TypeError(format!("Unsupported binary operation: {:?} on {:?} and {:?}", op, left, right))),
         }
     }
@@ -975,6 +1003,34 @@ impl VM {
     /// Execute comparison operation
     fn execute_compare_op(&self, op: &CompareOp, left: &VMValue, right: &VMValue) -> Result<bool, VMError> {
         match (left, right) {
+            // Bool comparisons: support Eq/Ne only for now
+            (VMValue::Bool(l), VMValue::Bool(r)) => {
+                let result = match op {
+                    CompareOp::Eq => l == r,
+                    CompareOp::Ne => l != r,
+                    _ => return Err(VMError::TypeError(format!("Unsupported boolean comparison: {:?}", op))),
+                };
+                Ok(result)
+            },
+
+            // Void comparisons: only Eq/Ne are defined
+            (VMValue::Void, VMValue::Void) => {
+                let result = match op {
+                    CompareOp::Eq => true,
+                    CompareOp::Ne => false,
+                    _ => return Err(VMError::TypeError("Cannot order Void".to_string())),
+                };
+                Ok(result)
+            },
+            (VMValue::Void, _) | (_, VMValue::Void) => {
+                let result = match op {
+                    CompareOp::Eq => false, // void == X (X != void) is false
+                    CompareOp::Ne => true,  // void != X is true
+                    _ => return Err(VMError::TypeError("Cannot order Void".to_string())),
+                };
+                Ok(result)
+            },
+
             (VMValue::Integer(l), VMValue::Integer(r)) => {
                 let result = match op {
                     CompareOp::Eq => l == r,
@@ -1099,7 +1155,7 @@ impl VM {
         // For now, implement basic methods for common box types
         // This is a simplified version - real implementation would need full method dispatch
 
-        // ResultBox (NyashResultBox) methods
+        // ResultBox (NyashResultBox - new)
         if let Some(result_box) = box_value.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
             match method {
                 // Rust側の公開APIメソッド名に合わせたバリアントを許容
@@ -1111,6 +1167,22 @@ impl VM {
                 }
                 "get_error" | "getError" => {
                     return Ok(result_box.get_error());
+                }
+                _ => return Ok(Box::new(VoidBox::new())),
+            }
+        }
+
+        // ResultBox (box_trait::ResultBox - legacy)
+        if let Some(result_box_legacy) = box_value.as_any().downcast_ref::<crate::box_trait::ResultBox>() {
+            match method {
+                "is_ok" | "isOk" => {
+                    return Ok(result_box_legacy.is_ok());
+                }
+                "get_value" | "getValue" => {
+                    return Ok(result_box_legacy.get_value());
+                }
+                "get_error" | "getError" => {
+                    return Ok(result_box_legacy.get_error());
                 }
                 _ => return Ok(Box::new(VoidBox::new())),
             }
@@ -1228,6 +1300,19 @@ impl VM {
                 },
                 _ => return Ok(Box::new(VoidBox::new())), // Unsupported method
             }
+        }
+        
+        // PluginBoxV2 support
+        if let Some(plugin_box) = box_value.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+            // For toString on plugins, return a descriptive string
+            if method == "toString" {
+                return Ok(Box::new(StringBox::new(format!("{}(id={})", plugin_box.box_type, plugin_box.inner.instance_id))));
+            }
+            
+            // Other plugin methods should be called via BoxCall instruction
+            // This path shouldn't normally be reached for plugin methods
+            eprintln!("Warning: Plugin method '{}' called via call_box_method - should use BoxCall", method);
+            return Ok(Box::new(VoidBox::new()));
         }
         
         // Default: return void for any unrecognized box type or method
