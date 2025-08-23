@@ -43,6 +43,12 @@ pub struct MirBuilder {
 
     /// Names of user-defined boxes declared in the current module
     pub(super) user_defined_boxes: HashSet<String>,
+
+    /// Weak field registry: BoxName -> {weak field names}
+    pub(super) weak_fields_by_box: HashMap<String, HashSet<String>>,
+
+    /// Remember class of object fields after assignments: (base_id, field) -> class_name
+    pub(super) field_origin_class: HashMap<(ValueId, String), String>,
 }
 
 impl MirBuilder {
@@ -58,6 +64,8 @@ impl MirBuilder {
             pending_phis: Vec::new(),
             value_origin_newbox: HashMap::new(),
             user_defined_boxes: HashSet::new(),
+            weak_fields_by_box: HashMap::new(),
+            field_origin_class: HashMap::new(),
         }
     }
 
@@ -203,6 +211,8 @@ impl MirBuilder {
             let me_id = self.value_gen.next();
             f.params.push(me_id);
             self.variable_map.insert("me".to_string(), me_id);
+            // Record origin: 'me' belongs to this box type (enables weak field wiring)
+            self.value_origin_newbox.insert(me_id, box_name.clone());
             // user parameters continue as %1..N
             for p in &params {
                 let pid = self.value_gen.next();
@@ -318,6 +328,17 @@ impl MirBuilder {
             },
             
             ASTNode::MethodCall { object, method, arguments, .. } => {
+                // Early TypeOp lowering for method-style is()/as()
+                if (method == "is" || method == "as") && arguments.len() == 1 {
+                    if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
+                        let obj_val = self.build_expression(*object.clone())?;
+                        let ty = Self::parse_type_name_to_mir(&type_name);
+                        let dst = self.value_gen.next();
+                        let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                        self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
+                        return Ok(dst);
+                    }
+                }
                 self.build_method_call(*object.clone(), method.clone(), arguments.clone())
             },
             
@@ -338,6 +359,17 @@ impl MirBuilder {
             },
             
             ASTNode::FunctionCall { name, arguments, .. } => {
+                // Early TypeOp lowering for function-style isType()/asType()
+                if (name == "isType" || name == "asType") && arguments.len() == 2 {
+                    if let Some(type_name) = Self::extract_string_literal(&arguments[1]) {
+                        let val = self.build_expression(arguments[0].clone())?;
+                        let ty = Self::parse_type_name_to_mir(&type_name);
+                        let dst = self.value_gen.next();
+                        let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                        self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                        return Ok(dst);
+                    }
+                }
                 self.build_function_call(name.clone(), arguments.clone())
             },
             
@@ -389,14 +421,14 @@ impl MirBuilder {
                 self.build_local_statement(variables.clone(), initial_values.clone())
             },
             
-            ASTNode::BoxDeclaration { name, methods, is_static, fields, constructors, .. } => {
+            ASTNode::BoxDeclaration { name, methods, is_static, fields, constructors, weak_fields, .. } => {
                 if is_static && name == "Main" {
                     self.build_static_main_box(methods.clone())
                 } else {
                     // Support user-defined boxes - handle as statement, return void
                     // Track as user-defined (eligible for method lowering)
                     self.user_defined_boxes.insert(name.clone());
-                    self.build_box_declaration(name.clone(), methods.clone(), fields.clone())?;
+                    self.build_box_declaration(name.clone(), methods.clone(), fields.clone(), weak_fields.clone())?;
 
                     // Phase 2: Lower constructors (birth/N) into MIR functions
                     // Function name pattern: "{BoxName}.{constructor_key}" (e.g., "Person.birth/1")
@@ -535,6 +567,17 @@ impl MirBuilder {
     
     /// Build function call
     fn build_function_call(&mut self, name: String, args: Vec<ASTNode>) -> Result<ValueId, String> {
+        // Minimal TypeOp wiring via function-style: isType(value, "Type"), asType(value, "Type")
+        if (name == "isType" || name == "asType") && args.len() == 2 {
+            if let Some(type_name) = Self::extract_string_literal(&args[1]) {
+                let val = self.build_expression(args[0].clone())?;
+                let ty = Self::parse_type_name_to_mir(&type_name);
+                let dst = self.value_gen.next();
+                let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                return Ok(dst);
+            }
+        }
         // Build argument values
         let mut arg_values = Vec::new();
         for arg in args {
@@ -563,6 +606,24 @@ impl MirBuilder {
     
     /// Build print statement - converts to console output
     fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+        // Early lowering for print(isType(...)) / print(asType(...)) to avoid undefined SSA when optimizations run
+        if let ASTNode::FunctionCall { name, arguments, .. } = &expression {
+            if (name == "isType" || name == "asType") && arguments.len() == 2 {
+                if let Some(type_name) = Self::extract_string_literal(&arguments[1]) {
+                    let val = self.build_expression(arguments[0].clone())?;
+                    let ty = Self::parse_type_name_to_mir(&type_name);
+                    let dst = self.value_gen.next();
+                    let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                    self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                    self.emit_instruction(MirInstruction::Print {
+                        value: dst,
+                        effects: EffectMask::PURE.add(Effect::Io),
+                    })?;
+                    return Ok(dst);
+                }
+            }
+        }
+
         let value = self.build_expression(expression)?;
         
         // For now, use a special Print instruction (minimal scope)
@@ -885,18 +946,51 @@ impl MirBuilder {
     
     /// Build field access: object.field
     fn build_field_access(&mut self, object: ASTNode, field: String) -> Result<ValueId, String> {
+        // Clone the object before building expression if we need to check it later
+        let object_clone = object.clone();
+        
         // First, build the object expression to get its ValueId
         let object_value = self.build_expression(object)?;
-        
+
         // Get the field from the object using RefGet
-        let result_id = self.value_gen.next();
+        let field_val = self.value_gen.next();
         self.emit_instruction(MirInstruction::RefGet {
-            dst: result_id,
+            dst: field_val,
             reference: object_value,
-            field,
+            field: field.clone(),
         })?;
-        
-        Ok(result_id)
+
+        // If we recorded origin class for this field on this base object, propagate it to this value id
+        if let Some(class_name) = self.field_origin_class.get(&(object_value, field.clone())).cloned() {
+            self.value_origin_newbox.insert(field_val, class_name);
+        }
+
+        // If we can infer the box type and the field is weak, emit WeakLoad (+ optional barrier)
+        let mut inferred_class: Option<String> = self.value_origin_newbox.get(&object_value).cloned();
+        // Fallback: if the object is a nested field access like (X.Y).Z, consult recorded field origins for X.Y
+        if inferred_class.is_none() {
+            if let ASTNode::FieldAccess { object: inner_obj, field: ref parent_field, .. } = object_clone {
+                // Build inner base to get a stable id and consult mapping
+                if let Ok(base_id) = self.build_expression(*inner_obj.clone()) {
+                    if let Some(cls) = self.field_origin_class.get(&(base_id, parent_field.clone())) {
+                        inferred_class = Some(cls.clone());
+                    }
+                }
+            }
+        }
+        if let Some(class_name) = inferred_class {
+            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
+                if weak_set.contains(&field) {
+                    // Barrier (read) PoC
+                    let _ = self.emit_barrier_read(field_val);
+                    // WeakLoad
+                    let loaded = self.emit_weak_load(field_val)?;
+                    return Ok(loaded);
+                }
+            }
+        }
+
+        Ok(field_val)
     }
     
     /// Build new expression: new ClassName(arguments)
@@ -941,15 +1035,38 @@ impl MirBuilder {
     fn build_field_assignment(&mut self, object: ASTNode, field: String, value: ASTNode) -> Result<ValueId, String> {
         // Build the object and value expressions
         let object_value = self.build_expression(object)?;
-        let value_result = self.build_expression(value)?;
-        
+        let mut value_result = self.build_expression(value)?;
+
+        // If we can infer the box type and the field is weak, create WeakRef before store
+        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
+                if weak_set.contains(&field) {
+                    value_result = self.emit_weak_new(value_result)?;
+                }
+            }
+        }
+
         // Set the field using RefSet
         self.emit_instruction(MirInstruction::RefSet {
             reference: object_value,
-            field,
+            field: field.clone(),
             value: value_result,
         })?;
-        
+
+        // Emit a write barrier for weak fields (PoC)
+        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
+                if weak_set.contains(&field) {
+                    let _ = self.emit_barrier_write(value_result);
+                }
+            }
+        }
+
+        // Record origin class for this field (if the value originates from NewBox of a known class)
+        if let Some(class_name) = self.value_origin_newbox.get(&value_result).cloned() {
+            self.field_origin_class.insert((object_value, field.clone()), class_name);
+        }
+
         // Return the assigned value
         Ok(value_result)
     }
@@ -1059,6 +1176,19 @@ impl MirBuilder {
     
     /// Build method call: object.method(arguments)
     fn build_method_call(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+        // Minimal TypeOp wiring via method-style syntax: value.is("Type") / value.as("Type")
+        if (method == "is" || method == "as") && arguments.len() == 1 {
+            if let ASTNode::Literal { value: crate::ast::LiteralValue::String(type_name), .. } = &arguments[0] {
+                // Build the object expression
+                let object_value = self.build_expression(object.clone())?;
+                // Map string to MIR type
+                let mir_ty = Self::parse_type_name_to_mir(type_name);
+                let dst = self.value_gen.next();
+                let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
+                return Ok(dst);
+            }
+        }
         // ExternCall判定はobjectの変数解決より先に行う（未定義変数で落とさない）
         if let ASTNode::Variable { name: object_name, .. } = object.clone() {
             // Build argument expressions first (externはobject自体を使わない)
@@ -1097,6 +1227,17 @@ impl MirBuilder {
 
         // Build the object expression
         let object_value = self.build_expression(object.clone())?;
+
+        // Secondary interception for is/as in case early path did not trigger
+        if (method == "is" || method == "as") && arguments.len() == 1 {
+            if let ASTNode::Literal { value: crate::ast::LiteralValue::String(type_name), .. } = &arguments[0] {
+                let mir_ty = Self::parse_type_name_to_mir(type_name);
+                let dst = self.value_gen.next();
+                let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
+                return Ok(dst);
+            }
+        }
 
         // Build argument expressions
         let mut arg_values = Vec::new();
@@ -1161,6 +1302,35 @@ impl MirBuilder {
         })?;
         Ok(result_id)
     }
+
+    /// Map a user-facing type name to MIR type
+    fn parse_type_name_to_mir(name: &str) -> super::MirType {
+        match name {
+            "Integer" | "Int" | "I64" => super::MirType::Integer,
+            "Float" | "F64" => super::MirType::Float,
+            "Bool" | "Boolean" => super::MirType::Bool,
+            "String" => super::MirType::String,
+            "Void" | "Unit" => super::MirType::Void,
+            other => super::MirType::Box(other.to_string()),
+        }
+    }
+    
+    /// Extract string literal from AST node if possible
+    /// Supports: Literal("Type") and new StringBox("Type")
+    fn extract_string_literal(node: &ASTNode) -> Option<String> {
+        match node {
+            ASTNode::Literal { value: crate::ast::LiteralValue::String(s), .. } => Some(s.clone()),
+            ASTNode::New { class, arguments, .. } if class == "StringBox" => {
+                if arguments.len() == 1 {
+                    if let ASTNode::Literal { value: crate::ast::LiteralValue::String(s), .. } = &arguments[0] {
+                        return Some(s.clone());
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
     
     /// Build from expression: from Parent.method(arguments)
     fn build_from_expression(&mut self, parent: String, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
@@ -1193,7 +1363,7 @@ impl MirBuilder {
     }
     
     /// Build box declaration: box Name { fields... methods... }
-    fn build_box_declaration(&mut self, name: String, methods: std::collections::HashMap<String, ASTNode>, fields: Vec<String>) -> Result<(), String> {
+    fn build_box_declaration(&mut self, name: String, methods: std::collections::HashMap<String, ASTNode>, fields: Vec<String>, weak_fields: Vec<String>) -> Result<(), String> {
         // For Phase 8.4, we'll emit metadata instructions to register the box type
         // In a full implementation, this would register type information for later use
         
@@ -1211,6 +1381,12 @@ impl MirBuilder {
                 dst: field_id,
                 value: ConstValue::String(format!("__field_{}_{}", name, field)),
             })?;
+        }
+
+        // Record weak fields for this box
+        if !weak_fields.is_empty() {
+            let set: HashSet<String> = weak_fields.into_iter().collect();
+            self.weak_fields_by_box.insert(name.clone(), set);
         }
         
         // Process methods - now methods is a HashMap

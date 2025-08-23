@@ -12,6 +12,26 @@ impl NyashInterpreter {
     /// 関数呼び出しを実行 - 🌍 革命的実装：GlobalBoxのメソッド呼び出し
     pub(super) fn execute_function_call(&mut self, name: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // Fallback: built-in type ops as global functions: isType(value, "Type"), asType(value, "Type")
+        if (name == "isType" || name == "asType") && arguments.len() == 2 {
+            // Evaluate args
+            let val = self.execute_expression(&arguments[0])?;
+            let ty_box = self.execute_expression(&arguments[1])?;
+            // Get type name string
+            let type_name = if let Some(s) = ty_box.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                s.value.clone()
+            } else {
+                return Err(RuntimeError::InvalidOperation { message: "Type name must be a string".to_string() });
+            };
+
+            if name == "isType" {
+                let matched = Self::matches_type_name(&val, &type_name);
+                return Ok(Box::new(crate::box_trait::BoolBox::new(matched)));
+            } else {
+                // asType: minimal safe cast (int<->float), otherwise identity
+                return Self::cast_to_type(val, &type_name);
+            }
+        }
         // コンストラクタ内での親コンストラクタ呼び出しチェック
         if let Some(context) = self.current_constructor_context.clone() {
             if let Some(parent_class) = context.parent_class {
@@ -93,5 +113,44 @@ impl NyashInterpreter {
         self.register_global_function(name, func_ast).unwrap_or_else(|err| {
             eprintln!("Warning: Failed to register global function: {}", err);
         });
+    }
+
+    /// Helper: match a NyashBox value against a simple type name
+    fn matches_type_name(val: &Box<dyn NyashBox>, type_name: &str) -> bool {
+        let tn = val.type_name();
+        match type_name {
+            "Integer" | "Int" | "I64" => tn == "IntegerBox",
+            "Float" | "F64" => tn == "FloatBox",
+            "Bool" | "Boolean" => tn == "BoolBox",
+            "String" => tn == "StringBox",
+            "Void" | "Unit" => tn == "VoidBox",
+            other => tn == other || tn == format!("{}Box", other),
+        }
+    }
+
+    /// Helper: cast box to a target type name (minimal support)
+    fn cast_to_type(val: Box<dyn NyashBox>, type_name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        match type_name {
+            "Integer" | "Int" | "I64" => {
+                // Float -> Integer (truncate), Integer -> Integer, else error
+                if let Some(i) = val.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    Ok(Box::new(crate::box_trait::IntegerBox::new(i.value)))
+                } else if let Some(f) = val.as_any().downcast_ref::<crate::boxes::FloatBox>() {
+                    Ok(Box::new(crate::box_trait::IntegerBox::new(f.value as i64)))
+                } else {
+                    Ok(val) // identity fallback for now
+                }
+            }
+            "Float" | "F64" => {
+                if let Some(f) = val.as_any().downcast_ref::<crate::boxes::FloatBox>() {
+                    Ok(Box::new(crate::boxes::FloatBox::new(f.value)))
+                } else if let Some(i) = val.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    Ok(Box::new(crate::boxes::FloatBox::new(i.value as f64)))
+                } else {
+                    Ok(val)
+                }
+            }
+            _ => Ok(val),
+        }
     }
 }

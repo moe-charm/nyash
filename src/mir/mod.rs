@@ -16,6 +16,7 @@ pub mod ownership_verifier_simple; // Simple ownership forest verification for c
 pub mod printer;
 pub mod value_id;
 pub mod effect;
+pub mod optimizer;
 
 // Re-export main types for easy access
 pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, MirType, TypeOpKind, WeakRefOp, BarrierOp};
@@ -28,6 +29,7 @@ pub use ownership_verifier_simple::{OwnershipVerifier, OwnershipError, Ownership
 pub use printer::MirPrinter;
 pub use value_id::{ValueId, LocalId, ValueIdGenerator};
 pub use effect::{EffectMask, Effect};
+pub use optimizer::MirOptimizer;
 
 /// MIR compilation result
 #[derive(Debug, Clone)]
@@ -54,7 +56,11 @@ impl MirCompiler {
     /// Compile AST to MIR module with verification
     pub fn compile(&mut self, ast: crate::ast::ASTNode) -> Result<MirCompileResult, String> {
         // Convert AST to MIR using builder
-        let module = self.builder.build_module(ast)?;
+        let mut module = self.builder.build_module(ast)?;
+        
+        // Optimize (safety net lowering for is/as → TypeOp 等)
+        let mut optimizer = MirOptimizer::new();
+        let _ = optimizer.optimize_module(&mut module);
         
         // Verify the generated MIR
         let verification_result = self.verifier.verify_module(&module);

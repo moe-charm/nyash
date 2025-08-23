@@ -36,26 +36,26 @@
 
 ## 🚧 次にやること（再開方針）
 
-1) 命令セットダイエットのPoC実装（短期）
-   - 現状: VMに `TypeOp/WeakRef/Barrier` 実行経路（等価）とPrinter対応。Builderに補助APIを追加済（未置換）。
-   - 次: Builder内の該当箇所を補助APIに置換（flag onで新命令を吐く／offで従来どおり）
+1) MIR26 前進（短期）
+   - プリンタ拡張: `TypeOp/WeakRef/Barrier` を `--mir-verbose` に明示表示
+   - スナップショット整備: 代表ケースで flag ON/OFF のMIR差分固定化
+   - vm-stats差分: `weak_field_poc.nyash` 等で JSON 取得・比較（キー: TypeOp/WeakRef/Barrier）
    - 旗: `mir_typeop_poc`（TypeCheck/Cast→TypeOp）、`mir_refbarrier_unify_poc`（Weak*/Barrier→統合）
-   - 成果物: スナップショット（flag on/off）＋ vm-statsのキー確認（TypeOp/WeakRef/Barrier）
 
-2) VM×プラグインのE2E拡張（短期）
-   - HTTP: 遅延応答・大ボディの計測、到達不能時のERR安定化の再検証（代表は追加済）
-   - Socket: 反復タイムアウトの追加ケース（代表は追加済）
-   - 成果物: 必要に応じてE2E追補と `VM_README.md` のTips更新
+2) Builder適用拡大（短期〜中期）
+   - 言語 `is/as` 導線（最小でも擬似ノード）→ `emit_type_check/emit_cast` へ配線
+   - 弱参照: 既存の `RefGet/RefSet` パスは弱フィールドで `WeakLoad/WeakNew`＋Barrier（flag ONで統合命令）
 
-3) ResultBox単一路線への統合（中期）
-- 新`NyashResultBox`へ統合、旧`ResultBox`は薄いラッパーとして段階移行
-- 成果物: 実装整理・移行メモ・影響調査
+3) VM/Verifierの補強（中期）
+   - `TypeOp(Cast)` の数値キャスト（Int/Float）安全化、誤用時TypeError整備
+   - Verifierに26命令整合（Barrier位置、WeakRef整合、支配関係）チェックを追加
 
-4) Array系の本実装（必要時・中期）
-   - VMの `ArrayGet/ArraySet` 実装済み。BoxCall fast-pathの整合性と回帰テストを充実
+4) VM×プラグインE2Eの維持（短期）
+   - HTTP/Socketの回帰確認（Void防御・遅延サーバ軽量化は済）
+   - 必要に応じて `VM_README.md` にTips追記
 
 5) BoxCall高速化（性能段階）
-- vm-statsでホットなBoxCallの高速化（命令セット統合より効果大の可能性）
+   - `--vm-stats` ホットパス特定後、Fast-path/キャッシュ適用
 
 ## ▶ 実行コマンド例
 
@@ -73,6 +73,21 @@ cargo test -q --features plugins e2e_interpreter_plugin_filebox_close_void
 cargo test -q --features plugins e2e_vm_plugin_filebox_close_void
 ```
 
+MIR26 PoC（弱参照・Barrier統合）:
+```bash
+# 弱フィールドPoC（flag OFF: WeakNew/WeakLoad/BarrierRead/Write）
+NYASH_VM_STATS=1 NYASH_VM_STATS_JSON=1 ./target/release/nyash --backend vm --vm-stats --vm-stats-json local_tests/weak_field_poc.nyash > vm_stats_weak_default.json
+
+# flag ON: WeakRef/Barrier 統合
+cargo build --release --features mir_refbarrier_unify_poc -q
+NYASH_VM_STATS=1 NYASH_VM_STATS_JSON=1 ./target/release/nyash --backend vm --vm-stats --vm-stats-json local_tests/weak_field_poc.nyash > vm_stats_weak_unified.json
+```
+
+MIRダンプ（プリンタ拡張後の確認）:
+```bash
+./target/release/nyash --dump-mir --mir-verbose local_tests/weak_field_poc.nyash | sed -n '1,200p'
+```
+
 MIRダンプ/検証:
 ```bash
 nyash --dump-mir --mir-verbose examples/plugin_box_sample.nyash
@@ -84,7 +99,7 @@ nyash --verify examples/plugin_box_sample.nyash
 - メタ降格: Debug / Nop / Safepoint（ビルドモードで制御）
 
 ---
-最終更新: 2025年8月23日（VM強化・E2E拡張・me参照安定化・TypeOp/WeakRef/Barrier PoC完了／次段はBuilder置換とスナップショット）
+最終更新: 2025年8月23日（VM強化・E2E拡張・me参照安定化・TypeOp/WeakRef/Barrier PoC完了／次段はプリンタ拡張・スナップショット・is/as導線）
 
 ## 🔁 再起動後の再開手順（ショート）
 ```bash

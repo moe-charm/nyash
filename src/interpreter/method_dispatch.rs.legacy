@@ -46,6 +46,22 @@ impl NyashInterpreter {
         
         // オブジェクトを評価（通常のメソッド呼び出し）
         let obj_value = self.execute_expression(object)?;
+
+        // Fallback: built-in type ops as instance methods: value.is("Type"), value.as("Type")
+        if (method == "is" || method == "as") && arguments.len() == 1 {
+            let ty_box = self.execute_expression(&arguments[0])?;
+            let type_name = if let Some(s) = ty_box.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                s.value.clone()
+            } else {
+                return Err(RuntimeError::InvalidOperation { message: "Type name must be a string".to_string() });
+            };
+            if method == "is" {
+                let matched = super::functions::NyashInterpreter::matches_type_name(&obj_value, &type_name);
+                return Ok(Box::new(crate::box_trait::BoolBox::new(matched)));
+            } else {
+                return super::functions::NyashInterpreter::cast_to_type(obj_value, &type_name);
+            }
+        }
         
         eprintln!("🔍 DEBUG: execute_method_call - object evaluated to type_name='{}', box_id={}", 
                  obj_value.type_name(), obj_value.box_id());

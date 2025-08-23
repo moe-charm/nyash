@@ -1,0 +1,65 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash VM Backend - Executing file: local_tests/weak_field_poc.nyash 🚀
+0
+{
+  "counts": {
+    "Barrier": 2,
+    "BoxCall": 2,
+    "Const": 9,
+    "NewBox": 2,
+    "Print": 1,
+    "RefGet": 4,
+    "RefSet": 3,
+    "Return": 3,
+    "Safepoint": 1,
+    "WeakRef": 2
+  },
+  "elapsed_ms": 0.16804799999999998,
+  "timestamp_ms": 1755957108401,
+  "top20": [
+    {
+      "count": 9,
+      "op": "Const"
+    },
+    {
+      "count": 4,
+      "op": "RefGet"
+    },
+    {
+      "count": 3,
+      "op": "RefSet"
+    },
+    {
+      "count": 3,
+      "op": "Return"
+    },
+    {
+      "count": 2,
+      "op": "Barrier"
+    },
+    {
+      "count": 2,
+      "op": "BoxCall"
+    },
+    {
+      "count": 2,
+      "op": "NewBox"
+    },
+    {
+      "count": 2,
+      "op": "WeakRef"
+    },
+    {
+      "count": 1,
+      "op": "Print"
+    },
+    {
+      "count": 1,
+      "op": "Safepoint"
+    }
+  ],
+  "total": 29
+}
+✅ VM execution completed successfully!
+Result: IntegerBox { value: 0, base: BoxBase { id: 4, parent_type_id: None } }

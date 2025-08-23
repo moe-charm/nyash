@@ -8,7 +8,7 @@
  * - Dead code elimination
  */
 
-use super::{MirModule, MirFunction, MirInstruction, ValueId, EffectMask, Effect};
+use super::{MirModule, MirFunction, MirInstruction, ValueId, MirType, TypeOpKind};
 use std::collections::{HashMap, HashSet};
 
 /// MIR optimization passes
@@ -50,6 +50,9 @@ impl MirOptimizer {
         
         // Pass 4: Intrinsic function optimization
         stats.merge(self.optimize_intrinsic_calls(module));
+
+        // Pass 4.5: Lower well-known intrinsics (is/as → TypeOp) as a safety net
+        stats.merge(self.lower_type_ops(module));
         
         // Pass 5: BoxField dependency optimization
         stats.merge(self.optimize_boxfield_operations(module));
@@ -196,7 +199,8 @@ impl MirOptimizer {
             MirInstruction::Const { value, .. } => format!("const_{:?}", value),
             MirInstruction::BinOp { op, lhs, rhs, .. } => format!("binop_{:?}_{}_{}", op, lhs.as_u32(), rhs.as_u32()),
             MirInstruction::Compare { op, lhs, rhs, .. } => format!("cmp_{:?}_{}_{}", op, lhs.as_u32(), rhs.as_u32()),
-            MirInstruction::BoxFieldLoad { box_val, field, .. } => format!("boxload_{}_{}", box_val.as_u32(), field),
+            // BoxFieldLoad removed from instruction set
+            // MirInstruction::BoxFieldLoad { box_val, field, .. } => format!("boxload_{}_{}", box_val.as_u32(), field),
             MirInstruction::Call { func, args, .. } => {
                 let args_str = args.iter().map(|v| v.as_u32().to_string()).collect::<Vec<_>>().join(",");
                 format!("call_{}_{}", func.as_u32(), args_str)
@@ -253,6 +257,102 @@ impl MirOptimizer {
         // 3. Identity elimination (e.g., x + 0 → x)
         0
     }
+
+    /// Safety-net lowering: convert known is/as patterns into TypeOp when possible
+    fn lower_type_ops(&mut self, module: &mut MirModule) -> OptimizationStats {
+        let mut stats = OptimizationStats::new();
+        for (_name, function) in &mut module.functions {
+            stats.intrinsic_optimizations += self.lower_type_ops_in_function(function);
+        }
+        stats
+    }
+
+    fn lower_type_ops_in_function(&mut self, function: &mut MirFunction) -> usize {
+        // Build a simple definition map: ValueId -> (block_id, index)
+        let mut def_map: std::collections::HashMap<ValueId, (super::basic_block::BasicBlockId, usize)> = std::collections::HashMap::new();
+        for (bb_id, block) in &function.blocks {
+            for (i, inst) in block.instructions.iter().enumerate() {
+                if let Some(dst) = inst.dst_value() {
+                    def_map.insert(dst, (*bb_id, i));
+                }
+            }
+            if let Some(term) = &block.terminator {
+                if let Some(dst) = term.dst_value() {
+                    def_map.insert(dst, (*bb_id, usize::MAX));
+                }
+            }
+        }
+
+        let mut lowered = 0;
+        
+        // Collect replacements first to avoid borrow checker issues
+        let mut replacements: Vec<(super::basic_block::BasicBlockId, usize, MirInstruction)> = Vec::new();
+        
+        // First pass: identify replacements
+        for (bb_id, block) in &function.blocks {
+            for i in 0..block.instructions.len() {
+                let replace = match &block.instructions[i] {
+                    MirInstruction::BoxCall { dst, box_val, method, args, .. } => {
+                        let is_is = method == "is" || method == "isType";
+                        let is_as = method == "as" || method == "asType";
+                        if (is_is || is_as) && args.len() == 1 {
+                            // Try to resolve type name from arg
+                            let arg_id = args[0];
+                            if let Some((def_bb, def_idx)) = def_map.get(&arg_id).copied() {
+                                // Look for pattern: NewBox StringBox(Const String)
+                                if let Some(def_block) = function.blocks.get(&def_bb) {
+                                    if def_idx < def_block.instructions.len() {
+                                        if let MirInstruction::NewBox { box_type, args: sb_args, .. } = &def_block.instructions[def_idx] {
+                                            if box_type == "StringBox" && sb_args.len() == 1 {
+                                                let str_id = sb_args[0];
+                                                if let Some((sbb, sidx)) = def_map.get(&str_id).copied() {
+                                                    if let Some(sblock) = function.blocks.get(&sbb) {
+                                                        if sidx < sblock.instructions.len() {
+                                                            if let MirInstruction::Const { value, .. } = &sblock.instructions[sidx] {
+                                                                if let super::instruction::ConstValue::String(s) = value {
+                                                                    // Build TypeOp to replace
+                                                                    let ty = map_type_name(s);
+                                                                    let op = if is_is { TypeOpKind::Check } else { TypeOpKind::Cast };
+                                                                    let new_inst = MirInstruction::TypeOp {
+                                                                        dst: dst.unwrap_or(*box_val),
+                                                                        op,
+                                                                        value: *box_val,
+                                                                        ty,
+                                                                    };
+                                                                    Some(new_inst)
+                                                                } else { None }
+                                                            } else { None }
+                                                        } else { None }
+                                                    } else { None }
+                                                } else { None }
+                                            } else { None }
+                                        } else { None }
+                                    } else { None }
+                                } else { None }
+                            } else { None }
+                        } else { None }
+                    }
+                    _ => None,
+                };
+
+                if let Some(new_inst) = replace {
+                    replacements.push((*bb_id, i, new_inst));
+                }
+            }
+        }
+        
+        // Second pass: apply replacements
+        for (bb_id, idx, new_inst) in replacements {
+            if let Some(block) = function.blocks.get_mut(&bb_id) {
+                if idx < block.instructions.len() {
+                    block.instructions[idx] = new_inst;
+                    lowered += 1;
+                }
+            }
+        }
+        
+        lowered
+    }
     
     /// Optimize BoxField operations
     fn optimize_boxfield_operations(&mut self, module: &mut MirModule) -> OptimizationStats {
@@ -277,6 +377,18 @@ impl MirOptimizer {
         // 3. Load forwarding
         // 4. Field access coalescing
         0
+    }
+}
+
+/// Map string type name to MIR type (optimizer-level helper)
+fn map_type_name(name: &str) -> MirType {
+    match name {
+        "Integer" | "Int" | "I64" => MirType::Integer,
+        "Float" | "F64" => MirType::Float,
+        "Bool" | "Boolean" => MirType::Bool,
+        "String" => MirType::String,
+        "Void" | "Unit" => MirType::Void,
+        other => MirType::Box(other.to_string()),
     }
 }
 
