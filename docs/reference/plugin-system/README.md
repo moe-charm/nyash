@@ -12,6 +12,11 @@
   - FileBoxプラグインで実証済み
   - プラグイン開発者はここから始める
 
+- **[../architecture/dynamic-plugin-flow.md](../architecture/dynamic-plugin-flow.md)** - **動的プラグインシステムの全体フロー** 🆕
+  - MIR→VM→Registry→プラグインの動的解決フロー
+  - コンパイル時決め打ちなし、実行時動的判定の仕組み
+  - nyash.tomlによる透過的な切り替え
+
 - **[vm-plugin-integration.md](./vm-plugin-integration.md)** - **VM統合仕様書** 🆕
   - VMバックエンドとプラグインシステムの統合
   - BoxRef型による統一アーキテクチャ

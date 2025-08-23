@@ -85,6 +85,76 @@ body
 }
 
 #[test]
+fn e2e_vm_http_status_404() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin3.log");
+    if !try_init_plugins() { return; }
+
+    let code = r#"
+local srv, cli, r, resp, req, body, st
+srv = new HttpServerBox()
+srv.start(8086)
+
+cli = new HttpClientBox()
+r = cli.get("http://localhost:8086/notfound")
+
+req = srv.accept().get_value()
+resp = new HttpResponseBox()
+resp.setStatus(404)
+resp.write("NF")
+req.respond(resp)
+
+resp = r.get_value()
+st = resp.getStatus()
+body = resp.readBody()
+st.toString() + ":" + body
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let runtime = NyashRuntime::new();
+    let mut compiler = nyash_rust::mir::MirCompiler::new();
+    let compile_result = compiler.compile(ast).expect("mir compile failed");
+    let mut vm = VM::with_runtime(runtime);
+    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    assert_eq!(result.to_string_box().value, "404:NF");
+}
+
+#[test]
+fn e2e_vm_http_status_500() {
+    std::env::set_var("NYASH_NET_LOG", "1");
+    std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin3.log");
+    if !try_init_plugins() { return; }
+
+    let code = r#"
+local srv, cli, r, resp, req, body, st
+srv = new HttpServerBox()
+srv.start(8084)
+
+cli = new HttpClientBox()
+r = cli.get("http://localhost:8084/error")
+
+req = srv.accept().get_value()
+resp = new HttpResponseBox()
+resp.setStatus(500)
+resp.write("ERR")
+req.respond(resp)
+
+resp = r.get_value()
+st = resp.getStatus()
+body = resp.readBody()
+st.toString() + ":" + body
+"#;
+
+    let ast = NyashParser::parse_from_string(code).expect("parse failed");
+    let runtime = NyashRuntime::new();
+    let mut compiler = nyash_rust::mir::MirCompiler::new();
+    let compile_result = compiler.compile(ast).expect("mir compile failed");
+    let mut vm = VM::with_runtime(runtime);
+    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    assert_eq!(result.to_string_box().value, "500:ERR");
+}
+
+#[test]
 fn e2e_vm_http_post_and_headers() {
     std::env::set_var("NYASH_NET_LOG", "1");
     std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin3.log");

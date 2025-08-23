@@ -49,3 +49,28 @@ Future Ideas
 Notes
 - Keep this file as a living list; prune as items graduate to tracked issues/PRs.
 
+---
+
+2025-08-23 Updates (VM × Plugins focus)
+- VM Stats frontdoor (done): CLI flags `--vm-stats`, `--vm-stats-json`; JSON schema includes total/counts/top20/elapsed_ms.
+  - Next: integrate with `--benchmark` to emit per-backend stats; add `NYASH_VM_STATS_FORMAT=json` docs.
+- ResultBox in VM (done): dispatch for `isOk/getValue/getError`; generic `toString()` fallback for any Box.
+  - Impact: HTTP Result paths now work end-to-end in VM.
+- MIR if-merge bug (done): bind merged variable to Phi result across Program blocks (ret now returns phi dst).
+  - Next: add verifier check for "use-before-def across merge"; snapshot a failing MIR pattern as a test.
+- Net plugin error mapping (done): on TCP connect failure, return TLV string; loader maps to Result.Err(ErrorBox).
+  - Next: formalize `returns_result` ok-type in nyash.toml (e.g., ok_returns = "HttpResponseBox"); tighten loader.
+- E2E coverage (done):
+  - FileBox: open/write/read, copyFrom(handle)
+  - Net: GET/POST/status/header/body; 204 empty body; client error (unreachable port) → Err
+  - Next: 404/5xx reply from server side; timeouts; large bodies; header casing behavior.
+
+Short-Term TODOs
+- Add vm-stats samples for normal/error HTTP flows; feed into 26-instruction diet discussion.
+- CI: run `--features plugins` E2E on a dedicated job; gate on Linux only; quiet logs unless failed.
+- Docs: append "VM→Plugin TLV debugging" quick tips (env flags, TLV preview).
+
+26-Instruction Diet Hooks
+- Candidate demotions: Debug/Nop/Safepoint → meta; TypeCheck/Cast → fold or verify-time.
+- Keep hot path: BoxCall/NewBox/Branch/Jump/Phi/BinOp/Compare/Return.
+- Track Weak*/Barrier usage; keep as extended-set unless surfaced in vm-stats.

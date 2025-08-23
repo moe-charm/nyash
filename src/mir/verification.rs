@@ -48,6 +48,12 @@ pub enum VerificationError {
         use_block: BasicBlockId,
         def_block: BasicBlockId,
     },
+    /// Merge block uses predecessor-defined value directly instead of Phi
+    MergeUsesPredecessorValue {
+        value: ValueId,
+        merge_block: BasicBlockId,
+        pred_block: BasicBlockId,
+    },
 }
 
 /// MIR verifier for SSA form and semantic correctness
@@ -102,6 +108,10 @@ impl MirVerifier {
         // 3. Check control flow integrity
         if let Err(mut cfg_errors) = self.verify_control_flow(function) {
             local_errors.append(&mut cfg_errors);
+        }
+        // 4. Check merge-block value usage (ensure Phi is used)
+        if let Err(mut merge_errors) = self.verify_merge_uses(function) {
+            local_errors.append(&mut merge_errors);
         }
         
         if local_errors.is_empty() {
@@ -219,6 +229,62 @@ impl MirVerifier {
             Err(errors)
         }
     }
+
+    /// Verify that blocks with multiple predecessors do not use predecessor-defined values directly.
+    /// In merge blocks, values coming from predecessors must be routed through Phi.
+    fn verify_merge_uses(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        let mut errors = Vec::new();
+        // Build predecessor map
+        let mut preds: std::collections::HashMap<BasicBlockId, Vec<BasicBlockId>> = std::collections::HashMap::new();
+        for (bid, block) in &function.blocks {
+            for succ in &block.successors {
+                preds.entry(*succ).or_default().push(*bid);
+            }
+        }
+        // Build definition map (value -> def block)
+        let mut def_block: std::collections::HashMap<ValueId, BasicBlockId> = std::collections::HashMap::new();
+        for (bid, block) in &function.blocks {
+            for inst in block.all_instructions() {
+                if let Some(dst) = inst.dst_value() {
+                    def_block.insert(dst, *bid);
+                }
+            }
+        }
+        // Helper: collect phi dsts in a block
+        let mut phi_dsts_in_block: std::collections::HashMap<BasicBlockId, std::collections::HashSet<ValueId>> = std::collections::HashMap::new();
+        for (bid, block) in &function.blocks {
+            let set = phi_dsts_in_block.entry(*bid).or_default();
+            for inst in block.all_instructions() {
+                if let super::MirInstruction::Phi { dst, .. } = inst { set.insert(*dst); }
+            }
+        }
+
+        for (bid, block) in &function.blocks {
+            let Some(pred_list) = preds.get(bid) else { continue };
+            if pred_list.len() < 2 { continue; }
+            let phi_dsts = phi_dsts_in_block.get(bid);
+            // check instructions including terminator
+            for inst in block.all_instructions() {
+                for used in inst.used_values() {
+                    if let Some(&db) = def_block.get(&used) {
+                        if pred_list.contains(&db) {
+                            // used value defined in a predecessor; must be routed via phi (i.e., used should be phi dst)
+                            let is_phi_dst = phi_dsts.map(|s| s.contains(&used)).unwrap_or(false);
+                            if !is_phi_dst {
+                                errors.push(VerificationError::MergeUsesPredecessorValue {
+                                    value: used,
+                                    merge_block: *bid,
+                                    pred_block: db,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
     
     /// Compute reachable blocks from entry
     fn compute_reachable_blocks(&self, function: &MirFunction) -> HashSet<BasicBlockId> {
@@ -301,6 +367,10 @@ impl std::fmt::Display for VerificationError {
                 write!(f, "Value {} used in block {} but defined in non-dominating block {}",
                        value, use_block, def_block)
             },
+            VerificationError::MergeUsesPredecessorValue { value, merge_block, pred_block } => {
+                write!(f, "Merge block {} uses predecessor-defined value {} from block {} without Phi",
+                       merge_block, value, pred_block)
+            },
         }
     }
 }
@@ -308,7 +378,8 @@ impl std::fmt::Display for VerificationError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mir::{MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
+    use crate::mir::{MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock, MirBuilder, MirPrinter};
+    use crate::ast::{ASTNode, Span, LiteralValue};
     
     #[test]
     fn test_valid_function_verification() {
@@ -333,5 +404,46 @@ mod tests {
         // This test would create a function with undefined value usage
         // and verify that the verifier catches it
         // Implementation details would depend on the specific test case
+    }
+
+    #[test]
+    fn test_if_merge_uses_phi_not_predecessor() {
+        // Program:
+        // if true { result = "A" } else { result = "B" }
+        // result
+        let ast = ASTNode::Program {
+            statements: vec![
+                ASTNode::If {
+                    condition: Box::new(ASTNode::Literal { value: LiteralValue::Bool(true), span: Span::unknown() }),
+                    then_body: vec![ ASTNode::Assignment {
+                        target: Box::new(ASTNode::Variable { name: "result".to_string(), span: Span::unknown() }),
+                        value: Box::new(ASTNode::Literal { value: LiteralValue::String("A".to_string()), span: Span::unknown() }),
+                        span: Span::unknown(),
+                    }],
+                    else_body: Some(vec![ ASTNode::Assignment {
+                        target: Box::new(ASTNode::Variable { name: "result".to_string(), span: Span::unknown() }),
+                        value: Box::new(ASTNode::Literal { value: LiteralValue::String("B".to_string()), span: Span::unknown() }),
+                        span: Span::unknown(),
+                    }]),
+                    span: Span::unknown(),
+                },
+                ASTNode::Variable { name: "result".to_string(), span: Span::unknown() },
+            ],
+            span: Span::unknown(),
+        };
+
+        let mut builder = MirBuilder::new();
+        let module = builder.build_module(ast).expect("build mir");
+
+        // Verify: should be OK (no MergeUsesPredecessorValue)
+        let mut verifier = MirVerifier::new();
+        let res = verifier.verify_module(&module);
+        if let Err(errs) = &res { eprintln!("Verifier errors: {:?}", errs); }
+        assert!(res.is_ok(), "MIR should pass merge-phi verification");
+
+        // Optional: ensure printer shows a phi in merge and ret returns a defined value
+        let mut printer = MirPrinter::verbose();
+        let mir_text = printer.print_module(&module);
+        assert!(mir_text.contains("phi"), "Printed MIR should contain a phi in merge block\n{}", mir_text);
     }
 }

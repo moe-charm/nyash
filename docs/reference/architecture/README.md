@@ -20,6 +20,11 @@
 - `src/box_factory/*` … Builtin/User/Plugin の各 Factory 実装
 - `src/runtime/plugin_loader_v2.rs` … BID-FFI v2 ローダ（ExternCall/Plugin 呼び出し）
 
+関連ドキュメント
+- 動的プラグインの流れ: [dynamic-plugin-flow.md](./dynamic-plugin-flow.md)
+- 命令セットダイエット: [mir-26-instruction-diet.md](./mir-26-instruction-diet.md)
+- MIR→VMマッピング: [mir-to-vm-mapping.md](./mir-to-vm-mapping.md)
+
 ## 実行フロー（概略）
 1) Nyash コード → Parser → AST → `MirCompiler` で `MirModule` を生成
 2) `VM::with_runtime(runtime)` で実行（`execute_module`）
@@ -35,6 +40,7 @@
   - Builtin: `BuiltinBoxFactory` が直接生成
   - User-defined: `UserDefinedBoxFactory` → `InstanceBox`
   - Plugin: プラグイン設定（`nyash.toml`）に従い BID-FFI で `PluginBoxV2`
+- **動的解決の詳細**: [dynamic-plugin-flow.md](./dynamic-plugin-flow.md) を参照
 
 ## birth/メソッドの関数化（MIR）
 - Lowering ポリシー: AST の `new` は `NewBox` に続けて `BoxCall("birth")` を自動挿入

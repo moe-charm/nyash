@@ -103,6 +103,22 @@
 - NewBox/BoxCall が上位に入るため、命令セットから外すのは不可（コア扱い）。
 - Compare/Branch/Jump/Phi は制御フローのコア。26命令の中核として維持が妥当。
 
+## 実測統計（2025-08-23）
+出所: vm-stats（正常系HTTP／異常系HTTP／FileBox）
+
+- 正常系HTTP（40命令）
+  - BoxCall: 17（42.5%）/ Const: 12（30%）/ NewBox: 9（22.5%）/ Return: 1 / Safepoint: 1
+- 異常系HTTP（21命令 = 正常の52.5%）
+  - BoxCall: 7（33.3%）/ Const: 6（28.6%）/ NewBox: 3（14.3%）
+  - Branch: 1 / Jump: 1 / Phi: 1（エラーハンドリング特有）/ Return: 1 / Safepoint: 1
+- FileBox（44命令）
+  - BoxCall: 17（38.6%）/ Const: 13（29.5%）/ NewBox: 12（27.3%）/ Return: 1 / Safepoint: 1
+
+設計含意:
+- BoxCallが常に最頻出（33〜42%）。呼び出しコスト最適化が最優先。
+- Const/NewBoxが次点。定数・生成の最適化（定数畳み込み／軽量生成・シェアリング）が効果的。
+- 異常系は早期収束で命令半減。if/phi修正は実戦で有効（Branch/Jump/Phiが顕在化）。
+
 ## 26命令ダイエット（検討のたたき台）
 方針: 「命令の意味は保ちつつ集約」。代表案：
 - 維持: Const / Copy / Load / Store / BinOp / UnaryOp / Compare / Jump / Branch / Phi / Return / Call / BoxCall / NewBox / ArrayGet / ArraySet
@@ -118,6 +134,19 @@
 
 ---
 
+## 26命令ダイエットの指針（実測反映）
+- 維持（ホット・コア）: BoxCall / NewBox / Const / BinOp / Compare / Branch / Jump / Phi / Return / Copy / Load / Store / Call
+- 実装方針: ExternCallは原則BoxCallへ集約（必要なら限定的に残す）。
+- メタ降格: Debug/Nop/Safepoint（ビルドモードで制御）。
+- 型系: TypeCheck/Castは折りたたみ or 検証時に処理（1命令に集約も可）。
+- 参照/弱参照/バリア: 需要ベースで拡張枠へ（vm-statsに登場しない限りコア外）。
+
+提案（ドラフト）:
+- コア候補（例）: Const, Copy, Load, Store, BinOp, UnaryOp, Compare, Jump, Branch, Phi, Return, Call, BoxCall, NewBox, ArrayGet, ArraySet, RefNew, RefGet, RefSet, Await, Print, ExternCall(集約可), TypeOp(=TypeCheck/Cast), 予備2（将来枠）
+- 予備はWeak*/Barrierや将来の非同期拡張等に割当（実測で常用化したら昇格）。
+
+---
+
 ## E2E更新（VM経由の実働確認）
 
 成功ケース（VM）:
@@ -125,6 +154,8 @@
 - FileBox.copyFrom(handle): Handle引数（tag=8, size=8, type_id+instance_id）で成功
 - HttpClientBox.get + HttpServerBox: 基本GETの往復（ResultBox経由でResponse取得）
 - HttpClientBox.post + headers: Status/ヘッダー/ボディをVMで往復確認
+ - HttpClientBox.get unreachable: 接続失敗時はResult.Err(ErrorBox)（ローダーがstring/bytesをErrにマップ）
+ - HTTP 404/500: Result.Ok(Response)（ステータスはResponse上に保持）
 
 デバッグ小技:
 - `NYASH_DEBUG_PLUGIN=1` で VM→Plugin 呼び出しTLVの ver/argc/先頭バイトをダンプ

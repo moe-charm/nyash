@@ -2,32 +2,43 @@
 
 ## ✅ 直近の完了
 1. ドキュメント再編成の完了（構造刷新）
-2. プラグインBox（FileBox）基本実装とインタープリター統合
+2. VM×プラグインのE2E整備（FileBox/Net）
+   - FileBox: open/write/read, copyFrom(handle)（VM）
+   - Net: GET/POST（VM）、404/500（Ok(Response)）、unreachable（Err(ErrorBox)）
 3. VM命令カウンタ＋時間計測のCLI化（`--vm-stats`, `--vm-stats-json`）とJSON出力対応
+   - サンプル/スクリプト整備（tools/run_vm_stats.sh、local_tests/vm_stats_*.nyash）
+4. MIR if-merge 修正（retがphi dstを返す）＋ Verifier強化（mergeでのphi未使用検知）
+5. ドキュメント追加・更新
+   - Dynamic Plugin Flow（MIR→VM→Registry→Loader→Plugin）
+   - Netプラグインのエラーモデル（unreachable=Err, 404/500=Ok）
+   - E2Eテスト一覧整備
+6. CI: plugins E2E ジョブ（Linux）を追加
 
 ## 🚧 次にやること（再開方針）
 
 1) MIR→VMの健全化（短期・最優先）
-- 現行MIR→VMのマッピング表を作成（欠落/冗長/重複を可視化）
-- サンプル/テストをVMで実行し、差分ログ（例外系・returns_result）を確認
-- 成果物: `docs/reference/architecture/mir-to-vm-mapping.md`（暫定）
+- マッピング表更新（Err経路・Handle戻り・Result整合を実測で反映）
+- Verifierルールの拡充（use-before-def across merge を強化）
+- 成果物: `docs/reference/architecture/mir-to-vm-mapping.md`（更新済・追補）
 
 2) VM×プラグインシステムのE2E検証（短期）
-- `tests/e2e_plugin_filebox.rs` をVMでも通す（`--features plugins`）
-- ケース: `new/close`, `open/read/write`, `copyFrom(handle)`、デリゲーション from Parent
-- 成果物: テストグリーン＋既知の制約を `VM_README.md` に明記
+- FileBox/Netを中心にケース拡張（大きいボディ、ヘッダー多数、タイムアウト等）
+- 成果物: E2E追補＋`VM_README.md` に既知の制約とTipsを追記
 
 3) 命令セットのダイエット（中期：目標26命令）
-- 実行統計（`--vm-stats --vm-stats-json`）でホット命令を特定
-- 統合方針（例: TypeCheck/Castの整理、Array/Ref周りの集約、ExternCall→BoxCall移行）
-- 段階移行（互換エイリアス→削除）と回帰テスト整備
-- 成果物: 26命令案ドラフト＋移行計画
+- 実測（HTTP OK/404/500/unreachable、FileBox）を反映して合意版を確定
+- 統合方針（TypeOp/WeakRef/Barrierの統合、ExternCall最小化）
+- 段階移行（ビルドモードでメタ降格、互換エイリアス→削除）と回帰テスト整備
+- 成果物: 26命令案（合意版）＋移行計画
 
 ## ▶ 実行コマンド例
 
 計測実行:
 ```bash
-nyash --backend vm --vm-stats --vm-stats-json local_tests/test_hello.nyash > vm_stats.json
+tools/run_vm_stats.sh local_tests/vm_stats_http_ok.nyash vm_stats_ok.json
+tools/run_vm_stats.sh local_tests/vm_stats_http_err.nyash vm_stats_err.json
+tools/run_vm_stats.sh local_tests/vm_stats_http_404.nyash vm_stats_404.json
+tools/run_vm_stats.sh local_tests/vm_stats_http_500.nyash vm_stats_500.json
 ```
 
 VM×プラグインE2E:
@@ -42,10 +53,9 @@ nyash --dump-mir --mir-verbose examples/plugin_box_sample.nyash
 nyash --verify examples/plugin_box_sample.nyash
 ```
 
-## 🔭 26命令ターゲット（ドラフトの方向性）
-コア（候補）: Const / Copy / Load / Store / BinOp / UnaryOp / Compare / Jump / Branch / Phi / Call / BoxCall / NewBox / ArrayGet / ArraySet / RefNew / RefGet / RefSet / WeakNew / WeakLoad / BarrierRead / BarrierWrite / Return / Print or ExternCall(→BoxCall集約) + 2枠（例外/await系のどちらか）
-
-補助: Debug/Nop/Safepointはビルドモードで有効化（命令としては非中核に降格）
+## 🔭 26命令ターゲット（合意ドラフト）
+- コア: Const / Copy / Load / Store / BinOp / UnaryOp / Compare / Jump / Branch / Phi / Return / Call / BoxCall / NewBox / ArrayGet / ArraySet / RefNew / RefGet / RefSet / Await / Print / ExternCall(最小) / TypeOp(=TypeCheck/Cast統合) / WeakRef(=WeakNew/WeakLoad統合) / Barrier(=Read/Write統合)
+- メタ降格: Debug / Nop / Safepoint（ビルドモードで制御）
 
 ---
-最終更新: 2025年8月23日（MIR/VM再フォーカス、26命令ダイエットへ）
+最終更新: 2025年8月23日（VM×Plugins安定・MIR修正・26命令合意ドラフトへ）

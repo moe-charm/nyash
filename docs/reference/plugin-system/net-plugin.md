@@ -30,6 +30,13 @@
   - `acceptTimeout(ms)`: タイムアウト時は `void`
   - `recvTimeout(ms)`: タイムアウト時は 空 `bytes`（長さ0の文字列）
 
+### HTTPエラーハンドリング（重要）
+- **接続失敗（unreachable）**: `Result.Err(ErrorBox)` を返す
+  - 例: ポート8099に接続できない → `Err("connect failed for 127.0.0.1:8099/...")`
+- **HTTPステータスエラー（404/500等）**: `Result.Ok(HttpResponseBox)` を返す
+  - 例: 404 Not Found → `Ok(response)` で `response.getStatus()` が 404
+  - トランスポート層は成功、アプリケーション層のエラーとして扱う
+
 将来の整合:
 - `ResultBox` での返却に対応する設計（`Ok(value)`/`Err(ErrorBox)`）を検討中。
 - `nyash.toml` のメソッド宣言に戻り値型（Result）を記載し、ランタイムで自動ラップする案。
