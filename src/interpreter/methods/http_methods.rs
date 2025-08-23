@@ -47,6 +47,15 @@ impl NyashInterpreter {
                 
                 Ok(socket_box.accept())
             }
+            "acceptTimeout" | "accept_timeout" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("acceptTimeout(ms) expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let ms = self.execute_expression(&arguments[0])?;
+                Ok(socket_box.accept_timeout(ms))
+            }
             "connect" => {
                 if arguments.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
@@ -66,6 +75,15 @@ impl NyashInterpreter {
                 }
                 
                 Ok(socket_box.read())
+            }
+            "recvTimeout" | "recv_timeout" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("recvTimeout(ms) expects 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let ms = self.execute_expression(&arguments[0])?;
+                Ok(socket_box.recv_timeout(ms))
             }
             "readHttpRequest" => {
                 if !arguments.is_empty() {

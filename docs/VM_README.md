@@ -48,6 +48,9 @@ NYASH_VM_STATS=1 NYASH_VM_STATS_JSON=1 ./target/debug/nyash --backend vm program
   - `scope_tracker` がスコープ終了時に `fini()` を呼ぶ（メモリ安全）。
 - 大きいボディ/多ヘッダー/タイムアウト
   - 逐次拡張中。異常時の挙動は上記Result規約に従う。実行ログと `--vm-stats` を併用して診断。
+- 反復タイムアウト: `local_tests/socket_repeated_timeouts.nyash` で `acceptTimeout/recvTimeout` の連続ケース確認
+- BoxCallデバッグ: `NYASH_VM_DEBUG_BOXCALL=1` でBoxCallの受け手型・引数型・処理経路（enter/fastpath/unified）・結果型をstderr出力
+  - 例: `NYASH_VM_DEBUG_BOXCALL=1 ./target/release/nyash --backend vm local_tests/test_vm_array_getset.nyash`
  - SocketBox（VM）
    - 基本API: `bind/listen/accept/connect/read/write/close/isServer/isConnected`
    - タイムアウト: `acceptTimeout(ms)` は接続なしで `void`、`recvTimeout(ms)` は空文字を返す

@@ -457,15 +457,25 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
 
-            MirInstruction::TypeOp { dst, op, value, ty: _ } => {
-                // PoC: mirror current semantics
+            MirInstruction::TypeOp { dst, op, value, ty } => {
                 match op {
                     crate::mir::TypeOpKind::Check => {
-                        // Current TypeCheck is a no-op that returns true
-                        self.set_value(*dst, VMValue::Bool(true));
+                        let v = self.get_value(*value)?;
+                        let ok = match ty {
+                            crate::mir::MirType::Integer => matches!(v, VMValue::Integer(_)),
+                            crate::mir::MirType::Float => matches!(v, VMValue::Float(_)),
+                            crate::mir::MirType::Bool => matches!(v, VMValue::Bool(_)),
+                            crate::mir::MirType::String => matches!(v, VMValue::String(_)),
+                            crate::mir::MirType::Void => matches!(v, VMValue::Void),
+                            crate::mir::MirType::Box(name) => match v {
+                                VMValue::BoxRef(ref arc) => arc.type_name() == name,
+                                _ => false,
+                            },
+                            _ => true,
+                        };
+                        self.set_value(*dst, VMValue::Bool(ok));
                     }
                     crate::mir::TypeOpKind::Cast => {
-                        // Current Cast is a copy/no-op
                         let v = self.get_value(*value)?;
                         self.set_value(*dst, v);
                     }
@@ -598,11 +608,14 @@ impl VM {
                 }
 
                 // Evaluate arguments
-                let mut arg_values = Vec::new();
+                let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
+                let mut arg_vm_values: Vec<VMValue> = Vec::new();
                 for arg_id in args {
                     let arg_vm_value = self.get_value(*arg_id)?;
                     arg_values.push(arg_vm_value.to_nyash_box());
+                    arg_vm_values.push(arg_vm_value);
                 }
+                self.debug_log_boxcall(&box_vm_value, method, &arg_values, "enter", None);
                 
                 // PluginBoxV2 method dispatch via BID-FFI (zero-arg minimal)
                 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
@@ -625,6 +638,31 @@ impl VM {
                         }
                     }
                     return Ok(ControlFlow::Continue);
+                }
+
+                // Fast-path for ArrayBox methods using original BoxRef (preserve state)
+                if let VMValue::BoxRef(ref arc_any) = box_vm_value {
+                    if let Some(arr) = arc_any.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        match method.as_str() {
+                            "get" => {
+                                if let Some(arg0) = arg_values.get(0) {
+                                    let res = arr.get((*arg0).clone_or_share());
+                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
+                                    return Ok(ControlFlow::Continue);
+                                }
+                            }
+                            "set" => {
+                                if arg_values.len() >= 2 {
+                                    let idx = (*arg_values.get(0).unwrap()).clone_or_share();
+                                    let val = (*arg_values.get(1).unwrap()).clone_or_share();
+                                    let _ = arr.set(idx, val);
+                                    if let Some(dst_id) = dst { let v = VMValue::Void; self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
+                                    return Ok(ControlFlow::Continue);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
                 }
 
                 // Call the method - unified dispatch for all Box types
@@ -651,6 +689,7 @@ impl VM {
                 // Store result if destination is specified
                 if let Some(dst_id) = dst {
                     let vm_result = VMValue::from_nyash_box(result);
+                    self.debug_log_boxcall(&box_vm_value, method, &arg_vm_values.iter().map(|v| v.to_nyash_box()).collect::<Vec<_>>(), "unified", Some(&vm_result));
                     self.set_value(*dst_id, vm_result);
                 }
                 Ok(ControlFlow::Continue)
@@ -699,17 +738,35 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
-            MirInstruction::ArrayGet { dst, array: _, index: _ } => {
-                // For now, array access returns a placeholder
-                // TODO: Implement proper array access
-                self.set_value(*dst, VMValue::Integer(0));
-                Ok(ControlFlow::Continue)
+            MirInstruction::ArrayGet { dst, array, index } => {
+                // Implement ArrayBox get(index) → value
+                let arr_val = self.get_value(*array)?;
+                let idx_val = self.get_value(*index)?;
+                if let VMValue::BoxRef(arc) = arr_val {
+                    if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        let idx_box = idx_val.to_nyash_box();
+                        let got = arr.get(idx_box);
+                        self.set_value(*dst, VMValue::from_nyash_box(got));
+                        return Ok(ControlFlow::Continue);
+                    }
+                }
+                Err(VMError::TypeError("ArrayGet expects ArrayBox".to_string()))
             },
             
-            MirInstruction::ArraySet { array: _, index: _, value: _ } => {
-                // For now, array setting is a no-op
-                // TODO: Implement proper array setting
-                Ok(ControlFlow::Continue)
+            MirInstruction::ArraySet { array, index, value } => {
+                // Implement ArrayBox set(index, value)
+                let arr_val = self.get_value(*array)?;
+                let idx_val = self.get_value(*index)?;
+                let val_val = self.get_value(*value)?;
+                if let VMValue::BoxRef(arc) = arr_val {
+                    if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        let idx_box = idx_val.to_nyash_box();
+                        let val_box = val_val.to_nyash_box();
+                        let _ = arr.set(idx_box, val_box);
+                        return Ok(ControlFlow::Continue);
+                    }
+                }
+                Err(VMError::TypeError("ArraySet expects ArrayBox".to_string()))
             },
             
             MirInstruction::Copy { dst, src } => {
@@ -1046,6 +1103,33 @@ impl VM {
     /// Execute comparison operation
     fn execute_compare_op(&self, op: &CompareOp, left: &VMValue, right: &VMValue) -> Result<bool, VMError> {
         match (left, right) {
+            // Numeric mixed comparisons (Integer/Float)
+            (VMValue::Integer(l), VMValue::Float(r)) => {
+                let l = *l as f64;
+                let r = *r;
+                let result = match op {
+                    CompareOp::Eq => l == r,
+                    CompareOp::Ne => l != r,
+                    CompareOp::Lt => l < r,
+                    CompareOp::Le => l <= r,
+                    CompareOp::Gt => l > r,
+                    CompareOp::Ge => l >= r,
+                };
+                Ok(result)
+            },
+            (VMValue::Float(l), VMValue::Integer(r)) => {
+                let l = *l;
+                let r = *r as f64;
+                let result = match op {
+                    CompareOp::Eq => l == r,
+                    CompareOp::Ne => l != r,
+                    CompareOp::Lt => l < r,
+                    CompareOp::Le => l <= r,
+                    CompareOp::Gt => l > r,
+                    CompareOp::Ge => l >= r,
+                };
+                Ok(result)
+            },
             // Bool comparisons: support Eq/Ne only for now
             (VMValue::Bool(l), VMValue::Bool(r)) => {
                 let result = match op {
@@ -1075,6 +1159,18 @@ impl VM {
             },
 
             (VMValue::Integer(l), VMValue::Integer(r)) => {
+                let result = match op {
+                    CompareOp::Eq => l == r,
+                    CompareOp::Ne => l != r,
+                    CompareOp::Lt => l < r,
+                    CompareOp::Le => l <= r,
+                    CompareOp::Gt => l > r,
+                    CompareOp::Ge => l >= r,
+                };
+                Ok(result)
+            },
+            
+            (VMValue::Float(l), VMValue::Float(r)) => {
                 let result = match op {
                     CompareOp::Eq => l == r,
                     CompareOp::Ne => l != r,
@@ -1145,6 +1241,35 @@ impl VM {
             MirInstruction::ExternCall { .. } => "ExternCall",
         };
         *self.instr_counter.entry(key).or_insert(0) += 1;
+    }
+
+    fn debug_log_boxcall(&self, recv: &VMValue, method: &str, args: &[Box<dyn NyashBox>], stage: &str, result: Option<&VMValue>) {
+        if std::env::var("NYASH_VM_DEBUG_BOXCALL").ok().as_deref() == Some("1") {
+            let recv_ty = match recv {
+                VMValue::BoxRef(arc) => arc.type_name().to_string(),
+                VMValue::Integer(_) => "Integer".to_string(),
+                VMValue::Float(_) => "Float".to_string(),
+                VMValue::Bool(_) => "Bool".to_string(),
+                VMValue::String(_) => "String".to_string(),
+                VMValue::Future(_) => "Future".to_string(),
+                VMValue::Void => "Void".to_string(),
+            };
+            let args_desc: Vec<String> = args.iter().map(|a| a.type_name().to_string()).collect();
+            if let Some(res) = result {
+                let res_ty = match res {
+                    VMValue::BoxRef(arc) => format!("BoxRef({})", arc.type_name()),
+                    VMValue::Integer(_) => "Integer".to_string(),
+                    VMValue::Float(_) => "Float".to_string(),
+                    VMValue::Bool(_) => "Bool".to_string(),
+                    VMValue::String(_) => "String".to_string(),
+                    VMValue::Future(_) => "Future".to_string(),
+                    VMValue::Void => "Void".to_string(),
+                };
+                eprintln!("[VM-BOXCALL][{}] recv_ty={} method={} argc={} args={:?} => result_ty={}", stage, recv_ty, method, args.len(), args_desc, res_ty);
+            } else {
+                eprintln!("[VM-BOXCALL][{}] recv_ty={} method={} argc={} args={:?}", stage, recv_ty, method, args.len(), args_desc);
+            }
+        }
     }
 
     /// Print simple VM execution statistics when enabled via env var

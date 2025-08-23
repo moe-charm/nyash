@@ -267,6 +267,7 @@ impl BoxCore for MapBox {
 }
 
 impl NyashBox for MapBox {
+    fn is_identity(&self) -> bool { true }
     fn type_name(&self) -> &'static str {
         "MapBox"
     }

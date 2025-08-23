@@ -243,24 +243,44 @@ impl NyashInterpreter {
         // ビルトインBoxのインスタンスを作成または取得
         match parent {
             "StringBox" => {
-                let string_box = StringBox::new("");
-                self.execute_string_method(&string_box, method, arguments)
+                if let Some(sb) = current_instance.as_any().downcast_ref::<StringBox>() {
+                    self.execute_string_method(sb, method, arguments)
+                } else {
+                    let string_box = StringBox::new("");
+                    self.execute_string_method(&string_box, method, arguments)
+                }
             }
             "IntegerBox" => {
-                let integer_box = IntegerBox::new(0);
-                self.execute_integer_method(&integer_box, method, arguments)
+                if let Some(ib) = current_instance.as_any().downcast_ref::<IntegerBox>() {
+                    self.execute_integer_method(ib, method, arguments)
+                } else {
+                    let integer_box = IntegerBox::new(0);
+                    self.execute_integer_method(&integer_box, method, arguments)
+                }
             }
             "ArrayBox" => {
-                let array_box = ArrayBox::new();
-                self.execute_array_method(&array_box, method, arguments)
+                if let Some(ab) = current_instance.as_any().downcast_ref::<ArrayBox>() {
+                    self.execute_array_method(ab, method, arguments)
+                } else {
+                    let array_box = ArrayBox::new();
+                    self.execute_array_method(&array_box, method, arguments)
+                }
             }
             "MapBox" => {
-                let map_box = MapBox::new();
-                self.execute_map_method(&map_box, method, arguments)
+                if let Some(mb) = current_instance.as_any().downcast_ref::<MapBox>() {
+                    self.execute_map_method(mb, method, arguments)
+                } else {
+                    let map_box = MapBox::new();
+                    self.execute_map_method(&map_box, method, arguments)
+                }
             }
             "MathBox" => {
-                let math_box = MathBox::new();
-                self.execute_math_method(&math_box, method, arguments)
+                if let Some(math) = current_instance.as_any().downcast_ref::<MathBox>() {
+                    self.execute_math_method(math, method, arguments)
+                } else {
+                    let math_box = MathBox::new();
+                    self.execute_math_method(&math_box, method, arguments)
+                }
             }
             // 他のビルトインBoxは必要に応じて追加
             _ => {

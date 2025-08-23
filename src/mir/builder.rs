@@ -61,6 +61,96 @@ impl MirBuilder {
         }
     }
 
+    /// Emit a type check instruction (flagged to TypeOp in PoC)
+    #[allow(dead_code)]
+    pub(super) fn emit_type_check(&mut self, value: ValueId, expected_type: String) -> Result<ValueId, String> {
+        let dst = self.value_gen.next();
+        #[cfg(feature = "mir_typeop_poc")]
+        {
+            self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Check, value, ty: super::MirType::Box(expected_type) })?;
+            return Ok(dst);
+        }
+        #[cfg(not(feature = "mir_typeop_poc"))]
+        {
+            self.emit_instruction(MirInstruction::TypeCheck { dst, value, expected_type })?;
+            Ok(dst)
+        }
+    }
+
+    /// Emit a cast instruction (flagged to TypeOp in PoC)
+    #[allow(dead_code)]
+    pub(super) fn emit_cast(&mut self, value: ValueId, target_type: super::MirType) -> Result<ValueId, String> {
+        let dst = self.value_gen.next();
+        #[cfg(feature = "mir_typeop_poc")]
+        {
+            self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Cast, value, ty: target_type.clone() })?;
+            return Ok(dst);
+        }
+        #[cfg(not(feature = "mir_typeop_poc"))]
+        {
+            self.emit_instruction(MirInstruction::Cast { dst, value, target_type })?;
+            Ok(dst)
+        }
+    }
+
+    /// Emit a weak reference creation (flagged to WeakRef(New) in PoC)
+    #[allow(dead_code)]
+    pub(super) fn emit_weak_new(&mut self, box_val: ValueId) -> Result<ValueId, String> {
+        let dst = self.value_gen.next();
+        #[cfg(feature = "mir_refbarrier_unify_poc")]
+        {
+            self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::New, value: box_val })?;
+            return Ok(dst);
+        }
+        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
+        {
+            self.emit_instruction(MirInstruction::WeakNew { dst, box_val })?;
+            Ok(dst)
+        }
+    }
+
+    /// Emit a weak reference load (flagged to WeakRef(Load) in PoC)
+    #[allow(dead_code)]
+    pub(super) fn emit_weak_load(&mut self, weak_ref: ValueId) -> Result<ValueId, String> {
+        let dst = self.value_gen.next();
+        #[cfg(feature = "mir_refbarrier_unify_poc")]
+        {
+            self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::Load, value: weak_ref })?;
+            return Ok(dst);
+        }
+        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
+        {
+            self.emit_instruction(MirInstruction::WeakLoad { dst, weak_ref })?;
+            Ok(dst)
+        }
+    }
+
+    /// Emit a barrier read (flagged to Barrier(Read) in PoC)
+    #[allow(dead_code)]
+    pub(super) fn emit_barrier_read(&mut self, ptr: ValueId) -> Result<(), String> {
+        #[cfg(feature = "mir_refbarrier_unify_poc")]
+        {
+            self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Read, ptr })
+        }
+        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
+        {
+            self.emit_instruction(MirInstruction::BarrierRead { ptr })
+        }
+    }
+
+    /// Emit a barrier write (flagged to Barrier(Write) in PoC)
+    #[allow(dead_code)]
+    pub(super) fn emit_barrier_write(&mut self, ptr: ValueId) -> Result<(), String> {
+        #[cfg(feature = "mir_refbarrier_unify_poc")]
+        {
+            self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Write, ptr })
+        }
+        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
+        {
+            self.emit_instruction(MirInstruction::BarrierWrite { ptr })
+        }
+    }
+
     /// Lower a box method (e.g., birth) into a standalone MIR function
     /// func_name: Fully-qualified name like "Person.birth/1"
     /// box_name: Owning box type name (used for 'me' param type)
@@ -733,13 +823,9 @@ impl MirBuilder {
                 let init_expr = initial_values[i].as_ref().unwrap();
                 self.build_expression(*init_expr.clone())?
             } else {
-                // No initial value - assign void (uninitialized)
-                let void_dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const {
-                    dst: void_dst,
-                    value: ConstValue::Void,
-                })?;
-                void_dst
+                // No initial value - do not emit a const; leave uninitialized until assigned
+                // Use a fresh SSA id only for name binding; consumers should not use it before assignment
+                self.value_gen.next()
             };
             
             // Register variable in SSA form
@@ -747,14 +833,10 @@ impl MirBuilder {
             last_value = Some(value_id);
         }
         
-        // Return the last assigned value, or void if no variables
+        // Return the last bound value id (no emission); callers shouldn't rely on this value
         Ok(last_value.unwrap_or_else(|| {
-            let void_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: void_val,
-                value: ConstValue::Void,
-            }).unwrap();
-            void_val
+            // create a dummy id without emission
+            self.value_gen.next()
         }))
     }
     
@@ -970,6 +1052,8 @@ impl MirBuilder {
             dst: me_value,
             value: ConstValue::String("__me__".to_string()),
         })?;
+        // Register a stable mapping so subsequent 'me' resolves to the same ValueId
+        self.variable_map.insert("me".to_string(), me_value);
         Ok(me_value)
     }
     

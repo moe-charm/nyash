@@ -302,6 +302,7 @@ impl Display for ArrayBox {
 }
 
 impl NyashBox for ArrayBox {
+    fn is_identity(&self) -> bool { true }
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }

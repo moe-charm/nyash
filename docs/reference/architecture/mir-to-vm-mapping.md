@@ -49,8 +49,8 @@
   - TODO: 正式な型変換に置換。
 
 ## 配列
-- ArrayGet: TODO（一時的に0を返す）
-- ArraySet: TODO（現在はno-op）
+- ArrayGet: ArrayBox.get(index) を呼び出し、戻り値を格納（VM対応済み）
+- ArraySet: ArrayBox.set(index, value) を呼び出し（VM対応済み）
 
 ## デバッグ/出力
 - Debug: No-op（性能優先）
@@ -198,3 +198,21 @@ Verifier（検証）に関する追加事項（方針）
 デバッグ小技:
 - `NYASH_DEBUG_PLUGIN=1` で VM→Plugin 呼び出しTLVの ver/argc/先頭バイトをダンプ
 - Netプラグインの内部ログ: `NYASH_NET_LOG=1 NYASH_NET_LOG_FILE=net_plugin.log`
+## 型・Null/Void・比較の扱い（更新）
+
+- NullはVM内部でVoidに折りたたみ（`Const Null → VMValue::Void`）。
+- VoidとNullは同一視されない（等価比較は `Void == Void` のみtrue）。
+- Compareの対応：
+  - 整数/文字列: Eq/Ne/Lt/Le/Gt/Ge（実装済）
+  - 真偽値: Eq/Ne のみ
+  - Void: Eq/Ne のみ（Void==Voidはtrue、それ以外はfalse）
+  - 浮動小数点: Eq/Ne/Lt/Le/Gt/Ge（新規）
+  - 整数と浮動小数点の混在: 双方をf64比較で対応（新規）
+
+## TypeOp（PoC）
+- 目的: TypeCheck/Castの統合。
+- Check: 最小意味論を実装（Integer/Float/Bool/String/Void/Box名に対し一致判定）。
+- Cast: 当面コピー等価（将来の変換方針に備える）。
+- me 参照
+  - メソッド/コンストラクタlowering時は `%0` にマップ（パラメータ）。
+  - それ以外の文脈ではフォールバックとして `Const "__me__"` を一度だけ発行して変数マップに保持し、以降の `me` は同一ValueIdを参照（RefGet/RefSetの整合性を保証）。

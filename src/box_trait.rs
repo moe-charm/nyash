@@ -720,6 +720,7 @@ impl Display for ErrorBox {
 }
 
 /// Result values in Nyash - represents success or error results
+#[deprecated(note = "Use boxes::result::NyashResultBox (aka boxes::ResultBox) instead")]
 #[derive(Debug)]
 pub struct ResultBox {
     pub is_success: bool,
