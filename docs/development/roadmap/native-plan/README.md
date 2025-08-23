@@ -2,11 +2,11 @@
 
 ## 🎯 目的
 開発者向けに「ビルド計画・段階的タスク・設計上の要点」を集約。  
-利用者向けの具体的なビルド手順は docs/説明書/native-build/README.md を参照。
+利用者向けの具体的なビルド手順は guides/ 以下の各ガイドを参照。
 
 ## 📋 重要リンク
-- **現在のタスク**: [docs/CURRENT_TASK.md](../../CURRENT_TASK.md)
-- **コア概念（速習）**: [docs/nyash_core_concepts.md](../../nyash_core_concepts.md)
+- **現在のタスク**: [development/current/CURRENT_TASK.md](../../current/CURRENT_TASK.md)
+- **コア概念（速習）**: [reference/architecture/nyash_core_concepts.md](../../reference/architecture/nyash_core_concepts.md)
 - **🤖 AI大会議記録**: [../ai_conference_native_compilation_20250814.md](../ai_conference_native_compilation_20250814.md)
 - **🗺️ ネイティブコンパイル戦略**: [../native-compilation-roadmap.md](../native-compilation-roadmap.md)
 - **フェーズ課題一覧**: [issues/](issues/)

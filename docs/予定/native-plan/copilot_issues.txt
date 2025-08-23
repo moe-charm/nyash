@@ -1,0 +1,1 @@
+# Moved: copilot_issues\n\nこのファイルは移動しました。最新は下記を参照してください。\n\n- 新しい場所: ../../development/roadmap/native-plan/copilot_issues.txt\n

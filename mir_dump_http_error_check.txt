@@ -1,0 +1,42 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: local_tests/test_http_error_simple.nyash 🚀
+🚀 MIR Output for local_tests/test_http_error_simple.nyash:
+; MIR Module: main
+
+define void @main() {
+bb0:
+    0: safepoint
+    1: %0 = const void
+    2: %1 = const void
+    3: %2 = const void
+    4: %3 = const void
+    5: %4 = new HttpClientBox()
+    6: call %4.birth()
+    7: %5 = const "http://127.0.0.1:8099/nope"
+    8: %6 = new StringBox(%5)
+    9: call %6.birth(%5)
+   10: %7 = const "http://127.0.0.1:8099/nope"
+   11: %8 = new StringBox(%7)
+   12: call %8.birth(%7)
+   13: %9 = call %4.get(%8)
+   14: %10 = call %9.isOk()
+   15: br %10, label bb1, label bb2
+
+bb1:
+    0: %11 = const "unexpected_ok"
+    1: %12 = new StringBox(%11)
+    2: call %12.birth(%11)
+    3: br label bb3
+
+bb2:
+    0: %13 = call %9.getError()
+    1: %14 = call %13.toString()
+    2: br label bb3
+
+bb3:
+    0: %15 = phi [%12, bb1], [%14, bb2]
+    1: ret %14
+}
+
+

@@ -3,7 +3,7 @@
 ## 📋 現在進行中
 
 ### 🎯 最重要タスク
-- **現在のタスク**: [docs/CURRENT_TASK.md](../CURRENT_TASK.md)
+- **現在のタスク**: [development/current/CURRENT_TASK.md](../current/CURRENT_TASK.md)
 - **Phase 8.3**: Box操作WASM実装（Copilot担当）
 - **Phase 8.4**: ネイティブコンパイル実装計画（AI大会議策定済み）
 
@@ -49,7 +49,7 @@
 ## 📚 関連ドキュメント
 
 ### 📖 技術資料
-- **[実行バックエンドガイド](../execution-backends.md)** - 3バックエンド使い分け
+- **[実行バックエンドガイド](../../reference/architecture/execution-backends.md)** - 3バックエンド使い分け
 - **[コアコンセプト](../nyash_core_concepts.md)** - Everything is Box哲学
 
 ### 🔄 進捗管理

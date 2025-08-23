@@ -18,7 +18,7 @@ pub mod value_id;
 pub mod effect;
 
 // Re-export main types for easy access
-pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, MirType};
+pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, MirType, TypeOpKind, WeakRefOp, BarrierOp};
 pub use instruction_v2::{MirInstructionV2, AtomicOrdering}; // New 25-instruction set
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use function::{MirFunction, MirModule, FunctionSignature};

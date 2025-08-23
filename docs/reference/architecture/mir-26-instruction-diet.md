@@ -84,3 +84,13 @@ Appendix: Rationale
 - Smaller ISA simplifies VM fast paths and aids JIT/AOT later.
 - Data shows hot paths concentrated on calls, const, alloc; control sparse and localized.
 - Folding type ops reduces interpreter/VM dispatch; verification handles safety.
+---
+
+Feature Flags (Cargo)
+- `mir_typeop_poc`: enable TypeOp PoC mapping (builder emits TypeOp instead of TypeCheck/Cast)
+- `mir_refbarrier_unify_poc`: enable WeakRef/Barrier PoC mapping (builder emits unified ops)
+
+Status (2025-08-23)
+- Flags declared in `Cargo.toml` (off by default)
+- PoC design doc: `docs/development/proposals/mir-typeop-weakref-barrier-poc.md`
+- Next: land builder/VM mapping behind flags, add snapshot tests; no behavior change with flags off

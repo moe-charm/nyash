@@ -136,6 +136,16 @@ pub enum MirInstruction {
         value: ValueId,
         target_type: MirType,
     },
+
+    // === Type Operations (Unified PoC) ===
+    /// Unified type operation (PoC): Check or Cast
+    /// `%dst = typeop(check|cast, %value, Type)`
+    TypeOp {
+        dst: ValueId,
+        op: TypeOpKind,
+        value: ValueId,
+        ty: MirType,
+    },
     
     // === Array Operations ===
     /// Get array element
@@ -250,6 +260,22 @@ pub enum MirInstruction {
     BarrierWrite {
         ptr: ValueId,
     },
+
+    // === Unified PoC: WeakRef/Barrier (flags-only scaffolding) ===
+    /// Unified weak reference op (PoC)
+    /// `%dst = weakref new %box` or `%dst = weakref load %weak`
+    WeakRef {
+        dst: ValueId,
+        op: WeakRefOp,
+        value: ValueId,
+    },
+
+    /// Unified barrier op (PoC)
+    /// `barrier read %ptr` or `barrier write %ptr`
+    Barrier {
+        op: BarrierOp,
+        ptr: ValueId,
+    },
     
     // === Phase 7: Async/Future Operations ===
     
@@ -354,6 +380,7 @@ impl MirInstruction {
             MirInstruction::UnaryOp { .. } |
             MirInstruction::Compare { .. } |
             MirInstruction::Cast { .. } |
+            MirInstruction::TypeOp { .. } |
             MirInstruction::Copy { .. } |
             MirInstruction::Phi { .. } |
             MirInstruction::TypeCheck { .. } |
@@ -396,6 +423,15 @@ impl MirInstruction {
             MirInstruction::WeakLoad { .. } => EffectMask::READ, // Loading weak ref has read effects
             MirInstruction::BarrierRead { .. } => EffectMask::READ.add(Effect::Barrier), // Memory barrier with read
             MirInstruction::BarrierWrite { .. } => EffectMask::WRITE.add(Effect::Barrier), // Memory barrier with write
+            // PoC unified ops mirror legacy effects
+            MirInstruction::WeakRef { op, .. } => match op {
+                WeakRefOp::New => EffectMask::PURE,
+                WeakRefOp::Load => EffectMask::READ,
+            },
+            MirInstruction::Barrier { op, .. } => match op {
+                BarrierOp::Read => EffectMask::READ.add(Effect::Barrier),
+                BarrierOp::Write => EffectMask::WRITE.add(Effect::Barrier),
+            },
             
             // Phase 7: Async/Future Operations
             MirInstruction::FutureNew { .. } => EffectMask::PURE.add(Effect::Alloc), // Creating future may allocate
@@ -419,12 +455,14 @@ impl MirInstruction {
             MirInstruction::NewBox { dst, .. } |
             MirInstruction::TypeCheck { dst, .. } |
             MirInstruction::Cast { dst, .. } |
+            MirInstruction::TypeOp { dst, .. } |
             MirInstruction::ArrayGet { dst, .. } |
             MirInstruction::Copy { dst, .. } |
             MirInstruction::RefNew { dst, .. } |
             MirInstruction::RefGet { dst, .. } |
             MirInstruction::WeakNew { dst, .. } |
             MirInstruction::WeakLoad { dst, .. } |
+            MirInstruction::WeakRef { dst, .. } |
             MirInstruction::FutureNew { dst, .. } |
             MirInstruction::Await { dst, .. } => Some(*dst),
             
@@ -443,6 +481,7 @@ impl MirInstruction {
             MirInstruction::RefSet { .. } |
             MirInstruction::BarrierRead { .. } |
             MirInstruction::BarrierWrite { .. } |
+            MirInstruction::Barrier { .. } |
             MirInstruction::FutureSet { .. } |
             MirInstruction::Safepoint |
             MirInstruction::Nop => None,
@@ -462,6 +501,7 @@ impl MirInstruction {
             MirInstruction::Load { ptr: operand, .. } |
             MirInstruction::TypeCheck { value: operand, .. } |
             MirInstruction::Cast { value: operand, .. } |
+            MirInstruction::TypeOp { value: operand, .. } |
             MirInstruction::Copy { src: operand, .. } |
             MirInstruction::Debug { value: operand, .. } |
             MirInstruction::Print { value: operand, .. } => vec![*operand],
@@ -511,6 +551,8 @@ impl MirInstruction {
             MirInstruction::WeakLoad { weak_ref, .. } => vec![*weak_ref],
             MirInstruction::BarrierRead { ptr } => vec![*ptr],
             MirInstruction::BarrierWrite { ptr } => vec![*ptr],
+            MirInstruction::WeakRef { value, .. } => vec![*value],
+            MirInstruction::Barrier { ptr, .. } => vec![*ptr],
             
             // Phase 7: Async/Future Operations
             MirInstruction::FutureNew { value, .. } => vec![*value],
@@ -522,6 +564,21 @@ impl MirInstruction {
         }
     }
 }
+
+/// Kind of unified type operation (PoC)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeOpKind {
+    Check,
+    Cast,
+}
+
+/// Kind of unified weak reference operation (PoC)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WeakRefOp { New, Load }
+
+/// Kind of unified barrier operation (PoC)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BarrierOp { Read, Write }
 
 impl ConstValue {
     /*

@@ -85,7 +85,7 @@ read = { args = [] }                                    # 引数なし
 ./tools/plugin-tester/target/release/plugin-tester io plugin.so
 ```
 
-**詳細**: [BID-FFI仕様書](説明書/reference/box-design/ffi-abi-specification.md)
+**詳細**: [BID-FFI仕様書](../plugin-system/ffi-abi-specification.md)
 
 ## ⚡ **実行バックエンド選択** - 開発から本番まで
 
@@ -650,5 +650,4 @@ cargo build --release -j32
 - **⚡ 性能**: VM 20倍、WASM 13倍、将来AOT 1000倍高速化
 - **📚 使いやすさ**: 自動変換、標準ライブラリ、直感的構文
 
-**詳しいdocs**: [完全リファレンス](説明書/reference/) | [開発ガイド](../CLAUDE.md) | [Phase計画](予定/native-plan/copilot_issues.txt)
-
+**詳しいdocs**: [完全リファレンス](../) | [開発ガイド](../../../CLAUDE.md) | [Phase計画](../../development/roadmap/native-plan/copilot_issues.txt)

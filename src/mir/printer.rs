@@ -279,6 +279,11 @@ impl MirPrinter {
                 format!("{} = cast {} to {:?}", dst, value, target_type)
             },
             
+            MirInstruction::TypeOp { dst, op, value, ty } => {
+                let op_str = match op { super::TypeOpKind::Check => "check", super::TypeOpKind::Cast => "cast" };
+                format!("{} = typeop {} {} {:?}", dst, op_str, value, ty)
+            },
+            
             MirInstruction::ArrayGet { dst, array, index } => {
                 format!("{} = {}[{}]", dst, array, index)
             },
@@ -347,6 +352,16 @@ impl MirPrinter {
             
             MirInstruction::BarrierWrite { ptr } => {
                 format!("barrier_write {}", ptr)
+            },
+            
+            MirInstruction::WeakRef { dst, op, value } => {
+                let op_str = match op { super::WeakRefOp::New => "new", super::WeakRefOp::Load => "load" };
+                format!("{} = weakref {} {}", dst, op_str, value)
+            },
+            
+            MirInstruction::Barrier { op, ptr } => {
+                let op_str = match op { super::BarrierOp::Read => "read", super::BarrierOp::Write => "write" };
+                format!("barrier {} {}", op_str, ptr)
             },
             
             // Phase 7: Async/Future Operations

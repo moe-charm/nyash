@@ -113,3 +113,6 @@ Nyash Source ──▶ MIR (Builder)
 - `docs/reference/architecture/mir-to-vm-mapping.md`
 - `docs/reference/architecture/mir-26-instruction-diet.md`
 
+See also
+- `docs/examples/http_result_patterns.md` - HTTPのResult挙動（unreachable/404/500）のE2E例
+- `docs/VM_README.md` - VM統計とプラグイン周りの既知制約

@@ -1,0 +1,86 @@
+🔍 DEBUG: Initializing v2 plugin system
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_counter_plugin.so
+[FileBox] Plugin initialized
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_filebox_plugin.so
+Net plugin: LOG_ON=false, LOG_PATH=net_plugin.log
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_net_plugin.so
+🔌 v2 plugin system initialized from nyash.toml
+  📦 Registering plugin provider for CounterBox
+  📦 Registering plugin provider for FileBox
+  📦 Registering plugin provider for HttpServerBox
+  📦 Registering plugin provider for HttpClientBox
+  📦 Registering plugin provider for HttpResponseBox
+  📦 Registering plugin provider for HttpRequestBox
+  📦 Registering plugin provider for SocketServerBox
+  📦 Registering plugin provider for SocketClientBox
+  📦 Registering plugin provider for SocketConnBox
+✅ v2 plugin system fully configured
+🚀 Nyash VM Backend - Executing file: local_tests/vm_stats_http_404.nyash 🚀
+🔍 create_box called for: HttpServerBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpServerBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpServerBox with type_id: 20
+🔍 Preparing to call birth() with type_id: 20
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=20, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpServerBox instance_id=1
+[PluginLoaderV2] Invoke HttpServerBox.birth: resolving and encoding args (argc=0)
+[VM→Plugin] call HttpServerBox.birth recv_id=1 returns_result=false
+[PluginLoaderV2] Invoke HttpServerBox.start: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(8404) -> I32(tag=2)
+[VM→Plugin] call HttpServerBox.start recv_id=1 returns_result=true
+🔍 create_box called for: HttpClientBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpClientBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpClientBox with type_id: 23
+🔍 Preparing to call birth() with type_id: 23
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=23, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpClientBox instance_id=1
+[PluginLoaderV2] Invoke HttpClientBox.birth: resolving and encoding args (argc=0)
+[VM→Plugin] call HttpClientBox.birth recv_id=1 returns_result=false
+[PluginLoaderV2] Invoke HttpClientBox.get: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=31) -> String(tag=6)
+[VM→Plugin] call HttpClientBox.get recv_id=1 returns_result=true
+[PluginLoaderV2] Invoke HttpServerBox.accept: resolving and encoding args (argc=0)
+[VM→Plugin] call HttpServerBox.accept recv_id=1 returns_result=true
+🔍 create_box called for: HttpResponseBox
+🔍 Config loaded successfully
+🔍 Found library: libnyash_net_plugin.so for box type: HttpResponseBox
+🔍 Plugin loaded successfully
+🔍 Reading nyash.toml for type configuration...
+🔍 nyash.toml read successfully
+🔍 nyash.toml parsed successfully
+🔍 Found box config for HttpResponseBox with type_id: 22
+🔍 Preparing to call birth() with type_id: 22
+🔍 Output buffer allocated, about to call plugin invoke_fn...
+🔍 Calling invoke_fn(type_id=22, method_id=0, instance_id=0, tlv_args=[1, 0, 0, 0], output_buf, output_size=1024)
+🔍 invoke_fn returned with result: 0
+🎉 birth() success: HttpResponseBox instance_id=2
+[PluginLoaderV2] Invoke HttpResponseBox.birth: resolving and encoding args (argc=0)
+[VM→Plugin] call HttpResponseBox.birth recv_id=2 returns_result=false
+[PluginLoaderV2] Invoke HttpResponseBox.setStatus: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: Integer(404) -> I32(tag=2)
+[VM→Plugin] call HttpResponseBox.setStatus recv_id=2 returns_result=false
+[PluginLoaderV2] Invoke HttpResponseBox.write: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: String(len=9) -> String(tag=6)
+[VM→Plugin] call HttpResponseBox.write recv_id=2 returns_result=false
+[PluginLoaderV2] Invoke HttpRequestBox.respond: resolving and encoding args (argc=1)
+[PluginLoaderV2]  arg[0]: PluginBoxV2(HttpResponseBox, id=2) -> Handle(tag=8)
+[VM→Plugin] call HttpRequestBox.respond recv_id=1 returns_result=false
+[PluginLoaderV2] Invoke HttpResponseBox.getStatus: resolving and encoding args (argc=0)
+[VM→Plugin] call HttpResponseBox.getStatus recv_id=1 returns_result=false
+[PluginLoaderV2] Invoke HttpResponseBox.readBody: resolving and encoding args (argc=0)
+[VM→Plugin] call HttpResponseBox.readBody recv_id=1 returns_result=false
+✅ VM execution completed successfully!
+Result: StringBox { value: "404:Not Found", base: BoxBase { id: 57, parent_type_id: None } }

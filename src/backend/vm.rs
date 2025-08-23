@@ -456,6 +456,22 @@ impl VM {
                 println!("{}", val.to_string());
                 Ok(ControlFlow::Continue)
             },
+
+            MirInstruction::TypeOp { dst, op, value, ty: _ } => {
+                // PoC: mirror current semantics
+                match op {
+                    crate::mir::TypeOpKind::Check => {
+                        // Current TypeCheck is a no-op that returns true
+                        self.set_value(*dst, VMValue::Bool(true));
+                    }
+                    crate::mir::TypeOpKind::Cast => {
+                        // Current Cast is a copy/no-op
+                        let v = self.get_value(*value)?;
+                        self.set_value(*dst, v);
+                    }
+                }
+                Ok(ControlFlow::Continue)
+            },
             
             MirInstruction::Return { value } => {
                 let return_value = if let Some(val_id) = value {
@@ -831,6 +847,25 @@ impl VM {
                 Ok(ControlFlow::Continue)
             },
             
+            // Unified PoC ops mapped to legacy behavior
+            MirInstruction::WeakRef { dst, op, value } => {
+                match op {
+                    crate::mir::WeakRefOp::New => {
+                        let v = self.get_value(*value)?;
+                        self.set_value(*dst, v);
+                    }
+                    crate::mir::WeakRefOp::Load => {
+                        let v = self.get_value(*value)?;
+                        self.set_value(*dst, v);
+                    }
+                }
+                Ok(ControlFlow::Continue)
+            },
+            MirInstruction::Barrier { .. } => {
+                // No-op
+                Ok(ControlFlow::Continue)
+            },
+            
             MirInstruction::BarrierRead { ptr: _ } => {
                 // Memory barrier read is a no-op for now
                 // In a real implementation, this would ensure memory ordering
@@ -1085,6 +1120,7 @@ impl VM {
             MirInstruction::NewBox { .. } => "NewBox",
             MirInstruction::TypeCheck { .. } => "TypeCheck",
             MirInstruction::Cast { .. } => "Cast",
+            MirInstruction::TypeOp { .. } => "TypeOp",
             MirInstruction::ArrayGet { .. } => "ArrayGet",
             MirInstruction::ArraySet { .. } => "ArraySet",
             MirInstruction::Copy { .. } => "Copy",
@@ -1101,6 +1137,8 @@ impl VM {
             MirInstruction::WeakLoad { .. } => "WeakLoad",
             MirInstruction::BarrierRead { .. } => "BarrierRead",
             MirInstruction::BarrierWrite { .. } => "BarrierWrite",
+            MirInstruction::WeakRef { .. } => "WeakRef",
+            MirInstruction::Barrier { .. } => "Barrier",
             MirInstruction::FutureNew { .. } => "FutureNew",
             MirInstruction::FutureSet { .. } => "FutureSet",
             MirInstruction::Await { .. } => "Await",

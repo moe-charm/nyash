@@ -1,0 +1,39 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash VM Backend - Executing file: local_tests/vm_stats_filebox.nyash 🚀
+{
+  "counts": {
+    "BoxCall": 17,
+    "Const": 13,
+    "NewBox": 12,
+    "Return": 1,
+    "Safepoint": 1
+  },
+  "elapsed_ms": 26.658774,
+  "timestamp_ms": 1755900319445,
+  "top20": [
+    {
+      "count": 17,
+      "op": "BoxCall"
+    },
+    {
+      "count": 13,
+      "op": "Const"
+    },
+    {
+      "count": 12,
+      "op": "NewBox"
+    },
+    {
+      "count": 1,
+      "op": "Return"
+    },
+    {
+      "count": 1,
+      "op": "Safepoint"
+    }
+  ],
+  "total": 44
+}
+✅ VM execution completed successfully!
+Result: StringBox { value: "HELLO", base: BoxBase { id: 59, parent_type_id: None } }

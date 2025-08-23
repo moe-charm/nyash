@@ -20,6 +20,9 @@ dynamic-file = []
 wasm-backend = ["dep:wasmtime", "dep:wabt"]
 # プラグイン機構の有効化（ネイティブ環境のみ推奨）
 plugins = ["dep:libloading"]
+# MIR instruction diet PoC flags (scaffolding only; off by default)
+mir_typeop_poc = []
+mir_refbarrier_unify_poc = []
 # Note: LLVM feature requires inkwell dependency and LLVM development libraries
 # llvm = ["dep:inkwell"]
 

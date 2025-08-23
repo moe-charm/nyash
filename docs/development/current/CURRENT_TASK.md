@@ -7,29 +7,37 @@
    - Net: GET/POST（VM）、404/500（Ok(Response)）、unreachable（Err(ErrorBox)）
 3. VM命令カウンタ＋時間計測のCLI化（`--vm-stats`, `--vm-stats-json`）とJSON出力対応
    - サンプル/スクリプト整備（tools/run_vm_stats.sh、local_tests/vm_stats_*.nyash）
-4. MIR if-merge 修正（retがphi dstを返す）＋ Verifier強化（mergeでのphi未使用検知）
-5. ドキュメント追加・更新
-   - Dynamic Plugin Flow（MIR→VM→Registry→Loader→Plugin）
-   - Netプラグインのエラーモデル（unreachable=Err, 404/500=Ok）
-   - E2Eテスト一覧整備
-6. CI: plugins E2E ジョブ（Linux）を追加
+4. MIR if-merge 修正（retがphi dstを返す）＋ Verifier強化（mergeでのphi未使用検知、支配関係チェック導入）
+5. VMの健全化（分岐・比較・Result）
+   - Compare: Void/BoolのEq/Ne定義（順序比較はTypeError）
+   - Branch条件: `BoxRef(BoolBox)→bool`／`BoxRef(VoidBox)→false`／`Integer≠0→true`
+   - ResultBox: 新旧両実装への動的ディスパッチ統一（isOk/getValue/getError）
+6. VMビルトイン強化（Array/Map/Socket）
+   - ArrayBox/MapBox: 代表メソッドをVM統合ディスパッチで実装（push/get/set/size等）
+   - SocketBox: `acceptTimeout(ms)`（void）/ `recvTimeout(ms)`（空文字）を追加
+   - E2E追加: `socket_timeout_server.nyash` / `socket_timeout_client.nyash`
+7. ドキュメント追加・更新
+   - MIR→VMマッピング（分岐条件の動的変換、Void/Bool比較）
+   - VM README（SocketBoxタイムアウト/E2E導線・HTTP Result整理）
+   - 26命令ダイエット: PoCフラグと進捗追記（TypeOp/WeakRef/Barrier）
+8. CI: plugins E2E ジョブ（Linux）を追加
 
 ## 🚧 次にやること（再開方針）
 
-1) MIR→VMの健全化（短期・最優先）
-- マッピング表更新（Err経路・Handle戻り・Result整合を実測で反映）
-- Verifierルールの拡充（use-before-def across merge を強化）
-- 成果物: `docs/reference/architecture/mir-to-vm-mapping.md`（更新済・追補）
+1) 命令セットダイエットのPoC実装（短期）
+- フラグ `mir_typeop_poc` 有効時、Builderで TypeCheck/Cast → TypeOp を出力
+- VMにTypeOp実行経路を追加（当面は既存と同義）
+- 次段: `mir_refbarrier_unify_poc` で Weak*/Barrier 統合（Builder/VM）
+- 成果物: スナップショット（flag on/off）＋ vm-statsで集計キー確認
 
-2) VM×プラグインシステムのE2E検証（短期）
-- FileBox/Netを中心にケース拡張（大きいボディ、ヘッダー多数、タイムアウト等）
-- 成果物: E2E追補＋`VM_README.md` に既知の制約とTipsを追記
+2) VM×プラグインのE2E拡張（短期）
+- HTTP: 遅延応答・大ボディの計測、到達不能時のERR安定化の再検証
+- Socket: タイムアウト系の追加ケース（連続acceptTimeout/recvTimeout）
+- 成果物: E2E追加と `VM_README.md` のTips追補
 
-3) 命令セットのダイエット（中期：目標26命令）
-- 実測（HTTP OK/404/500/unreachable、FileBox）を反映して合意版を確定
-- 統合方針（TypeOp/WeakRef/Barrierの統合、ExternCall最小化）
-- 段階移行（ビルドモードでメタ降格、互換エイリアス→削除）と回帰テスト整備
-- 成果物: 26命令案（合意版）＋移行計画
+3) ResultBox単一路線への統合（中期）
+- 新`NyashResultBox`へ統合、旧`ResultBox`は薄いラッパーとして段階移行
+- 成果物: 実装整理・移行メモ・影響調査
 
 ## ▶ 実行コマンド例
 
@@ -58,7 +66,7 @@ nyash --verify examples/plugin_box_sample.nyash
 - メタ降格: Debug / Nop / Safepoint（ビルドモードで制御）
 
 ---
-最終更新: 2025年8月23日（VM×Plugins安定・MIR修正・26命令合意ドラフト／再起動チェックポイント）
+最終更新: 2025年8月23日（VM強化・E2E拡張・TypeOp PoC着手／次段はBuilder/VMマッピング）
 
 ## 🔁 再起動後の再開手順（ショート）
 ```bash
@@ -71,4 +79,8 @@ cargo test --features plugins -q -- --nocapture
 # 3) VM Stats 代表値の再取得（任意）
 tools/run_vm_stats.sh local_tests/vm_stats_http_ok.nyash vm_stats_ok.json
 tools/run_vm_stats.sh local_tests/vm_stats_http_err.nyash vm_stats_err.json
+
+# 4) SocketBox タイムアウト確認（任意）
+./target/release/nyash local_tests/socket_timeout_server.nyash
+./target/release/nyash local_tests/socket_timeout_client.nyash
 ```

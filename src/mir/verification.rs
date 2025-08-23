@@ -163,38 +163,34 @@ impl MirVerifier {
         }
     }
     
-    /// Verify dominance relations
+    /// Verify dominance relations (def must dominate use across blocks)
     fn verify_dominance(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
-        // This is a simplified dominance check
-        // In a full implementation, we would compute the dominator tree
-        let errors = Vec::new();
-        
-        // For now, just check that values are defined before use in the same block
-        for (_block_id, block) in &function.blocks {
-            let mut defined_in_block = HashSet::new();
-            
+        let mut errors = Vec::new();
+
+        // Build def -> block map and dominators
+        let def_block = self.compute_def_blocks(function);
+        let dominators = self.compute_dominators(function);
+
+        for (use_block_id, block) in &function.blocks {
             for instruction in block.all_instructions() {
-                // Check uses
                 for used_value in instruction.used_values() {
-                    if !defined_in_block.contains(&used_value) {
-                        // Value used before definition in this block
-                        // This is okay if it's defined in a dominating block
-                        // For simplicity, we'll skip this check for now
+                    if let Some(&def_bb) = def_block.get(&used_value) {
+                        if def_bb != *use_block_id {
+                            let doms = dominators.get(use_block_id).unwrap();
+                            if !doms.contains(&def_bb) {
+                                errors.push(VerificationError::DominatorViolation {
+                                    value: used_value,
+                                    use_block: *use_block_id,
+                                    def_block: def_bb,
+                                });
+                            }
+                        }
                     }
-                }
-                
-                // Record definition
-                if let Some(dst) = instruction.dst_value() {
-                    defined_in_block.insert(dst);
                 }
             }
         }
-        
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
     
     /// Verify control flow graph integrity
@@ -234,22 +230,9 @@ impl MirVerifier {
     /// In merge blocks, values coming from predecessors must be routed through Phi.
     fn verify_merge_uses(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
         let mut errors = Vec::new();
-        // Build predecessor map
-        let mut preds: std::collections::HashMap<BasicBlockId, Vec<BasicBlockId>> = std::collections::HashMap::new();
-        for (bid, block) in &function.blocks {
-            for succ in &block.successors {
-                preds.entry(*succ).or_default().push(*bid);
-            }
-        }
-        // Build definition map (value -> def block)
-        let mut def_block: std::collections::HashMap<ValueId, BasicBlockId> = std::collections::HashMap::new();
-        for (bid, block) in &function.blocks {
-            for inst in block.all_instructions() {
-                if let Some(dst) = inst.dst_value() {
-                    def_block.insert(dst, *bid);
-                }
-            }
-        }
+        let preds = self.compute_predecessors(function);
+        let def_block = self.compute_def_blocks(function);
+        let dominators = self.compute_dominators(function);
         // Helper: collect phi dsts in a block
         let mut phi_dsts_in_block: std::collections::HashMap<BasicBlockId, std::collections::HashSet<ValueId>> = std::collections::HashMap::new();
         for (bid, block) in &function.blocks {
@@ -263,12 +246,13 @@ impl MirVerifier {
             let Some(pred_list) = preds.get(bid) else { continue };
             if pred_list.len() < 2 { continue; }
             let phi_dsts = phi_dsts_in_block.get(bid);
+            let doms_of_block = dominators.get(bid).unwrap();
             // check instructions including terminator
             for inst in block.all_instructions() {
                 for used in inst.used_values() {
                     if let Some(&db) = def_block.get(&used) {
-                        if pred_list.contains(&db) {
-                            // used value defined in a predecessor; must be routed via phi (i.e., used should be phi dst)
+                        // If def doesn't dominate merge block, it must be routed via phi
+                        if !doms_of_block.contains(&db) {
                             let is_phi_dst = phi_dsts.map(|s| s.contains(&used)).unwrap_or(false);
                             if !is_phi_dst {
                                 errors.push(VerificationError::MergeUsesPredecessorValue {
@@ -333,6 +317,70 @@ impl MirVerifier {
     /// Clear verification errors
     pub fn clear_errors(&mut self) {
         self.errors.clear();
+    }
+
+    /// Build predecessor map for all blocks
+    fn compute_predecessors(&self, function: &MirFunction) -> HashMap<BasicBlockId, Vec<BasicBlockId>> {
+        let mut preds: HashMap<BasicBlockId, Vec<BasicBlockId>> = HashMap::new();
+        for (bid, block) in &function.blocks {
+            for succ in &block.successors {
+                preds.entry(*succ).or_default().push(*bid);
+            }
+        }
+        preds
+    }
+
+    /// Build a map from ValueId to its defining block
+    fn compute_def_blocks(&self, function: &MirFunction) -> HashMap<ValueId, BasicBlockId> {
+        let mut def_block: HashMap<ValueId, BasicBlockId> = HashMap::new();
+        for (bid, block) in &function.blocks {
+            for inst in block.all_instructions() {
+                if let Some(dst) = inst.dst_value() { def_block.insert(dst, *bid); }
+            }
+        }
+        def_block
+    }
+
+    /// Compute dominator sets per block using standard iterative algorithm
+    fn compute_dominators(&self, function: &MirFunction) -> HashMap<BasicBlockId, HashSet<BasicBlockId>> {
+        let all_blocks: HashSet<BasicBlockId> = function.blocks.keys().copied().collect();
+        let preds = self.compute_predecessors(function);
+        let mut dom: HashMap<BasicBlockId, HashSet<BasicBlockId>> = HashMap::new();
+
+        for &b in function.blocks.keys() {
+            if b == function.entry_block {
+                let mut set = HashSet::new();
+                set.insert(b);
+                dom.insert(b, set);
+            } else {
+                dom.insert(b, all_blocks.clone());
+            }
+        }
+
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for &b in function.blocks.keys() {
+                if b == function.entry_block { continue; }
+                let mut new_set: HashSet<BasicBlockId> = all_blocks.clone();
+                if let Some(ps) = preds.get(&b) {
+                    if !ps.is_empty() {
+                        for (i, p) in ps.iter().enumerate() {
+                            if let Some(p_set) = dom.get(p) {
+                                if i == 0 { new_set = p_set.clone(); }
+                                else { new_set = new_set.intersection(p_set).copied().collect(); }
+                            }
+                        }
+                    }
+                }
+                new_set.insert(b);
+                if let Some(old) = dom.get(&b) {
+                    if &new_set != old { dom.insert(b, new_set); changed = true; }
+                }
+            }
+        }
+
+        dom
     }
 }
 
@@ -445,5 +493,58 @@ mod tests {
         let mut printer = MirPrinter::verbose();
         let mir_text = printer.print_module(&module);
         assert!(mir_text.contains("phi"), "Printed MIR should contain a phi in merge block\n{}", mir_text);
+    }
+
+    #[test]
+    fn test_merge_use_before_phi_detected() {
+        use crate::mir::{MirInstruction, ConstValue};
+
+        // Construct a function with a bad merge use (no phi)
+        let signature = FunctionSignature {
+            name: "merge_bad".to_string(),
+            params: vec![],
+            return_type: MirType::String,
+            effects: EffectMask::PURE,
+        };
+
+        let entry = BasicBlockId::new(0);
+        let mut f = MirFunction::new(signature, entry);
+
+        let then_bb = BasicBlockId::new(1);
+        let else_bb = BasicBlockId::new(2);
+        let merge_bb = BasicBlockId::new(3);
+
+        let cond = f.next_value_id(); // %0
+        {
+            let b0 = f.get_block_mut(entry).unwrap();
+            b0.add_instruction(MirInstruction::Const { dst: cond, value: ConstValue::Bool(true) });
+            b0.add_instruction(MirInstruction::Branch { condition: cond, then_bb, else_bb });
+        }
+
+        let v1 = f.next_value_id(); // %1
+        let mut b1 = BasicBlock::new(then_bb);
+        b1.add_instruction(MirInstruction::Const { dst: v1, value: ConstValue::String("A".to_string()) });
+        b1.add_instruction(MirInstruction::Jump { target: merge_bb });
+        f.add_block(b1);
+
+        let v2 = f.next_value_id(); // %2
+        let mut b2 = BasicBlock::new(else_bb);
+        b2.add_instruction(MirInstruction::Const { dst: v2, value: ConstValue::String("B".to_string()) });
+        b2.add_instruction(MirInstruction::Jump { target: merge_bb });
+        f.add_block(b2);
+
+        let mut b3 = BasicBlock::new(merge_bb);
+        // Illegal: directly use v1 from predecessor
+        b3.add_instruction(MirInstruction::Return { value: Some(v1) });
+        f.add_block(b3);
+
+        f.update_cfg();
+
+        let mut verifier = MirVerifier::new();
+        let res = verifier.verify_function(&f);
+        assert!(res.is_err(), "Verifier should error on merge use without phi");
+        let errs = res.err().unwrap();
+        assert!(errs.iter().any(|e| matches!(e, VerificationError::MergeUsesPredecessorValue{..} | VerificationError::DominatorViolation{..})),
+            "Expected merge/dominator error, got: {:?}", errs);
     }
 }
