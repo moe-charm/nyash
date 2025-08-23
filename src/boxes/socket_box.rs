@@ -208,6 +208,46 @@ impl SocketBox {
             Box::new(BoolBox::new(false))
         }
     }
+
+    /// クライアント接続を受諾（タイムアウトms、タイムアウト時はvoid）
+    pub fn accept_timeout(&self, timeout_ms: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let ms = timeout_ms.to_string_box().value.parse::<u64>().unwrap_or(0);
+        if ms == 0 { return self.accept(); }
+
+        let start = std::time::Instant::now();
+        if let Ok(mut guard) = self.listener.write() {
+            if let Some(ref listener) = *guard {
+                let _ = listener.set_nonblocking(true);
+                loop {
+                    match listener.accept() {
+                        Ok((stream, _addr)) => {
+                            let _ = listener.set_nonblocking(false);
+                            drop(guard);
+                            let client_socket = SocketBox::new();
+                            *client_socket.stream.write().unwrap() = Some(stream);
+                            *client_socket.is_connected.write().unwrap() = true;
+                            return Box::new(client_socket);
+                        },
+                        Err(e) => {
+                            if e.kind() == std::io::ErrorKind::WouldBlock {
+                                if start.elapsed() >= Duration::from_millis(ms) {
+                                    let _ = listener.set_nonblocking(false);
+                                    return Box::new(crate::box_trait::VoidBox::new());
+                                }
+                                std::thread::sleep(Duration::from_millis(5));
+                                continue;
+                            } else {
+                                eprintln!("🚨 SocketBox accept_timeout error: {}", e);
+                                let _ = listener.set_nonblocking(false);
+                                return Box::new(crate::box_trait::VoidBox::new());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Box::new(crate::box_trait::VoidBox::new())
+    }
     
     /// サーバーに接続（クライアントモード）
     pub fn connect(&self, address: Box<dyn NyashBox>, port: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
@@ -270,6 +310,44 @@ impl SocketBox {
             }
         } else {
             Box::new(StringBox::new("".to_string()))
+        }
+    }
+
+    /// タイムアウト付き読み取り（ms）。タイムアウト時は空文字。
+    pub fn recv_timeout(&self, timeout_ms: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let ms = timeout_ms.to_string_box().value.parse::<u64>().unwrap_or(0);
+        let stream_guard = self.stream.write().unwrap();
+        if let Some(ref stream) = *stream_guard {
+            match stream.try_clone() {
+                Ok(mut stream_clone) => {
+                    drop(stream_guard);
+                    let _ = stream_clone.set_read_timeout(Some(Duration::from_millis(ms)));
+                    let mut reader = BufReader::new(stream_clone);
+                    let mut buffer = String::new();
+                    match reader.read_line(&mut buffer) {
+                        Ok(_) => {
+                            if buffer.ends_with('\n') {
+                                buffer.pop();
+                                if buffer.ends_with('\r') { buffer.pop(); }
+                            }
+                            Box::new(StringBox::new(&buffer))
+                        }
+                        Err(e) => {
+                            if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut {
+                                return Box::new(StringBox::new(""));
+                            }
+                            eprintln!("🚨 SocketBox recv_timeout error: {}", e);
+                            Box::new(StringBox::new(""))
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("🚨 SocketBox stream clone error: {}", e);
+                    Box::new(StringBox::new(""))
+                }
+            }
+        } else {
+            Box::new(StringBox::new(""))
         }
     }
     

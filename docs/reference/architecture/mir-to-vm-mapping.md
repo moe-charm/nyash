@@ -15,7 +15,10 @@
 - UnaryOp: Partial
   - `Neg`(int), `Not`(bool) のみ。`BitNot` は TODO。
 - Compare: Partial
-  - Integer/ String の Eq/Ne/Lt/Le/Gt/Ge 対応。その他型は TypeError。
+  - Integer/ String の Eq/Ne/Lt/Le/Gt/Ge 対応。Bool は Eq/Ne のみ。
+  - Void は値を持たないため、比較は Eq/Ne のみ定義。
+    - `Void == Void` は true、`Void != Void` は false
+    - `Void == X` は false、`Void != X` は true（順序比較は TypeError）
 - Load / Store: Implemented
   - 現状はVM内の値スロット操作（簡易）。
 - Copy: Implemented
@@ -23,6 +26,10 @@
 
 ## 制御フロー
 - Branch / Jump / Return: Implemented
+  - Branchの条件は `Bool` を期待。以下の動的変換を許容：
+    - `Integer` → 非ゼロは true
+    - `BoxRef(BoolBox)` → 中身のbool
+    - `BoxRef(VoidBox)` → false（nullish false）
 - Phi: Implemented
   - `LoopExecutor` による選択実装（前BB情報を利用）。
 
@@ -75,6 +82,27 @@
 
 ---
 
+## Result / Err / Handle（BoxRef） 取り扱い（重要）
+
+目的: プラグイン呼び出し（BoxCall→PluginLoaderV2）およびVM内の戻り値で、ResultとBoxRef（Handle）を正しく扱うための合意事項。
+
+- HTTP系（Netプラグイン）の約束
+  - unreachable（接続不可/タイムアウト等）: `Result.Err(ErrorBox)` にマップする。
+  - HTTP 404/500 等のステータス異常: `Result.Ok(Response)` として返す（アプリ層で扱う）。
+- FileBox等のVoid戻り
+  - `close()` のような副作用のみのメソッドは `Ok(Void)` を返す。VMではVoidの実体は持たない。
+- Handle（BoxRef）戻り値
+  - プラグインは TLV tag=8（Handle）で `type_id:u32, instance_id:u32` を返す。
+  - Loader は返り値の `type_id` に対応する正しい `fini_method_id` を設定し、`PluginBoxV2` を生成してVMへ返す。
+  - 注意: 生成元のBoxと返り値のBoxの型が異なるケースがあるため、「呼び出し元のfini値を流用しない」。必ず返り値 `type_id` を基に解決する。
+- Resultの整合
+  - VMは `Result<T, ErrorBox>` をネイティブ表現し、`match` 等で分岐可能。
+  - `Ok(Void)` は `match Ok(_)` と等価に扱える（Voidは値を持たない）。
+
+参考: TLV/Loader仕様は `docs/reference/plugin-system/ffi-abi-specification.md` と `plugin-tester.md` を参照。
+
+---
+
 ## 既知の課題（抜粋）
 - BinOp/UnaryOp/Compare の型拡張（浮動小数・Bool/Box等）。
 - ArrayGet/ArraySet の実装。
@@ -82,6 +110,11 @@
 - 例外ハンドリング（Throw/Catchの制御フロー接続）。
 - WeakRef/Barrier の実体化（必要性評価の上、命令ダイエット候補）。
 - PluginBoxV2 のVM側統合強化（引数/戻り値のTLV全型対応、Handle戻り値→BoxRef化）。
+
+Verifier（検証）に関する追加事項（方針）
+- use-before-def across merge の強化: merge後にphiが未使用/未定義を選択するパスを禁止。
+- if-merge の戻り: retはphiのdstを返す（実装済み）。
+- TypeOp（TypeCheck/Cast）と命令の整合: Verifierで型注釈に基づく不一致を検出。
 
 ## VM統計（計測）
 - `--vm-stats` / `--vm-stats-json` で命令ごとの使用回数と時間(ms)を出力。
@@ -118,6 +151,11 @@
 - BoxCallが常に最頻出（33〜42%）。呼び出しコスト最適化が最優先。
 - Const/NewBoxが次点。定数・生成の最適化（定数畳み込み／軽量生成・シェアリング）が効果的。
 - 異常系は早期収束で命令半減。if/phi修正は実戦で有効（Branch/Jump/Phiが顕在化）。
+
+補足（HTTP 404/500の比較）
+- 404（"Not Found"）、500（"Internal Server Error"）ともに同一プロファイル（合計55命令）
+  - 内訳例: BoxCall: 23 / Const: 16 / NewBox: 12 / BinOp: 2 / Return: 1 / Safepoint: 1
+- ステータス差はアプリ層で完結し、VM命令の分布には有意差なし（設計の意図どおり）
 
 ## 26命令ダイエット（検討のたたき台）
 方針: 「命令の意味は保ちつつ集約」。代表案：
