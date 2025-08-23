@@ -58,4 +58,17 @@ nyash --verify examples/plugin_box_sample.nyash
 - メタ降格: Debug / Nop / Safepoint（ビルドモードで制御）
 
 ---
-最終更新: 2025年8月23日（VM×Plugins安定・MIR修正・26命令合意ドラフトへ）
+最終更新: 2025年8月23日（VM×Plugins安定・MIR修正・26命令合意ドラフト／再起動チェックポイント）
+
+## 🔁 再起動後の再開手順（ショート）
+```bash
+# 1) ビルド
+cargo build --release -j32
+
+# 2) plugins E2E（Linux）
+cargo test --features plugins -q -- --nocapture
+
+# 3) VM Stats 代表値の再取得（任意）
+tools/run_vm_stats.sh local_tests/vm_stats_http_ok.nyash vm_stats_ok.json
+tools/run_vm_stats.sh local_tests/vm_stats_http_err.nyash vm_stats_err.json
+```
