@@ -385,6 +385,8 @@ impl NyashRunner {
         }
     }
 
+    
+
     /// Collect Box declarations from AST and register into runtime
     fn collect_box_declarations(&self, ast: &ASTNode, runtime: &NyashRuntime) {
         fn walk(node: &ASTNode, runtime: &NyashRuntime) {

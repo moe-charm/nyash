@@ -136,6 +136,7 @@ impl VM {
 
     /// Execute comparison operation
     pub(super) fn execute_compare_op(&self, op: &CompareOp, left: &VMValue, right: &VMValue) -> Result<bool, VMError> {
+        eprintln!("[VM] execute_compare_op enter: op={:?}, left={:?}, right={:?}", op, left, right);
         match (left, right) {
             // Mixed numeric
             (VMValue::Integer(l), VMValue::Float(r)) => {
@@ -163,6 +164,9 @@ impl VM {
             // BoxRef(IntegerBox) comparisons (homogeneous)
             (VMValue::BoxRef(li), VMValue::BoxRef(ri)) => {
                 if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
+                    eprintln!("[VM] arm BoxRef-BoxRef: lt={}, rt={}", li.type_name(), ri.type_name());
+                }
+                if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
                     eprintln!(
                         "[VM] compare BoxRef vs BoxRef: left_type={}, right_type={}, left_str={}, right_str={}",
                         li.type_name(), ri.type_name(), li.to_string_box().value, ri.to_string_box().value
@@ -178,7 +182,7 @@ impl VM {
                 if let (Some(l), Some(r)) = (l_opt, r_opt) {
                     return Ok(match op { CompareOp::Eq => l == r, CompareOp::Ne => l != r, CompareOp::Lt => l < r, CompareOp::Le => l <= r, CompareOp::Gt => l > r, CompareOp::Ge => l >= r });
                 }
-                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+                Err(VMError::TypeError(format!("[BoxRef-BoxRef] Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
             }
             // Mixed Integer (BoxRef vs Integer)
             (VMValue::BoxRef(li), VMValue::Integer(r)) => {
@@ -186,22 +190,36 @@ impl VM {
                     .or_else(|| li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
                     .or_else(|| li.to_string_box().value.parse::<i64>().ok());
                 if let Some(l) = l_opt { return Ok(match op { CompareOp::Eq => l == *r, CompareOp::Ne => l != *r, CompareOp::Lt => l < *r, CompareOp::Le => l <= *r, CompareOp::Gt => l > *r, CompareOp::Ge => l >= *r }); }
-                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+                Err(VMError::TypeError(format!("[BoxRef-Integer] Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
             }
             (VMValue::Integer(l), VMValue::BoxRef(ri)) => {
                 let r_opt = ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)
                     .or_else(|| ri.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
                     .or_else(|| ri.to_string_box().value.parse::<i64>().ok());
                 if let Some(r) = r_opt { return Ok(match op { CompareOp::Eq => *l == r, CompareOp::Ne => *l != r, CompareOp::Lt => *l < r, CompareOp::Le => *l <= r, CompareOp::Gt => *l > r, CompareOp::Ge => *l >= r }); }
-                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+                Err(VMError::TypeError(format!("[Integer-BoxRef] Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
             }
             _ => {
+                // 80/20 numeric fallback: coerce via to_string when possible
+                fn to_i64(v: &VMValue) -> Option<i64> {
+                    match v {
+                        VMValue::Integer(i) => Some(*i),
+                        VMValue::Bool(b) => Some(if *b { 1 } else { 0 }),
+                        VMValue::String(s) => s.trim().parse::<i64>().ok(),
+                        VMValue::Float(f) => Some(*f as i64),
+                        VMValue::BoxRef(b) => b.to_string_box().value.trim().parse::<i64>().ok(),
+                        _ => None,
+                    }
+                }
+                if let (Some(l), Some(r)) = (to_i64(left), to_i64(right)) {
+                    return Ok(match op { CompareOp::Eq => l == r, CompareOp::Ne => l != r, CompareOp::Lt => l < r, CompareOp::Le => l <= r, CompareOp::Gt => l > r, CompareOp::Ge => l >= r });
+                }
                 if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
                     let lty = match left { VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()), other => format!("{:?}", other) };
                     let rty = match right { VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()), other => format!("{:?}", other) };
                     eprintln!("[VM] compare default arm: op={:?}, left={}, right={}", op, lty, rty);
                 }
-                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+                Err(VMError::TypeError(format!("[Default] Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
             },
         }
     }

@@ -58,39 +58,28 @@ impl VM {
 
     /// Execute a comparison instruction
     pub(super) fn execute_compare(&mut self, dst: ValueId, op: &CompareOp, lhs: ValueId, rhs: ValueId) -> Result<ControlFlow, VMError> {
+        eprintln!("[VM] execute_compare enter op={:?} lhs={:?} rhs={:?}", op, lhs, rhs);
         let mut left = self.get_value(lhs)?;
         let mut right = self.get_value(rhs)?;
+        eprintln!("[VM] execute_compare values: left={:?} right={:?}", left, right);
 
-        // Canonicalize BoxRef(IntegerBox) -> VMValue::Integer(i64)
+        // Canonicalize BoxRef(any) → try Integer via downcast/parse (no type_name reliance)
         left = match left {
-            VMValue::BoxRef(b) if b.type_name() == "IntegerBox" => {
-                if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
-                    eprintln!("[VM] Coerce left BoxRef(IntegerBox) -> Integer");
-                }
-                // Try downcast then parse fallback
+            VMValue::BoxRef(b) => {
                 if let Some(ib) = b.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] left downcast ok: {}", ib.value); }
                     VMValue::Integer(ib.value)
                 } else {
-                    let s = b.to_string_box().value;
-                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] left downcast fail; parse {}", s); }
-                    match s.parse::<i64>() { Ok(n) => VMValue::Integer(n), Err(_) => VMValue::BoxRef(b) }
+                    match b.to_string_box().value.trim().parse::<i64>() { Ok(n) => VMValue::Integer(n), Err(_) => VMValue::BoxRef(b) }
                 }
             }
             other => other,
         };
         right = match right {
-            VMValue::BoxRef(b) if b.type_name() == "IntegerBox" => {
-                if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
-                    eprintln!("[VM] Coerce right BoxRef(IntegerBox) -> Integer");
-                }
+            VMValue::BoxRef(b) => {
                 if let Some(ib) = b.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] right downcast ok: {}", ib.value); }
                     VMValue::Integer(ib.value)
                 } else {
-                    let s = b.to_string_box().value;
-                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] right downcast fail; parse {}", s); }
-                    match s.parse::<i64>() { Ok(n) => VMValue::Integer(n), Err(_) => VMValue::BoxRef(b) }
+                    match b.to_string_box().value.trim().parse::<i64>() { Ok(n) => VMValue::Integer(n), Err(_) => VMValue::BoxRef(b) }
                 }
             }
             other => other,
@@ -198,11 +187,7 @@ impl VM {
     /// Execute Phi instruction
     pub(super) fn execute_phi(&mut self, dst: ValueId, inputs: &[(BasicBlockId, ValueId)]) -> Result<ControlFlow, VMError> {
         // Minimal correct phi: select input based on previous_block via LoopExecutor
-        let selected = self.loop_executor.execute_phi(
-            dst,
-            inputs,
-            |id| self.get_value(id),
-        )?;
+        let selected = self.loop_execute_phi(dst, inputs)?;
         self.set_value(dst, selected);
         Ok(ControlFlow::Continue)
     }
@@ -274,6 +259,24 @@ impl VM {
                 .map_err(|e| VMError::InvalidInstruction(format!("Failed to create {}: {}", box_type, e)))?
         };
         
+        // 80/20: Basic boxes are stored as primitives in VMValue for simpler ops
+        if box_type == "IntegerBox" {
+            if let Some(ib) = new_box.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                self.set_value(dst, VMValue::Integer(ib.value));
+                return Ok(ControlFlow::Continue);
+            }
+        } else if box_type == "BoolBox" {
+            if let Some(bb) = new_box.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                self.set_value(dst, VMValue::Bool(bb.value));
+                return Ok(ControlFlow::Continue);
+            }
+        } else if box_type == "StringBox" {
+            if let Some(sb) = new_box.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                self.set_value(dst, VMValue::String(sb.value.clone()));
+                return Ok(ControlFlow::Continue);
+            }
+        }
+
         self.set_value(dst, VMValue::BoxRef(Arc::from(new_box)));
         Ok(ControlFlow::Continue)
     }

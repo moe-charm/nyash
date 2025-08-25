@@ -52,9 +52,16 @@ impl MirBuilder {
             
             // Comparison operations
             BinaryOpType::Comparison(op) => {
-                self.emit_instruction(MirInstruction::Compare {
-                    dst, op, lhs, rhs
-                })?;
+                // 80/20: If both operands originate from IntegerBox, cast to integer first
+                let (lhs2, rhs2) = if self.value_origin_newbox.get(&lhs).map(|s| s == "IntegerBox").unwrap_or(false)
+                    && self.value_origin_newbox.get(&rhs).map(|s| s == "IntegerBox").unwrap_or(false) {
+                    let li = self.value_gen.next();
+                    let ri = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::TypeOp { dst: li, op: TypeOpKind::Cast, value: lhs, ty: MirType::Integer })?;
+                    self.emit_instruction(MirInstruction::TypeOp { dst: ri, op: TypeOpKind::Cast, value: rhs, ty: MirType::Integer })?;
+                    (li, ri)
+                } else { (lhs, rhs) };
+                self.emit_instruction(MirInstruction::Compare { dst, op, lhs: lhs2, rhs: rhs2 })?;
             },
         }
         

@@ -531,9 +531,24 @@ impl MirBuilder {
             
             // Comparison operations
             BinaryOpType::Comparison(op) => {
-                self.emit_instruction(MirInstruction::Compare {
-                    dst, op, lhs, rhs
-                })?;
+                // 80/20: If both operands originate from IntegerBox, cast to integer first
+                let (lhs2, rhs2) = if self.value_origin_newbox.get(&lhs).map(|s| s == "IntegerBox").unwrap_or(false)
+                    && self.value_origin_newbox.get(&rhs).map(|s| s == "IntegerBox").unwrap_or(false) {
+                    let li = self.value_gen.next();
+                    let ri = self.value_gen.next();
+                    #[cfg(feature = "mir_typeop_poc")]
+                    {
+                        self.emit_instruction(MirInstruction::TypeOp { dst: li, op: super::TypeOpKind::Cast, value: lhs, ty: MirType::Integer })?;
+                        self.emit_instruction(MirInstruction::TypeOp { dst: ri, op: super::TypeOpKind::Cast, value: rhs, ty: MirType::Integer })?;
+                    }
+                    #[cfg(not(feature = "mir_typeop_poc"))]
+                    {
+                        self.emit_instruction(MirInstruction::Cast { dst: li, value: lhs, target_type: MirType::Integer })?;
+                        self.emit_instruction(MirInstruction::Cast { dst: ri, value: rhs, target_type: MirType::Integer })?;
+                    }
+                    (li, ri)
+                } else { (lhs, rhs) };
+                self.emit_instruction(MirInstruction::Compare { dst, op, lhs: lhs2, rhs: rhs2 })?;
             },
         }
         
