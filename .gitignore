@@ -48,6 +48,35 @@ nyash-rust/
 
 # Test files
 *.tmp
+
+# 🚨 ルートディレクトリ汚染防止（毎回散らかる問題対策）
+# デバッグ・テスト関連ファイル
+/test_*.txt
+/test_*.log
+/build_*.txt
+/mir_*.txt
+/mir_*.log
+/vm_*.log
+/vm_*.json
+/cmp_*.log
+/out.txt
+/err.txt
+/test.txt
+/*_output.txt
+/*_errors.txt
+/*_error.txt
+
+# 一時的なテストファイル（ルートに置かない！）
+/test_*.nyash
+
+# HTTP/ネットワークテストログ
+/http_test*.log
+/http_test*.txt
+
+# 分析・コンサルテーション結果
+/*_consultation.txt
+/*_analysis.txt
+/nekocode_*.txt
 *.bak
 *.orig
 test_*.ny

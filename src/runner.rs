@@ -28,10 +28,11 @@ use nyash_rust::backend::{wasm::WasmBackend, aot::AotBackend};
 #[cfg(feature = "llvm")]
 use nyash_rust::backend::{llvm_compile_and_execute};
 use std::{fs, process};
+mod modes;
 
 // v2 plugin system imports
-use nyash_rust::runtime::{init_global_loader_v2, get_global_registry, get_global_loader_v2, PluginConfig};
-use crate::runtime;
+use nyash_rust::runtime;
+use nyash_rust::runner_plugin_init;
 
 /// Main execution coordinator
 pub struct NyashRunner {
@@ -50,7 +51,7 @@ impl NyashRunner {
         runtime::init_global_unified_registry();
         
         // Try to initialize BID plugins from nyash.toml (best-effort)
-        self.init_bid_plugins();
+        runner_plugin_init::init_bid_plugins();
 
         // Optional: enable VM stats via CLI flags
         if self.config.vm_stats {
@@ -78,38 +79,7 @@ impl NyashRunner {
         }
     }
 
-    fn init_bid_plugins(&self) {
-        // v2プラグインシステムを初期化
-        eprintln!("🔍 DEBUG: Initializing v2 plugin system");
-        
-        // Try to load nyash.toml configuration
-        if let Ok(()) = init_global_loader_v2("nyash.toml") {
-            println!("🔌 v2 plugin system initialized from nyash.toml");
-            
-            // Apply plugin configuration to the box registry
-            let loader = get_global_loader_v2();
-            let loader = loader.read().unwrap();
-            
-            if let Some(config) = &loader.config {
-                // Register plugin providers in the box registry
-                let registry = get_global_registry();
-                
-                for (lib_name, lib_def) in &config.libraries {
-                    for box_name in &lib_def.boxes {
-                        eprintln!("  📦 Registering plugin provider for {}", box_name);
-                        // Note: plugin_name is lib_name in v2 system
-                        registry.apply_plugin_config(&PluginConfig {
-                            plugins: [(box_name.clone(), lib_name.clone())].into(),
-                        });
-                    }
-                }
-                
-                println!("✅ v2 plugin system fully configured");
-            }
-        } else {
-            eprintln!("⚠️ Failed to load nyash.toml - plugins disabled");
-        }
-    }
+    // init_bid_plugins moved to runner_plugin_init.rs
 
     /// Execute file-based mode with backend selection
     fn execute_file_mode(&self, filename: &str) {
@@ -158,19 +128,31 @@ impl NyashRunner {
                 process::exit(1);
             }
         } else if self.config.backend == "vm" {
-            println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
+            }
             self.execute_vm_mode(filename);
         } else if self.config.backend == "llvm" {
-            println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
+            }
             self.execute_llvm_mode(filename);
         } else {
-            println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
-            if let Some(fuel) = self.config.debug_fuel {
-                println!("🔥 Debug fuel limit: {} iterations", fuel);
-            } else {
-                println!("🔥 Debug fuel limit: unlimited");
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
             }
-            println!("====================================================");
+            if let Some(fuel) = self.config.debug_fuel {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    println!("🔥 Debug fuel limit: {} iterations", fuel);
+                }
+            } else {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    println!("🔥 Debug fuel limit: unlimited");
+                }
+            }
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                println!("====================================================");
+            }
             
             self.execute_nyash_file(filename);
         }

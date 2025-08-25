@@ -136,7 +136,9 @@ impl VM {
 
     /// Execute comparison operation
     pub(super) fn execute_compare_op(&self, op: &CompareOp, left: &VMValue, right: &VMValue) -> Result<bool, VMError> {
-        eprintln!("[VM] execute_compare_op enter: op={:?}, left={:?}, right={:?}", op, left, right);
+        let debug_cmp = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1") ||
+            std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1");
+        if debug_cmp { eprintln!("[VM] execute_compare_op enter: op={:?}, left={:?}, right={:?}", op, left, right); }
         match (left, right) {
             // Mixed numeric
             (VMValue::Integer(l), VMValue::Float(r)) => {

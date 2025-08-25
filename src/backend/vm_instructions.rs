@@ -58,10 +58,12 @@ impl VM {
 
     /// Execute a comparison instruction
     pub(super) fn execute_compare(&mut self, dst: ValueId, op: &CompareOp, lhs: ValueId, rhs: ValueId) -> Result<ControlFlow, VMError> {
-        eprintln!("[VM] execute_compare enter op={:?} lhs={:?} rhs={:?}", op, lhs, rhs);
+        let debug_cmp = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1") ||
+            std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1");
+        if debug_cmp { eprintln!("[VM] execute_compare enter op={:?} lhs={:?} rhs={:?}", op, lhs, rhs); }
         let mut left = self.get_value(lhs)?;
         let mut right = self.get_value(rhs)?;
-        eprintln!("[VM] execute_compare values: left={:?} right={:?}", left, right);
+        if debug_cmp { eprintln!("[VM] execute_compare values: left={:?} right={:?}", left, right); }
 
         // Canonicalize BoxRef(any) → try Integer via downcast/parse (no type_name reliance)
         left = match left {

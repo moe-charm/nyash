@@ -225,14 +225,25 @@ pub struct VM {
 }
 
 impl VM {
-    /// Helper: execute phi via loop executor (exposes private field safely)
+    /// Helper: execute phi selection based on previous_block (borrow-safe minimal)
     pub(super) fn loop_execute_phi(&mut self, _dst: ValueId, inputs: &[(BasicBlockId, ValueId)]) -> Result<VMValue, VMError> {
-        // 80/20 minimal: select first input when we can't safely borrow executor + self simultaneously
-        if let Some((_, val_id)) = inputs.first() {
-            self.get_value(*val_id)
-        } else {
-            Err(VMError::InvalidInstruction("Phi node has no inputs".to_string()))
+        if inputs.is_empty() {
+            return Err(VMError::InvalidInstruction("Phi node has no inputs".to_string()));
         }
+        let debug_phi = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_VM_DEBUG_PHI").ok().as_deref() == Some("1");
+        let prev = self.previous_block;
+        if debug_phi { eprintln!("[VM] phi-select prev={:?} inputs={:?}", prev, inputs); }
+        if let Some(prev_bb) = prev {
+            if let Some((_, val_id)) = inputs.iter().find(|(bb, _)| *bb == prev_bb) {
+                if debug_phi { eprintln!("[VM] phi-select hit prev={:?} -> {:?}", prev_bb, val_id); }
+                return self.get_value(*val_id);
+            }
+        }
+        // Fallback: first input
+        let (_, val_id) = inputs[0];
+        if debug_phi { eprintln!("[VM] phi-select fallback first -> {:?}", val_id); }
+        self.get_value(val_id)
     }
     /// Create a new VM instance
     pub fn new() -> Self {
@@ -438,7 +449,9 @@ impl VM {
     /// Execute a single instruction
     fn execute_instruction(&mut self, instruction: &MirInstruction) -> Result<ControlFlow, VMError> {
         // Record instruction for stats
-        eprintln!("[VM] execute_instruction: {:?}", instruction);
+        let debug_global = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1");
+        let debug_exec = debug_global || std::env::var("NYASH_VM_DEBUG_EXEC").ok().as_deref() == Some("1");
+        if debug_exec { eprintln!("[VM] execute_instruction: {:?}", instruction); }
         self.record_instruction(instruction);
         
         match instruction {
@@ -447,7 +460,7 @@ impl VM {
                 self.execute_const(*dst, value),
             
             MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                if std::env::var("NYASH_VM_DEBUG_ANDOR").ok().as_deref() == Some("1") {
+                if debug_global || std::env::var("NYASH_VM_DEBUG_ANDOR").ok().as_deref() == Some("1") {
                     eprintln!("[VM] execute_instruction -> BinOp({:?})", op);
                 }
                 self.execute_binop(*dst, op, *lhs, *rhs)
@@ -457,12 +470,13 @@ impl VM {
                 self.execute_unaryop(*dst, op, *operand),
             
             MirInstruction::Compare { dst, op, lhs, rhs } => {
-                eprintln!("[VM] dispatch Compare op={:?} lhs={:?} rhs={:?}", op, lhs, rhs);
+                let debug_cmp = debug_global || std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1");
+                if debug_cmp { eprintln!("[VM] dispatch Compare op={:?} lhs={:?} rhs={:?}", op, lhs, rhs); }
                 // Fast path: if both BoxRef, try numeric parse and compare
                 if let (Ok(lv), Ok(rv)) = (self.get_value(*lhs), self.get_value(*rhs)) {
-                    eprintln!("[VM] values before fastpath: left={:?} right={:?}", lv, rv);
+                    if debug_cmp { eprintln!("[VM] values before fastpath: left={:?} right={:?}", lv, rv); }
                     if let (VMValue::BoxRef(lb), VMValue::BoxRef(rb)) = (&lv, &rv) {
-                        eprintln!("[VM] BoxRef types: lty={} rty={} lstr={} rstr={}", lb.type_name(), rb.type_name(), lb.to_string_box().value, rb.to_string_box().value);
+                        if debug_cmp { eprintln!("[VM] BoxRef types: lty={} rty={} lstr={} rstr={}", lb.type_name(), rb.type_name(), lb.to_string_box().value, rb.to_string_box().value); }
                         let li = lb.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)
                             .or_else(|| lb.to_string_box().value.trim().parse::<i64>().ok());
                         let ri = rb.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)

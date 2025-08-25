@@ -7,9 +7,14 @@
 
 ### 直近の実行タスク（9.78h）
 1) 一時デバッグログの抑制（`NYASH_VM_DEBUG_*`のみ）
+   - 進捗: Runnerのバナー/プラグイン初期化ログは `NYASH_CLI_VERBOSE`/`NYASH_DEBUG_PLUGIN` のみで出力。
+           VMの逐次ログは `NYASH_VM_DEBUG[_EXEC|_CMP|_ANDOR|_PHI]` に限定。
 2) Phi正規化（LoopExecutorの借用衝突解消 → 正しい選択へ復帰）
+   - 進捗: VM側の選択を `previous_block` 基準に復帰（fallback: 先頭）。`NYASH_VM_DEBUG_PHI=1` でログ。
+   - 設計: docs/development/current/PHI_NORMALIZATION_PLAN.md を参照（段階プラン/次アクション）。
 3) 基本ボックス統一（StringBox/BoolBoxもre-export化）
 4) VM分割の導線（control_flow/dispatch/frameへ分離設計）
+   - 進捗: `src/backend/{control_flow.rs,dispatch.rs,frame.rs}` を追加（骨組み）。ビルド通過。
 5) 代表スナップショット追加（compare/loop/typeop_mixed）
 
 ### すぐ試せるコマンド
@@ -73,8 +78,16 @@ nyash --backend vm local_tests/and_or_truthy_vm.nyash  # 期待: false,true,fals
 - 既知の未解決: ループ比較で `BoxRef(IntegerBox) < BoxRef(IntegerBox)` が TypeError。
   - 対応中: 比較前に i64 へ正規化するフォールバックをVMに実装（downcast→toString→parse）。
   - 80/20ポリシー: 数値にパース可能なら比較継続、失敗時のみTypeError。
+
+### 🆕 進捗（2025-08-26 午前）
+- TypeError（`And/Or` 経路）再発なしを確認（3スモーク緑: compare/and_or/and_or_truthy）。
+- ログ抑制の徹底: Runner/VMのデバッグ出力を既定で静音、環境変数でのみ有効化。
+- Phi正規化 Step1: `previous_block` によるPhi入力選択をVMに実装（`NYASH_VM_DEBUG_PHI=1`）。
+- VM分割の骨組み: `control_flow.rs`/`dispatch.rs`/`frame.rs` 追加（今後段階移動）。
+- レガシー削除: `src/mir/builder_old.rs`, `src/mir/builder.rs.backup`, `src/parser.rs.backup`, `src/instance.rs.backup`, `src/box_trait.rs.backup` を削除。
+- objects.rs 分解 Step1: `execute_new` をヘルパ（三分割）へ抽出しスリム化（等価挙動）。
    
-### 🎯 次の優先タスク
+### 🎯 次の優先タスク（更新）
 
 1. **copilot_issues.txtの確認** 
    - Phase 8.4: AST→MIR Lowering完全実装（最優先）
@@ -87,6 +100,16 @@ nyash --backend vm local_tests/and_or_truthy_vm.nyash  # 期待: false,true,fals
    - 代替経路の洗い出し: `src/` 全体で `execute_binop`/`And`/`Unsupported binary operation` を再走査し、影響箇所を一掃。
    - 修正後、`local_tests/and_or_vm.nyash` で `false/true` の出力を確認。
    - ルート確定: Compare経路はBuilder側のCast導線で安定。VM側は保険フォールバックを維持しつつ一時ログを抑制へ。
+1.6 **objects.rs 分解 Step2（安全にファイル分割）**
+   - `objects_impl.rs` を導入し、抽出済みヘルパを移動。本体は薄いラッパに。
+   - 以降: `objects/{fields.rs,methods.rs,ops.rs}` への段階分解。
+
+1.7 **runner.rs 分離**
+   - `init_bid_plugins` を `runner/plugin_init.rs` へ抽出。各モードを `runner/modes/*.rs` に。
+
+1.8 **VM分割の段階移動**
+   - ブロック遷移を `control_flow.rs`、フレーム状態を `frame.rs` に移し、`dispatch.rs` の導線を準備。
+
 2. **MIR26命令対応**
    - TypeOp/WeakRef/Barrierのプリンタ拡張
    - スナップショット整備（extern_call/loop/boxcall/typeop_mixed 追加済）

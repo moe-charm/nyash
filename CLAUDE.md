@@ -500,10 +500,29 @@ Related-Code: src/backend/vm_instructions.rs::execute_binop()
 
 ### 🧪 テスト実行
 
-#### 📁 **テストファイル配置ルール（重要！）**
-- **local_testsフォルダを使用**: 一時的なテストファイルは`local_tests/`に配置
-- **ルートディレクトリには置かない**: プロジェクトルートが散らからないように
-- **実行例**: `./target/debug/nyash local_tests/test_example.nyash`
+#### 📁 **テストファイル配置ルール（超重要！毎回ルートが散らかる問題）**
+
+⚠️ **ルートディレクトリの汚染防止ルール** ⚠️
+```bash
+# ❌ 絶対ダメ：ルートで実行
+./target/release/nyash test.nyash        # ログがルートに散乱！
+cargo test > test_output.txt             # 出力ファイルがルートに！
+
+# ✅ 正しい方法：必ずディレクトリを使う
+cd local_tests && ../target/release/nyash test.nyash
+./target/release/nyash local_tests/test.nyash
+```
+
+**必須ルール：**
+- **テストファイル**: 必ず `local_tests/` に配置
+- **ログファイル**: 環境変数で `logs/` に出力するか、実行後即削除
+- **デバッグ出力**: `local_tests/` または `logs/` に保存
+- **一時ファイル**: `/tmp/` を使用
+
+**なぜ毎回ルートが散らかるのか：**
+1. テスト実行時にカレントディレクトリにログ出力
+2. エラー時のデバッグファイルが自動削除されない
+3. VM統計やMIRダンプがデフォルトでカレントに出力
 
 ```bash
 # 基本機能テスト
@@ -514,8 +533,8 @@ mkdir -p local_tests
 echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
 ./target/debug/nyash local_tests/test_hello.nyash
 
-# 演算子統合テスト
-./target/debug/nyash test_comprehensive_operators.nyash
+# 演算子統合テスト（local_testsから実行）
+./target/debug/nyash local_tests/test_comprehensive_operators.nyash
 
 # 実用アプリテスト
 ./target/debug/nyash app_dice_rpg.nyash

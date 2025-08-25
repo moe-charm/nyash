@@ -8,6 +8,10 @@ pub mod vm_instructions;
 pub mod vm_values;
 pub mod vm_boxcall;
 pub mod vm_stats;
+// Phase 9.78h: VM split scaffolding (control_flow/dispatch/frame)
+pub mod control_flow;
+pub mod dispatch;
+pub mod frame;
 
 #[cfg(feature = "wasm-backend")]
 pub mod wasm;

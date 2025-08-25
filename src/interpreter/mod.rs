@@ -33,7 +33,7 @@ mod core;
 mod expressions;
 mod statements;
 mod functions;
-mod objects;
+pub mod objects;
 mod objects_basic_constructors;
 mod io;
 mod methods;
