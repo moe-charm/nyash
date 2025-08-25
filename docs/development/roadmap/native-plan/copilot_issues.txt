@@ -163,22 +163,29 @@ Acceptance:
 
 ------------------------------------------------------------
 
-## 🏆 Phase 10: LLVM Direct AOT - 実現可能性検証中
+## 🏆 Phase 10: Cranelift JIT（主経路） + LLVM AOT（後段研究）
 
 Summary:
-- **調査・実証段階**: MIR→LLVM IR直接変換による最高性能AOT実現を目指す
-- インタープリターとの併用で最適な開発・実行体験を提供
-- 非同期処理フルサポート（async/await のネイティブ実装）
+- **主経路**: MIR→VMを維持しつつ、ホットパスをCraneliftでJIT化して2倍以上の高速化を狙う
+- **LLVM AOT**: 設計資産は維持しつつ、JIT安定後（Phase 11以降）に検討
+- **目標**: VMのホットパス（BoxCall/Array/Map）で体感高速化、ベンチで優位性を実証
 
-Priority: **Research** (Phase 9.8完了後に実現可能性評価)
-Expected Duration: **調査3週間 + 実装3-6ヶ月**（実現可能性次第）
+Priority: **High**（Phase 8.6完了直後着手）
+Expected Duration: **実装6-8週間（段階導入）**
 
-### 🔍 実現可能性チェック項目
-- ✅ **技術的基盤**: MIR 26命令セット（LLVM IR変換可能）
-- ✅ **AOTスケルトン**: 基本構造完成済み
-- ✅ **型情報システム**: 最適化に必要な情報完備
-- 🔄 **Proof of Concept**: 基本的なMIR→LLVM変換の実証
-- ❓ **実装工数**: 現実的な期間での完成可能性
+### 🚧 Start Gate（着手前の必須完了）
+- MIRダイエット（26命令）整合完了：Printer/Verifier/Optimizer一致・効果ラベル統一
+- Loop SSA復帰：Phi/Seal/Pred更新のVerifierチェック合格
+- TypeOp網羅：is/as/isType/asTypeの早期lowering＋Optimizer診断（未lowering検出）
+- 軽量スナップショット：TypeOp/extern_call/loop/await/boxcallでゴールデン緑
+- P2PBox再設計（Phase 9.79）完了・E2Eグリーン
+- CLI分離テスト導線（`cargo test -p core`）安定
+
+### 🔍 実現可能性チェック項目（Cranelift）
+- ✅ **技術的基盤**: MIR26整合（TypeOp/WeakRef/Barrier）
+- ✅ **VM統計**: `--vm-stats` でホット関数抽出可能
+- 🔄 **Proof of Concept**: MIR→CLIFの最小Lower（算術/比較/分岐）
+- ❓ **実装工数**: BoxCall/Array/MapのJIT最適化の妥当性
 
 ### 🌟 インタープリター併用戦略
 ```
@@ -188,54 +195,39 @@ Expected Duration: **調査3週間 + 実装3-6ヶ月**（実現可能性次第�
 Web配布: WASM（ブラウザ対応）
 ```
 
-### 🏗️ Phase 10.1: Proof of Concept（3週間）**実現可能性評価**
+### 🏗️ Phase 10.1: Proof of Concept（2週間）
 
-Investigation Steps:
-1) **MIR→LLVM IR変換調査**: 基本命令の変換可能性検証
-2) **Box型表現調査**: LLVM IRでのBox型効率的実装方法
-3) **C-ABI統合調査**: プラグインとの連携可能性  
-4) **性能予測**: 理論的な高速化効果の算出
+Steps:
+1) **JITマネージャ**: プロファイル収集・しきい値設計
+2) **MIR→CLIF最小Lower**: Const/BinOp/Compare/Branch/Return
+3) **呼出しABI**: VMとの引数/戻り値・BoxRef受け渡し
 
-### 🏗️ Phase 10.2: 基本実装（3ヶ月）**実現可能と判断した場合**
+### 🏗️ Phase 10.2: 基本実装（4週間）
 
 Implementation Steps:
-1) `src/backend/llvm/` 基盤構築
-2) MIR→LLVM IR基本変換
-3) Box操作の最適化（エスケープ解析）
-4) ベンチマーク: 100倍目標
+1) `src/backend/cranelift/` 基盤構築
+2) MIR→CLIF Lowerの拡充（Call/BoxCall/Array系）
+3) JIT関数テーブル + VM切替の安定化
+4) ベンチ: VM比2×目標、BoxCallホットパス優位
 
-### 🌐 Phase 10.3: 非同期拡張（2ヶ月）**基本実装完了後**
-
-非同期サポート戦略:
-- **async/await ネイティブ実装**: Rust風の効率的な非同期  
-- **軽量ランタイム**: 独自Future実装
-- **インタープリター互換**: 同じ非同期セマンティクス
-
-```rust
-// Phase 10.3: 非同期LLVM実装（予定）
-FutureNew → LLVM coroutine intrinsics
-Await → LLVM suspend/resume points  
-FutureSet → completion notification
-```
+### 🌐 Phase 10.3: 非同期の扱い（最小）
+- awaitは当面VM側で処理継続（JIT対象外）
+- JIT関数は同期区間を優先（将来拡張）
 
 ### 技術アプローチ
 🤖 Copilot協力期待:
-- **LLVM統合**: MIR→LLVM IR変換基盤
-- **非同期実装**: coroutine/suspend points
-- **エスケープ解析**: Box→スタック値最適化
-- **型特殊化**: コンパイル時型推論・特殊化
+- **Cranelift統合**: MIR→CLIF Lower
+- **VMハイブリッド**: JITスイッチ・例外/フォールバック
+- **ホットパス最適化**: BoxCall/Array/Mapの直結最適化
 
 ### パフォーマンス目標
-- **同期処理**: 100-1000倍高速化
-- **非同期処理**: Tokio並みの効率性
-- **メモリ効率**: Box割当数80%削減
-- **起動時間**: ネイティブレベル（<10ms）
+- **同期処理**: VM比 2×以上（段階的に引き上げ）
+- **起動時間**: 低オーバーヘッド（JIT初回コストを隠蔽）
 
 ### Acceptance Criteria
-- インタープリターとの完全な互換性
-- 非同期処理の効率的実装
-- 1000倍高速化達成（同期処理）
-- プロダクションレベル最適化
+- インタープリター/VMとの互換性（結果一致）
+- ホットパスでの実測高速化（2×）
+- 回帰テスト・スナップショットの整備
 
 References:
 - docs/予定/native-plan/issues/phase_10_x_llvm_backend_skeleton.md
@@ -464,7 +456,7 @@ Acceptance Criteria:
 
 ## Phase 10以降の展望
 🚀 **WASM復旧完了** (Phase 9.77): 基本機能の完全動作
-🚀 **LLVM Direct AOT** (Phase 10): 100-1000倍高速化
+🚀 **Cranelift JIT** (Phase 10): VM比2×以上の高速化（段階導入）
 🚀 **非同期ネイティブ実装** (Phase 10.2): async/await完全対応
 🚀 **インタープリター併用** : 開発・本番両対応
 

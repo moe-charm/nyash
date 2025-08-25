@@ -428,8 +428,12 @@ impl VM {
             MirInstruction::Const { dst, value } => 
                 self.execute_const(*dst, value),
             
-            MirInstruction::BinOp { dst, op, lhs, rhs } => 
-                self.execute_binop(*dst, op, *lhs, *rhs),
+            MirInstruction::BinOp { dst, op, lhs, rhs } => {
+                if std::env::var("NYASH_VM_DEBUG_ANDOR").ok().as_deref() == Some("1") {
+                    eprintln!("[VM] execute_instruction -> BinOp({:?})", op);
+                }
+                self.execute_binop(*dst, op, *lhs, *rhs)
+            },
             
             MirInstruction::UnaryOp { dst, op, operand } => 
                 self.execute_unaryop(*dst, op, *operand),
@@ -624,7 +628,122 @@ impl VM {
     
     /// Execute binary operation
     pub(super) fn execute_binary_op(&self, op: &BinaryOp, left: &VMValue, right: &VMValue) -> Result<VMValue, VMError> {
+        // Fast path: logical AND/OR accept any truthy via as_bool (supports BoxRef BoolBox/Void coercions)
+        if matches!(*op, BinaryOp::And | BinaryOp::Or) {
+            let l = left.as_bool()?;
+            let r = right.as_bool()?;
+            return Ok(VMValue::Bool(match *op { BinaryOp::And => l && r, BinaryOp::Or => l || r, _ => unreachable!() }));
+        }
+
         match (left, right) {
+            // Logical booleans (native)
+            (VMValue::Bool(l), VMValue::Bool(r)) => {
+                let result = match op {
+                    BinaryOp::And => *l && *r,
+                    BinaryOp::Or => *l || *r,
+                    _ => return Err(VMError::TypeError(format!(
+                        "Unsupported boolean operation: {:?}", op
+                    ))),
+                };
+                Ok(VMValue::Bool(result))
+            }
+
+            // Logical booleans (BoxRef BoolBox)
+            (VMValue::BoxRef(lb), VMValue::BoxRef(rb))
+                if lb.as_any().downcast_ref::<BoolBox>().is_some()
+                    && rb.as_any().downcast_ref::<BoolBox>().is_some() =>
+            {
+                let l = lb.as_any().downcast_ref::<BoolBox>().unwrap().value;
+                let r = rb.as_any().downcast_ref::<BoolBox>().unwrap().value;
+                let result = match op {
+                    BinaryOp::And => l && r,
+                    BinaryOp::Or => l || r,
+                    _ => return Err(VMError::TypeError(format!(
+                        "Unsupported boolean BoxRef operation: {:?}", op
+                    ))),
+                };
+                Ok(VMValue::Bool(result))
+            }
+
+            // Mixed boolean forms (BoxRef BoolBox with native Bool)
+            (VMValue::BoxRef(lb), VMValue::Bool(r)) if lb.as_any().downcast_ref::<BoolBox>().is_some() => {
+                let l = lb.as_any().downcast_ref::<BoolBox>().unwrap().value;
+                let result = match op {
+                    BinaryOp::And => l && *r,
+                    BinaryOp::Or => l || *r,
+                    _ => return Err(VMError::TypeError(format!(
+                        "Unsupported boolean operation: {:?}", op
+                    ))),
+                };
+                Ok(VMValue::Bool(result))
+            }
+            (VMValue::Bool(l), VMValue::BoxRef(rb)) if rb.as_any().downcast_ref::<BoolBox>().is_some() => {
+                let r = rb.as_any().downcast_ref::<BoolBox>().unwrap().value;
+                let result = match op {
+                    BinaryOp::And => *l && r,
+                    BinaryOp::Or => *l || r,
+                    _ => return Err(VMError::TypeError(format!(
+                        "Unsupported boolean operation: {:?}", op
+                    ))),
+                };
+                Ok(VMValue::Bool(result))
+            }
+
+            // Arithmetic with BoxRef(IntegerBox)
+            (VMValue::BoxRef(li), VMValue::BoxRef(ri))
+                if li.as_any().downcast_ref::<IntegerBox>().is_some()
+                    && ri.as_any().downcast_ref::<IntegerBox>().is_some() =>
+            {
+                let l = li.as_any().downcast_ref::<IntegerBox>().unwrap().value;
+                let r = ri.as_any().downcast_ref::<IntegerBox>().unwrap().value;
+                let res = match op {
+                    BinaryOp::Add => l + r,
+                    BinaryOp::Sub => l - r,
+                    BinaryOp::Mul => l * r,
+                    BinaryOp::Div => {
+                        if r == 0 { return Err(VMError::DivisionByZero); }
+                        l / r
+                    }
+                    _ => return Err(VMError::InvalidInstruction(format!(
+                        "Unsupported integer BoxRef operation: {:?}", op
+                    ))),
+                };
+                Ok(VMValue::Integer(res))
+            }
+
+            // Mixed Integer forms: BoxRef<IntegerBox> with native Integer
+            (VMValue::BoxRef(li), VMValue::Integer(r)) if li.as_any().downcast_ref::<IntegerBox>().is_some() => {
+                let l = li.as_any().downcast_ref::<IntegerBox>().unwrap().value;
+                let res = match op {
+                    BinaryOp::Add => l + *r,
+                    BinaryOp::Sub => l - *r,
+                    BinaryOp::Mul => l * *r,
+                    BinaryOp::Div => {
+                        if *r == 0 { return Err(VMError::DivisionByZero); }
+                        l / *r
+                    }
+                    _ => return Err(VMError::InvalidInstruction(format!(
+                        "Unsupported integer operation: {:?}", op
+                    ))),
+                };
+                Ok(VMValue::Integer(res))
+            }
+            (VMValue::Integer(l), VMValue::BoxRef(ri)) if ri.as_any().downcast_ref::<IntegerBox>().is_some() => {
+                let r = ri.as_any().downcast_ref::<IntegerBox>().unwrap().value;
+                let res = match op {
+                    BinaryOp::Add => *l + r,
+                    BinaryOp::Sub => *l - r,
+                    BinaryOp::Mul => *l * r,
+                    BinaryOp::Div => {
+                        if r == 0 { return Err(VMError::DivisionByZero); }
+                        *l / r
+                    }
+                    _ => return Err(VMError::InvalidInstruction(format!(
+                        "Unsupported integer operation: {:?}", op
+                    ))),
+                };
+                Ok(VMValue::Integer(res))
+            }
             (VMValue::Integer(l), VMValue::Integer(r)) => {
                 let result = match op {
                     BinaryOp::Add => *l + *r,
@@ -681,7 +800,7 @@ impl VM {
                 }
             },
             
-            _ => Err(VMError::TypeError(format!("Unsupported binary operation: {:?} on {:?} and {:?}", op, left, right))),
+            _ => Err(VMError::TypeError(format!("Unsupported binary operation [vm.rs updated]: {:?} on {:?} and {:?}", op, left, right))),
         }
     }
     

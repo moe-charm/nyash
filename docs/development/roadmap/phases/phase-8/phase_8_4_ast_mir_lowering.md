@@ -1,5 +1,8 @@
 # Phase 8.4: AST→MIR Lowering完全実装
 
+Status: In Progress (builder分割完了、lowering未完)
+Last Updated: 2025-08-25
+
 ## 🎯 Issue概要
 
 **現在の最重要課題**: Phase 8.3のBox操作WASMが実際にテストできない

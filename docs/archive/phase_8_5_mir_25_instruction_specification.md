@@ -1,4 +1,9 @@
-# Phase 8.5: MIR 25命令完全仕様実装（ChatGPT5 + AI大会議決定版）
+# [ARCHIVED] Phase 8.5: MIR 25命令完全仕様実装（ChatGPT5 + AI大会議決定版）
+
+この文書はアーカイブされました。最新かつ唯一の命令セットは `docs/reference/mir/INSTRUCTION_SET.md`（26命令）を参照してください。
+
+Status: Spec Draft / In Progress（Printer/Verifier/Optimizer整合は未完）
+Last Updated: 2025-08-25
 
 ## 🎯 Issue概要
 

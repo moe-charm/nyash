@@ -1,5 +1,8 @@
 # Phase 9.8: BIDレジストリ + 自動コード生成ツール（WASM/VM/LLVM/言語）
 
+Status: Planned（Phase 8.6完了後に着手）
+Last Updated: 2025-08-25
+
 目的（What/Why）
 - 外部ライブラリをBox（BID）として配布・発見・利用するための基盤を用意する。
 - 当面は nyash.toml にBID情報を“埋め込む”方式で回し、将来は外部BID(manifest)参照＋自動生成へ段階拡張する。

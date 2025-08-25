@@ -1,5 +1,8 @@
 # 🌐 P2PBox完全実装 - AI大会議仕様準拠
 
+Status: Planned（Phase 9.79で実装、Cranelift前に完了）
+Roadmap: docs/development/roadmap/phases/phase-9/phase_9_79_p2pbox_rebuild.md
+
 ## 📋 Issue概要
 
 **目標**: NyaMeshP2Pライブラリ実現のためのP2P通信システムを、AI大会議で決定した最新仕様に従って完全実装する

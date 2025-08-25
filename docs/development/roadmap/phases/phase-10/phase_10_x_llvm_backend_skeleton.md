@@ -1,5 +1,8 @@
 # Phase 10: LLVM Backend Skeleton（MIR→LLVM IR AOT 最小実装）
 
+Status: Deferred（Cranelift JIT先行のため、AOTは後段で検討）
+Last Updated: 2025-08-25
+
 目的
 - MIRからLLVM IRへの直接変換と、最小AOTパイプラインを構築するための実装ガイド（Copilot向けタスクリスト）。
 - Phase 9.7（ABI/BID＋ExternCall）を前提に、外部呼び出しの取り扱いも含めて安全に前進。

@@ -4,7 +4,7 @@ Nyashプログラミング言語開発に必要な情報をまとめたクイッ
 
 ## 🧭 Start Here (最初に見る)
 - **🎯 主軸タスク**: [docs/development/roadmap/native-plan/copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt) **← 最重要！**
-- 現在のタスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+- 現在のタスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)（近々/中期/長期の計画は同ファイル先頭）
 - ドキュメント入口: [docs/README.md](docs/README.md)
 - コア概念（速習）: [docs/reference/architecture/nyash_core_concepts.md](docs/reference/architecture/nyash_core_concepts.md)
 - Netプラグイン（HTTP/TCP）: [docs/reference/plugin-system/net-plugin.md](docs/reference/plugin-system/net-plugin.md)
@@ -17,7 +17,7 @@ Nyashプログラミング言語開発に必要な情報をまとめたクイッ
 - **Phase 8.5**: MIRダイエット（35命令→20命令）
 - **Phase 8.6**: VM性能改善（0.9倍 → 2倍以上）
 - **Phase 9**: JIT実装
-- **Phase 10**: AOT最終形態
+- **Phase 10**: Cranelift JIT（主経路）/ LLVM AOTは後段
 
 **迷ったらcopilot_issues.txtを確認せよ！**
 

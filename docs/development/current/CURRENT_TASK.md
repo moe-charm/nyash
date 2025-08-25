@@ -1,5 +1,33 @@
 # 🎯 CURRENT TASK - 2025年8月25日（状況整理）
 
+## ⏱️ 再開ショートカット（今日のフォーカス）
+- フォーカス: Phase 9.78h MIR前提整備（P2P/Cranelift前の総仕上げ）
+- 目標: MIR26命令の凍結・SSA/Verifier/Optimizer/VM整合・軽量スナップショット体制を完了
+- 参照: `docs/development/roadmap/phases/phase-9/phase_9_78h_mir_pipeline_stabilization.md`
+
+### 直近の実行タスク（9.78h）
+1) Builder移行完了（命令フィールド名/効果一致: `function→func`, `arguments→args`）
+2) Loop SSA復帰（Phi挿入・seal・predecessor更新の段階適用）
+3) TypeOp網羅（is/as/isType/asType早期lowering + Optimizer安全ネット強化）
+4) MIR26統合（TypeOp/WeakRef/Barrier）とPrinter/Verifier/Optimizer整合
+5) VM補強（and/or短絡扱いの確定と実装/BoxRef×BoxRef演算）
+6) 軽量スナップショット + CLI分離テスト + ResultBox移行の仕上げ
+
+### すぐ試せるコマンド
+```bash
+cargo build --release -j32
+nyash --dump-mir --mir-verbose local_tests/typeop_is_as_func_poc.nyash | sed -n '1,160p'
+NYASH_OPT_DIAG_FAIL=1 nyash --dump-mir --mir-verbose local_tests/typeop_diag_fail.nyash || echo DIAG BLOCKED
+tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
+```
+
+### 重要リンク（唯一参照/ゲート）
+- 命令セット（唯一出典・26命令）: `docs/reference/mir/INSTRUCTION_SET.md`
+- 9.78h（本フェーズ詳細）: `docs/development/roadmap/phases/phase-9/phase_9_78h_mir_pipeline_stabilization.md`
+- 9.79（P2P本体 前提: 9.78h完了）: `docs/development/roadmap/phases/phase-9/phase_9_79_p2pbox_rebuild.md`
+- Phase 10（Cranelift JIT主経路）: `docs/development/roadmap/phases/phase-10/phase_10_cranelift_jit_backend.md`
+
+
 ## 🚨 現在の状況（2025-08-25）
 
 ### ✅ 完了したタスク
@@ -26,6 +54,13 @@
    - execute_instruction_old削除（691行削減）
    - vm.rs: 2075行→1382行（33%削減）
    
+### 🆕 進捗（2025-08-25 夜）
+- VM and/or 対応の実装を追加（短絡評価は `as_bool()` 強制で統一、`BoxRef(IntegerBox)` の四則演算にも対応）。
+- ゴールデン（TypeOp代表2ケース）は緑のまま、Optimizer診断（未lowering検知）も動作確認済み。
+- ただし、VM実行時に `And` が `execute_binop` の短絡ルートに入らず、`execute_binary_op` の汎用経路で `Type error: Unsupported binary operation: And ...` が発生。
+  - 兆候: `NYASH_VM_DEBUG_ANDOR` のデバッグ出力が出ない＝`execute_binop` に入っていない、または別実装ルートを通過している可能性。
+  - 仮説: 古いVM経路の残存/リンク切替、もしくは実行時に別ビルド/別profileが使用されている。
+   
 ### 🎯 次の優先タスク
 
 1. **copilot_issues.txtの確認** 
@@ -33,6 +68,11 @@
    - Phase 8.5: MIRダイエット（35命令→20命令）
    - Phase 8.6: VM性能改善（0.9倍 → 2倍以上）
 
+1.5 **VM実行経路の特定と修正（最優先）**
+   - `runner.rs → VM::execute_module → execute_instruction → execute_binop` の各段でデバッグログを追加し、`BinOp(And/Or)` がどこで分岐しているか特定。
+   - バイナリ一致確認: `strings` によるシグネチャ（デバッグ文字列）含有の照合で実行バイナリを同定。
+   - 代替経路の洗い出し: `src/` 全体で `execute_binop`/`And`/`Unsupported binary operation` を再走査し、影響箇所を一掃。
+   - 修正後、`local_tests/and_or_vm.nyash` で `false/true` の出力を確認。
 2. **MIR26命令対応**
    - TypeOp/WeakRef/Barrierのプリンタ拡張
    - スナップショット整備
@@ -42,6 +82,39 @@
    - 言語 `is/as` 導線の実装
    - 弱参照フィールドのWeakLoad/WeakNew対応
    - 関数スタイル `isType/asType` の早期lowering強化
+
+## 🗺️ 計画の粒度（近々/中期/長期）
+
+### 近々（1–2週間）
+- Loop SSA復帰: `loop_api` 小APIを活用し、Phi挿入・seal・predecessor更新を段階適用。簡易loweringを正しいSSAに置換。
+- Builder移行完了: `builder.rs`の機能を`builder_modularized/*`へ移し切り、両者の差分（命令フィールド名・効果）を完全一致。
+- TypeOp網羅: `is/as`/`isType/asType`の早期loweringを再点検、Optimizer診断（未lowering検出）を有効化し回帰を防止。
+- 軽量スナップショット: MIRダンプ（verbose）に対する含有チェックを代表ケース（TypeOp/extern_call/loop/await/boxcall）へ拡張。
+
+### 中期（3–4週間）
+- WeakRef/Barrier統合: lowering（WeakNew/WeakLoad/Barrier）導線を整理、統合命令フラグON/OFFでMIR差を固定化。Verifierに整合チェック追加。
+- MIR26整合化: Printer/Verifier/Optimizerの26命令前提をそろえ、効果の表記・検証を強化。
+- CLI分離テスト: ワークスペース分割 or lib/binaryテスト分離で、`cargo test -p core` のみで回る導線を確立（CLI構成変更で止まらない）。
+- ResultBox移行: `box_trait::ResultBox` 参照を `boxes::ResultBox` へ一掃し、レガシー実装を段階的に削除。
+
+### 長期（Phase 8.4–8.6連動）
+- AST→MIR Lowering完全化（8.4）: すべての言語要素を新MIRへ安定lower。未対応分岐をゼロに。
+- MIRダイエット（8.5）: 命令の統一・簡素化（TypeOp/WeakRef/Barrierの統合効果）を活用し最小集合へ。
+- VM性能改善（8.6）: Hot-path（BoxCall/Array/Map）高速化、And/OrのVM未実装の解消、BoxRef演算の抜けを補完。
+
+### Phase 10 着手ゲート（Cranelift前提条件）
+- [ ] MIR26整合化完了（Printer/Verifier/Optimizerが26命令で一致・効果表記統一）
+- [ ] Loop SSA復帰（Phi/Seal/Pred更新がVerifierで合格）
+- [ ] TypeOp網羅（is/as/isType/asTypeの早期lowering＋Optimizer診断ONで回帰ゼロ）
+- [ ] 軽量スナップショット緑（TypeOp/extern_call/loop/await/boxcall 代表ケース）
+- [ ] P2PBox再設計（Phase 9.79）完了・E2Eパス
+- [ ] CLI分離テスト（`cargo test -p core`）が安定実行
+
+### ⚠️ トラブルノート（VM and/or 追跡用）
+- 症状: `--backend vm` で `And` が `execute_binop` の短絡パスを経由せず、`execute_binary_op` 汎用パスで `Type error`。
+- 状況: `MIR --dump-mir` では `bb0: %X = %A And %B` を出力（BuilderはOK）。
+- 差分検証: `execute_instruction`/`execute_binop` に挿入したデバッグ出力が未出力→実行経路の相違が濃厚。
+- 対応: 実行バイナリの署名チェックとコードパスの網羅的ログ追加でルート確定→修正。
 
 ### ⚠️ MIRビルダー引き継ぎポイント（ChatGPT5さんへ）
 - **状況**: MIRビルダーのモジュール化完了（Phase 1-8コミット済み）
@@ -121,6 +194,12 @@
    - 関数スタイル `isType/asType` の早期loweringを強化（`Literal("T")` と `new StringBox("T")` を確実に検出）
    - `print(isType(...))` の未定義SSA回避（print直前で必ず `TypeOp` のdstを生成）
 
+補足: 近々/中期で並行対応する項目
+- Loop SSA復帰（Phi挿入/Seal/Pred更新の段階適用、簡易loweringの置換）
+- Builder移行完了（`builder.rs` → `builder_modularized/*`、命令フィールド名・効果の完全一致）
+- CLI分離テスト導線（`cargo test -p core` 単独で回る構成）
+- ResultBox移行（`box_trait::ResultBox` → `boxes::ResultBox`、レガシー段階削除）
+
 3) VM/Verifierの補強（中期）
    - `TypeOp(Cast)` の数値キャスト（Int/Float）安全化、誤用時TypeError整備
    - Verifierに26命令整合（Barrier位置、WeakRef整合、支配関係）チェックを追加
@@ -169,6 +248,12 @@ cargo build --release -j32
   - 例: `./tools/ci_check_golden.sh`（差分があれば非ゼロ終了）
   
 補足: ASTの形状確認は `--dump-ast` を使用。
+
+#### 代表スナップショット対象（拡張）
+- TypeOp系: `typeop_is_as_poc.nyash`, `typeop_is_as_func_poc.nyash`
+- extern_call: `http_get_*.nyash`, `filebox_copy_from_handle.nyash`
+- loop/await: `loop_phi_seal_poc.nyash`, `await_http_timeout_poc.nyash`
+- boxcall: `array_map_fastpath_poc.nyash`, `boxcall_identity_share_poc.nyash`
 
 ## ▶ 実行コマンド例
 

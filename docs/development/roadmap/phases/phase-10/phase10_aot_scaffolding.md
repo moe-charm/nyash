@@ -1,5 +1,8 @@
 # 🏆 Phase 10: LLVM Direct AOT（最高性能実現）
 
+Status: Deferred（Cranelift JITをPhase 10の主経路に採用、AOTは後段研究）
+Last Updated: 2025-08-25
+
 ## 📋 Summary
 MIR→LLVM IR直接変換による最高性能AOT実現。Cranelift JITをスキップし、実用優先戦略でLLVMの強力な最適化を直接活用する。
 

@@ -19,11 +19,28 @@ impl VM {
 
     /// Execute a binary operation instruction
     pub(super) fn execute_binop(&mut self, dst: ValueId, op: &BinaryOp, lhs: ValueId, rhs: ValueId) -> Result<ControlFlow, VMError> {
-        let left = self.get_value(lhs)?;
-        let right = self.get_value(rhs)?;
-        let result = self.execute_binary_op(op, &left, &right)?;
-        self.set_value(dst, result);
-        Ok(ControlFlow::Continue)
+        // Short-circuit semantics for logical ops using boolean coercion
+        match *op {
+            BinaryOp::And | BinaryOp::Or => {
+                if std::env::var("NYASH_VM_DEBUG_ANDOR").ok().as_deref() == Some("1") {
+                    eprintln!("[VM] And/Or short-circuit path");
+                }
+                let left = self.get_value(lhs)?;
+                let right = self.get_value(rhs)?;
+                let lb = left.as_bool()?;
+                let rb = right.as_bool()?;
+                let out = match *op { BinaryOp::And => lb && rb, BinaryOp::Or => lb || rb, _ => unreachable!() };
+                self.set_value(dst, VMValue::Bool(out));
+                Ok(ControlFlow::Continue)
+            }
+            _ => {
+                let left = self.get_value(lhs)?;
+                let right = self.get_value(rhs)?;
+                let result = self.execute_binary_op(op, &left, &right)?;
+                self.set_value(dst, result);
+                Ok(ControlFlow::Continue)
+            }
+        }
     }
 
     /// Execute a unary operation instruction

@@ -1,5 +1,8 @@
 # Phase 8.6: VM性能改善実装（緊急修正）
 
+Status: In Progress（Critical; 0.9×→2×目標）
+Last Updated: 2025-08-25
+
 ## 🚨 Issue概要
 
 **緊急課題**: VMがインタープリターより性能劣化（0.9倍）している根本問題の解決
