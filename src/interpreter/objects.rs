@@ -106,6 +106,8 @@ impl NyashInterpreter {
         }
         
         // Unified registry is authoritative; legacy implementation removed
+        // NOTE: Legacy constructor path below is unreachable and kept only for reference during migration.
+        // TODO(migration): remove legacy block after all callsites are confirmed on Unified Registry.
         return Err(RuntimeError::UndefinedClass { name: class.to_string() });
         
         // Try basic type constructors first

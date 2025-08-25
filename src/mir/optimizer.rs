@@ -511,7 +511,7 @@ mod tests {
 
         // Ensure TypeOp remains in bb0
         let f = module.get_function("main").unwrap();
-        let block = f.get_block(&bb0).unwrap();
+        let block = f.get_block(bb0).unwrap();
         let has_typeop = block.all_instructions().any(|i| matches!(i, MirInstruction::TypeOp { .. }));
         assert!(has_typeop, "TypeOp should not be dropped by DCE when used by print");
     }

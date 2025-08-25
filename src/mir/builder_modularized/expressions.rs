@@ -182,16 +182,24 @@ impl MirBuilder {
         for arg in args {
             arg_values.push(self.build_expression(arg)?);
         }
-        
-        let dst = self.value_gen.next();
-        
-        // For now, treat all function calls as Box method calls
-        self.emit_instruction(MirInstruction::Call {
-            dst,
-            function: name,
-            arguments: arg_values,
+        // Prepare function identifier as a const String value id
+        let func_val = self.value_gen.next();
+        self.emit_instruction(MirInstruction::Const {
+            dst: func_val,
+            value: ConstValue::String(name),
         })?;
-        
+
+        // Destination for the call result
+        let dst = self.value_gen.next();
+
+        // Emit Call with conservative read effects
+        self.emit_instruction(MirInstruction::Call {
+            dst: Some(dst),
+            func: func_val,
+            args: arg_values,
+            effects: EffectMask::READ.add(Effect::ReadHeap),
+        })?;
+
         Ok(dst)
     }
 
@@ -461,49 +469,11 @@ impl MirBuilder {
                 self.build_field_access(*object.clone(), field.clone())
             },
             
-            ASTNode::ArrayAccess { array, index, .. } => {
-                // Build array and index expressions
-                let array_val = self.build_expression(*array)?;
-                let index_val = self.build_expression(*index)?;
-                
-                // Generate ArrayGet instruction
-                let result = self.value_gen.next();
-                self.emit_instruction(MirInstruction::ArrayGet {
-                    dst: result,
-                    array: array_val,
-                    index: index_val,
-                    effects: EffectMask::READ.add(Effect::ReadHeap),
-                })?;
-                
-                Ok(result)
-            },
-            
-            ASTNode::ArrayLiteral { elements, .. } => {
-                // Create new ArrayBox
-                let array_val = self.build_new_expression("ArrayBox".to_string(), vec![])?;
-                
-                // Add each element
-                for elem in elements {
-                    let elem_val = self.build_expression(elem)?;
-                    
-                    // array.push(elem)
-                    self.emit_instruction(MirInstruction::BoxCall {
-                        dst: None,
-                        box_val: array_val,
-                        method: "push".to_string(),
-                        args: vec![elem_val],
-                        effects: EffectMask::WRITE.add(Effect::WriteHeap),
-                    })?;
-                }
-                
-                Ok(array_val)
-            },
-            
             ASTNode::New { class, arguments, .. } => {
                 self.build_new_expression(class.clone(), arguments.clone())
             },
             
-            ASTNode::Await { expression, .. } => {
+            ASTNode::AwaitExpression { expression, .. } => {
                 self.build_await_expression(*expression)
             },
             
