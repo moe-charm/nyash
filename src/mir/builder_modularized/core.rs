@@ -203,3 +203,18 @@ impl MirBuilder {
         Ok(())
     }
 }
+
+// Adapter: Implement LoopBuilderApi for modularized MirBuilder to enable shared helpers
+impl crate::mir::loop_api::LoopBuilderApi for MirBuilder {
+    fn new_block(&mut self) -> super::BasicBlockId { self.block_gen.next() }
+    fn current_block(&self) -> Result<super::BasicBlockId, String> {
+        self.current_block.ok_or_else(|| "No current block".to_string())
+    }
+    fn start_new_block(&mut self, block: super::BasicBlockId) -> Result<(), String> {
+        self.start_new_block(block)
+    }
+    fn emit(&mut self, inst: super::MirInstruction) -> Result<(), String> {
+        self.emit_instruction(inst)
+    }
+    fn new_value(&mut self) -> super::ValueId { self.value_gen.next() }
+}
