@@ -148,7 +148,31 @@ impl MirVerifier {
         } else {
             if dlog::on("NYASH_DEBUG_VERIFIER") {
                 eprintln!("[VERIFY] {} errors in function {}", local_errors.len(), function.signature.name);
-                for e in &local_errors { eprintln!("  • {:?}", e); }
+                for e in &local_errors {
+                    match e {
+                        VerificationError::MergeUsesPredecessorValue { value, merge_block, pred_block } => {
+                            eprintln!(
+                                "  • MergeUsesPredecessorValue: value=%{:?} merge_bb={:?} pred_bb={:?} -- hint: insert/use Phi in merge block for values from predecessors",
+                                value, merge_block, pred_block
+                            );
+                        }
+                        VerificationError::DominatorViolation { value, use_block, def_block } => {
+                            eprintln!(
+                                "  • DominatorViolation: value=%{:?} use_bb={:?} def_bb={:?} -- hint: ensure definition dominates use, or route via Phi",
+                                value, use_block, def_block
+                            );
+                        }
+                        VerificationError::InvalidPhi { phi_value, block, reason } => {
+                            eprintln!(
+                                "  • InvalidPhi: phi_dst=%{:?} in bb={:?} reason={} -- hint: check inputs cover all predecessors and placed at block start",
+                                phi_value, block, reason
+                            );
+                        }
+                        other => {
+                            eprintln!("  • {:?}", other);
+                        }
+                    }
+                }
             }
             Err(local_errors)
         }
@@ -342,6 +366,8 @@ impl MirVerifier {
 
         for (use_block_id, block) in &function.blocks {
             for instruction in block.all_instructions() {
+                // Phi inputs are special: they are defined in predecessors; skip dominance check for them
+                if let super::MirInstruction::Phi { .. } = instruction { continue; }
                 for used_value in instruction.used_values() {
                     if let Some(&def_bb) = def_block.get(&used_value) {
                         if def_bb != *use_block_id {
@@ -418,6 +444,8 @@ impl MirVerifier {
             let doms_of_block = dominators.get(bid).unwrap();
             // check instructions including terminator
             for inst in block.all_instructions() {
+                // Skip Phi: its inputs are allowed to come from predecessors by SSA definition
+                if let super::MirInstruction::Phi { .. } = inst { continue; }
                 for used in inst.used_values() {
                     if let Some(&db) = def_block.get(&used) {
                         // If def doesn't dominate merge block, it must be routed via phi

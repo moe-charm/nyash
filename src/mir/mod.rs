@@ -73,8 +73,10 @@ impl MirCompiler {
         if self.optimize {
             let mut optimizer = MirOptimizer::new();
             let stats = optimizer.optimize_module(&mut module);
-            if std::env::var("NYASH_OPT_DIAG_FAIL").is_ok() && stats.diagnostics_reported > 0 {
-                return Err(format!("Diagnostic failure: {} unlowered type-op calls detected", stats.diagnostics_reported));
+            if (std::env::var("NYASH_OPT_DIAG_FAIL").is_ok()
+                || std::env::var("NYASH_OPT_DIAG_FORBID_LEGACY").is_ok())
+                && stats.diagnostics_reported > 0 {
+                return Err(format!("Diagnostic failure: {} issues detected (unlowered/legacy)", stats.diagnostics_reported));
             }
         }
         

@@ -315,6 +315,15 @@ nyash --backend vm local_tests/and_or_truthy_vm.nyash  # 期待: false,true,fals
     - Builderの早期loweringをFunctionCall分岐で強化（`Literal`/`StringBox`両対応、`print(...)` 内でも確実にdst生成）
     - Optimizerの安全ネット（BoxCall/Call→TypeOp）を `isType` パターンでも確実に発火させる（テーブル駆動の判定）
 
+- 命令の二重化（Legacy vs Unified）
+  - 状況: `MirInstruction` に旧系（`TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite`）と統合系（`TypeOp/WeakRef/Barrier`）が併存。
+  - リスク: ドキュメントは26命令（統合系）で凍結のため、実装との二重化がバグ温床に。
+  - 当面のガード: 26命令同期テストを追加（`src/mir/instruction_introspection.rs`）。ドキュメント≡実装名がズレたら赤。
+  - 次アクション:
+    1) Optimizer診断に「旧命令検出」フラグを追加（`NYASH_OPT_DIAG_FORBID_LEGACY=1`で旧命令が存在したら失敗）。
+    2) Printer/Verifier/Optimizerの表記・効果を統合側に寄せる（表示も統一）。
+    3) 段階的に旧命令をcfgで囲む or 内部で統合命令へアダプト（最終的に旧命令経路を削除）。
+
 ## ⏸️ セッション再開メモ（次にやること）
 - [ ] Builder: `extract_string_literal` の `StringBox`対応は導入済 → `FunctionCall` 早期loweringの再検証（`print(isType(...))` 直下）
 - [ ] Optimizer: `Call` 形式（関数呼び出し）でも `isType/asType` を検出して `TypeOp(Check/Cast)` に置換する安全ネットの強化とテスト

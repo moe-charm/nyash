@@ -357,8 +357,10 @@ impl MirPrinter {
                 format!("{} = new {}({})", dst, box_type, args_str)
             },
             
+            // Legacy -> Unified print: TypeCheck as TypeOp(check)
             MirInstruction::TypeCheck { dst, value, expected_type } => {
-                format!("{} = type_check {} is {}", dst, value, expected_type)
+                // Print using unified TypeOp style to avoid naming divergence
+                format!("{} = typeop check {} {}", dst, value, expected_type)
             },
             
             MirInstruction::Cast { dst, value, target_type } => {
@@ -424,20 +426,24 @@ impl MirPrinter {
                 format!("ref_set {}.{} = {}", reference, field, value)
             },
             
+            // Legacy -> Unified print: WeakNew as weakref new
             MirInstruction::WeakNew { dst, box_val } => {
-                format!("{} = weak_new {}", dst, box_val)
+                format!("{} = weakref new {}", dst, box_val)
             },
             
+            // Legacy -> Unified print: WeakLoad as weakref load
             MirInstruction::WeakLoad { dst, weak_ref } => {
-                format!("{} = weak_load {}", dst, weak_ref)
+                format!("{} = weakref load {}", dst, weak_ref)
             },
             
+            // Legacy -> Unified print: BarrierRead as barrier read
             MirInstruction::BarrierRead { ptr } => {
-                format!("barrier_read {}", ptr)
+                format!("barrier read {}", ptr)
             },
             
+            // Legacy -> Unified print: BarrierWrite as barrier write
             MirInstruction::BarrierWrite { ptr } => {
-                format!("barrier_write {}", ptr)
+                format!("barrier write {}", ptr)
             },
             
             MirInstruction::WeakRef { dst, op, value } => {

@@ -18,9 +18,9 @@
 
 実装状況（2025-08-26）
 - Step 1 完了: `VM::loop_execute_phi` が `previous_block` による選択に対応。
-- 既知の課題: LoopExecutor 経由の借用安全な委譲（Step 2）。
+- Step 2 スケルトン導入: `LoopExecutor` へphi実行を委譲し、`control_flow::record_transition(from,to)` で `previous_block` と遷移を記録。VM本体の分岐時に呼び出し済み。
+- 既知の課題: `LoopExecutor` のヘッダ検出/イテレーション管理の強化（いまは簡易）。
 
 次アクション
-- VM 内部の phi 実行を LoopExecutor へ委譲できるよう API を見直し（`get_value` クロージャの借用境界を調整）。
-- Builder 側の phi 正規化 TODO を CURRENT_TASK に追記。
-
+- `LoopExecutor` のヘッダ判定とイテレーション可視化を拡充（`is_loop_header` の実装、`NYASH_VM_DEBUG_PHI` 出力拡張）。
+- Builder 側の phi 正規化 TODO を CURRENT_TASK に追記（seal/pred更新・Phi先頭挿入の確認用ユニットテスト追加）。

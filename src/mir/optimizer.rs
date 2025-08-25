@@ -40,6 +40,9 @@ impl MirOptimizer {
             println!("🚀 Starting MIR optimization passes");
         }
         
+        // Pass 0: Normalize legacy instructions to unified forms (TypeOp/WeakRef/Barrier)
+        stats.merge(self.normalize_legacy_instructions(module));
+        
         // Pass 1: Dead code elimination
         stats.merge(self.eliminate_dead_code(module));
         
@@ -61,8 +64,11 @@ impl MirOptimizer {
             println!("✅ Optimization complete: {}", stats);
         }
         // Diagnostics (informational): report unlowered patterns
-        let diag = self.diagnose_unlowered_type_ops(module);
-        stats.merge(diag);
+        let diag1 = self.diagnose_unlowered_type_ops(module);
+        stats.merge(diag1);
+        // Diagnostics (policy): detect legacy (pre-unified) instructions when requested
+        let diag2 = self.diagnose_legacy_instructions(module);
+        stats.merge(diag2);
         
         stats
     }
@@ -289,6 +295,83 @@ impl MirOptimizer {
     }
 }
 
+impl MirOptimizer {
+    /// Normalize legacy instructions into unified MIR26 forms.
+    /// - TypeCheck/Cast → TypeOp(Check/Cast)
+    /// - WeakNew/WeakLoad → WeakRef(New/Load)
+    /// - BarrierRead/BarrierWrite → Barrier(Read/Write)
+    fn normalize_legacy_instructions(&mut self, module: &mut MirModule) -> OptimizationStats {
+        use super::{TypeOpKind, WeakRefOp, BarrierOp, MirInstruction as I, MirType};
+        let mut stats = OptimizationStats::new();
+        for (_fname, function) in &mut module.functions {
+            for (_bb, block) in &mut function.blocks {
+                // Rewrite in-place for normal instructions
+                for inst in &mut block.instructions {
+                    match inst {
+                        I::TypeCheck { dst, value, expected_type } => {
+                            let ty = MirType::Box(expected_type.clone());
+                            *inst = I::TypeOp { dst: *dst, op: TypeOpKind::Check, value: *value, ty };
+                            stats.reorderings += 0; // no-op; keep stats structure alive
+                        }
+                        I::Cast { dst, value, target_type } => {
+                            let ty = target_type.clone();
+                            *inst = I::TypeOp { dst: *dst, op: TypeOpKind::Cast, value: *value, ty };
+                        }
+                        I::WeakNew { dst, box_val } => {
+                            let val = *box_val;
+                            *inst = I::WeakRef { dst: *dst, op: WeakRefOp::New, value: val };
+                        }
+                        I::WeakLoad { dst, weak_ref } => {
+                            let val = *weak_ref;
+                            *inst = I::WeakRef { dst: *dst, op: WeakRefOp::Load, value: val };
+                        }
+                        I::BarrierRead { ptr } => {
+                            let val = *ptr;
+                            *inst = I::Barrier { op: BarrierOp::Read, ptr: val };
+                        }
+                        I::BarrierWrite { ptr } => {
+                            let val = *ptr;
+                            *inst = I::Barrier { op: BarrierOp::Write, ptr: val };
+                        }
+                        _ => {}
+                    }
+                }
+                // Rewrite terminator, if any
+                if let Some(term) = &mut block.terminator {
+                    match term {
+                        I::TypeCheck { dst, value, expected_type } => {
+                            let ty = MirType::Box(expected_type.clone());
+                            *term = I::TypeOp { dst: *dst, op: TypeOpKind::Check, value: *value, ty };
+                        }
+                        I::Cast { dst, value, target_type } => {
+                            let ty = target_type.clone();
+                            *term = I::TypeOp { dst: *dst, op: TypeOpKind::Cast, value: *value, ty };
+                        }
+                        I::WeakNew { dst, box_val } => {
+                            let val = *box_val;
+                            *term = I::WeakRef { dst: *dst, op: WeakRefOp::New, value: val };
+                        }
+                        I::WeakLoad { dst, weak_ref } => {
+                            let val = *weak_ref;
+                            *term = I::WeakRef { dst: *dst, op: WeakRefOp::Load, value: val };
+                        }
+                        I::BarrierRead { ptr } => {
+                            let val = *ptr;
+                            *term = I::Barrier { op: BarrierOp::Read, ptr: val };
+                        }
+                        I::BarrierWrite { ptr } => {
+                            let val = *ptr;
+                            *term = I::Barrier { op: BarrierOp::Write, ptr: val };
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        stats
+    }
+}
+
 /// Map string type name to MIR type (optimizer-level helper)
 fn map_type_name(name: &str) -> MirType {
     match name {
@@ -428,6 +511,53 @@ impl MirOptimizer {
                 stats.diagnostics_reported += count;
                 if diag_on {
                     eprintln!("[OPT][DIAG] Function '{}' has {} unlowered type-op calls", fname, count);
+                }
+            }
+        }
+        stats
+    }
+
+    /// Diagnostic: detect legacy instructions that should be unified into the canonical 26
+    /// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite
+    /// When NYASH_OPT_DIAG or NYASH_OPT_DIAG_FORBID_LEGACY is set, prints diagnostics.
+    fn diagnose_legacy_instructions(&mut self, module: &MirModule) -> OptimizationStats {
+        let mut stats = OptimizationStats::new();
+        let diag_on = self.debug
+            || std::env::var("NYASH_OPT_DIAG").is_ok()
+            || std::env::var("NYASH_OPT_DIAG_FORBID_LEGACY").is_ok();
+        for (fname, function) in &module.functions {
+            let mut count = 0usize;
+            for (_bb, block) in &function.blocks {
+                for inst in &block.instructions {
+                    match inst {
+                        MirInstruction::TypeCheck { .. }
+                        | MirInstruction::Cast { .. }
+                        | MirInstruction::WeakNew { .. }
+                        | MirInstruction::WeakLoad { .. }
+                        | MirInstruction::BarrierRead { .. }
+                        | MirInstruction::BarrierWrite { .. } => { count += 1; }
+                        _ => {}
+                    }
+                }
+                if let Some(term) = &block.terminator {
+                    match term {
+                        MirInstruction::TypeCheck { .. }
+                        | MirInstruction::Cast { .. }
+                        | MirInstruction::WeakNew { .. }
+                        | MirInstruction::WeakLoad { .. }
+                        | MirInstruction::BarrierRead { .. }
+                        | MirInstruction::BarrierWrite { .. } => { count += 1; }
+                        _ => {}
+                    }
+                }
+            }
+            if count > 0 {
+                stats.diagnostics_reported += count;
+                if diag_on {
+                    eprintln!(
+                        "[OPT][DIAG] Function '{}' has {} legacy MIR ops (TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite): unify to TypeOp/WeakRef/Barrier",
+                        fname, count
+                    );
                 }
             }
         }

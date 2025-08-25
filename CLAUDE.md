@@ -128,7 +128,7 @@ python3 -m http.server 8010
 
 ### 🌟 完全明示デリゲーション（2025-08-11革命）
 ```nyash
-// デリゲーション構文
+// デリゲーション構文（すべてのBoxで統一的に使える！）
 box Child from Parent {  // from構文でデリゲーション
     init(args) {  // コンストラクタは「init」に統一
         from Parent.init(args)  // 親の初期化
@@ -138,6 +138,12 @@ box Child from Parent {  // from構文でデリゲーション
         from Parent.method()  // 親メソッド呼び出し
     }
 }
+
+// ✅ ビルトインBox、プラグインBox、ユーザー定義Boxすべてで可能！
+box MyString from StringBox { }          // ビルトインBoxから
+box MyFile from FileBox { }             // プラグインBoxから
+box Employee from Person { }            // ユーザー定義Boxから
+box Multi from StringBox, IntegerBox { } // 多重デリゲーションも可能！
 ```
 
 ### 🔄 統一ループ構文

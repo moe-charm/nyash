@@ -158,16 +158,36 @@ pub trait BoxMetadata {
 
 ## 統一継承の実現
 
-### 現在の課題
-- ビルトインBoxの継承ができない
-- プラグインBoxの継承も未実装
+### ~~現在の課題~~ → 2025-08-25更新：すべて実装済み！
+- ~~ビルトインBoxの継承ができない~~ → ✅ 実装済み！
+- ~~プラグインBoxの継承も未実装~~ → ✅ 実装済み！
 
-### 理想的な統一継承
+### 理想的な統一継承（すでに実現！）
 ```nyash
-// すべて可能に！
-box MyString from StringBox { }      // ビルトイン継承
-box MyFile from FileBox { }          // プラグイン継承  
-box Employee from Person { }         // ユーザー定義継承
+// すべて可能になった！
+box MyString from StringBox { }      // ビルトイン継承 ✅
+box MyFile from FileBox { }          // プラグイン継承 ✅ 
+box Employee from Person { }         // ユーザー定義継承 ✅
+
+// 多重デリゲーションも可能！
+box MultiChild from StringBox, IntegerBox { }  // ✅
+```
+
+### 実際のコード例（動作確認済み）
+```nyash
+box EnhancedString from StringBox {
+    init { prefix, suffix }
+    
+    birth(text) {
+        from StringBox.birth(text)  // 透過的にpackに変換される
+        me.prefix = "【"
+        me.suffix = "】"
+    }
+    
+    enhanced() {
+        return me.prefix + me.toString() + me.suffix + "✨"
+    }
+}
 ```
 
 ## さらなる美化への道
@@ -240,3 +260,181 @@ impl ArrayBox {
 ユーザー定義Boxをビルトイン/プラグインBoxと完全に同じレベルで扱うことは、強引ではなく、むしろ設計として自然で美しい。この統一により、言語の一貫性と拡張性が大幅に向上する。
 
 今後は、基本メソッドの統一実装から始めて、段階的により洗練された設計へと進化させていくのが良いだろう。
+
+## 🚀 MIR/VM統一実装計画（2025-08-25追記）
+
+### 📍 現状の課題
+VMとMIRで、Box型によって異なる処理をしている：
+
+```rust
+// VMでの現状：InstanceBoxだけ特別扱い
+if let Some(inst) = arc_box.as_any().downcast_ref::<InstanceBox>() {
+    // ユーザー定義Box → 関数呼び出しに変換
+    let func_name = format!("{}.{}/{}", inst.class_name, method, args.len());
+} else {
+    // ビルトイン/プラグイン → 直接メソッド呼び出し
+    self.call_box_method(cloned_box, method, nyash_args)?
+}
+```
+
+### 🎯 統一実装の提案
+
+#### 1. 統一メソッドディスパッチインターフェース
+```rust
+pub trait UnifiedBox: NyashBox {
+    fn dispatch_method(&self, method: &str, args: Vec<Box<dyn NyashBox>>) 
+        -> Result<Box<dyn NyashBox>, String> {
+        // デフォルト実装：既存のメソッド呼び出しを使用
+        self.call_method(method, args)
+    }
+}
+
+// InstanceBoxでのオーバーライド
+impl UnifiedBox for InstanceBox {
+    fn dispatch_method(&self, method: &str, args: Vec<Box<dyn NyashBox>>) 
+        -> Result<Box<dyn NyashBox>, String> {
+        // MIR関数へのリダイレクト
+        let func_name = format!("{}.{}/{}", self.class_name, method, args.len());
+        // VM経由で関数呼び出し
+    }
+}
+```
+
+#### 2. VMの簡素化
+```rust
+// 統一後：すべて同じ処理パス
+let result = match &recv {
+    VMValue::BoxRef(arc_box) => {
+        arc_box.dispatch_method(method, nyash_args)?
+    }
+    _ => {
+        recv.to_nyash_box().dispatch_method(method, nyash_args)?
+    }
+};
+```
+
+#### 3. MIRレベルでの統一
+- `BoxCall`命令ですべてのBox型を統一的に処理
+- 型による分岐や特殊処理を削除
+- コンパイル時の最適化は維持
+
+### 💎 期待される効果
+
+1. **コードの簡素化**
+   - VM内の条件分岐削除で30%以上のコード削減
+   - 新Box型追加時の変更箇所が最小限に
+
+2. **保守性の向上**
+   - Box型の実装詳細がVMから隠蔽される
+   - テストが書きやすくなる
+
+3. **パフォーマンス**
+   - 統一的な最適化（メソッドキャッシュ等）が可能
+   - 仮想関数テーブルによる高速化の可能性
+
+4. **美しさ**
+   - 「Everything is Box」が実装レベルでも完全に実現
+   - シンプルで理解しやすいコード
+
+### 📅 実装ロードマップ
+
+1. **Phase 1**: UnifiedBoxトレイトの導入（後方互換性を保ちながら）
+2. **Phase 2**: VMでの統一ディスパッチ実装
+3. **Phase 3**: MIRビルダーの簡素化
+4. **Phase 4**: 旧実装の削除とクリーンアップ
+
+### 🌟 最終的なビジョン
+
+すべてのBox（ビルトイン、プラグイン、ユーザー定義）が完全に統一された世界：
+- 同じインターフェース
+- 同じ実行パス
+- 同じ最適化機会
+
+これこそが「Everything is Box」の究極の実現！
+
+## 🔌 プラグインローダーv2との統合
+
+### 現在のプラグインシステムとの関係
+- プラグインローダーv2がすでに統一的なインターフェースを提供
+- `extern_call`経由での統一的なアクセス
+- UnifiedBoxトレイトとの相性は良好
+
+### 統合のメリット
+- プラグインBoxも`dispatch_method()`で統一処理
+- ホットリロード時も透過的に動作
+- FFI境界を意識しない実装
+
+## 📊 パフォーマンス測定計画
+
+### 現在のベースライン
+- インタープリター基準で13.5倍高速化達成（VM実装）
+- BoxCall命令の実行時間が全体の約30%
+
+### 統一実装後の予測
+- 条件分岐削減で5-10%の高速化期待
+- メソッドキャッシュで追加20%改善の可能性
+- 測定方法：`--benchmark --iterations 1000`で検証
+
+## 🔄 移行時の互換性戦略
+
+### 段階的移行計画
+1. **Phase 1**: UnifiedBoxトレイトを追加（既存APIは維持）
+2. **Phase 2**: 警告付きで旧API使用を通知
+3. **Phase 3**: 内部実装を統一版に切り替え
+4. **Phase 4**: 旧APIをdeprecated化
+5. **Phase 5**: 完全削除（6ヶ月後）
+
+### テスト戦略
+- 既存の全E2Eテストが通ることを保証
+- パフォーマンスリグレッションテスト追加
+- プラグイン互換性テストスイート
+
+## ⚡ JITコンパイラとの統合（Phase 9準備）
+
+### 統一メソッドディスパッチの利点
+- JITが最適化しやすい単純な呼び出しパターン
+- インライン展開の機会増加
+- 型情報を活用した特殊化
+
+### 仮想関数テーブル（vtable）戦略
+```rust
+struct BoxVTable {
+    methods: HashMap<String, fn(&dyn NyashBox, Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, String>>,
+}
+```
+- 起動時に事前計算
+- JITコンパイル時に直接参照
+- キャッシュフレンドリーな配置
+
+## 🔧 具体的な実装タスク（TODO）
+
+### Phase 1: 基礎実装（1週間）
+- [ ] UnifiedBoxトレイトの定義（src/box_trait.rs）
+- [ ] StringBox, IntegerBox等への実装
+- [ ] InstanceBoxへのdispatch_method実装
+- [ ] 単体テストの作成
+
+### Phase 2: VM統合（2週間）
+- [ ] execute_boxcall()の簡素化
+- [ ] InstanceBox特別扱いコードの削除
+- [ ] VMValueとの統合
+- [ ] E2Eテスト全パス確認
+- [ ] ベンチマーク実行と比較
+
+### Phase 3: 最適化（1週間）
+- [ ] メソッドキャッシュ実装
+- [ ] 頻出メソッドの特殊化
+- [ ] vtable事前計算
+- [ ] JIT統合準備
+
+### Phase 4: クリーンアップ（3日）
+- [ ] 旧実装コードの削除
+- [ ] ドキュメント更新
+- [ ] CHANGELOG記載
+- [ ] マイグレーションガイド作成
+
+### 検証項目
+- [ ] 全Box型でtoString/type/equals/cloneが動作
+- [ ] プラグインBoxの透過的な動作
+- [ ] パフォーマンス改善の確認
+- [ ] メモリ使用量の変化なし
