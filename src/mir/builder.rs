@@ -79,94 +79,48 @@ impl MirBuilder {
         }
     }
 
-    /// Emit a type check instruction (flagged to TypeOp in PoC)
+    /// Emit a type check instruction (Unified: TypeOp(Check))
     #[allow(dead_code)]
     pub(super) fn emit_type_check(&mut self, value: ValueId, expected_type: String) -> Result<ValueId, String> {
         let dst = self.value_gen.next();
-        #[cfg(feature = "mir_typeop_poc")]
-        {
-            self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Check, value, ty: super::MirType::Box(expected_type) })?;
-            return Ok(dst);
-        }
-        #[cfg(not(feature = "mir_typeop_poc"))]
-        {
-            self.emit_instruction(MirInstruction::TypeCheck { dst, value, expected_type })?;
-            Ok(dst)
-        }
+        self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Check, value, ty: super::MirType::Box(expected_type) })?;
+        Ok(dst)
     }
 
-    /// Emit a cast instruction (flagged to TypeOp in PoC)
+    /// Emit a cast instruction (Unified: TypeOp(Cast))
     #[allow(dead_code)]
     pub(super) fn emit_cast(&mut self, value: ValueId, target_type: super::MirType) -> Result<ValueId, String> {
         let dst = self.value_gen.next();
-        #[cfg(feature = "mir_typeop_poc")]
-        {
-            self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Cast, value, ty: target_type.clone() })?;
-            return Ok(dst);
-        }
-        #[cfg(not(feature = "mir_typeop_poc"))]
-        {
-            self.emit_instruction(MirInstruction::Cast { dst, value, target_type })?;
-            Ok(dst)
-        }
+        self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Cast, value, ty: target_type.clone() })?;
+        Ok(dst)
     }
 
-    /// Emit a weak reference creation (flagged to WeakRef(New) in PoC)
+    /// Emit a weak reference creation (Unified: WeakRef(New))
     #[allow(dead_code)]
     pub(super) fn emit_weak_new(&mut self, box_val: ValueId) -> Result<ValueId, String> {
         let dst = self.value_gen.next();
-        #[cfg(feature = "mir_refbarrier_unify_poc")]
-        {
-            self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::New, value: box_val })?;
-            return Ok(dst);
-        }
-        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
-        {
-            self.emit_instruction(MirInstruction::WeakNew { dst, box_val })?;
-            Ok(dst)
-        }
+        self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::New, value: box_val })?;
+        Ok(dst)
     }
 
-    /// Emit a weak reference load (flagged to WeakRef(Load) in PoC)
+    /// Emit a weak reference load (Unified: WeakRef(Load))
     #[allow(dead_code)]
     pub(super) fn emit_weak_load(&mut self, weak_ref: ValueId) -> Result<ValueId, String> {
         let dst = self.value_gen.next();
-        #[cfg(feature = "mir_refbarrier_unify_poc")]
-        {
-            self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::Load, value: weak_ref })?;
-            return Ok(dst);
-        }
-        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
-        {
-            self.emit_instruction(MirInstruction::WeakLoad { dst, weak_ref })?;
-            Ok(dst)
-        }
+        self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::Load, value: weak_ref })?;
+        Ok(dst)
     }
 
-    /// Emit a barrier read (flagged to Barrier(Read) in PoC)
+    /// Emit a barrier read (Unified: Barrier(Read))
     #[allow(dead_code)]
     pub(super) fn emit_barrier_read(&mut self, ptr: ValueId) -> Result<(), String> {
-        #[cfg(feature = "mir_refbarrier_unify_poc")]
-        {
-            self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Read, ptr })
-        }
-        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
-        {
-            self.emit_instruction(MirInstruction::BarrierRead { ptr })
-        }
+        self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Read, ptr })
     }
 
-    /// Emit a barrier write (flagged to Barrier(Write) in PoC)
+    /// Emit a barrier write (Unified: Barrier(Write))
     #[allow(dead_code)]
     pub(super) fn emit_barrier_write(&mut self, ptr: ValueId) -> Result<(), String> {
-        #[cfg(feature = "mir_refbarrier_unify_poc")]
-        {
-            self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Write, ptr })
-        }
-        #[cfg(not(feature = "mir_refbarrier_unify_poc"))]
-        {
-            self.emit_instruction(MirInstruction::BarrierWrite { ptr })
-        }
+        self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Write, ptr })
     }
 
     /// Lower a box method (e.g., birth) into a standalone MIR function
