@@ -58,8 +58,44 @@ impl VM {
 
     /// Execute a comparison instruction
     pub(super) fn execute_compare(&mut self, dst: ValueId, op: &CompareOp, lhs: ValueId, rhs: ValueId) -> Result<ControlFlow, VMError> {
-        let left = self.get_value(lhs)?;
-        let right = self.get_value(rhs)?;
+        let mut left = self.get_value(lhs)?;
+        let mut right = self.get_value(rhs)?;
+
+        // Canonicalize BoxRef(IntegerBox) -> VMValue::Integer(i64)
+        left = match left {
+            VMValue::BoxRef(b) if b.type_name() == "IntegerBox" => {
+                if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
+                    eprintln!("[VM] Coerce left BoxRef(IntegerBox) -> Integer");
+                }
+                // Try downcast then parse fallback
+                if let Some(ib) = b.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] left downcast ok: {}", ib.value); }
+                    VMValue::Integer(ib.value)
+                } else {
+                    let s = b.to_string_box().value;
+                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] left downcast fail; parse {}", s); }
+                    match s.parse::<i64>() { Ok(n) => VMValue::Integer(n), Err(_) => VMValue::BoxRef(b) }
+                }
+            }
+            other => other,
+        };
+        right = match right {
+            VMValue::BoxRef(b) if b.type_name() == "IntegerBox" => {
+                if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
+                    eprintln!("[VM] Coerce right BoxRef(IntegerBox) -> Integer");
+                }
+                if let Some(ib) = b.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] right downcast ok: {}", ib.value); }
+                    VMValue::Integer(ib.value)
+                } else {
+                    let s = b.to_string_box().value;
+                    if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") { eprintln!("[VM] right downcast fail; parse {}", s); }
+                    match s.parse::<i64>() { Ok(n) => VMValue::Integer(n), Err(_) => VMValue::BoxRef(b) }
+                }
+            }
+            other => other,
+        };
+
         let result = self.execute_compare_op(op, &left, &right)?;
         self.set_value(dst, VMValue::Bool(result));
         Ok(ControlFlow::Continue)
@@ -161,15 +197,14 @@ impl VM {
 
     /// Execute Phi instruction
     pub(super) fn execute_phi(&mut self, dst: ValueId, inputs: &[(BasicBlockId, ValueId)]) -> Result<ControlFlow, VMError> {
-        // For now, just use the first input since we don't track previous BB in this refactored version
-        // TODO: Track previous basic block for proper phi node resolution
-        if let Some((_, val_id)) = inputs.first() {
-            let value = self.get_value(*val_id)?;
-            self.set_value(dst, value);
-            Ok(ControlFlow::Continue)
-        } else {
-            Err(VMError::InvalidInstruction("Phi node has no inputs".to_string()))
-        }
+        // Minimal correct phi: select input based on previous_block via LoopExecutor
+        let selected = self.loop_executor.execute_phi(
+            dst,
+            inputs,
+            |id| self.get_value(id),
+        )?;
+        self.set_value(dst, selected);
+        Ok(ControlFlow::Continue)
     }
 
     /// Execute Load/Store instructions

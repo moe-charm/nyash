@@ -63,10 +63,22 @@ impl VM {
                 match op { BinaryOp::Add => Ok(VMValue::String(format!("{}{}", l.to_string_box().value, r))), _ => Err(VMError::TypeError("BoxRef-String operations only support addition".to_string())) }
             },
 
-            // Arithmetic with BoxRef(IntegerBox)
-            (VMValue::BoxRef(li), VMValue::BoxRef(ri)) if li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some() && ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some() => {
-                let l = li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().unwrap().value;
-                let r = ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().unwrap().value;
+            // Arithmetic with BoxRef(IntegerBox) — support both legacy and new IntegerBox
+            (VMValue::BoxRef(li), VMValue::BoxRef(ri)) if {
+                li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some()
+                    || li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().is_some()
+            } && {
+                ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some()
+                    || ri.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().is_some()
+            } => {
+                let l = li.as_any().downcast_ref::<crate::box_trait::IntegerBox>()
+                    .map(|x| x.value)
+                    .or_else(|| li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .unwrap();
+                let r = ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>()
+                    .map(|x| x.value)
+                    .or_else(|| ri.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .unwrap();
                 let res = match op {
                     BinaryOp::Add => l + r,
                     BinaryOp::Sub => l - r,
@@ -78,8 +90,12 @@ impl VM {
             }
 
             // Mixed Integer forms
-            (VMValue::BoxRef(li), VMValue::Integer(r)) if li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some() => {
-                let l = li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().unwrap().value;
+            (VMValue::BoxRef(li), VMValue::Integer(r)) if li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some()
+                || li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().is_some() => {
+                let l = li.as_any().downcast_ref::<crate::box_trait::IntegerBox>()
+                    .map(|x| x.value)
+                    .or_else(|| li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .unwrap();
                 let res = match op {
                     BinaryOp::Add => l + *r,
                     BinaryOp::Sub => l - *r,
@@ -89,8 +105,12 @@ impl VM {
                 };
                 Ok(VMValue::Integer(res))
             }
-            (VMValue::Integer(l), VMValue::BoxRef(ri)) if ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some() => {
-                let r = ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().unwrap().value;
+            (VMValue::Integer(l), VMValue::BoxRef(ri)) if ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().is_some()
+                || ri.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().is_some() => {
+                let r = ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>()
+                    .map(|x| x.value)
+                    .or_else(|| ri.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .unwrap();
                 let res = match op {
                     BinaryOp::Add => *l + r,
                     BinaryOp::Sub => *l - r,
@@ -139,7 +159,50 @@ impl VM {
             (VMValue::Integer(l), VMValue::Integer(r)) => Ok(match op { CompareOp::Eq => l == r, CompareOp::Ne => l != r, CompareOp::Lt => l < r, CompareOp::Le => l <= r, CompareOp::Gt => l > r, CompareOp::Ge => l >= r }),
             (VMValue::Float(l), VMValue::Float(r)) => Ok(match op { CompareOp::Eq => l == r, CompareOp::Ne => l != r, CompareOp::Lt => l < r, CompareOp::Le => l <= r, CompareOp::Gt => l > r, CompareOp::Ge => l >= r }),
             (VMValue::String(l), VMValue::String(r)) => Ok(match op { CompareOp::Eq => l == r, CompareOp::Ne => l != r, CompareOp::Lt => l < r, CompareOp::Le => l <= r, CompareOp::Gt => l > r, CompareOp::Ge => l >= r }),
-            _ => Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right))),
+
+            // BoxRef(IntegerBox) comparisons (homogeneous)
+            (VMValue::BoxRef(li), VMValue::BoxRef(ri)) => {
+                if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "[VM] compare BoxRef vs BoxRef: left_type={}, right_type={}, left_str={}, right_str={}",
+                        li.type_name(), ri.type_name(), li.to_string_box().value, ri.to_string_box().value
+                    );
+                }
+                // Try integer comparisons via downcast or parse fallback
+                let l_opt = li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)
+                    .or_else(|| li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .or_else(|| li.to_string_box().value.parse::<i64>().ok());
+                let r_opt = ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)
+                    .or_else(|| ri.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .or_else(|| ri.to_string_box().value.parse::<i64>().ok());
+                if let (Some(l), Some(r)) = (l_opt, r_opt) {
+                    return Ok(match op { CompareOp::Eq => l == r, CompareOp::Ne => l != r, CompareOp::Lt => l < r, CompareOp::Le => l <= r, CompareOp::Gt => l > r, CompareOp::Ge => l >= r });
+                }
+                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+            }
+            // Mixed Integer (BoxRef vs Integer)
+            (VMValue::BoxRef(li), VMValue::Integer(r)) => {
+                let l_opt = li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)
+                    .or_else(|| li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .or_else(|| li.to_string_box().value.parse::<i64>().ok());
+                if let Some(l) = l_opt { return Ok(match op { CompareOp::Eq => l == *r, CompareOp::Ne => l != *r, CompareOp::Lt => l < *r, CompareOp::Le => l <= *r, CompareOp::Gt => l > *r, CompareOp::Ge => l >= *r }); }
+                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+            }
+            (VMValue::Integer(l), VMValue::BoxRef(ri)) => {
+                let r_opt = ri.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)
+                    .or_else(|| ri.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
+                    .or_else(|| ri.to_string_box().value.parse::<i64>().ok());
+                if let Some(r) = r_opt { return Ok(match op { CompareOp::Eq => *l == r, CompareOp::Ne => *l != r, CompareOp::Lt => *l < r, CompareOp::Le => *l <= r, CompareOp::Gt => *l > r, CompareOp::Ge => *l >= r }); }
+                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+            }
+            _ => {
+                if std::env::var("NYASH_VM_DEBUG_CMP").ok().as_deref() == Some("1") {
+                    let lty = match left { VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()), other => format!("{:?}", other) };
+                    let rty = match right { VMValue::BoxRef(b) => format!("BoxRef({})", b.type_name()), other => format!("{:?}", other) };
+                    eprintln!("[VM] compare default arm: op={:?}, left={}, right={}", op, lty, rty);
+                }
+                Err(VMError::TypeError(format!("Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+            },
         }
     }
 }

@@ -60,6 +60,15 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
 - ただし、VM実行時に `And` が `execute_binop` の短絡ルートに入らず、`execute_binary_op` の汎用経路で `Type error: Unsupported binary operation: And ...` が発生。
   - 兆候: `NYASH_VM_DEBUG_ANDOR` のデバッグ出力が出ない＝`execute_binop` に入っていない、または別実装ルートを通過している可能性。
   - 仮説: 古いVM経路の残存/リンク切替、もしくは実行時に別ビルド/別profileが使用されている。
+
+### 🆕 進捗（2025-08-26 早朝）
+- and/or 真理値強制の最終化: `VMValue::as_bool()` を拡張（`BoxRef(IntegerBox)`→非0でtrue、`Void`→false）。
+- テスト追加: `local_tests/and_or_truthy_vm.nyash`（期待: `false,true,false,true,false`）。緑を確認。
+- 基本ボックス統一（第一弾）: `IntegerBox` を正典に一本化。
+  - `src/boxes/integer_box.rs` は `pub use crate::box_trait::IntegerBox;` に置換し、実体の二重化を排除。
+- 既知の未解決: ループ比較で `BoxRef(IntegerBox) < BoxRef(IntegerBox)` が TypeError。
+  - 対応中: 比較前に i64 へ正規化するフォールバックをVMに実装（downcast→toString→parse）。
+  - 80/20ポリシー: 数値にパース可能なら比較継続、失敗時のみTypeError。
    
 ### 🎯 次の優先タスク
 
@@ -73,6 +82,7 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
    - バイナリ一致確認: `strings` によるシグネチャ（デバッグ文字列）含有の照合で実行バイナリを同定。
    - 代替経路の洗い出し: `src/` 全体で `execute_binop`/`And`/`Unsupported binary operation` を再走査し、影響箇所を一掃。
    - 修正後、`local_tests/and_or_vm.nyash` で `false/true` の出力を確認。
+   - ループ比較の犯人退治: `Compare` 直前で `BoxRef(IntegerBox)` を確実に i64 正規化（downcast→toString→parse フォールバック）。
 2. **MIR26命令対応**
    - TypeOp/WeakRef/Barrierのプリンタ拡張
    - スナップショット整備（extern_call/loop/boxcall/typeop_mixed 追加済）
@@ -120,6 +130,11 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
 - Verifier: Barrierの軽い文脈診断を追加（`NYASH_VERIFY_BARRIER_STRICT=1`で有効）。
 - ResultBox移行TODOを追加（`docs/development/current/RESULTBOX_MIGRATION_TODO.md`）。
 - VM: 旧`box_trait::ResultBox`扱いのデプリケーション警告を最小抑制（完全移行までの暫定）。
+
+### ✅ 小タスク完了（2025-08-26 早朝）
+- VM: `as_bool()` の拡張（IntegerBox/ Void を真理値化）。
+- テスト: `and_or_truthy_vm.nyash` 追加。
+- 基本ボックス統一（第一弾）: `IntegerBox` 実体の一本化（re-export）。
 
 ### ▶ リファクタリング開始（控えめ）
 - 方針: 肥大化防止のため`src/backend/vm.rs`を2分割のみ実施。

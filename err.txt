@@ -1,0 +1,16 @@
+🔍 DEBUG: Initializing v2 plugin system
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_counter_plugin.so
+Net plugin: LOG_ON=false, LOG_PATH=net_plugin.log
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_net_plugin.so
+[FileBox] Plugin initialized
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_filebox_plugin.so
+  📦 Registering plugin provider for CounterBox
+  📦 Registering plugin provider for HttpServerBox
+  📦 Registering plugin provider for HttpClientBox
+  📦 Registering plugin provider for HttpResponseBox
+  📦 Registering plugin provider for HttpRequestBox
+  📦 Registering plugin provider for SocketServerBox
+  📦 Registering plugin provider for SocketClientBox
+  📦 Registering plugin provider for SocketConnBox
+  📦 Registering plugin provider for FileBox
+❌ VM execution error: Type error: Unsupported comparison: Lt on BoxRef(IntegerBox { value: 0, base: BoxBase { id: 3, parent_type_id: None } }) and BoxRef(IntegerBox { value: 3, base: BoxBase { id: 7, parent_type_id: None } })

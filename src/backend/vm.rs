@@ -132,12 +132,17 @@ impl VMValue {
                 if let Some(bb) = b.as_any().downcast_ref::<BoolBox>() {
                     return Ok(bb.value);
                 }
+                // IntegerBox → truthy if non-zero (legacy and new)
+                if let Some(ib) = b.as_any().downcast_ref::<IntegerBox>() { return Ok(ib.value != 0); }
+                if let Some(ib) = b.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>() { return Ok(ib.value != 0); }
                 // VoidBox → false (nullish false)
                 if b.as_any().downcast_ref::<VoidBox>().is_some() {
                     return Ok(false);
                 }
                 Err(VMError::TypeError(format!("Expected bool, got BoxRef({})", b.type_name())))
             }
+            // Treat plain Void as false for logical contexts
+            VMValue::Void => Ok(false),
             _ => Err(VMError::TypeError(format!("Expected bool, got {:?}", self))),
         }
     }
@@ -441,8 +446,21 @@ impl VM {
             MirInstruction::UnaryOp { dst, op, operand } => 
                 self.execute_unaryop(*dst, op, *operand),
             
-            MirInstruction::Compare { dst, op, lhs, rhs } => 
-                self.execute_compare(*dst, op, *lhs, *rhs),
+            MirInstruction::Compare { dst, op, lhs, rhs } => {
+                // Fast path: compare IntegerBox values by unboxing to i64
+                if let (Ok(lv), Ok(rv)) = (self.get_value(*lhs), self.get_value(*rhs)) {
+                    if let (VMValue::BoxRef(lb), VMValue::BoxRef(rb)) = (&lv, &rv) {
+                        if lb.type_name() == "IntegerBox" && rb.type_name() == "IntegerBox" {
+                            let li = if let Some(ib) = lb.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { ib.value } else { lb.to_string_box().value.parse::<i64>().unwrap_or(0) };
+                            let ri = if let Some(ib) = rb.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { ib.value } else { rb.to_string_box().value.parse::<i64>().unwrap_or(0) };
+                            let out = match op { crate::mir::CompareOp::Eq => li == ri, crate::mir::CompareOp::Ne => li != ri, crate::mir::CompareOp::Lt => li < ri, crate::mir::CompareOp::Le => li <= ri, crate::mir::CompareOp::Gt => li > ri, crate::mir::CompareOp::Ge => li >= ri };
+                            self.set_value(*dst, VMValue::Bool(out));
+                            return Ok(ControlFlow::Continue);
+                        }
+                    }
+                }
+                self.execute_compare(*dst, op, *lhs, *rhs)
+            },
             
             // I/O operations
             MirInstruction::Print { value, .. } => 
