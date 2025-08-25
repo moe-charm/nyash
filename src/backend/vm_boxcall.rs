@@ -3,7 +3,7 @@
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
-use super::vm::{VM, VMError};
+use super::vm::{VM, VMError, VMValue};
 
 impl VM {
     /// Call a method on a Box - simplified version of interpreter method dispatch
@@ -106,5 +106,35 @@ impl VM {
 
         // Default: return void for any unrecognized box type or method
         Ok(Box::new(VoidBox::new()))
+    }
+
+    /// Debug helper for BoxCall tracing (enabled via NYASH_VM_DEBUG_BOXCALL=1)
+    pub(super) fn debug_log_boxcall(&self, recv: &VMValue, method: &str, args: &[Box<dyn NyashBox>], stage: &str, result: Option<&VMValue>) {
+        if std::env::var("NYASH_VM_DEBUG_BOXCALL").ok().as_deref() == Some("1") {
+            let recv_ty = match recv {
+                VMValue::BoxRef(arc) => arc.type_name().to_string(),
+                VMValue::Integer(_) => "Integer".to_string(),
+                VMValue::Float(_) => "Float".to_string(),
+                VMValue::Bool(_) => "Bool".to_string(),
+                VMValue::String(_) => "String".to_string(),
+                VMValue::Future(_) => "Future".to_string(),
+                VMValue::Void => "Void".to_string(),
+            };
+            let args_desc: Vec<String> = args.iter().map(|a| a.type_name().to_string()).collect();
+            if let Some(res) = result {
+                let res_ty = match res {
+                    VMValue::BoxRef(arc) => format!("BoxRef({})", arc.type_name()),
+                    VMValue::Integer(_) => "Integer".to_string(),
+                    VMValue::Float(_) => "Float".to_string(),
+                    VMValue::Bool(_) => "Bool".to_string(),
+                    VMValue::String(_) => "String".to_string(),
+                    VMValue::Future(_) => "Future".to_string(),
+                    VMValue::Void => "Void".to_string(),
+                };
+                eprintln!("[VM-BOXCALL][{}] recv_ty={} method={} argc={} args={:?} => result_ty={}", stage, recv_ty, method, args.len(), args_desc, res_ty);
+            } else {
+                eprintln!("[VM-BOXCALL][{}] recv_ty={} method={} argc={} args={:?}", stage, recv_ty, method, args.len(), args_desc);
+            }
+        }
     }
 }
