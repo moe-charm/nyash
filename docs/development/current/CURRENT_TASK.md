@@ -282,7 +282,7 @@ nyash --backend vm local_tests/and_or_truthy_vm.nyash  # 期待: false,true,fals
    - プリンタ拡張: `TypeOp/WeakRef/Barrier` を `--mir-verbose` に明示表示
    - スナップショット整備: 代表ケースで flag ON/OFF のMIR差分固定化
    - vm-stats差分: `weak_field_poc.nyash` 等で JSON 取得・比較（キー: TypeOp/WeakRef/Barrier）
-   - 旗: `mir_typeop_poc`（TypeCheck/Cast→TypeOp）、`mir_refbarrier_unify_poc`（Weak*/Barrier→統合）
+- 注: `mir_typeop_poc` / `mir_refbarrier_unify_poc` は非推奨（no-op）。Builderは統合命令（TypeOp/WeakRef/Barrier）を常に生成する。Optimizerに旧命令→統合命令の正規化パスあり。
 
 2) Builder適用拡大（短期〜中期）
    - 言語 `is/as` 導線（最小でも擬似ノード）→ `emit_type_check/emit_cast` へ配線

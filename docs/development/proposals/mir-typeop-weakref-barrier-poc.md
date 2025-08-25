@@ -17,8 +17,12 @@ Last Updated: 2025-08-23
 - Remove legacy instructions permanently (kept behind feature flags)
 
 ## Feature Flags (Cargo)
-- `mir_typeop_poc`: enable TypeOp and map TypeCheck/Cast to it during build
-- `mir_refbarrier_unify_poc`: enable WeakRef/Barrier unified ops and map legacy calls
+Note: 2025-08 Phase 9.78h 時点で統合命令はデフォルトとなり、以下のflagsは非推奨（no-op）だよ：
+
+- `mir_typeop_poc`: Builderは常に`TypeOp(Check/Cast)`を生成（旧`TypeCheck/Cast`は使わない）。
+- `mir_refbarrier_unify_poc`: Builderは常に`WeakRef/Barrier`を生成（旧`WeakNew/WeakLoad/BarrierRead/Write`は使わない）。
+
+互換性のため、Optimizerに旧命令→統合命令への正規化パス（Pass 0）が入っているにゃ。
 
 ## Mapping (Current → PoC)
 - TypeCheck { value, expected_type } → TypeOp { op: Check, value, type } (bool)
@@ -78,4 +82,3 @@ Last Updated: 2025-08-23
 - Add builder mapping behind flags
 - Add VM execution behind flags
 - Gate CI job to run PoC flags on Linux
-

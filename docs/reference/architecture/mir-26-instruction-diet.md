@@ -87,8 +87,10 @@ Appendix: Rationale
 ---
 
 Feature Flags (Cargo)
-- `mir_typeop_poc`: enable TypeOp PoC mapping (builder emits TypeOp instead of TypeCheck/Cast)
-- `mir_refbarrier_unify_poc`: enable WeakRef/Barrier PoC mapping (builder emits unified ops)
+- Deprecated flags (unified by default):
+  - `mir_typeop_poc`: no-op now. Builder always emits `TypeOp(Check/Cast)` instead of legacy `TypeCheck/Cast`。
+  - `mir_refbarrier_unify_poc`: no-op now. Builder always emits `WeakRef/Barrier` instead of legacy `WeakNew/WeakLoad/BarrierRead/Write`。
+  - Optimizer has a Pass 0 that normalizes any残存の旧命令 → 統合命令（安全ネット）。
 
 Status (2025-08-23)
 - Flags declared in `Cargo.toml` (off by default)
