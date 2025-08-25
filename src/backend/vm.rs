@@ -222,25 +222,35 @@ pub struct VM {
 }
 
 impl VM {
-    /// Helper: execute phi selection based on previous_block (borrow-safe minimal)
-    pub(super) fn loop_execute_phi(&mut self, _dst: ValueId, inputs: &[(BasicBlockId, ValueId)]) -> Result<VMValue, VMError> {
+    /// Helper: execute phi via LoopExecutor with previous_block-based selection (Step2 skeleton)
+    pub(super) fn loop_execute_phi(&mut self, dst: ValueId, inputs: &[(BasicBlockId, ValueId)]) -> Result<VMValue, VMError> {
         if inputs.is_empty() {
             return Err(VMError::InvalidInstruction("Phi node has no inputs".to_string()));
         }
         let debug_phi = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1")
             || std::env::var("NYASH_VM_DEBUG_PHI").ok().as_deref() == Some("1");
-        let prev = self.previous_block;
-        if debug_phi { eprintln!("[VM] phi-select prev={:?} inputs={:?}", prev, inputs); }
-        if let Some(prev_bb) = prev {
-            if let Some((_, val_id)) = inputs.iter().find(|(bb, _)| *bb == prev_bb) {
-                if debug_phi { eprintln!("[VM] phi-select hit prev={:?} -> {:?}", prev_bb, val_id); }
-                return self.get_value(*val_id);
+        if debug_phi { eprintln!("[VM] phi-select (delegated) prev={:?} inputs={:?}", self.previous_block, inputs); }
+        // Borrow just the values storage immutably to avoid borrowing entire &self in closure
+        let values_ref = &self.values;
+        let res = self.loop_executor.execute_phi(dst, inputs, |val_id| {
+            let index = val_id.to_usize();
+            if index < values_ref.len() {
+                if let Some(ref value) = values_ref[index] {
+                    Ok(value.clone())
+                } else {
+                    Err(VMError::InvalidValue(format!("Value {} not set", val_id)))
+                }
+            } else {
+                Err(VMError::InvalidValue(format!("Value {} out of bounds", val_id)))
+            }
+        });
+        if debug_phi {
+            match &res {
+                Ok(v) => eprintln!("[VM] phi-result -> {:?}", v),
+                Err(e) => eprintln!("[VM] phi-error -> {:?}", e),
             }
         }
-        // Fallback: first input
-        let (_, val_id) = inputs[0];
-        if debug_phi { eprintln!("[VM] phi-select fallback first -> {:?}", val_id); }
-        self.get_value(val_id)
+        res
     }
     /// Create a new VM instance
     pub fn new() -> Self {
@@ -395,7 +405,7 @@ impl VM {
                 .ok_or_else(|| VMError::InvalidBasicBlock(format!("Block {} not found", current_block)))?;
             
             self.frame.current_block = Some(current_block);
-            self.pc = 0;
+            self.frame.pc = 0;
             
             let mut next_block = None;
             let mut should_return = None;
@@ -403,7 +413,7 @@ impl VM {
             // Execute instructions in this block (including terminator)
             let all_instructions: Vec<_> = block.all_instructions().collect();
             for (index, instruction) in all_instructions.iter().enumerate() {
-                self.pc = index;
+                self.frame.pc = index;
                 
                 match self.execute_instruction(instruction)? {
                     ControlFlow::Continue => continue,
@@ -550,24 +560,7 @@ impl VM {
             }
         }
 
-        // ResultBox (box_trait::ResultBox - legacy)
-        {
-            #[allow(deprecated)]
-            if let Some(result_box_legacy) = box_value.as_any().downcast_ref::<crate::box_trait::ResultBox>() {
-                match method {
-                    "is_ok" | "isOk" => {
-                        return Ok(result_box_legacy.is_ok());
-                    }
-                    "get_value" | "getValue" => {
-                        return Ok(result_box_legacy.get_value());
-                    }
-                    "get_error" | "getError" => {
-                        return Ok(result_box_legacy.get_error());
-                    }
-                    _ => return Ok(Box::new(VoidBox::new())),
-                }
-            }
-        }
+        // Legacy box_trait::ResultBox is no longer handled here (migration complete)
 
         // Generic fallback: toString for any Box type
         if method == "toString" {

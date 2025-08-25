@@ -412,7 +412,7 @@ impl MirInstruction {
             
             // Phase 5: Control flow & exception handling
             MirInstruction::Throw { effects, .. } => *effects,
-            MirInstruction::Catch { .. } => EffectMask::PURE, // Setting up handler is pure
+            MirInstruction::Catch { .. } => EffectMask::CONTROL, // Handler setup affects control handling
             MirInstruction::Safepoint => EffectMask::PURE,    // No-op for now
             
             // Phase 6: Box reference operations

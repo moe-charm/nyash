@@ -7,6 +7,7 @@
 
 pub mod instruction;
 pub mod instruction_v2; // New 25-instruction specification
+pub mod instruction_introspection; // Introspection helpers for tests (core instruction names)
 pub mod basic_block;
 pub mod function;
 pub mod builder;
@@ -190,13 +191,10 @@ mod tests {
     #[test]
     fn test_lowering_extern_console_log() {
         // Build AST: console.log("hi") → ExternCall env.console.log
-        let ast = ASTNode::Expression {
-            expr: Box::new(ASTNode::MethodCall {
-                object: Box::new(ASTNode::Variable { name: "console".to_string(), span: crate::ast::Span::unknown() }),
-                method: "log".to_string(),
-                arguments: vec![ ASTNode::Literal { value: LiteralValue::String("hi".to_string()), span: crate::ast::Span::unknown() } ],
-                span: crate::ast::Span::unknown(),
-            }),
+        let ast = ASTNode::MethodCall {
+            object: Box::new(ASTNode::Variable { name: "console".to_string(), span: crate::ast::Span::unknown() }),
+            method: "log".to_string(),
+            arguments: vec![ ASTNode::Literal { value: LiteralValue::String("hi".to_string()), span: crate::ast::Span::unknown() } ],
             span: crate::ast::Span::unknown(),
         };
 
@@ -210,13 +208,10 @@ mod tests {
     #[test]
     fn test_lowering_boxcall_array_push() {
         // Build AST: (new ArrayBox()).push(1)
-        let ast = ASTNode::Expression {
-            expr: Box::new(ASTNode::MethodCall {
-                object: Box::new(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() }),
-                method: "push".to_string(),
-                arguments: vec![ ASTNode::Literal { value: LiteralValue::Integer(1), span: crate::ast::Span::unknown() } ],
-                span: crate::ast::Span::unknown(),
-            }),
+        let ast = ASTNode::MethodCall {
+            object: Box::new(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() }),
+            method: "push".to_string(),
+            arguments: vec![ ASTNode::Literal { value: LiteralValue::Integer(1), span: crate::ast::Span::unknown() } ],
             span: crate::ast::Span::unknown(),
         };
 

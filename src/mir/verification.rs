@@ -5,6 +5,7 @@
  */
 
 use super::{MirModule, MirFunction, BasicBlockId, ValueId};
+use crate::debug::log as dlog;
 use std::collections::{HashSet, HashMap};
 
 /// Verification error types
@@ -145,6 +146,10 @@ impl MirVerifier {
         if local_errors.is_empty() {
             Ok(())
         } else {
+            if dlog::on("NYASH_DEBUG_VERIFIER") {
+                eprintln!("[VERIFY] {} errors in function {}", local_errors.len(), function.signature.name);
+                for e in &local_errors { eprintln!("  • {:?}", e); }
+            }
             Err(local_errors)
         }
     }

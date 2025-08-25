@@ -51,7 +51,10 @@ impl NyashRunner {
         runtime::init_global_unified_registry();
         
         // Try to initialize BID plugins from nyash.toml (best-effort)
-        runner_plugin_init::init_bid_plugins();
+        // Allow disabling during snapshot/CI via NYASH_DISABLE_PLUGINS=1
+        if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
+            runner_plugin_init::init_bid_plugins();
+        }
 
         // Optional: enable VM stats via CLI flags
         if self.config.vm_stats {
@@ -114,7 +117,8 @@ impl NyashRunner {
         println!("Memory safety guaranteed by Rust's borrow checker! 🛡️");
     }
 
-    /// Execute Nyash file with interpreter
+    /// Execute Nyash file with interpreter (moved to modes/common.rs)
+    #[cfg(any())]
     fn execute_nyash_file(&self, filename: &str) {
         // Read the file
         let code = match fs::read_to_string(filename) {
@@ -178,7 +182,8 @@ impl NyashRunner {
         }
     }
 
-    /// Execute MIR compilation and processing mode
+    /// Execute MIR compilation and processing mode (moved to modes/mir.rs)
+    #[cfg(any())]
     fn execute_mir_mode(&self, filename: &str) {
         // Read the file
         let code = match fs::read_to_string(filename) {
@@ -233,7 +238,8 @@ impl NyashRunner {
         }
     }
 
-    /// Execute VM mode
+    /// Execute VM mode (moved to modes/vm.rs)
+    #[cfg(any())]
     fn execute_vm_mode(&self, filename: &str) {
         // Read the file
         let code = match fs::read_to_string(filename) {
@@ -295,7 +301,8 @@ impl NyashRunner {
 
     
 
-    /// Collect Box declarations from AST and register into runtime
+    /// Collect Box declarations (moved to modes/vm.rs)
+    #[cfg(any())]
     fn collect_box_declarations(&self, ast: &ASTNode, runtime: &NyashRuntime) {
         fn walk(node: &ASTNode, runtime: &NyashRuntime) {
             match node {
@@ -342,7 +349,8 @@ impl NyashRunner {
 
     // execute_aot_mode moved to runner::modes::aot
 
-    /// Execute LLVM mode
+    /// Execute LLVM mode (moved to modes/llvm.rs)
+    #[cfg(any())]
     fn execute_llvm_mode(&self, filename: &str) {
         // Read the file
         let code = match fs::read_to_string(filename) {
@@ -436,7 +444,8 @@ impl NyashRunner {
         }
     }
 
-    /// Execute benchmark mode
+    /// Execute benchmark mode (moved to modes/bench.rs)
+    #[cfg(any())]
     fn execute_benchmark_mode(&self) {
         println!("🏁 Running benchmark mode with {} iterations", self.config.iterations);
         
@@ -728,9 +737,12 @@ mod tests {
         let config = CliConfig {
             file: None,
             debug_fuel: Some(100000),
+            dump_ast: false,
             dump_mir: false,
             verify_mir: false,
             mir_verbose: false,
+            mir_verbose_effects: false,
+            no_optimize: false,
             backend: "interpreter".to_string(),
             compile_wasm: false,
             compile_native: false,

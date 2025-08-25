@@ -29,8 +29,11 @@ fi
 
 if [ -n "$OUTFILE" ]; then
   mkdir -p "$(dirname "$OUTFILE")"
-  "${CMD[@]}" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$OUTFILE"
+  # Filter noisy plugin/runtime banners to stabilize snapshots
+  NYASH_CLI_VERBOSE=1 "${CMD[@]}" \
+    | grep -Ev '^(\[PluginLoaderV2\]|\[FileBox\]|Net plugin:)' \
+    | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$OUTFILE"
   echo "Wrote MIR snapshot: $OUTFILE"
 else
-  "${CMD[@]}"
+  NYASH_CLI_VERBOSE=1 "${CMD[@]}"
 fi

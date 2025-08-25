@@ -1,4 +1,4 @@
-# 🎯 CURRENT TASK - 2025年8月25日（状況整理）
+# 🎯 CURRENT TASK - 2025年8月26日（状況整理＆再起動ショートカット）
 
 ## ⏱️ 再開ショートカット（今日のフォーカス）
 - フォーカス: VM比較経路の安定化後片付け + 1000行分解の下準備
@@ -35,6 +35,14 @@ nyash --backend vm local_tests/and_or_truthy_vm.nyash  # 期待: false,true,fals
 - 9.78h（本フェーズ詳細）: `docs/development/roadmap/phases/phase-9/phase_9_78h_mir_pipeline_stabilization.md`
 - 9.79（P2P本体 前提: 9.78h完了）: `docs/development/roadmap/phases/phase-9/phase_9_79_p2pbox_rebuild.md`
 - Phase 10（Cranelift JIT主経路）: `docs/development/roadmap/phases/phase-10/phase_10_cranelift_jit_backend.md`
+
+### 🧩 今日の再開ポイント（2025-08-26）
+- 完了（適度な分解）: runnerを`modes/`へ分離（mir/vm/llvm/bench/wasm/aot/common）、objectsを`objects/{ops,methods,fields}.rs`へ、VMに`frame.rs`/`control_flow::record_transition`/`dispatch::execute_instruction`導入。ログ抑制（NYASH_VM_DEBUG_* / NYASH_CLI_VERBOSE / NYASH_DEBUG_PLUGIN）、Phi正規化Step1（previous_block基準）。
+- 次アクション（小さく前進）:
+  1) MIR26命令「総数一致」チェック（コード≡ドキュメント）
+  2) Loop SSA Step2（seal/pred更新のスケルトン＋Verifierのphi系文言強化）
+  3) 代表スナップショット再確認（TypeOp/extern_call/loop/await/boxcall）
+- クイックコマンド: `cargo build --release -j32` → `nyash --backend vm local_tests/compare_box_vm.nyash` → `./tools/ci_check_golden.sh`
 
 
 ## 🚨 現在の状況（2025-08-25）
@@ -418,3 +426,41 @@ NYASH_VM_DEBUG_BOXCALL=1 ./target/release/nyash --backend vm local_tests/test_vm
   - Optimizer: 未lowering検知（is/as/isType/asType）をBoxCall/Call両経路で検出、`NYASH_OPT_DIAG_FAIL=1` と連携。
   - 代表スナップショット: extern_call/loop/boxcall/typeop_mixed をCIに追加、全件緑。
   - 注: WeakRef/Barrier の“統合”はPoCフラグで切替可能（レガシー命令も支援）—MIR26はドキュメントの正典、実装は互換を維持。
+
+
+## ✅ 本日の成果（9.78h）
+- MIR26命令のコード≡ドキュメント同期テストを追加（tests/mir_instruction_set_sync.rs）→ 緑
+- スナップショット安定化（tools/snapshot_mir.sh に静音フィルタ、golden全緑）
+- Phi選択の委譲スケルトンをVMへ実装（LoopExecutor::execute_phi）
+- ResultBox移行スイープ（VMのレガシーbox_trait::ResultBox経路を削除、boxes::ResultBoxに統一）
+- VM BoxRef演算フォールバック拡張（toString→parse<i64>、比較/四則/混在を広くカバー）
+- ロガー導入（環境変数ONでのみ出力）:
+  - NYASH_DEBUG_EFFECTS / NYASH_DEBUG_VERIFIER / NYASH_DEBUG_MIR_PRINTER / NYASH_DEBUG_TRYCATCH
+  - NYASH_VM_DEBUG_REF / NYASH_VM_DEBUG_BIN / 既存の NYASH_VM_DEBUG_* 系
+- VMユーザBoxのBoxCallをInstance関数へ橋渡し（InstanceBox → Class.method/arity へ委譲）
+
+## 🧪 テスト概況（要点）
+- 緑: 175件 / 赤: 1件（`mir::verification::tests::test_if_merge_uses_phi_not_predecessor`）
+- 失敗要旨: Mergeブロックで前任値使用と判定（DominatorViolation/MergeUsesPredecessorValue）
+- 生成MIR（CLI/Builder）はmergeにphiを含むため、Verifier側の検査条件かvariable_map束縛の拾い漏れの可能性。
+
+### デバッグ用コマンド（ログON例）
+```bash
+# Effects純度
+NYASH_DEBUG_EFFECTS=1 cargo test --lib mir::effect::tests::test_effect_mask_creation -- --nocapture
+
+# Verifier（phi/merge）
+NYASH_DEBUG_VERIFIER=1 cargo test --lib mir::verification::tests::test_if_merge_uses_phi_not_predecessor -- --nocapture
+
+# Try/CatchのLowering/Printer
+NYASH_DEBUG_TRYCATCH=1 NYASH_DEBUG_MIR_PRINTER=1 cargo test --lib mir::tests::test_try_catch_compilation -- --nocapture
+
+# VM 参照/演算
+NYASH_VM_DEBUG_REF=1 cargo test --lib backend::vm::tests::test_vm_user_box_birth_and_method -- --nocapture
+NYASH_VM_DEBUG_BIN=1 cargo test --lib tests::mir_vm_poc::test_boxref_arith -- --nocapture
+```
+
+## 🎯 次の着手（残1の精密駆逐）
+1) Verifierのmerge-phi検査を補強（phi dst/variable束縛の対応づけ強化 or 条件緩和の適用）
+2) Builderのvariable_map束縛拾い漏れがあれば補修（Program直下パターンの明示）
+3) 代表MIRダンプをfixture化して回帰チェック（phi存在の有無を機械判定）

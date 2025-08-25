@@ -53,6 +53,7 @@ pub mod config;
 
 // Runtime system (plugins, registry, etc.)
 pub mod runtime;
+pub mod debug;
 
 use nyash_rust::cli::CliConfig;
 use runner::NyashRunner;

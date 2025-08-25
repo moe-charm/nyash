@@ -335,6 +335,8 @@ impl VM {
 
     /// Execute RefGet instruction
     pub(super) fn execute_ref_get(&mut self, dst: ValueId, reference: ValueId, field: &str) -> Result<ControlFlow, VMError> {
+        let debug_ref = std::env::var("NYASH_VM_DEBUG_REF").ok().as_deref() == Some("1");
+        if debug_ref { eprintln!("[VM] RefGet ref={:?} field={}", reference, field); }
         // Visibility check (if class known and visibility declared). Skip for internal refs.
         let is_internal = self.object_internal.contains(&reference);
         if !is_internal {
@@ -352,13 +354,16 @@ impl VM {
         // Get field value from object
         let field_value = if let Some(fields) = self.object_fields.get(&reference) {
             if let Some(value) = fields.get(field) {
+                if debug_ref { eprintln!("[VM] RefGet hit: {} -> {:?}", field, value); }
                 value.clone()
             } else {
                 // Field not set yet, return default
+                if debug_ref { eprintln!("[VM] RefGet miss: {} -> default 0", field); }
                 VMValue::Integer(0)
             }
         } else {
             // Object has no fields yet, return default
+            if debug_ref { eprintln!("[VM] RefGet no fields: -> default 0"); }
             VMValue::Integer(0)
         };
         
@@ -368,8 +373,10 @@ impl VM {
 
     /// Execute RefSet instruction
     pub(super) fn execute_ref_set(&mut self, reference: ValueId, field: &str, value: ValueId) -> Result<ControlFlow, VMError> {
+        let debug_ref = std::env::var("NYASH_VM_DEBUG_REF").ok().as_deref() == Some("1");
         // Get the value to set
         let new_value = self.get_value(value)?;
+        if debug_ref { eprintln!("[VM] RefSet ref={:?} field={} value={:?}", reference, field, new_value); }
         // Visibility check (Skip for internal refs; otherwise enforce public)
         let is_internal = self.object_internal.contains(&reference);
         if !is_internal {
@@ -393,6 +400,7 @@ impl VM {
         // Set the field
         if let Some(fields) = self.object_fields.get_mut(&reference) {
             fields.insert(field.to_string(), new_value);
+            if debug_ref { eprintln!("[VM] RefSet stored: {}", field); }
         }
         
         Ok(ControlFlow::Continue)
@@ -515,19 +523,28 @@ impl VM {
         // Call the method based on receiver type
         let result = match &recv {
             VMValue::BoxRef(arc_box) => {
-                // Direct box method call
-                if debug_boxcall {
-                    eprintln!("[BoxCall] Taking BoxRef path for method '{}'", method);
+                // If this is a user InstanceBox, redirect to lowered function: Class.method/arity
+                if let Some(inst) = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let func_name = format!("{}.{}{}", inst.class_name, method, format!("/{}", args.len()));
+                    if debug_boxcall { eprintln!("[BoxCall] InstanceBox -> call {}", func_name); }
+                    // Build VMValue args: receiver first, then original VMValue args
+                    let mut vm_args = Vec::with_capacity(1 + args.len());
+                    vm_args.push(recv.clone());
+                    for a in args { vm_args.push(self.get_value(*a)?); }
+                    let res = self.call_function_by_name(&func_name, vm_args)?;
+                    return {
+                        if let Some(dst_id) = dst { self.set_value(dst_id, res); }
+                        Ok(ControlFlow::Continue)
+                    };
                 }
-                
+                // Otherwise, direct box method call
+                if debug_boxcall { eprintln!("[BoxCall] Taking BoxRef path for method '{}'", method); }
                 let cloned_box = arc_box.share_box();
                 self.call_box_method(cloned_box, method, nyash_args)?
             }
             _ => {
                 // Convert primitive to box and call
-                if debug_boxcall {
-                    eprintln!("[BoxCall] Converting primitive to box for method '{}'", method);
-                }
+                if debug_boxcall { eprintln!("[BoxCall] Converting primitive to box for method '{}'", method); }
                 
                 let box_value = recv.to_nyash_box();
                 self.call_box_method(box_value, method, nyash_args)?

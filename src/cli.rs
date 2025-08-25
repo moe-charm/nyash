@@ -199,9 +199,12 @@ mod tests {
         let config = CliConfig {
             file: None,
             debug_fuel: Some(100000),
+            dump_ast: false,
             dump_mir: false,
             verify_mir: false,
             mir_verbose: false,
+            mir_verbose_effects: false,
+            no_optimize: false,
             backend: "interpreter".to_string(),
             compile_wasm: false,
             compile_native: false,

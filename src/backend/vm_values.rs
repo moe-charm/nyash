@@ -13,6 +13,8 @@ use super::vm::{VM, VMError, VMValue};
 impl VM {
     /// Execute binary operation
     pub(super) fn execute_binary_op(&self, op: &BinaryOp, left: &VMValue, right: &VMValue) -> Result<VMValue, VMError> {
+        let debug_bin = std::env::var("NYASH_VM_DEBUG_BIN").ok().as_deref() == Some("1");
+        if debug_bin { eprintln!("[VM] binop {:?} {:?} {:?}", op, left, right); }
         // Fast path: logical AND/OR accept any truthy via as_bool
         if matches!(*op, BinaryOp::And | BinaryOp::Or) {
             let l = left.as_bool()?;
@@ -119,6 +121,43 @@ impl VM {
                     _ => return Err(VMError::InvalidInstruction(format!("Unsupported integer operation: {:?}", op))),
                 };
                 Ok(VMValue::Integer(res))
+            }
+
+            // 80/20 fallback: BoxRef(any) numeric via toString().parse::<i64>()
+            (VMValue::BoxRef(lb), VMValue::BoxRef(rb)) => {
+                let li = lb.to_string_box().value.trim().parse::<i64>().ok();
+                let ri = rb.to_string_box().value.trim().parse::<i64>().ok();
+                if let (Some(l), Some(r)) = (li, ri) {
+                    let res = match op {
+                        BinaryOp::Add => l + r,
+                        BinaryOp::Sub => l - r,
+                        BinaryOp::Mul => l * r,
+                        BinaryOp::Div => { if r == 0 { return Err(VMError::DivisionByZero); } l / r },
+                        _ => return Err(VMError::InvalidInstruction(format!("Unsupported integer operation: {:?}", op))),
+                    };
+                    if debug_bin { eprintln!("[VM] binop fallback BoxRef-BoxRef -> {}", res); }
+                    Ok(VMValue::Integer(res))
+                } else {
+                    Err(VMError::TypeError(format!("Unsupported binary operation: {:?} on {:?} and {:?}", op, left, right)))
+                }
+            }
+            (VMValue::BoxRef(lb), VMValue::Integer(r)) => {
+                if let Ok(l) = lb.to_string_box().value.trim().parse::<i64>() {
+                    let res = match op { BinaryOp::Add => l + *r, BinaryOp::Sub => l - *r, BinaryOp::Mul => l * *r, BinaryOp::Div => { if *r == 0 { return Err(VMError::DivisionByZero); } l / *r }, _ => return Err(VMError::InvalidInstruction(format!("Unsupported integer operation: {:?}", op))), };
+                    if debug_bin { eprintln!("[VM] binop fallback BoxRef-Int -> {}", res); }
+                    Ok(VMValue::Integer(res))
+                } else {
+                    Err(VMError::TypeError(format!("Unsupported binary operation: {:?} on {:?} and {:?}", op, left, right)))
+                }
+            }
+            (VMValue::Integer(l), VMValue::BoxRef(rb)) => {
+                if let Ok(r) = rb.to_string_box().value.trim().parse::<i64>() {
+                    let res = match op { BinaryOp::Add => *l + r, BinaryOp::Sub => *l - r, BinaryOp::Mul => *l * r, BinaryOp::Div => { if r == 0 { return Err(VMError::DivisionByZero); } *l / r }, _ => return Err(VMError::InvalidInstruction(format!("Unsupported integer operation: {:?}", op))), };
+                    if debug_bin { eprintln!("[VM] binop fallback Int-BoxRef -> {}", res); }
+                    Ok(VMValue::Integer(res))
+                } else {
+                    Err(VMError::TypeError(format!("Unsupported binary operation: {:?} on {:?} and {:?}", op, left, right)))
+                }
             }
 
             _ => Err(VMError::TypeError(format!("Unsupported binary operation: {:?} on {:?} and {:?}", op, left, right))),

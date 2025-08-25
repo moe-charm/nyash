@@ -5,6 +5,7 @@
  */
 
 use std::fmt;
+use crate::debug::log as dlog;
 
 /// Effect flags for tracking side effects and enabling optimizations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -129,8 +130,16 @@ impl EffectMask {
     
     /// Check if the computation is pure (no side effects)
     pub fn is_pure(self) -> bool {
-        // 純粋性は一次カテゴリで判定（Pureビットが立っていてもIO/WRITE/CONTROL等があれば純粋ではない）
-        self.primary_category() == Effect::Pure
+        // READ/WRITE/IO/CONTROLがあれば純粋ではない（READはreadonly扱い）
+        let pure = !self.contains(Effect::ReadHeap)
+            && !self.is_mut()
+            && !self.is_io()
+            && !self.is_control();
+        if dlog::on("NYASH_DEBUG_EFFECTS") {
+            eprintln!("[EFFECT] bits={:#06x} primary={:?} is_pure={} read_only={} mut={} io={}",
+                self.bits(), self.primary_category(), pure, self.is_read_only(), self.is_mut(), self.is_io());
+        }
+        pure
     }
     
     /// Check if the computation is mutable (modifies state)

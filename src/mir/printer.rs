@@ -6,6 +6,7 @@
 
 use super::{MirModule, MirFunction, BasicBlock, MirInstruction};
 use std::fmt::Write;
+use crate::debug::log as dlog;
 
 /// MIR printer for debug output and visualization
 pub struct MirPrinter {
@@ -148,6 +149,8 @@ impl MirPrinter {
             for block in function.blocks.values() {
                 for inst in &block.instructions {
                     match inst {
+                        MirInstruction::Throw { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found throw in {}", function.signature.name); } }
+                        MirInstruction::Catch { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found catch in {}", function.signature.name); } }
                         MirInstruction::TypeCheck { .. } => type_check += 1,
                         MirInstruction::Cast { .. } => type_cast += 1,
                         MirInstruction::TypeOp { op, .. } => match op {
@@ -171,6 +174,8 @@ impl MirPrinter {
                 }
                 if let Some(term) = &block.terminator {
                     match term {
+                        MirInstruction::Throw { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found throw(term) in {}", function.signature.name); } }
+                        MirInstruction::Catch { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found catch(term) in {}", function.signature.name); } }
                         MirInstruction::TypeCheck { .. } => type_check += 1,
                         MirInstruction::Cast { .. } => type_cast += 1,
                         MirInstruction::TypeOp { op, .. } => match op {

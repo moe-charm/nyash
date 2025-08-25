@@ -59,6 +59,7 @@ pub mod cli;
 // Runtime system (plugins, registry, etc.)
 pub mod runtime;
 pub mod runner_plugin_init;
+pub mod debug;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;

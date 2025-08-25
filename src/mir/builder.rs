@@ -844,6 +844,9 @@ impl MirBuilder {
         
         // Set up exception handler for the try block (before we enter it)
         if let Some(catch_clause) = catch_clauses.first() {
+            if std::env::var("NYASH_DEBUG_TRYCATCH").ok().as_deref() == Some("1") {
+                eprintln!("[BUILDER] Emitting catch handler for {:?}", catch_clause.exception_type);
+            }
             let exception_value = self.value_gen.next();
             
             // Register catch handler for exceptions that may occur in try block
@@ -874,9 +877,15 @@ impl MirBuilder {
         
         // Build catch block (reachable via exception handling)
         self.start_new_block(catch_block)?;
+        if std::env::var("NYASH_DEBUG_TRYCATCH").ok().as_deref() == Some("1") {
+            eprintln!("[BUILDER] Enter catch block {:?}", catch_block);
+        }
         
         // Handle catch clause
         if let Some(catch_clause) = catch_clauses.first() {
+            if std::env::var("NYASH_DEBUG_TRYCATCH").ok().as_deref() == Some("1") {
+                eprintln!("[BUILDER] Emitting catch handler for {:?}", catch_clause.exception_type);
+            }
             // Build catch body
             let catch_ast = ASTNode::Program {
                 statements: catch_clause.body.clone(),
