@@ -96,6 +96,7 @@ impl VMValue {
         }
     }
     
+    
     /// Get string representation for printing
     pub fn to_string(&self) -> String {
         match self {
@@ -185,15 +186,15 @@ pub struct VM {
     #[allow(dead_code)]
     last_result: Option<VMValue>,
     /// Simple field storage for objects (maps reference -> field -> value)
-    object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
+    pub(super) object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
     /// Class name mapping for objects (for visibility checks)
-    object_class: HashMap<ValueId, String>,
+    pub(super) object_class: HashMap<ValueId, String>,
     /// Marks ValueIds that represent internal (me/this) references within the current function
-    object_internal: std::collections::HashSet<ValueId>,
+    pub(super) object_internal: std::collections::HashSet<ValueId>,
     /// Loop executor for handling phi nodes and loop-specific logic
     loop_executor: LoopExecutor,
     /// Shared runtime for box creation and declarations
-    runtime: NyashRuntime,
+    pub(super) runtime: NyashRuntime,
     /// Scope tracker for calling fini on scope exit
     scope_tracker: ScopeTracker,
     /// Active MIR module during execution (for function calls)
@@ -309,7 +310,7 @@ impl VM {
     }
 
     /// Call a MIR function by name with VMValue arguments
-    fn call_function_by_name(&mut self, func_name: &str, args: Vec<VMValue>) -> Result<VMValue, VMError> {
+    pub(super) fn call_function_by_name(&mut self, func_name: &str, args: Vec<VMValue>) -> Result<VMValue, VMError> {
         let module_ref = self.module.as_ref().ok_or_else(|| VMError::InvalidInstruction("No active module".to_string()))?;
         let function_ref = module_ref.get_function(func_name)
             .ok_or_else(|| VMError::InvalidInstruction(format!("Function '{}' not found", func_name)))?;
@@ -421,636 +422,130 @@ impl VM {
     fn execute_instruction(&mut self, instruction: &MirInstruction) -> Result<ControlFlow, VMError> {
         // Record instruction for stats
         self.record_instruction(instruction);
+        
         match instruction {
-            MirInstruction::Const { dst, value } => {
-                let vm_value = VMValue::from(value);
-                self.set_value(*dst, vm_value);
-                Ok(ControlFlow::Continue)
-            },
+            // Basic operations
+            MirInstruction::Const { dst, value } => 
+                self.execute_const(*dst, value),
             
-            MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                let left = self.get_value(*lhs)?;
-                let right = self.get_value(*rhs)?;
-                let result = self.execute_binary_op(op, &left, &right)?;
-                self.set_value(*dst, result);
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::BinOp { dst, op, lhs, rhs } => 
+                self.execute_binop(*dst, op, *lhs, *rhs),
             
-            MirInstruction::UnaryOp { dst, op, operand } => {
-                let operand_val = self.get_value(*operand)?;
-                let result = self.execute_unary_op(op, &operand_val)?;
-                self.set_value(*dst, result);
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::UnaryOp { dst, op, operand } => 
+                self.execute_unaryop(*dst, op, *operand),
             
-            MirInstruction::Compare { dst, op, lhs, rhs } => {
-                let left = self.get_value(*lhs)?;
-                let right = self.get_value(*rhs)?;
-                let result = self.execute_compare_op(op, &left, &right)?;
-                self.set_value(*dst, VMValue::Bool(result));
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::Compare { dst, op, lhs, rhs } => 
+                self.execute_compare(*dst, op, *lhs, *rhs),
             
-            MirInstruction::Print { value, .. } => {
-                let val = self.get_value(*value)?;
-                println!("{}", val.to_string());
-                Ok(ControlFlow::Continue)
-            },
-
-            MirInstruction::TypeOp { dst, op, value, ty } => {
-                match op {
-                    crate::mir::TypeOpKind::Check => {
-                        let v = self.get_value(*value)?;
-                        let ok = match ty {
-                            crate::mir::MirType::Integer => matches!(v, VMValue::Integer(_)),
-                            crate::mir::MirType::Float => matches!(v, VMValue::Float(_)),
-                            crate::mir::MirType::Bool => matches!(v, VMValue::Bool(_)),
-                            crate::mir::MirType::String => matches!(v, VMValue::String(_)),
-                            crate::mir::MirType::Void => matches!(v, VMValue::Void),
-                            crate::mir::MirType::Box(name) => match v {
-                                VMValue::BoxRef(ref arc) => arc.type_name() == name,
-                                _ => false,
-                            },
-                            _ => true,
-                        };
-                        self.set_value(*dst, VMValue::Bool(ok));
-                    }
-                    crate::mir::TypeOpKind::Cast => {
-                        let v = self.get_value(*value)?;
-                        let casted = match ty {
-                            crate::mir::MirType::Integer => match v {
-                                VMValue::Integer(_) => v,
-                                VMValue::Float(f) => VMValue::Integer(f as i64),
-                                other => {
-                                    return Err(VMError::TypeError(format!(
-                                        "Cannot cast {:?} to Integer",
-                                        other
-                                    )));
-                                }
-                            },
-                            crate::mir::MirType::Float => match v {
-                                VMValue::Float(_) => v,
-                                VMValue::Integer(i) => VMValue::Float(i as f64),
-                                other => {
-                                    return Err(VMError::TypeError(format!(
-                                        "Cannot cast {:?} to Float",
-                                        other
-                                    )));
-                                }
-                            },
-                            // For other types, only allow no-op cast when already same category
-                            crate::mir::MirType::Bool => match v {
-                                VMValue::Bool(_) => v,
-                                other => {
-                                    return Err(VMError::TypeError(format!(
-                                        "Cannot cast {:?} to Bool",
-                                        other
-                                    )));
-                                }
-                            },
-                            crate::mir::MirType::String => match v {
-                                VMValue::String(_) => v,
-                                other => {
-                                    return Err(VMError::TypeError(format!(
-                                        "Cannot cast {:?} to String",
-                                        other
-                                    )));
-                                }
-                            },
-                            crate::mir::MirType::Void => match v {
-                                VMValue::Void => v,
-                                other => {
-                                    return Err(VMError::TypeError(format!(
-                                        "Cannot cast {:?} to Void",
-                                        other
-                                    )));
-                                }
-                            },
-                            crate::mir::MirType::Box(name) => match v {
-                                VMValue::BoxRef(ref arc) if arc.type_name() == name => v,
-                                other => {
-                                    return Err(VMError::TypeError(format!(
-                                        "Cannot cast {:?} to Box<{}>",
-                                        other, name
-                                    )));
-                                }
-                            },
-                            _ => v,
-                        };
-                        self.set_value(*dst, casted);
-                    }
-                }
-                Ok(ControlFlow::Continue)
-            },
+            // I/O operations
+            MirInstruction::Print { value, .. } => 
+                self.execute_print(*value),
             
-            MirInstruction::Return { value } => {
-                let return_value = if let Some(val_id) = value {
-                    let val = self.get_value(*val_id)?;
-                    val
-                } else {
-                    VMValue::Void
-                };
-                Ok(ControlFlow::Return(return_value))
-            },
+            // Type operations
+            MirInstruction::TypeOp { dst, op, value, ty } => 
+                self.execute_typeop(*dst, op, *value, ty),
             
-            MirInstruction::Jump { target } => {
-                Ok(ControlFlow::Jump(*target))
-            },
+            // Control flow
+            MirInstruction::Return { value } => 
+                self.execute_return(*value),
             
-            MirInstruction::Branch { condition, then_bb, else_bb } => {
-                let cond_val = self.get_value(*condition)?;
-                let cond_bool = cond_val.as_bool()?;
-                
-                if cond_bool {
-                    Ok(ControlFlow::Jump(*then_bb))
-                } else {
-                    Ok(ControlFlow::Jump(*else_bb))
-                }
-            },
+            MirInstruction::Jump { target } => 
+                self.execute_jump(*target),
             
-            MirInstruction::Phi { dst, inputs } => {
-                // Create a closure that captures self immutably
-                let values = &self.values;
-                let get_value_fn = |value_id: ValueId| -> Result<VMValue, VMError> {
-                    let index = value_id.to_usize();
-                    if index < values.len() {
-                        if let Some(ref value) = values[index] {
-                            Ok(value.clone())
-                        } else {
-                            Err(VMError::InvalidValue(format!("Value {} not set", value_id)))
-                        }
-                    } else {
-                        Err(VMError::InvalidValue(format!("Value {} out of bounds", value_id)))
-                    }
-                };
-                
-                // Delegate phi node execution to loop executor
-                let selected_value = self.loop_executor.execute_phi(
-                    *dst,
-                    inputs,
-                    get_value_fn
-                )?;
-                
-                self.set_value(*dst, selected_value);
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::Branch { condition, then_bb, else_bb } => 
+                self.execute_branch(*condition, *then_bb, *else_bb),
             
-            // Missing instructions that need basic implementations
-            MirInstruction::Load { dst, ptr } => {
-                // For now, loading is the same as getting the value
-                let value = self.get_value(*ptr)?;
-                self.set_value(*dst, value);
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::Phi { dst, inputs } => 
+                self.execute_phi(*dst, inputs),
             
-            MirInstruction::Store { value, ptr } => {
-                // For now, storing just updates the ptr with the value
-                let val = self.get_value(*value)?;
-                self.set_value(*ptr, val);
-                Ok(ControlFlow::Continue)
-            },
+            // Memory operations
+            MirInstruction::Load { dst, ptr } => 
+                self.execute_load(*dst, *ptr),
             
-            MirInstruction::Call { dst, func, args, effects: _ } => {
-                // Resolve function name from func value (expects Const String)
-                let func_val = self.get_value(*func)?;
-                let func_name = match func_val {
-                    VMValue::String(s) => s,
-                    _ => return Err(VMError::InvalidInstruction("Call expects func to be a String name".to_string())),
-                };
-                // Gather argument VM values
-                let mut vm_args = Vec::new();
-                for arg_id in args {
-                    vm_args.push(self.get_value(*arg_id)?);
-                }
-                let result = self.call_function_by_name(&func_name, vm_args)?;
-                if let Some(dst_id) = dst {
-                    self.set_value(*dst_id, result);
-                }
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::Store { value, ptr } => 
+                self.execute_store(*value, *ptr),
             
-            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
-                // Phase 9.78a: Unified method dispatch for all Box types
-                
-                // Get the box value
-                let box_vm_value = self.get_value(*box_val)?;
-                
-                // Handle BoxRef for proper method dispatch
-                let box_nyash = match &box_vm_value {
-                    // Use shared handle to avoid unintended constructor calls
-                    VMValue::BoxRef(arc_box) => arc_box.share_box(),
-                    _ => box_vm_value.to_nyash_box(),
-                };
-                
-                // Fast path: birth() for user-defined boxes is lowered to a MIR function
-                if method == "birth" {
-                    if let Some(instance) = box_nyash.as_any().downcast_ref::<InstanceBox>() {
-                        let class_name = instance.class_name.clone();
-                        let func_name = format!("{}.birth/{}", class_name, args.len());
-
-                        // Prepare VMValue args: me + evaluated arguments
-                        let mut vm_args: Vec<VMValue> = Vec::new();
-                        vm_args.push(VMValue::from_nyash_box(box_nyash.clone_or_share()));
-                        for arg_id in args {
-                            let arg_vm_value = self.get_value(*arg_id)?;
-                            vm_args.push(arg_vm_value);
-                        }
-
-                        // Call the lowered function (ignore return)
-                        let _ = self.call_function_by_name(&func_name, vm_args)?;
-
-                        // birth returns void; only set dst if specified (rare for birth)
-                        if let Some(dst_id) = dst {
-                            self.set_value(*dst_id, VMValue::Void);
-                        }
-                        return Ok(ControlFlow::Continue);
-                    }
-                }
-
-                // Evaluate arguments
-                let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
-                let mut arg_vm_values: Vec<VMValue> = Vec::new();
-                for arg_id in args {
-                    let arg_vm_value = self.get_value(*arg_id)?;
-                    arg_values.push(arg_vm_value.to_nyash_box());
-                    arg_vm_values.push(arg_vm_value);
-                }
-                self.debug_log_boxcall(&box_vm_value, method, &arg_values, "enter", None);
-                
-                // PluginBoxV2 method dispatch via BID-FFI (zero-arg minimal)
-                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
-                if let Some(plugin) = box_nyash.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                    let loader = crate::runtime::get_global_loader_v2();
-                    let loader = loader.read().map_err(|_| VMError::InvalidInstruction("Plugin loader lock poisoned".into()))?;
-                    match loader.invoke_instance_method(&plugin.box_type, method, plugin.instance_id(), &arg_values) {
-                        Ok(Some(result_box)) => {
-                            if let Some(dst_id) = dst {
-                                self.set_value(*dst_id, VMValue::from_nyash_box(result_box));
-                            }
-                        }
-                        Ok(None) => {
-                            if let Some(dst_id) = dst {
-                                self.set_value(*dst_id, VMValue::Void);
-                            }
-                        }
-                        Err(_) => {
-                            return Err(VMError::InvalidInstruction(format!("Plugin method call failed: {}", method)));
-                        }
-                    }
-                    return Ok(ControlFlow::Continue);
-                }
-
-                // Fast-path for common Box methods (Array/Map/String-like)
-                let fastpath_disabled = std::env::var("NYASH_VM_DISABLE_FASTPATH").is_ok();
-                if !fastpath_disabled {
-                if let VMValue::BoxRef(ref arc_any) = box_vm_value {
-                    // ArrayBox: get/set/push
-                    if let Some(arr) = arc_any.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                        match method.as_str() {
-                            "get" => {
-                                if let Some(arg0) = arg_values.get(0) {
-                                    let res = arr.get((*arg0).clone_or_share());
-                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
-                                    return Ok(ControlFlow::Continue);
-                                }
-                            }
-                            "set" => {
-                                if arg_values.len() >= 2 {
-                                    let idx = (*arg_values.get(0).unwrap()).clone_or_share();
-                                    let val = (*arg_values.get(1).unwrap()).clone_or_share();
-                                    let _ = arr.set(idx, val);
-                                    if let Some(dst_id) = dst { let v = VMValue::Void; self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
-                                    return Ok(ControlFlow::Continue);
-                                }
-                            }
-                            "push" => {
-                                if let Some(arg0) = arg_values.get(0) {
-                                    let res = arr.push((*arg0).clone_or_share());
-                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
-                                    return Ok(ControlFlow::Continue);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    // MapBox: get/set/has
-                    if let Some(map) = arc_any.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                        match method.as_str() {
-                            "get" => {
-                                if let Some(arg0) = arg_values.get(0) {
-                                    let res = map.get((*arg0).clone_or_share());
-                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
-                                    return Ok(ControlFlow::Continue);
-                                }
-                            }
-                            "set" => {
-                                if arg_values.len() >= 2 {
-                                    let k = (*arg_values.get(0).unwrap()).clone_or_share();
-                                    let vval = (*arg_values.get(1).unwrap()).clone_or_share();
-                                    let res = map.set(k, vval);
-                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
-                                    return Ok(ControlFlow::Continue);
-                                }
-                            }
-                            "has" => {
-                                if let Some(arg0) = arg_values.get(0) {
-                                    let res = map.has((*arg0).clone_or_share());
-                                    if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(res); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
-                                    return Ok(ControlFlow::Continue);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    // toString(): generic fast-path for any BoxRef (0-arg)
-                    if method == "toString" && arg_values.is_empty() {
-                        let res = box_nyash.to_string_box();
-                        if let Some(dst_id) = dst { let v = VMValue::from_nyash_box(Box::new(res)); self.debug_log_boxcall(&box_vm_value, method, &arg_values, "fastpath", Some(&v)); self.set_value(*dst_id, v); }
-                        return Ok(ControlFlow::Continue);
-                    }
-                }
-                }
-
-                // Call the method - unified dispatch for all Box types
-                // If user-defined InstanceBox: dispatch to lowered MIR function `{Class}.{method}/{argc}`
-                if let Some(instance) = box_nyash.as_any().downcast_ref::<InstanceBox>() {
-                    let class_name = instance.class_name.clone();
-                    let func_name = format!("{}.{}{}", class_name, method, format!("/{}", args.len()));
-                    // Prepare VMValue args: me + evaluated arguments (use original VM args for value-level fidelity)
-                    let mut vm_args: Vec<VMValue> = Vec::new();
-                    vm_args.push(VMValue::from_nyash_box(box_nyash.clone_or_share()));
-                    for arg_id in args {
-                        let arg_vm_value = self.get_value(*arg_id)?;
-                        vm_args.push(arg_vm_value);
-                    }
-                    let call_result = self.call_function_by_name(&func_name, vm_args)?;
-                    if let Some(dst_id) = dst {
-                        self.set_value(*dst_id, call_result);
-                    }
-                    return Ok(ControlFlow::Continue);
-                }
-
-                let result = self.call_unified_method(box_nyash, method, arg_values)?;
-                
-                // Store result if destination is specified
-                if let Some(dst_id) = dst {
-                    let vm_result = VMValue::from_nyash_box(result);
-                    self.debug_log_boxcall(&box_vm_value, method, &arg_vm_values.iter().map(|v| v.to_nyash_box()).collect::<Vec<_>>(), "unified", Some(&vm_result));
-                    self.set_value(*dst_id, vm_result);
-                }
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::Copy { dst, src } => 
+                self.execute_copy(*dst, *src),
             
-            MirInstruction::NewBox { dst, box_type, args } => {
-                // Evaluate arguments into NyashBox for unified factory
-                let mut nyash_args: Vec<Box<dyn NyashBox>> = Vec::new();
-                for arg_id in args {
-                    let arg_value = self.get_value(*arg_id)?;
-                    nyash_args.push(arg_value.to_nyash_box());
-                }
-                // Create via unified registry from runtime
-                let registry = self.runtime.box_registry.clone();
-                let created = {
-                    let guard = registry.lock().map_err(|_| VMError::InvalidInstruction("Registry lock poisoned".into()))?;
-                    guard.create_box(box_type, &nyash_args)
-                };
-                match created {
-                    Ok(b) => {
-                        // Register for scope-based finalization (share; keep same instance)
-                        let reg_arc = std::sync::Arc::from(b.share_box());
-                        self.scope_tracker.register_box(reg_arc);
-                        // Record class name for visibility checks
-                        self.object_class.insert(*dst, box_type.clone());
-                        // Store value in VM
-                        self.set_value(*dst, VMValue::from_nyash_box(b));
-                        Ok(ControlFlow::Continue)
-                    }
-                    Err(e) => Err(VMError::InvalidInstruction(format!("NewBox failed for {}: {}", box_type, e)))
-                }
-            },
+            // Complex operations
+            MirInstruction::Call { dst, func, args, effects: _ } => 
+                self.execute_call(*dst, *func, args),
             
-            MirInstruction::TypeCheck { dst, value: _, expected_type: _ } => {
-                // For now, type checks always return true
-                // TODO: Implement proper type checking
-                self.set_value(*dst, VMValue::Bool(true));
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => 
+                self.execute_boxcall(*dst, *box_val, method, args),
             
-            MirInstruction::Cast { dst, value, target_type: _ } => {
-                // For now, casting just copies the value
-                // TODO: Implement proper type casting
-                let val = self.get_value(*value)?;
-                self.set_value(*dst, val);
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::NewBox { dst, box_type, args } => 
+                self.execute_newbox(*dst, box_type, args),
             
-            MirInstruction::ArrayGet { dst, array, index } => {
-                // Implement ArrayBox get(index) → value
-                let arr_val = self.get_value(*array)?;
-                let idx_val = self.get_value(*index)?;
-                if let VMValue::BoxRef(arc) = arr_val {
-                    if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                        let idx_box = idx_val.to_nyash_box();
-                        let got = arr.get(idx_box);
-                        self.set_value(*dst, VMValue::from_nyash_box(got));
-                        return Ok(ControlFlow::Continue);
-                    }
-                }
-                Err(VMError::TypeError("ArrayGet expects ArrayBox".to_string()))
-            },
+            // Array operations
+            MirInstruction::ArrayGet { dst, array, index } => 
+                self.execute_array_get(*dst, *array, *index),
             
-            MirInstruction::ArraySet { array, index, value } => {
-                // Implement ArrayBox set(index, value)
-                let arr_val = self.get_value(*array)?;
-                let idx_val = self.get_value(*index)?;
-                let val_val = self.get_value(*value)?;
-                if let VMValue::BoxRef(arc) = arr_val {
-                    if let Some(arr) = arc.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                        let idx_box = idx_val.to_nyash_box();
-                        let val_box = val_val.to_nyash_box();
-                        let _ = arr.set(idx_box, val_box);
-                        return Ok(ControlFlow::Continue);
-                    }
-                }
-                Err(VMError::TypeError("ArraySet expects ArrayBox".to_string()))
-            },
+            MirInstruction::ArraySet { array, index, value } => 
+                self.execute_array_set(*array, *index, *value),
             
-            MirInstruction::Copy { dst, src } => {
-                // Copy instruction - duplicate the source value
-                let val = self.get_value(*src)?;
-                self.set_value(*dst, val);
-                // Propagate class mapping for references (helps track `me` copies)
-                if let Some(class_name) = self.object_class.get(src).cloned() {
-                    self.object_class.insert(*dst, class_name);
-                }
-                // Propagate internal marker (me/this lineage)
-                if self.object_internal.contains(src) {
-                    self.object_internal.insert(*dst);
-                }
-                Ok(ControlFlow::Continue)
-            },
+            // Reference operations
+            MirInstruction::RefNew { dst, box_val } => 
+                self.execute_ref_new(*dst, *box_val),
             
-            MirInstruction::Debug { value: _, message: _ } => {
-                // Debug instruction - skip debug output for performance
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::RefGet { dst, reference, field } => 
+                self.execute_ref_get(*dst, *reference, field),
             
-            MirInstruction::Nop => {
-                // No-op instruction
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::RefSet { reference, field, value } => 
+                self.execute_ref_set(*reference, field, *value),
             
-            // Phase 5: Control flow & exception handling
-            MirInstruction::Throw { exception, effects: _ } => {
-                let exception_val = self.get_value(*exception)?;
-                // For now, convert throw to error return (simplified exception handling)
-                // In a full implementation, this would unwind the stack looking for catch handlers
-                println!("Exception thrown: {}", exception_val.to_string());
-                Err(VMError::InvalidInstruction(format!("Unhandled exception: {}", exception_val.to_string())))
-            },
+            // Weak references
+            MirInstruction::WeakNew { dst, box_val } => 
+                self.execute_weak_new(*dst, *box_val),
             
-            MirInstruction::Catch { exception_type: _, exception_value, handler_bb: _ } => {
-                // For now, catch is a no-op since we don't have full exception handling
-                // In a real implementation, this would set up exception handling metadata
-                self.set_value(*exception_value, VMValue::Void);
-                Ok(ControlFlow::Continue)
-            },
+            MirInstruction::WeakLoad { dst, weak_ref } => 
+                self.execute_weak_load(*dst, *weak_ref),
             
-            MirInstruction::Safepoint => {
-                // Safepoint is a no-op for now
-                // In a real implementation, this could trigger GC, debugging, etc.
-                Ok(ControlFlow::Continue)
-            },
-            
-            // Phase 6: Box reference operations
-            MirInstruction::RefNew { dst, box_val } => {
-                // For now, a reference is just the same as the box value
-                // In a real implementation, this would create a proper reference
-                let box_value = self.get_value(*box_val)?;
-                self.set_value(*dst, box_value);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::RefGet { dst, reference, field } => {
-                // Visibility check (if class known and visibility declared). Skip for internal refs.
-                let is_internal = self.object_internal.contains(reference);
-                if !is_internal {
-                    if let Some(class_name) = self.object_class.get(reference) {
-                        if let Ok(decls) = self.runtime.box_declarations.read() {
-                            if let Some(decl) = decls.get(class_name) {
-                                let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
-                                if has_vis && !decl.public_fields.contains(field) {
-                                    return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
-                                }
-                            }
-                        }
-                    }
-                }
-                // Get field value from object
-                let field_value = if let Some(fields) = self.object_fields.get(reference) {
-                    if let Some(value) = fields.get(field) {
-                        value.clone()
-                    } else {
-                        // Field not set yet, return default
-                        VMValue::Integer(0)
-                    }
-                } else {
-                    // Object has no fields yet, return default
-                    VMValue::Integer(0)
-                };
-                
-                self.set_value(*dst, field_value);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::RefSet { reference, field, value } => {
-                // Get the value to set
-                let new_value = self.get_value(*value)?;
-                // Visibility check (Skip for internal refs; otherwise enforce public)
-                let is_internal = self.object_internal.contains(reference);
-                if !is_internal {
-                    if let Some(class_name) = self.object_class.get(reference) {
-                        if let Ok(decls) = self.runtime.box_declarations.read() {
-                            if let Some(decl) = decls.get(class_name) {
-                                let has_vis = !decl.public_fields.is_empty() || !decl.private_fields.is_empty();
-                                if has_vis && !decl.public_fields.contains(field) {
-                                    return Err(VMError::TypeError(format!("Field '{}' is private in {}", field, class_name)));
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Ensure object has field storage
-                if !self.object_fields.contains_key(reference) {
-                    self.object_fields.insert(*reference, HashMap::new());
-                }
-                
-                // Set the field
-                if let Some(fields) = self.object_fields.get_mut(reference) {
-                    fields.insert(field.clone(), new_value);
-                }
-                
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::WeakNew { dst, box_val } => {
-                // For now, a weak reference is just a copy of the value
-                // In a real implementation, this would create a proper weak reference
-                let box_value = self.get_value(*box_val)?;
-                self.set_value(*dst, box_value);
-                Ok(ControlFlow::Continue)
-            },
-            
-            MirInstruction::WeakLoad { dst, weak_ref } => {
-                // For now, loading from weak ref is the same as getting the value
-                // In a real implementation, this would check if the weak ref is still valid
-                let weak_value = self.get_value(*weak_ref)?;
-                self.set_value(*dst, weak_value);
-                Ok(ControlFlow::Continue)
-            },
-            
-            // Unified PoC ops mapped to legacy behavior
+            // Unified weak reference operations
             MirInstruction::WeakRef { dst, op, value } => {
                 match op {
                     crate::mir::WeakRefOp::New => {
-                        let v = self.get_value(*value)?;
-                        self.set_value(*dst, v);
+                        self.execute_weak_new(*dst, *value)
                     }
                     crate::mir::WeakRefOp::Load => {
-                        let v = self.get_value(*value)?;
-                        self.set_value(*dst, v);
+                        self.execute_weak_load(*dst, *value)
                     }
                 }
-                Ok(ControlFlow::Continue)
-            },
-            MirInstruction::Barrier { .. } => {
-                // No-op
-                Ok(ControlFlow::Continue)
-            },
+            }
             
+            // Barriers
             MirInstruction::BarrierRead { ptr: _ } => {
                 // Memory barrier read is a no-op for now
-                // In a real implementation, this would ensure memory ordering
                 Ok(ControlFlow::Continue)
-            },
+            }
             
             MirInstruction::BarrierWrite { ptr: _ } => {
                 // Memory barrier write is a no-op for now
-                // In a real implementation, this would ensure memory ordering
                 Ok(ControlFlow::Continue)
-            },
+            }
             
-            // Phase 7: Async/Future Operations
+            MirInstruction::Barrier { .. } => {
+                // Unified barrier is a no-op for now
+                Ok(ControlFlow::Continue)
+            }
+            
+            // Exception handling
+            MirInstruction::Throw { exception, effects: _ } => 
+                self.execute_throw(*exception),
+            
+            MirInstruction::Catch { exception_type: _, exception_value, handler_bb: _ } => 
+                self.execute_catch(*exception_value),
+            
+            // Future operations
             MirInstruction::FutureNew { dst, value } => {
                 let initial_value = self.get_value(*value)?;
                 let future = crate::boxes::future::FutureBox::new();
-                // Convert VMValue to NyashBox and set it in the future
                 let nyash_box = initial_value.to_nyash_box();
                 future.set_result(nyash_box);
                 self.set_value(*dst, VMValue::Future(future));
                 Ok(ControlFlow::Continue)
-            },
+            }
             
             MirInstruction::FutureSet { future, value } => {
                 let future_val = self.get_value(*future)?;
@@ -1062,56 +557,49 @@ impl VM {
                 } else {
                     Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
                 }
-            },
+            }
             
-            MirInstruction::Await { dst, future } => {
-                let future_val = self.get_value(*future)?;
-                
-                if let VMValue::Future(ref future_box) = future_val {
-                    // This blocks until the future is ready
-                    let result = future_box.get();
-                    // Convert NyashBox back to VMValue
-                    let vm_value = VMValue::from_nyash_box(result);
-                    self.set_value(*dst, vm_value);
-                    Ok(ControlFlow::Continue)
-                } else {
-                    Err(VMError::TypeError(format!("Expected Future, got {:?}", future_val)))
-                }
-            },
+            // Special operations
+            MirInstruction::Await { dst, future } => 
+                self.execute_await(*dst, *future),
             
-            // Phase 9.7: External Function Calls  
-            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
-                // Evaluate arguments as NyashBox for loader
-                let mut nyash_args: Vec<Box<dyn NyashBox>> = Vec::new();
-                for arg_id in args {
-                    let arg_value = self.get_value(*arg_id)?;
-                    nyash_args.push(arg_value.to_nyash_box());
-                }
-                // Route through plugin loader v2 (also handles env.* stubs)
-                let loader = crate::runtime::get_global_loader_v2();
-                let loader = loader.read().map_err(|_| VMError::InvalidInstruction("Plugin loader lock poisoned".into()))?;
-                match loader.extern_call(iface_name, method_name, &nyash_args) {
-                    Ok(Some(result_box)) => {
-                        if let Some(dst_id) = dst {
-                            self.set_value(*dst_id, VMValue::from_nyash_box(result_box));
-                        }
-                    }
-                    Ok(None) => {
-                        if let Some(dst_id) = dst {
-                            self.set_value(*dst_id, VMValue::Void);
-                        }
-                    }
-                    Err(_) => {
-                        return Err(VMError::InvalidInstruction(format!("ExternCall failed: {}.{}", iface_name, method_name)));
-                    }
-                }
+            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => 
+                self.execute_extern_call(*dst, iface_name, method_name, args),
+            
+            // Deprecated/No-op instructions
+            MirInstruction::TypeCheck { dst, value: _, expected_type: _ } => {
+                // TypeCheck is deprecated in favor of TypeOp
+                self.set_value(*dst, VMValue::Bool(true));
                 Ok(ControlFlow::Continue)
-            },
+            }
+            
+            MirInstruction::Cast { dst, value, target_type: _ } => {
+                // Cast is deprecated in favor of TypeOp
+                let val = self.get_value(*value)?;
+                self.set_value(*dst, val);
+                Ok(ControlFlow::Continue)
+            }
+            
+            MirInstruction::Debug { value: _, message: _ } => {
+                // Debug is a no-op in release mode
+                Ok(ControlFlow::Continue)
+            }
+            
+            MirInstruction::Nop => {
+                // No operation
+                Ok(ControlFlow::Continue)
+            }
+            
+            MirInstruction::Safepoint => {
+                // Safepoint for future GC/async support
+                Ok(ControlFlow::Continue)
+            }
         }
     }
+
     
     /// Get a value from storage
-    fn get_value(&self, value_id: ValueId) -> Result<VMValue, VMError> {
+    pub(super) fn get_value(&self, value_id: ValueId) -> Result<VMValue, VMError> {
         let index = value_id.to_usize();
         if index < self.values.len() {
             if let Some(ref value) = self.values[index] {
@@ -1125,7 +613,7 @@ impl VM {
     }
     
     /// Set a value in the VM storage
-    fn set_value(&mut self, value_id: ValueId, value: VMValue) {
+    pub(super) fn set_value(&mut self, value_id: ValueId, value: VMValue) {
         let index = value_id.to_usize();
         // Resize Vec if necessary
         if index >= self.values.len() {
@@ -1135,7 +623,7 @@ impl VM {
     }
     
     /// Execute binary operation
-    fn execute_binary_op(&self, op: &BinaryOp, left: &VMValue, right: &VMValue) -> Result<VMValue, VMError> {
+    pub(super) fn execute_binary_op(&self, op: &BinaryOp, left: &VMValue, right: &VMValue) -> Result<VMValue, VMError> {
         match (left, right) {
             (VMValue::Integer(l), VMValue::Integer(r)) => {
                 let result = match op {
@@ -1198,7 +686,7 @@ impl VM {
     }
     
     /// Execute unary operation
-    fn execute_unary_op(&self, op: &UnaryOp, operand: &VMValue) -> Result<VMValue, VMError> {
+    pub(super) fn execute_unary_op(&self, op: &UnaryOp, operand: &VMValue) -> Result<VMValue, VMError> {
         match (op, operand) {
             (UnaryOp::Neg, VMValue::Integer(i)) => Ok(VMValue::Integer(-i)),
             (UnaryOp::Not, VMValue::Bool(b)) => Ok(VMValue::Bool(!b)),
@@ -1207,7 +695,7 @@ impl VM {
     }
     
     /// Execute comparison operation
-    fn execute_compare_op(&self, op: &CompareOp, left: &VMValue, right: &VMValue) -> Result<bool, VMError> {
+    pub(super) fn execute_compare_op(&self, op: &CompareOp, left: &VMValue, right: &VMValue) -> Result<bool, VMError> {
         match (left, right) {
             // Numeric mixed comparisons (Integer/Float)
             (VMValue::Integer(l), VMValue::Float(r)) => {
@@ -1305,7 +793,7 @@ impl VM {
     }
 
     /// Record an instruction execution for statistics
-    fn record_instruction(&mut self, instruction: &MirInstruction) {
+    pub(super) fn record_instruction(&mut self, instruction: &MirInstruction) {
         let key: &'static str = match instruction {
             MirInstruction::Const { .. } => "Const",
             MirInstruction::BinOp { .. } => "BinOp",
@@ -1349,7 +837,7 @@ impl VM {
         *self.instr_counter.entry(key).or_insert(0) += 1;
     }
 
-    fn debug_log_boxcall(&self, recv: &VMValue, method: &str, args: &[Box<dyn NyashBox>], stage: &str, result: Option<&VMValue>) {
+    pub(super) fn debug_log_boxcall(&self, recv: &VMValue, method: &str, args: &[Box<dyn NyashBox>], stage: &str, result: Option<&VMValue>) {
         if std::env::var("NYASH_VM_DEBUG_BOXCALL").ok().as_deref() == Some("1") {
             let recv_ty = match recv {
                 VMValue::BoxRef(arc) => arc.type_name().to_string(),
@@ -1428,7 +916,7 @@ impl VM {
     }
     
     /// Call a method on a Box - simplified version of interpreter method dispatch
-    fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
+    pub(super) fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
         // For now, implement basic methods for common box types
         // This is a simplified version - real implementation would need full method dispatch
 
@@ -1705,7 +1193,7 @@ impl VM {
 }
 
 /// Control flow result from instruction execution
-enum ControlFlow {
+pub(super) enum ControlFlow {
     Continue,
     Jump(BasicBlockId),
     Return(VMValue),
