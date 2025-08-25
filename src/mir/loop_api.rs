@@ -24,6 +24,13 @@ pub trait LoopBuilderApi {
     fn emit(&mut self, inst: MirInstruction) -> Result<(), String>;
     /// Allocate a new SSA value id
     fn new_value(&mut self) -> ValueId;
+
+    /// Add predecessor edge to a block (CFG maintenance)
+    fn add_predecessor(&mut self, _block: BasicBlockId, _pred: BasicBlockId) -> Result<(), String> { Err("add_predecessor not implemented".into()) }
+    /// Seal a block when all predecessors are known
+    fn seal_block(&mut self, _block: BasicBlockId) -> Result<(), String> { Err("seal_block not implemented".into()) }
+    /// Insert a phi at block start
+    fn insert_phi_at_block_start(&mut self, _block: BasicBlockId, _dst: ValueId, _inputs: Vec<(BasicBlockId, ValueId)>) -> Result<(), String> { Err("insert_phi_at_block_start not implemented".into()) }
 }
 
 /// Helper: simplified loop lowering usable by any LoopBuilderApi implementor
@@ -68,5 +75,34 @@ impl LoopBuilderApi for super::builder::MirBuilder {
         super::builder::MirBuilder::emit_instruction(self, inst)
     }
     fn new_value(&mut self) -> ValueId { self.value_gen.next() }
-}
 
+    fn add_predecessor(&mut self, block: BasicBlockId, pred: BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut f) = self.current_function {
+            if let Some(bb) = f.get_block_mut(block) {
+                bb.add_predecessor(pred);
+                Ok(())
+            } else { Err(format!("Block {} not found", block.as_u32())) }
+        } else { Err("No current function".into()) }
+    }
+
+    fn seal_block(&mut self, block: BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut f) = self.current_function {
+            if let Some(bb) = f.get_block_mut(block) {
+                bb.seal();
+                Ok(())
+            } else { Err(format!("Block {} not found", block.as_u32())) }
+        } else { Err("No current function".into()) }
+    }
+
+    fn insert_phi_at_block_start(&mut self, block: BasicBlockId, dst: ValueId, inputs: Vec<(BasicBlockId, ValueId)>) -> Result<(), String> {
+        if let Some(ref mut f) = self.current_function {
+            if let Some(bb) = f.get_block_mut(block) {
+                let inst = MirInstruction::Phi { dst, inputs };
+                // Update effect mask and insert at the very start
+                bb.effects = bb.effects | inst.effects();
+                bb.instructions.insert(0, inst);
+                Ok(())
+            } else { Err(format!("Block {} not found", block.as_u32())) }
+        } else { Err("No current function".into()) }
+    }
+}

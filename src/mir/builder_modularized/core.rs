@@ -217,4 +217,33 @@ impl crate::mir::loop_api::LoopBuilderApi for MirBuilder {
         self.emit_instruction(inst)
     }
     fn new_value(&mut self) -> super::ValueId { self.value_gen.next() }
+
+    fn add_predecessor(&mut self, block: super::BasicBlockId, pred: super::BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut f) = self.current_function {
+            if let Some(bb) = f.get_block_mut(block) {
+                bb.add_predecessor(pred);
+                Ok(())
+            } else { Err(format!("Block {} not found", block.as_u32())) }
+        } else { Err("No current function".into()) }
+    }
+
+    fn seal_block(&mut self, block: super::BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut f) = self.current_function {
+            if let Some(bb) = f.get_block_mut(block) {
+                bb.seal();
+                Ok(())
+            } else { Err(format!("Block {} not found", block.as_u32())) }
+        } else { Err("No current function".into()) }
+    }
+
+    fn insert_phi_at_block_start(&mut self, block: super::BasicBlockId, dst: super::ValueId, inputs: Vec<(super::BasicBlockId, super::ValueId)>) -> Result<(), String> {
+        if let Some(ref mut f) = self.current_function {
+            if let Some(bb) = f.get_block_mut(block) {
+                let inst = super::MirInstruction::Phi { dst, inputs };
+                bb.effects = bb.effects | inst.effects();
+                bb.instructions.insert(0, inst);
+                Ok(())
+            } else { Err(format!("Block {} not found", block.as_u32())) }
+        } else { Err("No current function".into()) }
+    }
 }
