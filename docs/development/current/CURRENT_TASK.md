@@ -1,7 +1,88 @@
-# 🎯 CURRENT TASK - 2025年8月23日（刷新）
+# 🎯 CURRENT TASK - 2025年8月25日（状況整理）
+
+## 🚨 現在の状況（2025-08-25）
+1. **✅ MIRビルダーリファクタリング Phase 1完了🔧**
+   - mir/builder.rs: 1547行の大規模モジュール → **モジュール分割準備完了**
+   - 新構造: `src/mir/builder/` ディレクトリ作成
+     - `mod.rs`: 公開API定義
+     - `core.rs`: MirBuilder本体 + コア機能 (8関数実装済み)
+     - `expressions.rs`: 式変換処理 (プレースホルダー)
+     - `statements.rs`: 文変換処理 (プレースホルダー) 
+     - `control_flow.rs`: 制御フロー構築 (プレースホルダー)
+     - `box_handlers.rs`: Box関連処理 (プレースホルダー)
+   - **ビルド確認**: 新構造でコンパイル正常完了 ✅
+   - 責務分離の準備: AST→MIR変換、SSA構築、最適化ヒント、型推論
+   - nekocodeでの分析結果: MirBuilder構造体のみ検出（メソッドの登録に問題？）
+   
+### 🎯 次のリファクタリング計画
+**MIRビルダーの分割案（40関数を機能別に分類）**:
+
+1. **`mir/builder/core.rs`**: MirBuilder本体とコア機能（8関数）
+   - `new()`, `emit_instruction()`, `ensure_block_exists()`, `start_new_block()`
+   - `emit_type_check()`, `emit_cast()`, `emit_weak_new()`, `emit_weak_load()`
+   - `emit_barrier_read()`, `emit_barrier_write()`
+
+2. **`mir/builder/expressions.rs`**: 式の変換処理（11関数）
+   - `build_expression()`, `build_literal()`, `build_binary_op()`, `build_unary_op()`
+   - `build_variable_access()`, `build_function_call()`, `build_field_access()`
+   - `build_me_expression()`, `build_method_call()`, `build_from_expression()`
+   - `build_await_expression()`
+
+3. **`mir/builder/statements.rs`**: 文の変換処理（9関数）
+   - `build_module()`, `build_block()`, `build_assignment()`, `build_field_assignment()`
+   - `build_print_statement()`, `build_local_statement()`, `build_return_statement()`
+   - `build_throw_statement()`, `build_nowait_statement()`
+
+4. **`mir/builder/control_flow.rs`**: 制御フロー構築（3関数）
+   - `build_if_statement()`, `build_loop_statement()`, `build_try_catch_statement()`
+
+5. **`mir/builder/box_handlers.rs`**: Box関連の特殊処理（3関数）
+   - `build_new_expression()`, `build_box_declaration()`, `build_static_main_box()`
+
+### 📊 分析結果
+- **最も大きい関数**: `build_method_call()` (157行)
+- **複雑度が高い関数**: `build_expression()` (183行のmatch文)
+- **特に分離すべき部分**: 式ビルダー（全体の27.5%）
+
+### 🔧 実装計画
+1. **✅ Phase 1完了**: モジュール構造の作成
+   - ✅ `mir/builder/`ディレクトリ作成
+   - ✅ `mod.rs`で公開APIを定義
+   - ✅ 各サブモジュールファイルを作成
+   - ✅ ビルド確認: 新構造でコンパイル成功
+
+2. **Phase 2 (次回)**: 段階的な関数移動
+   - まずcore.rsに基本機能を移動
+   - 次にexpressions.rsに式処理を移動
+   - 依存関係を調整しながら進める
+
+3. **Phase 3**: テストとビルド確認
+   - 各段階でビルドが通ることを確認
+   - 既存のMIRテストが動作することを確認
+
+### ⚠️ リファクタリング時の注意点
+- `pub(super)`の可視性に注意（モジュール間で調整が必要）
+- `self`参照が多いため、トレイトの導入も検討
+- SSA構築に関わる`variable_map`等の共有状態に注意
+- **nekocodeの精度について**: 60%信頼度は誤検出が多いため参考程度に
+  - 外部ツール（cargo clippy等）が使えない環境では精度が低下
+  - 実際に使われている関数も未使用と判定される可能性高い
+
+
+2. **VMの既知の問題**
+   - 論理演算子（and, or）がBinOpとして未実装
+   - エラー: `Type error: Unsupported binary operation: And on Bool(true) and Bool(false)`
+   - インタープリターでは動作するがVMで動作しない
+   - **新発見**: BoxRef(IntegerBox) + BoxRef(IntegerBox)のような演算も未対応
+     - execute_binary_opにBoxRef同士の演算ケースが不足
 
 ## ✅ 直近の完了
-1. ドキュメント再編成の完了（構造刷新）
+1. VMモジュールのリファクタリング完了（2025-08-25）
+   - execute_instruction関数を29個のハンドラーに分割
+   - vm_instructions.rsモジュール作成（487行）
+   - execute_instruction_old削除（691行削減）
+   - vm.rs: 2075行→1382行（33%削減）
+2. ドキュメント再編成の完了（構造刷新）
 2. VM×プラグインのE2E整備（FileBox/Net）
    - FileBox: open/write/read, copyFrom(handle)（VM）
    - Net: GET/POST（VM）、404/500（Ok(Response)）、unreachable（Err(ErrorBox)）
