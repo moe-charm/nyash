@@ -48,7 +48,7 @@ P2PBox（Phase 9.79）に着手する前に、MIRパイプライン（Builder/SS
 - [ ] 軽量スナップショット緑（TypeOp/extern_call/loop/await/boxcall）
 - [ ] VM未実装の解消（And/Or・BoxRef演算）
 - [ ] CLI分離テスト導線（`cargo test -p core`）安定
-- [ ] ResultBox移行完了（旧参照なし）
+- [x] ResultBox移行完了（旧参照なし）
 - [ ] 命令セットの単一出典化（INSTRUCTION_SET.md）と総数26のテストがCIで緑
 
 ## 🪜 タスク分解（実行順）
