@@ -1,7 +1,10 @@
 # 🎯 CURRENT TASK - 2025年8月25日（状況整理）
 
 ## 🚨 現在の状況（2025-08-25）
-1. **✅ MIRビルダーリファクタリング完了🎉**
+
+### ✅ 完了したタスク
+
+1. **✅ MIRビルダーリファクタリング完了🎉**（2025-08-25）
    - mir/builder.rs: 1547行の大規模モジュール → **モジュール分割完了**
    - 新構造: `src/mir/builder/` ディレクトリ
      - `mod.rs`: 公開API定義
@@ -13,67 +16,32 @@
    - **ビルド確認**: 新構造でコンパイル正常完了 ✅
    - **総移動関数数**: 30関数（ヘルパー関数含む）
    - **行数削減**: 元の1547行から分割により読みやすさ大幅向上
+   - **コミット完了**: 
+     - Phase 3-5: cc2a5c2 (expressions.rs)
+     - Phase 6-8: 29af5e1 (statements/control_flow/box_handlers)
+
+2. **✅ VMモジュールのリファクタリング完了**（2025-08-25）
+   - execute_instruction関数を29個のハンドラーに分割
+   - vm_instructions.rsモジュール作成（487行）
+   - execute_instruction_old削除（691行削減）
+   - vm.rs: 2075行→1382行（33%削減）
    
-### 🎯 次のリファクタリング計画
-**MIRビルダーの分割案（40関数を機能別に分類）**:
+### 🎯 次の優先タスク
 
-1. **`mir/builder/core.rs`**: MirBuilder本体とコア機能（8関数）
-   - `new()`, `emit_instruction()`, `ensure_block_exists()`, `start_new_block()`
-   - `emit_type_check()`, `emit_cast()`, `emit_weak_new()`, `emit_weak_load()`
-   - `emit_barrier_read()`, `emit_barrier_write()`
+1. **copilot_issues.txtの確認** 
+   - Phase 8.4: AST→MIR Lowering完全実装（最優先）
+   - Phase 8.5: MIRダイエット（35命令→20命令）
+   - Phase 8.6: VM性能改善（0.9倍 → 2倍以上）
 
-2. **`mir/builder/expressions.rs`**: 式の変換処理（11関数）
-   - `build_expression()`, `build_literal()`, `build_binary_op()`, `build_unary_op()`
-   - `build_variable_access()`, `build_function_call()`, `build_field_access()`
-   - `build_me_expression()`, `build_method_call()`, `build_from_expression()`
-   - `build_await_expression()`
+2. **MIR26命令対応**
+   - TypeOp/WeakRef/Barrierのプリンタ拡張
+   - スナップショット整備
+   - vm-stats差分確認
 
-3. **`mir/builder/statements.rs`**: 文の変換処理（9関数）
-   - `build_module()`, `build_block()`, `build_assignment()`, `build_field_assignment()`
-   - `build_print_statement()`, `build_local_statement()`, `build_return_statement()`
-   - `build_throw_statement()`, `build_nowait_statement()`
-
-4. **`mir/builder/control_flow.rs`**: 制御フロー構築（3関数）
-   - `build_if_statement()`, `build_loop_statement()`, `build_try_catch_statement()`
-
-5. **`mir/builder/box_handlers.rs`**: Box関連の特殊処理（3関数）
-   - `build_new_expression()`, `build_box_declaration()`, `build_static_main_box()`
-
-### 📊 分析結果
-- **最も大きい関数**: `build_method_call()` (157行)
-- **複雑度が高い関数**: `build_expression()` (183行のmatch文)
-- **特に分離すべき部分**: 式ビルダー（全体の27.5%）
-
-### 🔧 実装計画
-1. **✅ Phase 1完了**: モジュール構造の作成
-   - ✅ `mir/builder/`ディレクトリ作成
-   - ✅ `mod.rs`で公開APIを定義
-   - ✅ 各サブモジュールファイルを作成
-   - ✅ ビルド確認: 新構造でコンパイル成功
-
-2. **✅ Phase 2完了**: 演算子関数群移動
-   - ✅ build_literal() → expressions.rs (17行)
-   - ✅ build_binary_op() → expressions.rs (25行)  
-   - ✅ build_unary_op() → expressions.rs (15行)
-   - ✅ convert_binary_operator() + convert_unary_operator() (24行)
-   - ✅ BinaryOpType enum定義追加
-   - **総移動**: 81行の式処理ロジック完了
-   - **ビルド確認**: 正常完了（警告数：51個）
-   - **中間commit**: cc2a5c2 完了
-
-3. **🎯 Phase 3候補**: 大型関数移動
-
-3. **Phase 3**: テストとビルド確認
-   - 各段階でビルドが通ることを確認
-   - 既存のMIRテストが動作することを確認
-
-### ⚠️ リファクタリング時の注意点
-- `pub(super)`の可視性に注意（モジュール間で調整が必要）
-- `self`参照が多いため、トレイトの導入も検討
-- SSA構築に関わる`variable_map`等の共有状態に注意
-- **nekocodeの精度について**: 60%信頼度は誤検出が多いため参考程度に
-  - 外部ツール（cargo clippy等）が使えない環境では精度が低下
-  - 実際に使われている関数も未使用と判定される可能性高い
+3. **Builder適用拡大**
+   - 言語 `is/as` 導線の実装
+   - 弱参照フィールドのWeakLoad/WeakNew対応
+   - 関数スタイル `isType/asType` の早期lowering強化
 
 
 2. **VMの既知の問題**
