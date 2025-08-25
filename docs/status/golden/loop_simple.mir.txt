@@ -1,0 +1,52 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: local_tests/simple_loop_test.nyash 🚀
+🚀 MIR Output for local_tests/simple_loop_test.nyash:
+; MIR Module: main
+
+; Module Statistics:
+;   Functions: 1
+;   Globals: 0
+;   Total Blocks: 4
+;   Total Instructions: 20
+;   Pure Functions: 1
+
+define void @main() {
+  ; Function Statistics:
+  ;   Blocks: 4
+  ;   Instructions: 20
+  ;   Values: 0
+  ;   Phi Functions: 1
+  ;   Pure: yes
+
+bb0:
+    0: safepoint
+    1: %1 = const 0
+    2: %2 = new IntegerBox(%1)
+    3: call %2.birth(%1)
+    4: br label bb1
+    ; effects: pure|read|alloc
+
+bb1:  ; preds(bb2)
+    0: %3 = phi [%2, bb0], [%9, bb2]
+    1: %4 = const 3
+    2: %5 = new IntegerBox(%4)
+    3: call %5.birth(%4)
+    4: %6 = icmp Lt %3, %5
+    5: br %6, label bb2, label bb3
+    ; effects: pure|read|alloc
+
+bb2:
+    0: safepoint
+    1: print %3
+    2: %7 = const 1
+    3: %8 = new IntegerBox(%7)
+    4: call %8.birth(%7)
+    5: %9 = %3 Add %8
+    6: br label bb1
+    ; effects: pure|io|read|alloc
+
+bb3:
+    0: %10 = const void
+    1: ret %10
+}

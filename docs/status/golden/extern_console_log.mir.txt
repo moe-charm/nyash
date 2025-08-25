@@ -1,0 +1,31 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: local_tests/extern_console_log.nyash 🚀
+🚀 MIR Output for local_tests/extern_console_log.nyash:
+; MIR Module: main
+
+; Module Statistics:
+;   Functions: 1
+;   Globals: 0
+;   Total Blocks: 1
+;   Total Instructions: 7
+;   Pure Functions: 1
+
+define void @main() {
+  ; Function Statistics:
+  ;   Blocks: 1
+  ;   Instructions: 7
+  ;   Values: 0
+  ;   Phi Functions: 0
+  ;   Pure: yes
+
+bb0:
+    0: safepoint
+    1: %0 = const "ok"
+    2: %1 = new StringBox(%0)
+    3: call %1.birth(%0)
+    4: extern_call env.console.log(%1) [effects: io]
+    5: %2 = const void
+    6: ret %2
+    ; effects: pure|io|read|alloc
+}

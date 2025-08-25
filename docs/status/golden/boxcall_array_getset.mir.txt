@@ -1,0 +1,74 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: local_tests/test_vm_array_getset.nyash 🚀
+🚀 MIR Output for local_tests/test_vm_array_getset.nyash:
+; MIR Module: main
+
+; Module Statistics:
+;   Functions: 1
+;   Globals: 0
+;   Total Blocks: 1
+;   Total Instructions: 50
+;   Pure Functions: 1
+
+define void @main() {
+  ; Function Statistics:
+  ;   Blocks: 1
+  ;   Instructions: 50
+  ;   Values: 0
+  ;   Phi Functions: 0
+  ;   Pure: yes
+
+bb0:
+    0: safepoint
+    1: %0 = const "__me__"
+    2: %1 = new ArrayBox()
+    3: call %1.birth()
+    4: ref_set %0.arr = %1
+    5: %2 = ref_get %0.arr
+    6: %3 = const 1
+    7: %4 = new IntegerBox(%3)
+    8: call %4.birth(%3)
+    9: %5 = call %2.push(%4)
+   10: %6 = ref_get %0.arr
+   11: %7 = const 2
+   12: %8 = new IntegerBox(%7)
+   13: call %8.birth(%7)
+   14: %9 = call %6.push(%8)
+   15: %10 = ref_get %0.arr
+   16: %11 = const 3
+   17: %12 = new IntegerBox(%11)
+   18: call %12.birth(%11)
+   19: %13 = call %10.push(%12)
+   20: %14 = ref_get %0.arr
+   21: %15 = const 1
+   22: %16 = new IntegerBox(%15)
+   23: call %16.birth(%15)
+   24: %17 = const 42
+   25: %18 = new IntegerBox(%17)
+   26: call %18.birth(%17)
+   27: %19 = call %14.set(%16, %18)
+   28: %23 = ref_get %0.arr
+   29: %24 = const 0
+   30: %25 = new IntegerBox(%24)
+   31: call %25.birth(%24)
+   32: %26 = call %23.get(%25)
+   33: %27 = ref_get %0.arr
+   34: %28 = const 1
+   35: %29 = new IntegerBox(%28)
+   36: call %29.birth(%28)
+   37: %30 = call %27.get(%29)
+   38: %31 = ref_get %0.arr
+   39: %32 = const 2
+   40: %33 = new IntegerBox(%32)
+   41: call %33.birth(%32)
+   42: %34 = call %31.get(%33)
+   43: %35 = call %26.toString()
+   44: print %35
+   45: %36 = call %30.toString()
+   46: print %36
+   47: %37 = call %34.toString()
+   48: print %37
+   49: ret %37
+    ; effects: pure|io|read|write|alloc
+}
