@@ -168,6 +168,24 @@ impl MirVerifier {
                                 phi_value, block, reason
                             );
                         }
+                        VerificationError::InvalidWeakRefSource { weak_ref, block, instruction_index, reason } => {
+                            eprintln!(
+                                "  • InvalidWeakRefSource: weak=%{:?} at {}:{} reason='{}' -- hint: source must be WeakRef(new)/WeakNew; ensure creation precedes load and value flows correctly",
+                                weak_ref, block, instruction_index, reason
+                            );
+                        }
+                        VerificationError::InvalidBarrierPointer { ptr, block, instruction_index, reason } => {
+                            eprintln!(
+                                "  • InvalidBarrierPointer: ptr=%{:?} at {}:{} reason='{}' -- hint: barrier pointer must be a valid ref (not void/null); ensure it is defined and non-void",
+                                ptr, block, instruction_index, reason
+                            );
+                        }
+                        VerificationError::SuspiciousBarrierContext { block, instruction_index, note } => {
+                            eprintln!(
+                                "  • SuspiciousBarrierContext: at {}:{} note='{}' -- hint: place barrier within ±2 of load/store/ref ops in same block or disable strict check",
+                                block, instruction_index, note
+                            );
+                        }
                         other => {
                             eprintln!("  • {:?}", other);
                         }
