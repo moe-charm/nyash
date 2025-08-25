@@ -6,19 +6,13 @@
    - 新構造: `src/mir/builder/` ディレクトリ
      - `mod.rs`: 公開API定義
      - `core.rs`: MirBuilder本体 + コア機能 (205行)
-     - `expressions.rs`: 式変換処理 (621行) - 全expression関数実装済み
-     - `statements.rs`: 文変換処理 (プレースホルダー) 
-     - `control_flow.rs`: 制御フロー構築 (プレースホルダー)
-     - `box_handlers.rs`: Box関連処理 (プレースホルダー)
+     - `expressions.rs`: 式変換処理 (621行) - 18関数実装済み
+     - `statements.rs`: 文変換処理 (165行) - 6関数実装済み 
+     - `control_flow.rs`: 制御フロー構築 (194行) - 4関数実装済み
+     - `box_handlers.rs`: Box関連処理 (73行) - 2関数実装済み
    - **ビルド確認**: 新構造でコンパイル正常完了 ✅
-   - expressions.rsに移動した主要関数:
-     - build_expression (巨大match文)
-     - build_literal, build_binary_op, build_unary_op
-     - build_variable_access, build_field_access
-     - build_function_call, build_method_call
-     - build_from_expression, build_me_expression
-     - build_assignment, build_field_assignment
-     - build_new_expression, build_await_expression
+   - **総移動関数数**: 30関数（ヘルパー関数含む）
+   - **行数削減**: 元の1547行から分割により読みやすさ大幅向上
    
 ### 🎯 次のリファクタリング計画
 **MIRビルダーの分割案（40関数を機能別に分類）**:
