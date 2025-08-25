@@ -203,9 +203,9 @@ pub struct VM {
     /// Active MIR module during execution (for function calls)
     module: Option<MirModule>,
     /// Instruction execution counters (by MIR opcode)
-    instr_counter: std::collections::HashMap<&'static str, usize>,
+    pub(super) instr_counter: std::collections::HashMap<&'static str, usize>,
     /// Execution start time for optional stats
-    exec_start: Option<Instant>,
+    pub(super) exec_start: Option<Instant>,
     // Phase 9.78a: Add unified Box handling components
     // TODO: Re-enable when interpreter refactoring is complete
     // /// Box registry for creating all Box types

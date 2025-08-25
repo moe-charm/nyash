@@ -75,7 +75,7 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
    - 修正後、`local_tests/and_or_vm.nyash` で `false/true` の出力を確認。
 2. **MIR26命令対応**
    - TypeOp/WeakRef/Barrierのプリンタ拡張
-   - スナップショット整備
+   - スナップショット整備（extern_call/loop/boxcall/typeop_mixed 追加済）
    - vm-stats差分確認
 
 3. **Builder適用拡大**
@@ -365,3 +365,9 @@ tools/run_vm_stats.sh local_tests/vm_stats_http_err.nyash vm_stats_err.json
 # 7) VM BoxCall デバッグ（任意）
 NYASH_VM_DEBUG_BOXCALL=1 ./target/release/nyash --backend vm local_tests/test_vm_array_getset.nyash
 ```
+- MIR26 整合（候補1）確認:
+  - Printer: `--mir-verbose-effects` の `pure|readonly|side` 表記と TypeOp/WeakRef/Barrier/ExternCall の表示が整合。
+  - Verifier: SSA/支配/CFG/merge-phi に加え WeakRef/Barrier の最小検証＋Strict Barrier診断を実装（環境変数でON）。
+  - Optimizer: 未lowering検知（is/as/isType/asType）をBoxCall/Call両経路で検出、`NYASH_OPT_DIAG_FAIL=1` と連携。
+  - 代表スナップショット: extern_call/loop/boxcall/typeop_mixed をCIに追加、全件緑。
+  - 注: WeakRef/Barrier の“統合”はPoCフラグで切替可能（レガシー命令も支援）—MIR26はドキュメントの正典、実装は互換を維持。

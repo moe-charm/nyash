@@ -729,6 +729,7 @@ pub struct ResultBox {
     base: BoxBase,
 }
 
+#[allow(deprecated)]
 impl ResultBox {
     pub fn new_success(value: Box<dyn NyashBox>) -> Self {
         Self {
@@ -772,6 +773,7 @@ impl ResultBox {
     }
 }
 
+#[allow(deprecated)]
 impl BoxCore for ResultBox {
     fn box_id(&self) -> u64 {
         self.base.id
@@ -794,6 +796,7 @@ impl BoxCore for ResultBox {
     }
 }
 
+#[allow(deprecated)]
 impl NyashBox for ResultBox {
     fn to_string_box(&self) -> StringBox {
         if self.is_success {
@@ -863,6 +866,7 @@ impl NyashBox for ResultBox {
     }
 }
 
+#[allow(deprecated)]
 impl Display for ResultBox {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.fmt_box(f)

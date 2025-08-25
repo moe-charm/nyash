@@ -3,11 +3,11 @@
 Nyashプログラミング言語開発に必要な情報をまとめたクイックリファレンス。
 
 ## 🧭 Start Here (最初に見る)
-- **🎯 主軸タスク**: [docs/development/roadmap/native-plan/copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt) **← 最重要！**
-- 現在のタスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)（近々/中期/長期の計画は同ファイル先頭）
-- ドキュメント入口: [docs/README.md](docs/README.md)
-- コア概念（速習）: [docs/reference/architecture/nyash_core_concepts.md](docs/reference/architecture/nyash_core_concepts.md)
-- Netプラグイン（HTTP/TCP）: [docs/reference/plugin-system/net-plugin.md](docs/reference/plugin-system/net-plugin.md)
+- **🎯 主軸タスク**: [copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt) **← 最重要！**
+- **📋 現在のタスク**: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)（近々/中期/長期の計画は同ファイル先頭）
+- **📚 言語仕様**: まず[LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)を読む
+- **📦 Box システム**: [boxes-system/](docs/reference/boxes-system/)でAPI確認
+- **⚙️ 実行バックエンド**: [execution-backends.md](docs/reference/architecture/execution-backends.md)
 
 ## 🤖 **Claude×Copilot協調開発の主軸**
 ### 📋 **copilot_issues.txt - 開発の軸となるファイル**
@@ -20,6 +20,23 @@ Nyashプログラミング言語開発に必要な情報をまとめたクイッ
 - **Phase 10**: Cranelift JIT（主経路）/ LLVM AOTは後段
 
 **迷ったらcopilot_issues.txtを確認せよ！**
+
+## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
+
+### なぜこのルールか？
+**実装後、必ず新しい問題や転回点が生まれるから。**
+- 100%完璧を目指すと、要件が変わったときの手戻りが大きい
+- 80%で動くものを作れば、実際の使用からフィードバックが得られる
+- 残り20%は、本当に必要かどうか実装後に判断できる
+
+### 実践方法
+1. **まず動くものを作る**（80%）
+2. **改善アイデアは `ideas/` フォルダに記録**（20%）
+3. **優先度に応じて後から改善**
+
+例: VM and/or実装
+- 80%: `as_bool()`で基本動作 → コミット ✅
+- 20%: 短絡評価、型最適化 → `ideas/improvements/2025-08-25-vm-andor-shortcircuit.md`
 
 ## 🚀 クイックスタート
 
@@ -92,21 +109,16 @@ python3 -m http.server 8010
   - ネイティブ計画: [docs/development/roadmap/native-plan/](docs/development/roadmap/native-plan/)
   - フェーズ課題: [docs/development/roadmap/](docs/development/roadmap/)
 - アーカイブ: [docs/archive/](docs/archive/)
-### 🎯 よく使う情報
-- Getting Started: [docs/guides/getting-started.md](docs/guides/getting-started.md)
-- Language Guide: [docs/guides/language-guide.md](docs/guides/language-guide.md)
-- Playground Guide: [docs/guides/tutorials/playground_guide.md](docs/guides/tutorials/playground_guide.md)
-### 📊 最新開発状況
-- 現在のタスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
-- ロードマップ: [docs/development/roadmap/](docs/development/roadmap/)
-### 📖 詳細リファレンス
-- リファレンス: [docs/reference/](docs/reference/)
-  - 言語仕様: [docs/reference/language/LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
-  - 可視性/デリゲーション: [docs/reference/language/field-visibility-and-delegation.md](docs/reference/language/field-visibility-and-delegation.md)
-  - Box/プラグイン: [docs/reference/boxes-system/](docs/reference/boxes-system/), [docs/reference/plugin-system/](docs/reference/plugin-system/)
-### 🎮 実用例・アプリ
-- **[実用例](docs/guides/)** - サンプルコード・パターン集
-- **実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
+
+### 🎯 よく使う情報（クイックアクセス）
+- **🔴 現在のタスク**: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md) ← 今ココ！
+- **🎮 Phase 9.78h**: [phase_9_78h_mir_pipeline_stabilization.md](docs/development/roadmap/phases/phase-9/phase_9_78h_mir_pipeline_stabilization.md)
+- **📐 言語仕様**: [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
+- **🤖 MIR 26命令**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
+- **📦 Box API**: [boxes-system/](docs/reference/boxes-system/)
+- **⚡ VM実装**: [VM_README.md](docs/reference/execution-backend/VM_README.md)
+- **🌐 Netプラグイン**: [net-plugin.md](docs/reference/plugin-system/net-plugin.md)
+- **🎮 実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
 
 ## ⚡ 重要な設計原則
 
@@ -445,6 +457,47 @@ NYASH_VM_DEBUG=1       # VM のみ
 gemini -p "Nyashの実装で困っています..."
 ```
 
+### 💡 アイデア管理（ideas/フォルダ）
+
+**80/20ルールの「残り20%」を整理して管理**
+
+```
+ideas/
+├── improvements/     # 80%実装の残り20%改善候補
+│   ├── 2025-08-25-vm-andor-shortcircuit.md
+│   └── archived/     # 実装済みor却下
+│
+├── new-features/     # 新機能アイデア  
+│   ├── 2025-08-25-repl-mode.md
+│   └── archived/
+│
+└── other/           # その他すべて（調査、メモ、設計案）
+    ├── 2025-08-25-cranelift-research.md
+    └── archived/
+```
+
+#### 📝 改善候補ファイルの形式
+```markdown
+# VM and/or 短絡評価の実装
+Status: Pending (80%実装済み)
+Created: 2025-08-25
+Priority: Low
+Related-Code: src/backend/vm_instructions.rs::execute_binop()
+
+## 現状（80%実装）
+- `as_bool()`で全オペランドを評価してから論理演算
+- 基本動作は完全に正常
+
+## 改善案（残り20%）
+### 1. 短絡評価
+- And: 左辺false → 右辺評価スキップ
+- Or: 左辺true → 右辺評価スキップ
+
+## 実装タイミング
+- [ ] パフォーマンス問題が報告されたら
+- [ ] Phase 10（最適化フェーズ）で一括対応
+```
+
 ### 🧪 テスト実行
 
 #### 📁 **テストファイル配置ルール（重要！）**
@@ -680,11 +733,7 @@ let new_plugin_box = PluginBoxV2 {
 
 ---
 
-最終更新: 2025年8月20日 - **📝 プラグインBox開発の注意点追加**
-- **TLV Handle処理**: type_idとfini_method_idの正しい扱い方を追記
-- **Phase 9.75g-0完了**: BID-FFI Step 1-3実装成功（プラグイン・テスター・設定）
-- **plugin-tester**: 汎用プラグイン診断ツール完成（CLAUDE.mdに追加）
-- **設計原則達成**: Box名非決め打ち・birth/finiライフサイクル・メモリ管理明確化
-- **次のステップ**: Step 4 - Nyashとの統合（src/bid/モジュール実装）
-- **copilot_issues.txt**: Phase順開発計画の軸として継続
-- **次期最優先**: AST→MIR Lowering完全実装（Phase 8.4）
+最終更新: 2025年8月25日 - **🏃 80/20ルールとideas/フォルダ構造追加**
+- **80/20ルール**: 完璧より進捗を優先する開発方針を明記
+- **ideas/フォルダ**: 改善案・新機能・その他アイデアの管理構造を追加
+- **ドキュメント整理**: 重複セクションを統合してスリム化

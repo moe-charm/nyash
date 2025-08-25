@@ -82,11 +82,14 @@ impl<'a> LoopBuilder<'a> {
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
         self.emit_safepoint()?;
-        
+
         // ボディをビルド
         for stmt in body {
             self.build_statement(stmt)?;
         }
+        // latchブロックのスナップショットを保存（phi入力解決用）
+        let latch_snapshot = self.get_current_variable_map();
+        self.block_var_maps.insert(body_id, latch_snapshot);
         
         // 8. Latchブロック（ボディの最後）からHeaderへ戻る
         let latch_id = self.current_block()?;
@@ -114,6 +117,8 @@ impl<'a> LoopBuilder<'a> {
     ) -> Result<(), String> {
         // 現在の変数マップから、ループで使用される可能性のある変数を取得
         let current_vars = self.get_current_variable_map();
+        // preheader時点のスナップショット（後でphi入力の解析に使う）
+        self.block_var_maps.insert(preheader_id, current_vars.clone());
         
         // 各変数に対して不完全なPhi nodeを作成
         let mut incomplete_phis = Vec::new();
@@ -271,9 +276,12 @@ impl<'a> LoopBuilder<'a> {
         self.parent_builder.variable_map.insert(name, value);
     }
     
-    fn get_variable_at_block(&self, name: &str, _block_id: BasicBlockId) -> Option<ValueId> {
-        // 簡易実装：現在の変数マップから取得
-        // TODO: 本来はブロックごとの変数マップを管理すべき
+    fn get_variable_at_block(&self, name: &str, block_id: BasicBlockId) -> Option<ValueId> {
+        // まずブロックごとのスナップショットを優先
+        if let Some(map) = self.block_var_maps.get(&block_id) {
+            if let Some(v) = map.get(name) { return Some(*v); }
+        }
+        // フォールバック：現在の変数マップ（単純ケース用）
         self.parent_builder.variable_map.get(name).copied()
     }
     

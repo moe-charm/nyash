@@ -589,6 +589,9 @@ impl std::fmt::Display for VerificationError {
             VerificationError::InvalidBarrierPointer { ptr, block, instruction_index, reason } => {
                 write!(f, "Invalid Barrier pointer {} in block {} at {}: {}", ptr, block, instruction_index, reason)
             },
+            VerificationError::SuspiciousBarrierContext { block, instruction_index, note } => {
+                write!(f, "Suspicious Barrier context in block {} at {}: {}", block, instruction_index, note)
+            },
         }
     }
 }
