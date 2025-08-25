@@ -206,6 +206,36 @@ mod tests {
 
         assert!(dump.contains("extern_call env.console.log"), "Expected extern_call env.console.log in MIR dump. Got:\n{}", dump);
     }
+
+    #[test]
+    fn test_lowering_boxcall_array_push() {
+        // Build AST: (new ArrayBox()).push(1)
+        let ast = ASTNode::Expression {
+            expr: Box::new(ASTNode::MethodCall {
+                object: Box::new(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() }),
+                method: "push".to_string(),
+                arguments: vec![ ASTNode::Literal { value: LiteralValue::Integer(1), span: crate::ast::Span::unknown() } ],
+                span: crate::ast::Span::unknown(),
+            }),
+            span: crate::ast::Span::unknown(),
+        };
+
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile should succeed");
+        let dump = MirPrinter::new().print_module(&result.module);
+        // Expect a BoxCall to push (printer formats as `call <box>.<method>(...)`)
+        assert!(dump.contains(".push("), "Expected BoxCall to .push(...). Got:\n{}", dump);
+    }
+
+    #[test]
+    fn test_lowering_await_expression() {
+        // Build AST: await 1  (semantic is nonsensical but should emit Await)
+        let ast = ASTNode::AwaitExpression { expression: Box::new(ASTNode::Literal { value: LiteralValue::Integer(1), span: crate::ast::Span::unknown() }), span: crate::ast::Span::unknown() };
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile should succeed");
+        let dump = MirPrinter::new().print_module(&result.module);
+        assert!(dump.contains("await"), "Expected await in MIR dump. Got:\n{}", dump);
+    }
     
     #[test]
     fn test_throw_compilation() {
