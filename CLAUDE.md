@@ -449,6 +449,40 @@ NYASH_VM_DEBUG=1       # VM のみ
 
 **判断基準：3ヶ月後の自分が理解できるか？**
 
+## ⚠️ Claude実行環境の既知のバグ（重要！）
+
+### 🐛 Bash Glob展開バグ（Issue #5811）
+
+**問題：** Claude Code v1.0.61-1.0.81でglob展開がパイプと一緒に使うと動作しない
+
+```bash
+# ❌ 失敗するパターン（asteriskが"glob"という文字列に置換される）
+ls *.md | wc -l          # エラー: "ls: 'glob' にアクセスできません"
+find . -name "*.rs"      # エラー: "glob"になる
+ls src/backend/vm_*.rs   # エラー: "glob: そのようなファイルやディレクトリはありません"
+
+# ✅ 回避策1: bash -c でラップ
+bash -c 'ls *.md | wc -l'
+bash -c 'ls src/backend/vm_*.rs | xargs wc -l'
+
+# ✅ 回避策2: findコマンドを使う（最も確実）
+find src/backend -name "vm_*.rs" -exec wc -l {} \;
+
+# ✅ 回避策3: 明示的にファイル名を列挙
+wc -l src/backend/vm.rs src/backend/vm_values.rs
+
+# ✅ 回避策4: ls + grepパターン  
+ls src/backend/ | grep "^vm_" | xargs -I{} wc -l src/backend/{}
+```
+
+**影響を受けるパターン：**
+- `*.md`, `*.rs` - 通常のglob
+- `src/*.py` - パス付きglob  
+- `file[12].md` - 文字クラス
+- `file{1,2}.md` - ブレース展開
+
+**根本原因：** Claudeのコマンド再構築機能のバグ（`pattern`ではなく`op`フィールドを使用）
+
 ## 🔧 開発サポート
 
 ### 🤖 AI相談

@@ -17,6 +17,8 @@ use crate::scope_tracker::ScopeTracker;
 use crate::instance_v2::InstanceBox;
 use super::vm_phi::LoopExecutor;
 use std::time::Instant;
+use super::frame::ExecutionFrame;
+use super::control_flow;
 
 // Phase 9.78a: Import necessary components for unified Box handling
 // TODO: Re-enable when interpreter refactoring is complete
@@ -184,15 +186,10 @@ pub struct VM {
     values: Vec<Option<VMValue>>,
     /// Current function being executed
     current_function: Option<String>,
-    /// Current basic block
-    current_block: Option<BasicBlockId>,
+    /// Frame state (current block, pc, last result)
+    frame: ExecutionFrame,
     /// Previous basic block (for phi node resolution)
     previous_block: Option<BasicBlockId>,
-    /// Program counter within current block
-    pc: usize,
-    /// Return value from last execution
-    #[allow(dead_code)]
-    last_result: Option<VMValue>,
     /// Simple field storage for objects (maps reference -> field -> value)
     pub(super) object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
     /// Class name mapping for objects (for visibility checks)
@@ -250,10 +247,8 @@ impl VM {
         Self {
             values: Vec::new(),
             current_function: None,
-            current_block: None,
+            frame: ExecutionFrame::new(),
             previous_block: None,
-            pc: 0,
-            last_result: None,
             object_fields: HashMap::new(),
             object_class: HashMap::new(),
             object_internal: std::collections::HashSet::new(),
@@ -277,10 +272,8 @@ impl VM {
         Self {
             values: Vec::new(),
             current_function: None,
-            current_block: None,
+            frame: ExecutionFrame::new(),
             previous_block: None,
-            pc: 0,
-            last_result: None,
             object_fields: HashMap::new(),
             object_class: HashMap::new(),
             object_internal: std::collections::HashSet::new(),
@@ -348,10 +341,10 @@ impl VM {
         // Save current frame
         let saved_values = std::mem::take(&mut self.values);
         let saved_current_function = self.current_function.clone();
-        let saved_current_block = self.current_block;
+        let saved_current_block = self.frame.current_block;
         let saved_previous_block = self.previous_block;
-        let saved_pc = self.pc;
-        let saved_last_result = self.last_result.clone();
+        let saved_pc = self.frame.pc;
+        let saved_last_result = self.frame.last_result;
 
         // Bind parameters
         for (i, param_id) in function.params.iter().enumerate() {
@@ -376,10 +369,10 @@ impl VM {
         // Restore frame
         self.values = saved_values;
         self.current_function = saved_current_function;
-        self.current_block = saved_current_block;
+        self.frame.current_block = saved_current_block;
         self.previous_block = saved_previous_block;
-        self.pc = saved_pc;
-        self.last_result = saved_last_result;
+        self.frame.pc = saved_pc;
+        self.frame.last_result = saved_last_result;
 
         result
     }
@@ -401,7 +394,7 @@ impl VM {
             let block = function.get_block(current_block)
                 .ok_or_else(|| VMError::InvalidBasicBlock(format!("Block {} not found", current_block)))?;
             
-            self.current_block = Some(current_block);
+            self.frame.current_block = Some(current_block);
             self.pc = 0;
             
             let mut next_block = None;
@@ -431,10 +424,8 @@ impl VM {
                 self.scope_tracker.pop_scope();
                 return Ok(return_value);
             } else if let Some(target) = next_block {
-                // Update previous block before jumping
-                self.previous_block = Some(current_block);
-                // Record the transition in loop executor
-                self.loop_executor.record_transition(current_block, target);
+                // Update previous block before jumping and record transition via control_flow helper
+                control_flow::record_transition(&mut self.previous_block, &mut self.loop_executor, current_block, target).ok();
                 current_block = target;
             } else {
                 // Block ended without terminator - this shouldn't happen in well-formed MIR
