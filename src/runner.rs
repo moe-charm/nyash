@@ -73,7 +73,8 @@ impl NyashRunner {
         }
 
         if let Some(ref filename) = self.config.file {
-            self.execute_file_mode(filename);
+            // Delegate file-mode execution to modes::common dispatcher
+            self.run_file(filename);
         } else {
             self.execute_demo_mode();
         }
@@ -82,81 +83,6 @@ impl NyashRunner {
     // init_bid_plugins moved to runner_plugin_init.rs
 
     /// Execute file-based mode with backend selection
-    fn execute_file_mode(&self, filename: &str) {
-        if self.config.dump_ast {
-            println!("🧠 Nyash AST Dump - Processing file: {}", filename);
-            let code = match fs::read_to_string(filename) {
-                Ok(content) => content,
-                Err(e) => {
-                    eprintln!("❌ Error reading file {}: {}", filename, e);
-                    process::exit(1);
-                }
-            };
-            let ast = match NyashParser::parse_from_string(&code) {
-                Ok(ast) => ast,
-                Err(e) => {
-                    eprintln!("❌ Parse error: {}", e);
-                    process::exit(1);
-                }
-            };
-            println!("{:#?}", ast);
-            return;
-        }
-        if self.config.dump_mir || self.config.verify_mir {
-            println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
-            self.execute_mir_mode(filename);
-        } else if self.config.compile_wasm {
-            #[cfg(feature = "wasm-backend")]
-            {
-                println!("🌐 Nyash WASM Compiler - Processing file: {} 🌐", filename);
-                self.execute_wasm_mode(filename);
-            }
-            #[cfg(not(feature = "wasm-backend"))]
-            {
-                eprintln!("❌ WASM backend not available. Please rebuild with: cargo build --features wasm-backend");
-                process::exit(1);
-            }
-        } else if self.config.compile_native {
-            #[cfg(feature = "wasm-backend")]
-            {
-                println!("🚀 Nyash AOT Compiler - Processing file: {} 🚀", filename);
-                self.execute_aot_mode(filename);
-            }
-            #[cfg(not(feature = "wasm-backend"))]
-            {
-                eprintln!("❌ AOT backend not available. Please rebuild with: cargo build --features wasm-backend");
-                process::exit(1);
-            }
-        } else if self.config.backend == "vm" {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
-            }
-            self.execute_vm_mode(filename);
-        } else if self.config.backend == "llvm" {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
-            }
-            self.execute_llvm_mode(filename);
-        } else {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
-            }
-            if let Some(fuel) = self.config.debug_fuel {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    println!("🔥 Debug fuel limit: {} iterations", fuel);
-                }
-            } else {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    println!("🔥 Debug fuel limit: unlimited");
-                }
-            }
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!("====================================================");
-            }
-            
-            self.execute_nyash_file(filename);
-        }
-    }
 
     /// Execute demo mode with all demonstrations
     fn execute_demo_mode(&self) {
