@@ -116,7 +116,7 @@ python3 -m http.server 8010
 - **📐 言語仕様**: [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
 - **🤖 MIR 26命令**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
 - **📦 Box API**: [boxes-system/](docs/reference/boxes-system/)
-- **⚡ VM実装**: [VM_README.md](docs/reference/execution-backend/VM_README.md)
+- **⚡ VM実装**: [VM_README.md](docs/VM_README.md)
 - **🌐 Netプラグイン**: [net-plugin.md](docs/reference/plugin-system/net-plugin.md)
 - **🎮 実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
 
