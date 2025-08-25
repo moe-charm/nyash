@@ -753,4 +753,95 @@ mod tests {
         assert!(errs.iter().any(|e| matches!(e, VerificationError::MergeUsesPredecessorValue{..} | VerificationError::DominatorViolation{..})),
             "Expected merge/dominator error, got: {:?}", errs);
     }
+
+    #[test]
+    fn test_loop_phi_normalization() {
+        // Program:
+        // local i = 0
+        // loop(false) { i = 1 }
+        // i
+        let ast = ASTNode::Program {
+            statements: vec![
+                ASTNode::Local {
+                    variables: vec!["i".to_string()],
+                    initial_values: vec![Some(Box::new(ASTNode::Literal { value: LiteralValue::Integer(0), span: Span::unknown() }))],
+                    span: Span::unknown(),
+                },
+                ASTNode::Loop {
+                    condition: Box::new(ASTNode::Literal { value: LiteralValue::Bool(false), span: Span::unknown() }),
+                    body: vec![ ASTNode::Assignment {
+                        target: Box::new(ASTNode::Variable { name: "i".to_string(), span: Span::unknown() }),
+                        value: Box::new(ASTNode::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }),
+                        span: Span::unknown(),
+                    }],
+                    span: Span::unknown(),
+                },
+                ASTNode::Variable { name: "i".to_string(), span: Span::unknown() },
+            ],
+            span: Span::unknown(),
+        };
+
+        let mut builder = MirBuilder::new();
+        let module = builder.build_module(ast).expect("build mir");
+
+        // Verify SSA/dominance: should pass
+        let mut verifier = MirVerifier::new();
+        let res = verifier.verify_module(&module);
+        if let Err(errs) = &res { eprintln!("Verifier errors: {:?}", errs); }
+        assert!(res.is_ok(), "MIR loop with phi normalization should pass verification");
+
+        // Ensure phi is printed (header phi for variable i)
+        let printer = MirPrinter::verbose();
+        let mir_text = printer.print_module(&module);
+        assert!(mir_text.contains("phi"), "Printed MIR should contain a phi for loop header\n{}", mir_text);
+    }
+
+    #[test]
+    fn test_loop_nested_if_phi() {
+        // Program:
+        // local x = 0
+        // loop(false) { if true { x = 1 } else { x = 2 } }
+        // x
+        let ast = ASTNode::Program {
+            statements: vec![
+                ASTNode::Local {
+                    variables: vec!["x".to_string()],
+                    initial_values: vec![Some(Box::new(ASTNode::Literal { value: LiteralValue::Integer(0), span: Span::unknown() }))],
+                    span: Span::unknown(),
+                },
+                ASTNode::Loop {
+                    condition: Box::new(ASTNode::Literal { value: LiteralValue::Bool(false), span: Span::unknown() }),
+                    body: vec![ ASTNode::If {
+                        condition: Box::new(ASTNode::Literal { value: LiteralValue::Bool(true), span: Span::unknown() }),
+                        then_body: vec![ ASTNode::Assignment {
+                            target: Box::new(ASTNode::Variable { name: "x".to_string(), span: Span::unknown() }),
+                            value: Box::new(ASTNode::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }),
+                            span: Span::unknown(),
+                        }],
+                        else_body: Some(vec![ ASTNode::Assignment {
+                            target: Box::new(ASTNode::Variable { name: "x".to_string(), span: Span::unknown() }),
+                            value: Box::new(ASTNode::Literal { value: LiteralValue::Integer(2), span: Span::unknown() }),
+                            span: Span::unknown(),
+                        }]),
+                        span: Span::unknown(),
+                    }],
+                    span: Span::unknown(),
+                },
+                ASTNode::Variable { name: "x".to_string(), span: Span::unknown() },
+            ],
+            span: Span::unknown(),
+        };
+
+        let mut builder = MirBuilder::new();
+        let module = builder.build_module(ast).expect("build mir");
+
+        let mut verifier = MirVerifier::new();
+        let res = verifier.verify_module(&module);
+        if let Err(errs) = &res { eprintln!("Verifier errors: {:?}", errs); }
+        assert!(res.is_ok(), "Nested if in loop should pass verification with proper phis");
+
+        let printer = MirPrinter::verbose();
+        let mir_text = printer.print_module(&module);
+        assert!(mir_text.contains("phi"), "Printed MIR should contain phi nodes for nested if/loop\n{}", mir_text);
+    }
 }

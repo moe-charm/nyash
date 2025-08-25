@@ -162,6 +162,8 @@ impl<'a> LoopBuilder<'a> {
                 
                 // 完成したPhi nodeを発行
                 self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
+                // 重要: ループ外から参照される変数はPhi結果に束縛し直す
+                self.update_variable(phi.var_name.clone(), phi.phi_id);
             }
         }
         

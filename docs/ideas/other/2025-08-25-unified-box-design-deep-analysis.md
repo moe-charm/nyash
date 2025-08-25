@@ -438,3 +438,93 @@ struct BoxVTable {
 - [ ] プラグインBoxの透過的な動作
 - [ ] パフォーマンス改善の確認
 - [ ] メモリ使用量の変化なし
+
+## 🚀 究極の統一：ビルトインBox完全プラグイン化構想
+
+### 現状の二重実装問題
+- **plugin_loader.rs** (1217行) - ビルトインBoxの動的ライブラリ化
+- **plugin_loader_v2.rs** (906行) - プラグインBoxシステム
+- 合計2000行以上の重複！
+
+### 完全プラグイン化の提案
+
+#### すべてをプラグインに統一
+```rust
+// 現在
+ビルトインFileBox → 静的リンク
+プラグインFileBox → 動的ロード（.so）
+
+// 統一後
+すべてのBox → プラグイン（.so）として実装
+```
+
+#### コアBoxの自動ロード戦略
+```rust
+const CORE_BOXES: &[&str] = &[
+    "libnyash_string_box.so",   // StringBox（必須）
+    "libnyash_integer_box.so",  // IntegerBox（必須）
+    "libnyash_bool_box.so",     // BoolBox（必須）
+    "libnyash_console_box.so",  // ConsoleBox（print用）
+];
+
+// 起動時に自動ロード
+fn init_core_boxes() {
+    for plugin in CORE_BOXES {
+        plugin_loader.load_required(plugin)
+            .expect("Core box loading failed");
+    }
+}
+```
+
+### メリット
+1. **コード削減**: plugin_loader.rs (1217行) を完全削除
+2. **統一性**: Everything is Boxの究極の実現
+3. **柔軟性**: StringBoxすら置き換え可能
+4. **ビルド高速化**: 本体が軽量に
+5. **配布の柔軟性**: 必要なBoxだけ選択可能
+
+### 考慮事項
+
+#### パフォーマンス
+- FFI境界のオーバーヘッドは**ナノ秒レベル**
+- 実用上の影響なし
+
+#### デバッグの課題と対策
+```rust
+// 課題：エラー時のスタックトレース
+thread 'main' panicked at 'FFI boundary: 0x7f8b2c001234'
+
+// 対策1：プラグイン側でのロギング
+#[no_mangle]
+pub extern "C" fn box_method_toString() {
+    eprintln!("[StringBox::toString] called from {:?}", std::thread::current().id());
+}
+
+// 対策2：デバッグシンボル保持
+cargo build --features debug-symbols
+
+// 対策3：プラグイン単体テストの充実
+#[test]
+fn test_string_box_methods() { /* ... */ }
+```
+
+### 実装ロードマップ
+1. **Phase A**: コアBoxのプラグイン化
+   - StringBox, IntegerBox, BoolBox, ConsoleBox
+2. **Phase B**: 起動時自動ロード機構
+3. **Phase C**: plugin_loader.rs削除
+4. **Phase D**: ドキュメント・テスト整備
+
+### 設定ファイル案
+```toml
+# ~/.nyash/config.toml
+[plugins]
+core_path = "./plugins/core/"
+search_paths = ["./plugins", "/usr/lib/nyash/plugins"]
+
+[core_boxes]
+required = ["string", "integer", "bool", "console"]
+optional = ["file", "math", "time"]
+```
+
+これにより、「Everything is Box」哲学が実装レベルでも完全に実現される！
