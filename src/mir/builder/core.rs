@@ -44,7 +44,17 @@ pub struct MirBuilder {
     pub(super) pending_phis: Vec<(BasicBlockId, ValueId, String)>,
 
     /// Origin tracking for simple optimizations (e.g., object.method after new)
-    pub(super) value_origins: HashMap<ValueId, String>,
+    /// Maps a ValueId to the class name if it was produced by NewBox of that class
+    pub(super) value_origin_newbox: HashMap<ValueId, String>,
+
+    /// Names of user-defined boxes declared in the current module
+    pub(super) user_defined_boxes: HashSet<String>,
+
+    /// Weak field registry: BoxName -> {weak field names}
+    pub(super) weak_fields_by_box: HashMap<String, HashSet<String>>,
+
+    /// Remember class of object fields after assignments: (base_id, field) -> class_name
+    pub(super) field_origin_class: HashMap<(ValueId, String), String>,
 }
 
 impl MirBuilder {
@@ -57,7 +67,10 @@ impl MirBuilder {
             block_gen: BasicBlockIdGenerator::new(),
             variable_map: HashMap::new(),
             pending_phis: Vec::new(),
-            value_origins: HashMap::new(),
+            value_origin_newbox: HashMap::new(),
+            user_defined_boxes: HashSet::new(),
+            weak_fields_by_box: HashMap::new(),
+            field_origin_class: HashMap::new(),
         }
     }
 

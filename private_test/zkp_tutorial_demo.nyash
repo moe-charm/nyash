@@ -1,0 +1,71 @@
+// Midnight Network ZKPチュートリアル - Nyashデモ
+// ゼロ知識証明を視覚的に理解する
+
+static box Main {
+    main() {
+        local tutorial = new ZKPTutorial()
+        tutorial.start()
+    }
+}
+
+box ZKPTutorial {
+    init { console }
+    
+    constructor() {
+        me.console = new ConsoleBox()
+    }
+    
+    start() {
+        me.console.log("🔐 ゼロ知識証明チュートリアル by Nyash")
+        me.console.log("=====================================")
+        
+        // レッスン1: 年齢証明
+        me.ageProofDemo()
+        
+        // レッスン2: 秘密投票
+        me.votingDemo()
+        
+        // レッスン3: 残高証明
+        me.balanceProofDemo()
+    }
+    
+    ageProofDemo() {
+        me.console.log("\n📝 レッスン1: 年齢証明")
+        me.console.log("実際の年齢を明かさずに「18歳以上」を証明します")
+        
+        local alice = new Person("Alice", 25)
+        local proof = alice.proveAgeAbove(18)
+        
+        me.console.log("Aliceの証明: " + proof)
+        me.console.log("検証結果: 18歳以上 ✅")
+        me.console.log("実際の年齢: 秘密のまま 🤫")
+    }
+    
+    votingDemo() {
+        me.console.log("\n🗳️ レッスン2: 秘密投票")
+        // 投票内容を秘密にしながら有効性を証明
+    }
+    
+    balanceProofDemo() {
+        me.console.log("\n💰 レッスン3: 残高証明")
+        // 具体的な金額を明かさずに「十分な残高がある」を証明
+    }
+}
+
+box Person {
+    init { name, age }
+    
+    constructor(name, age) {
+        me.name = name
+        me.age = age
+    }
+    
+    proveAgeAbove(minAge) {
+        // 実際のMidnightではZKP生成
+        // デモ用の簡易実装
+        if me.age >= minAge {
+            return "VALID_PROOF_" + new RandomBox().randomString(16)
+        }
+        return "INVALID_PROOF"
+    }
+}

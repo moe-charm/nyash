@@ -1,18 +1,24 @@
 # 🎯 CURRENT TASK - 2025年8月25日（状況整理）
 
 ## 🚨 現在の状況（2025-08-25）
-1. **✅ MIRビルダーリファクタリング Phase 1完了🔧**
-   - mir/builder.rs: 1547行の大規模モジュール → **モジュール分割準備完了**
-   - 新構造: `src/mir/builder/` ディレクトリ作成
+1. **✅ MIRビルダーリファクタリング完了🎉**
+   - mir/builder.rs: 1547行の大規模モジュール → **モジュール分割完了**
+   - 新構造: `src/mir/builder/` ディレクトリ
      - `mod.rs`: 公開API定義
-     - `core.rs`: MirBuilder本体 + コア機能 (8関数実装済み)
-     - `expressions.rs`: 式変換処理 (プレースホルダー)
+     - `core.rs`: MirBuilder本体 + コア機能 (205行)
+     - `expressions.rs`: 式変換処理 (621行) - 全expression関数実装済み
      - `statements.rs`: 文変換処理 (プレースホルダー) 
      - `control_flow.rs`: 制御フロー構築 (プレースホルダー)
      - `box_handlers.rs`: Box関連処理 (プレースホルダー)
    - **ビルド確認**: 新構造でコンパイル正常完了 ✅
-   - 責務分離の準備: AST→MIR変換、SSA構築、最適化ヒント、型推論
-   - nekocodeでの分析結果: MirBuilder構造体のみ検出（メソッドの登録に問題？）
+   - expressions.rsに移動した主要関数:
+     - build_expression (巨大match文)
+     - build_literal, build_binary_op, build_unary_op
+     - build_variable_access, build_field_access
+     - build_function_call, build_method_call
+     - build_from_expression, build_me_expression
+     - build_assignment, build_field_assignment
+     - build_new_expression, build_await_expression
    
 ### 🎯 次のリファクタリング計画
 **MIRビルダーの分割案（40関数を機能別に分類）**:
@@ -51,10 +57,17 @@
    - ✅ 各サブモジュールファイルを作成
    - ✅ ビルド確認: 新構造でコンパイル成功
 
-2. **Phase 2 (次回)**: 段階的な関数移動
-   - まずcore.rsに基本機能を移動
-   - 次にexpressions.rsに式処理を移動
-   - 依存関係を調整しながら進める
+2. **✅ Phase 2完了**: 演算子関数群移動
+   - ✅ build_literal() → expressions.rs (17行)
+   - ✅ build_binary_op() → expressions.rs (25行)  
+   - ✅ build_unary_op() → expressions.rs (15行)
+   - ✅ convert_binary_operator() + convert_unary_operator() (24行)
+   - ✅ BinaryOpType enum定義追加
+   - **総移動**: 81行の式処理ロジック完了
+   - **ビルド確認**: 正常完了（警告数：51個）
+   - **中間commit**: cc2a5c2 完了
+
+3. **🎯 Phase 3候補**: 大型関数移動
 
 3. **Phase 3**: テストとビルド確認
    - 各段階でビルドが通ることを確認
