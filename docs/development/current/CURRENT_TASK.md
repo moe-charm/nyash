@@ -43,6 +43,18 @@
    - 弱参照フィールドのWeakLoad/WeakNew対応
    - 関数スタイル `isType/asType` の早期lowering強化
 
+### ⚠️ MIRビルダー引き継ぎポイント（ChatGPT5さんへ）
+- **状況**: MIRビルダーのモジュール化完了（Phase 1-8コミット済み）
+- **問題**: MIR命令構造の変更により、expressions.rsでエラー発生
+  - `Call`命令: `function`→`func`, `arguments`→`args`
+  - `ArrayAccess`, `ArrayLiteral`, `Await`ノードが削除？
+  - effectsフィールドの有無が命令により異なる
+  - TypeOpKindのインポートパスエラー
+  - loop_builder.rsでのプライベートフィールドアクセス問題
+- **現在の対応**: 
+  - builder_modularizedディレクトリに一時退避
+  - 元のbuilder.rsでフルビルド可能な状態に復帰
+  - ChatGPT5さんのMIR命令変更に合わせた調整が必要
 
 2. **VMの既知の問題**
    - 論理演算子（and, or）がBinOpとして未実装
@@ -89,6 +101,11 @@
    - VM README（SocketBoxタイムアウト/E2E導線・HTTP Result整理）
    - 26命令ダイエット: PoCフラグと進捗追記（TypeOp/WeakRef/Barrier）
 10. CI: plugins E2E ジョブ（Linux）を追加
+
+### 📊 大規模ファイルのリファクタリング候補
+1. src/interpreter/objects.rs (1,272行) - オブジェクト処理の分割
+2. src/interpreter/plugin_loader.rs (1,217行) - v2があるので削除候補？
+3. src/interpreter/expressions/calls.rs (1,016行) - 関数呼び出し処理の分割
 
 ## 🚧 次にやること（再開方針）
 
