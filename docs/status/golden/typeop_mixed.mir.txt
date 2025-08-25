@@ -1,0 +1,57 @@
+🔌 v2 plugin system initialized from nyash.toml
+✅ v2 plugin system fully configured
+🚀 Nyash MIR Compiler - Processing file: local_tests/typeop_mixed.nyash 🚀
+🚀 MIR Output for local_tests/typeop_mixed.nyash:
+; MIR Module: main
+
+; Module Statistics:
+;   Functions: 1
+;   Globals: 0
+;   Total Blocks: 4
+;   Total Instructions: 24
+;   Pure Functions: 1
+
+define void @main() {
+  ; Function Statistics:
+  ;   Blocks: 4
+  ;   Instructions: 24
+  ;   Values: 0
+  ;   Phi Functions: 1
+  ;   Pure: yes
+  ;   TypeOp: 5 (check: 3, cast: 2)
+
+bb0:
+    0: safepoint
+    1: %1 = const 1
+    2: %2 = new IntegerBox(%1)
+    3: call %2.birth(%1)
+    4: %3 = new IntegerBox(%2)
+    5: call %3.birth(%2)
+    6: %5 = typeop check %3 Integer
+    7: %7 = typeop cast %3 Integer
+    8: %9 = typeop check %3 Integer
+    9: %11 = typeop cast %3 Integer
+   10: %12 = typeop check %3 Integer
+   11: br %12, label bb1, label bb2
+    ; effects: pure|read|alloc
+
+bb1:
+    0: %13 = const 1
+    1: %14 = new IntegerBox(%13)
+    2: call %14.birth(%13)
+    3: print %14
+    4: br label bb3
+    ; effects: pure|io|read|alloc
+
+bb2:
+    0: %15 = const 0
+    1: %16 = new IntegerBox(%15)
+    2: call %16.birth(%15)
+    3: print %16
+    4: br label bb3
+    ; effects: pure|io|read|alloc
+
+bb3:
+    0: %17 = phi [%14, bb1], [%16, bb2]
+    1: ret %17
+}

@@ -12,6 +12,7 @@ PAIRS=(
   "local_tests/extern_console_log.nyash docs/status/golden/extern_console_log.mir.txt"
   "local_tests/simple_loop_test.nyash docs/status/golden/loop_simple.mir.txt"
   "local_tests/test_vm_array_getset.nyash docs/status/golden/boxcall_array_getset.mir.txt"
+  "local_tests/typeop_mixed.nyash docs/status/golden/typeop_mixed.mir.txt"
 )
 
 for pair in "${PAIRS[@]}"; do
