@@ -5,6 +5,8 @@
 pub mod vm;
 pub mod vm_phi;
 pub mod vm_instructions;
+pub mod vm_values;
+pub mod vm_boxcall;
 
 #[cfg(feature = "wasm-backend")]
 pub mod wasm;

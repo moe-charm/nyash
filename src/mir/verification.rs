@@ -68,6 +68,12 @@ pub enum VerificationError {
         instruction_index: usize,
         reason: String,
     },
+    /// Barrier appears without nearby memory ops (diagnostic; strict mode only)
+    SuspiciousBarrierContext {
+        block: BasicBlockId,
+        instruction_index: usize,
+        note: String,
+    },
 }
 
 /// MIR verifier for SSA form and semantic correctness
@@ -130,6 +136,10 @@ impl MirVerifier {
         // 5. Minimal checks for WeakRef/Barrier
         if let Err(mut weak_barrier_errors) = self.verify_weakref_and_barrier(function) {
             local_errors.append(&mut weak_barrier_errors);
+        }
+        // 6. Light barrier-context diagnostic (strict mode only)
+        if let Err(mut barrier_ctx) = self.verify_barrier_context(function) {
+            local_errors.append(&mut barrier_ctx);
         }
         
         if local_errors.is_empty() {
@@ -219,6 +229,59 @@ impl MirVerifier {
             }
         }
 
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
+    }
+
+    /// Light diagnostic: Barrier should be near memory ops in the same block (best-effort)
+    /// Enabled only when NYASH_VERIFY_BARRIER_STRICT=1
+    fn verify_barrier_context(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        let strict = std::env::var("NYASH_VERIFY_BARRIER_STRICT").ok().as_deref() == Some("1");
+        if !strict { return Ok(()); }
+
+        use super::MirInstruction;
+        let mut errors = Vec::new();
+        for (bid, block) in &function.blocks {
+            // Build a flat vec of (idx, &inst) including terminator (as last)
+            let mut insts: Vec<(usize, &MirInstruction)> = block.instructions.iter().enumerate().collect();
+            if let Some(term) = &block.terminator {
+                insts.push((usize::MAX, term));
+            }
+            for (idx, inst) in &insts {
+                let is_barrier = matches!(inst,
+                    MirInstruction::Barrier { .. } |
+                    MirInstruction::BarrierRead { .. } |
+                    MirInstruction::BarrierWrite { .. }
+                );
+                if !is_barrier { continue; }
+
+                // Look around +-2 instructions for a memory op hint
+                let mut has_mem_neighbor = false;
+                for (j, other) in &insts {
+                    if *j == *idx { continue; }
+                    // integer distance (treat usize::MAX as distant)
+                    let dist = if *idx == usize::MAX || *j == usize::MAX { 99 } else { idx.max(j) - idx.min(j) };
+                    if dist > 2 { continue; }
+                    if matches!(other,
+                        MirInstruction::Load { .. } |
+                        MirInstruction::Store { .. } |
+                        MirInstruction::ArrayGet { .. } |
+                        MirInstruction::ArraySet { .. } |
+                        MirInstruction::RefGet { .. } |
+                        MirInstruction::RefSet { .. }
+                    ) {
+                        has_mem_neighbor = true;
+                        break;
+                    }
+                }
+                if !has_mem_neighbor {
+                    errors.push(VerificationError::SuspiciousBarrierContext {
+                        block: *bid,
+                        instruction_index: *idx,
+                        note: "barrier without nearby memory op (±2 inst)".to_string(),
+                    });
+                }
+            }
+        }
         if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
     

@@ -116,6 +116,17 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
 - 差分検証: `execute_instruction`/`execute_binop` に挿入したデバッグ出力が未出力→実行経路の相違が濃厚。
 - 対応: 実行バイナリの署名チェックとコードパスの網羅的ログ追加でルート確定→修正。
 
+### ✅ 小タスク完了（2025-08-25 深夜）
+- Verifier: Barrierの軽い文脈診断を追加（`NYASH_VERIFY_BARRIER_STRICT=1`で有効）。
+- ResultBox移行TODOを追加（`docs/development/current/RESULTBOX_MIGRATION_TODO.md`）。
+- VM: 旧`box_trait::ResultBox`扱いのデプリケーション警告を最小抑制（完全移行までの暫定）。
+
+### ▶ リファクタリング開始（控えめ）
+- 方針: 肥大化防止のため`src/backend/vm.rs`を2分割のみ実施。
+  - `vm_values.rs`: `execute_binary_op`/`execute_unary_op`/`execute_compare_op` を移動。
+  - `vm_boxcall.rs`: `call_box_method` を移動（`call_unified_method`は現状のまま）。
+- 影響最小・挙動非変更で、可読性と責務分離を先行する。
+
 ### ⚠️ MIRビルダー引き継ぎポイント（ChatGPT5さんへ）
 - **状況**: MIRビルダーのモジュール化完了（Phase 1-8コミット済み）
 - **問題**: MIR命令構造の変更により、expressions.rsでエラー発生
