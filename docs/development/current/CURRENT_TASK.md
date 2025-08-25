@@ -338,7 +338,7 @@ nyash --verify examples/plugin_box_sample.nyash
 - メタ降格: Debug / Nop / Safepoint（ビルドモードで制御）
 
 ---
-最終更新: 2025年8月23日（VM強化・E2E拡張・me参照安定化・TypeOp/WeakRef/Barrier PoC完了／次段はプリンタ拡張・スナップショット・is/as導線）
+最終更新: 2025年8月25日（MIR26整合確認・VM and/or実装・Loop補強・CLI分離テスト導線/ResultBox移行TODO追加／スナップショット最小運用）
 
 ## 🔁 再起動後の再開手順（ショート）
 ```bash
