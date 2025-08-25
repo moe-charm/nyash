@@ -135,6 +135,56 @@ mod tests {
         assert!(!mir_dump.is_empty(), "MIR dump should not be empty");
         assert!(mir_dump.contains("define"), "MIR dump should contain function definition");
     }
+
+    #[test]
+    fn test_lowering_is_type_function_call_in_print() {
+        // Build AST: print(isType(42, "Integer"))
+        let ast = ASTNode::Print {
+            expression: Box::new(ASTNode::FunctionCall {
+                name: "isType".to_string(),
+                arguments: vec![
+                    ASTNode::Literal { value: LiteralValue::Integer(42), span: crate::ast::Span::unknown() },
+                    ASTNode::Literal { value: LiteralValue::String("Integer".to_string()), span: crate::ast::Span::unknown() },
+                ],
+                span: crate::ast::Span::unknown(),
+            }),
+            span: crate::ast::Span::unknown(),
+        };
+
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile should succeed");
+
+        // Ensure TypeOp exists in the resulting MIR
+        let has_typeop = result.module.functions.values().any(|f| {
+            f.blocks.values().any(|b| b.all_instructions().any(|i| matches!(i, MirInstruction::TypeOp { .. })))
+        });
+        assert!(has_typeop, "Expected TypeOp lowering for print(isType(...))");
+    }
+
+    #[test]
+    fn test_lowering_is_method_call_in_print() {
+        // Build AST: print( (42).is("Integer") )
+        let ast = ASTNode::Print {
+            expression: Box::new(ASTNode::MethodCall {
+                object: Box::new(ASTNode::Literal { value: LiteralValue::Integer(42), span: crate::ast::Span::unknown() }),
+                method: "is".to_string(),
+                arguments: vec![
+                    ASTNode::Literal { value: LiteralValue::String("Integer".to_string()), span: crate::ast::Span::unknown() },
+                ],
+                span: crate::ast::Span::unknown(),
+            }),
+            span: crate::ast::Span::unknown(),
+        };
+
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile should succeed");
+
+        // Ensure TypeOp exists in the resulting MIR
+        let has_typeop = result.module.functions.values().any(|f| {
+            f.blocks.values().any(|b| b.all_instructions().any(|i| matches!(i, MirInstruction::TypeOp { .. })))
+        });
+        assert!(has_typeop, "Expected TypeOp lowering for print(obj.is(...))");
+    }
     
     #[test]
     fn test_throw_compilation() {
