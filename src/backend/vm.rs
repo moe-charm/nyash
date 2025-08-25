@@ -1057,18 +1057,21 @@ impl VM {
         }
 
         // ResultBox (box_trait::ResultBox - legacy)
-        if let Some(result_box_legacy) = box_value.as_any().downcast_ref::<crate::box_trait::ResultBox>() {
-            match method {
-                "is_ok" | "isOk" => {
-                    return Ok(result_box_legacy.is_ok());
+        {
+            #[allow(deprecated)]
+            if let Some(result_box_legacy) = box_value.as_any().downcast_ref::<crate::box_trait::ResultBox>() {
+                match method {
+                    "is_ok" | "isOk" => {
+                        return Ok(result_box_legacy.is_ok());
+                    }
+                    "get_value" | "getValue" => {
+                        return Ok(result_box_legacy.get_value());
+                    }
+                    "get_error" | "getError" => {
+                        return Ok(result_box_legacy.get_error());
+                    }
+                    _ => return Ok(Box::new(VoidBox::new())),
                 }
-                "get_value" | "getValue" => {
-                    return Ok(result_box_legacy.get_value());
-                }
-                "get_error" | "getError" => {
-                    return Ok(result_box_legacy.get_error());
-                }
-                _ => return Ok(Box::new(VoidBox::new())),
             }
         }
 
