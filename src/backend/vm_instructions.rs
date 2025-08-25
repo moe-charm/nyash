@@ -1,5 +1,10 @@
 /*!
- * VM Instruction Handlers - Extracted from execute_instruction for better modularity
+ * VM Instruction Handlers
+ *
+ * Purpose: Implementation of each MIR instruction handler (invoked by vm.rs)
+ * Responsibilities: load/store/branch/phi/call/array/ref/await/extern_call
+ * Key APIs: execute_const/execute_binop/execute_unaryop/execute_compare/...
+ * Typical Callers: VM::execute_instruction (dispatch point)
  */
 
 use crate::mir::{ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId, TypeOpKind, MirType};

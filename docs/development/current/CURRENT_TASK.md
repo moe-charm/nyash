@@ -127,6 +127,36 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
   - `vm_boxcall.rs`: `call_box_method` を移動（`call_unified_method`は現状のまま）。
 - 影響最小・挙動非変更で、可読性と責務分離を先行する。
 
+## 🧭 リファクタリングゴール（AI一目見て分かる導線）
+
+### 目的/原則
+- 明確責務: 各モジュールが1行で説明できる目的・責務を持つ
+- 入口統一: VM/MIRの読む順番が固定され、迷わない
+- ファイル肥大防止: 1000行超は段階分割（まずVMホットパス）
+- ドキュメント導線: quick-referenceで最短経路を提示
+- 振る舞い不変: すべてのゴールデン/CIが緑
+
+### マイルストーン（受入基準）
+- M1: VM導線完成（達成）
+  - vm.rs → vm_instructions.rs → vm_values.rs / vm_boxcall.rs / vm_stats.rs / vm_phi.rs
+  - code-map（docs/quick-reference/code-map.md）で入口と責務を明記
+  - 受入: build OK / golden 緑 / 実行変化なし
+- M2: モジュールヘッダ（着手）
+  - Purpose/Responsibilities/Key APIs/Typical Callers を各VMモジュール先頭に追記
+  - 受入: 各モジュール先頭4行程度の要約とcode-mapの整合
+- M3: 1000行級の導線整備（設計メモ）
+  - interpreter/plugin_loader.rs: v2主導の導線明文化（削除は後）
+  - interpreter/objects.rs: 可視性/フィールド/ライフサイクルの分割指針をTODO化
+- M4: レガシー移行（土台）
+  - RESULTBOX_MIGRATION_TODOの維持、VMは新旧両対応のまま
+
+### 実行順（小さく確実に）
+1) M2ヘッダ追加（VM系）
+2) M3 plugin_loader 導線の明文化（コメント/TODO/コードマップ）
+3) M3 objects.rs 分割設計メモ
+4) 用語の統一・code-map追従
+5) golden + 重要E2Eを確認
+
 ### ⚠️ MIRビルダー引き継ぎポイント（ChatGPT5さんへ）
 - **状況**: MIRビルダーのモジュール化完了（Phase 1-8コミット済み）
 - **問題**: MIR命令構造の変更により、expressions.rsでエラー発生

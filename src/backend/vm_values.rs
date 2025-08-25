@@ -1,5 +1,10 @@
 /*!
- * VM Value Operations - arithmetic, logical, and comparison helpers
+ * VM Value Operations
+ *
+ * Purpose: Arithmetic/logical/comparison helpers and boolean coercions
+ * Responsibilities: execute_binary_op / execute_unary_op / execute_compare_op
+ * Key APIs: execute_binary_op, execute_unary_op, execute_compare_op
+ * Typical Callers: vm_instructions::{execute_binop, execute_unaryop, execute_compare}
  */
 
 use crate::mir::{BinaryOp, CompareOp, UnaryOp};
@@ -138,4 +143,3 @@ impl VM {
         }
     }
 }
-

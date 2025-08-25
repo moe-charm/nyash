@@ -1,8 +1,10 @@
 /*!
- * VM Phi Node Handler - SSA形式のPhi nodeをVMで正しく実行するモジュール
- * 
- * MIRのloop_builder.rsに対応するVM側の実装
- * previous_blockを追跡してPhi nodeの正しい値を選択
+ * VM Loop/Phi Utilities
+ *
+ * Purpose: Track loop transitions and assist phi node resolution
+ * Responsibilities: PhiHandler/LoopExecutorでprevious_block・ループイテレーションを管理
+ * Key APIs: LoopExecutor::{new,record_transition,execute_phi}
+ * Typical Callers: VM 実行ループ（ブロック遷移/phi評価）
  */
 
 use super::vm::{VMValue, VMError};

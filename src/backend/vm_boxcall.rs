@@ -1,5 +1,10 @@
 /*!
- * VM BoxCall Dispatch - method calls on boxes
+ * VM BoxCall Dispatch
+ *
+ * Purpose: Method calls on Box values (dispatch by concrete box type)
+ * Responsibilities: call_box_method_impl, BoxCall debug logging
+ * Key APIs: call_box_method_impl, debug_log_boxcall
+ * Typical Callers: vm_instructions::execute_boxcall / VM::call_unified_method
  */
 
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};

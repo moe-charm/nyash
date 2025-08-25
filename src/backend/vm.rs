@@ -1,7 +1,10 @@
 /*!
  * VM Backend - Execute MIR instructions in a virtual machine
- * 
- * Simple stack-based VM for executing MIR code
+ *
+ * Purpose: Core VM (execute loop, storage, control-flow, integration glue)
+ * Responsibilities: fetch/dispatch instructions, manage values/blocks, stats hooks
+ * Key APIs: VM::execute_module, execute_instruction, get_value/set_value
+ * Typical Callers: runner (VM backend), instruction handlers (vm_instructions)
  */
 
 use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId};
