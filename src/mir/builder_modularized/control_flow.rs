@@ -95,37 +95,20 @@ impl MirBuilder {
     
     /// Build a loop statement: loop(condition) { body }
     ///
-    /// Note: This modularized builder uses a simplified lowering that avoids
-    /// coupling to mir::loop_builder (which expects mir::builder::MirBuilder).
-    /// Proper SSA phi construction should be reintroduced via an adapter/facade.
+    /// Uses the shared LoopBuilder facade to avoid tight coupling.
     pub(super) fn build_loop_statement(&mut self, condition: ASTNode, body: Vec<ASTNode>) -> Result<ValueId, String> {
-        // Blocks: preheader (current), header, body, after
-        let header_bb = self.block_gen.next();
-        let body_bb = self.block_gen.next();
-        let after_bb = self.block_gen.next();
-
-        // Jump to header from current block
-        self.emit_instruction(MirInstruction::Jump { target: header_bb })?;
-
-        // Header: evaluate condition and branch
-        self.start_new_block(header_bb)?;
+        // Evaluate condition first (boolean-ish value)
         let cond_val = self.build_expression(condition)?;
-        self.emit_instruction(MirInstruction::Branch { condition: cond_val, then_bb: body_bb, else_bb: after_bb })?;
 
-        // Body: build statements, then jump back to header
-        self.start_new_block(body_bb)?;
-        for stmt in body {
-            let _ = self.build_expression(stmt)?;
-        }
-        if !self.is_current_block_terminated() {
-            self.emit_instruction(MirInstruction::Jump { target: header_bb })?;
-        }
+        // Use loop_api helper with a closure that builds the loop body
+        let mut body_builder = |lb: &mut Self| -> Result<(), String> {
+            for stmt in &body {
+                let _ = lb.build_expression(stmt.clone())?;
+            }
+            Ok(())
+        };
 
-        // After: return void value
-        self.start_new_block(after_bb)?;
-        let void_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
-        Ok(void_id)
+        crate::mir::loop_api::build_simple_loop(self, cond_val, &mut body_builder)
     }
     
     /// Build a try/catch statement
