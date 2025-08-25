@@ -1,17 +1,16 @@
 # 🎯 CURRENT TASK - 2025年8月25日（状況整理）
 
 ## ⏱️ 再開ショートカット（今日のフォーカス）
-- フォーカス: Phase 9.78h MIR前提整備（P2P/Cranelift前の総仕上げ）
-- 目標: MIR26命令の凍結・SSA/Verifier/Optimizer/VM整合・軽量スナップショット体制を完了
+- フォーカス: VM比較経路の安定化後片付け + 1000行分解の下準備
+- 目標: 一時ログ抑制・Phi正規化・基本ボックス統一（String/Bool）・VM分割の導線作成
 - 参照: `docs/development/roadmap/phases/phase-9/phase_9_78h_mir_pipeline_stabilization.md`
 
 ### 直近の実行タスク（9.78h）
-1) Builder移行完了（命令フィールド名/効果一致: `function→func`, `arguments→args`）
-2) Loop SSA復帰（Phi挿入・seal・predecessor更新の段階適用）
-3) TypeOp網羅（is/as/isType/asType早期lowering + Optimizer安全ネット強化）
-4) MIR26統合（TypeOp/WeakRef/Barrier）とPrinter/Verifier/Optimizer整合
-5) VM補強（and/or短絡扱いの確定と実装/BoxRef×BoxRef演算）
-6) 軽量スナップショット + CLI分離テスト + ResultBox移行の仕上げ
+1) 一時デバッグログの抑制（`NYASH_VM_DEBUG_*`のみ）
+2) Phi正規化（LoopExecutorの借用衝突解消 → 正しい選択へ復帰）
+3) 基本ボックス統一（StringBox/BoolBoxもre-export化）
+4) VM分割の導線（control_flow/dispatch/frameへ分離設計）
+5) 代表スナップショット追加（compare/loop/typeop_mixed）
 
 ### すぐ試せるコマンド
 ```bash
@@ -19,6 +18,11 @@ cargo build --release -j32
 nyash --dump-mir --mir-verbose local_tests/typeop_is_as_func_poc.nyash | sed -n '1,160p'
 NYASH_OPT_DIAG_FAIL=1 nyash --dump-mir --mir-verbose local_tests/typeop_diag_fail.nyash || echo DIAG BLOCKED
 tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
+
+# 比較・論理のスモーク（VM）
+nyash --backend vm local_tests/compare_box_vm.nyash    # 期待: true
+nyash --backend vm local_tests/and_or_vm.nyash         # 期待: false\ntrue
+nyash --backend vm local_tests/and_or_truthy_vm.nyash  # 期待: false,true,false,true,false
 ```
 
 ### 重要リンク（唯一参照/ゲート）
@@ -82,7 +86,7 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
    - バイナリ一致確認: `strings` によるシグネチャ（デバッグ文字列）含有の照合で実行バイナリを同定。
    - 代替経路の洗い出し: `src/` 全体で `execute_binop`/`And`/`Unsupported binary operation` を再走査し、影響箇所を一掃。
    - 修正後、`local_tests/and_or_vm.nyash` で `false/true` の出力を確認。
-   - ループ比較の犯人退治: `Compare` 直前で `BoxRef(IntegerBox)` を確実に i64 正規化（downcast→toString→parse フォールバック）。
+   - ルート確定: Compare経路はBuilder側のCast導線で安定。VM側は保険フォールバックを維持しつつ一時ログを抑制へ。
 2. **MIR26命令対応**
    - TypeOp/WeakRef/Barrierのプリンタ拡張
    - スナップショット整備（extern_call/loop/boxcall/typeop_mixed 追加済）
@@ -125,6 +129,11 @@ tools/ci_check_golden.sh  # 代表ケースのMIR含有チェック
 - 状況: `MIR --dump-mir` では `bb0: %X = %A And %B` を出力（BuilderはOK）。
 - 差分検証: `execute_instruction`/`execute_binop` に挿入したデバッグ出力が未出力→実行経路の相違が濃厚。
 - 対応: 実行バイナリの署名チェックとコードパスの網羅的ログ追加でルート確定→修正。
+
+### 🔧 再開ガイド（最短手順）
+- ログ抑制: 一時ログはそのままでもOK。静かにしたい場合は `NYASH_VM_DEBUG_CMP=0 NYASH_VM_DEBUG_ANDOR=0` で実行。
+- 検証: 上記スモーク3本（compare/and_or/and_or_truthy）→`tools/ci_check_golden.sh`。
+- 進める順: Phi正規化 → String/Bool re-export → VM分割設計 → スナップショット追加。
 
 ### ✅ 小タスク完了（2025-08-25 深夜）
 - Verifier: Barrierの軽い文脈診断を追加（`NYASH_VERIFY_BARRIER_STRICT=1`で有効）。
