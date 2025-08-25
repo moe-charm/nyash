@@ -186,6 +186,26 @@ mod tests {
         });
         assert!(has_typeop, "Expected TypeOp lowering for print(obj.is(...))");
     }
+
+    #[test]
+    fn test_lowering_extern_console_log() {
+        // Build AST: console.log("hi") → ExternCall env.console.log
+        let ast = ASTNode::Expression {
+            expr: Box::new(ASTNode::MethodCall {
+                object: Box::new(ASTNode::Variable { name: "console".to_string(), span: crate::ast::Span::unknown() }),
+                method: "log".to_string(),
+                arguments: vec![ ASTNode::Literal { value: LiteralValue::String("hi".to_string()), span: crate::ast::Span::unknown() } ],
+                span: crate::ast::Span::unknown(),
+            }),
+            span: crate::ast::Span::unknown(),
+        };
+
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile should succeed");
+        let dump = MirPrinter::verbose().print_module(&result.module);
+
+        assert!(dump.contains("extern_call env.console.log"), "Expected extern_call env.console.log in MIR dump. Got:\n{}", dump);
+    }
     
     #[test]
     fn test_throw_compilation() {
