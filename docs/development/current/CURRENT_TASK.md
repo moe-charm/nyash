@@ -2,8 +2,8 @@
 
 コンテキストを最小化して、次フェーズへの導線だけ残すにゃ。
 
-## ⏱️ 今日のフォーカス（Phase 9.79b: Unified IDs → VM Thunks）
-- 目的: Box種別（builtin/user/plugin）をMIR/VMで数値ID＋スロット統一に移行し、Phase 10(JIT)の足場を固める。
+## ⏱️ 今日のフォーカス（Phase 9.79b → 9.79b.3: Thunks+Poly-PIC）
+- 目的: Box（builtin/user/plugin）を数値ID＋スロット＋vtable/thunk統一に移行し、Phase 10(JIT)への足場を確立する。
 
 ### 直近タスク（小さく早く）
 1) 9.79b.1: Unified Registry IDs + Builder Slotting
@@ -14,6 +14,14 @@
    - `execute_boxcall`をvtable+thunkの単一路線へ（ユニバーサル0..3のfast-path追加）✅ スケルトン
    - call-site単位のモノモーフィックPICを追加（Key設計とカウンタ導入・記録まで）✅ スケルトン
    - 次: 安定閾値での直呼び最適化（InstanceBox関数名キャッシュ）✅ 実装（PIC=8で昇格）
+   - PluginBoxV2 fast-path（method_id直叩き）✅ 最小TLV（string/int/handle）
+   - builtin/plugin/user のslot seed（4〜）✅ lazy seed/予約
+   - キャッシュ無効化（version by label）✅ loader/宣言でbump導線
+
+3) 9.79b.3: VM VTable Thunks + Poly-PIC（本実装）
+   - TypeMeta＋Thunkテーブル正式化（slot→thunk→target）: builtin/user/plugin 統一（in_progress）
+   - PICをpoly（2〜4件）に拡張＋version検証: ヒット/ミス/昇格/evict統計（in_progress）
+   - Diagnostics: Registry dump / MIRDebugInfo / PIC・VT統計 / cache bumpログ（in_progress）
 
 ### すぐ試せるコマンド
 ```bash
@@ -32,7 +40,8 @@ cargo build --release -j32
 
 ### ⏭️ 次（9.79b）
 - 9.79b.1: `phase_9_79b_1_unified_registry_ids_and_builder_slotting.md` ✅ 最小スコープ達成（method_id導入）
-- 9.79b.2: `phase_9_79b_2_vm_vtable_thunks_and_pic.md` → 着手予定
+- 9.79b.2: `phase_9_79b_2_vm_vtable_thunks_and_pic.md` ✅ ミニマム完了（ユニバーサル/PIC/Plugin fast-path）
+- 9.79b.3: `phase_9_79b_3_vm_vtable_thunks_and_pic.md` → 足場固め（TypeMeta/Thunk + Poly-PIC + Diagnostics）
 
 ## 統一Box設計メモ（唯一参照）
 - `docs/ideas/other/2025-08-25-unified-box-design-deep-analysis.md`
