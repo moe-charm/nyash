@@ -212,6 +212,8 @@ pub struct VM {
     pub(super) boxcall_pic_hits: std::collections::HashMap<String, u32>,
     /// Mono-PIC: cached direct targets (currently InstanceBox function name)
     pub(super) boxcall_pic_funcname: std::collections::HashMap<String, String>,
+    /// VTable-like cache: (type, method_id, arity) → direct target (InstanceBox method)
+    pub(super) boxcall_vtable_funcname: std::collections::HashMap<String, String>,
     // Phase 9.78a: Add unified Box handling components
     // TODO: Re-enable when interpreter refactoring is complete
     // /// Box registry for creating all Box types
@@ -274,6 +276,7 @@ impl VM {
             exec_start: None,
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
+            boxcall_vtable_funcname: std::collections::HashMap::new(),
             // TODO: Re-enable when interpreter refactoring is complete
             // box_registry: Arc::new(UnifiedBoxRegistry::new()),
             // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
@@ -301,6 +304,7 @@ impl VM {
             exec_start: None,
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
+            boxcall_vtable_funcname: std::collections::HashMap::new(),
         }
     }
     

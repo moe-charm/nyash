@@ -63,6 +63,11 @@ impl VM {
     fn pic_hits(&self, key: &str) -> u32 {
         *self.boxcall_pic_hits.get(key).unwrap_or(&0)
     }
+
+    /// Build vtable cache key for InstanceBox: TypeName#slot/arity
+    fn build_vtable_key(&self, class_name: &str, method_id: u16, arity: usize) -> String {
+        format!("VT:{}#{}{}", class_name, method_id, format!("/{}", arity))
+    }
     /// Execute a constant instruction
     pub(super) fn execute_const(&mut self, dst: ValueId, value: &ConstValue) -> Result<ControlFlow, VMError> {
         let vm_value = VMValue::from(value);
@@ -560,6 +565,21 @@ impl VM {
         let pic_key = self.build_pic_key(&recv, method, method_id);
         self.pic_record_hit(&pic_key);
 
+        // VTable-like direct call using method_id for InstanceBox (no threshold)
+        if let (Some(mid), VMValue::BoxRef(arc_box)) = (method_id, &recv) {
+            if let Some(inst) = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                let vkey = self.build_vtable_key(&inst.class_name, mid, args.len());
+                if let Some(func_name) = self.boxcall_vtable_funcname.get(&vkey).cloned() {
+                    let mut vm_args = Vec::with_capacity(1 + args.len());
+                    vm_args.push(recv.clone());
+                    for a in args { vm_args.push(self.get_value(*a)?); }
+                    let res = self.call_function_by_name(&func_name, vm_args)?;
+                    if let Some(dst_id) = dst { self.set_value(dst_id, res); }
+                    return Ok(ControlFlow::Continue);
+                }
+            }
+        }
+
         // Mono-PIC direct call: if we cached a target for this site and receiver is InstanceBox, use it
         if let VMValue::BoxRef(arc_box) = &recv {
             if arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
@@ -601,6 +621,11 @@ impl VM {
                 // If this is a user InstanceBox, redirect to lowered function: Class.method/arity
                 if let Some(inst) = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                     let func_name = format!("{}.{}{}", inst.class_name, method, format!("/{}", args.len()));
+                    // Populate vtable cache if method_id is known
+                    if let Some(mid) = method_id { 
+                        let vkey = self.build_vtable_key(&inst.class_name, mid, args.len());
+                        self.boxcall_vtable_funcname.entry(vkey).or_insert(func_name.clone());
+                    }
                     // If this call-site is hot, cache the function name for direct calls next time
                     const PIC_THRESHOLD: u32 = 8;
                     if self.pic_hits(&pic_key) >= PIC_THRESHOLD {
