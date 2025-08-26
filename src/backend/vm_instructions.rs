@@ -480,10 +480,10 @@ impl VM {
             nyash_args.push(arg_value.to_nyash_box());
         }
         
-        // Route through plugin loader v2 (also handles env.* stubs)
-        let loader = crate::runtime::get_global_loader_v2();
-        let loader = loader.read().map_err(|_| VMError::InvalidInstruction("Plugin loader lock poisoned".into()))?;
-        match loader.extern_call(iface_name, method_name, &nyash_args) {
+        // Route through unified plugin host (delegates to v2, handles env.* stubs)
+        let host = crate::runtime::get_global_plugin_host();
+        let host = host.read().map_err(|_| VMError::InvalidInstruction("Plugin host lock poisoned".into()))?;
+        match host.extern_call(iface_name, method_name, &nyash_args) {
             Ok(Some(result_box)) => {
                 if let Some(dst_id) = dst {
                     self.set_value(dst_id, VMValue::from_nyash_box(result_box));

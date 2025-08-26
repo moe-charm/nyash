@@ -528,3 +528,259 @@ optional = ["file", "math", "time"]
 ```
 
 これにより、「Everything is Box」哲学が実装レベルでも完全に実現される！
+
+## 🔍 統一デバッグインフラストラクチャ（2025-08-26追記）
+
+### 📍 MIRレベルでの統一デバッグ実現
+
+今までの議論で、MIRレベルでのデバッグ実装が最も理想的であることが判明しました。
+Gemini先生とCodex先生の両方が同じ結論に達しました：**設計案2＋3のハイブリッド**が最適解です。
+
+#### 核心設計：メタデータ分離＋プロファイリングAPI
+
+```rust
+// MIR本体はクリーンに保つ
+pub struct MIRModule {
+    pub functions: HashMap<String, MIRFunction>,
+    pub constants: Vec<Constant>,
+    pub debug_info: Option<MIRDebugInfo>,  // デバッグ時のみ生成
+}
+
+// 静的情報（設計案2）
+pub struct MIRDebugInfo {
+    // ID→名前のマッピング（文字列を避けてIDベース）
+    pub type_table: HashMap<u16, BoxTypeDescriptor>,      // TypeId → Box型情報
+    pub method_table: HashMap<u32, MethodInfo>,           // MethodId → メソッド情報
+    pub site_table: HashMap<u32, SiteInfo>,               // SiteId → 位置情報
+    pub source_map: HashMap<usize, SourceLocation>,       // PC → ソース位置
+}
+
+// 動的収集（設計案3）
+pub trait MIRProfiler: Send + Sync {
+    fn on_alloc(&mut self, type_id: u16, site_id: u32, obj_id: u64, size: usize);
+    fn on_free(&mut self, obj_id: u64);
+    fn on_method_enter(&mut self, method_id: u32, site_id: u32, instance_id: u64);
+    fn on_method_exit(&mut self, method_id: u32, site_id: u32, result: &VMValue);
+    fn on_field_access(&mut self, obj_id: u64, field_id: u16, is_write: bool);
+}
+```
+
+#### なぜこの設計が美しいのか？
+
+1. **MIRの純粋性を保つ** - デバッグ命令でIRを汚染しない
+2. **ゼロオーバーヘッド** - 本番ビルドではdebug_info = None
+3. **全バックエンド統一** - VM/JIT/AOT/WASMで同じプロファイラAPI
+4. **業界標準に準拠** - LLVM、JVM、.NETと同じアプローチ
+
+### 🧠 DeepInspectorBox - 統一デバッグ体験
+
+#### Everything is Boxの哲学をデバッグでも実現
+
+```nyash
+// グローバルシングルトン - すべてを見通す眼
+static box DeepInspectorBox {
+    init {
+        enabled,              // デバッグON/OFF
+        boxCreations,        // すべてのBox生成履歴
+        methodCalls,         // すべてのメソッド呼び出し
+        fieldAccess,         // フィールドアクセス履歴
+        memorySnapshots,     // メモリスナップショット
+        referenceGraph,      // 参照グラフ（リーク検出用）
+        performanceMetrics   // パフォーマンス統計
+    }
+    
+    // === Box ライフサイクル完全追跡 ===
+    trackBoxLifecycle(boxType) {
+        // 特定のBox型の生成から破棄まで完全追跡
+        return me.boxCreations.filter(b => b.type == boxType)
+    }
+    
+    // === メモリリーク検出（深い実装） ===
+    detectLeaks() {
+        // 参照グラフの構築
+        local graph = me.buildReferenceGraph()
+        
+        // 循環参照の検出
+        local cycles = graph.findCycles()
+        
+        // 到達不可能なBoxの検出
+        local unreachable = graph.findUnreachableFrom(me.getRootBoxes())
+        
+        // weak参照の考慮
+        local suspicious = me.findSuspiciousWeakReferences()
+        
+        return LeakReport {
+            cycles: cycles,
+            unreachable: unreachable,
+            suspicious: suspicious,
+            totalLeakedBytes: me.calculateLeakedMemory()
+        }
+    }
+    
+    // === P2P非同期フロー可視化 ===
+    traceAsyncFlow(startEvent) {
+        // P2Pメッセージの送信から受信、ハンドラー実行までの完全追跡
+        local flow = []
+        
+        // 送信イベント
+        flow.push(startEvent)
+        
+        // Transport経由の転送
+        local transportEvents = me.findTransportEvents(startEvent.messageId)
+        flow.extend(transportEvents)
+        
+        // MethodBox.invoke()の実行
+        local handlerExecution = me.findHandlerExecution(startEvent.to, startEvent.intent)
+        flow.push(handlerExecution)
+        
+        return AsyncFlowTrace {
+            events: flow,
+            totalTime: flow.last().time - flow.first().time,
+            visualization: me.generateFlowDiagram(flow)
+        }
+    }
+}
+```
+
+### 🔬 メモリリーク検出の深い仕組み
+
+#### 参照グラフベースの完全検出
+
+```rust
+impl DeepInspectorBox {
+    /// 参照グラフの構築（UnifiedBox設計と統合）
+    fn build_reference_graph(&self) -> ReferenceGraph {
+        let mut graph = ReferenceGraph::new();
+        
+        // すべてのBoxを走査（ビルトイン/プラグイン/ユーザー定義を統一的に）
+        for (obj_id, box_info) in &self.live_boxes {
+            match box_info.content {
+                // InstanceBoxのフィールド参照
+                BoxContent::Instance(fields) => {
+                    for (field_name, field_value) in fields {
+                        if let Some(target_id) = field_value.get_box_id() {
+                            graph.add_edge(*obj_id, target_id, EdgeType::Field(field_name));
+                        }
+                    }
+                }
+                
+                // MethodBoxのインスタンス参照
+                BoxContent::Method { instance_id, .. } => {
+                    graph.add_edge(*obj_id, instance_id, EdgeType::MethodInstance);
+                }
+                
+                // P2PBoxのハンドラー参照
+                BoxContent::P2P { handlers, .. } => {
+                    for (intent, handler_id) in handlers {
+                        graph.add_edge(*obj_id, handler_id, EdgeType::Handler(intent));
+                    }
+                }
+                
+                // ArrayBox/MapBoxの要素参照
+                BoxContent::Container(elements) => {
+                    for (index, element_id) in elements.iter().enumerate() {
+                        graph.add_edge(*obj_id, element_id, EdgeType::Element(index));
+                    }
+                }
+            }
+        }
+        
+        graph
+    }
+    
+    /// 高度なリーク検出アルゴリズム
+    fn detect_leak_patterns(&self, graph: &ReferenceGraph) -> Vec<LeakPattern> {
+        let mut patterns = vec![];
+        
+        // Pattern 1: 単純な循環参照
+        let cycles = graph.tarjan_scc();
+        for cycle in cycles {
+            if cycle.len() > 1 {
+                patterns.push(LeakPattern::CircularReference(cycle));
+            }
+        }
+        
+        // Pattern 2: イベントハンドラーリーク（P2P特有）
+        for (node_id, node_info) in &self.p2p_nodes {
+            for (intent, handler) in &node_info.handlers {
+                if let Some(method_box) = handler.as_method_box() {
+                    let instance_id = method_box.get_instance_id();
+                    if !self.is_box_alive(instance_id) {
+                        patterns.push(LeakPattern::DanglingHandler {
+                            node: node_id.clone(),
+                            intent: intent.clone(),
+                            dead_instance: instance_id,
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Pattern 3: 巨大オブジェクトグラフ
+        let subgraphs = graph.find_connected_components();
+        for subgraph in subgraphs {
+            let total_size = subgraph.iter()
+                .map(|id| self.get_box_size(*id))
+                .sum::<usize>();
+            
+            if total_size > SUSPICIOUS_GRAPH_SIZE {
+                patterns.push(LeakPattern::LargeObjectGraph {
+                    root: subgraph[0],
+                    size: total_size,
+                    object_count: subgraph.len(),
+                });
+            }
+        }
+        
+        patterns
+    }
+}
+```
+
+### 🚀 実装ロードマップ（2025年後半）
+
+#### Phase 1: MIRデバッグ基盤（2週間）
+- [ ] MIRDebugInfo構造の実装
+- [ ] MIRProfilerトレイトの定義
+- [ ] MIRビルダーでのデバッグ情報生成
+
+#### Phase 2: VMプロファイラー統合（1週間）
+- [ ] VMでのMIRProfiler実装
+- [ ] DeepInspectorBoxのVM連携
+- [ ] 基本的なメモリリーク検出
+
+#### Phase 3: 非同期フロー可視化（1週間）
+- [ ] P2Pメッセージトレース
+- [ ] MethodBox実行追跡
+- [ ] タイミング図の生成
+
+#### Phase 4: WASM対応（2週間）
+- [ ] nyash_debugインポートの実装
+- [ ] カスタムセクションへのデバッグ情報埋め込み
+- [ ] ブラウザ開発ツール連携
+
+#### Phase 5: パフォーマンス最適化（1週間）
+- [ ] ロックフリーリングバッファ
+- [ ] サンプリングモード
+- [ ] 増分参照グラフ更新
+
+### 💎 統一の美しさ
+
+この設計により、以下が実現されます：
+
+1. **完全な可視性** - Boxの生成から破棄、メソッド呼び出し、フィールドアクセスまですべて追跡
+2. **メモリ安全性の保証** - リークパターンの自動検出と可視化
+3. **非同期フローの理解** - P2Pメッセージングの複雑な流れを完全に把握
+4. **統一された体験** - VM/JIT/AOT/WASMすべてで同じデバッグ機能
+5. **Nyashらしさ** - DeepInspectorBox自体もBoxとして実装
+
+「Everything is Box」の哲学は、デバッグインフラストラクチャにおいても完全に実現されることになります。
+
+### 🔮 将来の拡張可能性
+
+- **AI支援デバッグ** - パターン認識によるバグの自動検出
+- **時間遡行デバッグ** - 実行履歴の巻き戻しと再実行
+- **分散トレーシング** - 複数ノード間のP2P通信の可視化
+- **パフォーマンスAI** - ボトルネックの自動最適化提案
+
+これらすべてが、統一されたMIRデバッグ基盤の上に構築可能です。

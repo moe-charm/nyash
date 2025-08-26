@@ -10,12 +10,17 @@ use super::*;
 use super::BuiltinStdlib;
 use std::sync::Arc;
 
-// Conditional debug macro - only outputs if NYASH_DEBUG=1 environment variable is set
+// Conditional debug macro - unified with utils::debug_on()
 macro_rules! debug_trace {
     ($($arg:tt)*) => {
-        if std::env::var("NYASH_DEBUG").unwrap_or_default() == "1" {
-            eprintln!($($arg)*);
-        }
+        if crate::interpreter::utils::debug_on() { eprintln!($($arg)*); }
+    };
+}
+
+// Local debug helper
+macro_rules! idebug {
+    ($($arg:tt)*) => {
+        if crate::interpreter::utils::debug_on() { eprintln!($($arg)*); }
     };
 }
 
@@ -143,10 +148,10 @@ impl NyashInterpreter {
                                 .insert(func_name.clone(), func_ast);
                         }
                         
-                        eprintln!("🔥 Static function '{}.{}' registered", box_name, func_name);
+                        idebug!("🔥 Static function '{}.{}' registered", box_name, func_name);
                     } else {
                         // box名なしのstatic関数（将来的にはエラーにする）
-                        eprintln!("⚠️ Static function '{}' needs box prefix (e.g., Math.min)", name);
+                        idebug!("⚠️ Static function '{}' needs box prefix (e.g., Math.min)", name);
                     }
                 } else {
                     // 通常の関数：従来通りGlobalBoxメソッドとして登録
@@ -566,7 +571,7 @@ impl NyashInterpreter {
     
     /// using文を実行 - Import namespace
     pub(super) fn execute_using_statement(&mut self, namespace_name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        eprintln!("🌟 DEBUG: execute_using_statement called with namespace: {}", namespace_name);
+        idebug!("🌟 DEBUG: execute_using_statement called with namespace: {}", namespace_name);
         
         // Phase 0: nyashstdのみサポート
         if namespace_name != "nyashstd" {
@@ -576,9 +581,9 @@ impl NyashInterpreter {
         }
         
         // 標準ライブラリを初期化（存在しない場合）
-        eprintln!("🌟 DEBUG: About to call ensure_stdlib_initialized");
+        idebug!("🌟 DEBUG: About to call ensure_stdlib_initialized");
         self.ensure_stdlib_initialized()?;
-        eprintln!("🌟 DEBUG: ensure_stdlib_initialized completed");
+        idebug!("🌟 DEBUG: ensure_stdlib_initialized completed");
         
         // using nyashstdの場合は特に何もしない（既に標準ライブラリが初期化されている）
         Ok(Box::new(VoidBox::new()))
@@ -587,9 +592,9 @@ impl NyashInterpreter {
     /// 標準ライブラリの初期化を確保
     fn ensure_stdlib_initialized(&mut self) -> Result<(), RuntimeError> {
         if self.stdlib.is_none() {
-            eprintln!("🌟 Initializing BuiltinStdlib...");
+            idebug!("🌟 Initializing BuiltinStdlib...");
             self.stdlib = Some(BuiltinStdlib::new());
-            eprintln!("✅ BuiltinStdlib initialized successfully");
+            idebug!("✅ BuiltinStdlib initialized successfully");
         }
         Ok(())
     }

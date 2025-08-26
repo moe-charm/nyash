@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "nekocode": {
+      "command": "python3",
+      "args": [
+        "/mnt/c/git/nyash-project/nyash/tools/nekocode-rust/mcp-nekocode-server/mcp_server_real.py"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "NEKOCODE_BINARY_PATH": "/mnt/c/git/nyash-project/nyash/tools/nekocode-rust/bin/nekocode",
+        "NEKOREFACTOR_BINARY_PATH": "/mnt/c/git/nyash-project/nyash/tools/nekocode-rust/bin/nekorefactor"
+      }
+    }
+  }
+}

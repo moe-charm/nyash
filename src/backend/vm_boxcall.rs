@@ -74,6 +74,35 @@ impl VM {
             }
         }
 
+        // P2PBox methods (minimal)
+        if let Some(p2p) = box_value.as_any().downcast_ref::<crate::boxes::p2p_box::P2PBox>() {
+            match method {
+                "send" => {
+                    if _args.len() >= 2 { return Ok(p2p.send(_args[0].clone_or_share(), _args[1].clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: send(to, intent) requires 2 args")));
+                }
+                "on" => {
+                    if _args.len() >= 2 { return Ok(p2p.on(_args[0].clone_or_share(), _args[1].clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: on(intent, handler) requires 2 args")));
+                }
+                "onOnce" | "on_once" => {
+                    if _args.len() >= 2 { return Ok(p2p.on_once(_args[0].clone_or_share(), _args[1].clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: onOnce(intent, handler) requires 2 args")));
+                }
+                "off" => {
+                    if _args.len() >= 1 { return Ok(p2p.off(_args[0].clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: off(intent) requires 1 arg")));
+                }
+                "getLastFrom" => { return Ok(p2p.get_last_from()); }
+                "getLastIntentName" => { return Ok(p2p.get_last_intent_name()); }
+                "debug_nodes" | "debugNodes" => { return Ok(p2p.debug_nodes()); }
+                "getNodeId" | "getId" => { return Ok(p2p.get_node_id()); }
+                "getTransportType" | "transport" => { return Ok(p2p.get_transport_type()); }
+                "isReachable" => { if let Some(n) = _args.get(0) { return Ok(p2p.is_reachable(n.clone_or_share())); } return Ok(Box::new(BoolBox::new(false))); }
+                _ => return Ok(Box::new(VoidBox::new())),
+            }
+        }
+
         // SocketBox methods (minimal + timeouts)
         if let Some(sock) = box_value.as_any().downcast_ref::<crate::boxes::socket_box::SocketBox>() {
             match method {

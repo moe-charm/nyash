@@ -5,6 +5,7 @@
  */
 
 use super::*;
+use crate::mir::TypeOpKind;
 use crate::ast::ASTNode;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -75,77 +76,46 @@ impl MirBuilder {
     }
 
     pub(super) fn emit_type_check(&mut self, value: ValueId, expected_type: String) -> Result<ValueId, String> {
-        let target_value = self.value_gen.next_value_id();
-        
+        let dst = self.value_gen.next();
         let instruction = MirInstruction::TypeOp {
-            dst: target_value,
-            operation: super::TypeOpKind::Check,
-            operand: value,
-            type_info: expected_type,
-            effects: EffectMask::new(Effect::ReadOnly),
+            dst,
+            op: TypeOpKind::Check,
+            value,
+            ty: MirType::Box(expected_type),
         };
-        
         self.emit_instruction(instruction)?;
-        Ok(target_value)
+        Ok(dst)
     }
 
     pub(super) fn emit_cast(&mut self, value: ValueId, target_type: super::MirType) -> Result<ValueId, String> {
-        let target_value = self.value_gen.next_value_id();
-        
-        let instruction = MirInstruction::TypeOp {
-            dst: target_value,
-            operation: super::TypeOpKind::Cast,
-            operand: value,
-            type_info: format!("{:?}", target_type),
-            effects: EffectMask::new(Effect::ReadOnly),
-        };
-        
+        let dst = self.value_gen.next();
+        let instruction = MirInstruction::TypeOp { dst, op: TypeOpKind::Cast, value, ty: target_type };
         self.emit_instruction(instruction)?;
-        Ok(target_value)
+        Ok(dst)
     }
 
     pub(super) fn emit_weak_new(&mut self, box_val: ValueId) -> Result<ValueId, String> {
-        let weak_ref = self.value_gen.next_value_id();
-        
-        let instruction = MirInstruction::WeakNew {
-            dst: weak_ref,
-            source: box_val,
-            effects: EffectMask::new(Effect::Pure),
-        };
-        
+        let dst = self.value_gen.next();
+        let instruction = MirInstruction::WeakNew { dst, box_val };
         self.emit_instruction(instruction)?;
-        Ok(weak_ref)
+        Ok(dst)
     }
 
     pub(super) fn emit_weak_load(&mut self, weak_ref: ValueId) -> Result<ValueId, String> {
-        let loaded_value = self.value_gen.next_value_id();
-        
-        let instruction = MirInstruction::WeakLoad {
-            dst: loaded_value,
-            weak_ref,
-            effects: EffectMask::new(Effect::ReadOnly),
-        };
-        
+        let dst = self.value_gen.next();
+        let instruction = MirInstruction::WeakLoad { dst, weak_ref };
         self.emit_instruction(instruction)?;
-        Ok(loaded_value)
+        Ok(dst)
     }
 
     pub(super) fn emit_barrier_read(&mut self, ptr: ValueId) -> Result<(), String> {
-        let instruction = MirInstruction::BarrierRead {
-            ptr,
-            effects: EffectMask::new(Effect::SideEffect),
-        };
-        
+        let instruction = MirInstruction::BarrierRead { ptr };
         self.emit_instruction(instruction)?;
         Ok(())
     }
 
     pub(super) fn emit_barrier_write(&mut self, ptr: ValueId) -> Result<(), String> {
-        let instruction = MirInstruction::BarrierWrite {
-            ptr,
-            effects: EffectMask::new(Effect::SideEffect),
-        };
-        
+        let instruction = MirInstruction::BarrierWrite { ptr };
         self.emit_instruction(instruction)?;
         Ok(())
     }
@@ -162,20 +132,18 @@ impl MirBuilder {
         }
 
         let current_block_id = self.current_block.unwrap();
-        
-        // Get a mutable reference to the current function
-        let current_function = self.current_function.as_mut().unwrap();
-        
-        // Ensure the block exists
+        // Ensure the block exists first (uses &mut self)
         self.ensure_block_exists(current_block_id)?;
-        
-        // Add instruction to current block
-        if let Some(block) = current_function.basic_blocks.get_mut(&current_block_id) {
-            block.instructions.push(instruction);
-        } else {
-            return Err(format!("Block {:?} not found in current function", current_block_id));
+        // Then borrow current_function mutably to add instruction
+        {
+            let f = self.current_function.as_mut().unwrap();
+            if let Some(bb) = f.get_block_mut(current_block_id) {
+                bb.add_instruction(instruction);
+            } else {
+                return Err(format!("Block {:?} not found in current function", current_block_id));
+            }
         }
-
+        
         Ok(())
     }
 
@@ -183,11 +151,8 @@ impl MirBuilder {
         let current_function = self.current_function.as_mut()
             .ok_or("No current function")?;
         
-        if !current_function.basic_blocks.contains_key(&block_id) {
-            current_function.basic_blocks.insert(block_id, BasicBlock {
-                id: block_id,
-                instructions: Vec::new(),
-            });
+        if current_function.get_block(block_id).is_none() {
+            current_function.add_block(BasicBlock::new(block_id));
         }
         
         Ok(())
@@ -201,6 +166,51 @@ impl MirBuilder {
         self.current_block = Some(block_id);
         
         Ok(())
+    }
+}
+
+impl MirBuilder {
+    /// Build a MIR module from AST (thin outer shell aligning with legacy builder)
+    pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
+        // Create empty module and a main function
+        let module = MirModule::new("main".to_string());
+        let main_signature = FunctionSignature {
+            name: "main".to_string(),
+            params: vec![],
+            return_type: MirType::Void,
+            effects: EffectMask::PURE,
+        };
+        let entry_block = self.block_gen.next();
+        let mut main_function = MirFunction::new(main_signature, entry_block);
+        main_function.metadata.is_entry_point = true;
+
+        // Set context
+        self.current_module = Some(module);
+        self.current_function = Some(main_function);
+        self.current_block = Some(entry_block);
+
+        // Entry safepoint
+        self.emit_instruction(MirInstruction::Safepoint)?;
+
+        // Lower AST to MIR
+        let result_value = self.build_expression(ast)?;
+
+        // Ensure a return at the end
+        if let Some(block_id) = self.current_block {
+            if let Some(ref mut f) = self.current_function {
+                if let Some(bb) = f.get_block_mut(block_id) {
+                    if !bb.is_terminated() {
+                        bb.add_instruction(MirInstruction::Return { value: Some(result_value) });
+                    }
+                }
+            }
+        }
+
+        // Finalize
+        let mut module = self.current_module.take().unwrap();
+        let function = self.current_function.take().unwrap();
+        module.add_function(function);
+        Ok(module)
     }
 }
 

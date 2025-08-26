@@ -25,6 +25,8 @@ mir_typeop_poc = []
 mir_refbarrier_unify_poc = []
 # Note: LLVM feature requires inkwell dependency and LLVM development libraries
 # llvm = ["dep:inkwell"]
+# Optional: modular MIR builder (off by default)
+mir_modular_builder = []
 
 [lib]
 name = "nyash_rust"

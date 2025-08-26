@@ -294,7 +294,7 @@ impl PluginBoxV2 {
         // Call birth
         let mut output_buffer = vec![0u8; 1024];
         let mut output_len = output_buffer.len();
-        let tlv_args = vec![1u8, 0, 0, 0];
+        let tlv_args = crate::runtime::plugin_ffi_common::encode_empty_args();
         let birth_result = unsafe {
             (plugin.invoke_fn)(type_id, 0, 0, tlv_args.as_ptr(), tlv_args.len(), output_buffer.as_mut_ptr(), &mut output_len)
         };
@@ -378,10 +378,7 @@ impl PluginBoxV2 {
             eprintln!("[PluginLoaderV2] Invoke {}.{}: resolving and encoding args (argc={})", box_type, method_name, args.len());
             // TLV args: encode using BID-1 style (u16 ver, u16 argc, then entries)
             let tlv_args = {
-                let mut buf = Vec::with_capacity(4 + args.len() * 16);
-                // Header: ver=1, argc=args.len()
-                buf.extend_from_slice(&1u16.to_le_bytes());
-                buf.extend_from_slice(&(args.len() as u16).to_le_bytes());
+                let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(args.len() as u16);
                 // Validate against nyash.toml method args schema if present
                 let expected_args = box_conf.methods.get(method_name).and_then(|m| m.args.clone());
                 if let Some(exp) = expected_args.as_ref() {
@@ -447,44 +444,27 @@ impl PluginBoxV2 {
                     // Plugin Handle (BoxRef): tag=8, size=8
                     if let Some(p) = a.as_any().downcast_ref::<PluginBoxV2>() {
                         eprintln!("[PluginLoaderV2]  arg[{}]: PluginBoxV2({}, id={}) -> Handle(tag=8)", idx, p.box_type, p.inner.instance_id);
-                        buf.push(8u8); // tag
-                        buf.push(0u8); // reserved
-                        buf.extend_from_slice(&(8u16).to_le_bytes());
-                        buf.extend_from_slice(&p.inner.type_id.to_le_bytes());
-                        buf.extend_from_slice(&p.inner.instance_id.to_le_bytes());
+                        crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.inner.instance_id);
                         continue;
                     }
                     // Integer: prefer i32
                     if let Some(i) = a.as_any().downcast_ref::<IntegerBox>() {
                         eprintln!("[PluginLoaderV2]  arg[{}]: Integer({}) -> I32(tag=2)", idx, i.value);
-                        buf.push(2u8); // tag=I32
-                        buf.push(0u8);
-                        buf.extend_from_slice(&(4u16).to_le_bytes());
                         let v = i.value as i32;
-                        buf.extend_from_slice(&v.to_le_bytes());
+                        crate::runtime::plugin_ffi_common::encode::i32(&mut buf, v);
                         continue;
                     }
                     // String: tag=6
                     if let Some(s) = a.as_any().downcast_ref::<StringBox>() {
                         eprintln!("[PluginLoaderV2]  arg[{}]: String(len={}) -> String(tag=6)", idx, s.value.len());
-                        let bytes = s.value.as_bytes();
-                        let len = std::cmp::min(bytes.len(), u16::MAX as usize);
-                        buf.push(6u8);
-                        buf.push(0u8);
-                        buf.extend_from_slice(&((len as u16).to_le_bytes()));
-                        buf.extend_from_slice(&bytes[..len]);
+                        crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value);
                         continue;
                     }
                     // No schema or unsupported type: only allow fallback when schema is None
                     if expected_args.is_none() {
                         eprintln!("[PluginLoaderV2]  arg[{}]: fallback stringify", idx);
                         let sv = a.to_string_box().value;
-                        let bytes = sv.as_bytes();
-                        let len = std::cmp::min(bytes.len(), u16::MAX as usize);
-                        buf.push(6u8);
-                        buf.push(0u8);
-                        buf.extend_from_slice(&((len as u16).to_le_bytes()));
-                        buf.extend_from_slice(&bytes[..len]);
+                        crate::runtime::plugin_ffi_common::encode::string(&mut buf, &sv);
                     } else {
                         return Err(BidError::InvalidArgs);
                     }
@@ -540,12 +520,7 @@ impl PluginBoxV2 {
                         return Ok(None);
                     }
                 }
-                if data.len() < 8 { return Ok(None); }
-                let tag = data[4];
-                let _rsv = data[5];
-                let size = u16::from_le_bytes([data[6], data[7]]) as usize;
-                if data.len() < 8 + size { return Ok(None); }
-                let payload = &data[8..8+size];
+                if let Some((tag, size, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(data) {
                 match tag {
                     8 if size == 8 => { // Handle -> PluginBoxV2
                         let mut t = [0u8;4]; t.copy_from_slice(&payload[0..4]);
@@ -583,13 +558,13 @@ impl PluginBoxV2 {
                         None
                     }
                     2 if size == 4 => { // I32
-                        let mut b = [0u8;4]; b.copy_from_slice(payload);
-                        let val: Box<dyn NyashBox> = Box::new(IntegerBox::new(i32::from_le_bytes(b) as i64));
-                        if dbg_on() { eprintln!("[Plugin→VM] return i32 value={} (returns_result={})", i32::from_le_bytes(b), returns_result); }
+                        let n = crate::runtime::plugin_ffi_common::decode::i32(payload).unwrap();
+                        let val: Box<dyn NyashBox> = Box::new(IntegerBox::new(n as i64));
+                        if dbg_on() { eprintln!("[Plugin→VM] return i32 value={} (returns_result={})", n, returns_result); }
                         if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
                     6 | 7 => { // String/Bytes
-                        let s = String::from_utf8_lossy(payload).to_string();
+                        let s = crate::runtime::plugin_ffi_common::decode::string(payload);
                         if dbg_on() { eprintln!("[Plugin→VM] return str/bytes len={} (returns_result={})", size, returns_result); }
                         if returns_result {
                             // Heuristic: for Result-returning methods, string payload represents an error message
@@ -604,7 +579,7 @@ impl PluginBoxV2 {
                         if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(Box::new(crate::box_trait::VoidBox::new()))) as Box<dyn NyashBox>) } else { None }
                     },
                     _ => None,
-                }
+                }} else { None }
             };
             Ok(result)
         }
@@ -746,7 +721,7 @@ impl PluginBoxV2 {
         let mut output_len = output_buffer.len();
         
         // Create TLV-encoded empty arguments (version=1, argc=0)
-        let tlv_args = vec![1u8, 0, 0, 0]; // version=1, argc=0
+        let tlv_args = crate::runtime::plugin_ffi_common::encode_empty_args();
         eprintln!("🔍 Output buffer allocated, about to call plugin invoke_fn...");
         
         let birth_result = unsafe {

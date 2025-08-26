@@ -5,6 +5,8 @@
  */
 
 use super::*;
+use crate::mir::builder_modularized::core::builder_debug_log;
+use crate::mir::TypeOpKind;
 use crate::ast::ASTNode;
 
 impl MirBuilder {
@@ -20,7 +22,7 @@ impl MirBuilder {
                     let val = self.build_expression(arguments[0].clone())?;
                     let ty = Self::parse_type_name_to_mir(&type_name);
                     let dst = self.value_gen.next();
-                    let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                    let op = if name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
                     builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
                     self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;
@@ -36,7 +38,7 @@ impl MirBuilder {
                     let obj_val = self.build_expression(*object.clone())?;
                     let ty = Self::parse_type_name_to_mir(&type_name);
                     let dst = self.value_gen.next();
-                    let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                    let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
                     builder_debug_log(&format!("emit TypeOp {:?} obj={} dst= {}", op, obj_val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
                     self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;

@@ -7,7 +7,7 @@ use crate::ast::{ASTNode, BinaryOperator, UnaryOperator};
 use crate::box_trait::{NyashBox, BoolBox, CompareBox};
 use crate::box_trait::{IntegerBox, StringBox};  // 🔧 修正: box_trait::*に統一
 use crate::boxes::FloatBox;  // FloatBoxはboxesのみに存在
-use crate::interpreter::core::{NyashInterpreter, RuntimeError};
+use crate::interpreter::{NyashInterpreter, RuntimeError};
 use crate::instance_v2::InstanceBox;
 
 // Local helper functions to bypass import issues

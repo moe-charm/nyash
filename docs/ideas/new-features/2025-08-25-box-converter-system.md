@@ -241,8 +241,122 @@ nyash-box-gen migrate \
 - [ ] ホットリロード機能
 - [ ] デバッグサポート
 
+## 使い分けの指針
+
+### ビルトインBox（静的リンク）が適する場合
+- **パフォーマンスクリティカル**: StringBox, IntegerBox等の基本型
+- **起動時必須**: ConsoleBox等のコア機能
+- **セキュリティ重視**: 改竄されると致命的なBox
+
+### プラグインBoxが適する場合
+- **多言語連携**: Python, C, Go等で実装されたBox
+- **サードパーティ提供**: コミュニティ製Box
+- **実験的機能**: 頻繁に更新されるBox
+- **プラットフォーム依存**: OS固有機能のラッパー
+
+### 多言語プラグインの例
+
+#### Python製プラグイン
+```toml
+# plugins/numpy-box/nyash-box.toml
+[box]
+id = "numpy"
+version = "1.0.0"
+language = "python"
+runtime = "python3.11"
+
+[dependencies]
+numpy = "1.24.0"
+pyo3 = "0.19.0"
+
+[wrapper]
+entry = "numpy_box_wrapper.py"
+ffi_bridge = "libpython_nyash_bridge.so"
+```
+
+```python
+# numpy_box_wrapper.py
+import numpy as np
+from nyash_python import Box, register_box
+
+@register_box("NumpyBox")
+class NumpyBox(Box):
+    def __init__(self, shape):
+        self.array = np.zeros(shape)
+    
+    def multiply(self, scalar):
+        return NumpyBox.from_array(self.array * scalar)
+```
+
+#### C製プラグイン（既存ライブラリのラッパー）
+```c
+// plugins/sqlite-box/sqlite_box.c
+#include <sqlite3.h>
+#include "nyash_box.h"
+
+typedef struct {
+    NyBoxBase base;
+    sqlite3 *db;
+} SqliteBox;
+
+NyBoxV1* sqlite_box_register(NyHostV1* host) {
+    // SQLiteの全機能をNyashから使えるように
+}
+```
+
+## 統合アーキテクチャ
+
+```
+Nyashランタイム
+    ├── ビルトインBox（高速・安全）
+    │   ├── StringBox (Rust)
+    │   ├── IntegerBox (Rust)
+    │   └── ConsoleBox (Rust)
+    │
+    └── プラグインBox（柔軟・拡張可能）
+        ├── FileBox (Rust plugin)
+        ├── NumpyBox (Python via PyO3)
+        ├── SqliteBox (C wrapper)
+        ├── TensorFlowBox (C++ via bindgen)
+        └── NodeBox (JavaScript via N-API)
+```
+
+## 将来的な可能性
+
+### 1. 言語別プラグインSDK
+```bash
+# 各言語用のテンプレート生成
+nyash-plugin-sdk init --lang python --name my-box
+nyash-plugin-sdk init --lang rust --name my-box
+nyash-plugin-sdk init --lang c --name my-box
+```
+
+### 2. プラグインマーケットプレイス
+```bash
+# コミュニティ製Boxの検索・インストール
+nyash plugin search opencv
+nyash plugin install opencv-box@2.4.0
+```
+
+### 3. ポリグロットBox
+```toml
+# 複数言語を組み合わせたBox
+[box]
+id = "ml-pipeline"
+components = [
+    { lang = "python", module = "preprocessing" },
+    { lang = "rust", module = "core_algorithm" },
+    { lang = "c++", module = "gpu_acceleration" }
+]
+```
+
 ## まとめ
 
 このシステムにより、「Everything is Box」の理想を保ちながら、
 現実的なパフォーマンスと開発効率を両立できる。
-純粋主義と実用主義の最適なバランスを実現する。
+さらに、多言語エコシステムとの統合により、
+Nyashが真の「ユニバーサルグルー言語」となる可能性を秘めている。
+
+ビルトインBoxは「高速・安全・必須」を担保し、
+プラグインBoxは「柔軟・拡張・実験」を可能にする。
+この二層構造こそが、Nyashの持続的な成長を支える基盤となる。

@@ -30,6 +30,12 @@ use std::collections::HashMap;
 mod async_methods;
 mod box_methods;
 mod core;
+mod eval;
+mod calls;
+mod methods_dispatch;
+pub mod utils;
+pub mod state;
+pub mod errors;
 mod expressions;
 mod statements;
 mod functions;
@@ -44,6 +50,8 @@ mod special_methods;
 
 // Main interpreter implementation - will be moved from interpreter.rs
 pub use core::NyashInterpreter;
+pub use state::SharedState;
+pub use errors::RuntimeError;
 
 
 /// 実行制御フロー

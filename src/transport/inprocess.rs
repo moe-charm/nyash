@@ -103,12 +103,37 @@ impl Transport for InProcessTransport {
     fn transport_type(&self) -> &'static str {
         "inprocess"
     }
+
+    fn register_intent_handler(&mut self, intent: &str, cb: Box<dyn Fn(IntentEnvelope) + Send + Sync>) {
+        let intent_name = intent.to_string();
+        let cb = std::sync::Arc::new(cb);
+        let cb_clone = cb.clone();
+        // Adapt to MessageBus handler signature
+        self.add_handler(&intent_name, Box::new(move |intent_box: IntentBox, from: &str| {
+            let env = IntentEnvelope {
+                from: from.to_string(),
+                to: String::new(), // not tracked at this layer for handler
+                intent: intent_box,
+                timestamp: std::time::Instant::now(),
+            };
+            (cb_clone)(env);
+        }));
+    }
+
+    fn debug_list_nodes(&self) -> Option<Vec<String>> {
+        let bus = self.bus.lock().ok()?;
+        Some(bus.get_nodes())
+    }
+
+    fn debug_bus_id(&self) -> Option<String> {
+        let ptr = std::sync::Arc::as_ptr(&self.bus);
+        Some(format!("{:p}", ptr))
+    }
 }
 
 impl Drop for InProcessTransport {
     fn drop(&mut self) {
-        // ノードをバスから解除
-        let mut bus = self.bus.lock().unwrap();
-        bus.unregister_node(&self.node_id);
+        // NOTE: Temporarily disabled unregister to avoid interfering with shared-node lifetimes.
+        // Proper refcounted unregister will be implemented later.
     }
 }

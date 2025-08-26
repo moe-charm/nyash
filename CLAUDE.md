@@ -1,13 +1,14 @@
-# Nyash開発ガイド for Claude
+# Claude Quick Start (Minimal Entry)
 
-Nyashプログラミング言語開発に必要な情報をまとめたクイックリファレンス。
+このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
-## 🧭 Start Here (最初に見る)
-- **🎯 主軸タスク**: [copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt) **← 最重要！**
-- **📋 現在のタスク**: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)（近々/中期/長期の計画は同ファイル先頭）
-- **📚 言語仕様**: まず[LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)を読む
-- **📦 Box システム**: [boxes-system/](docs/reference/boxes-system/)でAPI確認
-- **⚙️ 実行バックエンド**: [execution-backends.md](docs/reference/architecture/execution-backends.md)
+## Start Here (必ずここから)
+- 現在のタスク: docs/development/current/CURRENT_TASK.md
+- ドキュメントハブ: README.md
+- 主軸タスクリスト: docs/development/roadmap/native-plan/copilot_issues.txt
+
+Notes:
+- ここから先の導線は README.md に集約。Claude Codeくんがこのファイルを上書きしても最低限のリンクは保たれるよ。
 
 ## 🤖 **Claude×Copilot協調開発の主軸**
 ### 📋 **copilot_issues.txt - 開発の軸となるファイル**
@@ -73,21 +74,20 @@ target/x86_64-pc-windows-msvc/release/nyash.exe
 
 ### 🌐 WebAssembly版
 ```bash
-# WASMビルド方法1: nyash-wasmプロジェクトで直接ビルド
-cd projects/nyash-wasm
+# WASMビルド（ルートディレクトリで実行）
 wasm-pack build --target web
 
-# WASMビルド方法2: build.shスクリプト使用（古い方法）
-cd projects/nyash-wasm
-./build.sh
+# ビルド結果は pkg/ ディレクトリに生成される
+# - pkg/nyash_rust_bg.wasm
+# - pkg/nyash_rust.js
+# - pkg/nyash_rust.d.ts
 
 # 開発サーバー起動（ポート8010推奨）
 python3 -m http.server 8010
 
 # ブラウザでアクセス
-# http://localhost:8010/nyash_playground.html
-# http://localhost:8010/enhanced_playground.html
-# http://localhost:8010/canvas_playground.html
+# ローカルテスト: http://localhost:8010/nyash_playground.html
+# 公開プレイグラウンド: https://moe-charm.github.io/nyash/projects/nyash-wasm/nyash_playground.html
 ```
 
 **注意**: WASMビルドでは一部のBox（TimerBox、AudioBox等）は除外されます。

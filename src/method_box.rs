@@ -11,6 +11,7 @@ use crate::instance_v2::InstanceBox;
 use std::fmt::{Debug, Display};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
+use once_cell::sync::OnceCell;
 
 /// BoxType enum - ChatGPT先生の提案に従い、Box型を分類
 #[derive(Debug)]
@@ -81,15 +82,27 @@ impl MethodBox {
     
     /// メソッドを呼び出す
     pub fn invoke(&self, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, String> {
-        // TODO: インタープリタとの統合が必要
-        // 現在は仮実装
-        Err(format!("MethodBox.invoke not yet implemented for method '{}'", self.method_name))
+        if let Some(invoker) = METHOD_INVOKER.get() {
+            return invoker.invoke(self, _args);
+        }
+        Err(format!("MethodBox.invoke not configured (no invoker) for method '{}'", self.method_name))
     }
     
     /// インスタンスを取得（内部使用）
     pub fn get_instance(&self) -> Arc<Mutex<Box<dyn NyashBox>>> {
         Arc::clone(&self.instance)
     }
+}
+
+/// Global invoker hook to connect MethodBox to the interpreter
+pub trait MethodInvoker: Send + Sync {
+    fn invoke(&self, method: &MethodBox, args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, String>;
+}
+
+static METHOD_INVOKER: OnceCell<Arc<dyn MethodInvoker + Send + Sync>> = OnceCell::new();
+
+pub fn set_method_invoker(invoker: Arc<dyn MethodInvoker + Send + Sync>) {
+    let _ = METHOD_INVOKER.set(invoker);
 }
 
 impl NyashBox for MethodBox {

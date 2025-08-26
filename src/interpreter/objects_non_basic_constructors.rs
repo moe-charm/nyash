@@ -3,7 +3,7 @@
 
 use crate::ast::ASTNode;
 use crate::box_trait::*;
-use crate::interpreter::core::{NyashInterpreter as Interpreter, RuntimeError};
+use crate::interpreter::{NyashInterpreter as Interpreter, RuntimeError};
 use crate::boxes::math_box::MathBox;
 use crate::boxes::random_box::RandomBox;
 use crate::boxes::sound_box::SoundBox;

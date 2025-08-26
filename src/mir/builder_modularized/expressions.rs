@@ -5,6 +5,7 @@
  */
 
 use super::*;
+use crate::mir::TypeOpKind;
 use crate::ast::{ASTNode, LiteralValue, BinaryOperator};
 
 /// Binary operation type classification
@@ -179,7 +180,7 @@ impl MirBuilder {
                 let val = self.build_expression(args[0].clone())?;
                 let ty = Self::parse_type_name_to_mir(&type_name);
                 let dst = self.value_gen.next();
-                let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                let op = if name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
                 self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
                 return Ok(dst);
             }
@@ -211,7 +212,7 @@ impl MirBuilder {
     }
 
     /// Parse type name string to MIR type
-    fn parse_type_name_to_mir(name: &str) -> super::MirType {
+    pub(super) fn parse_type_name_to_mir(name: &str) -> super::MirType {
         match name {
             "Integer" | "Int" | "I64" => super::MirType::Integer,
             "Float" | "F64" => super::MirType::Float,
@@ -224,7 +225,7 @@ impl MirBuilder {
     
     /// Extract string literal from AST node if possible
     /// Supports: Literal("Type") and new StringBox("Type")
-    fn extract_string_literal(node: &ASTNode) -> Option<String> {
+    pub(super) fn extract_string_literal(node: &ASTNode) -> Option<String> {
         let mut cur = node;
         loop {
             match cur {
@@ -266,7 +267,7 @@ impl MirBuilder {
                 // Map string to MIR type
                 let mir_ty = Self::parse_type_name_to_mir(&type_name);
                 let dst = self.value_gen.next();
-                let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
                 self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
                 return Ok(dst);
             }
@@ -315,7 +316,7 @@ impl MirBuilder {
             if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
                 let mir_ty = Self::parse_type_name_to_mir(&type_name);
                 let dst = self.value_gen.next();
-                let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
                 self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
                 return Ok(dst);
             }
@@ -397,12 +398,13 @@ impl MirBuilder {
         if let Some(&parent_me) = self.variable_map.get(&format!("{}.__me__", parent)) {
             // Emit from call with parent's me
             let result = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Call {
-                dst: Some(result),
-                func: self.value_gen.next(), // Placeholder for from resolution
-                args: vec![parent_me], // Include parent's me plus other args
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
+        let func_id = self.value_gen.next(); // Placeholder for from resolution
+        self.emit_instruction(MirInstruction::Call {
+            dst: Some(result),
+            func: func_id,
+            args: vec![parent_me], // Include parent's me plus other args
+            effects: EffectMask::READ.add(Effect::ReadHeap),
+        })?;
             Ok(result)
         } else {
             // Fallback behavior without proper parent context
@@ -445,7 +447,7 @@ impl MirBuilder {
                         let obj_val = self.build_expression(*object.clone())?;
                         let ty = Self::parse_type_name_to_mir(&type_name);
                         let dst = self.value_gen.next();
-                        let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
+                        let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
                         self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
                         return Ok(dst);
                     }
@@ -587,11 +589,7 @@ impl MirBuilder {
         let result_id = self.value_gen.next();
         
         // Emit await instruction
-        self.emit_instruction(MirInstruction::Await {
-            dst: result_id,
-            future: future_value,
-            effects: EffectMask::READ.add(Effect::Async),
-        })?;
+        self.emit_instruction(MirInstruction::Await { dst: result_id, future: future_value })?;
         
         Ok(result_id)
     }

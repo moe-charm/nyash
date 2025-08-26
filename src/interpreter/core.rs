@@ -5,7 +5,7 @@
  * Everything is Box哲学に基づくAST実行エンジン
  */
 
-use crate::ast::{ASTNode, Span};
+use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, SharedNyashBox};
 use crate::instance_v2::InstanceBox;
 use crate::parser::ParseError;
@@ -14,13 +14,13 @@ use crate::runtime::{NyashRuntime, NyashRuntimeBuilder};
 use crate::box_factory::BoxFactory;
 use std::sync::{Arc, Mutex, RwLock};
 use std::collections::{HashMap, HashSet};
-use thiserror::Error;
 use super::{ControlFlow, BoxDeclaration, ConstructorContext, StaticBoxDefinition, StaticBoxState};
+use super::{RuntimeError, SharedState};
 use std::fs::OpenOptions;
 use std::io::Write;
 
 // ファイルロガー（expressions.rsと同じ）
-fn debug_log(msg: &str) {
+pub(crate) fn debug_log(msg: &str) {
     if let Ok(mut file) = OpenOptions::new()
         .create(true)
         .append(true)
@@ -31,172 +31,19 @@ fn debug_log(msg: &str) {
     }
 }
 
-// Conditional debug macro - only outputs if NYASH_DEBUG=1 environment variable is set
+// Conditional debug macro - unified with utils::debug_on()
 macro_rules! debug_trace {
     ($($arg:tt)*) => {
-        if std::env::var("NYASH_DEBUG").unwrap_or_default() == "1" {
-            eprintln!($($arg)*);
-        }
+        if crate::interpreter::utils::debug_on() { eprintln!($($arg)*); }
     };
 }
 
-/// 実行時エラー
-#[derive(Error, Debug)]
-pub enum RuntimeError {
-    #[error("Undefined variable '{name}'")]
-    UndefinedVariable { name: String },
-    
-    #[error("Undefined function '{name}'")]
-    UndefinedFunction { name: String },
-    
-    #[error("Undefined class '{name}'")]
-    UndefinedClass { name: String },
-    
-    #[error("Type error: {message}")]
-    TypeError { message: String },
-    
-    #[error("Invalid operation: {message}")]
-    InvalidOperation { message: String },
-    
-    #[error("Break outside of loop")]
-    BreakOutsideLoop,
-    
-    #[error("Return outside of function")]
-    ReturnOutsideFunction,
-    
-    #[error("Uncaught exception")]
-    UncaughtException,
-    
-    #[error("Parse error: {0}")]
-    ParseError(#[from] ParseError),
-    
-    #[error("Environment error: {0}")]
-    EnvironmentError(String),
-    
-    // === 🔥 Enhanced Errors with Span Information ===
-    
-    #[error("Undefined variable '{name}' at {span}")]
-    UndefinedVariableAt { name: String, span: Span },
-    
-    #[error("Type error: {message} at {span}")]
-    TypeErrorAt { message: String, span: Span },
-    
-    #[error("Invalid operation: {message} at {span}")]
-    InvalidOperationAt { message: String, span: Span },
-    
-    #[error("Break outside of loop at {span}")]
-    BreakOutsideLoopAt { span: Span },
-    
-    #[error("Return outside of function at {span}")]
-    ReturnOutsideFunctionAt { span: Span },
-    
-    #[error("Runtime failure: {message}")]
-    RuntimeFailure { message: String },
+macro_rules! idebug {
+    ($($arg:tt)*) => {
+        if crate::interpreter::utils::debug_on() { eprintln!($($arg)*); }
+    };
 }
 
-impl RuntimeError {
-    /// エラーの詳細な文脈付きメッセージを生成
-    pub fn detailed_message(&self, source: Option<&str>) -> String {
-        match self {
-            // Enhanced errors with span information
-            RuntimeError::UndefinedVariableAt { name, span } => {
-                let mut msg = format!("⚠️  Undefined variable '{}'", name);
-                if let Some(src) = source {
-                    msg.push('\n');
-                    msg.push_str(&span.error_context(src));
-                } else {
-                    msg.push_str(&format!(" at {}", span));
-                }
-                msg
-            }
-            
-            RuntimeError::TypeErrorAt { message, span } => {
-                let mut msg = format!("⚠️  Type error: {}", message);
-                if let Some(src) = source {
-                    msg.push('\n');
-                    msg.push_str(&span.error_context(src));
-                } else {
-                    msg.push_str(&format!(" at {}", span));
-                }
-                msg
-            }
-            
-            RuntimeError::InvalidOperationAt { message, span } => {
-                let mut msg = format!("⚠️  Invalid operation: {}", message);
-                if let Some(src) = source {
-                    msg.push('\n');
-                    msg.push_str(&span.error_context(src));
-                } else {
-                    msg.push_str(&format!(" at {}", span));
-                }
-                msg
-            }
-            
-            RuntimeError::BreakOutsideLoopAt { span } => {
-                let mut msg = "⚠️  Break statement outside of loop".to_string();
-                if let Some(src) = source {
-                    msg.push('\n');
-                    msg.push_str(&span.error_context(src));
-                } else {
-                    msg.push_str(&format!(" at {}", span));
-                }
-                msg
-            }
-            
-            RuntimeError::ReturnOutsideFunctionAt { span } => {
-                let mut msg = "⚠️  Return statement outside of function".to_string();
-                if let Some(src) = source {
-                    msg.push('\n');
-                    msg.push_str(&span.error_context(src));
-                } else {
-                    msg.push_str(&format!(" at {}", span));
-                }
-                msg
-            }
-            
-            // Fallback for old error variants without span
-            _ => format!("⚠️  {}", self),
-        }
-    }
-}
-
-/// スレッド間で共有される状態
-#[derive(Clone)]
-pub struct SharedState {
-    /// 🌍 GlobalBox - すべてのトップレベル関数とグローバル変数を管理
-    pub global_box: Arc<Mutex<InstanceBox>>,
-    
-    /// Box宣言のレジストリ（読み込みが多いのでRwLock）
-    pub box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
-    
-    /// 🔥 静的関数のレジストリ（読み込みが多いのでRwLock）
-    pub static_functions: Arc<RwLock<HashMap<String, HashMap<String, ASTNode>>>>,
-    
-    /// 🔥 Static Box定義レジストリ（遅延初期化用）
-    pub static_box_definitions: Arc<RwLock<HashMap<String, StaticBoxDefinition>>>,
-    
-    /// 読み込み済みファイル（重複防止）
-    pub included_files: Arc<Mutex<HashSet<String>>>,
-}
-
-impl SharedState {
-    /// 新しい共有状態を作成
-    pub fn new() -> Self {
-        let global_box = InstanceBox::new(
-            "Global".to_string(),
-            vec![],          // フィールド名（空から始める）
-            HashMap::new(),  // メソッド（グローバル関数）
-        );
-        
-        Self {
-            global_box: Arc::new(Mutex::new(global_box)),
-            box_declarations: Arc::new(RwLock::new(HashMap::new())),
-            static_functions: Arc::new(RwLock::new(HashMap::new())),
-            static_box_definitions: Arc::new(RwLock::new(HashMap::new())),
-            included_files: Arc::new(Mutex::new(HashSet::new())),
-        }
-    }
-}
 
 /// Nyashインタープリター - AST実行エンジン
 pub struct NyashInterpreter {
@@ -252,7 +99,7 @@ impl NyashInterpreter {
             reg.register(udf);
         }
 
-        Self {
+        let mut this = Self {
             shared,
             local_vars: HashMap::new(),
             outbox_vars: HashMap::new(),
@@ -263,7 +110,12 @@ impl NyashInterpreter {
             stdlib: None, // 遅延初期化
             runtime,
             discard_context: false,
-        }
+        };
+
+        // Register MethodBox invoker once (idempotent)
+        self::register_methodbox_invoker();
+
+        this
     }
 
     /// グループ構成を指定して新しいインタープリターを作成
@@ -286,7 +138,7 @@ impl NyashInterpreter {
             reg.register(udf);
         }
 
-        Self {
+        let mut this = Self {
             shared,
             local_vars: HashMap::new(),
             outbox_vars: HashMap::new(),
@@ -297,7 +149,9 @@ impl NyashInterpreter {
             stdlib: None,
             runtime,
             discard_context: false,
-        }
+        };
+        self::register_methodbox_invoker();
+        this
     }
     
     /// 共有状態から新しいインタープリターを作成（非同期実行用）
@@ -316,7 +170,7 @@ impl NyashInterpreter {
             reg.register(udf);
         }
 
-        Self {
+        let mut this = Self {
             shared,
             local_vars: HashMap::new(),
             outbox_vars: HashMap::new(),
@@ -327,7 +181,9 @@ impl NyashInterpreter {
             stdlib: None, // 遅延初期化
             runtime,
             discard_context: false,
-        }
+        };
+        self::register_methodbox_invoker();
+        this
     }
 
     /// 共有状態＋グループ構成を指定して新しいインタープリターを作成（非同期実行用）
@@ -347,7 +203,7 @@ impl NyashInterpreter {
             reg.register(udf);
         }
 
-        Self {
+        let mut this = Self {
             shared,
             local_vars: HashMap::new(),
             outbox_vars: HashMap::new(),
@@ -358,19 +214,11 @@ impl NyashInterpreter {
             stdlib: None,
             runtime,
             discard_context: false,
-        }
+        };
+        self::register_methodbox_invoker();
+        this
     }
     
-    /// ASTを実行
-    pub fn execute(&mut self, ast: ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        debug_log("=== NYASH EXECUTION START ===");
-        let result = self.execute_node(&ast);
-        if let Err(ref e) = result {
-            eprintln!("❌ Interpreter error: {}", e);
-        }
-        debug_log("=== NYASH EXECUTION END ===");
-        result
-    }
 
     /// Register an additional BoxFactory into this interpreter's runtime registry.
     /// This allows tests or embedders to inject custom factories without globals.
@@ -380,75 +228,6 @@ impl NyashInterpreter {
         }
     }
     
-    /// ノードを実行
-    fn execute_node(&mut self, node: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        match node {
-            ASTNode::Program { statements, .. } => {
-                let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
-                
-                let last = statements.len().saturating_sub(1);
-                for (i, statement) in statements.iter().enumerate() {
-                    let prev = self.discard_context;
-                    self.discard_context = i != last; // 最終文以外は値が破棄される
-                    result = self.execute_statement(statement)?;
-                    self.discard_context = prev;
-                    
-                    // 制御フローチェック
-                    match &self.control_flow {
-                        ControlFlow::Break => {
-                            return Err(RuntimeError::BreakOutsideLoop);
-                        }
-                        ControlFlow::Return(_) => {
-                            return Err(RuntimeError::ReturnOutsideFunction);
-                        }
-                        ControlFlow::Throw(_) => {
-                            return Err(RuntimeError::UncaughtException);
-                        }
-                        ControlFlow::None => {}
-                    }
-                }
-                
-                // 🎯 Static Box Main パターン - main()メソッドの自動実行
-                let has_main_method = {
-                    if let Ok(definitions) = self.shared.static_box_definitions.read() {
-                        if let Some(main_definition) = definitions.get("Main") {
-                            main_definition.methods.contains_key("main")
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                };
-                
-                if has_main_method {
-                    // Main static boxを初期化
-                    self.ensure_static_box_initialized("Main")?;
-                    
-                    // Main.main() を呼び出し
-                    let main_call_ast = ASTNode::MethodCall {
-                        object: Box::new(ASTNode::FieldAccess {
-                            object: Box::new(ASTNode::Variable {
-                                name: "statics".to_string(),
-                                span: crate::ast::Span::unknown(),
-                            }),
-                            field: "Main".to_string(),
-                            span: crate::ast::Span::unknown(),
-                        }),
-                        method: "main".to_string(),
-                        arguments: vec![],
-                        span: crate::ast::Span::unknown(),
-                    };
-                    
-                    // main()の戻り値を最終結果として使用
-                    result = self.execute_statement(&main_call_ast)?;
-                }
-                
-                Ok(result)
-            }
-            _ => self.execute_statement(node),
-        }
-    }
     
     // ========== 🌍 GlobalBox変数解決システム ==========
     
@@ -515,7 +294,7 @@ impl NyashInterpreter {
         }
         
         // 6. エラー：見つからない
-        eprintln!("🔍 DEBUG: '{}' not found anywhere!", name);
+        idebug!("🔍 DEBUG: '{}' not found anywhere!", name);
         Err(RuntimeError::UndefinedVariable {
             name: name.to_string(),
         })
@@ -609,7 +388,7 @@ impl NyashInterpreter {
             // ユーザー定義Box（InstanceBox）の場合
             if let Some(instance) = (**value).as_any().downcast_ref::<InstanceBox>() {
                 let _ = instance.fini();
-                eprintln!("🔄 Scope exit: Called fini() on local variable '{}' (InstanceBox)", name);
+                idebug!("🔄 Scope exit: Called fini() on local variable '{}' (InstanceBox)", name);
             }
             // プラグインBoxは共有ハンドルの可能性が高いため自動finiしない（明示呼び出しのみ）
             // ビルトインBoxは元々finiメソッドを持たないので呼ばない
@@ -642,7 +421,7 @@ impl NyashInterpreter {
             // ユーザー定義Box（InstanceBox）の場合
             if let Some(instance) = (**value).as_any().downcast_ref::<InstanceBox>() {
                 let _ = instance.fini();
-                eprintln!("🔄 Scope exit: Called fini() on outbox variable '{}' (InstanceBox)", name);
+                idebug!("🔄 Scope exit: Called fini() on outbox variable '{}' (InstanceBox)", name);
             }
             // プラグインBoxは共有ハンドルの可能性が高いため自動finiしない
             // ビルトインBoxは元々finiメソッドを持たないので呼ばない（要修正）
@@ -825,7 +604,7 @@ impl NyashInterpreter {
             initialization_state: StaticBoxState::NotInitialized,
         };
         
-        eprintln!("🔥 Static Box '{}' definition registered in statics namespace", name);
+        idebug!("🔥 Static Box '{}' definition registered in statics namespace", name);
         self.register_static_box(definition)
     }
     
@@ -921,7 +700,7 @@ impl NyashInterpreter {
         
         // 既に存在する場合はスキップ
         if global_box.get_field("statics").is_some() {
-            eprintln!("🌍 statics namespace already exists - skipping creation");
+            idebug!("🌍 statics namespace already exists - skipping creation");
             return Ok(());
         }
         
@@ -939,7 +718,7 @@ impl NyashInterpreter {
             fields_locked.insert("statics".to_string(), Arc::new(statics_box));
         }
             
-        eprintln!("🌍 statics namespace created in GlobalBox successfully");
+        idebug!("🌍 statics namespace created in GlobalBox successfully");
         Ok(())
     }
     
@@ -969,7 +748,7 @@ impl NyashInterpreter {
             fields_locked.insert(name.to_string(), Arc::new(instance));
         }
         
-        eprintln!("🔥 Static box '{}' instance registered in statics namespace", name);
+        idebug!("🔥 Static box '{}' instance registered in statics namespace", name);
         Ok(())
     }
     
@@ -984,7 +763,7 @@ impl NyashInterpreter {
     
     /// 🔗 Trigger weak reference invalidation (expert-validated implementation)
     pub(super) fn trigger_weak_reference_invalidation(&mut self, target_info: &str) {
-        eprintln!("🔗 DEBUG: Registering invalidation for: {}", target_info);
+        idebug!("🔗 DEBUG: Registering invalidation for: {}", target_info);
         
         // Extract actual object ID from target_info string
         // Format: "<ClassName instance #ID>" -> extract ID
@@ -996,17 +775,89 @@ impl NyashInterpreter {
             
             if let Ok(id) = clean_id_str.parse::<u64>() {
                 self.invalidated_ids.lock().unwrap().insert(id);
-                eprintln!("🔗 DEBUG: Object with ID {} marked as invalidated", id);
+                idebug!("🔗 DEBUG: Object with ID {} marked as invalidated", id);
             } else {
-                eprintln!("🔗 DEBUG: Failed to parse ID from: {}", clean_id_str);
+                idebug!("🔗 DEBUG: Failed to parse ID from: {}", clean_id_str);
             }
         } else {
             // Fallback for non-standard target_info format
-            eprintln!("🔗 DEBUG: No ID found in target_info, using fallback");
+            idebug!("🔗 DEBUG: No ID found in target_info, using fallback");
             if target_info.contains("Parent") {
                 self.invalidated_ids.lock().unwrap().insert(999); // Fallback marker
-                eprintln!("🔗 DEBUG: Parent objects marked as invalidated (fallback ID 999)");
+                idebug!("🔗 DEBUG: Parent objects marked as invalidated (fallback ID 999)");
             }
         }
     }
+}
+// ==== MethodBox Invoker Bridge ==========================================
+fn register_methodbox_invoker() {
+    use crate::method_box::{MethodBox, MethodInvoker, FunctionDefinition, set_method_invoker};
+    use crate::box_trait::{VoidBox};
+    use std::sync::Arc;
+
+    struct SimpleMethodInvoker;
+    impl MethodInvoker for SimpleMethodInvoker {
+        fn invoke(&self, method: &MethodBox, args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, String> {
+            // 1) 取得: メソッド定義
+            let def: FunctionDefinition = if let Some(def) = &method.method_def {
+                def.clone()
+            } else {
+                let inst_guard = method.get_instance();
+                let inst_locked = inst_guard.lock().map_err(|_| "MethodBox instance lock poisoned".to_string())?;
+                if let Some(inst) = inst_locked.as_any().downcast_ref::<InstanceBox>() {
+                    if let Some(ast) = inst.get_method(&method.method_name) {
+                        if let ASTNode::FunctionDeclaration { name, params, body, is_static, .. } = ast {
+                            FunctionDefinition { name: name.clone(), params: params.clone(), body: body.clone(), is_static: *is_static }
+                        } else {
+                            return Err("Method AST is not a function declaration".to_string());
+                        }
+                    } else {
+                        return Err(format!("Method '{}' not found on instance", method.method_name));
+                    }
+                } else {
+                    return Err("MethodBox instance is not an InstanceBox".to_string());
+                }
+            };
+
+            // 2) 新しいInterpreterでメソッド本体を実行（簡易）
+            let mut interp = NyashInterpreter::new();
+            // me = instance
+            let me_box = {
+                let inst_guard = method.get_instance();
+                let inst_locked = inst_guard.lock().map_err(|_| "MethodBox instance lock poisoned".to_string())?;
+                inst_locked.clone_or_share()
+            };
+            interp.declare_local_variable("me", me_box);
+
+            // 引数をローカルへ
+            if def.params.len() != args.len() {
+                return Err(format!("Argument mismatch: expected {}, got {}", def.params.len(), args.len()));
+            }
+            for (p, v) in def.params.iter().zip(args.into_iter()) {
+                interp.declare_local_variable(p, v);
+            }
+
+            // 本体実行
+            let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
+            for st in &def.body {
+                match interp.execute_statement(st) {
+                    Ok(val) => {
+                        result = val;
+                        if let super::ControlFlow::Return(ret) = &interp.control_flow {
+                            result = ret.clone_box();
+                            interp.control_flow = super::ControlFlow::None;
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        return Err(format!("Invoke error: {:?}", e));
+                    }
+                }
+            }
+            Ok(result)
+        }
+    }
+
+    // 登録（複数回new()されてもOnceCellなので一度だけ）
+    let _ = set_method_invoker(Arc::new(SimpleMethodInvoker));
 }

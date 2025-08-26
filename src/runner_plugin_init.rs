@@ -5,20 +5,20 @@
  * Behavior: Quiet by default; use NYASH_CLI_VERBOSE=1 or NYASH_DEBUG_PLUGIN=1 for logs
  */
 
-use crate::runtime::{init_global_loader_v2, get_global_registry, get_global_loader_v2, PluginConfig};
+use crate::runtime::{init_global_plugin_host, get_global_registry, get_global_plugin_host, PluginConfig};
 
 pub fn init_bid_plugins() {
     let cli_verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
     let plugin_debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
     if plugin_debug { eprintln!("🔍 DEBUG: Initializing v2 plugin system"); }
 
-    if let Ok(()) = init_global_loader_v2("nyash.toml") {
+    if let Ok(()) = init_global_plugin_host("nyash.toml") {
         if plugin_debug || cli_verbose {
-            println!("🔌 v2 plugin system initialized from nyash.toml");
+            println!("🔌 plugin host initialized from nyash.toml");
         }
-        let loader = get_global_loader_v2();
-        let loader = loader.read().unwrap();
-        if let Some(config) = &loader.config {
+        let host = get_global_plugin_host();
+        let host = host.read().unwrap();
+        if let Some(config) = host.config_ref() {
             let registry = get_global_registry();
             for (lib_name, lib_def) in &config.libraries {
                 for box_name in &lib_def.boxes {
@@ -27,7 +27,7 @@ pub fn init_bid_plugins() {
                 }
             }
             if plugin_debug || cli_verbose {
-                println!("✅ v2 plugin system fully configured");
+                println!("✅ plugin host fully configured");
             }
         }
     } else if plugin_debug || cli_verbose {

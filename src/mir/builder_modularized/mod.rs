@@ -23,5 +23,5 @@ pub use self::core::MirBuilder;
 pub use super::{
     MirInstruction, BasicBlock, BasicBlockId, MirFunction, MirModule,
     FunctionSignature, ValueId, ConstValue, BinaryOp, UnaryOp, CompareOp,
-    MirType, EffectMask, Effect, BasicBlockIdGenerator, ValueIdGenerator
+    MirType, EffectMask, Effect, BasicBlockIdGenerator, ValueIdGenerator, TypeOpKind
 };

@@ -7,7 +7,7 @@ use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, SharedNyashBox};
 use crate::boxes::FutureBox;
 use crate::instance_v2::InstanceBox;
-use crate::interpreter::core::{NyashInterpreter, RuntimeError};
+use crate::interpreter::{NyashInterpreter, RuntimeError};
 use std::sync::Arc;
 
 // Conditional debug macro - only outputs if NYASH_DEBUG=1 environment variable is set

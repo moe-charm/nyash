@@ -6,7 +6,7 @@ use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, VoidBox};
 use crate::boxes::{ArrayBox, MapBox, MathBox, ConsoleBox, TimeBox, RandomBox, DebugBox, SoundBox, SocketBox};
 use crate::boxes::{HTTPServerBox, HTTPRequestBox, HTTPResponseBox};
-use crate::interpreter::core::{NyashInterpreter, RuntimeError};
+use crate::interpreter::{NyashInterpreter, RuntimeError};
 use std::sync::{Arc, Mutex};
 
 impl NyashInterpreter {

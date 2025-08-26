@@ -125,6 +125,18 @@ impl MessageBusData {
     pub fn get_nodes(&self) -> Vec<String> {
         self.nodes.keys().cloned().collect()
     }
+
+    /// 条件付きでノードを解除（同一エンドポイントの場合のみ）
+    pub fn unregister_if_same(&mut self, id: &str, endpoint: &BusEndpoint) -> bool {
+        if let Some(current) = self.nodes.get(id) {
+            let a = std::sync::Arc::as_ptr(&current.handlers);
+            let b = std::sync::Arc::as_ptr(&endpoint.handlers);
+            if std::ptr::eq(a, b) {
+                return self.unregister_node(id);
+            }
+        }
+        false
+    }
 }
 
 /// グローバルMessageBusシングルトン

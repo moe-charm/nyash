@@ -3,11 +3,12 @@
  * Arc<Mutex>パターン対応版
  */
 
-use crate::interpreter::core::NyashInterpreter;
-use crate::interpreter::core::RuntimeError;
+use crate::interpreter::NyashInterpreter;
+use crate::interpreter::RuntimeError;
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox};
-use crate::boxes::{IntentBox};
+use crate::boxes::{IntentBox, P2PBox};
+use crate::box_trait::BoolBox;
 
 impl NyashInterpreter {
     /// IntentBoxのメソッド実行 (RwLock版)
@@ -39,75 +40,73 @@ impl NyashInterpreter {
         }
     }
     
-    // P2PBoxのメソッド実行 (Arc<Mutex>版) - Temporarily disabled
-    /*
+    // P2PBoxのメソッド実装（RwLockベース）
     pub(in crate::interpreter) fn execute_p2p_box_method(
         &mut self,
         p2p_box: &P2PBox,
         method: &str,
         arguments: &[ASTNode],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let data = p2p_box.lock().map_err(|_| RuntimeError::UndefinedVariable {
-            name: "Failed to lock P2PBox".to_string(),
-        })?;
-        
         match method {
             // ノードID取得
-            "getNodeId" | "getId" => {
-                Ok(Box::new(StringBox::new(data.get_node_id().to_string())))
-            }
-            
+            "getNodeId" | "getId" => Ok(p2p_box.get_node_id()),
+
             // トランスポート種類取得
-            "getTransportType" | "transport" => {
-                Ok(Box::new(StringBox::new(data.get_transport_type())))
-            }
-            
+            "getTransportType" | "transport" => Ok(p2p_box.get_transport_type()),
+
             // ノード到達可能性確認
             "isReachable" => {
                 if arguments.is_empty() {
-                    return Err(RuntimeError::UndefinedVariable {
-                        name: "isReachable requires node_id argument".to_string(),
-                    });
+                    return Err(RuntimeError::InvalidOperation { message: "isReachable requires node_id argument".to_string() });
                 }
-                
                 let node_id_result = self.execute_expression(&arguments[0])?;
-                let node_id = node_id_result.to_string_box().value;
-                let reachable = data.is_reachable(&node_id);
-                Ok(Box::new(BoolBox::new(reachable)))
+                Ok(p2p_box.is_reachable(node_id_result))
             }
-            
-            // send メソッド実装
+
+            // send メソッド実装（ResultBox返却）
             "send" => {
                 if arguments.len() < 2 {
-                    return Err(RuntimeError::UndefinedVariable {
-                        name: "send requires (to, intent) arguments".to_string(),
-                    });
+                    return Err(RuntimeError::InvalidOperation { message: "send requires (to, intent) arguments".to_string() });
                 }
-                
                 let to_result = self.execute_expression(&arguments[0])?;
-                let to = to_result.to_string_box().value;
-                
                 let intent_result = self.execute_expression(&arguments[1])?;
-                
-                // IntentBoxかチェック
-                if let Some(intent_box) = intent_result.as_any().downcast_ref::<IntentBox>() {
-                    match data.send(&to, intent_box.clone()) {
-                        Ok(_) => Ok(Box::new(StringBox::new("sent"))),
-                        Err(e) => Err(RuntimeError::UndefinedVariable {
-                            name: format!("Send failed: {:?}", e),
-                        })
-                    }
-                } else {
-                    Err(RuntimeError::UndefinedVariable {
-                        name: "Second argument must be an IntentBox".to_string(),
-                    })
-                }
+                Ok(p2p_box.send(to_result, intent_result))
             }
-            
-            _ => Err(RuntimeError::UndefinedVariable {
-                name: format!("P2PBox method '{}' not found", method),
-            })
+
+            // on メソッド実装（ResultBox返却）
+            , "on" => {
+                if arguments.len() < 2 {
+                    return Err(RuntimeError::InvalidOperation { message: "on requires (intentName, handler) arguments".to_string() });
+                }
+                let name_val = self.execute_expression(&arguments[0])?;
+                let handler_val = self.execute_expression(&arguments[1])?;
+                Ok(p2p_box.on(name_val, handler_val))
+            }
+
+            // 最後の受信情報（ループバック検証用）
+            "getLastFrom" => Ok(p2p_box.get_last_from()),
+            "getLastIntentName" => Ok(p2p_box.get_last_intent_name()),
+            "debug_nodes" | "debugNodes" => Ok(p2p_box.debug_nodes()),
+            "debug_bus_id" | "debugBusId" => Ok(p2p_box.debug_bus_id()),
+
+            // onOnce / off
+            "onOnce" | "on_once" => {
+                if arguments.len() < 2 {
+                    return Err(RuntimeError::InvalidOperation { message: "onOnce requires (intentName, handler) arguments".to_string() });
+                }
+                let name_val = self.execute_expression(&arguments[0])?;
+                let handler_val = self.execute_expression(&arguments[1])?;
+                Ok(p2p_box.on_once(name_val, handler_val))
+            }
+            "off" => {
+                if arguments.len() < 1 {
+                    return Err(RuntimeError::InvalidOperation { message: "off requires (intentName) argument".to_string() });
+                }
+                let name_val = self.execute_expression(&arguments[0])?;
+                Ok(p2p_box.off(name_val))
+            }
+
+            _ => Err(RuntimeError::UndefinedVariable { name: format!("P2PBox method '{}' not found", method) }),
         }
     }
-    */
 }

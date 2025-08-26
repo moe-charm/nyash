@@ -3,7 +3,7 @@
 
 use crate::ast::ASTNode;
 use crate::box_trait::*;
-use crate::interpreter::core::{NyashInterpreter as Interpreter, RuntimeError};
+use crate::interpreter::{NyashInterpreter as Interpreter, RuntimeError};
 use crate::boxes::FloatBox;
 use crate::boxes::null_box::NullBox;
 use crate::boxes::map_box::MapBox;

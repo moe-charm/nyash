@@ -75,16 +75,12 @@ impl BoxFactoryRegistry {
         }
     }
     
-    /// プラグインBoxを生成（v2実装）
+    /// プラグインBoxを生成（unified facade→v2）
     fn create_plugin_box(&self, plugin_name: &str, box_name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String> {
-        use crate::runtime::get_global_loader_v2;
-        
-        // v2ローダーを取得
-        let loader = get_global_loader_v2();
-        let loader = loader.read().unwrap();
-        
-        // プラグインからBoxを生成
-        loader.create_box(box_name, args)
+        use crate::runtime::get_global_plugin_host;
+        let host = get_global_plugin_host();
+        let host = host.read().unwrap();
+        host.create_box(box_name, args)
             .map_err(|e| format!("Failed to create {} from plugin {}: {:?}", box_name, plugin_name, e))
     }
 }
