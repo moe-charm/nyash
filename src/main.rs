@@ -37,6 +37,8 @@ pub mod mir;
 
 // 🚀 Backend Infrastructure  
 pub mod backend;
+// JIT subsystem (Phase 10)
+pub mod jit;
 
 // 📊 Performance Benchmarks
 pub mod benchmarks;

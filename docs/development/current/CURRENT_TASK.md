@@ -1,61 +1,65 @@
-# 🎯 CURRENT TASK - 2025-08-26（Phase 9.79b Kickoff）
+# 🎯 CURRENT TASK - 2025-08-27（Phase 10_b → 10_c）
 
-コンテキストを最小化して、次フェーズへの導線だけ残すにゃ。
+フェーズ10はJIT実用化へ！Core-1 Lowerの雛形を固めつつ、呼出/フォールバック導線を整えるよ。
 
-## ⏱️ 今日のフォーカス（Phase 9.79b → 9.79b.3: Thunks+Poly-PIC）
-- 目的: Box（builtin/user/plugin）を数値ID＋スロット＋vtable/thunk統一に移行し、Phase 10(JIT)への足場を確立する。
+## ⏱️ 今日のフォーカス（10_b: Lower(Core-1) 最小化 + 10_c準備）
+- 目的: IRBuilder抽象/Lowerを整備し、JIT関数テーブルとVM分岐の足場を実装。次の10_cで本実行に繋げる。
 
 ### 直近タスク（小さく早く）
-1) 9.79b.1: Unified Registry IDs + Builder Slotting
-   - 型ID/メソッドスロットの導入（レジストリ）✅ 実装
-   - ユニバーサルメソッド低スロット予約（0..3）✅ テストで不変確認
-   - Builderが解決可能なBoxCallに`method_id`を付与（未解決は遅延）✅ 実装/Printer表示
-2) 9.79b.2: VM VTable Thunks + Mono-PIC
-   - `execute_boxcall`をvtable+thunkの単一路線へ（ユニバーサル0..3のfast-path追加）✅ スケルトン
-   - call-site単位のモノモーフィックPICを追加（Key設計とカウンタ導入・記録まで）✅ スケルトン
-   - 次: 安定閾値での直呼び最適化（InstanceBox関数名キャッシュ）✅ 実装（PIC=8で昇格）
-   - PluginBoxV2 fast-path（method_id直叩き）✅ 最小TLV（string/int/handle）
-   - builtin/plugin/user のslot seed（4〜）✅ lazy seed/予約
-   - キャッシュ無効化（version by label）✅ loader/宣言でbump導線
+1) 10_b: Lower/Core-1 最小化（進行中 → ほぼ完了）
+   - IRBuilder抽象 + `NoopBuilder`（emit数カウント）✅ 完了
+   - `CraneliftBuilder` 雛形（feature `cranelift-jit`）✅ 完了
+   - LowerCore（Const/Copy/BinOp/Cmp/Branch/Ret）✅ 完了（emit→Builder）
+   - Engine.compile: builder選択（feature連動）＋Lower実行＋JIT handle発行✅ 完了
+   - JIT関数テーブル（stub: handle→ダミー関数）✅ 完了
+   - 残: 最小emit（const/binop/ret）をCLIFで生成し、関数ポインタをテーブル登録（feature有効時）
+     → 実装: CraneliftBuilderでi64用の`const/binop/ret`を生成し、JIT関数テーブルへクロージャとして登録完了（args未対応・i64専用）
+2) 10_c: 呼出/フォールバック（準備 → 部分実装）
+   - VM側の疑似ディスパッチログ（compiled時/実行時ログ）✅ 完了
+   - 残: is_compiled + `NYASH_JIT_EXEC=1` でJIT実行→`VMValue`返却、trap時VMフォールバック
+     → 実装: `VM.execute_function`で`NYASH_JIT_EXEC=1`かつ対象関数がcompiledならJIT実行し、その`VMValue`を即return（現状はargs未使用・trap未実装）
 
-3) 9.79b.3: VM VTable Thunks + Poly-PIC（本実装）
-   - TypeMeta＋Thunkテーブル正式化（slot→thunk→target）: builtin/user/plugin 統一（in_progress）
-   - PICをpoly（2〜4件）に拡張＋version検証: ヒット/ミス/昇格/evict統計（in_progress）
-   - Diagnostics: Registry dump / MIRDebugInfo / PIC・VT統計 / cache bumpログ（in_progress）
+備考（制限と次の着手点）
+- 返り値はi64（VMValue::Integer）に限定。f64・bool等は未emit
+- 引数は未対応（Closureは無視）。MIRのLoad/Param配線が必要
+- Compare/Branchはカウンタのみ（emit未着手）
+- trap→VMフォールバックは未実装（Craneliftトラップハンドリング追加が必要）
 
 ### すぐ試せるコマンド
 ```bash
 cargo build --release -j32
-./target/release/nyash examples/p2p_self_ping.nyash
-./target/release/nyash examples/p2p_ping_pong.nyash
+NYASH_JIT_STATS=1 NYASH_JIT_DUMP=1 ./target/release/nyash examples/p2p_ping_pong.nyash
+
+# 疑似実行パスを確認（まだVMフォールバック）
+NYASH_JIT_STATS=1 NYASH_JIT_DUMP=1 NYASH_JIT_EXEC=1 \
+  ./target/release/nyash examples/p2p_ping_pong.nyash
+
+# （任意）Craneliftを含めてビルド（今は最小初期化のみ）
+cargo build --release -j32 --features cranelift-jit
 ```
 
 ## 現在の地図（Done / Next）
 
-### ✅ 完了（9.79a）
-- ユニバーサル前段ディスパッチ（toString/type/equals/clone）Interpreter/VM
-- P2P unregister安全化・onOnce/off E2E・self/two-nodeスモーク
-- IntentBoxのpayload糖衣（MapBox/JSONBox直渡し可）
-- Docs: P2Pリファレンス/サンプル
+### ✅ 完了（Phase 9.79b）
+- TypeMeta/Thunk正式化・Poly-PIC（2〜4）・Plugin TLV拡張（bool/i64/f64/bytes）
+- VM fast-path整備（Instance/Plugin/Builtin）と統計サマリ強化
 
-### ⏭️ 次（9.79b）
-- 9.79b.1: `phase_9_79b_1_unified_registry_ids_and_builder_slotting.md` ✅ 最小スコープ達成（method_id導入）
-- 9.79b.2: `phase_9_79b_2_vm_vtable_thunks_and_pic.md` ✅ ミニマム完了（ユニバーサル/PIC/Plugin fast-path）
-- 9.79b.3: `phase_9_79b_3_vm_vtable_thunks_and_pic.md` → 足場固め（TypeMeta/Thunk + Poly-PIC + Diagnostics）
-
-## 統一Box設計メモ（唯一参照）
-- `docs/ideas/other/2025-08-25-unified-box-design-deep-analysis.md`
-  - 数値ID/スロット/Thunk/PIC/DebugInfoの全体像
+### ⏭️ 次（Phase 10）
+- 10_a: JITブートストラップ ✅ 完了
+- 10_b: Lower(Core-1) – Const/Move/BinOp/Cmp/Branch/Ret（最小emit仕上げ中）
+- 10_c: ABI/呼出し – JIT→JIT/JIT→VM、例外バイアウト（実行経路を実体化）
+- 10_d: コレクション基礎 – Array/Mapブリッジ
+- 10_e: BoxCall高速化 – Thunk/PIC直結
+- 10_f: TypeOp/Ref/Weak/Barrier（最小）
+- 10_g: 診断/ベンチ/回帰
+- 10_h: 硬化・最適化調整
 
 ## 参考リンク
+- フェーズ10ロードマップ: `docs/development/roadmap/phases/phase-10/phase_10_cranelift_jit_backend.md`
 - MIR命令セット: `docs/reference/mir/INSTRUCTION_SET.md`
-- Phase 9.79a（完了）: `docs/development/roadmap/phases/phase-9/phase_9_79a_unified_box_dispatch_and_p2p_polish.md`
-- Phase 9.79b（計画）:
-  - `docs/development/roadmap/phases/phase-9/phase_9_79b_1_unified_registry_ids_and_builder_slotting.md`
-  - `docs/development/roadmap/phases/phase-9/phase_9_79b_2_vm_vtable_thunks_and_pic.md`
-- Phase 10（Cranelift JIT主経路）: `docs/development/roadmap/phases/phase-10/phase_10_cranelift_jit_backend.md`
+- VM/Thunk/PIC: `docs/development/roadmap/phases/phase-9/phase_9_79b_3_vm_vtable_thunks_and_pic.md`
 
 ## Parking Lot（後でやる）
-- NyashValue即値最適化・演算子特化
-- トレイト階層化（Comparable/Arithmetic etc.）
-- オブジェクトリテラル糖衣（feature `object_literal`）提案: `docs/ideas/improvements/2025-08-26-object-literal-sugar.md`
+- Lower emitのテスト雛形
+- CLIFダンプ/CFG表示（`NYASH_JIT_DUMP=1`）
+- VM `--vm-stats` とJIT統計の統合

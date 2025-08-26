@@ -27,6 +27,12 @@ mir_refbarrier_unify_poc = []
 # llvm = ["dep:inkwell"]
 # Optional: modular MIR builder (off by default)
 mir_modular_builder = []
+cranelift-jit = [
+  "dep:cranelift-codegen",
+  "dep:cranelift-frontend",
+  "dep:cranelift-module",
+  "dep:cranelift-jit"
+]
 
 [lib]
 name = "nyash_rust"
@@ -127,6 +133,12 @@ regex = "1.0"
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
+
+# Cranelift JIT (optional; enabled via feature "cranelift-jit")
+cranelift-codegen = { version = "0.103", optional = true }
+cranelift-frontend = { version = "0.103", optional = true }
+cranelift-module = { version = "0.103", optional = true }
+cranelift-jit = { version = "0.103", optional = true }
 
 # WASM backend dependencies (Phase 8) - optional for faster builds
 wabt = { version = "0.10", optional = true }

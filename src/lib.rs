@@ -43,6 +43,7 @@ pub mod mir;
 
 // 🚀 Backend Infrastructure (NEW!)
 pub mod backend;
+pub mod jit; // Phase 10: Cranelift JIT subsystem (skeleton)
 
 // 📊 Performance Benchmarks (NEW!)
 pub mod benchmarks;

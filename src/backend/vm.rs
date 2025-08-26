@@ -218,6 +218,8 @@ pub struct VM {
     pub(super) boxcall_vtable_funcname: std::collections::HashMap<String, String>,
     /// Version map for cache invalidation: label -> version
     pub(super) type_versions: std::collections::HashMap<String, u32>,
+    /// Optional JIT manager (Phase 10_a skeleton)
+    pub(super) jit_manager: Option<crate::jit::manager::JitManager>,
     // Phase 9.78a: Add unified Box handling components
     // TODO: Re-enable when interpreter refactoring is complete
     // /// Box registry for creating all Box types
@@ -232,6 +234,13 @@ pub struct VM {
 }
 
 impl VM {
+    fn jit_threshold_from_env() -> u32 {
+        std::env::var("NYASH_JIT_THRESHOLD")
+            .ok()
+            .and_then(|s| s.parse::<u32>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(64)
+    }
     /// Helper: execute phi via LoopExecutor with previous_block-based selection (Step2 skeleton)
     pub(super) fn loop_execute_phi(&mut self, dst: ValueId, inputs: &[(BasicBlockId, ValueId)]) -> Result<VMValue, VMError> {
         if inputs.is_empty() {
@@ -283,6 +292,7 @@ impl VM {
             boxcall_poly_pic: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
+            jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
             // TODO: Re-enable when interpreter refactoring is complete
             // box_registry: Arc::new(UnifiedBoxRegistry::new()),
             // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
@@ -313,6 +323,7 @@ impl VM {
             boxcall_poly_pic: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
+            jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
         }
     }
     
@@ -364,6 +375,9 @@ impl VM {
         if std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") {
             self.print_cache_stats_summary();
         }
+
+        // Optional: print JIT stats summary (Phase 10_a)
+        if let Some(jm) = &self.jit_manager { jm.print_summary(); }
 
         // Convert result to NyashBox
         Ok(result.to_nyash_box())
@@ -438,6 +452,17 @@ impl VM {
     /// Execute a single function
     fn execute_function(&mut self, function: &MirFunction) -> Result<VMValue, VMError> {
         self.current_function = Some(function.signature.name.clone());
+        // Phase 10_a: JIT profiling (function entry)
+        if let Some(jm) = &mut self.jit_manager {
+            jm.record_entry(&function.signature.name);
+            // Try compile if hot (no-op for now, returns fake handle)
+            let _ = jm.maybe_compile(&function.signature.name, function);
+            if jm.is_compiled(&function.signature.name) && std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
+                if let Some(h) = jm.handle_of(&function.signature.name) {
+                    eprintln!("[JIT] dispatch would go to handle={} for {} (stub)", h, function.signature.name);
+                }
+            }
+        }
         
         // Initialize loop executor for this function
         self.loop_executor.initialize();
@@ -445,6 +470,28 @@ impl VM {
         // Enter a new scope for this function
         self.scope_tracker.push_scope();
         
+        // Phase 10_c: try a JIT dispatch when enabled; fallback to VM on trap/miss
+        // Prepare arguments from current frame params before borrowing jit_manager mutably
+        let args_vec: Vec<VMValue> = function
+            .params
+            .iter()
+            .filter_map(|pid| self.get_value(*pid).ok())
+            .collect();
+        if let Some(jm) = &mut self.jit_manager {
+            if std::env::var("NYASH_JIT_EXEC").ok().as_deref() == Some("1") {
+                if jm.is_compiled(&function.signature.name) {
+                    if let Some(val) = jm.execute_compiled(&function.signature.name, &args_vec) {
+                        // Exit scope before returning
+                        self.scope_tracker.pop_scope();
+                        return Ok(val);
+                    }
+                }
+            } else {
+                let argc = function.params.len();
+                let _would = jm.maybe_dispatch(&function.signature.name, argc);
+            }
+        }
+
         // Start at entry block
         let mut current_block = function.entry_block;
         

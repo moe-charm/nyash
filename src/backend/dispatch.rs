@@ -13,7 +13,7 @@ use super::vm::VMValue;
 
 /// Minimal dispatcher that routes a single instruction to the appropriate handler.
 /// Keeps behavior identical to the big match in vm.rs but centralized here.
-pub fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, debug_global: bool) -> Result<ControlFlow, VMError> {
+pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, debug_global: bool) -> Result<ControlFlow, VMError> {
     match instruction {
         // Basic operations
         MirInstruction::Const { dst, value } => vm.execute_const(*dst, value),
