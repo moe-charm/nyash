@@ -208,6 +208,8 @@ pub struct VM {
     pub(super) instr_counter: std::collections::HashMap<&'static str, usize>,
     /// Execution start time for optional stats
     pub(super) exec_start: Option<Instant>,
+    /// Mono-PIC skeleton: global hit counters keyed by (recv_type, method_id/name)
+    pub(super) boxcall_pic_hits: std::collections::HashMap<String, u32>,
     // Phase 9.78a: Add unified Box handling components
     // TODO: Re-enable when interpreter refactoring is complete
     // /// Box registry for creating all Box types
@@ -268,6 +270,7 @@ impl VM {
             module: None,
             instr_counter: std::collections::HashMap::new(),
             exec_start: None,
+            boxcall_pic_hits: std::collections::HashMap::new(),
             // TODO: Re-enable when interpreter refactoring is complete
             // box_registry: Arc::new(UnifiedBoxRegistry::new()),
             // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
@@ -293,6 +296,7 @@ impl VM {
             module: None,
             instr_counter: std::collections::HashMap::new(),
             exec_start: None,
+            boxcall_pic_hits: std::collections::HashMap::new(),
         }
     }
     

@@ -15,6 +15,49 @@ use super::{VM, VMValue, VMError};
 use super::vm::ControlFlow;
 
 impl VM {
+    /// Build a PIC key from receiver and method identity
+    fn build_pic_key(&self, recv: &VMValue, method: &str, method_id: Option<u16>) -> String {
+        let rkey = match recv {
+            VMValue::Integer(_) => "Int",
+            VMValue::Float(_) => "Float",
+            VMValue::Bool(_) => "Bool",
+            VMValue::String(_) => "String",
+            VMValue::Future(_) => "Future",
+            VMValue::Void => "Void",
+            VMValue::BoxRef(b) => {
+                // Using dynamic type name as fingerprint (will migrate to numeric id later)
+                return if let Some(mid) = method_id {
+                    format!("BoxRef:{}#{}", b.type_name(), mid)
+                } else {
+                    format!("BoxRef:{}#{}", b.type_name(), method)
+                };
+            }
+        };
+        if let Some(mid) = method_id {
+            format!("{}#{}", rkey, mid)
+        } else {
+            format!("{}#{}", rkey, method)
+        }
+    }
+
+    /// Record a PIC hit for the given key (skeleton: increments a counter)
+    fn pic_record_hit(&mut self, key: &str) {
+        use std::collections::hash_map::Entry;
+        match self.boxcall_pic_hits.entry(key.to_string()) {
+            Entry::Occupied(mut e) => {
+                let v = e.get_mut();
+                *v = v.saturating_add(1);
+                if std::env::var("NYASH_VM_PIC_DEBUG").ok().as_deref() == Some("1") {
+                    if *v == 8 || *v == 32 {
+                        eprintln!("[PIC] Hot BoxCall site '{}' hits={} (skeleton)", key, v);
+                    }
+                }
+            }
+            Entry::Vacant(v) => {
+                v.insert(1);
+            }
+        }
+    }
     /// Execute a constant instruction
     pub(super) fn execute_const(&mut self, dst: ValueId, value: &ConstValue) -> Result<ControlFlow, VMError> {
         let vm_value = VMValue::from(value);
@@ -508,6 +551,10 @@ impl VM {
         // Debug logging if enabled
         let debug_boxcall = std::env::var("NYASH_VM_DEBUG_BOXCALL").is_ok();
         
+        // Record PIC hit (per-receiver-type × method)
+        let pic_key = self.build_pic_key(&recv, method, method_id);
+        self.pic_record_hit(&pic_key);
+
         // Fast path: universal method slots via method_id (0..3)
         if let Some(mid) = method_id {
             if let Some(fast_res) = self.try_fast_universal(mid, &recv, args)? {
