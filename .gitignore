@@ -45,6 +45,8 @@ nyash-rust/
 
 # 開発用秘密フォルダ（完全除外）
 /development/
+/private/
+/private_test/
 
 # Test files
 *.tmp
@@ -119,3 +121,6 @@ local_tests/
 # Font files (already in assets/)
 *.ttf
 *.otf
+
+# Backup files
+/backups/

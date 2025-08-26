@@ -47,6 +47,9 @@ impl NyashInterpreter {
         method: &str,
         arguments: &[ASTNode],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        if crate::interpreter::utils::debug_on() || std::env::var("NYASH_DEBUG_P2P").unwrap_or_default() == "1" {
+            eprintln!("[Interp:P2P] {}(..) called with {} args", method, arguments.len());
+        }
         match method {
             // ノードID取得
             "getNodeId" | "getId" => Ok(p2p_box.get_node_id()),
@@ -74,7 +77,7 @@ impl NyashInterpreter {
             }
 
             // on メソッド実装（ResultBox返却）
-            , "on" => {
+            "on" => {
                 if arguments.len() < 2 {
                     return Err(RuntimeError::InvalidOperation { message: "on requires (intentName, handler) arguments".to_string() });
                 }

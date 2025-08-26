@@ -539,9 +539,40 @@ impl VM {
     }
     
     /// Call a method on a Box - simplified version of interpreter method dispatch
-    pub(super) fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
+    pub(super) fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, mut _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
         // For now, implement basic methods for common box types
         // This is a simplified version - real implementation would need full method dispatch
+
+        // 🌟 Universal methods pre-dispatch (non-invasive)
+        match method {
+            "toString" => {
+                if !_args.is_empty() {
+                    return Ok(Box::new(StringBox::new(format!("Error: toString() expects 0 arguments, got {}", _args.len()))));
+                }
+                return Ok(Box::new(StringBox::new(box_value.to_string_box().value)));
+            }
+            "type" => {
+                if !_args.is_empty() {
+                    return Ok(Box::new(StringBox::new(format!("Error: type() expects 0 arguments, got {}", _args.len()))));
+                }
+                return Ok(Box::new(StringBox::new(box_value.type_name())));
+            }
+            "equals" => {
+                if _args.len() != 1 {
+                    return Ok(Box::new(StringBox::new(format!("Error: equals() expects 1 argument, got {}", _args.len()))));
+                }
+                let rhs = _args.remove(0);
+                let eq = box_value.equals(&*rhs);
+                return Ok(Box::new(eq));
+            }
+            "clone" => {
+                if !_args.is_empty() {
+                    return Ok(Box::new(StringBox::new(format!("Error: clone() expects 0 arguments, got {}", _args.len()))));
+                }
+                return Ok(box_value.clone_box());
+            }
+            _ => {}
+        }
 
         // ResultBox (NyashResultBox - new)
         if let Some(result_box) = box_value.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
@@ -561,11 +592,6 @@ impl VM {
         }
 
         // Legacy box_trait::ResultBox is no longer handled here (migration complete)
-
-        // Generic fallback: toString for any Box type
-        if method == "toString" {
-            return Ok(Box::new(StringBox::new(box_value.to_string_box().value)));
-        }
 
         // StringBox methods
         if let Some(string_box) = box_value.as_any().downcast_ref::<StringBox>() {

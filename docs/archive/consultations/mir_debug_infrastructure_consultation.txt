@@ -1,0 +1,170 @@
+Nyash MIRレベルデバッグインフラストラクチャ設計相談
+
+【背景】
+NyashはMIR（中間表現）を経由して複数のバックエンドで実行されます：
+- VM（現在実装済み）
+- JIT（Phase 9で実装予定）
+- AOT（将来実装）
+- WASM（実装済み）
+
+現在、デバッグ・メモリリーク検出・パフォーマンス解析機能をVM層で実装することを検討していますが、
+MIRレベルで実装できれば、すべてのバックエンドで統一的に使える理想的な設計になります。
+
+【技術的課題】
+1. MIRは低レベル命令（26命令）で、高レベルのBox情報が失われる
+   - NewBox(type_id=6, args) → 6が何のBoxか分からない
+   - BoxCall(reg=0, "toString") → どのBox型のメソッドか不明
+
+2. MIRは実行前の静的表現なので、実行時情報の追跡が困難
+   - Boxの生成・破棄タイミング
+   - メソッド実行時間の計測
+   - メモリ使用量の追跡
+
+3. 各バックエンドでの実装の違い
+   - VM: スタックベース、インタープリター
+   - JIT: ネイティブコード生成
+   - WASM: 別の仮想マシン
+
+【設計案1: MIRデバッグ命令の追加】
+```rust
+pub enum MIRInstruction {
+    // 既存の命令
+    NewBox(u16, Vec<u8>),
+    BoxCall(RegisterIndex, RegisterIndex, String, Vec<RegisterIndex>),
+    
+    // デバッグ専用命令（本番では無視）
+    DebugBoxCreate(RegisterIndex, String),      // Box型名を記録
+    DebugMethodEnter(String, Vec<RegisterIndex>), // メソッド開始
+    DebugMethodExit(RegisterIndex),             // メソッド終了
+    DebugSnapshot(String),                      // 任意の時点のスナップショット
+}
+```
+
+メリット：
+- MIRレベルで完結
+- すべてのバックエンドで同じデバッグ情報
+
+デメリット：
+- MIRが肥大化
+- 本番実行時のオーバーヘッド
+
+【設計案2: MIRメタデータの分離】
+```rust
+pub struct MIRModule {
+    pub functions: HashMap<String, MIRFunction>,
+    pub constants: Vec<Constant>,
+    pub debug_info: Option<MIRDebugInfo>,  // デバッグ時のみ生成
+}
+
+pub struct MIRDebugInfo {
+    // 命令インデックス → デバッグ情報
+    instruction_map: HashMap<usize, InstructionDebugInfo>,
+    
+    // type_id → Box型名
+    type_names: HashMap<u16, String>,
+    
+    // ソースマップ
+    source_map: SourceMap,
+}
+```
+
+メリット：
+- MIR本体はクリーン
+- デバッグ時のみメタデータ生成
+
+デメリット：
+- 実行時追跡には各バックエンドでのフック必要
+
+【設計案3: MIRプロファイリング拡張】
+```rust
+pub trait MIRExecutor {
+    // 基本実行
+    fn execute(&mut self, module: &MIRModule) -> Result<(), Error>;
+    
+    // プロファイリング付き実行
+    fn execute_with_profiling(
+        &mut self, 
+        module: &MIRModule,
+        profiler: &mut dyn MIRProfiler
+    ) -> Result<(), Error>;
+}
+
+pub trait MIRProfiler {
+    fn on_instruction(&mut self, pc: usize, inst: &MIRInstruction);
+    fn on_box_create(&mut self, type_id: u16, reg: RegisterIndex);
+    fn on_method_call(&mut self, receiver: RegisterIndex, method: &str);
+    // ...
+}
+```
+
+メリット：
+- 各バックエンドが同じプロファイラーインターフェースを実装
+- 柔軟な拡張が可能
+
+デメリット：
+- 各バックエンドでの実装が必要
+
+【設計案4: MIR静的解析による事前情報抽出】
+```rust
+pub struct MIRAnalyzer {
+    pub fn analyze(module: &MIRModule) -> AnalysisResult {
+        // Box生成パターンの検出
+        let box_creations = find_box_creations(&module);
+        
+        // メソッド呼び出しグラフの構築
+        let call_graph = build_call_graph(&module);
+        
+        // 潜在的なメモリリークパターン
+        let leak_patterns = detect_leak_patterns(&module);
+        
+        AnalysisResult {
+            box_creations,
+            call_graph,
+            leak_patterns,
+            // ...
+        }
+    }
+}
+```
+
+メリット：
+- 実行前に多くの情報を取得
+- オーバーヘッドなし
+
+デメリット：
+- 動的な振る舞いは追跡できない
+
+【質問事項】
+
+1. MIRレベルでのデバッグ実装について、どの設計案が最も実用的でしょうか？
+
+2. 他の言語（LLVM IR、Java bytecode、.NET IL等）では、
+   このような問題をどのように解決していますか？
+
+3. MIR命令セットの拡張 vs メタデータ分離、
+   どちらがパフォーマンスと保守性のバランスが良いでしょうか？
+
+4. JIT/AOTコンパイル時にデバッグコードを埋め込む方法として、
+   効率的なアプローチはありますか？
+
+5. WASMのような異なる実行環境でも統一的にデバッグ情報を
+   扱う方法についてアドバイスをお願いします。
+
+【現在のMIR命令セット（26命令）】
+- 基本: Const, Move, Copy
+- 算術: Add, Sub, Mul, Div, Mod, Neg
+- 比較: Eq, Ne, Lt, Le, Gt, Ge
+- 論理: And, Or, Not
+- Box: NewBox, BoxCall, GetField, SetField
+- 制御: Br, Jmp, Call, Ret
+- メモリ: RefNew, RefGet, RefSet
+- 型: AsType, IsType
+
+【Nyashの設計哲学】
+- Everything is Box - すべてがBoxオブジェクト
+- メモリ安全性重視
+- 初学者フレンドリー
+- 高速実行（VM実装で13.5倍高速化達成）
+
+専門的な観点から、MIRレベルでの統一デバッグインフラストラクチャの
+実現可能性と最適な設計についてアドバイスをお願いします。

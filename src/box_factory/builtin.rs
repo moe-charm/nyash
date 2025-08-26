@@ -455,8 +455,15 @@ impl BuiltinBoxFactory {
                 });
             }
             let name = args[0].to_string_box().value;
+            // Accept multiple payload forms: JSON string, JSONBox, MapBox
+            let payload_str = if let Some(jb) = args[1].as_any().downcast_ref::<crate::boxes::json::JSONBox>() {
+                jb.to_string()
+            } else if let Some(mb) = args[1].as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                mb.toJSON().to_string_box().value
+            } else {
+                args[1].to_string_box().value
+            };
             // Try parse payload as JSON, fallback to string
-            let payload_str = args[1].to_string_box().value;
             let payload = match serde_json::from_str::<serde_json::Value>(&payload_str) {
                 Ok(json) => json,
                 Err(_) => serde_json::Value::String(payload_str),

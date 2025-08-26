@@ -179,9 +179,15 @@ impl P2PBox {
             if let Some(method_box) = handler.as_any().downcast_ref::<MethodBox>() {
                 let method_clone = method_box.clone();
                 let intent_name = intent_str.to_string();
+                // capture state holders for receive-side tracing
+                let last_from = Arc::clone(&self.last_from);
+                let last_intent = Arc::clone(&self.last_intent_name);
                 t.register_intent_handler(&intent_name, Box::new(move |env| {
                     // flagがtrueのときのみ実行
                     if flag.load(Ordering::SeqCst) {
+                        // Update receive-side traces for E2E visibility
+                        if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
+                        if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
                         let _ = method_clone.invoke(vec![
                             Box::new(env.intent.clone()),
                             Box::new(StringBox::new(env.from.clone())),
@@ -251,6 +257,16 @@ impl P2PBox {
         } else {
             Box::new(StringBox::new("<unsupported>"))
         }
+    }
+
+    /// デバッグ: intentに対する有効ハンドラー数（trueフラグ数）
+    pub fn debug_active_handler_count(&self, intent_name: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let name = intent_name.to_string_box().value;
+        let flags = self.handler_flags.read().unwrap();
+        let cnt = flags.get(&name)
+            .map(|v| v.iter().filter(|f| f.load(Ordering::SeqCst)).count())
+            .unwrap_or(0);
+        Box::new(crate::box_trait::IntegerBox::new(cnt as i64))
     }
 
     /// 最後に受信したfromを取得（ループバック検証用）
@@ -353,5 +369,84 @@ mod tests {
         }
         assert_eq!(p.get_last_from().to_string_box().value, "alice".to_string());
         assert_eq!(p.get_last_intent_name().to_string_box().value, "ping".to_string());
+    }
+
+    /// Internal helper for tests: register raw Rust handler with optional async reply
+    impl P2PBox {
+        #[allow(dead_code)]
+        fn __debug_on_rust(&self, intent: &str, reply_intent: Option<&str>) {
+            if let Ok(mut t) = self.transport.write() {
+                let intent_name = intent.to_string();
+                let last_from = Arc::clone(&self.last_from);
+                let last_intent = Arc::clone(&self.last_intent_name);
+                // create self clone for reply
+                let self_clone = self.clone();
+                let reply_name = reply_intent.map(|s| s.to_string());
+                t.register_intent_handler(&intent_name, Box::new(move |env| {
+                    if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
+                    if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
+                    if let Some(rn) = reply_name.clone() {
+                        let to = env.from.clone();
+                        std::thread::spawn(move || {
+                            // slight delay to avoid lock contention
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                            let intent = IntentBox::new(rn, serde_json::json!({}));
+                            let _ = self_clone.send(Box::new(StringBox::new(to)), Box::new(intent));
+                        });
+                    }
+                }));
+            }
+        }
+    }
+
+    #[test]
+    fn two_node_ping_pong() {
+        let alice = P2PBox::new("alice".to_string(), TransportKind::InProcess);
+        let bob = P2PBox::new("bob".to_string(), TransportKind::InProcess);
+        // bob replies pong to ping
+        bob.__debug_on_rust("ping", Some("pong"));
+        // alice listens pong
+        alice.__debug_on_rust("pong", None);
+        // send ping
+        let ping = IntentBox::new("ping".to_string(), serde_json::json!({}));
+        let _ = alice.send(Box::new(StringBox::new("bob")), Box::new(ping));
+        // bob should record ping
+        assert_eq!(bob.get_last_intent_name().to_string_box().value, "ping");
+        // allow async reply
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        // alice should record pong
+        assert_eq!(alice.get_last_intent_name().to_string_box().value, "pong");
+    }
+
+    #[test]
+    fn on_once_disables_after_first_delivery() {
+        let p = P2PBox::new("alice".to_string(), TransportKind::InProcess);
+        // Register one-time handler for 'hello'
+        let handler = crate::method_box::MethodBox::new(Box::new(p.clone()), "noop".to_string());
+        let _ = p.on_once(Box::new(StringBox::new("hello")), Box::new(handler));
+        // Initially active = 1
+        let c0 = p.debug_active_handler_count(Box::new(StringBox::new("hello")));
+        assert_eq!(c0.to_string_box().value, "1");
+        // Send twice to self
+        let intent = IntentBox::new("hello".to_string(), serde_json::json!({}));
+        let _ = p.send(Box::new(StringBox::new("alice")), Box::new(intent.clone()));
+        let _ = p.send(Box::new(StringBox::new("alice")), Box::new(intent));
+        // After first delivery, once-flag should be false => active count = 0
+        let c1 = p.debug_active_handler_count(Box::new(StringBox::new("hello")));
+        assert_eq!(c1.to_string_box().value, "0");
+    }
+
+    #[test]
+    fn off_clears_handlers() {
+        let p = P2PBox::new("bob".to_string(), TransportKind::InProcess);
+        let handler = crate::method_box::MethodBox::new(Box::new(p.clone()), "noop".to_string());
+        let _ = p.on(Box::new(StringBox::new("bye")), Box::new(handler));
+        // Active = 1
+        let c0 = p.debug_active_handler_count(Box::new(StringBox::new("bye")));
+        assert_eq!(c0.to_string_box().value, "1");
+        // Off
+        let _ = p.off(Box::new(StringBox::new("bye")));
+        let c1 = p.debug_active_handler_count(Box::new(StringBox::new("bye")));
+        assert_eq!(c1.to_string_box().value, "0");
     }
 }

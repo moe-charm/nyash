@@ -5,22 +5,21 @@
 ## Start Here (必ずここから)
 - 現在のタスク: docs/development/current/CURRENT_TASK.md
 - ドキュメントハブ: README.md
-- 主軸タスクリスト: docs/development/roadmap/native-plan/copilot_issues.txt
+- 🚀 **開発マスタープラン**: docs/development/roadmap/phases/00_MASTER_ROADMAP.md
 
 Notes:
 - ここから先の導線は README.md に集約。Claude Codeくんがこのファイルを上書きしても最低限のリンクは保たれるよ。
 
-## 🤖 **Claude×Copilot協調開発の主軸**
-### 📋 **copilot_issues.txt - 開発の軸となるファイル**
-**すべてはここに書いてある！** - Phase順タスク・優先順位・技術詳細
+## 🤖 **Claude×Copilot×ChatGPT協調開発**
+### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
+**すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-- **Phase 8.4**: AST→MIR Lowering完全実装（最優先）
-- **Phase 8.5**: MIRダイエット（35命令→20命令）
-- **Phase 8.6**: VM性能改善（0.9倍 → 2倍以上）
+- **Phase 8.6**: VM性能改善（0.9倍 → 2倍以上）**← 現在ここ**
 - **Phase 9**: JIT実装
 - **Phase 10**: Cranelift JIT（主経路）/ LLVM AOTは後段
+- **Phase 9.8**: BIDレジストリ（プラグイン全バックエンド対応）
 
-**迷ったらcopilot_issues.txtを確認せよ！**
+**迷ったらマスタープランを確認せよ！**
 
 ## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
 

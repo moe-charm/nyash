@@ -229,6 +229,38 @@ impl NyashInterpreter {
         // オブジェクトを評価（通常のメソッド呼び出し）
         let obj_value = self.execute_expression(object)?;
         idebug!("🔍 DEBUG: execute_method_call - object type: {}, method: {}", obj_value.type_name(), method);
+
+        // 🌟 ユニバーサルメソッド前段ディスパッチ（非侵襲）
+        // toString()/type()/equals(x)/clone() をトレイトに直結
+        match method {
+            "toString" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation { message: format!("toString() expects 0 arguments, got {}", arguments.len()) });
+                }
+                return Ok(Box::new(obj_value.to_string_box()));
+            }
+            "type" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation { message: format!("type() expects 0 arguments, got {}", arguments.len()) });
+                }
+                return Ok(Box::new(StringBox::new(obj_value.type_name())));
+            }
+            "equals" => {
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation { message: format!("equals() expects 1 argument, got {}", arguments.len()) });
+                }
+                let rhs = self.execute_expression(&arguments[0])?;
+                let eq = obj_value.equals(&*rhs);
+                return Ok(Box::new(eq));
+            }
+            "clone" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation { message: format!("clone() expects 0 arguments, got {}", arguments.len()) });
+                }
+                return Ok(obj_value.clone_box());
+            }
+            _ => {}
+        }
         
         // Builtin dispatch (centralized)
         if let Some(res) = self.dispatch_builtin_method(&obj_value, method, arguments) {

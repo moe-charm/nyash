@@ -1,539 +1,427 @@
-# Nyash統一Box設計の深い分析と今後の方向性
-Status: Research
+# Nyash統一Box設計の深い分析と実装戦略
+Status: Active Design
 Created: 2025-08-25
-Priority: High
+Updated: 2025-08-26 (Codex深掘り版)
+Priority: Critical
 Related: Everything is Box哲学の実装レベルでの完全実現
 
-## 現状の統一Box設計
+## 📌 最新の合意事項（2025-08-26）
 
-### 3種類のBoxの存在
-1. **ビルトインBox** - Rustで実装（StringBox, IntegerBox, ConsoleBox等）
-2. **プラグインBox** - 動的ライブラリで提供（FileBox等の置き換え可能）
-3. **ユーザー定義Box** - Nyashコードで定義（box Person等）
+### 2つのAI専門家からの統一見解
+- **Codex (GPT-5)**: ハイブリッドアプローチ推奨、Method ID = Stable Slot Index
+- **Claude**: MIRレベル完全統一の重要性を強調
+- **共通結論**: コアBox静的リンク＋MIR統一＋Thunk indirection = 最適解
 
-### 現在の統一アーキテクチャ
-```
-UnifiedBoxRegistry（統一レジストリ）
-├── BuiltinBoxFactory（優先度1）
-├── UserDefinedBoxFactory（優先度2）
-└── PluginBoxFactory（優先度3）
-```
+### 核心的設計決定
+1. **ハイブリッドアプローチ** - コアは静的、拡張はプラグイン
+2. **MIRレベル完全統一** - 3種類のBoxを数値IDで区別なく扱う
+3. **Stable Slot Index** - メソッドIDは型ごとのvtableスロット番号
+4. **Thunk-based Safety** - プラグインアンロード時の安全性保証
 
-### 統一の美しさ
+## 🎯 統一Box設計の全体像
 
-1. **透過的な置き換え**
-   - 同じ名前のBoxをプラグインで上書き可能
-   - 実行時の動的切り替えも可能
-
-2. **統一インターフェース**
-   ```rust
-   pub trait BoxFactory: Send + Sync {
-       fn create_box(&self, name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, RuntimeError>;
-       fn box_types(&self) -> Vec<&str>;
-       fn supports_birth(&self) -> bool;
-   }
-   ```
-
-3. **優先順位システム**
-   - ビルトイン > ユーザー定義 > プラグイン
-   - 予約語保護（StringBox等は上書き不可）
-
-## InstanceBoxによる完全統一
-
-### 統一実装の核心
-```rust
-pub struct InstanceBox {
-    pub class_name: String,                       // "StringBox", "Person"等
-    pub inner_content: Option<Box<dyn NyashBox>>, // 内包Box（統一！）
-    pub fields_ng: Arc<Mutex<HashMap<String, NyashValue>>>,
-    pub methods: Arc<HashMap<String, ASTNode>>,
-}
-```
-
-### 3つの形態を統一的に扱う
-```rust
-// ビルトイン
-InstanceBox::from_any_box("StringBox", Box::new(StringBox::new("hello")))
-
-// プラグイン
-InstanceBox::from_any_box("FileBox", plugin_loader.create_box("FileBox"))
-
-// ユーザー定義
-InstanceBox::from_declaration("Person", vec!["name", "age"], methods)
-```
-
-## 基本メソッドの統一提案
-
-### 問題点
-- `toString()` → `to_string_box()` （Rustの命名規則で異なる）
-- `type()` → `type_name()` （微妙に異なる）
-- 各Boxで個別実装されていて統一感がない
-
-### 解決案：NyashBoxトレイトにデフォルト実装
-```rust
-pub trait NyashBox: BoxCore + Debug {
-    // Nyash標準メソッド（デフォルト実装）
-    fn toString(&self) -> Box<dyn NyashBox> {
-        Box::new(StringBox::new(&self.to_string_box().value))
-    }
-    
-    fn type(&self) -> Box<dyn NyashBox> {
-        Box::new(StringBox::new(self.type_name()))
-    }
-    
-    fn equals(&self, other: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        Box::new(BoolBox::new(self.equals_internal(other.as_ref())))
-    }
-    
-    fn clone(&self) -> Box<dyn NyashBox> {
-        self.clone_box()
-    }
-}
-```
-
-### VMでの統一的な呼び出し
-```rust
-pub(super) fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
-    // 基本メソッドは全Boxで使える！
-    match method {
-        "toString" => Ok(box_value.toString()),
-        "type" => Ok(box_value.type()),
-        "equals" => Ok(box_value.equals(args[0].clone_or_share())),
-        "clone" => Ok(box_value.clone()),
-        _ => self.call_specific_method(box_value, method, args)
-    }
-}
-```
-
-## Gemini先生からの提案（部分）
-
-### 1. NyashValue Enumの導入
-```rust
-pub enum NyashValue {
-    // 即値（スタック上）
-    Void,
-    Bool(bool),
-    Integer(i64),
-    Float(f64),
-    
-    // ヒープ上の不変値
-    String(Arc<String>),
-    
-    // 複雑なオブジェクト
-    Object(Arc<NyashObject>),
-}
-```
-
-**メリット**:
-- 小さな値のヒープアロケーション回避
-- パターンマッチによる高速ディスパッチ
-- 型安全性の向上
-
-### 2. トレイトの階層化
-```rust
-// 基本トレイト
-pub trait NyashBox: Send + Sync + Debug {
-    fn to_string(&self) -> String;
-    fn type_name(&self) -> &'static str;
-    fn equals(&self, other: &dyn NyashBox) -> bool;
-}
-
-// 拡張トレイト
-pub trait Comparable: NyashBox {
-    fn compare(&self, other: &dyn NyashBox) -> Option<Ordering>;
-}
-
-pub trait Arithmetic: NyashBox {
-    fn add(&self, other: &dyn NyashBox) -> Result<Box<dyn NyashBox>, String>;
-}
-```
-
-### 3. メタプログラミング機能
-```rust
-pub trait BoxMetadata {
-    fn on_method_missing(&self, name: &str, args: &[NyashValue]) -> Option<NyashValue>;
-    fn on_field_access(&self, name: &str) -> Option<NyashValue>;
-}
-```
-
-## 統一継承の実現
-
-### ~~現在の課題~~ → 2025-08-25更新：すべて実装済み！
-- ~~ビルトインBoxの継承ができない~~ → ✅ 実装済み！
-- ~~プラグインBoxの継承も未実装~~ → ✅ 実装済み！
-
-### 理想的な統一継承（すでに実現！）
-```nyash
-// すべて可能になった！
-box MyString from StringBox { }      // ビルトイン継承 ✅
-box MyFile from FileBox { }          // プラグイン継承 ✅ 
-box Employee from Person { }         // ユーザー定義継承 ✅
-
-// 多重デリゲーションも可能！
-box MultiChild from StringBox, IntegerBox { }  // ✅
-```
-
-### 実際のコード例（動作確認済み）
-```nyash
-box EnhancedString from StringBox {
-    init { prefix, suffix }
-    
-    birth(text) {
-        from StringBox.birth(text)  // 透過的にpackに変換される
-        me.prefix = "【"
-        me.suffix = "】"
-    }
-    
-    enhanced() {
-        return me.prefix + me.toString() + me.suffix + "✨"
-    }
-}
-```
-
-## さらなる美化への道
-
-### 1. パイプライン演算子
-```nyash
-// 現在
-local result = str.substring(0, 5).toUpperCase().trim()
-
-// パイプライン版
-local result = str
-    |> substring(0, 5)
-    |> toUpperCase()
-    |> trim()
-```
-
-### 2. Box階層の整理
-```
-NyashBox (trait)
-├── ValueBox (数値・文字列・真偽値)
-│   ├── IntegerBox
-│   ├── StringBox
-│   └── BoolBox
-├── ContainerBox (コレクション)
-│   ├── ArrayBox
-│   └── MapBox
-├── IOBox (入出力)
-│   ├── ConsoleBox
-│   └── FileBox
-└── ConcurrentBox (並行処理)
-    ├── FutureBox
-    └── ChannelBox
-```
-
-### 3. エフェクトシステムの美化
-```rust
-impl ArrayBox {
-    #[effect(Pure)]
-    fn length(&self) -> IntegerBox { }
-    
-    #[effect(State)]
-    fn push(&mut self, item: Box<dyn NyashBox>) { }
-}
-```
-
-## 実装優先順位（80/20ルール）
-
-### 今すぐやるべき（80%）
-1. 基本メソッド（toString, type, equals, clone）の統一実装
-2. VMでの統一的なメソッドディスパッチ
-3. InstanceBoxのinner_content活用の徹底
-
-### 後でじっくり（20%）
-1. NyashValue enum導入によるパフォーマンス最適化
-2. トレイト階層化による整理
-3. パイプライン演算子の実装
-4. メタプログラミング機能
-5. 完全な統一継承システム
-
-## まとめ
-
-現在のNyashの統一Box設計は、すでに相当美しく実装されている。特に：
-
-1. **UnifiedBoxRegistry**による透過的な管理
-2. **優先順位システム**による明確な解決
-3. **InstanceBox**による統一的な扱い
-
-これらは「Everything is Box」哲学を実装レベルで体現している。
-
-ユーザー定義Boxをビルトイン/プラグインBoxと完全に同じレベルで扱うことは、強引ではなく、むしろ設計として自然で美しい。この統一により、言語の一貫性と拡張性が大幅に向上する。
-
-今後は、基本メソッドの統一実装から始めて、段階的により洗練された設計へと進化させていくのが良いだろう。
-
-## 🚀 MIR/VM統一実装計画（2025-08-25追記）
-
-### 📍 現状の課題
-VMとMIRで、Box型によって異なる処理をしている：
+### 1. Box分類の最終決定
 
 ```rust
-// VMでの現状：InstanceBoxだけ特別扱い
-if let Some(inst) = arc_box.as_any().downcast_ref::<InstanceBox>() {
-    // ユーザー定義Box → 関数呼び出しに変換
-    let func_name = format!("{}.{}/{}", inst.class_name, method, args.len());
-} else {
-    // ビルトイン/プラグイン → 直接メソッド呼び出し
-    self.call_box_method(cloned_box, method, nyash_args)?
-}
-```
-
-### 🎯 統一実装の提案
-
-#### 1. 統一メソッドディスパッチインターフェース
-```rust
-pub trait UnifiedBox: NyashBox {
-    fn dispatch_method(&self, method: &str, args: Vec<Box<dyn NyashBox>>) 
-        -> Result<Box<dyn NyashBox>, String> {
-        // デフォルト実装：既存のメソッド呼び出しを使用
-        self.call_method(method, args)
-    }
-}
-
-// InstanceBoxでのオーバーライド
-impl UnifiedBox for InstanceBox {
-    fn dispatch_method(&self, method: &str, args: Vec<Box<dyn NyashBox>>) 
-        -> Result<Box<dyn NyashBox>, String> {
-        // MIR関数へのリダイレクト
-        let func_name = format!("{}.{}/{}", self.class_name, method, args.len());
-        // VM経由で関数呼び出し
-    }
-}
-```
-
-#### 2. VMの簡素化
-```rust
-// 統一後：すべて同じ処理パス
-let result = match &recv {
-    VMValue::BoxRef(arc_box) => {
-        arc_box.dispatch_method(method, nyash_args)?
-    }
-    _ => {
-        recv.to_nyash_box().dispatch_method(method, nyash_args)?
-    }
-};
-```
-
-#### 3. MIRレベルでの統一
-- `BoxCall`命令ですべてのBox型を統一的に処理
-- 型による分岐や特殊処理を削除
-- コンパイル時の最適化は維持
-
-### 💎 期待される効果
-
-1. **コードの簡素化**
-   - VM内の条件分岐削除で30%以上のコード削減
-   - 新Box型追加時の変更箇所が最小限に
-
-2. **保守性の向上**
-   - Box型の実装詳細がVMから隠蔽される
-   - テストが書きやすくなる
-
-3. **パフォーマンス**
-   - 統一的な最適化（メソッドキャッシュ等）が可能
-   - 仮想関数テーブルによる高速化の可能性
-
-4. **美しさ**
-   - 「Everything is Box」が実装レベルでも完全に実現
-   - シンプルで理解しやすいコード
-
-### 📅 実装ロードマップ
-
-1. **Phase 1**: UnifiedBoxトレイトの導入（後方互換性を保ちながら）
-2. **Phase 2**: VMでの統一ディスパッチ実装
-3. **Phase 3**: MIRビルダーの簡素化
-4. **Phase 4**: 旧実装の削除とクリーンアップ
-
-### 🌟 最終的なビジョン
-
-すべてのBox（ビルトイン、プラグイン、ユーザー定義）が完全に統一された世界：
-- 同じインターフェース
-- 同じ実行パス
-- 同じ最適化機会
-
-これこそが「Everything is Box」の究極の実現！
-
-## 🔌 プラグインローダーv2との統合
-
-### 現在のプラグインシステムとの関係
-- プラグインローダーv2がすでに統一的なインターフェースを提供
-- `extern_call`経由での統一的なアクセス
-- UnifiedBoxトレイトとの相性は良好
-
-### 統合のメリット
-- プラグインBoxも`dispatch_method()`で統一処理
-- ホットリロード時も透過的に動作
-- FFI境界を意識しない実装
-
-## 📊 パフォーマンス測定計画
-
-### 現在のベースライン
-- インタープリター基準で13.5倍高速化達成（VM実装）
-- BoxCall命令の実行時間が全体の約30%
-
-### 統一実装後の予測
-- 条件分岐削減で5-10%の高速化期待
-- メソッドキャッシュで追加20%改善の可能性
-- 測定方法：`--benchmark --iterations 1000`で検証
-
-## 🔄 移行時の互換性戦略
-
-### 段階的移行計画
-1. **Phase 1**: UnifiedBoxトレイトを追加（既存APIは維持）
-2. **Phase 2**: 警告付きで旧API使用を通知
-3. **Phase 3**: 内部実装を統一版に切り替え
-4. **Phase 4**: 旧APIをdeprecated化
-5. **Phase 5**: 完全削除（6ヶ月後）
-
-### テスト戦略
-- 既存の全E2Eテストが通ることを保証
-- パフォーマンスリグレッションテスト追加
-- プラグイン互換性テストスイート
-
-## ⚡ JITコンパイラとの統合（Phase 9準備）
-
-### 統一メソッドディスパッチの利点
-- JITが最適化しやすい単純な呼び出しパターン
-- インライン展開の機会増加
-- 型情報を活用した特殊化
-
-### 仮想関数テーブル（vtable）戦略
-```rust
-struct BoxVTable {
-    methods: HashMap<String, fn(&dyn NyashBox, Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, String>>,
-}
-```
-- 起動時に事前計算
-- JITコンパイル時に直接参照
-- キャッシュフレンドリーな配置
-
-## 🔧 具体的な実装タスク（TODO）
-
-### Phase 1: 基礎実装（1週間）
-- [ ] UnifiedBoxトレイトの定義（src/box_trait.rs）
-- [ ] StringBox, IntegerBox等への実装
-- [ ] InstanceBoxへのdispatch_method実装
-- [ ] 単体テストの作成
-
-### Phase 2: VM統合（2週間）
-- [ ] execute_boxcall()の簡素化
-- [ ] InstanceBox特別扱いコードの削除
-- [ ] VMValueとの統合
-- [ ] E2Eテスト全パス確認
-- [ ] ベンチマーク実行と比較
-
-### Phase 3: 最適化（1週間）
-- [ ] メソッドキャッシュ実装
-- [ ] 頻出メソッドの特殊化
-- [ ] vtable事前計算
-- [ ] JIT統合準備
-
-### Phase 4: クリーンアップ（3日）
-- [ ] 旧実装コードの削除
-- [ ] ドキュメント更新
-- [ ] CHANGELOG記載
-- [ ] マイグレーションガイド作成
-
-### 検証項目
-- [ ] 全Box型でtoString/type/equals/cloneが動作
-- [ ] プラグインBoxの透過的な動作
-- [ ] パフォーマンス改善の確認
-- [ ] メモリ使用量の変化なし
-
-## 🚀 究極の統一：ビルトインBox完全プラグイン化構想
-
-### 現状の二重実装問題
-- **plugin_loader.rs** (1217行) - ビルトインBoxの動的ライブラリ化
-- **plugin_loader_v2.rs** (906行) - プラグインBoxシステム
-- 合計2000行以上の重複！
-
-### 完全プラグイン化の提案
-
-#### すべてをプラグインに統一
-```rust
-// 現在
-ビルトインFileBox → 静的リンク
-プラグインFileBox → 動的ロード（.so）
-
-// 統一後
-すべてのBox → プラグイン（.so）として実装
-```
-
-#### コアBoxの自動ロード戦略
-```rust
+// 絶対的コアBox（静的リンク必須）- 10個
 const CORE_BOXES: &[&str] = &[
-    "libnyash_string_box.so",   // StringBox（必須）
-    "libnyash_integer_box.so",  // IntegerBox（必須）
-    "libnyash_bool_box.so",     // BoolBox（必須）
-    "libnyash_console_box.so",  // ConsoleBox（print用）
+    "NilBox", "BoolBox", "IntegerBox", "FloatBox",
+    "StringBox", "ArrayBox", "MapBox", 
+    "ConsoleBox", "ResultBox", "MethodBox"
 ];
 
-// 起動時に自動ロード
-fn init_core_boxes() {
-    for plugin in CORE_BOXES {
-        plugin_loader.load_required(plugin)
-            .expect("Core box loading failed");
+// 準コアBox（静的だが置換可能）- 4個
+const SEMI_CORE_BOXES: &[&str] = &[
+    "MathBox", "DebugBox", "TimeBox", "RandomBox"
+];
+
+// プラグイン推奨Box - 残り全て
+const PLUGIN_BOXES: &[&str] = &[
+    "FileBox", "NetworkBox", "AudioBox", 
+    "P2PBox", "EguiBox", "WebDisplayBox", // ...
+];
+```
+
+### 2. 革新的な統一レジストリ設計（Codex提案）
+
+```rust
+pub struct UnifiedBoxRegistry {
+    // 型名 → 型ID（安定）
+    type_registry: HashMap<String, BoxTypeId>,
+    
+    // 型メタデータ（vtableベースアドレス含む）
+    type_meta: Vec<TypeMeta>,
+    
+    // (型ID, メソッド名) → スロット番号（永続的）
+    slot_index: HashMap<(BoxTypeId, String), SlotIdx>,
+    
+    // Thunkプール（固定アドレス、原子的更新可能）
+    thunks: Vec<MethodThunk>,
+    
+    // グローバルエポック（大規模無効化用）
+    epoch: AtomicU64,
+}
+
+// 型ごとのメタデータ
+struct TypeMeta {
+    version: AtomicU32,                    // 動的更新のバージョン
+    vtable_base: *const *const MethodThunk, // vtableベースポインタ
+    slot_count: u32,                       // 割り当て済みスロット数
+}
+
+// メソッドThunk（間接層）
+struct MethodThunk {
+    target: AtomicPtr<c_void>,  // 実装への原子的ポインタ
+    sig: Signature,             // メソッドシグネチャ
+    flags: MethodFlags,         // 純粋性、インライン可能性等
+}
+```
+
+## 🚀 MIRレベルでの完全統一実装
+
+### 1. 統一MIR命令（最終形）
+
+```rust
+pub enum MirInstruction {
+    // Box生成（すべて同じ）
+    BoxNew {
+        dst: ValueId,
+        type_id: BoxTypeId,     // 数値ID（ビルトイン=1、ユーザー=1000でも同じ）
+        args: Vec<ValueId>,
+    },
+    
+    // メソッド呼び出し（すべて同じ）
+    BoxCall {
+        dst: Option<ValueId>,
+        receiver: ValueId,
+        method_id: MethodId,    // 安定したスロット番号
+        args: Vec<ValueId>,
+        effects: EffectFlags,   // 純粋性、副作用情報
+    },
+}
+```
+
+### 2. メソッドID解決戦略（Codex推奨）
+
+```rust
+impl MirBuilder {
+    fn compile_method_call(&mut self, receiver: ValueId, method: &str, args: Vec<ValueId>) {
+        let receiver_type = self.infer_type(receiver);
+        
+        // 静的に解決可能な場合
+        if let Some(slot) = self.registry.resolve_slot(receiver_type, method) {
+            self.emit(MirInstruction::BoxCall {
+                dst: Some(self.new_value()),
+                receiver,
+                method_id: slot,
+                args,
+                effects: self.registry.get_method_flags(receiver_type, slot),
+            });
+        } else {
+            // 動的解決が必要（eval、動的ロード）
+            self.emit_late_bind_call(receiver, method, args);
+        }
     }
 }
 ```
 
-### メリット
-1. **コード削減**: plugin_loader.rs (1217行) を完全削除
-2. **統一性**: Everything is Boxの究極の実現
-3. **柔軟性**: StringBoxすら置き換え可能
-4. **ビルド高速化**: 本体が軽量に
-5. **配布の柔軟性**: 必要なBoxだけ選択可能
+### 3. VM実装の劇的簡素化
 
-### 考慮事項
-
-#### パフォーマンス
-- FFI境界のオーバーヘッドは**ナノ秒レベル**
-- 実用上の影響なし
-
-#### デバッグの課題と対策
 ```rust
-// 課題：エラー時のスタックトレース
-thread 'main' panicked at 'FFI boundary: 0x7f8b2c001234'
-
-// 対策1：プラグイン側でのロギング
-#[no_mangle]
-pub extern "C" fn box_method_toString() {
-    eprintln!("[StringBox::toString] called from {:?}", std::thread::current().id());
+// 現在：Box種類で複雑な分岐
+match determine_box_kind(&receiver) {
+    BoxKind::Instance => {
+        // ユーザー定義Boxの特殊処理
+        let func_name = format!("{}.{}", class_name, method);
+        self.call_mir_function(func_name, args)?
+    },
+    BoxKind::Plugin => {
+        // プラグインのFFI呼び出し
+        unsafe { plugin_invoke(receiver, method, args) }
+    },
+    BoxKind::Builtin => {
+        // ビルトインメソッド直接呼び出し
+        builtin_dispatch(receiver, method, args)
+    }
 }
 
-// 対策2：デバッグシンボル保持
-cargo build --features debug-symbols
-
-// 対策3：プラグイン単体テストの充実
-#[test]
-fn test_string_box_methods() { /* ... */ }
+// 統一後：完全に均一なディスパッチ！
+fn execute_boxcall(&mut self, receiver: ValueId, method_id: MethodId, args: Vec<ValueId>) {
+    // 1. 受信者の型を取得
+    let type_meta = self.get_type_meta(receiver);
+    
+    // 2. vtableからThunkを取得
+    let thunk = unsafe { *type_meta.vtable_base.add(method_id as usize) };
+    
+    // 3. Thunkのターゲットを原子的に読み取り
+    let target = thunk.target.load(Ordering::Acquire);
+    
+    // 4. 統一的な呼び出し
+    let result = (target)(receiver, args);
+    self.push(result);
+}
 ```
 
-### 実装ロードマップ
-1. **Phase A**: コアBoxのプラグイン化
-   - StringBox, IntegerBox, BoolBox, ConsoleBox
-2. **Phase B**: 起動時自動ロード機構
-3. **Phase C**: plugin_loader.rs削除
-4. **Phase D**: ドキュメント・テスト整備
+## ⚡ 高性能化の核心技術
 
-### 設定ファイル案
-```toml
-# ~/.nyash/config.toml
-[plugins]
-core_path = "./plugins/core/"
-search_paths = ["./plugins", "/usr/lib/nyash/plugins"]
+### 1. Polymorphic Inline Cache (PIC) 実装
 
-[core_boxes]
-required = ["string", "integer", "bool", "console"]
-optional = ["file", "math", "time"]
+```rust
+// コールサイトごとのインラインキャッシュ
+struct InlineCache {
+    // モノモーフィックエントリ（最頻出）
+    mono_type: BoxTypeId,
+    mono_version: u32,
+    mono_target: *const fn,
+    
+    // ポリモーフィックエントリ（2-4個）
+    poly_entries: [(BoxTypeId, u32, *const fn); 4],
+    poly_count: u8,
+}
+
+// JIT生成コード例（疑似コード）
+fn generate_pic_stub(cache: &InlineCache) -> Code {
+    // 1. 受信者の型IDを取得
+    // 2. モノモーフィックチェック
+    if receiver.type_id == cache.mono_type && 
+       receiver.version == cache.mono_version {
+        jump cache.mono_target  // 直接ジャンプ！
+    }
+    // 3. ポリモーフィックチェック
+    for entry in cache.poly_entries[..cache.poly_count] {
+        if receiver.type_id == entry.0 && receiver.version == entry.1 {
+            jump entry.2
+        }
+    }
+    // 4. スローパス
+    call slow_path_resolver
+}
 ```
 
-これにより、「Everything is Box」哲学が実装レベルでも完全に実現される！
+### 2. メソッドスロットの永続性保証
 
-## 🔍 統一デバッグインフラストラクチャ（2025-08-26追記）
+```rust
+impl UnifiedBoxRegistry {
+    // スロット予約（一度割り当てたら永続）
+    pub fn reserve_method_slot(
+        &mut self, 
+        type_id: BoxTypeId, 
+        method: &str, 
+        sig: &Signature
+    ) -> SlotIdx {
+        let key = (type_id, method.to_string());
+        
+        // 既存スロットがあれば返す
+        if let Some(&slot) = self.slot_index.get(&key) {
+            return slot;
+        }
+        
+        // 新規スロット割り当て（削除後も再利用しない）
+        let type_meta = &mut self.type_meta[type_id as usize];
+        let slot = SlotIdx(type_meta.slot_count);
+        type_meta.slot_count += 1;
+        
+        self.slot_index.insert(key, slot);
+        slot
+    }
+}
+```
+
+### 3. 安全なプラグインアンロード
+
+```rust
+impl PluginManager {
+    fn unload_plugin(&mut self, plugin_id: PluginId) {
+        // 1. 影響を受ける型とメソッドを列挙
+        let affected = self.get_plugin_methods(plugin_id);
+        
+        for (type_id, slot) in affected {
+            // 2. Thunkを原子的にスタブに差し替え
+            let thunk = &self.registry.get_thunk(type_id, slot);
+            let stub = get_unloaded_method_stub();
+            thunk.target.store(stub, Ordering::Release);
+            
+            // 3. 型バージョンをインクリメント（キャッシュ無効化）
+            let type_meta = &self.registry.type_meta[type_id];
+            type_meta.version.fetch_add(1, Ordering::AcqRel);
+        }
+        
+        // 4. RCU/Hazard Pointerで安全に回収
+        self.defer_plugin_cleanup(plugin_id);
+    }
+}
+
+// アンロード後のスタブ関数
+fn unloaded_method_stub(_: ValueId, _: Vec<ValueId>) -> VMValue {
+    panic!("Method has been unloaded")
+}
+```
+
+## 📊 パフォーマンス分析と予測
+
+### 現状のベースライン
+- インタープリター比: **13.5倍**高速
+- BoxCall実行時間: 全体の**30%**
+- 主なオーバーヘッド: 文字列比較、型判定、間接呼び出し
+
+### 改善による期待効果
+
+| 最適化技術 | 個別改善率 | 全体への影響 |
+|-----------|----------|-----------|
+| メソッドID化 | 50-70% | 15-21% |
+| PICキャッシュ | 80-90% | 24-27% |
+| インライン化 | 特定サイト10倍 | 10-25% |
+| 純粋性解析 | CSE/LICM可能 | 5-15% |
+
+### 20倍達成への道筋
+```
+現在: 13.5倍
+目標: 20.0倍（+48%必要）
+
+達成可能性:
+- ID化+PIC: 1.15-1.20倍
+- インライン化: 1.10-1.25倍  
+- 効果解析: 1.05-1.15倍
+合計: 1.32-1.73倍 → 17.8-23.4倍（達成可能！）
+```
+
+## 🛠️ 実装ロードマップ（詳細版）
+
+### Phase 1: 基盤構築（1週間）
+```rust
+// Week 1のタスク
+- [ ] MethodThunk構造体とアロケーター実装
+- [ ] TypeMetaとvtable管理実装
+- [ ] スロット予約API（reserve_method_slot）
+- [ ] 基本的なレジストリ操作
+```
+
+### Phase 2: MIR統合（1週間）
+```rust
+// Week 2のタスク
+- [ ] BoxNew/BoxCallの数値ID化
+- [ ] メソッド名→スロット解決
+- [ ] late-bind placeholderサポート
+- [ ] デバッグ情報サイドテーブル
+```
+
+### Phase 3: VM最適化（2週間）
+```rust
+// Week 3-4のタスク
+- [ ] 統一execute_boxcall実装
+- [ ] モノモーフィックPIC実装
+- [ ] ポリモーフィックPIC拡張
+- [ ] ベンチマーク検証
+```
+
+### Phase 4: プラグイン対応（1週間）
+```rust
+// Week 5のタスク
+- [ ] プラグインAPIのスロット対応
+- [ ] 安全なアンロード実装
+- [ ] バージョン管理とキャッシュ無効化
+- [ ] 実プラグイン移行（FileBox）
+```
+
+### Phase 5: JIT準備（継続的）
+```rust
+// 継続タスク
+- [ ] 純粋性フラグの伝搬
+- [ ] インライン可能IRの提供
+- [ ] Craneliftメタデータ整備
+- [ ] PIC codegenサポート
+```
+
+## 🔍 技術的詳細と実装のコツ
+
+### デバッグ情報の管理
+```rust
+// MIRは数値のみ保持
+struct MirDebugInfo {
+    // (type_id, slot) → 人間可読情報
+    method_names: HashMap<(BoxTypeId, SlotIdx), MethodDebug>,
+    // PC → ソース位置
+    source_map: HashMap<usize, SourceLocation>,
+}
+
+struct MethodDebug {
+    type_name: String,
+    method_name: String,
+    signature: String,
+    source_file: PathBuf,
+    line: u32,
+}
+```
+
+### スレッドセーフティ
+```rust
+// Read-Copy-Update パターン
+impl UnifiedBoxRegistry {
+    fn update_method(&self, type_id: BoxTypeId, slot: SlotIdx, new_impl: *const fn) {
+        // 1. 新バージョンを準備
+        let new_thunk = MethodThunk {
+            target: AtomicPtr::new(new_impl),
+            // ...
+        };
+        
+        // 2. RCUで安全に更新
+        rcu::synchronize(|| {
+            self.thunks[slot].target.store(new_impl, Ordering::Release);
+        });
+    }
+}
+```
+
+### メモリレイアウト最適化
+```rust
+// キャッシュフレンドリーな配置
+#[repr(C, align(64))]  // キャッシュライン境界
+struct TypeVTable {
+    thunks: [MethodThunk; MAX_METHODS_PER_TYPE],
+}
+
+// ホットデータをまとめる
+struct HotMethodData {
+    frequently_called: [MethodThunk; 8],  // toString, equals等
+    cold_methods: *const ColdMethodTable,
+}
+```
+
+## 💡 結論と次のステップ
+
+### 統一設計の価値
+1. **簡潔性**: VM/JIT実装が劇的にシンプルに
+2. **性能**: 20倍高速化が現実的に達成可能
+3. **安全性**: Thunk indirectionで動的更新も安全
+4. **拡張性**: 新Box型追加が容易
+
+### ChatGPT5への相談ポイント
+1. **Thunk実装の具体的なアセンブリ**
+2. **RCU/Hazard Pointerの実装詳細**
+3. **PICのCranelift codegenパターン**
+4. **型推論とスロット解決の統合**
+5. **デバッガ統合のベストプラクティス**
+
+### 実装の第一歩
+```rust
+// まずはこれを実装！
+pub struct MethodThunk {
+    target: AtomicPtr<extern "C" fn(*const u8, *const *const u8) -> *const u8>,
+    #[cfg(debug_assertions)]
+    debug_name: &'static str,
+}
+
+// そしてスロット予約
+registry.reserve_method_slot(STRING_BOX_ID, "toString", &sig);
+```
+
+「Everything is Box」の理想が、ついに実装レベルで完全に実現される時が来ました！
+
+## 🔍 統一デバッグインフラストラクチャ
 
 ### 📍 MIRレベルでの統一デバッグ実現
 
-今までの議論で、MIRレベルでのデバッグ実装が最も理想的であることが判明しました。
+MIRレベルでのデバッグ実装が最も理想的であることが判明しました。
 Gemini先生とCodex先生の両方が同じ結論に達しました：**設計案2＋3のハイブリッド**が最適解です。
 
 #### 核心設計：メタデータ分離＋プロファイリングAPI
@@ -737,7 +625,7 @@ impl DeepInspectorBox {
 }
 ```
 
-### 🚀 実装ロードマップ（2025年後半）
+### 🚀 統一デバッグ実装ロードマップ
 
 #### Phase 1: MIRデバッグ基盤（2週間）
 - [ ] MIRDebugInfo構造の実装
@@ -764,7 +652,7 @@ impl DeepInspectorBox {
 - [ ] サンプリングモード
 - [ ] 増分参照グラフ更新
 
-### 💎 統一の美しさ
+### 💎 統一デバッグの美しさ
 
 この設計により、以下が実現されます：
 

@@ -1,74 +1,51 @@
-# 🎯 CURRENT TASK - 2025-08-26（Context Reset / Fresh Focus）
+# 🎯 CURRENT TASK - 2025-08-26（Phase 9.79b Kickoff）
 
-コンテキストを「0%」にリセットし、いま必要なことだけに集中するにゃ。
+コンテキストを最小化して、次フェーズへの導線だけ残すにゃ。
 
-## ⏱️ 今日のフォーカス（Phase 9.79a: Unified Dispatch + P2P Polish）
-- 判断: 統一Box設計は「非侵襲のディスパッチ統一」から入る → P2PBox磨きを同時並行
-- 目的: ユニバーサルメソッド（toString/type/equals/clone）をVM/Interpreter前段で統一 + P2PBoxのmulti-node/async UX安定化
+## ⏱️ 今日のフォーカス（Phase 9.79b: Unified IDs → VM Thunks）
+- 目的: Box種別（builtin/user/plugin）をMIR/VMで数値ID＋スロット統一に移行し、Phase 10(JIT)の足場を固める。
 
-### 直近の実行タスク（小さく早く）
-1) ユニバーサルメソッドの前段ディスパッチ（非侵襲）
-   - VM/Interpreterで`toString/type/equals/clone`を共通ヘルパにマップ（トレイト変更なし）
-2) P2PBox磨き（multi-node/async/解除）
-   - share/cloneセマンティクス：share=共有, clone=新規（実装済みの明文化）
-   - unregisterの安全化（endpoint一致 or refcount）
-   - onOnce/off のE2Eテスト追加
-   - VM表示整合（getLast*/debug_* の toString/Console）
-3) E2Eスモーク更新
-   - self→self, two-node ping-pong（安定）
-   - asyncデモ（TimeBox併用で確実に出力）
+### 直近タスク（小さく早く）
+1) 9.79b.1: Unified Registry IDs + Builder Slotting
+   - 型ID/メソッドスロットの導入（レジストリ）
+   - ユニバーサルメソッド低スロット予約（0..3）
+   - Builderが解決可能なBoxCallに`method_id`を付与（未解決は遅延）
+2) 9.79b.2: VM VTable Thunks + Mono-PIC
+   - `execute_boxcall`をvtable+thunkの単一路線へ
+   - call-site単位のモノモーフィックPICを追加
 
-### すぐ試せるコマンド（最小）
+### すぐ試せるコマンド
 ```bash
-# Rust（Release）
 cargo build --release -j32
-./target/release/nyash --help
-
-# Plugin デバッグ実行（任意）
-NYASH_DEBUG_PLUGIN=1 ./target/release/nyash --backend vm local_tests/extern_console_log.nyash || true
-
-# WASM（Web配布）
-cd projects/nyash-wasm && wasm-pack build --target web --out-dir pkg
+./target/release/nyash examples/p2p_self_ping.nyash
+./target/release/nyash examples/p2p_ping_pong.nyash
 ```
 
-## 現在の地図（Done / Doing / Next）
+## 現在の地図（Done / Next）
 
-### ✅ 完了
-- PluginHostファサード導入・移行（create/invoke/extern）
-- TLVヘッダ/引数/ハンドルの共通化（`plugin_ffi_common.rs`）
-- Interpreter分割の導線: `eval.rs` / `calls.rs` / `methods_dispatch.rs` 抽出
-- ログ静音の基盤: `idebug!`（NYASH_DEBUG=1 で有効）を calls/core/statements に適用
-- MIR modular builder ゲート追加（feature: `mir_modular_builder`）/ 整合パッチ投入
+### ✅ 完了（9.79a）
+- ユニバーサル前段ディスパッチ（toString/type/equals/clone）Interpreter/VM
+- P2P unregister安全化・onOnce/off E2E・self/two-nodeスモーク
+- IntentBoxのpayload糖衣（MapBox/JSONBox直渡し可）
+- Docs: P2Pリファレンス/サンプル
 
-### 🚧 進行中（小タスク）
-- Interpreterログ統一の残り（`delegation.rs` など）
-- PluginHost の `resolve_method` キャッシュ化（I/O削減）
+### ⏭️ 次（9.79b）
+- 9.79b.1: `phase_9_79b_1_unified_registry_ids_and_builder_slotting.md`
+- 9.79b.2: `phase_9_79b_2_vm_vtable_thunks_and_pic.md`
 
-### ⏭️ 次アクション（今日～明日）
-- 9.79a-M1: ユニバーサル前段ディスパッチ（VM/Interpreter）/ 回帰確認
-- 9.79a-M2: P2P unregister安全化 + onOnce/off E2E + async安定
-- 9.79a-M3: VM表示整合/ Docs更新（言語ガイド・P2Pリファレンス）
+## 統一Box設計メモ（唯一参照）
+- `docs/ideas/other/2025-08-25-unified-box-design-deep-analysis.md`
+  - 数値ID/スロット/Thunk/PIC/DebugInfoの全体像
 
-## 決定事項（Unified Box設計メモ）
-- ドキュメント: `docs/ideas/other/2025-08-25-unified-box-design-deep-analysis.md`
-- 判断: まずはディスパッチャ層でユニバーサルメソッドを統一（トレイト変更なし）
-- P2Pは共有セマンティクス（share=共有, clone=新規）を維持しつつ unregister 正式化へ
-
-## 参考リンク（唯一参照/ゲート）
-- MIR命令セット（26命令）: `docs/reference/mir/INSTRUCTION_SET.md`
-- Phase 9.79（P2P）: `docs/development/roadmap/phases/phase-9/phase_9_79_p2pbox_rebuild.md`
-- Phase 9.79a（Unified Dispatch + P2P Polish）: `docs/development/roadmap/phases/phase-9/phase_9_79a_unified_box_dispatch_and_p2p_polish.md`
-- Phase 9.78h（前段完了）: `docs/development/roadmap/phases/phase-9/phase_9_78h_mir_pipeline_stabilization.md`
+## 参考リンク
+- MIR命令セット: `docs/reference/mir/INSTRUCTION_SET.md`
+- Phase 9.79a（完了）: `docs/development/roadmap/phases/phase-9/phase_9_79a_unified_box_dispatch_and_p2p_polish.md`
+- Phase 9.79b（計画）:
+  - `docs/development/roadmap/phases/phase-9/phase_9_79b_1_unified_registry_ids_and_builder_slotting.md`
+  - `docs/development/roadmap/phases/phase-9/phase_9_79b_2_vm_vtable_thunks_and_pic.md`
 - Phase 10（Cranelift JIT主経路）: `docs/development/roadmap/phases/phase-10/phase_10_cranelift_jit_backend.md`
 
-## Doneの定義（P2PBox 最小）
-- `LocalLoopback` で ping/pong が安定
-- P2PBox API（start/stop/send/broadcast/reply/on）が固まる
-- ResultBox経由でエラーが伝搬（E2E テスト含む）
-- ログは既定静音（環境変数でデバッグオン）
-
 ## Parking Lot（後でやる）
-- NyashValue enum導入（即値最適化）
+- NyashValue即値最適化・演算子特化
 - トレイト階層化（Comparable/Arithmetic etc.）
-- メタプログラミング・パイプライン演算子
-- `mir_modular_builder` をデフォルト化（パリティ後）
+- オブジェクトリテラル糖衣（feature `object_literal`）提案: `docs/ideas/improvements/2025-08-26-object-literal-sugar.md`

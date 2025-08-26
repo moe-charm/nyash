@@ -1,0 +1,44 @@
+// 📡 P2P Two-Node Ping-Pong (InProcess)
+// Uses MethodBox handlers to wire reply path.
+
+print("🚀 P2P Two-Node Ping-Pong Start")
+
+// Nodes
+alice = new P2PBox("alice", "inprocess")
+bob   = new P2PBox("bob",   "inprocess")
+
+// Service box to hold node reference and implement handlers
+box PingService {
+    init { node, name }
+
+    onPing(intent, sender) {
+        print("[" + me.name + "] recv " + intent.getName() + " from " + sender)
+        // reply pong back
+        reply = new IntentBox("pong", "{}")
+        me.node.send(sender, reply)
+    }
+
+    onPong(intent, sender) {
+        print("[" + me.name + "] recv " + intent.getName() + " from " + sender)
+    }
+}
+
+// Wire handlers
+svcBob = new PingService()
+svcBob.node = bob
+svcBob.name = "bob"
+bob.on("ping", new MethodBox(svcBob, "onPing"))
+
+svcAlice = new PingService()
+svcAlice.node = alice
+svcAlice.name = "alice"
+alice.on("pong", new MethodBox(svcAlice, "onPong"))
+
+// Kick ping
+alice.send("bob", new IntentBox("ping", "{}"))
+
+// Show traces for determinism
+print("alice.last=" + alice.getLastIntentName())
+print("bob.last=" + bob.getLastIntentName())
+
+print("✅ P2P Two-Node Ping-Pong Done")

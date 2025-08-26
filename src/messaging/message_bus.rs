@@ -114,6 +114,9 @@ impl MessageBusData {
     /// メッセージをルーティング
     pub fn route(&self, to: &str, intent: IntentBox, from: &str) -> Result<(), SendError> {
         if let Some(endpoint) = self.nodes.get(to) {
+            if std::env::var("NYASH_DEBUG_P2P").unwrap_or_default() == "1" {
+                eprintln!("[MessageBus] route {} -> {} intent={}", from, to, intent.get_name().to_string_box().value);
+            }
             endpoint.deliver(intent, from);
             Ok(())
         } else {

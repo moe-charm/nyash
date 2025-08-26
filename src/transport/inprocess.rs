@@ -109,6 +109,9 @@ impl Transport for InProcessTransport {
         let cb = std::sync::Arc::new(cb);
         let cb_clone = cb.clone();
         // Adapt to MessageBus handler signature
+        if std::env::var("NYASH_DEBUG_P2P").unwrap_or_default() == "1" {
+            eprintln!("[InProcessTransport] register handler node={} intent={}", self.node_id, intent_name);
+        }
         self.add_handler(&intent_name, Box::new(move |intent_box: IntentBox, from: &str| {
             let env = IntentEnvelope {
                 from: from.to_string(),
@@ -133,7 +136,17 @@ impl Transport for InProcessTransport {
 
 impl Drop for InProcessTransport {
     fn drop(&mut self) {
-        // NOTE: Temporarily disabled unregister to avoid interfering with shared-node lifetimes.
-        // Proper refcounted unregister will be implemented later.
+        // Safe unregister: only remove if the current endpoint matches the registry entry
+        if let Ok(mut bus) = self.bus.lock() {
+            let removed = bus.unregister_if_same(&self.node_id, &self.endpoint);
+            if std::env::var("NYASH_DEBUG_P2P").unwrap_or_default() == "1" {
+                eprintln!(
+                    "[InProcessTransport::drop] node_id={} removed={} (bus={:?})",
+                    self.node_id,
+                    removed,
+                    &*bus
+                );
+            }
+        }
     }
 }

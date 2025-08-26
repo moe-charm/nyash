@@ -1,6 +1,6 @@
 # Phase 9.79a: Unified Box Dispatch (Minimal) + P2PBox Polish
 
-Status: Planned
+Status: Completed
 Last Updated: 2025-08-26
 Owner: core-runtime
 
@@ -37,12 +37,33 @@ Owner: core-runtime
   - VM: universal methods 前置ディスパッチ
   - Interpreter: 同様の前置ディスパッチ
   - スモーク：既存演算子/print動作の回帰なし
+  - 進捗: 2025-08-26 達成（VM/Interpreterともに toString/type/equals/clone を前段で統一。cargo build 成功）
 - M2（Day 3–4）
   - P2PBox unregister安全化（endpoint一致 or refcount）
   - E2E: onOnce/off 追加、two-node ping-pong 安定、asyncデモが確実に出力
 - M3（Day 5）
   - VM表示整合：P2PヘルパのtoString/ConsoleをInterpreterと一致
   - Docs更新：言語ガイド/P2Pリファレンス反映
+
+## Completion Notes (2025-08-26)
+- Universal dispatch (toString/type/equals/clone): Interpreter/VMに前段実装・整合確認済み。
+- P2PBox Polish:
+  - InProcess unregister: endpoint一致時のみunregisterで安全化。
+  - E2E: onOnce/off ユニットテスト追加、two-node ping→pong スモーク、self→selfスモーク追加。
+  - 受信トレース: getLastFrom/getLastIntentName を受信時に更新。
+  - 実用ミニ糖衣: IntentBoxの第2引数に MapBox/JSONBox を直接渡せるよう拡張。
+- Docs: 新規リファレンス追加（P2P）/ 例追加
+  - docs/reference/boxes-system/p2p_box.md
+  - examples/p2p_self_ping.nyash
+  - examples/p2p_ping_pong.nyash
+
+Notes:
+- 非WASM環境のTimerBoxはダミーのため、async出力の確実化はWASM側のガイドで扱う。ネイティブでは同期スモーク（self→self/二者）で安定確認。
+
+## Next (roll-forward)
+- Language sugar: Object literal → MapBox lowering（feature flag `object_literal`で段階導入）
+  - Proposal: docs/ideas/improvements/2025-08-26-object-literal-sugar.md
+- WASMガイドにTimer併用のasyncサンプル追記。
 
 ## リスクと対策
 - VM分岐に触るリスク → 型別分岐の“前段”に追加、既存分岐はフォールバックとして維持
