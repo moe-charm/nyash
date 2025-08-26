@@ -51,6 +51,31 @@ NYASH_VM_STATS=1 NYASH_VM_STATS_JSON=1 ./target/debug/nyash --backend vm program
 - 反復タイムアウト: `local_tests/socket_repeated_timeouts.nyash` で `acceptTimeout/recvTimeout` の連続ケース確認
 - BoxCallデバッグ: `NYASH_VM_DEBUG_BOXCALL=1` でBoxCallの受け手型・引数型・処理経路（enter/fastpath/unified）・結果型をstderr出力
   - 例: `NYASH_VM_DEBUG_BOXCALL=1 ./target/release/nyash --backend vm local_tests/test_vm_array_getset.nyash`
+
+## 🔧 BoxCallの統一経路（Phase 9.79b）
+
+### method_id（スロット）によるBoxCall
+- Builderが受け手型を推論できる場合、`BoxCall`に数値`method_id`（スロット）を付与。
+- 低スロットはユニバーサル予約（0=toString, 1=type, 2=equals, 3=clone）。
+- ユーザー定義Boxは宣言時にインスタンスメソッドへスロットを4番から順に予約（決定論的）。
+
+### VMの実行経路（thunk + PIC）
+- ユニバーサルスロット（0..3）はVMのfast-path thunkで即時処理。
+  - toString/type/equals/cloneの4種は受け手`VMValue`から直接評価。
+- それ以外は以下の順で処理:
+  1. Mono-PIC（モノモーフィックPIC）直呼び: 受け手型×method（またはmethod_id）のキーでホットサイトを判定し、
+     `InstanceBox`は関数名キャッシュを使って `{Class}.{method}/{arity}` を直接呼び出す（閾値=8）。
+  2. 既存経路: `InstanceBox`はMIR関数へCall、それ以外は各Boxのメソッドディスパッチへフォールバック。
+
+環境変数（デバッグ）:
+```bash
+NYASH_VM_DEBUG_BOXCALL=1   # BoxCallの入出力と処理経路を出力
+NYASH_VM_PIC_DEBUG=1       # PICヒットのしきい値通過時にログ
+```
+
+今後の拡張:
+- 一般`method_id`（ユーザー/ビルトイン/プラグイン）に対するvtableスロット→thunk直呼び。
+- PICのキャッシュ無効化（型version）と多相PICへの拡張（Phase 10）。
  - SocketBox（VM）
    - 基本API: `bind/listen/accept/connect/read/write/close/isServer/isConnected`
    - タイムアウト: `acceptTimeout(ms)` は接続なしで `void`、`recvTimeout(ms)` は空文字を返す

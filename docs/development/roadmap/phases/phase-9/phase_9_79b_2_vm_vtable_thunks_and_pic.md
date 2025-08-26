@@ -36,10 +36,11 @@ Progress: Fast-path thunks (universal slots) + PIC skeleton committed
 - `MirInstruction::BoxCall` now carries optional `method_id` emitted by the builder when resolvable.
 - Added monomorphic PIC skeleton: per-(receiver type, method_id/name) hit counters in the VM.
 - Minimal tests: verify fast-path behavior for `type()` and `equals()`.
+ - PIC direct-call (InstanceBox): after threshold (8 hits), call `{Class}.{method}/{arity}` directly via cache.
 
 Next:
 - Threshold-based direct dispatch using per-site cache entries.
-- Extend beyond universal slots to general `method_id`-resolved methods.
+- Extend beyond universal slots to general `method_id`-resolved methods (builtin/plugin + user) via vtable thunks.
 
 ## Non-Goals
 - Polymorphic PIC (plan only)
