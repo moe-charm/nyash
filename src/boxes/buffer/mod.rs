@@ -47,6 +47,11 @@ impl BufferBox {
         }
     }
 
+    /// バッファ内容をコピーしてVec<u8>として取得（FFIやエンコード向け）
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.data.read().unwrap().clone()
+    }
+
     /// Rust向けヘルパー: バッファ長をusizeで取得（テスト用）
     pub fn len(&self) -> usize {
         self.data.read().unwrap().len()

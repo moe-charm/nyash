@@ -212,6 +212,8 @@ pub struct VM {
     pub(super) boxcall_pic_hits: std::collections::HashMap<String, u32>,
     /// Mono-PIC: cached direct targets (currently InstanceBox function name)
     pub(super) boxcall_pic_funcname: std::collections::HashMap<String, String>,
+    /// Poly-PIC: per call-site up to 4 entries of (label, version, func_name)
+    pub(super) boxcall_poly_pic: std::collections::HashMap<String, Vec<(String, u32, String)>>,
     /// VTable-like cache: (type, method_id, arity) → direct target (InstanceBox method)
     pub(super) boxcall_vtable_funcname: std::collections::HashMap<String, String>,
     /// Version map for cache invalidation: label -> version
@@ -278,6 +280,7 @@ impl VM {
             exec_start: None,
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
+            boxcall_poly_pic: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
             // TODO: Re-enable when interpreter refactoring is complete
@@ -307,6 +310,7 @@ impl VM {
             exec_start: None,
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
+            boxcall_poly_pic: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
         }
@@ -339,6 +343,10 @@ impl VM {
     pub fn execute_module(&mut self, module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
         // Store module for nested calls
         self.module = Some(module.clone());
+        // Optional: dump registry for debugging
+        if std::env::var("NYASH_REG_DUMP").ok().as_deref() == Some("1") {
+            crate::runtime::type_meta::dump_registry();
+        }
         // Reset stats
         self.instr_counter.clear();
         self.exec_start = Some(Instant::now());
@@ -352,8 +360,32 @@ impl VM {
         // Optional: print VM stats
         self.maybe_print_stats();
 
+        // Optional: print cache stats summary
+        if std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") {
+            self.print_cache_stats_summary();
+        }
+
         // Convert result to NyashBox
         Ok(result.to_nyash_box())
+    }
+
+    fn print_cache_stats_summary(&self) {
+        let sites_poly = self.boxcall_poly_pic.len();
+        let entries_poly: usize = self.boxcall_poly_pic.values().map(|v| v.len()).sum();
+        let avg_entries = if sites_poly > 0 { (entries_poly as f64) / (sites_poly as f64) } else { 0.0 };
+        let sites_mono = self.boxcall_pic_funcname.len();
+        let hits_total: u64 = self.boxcall_pic_hits.values().map(|v| *v as u64).sum();
+        let vt_entries = self.boxcall_vtable_funcname.len();
+        eprintln!(
+            "[VM] PIC/VT summary: poly_sites={} avg_entries={:.2} mono_sites={} hits_total={} vt_entries={}",
+            sites_poly, avg_entries, sites_mono, hits_total, vt_entries
+        );
+        // Top sites by hits (up to 5)
+        let mut hits: Vec<(&String, &u32)> = self.boxcall_pic_hits.iter().collect();
+        hits.sort_by(|a, b| b.1.cmp(a.1));
+        for (i, (k, v)) in hits.into_iter().take(5).enumerate() {
+            eprintln!("  #{} {} hits={}", i+1, k, v);
+        }
     }
 
     /// Call a MIR function by name with VMValue arguments

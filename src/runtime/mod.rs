@@ -12,6 +12,7 @@ pub mod unified_registry;
 pub mod nyash_runtime;
 // pub mod plugin_box;  // legacy - 古いPluginBox
 // pub mod plugin_loader;  // legacy - Host VTable使用
+pub mod type_meta;
 
 #[cfg(test)]
 mod tests;

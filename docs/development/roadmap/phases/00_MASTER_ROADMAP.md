@@ -111,6 +111,7 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 - MIR→VMを維持しつつ、ホットパスをCraneliftでJIT化
 - 目標: VM比2倍以上の高速化
 - LLVM AOTは設計資産は維持しつつ、Phase 11以降に検討
+- **🌟 NEW: GC切り替え可能ランタイム（世界初の柔軟なメモリ管理）**
 
 **Start Gate（着手前の必須完了）**:
 - ✅ MIRダイエット（26命令）整合完了
@@ -122,6 +123,8 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 1. **Phase 10.1**: Proof of Concept（2週間）
 2. **Phase 10.2**: 基本実装（4週間）
 3. **Phase 10.3**: 非同期の扱い（最小）
+4. **Phase 10.4**: GC切り替え可能ランタイム（2-3ヶ月）
+5. **Phase 10.5**: セルフホスティング（並行実装）
 
 ---
 

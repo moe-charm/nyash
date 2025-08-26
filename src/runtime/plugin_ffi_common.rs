@@ -28,32 +28,99 @@ pub mod decode {
         if buf.len() < 8 + size { return None; }
         Some((tag, size, &buf[8..8 + size]))
     }
+    /// Decode bool payload (size must be 1; nonzero => true)
+    pub fn bool(payload: &[u8]) -> Option<bool> {
+        if payload.len() != 1 { return None; }
+        Some(payload[0] != 0)
+    }
     /// Decode i32 payload (size must be 4)
     pub fn i32(payload: &[u8]) -> Option<i32> {
         if payload.len() != 4 { return None; }
         let mut b = [0u8;4]; b.copy_from_slice(payload);
         Some(i32::from_le_bytes(b))
     }
+    /// Decode f64 payload (size must be 8)
+    pub fn f64(payload: &[u8]) -> Option<f64> {
+        if payload.len() != 8 { return None; }
+        let mut b = [0u8;8]; b.copy_from_slice(payload);
+        Some(f64::from_le_bytes(b))
+    }
     /// Decode UTF-8 string/bytes
     pub fn string(payload: &[u8]) -> String {
         String::from_utf8_lossy(payload).to_string()
+    }
+
+    /// Get nth TLV entry from a buffer with header
+    pub fn tlv_nth(buf: &[u8], n: usize) -> Option<(u8, usize, &[u8])> {
+        if buf.len() < 4 { return None; }
+        let mut off = 4usize;
+        for i in 0..=n {
+            if buf.len() < off + 4 { return None; }
+            let tag = buf[off];
+            let _rsv = buf[off+1];
+            let size = u16::from_le_bytes([buf[off+2], buf[off+3]]) as usize;
+            if buf.len() < off + 4 + size { return None; }
+            if i == n {
+                return Some((tag, size, &buf[off+4..off+4+size]));
+            }
+            off += 4 + size;
+        }
+        None
     }
 }
 
 /// TLV encode helpers for primitive Nyash values
 pub mod encode {
+    /// tag for Bool
+    const TAG_BOOL: u8 = 1;
     /// tag for I32
     const TAG_I32: u8 = 2;
+    /// tag for I64
+    const TAG_I64: u8 = 3;
+    /// tag for F32
+    const TAG_F32: u8 = 4;
+    /// tag for F64
+    const TAG_F64: u8 = 5;
     /// tag for UTF-8 string
     const TAG_STRING: u8 = 6;
+    /// tag for raw bytes
+    const TAG_BYTES: u8 = 7;
     /// tag for Plugin Handle (type_id + instance_id)
     const TAG_HANDLE: u8 = 8;
 
+    /// Append a bool TLV entry (tag=1, size=1)
+    pub fn bool(buf: &mut Vec<u8>, v: bool) {
+        buf.push(TAG_BOOL);
+        buf.push(0u8);
+        buf.extend_from_slice(&(1u16).to_le_bytes());
+        buf.push(if v { 1u8 } else { 0u8 });
+    }
     /// Append an i32 TLV entry (tag=2, size=4, little-endian)
     pub fn i32(buf: &mut Vec<u8>, v: i32) {
         buf.push(TAG_I32);
         buf.push(0u8); // reserved
         buf.extend_from_slice(&(4u16).to_le_bytes());
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+    /// Append an i64 TLV entry (tag=3, size=8)
+    pub fn i64(buf: &mut Vec<u8>, v: i64) {
+        buf.push(TAG_I64);
+        buf.push(0u8);
+        buf.extend_from_slice(&(8u16).to_le_bytes());
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+    /// Append an f32 TLV entry (tag=4, size=4)
+    pub fn f32(buf: &mut Vec<u8>, v: f32) {
+        buf.push(TAG_F32);
+        buf.push(0u8);
+        buf.extend_from_slice(&(4u16).to_le_bytes());
+        buf.extend_from_slice(&v.to_le_bytes());
+    }
+    /// Append an f64 TLV entry (tag=5, size=8)
+    pub fn f64(buf: &mut Vec<u8>, v: f64) {
+        buf.push(TAG_F64);
+        buf.push(0u8);
+        buf.extend_from_slice(&(8u16).to_le_bytes());
         buf.extend_from_slice(&v.to_le_bytes());
     }
 
@@ -66,6 +133,14 @@ pub mod encode {
         buf.extend_from_slice(&((len as u16).to_le_bytes()));
         buf.extend_from_slice(&bytes[..len]);
     }
+    /// Append bytes TLV (tag=7)
+    pub fn bytes(buf: &mut Vec<u8>, data: &[u8]) {
+        let len = core::cmp::min(data.len(), u16::MAX as usize);
+        buf.push(TAG_BYTES);
+        buf.push(0u8);
+        buf.extend_from_slice(&(len as u16).to_le_bytes());
+        buf.extend_from_slice(&data[..len]);
+    }
 
     /// Append a plugin handle TLV entry (tag=8, size=8, type_id:u32 + instance_id:u32)
     pub fn plugin_handle(buf: &mut Vec<u8>, type_id: u32, instance_id: u32) {
@@ -74,5 +149,57 @@ pub mod encode {
         buf.extend_from_slice(&(8u16).to_le_bytes());
         buf.extend_from_slice(&type_id.to_le_bytes());
         buf.extend_from_slice(&instance_id.to_le_bytes());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{encode, decode};
+
+    #[test]
+    fn test_encode_decode_bool() {
+        let mut buf = super::encode_tlv_header(1);
+        encode::bool(&mut buf, true);
+        let (tag, sz, payload) = decode::tlv_first(&buf).unwrap();
+        assert_eq!(tag, 1);
+        assert_eq!(sz, 1);
+        assert_eq!(decode::bool(payload), Some(true));
+    }
+
+    #[test]
+    fn test_encode_decode_i32() {
+        let mut buf = super::encode_tlv_header(1);
+        encode::i32(&mut buf, 123456);
+        let (tag, sz, payload) = decode::tlv_first(&buf).unwrap();
+        assert_eq!(tag, 2);
+        assert_eq!(sz, 4);
+        assert_eq!(decode::i32(payload), Some(123456));
+    }
+
+    #[test]
+    fn test_encode_decode_f64() {
+        let mut buf = super::encode_tlv_header(1);
+        encode::f64(&mut buf, 3.14159);
+        let (tag, sz, payload) = decode::tlv_first(&buf).unwrap();
+        assert_eq!(tag, 5);
+        assert_eq!(sz, 8);
+        let v = decode::f64(payload).unwrap();
+        assert!((v - 3.14159).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_encode_decode_string_and_bytes() {
+        let mut buf = super::encode_tlv_header(2);
+        encode::string(&mut buf, "hello");
+        encode::bytes(&mut buf, &[1,2,3,4]);
+        // First entry string
+        let (tag, _sz, payload) = decode::tlv_nth(&buf, 0).unwrap();
+        assert_eq!(tag, 6);
+        assert_eq!(decode::string(payload), "hello");
+        // Second entry bytes
+        let (tag2, sz2, payload2) = decode::tlv_nth(&buf, 1).unwrap();
+        assert_eq!(tag2, 7);
+        assert_eq!(sz2, 4);
+        assert_eq!(payload2, &[1,2,3,4]);
     }
 }

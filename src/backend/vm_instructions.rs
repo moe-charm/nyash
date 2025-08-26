@@ -58,6 +58,48 @@ impl VM {
         format!("VT@v{}:{}#{}{}", ver, class_name, method_id, format!("/{}", arity))
     }
 
+    /// Poly-PIC probe: try up to 4 cached entries for this call-site
+    fn try_poly_pic(&mut self, pic_site_key: &str, recv: &VMValue) -> Option<String> {
+        let label = self.cache_label_for_recv(recv);
+        let ver = self.cache_version_for_label(&label);
+        if let Some(entries) = self.boxcall_poly_pic.get_mut(pic_site_key) {
+            // find match and move to end for naive LRU behavior
+            if let Some(idx) = entries.iter().position(|(l, v, _)| *l == label && *v == ver) {
+                let entry = entries.remove(idx);
+                entries.push(entry.clone());
+                return Some(entry.2);
+            }
+        }
+        None
+    }
+
+    /// Poly-PIC record: insert or refresh an entry for this call-site
+    fn record_poly_pic(&mut self, pic_site_key: &str, recv: &VMValue, func_name: &str) {
+        let label = self.cache_label_for_recv(recv);
+        let ver = self.cache_version_for_label(&label);
+        use std::collections::hash_map::Entry;
+        match self.boxcall_poly_pic.entry(pic_site_key.to_string()) {
+            Entry::Occupied(mut e) => {
+                let v = e.get_mut();
+                if let Some(idx) = v.iter().position(|(l, vv, _)| *l == label && *vv == ver) {
+                    v.remove(idx);
+                }
+                if v.len() >= 4 { v.remove(0); }
+                v.push((label.clone(), ver, func_name.to_string()));
+            }
+            Entry::Vacant(v) => {
+                v.insert(vec![(label.clone(), ver, func_name.to_string())]);
+            }
+        }
+        if std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") {
+            // minimal per-site size log
+            if let Some(v) = self.boxcall_poly_pic.get(pic_site_key) {
+                eprintln!("[PIC] site={} size={} last=({}, v{}) -> {}",
+                    pic_site_key, v.len(), label, ver, func_name);
+            }
+        }
+    }
+
     /// Compute cache label for a receiver
     fn cache_label_for_recv(&self, recv: &VMValue) -> String {
         match recv {
@@ -579,11 +621,136 @@ impl VM {
         let pic_key = self.build_pic_key(&recv, method, method_id);
         self.pic_record_hit(&pic_key);
 
-        // VTable-like direct call using method_id for InstanceBox (no threshold)
+        // VTable-like direct call using method_id via TypeMeta thunk table (InstanceBox/PluginBoxV2/Builtin)
         if let (Some(mid), VMValue::BoxRef(arc_box)) = (method_id, &recv) {
+            // Determine class label for TypeMeta
+            let mut class_label: Option<String> = None;
+            let mut is_instance = false;
+            let mut is_plugin = false;
+            let mut is_builtin = false;
             if let Some(inst) = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
-                let vkey = self.build_vtable_key(&inst.class_name, mid, args.len());
-                if let Some(func_name) = self.boxcall_vtable_funcname.get(&vkey).cloned() {
+                class_label = Some(inst.class_name.clone());
+                is_instance = true;
+            } else if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                class_label = Some(p.box_type.clone());
+                is_plugin = true;
+            } else {
+                class_label = Some(arc_box.type_name().to_string());
+                is_builtin = true;
+            }
+            if let Some(label) = class_label {
+                let tm = crate::runtime::type_meta::get_or_create_type_meta(&label);
+                if let Some(th) = tm.get_thunk(mid as usize) {
+                    if let Some(target) = th.get_target() {
+                        match target {
+                            crate::runtime::type_meta::ThunkTarget::MirFunction(func_name) => {
+                                if std::env::var("NYASH_VM_VT_STATS").ok().as_deref() == Some("1") {
+                                    eprintln!("[VT] hit class={} slot={} -> {}", label, mid, func_name);
+                                }
+                                let mut vm_args = Vec::with_capacity(1 + args.len());
+                                vm_args.push(recv.clone());
+                                for a in args { vm_args.push(self.get_value(*a)?); }
+                                let res = self.call_function_by_name(&func_name, vm_args)?;
+                                if let Some(dst_id) = dst { self.set_value(dst_id, res); }
+                                return Ok(ControlFlow::Continue);
+                            }
+                            crate::runtime::type_meta::ThunkTarget::PluginInvoke { method_id: mid2 } => {
+                                if is_plugin {
+                                    if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                        // Convert args prepared earlier (we need NyashBox args)
+                                        let nyash_args: Vec<Box<dyn NyashBox>> = args.iter()
+                                            .map(|arg| {
+                                                let val = self.get_value(*arg)?;
+                                                Ok(val.to_nyash_box())
+                                            })
+                                            .collect::<Result<Vec<_>, VMError>>()?;
+                                        // Encode minimal TLV (int/string/handle) same as fast-path
+                                        let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(nyash_args.len() as u16);
+                                        let mut enc_failed = false;
+                                        for a in &nyash_args {
+                                            if let Some(s) = a.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                                                crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &s.value);
+                                            } else if let Some(i) = a.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                                                crate::runtime::plugin_ffi_common::encode::i32(&mut tlv, i.value as i32);
+                                            } else if let Some(h) = a.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                                crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut tlv, h.inner.type_id, h.inner.instance_id);
+                                            } else {
+                                                enc_failed = true; break;
+                                            }
+                                        }
+                                        if !enc_failed {
+                                            let mut out = vec![0u8; 4096];
+                                            let mut out_len: usize = out.len();
+                                            let code = unsafe {
+                                                (p.inner.invoke_fn)(
+                                                    p.inner.type_id,
+                                                    mid2 as u32,
+                                                    p.inner.instance_id,
+                                                    tlv.as_ptr(),
+                                                    tlv.len(),
+                                                    out.as_mut_ptr(),
+                                                    &mut out_len,
+                                                )
+                                            };
+                                            if code == 0 {
+                                                let vm_out = if let Some((_tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                                                    let s = crate::runtime::plugin_ffi_common::decode::string(payload);
+                                                    if !s.is_empty() {
+                                                        VMValue::String(s)
+                                                    } else if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) {
+                                                        VMValue::Integer(v as i64)
+                                                    } else {
+                                                        VMValue::Void
+                                                    }
+                                                } else {
+                                                    VMValue::Void
+                                                };
+                                                if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
+                                                return Ok(ControlFlow::Continue);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            crate::runtime::type_meta::ThunkTarget::BuiltinCall { method: ref m } => {
+                                if is_builtin {
+                                    // Prepare NyashBox args and call by name
+                                    let nyash_args: Vec<Box<dyn NyashBox>> = args.iter()
+                                        .map(|arg| {
+                                            let val = self.get_value(*arg)?;
+                                            Ok(val.to_nyash_box())
+                                        })
+                                        .collect::<Result<Vec<_>, VMError>>()?;
+                                    let cloned_box = arc_box.share_box();
+                                    let out = self.call_box_method(cloned_box, m, nyash_args)?;
+                                    let vm_out = VMValue::from_nyash_box(out);
+                                    if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
+                                    return Ok(ControlFlow::Continue);
+                                }
+                            }
+                        }
+                    }
+                }
+                // Backward-compat: consult legacy vtable cache for InstanceBox if TypeMeta empty
+                if is_instance {
+                    let inst = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().unwrap();
+                    let vkey = self.build_vtable_key(&inst.class_name, mid, args.len());
+                    if let Some(func_name) = self.boxcall_vtable_funcname.get(&vkey).cloned() {
+                        let mut vm_args = Vec::with_capacity(1 + args.len());
+                        vm_args.push(recv.clone());
+                        for a in args { vm_args.push(self.get_value(*a)?); }
+                        let res = self.call_function_by_name(&func_name, vm_args)?;
+                        if let Some(dst_id) = dst { self.set_value(dst_id, res); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                }
+            }
+        }
+
+        // Poly-PIC direct call: if we cached a target for this site and receiver is InstanceBox, use it
+        if let VMValue::BoxRef(arc_box) = &recv {
+            if arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
+                if let Some(func_name) = self.try_poly_pic(&pic_key, &recv) {
                     let mut vm_args = Vec::with_capacity(1 + args.len());
                     vm_args.push(recv.clone());
                     for a in args { vm_args.push(self.get_value(*a)?); }
@@ -591,12 +758,7 @@ impl VM {
                     if let Some(dst_id) = dst { self.set_value(dst_id, res); }
                     return Ok(ControlFlow::Continue);
                 }
-            }
-        }
-
-        // Mono-PIC direct call: if we cached a target for this site and receiver is InstanceBox, use it
-        if let VMValue::BoxRef(arc_box) = &recv {
-            if arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
+                // Fallback to Mono-PIC (legacy) if present
                 if let Some(func_name) = self.boxcall_pic_funcname.get(&pic_key).cloned() {
                     // Build VM args: receiver first, then original args
                     let mut vm_args = Vec::with_capacity(1 + args.len());
@@ -632,10 +794,39 @@ impl VM {
                 let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(nyash_args.len() as u16);
                 let mut enc_failed = false;
                 for a in &nyash_args {
+                    // Prefer BufferBox → bytes
+                    if let Some(buf) = a.as_any().downcast_ref::<crate::boxes::buffer::BufferBox>() {
+                        let snapshot = buf.to_vec();
+                        crate::runtime::plugin_ffi_common::encode::bytes(&mut tlv, &snapshot);
+                        continue;
+                    }
                     if let Some(s) = a.as_any().downcast_ref::<crate::box_trait::StringBox>() {
                         crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &s.value);
                     } else if let Some(i) = a.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-                        crate::runtime::plugin_ffi_common::encode::i32(&mut tlv, i.value as i32);
+                        // Prefer 32-bit if fits, else i64
+                        if i.value >= i32::MIN as i64 && i.value <= i32::MAX as i64 {
+                            crate::runtime::plugin_ffi_common::encode::i32(&mut tlv, i.value as i32);
+                        } else {
+                            crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, i.value as i64);
+                        }
+                    } else if let Some(b) = a.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                        crate::runtime::plugin_ffi_common::encode::bool(&mut tlv, b.value);
+                    } else if let Some(f) = a.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                        crate::runtime::plugin_ffi_common::encode::f64(&mut tlv, f.value);
+                    } else if let Some(arr) = a.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        // Try encode as bytes if all elements are 0..255 integers
+                        let items = arr.items.read().unwrap();
+                        let mut tmp = Vec::with_capacity(items.len());
+                        let mut ok = true;
+                        for item in items.iter() {
+                            if let Some(intb) = item.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                                if intb.value >= 0 && intb.value <= 255 { tmp.push(intb.value as u8); } else { ok = false; break; }
+                            } else {
+                                ok = false; break;
+                            }
+                        }
+                        if ok { crate::runtime::plugin_ffi_common::encode::bytes(&mut tlv, &tmp); }
+                        else { enc_failed = true; break; }
                     } else if let Some(h) = a.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
                         crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut tlv, h.inner.type_id, h.inner.instance_id);
                     } else {
@@ -657,16 +848,17 @@ impl VM {
                         )
                     };
                     if code == 0 {
+                        // Record TypeMeta thunk for plugin invoke so next time VT path can hit
+                        let tm = crate::runtime::type_meta::get_or_create_type_meta(&p.box_type);
+                        tm.set_thunk_plugin_invoke(mid as usize, mid as u16);
                         // Try decode TLV first entry (string/i32); else return void
-                        let vm_out = if let Some((_tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
-                            // naive: try string, then i32
-                            let s = crate::runtime::plugin_ffi_common::decode::string(payload);
-                            if !s.is_empty() {
-                                VMValue::String(s)
-                            } else if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) {
-                                VMValue::Integer(v as i64)
-                            } else {
-                                VMValue::Void
+                        let vm_out = if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                            match tag {
+                                1 => crate::runtime::plugin_ffi_common::decode::bool(payload).map(VMValue::Bool).unwrap_or(VMValue::Void),
+                                2 => crate::runtime::plugin_ffi_common::decode::i32(payload).map(|v| VMValue::Integer(v as i64)).unwrap_or(VMValue::Void),
+                                5 => crate::runtime::plugin_ffi_common::decode::f64(payload).map(VMValue::Float).unwrap_or(VMValue::Void),
+                                6 => VMValue::String(crate::runtime::plugin_ffi_common::decode::string(payload)),
+                                _ => VMValue::Void,
                             }
                         } else {
                             VMValue::Void
@@ -688,12 +880,18 @@ impl VM {
                 // If this is a user InstanceBox, redirect to lowered function: Class.method/arity
                 if let Some(inst) = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                     let func_name = format!("{}.{}{}", inst.class_name, method, format!("/{}", args.len()));
-                    // Populate vtable cache if method_id is known
+                    // Populate TypeMeta thunk table and legacy vtable cache if method_id is known
                     if let Some(mid) = method_id { 
+                        // TypeMeta preferred store (MIR target)
+                        let tm = crate::runtime::type_meta::get_or_create_type_meta(&inst.class_name);
+                        tm.set_thunk_mir_target(mid as usize, func_name.clone());
+                        // Legacy cache retained for compatibility
                         let vkey = self.build_vtable_key(&inst.class_name, mid, args.len());
                         self.boxcall_vtable_funcname.entry(vkey).or_insert(func_name.clone());
                     }
-                    // If this call-site is hot, cache the function name for direct calls next time
+                    // Record in Poly-PIC immediately (size <= 4)
+                    self.record_poly_pic(&pic_key, &recv, &func_name);
+                    // If this call-site is hot, also cache in legacy Mono-PIC for backward behavior
                     const PIC_THRESHOLD: u32 = 8;
                     if self.pic_hits(&pic_key) >= PIC_THRESHOLD {
                         self.boxcall_pic_funcname.insert(pic_key.clone(), func_name.clone());
@@ -711,6 +909,12 @@ impl VM {
                 }
                 // Otherwise, direct box method call
                 if debug_boxcall { eprintln!("[BoxCall] Taking BoxRef path for method '{}'", method); }
+                // Populate TypeMeta for builtin path if method_id present (BuiltinCall thunk)
+                if let Some(mid) = method_id {
+                    let label = arc_box.type_name().to_string();
+                    let tm = crate::runtime::type_meta::get_or_create_type_meta(&label);
+                    tm.set_thunk_builtin(mid as usize, method.to_string());
+                }
                 let cloned_box = arc_box.share_box();
                 self.call_box_method(cloned_box, method, nyash_args)?
             }
