@@ -18,6 +18,7 @@ Last Updated: 2025-08-26
 - MIR Builder
   - When receiver type can be inferred, emit `BoxCall { method_id }` (slot ID) instead of name.
   - Add late-bind fallback path for unresolved sites (keeps current behavior).
+  - Reserve user-defined instance methods slots deterministically (start at 4; universal [0..3]).
 - Debug scaffolding
   - Add `MIRDebugInfo` container types (empty by default) for ID→name mapping (off by default).
 - Docs
@@ -46,4 +47,3 @@ Last Updated: 2025-08-26
 
 ## Roll-forward
 - Proceed to 9.79b.2 (VM vtable/thunk + mono-PIC).
-
