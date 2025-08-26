@@ -246,6 +246,16 @@ impl PluginBoxV2 {
                 eprintln!("Failed to load config: {}", e);
                 BidError::PluginError
             })?);
+        // Bump cache versions for all box types (config reload may change method layout)
+        if let Some(cfg) = self.config.as_ref() {
+            let mut labels: Vec<String> = Vec::new();
+            for (_lib, def) in &cfg.libraries {
+                for bt in &def.boxes {
+                    labels.push(format!("BoxRef:{}", bt));
+                }
+            }
+            crate::runtime::cache_versions::bump_many(&labels);
+        }
         Ok(())
     }
     
@@ -309,6 +319,8 @@ impl PluginBoxV2 {
             finalized: std::sync::atomic::AtomicBool::new(false),
         });
         self.singletons.write().unwrap().insert((lib_name.to_string(), box_type.to_string()), handle);
+        // bump version for this box type to invalidate caches
+        crate::runtime::cache_versions::bump_version(&format!("BoxRef:{}", box_type));
         Ok(())
     }
 

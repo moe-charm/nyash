@@ -214,6 +214,8 @@ pub struct VM {
     pub(super) boxcall_pic_funcname: std::collections::HashMap<String, String>,
     /// VTable-like cache: (type, method_id, arity) → direct target (InstanceBox method)
     pub(super) boxcall_vtable_funcname: std::collections::HashMap<String, String>,
+    /// Version map for cache invalidation: label -> version
+    pub(super) type_versions: std::collections::HashMap<String, u32>,
     // Phase 9.78a: Add unified Box handling components
     // TODO: Re-enable when interpreter refactoring is complete
     // /// Box registry for creating all Box types
@@ -277,6 +279,7 @@ impl VM {
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
+            type_versions: std::collections::HashMap::new(),
             // TODO: Re-enable when interpreter refactoring is complete
             // box_registry: Arc::new(UnifiedBoxRegistry::new()),
             // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
@@ -305,6 +308,7 @@ impl VM {
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
+            type_versions: std::collections::HashMap::new(),
         }
     }
     
@@ -1025,6 +1029,75 @@ console.log("ok")
         let mut vm = VM::with_runtime(runtime);
         let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
         assert_eq!(result.to_string_box().value, "void");
+    }
+
+    #[test]
+    fn test_vm_user_box_vtable_caching_two_calls() {
+        // Defines a simple user box and calls the same method twice; ensures correctness.
+        // Builder reserves slots for user methods (from 4), so method_id should be present,
+        // enabling vtable cache population on first call and (conceptually) direct call on second.
+        let code = r#"
+box Greeter {
+  init { name }
+  birth(n) { me.name = n }
+  greet() { return "Hi, " + me.name }
+}
+
+local g
+g = new Greeter("Bob")
+g.greet()
+g.greet()
+"#;
+
+        // Parse to AST
+        let ast = crate::parser::NyashParser::parse_from_string(code).expect("parse failed");
+
+        // Prepare runtime with user-defined declarations and factory
+        let runtime = {
+            let rt = crate::runtime::NyashRuntime::new();
+            // Collect box declarations into runtime so that user-defined factory works
+            fn collect_box_decls(ast: &crate::ast::ASTNode, runtime: &crate::runtime::NyashRuntime) {
+                use crate::core::model::BoxDeclaration as CoreBoxDecl;
+                fn walk(node: &crate::ast::ASTNode, runtime: &crate::runtime::NyashRuntime) {
+                    match node {
+                        crate::ast::ASTNode::Program { statements, .. } => for st in statements { walk(st, runtime); },
+                        crate::ast::ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
+                            let decl = CoreBoxDecl {
+                                name: name.clone(),
+                                fields: fields.clone(),
+                                public_fields: public_fields.clone(),
+                                private_fields: private_fields.clone(),
+                                methods: methods.clone(),
+                                constructors: constructors.clone(),
+                                init_fields: init_fields.clone(),
+                                weak_fields: weak_fields.clone(),
+                                is_interface: *is_interface,
+                                extends: extends.clone(),
+                                implements: implements.clone(),
+                                type_parameters: type_parameters.clone(),
+                            };
+                            if let Ok(mut map) = runtime.box_declarations.write() { map.insert(name.clone(), decl); }
+                        }
+                        _ => {}
+                    }
+                }
+                walk(ast, runtime);
+            }
+            collect_box_decls(&ast, &rt);
+            // Register user-defined factory
+            let mut shared = crate::interpreter::SharedState::new();
+            shared.box_declarations = rt.box_declarations.clone();
+            let udf = std::sync::Arc::new(crate::box_factory::user_defined::UserDefinedBoxFactory::new(shared));
+            if let Ok(mut reg) = rt.box_registry.lock() { reg.register(udf); }
+            rt
+        };
+
+        // Compile and execute
+        let mut compiler = crate::mir::MirCompiler::new();
+        let compile_result = compiler.compile(ast).expect("mir compile failed");
+        let mut vm = VM::with_runtime(runtime);
+        let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+        assert_eq!(result.to_string_box().value, "Hi, Bob");
     }
 
     #[test]

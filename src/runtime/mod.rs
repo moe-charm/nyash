@@ -20,6 +20,7 @@ pub use plugin_config::PluginConfig;
 pub use box_registry::{BoxFactoryRegistry, BoxProvider, get_global_registry};
 pub use plugin_loader_v2::{PluginLoaderV2, get_global_loader_v2, init_global_loader_v2};
 pub use plugin_loader_unified::{PluginHost, get_global_plugin_host, init_global_plugin_host, PluginLibraryHandle, PluginBoxType, MethodHandle};
+pub mod cache_versions;
 pub use unified_registry::{get_global_unified_registry, init_global_unified_registry, register_user_defined_factory};
 pub use nyash_runtime::{NyashRuntime, NyashRuntimeBuilder};
 // pub use plugin_box::PluginBox;  // legacy

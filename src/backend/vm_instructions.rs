@@ -17,26 +17,12 @@ use super::vm::ControlFlow;
 impl VM {
     /// Build a PIC key from receiver and method identity
     fn build_pic_key(&self, recv: &VMValue, method: &str, method_id: Option<u16>) -> String {
-        let rkey = match recv {
-            VMValue::Integer(_) => "Int",
-            VMValue::Float(_) => "Float",
-            VMValue::Bool(_) => "Bool",
-            VMValue::String(_) => "String",
-            VMValue::Future(_) => "Future",
-            VMValue::Void => "Void",
-            VMValue::BoxRef(b) => {
-                // Using dynamic type name as fingerprint (will migrate to numeric id later)
-                return if let Some(mid) = method_id {
-                    format!("BoxRef:{}#{}", b.type_name(), mid)
-                } else {
-                    format!("BoxRef:{}#{}", b.type_name(), method)
-                };
-            }
-        };
+        let label = self.cache_label_for_recv(recv);
+        let ver = self.cache_version_for_label(&label);
         if let Some(mid) = method_id {
-            format!("{}#{}", rkey, mid)
+            format!("v{}:{}#{}", ver, label, mid)
         } else {
-            format!("{}#{}", rkey, method)
+            format!("v{}:{}#{}", ver, label, method)
         }
     }
 
@@ -66,7 +52,35 @@ impl VM {
 
     /// Build vtable cache key for InstanceBox: TypeName#slot/arity
     fn build_vtable_key(&self, class_name: &str, method_id: u16, arity: usize) -> String {
-        format!("VT:{}#{}{}", class_name, method_id, format!("/{}", arity))
+        // Use same versioning as PIC for BoxRef<Class>
+        let label = format!("BoxRef:{}", class_name);
+        let ver = self.cache_version_for_label(&label);
+        format!("VT@v{}:{}#{}{}", ver, class_name, method_id, format!("/{}", arity))
+    }
+
+    /// Compute cache label for a receiver
+    fn cache_label_for_recv(&self, recv: &VMValue) -> String {
+        match recv {
+            VMValue::Integer(_) => "Int".to_string(),
+            VMValue::Float(_) => "Float".to_string(),
+            VMValue::Bool(_) => "Bool".to_string(),
+            VMValue::String(_) => "String".to_string(),
+            VMValue::Future(_) => "Future".to_string(),
+            VMValue::Void => "Void".to_string(),
+            VMValue::BoxRef(b) => format!("BoxRef:{}", b.type_name()),
+        }
+    }
+
+    /// Get current version for a cache label (default 0)
+    fn cache_version_for_label(&self, label: &str) -> u32 {
+        // Prefer global cache versions so that loaders can invalidate across VMs
+        crate::runtime::cache_versions::get_version(label)
+    }
+
+    /// Bump version for a label (used to invalidate caches)
+    #[allow(dead_code)]
+    pub fn bump_cache_version(&mut self, label: &str) {
+        crate::runtime::cache_versions::bump_version(label)
     }
     /// Execute a constant instruction
     pub(super) fn execute_const(&mut self, dst: ValueId, value: &ConstValue) -> Result<ControlFlow, VMError> {
@@ -610,6 +624,59 @@ impl VM {
                 Ok(val.to_nyash_box())
             })
             .collect::<Result<Vec<_>, VMError>>()?;
+
+        // PluginBoxV2 fast-path via method_id -> direct invoke_fn (skip name->id resolution)
+        if let (Some(mid), VMValue::BoxRef(arc_box)) = (method_id, &recv) {
+            if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                // Encode TLV args (support: int, string, plugin handle)
+                let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(nyash_args.len() as u16);
+                let mut enc_failed = false;
+                for a in &nyash_args {
+                    if let Some(s) = a.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                        crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &s.value);
+                    } else if let Some(i) = a.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                        crate::runtime::plugin_ffi_common::encode::i32(&mut tlv, i.value as i32);
+                    } else if let Some(h) = a.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut tlv, h.inner.type_id, h.inner.instance_id);
+                    } else {
+                        enc_failed = true; break;
+                    }
+                }
+                if !enc_failed {
+                    let mut out = vec![0u8; 4096];
+                    let mut out_len: usize = out.len();
+                    let code = unsafe {
+                        (p.inner.invoke_fn)(
+                            p.inner.type_id,
+                            mid as u32,
+                            p.inner.instance_id,
+                            tlv.as_ptr(),
+                            tlv.len(),
+                            out.as_mut_ptr(),
+                            &mut out_len,
+                        )
+                    };
+                    if code == 0 {
+                        // Try decode TLV first entry (string/i32); else return void
+                        let vm_out = if let Some((_tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                            // naive: try string, then i32
+                            let s = crate::runtime::plugin_ffi_common::decode::string(payload);
+                            if !s.is_empty() {
+                                VMValue::String(s)
+                            } else if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) {
+                                VMValue::Integer(v as i64)
+                            } else {
+                                VMValue::Void
+                            }
+                        } else {
+                            VMValue::Void
+                        };
+                        if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                }
+            }
+        }
         
         if debug_boxcall {
             self.debug_log_boxcall(&recv, method, &nyash_args, "START", None);

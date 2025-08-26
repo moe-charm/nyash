@@ -65,6 +65,8 @@ impl InstanceBox {
     
     /// ユーザー定義Box専用コンストラクタ
     pub fn from_declaration(class_name: String, fields: Vec<String>, methods: HashMap<String, ASTNode>) -> Self {
+        // Invalidate caches for this class since methods layout may change between runs
+        crate::runtime::cache_versions::bump_version(&format!("BoxRef:{}", class_name));
         let mut field_map = HashMap::new();
         let mut legacy_field_map = HashMap::new();
         
