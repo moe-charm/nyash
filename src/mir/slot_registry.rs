@@ -22,6 +22,24 @@ static NEXT_TYPE_ID: Lazy<Mutex<BoxTypeId>> = Lazy::new(|| Mutex::new(100)); // 
 static EXPLICIT_SLOTS: Lazy<Mutex<HashMap<(BoxTypeId, String), MethodSlot>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+// Builtin type -> (method, slot) static table (slots start at 4; 0..3 are universal)
+static BUILTIN_SLOTS: Lazy<HashMap<&'static str, Vec<(&'static str, MethodSlot)>>> = Lazy::new(|| {
+    use std::iter::FromIterator;
+    let mut m = HashMap::new();
+    m.insert("ArrayBox", vec![
+        ("push", 4), ("pop", 5), ("length", 6), ("len", 6), ("get", 7), ("set", 8),
+        ("remove", 9), ("contains", 10), ("indexOf", 11), ("clear", 12), ("join", 13),
+        ("sort", 14), ("reverse", 15), ("slice", 16)
+    ]);
+    m.insert("MapBox", vec![
+        ("set", 4), ("get", 5), ("has", 6), ("delete", 7), ("remove", 7), ("keys", 8),
+        ("values", 9), ("size", 10), ("clear", 11)
+    ]);
+    m.insert("IntegerBox", vec![("abs", 4)]);
+    m.insert("StringBox", vec![("substring", 4), ("concat", 5)]);
+    HashMap::from_iter(m)
+});
+
 // Universal slots mapping for quick checks
 fn universal_slot(method: &str) -> Option<MethodSlot> {
     match method {
@@ -70,6 +88,8 @@ pub fn resolve_slot(type_id: BoxTypeId, method: &str) -> Option<MethodSlot> {
 /// Resolve a method slot given a type name and method name.
 pub fn resolve_slot_by_type_name(type_name: &str, method: &str) -> Option<MethodSlot> {
     let ty = get_or_assign_type_id(type_name);
+    // Seed builtin slots lazily
+    seed_builtin_slots(ty, type_name);
     resolve_slot(ty, method)
 }
 
@@ -77,6 +97,16 @@ pub fn resolve_slot_by_type_name(type_name: &str, method: &str) -> Option<Method
 #[derive(Default, Debug, Clone)]
 pub struct MIRDebugInfo {
     // Optionally carry reverse maps when enabled in the future.
+}
+
+/// Seed builtin slots for a type name if present in the builtin table
+fn seed_builtin_slots(type_id: BoxTypeId, type_name: &str) {
+    if let Some(entries) = BUILTIN_SLOTS.get(type_name) {
+        let mut table = EXPLICIT_SLOTS.lock().unwrap();
+        for (name, slot) in entries.iter() {
+            table.entry((type_id, (*name).to_string())).or_insert(*slot);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -99,4 +129,3 @@ mod tests {
         assert_eq!(resolve_slot(tid, "push"), Some(8));
     }
 }
-
