@@ -380,18 +380,22 @@ mod tests {
                 let last_from = Arc::clone(&self.last_from);
                 let last_intent = Arc::clone(&self.last_intent_name);
                 // create self clone for reply
-                let self_clone = self.clone();
+                // Avoid deep clone (which re-registers transport). Use transport directly for reply.
+                let transport_arc = Arc::clone(&self.transport);
                 let reply_name = reply_intent.map(|s| s.to_string());
                 t.register_intent_handler(&intent_name, Box::new(move |env| {
                     if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
                     if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
                     if let Some(rn) = reply_name.clone() {
                         let to = env.from.clone();
+                        let transport_arc = Arc::clone(&transport_arc);
                         std::thread::spawn(move || {
                             // slight delay to avoid lock contention
                             std::thread::sleep(std::time::Duration::from_millis(5));
                             let intent = IntentBox::new(rn, serde_json::json!({}));
-                            let _ = self_clone.send(Box::new(StringBox::new(to)), Box::new(intent));
+                            if let Ok(transport) = transport_arc.read() {
+                                let _ = transport.send(&to, intent, Default::default());
+                            }
                         });
                     }
                 }));
