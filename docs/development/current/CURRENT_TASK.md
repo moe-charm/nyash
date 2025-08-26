@@ -13,7 +13,7 @@
 2) 9.79b.2: VM VTable Thunks + Mono-PIC
    - `execute_boxcall`をvtable+thunkの単一路線へ（ユニバーサル0..3のfast-path追加）✅ スケルトン
    - call-site単位のモノモーフィックPICを追加（Key設計とカウンタ導入・記録まで）✅ スケルトン
-   - 次: 安定閾値での直呼び最適化（後段）
+   - 次: 安定閾値での直呼び最適化（InstanceBox関数名キャッシュ）✅ 実装（PIC=8で昇格）
 
 ### すぐ試せるコマンド
 ```bash

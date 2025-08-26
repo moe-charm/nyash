@@ -58,6 +58,11 @@ impl VM {
             }
         }
     }
+
+    /// Read current PIC hit count for a key
+    fn pic_hits(&self, key: &str) -> u32 {
+        *self.boxcall_pic_hits.get(key).unwrap_or(&0)
+    }
     /// Execute a constant instruction
     pub(super) fn execute_const(&mut self, dst: ValueId, value: &ConstValue) -> Result<ControlFlow, VMError> {
         let vm_value = VMValue::from(value);
@@ -555,6 +560,21 @@ impl VM {
         let pic_key = self.build_pic_key(&recv, method, method_id);
         self.pic_record_hit(&pic_key);
 
+        // Mono-PIC direct call: if we cached a target for this site and receiver is InstanceBox, use it
+        if let VMValue::BoxRef(arc_box) = &recv {
+            if arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
+                if let Some(func_name) = self.boxcall_pic_funcname.get(&pic_key).cloned() {
+                    // Build VM args: receiver first, then original args
+                    let mut vm_args = Vec::with_capacity(1 + args.len());
+                    vm_args.push(recv.clone());
+                    for a in args { vm_args.push(self.get_value(*a)?); }
+                    let res = self.call_function_by_name(&func_name, vm_args)?;
+                    if let Some(dst_id) = dst { self.set_value(dst_id, res); }
+                    return Ok(ControlFlow::Continue);
+                }
+            }
+        }
+
         // Fast path: universal method slots via method_id (0..3)
         if let Some(mid) = method_id {
             if let Some(fast_res) = self.try_fast_universal(mid, &recv, args)? {
@@ -581,6 +601,11 @@ impl VM {
                 // If this is a user InstanceBox, redirect to lowered function: Class.method/arity
                 if let Some(inst) = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                     let func_name = format!("{}.{}{}", inst.class_name, method, format!("/{}", args.len()));
+                    // If this call-site is hot, cache the function name for direct calls next time
+                    const PIC_THRESHOLD: u32 = 8;
+                    if self.pic_hits(&pic_key) >= PIC_THRESHOLD {
+                        self.boxcall_pic_funcname.insert(pic_key.clone(), func_name.clone());
+                    }
                     if debug_boxcall { eprintln!("[BoxCall] InstanceBox -> call {}", func_name); }
                     // Build VMValue args: receiver first, then original VMValue args
                     let mut vm_args = Vec::with_capacity(1 + args.len());
