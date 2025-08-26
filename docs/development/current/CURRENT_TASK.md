@@ -11,8 +11,8 @@
    - ユニバーサルメソッド低スロット予約（0..3）✅ テストで不変確認
    - Builderが解決可能なBoxCallに`method_id`を付与（未解決は遅延）✅ 実装/Printer表示
 2) 9.79b.2: VM VTable Thunks + Mono-PIC
-   - `execute_boxcall`をvtable+thunkの単一路線へ
-   - call-site単位のモノモーフィックPICを追加
+   - `execute_boxcall`をvtable+thunkの単一路線へ（ユニバーサル0..3のfast-path追加）✅ スケルトン
+   - call-site単位のモノモーフィックPICを追加（Key設計とカウンタ導入、最適化は後段）🟡 途中
 
 ### すぐ試せるコマンド
 ```bash

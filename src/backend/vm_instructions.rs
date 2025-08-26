@@ -502,12 +502,20 @@ impl VM {
     }
 
     /// Execute BoxCall instruction
-    pub(super) fn execute_boxcall(&mut self, dst: Option<ValueId>, box_val: ValueId, method: &str, args: &[ValueId]) -> Result<ControlFlow, VMError> {
+    pub(super) fn execute_boxcall(&mut self, dst: Option<ValueId>, box_val: ValueId, method: &str, method_id: Option<u16>, args: &[ValueId]) -> Result<ControlFlow, VMError> {
         let recv = self.get_value(box_val)?;
         
         // Debug logging if enabled
         let debug_boxcall = std::env::var("NYASH_VM_DEBUG_BOXCALL").is_ok();
         
+        // Fast path: universal method slots via method_id (0..3)
+        if let Some(mid) = method_id {
+            if let Some(fast_res) = self.try_fast_universal(mid, &recv, args)? {
+                if let Some(dst_id) = dst { self.set_value(dst_id, fast_res); }
+                return Ok(ControlFlow::Continue);
+            }
+        }
+
         // Convert args to NyashBox
         let nyash_args: Vec<Box<dyn NyashBox>> = args.iter()
             .map(|arg| {
@@ -563,5 +571,57 @@ impl VM {
         }
         
         Ok(ControlFlow::Continue)
+    }
+}
+
+impl VM {
+    /// Try fast universal-thunk dispatch using reserved method slots 0..3.
+    /// Returns Some(result) if handled, or None to fall back to legacy path.
+    fn try_fast_universal(&mut self, method_id: u16, recv: &VMValue, args: &[ValueId]) -> Result<Option<VMValue>, VMError> {
+        match method_id {
+            0 => { // toString
+                let s = recv.to_string();
+                return Ok(Some(VMValue::String(s)));
+            }
+            1 => { // type
+                let t = match recv {
+                    VMValue::Integer(_) => "Integer".to_string(),
+                    VMValue::Float(_) => "Float".to_string(),
+                    VMValue::Bool(_) => "Bool".to_string(),
+                    VMValue::String(_) => "String".to_string(),
+                    VMValue::Future(_) => "Future".to_string(),
+                    VMValue::Void => "Void".to_string(),
+                    VMValue::BoxRef(b) => b.type_name().to_string(),
+                };
+                return Ok(Some(VMValue::String(t)));
+            }
+            2 => { // equals
+                // equals(other): bool — naive implementation via VMValue equivalence/coercion
+                let other = if let Some(arg0) = args.get(0) { self.get_value(*arg0)? } else { VMValue::Void };
+                let res = match (recv, &other) {
+                    (VMValue::Integer(a), VMValue::Integer(b)) => a == b,
+                    (VMValue::Bool(a), VMValue::Bool(b)) => a == b,
+                    (VMValue::String(a), VMValue::String(b)) => a == b,
+                    (VMValue::Void, VMValue::Void) => true,
+                    _ => recv.to_string() == other.to_string(),
+                };
+                return Ok(Some(VMValue::Bool(res)));
+            }
+            3 => { // clone
+                // For primitives: just copy. For BoxRef: share_box then wrap back.
+                let v = match recv {
+                    VMValue::Integer(i) => VMValue::Integer(*i),
+                    VMValue::Float(f) => VMValue::Float(*f),
+                    VMValue::Bool(b) => VMValue::Bool(*b),
+                    VMValue::String(s) => VMValue::String(s.clone()),
+                    VMValue::Future(f) => VMValue::Future(f.clone()),
+                    VMValue::Void => VMValue::Void,
+                    VMValue::BoxRef(b) => VMValue::from_nyash_box(b.share_box()),
+                };
+                return Ok(Some(v));
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 }
