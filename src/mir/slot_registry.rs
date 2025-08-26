@@ -37,6 +37,8 @@ static BUILTIN_SLOTS: Lazy<HashMap<&'static str, Vec<(&'static str, MethodSlot)>
     ]);
     m.insert("IntegerBox", vec![("abs", 4)]);
     m.insert("StringBox", vec![("substring", 4), ("concat", 5)]);
+    // Common plugin boxes (minimal seed)
+    m.insert("FileBox", vec![ ("open", 4), ("read", 5), ("write", 6), ("close", 7) ]);
     HashMap::from_iter(m)
 });
 
