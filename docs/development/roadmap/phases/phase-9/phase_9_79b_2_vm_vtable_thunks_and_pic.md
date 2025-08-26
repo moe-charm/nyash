@@ -4,6 +4,7 @@ Status: Planned
 Owner: core-runtime
 Target: Before Phase 10 (Cranelift JIT)
 Last Updated: 2025-08-26
+Progress: Fast-path thunks (universal slots) + PIC skeleton committed
 
 ## Goals
 - Implement unified VM BoxCall path via vtable thunks indexed by `MethodId`.
@@ -30,6 +31,16 @@ Last Updated: 2025-08-26
 - Monomorphic PIC
 - Test coverage for core scenarios
 
+## Progress Notes (2025-08-26)
+- Implemented fast-path thunks for universal slots (0..3: toString/type/equals/clone) in `execute_boxcall` using `method_id`.
+- `MirInstruction::BoxCall` now carries optional `method_id` emitted by the builder when resolvable.
+- Added monomorphic PIC skeleton: per-(receiver type, method_id/name) hit counters in the VM.
+- Minimal tests: verify fast-path behavior for `type()` and `equals()`.
+
+Next:
+- Threshold-based direct dispatch using per-site cache entries.
+- Extend beyond universal slots to general `method_id`-resolved methods.
+
 ## Non-Goals
 - Polymorphic PIC (plan only)
 - JIT emission (Phase 10)
@@ -48,4 +59,3 @@ Last Updated: 2025-08-26
 
 ## Roll-forward
 - Phase 10: Cranelift JIT lowers BoxCall to the same thunks; add poly-PIC and codegen stubs.
-

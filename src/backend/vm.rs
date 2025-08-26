@@ -1018,4 +1018,32 @@ console.log("ok")
         let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
         assert_eq!(result.to_string_box().value, "void");
     }
+
+    #[test]
+    fn test_vm_fastpath_universal_type_and_equals() {
+        // toString/type/equals/cloneのうち、typeとequalsのfast-pathを検証
+        // 1) type: (new ArrayBox()).type() == "ArrayBox"
+        let code_type = r#"
+return (new ArrayBox()).type()
+"#;
+        let ast = NyashParser::parse_from_string(code_type).expect("parse failed");
+        let runtime = NyashRuntime::new();
+        let mut compiler = crate::mir::MirCompiler::new();
+        let compile_result = compiler.compile(ast).expect("mir compile failed");
+        let mut vm = VM::with_runtime(runtime);
+        let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+        assert_eq!(result.to_string_box().value, "ArrayBox");
+
+        // 2) equals: (new IntegerBox(5)).equals(5) == true
+        let code_eq = r#"
+return (new IntegerBox(5)).equals(5)
+"#;
+        let ast = NyashParser::parse_from_string(code_eq).expect("parse failed");
+        let runtime = NyashRuntime::new();
+        let mut compiler = crate::mir::MirCompiler::new();
+        let compile_result = compiler.compile(ast).expect("mir compile failed");
+        let mut vm = VM::with_runtime(runtime);
+        let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+        assert_eq!(result.to_string_box().value, "true");
+    }
 }
