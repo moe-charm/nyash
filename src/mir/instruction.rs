@@ -74,10 +74,13 @@ pub enum MirInstruction {
     
     /// Box method invocation
     /// `%dst = invoke %box.method(%args...)`
+    /// method_id: Optional numeric slot id when resolved at build time
     BoxCall {
         dst: Option<ValueId>,
         box_val: ValueId,
         method: String,
+        /// Optional numeric method slot id (Unified Registry). None = late bind.
+        method_id: Option<u16>,
         args: Vec<ValueId>,
         effects: EffectMask,
     },

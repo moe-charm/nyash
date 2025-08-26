@@ -7,9 +7,9 @@
 
 ### 直近タスク（小さく早く）
 1) 9.79b.1: Unified Registry IDs + Builder Slotting
-   - 型ID/メソッドスロットの導入（レジストリ）
-   - ユニバーサルメソッド低スロット予約（0..3）
-   - Builderが解決可能なBoxCallに`method_id`を付与（未解決は遅延）
+   - 型ID/メソッドスロットの導入（レジストリ）✅ 実装
+   - ユニバーサルメソッド低スロット予約（0..3）✅ テストで不変確認
+   - Builderが解決可能なBoxCallに`method_id`を付与（未解決は遅延）✅ 実装/Printer表示
 2) 9.79b.2: VM VTable Thunks + Mono-PIC
    - `execute_boxcall`をvtable+thunkの単一路線へ
    - call-site単位のモノモーフィックPICを追加
@@ -30,8 +30,8 @@ cargo build --release -j32
 - Docs: P2Pリファレンス/サンプル
 
 ### ⏭️ 次（9.79b）
-- 9.79b.1: `phase_9_79b_1_unified_registry_ids_and_builder_slotting.md`
-- 9.79b.2: `phase_9_79b_2_vm_vtable_thunks_and_pic.md`
+- 9.79b.1: `phase_9_79b_1_unified_registry_ids_and_builder_slotting.md` ✅ 最小スコープ達成（method_id導入）
+- 9.79b.2: `phase_9_79b_2_vm_vtable_thunks_and_pic.md` → 着手予定
 
 ## 統一Box設計メモ（唯一参照）
 - `docs/ideas/other/2025-08-25-unified-box-design-deep-analysis.md`

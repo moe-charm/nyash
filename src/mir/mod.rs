@@ -21,6 +21,7 @@ pub mod printer;
 pub mod value_id;
 pub mod effect;
 pub mod optimizer;
+pub mod slot_registry; // Phase 9.79b.1: method slot resolution (IDs)
 
 // Re-export main types for easy access
 pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, MirType, TypeOpKind, WeakRefOp, BarrierOp};
@@ -37,6 +38,7 @@ pub use printer::MirPrinter;
 pub use value_id::{ValueId, LocalId, ValueIdGenerator};
 pub use effect::{EffectMask, Effect};
 pub use optimizer::MirOptimizer;
+pub use slot_registry::{BoxTypeId, MethodSlot};
 
 /// MIR compilation result
 #[derive(Debug, Clone)]
@@ -227,6 +229,23 @@ mod tests {
         let dump = MirPrinter::new().print_module(&result.module);
         // Expect a BoxCall to push (printer formats as `call <box>.<method>(...)`)
         assert!(dump.contains(".push("), "Expected BoxCall to .push(...). Got:\n{}", dump);
+    }
+
+    #[test]
+    fn test_boxcall_method_id_on_universal_slot() {
+        // Build AST: (new ArrayBox()).toString()
+        let ast = ASTNode::MethodCall {
+            object: Box::new(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() }),
+            method: "toString".to_string(),
+            arguments: vec![],
+            span: crate::ast::Span::unknown(),
+        };
+
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile should succeed");
+        let dump = MirPrinter::new().print_module(&result.module);
+        // Expect a BoxCall with numeric method id [#0] for toString universal slot
+        assert!(dump.contains("toString[#0]"), "Expected method_id #0 for toString. Dump:\n{}", dump);
     }
 
     #[test]

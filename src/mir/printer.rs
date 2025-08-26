@@ -312,16 +312,16 @@ impl MirPrinter {
                 }
             },
             
-            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
+            MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects: _ } => {
                 let args_str = args.iter()
                     .map(|v| format!("{}", v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                
+                let id_suffix = method_id.map(|id| format!("[#{}]", id)).unwrap_or_default();
                 if let Some(dst) = dst {
-                    format!("{} = call {}.{}({})", dst, box_val, method, args_str)
+                    format!("{} = call {}.{}{}({})", dst, box_val, method, id_suffix, args_str)
                 } else {
-                    format!("call {}.{}({})", box_val, method, args_str)
+                    format!("call {}.{}{}({})", box_val, method, id_suffix, args_str)
                 }
             },
             

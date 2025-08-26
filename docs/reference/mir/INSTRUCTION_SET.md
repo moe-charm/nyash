@@ -22,6 +22,7 @@ Last Updated: 2025-08-25
 - Call
 - ExternCall
 - BoxCall
+  - Note: BoxCall carries optional `method_id` (numeric slot) when the builder can resolve the receiver type; otherwise falls back to name-only late bind. Universal methods use reserved slots: 0=toString, 1=type, 2=equals, 3=clone.
 - NewBox
 - ArrayGet
 - ArraySet
@@ -42,4 +43,3 @@ Last Updated: 2025-08-25
 ## 同期ルール
 - 命令の追加/削除/統合は、まずこの文書を更新し、次に実装（列挙/Printer/Verifier/Optimizer/VM）を同期。最後に「総数=26」テストを更新する。
 - 実装が26を外れた場合はCIを赤にする（設計の合意なく増減させないため）。
-

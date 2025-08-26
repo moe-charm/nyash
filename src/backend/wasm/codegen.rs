@@ -404,7 +404,7 @@ impl WasmCodegen {
             },
             
             // Phase 9.77: BoxCall Implementation - Critical Box method calls
-            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ } => {
+            MirInstruction::BoxCall { dst, box_val, method, args, effects: _ , .. } => {
                 self.generate_box_call(*dst, *box_val, method, args)
             },
             

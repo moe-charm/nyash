@@ -9,6 +9,7 @@ use super::{
     FunctionSignature, ValueId, ConstValue, BinaryOp, UnaryOp, CompareOp,
     MirType, EffectMask, Effect, BasicBlockIdGenerator, ValueIdGenerator
 };
+use super::slot_registry::resolve_slot_by_type_name;
 use crate::ast::{ASTNode, LiteralValue, BinaryOperator};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -563,11 +564,17 @@ impl MirBuilder {
         }
         
         let box_val = arg_values.remove(0);
-        
+        // Try to resolve method slot if the object originates from a known NewBox
+        let method_id = self
+            .value_origin_newbox
+            .get(&box_val)
+            .and_then(|class_name| resolve_slot_by_type_name(class_name, &name));
+
         self.emit_instruction(MirInstruction::BoxCall {
             dst: Some(dst),
             box_val,
             method: name,
+            method_id,
             args: arg_values,
             effects: EffectMask::PURE.add(Effect::ReadHeap), // Conservative default
         })?;
@@ -742,7 +749,13 @@ impl MirBuilder {
                     eprintln!("[BUILDER] emit @bb{} -> {}", block_id, match &instruction {
                         MirInstruction::TypeOp { dst, op, value, ty } => format!("typeop {:?} {} {:?} -> {}", op, value, ty, dst),
                         MirInstruction::Print { value, .. } => format!("print {}", value),
-                        MirInstruction::BoxCall { box_val, method, args, dst, .. } => format!("boxcall {}.{}({:?}) -> {:?}", box_val, method, args, dst),
+                        MirInstruction::BoxCall { box_val, method, method_id, args, dst, .. } => {
+                            if let Some(mid) = method_id { 
+                                format!("boxcall {}.{}[#{}]({:?}) -> {:?}", box_val, method, mid, args, dst)
+                            } else {
+                                format!("boxcall {}.{}({:?}) -> {:?}", box_val, method, args, dst)
+                            }
+                        },
                         MirInstruction::Call { func, args, dst, .. } => format!("call {}({:?}) -> {:?}", func, args, dst),
                         MirInstruction::NewBox { dst, box_type, args } => format!("new {}({:?}) -> {}", box_type, args, dst),
                         MirInstruction::Const { dst, value } => format!("const {:?} -> {}", value, dst),
@@ -1030,14 +1043,16 @@ impl MirBuilder {
         })?;
 
         // Record origin for optimization: dst was created by NewBox of class
-        self.value_origin_newbox.insert(dst, class);
+        self.value_origin_newbox.insert(dst, class.clone());
 
         // Immediately call birth(...) on the created instance to run constructor semantics.
         // birth typically returns void; we don't capture the result here (dst: None)
+        let birt_mid = resolve_slot_by_type_name(&class, "birth");
         self.emit_instruction(MirInstruction::BoxCall {
             dst: None,
             box_val: dst,
             method: "birth".to_string(),
+            method_id: birt_mid,
             args: arg_values,
             effects: EffectMask::READ.add(Effect::ReadHeap),
         })?;
@@ -1307,10 +1322,16 @@ impl MirBuilder {
         }
 
         // Fallback: Emit a BoxCall instruction for regular or plugin/builtin method calls
+        // Try to resolve method slot when receiver type can be inferred
+        let maybe_class = self.value_origin_newbox.get(&object_value).cloned();
+        let mid = maybe_class
+            .as_ref()
+            .and_then(|cls| resolve_slot_by_type_name(cls, &method));
         self.emit_instruction(MirInstruction::BoxCall {
             dst: Some(result_id),
             box_val: object_value,
             method,
+            method_id: mid,
             args: arg_values,
             effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
         })?;
@@ -1368,6 +1389,7 @@ impl MirBuilder {
             dst: Some(result_id),
             box_val: parent_value,
             method,
+            method_id: None,
             args: arg_values,
             effects: EffectMask::READ.add(Effect::ReadHeap),
         })?;
