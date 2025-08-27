@@ -1,52 +1,79 @@
-# Phase 10.1 - PythonParserBox実装計画
+# Phase 10.1 - PythonParserBox実装
 
-このフォルダには、NyashとPythonの相互運用を実現するPythonParserBoxの実装計画が含まれています。
+見ただけで実装手順が分かる！順番通りに進めてください。
 
-## 📁 フォルダ構造
+## 📂 サブフェーズ構成（順番に実行）
 
-### メイン実装ドキュメント（最新版）
-- **`pythonparser_integrated_plan_summary.txt`** - 統合実装計画サマリー（最重要）
-- **`python_implementation_roadmap.txt`** - 実装ロードマップ（エキスパート統合版）
-- **`python_parser_box_implementation_plan.txt`** - 技術的実装計画（統合版）
-- **`builtin_box_implementation_flow.txt`** - ビルトインBox実装フロー（統合版）
-- **`python_to_nyash_transpiler.txt`** - Python→Nyashトランスパイラー機能
+### 📋 Phase 10.1a - 計画と設計
+最初にここから！全体像を理解する。
+- 統合実装計画を読む
+- エキスパート評価を確認
+- 5つの核心戦略を把握
 
-### エキスパート評価
-- **`expert_feedback_gemini_codex.txt`** - Gemini先生とCodex先生のフィードバック全文
+### ⚙️ Phase 10.1b - 環境設定
+開発環境を整える。
+- Python 3.11.9をインストール
+- Cargo.tomlに依存関係追加
+- ディレクトリ構造準備
 
-### アーカイブ（参考資料）
-- **`archive/`** フォルダ
-  - `python_parser_box_design.txt` - 初期設計案
-  - `chatgpt5_original_idea.txt` - ChatGPT5の元アイデア
-  - `summary_2025_08_27.txt` - 当日の議論まとめ
+### 🔧 Phase 10.1c - パーサー統合
+CPythonパーサーをNyashに統合。
+- PythonParserBox実装
+- GIL管理の実装
+- JSON中間表現への変換
 
-## 🎯 Phase 10.1の目標
+### 💻 Phase 10.1d - Core実装
+基本的なPython構文の変換。
+- Phase 1機能（def/if/for/while）
+- 意味論の正確な実装
+- 70%コンパイル率達成
 
-1. **Pythonエコシステムの即座活用** - 既存Pythonライブラリの利用
-2. **Differential Testing** - Nyashパーサーのバグ自動検証
-3. **言語成熟度の向上** - 実用的なPythonコードでのストレステスト
+### 🔄 Phase 10.1e - トランスパイラー
+Python→Nyashソース変換。
+- AST→Nyashソース生成
+- フォーマッター実装
+- コマンドラインツール
 
-## 🔑 核心戦略（エキスパート推奨）
+### 🧪 Phase 10.1f - テスト
+Differential Testingでバグ発見。
+- CPython vs Nyash比較
+- ベンチマーク実行
+- バグ修正とCI統合
 
-1. **関数単位フォールバック** - ファイル全体でなく関数レベルで切り替え
-2. **Python 3.11固定** - AST安定性の確保
-3. **意味論の正確な実装** - 最適化より互換性優先
-4. **GIL管理の最小化** - Python側でJSON生成、Rust側で処理
-5. **テレメトリー重視** - 継続的な改善のための計測
+### 📚 Phase 10.1g - ドキュメント
+使い方を文書化してリリース。
+- ユーザーガイド作成
+- APIリファレンス
+- サンプルプロジェクト
 
-## 📋 実装フェーズ
+## 🎯 各フェーズの目安時間
 
-- **Phase 1**: Core Subset（基本構文）- 2週間
-- **Phase 2**: Data Model（特殊メソッド）- 3週間
-- **Phase 3**: Advanced Features（高度な機能）- 1ヶ月
-- **Phase 4**: Modern Python（最新機能）- 将来
+| フェーズ | 内容 | 目安時間 |
+|---------|------|----------|
+| 10.1a | 計画理解 | 2-3時間 |
+| 10.1b | 環境設定 | 1-2時間 |
+| 10.1c | パーサー統合 | 3-5日 |
+| 10.1d | Core実装 | 1-2週間 |
+| 10.1e | トランスパイラー | 3-5日 |
+| 10.1f | テスト | 1週間 |
+| 10.1g | ドキュメント | 3-5日 |
 
-## 🚀 期待される成果
+**合計**: 約1ヶ月
 
-- 純Pythonループの2-10倍高速化
-- Nyashパーサーのバグ発見と改善
-- PythonからNyashへの段階的移行パス
-- Python→Nyashスクリプト変換機能
+## 🌟 最終目標
+
+- **70%以上**の関数がコンパイル可能
+- **2-10倍**の性能向上
+- **10件以上**のNyashバグ発見
+- **実用的な**Python→Nyash移行ツール
+
+## 💡 Tips
+
+- 各フェーズのREADME.mdを必ず読む
+- 完了条件をチェックしながら進める
+- テレメトリーで進捗を確認
+- 困ったらarchive/の資料も参照
 
 ---
-作成日: 2025-08-27
+
+**さあ、Phase 10.1a から始めましょう！**

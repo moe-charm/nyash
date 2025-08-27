@@ -2,14 +2,15 @@
 
 フェーズ10はJIT実用化へ！Core-1 Lowerの雛形を固めつつ、呼出/フォールバック導線を整えるよ。
 
-## ⏱️ 今日のサマリ（10_c実行経路の堅牢化＋GC/スケジューラ導線）
+## ⏱️ 今日のサマリ（10_c実行経路の堅牢化＋10_7分岐配線＋GC/スケジューラ導線）
 - 目的: JIT実行を安全に通す足場を仕上げつつ、GC/スケジューラ導線を整備し回帰検出力を上げる。
-  - 10_c: panic→VMフォールバック（`catch_unwind`）/ JIT経路のroot区域化 / Core-1 i64 param minimal pass（`emit_param_i64` + LowerCoreで供給）
+  - 10_c: panic→VMフォールバック（`catch_unwind`）/ JIT経路のroot区域化 / Core-1 i64 param minimal pass（`emit_param_i64` + LowerCoreで供給）✅ 完了
   - 10_4a/10_4b: GC導線 + Write-Barrier挿入（ArraySet/RefSet/BoxCall）、root API（enter/pin/leave）
   - 10_4c: CountingGcカウンタ出力＋roots/BoxRef内訳、depth2リーチャビリティ観測（`NYASH_GC_TRACE=1/2/3`）✅ 完了
   - 10_4d: STRICTバリア検証（CountingGc前後比較で漏れ即検出）✅ 完了（`NYASH_GC_BARRIER_STRICT=1`）
   - 10_6b: シングルスレ・スケジューラ（spawn/spawn_after/poll）、Safepointで`poll()`連携、`NYASH_SCHED_POLL_BUDGET`対応 ✅ 完了
-  - ベンチ: CLIベンチへJIT比較追加（ウォームアップあり）、スクリプト版`examples/ny_bench.nyash`追加（TimerBoxでops/sec）
+  - 10_7: JIT分岐配線（Cranelift）— MIR Branch/Jump→CLIFブロック配線、条件b1保持、分岐b1/`i64!=0`両対応（feature: `cranelift-jit`）
+  - ベンチ: CLIベンチへJIT比較追加（ウォームアップあり）、`branch_return`ケース追加、スクリプト版`examples/ny_bench.nyash`追加（TimerBoxでops/sec）
 
 ### 直近タスク（小さく早く）
 1) 10_b: Lower/Core-1 最小化（進行中 → ほぼ完了）
@@ -25,12 +26,17 @@
    - JIT実行→`VMValue`返却、panic時VMフォールバック ✅（`engine.execute_handle`で`catch_unwind`）
    - Core-1最小: i64 param/return、Const(i64/bool→0/1)、BinOp/Compare/Return ✅
    - HostCall最小（Array/Map: len/get/set/push/size）ゲート`NYASH_JIT_HOSTCALL=1` ✅
-   - Branch/Jumpは統計カウントまで（CLIFブロック配線は後続フェーズで拡張）
+   - Branch/JumpはCranelift配線導入済み（feature `cranelift-jit`）。副作用命令は未lowerのためVMへフォールバック
+3) 10_7: 分岐配線（Cranelift）— 進捗中
+   - LowerCore: BB整列・マッピング→builderの`prepare_blocks/switch/seal/br_if/jump`呼出 ✅
+   - CraneliftBuilder: ブロック配列管理、`brif/jump`実装、条件b1/`i64!=0`両対応 ✅
+   - 残: 最小PHI（単純ダイアモンド）導入（`NYASH_JIT_PHI_MIN=1`ガード）/ 副作用命令の扱い方針（当面VMへ）
 
 備考（制限と次の着手点）
 - 返り値はi64（VMValue::Integer）に限定。f64はconst最小emit、boolはi64 0/1へ正規化（分岐条件入力に対応）
 - 引数はi64のみ最小パス。複数引数はparamマッピングで通過、非i64は未対応 → 次対応
-- Branch/JumpのCLIF実配線は準備済み（ビルダー側は統計カウント）。CLIFブロック配線は後続で実装。
+- Branch/JumpのCLIF配線は導入済み（feature `cranelift-jit`）。条件はb1で保持し、必要に応じて`i64!=0`で正規化
+- 副作用命令（print等）はJIT未対応のためVMへ委譲（安全性優先）
 - JIT/VM統合統計（フォールバック率/時間の一括出力）未統合 → 次対応
 
 ### すぐ試せるコマンド
@@ -44,6 +50,12 @@ NYASH_JIT_STATS=1 NYASH_JIT_DUMP=1 NYASH_JIT_EXEC=1 \
 
 # （任意）Craneliftを含めてビルド（今は最小初期化のみ）
 cargo build --release -j32 --features cranelift-jit
+
+# JIT分岐デモ（feature有効時）
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+  ./target/release/nyash --backend vm examples/jit_branch_demo.nyash
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+  ./target/release/nyash --backend vm examples/jit_loop_early_return.nyash
 
 # スクリプトベンチ（TimerBox版）
 ./target/release/nyash examples/ny_bench.nyash
@@ -92,6 +104,11 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
   - STRICTモードのCI導入（CountingGc前提）/ goldenベンチ導入
 - 10_6b:
   - スケジューラ: poll予算の設定ファイル化、将来のscript API検討（継続）
+- 10_7:
+  - 最小PHI（単純ダイアモンド）の導入（`NYASH_JIT_PHI_MIN=1`ガード）
+  - IRBuilder APIの整理（block param/分岐引数の正式化）とCranelift実装の安定化
+  - 副作用命令のJIT扱い（方針: 当面VMへ、将来はHostCall化）
+  - CFG検証と`NYASH_JIT_DUMP=1`でのCFG可視化
 - ベンチ:
   - `examples/ny_bench.nyash`のケース追加（関数呼出/Map set-get）とループ回数のenv化
 

@@ -1,0 +1,17 @@
+// JIT loop early-return demo (no PHI needed)
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1
+
+static box Main {
+    main() {
+        local i
+        i = 0
+        loop(i < 10) {
+            if (i == 3) {
+                return 99
+            }
+            i = i + 1
+        }
+        return -1
+    }
+}
+

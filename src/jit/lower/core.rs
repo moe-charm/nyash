@@ -24,10 +24,27 @@ impl LowerCore {
         for (i, v) in func.params.iter().copied().enumerate() {
             self.param_index.insert(v, i);
         }
-        // Prepare block mapping (Phase 10.7 stub): deterministic ordering by sorted keys
+        // Prepare block mapping (Phase 10.7): deterministic ordering by sorted keys
         let mut bb_ids: Vec<_> = func.blocks.keys().copied().collect();
         bb_ids.sort_by_key(|b| b.0);
         builder.prepare_blocks(bb_ids.len());
+        // Optional: collect single-PHI targets for minimal PHI path
+        let enable_phi_min = std::env::var("NYASH_JIT_PHI_MIN").ok().as_deref() == Some("1");
+        let mut phi_targets: std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<crate::mir::BasicBlockId, crate::mir::ValueId>> = std::collections::HashMap::new();
+        if enable_phi_min {
+            for (bb_id, bb) in func.blocks.iter() {
+                // gather Phi instructions in this block
+                let mut phis: Vec<&crate::mir::MirInstruction> = Vec::new();
+                for ins in bb.instructions.iter() { if let crate::mir::MirInstruction::Phi { .. } = ins { phis.push(ins); } }
+                if phis.len() == 1 {
+                    if let crate::mir::MirInstruction::Phi { inputs, .. } = phis[0] {
+                        let mut map: std::collections::HashMap<crate::mir::BasicBlockId, crate::mir::ValueId> = std::collections::HashMap::new();
+                        for (pred, val) in inputs.iter() { map.insert(*pred, *val); }
+                        phi_targets.insert(*bb_id, map);
+                    }
+                }
+            }
+        }
         builder.prepare_signature_i64(func.params.len(), true);
         builder.begin_function(&func.signature.name);
         // Iterate blocks in the sorted order to keep indices stable
@@ -48,13 +65,34 @@ impl LowerCore {
                         // Map BasicBlockId -> index
                         let then_index = bb_ids.iter().position(|x| x == then_bb).unwrap_or(0);
                         let else_index = bb_ids.iter().position(|x| x == else_bb).unwrap_or(0);
-                        builder.br_if_top_is_true(then_index, else_index);
+                        if enable_phi_min {
+                            // For minimal PHI, pass one i64 arg if successor defines a single PHI with this block as pred
+                            let mut then_n = 0usize;
+                            let mut else_n = 0usize;
+                            if let Some(pred_map) = phi_targets.get(then_bb) {
+                                if let Some(v) = pred_map.get(bb_id) { self.push_value_if_known_or_param(builder, v); then_n = 1; builder.ensure_block_param_i64(then_index); }
+                            }
+                            if let Some(pred_map) = phi_targets.get(else_bb) {
+                                if let Some(v) = pred_map.get(bb_id) { self.push_value_if_known_or_param(builder, v); else_n = 1; builder.ensure_block_param_i64(else_index); }
+                            }
+                            builder.br_if_with_args(then_index, else_index, then_n, else_n);
+                        } else {
+                            builder.br_if_top_is_true(then_index, else_index);
+                        }
                         builder.seal_block(then_index);
                         builder.seal_block(else_index);
                     }
                     crate::mir::MirInstruction::Jump { target } => {
                         let target_index = bb_ids.iter().position(|x| x == target).unwrap_or(0);
-                        builder.jump_to(target_index);
+                        if enable_phi_min {
+                            let mut n = 0usize;
+                            if let Some(pred_map) = phi_targets.get(target) {
+                                if let Some(v) = pred_map.get(bb_id) { self.push_value_if_known_or_param(builder, v); n = 1; builder.ensure_block_param_i64(target_index); }
+                            }
+                            builder.jump_with_args(target_index, n);
+                        } else {
+                            builder.jump_to(target_index);
+                        }
                         builder.seal_block(target_index);
                     }
                     _ => {
@@ -167,6 +205,10 @@ impl LowerCore {
             I::Return { value } => {
                 if let Some(v) = value { self.push_value_if_known_or_param(b, v); }
                 b.emit_return()
+            }
+            I::Phi { .. } => {
+                // Minimal PHI: load current block param as value (i64)
+                b.push_block_param_i64();
             }
             I::ArrayGet { array, index, .. } => {
                 if std::env::var("NYASH_JIT_HOSTCALL").ok().as_deref() == Some("1") {

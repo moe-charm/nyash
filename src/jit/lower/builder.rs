@@ -36,6 +36,17 @@ pub trait IRBuilder {
     fn br_if_top_is_true(&mut self, _then_index: usize, _else_index: usize) { }
     /// Optional: unconditional jump to target block index
     fn jump_to(&mut self, _target_index: usize) { }
+    /// Optional: ensure target block has one i64 block param (for minimal PHI)
+    fn ensure_block_param_i64(&mut self, _index: usize) { }
+    /// Optional: push current block's first param (i64) onto the value stack
+    fn push_block_param_i64(&mut self) { }
+    /// Optional: conditional branch with explicit arg counts for then/else; pops args from stack
+    fn br_if_with_args(&mut self, _then_index: usize, _else_index: usize, _then_n: usize, _else_n: usize) {
+        // fallback to no-arg br_if
+        self.br_if_top_is_true(_then_index, _else_index);
+    }
+    /// Optional: jump with explicit arg count; pops args from stack
+    fn jump_with_args(&mut self, _target_index: usize, _n: usize) { self.jump_to(_target_index); }
 }
 
 pub struct NoopBuilder {
@@ -76,6 +87,7 @@ pub struct CraneliftBuilder {
     // Phase 10.7: basic block wiring state
     blocks: Vec<cranelift_codegen::ir::Block>,
     current_block_index: Option<usize>,
+    block_param_counts: std::collections::HashMap<usize, usize>,
     // Finalized function pointer (if any)
     compiled_closure: Option<std::sync::Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>>, 
     // Desired simple ABI (Phase 10_c minimal): i64 params count and i64 return
@@ -427,6 +439,74 @@ impl IRBuilder for CraneliftBuilder {
         self.stats.3 += 1;
         fb.finalize();
     }
+    fn ensure_block_param_i64(&mut self, index: usize) {
+        use cranelift_codegen::ir::types;
+        use cranelift_frontend::FunctionBuilder;
+        if index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        let count = self.block_param_counts.get(&index).copied().unwrap_or(0);
+        if count == 0 {
+            let b = self.blocks[index];
+            let _v = fb.append_block_param(b, types::I64);
+            self.block_param_counts.insert(index, 1);
+        }
+        fb.finalize();
+    }
+    fn push_block_param_i64(&mut self) {
+        use cranelift_frontend::FunctionBuilder;
+        use cranelift_codegen::ir::types;
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        // Determine current block
+        let b = if let Some(idx) = self.current_block_index { self.blocks[idx] } else if let Some(b) = self.entry_block { b } else { fb.create_block() };
+        // Fetch first param if exists
+        let params = fb.func.dfg.block_params(b).to_vec();
+        if let Some(v) = params.get(0).copied() { self.value_stack.push(v); }
+        else {
+            // defensive: push 0
+            let zero = fb.ins().iconst(types::I64, 0);
+            self.value_stack.push(zero);
+        }
+        fb.finalize();
+    }
+    fn br_if_with_args(&mut self, then_index: usize, else_index: usize, then_n: usize, else_n: usize) {
+        use cranelift_codegen::ir::{types, condcodes::IntCC};
+        use cranelift_frontend::FunctionBuilder;
+        if then_index >= self.blocks.len() || else_index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        // Condition
+        let cond_b1 = if let Some(v) = self.value_stack.pop() {
+            let ty = fb.func.dfg.value_type(v);
+            if ty == types::I64 { fb.ins().icmp_imm(IntCC::NotEqual, v, 0) } else { v }
+        } else {
+            let zero = fb.ins().iconst(types::I64, 0);
+            fb.ins().icmp_imm(IntCC::NotEqual, zero, 0)
+        };
+        // Pop else args then then args (so stack order can be value-friendly)
+        let mut else_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        for _ in 0..else_n { if let Some(v) = self.value_stack.pop() { else_args.push(v); } }
+        else_args.reverse();
+        let mut then_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        for _ in 0..then_n { if let Some(v) = self.value_stack.pop() { then_args.push(v); } }
+        then_args.reverse();
+        fb.ins().brif(cond_b1, self.blocks[then_index], &then_args, self.blocks[else_index], &else_args);
+        self.stats.3 += 1;
+        fb.finalize();
+    }
+    fn jump_with_args(&mut self, target_index: usize, n: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        if target_index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        for _ in 0..n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
+        args.reverse();
+        fb.ins().jump(self.blocks[target_index], &args);
+        self.stats.3 += 1;
+        fb.finalize();
+    }
 }
 
 #[cfg(feature = "cranelift-jit")]
@@ -474,6 +554,7 @@ impl CraneliftBuilder {
             entry_block: None,
             blocks: Vec::new(),
             current_block_index: None,
+            block_param_counts: std::collections::HashMap::new(),
             compiled_closure: None,
             desired_argc: 0,
             desired_has_ret: true,
