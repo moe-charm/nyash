@@ -14,6 +14,8 @@ use crate::runtime::plugin_loader_v2::PluginBoxV2;
 pub struct ScopeTracker {
     /// Stack of scopes, each containing Boxes created in that scope
     scopes: Vec<Vec<Arc<dyn NyashBox>>>,
+    /// Root regions for GC (values pinned as roots during a dynamic region)
+    roots: Vec<Vec<crate::backend::vm::VMValue>>,
 }
 
 impl ScopeTracker {
@@ -21,6 +23,7 @@ impl ScopeTracker {
     pub fn new() -> Self {
         Self {
             scopes: vec![Vec::new()], // Start with one root scope
+            roots: vec![Vec::new()],  // Start with one root region
         }
     }
     
@@ -50,9 +53,7 @@ impl ScopeTracker {
         }
         
         // Ensure we always have at least one scope
-        if self.scopes.is_empty() {
-            self.scopes.push(Vec::new());
-        }
+        if self.scopes.is_empty() { self.scopes.push(Vec::new()); }
     }
     
     /// Register a Box in the current scope
@@ -73,6 +74,52 @@ impl ScopeTracker {
         if let Some(root_scope) = self.scopes.first_mut() {
             root_scope.clear();
         }
+
+        // Reset roots to a single empty region
+        self.roots.clear();
+        self.roots.push(Vec::new());
+    }
+
+    // ===== GC root region API (Phase 10.4 prep) =====
+    /// Enter a new GC root region
+    pub fn enter_root_region(&mut self) {
+        if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+            eprintln!("[GC] roots: enter");
+        }
+        self.roots.push(Vec::new());
+    }
+
+    /// Leave current GC root region (dropping all pinned values)
+    pub fn leave_root_region(&mut self) {
+        if let Some(_) = self.roots.pop() {
+            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[GC] roots: leave");
+            }
+        }
+        if self.roots.is_empty() { self.roots.push(Vec::new()); }
+    }
+
+    /// Pin a VMValue into the current root region (cheap clone)
+    pub fn pin_root(&mut self, v: &crate::backend::vm::VMValue) {
+        if let Some(cur) = self.roots.last_mut() {
+            cur.push(v.clone());
+            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[GC] roots: pin {:?}", v);
+            }
+        }
+    }
+
+    /// Total number of pinned roots across all regions (for GC PoC diagnostics)
+    pub fn root_count_total(&self) -> usize { self.roots.iter().map(|r| r.len()).sum() }
+
+    /// Number of active root regions
+    pub fn root_regions(&self) -> usize { self.roots.len() }
+
+    /// Snapshot a flat vector of current roots (cloned) for diagnostics
+    pub fn roots_snapshot(&self) -> Vec<crate::backend::vm::VMValue> {
+        let mut out = Vec::new();
+        for region in &self.roots { out.extend(region.iter().cloned()); }
+        out
     }
 }
 

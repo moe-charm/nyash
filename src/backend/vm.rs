@@ -234,6 +234,90 @@ pub struct VM {
 }
 
 impl VM {
+    /// Enter a GC root region and return a guard that leaves on drop
+    pub(super) fn enter_root_region(&mut self) {
+        self.scope_tracker.enter_root_region();
+    }
+
+    /// Pin a slice of VMValue as roots in the current region
+    pub(super) fn pin_roots<'a>(&mut self, values: impl IntoIterator<Item = &'a VMValue>) {
+        for v in values {
+            self.scope_tracker.pin_root(v);
+        }
+    }
+
+    /// Leave current GC root region
+    pub(super) fn leave_root_region(&mut self) { self.scope_tracker.leave_root_region(); }
+
+    /// Site info for GC logs: (func, bb, pc)
+    pub(super) fn gc_site_info(&self) -> (String, i64, i64) {
+        let func = self.current_function.as_deref().unwrap_or("<none>").to_string();
+        let bb = self.frame.current_block.map(|b| b.0 as i64).unwrap_or(-1);
+        let pc = self.frame.pc as i64;
+        (func, bb, pc)
+    }
+
+    /// Print a simple breakdown of root VMValue kinds and top BoxRef types
+    fn gc_print_roots_breakdown(&self) {
+        use std::collections::HashMap;
+        let roots = self.scope_tracker.roots_snapshot();
+        let mut kinds: HashMap<&'static str, u64> = HashMap::new();
+        let mut box_types: HashMap<String, u64> = HashMap::new();
+        for v in &roots {
+            match v {
+                VMValue::Integer(_) => *kinds.entry("Integer").or_insert(0) += 1,
+                VMValue::Float(_) => *kinds.entry("Float").or_insert(0) += 1,
+                VMValue::Bool(_) => *kinds.entry("Bool").or_insert(0) += 1,
+                VMValue::String(_) => *kinds.entry("String").or_insert(0) += 1,
+                VMValue::Future(_) => *kinds.entry("Future").or_insert(0) += 1,
+                VMValue::Void => *kinds.entry("Void").or_insert(0) += 1,
+                VMValue::BoxRef(b) => {
+                    let tn = b.type_name().to_string();
+                    *box_types.entry(tn).or_insert(0) += 1;
+                }
+            }
+        }
+        eprintln!("[GC] roots_breakdown: kinds={:?}", kinds);
+        let mut top: Vec<(String, u64)> = box_types.into_iter().collect();
+        top.sort_by(|a, b| b.1.cmp(&a.1));
+        top.truncate(5);
+        eprintln!("[GC] roots_boxref_top5: {:?}", top);
+    }
+    fn gc_print_reachability_depth2(&self) {
+        use std::collections::HashMap;
+        let roots = self.scope_tracker.roots_snapshot();
+        let mut child_types: HashMap<String, u64> = HashMap::new();
+        let mut child_count = 0u64;
+        for v in &roots {
+            if let VMValue::BoxRef(b) = v {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    if let Ok(items) = arr.items.read() {
+                        for item in items.iter() {
+                            let tn = item.type_name().to_string();
+                            *child_types.entry(tn).or_insert(0) += 1;
+                            child_count += 1;
+                        }
+                    }
+                }
+                if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                    let vals = map.values();
+                    if let Some(arr2) = vals.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        if let Ok(items) = arr2.items.read() {
+                            for item in items.iter() {
+                                let tn = item.type_name().to_string();
+                                *child_types.entry(tn).or_insert(0) += 1;
+                                child_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let mut top: Vec<(String, u64)> = child_types.into_iter().collect();
+        top.sort_by(|a, b| b.1.cmp(&a.1));
+        top.truncate(5);
+        eprintln!("[GC] depth2_children: total={} top5={:?}", child_count, top);
+    }
     fn jit_threshold_from_env() -> u32 {
         std::env::var("NYASH_JIT_THRESHOLD")
             .ok()
@@ -379,6 +463,21 @@ impl VM {
         // Optional: print JIT stats summary (Phase 10_a)
         if let Some(jm) = &self.jit_manager { jm.print_summary(); }
 
+        // Optional: GC diagnostics if enabled
+        if let Ok(val) = std::env::var("NYASH_GC_TRACE") {
+            if val == "1" || val == "2" || val == "3" {
+                if let Some((sp, rd, wr)) = self.runtime.gc.snapshot_counters() {
+                    eprintln!("[GC] counters: safepoints={} read_barriers={} write_barriers={}", sp, rd, wr);
+                }
+                let roots_total = self.scope_tracker.root_count_total();
+                let root_regions = self.scope_tracker.root_regions();
+                let field_slots: usize = self.object_fields.values().map(|m| m.len()).sum();
+                eprintln!("[GC] mock_mark: roots_total={} regions={} object_field_slots={}", roots_total, root_regions, field_slots);
+                if val == "2" || val == "3" { self.gc_print_roots_breakdown(); }
+                if val == "3" { self.gc_print_reachability_depth2(); }
+            }
+        }
+
         // Convert result to NyashBox
         Ok(result.to_nyash_box())
     }
@@ -404,6 +503,9 @@ impl VM {
 
     /// Call a MIR function by name with VMValue arguments
     pub(super) fn call_function_by_name(&mut self, func_name: &str, args: Vec<VMValue>) -> Result<VMValue, VMError> {
+        // Root region: ensure args stay rooted during nested call
+        self.enter_root_region();
+        self.pin_roots(args.iter());
         let module_ref = self.module.as_ref().ok_or_else(|| VMError::InvalidInstruction("No active module".to_string()))?;
         let function_ref = module_ref.get_function(func_name)
             .ok_or_else(|| VMError::InvalidInstruction(format!("Function '{}' not found", func_name)))?;
@@ -445,7 +547,8 @@ impl VM {
         self.previous_block = saved_previous_block;
         self.frame.pc = saved_pc;
         self.frame.last_result = saved_last_result;
-
+        // Leave GC root region
+        self.scope_tracker.leave_root_region();
         result
     }
     
@@ -477,18 +580,29 @@ impl VM {
             .iter()
             .filter_map(|pid| self.get_value(*pid).ok())
             .collect();
-        if let Some(jm) = &mut self.jit_manager {
-            if std::env::var("NYASH_JIT_EXEC").ok().as_deref() == Some("1") {
-                if jm.is_compiled(&function.signature.name) {
-                    if let Some(val) = jm.execute_compiled(&function.signature.name, &args_vec) {
+        if std::env::var("NYASH_JIT_EXEC").ok().as_deref() == Some("1") {
+            // Root regionize args for JIT call
+            self.enter_root_region();
+            self.pin_roots(args_vec.iter());
+            if let Some(jm_ref) = self.jit_manager.as_ref() {
+                if jm_ref.is_compiled(&function.signature.name) {
+                    if let Some(val) = jm_ref.execute_compiled(&function.signature.name, &args_vec) {
                         // Exit scope before returning
+                        self.leave_root_region();
                         self.scope_tracker.pop_scope();
                         return Ok(val);
+                    } else if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") ||
+                              std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1") {
+                        eprintln!("[JIT] fallback: VM path taken for {}", function.signature.name);
                     }
                 }
-            } else {
+            }
+            // Leave root region if not compiled or after fallback
+            self.leave_root_region();
+        } else {
+            if let Some(jm_mut) = &mut self.jit_manager {
                 let argc = function.params.len();
-                let _would = jm.maybe_dispatch(&function.signature.name, argc);
+                let _would = jm_mut.maybe_dispatch(&function.signature.name, argc);
             }
         }
 
@@ -921,6 +1035,9 @@ impl VM {
         Ok(Box::new(VoidBox::new()))
     }
 }
+
+/// RAII guard for GC root regions
+// Root region guard removed in favor of explicit enter/leave to avoid borrow conflicts
 
 /// Control flow result from instruction execution
 pub(super) enum ControlFlow {

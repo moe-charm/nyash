@@ -161,6 +161,31 @@ JSON出力例:
 
 ベンチマークと併用して、ホット命令の抽出・命令セット最適化に活用できます。
 
+### ⏱️ 協調スケジューラ（Phase 10.6b）
+- VMはMIRの`safepoint`命令到達時にランタイムのスケジューラ`poll()`を呼びます。
+- シングルスレ実装（既定）では、`spawn`/`spawn_after`で投入されたタスクを safepoint ごとに最大N件実行します。
+- 制御: `NYASH_SCHED_POLL_BUDGET`（既定: 1）でNを指定。
+
+デモ実行:
+```bash
+cargo build --release -j32
+NYASH_SCHED_DEMO=1 NYASH_SCHED_POLL_BUDGET=2 \
+  ./target/release/nyash --backend vm examples/scheduler_demo.nyash
+```
+
+### 🧹 GCトレーシング（Phase 10.4）
+- カウンタ有効化: `NYASH_GC_COUNTING=1`（CountingGcを注入）
+- 出力レベル: `NYASH_GC_TRACE=1/2/3`
+  - 1: safepoint/barrierログ＋カウンタ
+  - 2: + ルート内訳
+  - 3: + depth=2 リーチャビリティ概要
+- 厳格検証: `NYASH_GC_BARRIER_STRICT=1`（Write-Barrier未増分ならpanic）
+
+```bash
+NYASH_GC_COUNTING=1 NYASH_GC_TRACE=2 \
+  ./target/release/nyash --backend vm examples/scheduler_demo.nyash
+```
+
 ## 🌐 WASM実行（Web対応）
 
 ### 特徴
@@ -371,3 +396,20 @@ nyash --compile-wasm app.nyash -o public/app.wat
 
 最終更新: 2025-08-14
 作成者: Nyash Development Team
+### 🔥 JIT実行（Phase 10_c 最小経路）
+- 有効化: `NYASH_JIT_EXEC=1` とし、`NYASH_JIT_THRESHOLD=1` でホット判定しきい値を下げる
+- 追加情報: `NYASH_JIT_STATS=1` でJITコンパイル/実行時間、サイト集計を出力
+- ダンプ: `NYASH_JIT_DUMP=1` でLowerカバレッジ/emit統計を表示
+- HostCall（配列/Map最小）: `NYASH_JIT_HOSTCALL=1`
+
+例:
+```bash
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_STATS=1 \
+  ./target/release/nyash --backend vm examples/scheduler_demo.nyash
+```
+
+現状のカバレッジ（Core-1）
+- Const(i64/bool), BinOp(Add/Sub/Mul/Div/Mod), Compare(Eq/Ne/Lt/Le/Gt/Ge), Return
+- Paramのi64経路（複数引数対応）
+- Array/Mapの最小HostCall（len/get/set/push/size）
+- Branch/Jumpは統計カウント（CLIFブロック配線は後続フェーズで拡張）

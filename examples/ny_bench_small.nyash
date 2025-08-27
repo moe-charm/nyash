@@ -1,0 +1,46 @@
+// Nyash small benchmarks - reduced iterations for quick testing
+// How to run:
+//  - Interpreter:           ./target/release/nyash examples/ny_bench_small.nyash
+//  - VM:                    ./target/release/nyash --backend vm examples/ny_bench_small.nyash
+//  - VM+JIT (fast path!):   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examples/ny_bench_small.nyash
+
+local ITER
+ITER = 1000  // reduced for interpreter testing
+
+print("\n=== Nyash Small Benchmarks (ITER=" + ITER + ") ===")
+
+// 1) Simple arithmetic loop: sum 0..ITER-1
+local i, sum
+i = 0
+sum = 0
+loop(i < ITER) {
+  sum = sum + i
+  i = i + 1
+}
+print("[arith_loop] sum = " + sum)
+
+// 2) Array push loop: push integers 0..ITER-1
+local arr
+arr = new ArrayBox()
+i = 0
+loop(i < ITER) {
+  arr.push(i)
+  i = i + 1
+}
+print("[array_push] length = " + arr.length())
+
+// 3) Mixed arithmetic: simple_add repeated
+local a, b, z
+a = 1
+b = 2
+i = 0
+loop(i < ITER) {
+  z = a + b
+  a = a + 1
+  b = b + 1
+  i = i + 1
+}
+print("[simple_add_loop] final z = " + z)
+
+print("\nDone.")
+return 0

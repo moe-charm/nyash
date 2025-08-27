@@ -1,6 +1,6 @@
 # 🚀 Nyash Language Reference 2025
 
-**最終更新: 2025年8月11日 - デリゲーション革命完了！`from`統一構文＋`init`構文決定！**
+**最終更新: 2025年8月27日 - フィールド可視性導入！`public`/`private`ブロック構文決定！**
 
 ## 📖 概要
 
@@ -27,7 +27,8 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 | `local` | ローカル変数宣言 | `local x, y = 10` |
 | `outbox` | 所有権移転変数 | `outbox result = compute()` |
 | `global` | グローバル変数 | `global CONFIG = "dev"` |
-| `init` | フィールド初期化ブロック | `init { name, age }` |
+| `public` | 公開フィールド宣言 | `public { name, age }` |
+| `private` | 非公開フィールド宣言 | `private { password, cache }` |
 
 ### **制御構文**
 | 予約語 | 用途 | 例 |
@@ -76,7 +77,8 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 #### **基本Box**
 ```nyash
 box ClassName {
-    init { field1, field2, field3 }  # カンマ必須！CPU暴走防止
+    public { field1, field2 }    # 公開フィールド
+    private { field3 }           # 非公開フィールド
     
     # コンストラクタ
     init(param1, param2) {  # init構文に統一
@@ -100,7 +102,7 @@ box ClassName {
 #### **デリゲーションBox**
 ```nyash
 box Child from Parent interface Comparable {
-    init { childField }
+    private { childField }    # プライベートフィールド
     
     init(parentParam, childParam) {  # init構文に統一
         from Parent.init(parentParam)  # 親コンストラクタ明示呼び出し
@@ -123,7 +125,7 @@ box Child from Parent interface Comparable {
 #### **Static Box（推奨エントリーポイント）**
 ```nyash
 static box Main {
-    init { console, result }
+    public { console, result }
     
     main() {
         me.console = new ConsoleBox()
@@ -136,7 +138,7 @@ static box Main {
 #### **ジェネリックBox**
 ```nyash
 box Container<T> {
-    init { value }
+    public { value }
     
     Container(item) {
         me.value = item
@@ -259,7 +261,8 @@ console.log("Everything is Box!")   # コンソール出力
 #### **パラメータ付きコンストラクタ**
 ```nyash
 box Person {
-    init { name, age, email }
+    public { name, email }
+    private { age }
     
     init(personName, personAge) {  # init構文に統一
         me.name = personName
@@ -286,7 +289,7 @@ guest = Person.createGuest()
 ```nyash
 # 基底Box
 box Animal {
-    init { name, species }
+    public { name, species }
     
     init(animalName, animalSpecies) {
         me.name = animalName
@@ -300,7 +303,7 @@ box Animal {
 
 # デリゲーション
 box Dog from Animal {
-    init { breed }  # 追加フィールド
+    public { breed }  # 追加フィールド
     
     init(dogName, dogBreed) {
         from Animal.init(dogName, "Canine")  # 親コンストラクタ呼び出し
@@ -323,7 +326,7 @@ box Cat from Animal interface Playful {
 #### **名前空間・ユーティリティ**
 ```nyash
 static box MathUtils {
-    init { PI, E }
+    public { PI, E }
     
     static {
         me.PI = 3.14159265
@@ -349,7 +352,7 @@ pi = MathUtils.PI
 ```nyash
 # 🎯 推奨: Static Box Main パターン
 static box Main {
-    init { console, result }
+    public { console, result }
     
     main() {
         me.console = new ConsoleBox()
@@ -407,7 +410,7 @@ boolSum = true + false           # 1 (IntegerBox)
 # メモリ安全性・非同期安全性保証システム
 
 static box Calculator {
-    init { memory }  # 必須フィールド宣言
+    private { memory }  # 必須フィールド宣言
     
     calculate() {
         local temp       # 必須ローカル変数宣言
@@ -491,7 +494,7 @@ static box Calculator {
 ```nyash
 # ✅ 推奨スタイル
 static box Main {
-    init { console, result }    # フィールド明示
+    public { console, result }    # 公開フィールド明示
     
     main() {
         me.console = new ConsoleBox()
@@ -508,12 +511,13 @@ static box Main {
 ### **7.3 よくある間違いと対策**
 ```nyash
 # ❌ よくある間違い
-init { field1 field2 }      # カンマなし → CPU暴走
+public { field1 field2 }    # カンマなし → CPU暴走
 x = 42                      # 変数未宣言 → ランタイムエラー
 while condition { }         # 非対応構文 → パーサーエラー
 
 # ✅ 正しい書き方
-init { field1, field2 }     # カンマ必須
+public { field1, field2 }   # カンマ必須
+private { internalData }    # 非公開フィールド
 local x = 42               # 事前宣言
 loop(condition) { }        # 統一ループ構文
 ```
@@ -522,4 +526,4 @@ loop(condition) { }        # 統一ループ構文
 
 **🎉 Nyash 2025は、AI協働設計による最先端言語システムとして、シンプルさと強力さを完全に両立しました。**
 
-*最終更新: 2025年8月10日 - Arc<Mutex> Revolution + AI大相談会成功記念*
+*最終更新: 2025年8月27日 - フィールド可視性導入 + public/private明示化*

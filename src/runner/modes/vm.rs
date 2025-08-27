@@ -20,9 +20,12 @@ impl NyashRunner {
 
         // Prepare runtime and collect Box declarations for VM user-defined types
         let runtime = {
-            let rt = NyashRuntimeBuilder::new()
-                .with_builtin_groups(BuiltinGroups::native_full())
-                .build();
+            let mut builder = NyashRuntimeBuilder::new()
+                .with_builtin_groups(BuiltinGroups::native_full());
+            if std::env::var("NYASH_GC_COUNTING").ok().as_deref() == Some("1") {
+                builder = builder.with_counting_gc();
+            }
+            let rt = builder.build();
             self.collect_box_declarations(&ast, &rt);
             // Register UserDefinedBoxFactory backed by the same declarations
             let mut shared = SharedState::new();
@@ -38,6 +41,20 @@ impl NyashRunner {
             Ok(result) => result,
             Err(e) => { eprintln!("❌ MIR compilation error: {}", e); process::exit(1); }
         };
+
+        // Optional: demo scheduling hook
+        if std::env::var("NYASH_SCHED_DEMO").ok().as_deref() == Some("1") {
+            if let Some(s) = &runtime.scheduler {
+                // Immediate task
+                s.spawn("demo-immediate", Box::new(|| {
+                    println!("[SCHED] immediate task ran at safepoint");
+                }));
+                // Delayed task
+                s.spawn_after(0, "demo-delayed", Box::new(|| {
+                    println!("[SCHED] delayed task ran at safepoint");
+                }));
+            }
+        }
 
         // Execute with VM using prepared runtime
         let mut vm = VM::with_runtime(runtime);
@@ -81,4 +98,3 @@ impl NyashRunner {
         walk(ast, runtime);
     }
 }
-

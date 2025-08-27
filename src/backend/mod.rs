@@ -12,6 +12,7 @@ pub mod vm_stats;
 pub mod control_flow;
 pub mod dispatch;
 pub mod frame;
+pub mod gc_helpers;
 
 #[cfg(feature = "wasm-backend")]
 pub mod wasm;

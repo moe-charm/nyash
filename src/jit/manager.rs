@@ -80,7 +80,15 @@ impl JitManager {
     /// 10_c: execute compiled function if present (stub: empty args). Returns Some(VMValue) if JIT path was taken.
     pub fn execute_compiled(&self, func: &str, args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> {
         if let Some(h) = self.handle_of(func) {
-            return self.engine.execute_handle(h, args);
+            // Expose current args to hostcall shims
+            crate::jit::rt::set_current_args(args);
+            let t0 = std::time::Instant::now();
+            let out = self.engine.execute_handle(h, args);
+            if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
+                let dt = t0.elapsed();
+                eprintln!("[JIT] exec_time_ms={} for {}", dt.as_millis(), func);
+            }
+            return out;
         }
         None
     }

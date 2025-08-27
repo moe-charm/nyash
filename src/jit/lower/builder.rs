@@ -12,6 +12,10 @@ pub enum CmpKind { Eq, Ne, Lt, Le, Gt, Ge }
 pub trait IRBuilder {
     fn begin_function(&mut self, name: &str);
     fn end_function(&mut self);
+    /// Optional: prepare a simple `i64` ABI signature with `argc` params
+    fn prepare_signature_i64(&mut self, _argc: usize, _has_ret: bool) { }
+    /// Load i64 parameter at index and push to value stack (Core-1 path)
+    fn emit_param_i64(&mut self, _index: usize) { }
     fn emit_const_i64(&mut self, _val: i64);
     fn emit_const_f64(&mut self, _val: f64);
     fn emit_binop(&mut self, _op: BinOpKind);
@@ -38,6 +42,7 @@ impl NoopBuilder {
 impl IRBuilder for NoopBuilder {
     fn begin_function(&mut self, _name: &str) {}
     fn end_function(&mut self) {}
+    fn emit_param_i64(&mut self, _index: usize) { self.consts += 1; }
     fn emit_const_i64(&mut self, _val: i64) { self.consts += 1; }
     fn emit_const_f64(&mut self, _val: f64) { self.consts += 1; }
     fn emit_binop(&mut self, _op: BinOpKind) { self.binops += 1; }
@@ -59,6 +64,9 @@ pub struct CraneliftBuilder {
     entry_block: Option<cranelift_codegen::ir::Block>,
     // Finalized function pointer (if any)
     compiled_closure: Option<std::sync::Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>>, 
+    // Desired simple ABI (Phase 10_c minimal): i64 params count and i64 return
+    desired_argc: usize,
+    desired_has_ret: bool,
 }
 
 #[cfg(feature = "cranelift-jit")]
@@ -67,7 +75,98 @@ use cranelift_module::Module;
 use cranelift_codegen::ir::InstBuilder;
 
 #[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_host_stub0() -> i64 { 0 }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_array_len(arr_param_index: i64) -> i64 {
+    // Interpret first arg as function param index and fetch from thread-local args
+    if arr_param_index < 0 { return 0; }
+    crate::jit::rt::with_args(|args| {
+        let idx = arr_param_index as usize;
+        if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+            if let Some(ab) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                if let Some(ib) = ab.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    return ib.value;
+                }
+            }
+        }
+        0
+    })
+}
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_array_push(arr_param_index: i64, val: i64) -> i64 {
+    if arr_param_index < 0 { return 0; }
+    crate::jit::rt::with_args(|args| {
+        let idx = arr_param_index as usize;
+        if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+            if let Some(ab) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                // Push integer value only (PoC)
+                let ib = crate::box_trait::IntegerBox::new(val);
+                let _ = ab.push(Box::new(ib));
+                return 0;
+            }
+        }
+        0
+    })
+}
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_array_get(arr_param_index: i64, idx: i64) -> i64 {
+    if arr_param_index < 0 { return 0; }
+    crate::jit::rt::with_args(|args| {
+        let pidx = arr_param_index as usize;
+        if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(pidx) {
+            if let Some(ab) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                let val = ab.get(Box::new(crate::box_trait::IntegerBox::new(idx)));
+                if let Some(ib) = val.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    return ib.value;
+                }
+            }
+        }
+        0
+    })
+}
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_array_set(arr_param_index: i64, idx: i64, val: i64) -> i64 {
+    if arr_param_index < 0 { return 0; }
+    crate::jit::rt::with_args(|args| {
+        let pidx = arr_param_index as usize;
+        if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(pidx) {
+            if let Some(ab) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                let _ = ab.set(
+                    Box::new(crate::box_trait::IntegerBox::new(idx)),
+                    Box::new(crate::box_trait::IntegerBox::new(val)),
+                );
+                return 0;
+            }
+        }
+        0
+    })
+}
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_map_get(_map: u64, _key: i64) -> i64 { 0 }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_map_set(_map: u64, _key: i64, _val: i64) -> i64 { 0 }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_map_size(map_param_index: i64) -> i64 {
+    if map_param_index < 0 { return 0; }
+    crate::jit::rt::with_args(|args| {
+        let idx = map_param_index as usize;
+        if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+            if let Some(mb) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                if let Some(ib) = mb.size().as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    return ib.value;
+                }
+            }
+        }
+        0
+    })
+}
+
+#[cfg(feature = "cranelift-jit")]
 impl IRBuilder for CraneliftBuilder {
+    fn prepare_signature_i64(&mut self, argc: usize, has_ret: bool) {
+        self.desired_argc = argc;
+        self.desired_has_ret = has_ret;
+    }
     fn begin_function(&mut self, name: &str) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
         use cranelift_frontend::FunctionBuilder;
@@ -76,10 +175,11 @@ impl IRBuilder for CraneliftBuilder {
         self.value_stack.clear();
         self.entry_block = None;
 
-        // Minimal signature: () -> i64  (Core-1 integer path)
+        // Minimal signature: (i64 x argc) -> i64?  (Core-1 integer path)
         let call_conv = self.module.isa().default_call_conv();
         let mut sig = Signature::new(call_conv);
-        sig.returns.push(AbiParam::new(types::I64));
+        for _ in 0..self.desired_argc { sig.params.push(AbiParam::new(types::I64)); }
+        if self.desired_has_ret { sig.returns.push(AbiParam::new(types::I64)); }
         self.ctx.func.signature = sig;
         self.ctx.func.name = cranelift_codegen::ir::UserFuncName::user(0, 0);
 
@@ -116,7 +216,7 @@ impl IRBuilder for CraneliftBuilder {
         // Get finalized code pointer and wrap into a safe closure
         let code = self.module.get_finalized_function(func_id);
 
-        // SAFETY: We compiled a function with signature () -> i64
+        // SAFETY: We compiled a function with simple i64 ABI; we still call without args for now
         unsafe {
             let f: extern "C" fn() -> i64 = std::mem::transmute(code);
             let closure = std::sync::Arc::new(move |_args: &[crate::backend::vm::VMValue]| -> crate::backend::vm::VMValue {
@@ -200,14 +300,83 @@ impl IRBuilder for CraneliftBuilder {
         }
         fb.finalize();
     }
+
+    fn emit_host_call(&mut self, symbol: &str, _argc: usize, has_ret: bool) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        use cranelift_frontend::FunctionBuilder;
+        use cranelift_module::{Linkage, Module};
+
+        // Minimal import+call to a registered stub symbol; ignore args for now
+        let call_conv = self.module.isa().default_call_conv();
+        let mut sig = Signature::new(call_conv);
+        // Collect up to _argc i64 values from stack as arguments (right-to-left)
+        let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        let take_n = _argc.min(self.value_stack.len());
+        for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
+        args.reverse();
+        // Build params for each collected arg
+        for _ in 0..args.len() { sig.params.push(AbiParam::new(types::I64)); }
+        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+
+        let func_id = self.module
+            .declare_function(symbol, Linkage::Import, &sig)
+            .expect("declare import failed");
+
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        let fref = self.module.declare_func_in_func(func_id, fb.func);
+        let call_inst = fb.ins().call(fref, &args);
+        if has_ret {
+            let results = fb.inst_results(call_inst).to_vec();
+            if let Some(v) = results.get(0).copied() {
+                self.value_stack.push(v);
+            }
+        }
+        fb.finalize();
+    }
+}
+
+#[cfg(feature = "cranelift-jit")]
+impl CraneliftBuilder {
+    fn entry_param(&mut self, index: usize) -> Option<cranelift_codegen::ir::Value> {
+        use cranelift_frontend::FunctionBuilder;
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(b) = self.entry_block {
+            fb.switch_to_block(b);
+            let params = fb.func.dfg.block_params(b).to_vec();
+            if let Some(v) = params.get(index).copied() { return Some(v); }
+        }
+        None
+    }
+}
+
+#[cfg(feature = "cranelift-jit")]
+impl IRBuilder for CraneliftBuilder {
+    fn emit_param_i64(&mut self, index: usize) {
+        if let Some(v) = self.entry_param(index) {
+            self.value_stack.push(v);
+        }
+    }
 }
 
 #[cfg(feature = "cranelift-jit")]
 impl CraneliftBuilder {
     pub fn new() -> Self {
         // Initialize a minimal JITModule to validate linking; not used yet
-        let builder = cranelift_jit::JITBuilder::new(cranelift_module::default_libcall_names())
+        let mut builder = cranelift_jit::JITBuilder::new(cranelift_module::default_libcall_names())
             .expect("failed to create JITBuilder");
+        // Register host-call symbols (PoC: map to simple C-ABI stubs)
+        builder.symbol("nyash.host.stub0", nyash_host_stub0 as *const u8);
+        {
+            use crate::jit::r#extern::collections as c;
+            builder.symbol(c::SYM_ARRAY_LEN, nyash_array_len as *const u8);
+            builder.symbol(c::SYM_ARRAY_GET, nyash_array_get as *const u8);
+            builder.symbol(c::SYM_ARRAY_SET, nyash_array_set as *const u8);
+            builder.symbol(c::SYM_ARRAY_PUSH, nyash_array_push as *const u8);
+            builder.symbol(c::SYM_MAP_GET, nyash_map_get as *const u8);
+            builder.symbol(c::SYM_MAP_SET, nyash_map_set as *const u8);
+            builder.symbol(c::SYM_MAP_SIZE, nyash_map_size as *const u8);
+        }
         let module = cranelift_jit::JITModule::new(builder);
         let ctx = cranelift_codegen::Context::new();
         let fbc = cranelift_frontend::FunctionBuilderContext::new();
@@ -218,6 +387,8 @@ impl CraneliftBuilder {
             value_stack: Vec::new(),
             entry_block: None,
             compiled_closure: None,
+            desired_argc: 0,
+            desired_has_ret: true,
         }
     }
 

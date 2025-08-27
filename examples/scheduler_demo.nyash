@@ -1,0 +1,12 @@
+// Scheduler demo: produces multiple safepoints via loop
+// Run with: NYASH_SCHED_DEMO=1 NYASH_SCHED_POLL_BUDGET=2 ./target/release/nyash --backend vm examples/scheduler_demo.nyash
+
+local i
+i = 0
+loop(i < 5) {
+    print("tick " + i)
+    i = i + 1
+}
+
+print("done")
+

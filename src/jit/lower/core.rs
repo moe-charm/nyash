@@ -1,4 +1,4 @@
-use crate::mir::{MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp};
+use crate::mir::{MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, ValueId};
 use super::builder::{IRBuilder, BinOpKind, CmpKind};
 
 /// Lower(Core-1): Minimal lowering skeleton for Const/Move/BinOp/Cmp/Branch/Ret
@@ -6,14 +6,25 @@ use super::builder::{IRBuilder, BinOpKind, CmpKind};
 pub struct LowerCore {
     pub unsupported: usize,
     pub covered: usize,
+    /// Minimal constant propagation for i64 to feed host-call args
+    known_i64: std::collections::HashMap<ValueId, i64>,
+    /// Parameter index mapping for ValueId
+    param_index: std::collections::HashMap<ValueId, usize>,
 }
 
 impl LowerCore {
-    pub fn new() -> Self { Self { unsupported: 0, covered: 0 } }
+    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), param_index: std::collections::HashMap::new() } }
 
     /// Walk the MIR function and count supported/unsupported instructions.
     /// In the future, this will build CLIF via Cranelift builders.
     pub fn lower_function(&mut self, func: &MirFunction, builder: &mut dyn IRBuilder) -> Result<(), String> {
+        // Prepare a simple i64 ABI based on param count; always assume i64 return for now
+        // Build param index map
+        self.param_index.clear();
+        for (i, v) in func.params.iter().copied().enumerate() {
+            self.param_index.insert(v, i);
+        }
+        builder.prepare_signature_i64(func.params.len(), true);
         builder.begin_function(&func.signature.name);
         for (_bb_id, bb) in func.blocks.iter() {
             for instr in bb.instructions.iter() {
@@ -27,6 +38,17 @@ impl LowerCore {
         }
         builder.end_function();
         Ok(())
+    }
+
+    /// Push a value onto the builder stack if it is a known i64 const or a parameter.
+    fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
+        if let Some(pidx) = self.param_index.get(id).copied() {
+            b.emit_param_i64(pidx);
+            return;
+        }
+        if let Some(v) = self.known_i64.get(id).copied() {
+            b.emit_const_i64(v);
+        }
     }
 
     fn cover_if_supported(&mut self, instr: &MirInstruction) {
@@ -49,16 +71,33 @@ impl LowerCore {
     fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction) {
         use crate::mir::MirInstruction as I;
         match instr {
-            I::Const { value, .. } => match value {
-                ConstValue::Integer(i) => b.emit_const_i64(*i),
+            I::Const { dst, value } => match value {
+                ConstValue::Integer(i) => { 
+                    b.emit_const_i64(*i);
+                    self.known_i64.insert(*dst, *i);
+                }
                 ConstValue::Float(f) => b.emit_const_f64(*f),
-                ConstValue::Bool(_)
-                | ConstValue::String(_) | ConstValue::Null | ConstValue::Void => {
+                ConstValue::Bool(bv) => {
+                    let iv = if *bv { 1 } else { 0 };
+                    b.emit_const_i64(iv);
+                    self.known_i64.insert(*dst, iv);
+                }
+                ConstValue::String(_) | ConstValue::Null | ConstValue::Void => {
                     // leave unsupported for now
                 }
             },
-            I::Copy { .. } => { /* no-op for now */ }
-            I::BinOp { op, .. } => {
+            I::Copy { dst, src } => { 
+                if let Some(v) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, v); }
+                // If source is a parameter, materialize it on the stack for downstream ops
+                if let Some(pidx) = self.param_index.get(src).copied() {
+                    b.emit_param_i64(pidx);
+                }
+                // Otherwise no-op for codegen (stack-machine handles sources directly later)
+            }
+            I::BinOp { dst, op, lhs, rhs } => {
+                // Ensure operands are on stack when available (param or known const)
+                self.push_value_if_known_or_param(b, lhs);
+                self.push_value_if_known_or_param(b, rhs);
                 let kind = match op {
                     BinaryOp::Add => BinOpKind::Add,
                     BinaryOp::Sub => BinOpKind::Sub,
@@ -70,8 +109,22 @@ impl LowerCore {
                     | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr => { return; }
                 };
                 b.emit_binop(kind);
+                if let (Some(a), Some(b)) = (self.known_i64.get(lhs), self.known_i64.get(rhs)) {
+                    let res = match op {
+                        BinaryOp::Add => a.wrapping_add(*b),
+                        BinaryOp::Sub => a.wrapping_sub(*b),
+                        BinaryOp::Mul => a.wrapping_mul(*b),
+                        BinaryOp::Div => if *b != 0 { a.wrapping_div(*b) } else { 0 },
+                        BinaryOp::Mod => if *b != 0 { a.wrapping_rem(*b) } else { 0 },
+                        _ => 0,
+                    };
+                    self.known_i64.insert(*dst, res);
+                }
             }
-            I::Compare { op, .. } => {
+            I::Compare { op, lhs, rhs, .. } => {
+                // Ensure operands are on stack when available (param or known const)
+                self.push_value_if_known_or_param(b, lhs);
+                self.push_value_if_known_or_param(b, rhs);
                 let kind = match op {
                     CompareOp::Eq => CmpKind::Eq,
                     CompareOp::Ne => CmpKind::Ne,
@@ -84,12 +137,57 @@ impl LowerCore {
             }
             I::Jump { .. } => b.emit_jump(),
             I::Branch { .. } => b.emit_branch(),
-            I::Return { .. } => b.emit_return(),
-            I::ArrayGet { .. } => {
-                b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_GET, 2, true);
+            I::Return { value } => {
+                if let Some(v) = value { self.push_value_if_known_or_param(b, v); }
+                b.emit_return()
             }
-            I::ArraySet { .. } => {
-                b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_SET, 3, false);
+            I::ArrayGet { array, index, .. } => {
+                if std::env::var("NYASH_JIT_HOSTCALL").ok().as_deref() == Some("1") {
+                    // Push args: array param index (or -1), index (known or 0)
+                    let idx = self.known_i64.get(index).copied().unwrap_or(0);
+                    let arr_idx = self.param_index.get(array).copied().map(|x| x as i64).unwrap_or(-1);
+                    b.emit_const_i64(arr_idx);
+                    b.emit_const_i64(idx);
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_GET, 2, true);
+                }
+            }
+            I::ArraySet { array, index, value } => {
+                if std::env::var("NYASH_JIT_HOSTCALL").ok().as_deref() == Some("1") {
+                    let idx = self.known_i64.get(index).copied().unwrap_or(0);
+                    let val = self.known_i64.get(value).copied().unwrap_or(0);
+                    let arr_idx = self.param_index.get(array).copied().map(|x| x as i64).unwrap_or(-1);
+                    b.emit_const_i64(arr_idx);
+                    b.emit_const_i64(idx);
+                    b.emit_const_i64(val);
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_SET, 3, false);
+                }
+            }
+            I::BoxCall { box_val: array, method, args, dst, .. } => {
+                if std::env::var("NYASH_JIT_HOSTCALL").ok().as_deref() == Some("1") {
+                    match method.as_str() {
+                        "len" | "length" => {
+                            // argc=1: (array_param_index)
+                            let arr_idx = self.param_index.get(array).copied().map(|x| x as i64).unwrap_or(-1);
+                            b.emit_const_i64(arr_idx);
+                            b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                        }
+                        "push" => {
+                            // argc=2: (array, value)
+                            let val = args.get(0).and_then(|v| self.known_i64.get(v)).copied().unwrap_or(0);
+                            let arr_idx = self.param_index.get(array).copied().map(|x| x as i64).unwrap_or(-1);
+                            b.emit_const_i64(arr_idx);
+                            b.emit_const_i64(val);
+                            b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_PUSH, 2, false);
+                        }
+                        "size" => {
+                            // MapBox.size(): argc=1 (map_param_index)
+                            let map_idx = self.param_index.get(array).copied().map(|x| x as i64).unwrap_or(-1);
+                            b.emit_const_i64(map_idx);
+                            b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_SIZE, 1, dst.is_some());
+                        }
+                        _ => {}
+                    }
+                }
             }
             _ => {}
         }

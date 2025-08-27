@@ -1,0 +1,5 @@
+// PoC: array push + len (JIT hostcall path gated)
+arr = new ArrayBox()
+arr.push(1)
+arr.push(2)
+print(arr.length())

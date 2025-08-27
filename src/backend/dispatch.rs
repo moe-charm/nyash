@@ -88,9 +88,31 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
         },
 
         // Barriers
-        MirInstruction::BarrierRead { .. } => Ok(ControlFlow::Continue),
-        MirInstruction::BarrierWrite { .. } => Ok(ControlFlow::Continue),
-        MirInstruction::Barrier { .. } => Ok(ControlFlow::Continue),
+        MirInstruction::BarrierRead { .. } => {
+            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+                let (func, bb, pc) = vm.gc_site_info();
+                eprintln!("[GC] barrier: Read @{} bb={} pc={}", func, bb, pc);
+            }
+            vm.runtime.gc.barrier(crate::runtime::gc::BarrierKind::Read);
+            Ok(ControlFlow::Continue)
+        }
+        MirInstruction::BarrierWrite { .. } => {
+            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+                let (func, bb, pc) = vm.gc_site_info();
+                eprintln!("[GC] barrier: Write @{} bb={} pc={}", func, bb, pc);
+            }
+            vm.runtime.gc.barrier(crate::runtime::gc::BarrierKind::Write);
+            Ok(ControlFlow::Continue)
+        }
+        MirInstruction::Barrier { op, .. } => {
+            let k = match op { crate::mir::BarrierOp::Read => crate::runtime::gc::BarrierKind::Read, crate::mir::BarrierOp::Write => crate::runtime::gc::BarrierKind::Write };
+            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+                let (func, bb, pc) = vm.gc_site_info();
+                eprintln!("[GC] barrier: {:?} @{} bb={} pc={}", k, func, bb, pc);
+            }
+            vm.runtime.gc.barrier(k);
+            Ok(ControlFlow::Continue)
+        }
 
         // Exceptions
         MirInstruction::Throw { exception, .. } => vm.execute_throw(*exception),
@@ -123,7 +145,16 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
         MirInstruction::Cast { dst, value, .. } => { let val = vm.get_value(*value)?; vm.set_value(*dst, val); Ok(ControlFlow::Continue) }
         MirInstruction::Debug { .. } => Ok(ControlFlow::Continue),
         MirInstruction::Nop => Ok(ControlFlow::Continue),
-        MirInstruction::Safepoint => Ok(ControlFlow::Continue),
+        MirInstruction::Safepoint => {
+            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+                let (func, bb, pc) = vm.gc_site_info();
+                eprintln!("[GC] safepoint @{} bb={} pc={}", func, bb, pc);
+            }
+            vm.runtime.gc.safepoint();
+            // Cooperative scheduling: poll single-thread scheduler
+            if let Some(s) = &vm.runtime.scheduler { s.poll(); }
+            Ok(ControlFlow::Continue)
+        },
     }
 }
 

@@ -1,0 +1,37 @@
+Phase 10.6c — Parallel GC Design (Notes)
+
+Objectives
+- Keep GC hooks and MIR sites stable while enabling parallel/stop-the-world options.
+- Introduce per-thread root regions, card marking, and coordinated safepoints.
+
+Design Sketch
+1) Per-thread roots
+   - Root API remains the same but live under thread-local trackers.
+   - VM/engines expose `enter_root_region/pin/leave_root_region` that operate on TLS.
+   - Global snapshot for diagnostics merges per-thread views (debug only).
+
+2) Safepoint coordination
+   - Central GC controller requests a safepoint; worker threads acknowledge at next MIR `Safepoint`.
+   - Timeout/poll policy configurable; in single-threaded mode this is no-op.
+
+3) Card marking / write barriers
+   - Extend `BarrierKind::Write` to accept optional object metadata (future API): object id/card index.
+   - For now, keep symbolic barrier only; when parallel GC is enabled, maintain a global dirty set.
+
+4) Scheduler interplay
+   - GC controller can schedule minor/major cycles using the Scheduler abstraction.
+   - In single-threaded mode, cycles are chunked via `poll()` to avoid long pauses.
+
+API Diffs (future)
+- `GcHooks::barrier(kind)` → `barrier(kind, obj: Option<ObjectId>)` (compat shim keeps old signature).
+- `GcHooks::safepoint()` may return a hint (`Proceed`, `Yield`) for engines to cooperate.
+
+Migration Plan
+- Keep current single-threaded path as default.
+- Add feature flag `gc-parallel` that swaps in an implementation honoring the extended API.
+- Incrementally add: dirty set, per-thread roots, coordinated safepoint prototype.
+
+Testing Strategy
+- Deterministic unit tests using SingleThreadScheduler.
+- Stress tests with STRICT barrier and TRACE=2 to validate barrier coverage and root progression.
+

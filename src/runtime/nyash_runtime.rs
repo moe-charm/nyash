@@ -18,6 +18,10 @@ pub struct NyashRuntime {
     pub box_registry: Arc<Mutex<UnifiedBoxRegistry>>,
     /// User-defined box declarations collected from source
     pub box_declarations: Arc<RwLock<HashMap<String, BoxDeclaration>>>,
+    /// GC hooks (switchable runtime). Default is no-op.
+    pub gc: Arc<dyn crate::runtime::gc::GcHooks>,
+    /// Optional scheduler (single-thread by default is fine)
+    pub scheduler: Option<Arc<dyn crate::runtime::scheduler::Scheduler>>, 
 }
 
 impl NyashRuntime {
@@ -26,6 +30,8 @@ impl NyashRuntime {
         Self {
             box_registry: create_default_registry(),
             box_declarations: Arc::new(RwLock::new(HashMap::new())),
+            gc: Arc::new(crate::runtime::gc::NullGc),
+            scheduler: Some(Arc::new(crate::runtime::scheduler::SingleThreadScheduler::new())),
         }
     }
 }
@@ -35,11 +41,13 @@ pub struct NyashRuntimeBuilder {
     box_registry: Option<Arc<Mutex<UnifiedBoxRegistry>>>,
     box_declarations: Option<Arc<RwLock<HashMap<String, BoxDeclaration>>>>,
     builtin_groups: Option<BuiltinGroups>,
+    gc: Option<Arc<dyn crate::runtime::gc::GcHooks>>, 
+    scheduler: Option<Arc<dyn crate::runtime::scheduler::Scheduler>>,
 }
 
 impl NyashRuntimeBuilder {
     pub fn new() -> Self {
-        Self { box_registry: None, box_declarations: None, builtin_groups: None }
+        Self { box_registry: None, box_declarations: None, builtin_groups: None, gc: None, scheduler: None }
     }
 
     /// Inject a BoxFactory implementation directly into a private registry
@@ -72,6 +80,8 @@ impl NyashRuntimeBuilder {
         NyashRuntime {
             box_registry: registry,
             box_declarations: self.box_declarations.unwrap_or_else(|| Arc::new(RwLock::new(HashMap::new()))),
+            gc: self.gc.unwrap_or_else(|| Arc::new(crate::runtime::gc::NullGc)),
+            scheduler: Some(self.scheduler.unwrap_or_else(|| Arc::new(crate::runtime::scheduler::SingleThreadScheduler::new()))),
         }
     }
 }
@@ -95,6 +105,31 @@ impl NyashRuntimeBuilder {
     /// If a custom box_registry is already provided, this setting is ignored.
     pub fn with_builtin_groups(mut self, groups: BuiltinGroups) -> Self {
         self.builtin_groups = Some(groups);
+        self
+    }
+
+    /// Inject custom GC hooks (switchable runtime). Default is no-op.
+    pub fn with_gc_hooks(mut self, gc: Arc<dyn crate::runtime::gc::GcHooks>) -> Self {
+        self.gc = Some(gc);
+        self
+    }
+
+    /// Convenience: use CountingGc for development metrics
+    pub fn with_counting_gc(mut self) -> Self {
+        let gc = Arc::new(crate::runtime::gc::CountingGc::new());
+        self.gc = Some(gc);
+        self
+    }
+
+    /// Inject a custom scheduler implementation
+    pub fn with_scheduler(mut self, sched: Arc<dyn crate::runtime::scheduler::Scheduler>) -> Self {
+        self.scheduler = Some(sched);
+        self
+    }
+
+    /// Convenience: use SingleThreadScheduler
+    pub fn with_single_thread_scheduler(mut self) -> Self {
+        self.scheduler = Some(Arc::new(crate::runtime::scheduler::SingleThreadScheduler::new()));
         self
     }
 }

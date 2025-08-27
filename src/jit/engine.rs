@@ -36,6 +36,7 @@ impl JitEngine {
 
     /// Compile a function if supported; returns an opaque handle id
     pub fn compile_function(&mut self, func_name: &str, mir: &crate::mir::MirFunction) -> Option<u64> {
+        let t0 = std::time::Instant::now();
         // Phase 10_b skeleton: walk MIR with LowerCore and report coverage
         let mut lower = crate::jit::lower::core::LowerCore::new();
         #[cfg(feature = "cranelift-jit")]
@@ -68,6 +69,10 @@ impl JitEngine {
         {
             if let Some(closure) = builder.take_compiled_closure() {
                 self.fntab.insert(h, closure);
+                if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
+                    let dt = t0.elapsed();
+                    eprintln!("[JIT] compile_time_ms={} for {}", dt.as_millis(), func_name);
+                }
                 return Some(h);
             }
         }
@@ -75,12 +80,28 @@ impl JitEngine {
         self.fntab.insert(h, Arc::new(|_args: &[crate::backend::vm::VMValue]| {
             crate::backend::vm::VMValue::Void
         }));
+        if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
+            let dt = t0.elapsed();
+            eprintln!("[JIT] compile_time_ms={} for {} (stub)", dt.as_millis(), func_name);
+        }
         Some(h)
     }
 
-    /// Execute compiled function by handle (stub). Returns Some(VMValue) if found.
+    /// Execute compiled function by handle with trap fallback.
+    /// Returns Some(VMValue) if executed successfully; None on missing handle or trap (panic).
     pub fn execute_handle(&self, handle: u64, args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> {
-        self.fntab.get(&handle).map(|f| f(args))
+        let f = match self.fntab.get(&handle) { Some(f) => f, None => return None };
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (f)(args)));
+        match res {
+            Ok(v) => Some(v),
+            Err(_) => {
+                if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") ||
+                   std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1") {
+                    eprintln!("[JIT] trap: panic during handle={} execution — falling back to VM", handle);
+                }
+                None
+            }
+        }
     }
 
     /// Register built-in externs (collections)

@@ -15,6 +15,7 @@ use super::{VM, VMValue, VMError};
 use super::vm::ControlFlow;
 
 impl VM {
+    // moved helpers to backend::gc_helpers
     /// Build a PIC key from receiver and method identity
     fn build_pic_key(&self, recv: &VMValue, method: &str, method_id: Option<u16>) -> String {
         let label = self.cache_label_for_recv(recv);
@@ -420,6 +421,8 @@ impl VM {
         
         if let VMValue::BoxRef(array_box) = &array_val {
             if let Some(array) = array_box.as_any().downcast_ref::<ArrayBox>() {
+                // GC write barrier (array contents mutation)
+                crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "ArraySet");
                 // ArrayBox expects Box<dyn NyashBox> for index
                 let index_box = index_val.to_nyash_box();
                 let box_value = value_val.to_nyash_box();
@@ -506,7 +509,8 @@ impl VM {
             self.object_fields.insert(reference, std::collections::HashMap::new());
         }
         
-        // Set the field
+        // Set the field (with GC write barrier)
+        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "RefSet");
         if let Some(fields) = self.object_fields.get_mut(&reference) {
             fields.insert(field.to_string(), new_value);
             if debug_ref { eprintln!("[VM] RefSet stored: {}", field); }
@@ -647,16 +651,34 @@ impl VM {
                                 if std::env::var("NYASH_VM_VT_STATS").ok().as_deref() == Some("1") {
                                     eprintln!("[VT] hit class={} slot={} -> {}", label, mid, func_name);
                                 }
+                                // 実行: 受け取り→VM引数並べ→関数呼出
                                 let mut vm_args = Vec::with_capacity(1 + args.len());
                                 vm_args.push(recv.clone());
                                 for a in args { vm_args.push(self.get_value(*a)?); }
                                 let res = self.call_function_by_name(&func_name, vm_args)?;
+
+                                // 10_e: Thunk経路でもPIC/VTableを直結更新するにゃ
+                                // - Poly-PIC: 直ちに記録（最大4件ローカルLRU）
+                                self.record_poly_pic(&pic_key, &recv, &func_name);
+                                // - HotならMono-PICにも格納（しきい値=8）
+                                const PIC_THRESHOLD: u32 = 8;
+                                if self.pic_hits(&pic_key) >= PIC_THRESHOLD {
+                                    self.boxcall_pic_funcname.insert(pic_key.clone(), func_name.clone());
+                                }
+                                // - InstanceBoxならVTableキーにも登録（method_id/arity直結）
+                                if is_instance {
+                                    let vkey = self.build_vtable_key(&label, mid, args.len());
+                                    self.boxcall_vtable_funcname.entry(vkey).or_insert(func_name.clone());
+                                }
+
                                 if let Some(dst_id) = dst { self.set_value(dst_id, res); }
                                 return Ok(ControlFlow::Continue);
                             }
                             crate::runtime::type_meta::ThunkTarget::PluginInvoke { method_id: mid2 } => {
                                 if is_plugin {
                                     if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                        // Root region for plugin call (pin recv + args)
+                                        self.enter_root_region();
                                         // Convert args prepared earlier (we need NyashBox args)
                                         let nyash_args: Vec<Box<dyn NyashBox>> = args.iter()
                                             .map(|arg| {
@@ -664,6 +686,10 @@ impl VM {
                                                 Ok(val.to_nyash_box())
                                             })
                                             .collect::<Result<Vec<_>, VMError>>()?;
+                                        // Pin roots: receiver and VMValue args
+                                        self.pin_roots(std::iter::once(&recv));
+                                        let pinned_args: Vec<VMValue> = args.iter().filter_map(|a| self.get_value(*a).ok()).collect();
+                                        self.pin_roots(pinned_args.iter());
                                         // Encode minimal TLV (int/string/handle) same as fast-path
                                         let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(nyash_args.len() as u16);
                                         let mut enc_failed = false;
@@ -706,8 +732,12 @@ impl VM {
                                                     VMValue::Void
                                                 };
                                                 if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
+                                                // Leave root region
+                                                self.leave_root_region();
                                                 return Ok(ControlFlow::Continue);
                                             }
+                                        // Leave root region also on error path
+                                        self.leave_root_region();
                                         }
                                     }
                                 }
@@ -721,6 +751,10 @@ impl VM {
                                             Ok(val.to_nyash_box())
                                         })
                                         .collect::<Result<Vec<_>, VMError>>()?;
+                                    // Write barrier for known mutating builtins
+                                    if crate::backend::gc_helpers::is_mutating_builtin_call(&recv, m) {
+                                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall.builtin");
+                                    }
                                     let cloned_box = arc_box.share_box();
                                     let out = self.call_box_method(cloned_box, m, nyash_args)?;
                                     let vm_out = VMValue::from_nyash_box(out);
@@ -787,13 +821,15 @@ impl VM {
             })
             .collect::<Result<Vec<_>, VMError>>()?;
 
-        // PluginBoxV2 fast-path via method_id -> direct invoke_fn (skip name->id resolution)
-        if let (Some(mid), VMValue::BoxRef(arc_box)) = (method_id, &recv) {
-            if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                // Encode TLV args (support: int, string, plugin handle)
-                let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(nyash_args.len() as u16);
-                let mut enc_failed = false;
-                for a in &nyash_args {
+                // PluginBoxV2 fast-path via method_id -> direct invoke_fn (skip name->id resolution)
+                if let (Some(mid), VMValue::BoxRef(arc_box)) = (method_id, &recv) {
+                    if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        // Root region for plugin call
+                        self.enter_root_region();
+                        // Encode TLV args (support: int, string, plugin handle)
+                        let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(nyash_args.len() as u16);
+                        let mut enc_failed = false;
+                        for a in &nyash_args {
                     // Prefer BufferBox → bytes
                     if let Some(buf) = a.as_any().downcast_ref::<crate::boxes::buffer::BufferBox>() {
                         let snapshot = buf.to_vec();
@@ -864,8 +900,11 @@ impl VM {
                             VMValue::Void
                         };
                         if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
+                        self.leave_root_region();
                         return Ok(ControlFlow::Continue);
                     }
+                    // Leave root region also on non-zero code path
+                    self.leave_root_region();
                 }
             }
         }
@@ -914,6 +953,10 @@ impl VM {
                     let label = arc_box.type_name().to_string();
                     let tm = crate::runtime::type_meta::get_or_create_type_meta(&label);
                     tm.set_thunk_builtin(mid as usize, method.to_string());
+                }
+                // Write barrier for known mutating builtins
+                if crate::backend::gc_helpers::is_mutating_builtin_call(&recv, method) {
+                    crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall");
                 }
                 let cloned_box = arc_box.share_box();
                 self.call_box_method(cloned_box, method, nyash_args)?

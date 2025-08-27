@@ -1,0 +1,12 @@
+// Param-map JIT HostCall PoC
+box Utils {
+    getMapSize(m) {
+        return m.size()
+    }
+}
+
+m = new MapBox()
+m.set("a", 1)
+m.set("b", 2)
+u = new Utils()
+print(u.getMapSize(m))
