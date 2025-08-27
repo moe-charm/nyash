@@ -412,4 +412,7 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_STATS=1 \
 - Const(i64/bool), BinOp(Add/Sub/Mul/Div/Mod), Compare(Eq/Ne/Lt/Le/Gt/Ge), Return
 - Paramのi64経路（複数引数対応）
 - Array/Mapの最小HostCall（len/get/set/push/size）
-- Branch/Jumpは統計カウント（CLIFブロック配線は後続フェーズで拡張）
+- Branch/JumpはPhase 10.7でCranelift配線を導入（feature: `cranelift-jit`）。
+  - 分岐条件はb1化（i64の場合は !=0 で正規化）
+  - 直線＋if/elseでのreturnをJITで実行（副作用は未対応のためVMへ）
+  - PHIは将来の`NYASH_JIT_PHI_MIN=1`で最小導入予定
