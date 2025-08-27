@@ -24,16 +24,43 @@ impl LowerCore {
         for (i, v) in func.params.iter().copied().enumerate() {
             self.param_index.insert(v, i);
         }
+        // Prepare block mapping (Phase 10.7 stub): deterministic ordering by sorted keys
+        let mut bb_ids: Vec<_> = func.blocks.keys().copied().collect();
+        bb_ids.sort_by_key(|b| b.0);
+        builder.prepare_blocks(bb_ids.len());
         builder.prepare_signature_i64(func.params.len(), true);
         builder.begin_function(&func.signature.name);
-        for (_bb_id, bb) in func.blocks.iter() {
+        // Iterate blocks in the sorted order to keep indices stable
+        for (idx, bb_id) in bb_ids.iter().enumerate() {
+            let bb = func.blocks.get(bb_id).unwrap();
+            builder.switch_to_block(idx);
             for instr in bb.instructions.iter() {
                 self.cover_if_supported(instr);
                 self.try_emit(builder, instr);
             }
             if let Some(term) = &bb.terminator {
                 self.cover_if_supported(term);
-                self.try_emit(builder, term);
+                // Branch/Jump need block mapping: pass indices
+                match term {
+                    crate::mir::MirInstruction::Branch { condition, then_bb, else_bb } => {
+                        // Try to place condition on stack (param/const path); builder will adapt
+                        self.push_value_if_known_or_param(builder, condition);
+                        // Map BasicBlockId -> index
+                        let then_index = bb_ids.iter().position(|x| x == then_bb).unwrap_or(0);
+                        let else_index = bb_ids.iter().position(|x| x == else_bb).unwrap_or(0);
+                        builder.br_if_top_is_true(then_index, else_index);
+                        builder.seal_block(then_index);
+                        builder.seal_block(else_index);
+                    }
+                    crate::mir::MirInstruction::Jump { target } => {
+                        let target_index = bb_ids.iter().position(|x| x == target).unwrap_or(0);
+                        builder.jump_to(target_index);
+                        builder.seal_block(target_index);
+                    }
+                    _ => {
+                        self.try_emit(builder, term);
+                    }
+                }
             }
         }
         builder.end_function();

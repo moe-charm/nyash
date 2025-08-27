@@ -1,0 +1,184 @@
+# PythonParserBox 実装ロードマップ
+Based on ChatGPT5's Python Language Feature Surface Map
+
+## 🎯 実装優先順位の考え方
+
+### 1. 最小限の価値を早く提供
+- まずPythonコードが「動く」状態を作る
+- 完璧な言語機能カバレッジより、実用的なサブセットを優先
+
+### 2. Nyashの強みを活かせる部分から
+- ループ最適化（for/while → MIR/JIT高速化）
+- 関数呼び出し（def → BoxCall高速化）
+- 数値計算（BinOp → ネイティブ性能）
+
+### 3. 段階的な拡張を可能にする設計
+- 未実装機能はCPython execへフォールバック
+- 実装済み機能から徐々にMIR変換を拡大
+
+## 📋 Phase 1: Core Subset（1-2週間）
+**目標**: 基本的なPythonコードをNyashで実行可能にする
+
+### 文（Statement）
+- [x] def - 関数定義 → Nyash関数/Box
+- [x] if/elif/else - 条件分岐 → CondBr
+- [x] for - ループ → Loop + Iterator
+- [x] while - ループ → Loop
+- [x] return - 戻り値 → Return
+- [ ] import（最小限） - 標準モジュールは後回し
+
+### 式（Expression）
+- [x] 関数呼び出し - Call → BoxCall
+- [x] 演算子（算術） - +,-,*,/,% → BinOp
+- [x] 比較演算子 - ==,!=,<,>,<=,>= → Compare
+- [x] 変数参照/代入 - Name → Load/Store
+- [x] リテラル - 数値/文字列/bool → Const
+
+### データ型（最小限）
+- [x] int → IntegerBox
+- [x] float → FloatBox  
+- [x] str → StringBox
+- [x] bool → BoolBox
+- [x] list（基本） → ArrayBox
+
+## 📋 Phase 2: Data Model（2-3週間）
+**目標**: Pythonの特殊メソッドをNyashのBoxメソッドにマッピング
+
+### 特殊メソッド
+- [ ] __init__ → constructor/birth
+- [ ] __len__ → length()
+- [ ] __getitem__ → get()
+- [ ] __setitem__ → set()
+- [ ] __iter__ → iterator()
+- [ ] __str__ → toString()
+
+### コレクション拡張
+- [ ] dict → MapBox
+- [ ] tuple → ImmutableArrayBox（新規）
+- [ ] set → SetBox（新規）
+
+### 演算子オーバーロード
+- [ ] __add__, __sub__ 等 → operator+, operator-
+- [ ] __eq__, __lt__ 等 → equals(), compareTo()
+
+## 📋 Phase 3: Advanced Features（1ヶ月）
+**目標**: Pythonの生産性の高い機能を実装
+
+### 制御フロー拡張
+- [ ] try/except → エラーハンドリング
+- [ ] with文 → リソース管理
+- [ ] break/continue → ループ制御
+
+### 高度な機能
+- [ ] ジェネレータ（yield） → GeneratorBox
+- [ ] デコレータ → 関数ラッパー
+- [ ] 内包表記 → 最適化されたループ
+- [ ] ラムダ式 → 匿名関数
+
+### クラスシステム
+- [ ] class文 → box定義
+- [ ] 継承 → from構文
+- [ ] super() → from Parent.method()
+
+## 📋 Phase 4: Modern Python（将来）
+**目標**: 最新のPython機能をサポート
+
+### 非同期
+- [ ] async/await → 非同期Box（将来のNyash非同期と統合）
+- [ ] async for/with → 非同期イテレータ
+
+### パターンマッチ（3.10+）
+- [ ] match/case → Nyashのパターンマッチ（将来実装時）
+
+### 型ヒント
+- [ ] 型アノテーション → MIRの型情報として活用
+- [ ] typing モジュール → 静的型チェック情報
+
+## 🚀 実装戦略
+
+### Step 1: AST変換の基礎（Phase 1開始）
+```python
+# Python側でAST→JSON
+import ast
+import json
+
+def parse_to_json(code):
+    tree = ast.parse(code)
+    return json.dumps(ast_to_dict(tree))
+
+# 最小限のノードから実装
+def ast_to_dict(node):
+    if isinstance(node, ast.FunctionDef):
+        return {
+            "type": "FunctionDef",
+            "name": node.name,
+            "args": [arg.arg for arg in node.args.args],
+            "body": [ast_to_dict(stmt) for stmt in node.body]
+        }
+    # ... 他のノードタイプを順次追加
+```
+
+### Step 2: Nyash AST生成（Rust側）
+```rust
+// JSON → Nyash AST
+fn convert_python_ast(json: &str) -> Result<ast::Program> {
+    let py_ast: PythonAst = serde_json::from_str(json)?;
+    match py_ast {
+        PythonAst::FunctionDef { name, args, body } => {
+            // Python def → Nyash function
+            ast::BoxDef {
+                name,
+                methods: vec![ast::Method {
+                    name: name.clone(),
+                    params: args,
+                    body: convert_statements(body),
+                }],
+                ..
+            }
+        }
+        // ... 他のケース
+    }
+}
+```
+
+### Step 3: 段階的な実行
+1. 最初はCPython exec()でそのまま実行
+2. 変換可能な部分からMIR生成
+3. MIR化された部分はVM/JITで高速実行
+4. 未対応部分は自動的にCPythonフォールバック
+
+## 📊 期待される成果
+
+### Phase 1完了時点
+- 簡単な数値計算スクリプトが2-5倍高速化
+- 基本的なループが最適化される
+- Nyashの既存Box（FileBox等）がPythonから使える
+
+### Phase 2完了時点
+- Pythonのリスト/辞書操作が高速化
+- NyashとPythonのデータ構造が相互運用可能
+- 特殊メソッドによる自然な統合
+
+### Phase 3完了時点
+- Pythonの生産的な機能がNyashで高速実行
+- 既存Pythonコードの大部分が動作
+- デコレータやジェネレータも最適化
+
+## 🎯 最初の一歩（今すぐ開始）
+
+1. pyo3でPythonParserBoxの骨組み作成
+2. 最小限のparse_to_json実装（def + return）
+3. 単純な関数のAST変換テスト
+4. "Hello from Python in Nyash"を表示
+
+```python
+# 最初のテストケース
+def hello():
+    return "Hello from Python in Nyash"
+
+# これがNyashで動けば成功！
+```
+
+---
+作成日: 2025-08-27
+ChatGPT5のサーフェスマップを基に優先順位付けしたロードマップ

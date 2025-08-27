@@ -25,6 +25,17 @@ pub trait IRBuilder {
     fn emit_return(&mut self);
     /// Phase 10_d scaffolding: host-call emission (symbolic)
     fn emit_host_call(&mut self, _symbol: &str, _argc: usize, _has_ret: bool) { }
+    // ==== Phase 10.7 (control-flow wiring, default no-op) ====
+    /// Optional: prepare N basic blocks and return their handles (0..N-1)
+    fn prepare_blocks(&mut self, _count: usize) { }
+    /// Optional: switch current insertion point to a given block index
+    fn switch_to_block(&mut self, _index: usize) { }
+    /// Optional: seal a block after all predecessors are known
+    fn seal_block(&mut self, _index: usize) { }
+    /// Optional: conditional branch, treating the top-of-stack as condition (i64!=0 or b1)
+    fn br_if_top_is_true(&mut self, _then_index: usize, _else_index: usize) { }
+    /// Optional: unconditional jump to target block index
+    fn jump_to(&mut self, _target_index: usize) { }
 }
 
 pub struct NoopBuilder {
