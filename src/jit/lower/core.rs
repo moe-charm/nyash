@@ -10,10 +10,12 @@ pub struct LowerCore {
     known_i64: std::collections::HashMap<ValueId, i64>,
     /// Parameter index mapping for ValueId
     param_index: std::collections::HashMap<ValueId, usize>,
+    /// Track values produced by Phi (for minimal PHI path)
+    phi_values: std::collections::HashSet<ValueId>,
 }
 
 impl LowerCore {
-    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), param_index: std::collections::HashMap::new() } }
+    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), param_index: std::collections::HashMap::new(), phi_values: std::collections::HashSet::new() } }
 
     /// Walk the MIR function and count supported/unsupported instructions.
     /// In the future, this will build CLIF via Cranelift builders.
@@ -48,11 +50,13 @@ impl LowerCore {
         builder.prepare_signature_i64(func.params.len(), true);
         builder.begin_function(&func.signature.name);
         // Iterate blocks in the sorted order to keep indices stable
+        self.phi_values.clear();
         for (idx, bb_id) in bb_ids.iter().enumerate() {
             let bb = func.blocks.get(bb_id).unwrap();
             builder.switch_to_block(idx);
             for instr in bb.instructions.iter() {
                 self.cover_if_supported(instr);
+                if let MirInstruction::Phi { dst, .. } = instr { self.phi_values.insert(*dst); }
                 self.try_emit(builder, instr);
             }
             if let Some(term) = &bb.terminator {
@@ -107,6 +111,11 @@ impl LowerCore {
 
     /// Push a value onto the builder stack if it is a known i64 const or a parameter.
     fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
+        if self.phi_values.contains(id) {
+            // Minimal PHI: read current block param
+            b.push_block_param_i64();
+            return;
+        }
         if let Some(pidx) = self.param_index.get(id).copied() {
             b.emit_param_i64(pidx);
             return;

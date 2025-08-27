@@ -30,7 +30,8 @@
 3) 10_7: 分岐配線（Cranelift）— 進捗中
    - LowerCore: BB整列・マッピング→builderの`prepare_blocks/switch/seal/br_if/jump`呼出 ✅
    - CraneliftBuilder: ブロック配列管理、`brif/jump`実装、条件b1/`i64!=0`両対応 ✅
-   - 残: 最小PHI（単純ダイアモンド）導入（`NYASH_JIT_PHI_MIN=1`ガード）/ 副作用命令の扱い方針（当面VMへ）
+   - 最小PHI（単純ダイアモンド）導入（`NYASH_JIT_PHI_MIN=1`ガード）✅ 初期対応
+   - 残: 副作用命令の扱い方針（当面VMへ）、CFG可視化の拡張（`NYASH_JIT_DUMP=1`）
 
 備考（制限と次の着手点）
 - 返り値はi64（VMValue::Integer）に限定。f64はconst最小emit、boolはi64 0/1へ正規化（分岐条件入力に対応）
