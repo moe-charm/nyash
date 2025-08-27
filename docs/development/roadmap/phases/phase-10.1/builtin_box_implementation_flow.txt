@@ -1,0 +1,410 @@
+# PythonParserBox ビルトインBox実装フロー
+～CPythonパーサー統合とPhase 1実装の具体的な流れ～
+
+## 🎯 全体の実装フロー
+
+### Step 1: ビルトインBoxとしての基盤作成
+```
+1. src/boxes/python_parser_box/mod.rs を作成
+2. BoxBase + BoxCore統一アーキテクチャに準拠
+3. PythonParserBoxの基本構造を定義
+4. src/boxes/mod.rs に登録
+```
+
+### Step 2: pyo3統合とCPythonパーサー接続
+```
+1. Cargo.tomlに pyo3依存関係追加
+2. Python環境の自動初期化設定
+3. ast.parse()へのFFIブリッジ実装
+4. JSON中間表現への変換
+```
+
+### Step 3: Phase 1機能の実装
+```
+1. 最小限のAST変換（def, if, for, return）
+2. 基本的な式の変換（演算子、関数呼び出し）
+3. Nyash ASTへのマッピング
+4. テストケースの作成
+```
+
+## 📝 具体的な実装コード
+
+### 1. ビルトインBox定義（src/boxes/python_parser_box/mod.rs）
+```rust
+use crate::core::{BoxBase, BoxCore, NyashBox};
+use crate::ast;
+use pyo3::prelude::*;
+use std::sync::{Arc, Mutex};
+
+pub struct PythonParserBox {
+    base: BoxBase,
+    py_helper: Arc<Mutex<PyHelper>>,  // Python実行環境
+}
+
+impl BoxCore for PythonParserBox {
+    fn box_id(&self) -> u64 {
+        self.base.box_id()
+    }
+    
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id()
+    }
+    
+    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "PythonParserBox#{}", self.box_id())
+    }
+}
+
+impl NyashBox for PythonParserBox {
+    fn type_name(&self) -> &'static str {
+        "PythonParserBox"
+    }
+    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(PythonParserBox {
+            base: BoxBase::new(),
+            py_helper: self.py_helper.clone(),
+        })
+    }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+```
+
+### 2. メソッド実装（Phase 1対応）
+```rust
+impl PythonParserBox {
+    // コンストラクタ
+    pub fn new() -> Result<Self, String> {
+        // Python環境の初期化
+        Python::with_gil(|py| {
+            let helper = PyHelper::new(py)?;
+            Ok(PythonParserBox {
+                base: BoxBase::new(),
+                py_helper: Arc::new(Mutex::new(helper)),
+            })
+        })
+    }
+    
+    // Python code → JSON AST
+    pub fn parse_to_json(&self, code: &str) -> Result<String, String> {
+        let helper = self.py_helper.lock().unwrap();
+        Python::with_gil(|py| {
+            helper.parse_to_json(py, code)
+        })
+    }
+    
+    // JSON AST → Nyash AST（Phase 1機能のみ）
+    pub fn json_to_nyash_ast(&self, json: &str) -> Result<ast::Program, String> {
+        let py_ast: Phase1PythonAst = serde_json::from_str(json)
+            .map_err(|e| format!("JSON parse error: {}", e))?;
+        
+        let converter = Phase1Converter::new();
+        converter.convert(py_ast)
+    }
+    
+    // 直接実行（最初はCPython exec、段階的にMIR実行へ）
+    pub fn run(&self, code: &str) -> Result<Box<dyn NyashBox>, String> {
+        // Phase 1: CPython exec経由
+        let helper = self.py_helper.lock().unwrap();
+        Python::with_gil(|py| {
+            helper.exec_code(py, code)
+        })
+    }
+}
+```
+
+### 3. Python側ヘルパー実装
+```rust
+// Pythonコードを文字列として埋め込み
+const PYTHON_HELPER_CODE: &str = r#"
+import ast
+import json
+
+def ast_to_dict(node):
+    """Phase 1: 基本的なAST要素のみ変換"""
+    if isinstance(node, ast.Module):
+        return {
+            "type": "Module",
+            "body": [ast_to_dict(stmt) for stmt in node.body]
+        }
+    elif isinstance(node, ast.FunctionDef):
+        return {
+            "type": "FunctionDef",
+            "name": node.name,
+            "args": [arg.arg for arg in node.args.args],
+            "body": [ast_to_dict(stmt) for stmt in node.body]
+        }
+    elif isinstance(node, ast.Return):
+        return {
+            "type": "Return",
+            "value": ast_to_dict(node.value) if node.value else None
+        }
+    elif isinstance(node, ast.BinOp):
+        return {
+            "type": "BinOp",
+            "op": node.op.__class__.__name__,
+            "left": ast_to_dict(node.left),
+            "right": ast_to_dict(node.right)
+        }
+    elif isinstance(node, ast.Call):
+        return {
+            "type": "Call",
+            "func": ast_to_dict(node.func),
+            "args": [ast_to_dict(arg) for arg in node.args]
+        }
+    elif isinstance(node, ast.Name):
+        return {
+            "type": "Name",
+            "id": node.id
+        }
+    elif isinstance(node, ast.Constant):
+        return {
+            "type": "Constant",
+            "value": node.value
+        }
+    elif isinstance(node, ast.If):
+        return {
+            "type": "If",
+            "test": ast_to_dict(node.test),
+            "body": [ast_to_dict(stmt) for stmt in node.body],
+            "orelse": [ast_to_dict(stmt) for stmt in node.orelse]
+        }
+    elif isinstance(node, ast.For):
+        return {
+            "type": "For",
+            "target": ast_to_dict(node.target),
+            "iter": ast_to_dict(node.iter),
+            "body": [ast_to_dict(stmt) for stmt in node.body]
+        }
+    elif isinstance(node, ast.While):
+        return {
+            "type": "While",
+            "test": ast_to_dict(node.test),
+            "body": [ast_to_dict(stmt) for stmt in node.body]
+        }
+    else:
+        # Phase 1では未対応
+        return {"type": "Unsupported", "node": str(type(node))}
+
+def parse_to_json(code):
+    try:
+        tree = ast.parse(code)
+        return json.dumps(ast_to_dict(tree))
+    except Exception as e:
+        return json.dumps({"type": "Error", "message": str(e)})
+"#;
+
+struct PyHelper {
+    // Python側のヘルパー関数への参照を保持
+    parse_func: PyObject,
+}
+
+impl PyHelper {
+    fn new(py: Python) -> PyResult<Self> {
+        // ヘルパーコードをPythonで実行
+        let helpers = PyModule::from_code(py, PYTHON_HELPER_CODE, "helper.py", "helper")?;
+        let parse_func = helpers.getattr("parse_to_json")?.to_object(py);
+        
+        Ok(PyHelper { parse_func })
+    }
+    
+    fn parse_to_json(&self, py: Python, code: &str) -> Result<String, String> {
+        match self.parse_func.call1(py, (code,)) {
+            Ok(result) => result.extract::<String>(py)
+                .map_err(|e| format!("Extract error: {}", e)),
+            Err(e) => Err(format!("Parse error: {}", e))
+        }
+    }
+}
+```
+
+### 4. Phase 1 AST変換器
+```rust
+struct Phase1Converter;
+
+impl Phase1Converter {
+    fn new() -> Self {
+        Phase1Converter
+    }
+    
+    fn convert(&self, py_ast: Phase1PythonAst) -> Result<ast::Program, String> {
+        match py_ast {
+            Phase1PythonAst::Module { body } => {
+                let mut items = vec![];
+                for stmt in body {
+                    match self.convert_statement(stmt)? {
+                        Some(item) => items.push(item),
+                        None => {} // 未対応要素はスキップ
+                    }
+                }
+                Ok(ast::Program { items })
+            }
+            _ => Err("Expected Module at top level".into())
+        }
+    }
+    
+    fn convert_statement(&self, stmt: Phase1PythonAst) -> Result<Option<ast::ProgramItem>, String> {
+        match stmt {
+            Phase1PythonAst::FunctionDef { name, args, body } => {
+                // Python def → Nyash function
+                let params = args.into_iter()
+                    .map(|arg| ast::Parameter { name: arg, ty: None })
+                    .collect();
+                
+                let nyash_body = self.convert_body(body)?;
+                
+                Ok(Some(ast::ProgramItem::Function(ast::FunctionDef {
+                    name,
+                    params,
+                    body: nyash_body,
+                    return_type: None,
+                })))
+            }
+            Phase1PythonAst::Return { value } => {
+                let expr = value
+                    .map(|v| self.convert_expression(v))
+                    .transpose()?;
+                    
+                Ok(Some(ast::ProgramItem::Statement(ast::Statement::Return(expr))))
+            }
+            // 他の文も同様に変換
+            _ => Ok(None) // Phase 1では未対応
+        }
+    }
+    
+    fn convert_expression(&self, expr: Phase1PythonAst) -> Result<ast::Expression, String> {
+        match expr {
+            Phase1PythonAst::BinOp { op, left, right } => {
+                let left = Box::new(self.convert_expression(*left)?);
+                let right = Box::new(self.convert_expression(*right)?);
+                
+                let op = match op.as_str() {
+                    "Add" => ast::BinaryOp::Add,
+                    "Sub" => ast::BinaryOp::Sub,
+                    "Mul" => ast::BinaryOp::Mul,
+                    "Div" => ast::BinaryOp::Div,
+                    _ => return Err(format!("Unsupported operator: {}", op))
+                };
+                
+                Ok(ast::Expression::BinaryOp { op, left, right })
+            }
+            Phase1PythonAst::Constant { value } => {
+                // Python定数 → Nyashリテラル
+                match value {
+                    serde_json::Value::Number(n) => {
+                        if let Some(i) = n.as_i64() {
+                            Ok(ast::Expression::Integer(i))
+                        } else if let Some(f) = n.as_f64() {
+                            Ok(ast::Expression::Float(f))
+                        } else {
+                            Err("Unsupported number type".into())
+                        }
+                    }
+                    serde_json::Value::String(s) => {
+                        Ok(ast::Expression::String(s))
+                    }
+                    serde_json::Value::Bool(b) => {
+                        Ok(ast::Expression::Bool(b))
+                    }
+                    _ => Err("Unsupported constant type".into())
+                }
+            }
+            // 他の式も同様
+            _ => Err("Unsupported expression in Phase 1".into())
+        }
+    }
+}
+```
+
+### 5. インタープリター統合（src/interpreter/builtins.rs）
+```rust
+// ビルトインBox登録に追加
+pub fn register_builtin_boxes(env: &mut Environment) {
+    // 既存のBox登録...
+    
+    // PythonParserBox追加
+    env.register_builtin_box("PythonParserBox", || {
+        match PythonParserBox::new() {
+            Ok(parser) => Arc::new(parser) as Arc<dyn NyashBox>,
+            Err(e) => panic!("Failed to initialize PythonParserBox: {}", e)
+        }
+    });
+}
+```
+
+### 6. 使用例とテストケース
+```nyash
+// test_python_parser_phase1.nyash
+local py = new PythonParserBox()
+
+// Phase 1: 基本的な関数定義と演算
+local code = """
+def add(x, y):
+    return x + y
+
+def multiply(x, y):
+    return x * y
+
+def calculate(a, b):
+    sum_val = add(a, b)
+    prod_val = multiply(a, b)
+    return sum_val + prod_val
+"""
+
+// パースしてJSON ASTを確認
+local json_ast = py.parse_to_json(code)
+print("JSON AST: " + json_ast)
+
+// Nyash ASTに変換
+local nyash_ast = py.json_to_nyash_ast(json_ast)
+print("Conversion successful!")
+
+// 実行（最初はCPython経由）
+local result = py.run(code + "\nprint(calculate(10, 5))")
+```
+
+## 📊 段階的な実装計画
+
+### Week 1: 基盤構築
+- [ ] PythonParserBoxの基本構造
+- [ ] pyo3統合とPython環境初期化
+- [ ] parse_to_json基本実装
+- [ ] エラーハンドリング
+
+### Week 2: Phase 1変換器
+- [ ] Phase1PythonAstの定義
+- [ ] Phase1Converterの実装
+- [ ] 基本的な文と式の変換
+- [ ] テストケース作成
+
+### Week 3: 統合とテスト
+- [ ] インタープリター統合
+- [ ] CPython exec経由の実行
+- [ ] ベンチマーク準備
+- [ ] ドキュメント整備
+
+## 🚀 期待される成果
+
+### Phase 1完了時点で実現できること：
+1. **基本的なPythonコードの実行**
+   - 関数定義、算術演算、条件分岐、ループ
+   
+2. **Nyash ASTへの変換**
+   - 将来のMIR/JIT最適化への道筋
+   
+3. **統合開発環境**
+   - PythonコードとNyashコードの混在実行
+   
+4. **性能測定基盤**
+   - CPython実行 vs Nyash実行の比較
+
+---
+作成日: 2025-08-27
+Phase 1実装の具体的な手順とコード例

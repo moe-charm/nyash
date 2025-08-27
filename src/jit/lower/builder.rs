@@ -73,6 +73,9 @@ pub struct CraneliftBuilder {
     current_name: Option<String>,
     value_stack: Vec<cranelift_codegen::ir::Value>,
     entry_block: Option<cranelift_codegen::ir::Block>,
+    // Phase 10.7: basic block wiring state
+    blocks: Vec<cranelift_codegen::ir::Block>,
+    current_block_index: Option<usize>,
     // Finalized function pointer (if any)
     compiled_closure: Option<std::sync::Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>>, 
     // Desired simple ABI (Phase 10_c minimal): i64 params count and i64 return
@@ -184,7 +187,7 @@ impl IRBuilder for CraneliftBuilder {
 
         self.current_name = Some(name.to_string());
         self.value_stack.clear();
-        self.entry_block = None;
+        // Keep any pre-created blocks (from prepare_blocks)
 
         // Minimal signature: (i64 x argc) -> i64?  (Core-1 integer path)
         let call_conv = self.module.isa().default_call_conv();
@@ -195,12 +198,18 @@ impl IRBuilder for CraneliftBuilder {
         self.ctx.func.name = cranelift_codegen::ir::UserFuncName::user(0, 0);
 
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        let block = fb.create_block();
-        fb.append_block_params_for_function_params(block);
-        fb.switch_to_block(block);
-        fb.seal_block(block);
-        self.entry_block = Some(block);
-        // Store builder back (drop at end_function)
+        // Prepare entry block: use pre-created block[0] if present, otherwise create
+        if self.blocks.is_empty() {
+            let block = fb.create_block();
+            self.blocks.push(block);
+        }
+        let entry = self.blocks[0];
+        fb.append_block_params_for_function_params(entry);
+        fb.switch_to_block(entry);
+        // Entry block can be sealed immediately
+        fb.seal_block(entry);
+        self.entry_block = Some(entry);
+        self.current_block_index = Some(0);
         fb.finalize();
     }
 
@@ -243,7 +252,8 @@ impl IRBuilder for CraneliftBuilder {
         use cranelift_frontend::FunctionBuilder;
         // Recreate FunctionBuilder each emit (lightweight wrapper around ctx+fbc)
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let v = fb.ins().iconst(types::I64, val);
         self.value_stack.push(v);
         self.stats.0 += 1;
@@ -258,7 +268,8 @@ impl IRBuilder for CraneliftBuilder {
         let rhs = self.value_stack.pop().unwrap();
         let lhs = self.value_stack.pop().unwrap();
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let res = match op {
             BinOpKind::Add => fb.ins().iadd(lhs, rhs),
             BinOpKind::Sub => fb.ins().isub(lhs, rhs),
@@ -278,7 +289,8 @@ impl IRBuilder for CraneliftBuilder {
         let rhs = self.value_stack.pop().unwrap();
         let lhs = self.value_stack.pop().unwrap();
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let cc = match op {
             CmpKind::Eq => IntCC::Equal,
             CmpKind::Ne => IntCC::NotEqual,
@@ -300,7 +312,8 @@ impl IRBuilder for CraneliftBuilder {
         use cranelift_frontend::FunctionBuilder;
         self.stats.4 += 1;
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         if let Some(v) = self.value_stack.pop() {
             fb.ins().return_(&[v]);
         } else {
@@ -334,7 +347,8 @@ impl IRBuilder for CraneliftBuilder {
             .expect("declare import failed");
 
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let fref = self.module.declare_func_in_func(func_id, fb.func);
         let call_inst = fb.ins().call(fref, &args);
         if has_ret {
@@ -343,6 +357,64 @@ impl IRBuilder for CraneliftBuilder {
                 self.value_stack.push(v);
             }
         }
+        fb.finalize();
+    }
+
+    // ==== Phase 10.7 block APIs ====
+    fn prepare_blocks(&mut self, count: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        if count == 0 { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        // Only create if not already created
+        if self.blocks.len() < count {
+            let to_create = count - self.blocks.len();
+            for _ in 0..to_create { self.blocks.push(fb.create_block()); }
+        }
+        fb.finalize();
+    }
+    fn switch_to_block(&mut self, index: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        if index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        fb.switch_to_block(self.blocks[index]);
+        self.current_block_index = Some(index);
+        fb.finalize();
+    }
+    fn seal_block(&mut self, index: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        if index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        fb.seal_block(self.blocks[index]);
+        fb.finalize();
+    }
+    fn br_if_top_is_true(&mut self, then_index: usize, else_index: usize) {
+        use cranelift_codegen::ir::{types, condcodes::IntCC};
+        use cranelift_frontend::FunctionBuilder;
+        if then_index >= self.blocks.len() || else_index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        // Ensure we are in a block
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        // Take top-of-stack as cond; if it's i64, normalize to b1 via icmp_imm != 0
+        let cond_b1 = if let Some(v) = self.value_stack.pop() {
+            fb.ins().icmp_imm(IntCC::NotEqual, v, 0)
+        } else {
+            let zero = fb.ins().iconst(types::I64, 0);
+            fb.ins().icmp_imm(IntCC::NotEqual, zero, 0)
+        };
+        fb.ins().brif(cond_b1, self.blocks[then_index], &[]);
+        fb.ins().jump(self.blocks[else_index], &[]);
+        self.stats.3 += 1;
+        fb.finalize();
+    }
+    fn jump_to(&mut self, target_index: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        if target_index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        fb.ins().jump(self.blocks[target_index], &[]);
+        self.stats.3 += 1;
         fb.finalize();
     }
 }
@@ -397,6 +469,8 @@ impl CraneliftBuilder {
             current_name: None,
             value_stack: Vec::new(),
             entry_block: None,
+            blocks: Vec::new(),
+            current_block_index: None,
             compiled_closure: None,
             desired_argc: 0,
             desired_has_ret: true,
