@@ -177,6 +177,11 @@ extern "C" fn nyash_map_size(map_param_index: i64) -> i64 {
 
 #[cfg(feature = "cranelift-jit")]
 impl IRBuilder for CraneliftBuilder {
+    fn emit_param_i64(&mut self, index: usize) {
+        if let Some(v) = self.entry_param(index) {
+            self.value_stack.push(v);
+        }
+    }
     fn prepare_signature_i64(&mut self, argc: usize, has_ret: bool) {
         self.desired_argc = argc;
         self.desired_has_ret = has_ret;
@@ -402,8 +407,7 @@ impl IRBuilder for CraneliftBuilder {
             let zero = fb.ins().iconst(types::I64, 0);
             fb.ins().icmp_imm(IntCC::NotEqual, zero, 0)
         };
-        fb.ins().brif(cond_b1, self.blocks[then_index], &[]);
-        fb.ins().jump(self.blocks[else_index], &[]);
+        fb.ins().brif(cond_b1, self.blocks[then_index], &[], self.blocks[else_index], &[]);
         self.stats.3 += 1;
         fb.finalize();
     }
@@ -433,14 +437,7 @@ impl CraneliftBuilder {
     }
 }
 
-#[cfg(feature = "cranelift-jit")]
-impl IRBuilder for CraneliftBuilder {
-    fn emit_param_i64(&mut self, index: usize) {
-        if let Some(v) = self.entry_param(index) {
-            self.value_stack.push(v);
-        }
-    }
-}
+// removed duplicate impl IRBuilder for CraneliftBuilder (emit_param_i64 moved into main impl)
 
 #[cfg(feature = "cranelift-jit")]
 impl CraneliftBuilder {
