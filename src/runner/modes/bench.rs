@@ -30,6 +30,19 @@ impl NyashRunner {
                 return sum
                 "#,
             ),
+            (
+                "branch_return",
+                r#"
+                local a, b
+                a = 3
+                b = 5
+                if (a < b) {
+                    return 1
+                } else {
+                    return 2
+                }
+                "#,
+            ),
         ];
 
         for (name, code) in tests {

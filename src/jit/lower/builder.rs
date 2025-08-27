@@ -288,7 +288,7 @@ impl IRBuilder for CraneliftBuilder {
     }
 
     fn emit_compare(&mut self, op: CmpKind) {
-        use cranelift_codegen::ir::{types, condcodes::IntCC};
+        use cranelift_codegen::ir::{condcodes::IntCC};
         use cranelift_frontend::FunctionBuilder;
         if self.value_stack.len() < 2 { return; }
         let rhs = self.value_stack.pop().unwrap();
@@ -305,8 +305,8 @@ impl IRBuilder for CraneliftBuilder {
             CmpKind::Ge => IntCC::SignedGreaterThanOrEqual,
         };
         let b1 = fb.ins().icmp(cc, lhs, rhs);
-        let as_i64 = fb.ins().uextend(types::I64, b1);
-        self.value_stack.push(as_i64);
+        // Keep b1 on the stack; users (branch) can consume directly, arithmetic should not assume compare value as i64
+        self.value_stack.push(b1);
         self.stats.2 += 1;
         fb.finalize();
     }
@@ -402,7 +402,13 @@ impl IRBuilder for CraneliftBuilder {
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         // Take top-of-stack as cond; if it's i64, normalize to b1 via icmp_imm != 0
         let cond_b1 = if let Some(v) = self.value_stack.pop() {
-            fb.ins().icmp_imm(IntCC::NotEqual, v, 0)
+            let ty = fb.func.dfg.value_type(v);
+            if ty == types::I64 {
+                fb.ins().icmp_imm(IntCC::NotEqual, v, 0)
+            } else {
+                // assume already b1
+                v
+            }
         } else {
             let zero = fb.ins().iconst(types::I64, 0);
             fb.ins().icmp_imm(IntCC::NotEqual, zero, 0)
