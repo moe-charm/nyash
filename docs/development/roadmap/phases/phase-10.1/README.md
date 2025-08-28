@@ -1,79 +1,93 @@
-# Phase 10.1 - PythonParserBox実装
+# Phase 10.1: JIT→EXE via Plugin Box Unification
 
-見ただけで実装手順が分かる！順番通りに進めてください。
+## 🎯 革新的発見：すべてはプラグインになる
 
-## 📂 サブフェーズ構成（順番に実行）
+### 核心的洞察
+既存のプラグインシステム（BID-FFI）がすでに完全なC ABIを持っている。
+これを活用することで、JIT→EXE変換が現実的に可能。
 
-### 📋 Phase 10.1a - 計画と設計
-最初にここから！全体像を理解する。
-- 統合実装計画を読む
-- エキスパート評価を確認
-- 5つの核心戦略を把握
+## 📊 フェーズ概要
 
-### ⚙️ Phase 10.1b - 環境設定
-開発環境を整える。
-- Python 3.11.9をインストール
-- Cargo.tomlに依存関係追加
-- ディレクトリ構造準備
+### 目標
+- ビルトインBoxをプラグイン化してC ABI統一
+- JITから統一されたプラグインAPIを呼び出し
+- スタティックリンクによるスタンドアロンEXE生成
 
-### 🔧 Phase 10.1c - パーサー統合
-CPythonパーサーをNyashに統合。
-- PythonParserBox実装
-- GIL管理の実装
-- JSON中間表現への変換
+### 背景
+```
+現在の構造:
+- JIT → HostCall → Rustビルトイン（複雑）
+- JIT → PluginInvoke → プラグインBox（C FFI）
 
-### 💻 Phase 10.1d - Core実装
-基本的なPython構文の変換。
-- Phase 1機能（def/if/for/while）
-- 意味論の正確な実装
-- 70%コンパイル率達成
+統一後:
+- JIT → PluginInvoke → すべてのBox（統一！）
+- EXE → PluginInvoke → スタティックリンクされたBox
+```
 
-### 🔄 Phase 10.1e - トランスパイラー
-Python→Nyashソース変換。
-- AST→Nyashソース生成
-- フォーマッター実装
-- コマンドラインツール
+## 🚀 実装計画
 
-### 🧪 Phase 10.1f - テスト
-Differential Testingでバグ発見。
-- CPython vs Nyash比較
-- ベンチマーク実行
-- バグ修正とCI統合
+### Week 1: ArrayBoxプラグイン化PoC
+- ArrayBoxをプラグインとして再実装
+- JITからのプラグイン呼び出しテスト
+- パフォーマンス測定（HostCall vs Plugin）
 
-### 📚 Phase 10.1g - ドキュメント
-使い方を文書化してリリース。
-- ユーザーガイド作成
-- APIリファレンス
-- サンプルプロジェクト
+### Week 2: 主要Box移行
+- StringBox、IntegerBox、BoolBoxのプラグイン化
+- JIT lowering層の統一（plugin_invoke経由）
+- 既存HostCallとの共存メカニズム
 
-## 🎯 各フェーズの目安時間
+### Week 3: 静的リンク基盤
+- プラグインの`.a`ライブラリビルド
+- 最小ランタイム（nyash-runtime）設計
+- リンカースクリプト作成
 
-| フェーズ | 内容 | 目安時間 |
-|---------|------|----------|
-| 10.1a | 計画理解 | 2-3時間 |
-| 10.1b | 環境設定 | 1-2時間 |
-| 10.1c | パーサー統合 | 3-5日 |
-| 10.1d | Core実装 | 1-2週間 |
-| 10.1e | トランスパイラー | 3-5日 |
-| 10.1f | テスト | 1週間 |
-| 10.1g | ドキュメント | 3-5日 |
+### Week 4: EXE生成実証
+- Hello Worldレベルのスタンドアロン実行
+- Linux/macOSでの動作確認
+- デバッグ情報とunwind対応
 
-**合計**: 約1ヶ月
+## 📁 ディレクトリ構造（予定）
 
-## 🌟 最終目標
+```
+plugins/
+├── nyash-core-boxes/        # ビルトインBox群
+│   ├── nyash-array-plugin/
+│   ├── nyash-string-plugin/
+│   └── nyash-integer-plugin/
+├── nyash-runtime-minimal/   # 最小ランタイム
+└── existing/               # 既存プラグイン
+    ├── nyash-file-plugin/
+    └── nyash-net-plugin/
+```
 
-- **70%以上**の関数がコンパイル可能
-- **2-10倍**の性能向上
-- **10件以上**のNyashバグ発見
-- **実用的な**Python→Nyash移行ツール
+## 🔗 関連資料
 
-## 💡 Tips
+- [革新的アプローチ詳細](../../../ideas/new-features/2025-08-28-jit-exe-via-plugin-unification.md)
+- [プラグインAPI仕様](../../../../reference/plugin-system/)
+- [Phase 10.5: Python統合計画](../phase-10.5/) （旧10.1）
+- [Phase 10.10: 前段階の成果](../phase-10/phase_10_10/)
 
-- 各フェーズのREADME.mdを必ず読む
-- 完了条件をチェックしながら進める
-- テレメトリーで進捗を確認
-- 困ったらarchive/の資料も参照
+## ⚡ 成功指標
+
+1. **技術的検証**
+   - ArrayBoxがプラグインとして動作
+   - JITからの呼び出し成功
+   - 性能劣化10%以内
+
+2. **統合達成**
+   - 5つ以上のビルトインBoxがプラグイン化
+   - JIT lowering層の完全統一
+
+3. **EXE生成**
+   - スタンドアロン実行ファイル生成
+   - 基本的なNyashプログラムの動作
+
+## 🎉 期待される成果
+
+- **Everything is Plugin** - 新たな設計哲学の確立
+- 自己ホスティングへの現実的な道筋
+- プラグインエコシステムの拡大可能性
 
 ---
 
-**さあ、Phase 10.1a から始めましょう！**
+*"Everything is Box → Everything is Plugin → Everything is Possible"*

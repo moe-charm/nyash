@@ -1,22 +1,33 @@
-# 🎯 CURRENT TASK - 2025-08-29（Phase 10.1 キックオフ＋リファクタ）
+# 🎯 CURRENT TASK - 2025-08-29（Phase 10.1 革新的転換）
 
-Phase 10.10 は完了（DoD確認済）。Phase 10.1 に入る前に、JIT Lower 周辺の分割リファクタを小刻みに完了させ、スモークを維持したまま移行します。
+Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグインシステムを活用したJIT→EXE実現の道を発見！
+
+## 🚀 革新的発見：プラグインBox統一化
+
+### 核心的洞察
+- 既存のプラグインシステム（BID-FFI）がすでに**完全なC ABI**を持っている
+- すべてのBoxをプラグイン化すれば、JIT→EXEが自然に実現可能
+- "Everything is Box" → "Everything is Plugin" への進化
 
 ## ⏱️ 今日のサマリ
-- 目的: 10.1 着手前のリファクタ（機能差分なし）を完了し、Week1を開始する。
-- スコープ: `src/jit/lower/core.rs / builder.rs` の整理のみ。挙動変更なし、ビルドとスモークは常にGreenを維持。
+- 発見: プラグインBox経由でのJIT→EXE実現可能性
+- 決定: Phase 10.1を「プラグインBox統一化」に変更
+- 移動: 旧Phase 10.1（Python統合）→ Phase 10.5へ
 
 ## 現在地（Done / Doing / Next）
 - ✅ Done（Phase 10.10）
   - GC Switchable Runtime（GcConfigBox）/ Unified Debug（DebugConfigBox）
   - JitPolicyBox（allowlist/presets）/ HostCallのRO運用（events連携）
   - CIスモーク導入（runtime/compile-events）/ 代表サンプル整備
-- 🔧 Doing（Refactor before 10.1）
-  - `extern_thunks.rs` 抽出済（builder → `src/jit/lower/extern_thunks.rs`）
-  - `cfg_dot.rs` 抽出済（core → `src/jit/lower/cfg_dot.rs`）
-- ⏭️ Next（Phase 10.1 Kickoff）
-  - Week1開始（Python統合の環境・入り口整備）
-  - 10.10の回帰はCIスモークで継続監視
+- 🔧 Doing（Phase 10.1 新計画）
+  - ArrayBoxのプラグイン化PoC開始
+  - JIT lowering層の統一設計
+  - リファクタリング作業は継続（core_hostcall.rs完了）
+- ⏭️ Next（Phase 10.1 実装）
+  - Week1: ArrayBoxプラグイン化と性能測定
+  - Week2: 主要ビルトインBoxの移行
+  - Week3: スタティックリンク基盤構築
+  - Week4: EXE生成実証
 
 ## リファクタリング計画（機能差分なし）
 1) core_hostcall 分割（イベントlower＋emit_host_call周辺）
@@ -36,13 +47,17 @@ Phase 10.10 は完了（DoD確認済）。Phase 10.1 に入る前に、JIT Lower
 - ログ/イベント出力がリファクタ前と一致（体感差分なし）
 - `core.rs`/`builder.rs` の行数削減（目安 < 1000）
 
-## Phase 10.1 キックオフ
-- 参照: `docs/development/roadmap/phases/phase-10.1/`
+## Phase 10.1 新計画：プラグインBox統一化
+- 参照: `docs/development/roadmap/phases/phase-10.1/` （新計画）
+- 詳細: `docs/ideas/new-features/2025-08-28-jit-exe-via-plugin-unification.md`
 - Week1（概要）
-  - 10.1a: 計画再確認（I/O境界・GIL/FFI方針）
-  - 10.1b: 環境設定（最小ブリッジ・検証手順）
-  - 10.1c: パーサー統合の入口作成（Box-Firstで薄く）
-  - 10.1d: Core最小経路（Phase 1機能）
+  - ArrayBoxプラグイン実装とテスト
+  - JIT→Plugin呼び出しパス確立
+  - パフォーマンス測定と最適化
+  
+## Phase 10.5（旧10.1）：Python統合
+- 参照: `docs/development/roadmap/phases/phase-10.5/` （移動済み）
+- ChatGPT5の当初計画を後段フェーズへ
 
 ## すぐ試せるコマンド（現状維持の確認）
 ```bash
@@ -67,8 +82,10 @@ NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS_PATH=events.jso
 ```
 
 ## 参考リンク
-- Phase 10.1: `docs/development/roadmap/phases/phase-10.1/README.md`
+- Phase 10.1（新）: `docs/development/roadmap/phases/phase-10.1/README.md` - プラグインBox統一化
+- Phase 10.5（旧10.1）: `docs/development/roadmap/phases/phase-10.5/README.md` - Python統合
 - Phase 10.10: `docs/development/roadmap/phases/phase-10/phase_10_10/README.md`
+- プラグインAPI: `src/bid/plugin_api.rs`
 - MIR命令セット: `docs/reference/mir/INSTRUCTION_SET.md`
 
 ## Checkpoint（再起動用メモ）
