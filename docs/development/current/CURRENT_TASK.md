@@ -462,3 +462,14 @@ NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS_PATH=events.jso
 ⏭️ 次（Phase 10.1 着手）
 - Python統合（chatgpt5_integrated_plan.md）に沿って Week1 を開始
 - 10.10の観測・回帰はCIスモークで継続監視（問題検知時は即fix）
+
+## ♻️ リファクタリング（10.10締めの整備）
+- 目的: 大型ファイルを分割し、他AIでも扱いやすい（~1000行以内目安）構成に整理。
+- 進捗（完了）:
+  - jit/lower/builder.rs → extern_thunks 分離（`src/jit/lower/extern_thunks.rs`）
+  - jit/lower/core.rs → cfg_dot 分離（`src/jit/lower/cfg_dot.rs`）
+  - builder.rs 1220→980行、core.rs 1072→1012行（機能差分なしの移動）
+- 次（小刻みで継続）:
+  - core.rs の HostCall 降ろしを `core_hostcall.rs` へ分割（イベントlower＋emit_host_call周り）
+  - 算術/比較/分岐を `core_ops.rs` に段階分離
+  - 各ステップごとにビルド＋スモーク（CI）確認、ロジック変更なしで進める
