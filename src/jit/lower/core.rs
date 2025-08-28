@@ -7,7 +7,7 @@ pub struct LowerCore {
     pub unsupported: usize,
     pub covered: usize,
     /// Minimal constant propagation for i64 to feed host-call args
-    known_i64: std::collections::HashMap<ValueId, i64>,
+    pub(super) known_i64: std::collections::HashMap<ValueId, i64>,
     /// Minimal constant propagation for f64 (math.* signature checks)
     known_f64: std::collections::HashMap<ValueId, f64>,
     /// Parameter index mapping for ValueId
@@ -17,7 +17,7 @@ pub struct LowerCore {
     /// Map (block, phi dst) -> param index in that block (for multi-PHI)
     phi_param_index: std::collections::HashMap<(crate::mir::BasicBlockId, ValueId), usize>,
     /// Track values that are boolean (b1) results, e.g., Compare destinations
-    bool_values: std::collections::HashSet<ValueId>,
+    pub(super) bool_values: std::collections::HashSet<ValueId>,
     /// Track PHI destinations that are boolean (all inputs derived from bool_values)
     bool_phi_values: std::collections::HashSet<ValueId>,
     /// Track values that are FloatBox instances (for arg type classification)
@@ -427,7 +427,7 @@ impl LowerCore {
     }
 
     /// Push a value onto the builder stack if it is a known i64 const or a parameter.
-    fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
+    pub(super) fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
         if self.phi_values.contains(id) {
             // Multi-PHI: find the param index for this phi in the current block
             // We don't have the current block id here; rely on builder's current block context and our stored index being positional.
@@ -531,51 +531,10 @@ impl LowerCore {
                 if self.bool_values.contains(src) { self.bool_values.insert(*dst); }
                 // Otherwise no-op for codegen (stack-machine handles sources directly later)
             }
-            I::BinOp { dst, op, lhs, rhs } => {
-                // Ensure operands are on stack when available (param or known const)
-                self.push_value_if_known_or_param(b, lhs);
-                self.push_value_if_known_or_param(b, rhs);
-                let kind = match op {
-                    BinaryOp::Add => BinOpKind::Add,
-                    BinaryOp::Sub => BinOpKind::Sub,
-                    BinaryOp::Mul => BinOpKind::Mul,
-                    BinaryOp::Div => BinOpKind::Div,
-                    BinaryOp::Mod => BinOpKind::Mod,
-                    // Not yet supported in Core-1
-                    BinaryOp::And | BinaryOp::Or
-                    | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr => { return Ok(()); }
-                };
-                b.emit_binop(kind);
-                if let (Some(a), Some(b)) = (self.known_i64.get(lhs), self.known_i64.get(rhs)) {
-                    let res = match op {
-                        BinaryOp::Add => a.wrapping_add(*b),
-                        BinaryOp::Sub => a.wrapping_sub(*b),
-                        BinaryOp::Mul => a.wrapping_mul(*b),
-                        BinaryOp::Div => if *b != 0 { a.wrapping_div(*b) } else { 0 },
-                        BinaryOp::Mod => if *b != 0 { a.wrapping_rem(*b) } else { 0 },
-                        _ => 0,
-                    };
-                    self.known_i64.insert(*dst, res);
-                }
-            }
-            I::Compare { op, lhs, rhs, .. } => {
-                // Ensure operands are on stack when available (param or known const)
-                self.push_value_if_known_or_param(b, lhs);
-                self.push_value_if_known_or_param(b, rhs);
-                let kind = match op {
-                    CompareOp::Eq => CmpKind::Eq,
-                    CompareOp::Ne => CmpKind::Ne,
-                    CompareOp::Lt => CmpKind::Lt,
-                    CompareOp::Le => CmpKind::Le,
-                    CompareOp::Gt => CmpKind::Gt,
-                    CompareOp::Ge => CmpKind::Ge,
-                };
-                b.emit_compare(kind);
-                // Mark the last dst (compare produces a boolean)
-                if let MirInstruction::Compare { dst, .. } = instr { self.bool_values.insert(*dst); }
-            }
-            I::Jump { .. } => b.emit_jump(),
-            I::Branch { .. } => b.emit_branch(),
+            I::BinOp { dst, op, lhs, rhs } => { self.lower_binop(b, op, lhs, rhs, dst); }
+            I::Compare { op, lhs, rhs, dst } => { self.lower_compare(b, op, lhs, rhs, dst); }
+            I::Jump { .. } => self.lower_jump(b),
+            I::Branch { .. } => self.lower_branch(b),
             I::Return { value } => {
                 if let Some(v) = value { self.push_value_if_known_or_param(b, v); }
                 b.emit_return()
@@ -605,7 +564,24 @@ impl LowerCore {
             I::ArrayGet { array, index, .. } => { super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index); }
             I::ArraySet { array, index, value } => { super::core_hostcall::lower_array_set(b, &self.param_index, &self.known_i64, array, index, value); }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
-                if crate::jit::config::current().hostcall {
+                if super::core_hostcall::lower_boxcall_simple_reads(b, &self.param_index, &self.known_i64, array, method.as_str(), args, dst.clone()) {
+                    // handled in helper (read-only simple methods)
+                } else if method.as_str() == "get" {
+                    super::core_hostcall::lower_map_get(func, b, &self.param_index, &self.known_i64, array, args, dst.clone());
+                } else if method.as_str() == "has" {
+                    super::core_hostcall::lower_map_has(b, &self.param_index, &self.known_i64, array, args, dst.clone());
+                } else if matches!(method.as_str(), "sin" | "cos" | "abs" | "min" | "max") {
+                    super::core_hostcall::lower_math_call(
+                        func,
+                        b,
+                        &self.known_i64,
+                        &self.known_f64,
+                        &self.float_box_values,
+                        method.as_str(),
+                        args,
+                        dst.clone(),
+                    );
+                } else if crate::jit::config::current().hostcall {
                     match method.as_str() {
                         "len" | "length" => {
                             if let Some(pidx) = self.param_index.get(array).copied() {
