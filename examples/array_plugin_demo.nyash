@@ -1,0 +1,22 @@
+// ArrayBox plugin demo
+// Requires: plugins/nyash-array-plugin built (release) and nyash.toml updated
+// Run:
+//   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/array_plugin_demo.nyash
+
+static box Main {
+  main() {
+    local a, i
+    a = new ArrayBox()
+    // push integers 1..5
+    i = 1
+    loop (i <= 5) {
+      a.push(i)
+      i = i + 1
+    }
+    me.console.log("len=", a.length())
+    me.console.log("get(0)=", a.get(0))
+    me.console.log("get(4)=", a.get(4))
+    return a.length()
+  }
+}
+

@@ -32,6 +32,8 @@ pub trait IRBuilder {
     fn emit_host_call(&mut self, _symbol: &str, _argc: usize, _has_ret: bool) { }
     /// Typed host-call emission: params kinds and return type hint (f64 when true)
     fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], _has_ret: bool, _ret_is_f64: bool) { }
+    /// Phase 10.2: plugin invoke emission (symbolic; type_id/method_id based)
+    fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, _has_ret: bool) { }
     // ==== Phase 10.7 (control-flow wiring, default no-op) ====
     /// Optional: prepare N basic blocks and return their handles (0..N-1)
     fn prepare_blocks(&mut self, _count: usize) { }
@@ -98,6 +100,7 @@ impl IRBuilder for NoopBuilder {
     fn emit_branch(&mut self) { self.branches += 1; }
     fn emit_return(&mut self) { self.rets += 1; }
     fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], has_ret: bool, _ret_is_f64: bool) { if has_ret { self.consts += 1; } }
+    fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
     fn ensure_local_i64(&mut self, _index: usize) { /* no-op */ }
     fn store_local_i64(&mut self, _index: usize) { self.consts += 1; }
     fn load_local_i64(&mut self, _index: usize) { self.consts += 1; }

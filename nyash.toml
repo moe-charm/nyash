@@ -128,3 +128,30 @@ search_paths = [
     "/usr/local/lib/nyash/plugins",
     "~/.nyash/plugins"
 ]
+[libraries."libnyash_array_plugin.so"]
+boxes = ["ArrayBox"]
+path = "./plugins/nyash-array-plugin/target/release/libnyash_array_plugin.so"
+
+[libraries."libnyash_array_plugin.so".ArrayBox]
+type_id = 10
+
+[libraries."libnyash_array_plugin.so".ArrayBox.methods]
+birth = { method_id = 0 }
+length = { method_id = 1 }
+get = { method_id = 2, args = ["index"] }
+push = { method_id = 3, args = ["value"] }
+set = { method_id = 4, args = ["index", "value"] }
+fini = { method_id = 4294967295 }
+[libraries."libnyash_map_plugin.so"]
+boxes = ["MapBox"]
+path = "./plugins/nyash-map-plugin/target/release/libnyash_map_plugin.so"
+
+[libraries."libnyash_map_plugin.so".MapBox]
+type_id = 11
+
+[libraries."libnyash_map_plugin.so".MapBox.methods]
+birth = { method_id = 0 }
+size  = { method_id = 1 }
+get   = { method_id = 2, args = ["key"] }
+has   = { method_id = 3, args = ["key"] }
+fini  = { method_id = 4294967295 }

@@ -1,0 +1,176 @@
+//! Nyash ArrayBox Plugin - Minimal BID-FFI v1
+//! Methods: birth(0), length(1), get(2), push(3), fini(u32::MAX)
+
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
+
+// ===== Error Codes (aligned with existing plugins) =====
+const NYB_SUCCESS: i32 = 0;
+const NYB_E_SHORT_BUFFER: i32 = -1;
+const NYB_E_INVALID_TYPE: i32 = -2;
+const NYB_E_INVALID_METHOD: i32 = -3;
+const NYB_E_INVALID_ARGS: i32 = -4;
+const NYB_E_PLUGIN_ERROR: i32 = -5;
+const NYB_E_INVALID_HANDLE: i32 = -8;
+
+// ===== Method IDs =====
+const METHOD_BIRTH: u32 = 0;           // constructor -> returns instance_id (u32 LE, no TLV)
+const METHOD_LENGTH: u32 = 1;          // returns TLV i64
+const METHOD_GET: u32 = 2;             // args: i64 index -> returns TLV i64
+const METHOD_PUSH: u32 = 3;            // args: i64 value -> returns TLV i64 (new length)
+const METHOD_SET:  u32 = 4;            // args: i64 index, i64 value -> returns TLV i64 (new length)
+const METHOD_FINI: u32 = u32::MAX;     // destructor
+
+// Assign a unique type_id for ArrayBox (as declared in nyash.toml)
+const TYPE_ID_ARRAY: u32 = 10;
+
+// ===== Instance state (PoC: store i64 values only) =====
+struct ArrayInstance { data: Vec<i64> }
+
+static INSTANCES: Lazy<Mutex<HashMap<u32, ArrayInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+
+#[no_mangle]
+pub extern "C" fn nyash_plugin_abi() -> u32 { 1 }
+
+#[no_mangle]
+pub extern "C" fn nyash_plugin_init() -> i32 { NYB_SUCCESS }
+
+#[no_mangle]
+pub extern "C" fn nyash_plugin_invoke(
+    type_id: u32,
+    method_id: u32,
+    instance_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    if type_id != TYPE_ID_ARRAY { return NYB_E_INVALID_TYPE; }
+
+    unsafe {
+        match method_id {
+            METHOD_BIRTH => {
+                if result_len.is_null() { return NYB_E_INVALID_ARGS; }
+                if preflight(result, result_len, 4) { return NYB_E_SHORT_BUFFER; }
+                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.insert(id, ArrayInstance { data: Vec::new() });
+                } else { return NYB_E_PLUGIN_ERROR; }
+                let bytes = id.to_le_bytes();
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
+                *result_len = 4;
+                NYB_SUCCESS
+            }
+            METHOD_FINI => {
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.remove(&instance_id);
+                    NYB_SUCCESS
+                } else { NYB_E_PLUGIN_ERROR }
+            }
+            METHOD_LENGTH => {
+                if let Ok(map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get(&instance_id) {
+                        return write_tlv_i64(inst.data.len() as i64, result, result_len);
+                    } else { return NYB_E_INVALID_HANDLE; }
+                } else { return NYB_E_PLUGIN_ERROR; }
+            }
+            METHOD_GET => {
+                let idx = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                if idx < 0 { return NYB_E_INVALID_ARGS; }
+                if let Ok(map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get(&instance_id) {
+                        let i = idx as usize;
+                        if i >= inst.data.len() { return NYB_E_INVALID_ARGS; }
+                        return write_tlv_i64(inst.data[i], result, result_len);
+                    } else { return NYB_E_INVALID_HANDLE; }
+                } else { return NYB_E_PLUGIN_ERROR; }
+            }
+            METHOD_PUSH => {
+                let val = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                if let Ok(mut map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get_mut(&instance_id) {
+                        inst.data.push(val);
+                        return write_tlv_i64(inst.data.len() as i64, result, result_len);
+                    } else { return NYB_E_INVALID_HANDLE; }
+                } else { return NYB_E_PLUGIN_ERROR; }
+            }
+            METHOD_SET => {
+                let idx = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                let val = match read_arg_i64(args, args_len, 1) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                if idx < 0 { return NYB_E_INVALID_ARGS; }
+                if let Ok(mut map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get_mut(&instance_id) {
+                        let i = idx as usize;
+                        if i >= inst.data.len() { return NYB_E_INVALID_ARGS; }
+                        inst.data[i] = val;
+                        return write_tlv_i64(inst.data.len() as i64, result, result_len);
+                    } else { return NYB_E_INVALID_HANDLE; }
+                } else { return NYB_E_PLUGIN_ERROR; }
+            }
+            _ => NYB_E_INVALID_METHOD,
+        }
+    }
+}
+
+// ===== Minimal TLV helpers (compatible with host expectations) =====
+fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
+    unsafe {
+        if result_len.is_null() { return false; }
+        if result.is_null() || *result_len < needed {
+            *result_len = needed;
+            return true;
+        }
+    }
+    false
+}
+
+fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
+    if result_len.is_null() { return NYB_E_INVALID_ARGS; }
+    let mut buf: Vec<u8> = Vec::with_capacity(4 + payloads.iter().map(|(_,p)| 4 + p.len()).sum::<usize>());
+    buf.extend_from_slice(&1u16.to_le_bytes()); // version
+    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes()); // argc
+    for (tag, payload) in payloads {
+        buf.push(*tag);
+        buf.push(0);
+        buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        buf.extend_from_slice(payload);
+    }
+    unsafe {
+        let needed = buf.len();
+        if result.is_null() || *result_len < needed {
+            *result_len = needed;
+            return NYB_E_SHORT_BUFFER;
+        }
+        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, needed);
+        *result_len = needed;
+    }
+    NYB_SUCCESS
+}
+
+fn write_tlv_i64(v: i64, result: *mut u8, result_len: *mut usize) -> i32 {
+    write_tlv_result(&[(3u8, &v.to_le_bytes())], result, result_len)
+}
+
+/// Read nth TLV argument as i64 (tag 3)
+fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
+    if args.is_null() || args_len < 4 { return None; }
+    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
+    let mut off = 4usize; // skip header
+    for i in 0..=n {
+        if buf.len() < off + 4 { return None; }
+        let tag = buf[off];
+        let _rsv = buf[off+1];
+        let size = u16::from_le_bytes([buf[off+2], buf[off+3]]) as usize;
+        if buf.len() < off + 4 + size { return None; }
+        if i == n {
+            if tag != 3 || size != 8 { return None; }
+            let mut b = [0u8;8];
+            b.copy_from_slice(&buf[off+4 .. off+4+8]);
+            return Some(i64::from_le_bytes(b));
+        }
+        off += 4 + size;
+    }
+    None
+}

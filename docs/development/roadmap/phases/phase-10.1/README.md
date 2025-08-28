@@ -26,22 +26,22 @@
 
 ## 🚀 実装計画
 
-### Week 1: ArrayBoxプラグイン化PoC
+### Week 1: ArrayBoxプラグイン化PoC（詳細は phase_plan.md 参照）
 - ArrayBoxをプラグインとして再実装
 - JITからのプラグイン呼び出しテスト
 - パフォーマンス測定（HostCall vs Plugin）
 
-### Week 2: 主要Box移行
+### Week 2: 主要Box移行（詳細は phase_plan.md 参照）
 - StringBox、IntegerBox、BoolBoxのプラグイン化
 - JIT lowering層の統一（plugin_invoke経由）
 - 既存HostCallとの共存メカニズム
 
-### Week 3: 静的リンク基盤
+### Week 3: 静的リンク基盤（詳細は phase_plan.md 参照）
 - プラグインの`.a`ライブラリビルド
 - 最小ランタイム（nyash-runtime）設計
 - リンカースクリプト作成
 
-### Week 4: EXE生成実証
+### Week 4: EXE生成実証（詳細は phase_plan.md 参照）
 - Hello Worldレベルのスタンドアロン実行
 - Linux/macOSでの動作確認
 - デバッグ情報とunwind対応
@@ -61,6 +61,8 @@ plugins/
 ```
 
 ## 🔗 関連資料
+
+- フェーズ計画の詳細: [phase_plan.md](./phase_plan.md)
 
 - [革新的アプローチ詳細](../../../ideas/new-features/2025-08-28-jit-exe-via-plugin-unification.md)
 - [プラグインAPI仕様](../../../../reference/plugin-system/)

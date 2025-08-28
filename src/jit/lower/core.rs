@@ -561,15 +561,55 @@ impl LowerCore {
                     b.push_block_param_i64_at(pos);
                 }
             }
-            I::ArrayGet { array, index, .. } => { super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index); }
-            I::ArraySet { array, index, value } => { super::core_hostcall::lower_array_set(b, &self.param_index, &self.known_i64, array, index, value); }
+            I::ArrayGet { array, index, .. } => {
+                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
+                    // Plugin path: ArrayBox.get(index)
+                    if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
+                        if let Ok(h) = ph.resolve_method("ArrayBox", "get") {
+                            // receiver
+                            if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                            // index
+                            if let Some(iv) = self.known_i64.get(index).copied() { b.emit_const_i64(iv); } else { self.push_value_if_known_or_param(b, index); }
+                            b.emit_plugin_invoke(h.type_id, h.method_id, 2, true);
+                            crate::jit::events::emit_lower(
+                                serde_json::json!({
+                                    "id": format!("plugin:{}:{}", h.box_type, "get"),
+                                    "decision":"allow","reason":"plugin_invoke","argc": 2,
+                                    "type_id": h.type_id, "method_id": h.method_id
+                                }),
+                                "plugin","<jit>"
+                            );
+                        }
+                    }
+                } else {
+                    super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index);
+                }
+            }
+            I::ArraySet { array, index, value } => {
+                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
+                    if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
+                        if let Ok(h) = ph.resolve_method("ArrayBox", "set") {
+                            if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                            if let Some(iv) = self.known_i64.get(index).copied() { b.emit_const_i64(iv); } else { self.push_value_if_known_or_param(b, index); }
+                            if let Some(vv) = self.known_i64.get(value).copied() { b.emit_const_i64(vv); } else { self.push_value_if_known_or_param(b, value); }
+                            b.emit_plugin_invoke(h.type_id, h.method_id, 3, false);
+                            crate::jit::events::emit_lower(
+                                serde_json::json!({
+                                    "id": format!("plugin:{}:{}", h.box_type, "set"),
+                                    "decision":"allow","reason":"plugin_invoke","argc": 3,
+                                    "type_id": h.type_id, "method_id": h.method_id
+                                }),
+                                "plugin","<jit>"
+                            );
+                        }
+                    }
+                } else {
+                    super::core_hostcall::lower_array_set(b, &self.param_index, &self.known_i64, array, index, value);
+                }
+            }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
                 if super::core_hostcall::lower_boxcall_simple_reads(b, &self.param_index, &self.known_i64, array, method.as_str(), args, dst.clone()) {
                     // handled in helper (read-only simple methods)
-                } else if method.as_str() == "get" {
-                    super::core_hostcall::lower_map_get(func, b, &self.param_index, &self.known_i64, array, args, dst.clone());
-                } else if method.as_str() == "has" {
-                    super::core_hostcall::lower_map_has(b, &self.param_index, &self.known_i64, array, args, dst.clone());
                 } else if matches!(method.as_str(), "sin" | "cos" | "abs" | "min" | "max") {
                     super::core_hostcall::lower_math_call(
                         func,
@@ -581,6 +621,65 @@ impl LowerCore {
                         args,
                         dst.clone(),
                     );
+                } else if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
+                    match method.as_str() {
+                        "len" | "length" | "push" | "get" | "set" => {
+                            // Resolve ArrayBox plugin method and emit plugin_invoke (symbolic)
+                            if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
+                                let mname = if method.as_str() == "len" { "length" } else { method.as_str() };
+                                if let Ok(h) = ph.resolve_method("ArrayBox", mname) {
+                                    // Receiver
+                                    if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                                    let mut argc = 1usize;
+                                    match mname {
+                                        "push" | "get" => {
+                                            if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
+                                            argc += 1;
+                                        }
+                                        "set" => {
+                                            // two args: index, value
+                                            if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
+                                            if let Some(v2) = args.get(1) { self.push_value_if_known_or_param(b, v2); } else { b.emit_const_i64(0); }
+                                            argc += 2;
+                                        }
+                                        _ => {}
+                                    }
+                                    b.emit_plugin_invoke(h.type_id, h.method_id, argc, dst.is_some());
+                                    crate::jit::events::emit_lower(
+                                        serde_json::json!({
+                                            "id": format!("plugin:{}:{}", h.box_type, mname),
+                                            "decision":"allow","reason":"plugin_invoke","argc": argc,
+                                            "type_id": h.type_id, "method_id": h.method_id
+                                        }),
+                                        "plugin","<jit>"
+                                    );
+                                }
+                            }
+                        }
+                        // Map (RO): size/get/has
+                        "size" | "get" | "has" => {
+                            if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
+                                if let Ok(h) = ph.resolve_method("MapBox", method.as_str()) {
+                                    if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                                    let mut argc = 1usize;
+                                    if matches!(method.as_str(), "get" | "has") {
+                                        if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
+                                        argc += 1;
+                                    }
+                                    b.emit_plugin_invoke(h.type_id, h.method_id, argc, dst.is_some());
+                                    crate::jit::events::emit_lower(
+                                        serde_json::json!({
+                                            "id": format!("plugin:{}:{}", h.box_type, method.as_str()),
+                                            "decision":"allow","reason":"plugin_invoke","argc": argc,
+                                            "type_id": h.type_id, "method_id": h.method_id
+                                        }),
+                                        "plugin","<jit>"
+                                    );
+                                }
+                            }
+                        }
+                        _ => { /* other BoxCalls handled below */ }
+                    }
                 } else if crate::jit::config::current().hostcall {
                     match method.as_str() {
                         "len" | "length" => {
