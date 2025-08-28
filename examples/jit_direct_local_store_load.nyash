@@ -1,0 +1,15 @@
+// jit-direct: minimal local Store/Load path
+// Build: cargo build --release --features cranelift-jit
+// Run:   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+//        ./target/release/nyash --jit-direct examples/jit_direct_local_store_load.nyash
+
+static box Main {
+  main() {
+    local x, y
+    x = 1
+    y = 2
+    x = x + y  // store/load around add
+    return x   // expect 3
+  }
+}
+

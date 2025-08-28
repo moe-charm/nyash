@@ -1,0 +1,13 @@
+// Param-array JIT HostCall PoC (isEmpty)
+box Utils {
+    isEmpty(a) {
+        return a.isEmpty()
+    }
+}
+
+a = new ArrayBox()
+u = new Utils()
+print(u.isEmpty(a))
+a.push(1)
+print(u.isEmpty(a))
+

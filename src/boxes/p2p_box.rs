@@ -122,9 +122,34 @@ impl P2PBox {
             last_intent_name: Arc::new(RwLock::new(None)),
         };
 
-        // Note: InProcess callback registration is postponed until a unified
-        // Transport subscription API is provided. For now, loopback tracing is
-        // handled in send() when sending to self.
+        // Minimal built-in system handler: auto-respond to sys.ping
+        // This enables health checks via ping() without requiring user wiring.
+        if attach_cb {
+            // capture for receive-side traces
+            let last_from = Arc::clone(&p2p.last_from);
+            let last_intent = Arc::clone(&p2p.last_intent_name);
+            // capture transport Arc to use inside handler
+            let transport_arc_outer = Arc::clone(&p2p.transport);
+            {
+                if let Ok(mut t) = transport_arc_outer.write() {
+                    let transport_arc_for_cb = Arc::clone(&transport_arc_outer);
+                    t.register_intent_handler("sys.ping", Box::new(move |env| {
+                        if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
+                        if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
+                        // Reply asynchronously to avoid deep call stacks
+                        let to = env.from.clone();
+                        let reply = crate::boxes::IntentBox::new("sys.pong".to_string(), serde_json::json!({}));
+                        let transport_arc = Arc::clone(&transport_arc_for_cb);
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                            if let Ok(transport) = transport_arc.read() {
+                                let _ = transport.send(&to, reply, Default::default());
+                            }
+                        });
+                    }));
+                };
+            }
+        }
 
         p2p
     }
@@ -133,6 +158,51 @@ impl P2PBox {
     pub fn get_node_id(&self) -> Box<dyn NyashBox> {
         let node_id = self.node_id.read().unwrap().clone();
         Box::new(StringBox::new(node_id))
+    }
+
+    /// Blocking ping: send sys.ping to target and wait for sys.pong
+    /// Returns BoolBox(true) on success within timeout, else false.
+    pub fn ping_with_timeout(&self, to: Box<dyn NyashBox>, timeout_ms: u64) -> Box<dyn NyashBox> {
+        use std::sync::{mpsc, Arc};
+        let to_str = to.to_string_box().value;
+
+        // Create oneshot channel for pong
+        let (tx, rx) = mpsc::channel::<()>();
+        let active = Arc::new(AtomicBool::new(true));
+        let active_cb = Arc::clone(&active);
+
+        // Register temporary transport-level handler for sys.pong
+        if let Ok(mut t) = self.transport.write() {
+            t.register_intent_handler("sys.pong", Box::new(move |env| {
+                if active_cb.load(Ordering::SeqCst) {
+                    // record last receive for visibility
+                    // Note: we cannot access self here safely; rely on tx notify only
+                    let _ = env; // suppress unused
+                    let _ = tx.send(());
+                }
+            }));
+
+            // Send sys.ping
+            let ping = IntentBox::new("sys.ping".to_string(), serde_json::json!({}));
+            match t.send(&to_str, ping, Default::default()) {
+                Ok(()) => { /* proceed to wait */ }
+                Err(_) => {
+                    return Box::new(BoolBox::new(false));
+                }
+            }
+        } else {
+            return Box::new(BoolBox::new(false));
+        }
+
+        // Wait for pong with timeout
+        let ok = rx.recv_timeout(std::time::Duration::from_millis(timeout_ms)).is_ok();
+        active.store(false, Ordering::SeqCst);
+        Box::new(BoolBox::new(ok))
+    }
+
+    /// Convenience default-timeout ping (200ms)
+    pub fn ping(&self, to: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        self.ping_with_timeout(to, 200)
     }
     
     /// 特定ノードにメッセージを送信
@@ -452,5 +522,29 @@ mod tests {
         let _ = p.off(Box::new(StringBox::new("bye")));
         let c1 = p.debug_active_handler_count(Box::new(StringBox::new("bye")));
         assert_eq!(c1.to_string_box().value, "0");
+    }
+
+    #[test]
+    fn ping_success_between_two_nodes() {
+        let alice = P2PBox::new("alice".to_string(), TransportKind::InProcess);
+        let bob = P2PBox::new("bob".to_string(), TransportKind::InProcess);
+        // bob has built-in sys.ping -> sys.pong
+        let ok = alice.ping(Box::new(StringBox::new("bob")));
+        if let Some(b) = ok.as_any().downcast_ref::<BoolBox>() {
+            assert!(b.value);
+        } else {
+            panic!("ping did not return BoolBox");
+        }
+    }
+
+    #[test]
+    fn ping_timeout_on_missing_node() {
+        let alice = P2PBox::new("alice".to_string(), TransportKind::InProcess);
+        let ok = alice.ping_with_timeout(Box::new(StringBox::new("nobody")), 20);
+        if let Some(b) = ok.as_any().downcast_ref::<BoolBox>() {
+            assert!(!b.value);
+        } else {
+            panic!("ping_with_timeout did not return BoolBox");
+        }
     }
 }

@@ -1,0 +1,53 @@
+// f64 micro benchmark (Cranelift JIT)
+// Requirements:
+//   - Build with: cargo build --release --features cranelift-jit
+//   - Run with:   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 \
+//                 ./target/release/nyash --backend vm examples/ny_bench_f64.nyash
+// Notes:
+//   - VM backend alone may not support f64 BinOp/Compare; use JIT as above.
+
+static box Main {
+  main() {
+    local ITER, timer
+    ITER = 200000
+    timer = new TimerBox()
+
+    print("\n=== f64 Micro Bench (ITER=" + ITER + ") ===")
+
+    // 1) f64 add/mul loop
+    local i, x, y, z, t0, t1, ms, ops
+    i = 0
+    x = 1.5
+    y = 2.25
+    t0 = timer.now()
+    loop(i < ITER) {
+      z = x + y
+      x = z * 1.000001
+      i = i + 1
+    }
+    t1 = timer.now()
+    ms = t1 - t0
+    ops = (ITER * 1000.0) / ms
+    print("[f64_addmul] elapsed_ms=" + ms + ", ops/sec=" + ops)
+
+    // 2) f64 compare loop
+    local c
+    i = 0
+    x = 10.0
+    y = 9.5
+    t0 = timer.now()
+    loop(i < ITER) {
+      c = x > y
+      y = y + 0.000001
+      i = i + 1
+    }
+    t1 = timer.now()
+    ms = t1 - t0
+    ops = (ITER * 1000.0) / ms
+    print("[f64_compare] elapsed_ms=" + ms + ", ops/sec=" + ops)
+
+    print("\nDone (f64).")
+    return 0
+  }
+}
+

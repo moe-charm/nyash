@@ -6,6 +6,36 @@
 - 現在のタスク: docs/development/current/CURRENT_TASK.md
 - ドキュメントハブ: README.md
 - 🚀 **開発マスタープラン**: docs/development/roadmap/phases/00_MASTER_ROADMAP.md
+ - 📊 **JIT統計JSONスキーマ(v1)**: docs/reference/jit/jit_stats_json_v1.md
+
+## 🧱 先頭原則: 「箱理論（Box-First）」で足場を積む
+Nyashは「Everything is Box」。実装・最適化・検証のすべてを「箱」で分離・固定し、いつでも戻せる足場を積み木のように重ねる。
+
+- 基本姿勢: 「まず箱に切り出す」→「境界をはっきりさせる」→「差し替え可能にする」
+  - 環境依存や一時的なフラグは、可能な限り「箱経由」に集約（例: JitConfigBox）
+  - VM/JIT/GC/スケジューラは箱化されたAPI越しに連携（直参照・直結合を避ける）
+- いつでも戻せる: 機能フラグ・スコープ限定・デフォルトオフを活用し、破壊的変更を避ける
+  - 「限定スコープの足場」を先に立ててから最適化（戻りやすい積み木）
+- AI補助時の注意: 「力づく最適化」を抑え、まず箱で境界を確立→小さく通す→可視化→次の一手
+
+進め方（積み木が大きくなりすぎないために）
+- 1) 足場は最小限（設定/境界/可視化/フォールバック）→ 2) すぐ実効カバレッジ拡大へ
+- 返り値ヒントなどは「フックだけ」用意し、切替ポイントを1箇所に固定（将来1行切替）
+- 同じ分岐を複数箇所に作らない（ParamKind→型決定は1関数に集約）
+- 観測（統計/CFG）で回れるようにして「止まらない実装サイクル」を維持
+
+
+実践テンプレート（開発時の合言葉）
+- 「箱にする」: 設定・状態・橋渡しはBox化（例: JitConfigBox, HandleRegistry）
+- 「境界を作る」: 変換は境界1箇所で（VMValue↔JitValue, Handle↔Arc）
+- 「戻せる」: フラグ・feature・env/Boxで切替。panic→フォールバック経路を常設
+- 「見える化」: ダンプ/JSON/DOTで可視化、回帰テストを最小構成で先に入れる
+
+標準化（例）
+- 設定の箱: JIT/VMフラグは `JitConfigBox` に集約し、`apply()`でenvにも反映
+- 実行時読み: ホットパスでは `jit::config::current()` を参照（env直読みを排除）
+- ハンドルの箱: JIT↔Hostは `HandleRegistry`（u64↔Arc）で疎結合化
+- 可視化: `NYASH_JIT_DUMP/…_JSON/NYASH_JIT_DOT` を活用し、変化を常に観測
 
 Notes:
 - ここから先の導線は README.md に集約。Claude Codeくんがこのファイルを上書きしても最低限のリンクは保たれるよ。
@@ -90,6 +120,15 @@ python3 -m http.server 8010
 ```
 
 **注意**: WASMビルドでは一部のBox（TimerBox、AudioBox等）は除外されます。
+
+### 🔧 JIT-direct（独立JIT）運用メモ（最小）
+- 方針: 当面は read-only（書き込み命令はjit-directで拒否）
+- 失敗の見える化: `NYASH_JIT_STATS_JSON=1` または `NYASH_JIT_ERROR_JSON=1` でエラーを1行JSON出力
+- すぐ試す例（Cranelift有効時）
+  - `examples/jit_direct_local_store_load.nyash`（最小Store/Load → 3）
+  - `examples/jit_direct_bool_ret.nyash`（Bool戻り → true）
+  - `examples/jit_direct_f64_ret.nyash`（F64戻り → 3.75, `NYASH_JIT_NATIVE_F64=1`）
+- Box-First運用キット: `docs/engineering/box_first_enforcement.md`（PRテンプレ/CIガード/運用指標）
 
 ## 📚 ドキュメント構造
 
@@ -578,6 +617,22 @@ echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
 
 # 実用アプリテスト
 ./target/debug/nyash app_dice_rpg.nyash
+
+# JIT 実行フラグ（CLI）
+./target/release/nyash --backend vm \
+  --jit-exec --jit-stats --jit-dump --jit-threshold 1 \
+  --jit-phi-min --jit-hostcall --jit-handle-debug \
+  examples/jit_branch_demo.nyash
+# 既存の環境変数でも可: 
+#   NYASH_JIT_EXEC/NYASH_JIT_STATS(/_JSON)/NYASH_JIT_DUMP/NYASH_JIT_THRESHOLD
+#   NYASH_JIT_PHI_MIN/NYASH_JIT_HOSTCALL/NYASH_JIT_HANDLE_DEBUG
+
+# HostCallハンドルPoCの例
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_array_param_call.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_map_param_call.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_map_int_keys_param_call.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_param_length.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_is_empty.nyash
 ```
 
 #### 🔌 **プラグインテスター（BID-FFI診断ツール）**

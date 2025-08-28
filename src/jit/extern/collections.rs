@@ -13,6 +13,21 @@ pub const SYM_MAP_GET: &str = "nyash.map.get";
 pub const SYM_MAP_SET: &str = "nyash.map.set";
 pub const SYM_MAP_SIZE: &str = "nyash.map.size";
 
+// Handle-based variants for direct JIT bridging
+pub const SYM_ARRAY_LEN_H: &str = "nyash.array.len_h";
+pub const SYM_ARRAY_GET_H: &str = "nyash.array.get_h";
+pub const SYM_ARRAY_SET_H: &str = "nyash.array.set_h";
+pub const SYM_ARRAY_PUSH_H: &str = "nyash.array.push_h";
+pub const SYM_ARRAY_LAST_H: &str = "nyash.array.last_h";
+pub const SYM_MAP_SIZE_H: &str = "nyash.map.size_h";
+pub const SYM_MAP_GET_H: &str = "nyash.map.get_h";
+pub const SYM_MAP_SET_H: &str = "nyash.map.set_h";
+pub const SYM_MAP_HAS_H: &str = "nyash.map.has_h";
+// Generic read-only helper
+pub const SYM_ANY_LEN_H: &str = "nyash.any.length_h";
+pub const SYM_ANY_IS_EMPTY_H: &str = "nyash.any.is_empty_h";
+pub const SYM_STRING_CHARCODE_AT_H: &str = "nyash.string.charCodeAt_h";
+
 fn as_array(args: &[VMValue]) -> Option<&crate::boxes::array::ArrayBox> {
     match args.get(0) {
         Some(VMValue::BoxRef(b)) => b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>(),
@@ -88,4 +103,3 @@ pub fn map_size(args: &[VMValue]) -> VMValue {
     }
     VMValue::Integer(0)
 }
-

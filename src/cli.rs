@@ -26,6 +26,21 @@ pub struct CliConfig {
     pub iterations: u32,
     pub vm_stats: bool,
     pub vm_stats_json: bool,
+    // JIT controls
+    pub jit_exec: bool,
+    pub jit_stats: bool,
+    pub jit_stats_json: bool,
+    pub jit_dump: bool,
+    pub jit_threshold: Option<u32>,
+    pub jit_phi_min: bool,
+    pub jit_hostcall: bool,
+    pub jit_handle_debug: bool,
+    pub jit_native_f64: bool,
+    pub jit_native_bool: bool,
+    pub jit_only: bool,
+    pub jit_direct: bool,
+    // DOT emit helper
+    pub emit_cfg: Option<String>,
 }
 
 impl CliConfig {
@@ -147,6 +162,84 @@ impl CliConfig {
                     .help("Output VM statistics in JSON format")
                     .action(clap::ArgAction::SetTrue)
             )
+            .arg(
+                Arg::new("jit-exec")
+                    .long("jit-exec")
+                    .help("Enable JIT execution where available (NYASH_JIT_EXEC=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-stats")
+                    .long("jit-stats")
+                    .help("Print JIT compilation/execution statistics (NYASH_JIT_STATS=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-stats-json")
+                    .long("jit-stats-json")
+                    .help("Output JIT statistics in JSON format (NYASH_JIT_STATS_JSON=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-dump")
+                    .long("jit-dump")
+                    .help("Dump JIT lowering summary (NYASH_JIT_DUMP=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-threshold")
+                    .long("jit-threshold")
+                    .value_name("N")
+                    .help("Set hotness threshold for JIT compilation (NYASH_JIT_THRESHOLD)")
+            )
+            .arg(
+                Arg::new("jit-phi-min")
+                    .long("jit-phi-min")
+                    .help("Enable minimal PHI path for branches (NYASH_JIT_PHI_MIN=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-hostcall")
+                    .long("jit-hostcall")
+                    .help("Enable JIT hostcall bridge for Array/Map (NYASH_JIT_HOSTCALL=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-handle-debug")
+                    .long("jit-handle-debug")
+                    .help("Print JIT handle allocation debug logs (NYASH_JIT_HANDLE_DEBUG=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-native-f64")
+                    .long("jit-native-f64")
+                    .help("Enable native f64 ABI path in JIT (NYASH_JIT_NATIVE_F64=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-native-bool")
+                    .long("jit-native-bool")
+                    .help("Enable native bool ABI path in JIT (NYASH_JIT_NATIVE_BOOL=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-only")
+                    .long("jit-only")
+                    .help("Run JIT only (no VM fallback). Fails if JIT is unavailable (NYASH_JIT_ONLY=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-direct")
+                    .long("jit-direct")
+                    .help("Run program via independent JIT engine (no VM interpreter/executor). Requires --features cranelift-jit")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("emit-cfg")
+                    .long("emit-cfg")
+                    .value_name("DOT_FILE")
+                    .help("Emit JIT CFG as DOT to file (equivalent to setting NYASH_JIT_DOT)")
+            )
     }
 
     /// Convert ArgMatches to CliConfig
@@ -168,6 +261,19 @@ impl CliConfig {
             iterations: matches.get_one::<String>("iterations").unwrap().parse().unwrap_or(10),
             vm_stats: matches.get_flag("vm-stats"),
             vm_stats_json: matches.get_flag("vm-stats-json"),
+            jit_exec: matches.get_flag("jit-exec"),
+            jit_stats: matches.get_flag("jit-stats"),
+            jit_stats_json: matches.get_flag("jit-stats-json"),
+            jit_dump: matches.get_flag("jit-dump"),
+            jit_threshold: matches.get_one::<String>("jit-threshold").and_then(|s| s.parse::<u32>().ok()),
+            jit_phi_min: matches.get_flag("jit-phi-min"),
+            jit_hostcall: matches.get_flag("jit-hostcall"),
+            jit_handle_debug: matches.get_flag("jit-handle-debug"),
+            jit_native_f64: matches.get_flag("jit-native-f64"),
+            jit_native_bool: matches.get_flag("jit-native-bool"),
+            emit_cfg: matches.get_one::<String>("emit-cfg").cloned(),
+            jit_only: matches.get_flag("jit-only"),
+            jit_direct: matches.get_flag("jit-direct"),
         }
     }
 }
@@ -213,6 +319,16 @@ mod tests {
             iterations: 10,
             vm_stats: false,
             vm_stats_json: false,
+            jit_exec: false,
+            jit_stats: false,
+            jit_stats_json: false,
+            jit_dump: false,
+            jit_threshold: None,
+            jit_phi_min: false,
+            jit_hostcall: false,
+            jit_handle_debug: false,
+            jit_native_f64: false,
+            jit_native_bool: false,
         };
         
         assert_eq!(config.backend, "interpreter");

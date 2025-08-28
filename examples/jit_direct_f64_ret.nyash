@@ -1,0 +1,15 @@
+// jit-direct: f64 return demo
+// Build: cargo build --release --features cranelift-jit
+// Run:   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 \
+//        ./target/release/nyash --jit-direct examples/jit_direct_f64_ret.nyash
+
+static box Main {
+  main() {
+    local x, y, s
+    x = 1.5
+    y = 2.25
+    s = x + y
+    return s       // expect 3.75
+  }
+}
+

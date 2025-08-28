@@ -76,6 +76,21 @@ impl NyashInterpreter {
                 Ok(p2p_box.send(to_result, intent_result))
             }
 
+            // ping: health check using sys.ping/sys.pong
+            "ping" => {
+                if arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation { message: "ping requires (to [, timeout_ms]) arguments".to_string() });
+                }
+                let to_result = self.execute_expression(&arguments[0])?;
+                if arguments.len() >= 2 {
+                    let tmo_val = self.execute_expression(&arguments[1])?;
+                    let tmo_ms = tmo_val.to_string_box().value.parse::<u64>().unwrap_or(200);
+                    Ok(p2p_box.ping_with_timeout(to_result, tmo_ms))
+                } else {
+                    Ok(p2p_box.ping(to_result))
+                }
+            }
+
             // on メソッド実装（ResultBox返却）
             "on" => {
                 if arguments.len() < 2 {

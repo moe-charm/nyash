@@ -30,6 +30,119 @@ impl VM {
             return Ok(Box::new(StringBox::new(box_value.to_string_box().value)));
         }
 
+        // JitConfigBox methods
+        if let Some(jcb) = box_value.as_any().downcast_ref::<crate::boxes::jit_config_box::JitConfigBox>() {
+            match method {
+                "get" => {
+                    if let Some(k) = _args.get(0) { return Ok(jcb.get_flag(&k.to_string_box().value).unwrap_or_else(|e| Box::new(StringBox::new(e.to_string())))); }
+                    return Ok(Box::new(StringBox::new("get(name) requires 1 arg")));
+                }
+                "set" => {
+                    if _args.len() >= 2 {
+                        let k = _args[0].to_string_box().value;
+                        let v = _args[1].to_string_box().value;
+                        let on = matches!(v.as_str(), "1" | "true" | "True" | "on" | "ON");
+                        return Ok(jcb.set_flag(&k, on).unwrap_or_else(|e| Box::new(StringBox::new(e.to_string()))));
+                    }
+                    return Ok(Box::new(StringBox::new("set(name, bool) requires 2 args")));
+                }
+                "getThreshold" => { return Ok(jcb.get_threshold()); }
+                "setThreshold" => {
+                    if let Some(v) = _args.get(0) { 
+                        let iv = v.to_string_box().value.parse::<i64>().unwrap_or(0);
+                        return Ok(jcb.set_threshold(iv).unwrap_or_else(|e| Box::new(StringBox::new(e.to_string()))));
+                    }
+                    return Ok(Box::new(StringBox::new("setThreshold(n) requires 1 arg")));
+                }
+                "apply" => { return Ok(jcb.apply()); }
+                "toJson" => { return Ok(jcb.to_json()); }
+                "fromJson" => {
+                    if let Some(s) = _args.get(0) { return Ok(jcb.from_json(&s.to_string_box().value).unwrap_or_else(|e| Box::new(StringBox::new(e.to_string())))); }
+                    return Ok(Box::new(StringBox::new("fromJson(json) requires 1 arg")));
+                }
+                "enable" => {
+                    if let Some(k) = _args.get(0) { return Ok(jcb.set_flag(&k.to_string_box().value, true).unwrap_or_else(|e| Box::new(StringBox::new(e.to_string())))); }
+                    return Ok(Box::new(StringBox::new("enable(name) requires 1 arg")));
+                }
+                "disable" => {
+                    if let Some(k) = _args.get(0) { return Ok(jcb.set_flag(&k.to_string_box().value, false).unwrap_or_else(|e| Box::new(StringBox::new(e.to_string())))); }
+                    return Ok(Box::new(StringBox::new("disable(name) requires 1 arg")));
+                }
+                "summary" => { return Ok(jcb.summary()); }
+                _ => { return Ok(Box::new(VoidBox::new())); }
+            }
+        }
+
+        // JitStatsBox methods
+        if let Some(jsb) = box_value.as_any().downcast_ref::<crate::boxes::jit_stats_box::JitStatsBox>() {
+            match method {
+                "toJson" => { return Ok(jsb.to_json()); }
+                "top5" => {
+                    if let Some(jm) = &self.jit_manager {
+                        let v = jm.top_hits(5);
+                        let arr: Vec<serde_json::Value> = v.into_iter().map(|(name, hits, compiled, handle)| {
+                            serde_json::json!({
+                                "name": name,
+                                "hits": hits,
+                                "compiled": compiled,
+                                "handle": handle
+                            })
+                        }).collect();
+                        let s = serde_json::to_string(&arr).unwrap_or_else(|_| "[]".to_string());
+                        return Ok(Box::new(StringBox::new(s)));
+                    }
+                    return Ok(Box::new(StringBox::new("[]")));
+                }
+                "summary" => {
+                    let cfg = crate::jit::config::current();
+                    let caps = crate::jit::config::probe_capabilities();
+                    let abi_mode = if cfg.native_bool_abi && caps.supports_b1_sig { "b1_bool" } else { "i64_bool" };
+                    let b1_norm = crate::jit::rt::b1_norm_get();
+                    let ret_b1 = crate::jit::rt::ret_bool_hint_get();
+                    let mut payload = serde_json::json!({
+                        "abi_mode": abi_mode,
+                        "abi_b1_enabled": cfg.native_bool_abi,
+                        "abi_b1_supported": caps.supports_b1_sig,
+                        "b1_norm_count": b1_norm,
+                        "ret_bool_hint_count": ret_b1,
+                        "top5": [],
+                        "perFunction": []
+                    });
+                    if let Some(jm) = &self.jit_manager {
+                        let v = jm.top_hits(5);
+                        let top5: Vec<serde_json::Value> = v.into_iter().map(|(name, hits, compiled, handle)| serde_json::json!({
+                            "name": name, "hits": hits, "compiled": compiled, "handle": handle
+                        })).collect();
+                        let perf = jm.per_function_stats();
+                        let per_arr: Vec<serde_json::Value> = perf.into_iter().map(|(name, phi_t, phi_b1, rb, hits, compiled, handle)| serde_json::json!({
+                            "name": name, "phi_total": phi_t, "phi_b1": phi_b1, "ret_bool_hint": rb, "hits": hits, "compiled": compiled, "handle": handle
+                        })).collect();
+                        if let Some(obj) = payload.as_object_mut() { obj.insert("top5".to_string(), serde_json::Value::Array(top5)); obj.insert("perFunction".to_string(), serde_json::Value::Array(per_arr)); }
+                    }
+                    let s = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
+                    return Ok(Box::new(StringBox::new(s)));
+                }
+                "perFunction" | "per_function" => {
+                    if let Some(jm) = &self.jit_manager {
+                        let v = jm.per_function_stats();
+                        let arr: Vec<serde_json::Value> = v.into_iter().map(|(name, phi_t, phi_b1, rb, hits, compiled, handle)| serde_json::json!({
+                            "name": name,
+                            "phi_total": phi_t,
+                            "phi_b1": phi_b1,
+                            "ret_bool_hint": rb,
+                            "hits": hits,
+                            "compiled": compiled,
+                            "handle": handle,
+                        })).collect();
+                        let s = serde_json::to_string_pretty(&arr).unwrap_or_else(|_| "[]".to_string());
+                        return Ok(Box::new(StringBox::new(s)));
+                    }
+                    return Ok(Box::new(StringBox::new("[]")));
+                }
+                _ => { return Ok(Box::new(VoidBox::new())); }
+            }
+        }
+
         // StringBox methods
         if let Some(string_box) = box_value.as_any().downcast_ref::<StringBox>() {
             match method {

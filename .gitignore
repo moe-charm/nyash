@@ -124,3 +124,14 @@ local_tests/
 
 # Backup files
 /backups/
+
+# 📚 論文関連フォルダ（作業中と公開用を分離）
+# 作業中（WIP: Work In Progress）- Git追跡除外
+docs/research/papers-wip/
+docs/research/drafts/
+docs/research/notes/
+
+# 査読中・未公開論文 - Git追跡除外
+docs/research/papers-under-review/
+
+# 完成・公開済み論文は docs/research/papers-published/ に配置（Git追跡対象）

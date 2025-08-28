@@ -1,0 +1,18 @@
+// PHI with boolean inputs demo (shows (b1) tag)
+// Enable: NYASH_JIT_PHI_MIN=1 NYASH_JIT_DUMP=1
+
+static box Main {
+  main() {
+    local a, b, x
+    a = 1
+    b = 2
+    if (a < b) {
+      x = (3 < 4)
+    } else {
+      x = (5 < 6)
+    }
+    // Use x so it stays live
+    if (x) { return 1 } else { return 0 }
+  }
+}
+

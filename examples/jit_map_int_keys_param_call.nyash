@@ -1,0 +1,14 @@
+// Param-map JIT HostCall PoC with integer keys
+box Utils {
+    sumKeys(m) {
+        // get(1) + get(2)
+        return m.get(1) + m.get(2)
+    }
+}
+
+m = new MapBox()
+m.set(1, 10)
+m.set(2, 20)
+u = new Utils()
+print(u.sumKeys(m))
+

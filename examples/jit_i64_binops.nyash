@@ -1,0 +1,14 @@
+// i64 BinOp coverage demo (Add/Sub/Mul/Div/Mod)
+// Enable: NYASH_JIT_THRESHOLD=1 NYASH_JIT_DUMP=1
+
+static box Main {
+  main() {
+    local a, b, r
+    a = 7
+    b = 3
+    r = a + b
+    r = r - (a * b)
+    r = r + (a / b)
+    return r
+  }
+}

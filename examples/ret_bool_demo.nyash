@@ -1,0 +1,12 @@
+// Return boolean demo
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1
+
+static box Main {
+  main() {
+    local a, b
+    a = 3
+    b = 5
+    // Return result of comparison directly (boolean)
+    return a < b
+  }
+}

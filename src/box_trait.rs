@@ -33,7 +33,7 @@ pub const BUILTIN_BOXES: &[&str] = &[
     "SoundBox", "DebugBox", "MethodBox", "ConsoleBox",
     "BufferBox", "RegexBox", "JSONBox", "StreamBox", 
     "HTTPClientBox", "IntentBox", "P2PBox", "SocketBox", 
-    "HTTPServerBox", "HTTPRequestBox", "HTTPResponseBox"
+    "HTTPServerBox", "HTTPRequestBox", "HTTPResponseBox", "JitConfigBox"
 ];
 
 /// 🔥 ビルトインBox判定関数 - pack透明化システムの核心

@@ -1,0 +1,12 @@
+// JIT native f64 arithmetic demo
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1
+
+static box Main {
+    main() {
+        local x, y
+        x = 1.5
+        y = 2.25
+        return x + y
+    }
+}
+

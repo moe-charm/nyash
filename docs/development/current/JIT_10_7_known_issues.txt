@@ -1,0 +1,52 @@
+JIT Phase 10_7 — Known Issues and Future Refinements (2025-08-27)
+
+Scope: LowerCore(Core-1), Branch/PHI wiring, ABI(min), Stats/CFG dump
+
+1) b1 PHI tagging heuristics
+- Symptom: (b1) tag may not appear for some PHI nodes when inputs are routed via variables (Load/Store) or multi-step copies.
+- Current mitigation:
+  - Pre-scan: mark Compare/Const Bool as boolean producers.
+  - Propagate through Copy; close over PHI if all inputs are boolean-like.
+  - CFG dump heuristic: mark (b1) if pre-analysis true OR all inputs look boolean OR the PHI output is used as branch condition.
+- Residual risk: Complex IR (loads/stores, deep copies, optimizer rewrites) can hide provenance; tag may still be missed.
+- Future: Track boolean type via MIR type system or a dedicated lattice in analysis pass; extend provenance across Load/Store when safe.
+
+2) f64 arithmetic/compare on VM backend
+- Symptom: VM path errors on f64 BinOp/Compare (e.g., Add/>, mixed types).
+- Cause: VM does not yet implement floating-point arithmetic/compare ops.
+- Current mitigation: Examples using f64 are marked for Cranelift-enabled JIT environments; VM returns type errors as expected.
+- Future: Implement f64 BinOp/Compare in VM or add auto-promotion layer consistent with JIT behavior.
+
+3) JIT execution stub semantics
+- Symptom: Previously, enabling NYASH_JIT_EXEC could alter results via stub returns when Cranelift was not enabled.
+- Fix: Stub disabled; compilation skipped without Cranelift, full VM fallback retains semantics.
+- Future: None (resolved). Keep behavior documented.
+
+4) ret_bool_hint_count visibility
+- Symptom: Counter can remain 0 when MIR signatures don’t mark Bool return even if code returns boolean values via VM-level boxes.
+- Cause: Counter increments on MIR signature Bool return detection; not on dynamic boolean returns.
+- Future: Consider counting dynamic sites or adding per-function attributes post-inference.
+
+5) PHI dump dependency on phi_min
+- Symptom: Detailed PHI dump (with (b1) tags) only shows when NYASH_JIT_PHI_MIN=1.
+- Current stance: Intended; PHI path is opt-in while stabilizing.
+- Future: Always-on summary rows possible; keep detail behind flag to reduce noise.
+
+6) Stats scope and sources
+- Symptom: JitStatsBox and unified stats currently reflect process-local counters; function-level detail via top5 only.
+- Future: Add per-function structured stats via Box API; expose compilation state/timings when available.
+
+7) Toolchain capability gating (b1 ABI)
+- Symptom: Native boolean (b1) return in signatures remains disabled (cap false).
+- Current stance: Switch point centralized; flips on when toolchain supports b1 in signatures.
+- Future: Periodically probe toolchain; add CI check to toggle automatically.
+
+8) Warning noise (unexpected cfg: llvm)
+- Symptom: Warnings about unknown `llvm` feature in conditional cfg.
+- Cause: Feature not declared in Cargo.toml; code guards are placeholders.
+- Future: Add feature or silence warnings for non-supported builds.
+
+9) Documentation sync
+- Symptom: Some flags visible via CLI and boxes; ensure README/CURRENT_TASK stay aligned.
+- Future: Add short “JIT quick flags” section with examples in docs.
+

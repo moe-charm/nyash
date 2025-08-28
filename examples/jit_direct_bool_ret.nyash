@@ -1,0 +1,14 @@
+// jit-direct: boolean return normalization
+// Build: cargo build --release --features cranelift-jit
+// Run:   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+//        ./target/release/nyash --jit-direct examples/jit_direct_bool_ret.nyash
+
+static box Main {
+  main() {
+    local a, b
+    a = 3
+    b = 5
+    return a < b   // expect true
+  }
+}
+

@@ -2,7 +2,14 @@
 
 フェーズ10はJIT実用化へ！Core-1 Lowerの雛形を固めつつ、呼出/フォールバック導線を整えるよ。
 
-## ⏱️ 今日のサマリ（10_c実行経路の堅牢化＋10_7分岐配線＋GC/スケジューラ導線）
+## 🆕 Quick Hot Update（2025-08-27-2）
+- JitStatsBox: perFunction() 追加（関数単位の統計をJSON配列で取得）
+- b1 PHI格子 強化（Compare/Const/Cast(TypeOp)/Branch/Copy/PHI/Store/Loadの固定点伝播）
+- 独立JIT: `--jit-direct` に引数対応（`NYASH_JIT_ARGS` をMIR型にcoerce）、結果の型名も表示
+- b1 ABI切替の下地: `NYASH_JIT_ABI_B1_SUPPORT=1` でcapを強制ONできるように（将来のtoolchain更新に備えたスイッチ）
+- リンク: JSONスキーマ(v1) → `docs/reference/jit/jit_stats_json_v1.md`
+
+## ⏱️ 今日のサマリ（10_c実行経路の堅牢化＋10_7分岐/PHI/独立ABI＋GC/スケジューラ導線）
 - 目的: JIT実行を安全に通す足場を仕上げつつ、GC/スケジューラ導線を整備し回帰検出力を上げる。
   - 10_c: panic→VMフォールバック（`catch_unwind`）/ JIT経路のroot区域化 / Core-1 i64 param minimal pass（`emit_param_i64` + LowerCoreで供給）✅ 完了
   - 10_4a/10_4b: GC導線 + Write-Barrier挿入（ArraySet/RefSet/BoxCall）、root API（enter/pin/leave）
@@ -10,7 +17,80 @@
   - 10_4d: STRICTバリア検証（CountingGc前後比較で漏れ即検出）✅ 完了（`NYASH_GC_BARRIER_STRICT=1`）
   - 10_6b: シングルスレ・スケジューラ（spawn/spawn_after/poll）、Safepointで`poll()`連携、`NYASH_SCHED_POLL_BUDGET`対応 ✅ 完了
   - 10_7: JIT分岐配線（Cranelift）— MIR Branch/Jump→CLIFブロック配線、条件b1保持、分岐b1/`i64!=0`両対応（feature: `cranelift-jit`）
+  - 10_7: 最小PHI（単純ダイアモンド）— `NYASH_JIT_PHI_MIN=1` で有効、ブロック引数で合流値を受け渡し ✅ 初期対応
+  - 10_7: JIT独立ABI導入 — `JitValue`（i64/f64/bool/handle） + VMValue↔JitValueアダプタ、TLS分離（legacy VMArgs / JIT Args）✅ 完了
   - ベンチ: CLIベンチへJIT比較追加（ウォームアップあり）、`branch_return`ケース追加、スクリプト版`examples/ny_bench.nyash`追加（TimerBoxでops/sec）
+
+### 🆕 追加アップデート（10_7進捗）
+- ハンドルレジストリ + スコープ管理（JIT呼び出し単位で自動クリーンアップ）✅
+- HostCallブリッジ（ハンドル経由・read-only中心）✅
+  - Array/Map/String: `length`/`isEmpty`、Map: `has`、String: `charCodeAt`
+  - Array/Map get/set/push/size: 既存PoCをハンドル経由に段階移行
+- 多値PHIの配線（then/else/jumpで順序つき引数渡し）✅
+  - DOT可視化（`NYASH_JIT_DOT=path.dot` でCFG出力）✅ 初期対応
+  - 引数ネイティブ型（10_7hの前段）: MIRシグネチャから `Float→F64`, `Bool→I64(0/1)` を反映（`NYASH_JIT_NATIVE_F64/BOOL`）✅ 初期対応
+- ダンプの簡潔化（CFG/PHI要点表示、f64/boolネイティブ有効フラグ表示）✅
+- CFG/PHIダンプの詳細化（`NYASH_JIT_DUMP=1`）✅ 初期強化
+  - 例: `phi: bb=3 slots=2 preds=1|2` に続けて `dst vX <- pred:val, ...` を列挙（合流値の源が一目で分かる）
+- JIT設定の集約（Rust側）✅ 初期導入
+  - `src/jit/config.rs` に `JitConfig` を追加し、RunnerからCLIと環境変数を一元反映
+- JitConfigBox 追加（10_7f）✅ 初期対応
+  - `new JitConfigBox()` で `exec/stats/dump/phi_min/hostcall/.../threshold` を操作し `apply()` でenv反映
+  - `toJson()/fromJson()` で再現性確保、`summary()` で状態確認
+- f64ネイティブ最小経路（`NYASH_JIT_NATIVE_F64=1`）✅
+  - f64定数、F64同士の四則、F64戻りシグネチャ・トランポリン
+  - トランポリンは`desired_ret_is_f64`を捕捉（env依存のズレを排除）✅
+- Boolネイティブ最小経路（`NYASH_JIT_NATIVE_BOOL=1`）↗ 準備済み
+  - 比較はb1で保持し分岐に直接供給（既定）／戻りは当面i64(0/1)で正規化（将来b1戻りに拡張）
+- 細かな修正: P2PBoxでtransportコールバック登録時の借用期間エラーを修正（lock解放順を明示）
+- Bugfix: Cranelift `push_block_param_i64_at` で `switch_to_block` 未呼出によるpanicを修正（CFG/PHI経路の安定化）✅
+ - LowerCore小型足場追加 ✅
+   - ret_boolヒント: 返り値がBoolの関数で `builder.hint_ret_bool(true)` を呼ぶ切替点を用意（現状no-op、将来1行で切替）
+   - Castの最小下ろし: `I::Cast` を値供給＋既知整数の継承で安全通過（副作用なし領域）
+ - 観測強化 ✅
+   - b1正規化カウンタ: `b1_norm_count`（分岐条件・b1ブロック引数の正規化で加算）
+   - JitStatsBox: `{abi_mode, abi_b1_enabled, abi_b1_supported, b1_norm_count}` を `toJson()` で取得可能（BoxFactory登録済み）
+   - 統合JIT統計（テキスト/JSON）に `abi_mode/…/b1_norm_count` を追加
+ - 便利CLI ✅
+   - `--emit-cfg <DOT_FILE>` 追加（`NYASH_JIT_DOT` のCLI版。`NYASH_JIT_DUMP`も自動オン）
+- 重要: Cranelift未有効時の挙動を是正 ✅
+  - 以前: `NYASH_JIT_EXEC=1` でJITスタブが0を返すことがあり、結果が変わり得た
+  - 変更: Cranelift未有効では「未コンパイル扱い」にしてVMへ完全フォールバック（JIT有効でも結果は不変）
+
+- 独立JITモード ✅ 追加
+  - `--jit-direct`: VM実行ループを介さず、JITエンジンで `main` を直接コンパイル実行（Cranelift有効時）
+  - `--jit-only`: フォールバック禁止（JIT未コンパイル/失敗は即エラー）— 独立性検証に最適
+
+- b1 PHIの型/格子解析 強化 ✅
+  - Compare/Const Bool起点＋Copy/PHIに加え、Load/Storeヒューリスティックを導入（固定点伝播）
+  - PHI統計は常時計測（`phi_total_slots`/`phi_b1_slots`）→ JSON/ダンプ一致
+
+- 関数単位JIT統計 ✅
+  - LowerCore→JitEngine→JitManagerで `phi_total/phi_b1/ret_bool_hint/hits/compiled/handle` を集約
+  - `JitStatsBox.summary()` に `perFunction` 配列を追加（関数ごとの明細）
+
+- f64 E2Eと簡易ベンチ（Cranelift向け）✅ 追加
+  - 例: `examples/jit_f64_e2e_add_compare.nyash` / ベンチ: `examples/ny_bench_f64.nyash`
+  - 注意: VM単体ではf64演算/比較は未対応。`--features cranelift-jit` + `NYASH_JIT_EXEC=1 NYASH_JIT_NATIVE_F64=1` で実行
+
+- JSONスキーマの文書化 ✅
+  - 参照: `docs/reference/jit/jit_stats_json_v1.md`（version=1）
+  - 統一JSON/Box JSONともに `version` フィールドを付与
+
+- f64 E2Eと簡易ベンチ（Cranelift向け）✅ 追加
+  - 例: `examples/jit_f64_e2e_add_compare.nyash`
+  - ベンチ: `examples/ny_bench_f64.nyash`
+  - 注意: VM単体ではf64演算/比較は未対応。`--features cranelift-jit` + `NYASH_JIT_EXEC=1 NYASH_JIT_NATIVE_F64=1` で実行
+
+- JSONスキーマの文書化 ✅ 追加
+  - 参照: `docs/reference/jit/jit_stats_json_v1.md`（version=1）
+  - 統一JSON/Box JSONともに `version` フィールドを付与
+
+- PHI統計（常時計測）✅
+  - `phi_total_slots`/`phi_b1_slots` をLowerCoreで常時計測し、JSONに出力
+
+- Cranelift互換性修正 ✅
+  - b1シグネチャを使用せず、戻りはi64に正規化（`select(b1,1,0)`）。`types::B1`/`bint` 非依存でビルド安定化
 
 ### 直近タスク（小さく早く）
 1) 10_b: Lower/Core-1 最小化（進行中 → ほぼ完了）
@@ -20,25 +100,96 @@
    - Engine.compile: builder選択（feature連動）＋Lower実行＋JIT handle発行✅ 完了
    - JIT関数テーブル（stub: handle→ダミー関数）✅ 完了
    - 残: 最小emit（const/binop/ret）をCLIFで生成し、関数ポインタをテーブル登録（feature有効時）
-     → 実装: CraneliftBuilderでi64用の`const/binop/ret`を生成し、JIT関数テーブルへクロージャとして登録完了（args未対応・i64専用）
+     → 実装: CraneliftBuilderでi64用の`const/binop/ret`を生成し、JIT関数テーブルへクロージャとして登録完了（i64引数0〜6個対応／bool,f64はi64正規化）✅ 更新
 2) 10_c: 呼出/フォールバック（最小経路）✅ 完了
    - VM側の疑似ディスパッチログ（compiled時/実行時ログ）✅
    - JIT実行→`VMValue`返却、panic時VMフォールバック ✅（`engine.execute_handle`で`catch_unwind`）
    - Core-1最小: i64 param/return、Const(i64/bool→0/1)、BinOp/Compare/Return ✅
    - HostCall最小（Array/Map: len/get/set/push/size）ゲート`NYASH_JIT_HOSTCALL=1` ✅
    - Branch/JumpはCranelift配線導入済み（feature `cranelift-jit`）。副作用命令は未lowerのためVMへフォールバック
-3) 10_7: 分岐配線（Cranelift）— 進捗中
+3) 10_7: 分岐/PHI/独立ABI（Cranelift）— 進捗中
    - LowerCore: BB整列・マッピング→builderの`prepare_blocks/switch/seal/br_if/jump`呼出 ✅
    - CraneliftBuilder: ブロック配列管理、`brif/jump`実装、条件b1/`i64!=0`両対応 ✅
    - 最小PHI（単純ダイアモンド）導入（`NYASH_JIT_PHI_MIN=1`ガード）✅ 初期対応
-   - 残: 副作用命令の扱い方針（当面VMへ）、CFG可視化の拡張（`NYASH_JIT_DUMP=1`）
+   - JIT独立化: `JitValue` ABI + 変換アダプタ + TLS分離でVM内部へ非依存化 ✅ 完了
+   - 残: 副作用命令の扱い方針（当面VMへ）、CFG可視化の追加改善（ブロック引数の整形など）
+    - 検証: `--features cranelift-jit` 有効ビルドで `examples/jit_branch_demo.nyash` / `jit_phi_demo.nyash` がJIT経路で正常動作を確認（`NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1`）✅
+
+### 🆕 追加（2025-08-28）
+- JitStatsBox: `perFunction()` をVMディスパッチへ実装（JSON配列で name/hits/phi_total/phi_b1/ret_bool_hint/compiled/handle を返却）✅
+- PHI(b1)読出しの安定化（最小）✅
+  - `NYASH_JIT_PHI_MIN=1` 有効時、ブールと推定されたPHIは b1 としてブロック引数を読み出し（分岐に直結）
+  - 分岐条件をブール格子のシードに追加（pre-scanで `condition` をbooleanとして扱う）
+- デモ更新: `examples/jit_stats_summary_demo.nyash` に `perFunction()` 出力を追加 ✅
+- jit-direct（独立JIT）足場の強化 ✅
+  - read-onlyガード（WriteHeap検出で明示エラー）/ 統一エラーJSON（`NYASH_JIT_ERROR_JSON=1`）
+  - 最小E2E: `examples/jit_direct_local_store_load.nyash` / `jit_direct_bool_ret.nyash` / `jit_direct_f64_ret.nyash`
+  - 参考: Box-First運用キット `docs/engineering/box_first_enforcement.md`（PR/CIはアドバイザリ導入）
+
+## 🔜 次：Phase 10.9 Builtin-Box JIT（Box-Firstで最小から）
+
+目的: VMとJITでビルトインBoxの読み取り系を同等動作にし、後続（生成/書き込み）へ進む足場を固める。
+
+### 必要な箱（最小セット）
+- JitPolicyBox（ポリシー箱）
+  - 役割: read-onlyゲート/書き込み検出/HostCall許可リストの一本化（1箇所で切替）
+  - 経路: runner/jit-direct/engine/lower が参照（env直読みはしない）
+- JitEventsBox（観測箱）
+  - 役割: compile/execute/fallback/trapを JSONL へAppend（{fn, abi_mode, reason, ms}）
+  - 経路: 既存statsと共存。回帰の目視を容易に。
+- HostcallRegistryBox（read-only）
+  - 役割: 許可HostCallと引数/戻りの種別を宣言。型検査の単一点にする。
+  - 初期: String.length/isEmpty/charCodeAt, Array.length/isEmpty/get, Map.size/has
+- FrameSlotsBox（スロット箱）
+  - 役割: ptr→slot の管理と型注釈（今はi64のみ）。LowerCoreから委譲。
+- CallBoundaryBox（呼出し境界箱／薄い）
+  - 役割: JIT↔JIT/JIT↔VM呼出しの単一点（将来の多関数対応の足場）。今は型変換の箱だけ用意。
+
+最小原則: まず箱を置く（no-op/ログだけでもOK）→ 切替点が1箇所になったら機能を足す。
+
+### 実装計画（小さい積み木で順に）
+1) Week 10.9-α（足場）
+   - JitPolicyBox v0: read-only/HostCall whitelist を箱へ移動（runnerの散在チェックを統合）
+   - JitEventsBox v0: compile/executeのJSONLイベント（オプトイン）
+   - CURRENT_TASK/CLAUDEへポリシーと使い方を簡潔追記
+2) Week 10.9-β（読み取り系カバレッジ）
+   - HostcallRegistryBox v0: String/Array/Mapの読み取りAPIを登録・型検査
+   - LowerCore: BoxCallのread-only経路をRegistry参照に切替（散在ロジックの削減）
+   - E2E: length/isEmpty/charCodeAt/get/size/has（jit-direct + VMで一致）
+3) Week 10.9-γ（生成の足場）
+   - CallBoundaryBox v0: JIT→VM（new演算子など）を一旦VMへ委譲する薄い箱
+   - new StringBox/IntegerBox/ArrayBox の最小経路（jit-directは方針次第で拒否でも可）
+4) Week 10.9-δ（書き込みの導線のみ）
+   - JitPolicyBox: write許可のスイッチを箱に実装（既定OFF）
+   - LowerCore: 書き込み命令はPolicy参照で拒否/委譲/許可（1箇所で判断）
+
+### 成功判定（DoD）
+- 機能: 読み取り系ビルトインBoxがJIT経路でVMと一致（上記API）
+- 箱: Policy/Events/Registryが1箇所で参照される（散在ロジック解消）
+- 観測: JSONLイベントが最低1件以上出力（明示opt-in）
+- 回帰: `jit-direct` read-only方針が維持され、拒否理由がイベント/JSONで判読可
+
+### リスクと箱での緩和
+- HostCallの型崩れ: HostcallRegistryBoxで型検査→不一致はPolicy経由で明示拒否
+- 方針変更の揺れ: JitPolicyBoxのフラグだけで切替可能（コード散在を回避）
+- 観測不足: JitEventsBoxのイベント粒度を先に用意（必要最小限でOK）
+
 
 備考（制限と次の着手点）
-- 返り値はi64（VMValue::Integer）に限定。f64はconst最小emit、boolはi64 0/1へ正規化（分岐条件入力に対応）
-- 引数はi64のみ最小パス。複数引数はparamマッピングで通過、非i64は未対応 → 次対応
+- 返り値はi64（VMValue::Integer）に限定。f64/boolは設計着手（ダンプで有効フラグ観測のみ）
+- 引数はi64最小パス。複数引数はparamマッピングで通過、非i64はハンドル/正規化で暫定対応
 - Branch/JumpのCLIF配線は導入済み（feature `cranelift-jit`）。条件はb1で保持し、必要に応じて`i64!=0`で正規化
 - 副作用命令（print等）はJIT未対応のためVMへ委譲（安全性優先）
-- JIT/VM統合統計（フォールバック率/時間の一括出力）未統合 → 次対応
+- JIT/VM統合統計（フォールバック率/時間の一括出力）✅ 実装済み（最小）
+  - `maybe_print_jit_unified_stats()` により、テキスト/JSON（`NYASH_JIT_STATS_JSON=1`）でsites/compiled/hits/exec_ok/trap/fallback_rate/handlesを出力
+
+## 📦 箱作戦（JIT独立化の方針）
+- ABIの箱: `JitValue`（I64/F64/Bool/Handle）でJIT入出力を統一、VM型に非依存
+- 変換アダプタ: VMValue↔JitValueはアダプタに集約、境界は必ずアダプタ経由
+- TLS分離: legacy VMArgs（既存HostCall用）とJIT Args（新ABI）を分離し段階移行
+- HostCall独立化（計画）: Handle(u64) + ハンドルレジストリ導入でJIT→ホストを完全独立（VM型非参照）
+- 設定の箱（進捗）: Rust側で`JitConfig`を導入しenv/CLI設定を集約（Nyash側Box化は後続）
+- 可視化: `NYASH_JIT_DUMP=1`でCFG/ブロック引数を可視化し回帰検出力を強化
 
 ### すぐ試せるコマンド
 ```bash
@@ -67,6 +218,17 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
 ./target/release/nyash --benchmark --iterations 200
 ```
 
+#### HostCall（ハンドルPoC）
+```bash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_array_param_call.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_map_param_call.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_map_int_keys_param_call.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_map_has_int_keys.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_param_length.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_is_empty.nyash
+./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_charcode_at.nyash
+```
+
 ## 現在の地図（Done / Next）
 
 ### ✅ 完了（Phase 9.79b）
@@ -92,12 +254,13 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
 - Lower emitのテスト雛形
 - CLIFダンプ/CFG表示（`NYASH_JIT_DUMP=1`）
 - VM `--vm-stats` とJIT統計の統合
+  → 実装済み（VM終了時にJIT統合サマリ出力。JSON出力も可）
 
 ### 残タスク（箇条書き）
 - 10_c:
   - CLIF: Branch/Jumpの実ブロック配線、Compare結果の適用確認
   - 返り値/引数の型拡張（bool/f64）、複数引数の網羅
-  - JIT/VM統合統計（フォールバック率/時間の一括出力）
+  - JIT/VM統合統計（フォールバック率/時間の一括出力）✅ 済（最小）
 - 10_4c:
   - リーチャビリティ観測の深さ拡張（depth=2→N）と軽量ダンプ
   - （将来）実Mark/TraverseのPoC（解放はしない）
@@ -106,12 +269,31 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
 - 10_6b:
   - スケジューラ: poll予算の設定ファイル化、将来のscript API検討（継続）
 - 10_7:
-  - 最小PHI（単純ダイアモンド）の導入（`NYASH_JIT_PHI_MIN=1`ガード）
-  - IRBuilder APIの整理（block param/分岐引数の正式化）とCranelift実装の安定化
+  - Hostハンドルレジストリ導入（JIT側はHandleのみを見る）
+  - IRBuilder APIの整理（block param/分岐引数の正式化）とCranelift実装の安定化（暫定APIの整形）
   - 副作用命令のJIT扱い（方針: 当面VMへ、将来はHostCall化）
-  - CFG検証と`NYASH_JIT_DUMP=1`でのCFG可視化
+  - CFG検証と`NYASH_JIT_DUMP=1`でのCFG可視化（ブロックと引数のダンプ）✅ 初期強化済み（更なる整形・網羅は継続）
+  - JitConfigBoxで設定の箱集約（env/CLI整合、テスト容易化）✅ Rust側の`JitConfig`導入済（Box化は後続）
+  - Bool戻り最小化: `hint_ret_bool`をCranelift側に配線し、b1→i64とb1ネイティブを切替可能に
+  - Compare/BinOpの副作用なし領域の拡大（Copy/Const/Castは開始済み、And/Orは当面VMフォールバック）
+  - PHI(b1)の扱い整理: ブロック引数のb1対応を正式化（i64 0/1正規化とb1の両立）
+  - 統計/ダンプの整備: `b1_norm_count`のJSON/テキスト両方での検証手順をドキュメント化
+  - b1 PHI格子の精度UP（簡易エイリアス/型注釈の取り込み）
+  - ネイティブb1 ABI: ツールチェーンcap連動で返り/引数b1署名への切替（切替点は一本化済）
+  - VMのf64演算/比較パリティ（10.8へ移送）
+  - JitStatsBox: `perFunction()` の箱API追加（summaryを介さず単体取得）
+  - b1 PHIタグの頑健化（Load/Store越しの由来推定を型/格子解析で補強）
+  - VMのf64演算/比較パリティ（10.8へ移送予定）
+  - JSONスキーマのversion管理とサンプル更新（`v1`整理済み、今後の拡張計画をドキュメント化）
 - ベンチ:
   - `examples/ny_bench.nyash`のケース追加（関数呼出/Map set-get）とループ回数のenv化
+
+### 🛠️ メンテ・ビルドノート（環境依存）
+- WSL配下（`/mnt/c/...`）で `cargo build` 時に `Invalid cross-device link (os error 18)` が発生する場合あり
+  - 対策: リポジトリをLinux FS側（例: `~/work/nyash`）に配置／`CARGO_TARGET_DIR` と `TMPDIR` を同一FS配下へ設定
+  - 備考: リンク動作とFS差分が原因のため、コード修正ではなく環境調整で解決
+- Codex CLIの実行権限・サンドボックス設定忘れで「ビルドできない」誤検知になる場合あり
+  - 対策: `codex --ask-for-approval never --sandbox danger-full-access` を付与して起動する（この指定忘れが原因だったケースあり）
 
 ---
 

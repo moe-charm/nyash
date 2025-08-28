@@ -272,6 +272,26 @@ impl BuiltinBoxFactory {
             }
             Ok(Box::new(DebugBox::new()))
         });
+
+        // JitStatsBox (runtime counters & modes)
+        self.register("JitStatsBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("JitStatsBox constructor expects 0 arguments, got {}", args.len()),
+                });
+            }
+            Ok(Box::new(crate::boxes::jit_stats_box::JitStatsBox::new()))
+        });
+
+        // JitConfigBox (runtime JIT configuration as a Box)
+        self.register("JitConfigBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("JitConfigBox constructor expects 0 arguments, got {}", args.len()),
+                });
+            }
+            Ok(Box::new(crate::boxes::jit_config_box::JitConfigBox::new()))
+        });
     }
     
     /// Register I/O types

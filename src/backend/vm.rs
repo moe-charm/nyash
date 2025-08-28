@@ -454,13 +454,15 @@ impl VM {
         
         // Optional: print VM stats
         self.maybe_print_stats();
+        // Optional: print concise JIT unified stats
+        self.maybe_print_jit_unified_stats();
 
         // Optional: print cache stats summary
         if std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") {
             self.print_cache_stats_summary();
         }
 
-        // Optional: print JIT stats summary (Phase 10_a)
+        // Optional: print JIT detailed summary (top functions)
         if let Some(jm) = &self.jit_manager { jm.print_summary(); }
 
         // Optional: GC diagnostics if enabled
@@ -560,6 +562,8 @@ impl VM {
             jm.record_entry(&function.signature.name);
             // Try compile if hot (no-op for now, returns fake handle)
             let _ = jm.maybe_compile(&function.signature.name, function);
+            // Record per-function lower stats captured during last JIT lower (if any)
+            // Note: The current engine encapsulates its LowerCore; expose via last_stats on a new instance as needed.
             if jm.is_compiled(&function.signature.name) && std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
                 if let Some(h) = jm.handle_of(&function.signature.name) {
                     eprintln!("[JIT] dispatch would go to handle={} for {} (stub)", h, function.signature.name);
@@ -581,12 +585,13 @@ impl VM {
             .filter_map(|pid| self.get_value(*pid).ok())
             .collect();
         if std::env::var("NYASH_JIT_EXEC").ok().as_deref() == Some("1") {
+            let jit_only = std::env::var("NYASH_JIT_ONLY").ok().as_deref() == Some("1");
             // Root regionize args for JIT call
             self.enter_root_region();
             self.pin_roots(args_vec.iter());
-            if let Some(jm_ref) = self.jit_manager.as_ref() {
-                if jm_ref.is_compiled(&function.signature.name) {
-                    if let Some(val) = jm_ref.execute_compiled(&function.signature.name, &args_vec) {
+            if let Some(jm_mut) = self.jit_manager.as_mut() {
+                if jm_mut.is_compiled(&function.signature.name) {
+                    if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &args_vec) {
                         // Exit scope before returning
                         self.leave_root_region();
                         self.scope_tracker.pop_scope();
@@ -594,6 +599,29 @@ impl VM {
                     } else if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") ||
                               std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1") {
                         eprintln!("[JIT] fallback: VM path taken for {}", function.signature.name);
+                        if jit_only {
+                            self.leave_root_region();
+                            self.scope_tracker.pop_scope();
+                            return Err(VMError::InvalidInstruction(format!("JIT-only enabled and JIT trap occurred for {}", function.signature.name)));
+                        }
+                    }
+                } else if jit_only {
+                    // Try to compile now and execute; if not possible, error out
+                    let _ = jm_mut.maybe_compile(&function.signature.name, function);
+                    if jm_mut.is_compiled(&function.signature.name) {
+                        if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &args_vec) {
+                            self.leave_root_region();
+                            self.scope_tracker.pop_scope();
+                            return Ok(val);
+                        } else {
+                            self.leave_root_region();
+                            self.scope_tracker.pop_scope();
+                            return Err(VMError::InvalidInstruction(format!("JIT-only enabled and JIT execution failed for {}", function.signature.name)));
+                        }
+                    } else {
+                        self.leave_root_region();
+                        self.scope_tracker.pop_scope();
+                        return Err(VMError::InvalidInstruction(format!("JIT-only enabled but function not compiled: {}", function.signature.name)));
                     }
                 }
             }
@@ -801,6 +829,77 @@ impl VM {
         }
 
         // Legacy box_trait::ResultBox is no longer handled here (migration complete)
+
+        // JitStatsBox methods (process-local JIT counters)
+        if let Some(_jsb) = box_value.as_any().downcast_ref::<crate::boxes::jit_stats_box::JitStatsBox>() {
+            match method {
+                "toJson" | "toJSON" => {
+                    return Ok(crate::boxes::jit_stats_box::JitStatsBox::new().to_json());
+                }
+                // Return detailed per-function stats as JSON array
+                // Each item: { name, phi_total, phi_b1, ret_bool_hint, hits, compiled, handle }
+                "perFunction" | "per_function" => {
+                    if let Some(jm) = &self.jit_manager {
+                        let v = jm.per_function_stats();
+                        let arr: Vec<serde_json::Value> = v.into_iter().map(|(name, phi_t, phi_b1, rb, hits, compiled, handle)| {
+                            serde_json::json!({
+                                "name": name,
+                                "phi_total": phi_t,
+                                "phi_b1": phi_b1,
+                                "ret_bool_hint": rb,
+                                "hits": hits,
+                                "compiled": compiled,
+                                "handle": handle
+                            })
+                        }).collect();
+                        let s = serde_json::to_string(&arr).unwrap_or_else(|_| "[]".to_string());
+                        return Ok(Box::new(crate::box_trait::StringBox::new(s)));
+                    }
+                    return Ok(Box::new(crate::box_trait::StringBox::new("[]")));
+                }
+                "top5" => {
+                    if let Some(jm) = &self.jit_manager {
+                        let v = jm.top_hits(5);
+                        let arr: Vec<serde_json::Value> = v.into_iter().map(|(name, hits, compiled, handle)| {
+                            serde_json::json!({
+                                "name": name,
+                                "hits": hits,
+                                "compiled": compiled,
+                                "handle": handle
+                            })
+                        }).collect();
+                        let s = serde_json::to_string(&arr).unwrap_or_else(|_| "[]".to_string());
+                        return Ok(Box::new(crate::box_trait::StringBox::new(s)));
+                    }
+                    return Ok(Box::new(crate::box_trait::StringBox::new("[]")));
+                }
+                "summary" => {
+                    let cfg = crate::jit::config::current();
+                    let caps = crate::jit::config::probe_capabilities();
+                    let abi_mode = if cfg.native_bool_abi && caps.supports_b1_sig { "b1_bool" } else { "i64_bool" };
+                    let b1_norm = crate::jit::rt::b1_norm_get();
+                    let ret_b1 = crate::jit::rt::ret_bool_hint_get();
+                    let mut payload = serde_json::json!({
+                        "abi_mode": abi_mode,
+                        "abi_b1_enabled": cfg.native_bool_abi,
+                        "abi_b1_supported": caps.supports_b1_sig,
+                        "b1_norm_count": b1_norm,
+                        "ret_bool_hint_count": ret_b1,
+                        "top5": []
+                    });
+                    if let Some(jm) = &self.jit_manager {
+                        let v = jm.top_hits(5);
+                        let top5: Vec<serde_json::Value> = v.into_iter().map(|(name, hits, compiled, handle)| serde_json::json!({
+                            "name": name, "hits": hits, "compiled": compiled, "handle": handle
+                        })).collect();
+                        if let Some(obj) = payload.as_object_mut() { obj.insert("top5".to_string(), serde_json::Value::Array(top5)); }
+                    }
+                    let s = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| "{}".to_string());
+                    return Ok(Box::new(crate::box_trait::StringBox::new(s)));
+                }
+                _ => return Ok(Box::new(crate::box_trait::VoidBox::new())),
+            }
+        }
 
         // StringBox methods
         if let Some(string_box) = box_value.as_any().downcast_ref::<StringBox>() {

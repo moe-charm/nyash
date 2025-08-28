@@ -1,0 +1,12 @@
+// Param-map JIT HostCall PoC (has)
+box Utils {
+    has12(m) {
+        return m.has(1) + m.has(2)
+    }
+}
+
+m = new MapBox()
+m.set(1, 10)
+u = new Utils()
+print(u.has12(m))
+

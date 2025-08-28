@@ -1,0 +1,13 @@
+// JitStatsBox.summary demo (pretty JSON)
+// Enable: NYASH_JIT_STATS=1 NYASH_JIT_THRESHOLD=1
+
+static box Main {
+  main() {
+    local s
+    s = new JitStatsBox()
+    print(s.summary())
+    // Also show per-function stats JSON array
+    print(s.perFunction())
+    return 0
+  }
+}

@@ -12,11 +12,15 @@ pub struct JitEngine {
     initialized: bool,
     next_handle: u64,
     /// Stub function table: handle -> callable closure
-    fntab: HashMap<u64, Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>>,
+    fntab: HashMap<u64, Arc<dyn Fn(&[crate::jit::abi::JitValue]) -> crate::jit::abi::JitValue + Send + Sync>>,
     /// Host externs by symbol name (Phase 10_d)
     externs: HashMap<String, Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>>,
     #[cfg(feature = "cranelift-jit")]
     isa: Option<cranelift_codegen::isa::OwnedTargetIsa>,
+    // Last lower stats (per function)
+    last_phi_total: u64,
+    last_phi_b1: u64,
+    last_ret_bool_hint: bool,
 }
 
 impl JitEngine {
@@ -27,6 +31,9 @@ impl JitEngine {
             fntab: HashMap::new(),
             externs: HashMap::new(),
             #[cfg(feature = "cranelift-jit")] isa: None,
+            last_phi_total: 0,
+            last_phi_b1: 0,
+            last_ret_bool_hint: false,
         };
         #[cfg(feature = "cranelift-jit")]
         { this.isa = None; }
@@ -47,26 +54,46 @@ impl JitEngine {
             eprintln!("[JIT] lower failed for {}: {}", func_name, e);
             return None;
         }
-        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+        // Capture per-function lower stats for manager to query later
+        let (phi_t, phi_b1, ret_b) = lower.last_stats();
+        self.last_phi_total = phi_t; self.last_phi_b1 = phi_b1; self.last_ret_bool_hint = ret_b;
+        // Record per-function stats into manager via callback if available (handled by caller)
+        let cfg_now = crate::jit::config::current();
+        if cfg_now.dump {
+            let phi_min = cfg_now.phi_min;
+            let native_f64 = cfg_now.native_f64;
+            let native_bool = cfg_now.native_bool;
             #[cfg(feature = "cranelift-jit")]
             {
                 let s = builder.stats;
-                eprintln!("[JIT] lower {}: covered={} unsupported={} (consts={}, binops={}, cmps={}, branches={}, rets={})",
-                    func_name, lower.covered, lower.unsupported,
+                eprintln!("[JIT] lower {}: argc={} phi_min={} f64={} bool={} covered={} unsupported={} (consts={}, binops={}, cmps={}, branches={}, rets={})",
+                    func_name, mir.params.len(), phi_min, native_f64, native_bool,
+                    lower.covered, lower.unsupported,
                     s.0, s.1, s.2, s.3, s.4);
             }
             #[cfg(not(feature = "cranelift-jit"))]
             {
-                eprintln!("[JIT] lower {}: covered={} unsupported={} (consts={}, binops={}, cmps={}, branches={}, rets={})",
-                    func_name, lower.covered, lower.unsupported,
+                eprintln!("[JIT] lower {}: argc={} phi_min={} f64={} bool={} covered={} unsupported={} (consts={}, binops={}, cmps={}, branches={}, rets={})",
+                    func_name, mir.params.len(), phi_min, native_f64, native_bool,
+                    lower.covered, lower.unsupported,
                     builder.consts, builder.binops, builder.cmps, builder.branches, builder.rets);
             }
+            // Optional DOT export
+            if let Ok(path) = std::env::var("NYASH_JIT_DOT") {
+                if !path.is_empty() {
+                    if let Err(e) = crate::jit::lower::core::dump_cfg_dot(mir, &path, phi_min) {
+                        eprintln!("[JIT] DOT export failed: {}", e);
+                    } else {
+                        eprintln!("[JIT] DOT written to {}", path);
+                    }
+                }
+            }
         }
-        // Create a handle and register an executable closure
-        let h = self.next_handle;
-        self.next_handle = self.next_handle.saturating_add(1);
+        // Create a handle and register an executable closure if available
         #[cfg(feature = "cranelift-jit")]
         {
+            let h = self.next_handle;
+            self.next_handle = self.next_handle.saturating_add(1);
             if let Some(closure) = builder.take_compiled_closure() {
                 self.fntab.insert(h, closure);
                 if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
@@ -75,21 +102,27 @@ impl JitEngine {
                 }
                 return Some(h);
             }
+            // If Cranelift path did not produce a closure, treat as not compiled
+            return None;
         }
-        // Fallback: insert a stub closure
-        self.fntab.insert(h, Arc::new(|_args: &[crate::backend::vm::VMValue]| {
-            crate::backend::vm::VMValue::Void
-        }));
-        if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
-            let dt = t0.elapsed();
-            eprintln!("[JIT] compile_time_ms={} for {} (stub)", dt.as_millis(), func_name);
+        #[cfg(not(feature = "cranelift-jit"))]
+        {
+            // Without Cranelift, do not register a stub that alters program semantics.
+            // Report as not compiled so VM path remains authoritative.
+            if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
+                let dt = t0.elapsed();
+                eprintln!("[JIT] compile skipped (no cranelift) for {} after {}ms", func_name, dt.as_millis());
+            }
+            return None;
         }
-        Some(h)
     }
+
+    /// Get statistics from the last lowered function
+    pub fn last_lower_stats(&self) -> (u64, u64, bool) { (self.last_phi_total, self.last_phi_b1, self.last_ret_bool_hint) }
 
     /// Execute compiled function by handle with trap fallback.
     /// Returns Some(VMValue) if executed successfully; None on missing handle or trap (panic).
-    pub fn execute_handle(&self, handle: u64, args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> {
+    pub fn execute_handle(&self, handle: u64, args: &[crate::jit::abi::JitValue]) -> Option<crate::jit::abi::JitValue> {
         let f = match self.fntab.get(&handle) { Some(f) => f, None => return None };
         let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (f)(args)));
         match res {

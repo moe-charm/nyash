@@ -1,0 +1,11 @@
+// Param-string JIT HostCall PoC (isEmpty)
+box Utils {
+    isEmpty(s) {
+        return s.isEmpty()
+    }
+}
+
+u = new Utils()
+print(u.isEmpty(""))
+print(u.isEmpty("nyash"))
+
