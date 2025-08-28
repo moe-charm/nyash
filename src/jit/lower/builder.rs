@@ -138,14 +138,20 @@ use cranelift_codegen::ir::InstBuilder;
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_host_stub0() -> i64 { 0 }
 #[cfg(feature = "cranelift-jit")]
-use super::extern_thunks::{ nyash_math_sin_f64, nyash_math_cos_f64, nyash_math_abs_f64, nyash_math_min_f64, nyash_math_max_f64, };
-#[cfg(feature = "cranelift-jit")]
+use super::extern_thunks::{
+    nyash_math_sin_f64, nyash_math_cos_f64, nyash_math_abs_f64, nyash_math_min_f64, nyash_math_max_f64,
+    nyash_array_len_h, nyash_array_get_h, nyash_array_set_h, nyash_array_push_h, 
+    nyash_array_last_h, nyash_map_size_h, nyash_map_get_h, nyash_map_get_hh,
+    nyash_map_set_h, nyash_map_has_h,
+    nyash_string_charcode_at_h,
+    nyash_any_length_h, nyash_any_is_empty_h,
+};
 
 #[cfg(feature = "cranelift-jit")]
-
-#[cfg(feature = "cranelift-jit")]
-
-#[cfg(feature = "cranelift-jit")]
+use crate::{
+    mir::{MirType, Effect as OpEffect, MirFunction},
+    jit::events,
+};
 
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_array_len(arr_param_index: i64) -> i64 {
