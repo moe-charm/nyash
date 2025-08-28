@@ -1,0 +1,12 @@
+[package]
+name = "nyrt"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "nyrt"
+crate-type = ["staticlib"]
+
+[dependencies]
+nyash-rust = { path = "../../" }
+

@@ -99,6 +99,27 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/map_plugin_ro_d
   - 対象: Array(len/get/push/set), Map(size/get/has/set) の i64 1〜2引数経路
 ```
 
+### 10.2 追加: AOT接続（.o出力）
+- 新規: `NYASH_AOT_OBJECT_OUT=/path/to/dir-or-file` を指定すると、JITでコンパイル成功した関数ごとに Cranelift ObjectModule で `.o` を生成します。
+  - ディレクトリを指定した場合: `/<dir>/<func>.o` に書き出し
+  - ファイルを指定した場合: そのパスに上書き
+- 現状の到達性: JITロワラーで未対応命令が含まれる関数はスキップされるため、完全カバレッジ化が進むにつれて `.o` 出力関数が増えます。
+- 未解決シンボル: `nyash_plugin_invoke3_i64`（暫定シム）。次フェーズで `libnyrt.a` に実装を移し、`nyrt_*`/`nyplug_*` 記号と共に解決します。
+
+### 10.2b: JITカバレッジの最小拡張（ブロッカー解消）
+- 課題: 関数内に未対応命令が1つでもあると関数全体をJITスキップ（現在の保守的ポリシー）。`new StringBox()` 等が主因で、plugin_invoke のテストや `.o` 出力まで到達しづらい。
+- 対応方針（優先度順）
+  1) NewBox→birth の lowering 追加（プラグイン birth を `emit_plugin_invoke(type_id, 0, argc=1レシーバ扱い)` に変換）
+  2) Print/Debug の no-op/hostcall化（スキップ回避）
+  3) 既定スキップポリシーは維持しつつ、`NYASH_AOT_ALLOW_UNSUPPORTED=1` で .o 出力だけは許容（検証用途）
+- DoD:
+  - `examples/aot_min_string_len.nyash` がJITコンパイルされ `.o` が出力される（Cranelift有効ビルド時）
+  - String/Integer の RO メソッドで plugin_invoke がイベントに現れる
+
+### 現状の診断（共有事項）
+- JITは「未対応 > 0」で関数全体をスキップする保守的設計（決め打ち）。plugin_invoke 自体は実装済みだが、関数がJIT対象にならないと動かせない。
+- プラグインはVM経路で完全動作しており、JIT側の命令サポート不足がAOT検証のボトルネック。
+
 ## 参考リンク
 - Phase 10.1（新）: `docs/development/roadmap/phases/phase-10.1/README.md` - プラグインBox統一化
 - Phase 10.5（旧10.1）: `docs/development/roadmap/phases/phase-10.5/README.md` - Python統合

@@ -223,3 +223,28 @@ pub(super) extern "C" fn nyash_string_charcode_at_h(handle: u64, idx: i64) -> i6
     -1
 }
 
+// ---- Birth (handle) ----
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_string_birth_h() -> i64 {
+    // Create a new StringBox via unified plugin host (or builtin fallback), store as handle
+    if let Ok(host_g) = crate::runtime::get_global_plugin_host().read() {
+        if let Ok(b) = host_g.create_box("StringBox", &[]) {
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(b);
+            let h = crate::jit::rt::handles::to_handle(arc);
+            return h as i64;
+        }
+    }
+    0
+}
+
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_integer_birth_h() -> i64 {
+    if let Ok(host_g) = crate::runtime::get_global_plugin_host().read() {
+        if let Ok(b) = host_g.create_box("IntegerBox", &[]) {
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(b);
+            let h = crate::jit::rt::handles::to_handle(arc);
+            return h as i64;
+        }
+    }
+    0
+}

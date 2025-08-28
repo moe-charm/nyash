@@ -156,3 +156,34 @@ get   = { method_id = 2, args = ["key"] }
 has   = { method_id = 3, args = ["key"] }
 set   = { method_id = 4, args = ["key", "value"] }
 fini  = { method_id = 4294967295 }
+
+# IntegerBox plugin (basic numeric box)
+[libraries."libnyash_integer_plugin.so"]
+boxes = ["IntegerBox"]
+path = "./plugins/nyash-integer-plugin/target/release/libnyash_integer_plugin.so"
+
+[libraries."libnyash_integer_plugin.so".IntegerBox]
+type_id = 12
+
+[libraries."libnyash_integer_plugin.so".IntegerBox.methods]
+birth = { method_id = 0 }
+get   = { method_id = 1 }
+set   = { method_id = 2, args = ["value"] }
+fini  = { method_id = 4294967295 }
+
+# StringBox plugin (read-only methods first)
+[libraries."libnyash_string_plugin.so"]
+boxes = ["StringBox"]
+path = "./plugins/nyash-string-plugin/target/release/libnyash_string_plugin.so"
+
+[libraries."libnyash_string_plugin.so".StringBox]
+type_id = 13
+
+[libraries."libnyash_string_plugin.so".StringBox.methods]
+birth      = { method_id = 0 }
+length     = { method_id = 1 }
+is_empty   = { method_id = 2 }
+charCodeAt = { method_id = 3, args = ["index"] }
+concat     = { method_id = 4, args = ["other"] }
+fromUtf8   = { method_id = 5, args = ["data"] }
+fini       = { method_id = 4294967295 }

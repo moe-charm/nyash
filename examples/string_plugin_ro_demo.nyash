@@ -1,0 +1,15 @@
+// StringBox plugin demo (RO methods)
+// Build: (cd plugins/nyash-string-plugin && cargo build --release)
+
+static box Main {
+  main() {
+    local s
+    s = new StringBox()
+    me.console.log("len=", s.length())
+    me.console.log("is_empty=", s.is_empty())
+    me.console.log("charCodeAt(0)=", s.charCodeAt(0))
+    // Return len as Integer
+    return s.length()
+  }
+}
+

@@ -457,14 +457,26 @@ impl LowerCore {
             I::Const { .. }
                 | I::Copy { .. }
                 | I::Cast { .. }
+                | I::TypeCheck { .. }
+                | I::TypeOp { .. }
                 | I::BinOp { .. }
                 | I::Compare { .. }
                 | I::Jump { .. }
                 | I::Branch { .. }
                 | I::Return { .. }
+                | I::Call { .. }
                 | I::BoxCall { .. }
                 | I::ArrayGet { .. }
                 | I::ArraySet { .. }
+                | I::NewBox { .. }
+                | I::Store { .. }
+                | I::Load { .. }
+                | I::Phi { .. }
+                | I::Print { .. }
+                | I::Debug { .. }
+                | I::ExternCall { .. }
+                | I::Safepoint
+                | I::Nop
         );
         if supported { self.covered += 1; } else { self.unsupported += 1; }
     }
@@ -473,6 +485,21 @@ impl LowerCore {
         use crate::mir::MirInstruction as I;
         match instr {
             I::NewBox { dst, box_type, args } => {
+                // Minimal JIT lowering for builtin pluginized boxes: birth() via handle-based shim
+                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") && args.is_empty() {
+                    let bt = box_type.as_str();
+                    match bt {
+                        "StringBox" => {
+                            // Emit host-call to create a new StringBox handle; push as i64
+                            b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_BIRTH_H, 0, true);
+                            // Do not attempt to classify; downstream ops will treat as handle
+                        }
+                        "IntegerBox" => {
+                            b.emit_host_call(crate::jit::r#extern::collections::SYM_INTEGER_BIRTH_H, 0, true);
+                        }
+                        _ => { /* Other boxes: no-op for now */ }
+                    }
+                }
                 // Track boxed numeric literals to aid signature checks (FloatBox/IntegerBox)
                 if box_type == "FloatBox" {
                     if let Some(src) = args.get(0) {
@@ -622,6 +649,78 @@ impl LowerCore {
                         dst.clone(),
                     );
                 } else if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
+                    // Prefer unique StringBox methods first to avoid name collisions with Array/Map
+                    if matches!(method.as_str(), "is_empty" | "charCodeAt") {
+                        if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
+                            if let Ok(h) = ph.resolve_method("StringBox", method.as_str()) {
+                                // Receiver
+                                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                                let mut argc = 1usize;
+                                if method.as_str() == "charCodeAt" {
+                                    if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
+                                    argc = 2;
+                                }
+                                if method.as_str() == "is_empty" { b.hint_ret_bool(true); }
+                                b.emit_plugin_invoke(h.type_id, h.method_id, argc, dst.is_some());
+                                crate::jit::events::emit_lower(
+                                    serde_json::json!({
+                                        "id": format!("plugin:{}:{}", h.box_type, method.as_str()),
+                                        "decision":"allow","reason":"plugin_invoke","argc": argc,
+                                        "type_id": h.type_id, "method_id": h.method_id
+                                    }),
+                                    "plugin","<jit>"
+                                );
+                                return Ok(());
+                            }
+                        }
+                    }
+                    // String.length() specialized when receiver is String (avoid Array collision)
+                    if method.as_str() == "length" {
+                        let recv_is_string = func.metadata.value_types.get(array).map(|mt| matches!(mt, crate::mir::MirType::String)).unwrap_or(false);
+                        if recv_is_string {
+                            if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
+                                if let Ok(h) = ph.resolve_method("StringBox", "length") {
+                                    if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                                    b.emit_plugin_invoke(h.type_id, h.method_id, 1, dst.is_some());
+                                    crate::jit::events::emit_lower(
+                                        serde_json::json!({
+                                            "id": format!("plugin:{}:{}", h.box_type, "length"),
+                                            "decision":"allow","reason":"plugin_invoke","argc": 1,
+                                            "type_id": h.type_id, "method_id": h.method_id
+                                        }),
+                                        "plugin","<jit>"
+                                    );
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
+                    // Integer.get/set specialized when receiver is Integer (avoid Map collision)
+                    if matches!(method.as_str(), "get" | "set") {
+                        let recv_is_int = func.metadata.value_types.get(array).map(|mt| matches!(mt, crate::mir::MirType::Integer)).unwrap_or(false);
+                        if recv_is_int {
+                            if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
+                                if let Ok(h) = ph.resolve_method("IntegerBox", method.as_str()) {
+                                    if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                                    let mut argc = 1usize;
+                                    if method.as_str() == "set" {
+                                        if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
+                                        argc = 2;
+                                    }
+                                    b.emit_plugin_invoke(h.type_id, h.method_id, argc, dst.is_some());
+                                    crate::jit::events::emit_lower(
+                                        serde_json::json!({
+                                            "id": format!("plugin:{}:{}", h.box_type, method.as_str()),
+                                            "decision":"allow","reason":"plugin_invoke","argc": argc,
+                                            "type_id": h.type_id, "method_id": h.method_id
+                                        }),
+                                        "plugin","<jit>"
+                                    );
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
                     match method.as_str() {
                         "len" | "length" | "push" | "get" | "set" => {
                             // Resolve ArrayBox plugin method and emit plugin_invoke (symbolic)

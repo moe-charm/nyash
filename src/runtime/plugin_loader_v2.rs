@@ -534,6 +534,11 @@ impl PluginBoxV2 {
                 }
                 if let Some((tag, size, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(data) {
                 match tag {
+                    1 if size == 1 => { // Bool
+                        let b = crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false);
+                        let val: Box<dyn NyashBox> = Box::new(crate::box_trait::BoolBox::new(b));
+                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
+                    }
                     8 if size == 8 => { // Handle -> PluginBoxV2
                         let mut t = [0u8;4]; t.copy_from_slice(&payload[0..4]);
                         let mut i = [0u8;4]; i.copy_from_slice(&payload[4..8]);
@@ -585,6 +590,15 @@ impl PluginBoxV2 {
                         } else {
                             Some(Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
                         }
+                    }
+                    3 if size == 8 => { // I64
+                        // Try decoding as i64 directly; also support legacy i32 payload size 4 when mis-encoded
+                        let n = if payload.len() == 8 {
+                            let mut b = [0u8;8]; b.copy_from_slice(&payload[0..8]); i64::from_le_bytes(b)
+                        } else { 0 }
+                            ;
+                        let val: Box<dyn NyashBox> = Box::new(IntegerBox::new(n));
+                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
                     9 => {
                         if dbg_on() { eprintln!("[Plugin→VM] return void (returns_result={})", returns_result); }

@@ -32,6 +32,16 @@ This plan refines how we leverage the existing plugin system (BID-FFI) to unify 
   - JIT execution of Array read/write (policy-constrained) via plugin path.
   - Behavior parity with HostCall; no regressions on CI smoke.
 
+### 10.2b: JIT Coverage Unblockers (0.5–1 week)
+- Goal:
+  - Remove practical blockers so plugin_invoke can be exercised in typical Nyash functions and `.o` can be produced.
+- Deliverables:
+  - Lowering for `NewBox` of pluginized builtins → translate `new <Box>()` to plugin `birth()` via `emit_plugin_invoke(type_id, 0, argc=1 recvr-param)` with appropriate handle threading.
+  - Treat `Print/Debug` as no-op/hostcall for v0 to avoid function-wide skip.
+  - Keep conservative skip policy by default; document `NYASH_AOT_ALLOW_UNSUPPORTED=1` for validation-only `.o` emission.
+- DoD:
+  - Minimal demo function with `String.length()` compiled by JIT (Cranelift) and `.o` emitted. Plugin events visible under JIT.
+
 ### 10.3: Broaden plugin coverage + Compatibility (2 weeks)
 - Targets: String/Integer/Bool/Map (read-only first).
 - Deliverables:
@@ -65,6 +75,7 @@ This plan refines how we leverage the existing plugin system (BID-FFI) to unify 
 - Linking complexity: start with the smallest set (Array/Print/GC-minimal), expand gradually.
 - Performance: keep RO-first; benchmark and fall back to HostCall if needed.
 - Windows linkage: prioritize Linux/macOS, then handle Win specifics in a follow-up task.
+- JIT coverage: adopt staged lowering (NewBox→birth, Print/Debug no-op) to clear blockers; retain strict skip policy otherwise.
 
 ## References
 - `c_abi_unified_design.md`
@@ -74,4 +85,3 @@ This plan refines how we leverage the existing plugin system (BID-FFI) to unify 
 ---
 
 Everything is Plugin → unified paths for JIT and AOT.
-

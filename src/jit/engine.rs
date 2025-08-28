@@ -91,7 +91,7 @@ impl JitEngine {
         }
         // If lowering left any unsupported instructions, do not register a closure.
         // This preserves VM semantics until coverage is complete for the function.
-        if lower.unsupported > 0 {
+        if lower.unsupported > 0 && std::env::var("NYASH_AOT_ALLOW_UNSUPPORTED").ok().as_deref() != Some("1") {
             if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") || cfg_now.dump {
                 eprintln!("[JIT] skip compile for {}: unsupported={} (>0)", func_name, lower.unsupported);
             }
@@ -107,6 +107,27 @@ impl JitEngine {
                 if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
                     let dt = t0.elapsed();
                     eprintln!("[JIT] compile_time_ms={} for {}", dt.as_millis(), func_name);
+                }
+                // Optional: also emit an object file for AOT if requested via env
+                if let Ok(path) = std::env::var("NYASH_AOT_OBJECT_OUT") {
+                    if !path.is_empty() {
+                        let mut lower2 = crate::jit::lower::core::LowerCore::new();
+                        let mut objb = crate::jit::lower::builder::ObjectBuilder::new();
+                        if let Err(e) = lower2.lower_function(mir, &mut objb) {
+                            eprintln!("[AOT] lower failed for {}: {}", func_name, e);
+                        } else if let Some(bytes) = objb.take_object_bytes() {
+                            use std::path::Path;
+                            let p = Path::new(&path);
+                            let out_path = if p.is_dir() || path.ends_with('/') { p.join(format!("{}.o", func_name)) } else { p.to_path_buf() };
+                            if let Some(parent) = out_path.parent() { let _ = std::fs::create_dir_all(parent); }
+                            match std::fs::write(&out_path, bytes) {
+                                Ok(_) => {
+                                    eprintln!("[AOT] wrote object: {}", out_path.display());
+                                }
+                                Err(e) => { eprintln!("[AOT] failed to write object {}: {}", out_path.display(), e); }
+                            }
+                        }
+                    }
                 }
                 return Some(h);
             }

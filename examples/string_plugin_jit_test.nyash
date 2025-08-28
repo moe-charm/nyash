@@ -1,0 +1,28 @@
+// Simple JIT test for StringBox plugin
+static box Main {
+  getLen(s) {
+    return s.length()
+  }
+  
+  isEmpty(s) {
+    return s.is_empty()
+  }
+  
+  main() {
+    local s = new StringBox()
+    local len = 0
+    local empty = true
+    
+    // Call functions multiple times to trigger JIT
+    local i = 0
+    loop(i < 20) {
+      len = me.getLen(s)
+      empty = me.isEmpty(s)
+      i = i + 1
+    }
+    
+    me.console.log("len=", len)
+    me.console.log("empty=", empty)
+    return len
+  }
+}
