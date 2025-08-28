@@ -31,6 +31,10 @@ pub struct CliConfig {
     pub jit_stats: bool,
     pub jit_stats_json: bool,
     pub jit_dump: bool,
+    pub jit_events: bool,
+    pub jit_events_compile: bool,
+    pub jit_events_runtime: bool,
+    pub jit_events_path: Option<String>,
     pub jit_threshold: Option<u32>,
     pub jit_phi_min: bool,
     pub jit_hostcall: bool,
@@ -187,6 +191,30 @@ impl CliConfig {
                     .action(clap::ArgAction::SetTrue)
             )
             .arg(
+                Arg::new("jit-events")
+                    .long("jit-events")
+                    .help("Emit JIT events as JSONL (NYASH_JIT_EVENTS=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-events-compile")
+                    .long("jit-events-compile")
+                    .help("Emit compile-time (lower) JIT events (NYASH_JIT_EVENTS_COMPILE=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-events-runtime")
+                    .long("jit-events-runtime")
+                    .help("Emit runtime JIT events (NYASH_JIT_EVENTS_RUNTIME=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("jit-events-path")
+                    .long("jit-events-path")
+                    .value_name("FILE")
+                    .help("Write JIT events JSONL to file (NYASH_JIT_EVENTS_PATH)")
+            )
+            .arg(
                 Arg::new("jit-threshold")
                     .long("jit-threshold")
                     .value_name("N")
@@ -265,6 +293,10 @@ impl CliConfig {
             jit_stats: matches.get_flag("jit-stats"),
             jit_stats_json: matches.get_flag("jit-stats-json"),
             jit_dump: matches.get_flag("jit-dump"),
+            jit_events: matches.get_flag("jit-events"),
+            jit_events_compile: matches.get_flag("jit-events-compile"),
+            jit_events_runtime: matches.get_flag("jit-events-runtime"),
+            jit_events_path: matches.get_one::<String>("jit-events-path").cloned(),
             jit_threshold: matches.get_one::<String>("jit-threshold").and_then(|s| s.parse::<u32>().ok()),
             jit_phi_min: matches.get_flag("jit-phi-min"),
             jit_hostcall: matches.get_flag("jit-hostcall"),
@@ -323,12 +355,19 @@ mod tests {
             jit_stats: false,
             jit_stats_json: false,
             jit_dump: false,
+            jit_events: false,
+            jit_events_compile: false,
+            jit_events_runtime: false,
+            jit_events_path: None,
             jit_threshold: None,
             jit_phi_min: false,
             jit_hostcall: false,
             jit_handle_debug: false,
             jit_native_f64: false,
             jit_native_bool: false,
+            emit_cfg: None,
+            jit_only: false,
+            jit_direct: false,
         };
         
         assert_eq!(config.backend, "interpreter");

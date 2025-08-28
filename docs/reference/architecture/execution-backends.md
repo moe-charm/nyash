@@ -1,6 +1,6 @@
 # Nyash実行バックエンド完全ガイド
 
-Nyashプログラミング言語は、**Everything is Box**哲学を維持しながら、3つの異なる実行方式をサポートしています。用途に応じて最適な実行方式を選択できます。
+Nyashプログラミング言語は、**Everything is Box**哲学を維持しながら、4つの異なる実行方式をサポートしています。用途に応じて最適な実行方式を選択できます。
 
 ## 🚀 実行方式一覧
 
@@ -9,6 +9,7 @@ Nyashプログラミング言語は、**Everything is Box**哲学を維持しな
 | **インタープリター** | 開発・デバッグ | 直接AST実行、詳細ログ | 低速・高機能 |
 | **VM** | 本番・高速実行 | MIR→VM実行 | 中速・最適化 |
 | **WASM** | Web・サンドボックス | MIR→WASM変換 | 高速・移植性 |
+| **AOT** (実験的) | 高速起動 | MIR→WASM→ネイティブ | 最高速・要wasmtime |
 
 ## 📋 CLIオプション
 
@@ -52,6 +53,20 @@ nyash --compile-wasm program.nyash -o output.wat
 
 # ブラウザで実行可能なWASMを生成
 nyash --compile-wasm program.nyash -o public/app.wat
+```
+
+### AOT/ネイティブコンパイル（実験的機能）
+```bash
+# ビルド時に wasm-backend feature が必要
+cargo build --release --features wasm-backend
+
+# AOTコンパイル（.cwasm生成）
+nyash --compile-native program.nyash -o program
+# または
+nyash --aot program.nyash -o program
+
+# 注意: 現在は完全なスタンドアロン実行ファイルではなく、
+# wasmtime用のプリコンパイル済みWASM（.cwasm）が生成されます
 ```
 
 ### ⚡ ベンチマーク（パフォーマンス測定）
@@ -186,6 +201,28 @@ NYASH_GC_COUNTING=1 NYASH_GC_TRACE=2 \
   ./target/release/nyash --backend vm examples/scheduler_demo.nyash
 ```
 
+#### Boxからの切替（GcConfigBox）
+環境変数ではなくNyashスクリプトから切り替える場合は `GcConfigBox` を使います。`apply()` で環境に反映され、その後の実行に適用されます。
+
+```nyash
+// 最小例: CountingGc + trace をオン
+static box Main {
+  main() {
+    local G
+    G = new GcConfigBox()
+    G = G.setFlag("counting", true)
+    G = G.setFlag("trace", true)   // 1/2/3 は環境。Box では on/off を切替
+    G.apply()                       // ← ここで反映
+    return "ok"
+  }
+}
+```
+
+代表デモ（書き込みバリア/カウンタの可視化）:
+```bash
+./target/release/nyash --backend vm examples/gc_counting_demo.nyash
+```
+
 ## 🌐 WASM実行（Web対応）
 
 ### 特徴
@@ -247,6 +284,58 @@ async function loadNyashWasm() {
 }
 </script>
 ```
+
+## 🚀 AOT/ネイティブコンパイル（実験的）
+
+### 特徴
+- **用途**: 高速起動・配布用実行ファイル
+- **実行**: AST→MIR→WASM→プリコンパイル済みネイティブ
+- **速度**: 最高速（JIT起動オーバーヘッドなし）
+- **制約**: wasmtimeランタイムが必要
+
+### コンパイルパイプライン
+```
+Nyashソース → AST → MIR → WASM → .cwasm（プリコンパイル済み）
+```
+
+### ビルド方法
+```bash
+# 1. wasm-backend feature付きでNyashをビルド
+cargo build --release --features wasm-backend
+
+# 2. AOTコンパイル実行
+./target/release/nyash --compile-native hello.nyash -o hello
+# または短縮形
+./target/release/nyash --aot hello.nyash -o hello
+
+# 3. 生成されたファイル
+# hello.cwasm が生成される（wasmtimeプリコンパイル形式）
+```
+
+### 現在の実装状況
+- ✅ MIR→WASM変換
+- ✅ WASM→.cwasm（wasmtimeプリコンパイル）
+- ❌ 完全なスタンドアロン実行ファイル生成（TODO）
+- ❌ ランタイム埋め込み（将来実装予定）
+
+### 使用例
+```bash
+# コンパイル
+./target/release/nyash --aot examples/hello_world.nyash -o hello_aot
+
+# 実行（将来的な目標）
+# ./hello_aot  # 現在は未実装
+
+# 現在は wasmtime で実行
+# wasmtime --precompiled hello_aot.cwasm
+```
+
+### 技術的詳細
+AOTバックエンドは内部的に以下の処理を行います：
+1. **MirCompiler**: NyashコードをMIRに変換
+2. **WasmBackend**: MIRをWASMバイトコードに変換
+3. **wasmtime::Engine::precompile**: WASMをネイティブコードにプリコンパイル
+4. **出力**: .cwasm形式で保存（wasmtime独自形式）
 
 ## 📊 パフォーマンス比較
 

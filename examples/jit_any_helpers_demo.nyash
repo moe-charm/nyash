@@ -1,0 +1,44 @@
+// JIT ANY Helpers Demo - JIT内部での統一的な型処理
+// ANYヘルパーは nyash.any.length_h と nyash.any.is_empty_h として
+// JITのHostCall経由で Array/String/Map を統一的に扱える！
+
+box Helper {
+    birth() {}
+    
+    // このメソッドがJITコンパイルされると、内部的にANYヘルパーが使われる
+    getInfo(obj) {
+        // JIT内部では nyash.any.length_h が呼ばれる
+        local len
+        len = obj.length()  // Array/Stringなら動作
+        
+        // JIT内部では nyash.any.is_empty_h が呼ばれる
+        local empty
+        empty = obj.isEmpty()  // Array/Stringなら動作
+        
+        return len
+    }
+}
+
+static box Main {
+    main() {
+        local H
+        H = new Helper()
+        
+        // Array での使用
+        local arr
+        arr = new ArrayBox()
+        arr.push("cat")
+        arr.push("dog")
+        print("Array info: " + H.getInfo(arr))  // 2
+        
+        // String での使用
+        local str
+        str = new StringBox("Hello")
+        print("String info: " + H.getInfo(str))  // 5
+        
+        // 注意: MapBoxは現在のインタープリターではlength()未実装
+        // JITでは nyash.any.length_h が Map.size() にマップされる
+        
+        return "Done"
+    }
+}

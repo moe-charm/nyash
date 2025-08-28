@@ -22,6 +22,8 @@ impl JitManager {
         Self { threshold, hits: HashMap::new(), compiled: HashMap::new(), engine: crate::jit::engine::JitEngine::new(), exec_ok: 0, exec_trap: 0, func_phi_total: HashMap::new(), func_phi_b1: HashMap::new(), func_ret_bool_hint: HashMap::new() }
     }
 
+    pub fn set_threshold(&mut self, t: u32) { self.threshold = t.max(1); }
+
     pub fn record_entry(&mut self, func: &str) {
         let c = self.hits.entry(func.to_string()).or_insert(0);
         *c = c.saturating_add(1);
@@ -155,7 +157,20 @@ impl JitManager {
                     let vmv = crate::jit::boundary::CallBoundaryBox::to_vm(ret_ty, v);
                     Some(vmv)
                 }
-                None => { self.exec_trap = self.exec_trap.saturating_add(1); None }
+                None => {
+                    self.exec_trap = self.exec_trap.saturating_add(1);
+                    // Emit a minimal trap event for observability (runtime only)
+                    let dt = t0.elapsed();
+                    crate::jit::events::emit_runtime(
+                        serde_json::json!({
+                            "kind": "trap",  // redundant with wrapper kind but explicit here for clarity
+                            "reason": "jit_execute_failed",
+                            "ms": dt.as_millis()
+                        }),
+                        "trap", func
+                    );
+                    None
+                }
             };
             // Clear handles created during this call
             crate::jit::rt::handles::end_scope_clear();

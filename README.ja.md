@@ -88,6 +88,11 @@ result2 = await future2
 
 ## 🏗️ **革命的アーキテクチャ**
 
+### 例とスモーク（開発者向けクイック）
+- 代表例: `examples/README.md`（HH直実行・mutating opt-in・GCデモ）
+- スモーク実行: `bash tools/smoke_phase_10_10.sh`
+- JITイベント最小スキーマ: `docs/reference/jit/jit_events_json_v0_1.md`
+
 ### Everything is Box 哲学
 Nyashのすべての値は **Box** - 統一された、メモリ安全なコンテナです：
 

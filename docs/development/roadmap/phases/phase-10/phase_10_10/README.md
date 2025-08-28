@@ -80,5 +80,15 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
 # Mutating opt-in（Array.push）
 NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
   ./target/release/nyash --backend vm examples/jit_policy_optin_mutating.nyash
-```
 
+## 例とスモーク（開発者向けクイック）
+- 例一覧: `examples/README.md`（HH直実行・mutating opt-in・GCデモ）
+- スモーク: `bash tools/smoke_phase_10_10.sh`
+- JITイベント最小スキーマ: `docs/reference/jit/jit_events_json_v0_1.md`
+
+### Quick Note（運用の勘所）
+- phase分離: compile→`phase:"lower"`（opt-in）, runtime→`phase:"execute"`（既定ON可）
+- しきい値: 観測ONかつ未指定なら `NYASH_JIT_THRESHOLD=1`（Runner/DebugConfigが補助）
+- HostCall: 実例では `NYASH_JIT_HOSTCALL=1` を明示（HH直実行/ANYヘルパ）
+- ANYヘルパ: `nyash.any.length_h / is_empty_h` でROは十分カバー（追加不要）
+```

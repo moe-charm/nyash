@@ -66,6 +66,11 @@ impl NyashRunner {
         }
         // Optional: JIT controls via CLI flags (centralized)
         {
+            // CLI opt-in for JSONL events
+            if self.config.jit_events { std::env::set_var("NYASH_JIT_EVENTS", "1"); }
+            if self.config.jit_events_compile { std::env::set_var("NYASH_JIT_EVENTS_COMPILE", "1"); }
+            if self.config.jit_events_runtime { std::env::set_var("NYASH_JIT_EVENTS_RUNTIME", "1"); }
+            if let Some(ref p) = self.config.jit_events_path { std::env::set_var("NYASH_JIT_EVENTS_PATH", p); }
             let mut jc = nyash_rust::jit::config::JitConfig::from_env();
             jc.exec |= self.config.jit_exec;
             jc.stats |= self.config.jit_stats;
@@ -77,10 +82,11 @@ impl NyashRunner {
             jc.handle_debug |= self.config.jit_handle_debug;
             jc.native_f64 |= self.config.jit_native_f64;
             jc.native_bool |= self.config.jit_native_bool;
-            // If events are enabled and no threshold is provided, force threshold=1 so lowering runs and emits events
-            if std::env::var("NYASH_JIT_EVENTS").ok().as_deref() == Some("1") && jc.threshold.is_none() {
-                jc.threshold = Some(1);
-            }
+            // If observability is enabled and no threshold is provided, force threshold=1 so lowering runs and emits events
+            let events_on = std::env::var("NYASH_JIT_EVENTS").ok().as_deref() == Some("1")
+                || std::env::var("NYASH_JIT_EVENTS_COMPILE").ok().as_deref() == Some("1")
+                || std::env::var("NYASH_JIT_EVENTS_RUNTIME").ok().as_deref() == Some("1");
+            if events_on && jc.threshold.is_none() { jc.threshold = Some(1); }
             if self.config.jit_only { std::env::set_var("NYASH_JIT_ONLY", "1"); }
             // Apply runtime capability probe (e.g., disable b1 ABI if unsupported)
             let caps = nyash_rust::jit::config::probe_capabilities();

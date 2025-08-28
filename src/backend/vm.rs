@@ -559,6 +559,10 @@ impl VM {
         self.current_function = Some(function.signature.name.clone());
         // Phase 10_a: JIT profiling (function entry)
         if let Some(jm) = &mut self.jit_manager {
+            // Allow threshold to react to env updates (e.g., DebugConfigBox.apply at runtime)
+            if let Ok(s) = std::env::var("NYASH_JIT_THRESHOLD") {
+                if let Ok(t) = s.parse::<u32>() { if t > 0 { jm.set_threshold(t); } }
+            }
             jm.record_entry(&function.signature.name);
             // Try compile if hot (no-op for now, returns fake handle)
             let _ = jm.maybe_compile(&function.signature.name, function);

@@ -1,0 +1,6 @@
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle","I64","I64"],"argc":3,"decision":"fallback","id":"nyash.map.set_h","reason":"receiver_not_param"}
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle","I64","I64"],"argc":3,"decision":"fallback","id":"nyash.map.set_h","phase":"lower","reason":"receiver_not_param"}
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle","I64"],"argc":2,"decision":"allow","id":"nyash.array.push_h","reason":"sig_ok"}
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle"],"argc":1,"decision":"allow","id":"nyash.any.length_h","reason":"sig_ok"}
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle","I64"],"argc":2,"decision":"allow","id":"nyash.array.push_h","reason":"sig_ok"}
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle"],"argc":1,"decision":"allow","id":"nyash.any.length_h","reason":"sig_ok"}

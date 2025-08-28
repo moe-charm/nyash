@@ -24,11 +24,15 @@ impl JitConfig {
     pub fn from_env() -> Self {
         let getb = |k: &str| std::env::var(k).ok().as_deref() == Some("1");
         let threshold = std::env::var("NYASH_JIT_THRESHOLD").ok().and_then(|s| s.parse::<u32>().ok());
+        // Respect explicit dump flag, but also treat a non-empty NYASH_JIT_DOT path
+        // as an implicit request to enable dump (so Box/CLI/env stay consistent).
+        let dump_flag = getb("NYASH_JIT_DUMP")
+            || std::env::var("NYASH_JIT_DOT").ok().map(|s| !s.is_empty()).unwrap_or(false);
         Self {
             exec: getb("NYASH_JIT_EXEC"),
             stats: getb("NYASH_JIT_STATS"),
             stats_json: getb("NYASH_JIT_STATS_JSON"),
-            dump: getb("NYASH_JIT_DUMP"),
+            dump: dump_flag,
             threshold,
             phi_min: getb("NYASH_JIT_PHI_MIN"),
             hostcall: getb("NYASH_JIT_HOSTCALL"),

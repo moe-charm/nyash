@@ -1,0 +1,44 @@
+// JitPolicy whitelist demo with DebugConfigBox event setup.
+// Goal: show fallback on read_only, then allow after whitelist.
+// Run (Cranelift enabled recommended):
+//   cargo build --release -j32 --features cranelift-jit
+//   NYASH_JIT_HOSTCALL=1 ./target/release/nyash --backend vm examples/jit_policy_whitelist_demo.nyash
+// Check events file:
+//   cat policy_events.jsonl  # contains phase=lower/execute decisions
+
+box Helper {
+  birth() {}
+  add(a) {
+    a.push(1)
+    return a.length()
+  }
+}
+
+static box Main {
+  main() {
+    // Enable compile-time events and output path via DebugConfigBox
+    local D
+    D = new DebugConfigBox()
+    D = D.setFlag("jit_events_compile", true)
+    D = D.setFlag("jit_events_runtime", true)
+    D = D.setPath("jit_events_path", "policy_events.jsonl")
+    D.apply()
+
+    // Prepare JIT policy: read_only first
+    local P
+    P = new JitPolicyBox()
+    P.set("read_only", true)
+
+    // Prepare data and helper
+    local H, A
+    H = new Helper()
+    A = new ArrayBox()
+
+    // 1st call: should fallback by policy (mutating denied)
+    H.add(A)
+
+    // Whitelist push_h and retry (expect allow)
+    P.addWhitelist("nyash.array.push_h")
+    return H.add(A)
+  }
+}

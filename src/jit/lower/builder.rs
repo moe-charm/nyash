@@ -138,15 +138,15 @@ use cranelift_codegen::ir::InstBuilder;
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_host_stub0() -> i64 { 0 }
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_math_sin_f64(x: f64) -> f64 { x.sin() }
+use super::extern_thunks::{ nyash_math_sin_f64, nyash_math_cos_f64, nyash_math_abs_f64, nyash_math_min_f64, nyash_math_max_f64, };
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_math_cos_f64(x: f64) -> f64 { x.cos() }
+
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_math_abs_f64(x: f64) -> f64 { x.abs() }
+
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_math_min_f64(a: f64, b: f64) -> f64 { a.min(b) }
+
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_math_max_f64(a: f64, b: f64) -> f64 { a.max(b) }
+
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_array_len(arr_param_index: i64) -> i64 {
     // Interpret first arg as function param index and fetch from thread-local args
@@ -234,258 +234,18 @@ extern "C" fn nyash_map_size(map_param_index: i64) -> i64 {
 
 // === Handle-based externs (10.7c) ===
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_array_len_h(handle: u64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ARRAY_LEN_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
-    );
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_array_push_h(handle: u64, val: i64) -> i64 {
-    // Policy/Events: classify and decide with whitelist
-    use crate::jit::hostcall_registry::{classify, HostcallKind};
-    let sym = crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H;
-    let pol = crate::jit::policy::current();
-    let wh = pol.hostcall_whitelist;
-    match (classify(sym), pol.read_only && !wh.iter().any(|s| s == sym)) {
-        (HostcallKind::Mutating, true) => {
-            crate::jit::events::emit(
-                "hostcall", "<jit>", None, None,
-                serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
-            );
-            return 0;
-        }
-        _ => {}
-    }
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            let ib = crate::box_trait::IntegerBox::new(val);
-            let _ = arr.push(Box::new(ib));
-            crate::jit::events::emit(
-                "hostcall", "<jit>", None, None,
-                serde_json::json!({"id": sym, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
-            );
-            return 0;
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_array_get_h(handle: u64, idx: i64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ARRAY_GET_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
-    );
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            let val = arr.get(Box::new(crate::box_trait::IntegerBox::new(idx)));
-            if let Some(ib) = val.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_array_last_h(handle: u64) -> i64 {
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            // Return last element as i64 if IntegerBox, else 0
-            if let Ok(items) = arr.items.read() {
-                if let Some(last) = items.last() {
-                    if let Some(ib) = last.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-                        return ib.value;
-                    }
-                }
-            }
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_array_set_h(handle: u64, idx: i64, val: i64) -> i64 {
-    use crate::jit::hostcall_registry::{classify, HostcallKind};
-    let sym = crate::jit::r#extern::collections::SYM_ARRAY_SET_H;
-    let pol = crate::jit::policy::current();
-    let wh = pol.hostcall_whitelist;
-    if classify(sym) == HostcallKind::Mutating && pol.read_only && !wh.iter().any(|s| s == sym) {
-        crate::jit::events::emit(
-            "hostcall", "<jit>", None, None,
-            serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
-        );
-        return 0;
-    }
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            let _ = arr.set(
-                Box::new(crate::box_trait::IntegerBox::new(idx)),
-                Box::new(crate::box_trait::IntegerBox::new(val)),
-            );
-            crate::jit::events::emit(
-                "hostcall", "<jit>", None, None,
-                serde_json::json!({"id": sym, "decision":"allow", "argc":3, "arg_types":["Handle","I64","I64"]})
-            );
-            return 0;
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_map_size_h(handle: u64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SIZE_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
-    );
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-            if let Some(ib) = map.size().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_map_get_h(handle: u64, key: i64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_GET_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
-    );
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-            let key_box = Box::new(crate::box_trait::IntegerBox::new(key));
-            let val = map.get(key_box);
-            if let Some(ib) = val.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_map_get_hh(map_h: u64, key_h: u64) -> i64 {
-    // Emit allow event for visibility
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_GET_HH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]})
-    );
-    let map_arc = crate::jit::rt::handles::get(map_h);
-    let key_arc = crate::jit::rt::handles::get(key_h);
-    if let (Some(mobj), Some(kobj)) = (map_arc, key_arc) {
-        if let Some(map) = mobj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-            let key_box: Box<dyn crate::box_trait::NyashBox> = kobj.share_box();
-            let val = map.get(key_box);
-            // Register result into handle table and return handle id
-            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(val);
-            let h = crate::jit::rt::handles::to_handle(arc);
-            return h as i64;
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_map_set_h(handle: u64, key: i64, val: i64) -> i64 {
-    use crate::jit::hostcall_registry::{classify, HostcallKind};
-    let sym = crate::jit::r#extern::collections::SYM_MAP_SET_H;
-    let pol = crate::jit::policy::current();
-    let wh = pol.hostcall_whitelist;
-    if classify(sym) == HostcallKind::Mutating && pol.read_only && !wh.iter().any(|s| s == sym) {
-        crate::jit::events::emit(
-            "hostcall", "<jit>", None, None,
-            serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
-        );
-        return 0;
-    }
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-            let key_box = Box::new(crate::box_trait::IntegerBox::new(key));
-            let val_box = Box::new(crate::box_trait::IntegerBox::new(val));
-            let _ = map.set(key_box, val_box);
-            crate::jit::events::emit(
-                "hostcall", "<jit>", None, None,
-                serde_json::json!({"id": sym, "decision":"allow", "argc":3, "arg_types":["Handle","I64","I64"]})
-            );
-            return 0;
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_map_has_h(handle: u64, key: i64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_HAS_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
-    );
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-            let key_box = Box::new(crate::box_trait::IntegerBox::new(key));
-            let val = map.get(key_box);
-            // Treat presence if result is not Void
-            let is_present = !val.as_any().is::<crate::box_trait::VoidBox>();
-            return if is_present { 1 } else { 0 };
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_any_length_h(handle: u64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
-    );
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        // Array length
-        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
-        }
-        // String length
-        if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() {
-            return sb.value.len() as i64;
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_any_is_empty_h(handle: u64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_IS_EMPTY_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
-    );
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        // Array empty?
-        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            if let Ok(items) = arr.items.read() { return if items.is_empty() { 1 } else { 0 }; }
-        }
-        // String empty?
-        if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() {
-            return if sb.value.is_empty() { 1 } else { 0 };
-        }
-        // Map empty?
-        if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-            if let Some(ib) = map.size().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return if ib.value == 0 { 1 } else { 0 }; }
-        }
-    }
-    0
-}
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_string_charcode_at_h(handle: u64, idx: i64) -> i64 {
-    crate::jit::events::emit(
-        "hostcall", "<jit>", None, None,
-        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_STRING_CHARCODE_AT_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
-    );
-    if idx < 0 { return -1; }
-    if let Some(obj) = crate::jit::rt::handles::get(handle) {
-        if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() {
-            let s = &sb.value;
-            let i = idx as usize;
-            if i < s.len() {
-                // Return UTF-8 byte at index (ASCII-friendly PoC)
-                return s.as_bytes()[i] as i64;
-            } else { return -1; }
-        }
-    }
-    -1
-}
 
 #[cfg(feature = "cranelift-jit")]
 impl IRBuilder for CraneliftBuilder {

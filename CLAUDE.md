@@ -101,13 +101,15 @@ cargo xwin build --target x86_64-pc-windows-msvc --release
 target/x86_64-pc-windows-msvc/release/nyash.exe
 ```
 
-### 🌐 WebAssembly版
+### 🌐 WebAssembly版（2種類あるので注意！）
+
+#### 1️⃣ **Rust→WASM（ブラウザでNyashインタープリター実行）**
 ```bash
 # WASMビルド（ルートディレクトリで実行）
 wasm-pack build --target web
 
 # ビルド結果は pkg/ ディレクトリに生成される
-# - pkg/nyash_rust_bg.wasm
+# - pkg/nyash_rust_bg.wasm   # Rustで書かれたNyashインタープリター全体
 # - pkg/nyash_rust.js
 # - pkg/nyash_rust.d.ts
 
@@ -120,6 +122,32 @@ python3 -m http.server 8010
 ```
 
 **注意**: WASMビルドでは一部のBox（TimerBox、AudioBox等）は除外されます。
+
+#### 2️⃣ **Nyash→MIR→WASM（Nyashプログラムをコンパイル）**
+```bash
+# NyashコードをWASMにコンパイル（WAT形式で出力）
+./target/release/nyash --compile-wasm program.nyash
+
+# ファイルに出力
+./target/release/nyash --compile-wasm program.nyash -o output.wat
+
+# 現在の実装状況：
+# - 基本的なMIR→WASM変換は動作
+# - print文などの基本機能のみ
+# - 実行にはwasmtimeなどのランタイムが必要
+```
+
+**違いのまとめ:**
+- **Rust→WASM**: Nyashインタープリター自体をブラウザで動かす（フル機能）
+- **Nyash→WASM**: Nyashプログラムを単体WASMに変換（限定機能）
+
+#### 3️⃣ **Nyash→AOT/Native（将来実装予定）**
+```bash
+# NyashコードをネイティブバイナリにAOTコンパイル（現在開発中）
+./target/release/nyash --compile-native program.nyash -o program.exe
+# または
+./target/release/nyash --aot program.nyash -o program.exe
+```
 
 ### 🔧 JIT-direct（独立JIT）運用メモ（最小）
 - 方針: 当面は read-only（書き込み命令はjit-directで拒否）

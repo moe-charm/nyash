@@ -23,9 +23,14 @@ fn ensure_default() {
     let mut r = Registry::default();
     // Read-only defaults
     for s in [
-        "nyash.array.len_h", "nyash.any.length_h", "nyash.any.is_empty_h",
-        "nyash.map.size_h", "nyash.map.get_h", "nyash.string.charCodeAt_h",
-        "nyash.array.get_h"
+        "nyash.array.len_h",
+        "nyash.any.length_h",
+        "nyash.any.is_empty_h",
+        "nyash.map.size_h",
+        "nyash.map.get_h",
+        "nyash.map.has_h",
+        "nyash.string.charCodeAt_h",
+        "nyash.array.get_h",
     ] { r.ro.insert(s.to_string()); }
     // Mutating defaults
     for s in [
@@ -45,6 +50,13 @@ fn ensure_default() {
     r.sig.entry("nyash.map.size_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
     r.sig.entry("nyash.array.get_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::Handle });
     r.sig.entry("nyash.array.len_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
+    // String helpers
+    r.sig.entry("nyash.string.charCodeAt_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::I64 });
+    // Any helpers (length/is_empty)
+    r.sig.entry("nyash.any.length_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
+    r.sig.entry("nyash.any.is_empty_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
+    // Map.has(handle, i64) -> i64(0/1)
+    r.sig.entry("nyash.map.has_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::I64 });
     let _ = REG.set(RwLock::new(r));
 }
 

@@ -231,6 +231,19 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
 
 ## 現在の地図（Done / Next）
 
+### ✅ 完了（Phase 10.10）
+- **GC Switchable Runtime**: GcConfigBox実装（counting/trace/barrier_strictフラグ制御）
+- **Unified Debug System**: DebugConfigBox実装（JIT events/stats/dump/dot設定の一元管理）
+- **Box Method Dispatch**: GcConfigBox/DebugConfigBoxのメソッドディスパッチ実装
+- **JitPolicyBox**: ホワイトリストとプリセット機能実装（mutating_minimal/common）
+- **ANCP設計**: AI-Nyash Compact Notation Protocol設計完了（50-90%トークン削減）
+
+### ✅ 完了（Phase 10.9）
+- **HostCall統合**: Registry v0実装、Policy/Events連携
+- **HH経路**: Map.get_hh実装（Handle,Handle引数でJIT直実行）
+- **RO/WO分離**: read-only既定、mutatingはopt-in（policy_denied_mutatingイベント）
+- **Math関数**: sin/cos/abs/min/max等のF64署名一致時のallow実装
+
 ### ✅ 完了（Phase 9.79b）
 - TypeMeta/Thunk正式化・Poly-PIC（2〜4）・Plugin TLV拡張（bool/i64/f64/bytes）
 - VM fast-path整備（Instance/Plugin/Builtin）と統計サマリ強化
@@ -397,9 +410,55 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
   - jit_policy_optin_mutating.nyash（mutatingのopt-in）
   - gc_counting_demo.nyash（CountingGcの可視化、VMパス）
 
-次の着手（Restart後すぐ）
-1) Runner統合（DebugConfigの反映優先度/CLI連携の整理）
-   - 目標: CLI→DebugConfigBox→env→JIT/VM の一本化（既存JitConfigとの整合）
-2) GCドキュメントに GcConfigBox の使用例を追記（短文 + コマンド）
-3) examples/README.md（最小手順）
-   - HH直実行、mutating opt-in、CountingGc demo の3本だけ掲載
+### ✅ 完了（2025-08-28 late 整理）
+- Runner統合（DebugConfig/CLI/Envの整合）
+  - DOT指定時にdump暗黙ON、観測系ON時のしきい値auto=1（未指定時）
+- GCドキュメントに GcConfigBox 使用例を追記（短文 + コマンド）
+- examples/README.md 最小手順を整備（HH直実行・mutating opt-in・CountingGc）
+- DebugConfigBox拡張（最小）: `jit_events_compile/runtime`, `jit_events_path` を追加（`apply()`でenv反映）
+- JIT Eventsのphase分離（lower/execute）とAPI導入（compileは明示opt-in）
+- サンプル追加: `examples/jit_policy_whitelist_demo.nyash`（read_only→whitelist／events分離）
+- runtime trapイベント出力（JIT実行失敗時に1行JSONL）
+- CIスモーク導入: runtime系（3本）＋ compile-events（phase:"lower"検証）
+
+⏭️ 次（Phase 10.10 続行・箱は増やさない）
+- ANYヘルパ運用で十分（length_h / is_empty_h）→ 追加なし、Box-Firstの最小原則を維持
+- whitelist回帰の軽量確認は `jit_policy_whitelist_demo.nyash` で実施（CI移行は後段）
+- 将来候補: `nyash.any.type_h` は Phase 11 で型特化最適化検討時に導入可
+
+### 🔍 Smoke（Phase 10.10 最小確認）
+- スクリプト: `tools/smoke_phase_10_10.sh`
+  - 実行: `bash tools/smoke_phase_10_10.sh`
+  - 内容: Build → HH直実行 → mutating opt-in → GCデモ
+
+代表コマンド（HostCallはNYASH_JIT_HOSTCALL=1を明示）
+```
+# Build（Cranelift込み推奨）
+cargo build --release -j32 --features cranelift-jit
+
+# HH直実行（Map.get_hh）
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+  ./target/release/nyash --backend vm examples/jit_map_get_param_hh.nyash
+
+# mutating opt-in（policy whitelist）
+NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 \
+  ./target/release/nyash --backend vm examples/jit_policy_whitelist_demo.nyash
+
+# GC counting（VMパス）
+./target/release/nyash --backend vm examples/gc_counting_demo.nyash
+
+# compileのみ（必要時）
+NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS_PATH=events.jsonl \
+  ./target/release/nyash --backend vm examples/jit_map_get_param_hh.nyash
+```
+
+## ✅ Phase 10.10 完了（DoD確認）
+- DebugConfig/Box/CLIの一貫挙動（apply後の即時反映）: OK
+- GC切替とバリアサイト観測が可能: OK（CountingGc/TRACE/STRICT）
+- HostCall（RO/一部WO）: paramでallow／非paramでfallback（イベントで確認）: OK
+- 代表サンプルが examples/README の手順で成功（CIスモークもgreen）: OK
+- イベントスキーマ（v0.1）文書化・trap出力: OK
+
+⏭️ 次（Phase 10.1 着手）
+- Python統合（chatgpt5_integrated_plan.md）に沿って Week1 を開始
+- 10.10の観測・回帰はCIスモークで継続監視（問題検知時は即fix）

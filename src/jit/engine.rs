@@ -89,6 +89,14 @@ impl JitEngine {
                 }
             }
         }
+        // If lowering left any unsupported instructions, do not register a closure.
+        // This preserves VM semantics until coverage is complete for the function.
+        if lower.unsupported > 0 {
+            if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") || cfg_now.dump {
+                eprintln!("[JIT] skip compile for {}: unsupported={} (>0)", func_name, lower.unsupported);
+            }
+            return None;
+        }
         // Create a handle and register an executable closure if available
         #[cfg(feature = "cranelift-jit")]
         {

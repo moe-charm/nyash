@@ -1,0 +1,2 @@
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle","I64","I64"],"argc":3,"decision":"fallback","id":"nyash.map.set_h","phase":"lower","reason":"receiver_not_param"}
+{"kind":"hostcall","function":"<jit>","arg_types":["Handle","Handle"],"argc":2,"decision":"allow","id":"nyash.map.get_hh","phase":"lower","reason":"sig_ok"}

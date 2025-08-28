@@ -1,0 +1,81 @@
+// ANY Helpers Demo - 型を問わない統一的な操作
+// ANYヘルパーは Array, String, Map すべてに対応する万能メソッド！
+
+static box Main {
+    main() {
+        local console
+        console = new ConsoleBox()
+        
+        console.log("=== ANY Helpers Demo ===")
+        console.log("")
+        
+        // 1. length() - どんなBoxでも長さ/サイズを取得
+        console.log("1) length() helper:")
+        
+        local arr
+        arr = new ArrayBox()
+        arr.push("cat")
+        arr.push("dog")
+        console.log("Array length: " + arr.length())  // 2
+        
+        local str
+        str = new StringBox("Hello")
+        console.log("String length: " + str.length())  // 5
+        
+        local map
+        map = new MapBox()
+        map.set("name", "Nyash")
+        map.set("version", "1.0")
+        console.log("Map size: " + map.length())  // 2
+        console.log("")
+        
+        // 2. isEmpty() - どんなBoxでも空かチェック
+        console.log("2) isEmpty() helper:")
+        
+        local emptyArr
+        emptyArr = new ArrayBox()
+        console.log("Empty array: " + emptyArr.isEmpty())  // true
+        arr.push("fish")
+        console.log("Non-empty array: " + arr.isEmpty())   // false
+        
+        local emptyStr
+        emptyStr = new StringBox("")
+        console.log("Empty string: " + emptyStr.isEmpty())  // true
+        local fullStr
+        fullStr = new StringBox("Nyash")
+        console.log("Non-empty string: " + fullStr.isEmpty())  // false
+        
+        local emptyMap
+        emptyMap = new MapBox()
+        console.log("Empty map: " + emptyMap.isEmpty())     // true
+        console.log("Non-empty map: " + map.isEmpty())      // false
+        console.log("")
+        
+        // 3. 実用例：型を気にせず処理
+        console.log("3) Practical example - type-agnostic processing:")
+        
+        local items
+        items = new ArrayBox()
+        items.push(arr)     // Array
+        items.push(str)     // String  
+        items.push(map)     // Map
+        
+        // どんな型でも統一的に処理できる！
+        local i
+        i = 0
+        loop(i < items.length()) {
+            local item
+            item = items.get(i)
+            console.log("Item " + i + " - length: " + item.length() + ", empty: " + item.isEmpty())
+            i = i + 1
+        }
+        
+        console.log("")
+        console.log("=== ANYヘルパーの威力 ===")
+        console.log("- 型固有のメソッドを覚える必要なし")
+        console.log("- Array/String/Mapを統一的に扱える")
+        console.log("- Everything is Box 哲学の体現！")
+        
+        return "Demo complete!"
+    }
+}
