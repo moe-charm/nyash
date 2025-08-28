@@ -602,41 +602,8 @@ impl LowerCore {
                     b.push_block_param_i64_at(pos);
                 }
             }
-            I::ArrayGet { array, index, .. } => {
-                if crate::jit::config::current().hostcall {
-                    let idx = self.known_i64.get(index).copied().unwrap_or(0);
-                    if let Some(pidx) = self.param_index.get(array).copied() {
-                        // Handle-based: push handle value from param, then index
-                        b.emit_param_i64(pidx);
-                        b.emit_const_i64(idx);
-                        b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_GET_H, 2, true);
-                    } else {
-                        // Fallback to index-based (param index unknown)
-                        let arr_idx = -1;
-                        b.emit_const_i64(arr_idx);
-                        b.emit_const_i64(idx);
-                        b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_GET, 2, true);
-                    }
-                }
-            }
-            I::ArraySet { array, index, value } => {
-                if crate::jit::config::current().hostcall {
-                    let idx = self.known_i64.get(index).copied().unwrap_or(0);
-                    let val = self.known_i64.get(value).copied().unwrap_or(0);
-                    if let Some(pidx) = self.param_index.get(array).copied() {
-                        b.emit_param_i64(pidx);
-                        b.emit_const_i64(idx);
-                        b.emit_const_i64(val);
-                        b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_SET_H, 3, false);
-                    } else {
-                        let arr_idx = -1;
-                        b.emit_const_i64(arr_idx);
-                        b.emit_const_i64(idx);
-                        b.emit_const_i64(val);
-                        b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_SET, 3, false);
-                    }
-                }
-            }
+            I::ArrayGet { array, index, .. } => { super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index); }
+            I::ArraySet { array, index, value } => { super::core_hostcall::lower_array_set(b, &self.param_index, &self.known_i64, array, index, value); }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
                 if crate::jit::config::current().hostcall {
                     match method.as_str() {
@@ -1009,4 +976,3 @@ impl LowerCore {
 }
 
 pub use super::cfg_dot::dump_cfg_dot;
-
