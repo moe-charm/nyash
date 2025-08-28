@@ -141,6 +141,48 @@ use cranelift_codegen::ir::InstBuilder;
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_host_stub0() -> i64 { 0 }
 #[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    use crate::runtime::plugin_loader_v2::PluginBoxV2;
+    // Resolve receiver instance from legacy VM args (param index)
+    let mut instance_id: u32 = 0;
+    let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
+    if a0 >= 0 {
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            let idx = a0 as usize;
+            if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                    instance_id = p.instance_id();
+                    invoke = Some(p.inner.invoke_fn);
+                }
+            }
+        });
+    }
+    if invoke.is_none() { return 0; }
+    // Build TLV args from a1/a2 if present
+    let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+    let mut add_i64 = |v: i64| { crate::runtime::plugin_ffi_common::encode::i64(&mut buf, v); };
+    if argc >= 2 { add_i64(a1); }
+    if argc >= 3 { add_i64(a2); }
+    // Prepare output buffer
+    let mut out: [u8; 32] = [0; 32];
+    let mut out_len: usize = out.len();
+    let rc = unsafe { invoke.unwrap()(type_id as u32, method_id as u32, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
+    if rc != 0 { return 0; }
+    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+        match tag {
+            3 => { // I64
+                if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) { return v as i64; }
+                if payload.len() == 8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b); }
+            }
+            1 => { // Bool
+                return if crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false) { 1 } else { 0 };
+            }
+            _ => {}
+        }
+    }
+    0
+}
+#[cfg(feature = "cranelift-jit")]
 use super::extern_thunks::{
     nyash_math_sin_f64, nyash_math_cos_f64, nyash_math_abs_f64, nyash_math_min_f64, nyash_math_max_f64,
     nyash_array_len_h, nyash_array_get_h, nyash_array_set_h, nyash_array_push_h, 
@@ -683,6 +725,52 @@ impl IRBuilder for CraneliftBuilder {
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let fref = self.module.declare_func_in_func(func_id, fb.func);
         let call_inst = fb.ins().call(fref, &args);
+        if has_ret {
+            let results = fb.inst_results(call_inst).to_vec();
+            if let Some(v) = results.get(0).copied() { self.value_stack.push(v); }
+        }
+        fb.finalize();
+    }
+
+    fn emit_plugin_invoke(&mut self, type_id: u32, method_id: u32, argc: usize, has_ret: bool) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        use cranelift_frontend::FunctionBuilder;
+        use cranelift_module::{Linkage, Module};
+
+        // Pop argc values (right-to-left): receiver + up to 2 args
+        let mut arg_vals: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        let take_n = argc.min(self.value_stack.len());
+        for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { arg_vals.push(v); } }
+        arg_vals.reverse();
+        // Pad to 3 values (receiver + a1 + a2)
+        while arg_vals.len() < 3 { arg_vals.push({
+            let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+            let z = fb.ins().iconst(types::I64, 0);
+            fb.finalize();
+            z
+        }); }
+
+        // Build signature: (i64 type_id, i64 method_id, i64 argc, i64 a0, i64 a1, i64 a2) -> i64
+        let call_conv = self.module.isa().default_call_conv();
+        let mut sig = Signature::new(call_conv);
+        for _ in 0..6 { sig.params.push(AbiParam::new(types::I64)); }
+        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+
+        let symbol = "nyash_plugin_invoke3_i64";
+        let func_id = self.module
+            .declare_function(symbol, Linkage::Import, &sig)
+            .expect("declare plugin shim failed");
+
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        let fref = self.module.declare_func_in_func(func_id, fb.func);
+        let c_type = fb.ins().iconst(types::I64, type_id as i64);
+        let c_meth = fb.ins().iconst(types::I64, method_id as i64);
+        let c_argc = fb.ins().iconst(types::I64, argc as i64);
+        let call_inst = fb.ins().call(fref, &[c_type, c_meth, c_argc, arg_vals[0], arg_vals[1], arg_vals[2]]);
         if has_ret {
             let results = fb.inst_results(call_inst).to_vec();
             if let Some(v) = results.get(0).copied() { self.value_stack.push(v); }

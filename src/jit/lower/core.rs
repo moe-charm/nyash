@@ -656,15 +656,31 @@ impl LowerCore {
                                 }
                             }
                         }
-                        // Map (RO): size/get/has
-                        "size" | "get" | "has" => {
+                        // Map: size/get/has (RO) and set (mutating; allowed only when policy.read_only=false)
+                        "size" | "get" | "has" | "set" => {
                             if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
                                 if let Ok(h) = ph.resolve_method("MapBox", method.as_str()) {
+                                    if method.as_str() == "set" && crate::jit::policy::current().read_only {
+                                        // Deny mutating under read-only policy
+                                        crate::jit::events::emit_lower(
+                                            serde_json::json!({
+                                                "id": format!("plugin:{}:{}", "MapBox", "set"),
+                                                "decision":"fallback","reason":"policy_denied_mutating"
+                                            }),
+                                            "plugin","<jit>"
+                                        );
+                                        // Do not emit plugin call; VM path will handle
+                                        return Ok(());
+                                    }
                                     if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
                                     let mut argc = 1usize;
                                     if matches!(method.as_str(), "get" | "has") {
                                         if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
                                         argc += 1;
+                                    } else if method.as_str() == "set" {
+                                        if let Some(k) = args.get(0) { self.push_value_if_known_or_param(b, k); } else { b.emit_const_i64(0); }
+                                        if let Some(v) = args.get(1) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
+                                        argc += 2;
                                     }
                                     b.emit_plugin_invoke(h.type_id, h.method_id, argc, dst.is_some());
                                     crate::jit::events::emit_lower(

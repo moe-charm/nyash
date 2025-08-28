@@ -60,9 +60,18 @@ plugins/
     └── nyash-net-plugin/
 ```
 
-## 🔗 関連資料
+## 🔗 関連資料（整備済み）
 
 - フェーズ計画の詳細: [phase_plan.md](./phase_plan.md)
+- C ABI v0 仕様（JIT/AOT/Plugin共通）: ../../../../docs/reference/abi/nyrt_c_abi_v0.md
+  - 命名: `nyrt_*`（コア）/ `nyplug_{name}_*`（プラグイン）
+  - 呼出規約: x86_64 SysV / aarch64 AAPCS64 / Win64
+  - `*_abi_version()` で fail-fast（v0=1）
+
+## ストリームエラー対策（長文/大出力を避ける）
+- 先頭に短い要約（サマリ）を置く（本READMEの冒頭にあり）
+- 詳細設計や長いコードは分割して参照（phase_plan.md / nyrt_c_abi_v0.md）
+- コマンドやコードは三連バッククォートで閉じ忘れ防止
 
 - [革新的アプローチ詳細](../../../ideas/new-features/2025-08-28-jit-exe-via-plugin-unification.md)
 - [プラグインAPI仕様](../../../../reference/plugin-system/)

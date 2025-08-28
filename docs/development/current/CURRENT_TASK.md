@@ -9,10 +9,11 @@ Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグイン�
 - すべてのBoxをプラグイン化すれば、JIT→EXEが自然に実現可能
 - "Everything is Box" → "Everything is Plugin" への進化
 
-## ⏱️ 今日のサマリ
-- 発見: プラグインBox経由でのJIT→EXE実現可能性
-- 決定: Phase 10.1を「プラグインBox統一化」に変更
-- 移動: 旧Phase 10.1（Python統合）→ Phase 10.5へ
+## ⏱️ 今日のサマリ（Array/Map プラグイン経路の安定化→10.2へ）
+- 実装: Array/Map のプラグイン（BID-FFI v1）を作成し、nyash.toml に統合
+- Lower: `NYASH_USE_PLUGIN_BUILTINS=1` で Array(len/get/push/set), Map(size/get/has/set) を `emit_plugin_invoke(..)` に配線
+- サンプル: array/map デモを追加し VM 実行で正常動作確認
+- 次: 10.2（Craneliftの実呼び出し）に着手
 
 ## 現在地（Done / Doing / Next）
 - ✅ Done（Phase 10.10）
@@ -79,6 +80,23 @@ NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 \
 # compileイベントのみ（必要時）
 NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS_PATH=events.jsonl \
   ./target/release/nyash --backend vm examples/jit_map_get_param_hh.nyash
+
+# Plugin demos（Array/Map）
+(cd plugins/nyash-array-plugin && cargo build --release)
+(cd plugins/nyash-map-plugin && cargo build --release)
+NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/array_plugin_demo.nyash
+NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/array_plugin_set_demo.nyash
+NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/map_plugin_ro_demo.nyash
+
+## ⏭️ Next（Phase 10.2: JIT実呼び出しの実体化）
+- 目的: Craneliftの `emit_plugin_invoke` を実装し、JITでも実体のプラグインAPIを呼ぶ
+- 方針:
+  - シム関数 `extern "C" nyash_plugin_invoke3_i64(type_id, method_id, argc, a0, a1, a2) -> i64` を実装
+    - a0: 受け手（param index／負なら未解決）
+    - args: i64 を TLV にエンコードして plugin invoke_fn へ橋渡し
+    - 戻り: TLV（i64/Bool）の最初の値を i64 に正規化
+  - CraneliftBuilder: `emit_plugin_invoke` で上記シムを import→call（常に6引数）
+  - 対象: Array(len/get/push/set), Map(size/get/has/set) の i64 1〜2引数経路
 ```
 
 ## 参考リンク
@@ -92,4 +110,3 @@ NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS_PATH=events.jso
 - 状態確認: `git status` / `git log --oneline -3` / `cargo check`
 - スモーク: `bash tools/smoke_phase_10_10.sh`
 - 次の一手: core_hostcall → core_ops の順に分割、毎回ビルド/スモークで確認
-

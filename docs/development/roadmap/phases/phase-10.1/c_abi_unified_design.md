@@ -49,9 +49,8 @@ struct NyBox {
 - x86_64 SysV / aarch64 AAPCS64 / Win64 をターゲットごとに固定
 - Craneliftの`call_conv`を上記に合わせる（JIT/AOT共通）
 
-### 5. バージョン管理
-- `nyrt_abi_version()`を導入（壊れたら即fail）
-- プラグインも`nyplug_{name}_abi_version()`
+### 5. バージョン管理（fail-fast）
+- `nyrt_abi_version()` / `nyplug_{name}_abi_version()`（v0=1）。不一致は起動時に即fail（ローダ側で検査）。
 
 ## 📝 最小ヘッダ雛形
 
@@ -122,6 +121,8 @@ int32_t nyplug_array_push(NyBox arr, NyBox v);
    - Linux/macOS: `cc mod.o -static -L. -lnyrt -lnyplug_array -o app`
    - Windows: `link mod.obj nyrt.lib nyplug_array.lib /OUT:app.exe`
 4. 実行：`./app`でJIT無しに動作
+
+補足: 現行実装ではプラグインは `nyash_plugin_invoke`（BID-FFI v1, TLV）を用いる。v0ではこれを固定し、将来的に `nyplug_*` 直関数を併置する場合も `*_abi_version()` で互換を担保する。
 
 ## ⚡ 実装順序（重要！）
 

@@ -615,6 +615,17 @@ impl PluginBoxV2 {
                 })?
         };
         
+        // Optional ABI version check (v0: expect 1)
+        if let Ok(sym) = unsafe { lib.get::<unsafe extern "C" fn() -> u32>(b"nyash_plugin_abi") } {
+            let ver = unsafe { (*sym)() };
+            if ver != 1 {
+                eprintln!("[PluginLoaderV2] nyash_plugin_abi version mismatch: {} (expected 1) for {}", ver, lib_name);
+                return Err(BidError::PluginError);
+            }
+        } else {
+            eprintln!("[PluginLoaderV2] nyash_plugin_abi not found for {} (assuming v0=1)", lib_name);
+        }
+
         // Get required invoke function and dereference it
         let invoke_fn = unsafe {
             let symbol: libloading::Symbol<unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32> = 

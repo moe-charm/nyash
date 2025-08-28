@@ -154,4 +154,5 @@ birth = { method_id = 0 }
 size  = { method_id = 1 }
 get   = { method_id = 2, args = ["key"] }
 has   = { method_id = 3, args = ["key"] }
+set   = { method_id = 4, args = ["key", "value"] }
 fini  = { method_id = 4294967295 }

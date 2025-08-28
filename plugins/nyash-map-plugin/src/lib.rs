@@ -19,6 +19,7 @@ const METHOD_BIRTH: u32 = 0;
 const METHOD_SIZE:  u32 = 1;
 const METHOD_GET:   u32 = 2; // args: i64 key -> TLV i64
 const METHOD_HAS:   u32 = 3; // args: i64 key -> TLV bool
+const METHOD_SET:   u32 = 4; // args: i64 key, i64 value -> TLV i64 (size)
 const METHOD_FINI:  u32 = u32::MAX;
 
 // Type id (nyash.toml に合わせる)
@@ -76,6 +77,16 @@ pub extern "C" fn nyash_plugin_invoke(
                 let key = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
                 if let Ok(map) = INSTANCES.lock() {
                     if let Some(inst) = map.get(&instance_id) { write_tlv_bool(inst.data.contains_key(&key), result, result_len) } else { NYB_E_INVALID_HANDLE }
+                } else { NYB_E_PLUGIN_ERROR }
+            }
+            METHOD_SET => {
+                let key = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                let val = match read_arg_i64(args, args_len, 1) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                if let Ok(mut map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get_mut(&instance_id) {
+                        inst.data.insert(key, val);
+                        return write_tlv_i64(inst.data.len() as i64, result, result_len);
+                    } else { NYB_E_INVALID_HANDLE }
                 } else { NYB_E_PLUGIN_ERROR }
             }
             _ => NYB_E_INVALID_METHOD,
@@ -139,4 +150,3 @@ fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
     }
     None
 }
-
