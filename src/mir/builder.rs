@@ -61,6 +61,9 @@ pub struct MirBuilder {
 
     /// Remember class of object fields after assignments: (base_id, field) -> class_name
     pub(super) field_origin_class: HashMap<(ValueId, String), String>,
+
+    /// Optional per-value type annotations (MIR-level): ValueId -> MirType
+    pub(super) value_types: HashMap<ValueId, super::MirType>,
 }
 
 impl MirBuilder {
@@ -78,6 +81,7 @@ impl MirBuilder {
             user_defined_boxes: HashSet::new(),
             weak_fields_by_box: HashMap::new(),
             field_origin_class: HashMap::new(),
+            value_types: HashMap::new(),
         }
     }
 
@@ -254,13 +258,19 @@ impl MirBuilder {
                             value: Some(result_value),
                         });
                     }
+                    // Infer return type from TyEnv (value_types)
+                    if let Some(mt) = self.value_types.get(&result_value).cloned() {
+                        function.signature.return_type = mt;
+                    }
                 }
             }
         }
         
         // Finalize and return module
         let mut module = self.current_module.take().unwrap();
-        let function = self.current_function.take().unwrap();
+        let mut function = self.current_function.take().unwrap();
+        // Flush value_types (TyEnv) into function metadata
+        function.metadata.value_types = self.value_types.clone();
         module.add_function(function);
         
         Ok(module)
@@ -451,6 +461,15 @@ impl MirBuilder {
     
     /// Build a literal value
     fn build_literal(&mut self, literal: LiteralValue) -> Result<ValueId, String> {
+        // Determine type without moving literal
+        let ty_for_dst = match &literal {
+            LiteralValue::Integer(_) => Some(super::MirType::Integer),
+            LiteralValue::Float(_) => Some(super::MirType::Float),
+            LiteralValue::Bool(_) => Some(super::MirType::Bool),
+            LiteralValue::String(_) => Some(super::MirType::String),
+            _ => None,
+        };
+
         let const_value = match literal {
             LiteralValue::Integer(n) => ConstValue::Integer(n),
             LiteralValue::Float(f) => ConstValue::Float(f),
@@ -465,6 +484,8 @@ impl MirBuilder {
             dst,
             value: const_value,
         })?;
+        // Annotate type
+        if let Some(ty) = ty_for_dst { self.value_types.insert(dst, ty); }
         
         Ok(dst)
     }
@@ -483,6 +504,8 @@ impl MirBuilder {
                 self.emit_instruction(MirInstruction::BinOp {
                     dst, op, lhs, rhs
                 })?;
+                // Arithmetic results are integers for now (Core-1)
+                self.value_types.insert(dst, super::MirType::Integer);
             },
             
             // Comparison operations
@@ -497,6 +520,7 @@ impl MirBuilder {
                     (li, ri)
                 } else { (lhs, rhs) };
                 self.emit_instruction(MirInstruction::Compare { dst, op, lhs: lhs2, rhs: rhs2 })?;
+                self.value_types.insert(dst, super::MirType::Bool);
             },
         }
         
@@ -515,6 +539,8 @@ impl MirBuilder {
             op: mir_op,
             operand: operand_val,
         })?;
+        // Unary op result type heuristic (neg/not): keep integer/bool for now
+        // Leave unset to avoid mislabel
         
         Ok(dst)
     }
@@ -610,6 +636,8 @@ impl MirBuilder {
                 args: math_args,
                 effects: EffectMask::READ.add(Effect::ReadHeap),
             })?;
+            // math.* returns Float
+            self.value_types.insert(dst, super::MirType::Float);
             return Ok(dst);
         }
 
@@ -1098,6 +1126,14 @@ impl MirBuilder {
             box_type: class.clone(),
             args: arg_values.clone(),
         })?;
+        // Annotate primitive boxes
+        match class.as_str() {
+            "IntegerBox" => { self.value_types.insert(dst, super::MirType::Integer); },
+            "FloatBox" => { self.value_types.insert(dst, super::MirType::Float); },
+            "BoolBox" => { self.value_types.insert(dst, super::MirType::Bool); },
+            "StringBox" => { self.value_types.insert(dst, super::MirType::String); },
+            other => { self.value_types.insert(dst, super::MirType::Box(other.to_string())); }
+        }
 
         // Record origin for optimization: dst was created by NewBox of class
         self.value_origin_newbox.insert(dst, class.clone());
@@ -1360,6 +1396,8 @@ impl MirBuilder {
                     args: math_args,
                     effects: EffectMask::READ.add(Effect::ReadHeap),
                 })?;
+                // math.* returns Float
+                self.value_types.insert(result_id, super::MirType::Float);
                 return Ok(result_id);
             }
         }

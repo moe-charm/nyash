@@ -85,6 +85,35 @@
 - b1正規化カウンタ: `b1_norm_count`（分岐条件/PHI）
 - HostCallイベント: `argc`/`arg_types`/`reason`でデバッグ容易化（mutatingは `policy_denied_mutating`）
 
+### 🔎 HostCallイベントの基準（10.9-β）
+- 受け手が関数パラメータ（param）の場合は JIT直実行（allow/sig_ok）を基本にイベント出力
+  - Map.get(Handle, I64): `id: nyash.map.get_h`, `arg_types: ["Handle","I64"]`
+  - Map.get(Handle, Handle): `id: nyash.map.get_hh`, `arg_types: ["Handle","Handle"]`
+  - length/isEmpty/charCodeAt/size 等も `*_h`（Handle受け）でallow
+- 受け手がparamでない場合は VMへフォールバック（fallback/receiver_not_param）をイベントで記録（読み取り系の可視化を保証）
+  - 例: `id: nyash.any.length_h`, `decision: fallback`, `reason: receiver_not_param`
+- 数値緩和: `NYASH_JIT_HOSTCALL_RELAX_NUMERIC=1` または `NYASH_JIT_NATIVE_F64=1` で `I64→F64` コアーションを許容（sig_okに影響）
+
+### 🧪 代表サンプル（E2E）
+```bash
+# math.*（関数スタイル）: 署名一致でallow、戻りFloat表示
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 NYASH_JIT_EVENTS=1 \
+  ./target/release/nyash --backend vm examples/jit_math_function_style_min_float.nyash
+
+# Map.get（パラメータ受け＋Handleキー → HH直実行）
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+  ./target/release/nyash --backend vm examples/jit_map_get_param_hh.nyash
+
+# Map.get（非パラメータ受け → fallback記録）
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+  ./target/release/nyash --backend vm examples/jit_hostcall_map_get_handle.nyash
+```
+
+### ⚙️ Quick flags（イベント観測を確実に）
+- `NYASH_JIT_EVENTS=1` のとき Runner が `NYASH_JIT_THRESHOLD=1` を自動適用（未指定の場合）
+  - 1回目からLowerが走り、allow/fallbackのイベントが必ず出る
+  - 明示的に `NYASH_JIT_THRESHOLD` を指定した場合はそちらを優先
+
 ## ⚠️ リスクとその箱での緩和
 - 署名不一致（args/ret）
   - HostcallRegistryBox で一元検査。不一致は `sig_mismatch` でイベント記録→VMへ
@@ -106,6 +135,20 @@
 - Boolネイティブ（b1）署名サポート（ツールチェーンcapに連動）
 - HostCallブリッジの拡大（Map.getの多型キー、String操作の追加）
 - CallBoundaryBox経由の `new`/副作用命令の段階的JIT化
+
+## ✳️ 10.9-δ 書き込みの導線（運用）
+- 既定ポリシー: read_only（`NYASH_JIT_READ_ONLY=1`）で mutating はフォールバック（`reason: policy_denied_mutating`）。
+- JitPolicyBox でopt-in:
+  ```nyash
+  P = new JitPolicyBox()
+  P.set("read_only", true)
+  P.addWhitelist("nyash.array.push_h")          // 個別に許可
+  // またはプリセット：
+  P.enablePreset("mutating_minimal")            // Array.push_h を許可
+  ```
+- イベント方針:
+  - 受け手=param: allow/sig_ok（whitelist/オフ時はfallback/policy_denied_mutating）
+  - 受け手≠param: fallback/receiver_not_param（可視化を保証）
 
 ---
 

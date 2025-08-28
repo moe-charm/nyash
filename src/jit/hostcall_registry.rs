@@ -12,7 +12,8 @@ pub enum HostcallKind { ReadOnly, Mutating }
 struct Registry {
     ro: HashSet<String>,
     mu: HashSet<String>,
-    sig: HashMap<String, Signature>,
+    // Allow multiple signatures per symbol (overloads)
+    sig: HashMap<String, Vec<Signature>>,
 }
 
 static REG: OnceCell<RwLock<Registry>> = OnceCell::new();
@@ -32,16 +33,18 @@ fn ensure_default() {
     ] { r.mu.insert(s.to_string()); }
     // Signatures (v0): register known symbols with simple arg/ret kinds
     // math.* thin bridge: f64 signatures only (allow when args match exactly)
-    r.sig.insert("nyash.math.sin".to_string(), Signature { args: vec![ArgKind::F64], ret: ArgKind::F64 });
-    r.sig.insert("nyash.math.cos".to_string(), Signature { args: vec![ArgKind::F64], ret: ArgKind::F64 });
-    r.sig.insert("nyash.math.abs".to_string(), Signature { args: vec![ArgKind::F64], ret: ArgKind::F64 });
-    r.sig.insert("nyash.math.min".to_string(), Signature { args: vec![ArgKind::F64, ArgKind::F64], ret: ArgKind::F64 });
-    r.sig.insert("nyash.math.max".to_string(), Signature { args: vec![ArgKind::F64, ArgKind::F64], ret: ArgKind::F64 });
+    r.sig.entry("nyash.math.sin".to_string()).or_default().push(Signature { args: vec![ArgKind::F64], ret: ArgKind::F64 });
+    r.sig.entry("nyash.math.cos".to_string()).or_default().push(Signature { args: vec![ArgKind::F64], ret: ArgKind::F64 });
+    r.sig.entry("nyash.math.abs".to_string()).or_default().push(Signature { args: vec![ArgKind::F64], ret: ArgKind::F64 });
+    r.sig.entry("nyash.math.min".to_string()).or_default().push(Signature { args: vec![ArgKind::F64, ArgKind::F64], ret: ArgKind::F64 });
+    r.sig.entry("nyash.math.max".to_string()).or_default().push(Signature { args: vec![ArgKind::F64, ArgKind::F64], ret: ArgKind::F64 });
     // Collections (handle-based)
-    r.sig.insert("nyash.map.get_h".to_string(), Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::Handle });
-    r.sig.insert("nyash.map.size_h".to_string(), Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
-    r.sig.insert("nyash.array.get_h".to_string(), Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::Handle });
-    r.sig.insert("nyash.array.len_h".to_string(), Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
+    // Map get: support both integer and handle keys (overload)
+    r.sig.entry("nyash.map.get_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::Handle });
+    r.sig.entry("nyash.map.get_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::Handle });
+    r.sig.entry("nyash.map.size_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
+    r.sig.entry("nyash.array.get_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::Handle });
+    r.sig.entry("nyash.array.len_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
     let _ = REG.set(RwLock::new(r));
 }
 
@@ -124,14 +127,12 @@ pub fn set_signature_csv(symbol: &str, args_csv: &str, ret_str: &str) -> bool {
     if !ok { return false; }
     let sig = Signature { args, ret };
     if let Some(lock) = REG.get() {
-        if let Ok(mut w) = lock.write() { w.sig.insert(symbol.to_string(), sig); return true; }
+        if let Ok(mut w) = lock.write() {
+            w.sig.entry(symbol.to_string()).or_default().push(sig);
+            return true;
+        }
     }
     false
-}
-
-pub fn get_signature(symbol: &str) -> Option<Signature> {
-    ensure_default();
-    REG.get().and_then(|lock| lock.read().ok()).and_then(|g| g.sig.get(symbol).cloned())
 }
 
 /// Check observed args against a registered signature.
@@ -139,15 +140,27 @@ pub fn get_signature(symbol: &str) -> Option<Signature> {
 /// - Returns Err("sig_mismatch") when arg length or kinds differ.
 pub fn check_signature(symbol: &str, observed_args: &[ArgKind]) -> Result<(), &'static str> {
     ensure_default();
-    if let Some(sig) = get_signature(symbol) {
-        if sig.args.len() != observed_args.len() { return Err("sig_mismatch"); }
-        let cfg_now = crate::jit::config::current();
-        let relax = cfg_now.relax_numeric || cfg_now.native_f64;
-        for (expected, observed) in sig.args.iter().zip(observed_args.iter()) {
-            if expected == observed { continue; }
-            // v0 coercion: allow I64 → F64 only when relaxed numeric is enabled
-            if relax && matches!(expected, ArgKind::F64) && matches!(observed, ArgKind::I64) { continue; }
-            return Err("sig_mismatch");
+    if let Some(lock) = REG.get() {
+        if let Ok(g) = lock.read() {
+            if let Some(sigs) = g.sig.get(symbol) {
+                let cfg_now = crate::jit::config::current();
+                let relax = cfg_now.relax_numeric || cfg_now.native_f64;
+                // Match against any one of the overload signatures
+                'outer: for sig in sigs.iter() {
+                    if sig.args.len() != observed_args.len() { continue; }
+                    for (expected, observed) in sig.args.iter().zip(observed_args.iter()) {
+                        if expected == observed { continue; }
+                        // v0 coercion: allow I64 → F64 only when relaxed numeric is enabled
+                        if relax && matches!(expected, ArgKind::F64) && matches!(observed, ArgKind::I64) { continue; }
+                        // Mismatch for this candidate signature
+                        continue 'outer;
+                    }
+                    // All args matched for this signature
+                    return Ok(());
+                }
+                // No overload matched
+                return Err("sig_mismatch");
+            }
         }
     }
     Ok(())

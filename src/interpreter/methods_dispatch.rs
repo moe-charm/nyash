@@ -4,6 +4,7 @@ use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore};
 use crate::boxes::{ArrayBox, FloatBox, BufferBox, ResultBox, FutureBox, JSONBox, HttpClientBox, StreamBox, RegexBox, MathBox};
 use crate::boxes::{null_box, time_box, map_box, random_box, sound_box, debug_box, console_box};
+use crate::boxes::{gc_config_box::GcConfigBox, debug_config_box::DebugConfigBox};
 use crate::boxes::file;
 use crate::channel_box::ChannelBox;
 use super::{NyashInterpreter, RuntimeError};
@@ -108,6 +109,14 @@ impl NyashInterpreter {
         // ConsoleBox
         if let Some(b) = obj.as_any().downcast_ref::<console_box::ConsoleBox>() {
             return Some(self.execute_console_method(b, method, arguments));
+        }
+        // GcConfigBox
+        if let Some(b) = obj.as_any().downcast_ref::<GcConfigBox>() {
+            return Some(self.execute_gc_config_method(b, method, arguments));
+        }
+        // DebugConfigBox
+        if let Some(b) = obj.as_any().downcast_ref::<DebugConfigBox>() {
+            return Some(self.execute_debug_config_method(b, method, arguments));
         }
 
         None

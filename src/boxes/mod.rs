@@ -79,6 +79,8 @@ pub mod jit_stats_box;
 pub mod jit_policy_box;
 pub mod jit_events_box;
 pub mod jit_hostcall_registry_box;
+pub mod debug_config_box;
+pub mod gc_config_box;
 
 // Web専用Box群（ブラウザ環境でのみ利用可能）
 #[cfg(target_arch = "wasm32")]

@@ -66,6 +66,9 @@ pub struct FunctionMetadata {
     
     /// Optimization hints
     pub optimization_hints: Vec<String>,
+
+    /// Optional per-value type map (for builders that annotate ValueId types)
+    pub value_types: std::collections::HashMap<ValueId, MirType>,
 }
 
 impl MirFunction {

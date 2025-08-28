@@ -1,0 +1,30 @@
+// Map.get with both receiver and key as function parameters
+// Expect: JIT hostcall allow for nyash.map.get_hh (Handle,Handle)
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_map_get_param_hh.nyash
+
+box Helper {
+  birth() {
+    // no-op constructor
+  }
+  getv(m, k) {
+    return m.get(k)
+  }
+}
+
+static box Main {
+  main() {
+    local m, k, v
+    m = new MapBox()
+    k = "key1"
+    v = "value1"
+    // Mutating ops fall back to VM by policy (read-only JIT)
+    m.set(k, v)
+    // Use user-defined box Helper so that getv is lowered into a MIR function
+    local h
+    h = new Helper()
+    // Both m and k are parameters of Helper.getv/2 → JIT can use HH path
+    return h.getv(m, k)
+  }
+}

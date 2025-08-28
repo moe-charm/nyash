@@ -336,3 +336,70 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
   - `NYASH_JIT_EVENTS=1` でイベントJSONを確認（fallback/trap理由が出る）
   - `cargo clean -p nyash-rust` → 再ビルド
   - 数値緩和: `NYASH_JIT_HOSTCALL_RELAX_NUMERIC=1` で i64→f64 のコアーションを許容（既定は `native_f64=1` 時に有効）
+
+### ✅ 10.9-β HostCall統合（完了）
+- math.*（関数スタイル）: 署名（F64）一致時に allow/sig_ok をイベント出力。戻りは Float 表示で安定。
+- Map.get:
+  - 受け手=param, key=I64 → `id: nyash.map.get_h`（Handle,I64）で allow かつ JIT実行
+  - 受け手=param, key=Handle → `id: nyash.map.get_hh`（Handle,Handle）で allow かつ JIT実行（HH経路）
+  - 受け手がparamでない場合 → fallback（`reason: receiver_not_param`）をイベントに記録し VM 実行
+- RO系（length/isEmpty/charCodeAt/size）: 受け手=param は allow/sig_ok。受け手≠param は fallback/receiver_not_param を必ず記録。
+- Quick flags: `NYASH_JIT_EVENTS=1` のとき Runner が未指定の `NYASH_JIT_THRESHOLD` を自動で `1` に設定（Lowerが1回目から走ってイベントが出る）。
+- 代表コマンド:
+  ```bash
+  # math.min（関数スタイル）
+  NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 NYASH_JIT_EVENTS=1 \
+    ./target/release/nyash --backend vm examples/jit_math_function_style_min_float.nyash
+
+  # Map.get（パラメータ受け＋Handleキー → HH直実行）
+  NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+    ./target/release/nyash --backend vm examples/jit_map_get_param_hh.nyash
+
+  # Map.get（非パラメータ受け → fallback記録）
+  NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+    ./target/release/nyash --backend vm examples/jit_hostcall_map_get_handle.nyash
+  ```
+
+### ⏭️ 10.9-δ（書き込みの導線のみ：次）
+- 方針: 既定は read-only（`policy.read_only=true`）。書き込みは fallback（`reason: policy_denied_mutating`）をイベントで可視化。（実装済）
+- 対象: Array.push/set, Map.set/delete など。イベントIDは `*_h`（Handle受け）に統一。
+- 仕上げ: `JitPolicyBox` に opt-in 追加（完了）
+  - `set("read_only", true|false)` / `setWhitelistCsv("id1,id2")` / `addWhitelist("id")` / `clearWhitelist()`
+  - プリセット: `enablePreset("mutating_minimal")`（Array.push_h） / `enablePreset("mutating_common")`（Array.push_h, Array.set_h, Map.set_h）
+
+---
+
+## 🚀 Phase 10.10 – Python→Nyash→MIR→VM/Native 実用化整備（着手）
+
+目標（DoD 抜粋）
+- DebugConfig（Box+Rust）で dump/events/stats/dot/phi_min 等の切替を一本化（CLI/env/Box同期）
+- GC切替（Null/Counting）をCLI/Boxから操作可能、root/bARRIERサイト観測が動く
+- HostCall（RO/一部WO）が param でallow、非paramでfallback（イベントで確認可）
+- 代表サンプル最小集合でE2E安定
+
+着手タスク（In Progress）
+1) DebugConfigBox（新規）
+   - setFlag(name,bool)/setPath(name,string)/apply()/summary()（env反映）
+   - 対応: NYASH_JIT_EVENTS/…/DUMP/…/DOT（最小）
+2) GC切替のCLI/Box連携（Pending）
+3) 代表サンプル/README整備（Pending）
+
+---
+
+### ⏸️ Checkpoint（2025-08-28 再起動用メモ）
+- 10.9-β/δ 完了（RO allow+fallback可視化、WOはpolicy/whitelistでopt-in）
+- HH経路（Map.get_hh）実装済み。戻りはCallBoundaryBoxでBoxRef復元。
+- JitPolicyBox: addWhitelist/clearWhitelist/enablePreset（mutating_minimal/common 等）
+- DebugConfigBox: JIT観測系（events/stats/dump/dot）をBoxで一元制御→apply()でenv反映
+- GcConfigBox: counting/trace/barrier_strict をBoxで操作→apply()でenv反映
+- 例:
+  - jit_map_get_param_hh.nyash（HH直実行）
+  - jit_policy_optin_mutating.nyash（mutatingのopt-in）
+  - gc_counting_demo.nyash（CountingGcの可視化、VMパス）
+
+次の着手（Restart後すぐ）
+1) Runner統合（DebugConfigの反映優先度/CLI連携の整理）
+   - 目標: CLI→DebugConfigBox→env→JIT/VM の一本化（既存JitConfigとの整合）
+2) GCドキュメントに GcConfigBox の使用例を追記（短文 + コマンド）
+3) examples/README.md（最小手順）
+   - HH直実行、mutating opt-in、CountingGc demo の3本だけ掲載

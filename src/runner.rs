@@ -77,6 +77,10 @@ impl NyashRunner {
             jc.handle_debug |= self.config.jit_handle_debug;
             jc.native_f64 |= self.config.jit_native_f64;
             jc.native_bool |= self.config.jit_native_bool;
+            // If events are enabled and no threshold is provided, force threshold=1 so lowering runs and emits events
+            if std::env::var("NYASH_JIT_EVENTS").ok().as_deref() == Some("1") && jc.threshold.is_none() {
+                jc.threshold = Some(1);
+            }
             if self.config.jit_only { std::env::set_var("NYASH_JIT_ONLY", "1"); }
             // Apply runtime capability probe (e.g., disable b1 ABI if unsupported)
             let caps = nyash_rust::jit::config::probe_capabilities();
@@ -321,7 +325,42 @@ impl NyashRunner {
         match vm.execute_module(&compile_result.module) {
             Ok(result) => {
                 println!("✅ VM execution completed successfully!");
-                println!("Result: {:?}", result);
+                if let Some(func) = compile_result.module.functions.get("main") {
+                    use nyash_rust::mir::MirType;
+                    use nyash_rust::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
+                    use nyash_rust::boxes::FloatBox;
+                    let (ety, sval) = match &func.signature.return_type {
+                        MirType::Float => {
+                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
+                                ("Float", format!("{}", fb.value))
+                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Float", format!("{}", ib.value as f64))
+                            } else { ("Float", result.to_string_box().value) }
+                        }
+                        MirType::Integer => {
+                            if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Integer", ib.value.to_string())
+                            } else { ("Integer", result.to_string_box().value) }
+                        }
+                        MirType::Bool => {
+                            if let Some(bb) = result.as_any().downcast_ref::<BoolBox>() {
+                                ("Bool", bb.value.to_string())
+                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Bool", (ib.value != 0).to_string())
+                            } else { ("Bool", result.to_string_box().value) }
+                        }
+                        MirType::String => {
+                            if let Some(sb) = result.as_any().downcast_ref::<StringBox>() {
+                                ("String", sb.value.clone())
+                            } else { ("String", result.to_string_box().value) }
+                        }
+                        _ => { (result.type_name(), result.to_string_box().value) }
+                    };
+                    println!("ResultType(MIR): {}", ety);
+                    println!("Result: {}", sval);
+                } else {
+                    println!("Result: {:?}", result);
+                }
             },
             Err(e) => {
                 eprintln!("❌ VM execution error: {}", e);

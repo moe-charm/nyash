@@ -23,5 +23,6 @@ pub mod data_methods;       // BufferBox, JSONBox, RegexBox
 pub mod network_methods;    // HttpClientBox, StreamBox
 pub mod p2p_methods;        // IntentBox, P2PBox
 pub mod http_methods;       // SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox
+pub mod system_methods;     // GcConfigBox, DebugConfigBox
 
 // Re-export methods for easy access

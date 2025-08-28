@@ -13,6 +13,32 @@ use super::vm::{VM, VMError, VMValue};
 impl VM {
     /// Call a method on a Box - simplified version of interpreter method dispatch
     pub(super) fn call_box_method_impl(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
+        // MathBox methods (minimal set used in 10.9)
+        if let Some(math) = box_value.as_any().downcast_ref::<crate::boxes::math_box::MathBox>() {
+            match method {
+                "min" => {
+                    if _args.len() >= 2 { return Ok(math.min(_args[0].clone_or_share(), _args[1].clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: min(a, b) requires 2 args")));
+                }
+                "max" => {
+                    if _args.len() >= 2 { return Ok(math.max(_args[0].clone_or_share(), _args[1].clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: max(a, b) requires 2 args")));
+                }
+                "abs" => {
+                    if let Some(v) = _args.get(0) { return Ok(math.abs(v.clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: abs(x) requires 1 arg")));
+                }
+                "sin" => {
+                    if let Some(v) = _args.get(0) { return Ok(math.sin(v.clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: sin(x) requires 1 arg")));
+                }
+                "cos" => {
+                    if let Some(v) = _args.get(0) { return Ok(math.cos(v.clone_or_share())); }
+                    return Ok(Box::new(StringBox::new("Error: cos(x) requires 1 arg")));
+                }
+                _ => { return Ok(Box::new(VoidBox::new())); }
+            }
+        }
         // ResultBox (NyashResultBox - new)
         if let Some(result_box) = box_value.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
             match method {
@@ -69,6 +95,39 @@ impl VM {
                     return Ok(Box::new(StringBox::new("disable(name) requires 1 arg")));
                 }
                 "summary" => { return Ok(jcb.summary()); }
+                _ => { return Ok(Box::new(VoidBox::new())); }
+            }
+        }
+
+        // JitPolicyBox methods
+        if let Some(jpb) = box_value.as_any().downcast_ref::<crate::boxes::jit_policy_box::JitPolicyBox>() {
+            match method {
+                "get" => {
+                    if let Some(k) = _args.get(0) { return Ok(jpb.get_flag(&k.to_string_box().value)); }
+                    return Ok(Box::new(StringBox::new("get(name) requires 1 arg")));
+                }
+                "set" => {
+                    if _args.len() >= 2 {
+                        let k = _args[0].to_string_box().value;
+                        let v = _args[1].to_string_box().value;
+                        let on = matches!(v.as_str(), "1" | "true" | "True" | "on" | "ON");
+                        return Ok(jpb.set_flag(&k, on));
+                    }
+                    return Ok(Box::new(StringBox::new("set(name, bool) requires 2 args")));
+                }
+                "setWhitelistCsv" | "set_whitelist_csv" => {
+                    if let Some(s) = _args.get(0) { return Ok(jpb.set_whitelist_csv(&s.to_string_box().value)); }
+                    return Ok(Box::new(StringBox::new("setWhitelistCsv(csv) requires 1 arg")));
+                }
+                "addWhitelist" | "add_whitelist" => {
+                    if let Some(s) = _args.get(0) { return Ok(jpb.add_whitelist(&s.to_string_box().value)); }
+                    return Ok(Box::new(StringBox::new("addWhitelist(name) requires 1 arg")));
+                }
+                "clearWhitelist" | "clear_whitelist" => { return Ok(jpb.clear_whitelist()); }
+                "enablePreset" | "enable_preset" => {
+                    if let Some(s) = _args.get(0) { return Ok(jpb.enable_preset(&s.to_string_box().value)); }
+                    return Ok(Box::new(StringBox::new("enablePreset(name) requires 1 arg")));
+                }
                 _ => { return Ok(Box::new(VoidBox::new())); }
             }
         }

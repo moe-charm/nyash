@@ -21,6 +21,7 @@ pub const SYM_ARRAY_PUSH_H: &str = "nyash.array.push_h";
 pub const SYM_ARRAY_LAST_H: &str = "nyash.array.last_h";
 pub const SYM_MAP_SIZE_H: &str = "nyash.map.size_h";
 pub const SYM_MAP_GET_H: &str = "nyash.map.get_h";
+pub const SYM_MAP_GET_HH: &str = "nyash.map.get_hh";
 pub const SYM_MAP_SET_H: &str = "nyash.map.set_h";
 pub const SYM_MAP_HAS_H: &str = "nyash.map.has_h";
 // Generic read-only helper
@@ -61,18 +62,45 @@ pub fn array_get(args: &[VMValue]) -> VMValue {
 }
 
 pub fn array_set(args: &[VMValue]) -> VMValue {
+    // Enforce policy for mutating operation
+    if crate::jit::policy::current().read_only &&
+        !crate::jit::policy::current().hostcall_whitelist.iter().any(|s| s == SYM_ARRAY_SET)
+    {
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": SYM_ARRAY_SET, "decision":"fallback", "reason":"policy_denied_mutating"})
+        );
+        return VMValue::Integer(0);
+    }
     if let (Some(arr), Some(VMValue::Integer(idx)), Some(value)) = (as_array(args), args.get(1), args.get(2)) {
         let val_box: Box<dyn NyashBox> = value.to_nyash_box();
         let res = arr.set(Box::new(IntegerBox::new(*idx)), val_box);
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": SYM_ARRAY_SET, "decision":"allow", "argc":3, "arg_types":["Handle","I64","Handle"]})
+        );
         return VMValue::from_nyash_box(res);
     }
     VMValue::BoxRef(Arc::new(StringBox::new("Error: array.set expects (ArrayBox, i64, value)")))
 }
 
 pub fn array_push(args: &[VMValue]) -> VMValue {
+    if crate::jit::policy::current().read_only &&
+        !crate::jit::policy::current().hostcall_whitelist.iter().any(|s| s == SYM_ARRAY_PUSH)
+    {
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": SYM_ARRAY_PUSH, "decision":"fallback", "reason":"policy_denied_mutating"})
+        );
+        return VMValue::Integer(0);
+    }
     if let (Some(arr), Some(value)) = (as_array(args), args.get(1)) {
         let val_box: Box<dyn NyashBox> = value.to_nyash_box();
         let res = arr.push(val_box);
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": SYM_ARRAY_PUSH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]})
+        );
         return VMValue::from_nyash_box(res);
     }
     VMValue::BoxRef(Arc::new(StringBox::new("Error: array.push expects (ArrayBox, value)")))
@@ -87,10 +115,24 @@ pub fn map_get(args: &[VMValue]) -> VMValue {
 }
 
 pub fn map_set(args: &[VMValue]) -> VMValue {
+    if crate::jit::policy::current().read_only &&
+        !crate::jit::policy::current().hostcall_whitelist.iter().any(|s| s == SYM_MAP_SET)
+    {
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": SYM_MAP_SET, "decision":"fallback", "reason":"policy_denied_mutating"})
+        );
+        return VMValue::Integer(0);
+    }
     if let (Some(map), Some(key), Some(value)) = (as_map(args), args.get(1), args.get(2)) {
         let key_box: Box<dyn NyashBox> = key.to_nyash_box();
         let val_box: Box<dyn NyashBox> = value.to_nyash_box();
-        return VMValue::from_nyash_box(map.set(key_box, val_box));
+        let out = map.set(key_box, val_box);
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": SYM_MAP_SET, "decision":"allow", "argc":3, "arg_types":["Handle","Handle","Handle"]})
+        );
+        return VMValue::from_nyash_box(out);
     }
     VMValue::BoxRef(Arc::new(StringBox::new("Error: map.set expects (MapBox, key, value)")))
 }

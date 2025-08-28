@@ -48,5 +48,52 @@ impl JitPolicyBox {
         crate::jit::policy::set_current(cur);
         Box::new(VoidBox::new())
     }
-}
 
+    pub fn add_whitelist(&self, name: &str) -> Box<dyn NyashBox> {
+        let mut cur = crate::jit::policy::current();
+        if !cur.hostcall_whitelist.iter().any(|s| s == name) {
+            cur.hostcall_whitelist.push(name.to_string());
+        }
+        crate::jit::policy::set_current(cur);
+        Box::new(VoidBox::new())
+    }
+
+    pub fn clear_whitelist(&self) -> Box<dyn NyashBox> {
+        let mut cur = crate::jit::policy::current();
+        cur.hostcall_whitelist.clear();
+        crate::jit::policy::set_current(cur);
+        Box::new(VoidBox::new())
+    }
+
+    pub fn enable_preset(&self, name: &str) -> Box<dyn NyashBox> {
+        let mut cur = crate::jit::policy::current();
+        match name {
+            // 最小: Array.push_h のみ許可（読み取り以外は変えない）
+            "mutating_minimal" | "mutating_array_push" => {
+                let id = crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H;
+                if !cur.hostcall_whitelist.iter().any(|s| s == id) {
+                    cur.hostcall_whitelist.push(id.to_string());
+                }
+            }
+            // 例: Map.set_h も追加許可（必要に応じて拡張）
+            "mutating_map_set" => {
+                let id = crate::jit::r#extern::collections::SYM_MAP_SET_H;
+                if !cur.hostcall_whitelist.iter().any(|s| s == id) {
+                    cur.hostcall_whitelist.push(id.to_string());
+                }
+            }
+            // よく使う: Array.push_h + Array.set_h + Map.set_h を許可
+            "mutating_common" => {
+                let ids = [
+                    crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H,
+                    crate::jit::r#extern::collections::SYM_ARRAY_SET_H,
+                    crate::jit::r#extern::collections::SYM_MAP_SET_H,
+                ];
+                for id in ids { if !cur.hostcall_whitelist.iter().any(|s| s == id) { cur.hostcall_whitelist.push(id.to_string()); } }
+            }
+            _ => { return Box::new(StringBox::new(format!("Unknown preset: {}", name))); }
+        }
+        crate::jit::policy::set_current(cur);
+        Box::new(VoidBox::new())
+    }
+}

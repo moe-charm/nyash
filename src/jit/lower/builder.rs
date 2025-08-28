@@ -248,10 +248,12 @@ extern "C" fn nyash_array_len_h(handle: u64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_array_push_h(handle: u64, val: i64) -> i64 {
-    // Policy/Events: classify and decide
+    // Policy/Events: classify and decide with whitelist
     use crate::jit::hostcall_registry::{classify, HostcallKind};
     let sym = crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H;
-    match (classify(sym), crate::jit::policy::current().read_only) {
+    let pol = crate::jit::policy::current();
+    let wh = pol.hostcall_whitelist;
+    match (classify(sym), pol.read_only && !wh.iter().any(|s| s == sym)) {
         (HostcallKind::Mutating, true) => {
             crate::jit::events::emit(
                 "hostcall", "<jit>", None, None,
@@ -308,7 +310,9 @@ extern "C" fn nyash_array_last_h(handle: u64) -> i64 {
 extern "C" fn nyash_array_set_h(handle: u64, idx: i64, val: i64) -> i64 {
     use crate::jit::hostcall_registry::{classify, HostcallKind};
     let sym = crate::jit::r#extern::collections::SYM_ARRAY_SET_H;
-    if classify(sym) == HostcallKind::Mutating && crate::jit::policy::current().read_only {
+    let pol = crate::jit::policy::current();
+    let wh = pol.hostcall_whitelist;
+    if classify(sym) == HostcallKind::Mutating && pol.read_only && !wh.iter().any(|s| s == sym) {
         crate::jit::events::emit(
             "hostcall", "<jit>", None, None,
             serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
@@ -359,10 +363,33 @@ extern "C" fn nyash_map_get_h(handle: u64, key: i64) -> i64 {
     0
 }
 #[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_map_get_hh(map_h: u64, key_h: u64) -> i64 {
+    // Emit allow event for visibility
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_GET_HH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]})
+    );
+    let map_arc = crate::jit::rt::handles::get(map_h);
+    let key_arc = crate::jit::rt::handles::get(key_h);
+    if let (Some(mobj), Some(kobj)) = (map_arc, key_arc) {
+        if let Some(map) = mobj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+            let key_box: Box<dyn crate::box_trait::NyashBox> = kobj.share_box();
+            let val = map.get(key_box);
+            // Register result into handle table and return handle id
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(val);
+            let h = crate::jit::rt::handles::to_handle(arc);
+            return h as i64;
+        }
+    }
+    0
+}
+#[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_map_set_h(handle: u64, key: i64, val: i64) -> i64 {
     use crate::jit::hostcall_registry::{classify, HostcallKind};
     let sym = crate::jit::r#extern::collections::SYM_MAP_SET_H;
-    if classify(sym) == HostcallKind::Mutating && crate::jit::policy::current().read_only {
+    let pol = crate::jit::policy::current();
+    let wh = pol.hostcall_whitelist;
+    if classify(sym) == HostcallKind::Mutating && pol.read_only && !wh.iter().any(|s| s == sym) {
         crate::jit::events::emit(
             "hostcall", "<jit>", None, None,
             serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
@@ -385,6 +412,10 @@ extern "C" fn nyash_map_set_h(handle: u64, key: i64, val: i64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_map_has_h(handle: u64, key: i64) -> i64 {
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_HAS_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
+    );
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
             let key_box = Box::new(crate::box_trait::IntegerBox::new(key));
@@ -1153,6 +1184,7 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_ARRAY_LAST_H, nyash_array_last_h as *const u8);
             builder.symbol(c::SYM_MAP_SIZE_H, nyash_map_size_h as *const u8);
             builder.symbol(c::SYM_MAP_GET_H, nyash_map_get_h as *const u8);
+            builder.symbol(c::SYM_MAP_GET_HH, nyash_map_get_hh as *const u8);
             builder.symbol(c::SYM_MAP_SET_H, nyash_map_set_h as *const u8);
             builder.symbol(c::SYM_MAP_HAS_H, nyash_map_has_h as *const u8);
             builder.symbol(c::SYM_ANY_LEN_H, nyash_any_length_h as *const u8);

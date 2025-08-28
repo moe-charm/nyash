@@ -91,7 +91,7 @@ impl VMValue {
     pub fn to_nyash_box(&self) -> Box<dyn NyashBox> {
         match self {
             VMValue::Integer(i) => Box::new(IntegerBox::new(*i)),
-            VMValue::Float(f) => Box::new(StringBox::new(&f.to_string())), // Simplified for now
+            VMValue::Float(f) => Box::new(crate::boxes::FloatBox::new(*f)),
             VMValue::Bool(b) => Box::new(BoolBox::new(*b)),
             VMValue::String(s) => Box::new(StringBox::new(s)),
             VMValue::Future(f) => Box::new(f.clone()),
@@ -591,7 +591,7 @@ impl VM {
             self.pin_roots(args_vec.iter());
             if let Some(jm_mut) = self.jit_manager.as_mut() {
                 if jm_mut.is_compiled(&function.signature.name) {
-                    if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &args_vec) {
+                    if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) {
                         // Exit scope before returning
                         self.leave_root_region();
                         self.scope_tracker.pop_scope();
@@ -609,7 +609,7 @@ impl VM {
                     // Try to compile now and execute; if not possible, error out
                     let _ = jm_mut.maybe_compile(&function.signature.name, function);
                     if jm_mut.is_compiled(&function.signature.name) {
-                        if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &args_vec) {
+                        if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) {
                             self.leave_root_region();
                             self.scope_tracker.pop_scope();
                             return Ok(val);
@@ -1014,6 +1014,50 @@ impl VM {
                 "values" => { return Ok(map_box.values()); },
                 "size" => { return Ok(map_box.size()); },
                 "clear" => { return Ok(map_box.clear()); },
+                _ => return Ok(Box::new(VoidBox::new())),
+            }
+        }
+
+        // MathBox methods (minimal set)
+        if let Some(math_box) = box_value.as_any().downcast_ref::<crate::boxes::math_box::MathBox>() {
+            // Coerce numeric-like StringBox to FloatBox for function-style lowering path
+            let mut coerce_num = |b: &Box<dyn NyashBox>| -> Box<dyn NyashBox> {
+                if let Some(sb) = b.as_any().downcast_ref::<StringBox>() {
+                    let s = sb.value.trim();
+                    if let Ok(f) = s.parse::<f64>() { return Box::new(crate::boxes::FloatBox::new(f)); }
+                    if let Ok(i) = s.parse::<i64>() { return Box::new(IntegerBox::new(i)); }
+                }
+                b.clone_or_share()
+            };
+            match method {
+                "min" => {
+                    if _args.len() >= 2 {
+                        let a = coerce_num(&_args[0]);
+                        let b = coerce_num(&_args[1]);
+                        return Ok(math_box.min(a, b));
+                    }
+                    return Ok(Box::new(StringBox::new("Error: min(a,b) requires 2 args")));
+                }
+                "max" => {
+                    if _args.len() >= 2 {
+                        let a = coerce_num(&_args[0]);
+                        let b = coerce_num(&_args[1]);
+                        return Ok(math_box.max(a, b));
+                    }
+                    return Ok(Box::new(StringBox::new("Error: max(a,b) requires 2 args")));
+                }
+                "abs" => {
+                    if let Some(v) = _args.get(0) { return Ok(math_box.abs(coerce_num(v))); }
+                    return Ok(Box::new(StringBox::new("Error: abs(x) requires 1 arg")));
+                }
+                "sin" => {
+                    if let Some(v) = _args.get(0) { return Ok(math_box.sin(coerce_num(v))); }
+                    return Ok(Box::new(StringBox::new("Error: sin(x) requires 1 arg")));
+                }
+                "cos" => {
+                    if let Some(v) = _args.get(0) { return Ok(math_box.cos(coerce_num(v))); }
+                    return Ok(Box::new(StringBox::new("Error: cos(x) requires 1 arg")));
+                }
                 _ => return Ok(Box::new(VoidBox::new())),
             }
         }

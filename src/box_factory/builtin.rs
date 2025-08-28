@@ -292,6 +292,36 @@ impl BuiltinBoxFactory {
             }
             Ok(Box::new(crate::boxes::jit_config_box::JitConfigBox::new()))
         });
+
+        // JitPolicyBox (runtime JIT policy as a Box)
+        self.register("JitPolicyBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("JitPolicyBox constructor expects 0 arguments, got {}", args.len()),
+                });
+            }
+            Ok(Box::new(crate::boxes::jit_policy_box::JitPolicyBox::new()))
+        });
+
+        // DebugConfigBox (runtime debug/observability switches)
+        self.register("DebugConfigBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("DebugConfigBox constructor expects 0 arguments, got {}", args.len()),
+                });
+            }
+            Ok(Box::new(crate::boxes::debug_config_box::DebugConfigBox::new()))
+        });
+
+        // GcConfigBox (runtime GC switches)
+        self.register("GcConfigBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("GcConfigBox constructor expects 0 arguments, got {}", args.len()),
+                });
+            }
+            Ok(Box::new(crate::boxes::gc_config_box::GcConfigBox::new()))
+        });
     }
     
     /// Register I/O types

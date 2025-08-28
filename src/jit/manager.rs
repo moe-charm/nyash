@@ -134,7 +134,7 @@ impl JitManager {
     }
 
     /// 10_c: execute compiled function if present (stub: empty args). Returns Some(VMValue) if JIT path was taken.
-    pub fn execute_compiled(&mut self, func: &str, args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> {
+    pub fn execute_compiled(&mut self, func: &str, ret_ty: &crate::mir::MirType, args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> {
         if let Some(h) = self.handle_of(func) {
             // Expose args to both legacy VM hostcalls and new JIT ABI TLS
             crate::jit::rt::set_legacy_vm_args(args);
@@ -149,7 +149,12 @@ impl JitManager {
                 eprintln!("[JIT] exec_time_ms={} for {}", dt.as_millis(), func);
             }
             let res = match out {
-                Some(v) => { self.exec_ok = self.exec_ok.saturating_add(1); Some(crate::jit::abi::adapter::from_jit_value(v)) }
+                Some(v) => {
+                    self.exec_ok = self.exec_ok.saturating_add(1);
+                    // Use CallBoundaryBox to convert JitValue → VMValue with MIR ret type hint
+                    let vmv = crate::jit::boundary::CallBoundaryBox::to_vm(ret_ty, v);
+                    Some(vmv)
+                }
                 None => { self.exec_trap = self.exec_trap.saturating_add(1); None }
             };
             // Clear handles created during this call
