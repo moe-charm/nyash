@@ -1,0 +1,12 @@
+// Fallback case: Array.append/push is mutating; with read-only policy it should fallback
+// Run: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examples/jit_hostcall_array_append.nyash
+
+static box Main {
+  main() {
+    local xs
+    xs = new ArrayBox()
+    xs.push(1)
+    return xs.length() // expect 1 in VM; under JIT read-only policy push is denied → still 1 via VM path
+  }
+}
+

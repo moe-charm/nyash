@@ -8,6 +8,8 @@ pub struct LowerCore {
     pub covered: usize,
     /// Minimal constant propagation for i64 to feed host-call args
     known_i64: std::collections::HashMap<ValueId, i64>,
+    /// Minimal constant propagation for f64 (math.* signature checks)
+    known_f64: std::collections::HashMap<ValueId, f64>,
     /// Parameter index mapping for ValueId
     param_index: std::collections::HashMap<ValueId, usize>,
     /// Track values produced by Phi (for minimal PHI path)
@@ -18,6 +20,8 @@ pub struct LowerCore {
     bool_values: std::collections::HashSet<ValueId>,
     /// Track PHI destinations that are boolean (all inputs derived from bool_values)
     bool_phi_values: std::collections::HashSet<ValueId>,
+    /// Track values that are FloatBox instances (for arg type classification)
+    float_box_values: std::collections::HashSet<ValueId>,
     // Per-function statistics (last lowered)
     last_phi_total: u64,
     last_phi_b1: u64,
@@ -28,7 +32,7 @@ pub struct LowerCore {
 }
 
 impl LowerCore {
-    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), param_index: std::collections::HashMap::new(), phi_values: std::collections::HashSet::new(), phi_param_index: std::collections::HashMap::new(), bool_values: std::collections::HashSet::new(), bool_phi_values: std::collections::HashSet::new(), last_phi_total: 0, last_phi_b1: 0, last_ret_bool_hint_used: false, local_index: std::collections::HashMap::new(), next_local: 0 } }
+    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), known_f64: std::collections::HashMap::new(), param_index: std::collections::HashMap::new(), phi_values: std::collections::HashSet::new(), phi_param_index: std::collections::HashMap::new(), bool_values: std::collections::HashSet::new(), bool_phi_values: std::collections::HashSet::new(), float_box_values: std::collections::HashSet::new(), last_phi_total: 0, last_phi_b1: 0, last_ret_bool_hint_used: false, local_index: std::collections::HashMap::new(), next_local: 0 } }
 
     /// Get statistics for the last lowered function
     pub fn last_stats(&self) -> (u64, u64, bool) { (self.last_phi_total, self.last_phi_b1, self.last_ret_bool_hint_used) }
@@ -232,10 +236,22 @@ impl LowerCore {
         } else {
             builder.prepare_signature_i64(func.params.len(), true);
         }
+        // Pre-scan FloatBox creations across all blocks for arg classification
+        self.float_box_values.clear();
+        for bb in bb_ids.iter() {
+            if let Some(block) = func.blocks.get(bb) {
+                for ins in block.instructions.iter() {
+                    if let crate::mir::MirInstruction::NewBox { dst, box_type, .. } = ins { if box_type == "FloatBox" { self.float_box_values.insert(*dst); } }
+                    if let crate::mir::MirInstruction::Copy { dst, src } = ins { if self.float_box_values.contains(src) { self.float_box_values.insert(*dst); } }
+                }
+            }
+        }
+
         builder.begin_function(&func.signature.name);
         // Iterate blocks in the sorted order to keep indices stable
         self.phi_values.clear();
         self.phi_param_index.clear();
+        self.float_box_values.clear();
         for (idx, bb_id) in bb_ids.iter().enumerate() {
             let bb = func.blocks.get(bb_id).unwrap();
             builder.switch_to_block(idx);
@@ -262,7 +278,10 @@ impl LowerCore {
             }
             for instr in bb.instructions.iter() {
                 self.cover_if_supported(instr);
-                self.try_emit(builder, instr, *bb_id);
+                self.try_emit(builder, instr, *bb_id, func);
+                // Track FloatBox creations for later arg classification
+                if let crate::mir::MirInstruction::NewBox { dst, box_type, .. } = instr { if box_type == "FloatBox" { self.float_box_values.insert(*dst); } }
+                if let crate::mir::MirInstruction::Copy { dst, src } = instr { if self.float_box_values.contains(src) { self.float_box_values.insert(*dst); } }
             }
             if let Some(term) = &bb.terminator {
                 self.cover_if_supported(term);
@@ -353,10 +372,10 @@ impl LowerCore {
                         }
                         builder.seal_block(target_index);
                     }
-                    _ => {
-                        self.try_emit(builder, term, *bb_id);
-                    }
+                    _ => { /* other terminators handled via generic emission below */ }
                 }
+                // Also allow other terminators to be emitted if needed
+                self.try_emit(builder, term, *bb_id, func);
             }
         }
         builder.end_function();
@@ -443,28 +462,53 @@ impl LowerCore {
                 | I::Jump { .. }
                 | I::Branch { .. }
                 | I::Return { .. }
+                | I::BoxCall { .. }
                 | I::ArrayGet { .. }
                 | I::ArraySet { .. }
         );
         if supported { self.covered += 1; } else { self.unsupported += 1; }
     }
 
-    fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId) {
+    fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId, func: &crate::mir::MirFunction) {
         use crate::mir::MirInstruction as I;
         match instr {
-            I::Cast { dst, value, target_type: _ } => {
+            I::NewBox { dst, box_type, args } => {
+                // Track boxed numeric literals to aid signature checks (FloatBox/IntegerBox)
+                if box_type == "FloatBox" {
+                    if let Some(src) = args.get(0) {
+                        if let Some(fv) = self.known_f64.get(src).copied() {
+                            self.known_f64.insert(*dst, fv);
+                        } else if let Some(iv) = self.known_i64.get(src).copied() {
+                            self.known_f64.insert(*dst, iv as f64);
+                        }
+                    }
+                } else if box_type == "IntegerBox" {
+                    if let Some(src) = args.get(0) {
+                        if let Some(iv) = self.known_i64.get(src).copied() {
+                            self.known_i64.insert(*dst, iv);
+                        }
+                    }
+                }
+            }
+            I::Cast { dst, value, target_type } => {
                 // Minimal cast footing: materialize source when param/known
                 // Bool→Int: rely on producers (compare) and branch/b1 loaders; here we just reuse integer path
                 self.push_value_if_known_or_param(b, value);
                 // Track known i64 if source known
                 if let Some(v) = self.known_i64.get(value).copied() { self.known_i64.insert(*dst, v); }
+                // Track known f64 for float casts
+                if matches!(target_type, crate::mir::MirType::Float) {
+                    if let Some(iv) = self.known_i64.get(value).copied() {
+                        self.known_f64.insert(*dst, iv as f64);
+                    }
+                }
             }
             I::Const { dst, value } => match value {
                 ConstValue::Integer(i) => { 
                     b.emit_const_i64(*i);
                     self.known_i64.insert(*dst, *i);
                 }
-                ConstValue::Float(f) => b.emit_const_f64(*f),
+                ConstValue::Float(f) => { b.emit_const_f64(*f); self.known_f64.insert(*dst, *f); }
                 ConstValue::Bool(bv) => {
                     let iv = if *bv { 1 } else { 0 };
                     b.emit_const_i64(iv);
@@ -478,6 +522,7 @@ impl LowerCore {
             },
             I::Copy { dst, src } => { 
                 if let Some(v) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, v); }
+                if let Some(v) = self.known_f64.get(src).copied() { self.known_f64.insert(*dst, v); }
                 // If source is a parameter, materialize it on the stack for downstream ops
                 if let Some(pidx) = self.param_index.get(src).copied() {
                     b.emit_param_i64(pidx);
@@ -558,7 +603,7 @@ impl LowerCore {
                 }
             }
             I::ArrayGet { array, index, .. } => {
-                if std::env::var("NYASH_JIT_HOSTCALL").ok().as_deref() == Some("1") {
+                if crate::jit::config::current().hostcall {
                     let idx = self.known_i64.get(index).copied().unwrap_or(0);
                     if let Some(pidx) = self.param_index.get(array).copied() {
                         // Handle-based: push handle value from param, then index
@@ -575,7 +620,7 @@ impl LowerCore {
                 }
             }
             I::ArraySet { array, index, value } => {
-                if std::env::var("NYASH_JIT_HOSTCALL").ok().as_deref() == Some("1") {
+                if crate::jit::config::current().hostcall {
                     let idx = self.known_i64.get(index).copied().unwrap_or(0);
                     let val = self.known_i64.get(value).copied().unwrap_or(0);
                     if let Some(pidx) = self.param_index.get(array).copied() {
@@ -593,7 +638,7 @@ impl LowerCore {
                 }
             }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
-                if std::env::var("NYASH_JIT_HOSTCALL").ok().as_deref() == Some("1") {
+                if crate::jit::config::current().hostcall {
                     match method.as_str() {
                         "len" | "length" => {
                             if let Some(pidx) = self.param_index.get(array).copied() {
@@ -605,6 +650,106 @@ impl LowerCore {
                                 b.emit_const_i64(arr_idx);
                                 b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
                             }
+                        }
+                        // math.* minimal boundary: use registry signature to decide allow/fallback (no actual hostcall yet)
+                        "sin" | "cos" | "abs" | "min" | "max" => {
+                            use crate::jit::hostcall_registry::{check_signature, ArgKind};
+                            // Build symbol and observed arg kinds (f64 if known float, else i64)
+                            let sym = format!("nyash.math.{}", method);
+                            let mut observed: Vec<ArgKind> = Vec::new();
+                            for v in args.iter() {
+                                if self.known_f64.contains_key(v) { observed.push(ArgKind::F64); }
+                                else { observed.push(ArgKind::I64); }
+                            }
+                            // Prepare arg_types for event payload
+                            // Classify argument kinds using known maps and FloatBox tracking; as a last resort, scan for NewBox(FloatBox)
+                            let mut observed_kinds: Vec<crate::jit::hostcall_registry::ArgKind> = Vec::new();
+                            for v in args.iter() {
+                                let mut kind = if self.known_f64.contains_key(v) || self.float_box_values.contains(v) {
+                                    crate::jit::hostcall_registry::ArgKind::F64
+                                } else { crate::jit::hostcall_registry::ArgKind::I64 };
+                                if let crate::jit::hostcall_registry::ArgKind::I64 = kind {
+                                    'scanv: for (_bb_id, bb) in func.blocks.iter() {
+                                        for ins in bb.instructions.iter() {
+                                            if let crate::mir::MirInstruction::NewBox { dst, box_type, .. } = ins {
+                                                if *dst == *v && box_type == "FloatBox" { kind = crate::jit::hostcall_registry::ArgKind::F64; break 'scanv; }
+                                            }
+                                        }
+                                    }
+                                }
+                                observed_kinds.push(kind);
+                            }
+                            let arg_types: Vec<&'static str> = observed_kinds.iter().map(|k| match k { crate::jit::hostcall_registry::ArgKind::I64 => "I64", crate::jit::hostcall_registry::ArgKind::F64 => "F64", crate::jit::hostcall_registry::ArgKind::Handle => "Handle" }).collect();
+                            match check_signature(&sym, &observed_kinds) {
+                                Ok(()) => {
+                                    // allow: record decision; execution remains on VM for now (thin bridge)
+                                    crate::jit::events::emit(
+                                        "hostcall",
+                                        "<jit>",
+                                        None,
+                                        None,
+                                        serde_json::json!({
+                                            "id": sym,
+                                            "decision": "allow",
+                                            "reason": "sig_ok",
+                                            "argc": observed.len(),
+                                            "arg_types": arg_types
+                                        })
+                                    );
+                                    // If native f64 is enabled, emit a typed hostcall to math extern
+                                    if crate::jit::config::current().native_f64 {
+                                        let (symbol, arity) = match method.as_str() {
+                                            "sin" => ("nyash.math.sin_f64", 1),
+                                            "cos" => ("nyash.math.cos_f64", 1),
+                                            "abs" => ("nyash.math.abs_f64", 1),
+                                            "min" => ("nyash.math.min_f64", 2),
+                                            "max" => ("nyash.math.max_f64", 2),
+                                            _ => ("nyash.math.sin_f64", 1),
+                                        };
+                                        // Push f64 args from known_f64 or coerce known_i64
+                                        for i in 0..arity {
+                                            if let Some(v) = args.get(i) {
+                                                // Try direct known values
+                                                if let Some(fv) = self.known_f64.get(v).copied() { b.emit_const_f64(fv); continue; }
+                                                if let Some(iv) = self.known_i64.get(v).copied() { b.emit_const_f64(iv as f64); continue; }
+                                                // Try unwrap FloatBox: scan blocks to find NewBox FloatBox { args: [src] } and reuse src const
+                                                let mut emitted = false;
+                                                'scan: for (_bb_id, bb) in func.blocks.iter() {
+                                                    for ins in bb.instructions.iter() {
+                                                        if let crate::mir::MirInstruction::NewBox { dst, box_type, args: nb_args } = ins {
+                                                            if *dst == *v && box_type == "FloatBox" {
+                                                                if let Some(srcv) = nb_args.get(0) {
+                                                                    if let Some(fv) = self.known_f64.get(srcv).copied() { b.emit_const_f64(fv); emitted = true; break 'scan; }
+                                                                    if let Some(iv) = self.known_i64.get(srcv).copied() { b.emit_const_f64(iv as f64); emitted = true; break 'scan; }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if !emitted { b.emit_const_f64(0.0); }
+                                            } else { b.emit_const_f64(0.0); }
+                                        }
+                                        let kinds: Vec<super::builder::ParamKind> = (0..arity).map(|_| super::builder::ParamKind::F64).collect();
+                                        b.emit_host_call_typed(symbol, &kinds, dst.is_some(), true);
+                                    }
+                                }
+                                Err(reason) => {
+                                    crate::jit::events::emit(
+                                        "hostcall",
+                                        "<jit>",
+                                        None,
+                                        None,
+                                        serde_json::json!({
+                                            "id": sym,
+                                            "decision": "fallback",
+                                            "reason": reason,
+                                            "argc": observed.len(),
+                                            "arg_types": arg_types
+                                        })
+                                    );
+                                }
+                            }
+                            // no-op: VM側で実行される
                         }
                         "isEmpty" | "empty" => {
                             if let Some(pidx) = self.param_index.get(array).copied() {

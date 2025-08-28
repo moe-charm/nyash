@@ -17,6 +17,7 @@ pub struct JitConfig {
     pub native_bool: bool,     // NYASH_JIT_NATIVE_BOOL
     pub native_bool_abi: bool, // NYASH_JIT_ABI_B1 (experimental)
     pub ret_bool_b1: bool,     // NYASH_JIT_RET_B1 (footing; currently returns i64 0/1)
+    pub relax_numeric: bool,   // NYASH_JIT_HOSTCALL_RELAX_NUMERIC (i64->f64 coercion)
 }
 
 impl JitConfig {
@@ -36,6 +37,7 @@ impl JitConfig {
             native_bool: getb("NYASH_JIT_NATIVE_BOOL"),
             native_bool_abi: getb("NYASH_JIT_ABI_B1"),
             ret_bool_b1: getb("NYASH_JIT_RET_B1"),
+            relax_numeric: getb("NYASH_JIT_HOSTCALL_RELAX_NUMERIC"),
         }
     }
 
@@ -55,6 +57,7 @@ impl JitConfig {
         setb("NYASH_JIT_NATIVE_BOOL", self.native_bool);
         setb("NYASH_JIT_ABI_B1", self.native_bool_abi);
         setb("NYASH_JIT_RET_B1", self.ret_bool_b1);
+        setb("NYASH_JIT_HOSTCALL_RELAX_NUMERIC", self.relax_numeric);
     }
 }
 

@@ -30,6 +30,8 @@ pub trait IRBuilder {
     fn emit_return(&mut self);
     /// Phase 10_d scaffolding: host-call emission (symbolic)
     fn emit_host_call(&mut self, _symbol: &str, _argc: usize, _has_ret: bool) { }
+    /// Typed host-call emission: params kinds and return type hint (f64 when true)
+    fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], _has_ret: bool, _ret_is_f64: bool) { }
     // ==== Phase 10.7 (control-flow wiring, default no-op) ====
     /// Optional: prepare N basic blocks and return their handles (0..N-1)
     fn prepare_blocks(&mut self, _count: usize) { }
@@ -95,6 +97,7 @@ impl IRBuilder for NoopBuilder {
     fn emit_jump(&mut self) { self.branches += 1; }
     fn emit_branch(&mut self) { self.branches += 1; }
     fn emit_return(&mut self) { self.rets += 1; }
+    fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], has_ret: bool, _ret_is_f64: bool) { if has_ret { self.consts += 1; } }
     fn ensure_local_i64(&mut self, _index: usize) { /* no-op */ }
     fn store_local_i64(&mut self, _index: usize) { self.consts += 1; }
     fn load_local_i64(&mut self, _index: usize) { self.consts += 1; }
@@ -134,6 +137,16 @@ use cranelift_codegen::ir::InstBuilder;
 
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_host_stub0() -> i64 { 0 }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_math_sin_f64(x: f64) -> f64 { x.sin() }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_math_cos_f64(x: f64) -> f64 { x.cos() }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_math_abs_f64(x: f64) -> f64 { x.abs() }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_math_min_f64(a: f64, b: f64) -> f64 { a.min(b) }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_math_max_f64(a: f64, b: f64) -> f64 { a.max(b) }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_array_len(arr_param_index: i64) -> i64 {
     // Interpret first arg as function param index and fetch from thread-local args
@@ -222,6 +235,10 @@ extern "C" fn nyash_map_size(map_param_index: i64) -> i64 {
 // === Handle-based externs (10.7c) ===
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_array_len_h(handle: u64) -> i64 {
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ARRAY_LEN_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
+    );
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
             if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
@@ -236,7 +253,10 @@ extern "C" fn nyash_array_push_h(handle: u64, val: i64) -> i64 {
     let sym = crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H;
     match (classify(sym), crate::jit::policy::current().read_only) {
         (HostcallKind::Mutating, true) => {
-            crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": sym, "decision":"fallback"}));
+            crate::jit::events::emit(
+                "hostcall", "<jit>", None, None,
+                serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
+            );
             return 0;
         }
         _ => {}
@@ -245,7 +265,10 @@ extern "C" fn nyash_array_push_h(handle: u64, val: i64) -> i64 {
         if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
             let ib = crate::box_trait::IntegerBox::new(val);
             let _ = arr.push(Box::new(ib));
-            crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": sym, "decision":"allow"}));
+            crate::jit::events::emit(
+                "hostcall", "<jit>", None, None,
+                serde_json::json!({"id": sym, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
+            );
             return 0;
         }
     }
@@ -253,6 +276,10 @@ extern "C" fn nyash_array_push_h(handle: u64, val: i64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_array_get_h(handle: u64, idx: i64) -> i64 {
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ARRAY_GET_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
+    );
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
             let val = arr.get(Box::new(crate::box_trait::IntegerBox::new(idx)));
@@ -282,7 +309,10 @@ extern "C" fn nyash_array_set_h(handle: u64, idx: i64, val: i64) -> i64 {
     use crate::jit::hostcall_registry::{classify, HostcallKind};
     let sym = crate::jit::r#extern::collections::SYM_ARRAY_SET_H;
     if classify(sym) == HostcallKind::Mutating && crate::jit::policy::current().read_only {
-        crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": sym, "decision":"fallback"}));
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
+        );
         return 0;
     }
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
@@ -291,7 +321,10 @@ extern "C" fn nyash_array_set_h(handle: u64, idx: i64, val: i64) -> i64 {
                 Box::new(crate::box_trait::IntegerBox::new(idx)),
                 Box::new(crate::box_trait::IntegerBox::new(val)),
             );
-            crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": sym, "decision":"allow"}));
+            crate::jit::events::emit(
+                "hostcall", "<jit>", None, None,
+                serde_json::json!({"id": sym, "decision":"allow", "argc":3, "arg_types":["Handle","I64","I64"]})
+            );
             return 0;
         }
     }
@@ -299,7 +332,10 @@ extern "C" fn nyash_array_set_h(handle: u64, idx: i64, val: i64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_map_size_h(handle: u64) -> i64 {
-    crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SIZE_H, "decision":"allow"}));
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SIZE_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
+    );
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
             if let Some(ib) = map.size().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
@@ -309,7 +345,10 @@ extern "C" fn nyash_map_size_h(handle: u64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_map_get_h(handle: u64, key: i64) -> i64 {
-    crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_GET_H, "decision":"allow"}));
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_GET_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
+    );
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
             let key_box = Box::new(crate::box_trait::IntegerBox::new(key));
@@ -324,7 +363,10 @@ extern "C" fn nyash_map_set_h(handle: u64, key: i64, val: i64) -> i64 {
     use crate::jit::hostcall_registry::{classify, HostcallKind};
     let sym = crate::jit::r#extern::collections::SYM_MAP_SET_H;
     if classify(sym) == HostcallKind::Mutating && crate::jit::policy::current().read_only {
-        crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": sym, "decision":"fallback"}));
+        crate::jit::events::emit(
+            "hostcall", "<jit>", None, None,
+            serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"})
+        );
         return 0;
     }
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
@@ -332,7 +374,10 @@ extern "C" fn nyash_map_set_h(handle: u64, key: i64, val: i64) -> i64 {
             let key_box = Box::new(crate::box_trait::IntegerBox::new(key));
             let val_box = Box::new(crate::box_trait::IntegerBox::new(val));
             let _ = map.set(key_box, val_box);
-            crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": sym, "decision":"allow"}));
+            crate::jit::events::emit(
+                "hostcall", "<jit>", None, None,
+                serde_json::json!({"id": sym, "decision":"allow", "argc":3, "arg_types":["Handle","I64","I64"]})
+            );
             return 0;
         }
     }
@@ -353,7 +398,10 @@ extern "C" fn nyash_map_has_h(handle: u64, key: i64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_any_length_h(handle: u64) -> i64 {
-    crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"allow"}));
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
+    );
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         // Array length
         if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
@@ -368,7 +416,10 @@ extern "C" fn nyash_any_length_h(handle: u64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_any_is_empty_h(handle: u64) -> i64 {
-    crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_IS_EMPTY_H, "decision":"allow"}));
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_IS_EMPTY_H, "decision":"allow", "argc":1, "arg_types":["Handle"]})
+    );
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         // Array empty?
         if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
@@ -387,7 +438,10 @@ extern "C" fn nyash_any_is_empty_h(handle: u64) -> i64 {
 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_string_charcode_at_h(handle: u64, idx: i64) -> i64 {
-    crate::jit::events::emit("hostcall", "<jit>", None, None, serde_json::json!({"id": crate::jit::r#extern::collections::SYM_STRING_CHARCODE_AT_H, "decision":"allow"}));
+    crate::jit::events::emit(
+        "hostcall", "<jit>", None, None,
+        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_STRING_CHARCODE_AT_H, "decision":"allow", "argc":2, "arg_types":["Handle","I64"]})
+    );
     if idx < 0 { return -1; }
     if let Some(obj) = crate::jit::rt::handles::get(handle) {
         if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() {
@@ -790,6 +844,52 @@ impl IRBuilder for CraneliftBuilder {
         fb.finalize();
     }
 
+    fn emit_host_call_typed(&mut self, symbol: &str, params: &[ParamKind], has_ret: bool, ret_is_f64: bool) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        use cranelift_frontend::FunctionBuilder;
+        use cranelift_module::{Linkage, Module};
+
+        // Pop values according to params length (right-to-left), then reverse
+        let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        let take_n = params.len().min(self.value_stack.len());
+        for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
+        args.reverse();
+
+        // Build typed signature
+        let call_conv = self.module.isa().default_call_conv();
+        let mut sig = Signature::new(call_conv);
+        let abi_param_for_kind = |k: &ParamKind| {
+            match k {
+                ParamKind::I64 => AbiParam::new(types::I64),
+                ParamKind::F64 => AbiParam::new(types::F64),
+                ParamKind::B1 => {
+                    // Map b1 to I64 unless native-b1 ABI is enabled; keep simple here
+                    AbiParam::new(types::I64)
+                }
+            }
+        };
+        for k in params { sig.params.push(abi_param_for_kind(k)); }
+        if has_ret {
+            if ret_is_f64 { sig.returns.push(AbiParam::new(types::F64)); }
+            else { sig.returns.push(AbiParam::new(types::I64)); }
+        }
+
+        let func_id = self.module
+            .declare_function(symbol, Linkage::Import, &sig)
+            .expect("declare typed import failed");
+
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        let fref = self.module.declare_func_in_func(func_id, fb.func);
+        let call_inst = fb.ins().call(fref, &args);
+        if has_ret {
+            let results = fb.inst_results(call_inst).to_vec();
+            if let Some(v) = results.get(0).copied() { self.value_stack.push(v); }
+        }
+        fb.finalize();
+    }
+
     // ==== Phase 10.7 block APIs ====
     fn prepare_blocks(&mut self, count: usize) {
         use cranelift_frontend::FunctionBuilder;
@@ -1039,6 +1139,12 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_MAP_GET, nyash_map_get as *const u8);
             builder.symbol(c::SYM_MAP_SET, nyash_map_set as *const u8);
             builder.symbol(c::SYM_MAP_SIZE, nyash_map_size as *const u8);
+            // Math f64 externs
+            builder.symbol("nyash.math.sin_f64", nyash_math_sin_f64 as *const u8);
+            builder.symbol("nyash.math.cos_f64", nyash_math_cos_f64 as *const u8);
+            builder.symbol("nyash.math.abs_f64", nyash_math_abs_f64 as *const u8);
+            builder.symbol("nyash.math.min_f64", nyash_math_min_f64 as *const u8);
+            builder.symbol("nyash.math.max_f64", nyash_math_max_f64 as *const u8);
             // Handle-based symbols
             builder.symbol(c::SYM_ARRAY_LEN_H, nyash_array_len_h as *const u8);
             builder.symbol(c::SYM_ARRAY_GET_H, nyash_array_get_h as *const u8);

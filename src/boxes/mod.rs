@@ -78,6 +78,7 @@ pub mod jit_config_box;
 pub mod jit_stats_box;
 pub mod jit_policy_box;
 pub mod jit_events_box;
+pub mod jit_hostcall_registry_box;
 
 // Web専用Box群（ブラウザ環境でのみ利用可能）
 #[cfg(target_arch = "wasm32")]
@@ -112,6 +113,7 @@ pub use jit_config_box::JitConfigBox;
 pub use jit_stats_box::JitStatsBox;
 pub use jit_policy_box::JitPolicyBox;
 pub use jit_events_box::JitEventsBox;
+pub use jit_hostcall_registry_box::JitHostcallRegistryBox;
 
 // EguiBoxの再エクスポート（非WASM環境のみ）
 #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]

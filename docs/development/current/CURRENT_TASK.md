@@ -307,3 +307,32 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examp
 - ハンドル表PoC（u64→Arc<Box>）でローカルnew値もHostCall対象に
 - 型拡張（整数以外、文字列キーなど）
 - BoxCallカバレッジ拡張とデオプ/フォールバック強化
+- 10.9-β 進捗チェックポイント（2025-08-28-夜）
+  - 完了: Policy/Events α（既存）/ Registry v0（最小）/ HostcallRegistryBox 追加
+  - 接続: ハンドル系HostCallに `registry + policy + events` を暫定接続（mutatingはfallback、ROはallowログ）
+  - Lower: `NYASH_JIT_HOSTCALL` → `jit::config::current().hostcall` に置換（env直読の排除）
+  - E2E（追加サンプル）:
+    - 成功: `examples/jit_hostcall_len_string.nyash`（String.length → allow）
+    - 失敗: `examples/jit_hostcall_array_append.nyash`（Array.push → fallback）
+    - 境界: `examples/jit_hostcall_math_sin_mismatch.nyash`（math.sinにi64 → sig_mismatch相当のfallbackイベント）
+  - 次: Registryに署名（args/ret）を持たせ、唯一の切替点で `sig_mismatch` を厳密化／math.* のROブリッジ薄接続
+
+### ⚠️ リカバリ/再起動チェックリスト（短縮）
+- ビルド: `cargo build --release --features cranelift-jit`
+- 主要フラグ: 
+  - `NYASH_JIT_EXEC=1`（JIT実行有効）
+  - `NYASH_JIT_THRESHOLD=1`（即JIT）
+  - `NYASH_JIT_EVENTS=1`（JSONLイベント標準出力）
+  - （任意）`NYASH_JIT_EVENTS_PATH=target/nyash/jit-events.jsonl`
+- 代表サンプル:
+  - 成功: `./target/release/nyash --backend vm examples/jit_hostcall_len_string.nyash`
+  - 失敗: `NYASH_JIT_EVENTS=1 ./target/release/nyash --backend vm examples/jit_hostcall_array_append.nyash`
+  - 境界: `NYASH_JIT_EVENTS=1 ./target/release/nyash --backend vm examples/jit_hostcall_math_sin_mismatch.nyash`
+  - 署名一致(allow観測): `NYASH_JIT_EVENTS=1 ./target/release/nyash --backend vm examples/jit_hostcall_math_sin_allow_float.nyash`
+  - 関数スタイル(math.*): `NYASH_JIT_NATIVE_F64=1 NYASH_JIT_EVENTS=1 ./target/release/nyash --backend vm examples/jit_math_function_style_sin_float.nyash`
+    - 追加: `cos/abs/min/max` それぞれ `examples/jit_math_function_style_*.nyash`
+- うまく動かない時:
+  - `--features cranelift-jit` が付いているか確認
+  - `NYASH_JIT_EVENTS=1` でイベントJSONを確認（fallback/trap理由が出る）
+  - `cargo clean -p nyash-rust` → 再ビルド
+  - 数値緩和: `NYASH_JIT_HOSTCALL_RELAX_NUMERIC=1` で i64→f64 のコアーションを許容（既定は `native_f64=1` 時に有効）

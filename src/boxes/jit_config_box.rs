@@ -33,6 +33,7 @@ impl JitConfigBox {
             "native_bool" => cfg.native_bool = on,
             "bool_abi" | "native_bool_abi" => cfg.native_bool_abi = on,
             "ret_b1" | "ret_bool_b1" => cfg.ret_bool_b1 = on,
+            "relax_numeric" | "hostcall_relax_numeric" => cfg.relax_numeric = on,
             _ => return Err(RuntimeError::InvalidOperation { message: format!("Unknown flag: {}", name) }),
         }
         Ok(Box::new(VoidBox::new()))
@@ -51,6 +52,7 @@ impl JitConfigBox {
             "native_bool" => cfg.native_bool,
             "bool_abi" | "native_bool_abi" => cfg.native_bool_abi,
             "ret_b1" | "ret_bool_b1" => cfg.ret_bool_b1,
+            "relax_numeric" | "hostcall_relax_numeric" => cfg.relax_numeric,
             _ => return Err(RuntimeError::InvalidOperation { message: format!("Unknown flag: {}", name) }),
         };
         Ok(Box::new(BoolBox::new(b)))
@@ -80,6 +82,7 @@ impl JitConfigBox {
             "native_bool": cfg.native_bool,
             "native_bool_abi": cfg.native_bool_abi,
             "ret_bool_b1": cfg.ret_bool_b1,
+            "relax_numeric": cfg.relax_numeric,
         });
         Box::new(StringBox::new(val.to_string()))
     }
@@ -98,6 +101,7 @@ impl JitConfigBox {
         if let Some(b) = v.get("native_bool").and_then(|x| x.as_bool()) { cfg.native_bool = b; }
         if let Some(b) = v.get("native_bool_abi").and_then(|x| x.as_bool()) { cfg.native_bool_abi = b; }
         if let Some(b) = v.get("ret_bool_b1").and_then(|x| x.as_bool()) { cfg.ret_bool_b1 = b; }
+        if let Some(b) = v.get("relax_numeric").and_then(|x| x.as_bool()) { cfg.relax_numeric = b; }
         Ok(Box::new(VoidBox::new()))
     }
     pub fn apply(&self) -> Box<dyn NyashBox> {
@@ -111,9 +115,9 @@ impl JitConfigBox {
     pub fn summary(&self) -> Box<dyn NyashBox> {
         let cfg = self.config.read().unwrap();
         let s = format!(
-            "exec={} stats={} json={} dump={} thr={:?} phi_min={} hostcall={} hdbg={} f64={} bool={}",
+            "exec={} stats={} json={} dump={} thr={:?} phi_min={} hostcall={} hdbg={} f64={} bool={} relax_numeric={}",
             cfg.exec, cfg.stats, cfg.stats_json, cfg.dump, cfg.threshold,
-            cfg.phi_min, cfg.hostcall, cfg.handle_debug, cfg.native_f64, cfg.native_bool
+            cfg.phi_min, cfg.hostcall, cfg.handle_debug, cfg.native_f64, cfg.native_bool, cfg.relax_numeric
         );
         Box::new(StringBox::new(s))
     }

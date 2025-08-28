@@ -1,0 +1,18 @@
+// Map get with handle arguments
+// Expect: decision="allow", arg_types=["Handle","Handle"]
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_EVENTS=1 NYASH_JIT_HOSTCALL=1 \
+//     ./target/release/nyash --backend vm examples/jit_hostcall_map_get_handle.nyash
+
+static box Main {
+  main() {
+    local m, k, v
+    m = new MapBox()
+    k = "key1"
+    v = "value1"
+    m.set(k, v)  // This will fallback (mutating)
+    
+    // ReadOnly operation - should allow
+    return m.get(k)
+  }
+}

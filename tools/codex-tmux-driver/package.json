@@ -1,0 +1,16 @@
+{
+  "name": "codex-tmux-driver",
+  "version": "1.0.0",
+  "description": "AI driver for tmux sessions with Codex event monitoring",
+  "main": "codex-tmux-driver.js",
+  "scripts": {
+    "start": "node codex-tmux-driver.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {},
+  "author": "Nyash Team",
+  "license": "MIT"
+}

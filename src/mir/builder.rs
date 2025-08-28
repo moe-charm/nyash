@@ -551,19 +551,75 @@ impl MirBuilder {
                 return Ok(dst);
             }
         }
-        // Build argument values
-        let mut arg_values = Vec::new();
-        for arg in args {
-            arg_values.push(self.build_expression(arg)?);
-        }
-        
+        // Keep original args for special handling (math.*)
+        let raw_args = args.clone();
+
         let dst = self.value_gen.next();
-        
-        // For now, treat all function calls as Box method calls
+
+        // Special-case: math.* as function-style (sin(x), cos(x), abs(x), min(a,b), max(a,b))
+        // Normalize to BoxCall on a fresh MathBox receiver with original args intact.
+        let is_math_func = matches!(name.as_str(), "sin" | "cos" | "abs" | "min" | "max");
+        if is_math_func {
+            // Build numeric args directly for math.* to preserve f64 typing
+            let mut math_args: Vec<ValueId> = Vec::new();
+            for a in raw_args.into_iter() {
+                match a {
+                    // new FloatBox(<literal/expr>) → use inner literal/expr directly
+                    ASTNode::New { class, arguments, .. } if class == "FloatBox" && arguments.len() == 1 => {
+                        let v = self.build_expression(arguments[0].clone())?;
+                        math_args.push(v);
+                    }
+                    // new IntegerBox(n) → coerce to float const for math f64 signature
+                    ASTNode::New { class, arguments, .. } if class == "IntegerBox" && arguments.len() == 1 => {
+                        // Build integer then cast to float for clarity
+                        let iv = self.build_expression(arguments[0].clone())?;
+                        let fv = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::TypeOp { dst: fv, op: super::TypeOpKind::Cast, value: iv, ty: MirType::Float })?;
+                        math_args.push(fv);
+                    }
+                    // literal float → use as-is
+                    ASTNode::Literal { value: LiteralValue::Float(_), .. } => {
+                        let v = self.build_expression(a)?; math_args.push(v);
+                    }
+                    // fallback: build normally
+                    other => { let v = self.build_expression(other)?; math_args.push(v); }
+                }
+            }
+            // new MathBox()
+            let math_recv = self.value_gen.next();
+            self.emit_instruction(MirInstruction::NewBox { dst: math_recv, box_type: "MathBox".to_string(), args: vec![] })?;
+            // Record origin to assist slot resolution
+            self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
+            // birth()
+            let birt_mid = resolve_slot_by_type_name("MathBox", "birth");
+            self.emit_instruction(MirInstruction::BoxCall {
+                dst: None,
+                box_val: math_recv,
+                method: "birth".to_string(),
+                method_id: birt_mid,
+                args: vec![],
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
+
+            let method_id = resolve_slot_by_type_name("MathBox", &name);
+            self.emit_instruction(MirInstruction::BoxCall {
+                dst: Some(dst),
+                box_val: math_recv,
+                method: name,
+                method_id,
+                args: math_args,
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
+            return Ok(dst);
+        }
+
+        // Default: treat as method-style on first argument as receiver
+        // Build argument values (default path)
+        let mut arg_values = Vec::new();
+        for arg in raw_args { arg_values.push(self.build_expression(arg)?); }
         if arg_values.is_empty() {
             return Err("Function calls require at least one argument (the object)".to_string());
         }
-        
         let box_val = arg_values.remove(0);
         // Try to resolve method slot if the object originates from a known NewBox
         let method_id = self
@@ -1269,20 +1325,57 @@ impl MirBuilder {
             }
         }
 
-        // Build argument expressions
-        let mut arg_values = Vec::new();
-        for arg in &arguments {
-            arg_values.push(self.build_expression(arg.clone())?);
+        // Special-case: MathBox methods (sin/cos/abs/min/max) — normalize args to numeric primitives
+        let is_math_method = matches!(method.as_str(), "sin" | "cos" | "abs" | "min" | "max");
+        if is_math_method {
+            // Try detect MathBox receiver by origin; fallback可
+            let recv_is_math = self.value_origin_newbox.get(&object_value).map(|s| s == "MathBox").unwrap_or(false)
+                || matches!(object, ASTNode::New { ref class, .. } if class == "MathBox");
+            if recv_is_math {
+                let mut math_args: Vec<ValueId> = Vec::new();
+                for a in arguments.iter() {
+                    match a {
+                        ASTNode::New { class, arguments, .. } if class == "FloatBox" && arguments.len() == 1 => {
+                            let v = self.build_expression(arguments[0].clone())?; math_args.push(v);
+                        }
+                        ASTNode::New { class, arguments, .. } if class == "IntegerBox" && arguments.len() == 1 => {
+                            let iv = self.build_expression(arguments[0].clone())?;
+                            let fv = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::TypeOp { dst: fv, op: super::TypeOpKind::Cast, value: iv, ty: MirType::Float })?;
+                            math_args.push(fv);
+                        }
+                        ASTNode::Literal { value: LiteralValue::Float(_), .. } => {
+                            let v = self.build_expression(a.clone())?; math_args.push(v);
+                        }
+                        other => { let v = self.build_expression(other.clone())?; math_args.push(v); }
+                    }
+                }
+                let result_id = self.value_gen.next();
+                let method_name = method.clone();
+                self.emit_instruction(MirInstruction::BoxCall {
+                    dst: Some(result_id),
+                    box_val: object_value,
+                    method,
+                    method_id: resolve_slot_by_type_name("MathBox", &method_name),
+                    args: math_args,
+                    effects: EffectMask::READ.add(Effect::ReadHeap),
+                })?;
+                return Ok(result_id);
+            }
         }
+
+        // Build argument expressions (default)
+        let mut arg_values = Vec::new();
+        for arg in &arguments { arg_values.push(self.build_expression(arg.clone())?); }
 
         // Create result value
         let result_id = self.value_gen.next();
         
         // Optimization: If the object is a direct `new ClassName(...)`, lower to a direct Call
-        if let ASTNode::New { class, .. } = object {
+        if let ASTNode::New { ref class, .. } = object {
             // Build function name and only lower to Call if the function exists (user-defined)
             let func_name = format!("{}.{}{}", class, method, format!("/{}", arg_values.len()));
-            let can_lower = self.user_defined_boxes.contains(&class)
+            let can_lower = self.user_defined_boxes.contains(class.as_str())
                 && if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
             if can_lower {
                 let func_val = self.value_gen.next();
@@ -1303,7 +1396,7 @@ impl MirBuilder {
             // If the object originates from a NewBox in this function, we can lower to Call as well
             if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
                 let func_name = format!("{}.{}{}", class_name, method, format!("/{}", arg_values.len()));
-                let can_lower = self.user_defined_boxes.contains(&class_name)
+                let can_lower = self.user_defined_boxes.contains(class_name.as_str())
                     && if let Some(ref module) = self.current_module { module.functions.contains_key(&func_name) } else { false };
                 if can_lower {
                     let func_val = self.value_gen.next();

@@ -1,0 +1,13 @@
+// Boundary case: math.sin expects f64; v0 emits sig_mismatch fallback event
+// Run: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_EVENTS=1 ./target/release/nyash --backend vm examples/jit_hostcall_math_sin_mismatch.nyash
+
+static box Main {
+  main() {
+    local m, x
+    m = new MathBox()
+    x = 0
+    // Int arg; v0 JIT records sig_mismatch and VM executes
+    return m.sin(x)
+  }
+}
+

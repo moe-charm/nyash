@@ -1,0 +1,16 @@
+// Allow case: math.sin expects f64; JIT records sig_ok (allow) and VM executes (thin bridge)
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_hostcall_math_sin_allow_float.nyash
+
+static box Main {
+  main() {
+    local m, x
+    m = new MathBox()
+    // pi/2 in double precision
+    x = 1.5707963267948966
+    // Registry signature matches (f64 -> f64), event: {decision: "allow", reason: "sig_ok"}
+    return m.sin(x)
+  }
+}
+
