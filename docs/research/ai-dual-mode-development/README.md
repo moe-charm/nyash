@@ -25,9 +25,18 @@ ai-dual-mode-development/
 │   ├── model_comparison.md   # 従来モデルとの比較
 │   ├── box_theory.md        # 箱理論の役割
 │   └── observable_design.md # 観測可能性の設計
-└── figures/                  # 図表・ダイアグラム
-    ├── ai_dual_mode_flow.svg # AI二重化フロー図
-    └── development_speed.svg # 開発速度比較グラフ
+├── tmux-emergence/          # tmux創発的対話研究（統合済み）
+│   ├── emergent-dialogue-via-tmux.md  # tmux事件の論文提案
+│   ├── chatgpt5-analysis.md          # ChatGPT5の分析
+│   ├── paper-abstract.md             # 創発的AI行動の要約
+│   ├── theoretical-implications.md   # 理論的含意
+│   └── tmux-incident-log.md          # 元事件のログ
+├── paper_abstract.md        # AI二重化モデル論文要約
+├── workshop_paper_draft.md  # ワークショップ論文草稿
+├── danger-sensor-case-studies.md  # 危機検知事例研究
+├── hidden-crisis-moments.md       # 隠れた危機の瞬間
+└── figures/                 # 図表・ダイアグラム
+    └── README.md           # 図表作成ガイド
 ```
 
 ## 🔑 キーコンセプト
@@ -41,11 +50,19 @@ ai-dual-mode-development/
 - すべてを「箱」として扱う設計哲学
 - AI自身も「俯瞰Box」「実装Box」として機能
 - 問題も「観測可能な箱」として切り出し
+- **2025-08-29追記**: 「箱にして」という単純な指示でJIT開発が劇的に加速
+  - ChatGPT5が箱理論を完全習得し、Phase 10.7を8つの独立箱に構造化
+  - 詳細: [06_box_theory_acceleration.md](conversations/06_box_theory_acceleration.md)
 
 ### 3. 観測駆動開発
 - `argc==0` のような単純な指標で問題を即座に特定
 - JSONLイベントによる実行時観測
 - 各層での独立した観測点設置
+
+### 4. tmux創発的対話（NEW!）
+- ターミナル多重化がAI間通信路に転化
+- 技術的観察から社会的発話への自然な移行
+- プロトコルなきAI協調の実証
 
 ## 📈 インパクト
 
@@ -67,5 +84,6 @@ ai-dual-mode-development/
 - 同一AIの多重人格的運用
 - 人間-AI-AI の三者協調モデル
 - 観測可能性を中心とした開発手法
+- ツール媒介による創発的AI対話
 
 これは単なる効率化ではなく、**知的創造プロセスの根本的な変革**を示唆している。

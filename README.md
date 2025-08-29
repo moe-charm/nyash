@@ -1,4 +1,5 @@
 # 🐱 Nyash Programming Language
+**A Seriously-Crafted Hobby Language**  
 **From Zero to Native Binary in 20 Days - The AI-Powered Language Revolution**
 
 *[🇯🇵 日本語版はこちら / Japanese Version](README.ja.md)*
@@ -7,7 +8,16 @@
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20Faster-ff6b6b.svg)](#performance)
 [![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20Powered-orange.svg)](#execution-modes)
+[![Try in Browser](https://img.shields.io/badge/Try%20Now-Browser%20Playground-ff6b6b.svg)](projects/nyash-wasm/nyash_playground.html)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
+
+---
+
+## 🎮 **Try Nyash in Your Browser Right Now!**
+
+👉 **[Launch Browser Playground](projects/nyash-wasm/nyash_playground.html)** 👈
+
+No installation needed - experience Nyash instantly in your web browser!
 
 ---
 
@@ -140,7 +150,7 @@ Native Binary  | ~4ms      | ~27x faster
 ### Clean Syntax
 ```nyash
 box GameCharacter {
-    init { name, health, skills }
+    private { name, health, skills }
     
     // Birth constructor - giving life to Boxes!
     birth(characterName) {
@@ -179,7 +189,7 @@ local files = await task2
 ```nyash
 // Composition over inheritance
 box EnhancedArray from ArrayBox {
-    init { logger }
+    private { logger }
     
     override push(item) {
         me.logger.log("Adding: " + item)
@@ -278,7 +288,7 @@ loop(true) {
 ### Game Development
 ```nyash
 box GameObject {
-    init { x, y, sprite }
+    public { x, y, sprite }
     
     update(deltaTime) {
         // Physics simulation
@@ -309,7 +319,7 @@ MIT License - Use freely in your projects!
 
 ## 👨‍💻 **Creator**
 
-**Tomoaki** - Language Designer & Revolutionary
+**charmpic** - Hobby Language Developer
 - 🐱 GitHub: [@moe-charm](https://github.com/moe-charm)
 - 🌟 Created with: Claude, ChatGPT, Codex collaboration
 

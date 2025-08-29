@@ -472,7 +472,8 @@ impl LowerCore {
                 | I::Store { .. }
                 | I::Load { .. }
                 | I::Phi { .. }
-                | I::Print { .. }
+                // PrintはJIT経路では未対応（VMにフォールバックしてコンソール出力を保持）
+                // | I::Print { .. }
                 | I::Debug { .. }
                 | I::ExternCall { .. }
                 | I::Safepoint
@@ -492,13 +493,18 @@ impl LowerCore {
                         "StringBox" => {
                             // Emit host-call to create a new StringBox handle; push as i64
                             b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_BIRTH_H, 0, true);
-                            // Do not attempt to classify; downstream ops will treat as handle
                         }
                         "IntegerBox" => {
                             b.emit_host_call(crate::jit::r#extern::collections::SYM_INTEGER_BIRTH_H, 0, true);
                         }
-                        _ => { /* Other boxes: no-op for now */ }
+                        _ => {
+                            // Any other NewBox (e.g., ArrayBox/MapBox/etc.) is UNSUPPORTED in JIT for now
+                            self.unsupported += 1;
+                        }
                     }
+                } else {
+                    // NewBox with args or NYASH_USE_PLUGIN_BUILTINS!=1 → unsupported in JIT
+                    self.unsupported += 1;
                 }
                 // Track boxed numeric literals to aid signature checks (FloatBox/IntegerBox)
                 if box_type == "FloatBox" {

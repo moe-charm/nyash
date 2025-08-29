@@ -308,6 +308,18 @@ impl DebugBox {
         let tracked = self.tracked_boxes.read().unwrap();
         Ok(Box::new(crate::box_trait::IntegerBox::new(tracked.len() as i64)))
     }
+
+    // --- Phase 1: JIT/Plugin shim tracing ---
+    pub fn trace_plugin_calls(&self, on: bool) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        crate::jit::shim_trace::set_enabled(on);
+        println!("[DEBUG] JIT shim trace: {}", if on {"ENABLED"} else {"DISABLED"});
+        Ok(Box::new(VoidBox::new()))
+    }
+
+    pub fn get_jit_events(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        let s = crate::jit::shim_trace::snapshot_joined();
+        Ok(Box::new(StringBox::new(s)))
+    }
 }
 
 // Manual Clone implementation for DebugBox (RwLock doesn't auto-derive Clone)

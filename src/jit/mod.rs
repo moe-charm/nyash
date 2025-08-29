@@ -11,3 +11,4 @@ pub mod policy;
 pub mod events;
 pub mod hostcall_registry;
 pub mod boundary;
+pub mod shim_trace;

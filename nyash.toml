@@ -201,6 +201,8 @@ birth  = { method_id = 0 }
 eval   = { method_id = 1, args = ["code"] }
 import = { method_id = 2, args = ["name"] }
 fini   = { method_id = 4294967295 }
+evalR  = { method_id = 11, args = ["code"], returns_result = true }
+importR= { method_id = 12, args = ["name"], returns_result = true }
 
 [libraries."libnyash_python_plugin.so".PyObjectBox]
 type_id = 41
@@ -212,3 +214,6 @@ call    = { method_id = 2, args = ["args"] }
 callKw  = { method_id = 5 }
 str     = { method_id = 3 }
 fini    = { method_id = 4294967295 }
+getattrR= { method_id = 11, args = ["name"], returns_result = true }
+callR   = { method_id = 12, args = ["args"], returns_result = true }
+callKwR = { method_id = 15, returns_result = true }

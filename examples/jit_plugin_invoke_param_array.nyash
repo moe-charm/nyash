@@ -1,0 +1,27 @@
+// JIT plugin_invoke smoke: no NewBox in JITed function
+// Requires: array plugin built + nyash.toml configured
+// Build plugins:
+//   (cd plugins/nyash-array-plugin && cargo build --release)
+// Run (JIT helper only):
+//   NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+//   NYASH_JIT_SHIM_TRACE=1 NYASH_CLI_VERBOSE=1 \
+//   ./target/release/nyash --backend vm examples/jit_plugin_invoke_param_array.nyash
+
+static box Main {
+  main() {
+    local a
+    // Create ArrayBox in VM (this function stays in VM)
+    a = new ArrayBox()
+    a.push(1)
+    a.push(2)
+    a.push(3)
+    // Call helper (this function should JIT) — only BoxCall on parameter
+    return me.helper(a)
+  }
+
+  helper(arr) {
+    // No allocations/new here; only plugin call on parameter
+    return arr.length()
+  }
+}
+

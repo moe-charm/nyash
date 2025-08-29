@@ -357,6 +357,23 @@ impl NyashInterpreter {
                 }
                 debug_box.show_call_stack()
             }
+            "tracePluginCalls" => {
+                if arg_values.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("tracePluginCalls(on:bool) expects 1 argument, got {}", arg_values.len()),
+                    });
+                }
+                let on = if let Some(b) = arg_values[0].as_any().downcast_ref::<crate::box_trait::BoolBox>() { b.value } else { false };
+                debug_box.trace_plugin_calls(on)
+            }
+            "getJitEvents" => {
+                if !arg_values.is_empty() {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("getJitEvents() expects 0 arguments, got {}", arg_values.len()),
+                    });
+                }
+                debug_box.get_jit_events()
+            }
             "clear" => {
                 if !arg_values.is_empty() {
                     return Err(RuntimeError::InvalidOperation {

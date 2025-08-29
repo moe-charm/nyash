@@ -1,0 +1,25 @@
+// Simple test for Result-returning Python APIs
+static box Main {
+  main() {
+    local py = new PyRuntimeBox()
+    
+    // Test importR (Result variant)
+    print("Testing importR...")
+    local mathR = py.importR("math")
+    print("importR returned: " + mathR)
+    
+    // Test error case
+    print("Testing import error...")
+    local badR = py.importR("no_such_module_xxxxx")
+    print("importR error returned: " + badR)
+    
+    // Normal import for comparison
+    print("Testing normal import...")
+    local math = py.import("math")
+    local sqrt = math.getattr("sqrt")
+    local result = sqrt.call(16)
+    print("sqrt(16) = " + result.str())
+    
+    return 0
+  }
+}

@@ -1,4 +1,5 @@
 # 🐱 Nyash プログラミング言語
+**超真面目に作っている趣味言語**  
 **20日でゼロからネイティブバイナリへ - AI駆動の言語革命**
 
 *[🇺🇸 English Version / 英語版はこちら](README.md)*
@@ -7,7 +8,16 @@
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20高速化-ff6b6b.svg)](#performance)
 [![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20搭載-orange.svg)](#execution-modes)
+[![ブラウザで試す](https://img.shields.io/badge/今すぐ試す-ブラウザプレイグラウンド-ff6b6b.svg)](projects/nyash-wasm/nyash_playground.html)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
+
+---
+
+## 🎮 **今すぐブラウザでNyashを試そう！**
+
+👉 **[ブラウザプレイグラウンドを起動](projects/nyash-wasm/nyash_playground.html)** 👈
+
+インストール不要 - ウェブブラウザで即座にNyashを体験！
 
 ---
 
@@ -140,7 +150,7 @@ VM + JIT        | 5.8ms     | 19.0倍高速
 ### クリーンな構文
 ```nyash
 box GameCharacter {
-    init { name, health, skills }
+    private { name, health, skills }
     
     // birthコンストラクタ - Boxに生命を与える！
     birth(characterName) {
@@ -179,7 +189,7 @@ local files = await task2
 ```nyash
 // 継承よりコンポジション
 box EnhancedArray from ArrayBox {
-    init { logger }
+    private { logger }
     
     override push(item) {
         me.logger.log("追加中: " + item)
@@ -278,7 +288,7 @@ loop(true) {
 ### ゲーム開発
 ```nyash
 box GameObject {
-    init { x, y, sprite }
+    public { x, y, sprite }
     
     update(deltaTime) {
         // 物理シミュレーション
@@ -309,7 +319,7 @@ MIT ライセンス - プロジェクトで自由に使用してください！
 
 ## 👨‍💻 **作者**
 
-**Tomoaki** - 言語設計者＆革命家
+**charmpic** - 趣味で言語作ってる人
 - 🐱 GitHub: [@moe-charm](https://github.com/moe-charm)
 - 🌟 協力: Claude、ChatGPT、Codexとのコラボレーション
 

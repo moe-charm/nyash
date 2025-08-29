@@ -73,15 +73,26 @@ Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグイン�
 - ✅ `PyRuntimeBox.birth()` 正常実行（instance_id=1）
 - ✅ VM側委譲: `PluginBoxV2` メソッドを `PluginHost.invoke_instance_method` に委譲（BoxCallでも実体plugin_invoke実行）
 - ✅ E2Eデモ: `py.import("math").getattr("sqrt").call(9).str()` がVM経路で実行（`examples/py_math_sqrt_demo.nyash`）
+- ✅ R系API: `evalR/importR/getattrR/callR/callKwR` がResult（Ok/Err）で安定（エラーメッセージの保持確認済）
+- ✅ 自動デコード（オプトイン）: `NYASH_PY_AUTODECODE=1` で eval/getattr/call/callKw の数値/文字列/bytesがTLVで直接返る
+- ✅ kwargs対応: `callKw` 実装（TLVで key:string と value のペア）、`examples/py_kw_round_demo.nyash` を追加（builtins.intで検証）
+
+### JIT強化（10.2 連携の下ごしらえ）
+- 追加: i64シムの戻りdecode拡張（I32/I64/Bool/F64[暫定]）
+- 追加: f64専用シム `nyash_plugin_invoke3_f64` と `emit_plugin_invoke` 切替（ENV=`NYASH_JIT_PLUGIN_F64`）
+- 目的: Python含むプラグインのROで「数値/Bool/f64（選択）」戻りをJIT/AOT経路で受ける足場を整備
+ - 追加: シム・トレース（ENV=`NYASH_JIT_SHIM_TRACE=1`）とカナリー検査（出力バッファのオーバーラン検出）
+ - 追加: レシーバ自動解決フォールバック（a0<0時はVM引数を走査してPluginBoxV2を特定）
 
 ### 方針決定（Built-inとの関係）
 - いまはビルトインBoxを削除しない。余計な変更を避け、プラグイン優先の運用で干渉を止める。
 - 例・テスト・CIをプラグイン経路に寄せ、十分に安定してから段階的に外す。
 
 ### 次アクション（小さく通す）
-1) Loaderのエンコード強化（v2）: Bool/F64/Bytes（Array<u8>）を正式サポート → kwargsや一般引数を堅牢化
-2) 戻り値自動デコード（オプトイン）: `NYASH_PY_AUTODECODE=1` 設計（数値/文字列/bytesのTLV変換）。段階的に導入。
-3) 例外のResult化: returns_resultの扱い整理（成功文字列とエラー文字列の判別手段の仕様化）
+1) DebugBox（Phase 1）: JITシムイベント取得（getJitEvents）/プラグイン呼び出し履歴トレース（tracePluginCalls）
+2) JIT typedシムの拡張: f64の自動選択（Lowerer型ヒント）→ Handle/String返却シムの導入（ハンドルID/文字列返却）
+3) AOTスモーク: Python数値戻りの .o 生成をもう1本追加（f64/Bool/i64いずれか）
+4) ガイド: R系APIとNYASH_PY_AUTODECODEの使い分け、JITシムトレースの使い方を追記
 
 ## すぐ試せるコマンド（現状維持の確認）
 ```bash
@@ -122,6 +133,13 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_math_sqrt_de
 
 # kwargsデモ（builtins.int）
 NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_kw_round_demo.nyash
+
+# 自動デコード（evalの数値/文字列が直接返る）
+NYASH_PY_AUTODECODE=1 NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_eval_autodecode_demo.nyash
+
+# JIT（f64戻りのシム選択: type_id:method_id を指定）
+# 例: PyObjectBox.callR(=12) を f64 扱いにする（実験用）
+NYASH_JIT_PLUGIN_F64="41:12" NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_math_sqrt_demo.nyash
 
 # kwargsデモ（builtins.int）
 NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_kw_round_demo.nyash

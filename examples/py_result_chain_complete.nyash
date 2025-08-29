@@ -1,0 +1,45 @@
+// Complete Result chain test (importR → getattrR → callR)
+static box Main {
+  main() {
+    local py = new PyRuntimeBox()
+    
+    // Success chain: math.sqrt(25) 
+    print("=== Success chain test ===")
+    local mathR = py.importR("math")
+    print("1. importR('math') = " + mathR)
+    
+    if mathR.isOk() {
+      local math = mathR.unwrap()
+      local sqrtR = math.getattrR("sqrt")
+      print("2. getattrR('sqrt') = " + sqrtR)
+      
+      if sqrtR.isOk() {
+        local sqrt = sqrtR.unwrap()
+        local resultR = sqrt.callR(25)
+        print("3. callR(25) = " + resultR)
+        
+        if resultR.isOk() {
+          local result = resultR.unwrap()
+          print("4. Final value = " + result.str())
+        }
+      }
+    }
+    
+    // Error chain: test error handling
+    print("\n=== Error chain test ===")
+    local badModR = py.importR("nonexistent_module")
+    print("importR('nonexistent_module') = " + badModR)
+    
+    // Test getattrR error
+    local mathNormal = py.import("math")
+    local badAttrR = mathNormal.getattrR("nonexistent_attr")
+    print("getattrR('nonexistent_attr') = " + badAttrR)
+    
+    // Test callR with invalid args
+    local sqrtNormal = mathNormal.getattr("sqrt")
+    local badCallR = sqrtNormal.callR("invalid_arg")
+    print("callR('invalid_arg') = " + badCallR)
+    
+    return 0
+  }
+}
