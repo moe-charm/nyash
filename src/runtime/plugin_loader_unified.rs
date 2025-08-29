@@ -106,6 +106,12 @@ impl PluginHost {
         l.invoke_instance_method(box_type, method_name, instance_id, args)
     }
 
+    /// Check if a method returns Result (Ok/Err) per plugin spec or central config.
+    pub fn method_returns_result(&self, box_type: &str, method_name: &str) -> bool {
+        let l = self.loader.read().unwrap();
+        l.method_returns_result(box_type, method_name)
+    }
+
     pub fn extern_call(
         &self,
         iface_name: &str,

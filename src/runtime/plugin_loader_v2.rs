@@ -200,11 +200,31 @@ mod enabled {
     }
 }
 
-impl PluginBoxV2 {
-    pub fn instance_id(&self) -> u32 { self.inner.instance_id }
-    pub fn finalize_now(&self) { self.inner.finalize_now() }
-    pub fn is_finalized(&self) -> bool { self.inner.finalized.load(std::sync::atomic::Ordering::SeqCst) }
-}
+    impl PluginBoxV2 {
+        pub fn instance_id(&self) -> u32 { self.inner.instance_id }
+        pub fn finalize_now(&self) { self.inner.finalize_now() }
+        pub fn is_finalized(&self) -> bool { self.inner.finalized.load(std::sync::atomic::Ordering::SeqCst) }
+    }
+
+    /// Public helper to construct a PluginBoxV2 from raw parts (for VM/JIT integration)
+    pub fn construct_plugin_box(
+        box_type: String,
+        type_id: u32,
+        invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+        instance_id: u32,
+        fini_method_id: Option<u32>,
+    ) -> PluginBoxV2 {
+        PluginBoxV2 {
+            box_type,
+            inner: std::sync::Arc::new(PluginHandleInner {
+                type_id,
+                invoke_fn,
+                instance_id,
+                fini_method_id,
+                finalized: std::sync::atomic::AtomicBool::new(false),
+            }),
+        }
+    }
 
 /// Plugin loader v2
     pub struct PluginLoaderV2 {
@@ -222,7 +242,7 @@ impl PluginBoxV2 {
     box_specs: RwLock<HashMap<(String,String), LoadedBoxSpec>>,
 }
 
-    impl PluginLoaderV2 {
+impl PluginLoaderV2 {
     fn find_box_by_type_id<'a>(&'a self, config: &'a NyashConfigV2, toml_value: &'a toml::Value, type_id: u32) -> Option<(&'a str, &'a str)> {
         for (lib_name, lib_def) in &config.libraries {
             for box_name in &lib_def.boxes {
@@ -472,6 +492,26 @@ impl PluginBoxV2 {
             Ok(method.method_id)
         }
 
+        /// Determine whether a method returns a Result (Ok/Err) wrapper.
+        pub fn method_returns_result(&self, box_type: &str, method_name: &str) -> bool {
+            let config = match &self.config { Some(c) => c, None => return false };
+            let lib_name = match self.find_lib_name_for_box(box_type) { Some(n) => n, None => return false };
+            // Prefer spec if present
+            if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.clone(), box_type.to_string())) {
+                if let Some(m) = spec.methods.get(method_name) { return m.returns_result; }
+            }
+            // Fallback to central nyash.toml
+            let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+            if let Ok(toml_content) = std::fs::read_to_string(cfg_path) {
+                if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
+                    if let Some(bc) = config.get_box_config(&lib_name, box_type, &toml_value) {
+                        return bc.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false);
+                    }
+                }
+            }
+            false
+        }
+
         /// Invoke an instance method on a plugin box by name (minimal TLV encoding)
         pub fn invoke_instance_method(
             &self,
@@ -490,10 +530,20 @@ impl PluginBoxV2 {
             let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
             let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
             let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
-            // Prefer spec-loaded type_id/method returns_result
+            // Prefer spec values; but if method isn't listed in spec, fallback to central nyash.toml for returns_result
             let (type_id, returns_result) = if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.clone(), box_type.to_string())) {
-                let tid = spec.type_id.unwrap_or_else(|| config.box_types.get(box_type).copied().unwrap_or(0));
-                let rr = spec.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false);
+                let tid = spec
+                    .type_id
+                    .or_else(|| config.box_types.get(box_type).copied())
+                    .ok_or(BidError::InvalidType)?;
+                let rr = if let Some(m) = spec.methods.get(method_name) {
+                    m.returns_result
+                } else {
+                    // Fallback to central config for method flags
+                    if let Some(box_conf) = config.get_box_config(&lib_name, box_type, &toml_value) {
+                        box_conf.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false)
+                    } else { false }
+                };
                 (tid, rr)
             } else {
                 let box_conf = config.get_box_config(&lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
@@ -537,8 +587,21 @@ impl PluginBoxV2 {
                             if let Ok(val_opt) = self.invoke_instance_method("IntegerBox", "get", p.inner.instance_id, &[]) {
                                 if let Some(val_box) = val_opt { enc_owned = Some(val_box); enc_ref = enc_owned.as_ref().unwrap(); }
                             }
+                        } else if p.box_type == "StringBox" {
+                            // Prefer TLV string for expected string params
+                            let need_string = if let Some(exp) = expected_args.as_ref() {
+                                matches!(exp.get(idx), Some(crate::config::nyash_toml_v2::ArgDecl::Typed { kind, .. }) if kind == "string")
+                            } else {
+                                // Name fallback: allow coercion to string
+                                true
+                            };
+                            if need_string {
+                                if let Ok(val_opt) = self.invoke_instance_method("StringBox", "toUtf8", p.inner.instance_id, &[]) {
+                                    if let Some(val_box) = val_opt { enc_owned = Some(val_box); enc_ref = enc_owned.as_ref().unwrap(); }
+                                }
+                            }
                         }
-                        // Future: StringBox/BoolBox/F64 plugin-to-primitive coercions
+                        // Future: BoolBox/F64 coercions
                     }
                     // If schema exists, validate per expected kind
                     if let Some(exp) = expected_args.as_ref() {
@@ -557,8 +620,16 @@ impl PluginBoxV2 {
                                     }
                                     "string" => {
                                         if enc_ref.as_any().downcast_ref::<StringBox>().is_none() {
-                                            return Err(BidError::InvalidArgs);
+                                            // Attempt late coercion for plugin StringBox
+                                            if let Some(p) = enc_ref.as_any().downcast_ref::<PluginBoxV2>() {
+                                                if p.box_type == "StringBox" {
+                                                    if let Ok(val_opt) = self.invoke_instance_method("StringBox", "toUtf8", p.inner.instance_id, &[]) {
+                                                        if let Some(val_box) = val_opt { enc_owned = Some(val_box); enc_ref = enc_owned.as_ref().unwrap(); }
+                                                    }
+                                                }
+                                            }
                                         }
+                                        if enc_ref.as_any().downcast_ref::<StringBox>().is_none() { return Err(BidError::InvalidArgs); }
                                     }
                                     "int" | "i32" => {
                                         if enc_ref.as_any().downcast_ref::<IntegerBox>().is_none() {
@@ -692,6 +763,12 @@ impl PluginBoxV2 {
                     }
                 }
                 if let Some((tag, size, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(data) {
+                if dbg_on() {
+                    let preview_len = std::cmp::min(payload.len(), 16);
+                    let preview: Vec<String> = payload[..preview_len].iter().map(|b| format!("{:02X}", b)).collect();
+                    eprintln!("[Plugin→VM] tag={} size={} preview={} returns_result={} for {}.{}",
+                        tag, size, preview.join(" "), returns_result, box_type, method_name);
+                }
                 match tag {
                     1 if size == 1 => { // Bool
                         let b = crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false);
@@ -748,13 +825,9 @@ impl PluginBoxV2 {
                     6 | 7 => { // String/Bytes
                         let s = crate::runtime::plugin_ffi_common::decode::string(payload);
                         if dbg_on() { eprintln!("[Plugin→VM] return str/bytes len={} (returns_result={})", size, returns_result); }
-                        if returns_result {
-                            // Heuristic: for Result-returning methods, string payload represents an error message
-                            let err = crate::exception_box::ErrorBox::new(&s);
-                            Some(Box::new(crate::boxes::result::NyashResultBox::new_err(Box::new(err))) as Box<dyn NyashBox>)
-                        } else {
-                            Some(Box::new(StringBox::new(s)) as Box<dyn NyashBox>)
-                        }
+                        // Treat as Ok payload; Err is indicated by non-zero rc earlier
+                        let val: Box<dyn NyashBox> = Box::new(StringBox::new(s));
+                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
                     3 if size == 8 => { // I64
                         // Try decoding as i64 directly; also support legacy i32 payload size 4 when mis-encoded
@@ -986,8 +1059,46 @@ impl PluginBoxV2 {
         let mut output_buffer = vec![0u8; 1024]; // 1KB buffer for output
         let mut output_len = output_buffer.len();
         
-        // Create TLV-encoded empty arguments (version=1, argc=0)
-        let tlv_args = crate::runtime::plugin_ffi_common::encode_empty_args();
+        // Encode constructor arguments (best-effort). Birth schemas are optional; we support common primitives.
+        let tlv_args = {
+            let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(_args.len() as u16);
+            for (idx, a) in _args.iter().enumerate() {
+                // Coerce plugin integer/string primitive boxes to builtins first
+                let mut enc_ref: &Box<dyn NyashBox> = a;
+                let mut enc_owned: Option<Box<dyn NyashBox>> = None;
+                if let Some(p) = a.as_any().downcast_ref::<PluginBoxV2>() {
+                    if p.box_type == "IntegerBox" {
+                        if let Ok(val_opt) = self.invoke_instance_method("IntegerBox", "get", p.inner.instance_id, &[]) {
+                            if let Some(val_box) = val_opt { enc_owned = Some(val_box); enc_ref = enc_owned.as_ref().unwrap(); }
+                        }
+                    } else if p.box_type == "StringBox" {
+                        if let Ok(val_opt) = self.invoke_instance_method("StringBox", "toUtf8", p.inner.instance_id, &[]) {
+                            if let Some(val_box) = val_opt { enc_owned = Some(val_box); enc_ref = enc_owned.as_ref().unwrap(); }
+                        }
+                    }
+                }
+                if let Some(i) = enc_ref.as_any().downcast_ref::<IntegerBox>() {
+                    crate::runtime::plugin_ffi_common::encode::i64(&mut buf, i.value);
+                    continue;
+                }
+                if let Some(s) = enc_ref.as_any().downcast_ref::<StringBox>() {
+                    crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value);
+                    continue;
+                }
+                if let Some(b) = enc_ref.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                    crate::runtime::plugin_ffi_common::encode::bool(&mut buf, b.value);
+                    continue;
+                }
+                if let Some(f) = enc_ref.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                    crate::runtime::plugin_ffi_common::encode::f64(&mut buf, f.value);
+                    continue;
+                }
+                // Fallback: stringify
+                let sv = enc_ref.to_string_box().value;
+                crate::runtime::plugin_ffi_common::encode::string(&mut buf, &sv);
+            }
+            buf
+        };
         eprintln!("🔍 Output buffer allocated, about to call plugin invoke_fn...");
         
         let birth_result = unsafe {

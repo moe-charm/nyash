@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::os::raw::c_char;
 use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
+use std::ffi::CStr;
 
 // ===== Error Codes (BID-1) =====
 const NYB_SUCCESS: i32 = 0;
@@ -49,6 +50,26 @@ fn parse_first_string(args: &[u8]) -> Result<String, ()> {
     if args.len() < p + sz { return Err(()); }
     let s = String::from_utf8_lossy(&args[p..p+sz]).to_string();
     Ok(s)
+}
+
+fn format_first_any(args: &[u8]) -> Option<String> {
+    if args.len() < 4 { return None; }
+    let mut p = 4usize;
+    if args.len() < p + 4 { return None; }
+    let tag = u16::from_le_bytes([args[p], args[p+1]]); p += 2;
+    let sz  = u16::from_le_bytes([args[p], args[p+1]]) as usize; p += 2;
+    if args.len() < p + sz { return None; }
+    let payload = &args[p..p+sz];
+    match tag {
+        1 => Some(if sz>0 && payload[0]!=0 { "true".into() } else { "false".into() }),
+        2 => { if sz!=4 { None } else { let mut b=[0u8;4]; b.copy_from_slice(payload); Some((i32::from_le_bytes(b)).to_string()) } },
+        3 => { if sz!=8 { None } else { let mut b=[0u8;8]; b.copy_from_slice(payload); Some((i64::from_le_bytes(b)).to_string()) } },
+        5 => { if sz!=8 { None } else { let mut b=[0u8;8]; b.copy_from_slice(payload); Some(f64::from_le_bytes(b).to_string()) } },
+        6 => { std::str::from_utf8(payload).ok().map(|s| s.to_string()) },
+        7 => Some(format!("<bytes:{}>", sz)),
+        8 => { if sz==8 { let mut t=[0u8;4]; t.copy_from_slice(&payload[0..4]); let mut i=[0u8;4]; i.copy_from_slice(&payload[4..8]); Some(format!("<handle {}:{}>", u32::from_le_bytes(t), u32::from_le_bytes(i))) } else { None } },
+        _ => None,
+    }
 }
 
 // Write TLV birth result: Handle(tag=8,size=8) with (type_id, instance_id)
@@ -118,16 +139,14 @@ pub extern "C" fn nyash_plugin_invoke(
             }
             METHOD_LOG | METHOD_PRINTLN => {
                 let slice = std::slice::from_raw_parts(args, args_len);
-                match parse_first_string(slice) {
-                    Ok(s) => {
-                        if method_id == METHOD_LOG { print!("{}", s); } else { println!("{}", s); }
-                        return write_tlv_void(result, result_len);
-                    }
-                    Err(_) => return NYB_E_INVALID_ARGS,
-                }
+                let s = match parse_first_string(slice) {
+                    Ok(s) => s,
+                    Err(_) => format_first_any(slice).unwrap_or_else(|| "".to_string()),
+                };
+                if method_id == METHOD_LOG { print!("{}", s); } else { println!("{}", s); }
+                return write_tlv_void(result, result_len);
             }
             _ => NYB_E_INVALID_METHOD,
         }
     }
 }
-

@@ -206,7 +206,6 @@ impl UnifiedBoxRegistry {
 }
 
 /// Re-export submodules
-pub mod builtin;
 pub mod user_defined;
 pub mod plugin;
 

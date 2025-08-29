@@ -118,41 +118,8 @@ impl NyashInterpreter {
         this
     }
 
-    /// グループ構成を指定して新しいインタープリターを作成
-    pub fn new_with_groups(groups: crate::box_factory::builtin::BuiltinGroups) -> Self {
-        let shared = SharedState::new();
-
-        // 先にランタイム（組み込みグループのみ）を構築
-        let runtime = NyashRuntimeBuilder::new()
-            .with_builtin_groups(groups)
-            .build();
-
-        // Runtimeのbox_declarationsを共有状態に差し替え
-        let mut shared = shared; // 可変化
-        shared.box_declarations = runtime.box_declarations.clone();
-
-        // 差し替え済みSharedStateでUDFを登録
-        use crate::box_factory::user_defined::UserDefinedBoxFactory;
-        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
-        if let Ok(mut reg) = runtime.box_registry.lock() {
-            reg.register(udf);
-        }
-
-        let mut this = Self {
-            shared,
-            local_vars: HashMap::new(),
-            outbox_vars: HashMap::new(),
-            control_flow: ControlFlow::None,
-            current_constructor_context: None,
-            evaluation_stack: Vec::new(),
-            invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
-            stdlib: None,
-            runtime,
-            discard_context: false,
-        };
-        self::register_methodbox_invoker();
-        this
-    }
+    /// 互換API: 旧BuiltinGroupsを受け取るコンストラクタ（無視して new() 相当）
+    pub fn new_with_groups<T>(_groups: T) -> Self where T: core::fmt::Debug { Self::new() }
     
     /// 共有状態から新しいインタープリターを作成（非同期実行用）
     pub fn with_shared(shared: SharedState) -> Self {
@@ -186,38 +153,8 @@ impl NyashInterpreter {
         this
     }
 
-    /// 共有状態＋グループ構成を指定して新しいインタープリターを作成（非同期実行用）
-    pub fn with_shared_and_groups(shared: SharedState, groups: crate::box_factory::builtin::BuiltinGroups) -> Self {
-        // 先にランタイム（組み込みグループのみ）を構築
-        let runtime = NyashRuntimeBuilder::new()
-            .with_builtin_groups(groups)
-            .build();
-
-        let mut shared = shared; // 可変化
-        shared.box_declarations = runtime.box_declarations.clone();
-
-        // 差し替え済みSharedStateでUDFを登録
-        use crate::box_factory::user_defined::UserDefinedBoxFactory;
-        let udf = Arc::new(UserDefinedBoxFactory::new(shared.clone()));
-        if let Ok(mut reg) = runtime.box_registry.lock() {
-            reg.register(udf);
-        }
-
-        let mut this = Self {
-            shared,
-            local_vars: HashMap::new(),
-            outbox_vars: HashMap::new(),
-            control_flow: ControlFlow::None,
-            current_constructor_context: None,
-            evaluation_stack: Vec::new(),
-            invalidated_ids: Arc::new(Mutex::new(HashSet::new())),
-            stdlib: None,
-            runtime,
-            discard_context: false,
-        };
-        self::register_methodbox_invoker();
-        this
-    }
+    /// 互換API: 共有状態＋旧BuiltinGroups（無視）
+    pub fn with_shared_and_groups<T>(shared: SharedState, _groups: T) -> Self where T: core::fmt::Debug { Self::with_shared(shared) }
     
 
     /// Register an additional BoxFactory into this interpreter's runtime registry.

@@ -1,5 +1,5 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, mir::MirCompiler, backend::VM, runtime::{NyashRuntime, NyashRuntimeBuilder}, ast::ASTNode, core::model::BoxDeclaration as CoreBoxDecl, interpreter::SharedState, box_factory::{builtin::BuiltinGroups, user_defined::UserDefinedBoxFactory}};
+use nyash_rust::{parser::NyashParser, mir::MirCompiler, backend::VM, runtime::{NyashRuntime, NyashRuntimeBuilder}, ast::ASTNode, core::model::BoxDeclaration as CoreBoxDecl, interpreter::SharedState, box_factory::user_defined::UserDefinedBoxFactory};
 use std::{fs, process};
 use std::sync::Arc;
 
@@ -20,8 +20,7 @@ impl NyashRunner {
 
         // Prepare runtime and collect Box declarations for VM user-defined types
         let runtime = {
-            let mut builder = NyashRuntimeBuilder::new()
-                .with_builtin_groups(BuiltinGroups::native_full());
+            let mut builder = NyashRuntimeBuilder::new();
             if std::env::var("NYASH_GC_COUNTING").ok().as_deref() == Some("1") {
                 builder = builder.with_counting_gc();
             }

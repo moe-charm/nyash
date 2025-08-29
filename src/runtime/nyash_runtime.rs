@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use crate::core::model::BoxDeclaration;
 use crate::box_factory::{UnifiedBoxRegistry, BoxFactory};
-use crate::box_factory::builtin::{BuiltinBoxFactory, BuiltinGroups};
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
 
@@ -40,14 +39,13 @@ impl NyashRuntime {
 pub struct NyashRuntimeBuilder {
     box_registry: Option<Arc<Mutex<UnifiedBoxRegistry>>>,
     box_declarations: Option<Arc<RwLock<HashMap<String, BoxDeclaration>>>>,
-    builtin_groups: Option<BuiltinGroups>,
     gc: Option<Arc<dyn crate::runtime::gc::GcHooks>>, 
     scheduler: Option<Arc<dyn crate::runtime::scheduler::Scheduler>>,
 }
 
 impl NyashRuntimeBuilder {
     pub fn new() -> Self {
-        Self { box_registry: None, box_declarations: None, builtin_groups: None, gc: None, scheduler: None }
+        Self { box_registry: None, box_declarations: None, gc: None, scheduler: None }
     }
 
     /// Inject a BoxFactory implementation directly into a private registry
@@ -69,13 +67,7 @@ impl NyashRuntimeBuilder {
     }
 
     pub fn build(self) -> NyashRuntime {
-        let registry = match self.box_registry {
-            Some(reg) => reg,
-            None => match self.builtin_groups {
-                Some(groups) => create_registry_with_groups(groups),
-                None => create_default_registry(),
-            }
-        };
+        let registry = self.box_registry.unwrap_or_else(|| create_default_registry());
 
         NyashRuntime {
             box_registry: registry,
@@ -87,18 +79,8 @@ impl NyashRuntimeBuilder {
 }
 
 fn create_default_registry() -> Arc<Mutex<UnifiedBoxRegistry>> {
-    create_registry_with_groups(BuiltinGroups::default())
-}
-
-fn create_registry_with_groups(groups: BuiltinGroups) -> Arc<Mutex<UnifiedBoxRegistry>> {
     let mut registry = UnifiedBoxRegistry::new();
-    // Optional: disable builtin boxes entirely to flush out conflicts
-    let disable_builtins = std::env::var("NYASH_DISABLE_BUILTINS").ok().as_deref() == Some("1");
-    if !disable_builtins {
-        registry.register(Arc::new(BuiltinBoxFactory::new_with_groups(groups)));
-    } else {
-        eprintln!("[UnifiedRegistry] Builtin boxes disabled via NYASH_DISABLE_BUILTINS=1");
-    }
+    eprintln!("[UnifiedRegistry] Builtin boxes removed; using plugins-only registry");
     #[cfg(feature = "plugins")]
     {
         registry.register(Arc::new(PluginBoxFactory::new()));
@@ -107,13 +89,6 @@ fn create_registry_with_groups(groups: BuiltinGroups) -> Arc<Mutex<UnifiedBoxReg
 }
 
 impl NyashRuntimeBuilder {
-    /// Configure which builtin groups are registered in the registry.
-    /// If a custom box_registry is already provided, this setting is ignored.
-    pub fn with_builtin_groups(mut self, groups: BuiltinGroups) -> Self {
-        self.builtin_groups = Some(groups);
-        self
-    }
-
     /// Inject custom GC hooks (switchable runtime). Default is no-op.
     pub fn with_gc_hooks(mut self, gc: Arc<dyn crate::runtime::gc::GcHooks>) -> Self {
         self.gc = Some(gc);

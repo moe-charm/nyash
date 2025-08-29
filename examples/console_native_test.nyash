@@ -1,0 +1,17 @@
+// ConsoleBox native build test - minimal example
+// Build native:
+//   cargo build --release --features cranelift-jit
+//   ./tools/build_aot.sh examples/console_native_test.nyash console_app
+
+static box Main {
+  greet(name) {
+    local c
+    c = new ConsoleBox()
+    c.println("Hello, " + name + "!")
+    return 0
+  }
+  
+  main() {
+    return me.greet("Nyash Native")
+  }
+}

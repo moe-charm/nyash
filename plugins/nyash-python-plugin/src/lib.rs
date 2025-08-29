@@ -51,7 +51,13 @@ const PYO_METHOD_CALL_KW_R:u32 = 15;
 
 // ===== Minimal in-memory state for stubs =====
 #[derive(Default)]
-struct PyRuntimeInstance {}
+struct PyRuntimeInstance { globals: Option<*mut PyObject> }
+// Safety: Access to CPython state is guarded by the GIL in all call sites
+// and we only store raw pointers captured under the GIL. We never mutate
+// from multiple threads without reacquiring the GIL. Therefore, mark as
+// Send/Sync for storage inside global Lazy<Mutex<...>>.
+unsafe impl Send for PyRuntimeInstance {}
+unsafe impl Sync for PyRuntimeInstance {}
 
 #[derive(Default)]
 struct PyObjectInstance {}
@@ -254,7 +260,18 @@ fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_
                 if preflight(result, result_len, 4) { return NYB_E_SHORT_BUFFER; }
                 if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
                 let id = RT_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut map) = RUNTIMES.lock() { map.insert(id, PyRuntimeInstance::default()); } else { return NYB_E_PLUGIN_ERROR; }
+                let mut inst = PyRuntimeInstance::default();
+                if let Some(cpy) = &*CPY.lock().unwrap() {
+                    let c_main = CString::new("__main__").unwrap();
+                    let state = (cpy.PyGILState_Ensure)();
+                    let module = (cpy.PyImport_AddModule)(c_main.as_ptr());
+                    if !module.is_null() {
+                        let dict = (cpy.PyModule_GetDict)(module);
+                        if !dict.is_null() { inst.globals = Some(dict); }
+                    }
+                    (cpy.PyGILState_Release)(state);
+                }
+                if let Ok(mut map) = RUNTIMES.lock() { map.insert(id, inst); } else { return NYB_E_PLUGIN_ERROR; }
                 let bytes = id.to_le_bytes();
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
                 *result_len = 4;
@@ -267,23 +284,35 @@ fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_
             }
             PY_METHOD_EVAL | PY_METHOD_EVAL_R => {
                 if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
-                let Some(code) = read_arg_string(_args, _args_len, 0) else { return NYB_E_INVALID_ARGS; };
+                // Allow zero-arg eval by reading from env var (NYASH_PY_EVAL_CODE) for bootstrap demos
+                let argc = tlv_count_args(_args, _args_len);
+                let code = if argc == 0 {
+                    std::env::var("NYASH_PY_EVAL_CODE").unwrap_or_else(|_| "".to_string())
+                } else {
+                    if let Some(s) = read_arg_string(_args, _args_len, 0) { s } else { return NYB_E_INVALID_ARGS }
+                };
                 let c_code = match CString::new(code) { Ok(s) => s, Err(_) => return NYB_E_INVALID_ARGS };
-                let c_main = CString::new("__main__").unwrap();
                 if let Some(cpy) = &*CPY.lock().unwrap() {
                     let state = (cpy.PyGILState_Ensure)();
-                    let globals = (cpy.PyImport_AddModule)(c_main.as_ptr());
-                    if globals.is_null() { (cpy.PyGILState_Release)(state); return NYB_E_PLUGIN_ERROR; }
-                    let dict = (cpy.PyModule_GetDict)(globals);
+                    // use per-runtime globals if available
+                    let mut dict: *mut PyObject = std::ptr::null_mut();
+                    if let Ok(map) = RUNTIMES.lock() { if let Some(rt) = map.get(&_instance_id) { if let Some(g) = rt.globals { dict = g; } } }
+                    if dict.is_null() {
+                        let c_main = CString::new("__main__").unwrap();
+                        let module = (cpy.PyImport_AddModule)(c_main.as_ptr());
+                        if module.is_null() { (cpy.PyGILState_Release)(state); return NYB_E_PLUGIN_ERROR; }
+                        dict = (cpy.PyModule_GetDict)(module);
+                    }
                     // 258 == Py_eval_input
                     let obj = (cpy.PyRun_StringFlags)(c_code.as_ptr(), 258, dict, dict, std::ptr::null_mut());
                     if obj.is_null() {
                         let msg = take_py_error_string(cpy);
                         (cpy.PyGILState_Release)(state);
+                        if method_id == PY_METHOD_EVAL_R { return NYB_E_PLUGIN_ERROR; }
                         if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
                         return NYB_E_PLUGIN_ERROR;
                     }
-                    if method_id == PY_METHOD_EVAL && should_autodecode() && try_write_autodecode(cpy, obj, result, result_len) {
+                    if (method_id == PY_METHOD_EVAL || method_id == PY_METHOD_EVAL_R) && should_autodecode() && try_write_autodecode(cpy, obj, result, result_len) {
                         (cpy.Py_DecRef)(obj);
                         (cpy.PyGILState_Release)(state);
                         return NYB_SUCCESS;
@@ -315,9 +344,12 @@ fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_
                     if obj.is_null() {
                         let msg = take_py_error_string(cpy);
                         (cpy.PyGILState_Release)(state);
+                        if method_id == PY_METHOD_IMPORT_R { return NYB_E_PLUGIN_ERROR; }
                         if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
                         return NYB_E_PLUGIN_ERROR;
                     }
+                    // expose module into runtime globals
+                    if let Ok(map) = RUNTIMES.lock() { if let Some(rt) = map.get(&_instance_id) { if let Some(gl) = rt.globals { (cpy.PyDict_SetItemString)(gl, c_name.as_ptr(), obj); } } }
                     let id = OBJ_COUNTER.fetch_add(1, Ordering::Relaxed);
                     if let Ok(mut map) = PYOBJS.lock() { map.insert(id, PyObjectInstance::default()); } else { (cpy.Py_DecRef)(obj); (cpy.PyGILState_Release)(state); return NYB_E_PLUGIN_ERROR; }
                     OBJ_PTRS.lock().unwrap().insert(id, PyPtr(obj));
@@ -353,10 +385,11 @@ fn handle_py_object(method_id: u32, instance_id: u32, _args: *const u8, _args_le
                 if attr.is_null() {
                     let msg = take_py_error_string(cpy);
                     unsafe { (cpy.PyGILState_Release)(state); }
+                    if method_id == PYO_METHOD_GETATTR_R { return NYB_E_PLUGIN_ERROR; }
                     if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
                     return NYB_E_PLUGIN_ERROR;
                 }
-                if method_id == PYO_METHOD_GETATTR && should_autodecode() && try_write_autodecode(cpy, attr, result, result_len) {
+                if should_autodecode() && try_write_autodecode(cpy, attr, result, result_len) {
                     unsafe { (cpy.Py_DecRef)(attr); (cpy.PyGILState_Release)(state); }
                     return NYB_SUCCESS;
                 }
@@ -385,10 +418,11 @@ fn handle_py_object(method_id: u32, instance_id: u32, _args: *const u8, _args_le
                 if ret.is_null() {
                     let msg = take_py_error_string(cpy);
                     unsafe { (cpy.PyGILState_Release)(state); }
+                    if method_id == PYO_METHOD_CALL_R { return NYB_E_PLUGIN_ERROR; }
                     if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
                     return NYB_E_PLUGIN_ERROR;
                 }
-                if method_id == PYO_METHOD_CALL && should_autodecode() && try_write_autodecode(cpy, ret, result, result_len) {
+                if should_autodecode() && try_write_autodecode(cpy, ret, result, result_len) {
                     unsafe { (cpy.Py_DecRef)(ret); (cpy.PyGILState_Release)(state); }
                     return NYB_SUCCESS;
                 }
@@ -419,10 +453,11 @@ fn handle_py_object(method_id: u32, instance_id: u32, _args: *const u8, _args_le
                 if ret.is_null() {
                     let msg = take_py_error_string(cpy);
                     unsafe { (cpy.PyGILState_Release)(state); }
+                    if method_id == PYO_METHOD_CALL_KW_R { return NYB_E_PLUGIN_ERROR; }
                     if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
                     return NYB_E_PLUGIN_ERROR;
                 }
-                if method_id == PYO_METHOD_CALL_KW && should_autodecode() && try_write_autodecode(cpy, ret, result, result_len) {
+                if (method_id == PYO_METHOD_CALL_KW || method_id == PYO_METHOD_CALL_KW_R) && should_autodecode() && try_write_autodecode(cpy, ret, result, result_len) {
                     unsafe { (cpy.Py_DecRef)(ret); (cpy.PyGILState_Release)(state); }
                     return NYB_SUCCESS;
                 }
@@ -449,7 +484,6 @@ fn handle_py_object(method_id: u32, instance_id: u32, _args: *const u8, _args_le
             NYB_E_PLUGIN_ERROR
         }
         // keep others unimplemented in 10.5b-min
-        PYO_METHOD_GETATTR | PYO_METHOD_CALL => NYB_E_INVALID_METHOD,
         _ => NYB_E_INVALID_METHOD,
     }
 }
@@ -690,6 +724,7 @@ fn try_write_autodecode(cpy: &CPython, obj: *mut PyObject, result: *mut u8, resu
             had_err = true; (cpy.PyErr_Clear)();
         }
         if !had_err {
+            eprintln!("[PyPlugin] autodecode: Float {}", f);
             let mut payload = [0u8;8];
             payload.copy_from_slice(&f.to_le_bytes());
             let rc = write_tlv_result(&[(5u8, &payload)], result, result_len);
@@ -698,6 +733,7 @@ fn try_write_autodecode(cpy: &CPython, obj: *mut PyObject, result: *mut u8, resu
         // Integer (PyLong) -> tag=3 (i64)
         let i = (cpy.PyLong_AsLongLong)(obj);
         if !(cpy.PyErr_Occurred)().is_null() { (cpy.PyErr_Clear)(); } else {
+            eprintln!("[PyPlugin] autodecode: I64 {}", i);
             let mut payload = [0u8;8];
             payload.copy_from_slice(&i.to_le_bytes());
             let rc = write_tlv_result(&[(3u8, &payload)], result, result_len);
@@ -709,6 +745,7 @@ fn try_write_autodecode(cpy: &CPython, obj: *mut PyObject, result: *mut u8, resu
             (cpy.PyErr_Clear)();
         } else if !u.is_null() {
             let s = CStr::from_ptr(u).to_string_lossy();
+            eprintln!("[PyPlugin] autodecode: String '{}', len={} ", s, s.len());
             let rc = write_tlv_result(&[(6u8, s.as_bytes())], result, result_len);
             return rc == NYB_SUCCESS || rc == NYB_E_SHORT_BUFFER;
         }
@@ -717,6 +754,7 @@ fn try_write_autodecode(cpy: &CPython, obj: *mut PyObject, result: *mut u8, resu
         let mut sz: isize = 0;
         if (cpy.PyBytes_AsStringAndSize)(obj, &mut ptr, &mut sz) == 0 {
             let slice = std::slice::from_raw_parts(ptr as *const u8, sz as usize);
+            eprintln!("[PyPlugin] autodecode: Bytes {} bytes", sz);
             let rc = write_tlv_result(&[(7u8, slice)], result, result_len);
             return rc == NYB_SUCCESS || rc == NYB_E_SHORT_BUFFER;
         } else if !(cpy.PyErr_Occurred)().is_null() { (cpy.PyErr_Clear)(); }

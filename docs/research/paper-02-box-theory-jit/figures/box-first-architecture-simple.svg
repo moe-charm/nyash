@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style type="text/css">
+      .box { fill: #f0f8ff; stroke: #333; stroke-width: 2; }
+      .vm { fill: #e8f5e9; stroke: #2e7d32; stroke-width: 3; }
+      .jit { fill: #fff3e0; stroke: #ef6c00; stroke-width: 3; }
+      .arrow { fill: none; stroke: #555; stroke-width: 2; }
+      .text { font-family: Arial, sans-serif; font-size: 14px; text-anchor: middle; }
+      .title { font-size: 18px; font-weight: bold; }
+      .small { font-size: 12px; }
+    </style>
+  </defs>
+  
+  <!-- Title -->
+  <text x="400" y="30" class="text title">Box-First JIT Architecture</text>
+  
+  <!-- VM Box -->
+  <rect x="50" y="70" width="300" height="200" class="vm" rx="10"/>
+  <text x="200" y="100" class="text title">Nyash VM</text>
+  <text x="200" y="130" class="text">・MIR実行エンジン</text>
+  <text x="200" y="150" class="text">・VMValue (Integer/Float/Bool/Box)</text>
+  <text x="200" y="170" class="text">・ホットスポット検出</text>
+  <text x="200" y="190" class="text">・フォールバック実行</text>
+  <text x="200" y="220" class="text small">catch_unwind で安全に復帰</text>
+  
+  <!-- JIT Engine Box -->
+  <rect x="450" y="70" width="300" height="200" class="jit" rx="10"/>
+  <text x="600" y="100" class="text title">JIT Engine (Cranelift)</text>
+  <text x="600" y="130" class="text">・MIR → CLIF変換</text>
+  <text x="600" y="150" class="text">・JitValue (i64/f64/bool/handle)</text>
+  <text x="600" y="170" class="text">・ネイティブコード生成</text>
+  <text x="600" y="190" class="text">・実行時最適化</text>
+  <text x="600" y="220" class="text small">VM内部に非依存</text>
+  
+  <!-- Three small boxes with keywords -->
+  <g transform="translate(400, 300)">
+    <!-- 実行 box -->
+    <rect x="-160" y="0" width="100" height="40" class="box" rx="5"/>
+    <text x="-110" y="25" class="text">実行</text>
+    
+    <!-- JIT box -->
+    <rect x="-50" y="0" width="100" height="40" class="box" rx="5"/>
+    <text x="0" y="25" class="text">JIT</text>
+    
+    <!-- Box box -->
+    <rect x="60" y="0" width="100" height="40" class="box" rx="5"/>
+    <text x="110" y="25" class="text">Box</text>
+  </g>
+  
+  <!-- Three Essential Boxes below -->
+  <!-- Configuration Box -->
+  <rect x="100" y="360" width="180" height="130" class="box" rx="10"/>
+  <text x="190" y="390" class="text title">Configuration Box</text>
+  <text x="190" y="415" class="text">JitConfigBox</text>
+  <text x="190" y="435" class="text small">・env変数統一管理</text>
+  <text x="190" y="450" class="text small">・実行時能力プローブ</text>
+  <text x="190" y="465" class="text small">・設定の箱化</text>
+  
+  <!-- Boundary Box (center) -->
+  <rect x="310" y="360" width="180" height="130" class="box" rx="10"/>
+  <text x="400" y="390" class="text title">Boundary Box</text>
+  <text x="400" y="415" class="text">HandleRegistry</text>
+  <text x="400" y="435" class="text small">・u64 ↔ Arc&lt;Box&gt;</text>
+  <text x="400" y="450" class="text small">・JitValue変換</text>
+  <text x="400" y="465" class="text small">・型境界の明確化</text>
+  
+  <!-- Observability Box -->
+  <rect x="520" y="360" width="180" height="130" class="box" rx="10"/>
+  <text x="610" y="390" class="text title">Observability Box</text>
+  <text x="610" y="415" class="text">統計・可視化</text>
+  <text x="610" y="435" class="text small">・DOT図生成 (CFG/PHI)</text>
+  <text x="610" y="450" class="text small">・JIT統計 (JSON)</text>
+  <text x="610" y="465" class="text small">・フォールバック率</text>
+  
+  <!-- Arrows -->
+  <!-- VM to JIT -->
+  <path d="M 350 170 L 450 170" class="arrow" marker-end="url(#arrowhead)"/>
+  <text x="400" y="165" class="text small">ホット関数</text>
+  
+  <!-- JIT to VM (fallback) -->
+  <path d="M 450 200 L 350 200" class="arrow" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+  <text x="400" y="215" class="text small">フォールバック</text>
+  
+  <!-- Boxes to VM/JIT -->
+  <path d="M 190 360 L 200 270" class="arrow" marker-end="url(#arrowhead)"/>
+  <path d="M 400 360 L 400 270" class="arrow" marker-end="url(#arrowhead)"/>
+  <path d="M 610 360 L 600 270" class="arrow" marker-end="url(#arrowhead)"/>
+  
+  <!-- Legend -->
+  <text x="50" y="540" class="text small" text-anchor="start">凡例:</text>
+  <rect x="50" y="550" width="30" height="15" class="vm"/>
+  <text x="90" y="562" class="text small" text-anchor="start">実行エンジン</text>
+  <rect x="200" y="550" width="30" height="15" class="jit"/>
+  <text x="240" y="562" class="text small" text-anchor="start">JITコンパイラ</text>
+  <rect x="350" y="550" width="30" height="15" class="box"/>
+  <text x="390" y="562" class="text small" text-anchor="start">Box (設定/境界/観測)</text>
+  
+  <!-- Arrow marker definition -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  
+  <!-- Key points annotation -->
+  <text x="400" y="570" class="text small">可視・可逆・切替可能な設計により、24時間でJIT実装を達成</text>
+</svg>

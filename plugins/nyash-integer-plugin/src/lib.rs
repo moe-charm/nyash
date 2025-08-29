@@ -50,8 +50,10 @@ pub extern "C" fn nyash_plugin_invoke(
             M_BIRTH => {
                 if result_len.is_null() { return E_ARGS; }
                 if preflight(result, result_len, 4) { return E_SHORT; }
+                // Optional initial value from first arg (i64/i32)
+                let init = read_arg_i64(args, args_len, 0).unwrap_or(0);
                 let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut m) = INST.lock() { m.insert(id, IntInstance { value: 0 }); }
+                if let Ok(mut m) = INST.lock() { m.insert(id, IntInstance { value: init }); }
                 else { return E_PLUGIN; }
                 let b = id.to_le_bytes();
                 std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4); *result_len = 4; OK

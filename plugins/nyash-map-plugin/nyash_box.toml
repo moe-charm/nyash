@@ -8,7 +8,7 @@ author = "Nyash Team"
 boxes = ["MapBox"]
 
 [MapBox]
-type_id = 12
+type_id = 11
 
 [MapBox.lifecycle]
 birth = { id = 0 }
@@ -32,4 +32,3 @@ thread_safe = true
 windows = "target/x86_64-pc-windows-msvc/release/nyash_map_plugin.dll"
 linux   = "target/release/libnyash_map_plugin.so"
 macos   = "target/release/libnyash_map_plugin.dylib"
-

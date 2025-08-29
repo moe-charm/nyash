@@ -8,7 +8,7 @@ author = "Nyash Team"
 boxes = ["StringBox"]
 
 [StringBox]
-type_id = 10
+type_id = 13
 
 [StringBox.lifecycle]
 birth = { id = 0 }
@@ -19,6 +19,11 @@ id = 1
 args = []
 returns = { type = "i64" }
 
+[StringBox.methods.toUtf8]
+id = 6
+args = []
+returns = { type = "string" }
+
 [implementation]
 ffi_version = 1
 thread_safe = true
@@ -27,4 +32,3 @@ thread_safe = true
 windows = "target/x86_64-pc-windows-msvc/release/nyash_string_plugin.dll"
 linux   = "target/release/libnyash_string_plugin.so"
 macos   = "target/release/libnyash_string_plugin.dylib"
-

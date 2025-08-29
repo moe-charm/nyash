@@ -54,28 +54,31 @@
 - Console 橋渡し（`env.console.log/println` → ConsoleBox）を strict 経路で実行可能に。
 - nyrtシムで String/Integer 引数を TLV(tag=6/3) に自動変換（import/getattr/call の基盤整備）。
 - 戻りバッファの動的拡張で AOT 実行時の短バッファ起因の不安定さを軽減。
+ - VM: per-runtime globals 実装により `py.import("math"); py.eval("math.sqrt(16)")` が Green（autodecode=1 で 4）。
+   - 例: `examples/test_py_context_sharing.nyash`（戻り値で最終結果を確認）
 
 #### ❗ 現状の制約 / 不具合
 - VM: `py.import("math")` の後に `py.eval("math.sqrt(16)")` が "name 'math' is not defined"（文脈共有が未確立）。
-  - 対策方針: PyRuntimeInstance に per-runtime globals(dict) を持たせ、birth 時に `__main__` の dict を確保。import 成功時は globals に挿入、eval は当該 globals を使う。
+  - 2025-08-30 解消: PyRuntimeInstance に per-runtime globals(dict) を実装（birthで `__main__` dict 確保、import成功時にglobalsへ挿入、evalは同globalsで評価）。
 - getattr/call（PyObjectBox）: AOT 実Emitはまだ限定（Lowerer が import 返りの Box 型を把握できない）。
-  - 対策方針: Lowerer の box_type 伝搬を拡張し、`plugin_invoke %rt.import -> PyObjectBox` を box_type_map に記録。`getattr/call` を確実に `emit_plugin_invoke` に誘導。
+  - 対策方針（更新）: Python特化の型伝搬を撤廃し、Handle-First で汎用化。戻りが `box` のメソッドは「Handle（TLV tag=8）」として扱い、Lowerer は `emit_plugin_invoke` のみ（箱名固定を行わない）。必要に応じて by-name シムで実行時解決。
 
-#### 🎯 次タスク（実装順）
-1) Pythonプラグイン: per-runtime globals の完全実装
-   - birth: `__main__` dict を PyRuntimeInstance に保持
-   - import: 成功時に runtime.globals へ `name` で登録
-   - eval: runtime.globals を global/local に指定して評価
-   - VM/E2E で `py.import("math"); py.eval("math.sqrt(16)")` を Green に
-2) Lowerer: PyObjectBox の戻り型伝搬
-   - `import → PyObjectBox`、`getattr → PyObjectBox` の関係を box_type_map に反映
-   - getattr/call を `emit_plugin_invoke` で実Emit（has_ret/argc 正規化）
-3) AOT 実行の安定化
-   - nyrt シム: Bytes/Bool/Float を含む複数引数 TLV のカバレッジ拡大（必要に応じて）
-   - 実行ログ（`NYASH_DEBUG_PLUGIN=1`）で TLV 入出力を継続監視
-4) ドキュメント/サンプル更新
-   - eval 方式の最小AOT（成功例）をガイドへ明記
-   - import/getattr/call のAOT例を追加（通り次第）
+#### 🎯 次タスク（実装順・更新済）
+1) 設計ドキュメント反映（最優先）
+   - `phase-10.5/10.5c-handle-first-plugininvoke-plan.md` を追加（完了）。
+   - MASTER_ROADMAP からの導線追記（別PRで可）。
+2) Lowerer 汎用化（Python特化排除）
+   - Python固有の型伝搬（dst=PyObjectBox 記録）を撤去し、戻りが `box` の場合は Handle として扱う（型名固定なし）。
+   - `emit_plugin_invoke` は従来どおり使用（has_ret/argc 正規化）。
+3) メタデータ解決
+   - `PluginHost.resolve_method` に `returns.type` を露出。Lowerer が `box`/primitive のみを参照。
+4) by-name シムの導入（必要時）
+   - `nyrt`/builder に `nyash_plugin_invoke_by_name_{i64,f64}` を追加し、受け手箱名未確定時の実行時解決に使用。
+5) AOT 実行の安定化
+   - nyrt シム: Bytes/Bool/Float/複数引数 TLV のカバレッジ拡大。
+   - 連鎖（import→getattr→call）の最小AOT例を Green（unsupported=0）。
+6) ドキュメント/サンプル更新
+   - Handle-First のガイドと最小AOT手順の追記。
 
 ## 🔧 実行方法（再起動手順）
 ```bash

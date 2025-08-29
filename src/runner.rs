@@ -16,7 +16,6 @@ use nyash_rust::{
     backend::VM,
 };
 use nyash_rust::runtime::{NyashRuntime, NyashRuntimeBuilder};
-use nyash_rust::box_factory::builtin::BuiltinGroups;
 use nyash_rust::interpreter::SharedState;
 use nyash_rust::box_factory::user_defined::UserDefinedBoxFactory;
 use nyash_rust::core::model::BoxDeclaration as CoreBoxDecl;
@@ -272,7 +271,7 @@ impl NyashRunner {
         eprintln!("🔍 DEBUG: Creating interpreter...");
         
         // Execute the AST
-        let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
+        let mut interpreter = NyashInterpreter::new();
         eprintln!("🔍 DEBUG: Starting execution...");
         match interpreter.execute(ast) {
             Ok(result) => {
@@ -1025,7 +1024,7 @@ fn demo_interpreter_system() {
     
     match NyashParser::parse_from_string(simple_code) {
         Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
+            let mut interpreter = NyashInterpreter::new();
             match interpreter.execute(ast) {
                 Ok(result) => {
                     println!("    ✅ Result: {}", result.to_string_box().value);
@@ -1050,7 +1049,7 @@ fn demo_interpreter_system() {
     
     match NyashParser::parse_from_string(expr_code) {
         Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
+            let mut interpreter = NyashInterpreter::new();
             match interpreter.execute(ast) {
                 Ok(result) => {
                     println!("    ✅ Result: {}", result.to_string_box().value);

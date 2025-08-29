@@ -1,5 +1,5 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter, box_factory::builtin::BuiltinGroups};
+use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter};
 use std::{fs, process};
 
 impl NyashRunner {
@@ -93,7 +93,7 @@ impl NyashRunner {
         println!("✅ Parse successful!");
 
         // Execute the AST
-        let mut interpreter = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
+        let mut interpreter = NyashInterpreter::new();
         eprintln!("🔍 DEBUG: Starting execution...");
         match interpreter.execute(ast) {
             Ok(result) => {

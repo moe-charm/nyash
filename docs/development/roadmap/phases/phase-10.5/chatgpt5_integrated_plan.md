@@ -1,7 +1,12 @@
-# Phase 10.1 - Python統合計画（ChatGPT5高速開発版）
-最終更新: 2025-08-27
+# [Archived] 旧 Phase 10.1 - Python統合計画（ChatGPT5高速開発版）
+最終更新: 2025-08-27 ／ 状態: Archived（Phase 10.5 に統合）
 
-## 🚀 概要：2週間での爆速実装
+現行の計画は Phase 10.5 のドキュメントに集約しています。最新は以下を参照してください:
+- Phase 10.5 Index: ./INDEX.md
+- 10.5a – Python ABI 設計: ./10.5a-ABI-DESIGN.md
+- 10.5b – ネイティブビルド基盤: ./10.5b-native-build-consolidation.md
+
+## 🚀 概要：2週間での爆速実装（当時案）
 
 ChatGPT5の最小Box設計により、元の1ヶ月計画を**2週間**に圧縮。Nyash既存アーキテクチャ（MirBuilder 100%実装済み、HandleRegistry 80%実装済み）を最大活用。
 

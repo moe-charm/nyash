@@ -464,7 +464,7 @@ impl VM {
             }
         }
         // Get field value from object
-        let field_value = if let Some(fields) = self.object_fields.get(&reference) {
+        let mut field_value = if let Some(fields) = self.object_fields.get(&reference) {
             if let Some(value) = fields.get(field) {
                 if debug_ref { eprintln!("[VM] RefGet hit: {} -> {:?}", field, value); }
                 value.clone()
@@ -478,6 +478,23 @@ impl VM {
             if debug_ref { eprintln!("[VM] RefGet no fields: -> default 0"); }
             VMValue::Integer(0)
         };
+
+        // Special binding for environment-like fields: map 'console' to plugin ConsoleBox
+        if matches!(field_value, VMValue::Integer(0)) && field == "console" {
+            if debug_ref { eprintln!("[VM] RefGet special binding: console -> Plugin ConsoleBox"); }
+            let host = crate::runtime::get_global_plugin_host();
+            let host = host.read().unwrap();
+            if let Ok(pbox) = host.create_box("ConsoleBox", &[]) {
+                field_value = VMValue::from_nyash_box(pbox);
+                // Cache on the object so subsequent ref_get uses the same instance
+                if !self.object_fields.contains_key(&reference) {
+                    self.object_fields.insert(reference, std::collections::HashMap::new());
+                }
+                if let Some(fields) = self.object_fields.get_mut(&reference) {
+                    fields.insert(field.to_string(), field_value.clone());
+                }
+            }
+        }
         
         self.set_value(dst, field_value);
         Ok(ControlFlow::Continue)
@@ -987,6 +1004,39 @@ impl VM {
     /// Execute a forced plugin invocation (no builtin fallback)
     pub(super) fn execute_plugin_invoke(&mut self, dst: Option<ValueId>, box_val: ValueId, method: &str, args: &[ValueId]) -> Result<ControlFlow, VMError> {
         let recv = self.get_value(box_val)?;
+        // Allow static birth on primitives/builtin boxes to create a plugin instance.
+        if method == "birth" && !matches!(recv, VMValue::BoxRef(ref b) if b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some()) {
+            eprintln!("[VM PluginInvoke] static birth fallback recv={:?}", recv);
+            // Map primitive/builtin receiver to plugin box type name and constructor args
+            let mut created: Option<VMValue> = None;
+            match &recv {
+                VMValue::String(s) => {
+                    // Create plugin StringBox with initial content
+                    let host = crate::runtime::get_global_plugin_host();
+                    let host = host.read().unwrap();
+                    let sb: Box<dyn crate::box_trait::NyashBox> = Box::new(crate::box_trait::StringBox::new(s.clone()));
+                    if let Ok(b) = host.create_box("StringBox", &[sb]) {
+                        created = Some(VMValue::from_nyash_box(b));
+                    }
+                }
+                VMValue::Integer(_n) => {
+                    // Create plugin IntegerBox (value defaults to 0); args ignored by current plugin
+                    let host = crate::runtime::get_global_plugin_host();
+                    let host = host.read().unwrap();
+                    if let Ok(b) = host.create_box("IntegerBox", &[]) {
+                        created = Some(VMValue::from_nyash_box(b));
+                    }
+                }
+                _ => {
+                    // no-op
+                }
+            }
+            if let Some(val) = created {
+                if let Some(dst_id) = dst { self.set_value(dst_id, val); }
+                return Ok(ControlFlow::Continue);
+            }
+        }
+
         // Only allowed on plugin boxes
         if let VMValue::BoxRef(pbox) = &recv {
             if let Some(p) = pbox.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
@@ -998,15 +1048,48 @@ impl VM {
 
                 // Encode args to TLV
                 let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(args.len() as u16);
-                for a in args.iter() {
+                for (idx, a) in args.iter().enumerate() {
                     let v = self.get_value(*a)?;
                     match v {
-                        VMValue::Integer(n) => crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, n),
-                        VMValue::Float(x) => crate::runtime::plugin_ffi_common::encode::f64(&mut tlv, x),
+                        VMValue::Integer(n) => {
+                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                eprintln!("[VM→Plugin][vm] arg[{}] encode I64 {}", idx, n);
+                            }
+                            crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, n)
+                        }
+                        VMValue::Float(x) => {
+                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                eprintln!("[VM→Plugin][vm] arg[{}] encode F64 {}", idx, x);
+                            }
+                            crate::runtime::plugin_ffi_common::encode::f64(&mut tlv, x)
+                        }
                         VMValue::Bool(b) => crate::runtime::plugin_ffi_common::encode::bool(&mut tlv, b),
                         VMValue::String(ref s) => crate::runtime::plugin_ffi_common::encode::string(&mut tlv, s),
                         VMValue::BoxRef(ref b) => {
                             if let Some(h) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                // Coerce common plugin primitives to TLV primitives instead of handle when sensible
+                                if h.box_type == "StringBox" {
+                                    // toUtf8 -> TLV string
+                                    let host = crate::runtime::get_global_plugin_host();
+                                    let host = host.read().unwrap();
+                                    if let Ok(val_opt) = host.invoke_instance_method("StringBox", "toUtf8", h.inner.instance_id, &[]) {
+                                        if let Some(sb) = val_opt.and_then(|bx| bx.as_any().downcast_ref::<crate::box_trait::StringBox>().map(|s| s.value.clone())) {
+                                            crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &sb);
+                                            continue;
+                                        }
+                                    }
+                                } else if h.box_type == "IntegerBox" {
+                                    // get() -> TLV i64
+                                    let host = crate::runtime::get_global_plugin_host();
+                                    let host = host.read().unwrap();
+                                    if let Ok(val_opt) = host.invoke_instance_method("IntegerBox", "get", h.inner.instance_id, &[]) {
+                                        if let Some(ib) = val_opt.and_then(|bx| bx.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|i| i.value)) {
+                                            crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, ib);
+                                            continue;
+                                        }
+                                    }
+                                }
+                                // Fallback: pass handle
                                 crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut tlv, h.inner.type_id, h.inner.instance_id);
                             } else {
                                 // Best effort: stringify non-plugin boxes
@@ -1021,6 +1104,9 @@ impl VM {
                     }
                 }
 
+                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    eprintln!("[VM→Plugin] invoke {}.{} inst_id={} argc={} (direct)", p.box_type, method, p.inner.instance_id, args.len());
+                }
                 let mut out = vec![0u8; 4096];
                 let mut out_len: usize = out.len();
                 let code = unsafe {
@@ -1035,9 +1121,26 @@ impl VM {
                     )
                 };
                 if code != 0 {
-                    return Err(VMError::InvalidInstruction(format!("PluginInvoke failed: {}.{} rc={}", p.box_type, method, code)));
+                    let host = crate::runtime::get_global_plugin_host();
+                    let host = host.read().unwrap();
+                    let rr = host.method_returns_result(&p.box_type, method);
+                    if rr {
+                        let be = crate::bid::BidError::from_raw(code);
+                        let err = crate::exception_box::ErrorBox::new(&format!("{} (code: {})", be.message(), code));
+                        let res = crate::boxes::result::NyashResultBox::new_err(Box::new(err));
+                        let vmv = VMValue::BoxRef(std::sync::Arc::from(Box::new(res) as Box<dyn crate::box_trait::NyashBox>));
+                        if let Some(dst_id) = dst { self.set_value(dst_id, vmv); }
+                        return Ok(ControlFlow::Continue);
+                    } else {
+                        return Err(VMError::InvalidInstruction(format!("PluginInvoke failed: {}.{} rc={}", p.box_type, method, code)));
+                    }
                 }
-                let vm_out = if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                let vm_out_raw = if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        let preview_len = std::cmp::min(payload.len(), 16);
+                        let preview: Vec<String> = payload[..preview_len].iter().map(|b| format!("{:02X}", b)).collect();
+                        eprintln!("[Plugin→VM][vm] {}.{} tag={} sz={} preview=\n{}", p.box_type, method, tag, _sz, preview.join(" "));
+                    }
                     match tag {
                         1 => crate::runtime::plugin_ffi_common::decode::bool(payload).map(VMValue::Bool).unwrap_or(VMValue::Void),
                         2 => crate::runtime::plugin_ffi_common::decode::i32(payload).map(|v| VMValue::Integer(v as i64)).unwrap_or(VMValue::Void),
@@ -1046,15 +1149,73 @@ impl VM {
                         }
                         5 => crate::runtime::plugin_ffi_common::decode::f64(payload).map(VMValue::Float).unwrap_or(VMValue::Void),
                         6 => VMValue::String(crate::runtime::plugin_ffi_common::decode::string(payload)),
-                        8 => VMValue::Void,
+                        8 => {
+                            // Handle return: map (type_id, instance_id) to PluginBoxV2 using central config
+                            if payload.len() == 8 {
+                                let mut t = [0u8;4]; t.copy_from_slice(&payload[0..4]);
+                                let mut i = [0u8;4]; i.copy_from_slice(&payload[4..8]);
+                                let r_type = u32::from_le_bytes(t);
+                                let r_inst = u32::from_le_bytes(i);
+                                // Resolve box name via [box_types] reverse lookup
+                                let host_arc = crate::runtime::get_global_plugin_host();
+                                let host_ro = host_arc.read().unwrap();
+                                if let Some(cfg) = host_ro.config_ref() {
+                                    let mut box_name_opt: Option<String> = None;
+                                    for (name, id) in cfg.box_types.iter() { if *id == r_type { box_name_opt = Some(name.clone()); break; } }
+                                    if let Some(box_name) = box_name_opt {
+                                        // Find library providing this box
+                                        if let Some((lib_name, _)) = cfg.find_library_for_box(&box_name) {
+                                            // Read nyash.toml to resolve fini method
+                                            let cfg_path = "nyash.toml";
+                                            if let Ok(toml_content) = std::fs::read_to_string(cfg_path) {
+                                                if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
+                                                    let fini_id = cfg.get_box_config(lib_name, &box_name, &toml_value)
+                                                        .and_then(|bc| bc.methods.get("fini").map(|m| m.method_id));
+                                                    let pbox = crate::runtime::plugin_loader_v2::construct_plugin_box(
+                                                        box_name,
+                                                        r_type,
+                                                        p.inner.invoke_fn,
+                                                        r_inst,
+                                                        fini_id,
+                                                    );
+                                                    VMValue::BoxRef(Arc::from(Box::new(pbox) as Box<dyn crate::box_trait::NyashBox>))
+                                                } else { VMValue::Void }
+                                            } else { VMValue::Void }
+                                        } else { VMValue::Void }
+                                    } else { VMValue::Void }
+                                } else { VMValue::Void }
+                            } else { VMValue::Void }
+                        }
                         _ => VMValue::Void,
                     }
                 } else { VMValue::Void };
+                // Wrap into Result.Ok when method is declared returns_result
+                let vm_out = {
+                    let host = crate::runtime::get_global_plugin_host();
+                    let host = host.read().unwrap();
+                    let rr = host.method_returns_result(&p.box_type, method);
+                    if rr {
+                        // Boxify vm_out into NyashBox first
+                        let boxed: Box<dyn crate::box_trait::NyashBox> = match vm_out_raw {
+                            VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                            VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                            VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                            VMValue::String(s) => Box::new(crate::box_trait::StringBox::new(s)),
+                            VMValue::BoxRef(b) => b.share_box(),
+                            VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            _ => Box::new(crate::box_trait::StringBox::new(vm_out_raw.to_string()))
+                        };
+                        let res = crate::boxes::result::NyashResultBox::new_ok(boxed);
+                        VMValue::BoxRef(std::sync::Arc::from(Box::new(res) as Box<dyn crate::box_trait::NyashBox>))
+                    } else {
+                        vm_out_raw
+                    }
+                };
                 if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
                 return Ok(ControlFlow::Continue);
             }
         }
-        Err(VMError::InvalidInstruction(format!("PluginInvoke requires PluginBox receiver; got {:?}", recv)))
+        Err(VMError::InvalidInstruction(format!("PluginInvoke requires PluginBox receiver; method={} got {:?}", method, recv)))
     }
 }
 

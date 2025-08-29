@@ -2,21 +2,29 @@
 
 このディレクトリはNyashプロジェクトの学術的な研究テーマ、論文提案、実験計画を管理します。
 
-## 📚 ディレクトリ構成
+## 📚 ディレクトリ構成（1論文1フォルダ原則）
 
 ```
 research/
-├── papers-wip/         # 作業中の論文（Git追跡除外）
-├── papers-under-review/ # 査読中の論文（Git追跡除外）
-├── papers-published/    # 公開済み論文（Git追跡対象）
-├── ai-dual-mode-development/ # AI協調開発の研究
-├── proposals/          # 研究提案
-└── experimental-protocols/ # 実験プロトコル
+├── paper-01-box-theory-education/    # 箱理論教育論文
+├── paper-02-box-theory-jit/         # 箱理論JIT設計論文 ⭐執筆中
+├── paper-03-box-theory-gc/          # 箱理論GC論文
+├── paper-04-box-theory-sync/        # 箱理論同期境界論文
+├── paper-05-box-theory-visualization/# 箱理論可視化論文
+├── paper-06-gc-debug-tool/          # GCデバッグツール論文
+├── paper-07-nyash-one-month/        # 1ヶ月開発論文 ⭐執筆中
+├── paper-08-tmux-emergence/         # tmux創発的対話論文 ⭐執筆中
+├── paper-09-ai-collaboration-pitfall/ # AI協調開発の落とし穴論文 🆕
+├── papers-shared/                   # 共通リソース・テンプレート
+├── ai-dual-mode-development/        # AI協調開発の追加研究
+├── papers-under-review/             # 査読中（Git追跡除外）
+├── papers-published/                # 公開済み（Git追跡対象）
+└── proposals/                       # 研究提案
 ```
 
 ## 🔬 現在の研究テーマ一覧
 
-### 1. 🏆 **1ヶ月で完走した独自言語処理系**（2025-nyash-one-month）
+### 1. 🏆 **1ヶ月で完走した独自言語処理系**（[paper-07-nyash-one-month/](paper-07-nyash-one-month/)）
 - **タイトル**: "Nyash: 1ヶ月で実現した統一実行モデルによる完全言語処理系"
 - **状態**: 執筆戦略決定済み（AI先生アドバイス取得）
 - **概要**: 
@@ -28,14 +36,14 @@ research/
   - Python統合デモ成功（2025-08-29）: math.sqrt(9) = 3.0
   - ChatGPT5「異次元。歴史に刻まれるスピード感」
 
-### 2. 📦 **Box理論論文シリーズ**（box-theory-series）
+### 2. 📦 **Box理論論文シリーズ**
 8本構想の包括的な研究プロジェクト：
 
-#### 2-1. 教育論文（01-education）
+#### 2-1. 教育論文（[paper-01-box-theory-education/](paper-01-box-theory-education/)）
 - **タイトル**: "Programming Language Design that Makes Bad Code Impossible"
 - **概要**: Box理論による革新的プログラミング教育
 
-#### 2-2. ⭐ JIT設計論文（02-jit-design）【進行中】
+#### 2-2. ⭐ JIT設計論文（[paper-02-box-theory-jit/](paper-02-box-theory-jit/)）【進行中】
 - **タイトル**: "Box-First JIT: Decoupled, Probe-Driven JIT Enablement in Nyash within 24 Hours"
 - **状態**: paper-draft-v2.md, paper-ja.md, paper.tex完成
 - **概要**: 
@@ -44,15 +52,15 @@ research/
   - VM比1.06〜1.40倍の改善を実証
 - **図表**: アーキテクチャ図多数完成
 
-#### 2-3. GC契約論文（03-gc-contracts）
+#### 2-3. GC契約論文（[paper-03-box-theory-gc/](paper-03-box-theory-gc/)）
 - **タイトル**: "決定的解放と遅延GCの統一モデル"
 - **概要**: 箱の生命周期契約によるメモリ管理
 
-#### 2-4. 同期境界論文（04-sync-boundaries）
+#### 2-4. 同期境界論文（[paper-04-box-theory-sync/](paper-04-box-theory-sync/)）
 - **タイトル**: "箱境界での自動同期化機構"
 - **概要**: Arc<Mutex>統一による並行性制御
 
-#### 2-5. 可視化論文（05-visualization）
+#### 2-5. 可視化論文（[paper-05-box-theory-visualization/](paper-05-box-theory-visualization/)）
 - **タイトル**: "CFGとIRの箱ベース可視化"
 - **概要**: プログラム構造の直感的理解支援
 
@@ -70,7 +78,7 @@ research/
   - 「深く考えてにゃ」から生まれた新開発パラダイム
 - **関連**: tmux事件研究、協調パターン分析
 
-### 4. 🧹 **Debug-Only GC論文**（2025-gc-as-debug-tool）
+### 4. 🧹 **Debug-Only GC論文**（[paper-06-gc-debug-tool/](paper-06-gc-debug-tool/)）
 - **タイトル**: "GC as a Development-Time Quality Assurance Tool"
 - **状態**: abstract.md完成、実験計画中
 - **概要**: 
@@ -78,9 +86,21 @@ research/
   - 「所有権森（Ownership Forests）」による意味論等価性保証
   - GC有効/無効で同一動作を実現
 
-### 5. 🔮 **創発的AI対話研究**（emergent-behavior）
+### 5. 🔮 **創発的AI対話研究**（[paper-08-tmux-emergence/](paper-08-tmux-emergence/)）
 - **概要**: ターミナル多重化による偶発的AI間対話の記録
 - **内容**: theoretical-implications.md, tmux-incident-log.md
+
+### 6. 🚨 **AI協調開発の落とし穴**（[paper-09-ai-collaboration-pitfall/](paper-09-ai-collaboration-pitfall/)）
+- **タイトル**: "設計哲学を守る本能的回避：AI協調開発における危機管理"
+- **状態**: 事例分析完了（2025-08-30）
+- **概要**:
+  - Python統合でのLowerer特殊化危機の回避事例
+  - 「Everything is Box」哲学 vs 技術的正しさの対立
+  - エンジニアの直感（「ん？大丈夫？」）による設計崩壊の防止
+- **教訓**:
+  - 爆速開発における批判的思考の重要性
+  - AI提案の無批判受容の危険性
+  - 設計原則を守る人間の役割
 
 ## 🌟 研究の特徴と共通テーマ
 
@@ -157,4 +177,4 @@ Nyashプロジェクトは学術的な貢献を歓迎します：
 
 *Everything is Box, Everything is Research, Everything is Observable*
 
-**最終更新**: 2025年8月29日 - 1ヶ月で言語処理系完走＋AI先生たちの執筆戦略取得 🎉
+**最終更新**: 2025年8月30日 - AI協調開発の落とし穴事例を追加（設計哲学の危機を本能で回避） 🛡️

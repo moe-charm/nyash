@@ -19,6 +19,7 @@ const M_IS_EMPTY: u32 = 2;
 const M_CHAR_CODE_AT: u32 = 3;
 const M_CONCAT: u32 = 4;       // concat(other: String|Handle) -> Handle(new)
 const M_FROM_UTF8: u32 = 5;    // fromUtf8(data: String|Bytes) -> Handle(new)
+const M_TO_UTF8: u32   = 6;    // toUtf8() -> String
 const M_FINI: u32 = u32::MAX;
 
 const TYPE_ID_STRING: u32 = 13;
@@ -51,7 +52,9 @@ pub extern "C" fn nyash_plugin_invoke(
                 if result_len.is_null() { return E_ARGS; }
                 if preflight(result, result_len, 4) { return E_SHORT; }
                 let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut m) = INST.lock() { m.insert(id, StrInstance { s: String::new() }); }
+                // Optional init from first arg (String/Bytes)
+                let init = read_arg_string(args, args_len, 0).unwrap_or_else(|| String::new());
+                if let Ok(mut m) = INST.lock() { m.insert(id, StrInstance { s: init }); }
                 else { return E_PLUGIN; }
                 let b = id.to_le_bytes(); std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4); *result_len = 4; OK
             }
@@ -100,6 +103,13 @@ pub extern "C" fn nyash_plugin_invoke(
                 if let Ok(mut m) = INST.lock() { m.insert(id, StrInstance { s }); } else { return E_PLUGIN; }
                 return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
             }
+            M_TO_UTF8 => {
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        return write_tlv_string(&inst.s, result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
             _ => E_METHOD,
         }
     }
@@ -124,6 +134,9 @@ fn write_tlv_handle(type_id: u32, instance_id: u32, result: *mut u8, result_len:
     payload.extend_from_slice(&type_id.to_le_bytes());
     payload.extend_from_slice(&instance_id.to_le_bytes());
     write_tlv_result(&[(8u8, &payload)], result, result_len)
+}
+fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
+    write_tlv_result(&[(6u8, s.as_bytes())], result, result_len)
 }
 fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
     if args.is_null() || args_len < 4 { return None; }

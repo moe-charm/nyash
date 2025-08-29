@@ -8,7 +8,7 @@ author = "Nyash Team"
 boxes = ["ArrayBox"]
 
 [ArrayBox]
-type_id = 11
+type_id = 10
 
 [ArrayBox.lifecycle]
 birth = { id = 0 }
@@ -37,4 +37,3 @@ thread_safe = true
 windows = "target/x86_64-pc-windows-msvc/release/nyash_array_plugin.dll"
 linux   = "target/release/libnyash_array_plugin.so"
 macos   = "target/release/libnyash_array_plugin.dylib"
-

@@ -13,6 +13,22 @@ use super::vm::{VM, VMError, VMValue};
 impl VM {
     /// Call a method on a Box - simplified version of interpreter method dispatch
     pub(super) fn call_box_method_impl(&self, box_value: Box<dyn NyashBox>, method: &str, _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
+        // PluginBoxV2: delegate to unified plugin host (BID-FFI v1)
+        if let Some(pbox) = box_value.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                eprintln!("[VM][BoxCall→PluginInvoke] {}.{} inst_id={}", pbox.box_type, method, pbox.inner.instance_id);
+            }
+            let host = crate::runtime::get_global_plugin_host();
+            let host = host.read().unwrap();
+            match host.invoke_instance_method(&pbox.box_type, method, pbox.inner.instance_id, &_args) {
+                Ok(Some(val)) => { return Ok(val); }
+                Ok(None) => { return Ok(Box::new(crate::box_trait::VoidBox::new())); }
+                Err(e) => {
+                    return Err(VMError::InvalidInstruction(format!("PluginInvoke failed via BoxCall: {}.{} ({})", pbox.box_type, method, e.message())));
+                }
+            }
+        }
+
         // MathBox methods (minimal set used in 10.9)
         if let Some(math) = box_value.as_any().downcast_ref::<crate::boxes::math_box::MathBox>() {
             match method {

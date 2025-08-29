@@ -1,5 +1,5 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter, box_factory::builtin::BuiltinGroups, mir::MirCompiler, backend::VM};
+use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter, mir::MirCompiler, backend::VM};
 
 impl NyashRunner {
     /// Execute benchmark mode (split)
@@ -105,7 +105,7 @@ impl NyashRunner {
         let start = std::time::Instant::now();
         for _ in 0..iters {
             if let Ok(ast) = NyashParser::parse_from_string(code) {
-                let mut interp = NyashInterpreter::new_with_groups(BuiltinGroups::native_full());
+                let mut interp = NyashInterpreter::new();
                 let _ = interp.execute(ast);
             }
         }

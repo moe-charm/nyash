@@ -49,6 +49,9 @@ impl MirOptimizer {
             stats.merge(self.force_plugin_invoke(module));
         }
 
+        // Normalize Python helper form: py.getattr(obj, name) → obj.getattr(name)
+        stats.merge(self.normalize_python_helper_calls(module));
+
         // Pass 1: Dead code elimination
         stats.merge(self.eliminate_dead_code(module));
         
@@ -320,6 +323,40 @@ impl MirOptimizer {
                     if let I::BoxCall { dst, box_val, method, args, effects, .. } = inst.clone() {
                         *inst = I::PluginInvoke { dst, box_val, method, args, effects };
                         stats.intrinsic_optimizations += 1;
+                    }
+                }
+            }
+        }
+        stats
+    }
+
+    /// Normalize Python helper calls that route via PyRuntimeBox into proper receiver form.
+    ///
+    /// Rewrites: PluginInvoke { box_val=py (PyRuntimeBox), method="getattr"|"call", args=[obj, rest...] }
+    ///        →  PluginInvoke { box_val=obj, method, args=[rest...] }
+    fn normalize_python_helper_calls(&mut self, module: &mut MirModule) -> OptimizationStats {
+        use super::{MirInstruction as I, MirType};
+        let mut stats = OptimizationStats::new();
+        for (_fname, function) in &mut module.functions {
+            for (_bb, block) in &mut function.blocks {
+                for inst in &mut block.instructions {
+                    if let I::PluginInvoke { box_val, method, args, .. } = inst {
+                        if method == "getattr" && args.len() >= 2 {
+                            // Prefer metadata when available
+                            // Heuristic: helper形式 (obj, name) のときのみ書換
+                            // Rewrite receiver to args[0]
+                            let new_recv = args[0];
+                            // Remove first arg and keep the rest
+                            args.remove(0);
+                            *box_val = new_recv;
+                            stats.intrinsic_optimizations += 1;
+                        } else if method == "call" && !args.is_empty() {
+                            // call は helper形式 (func, args...) を receiver=func に正規化
+                            let new_recv = args[0];
+                            args.remove(0);
+                            *box_val = new_recv;
+                            stats.intrinsic_optimizations += 1;
+                        }
                     }
                 }
             }

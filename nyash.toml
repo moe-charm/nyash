@@ -133,10 +133,10 @@ search_paths = [
 [box_types]
 FileBox     = 6
 ConsoleBox  = 5
-StringBox   = 10
-ArrayBox    = 11
-MapBox      = 12
+ArrayBox    = 10
+MapBox      = 11
 IntegerBox  = 12
+StringBox   = 13
 CounterBox  = 7
 HttpServerBox   = 20
 HttpRequestBox  = 21

@@ -34,6 +34,8 @@ pub trait IRBuilder {
     fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], _has_ret: bool, _ret_is_f64: bool) { }
     /// Phase 10.2: plugin invoke emission (symbolic; type_id/method_id based)
     fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, _has_ret: bool) { }
+    /// Phase 10.5c: plugin invoke by method-name (box_type unknown at compile-time)
+    fn emit_plugin_invoke_by_name(&mut self, _method: &str, _argc: usize, _has_ret: bool) { }
     // ==== Phase 10.7 (control-flow wiring, default no-op) ====
     /// Optional: prepare N basic blocks and return their handles (0..N-1)
     fn prepare_blocks(&mut self, _count: usize) { }
@@ -101,6 +103,7 @@ impl IRBuilder for NoopBuilder {
     fn emit_return(&mut self) { self.rets += 1; }
     fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], has_ret: bool, _ret_is_f64: bool) { if has_ret { self.consts += 1; } }
     fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
+    fn emit_plugin_invoke_by_name(&mut self, _method: &str, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
     fn ensure_local_i64(&mut self, _index: usize) { /* no-op */ }
     fn store_local_i64(&mut self, _index: usize) { self.consts += 1; }
     fn load_local_i64(&mut self, _index: usize) { self.consts += 1; }
@@ -404,6 +407,111 @@ extern "C" fn nyash_plugin_invoke3_f64(type_id: i64, method_id: i64, argc: i64, 
         }
     }
     0.0
+}
+
+// === By-name plugin shims (JIT) ===
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_plugin_invoke_name_getattr_i64(argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    nyash_plugin_invoke_name_common_i64("getattr", argc, a0, a1, a2)
+}
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_plugin_invoke_name_call_i64(argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    nyash_plugin_invoke_name_common_i64("call", argc, a0, a1, a2)
+}
+#[cfg(feature = "cranelift-jit")]
+fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    use crate::runtime::plugin_loader_v2::PluginBoxV2;
+    // Resolve receiver
+    let mut instance_id: u32 = 0;
+    let mut type_id: u32 = 0;
+    let mut box_type: Option<String> = None;
+    let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
+    if a0 > 0 {
+        if let Some(obj) = crate::jit::rt::handles::get(a0 as u64) {
+            if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
+                instance_id = p.instance_id(); type_id = p.inner.type_id; box_type = Some(p.box_type.clone());
+                invoke = Some(p.inner.invoke_fn);
+            }
+        }
+    }
+    if invoke.is_none() && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            let idx = a0.max(0) as usize;
+            if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                    instance_id = p.instance_id(); type_id = p.inner.type_id; box_type = Some(p.box_type.clone());
+                    invoke = Some(p.inner.invoke_fn);
+                }
+            }
+        });
+    }
+    if invoke.is_none() {
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            for v in args.iter() {
+                if let crate::backend::vm::VMValue::BoxRef(b) = v {
+                    if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                        instance_id = p.instance_id(); type_id = p.inner.type_id; box_type = Some(p.box_type.clone());
+                        invoke = Some(p.inner.invoke_fn); break;
+                    }
+                }
+            }
+        });
+    }
+    if invoke.is_none() { return 0; }
+    let box_type = box_type.unwrap_or_default();
+    // Resolve method_id via host
+    let mh = if let Ok(host) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() { host.resolve_method(&box_type, method) } else { return 0 };
+    let method_id = match mh { Ok(h) => h.method_id, Err(_) => return 0 } as u32;
+    // TLV args from legacy (skip receiver)
+    let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+    let mut add_from_legacy = |pos: usize| {
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            if let Some(v) = args.get(pos) {
+                use crate::backend::vm::VMValue as V;
+                match v {
+                    V::String(s) => crate::runtime::plugin_ffi_common::encode::string(&mut buf, s),
+                    V::Integer(i) => crate::runtime::plugin_ffi_common::encode::i64(&mut buf, *i),
+                    V::Float(f) => crate::runtime::plugin_ffi_common::encode::f64(&mut buf, *f),
+                    V::Bool(b) => crate::runtime::plugin_ffi_common::encode::bool(&mut buf, *b),
+                    V::BoxRef(b) => {
+                        if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                            let host = crate::runtime::get_global_plugin_host();
+                            if let Ok(hg) = host.read() {
+                            if p.box_type == "StringBox" {
+                                    if let Ok(Some(sb)) = hg.invoke_instance_method("StringBox", "toUtf8", p.instance_id(), &[]) {
+                                        if let Some(s) = sb.as_any().downcast_ref::<crate::box_trait::StringBox>() { crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value); return; }
+                                    }
+                                } else if p.box_type == "IntegerBox" {
+                                    if let Ok(Some(ibx)) = hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[]) {
+                                        if let Some(i) = ibx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { crate::runtime::plugin_ffi_common::encode::i64(&mut buf, i.value); return; }
+                                    }
+                                }
+                            }
+                            crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id());
+                        } else {
+                            let s = b.to_string_box().value; crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+    };
+    if argc >= 2 { add_from_legacy(1); }
+    if argc >= 3 { add_from_legacy(2); }
+    let mut out = vec![0u8; 4096]; let mut out_len: usize = out.len();
+    let rc = unsafe { invoke.unwrap()(type_id as u32, method_id, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
+    if rc != 0 { return 0; }
+    let out_slice = &out[..out_len];
+    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
+        match tag {
+            3 => { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b); } }
+            1 => { return if crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false) { 1 } else { 0 }; }
+            5 => { if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref()==Some("1") { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); let f=f64::from_le_bytes(b); return f as i64; } } }
+            _ => {}
+        }
+    }
+    0
 }
 #[cfg(feature = "cranelift-jit")]
 use super::extern_thunks::{
@@ -1009,6 +1117,42 @@ impl IRBuilder for CraneliftBuilder {
         fb.finalize();
     }
 
+    fn emit_plugin_invoke_by_name(&mut self, method: &str, argc: usize, has_ret: bool) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        use cranelift_frontend::FunctionBuilder;
+        use cranelift_module::{Linkage, Module};
+
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+
+        // Pop argc-1 values (a0 receiver included in argc? Here argc = 1 + args.len())
+        let mut arg_vals: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        let take_n = argc.min(self.value_stack.len());
+        for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { arg_vals.push(v); } }
+        arg_vals.reverse();
+        while arg_vals.len() < 3 {
+            let z = fb.ins().iconst(types::I64, 0);
+            arg_vals.push(z);
+        }
+
+        // Signature: (i64 argc, i64 a0, i64 a1, i64 a2) -> i64
+        let call_conv = self.module.isa().default_call_conv();
+        let mut sig = Signature::new(call_conv);
+        for _ in 0..4 { sig.params.push(AbiParam::new(types::I64)); }
+        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+
+        let sym = format!("nyash_plugin_invoke_name_{}_i64", method);
+        let func_id = self.module
+            .declare_function(&sym, Linkage::Import, &sig)
+            .expect("declare by-name plugin shim failed");
+        let fref = self.module.declare_func_in_func(func_id, fb.func);
+        let c_argc = fb.ins().iconst(types::I64, argc as i64);
+        let call_inst = fb.ins().call(fref, &[c_argc, arg_vals[0], arg_vals[1], arg_vals[2]]);
+        if has_ret { let results = fb.inst_results(call_inst).to_vec(); if let Some(v) = results.get(0).copied() { self.value_stack.push(v); } }
+        fb.finalize();
+    }
+
     // ==== Phase 10.7 block APIs ====
     fn prepare_blocks(&mut self, count: usize) {
         use cranelift_frontend::FunctionBuilder;
@@ -1509,6 +1653,7 @@ impl CraneliftBuilder {
         builder.symbol("nyash.host.stub0", nyash_host_stub0 as *const u8);
         {
             use crate::jit::r#extern::collections as c;
+            use super::extern_thunks::{nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64};
             builder.symbol(c::SYM_ARRAY_LEN, nyash_array_len as *const u8);
             builder.symbol(c::SYM_ARRAY_GET, nyash_array_get as *const u8);
             builder.symbol(c::SYM_ARRAY_SET, nyash_array_set as *const u8);
@@ -1541,6 +1686,9 @@ impl CraneliftBuilder {
             // Plugin invoke shims (i64/f64)
             builder.symbol("nyash_plugin_invoke3_i64", nyash_plugin_invoke3_i64 as *const u8);
             builder.symbol("nyash_plugin_invoke3_f64", nyash_plugin_invoke3_f64 as *const u8);
+            // By-name plugin invoke shims (method-name specific)
+            builder.symbol("nyash_plugin_invoke_name_getattr_i64", nyash_plugin_invoke_name_getattr_i64 as *const u8);
+            builder.symbol("nyash_plugin_invoke_name_call_i64", nyash_plugin_invoke_name_call_i64 as *const u8);
         }
         let module = cranelift_jit::JITModule::new(builder);
         let ctx = cranelift_codegen::Context::new();

@@ -1,0 +1,6 @@
+// Minimal test for native build
+static box Main {
+  main() {
+    return 42
+  }
+}

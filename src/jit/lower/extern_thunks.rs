@@ -6,6 +6,10 @@ use crate::jit::events;
 
 #[cfg(feature = "cranelift-jit")]
 use crate::jit::r#extern::collections as c;
+#[cfg(feature = "cranelift-jit")]
+use crate::runtime::plugin_loader_unified;
+#[cfg(feature = "cranelift-jit")]
+use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
 // ---- Math (native f64) ----
 #[cfg(feature = "cranelift-jit")]
@@ -224,6 +228,110 @@ pub(super) extern "C" fn nyash_any_is_empty_h(handle: u64) -> i64 {
         }
         if let Some(map) = obj.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
             if let Some(ib) = map.size().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return if ib.value == 0 { 1 } else { 0 }; }
+        }
+    }
+    0
+}
+
+// ---- By-name plugin invoke (generic receiver; resolves method_id at runtime) ----
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_plugin_invoke_name_getattr_i64(argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    nyash_plugin_invoke_name_common_i64("getattr", argc, a0, a1, a2)
+}
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_plugin_invoke_name_call_i64(argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    nyash_plugin_invoke_name_common_i64("call", argc, a0, a1, a2)
+}
+#[cfg(feature = "cranelift-jit")]
+fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, _a1: i64, _a2: i64) -> i64 {
+    // Resolve receiver
+    let mut instance_id: u32 = 0;
+    let mut type_id: u32 = 0;
+    let mut box_type: Option<String> = None;
+    let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
+    if a0 > 0 {
+        if let Some(obj) = crate::jit::rt::handles::get(a0 as u64) {
+            if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
+                instance_id = p.instance_id(); type_id = p.inner.type_id; box_type = Some(p.box_type.clone());
+                invoke = Some(p.inner.invoke_fn);
+            }
+        }
+    }
+    if invoke.is_none() && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            let idx = a0.max(0) as usize;
+            if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                    instance_id = p.instance_id(); type_id = p.inner.type_id; box_type = Some(p.box_type.clone());
+                    invoke = Some(p.inner.invoke_fn);
+                }
+            }
+        });
+    }
+    if invoke.is_none() {
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            for v in args.iter() {
+                if let crate::backend::vm::VMValue::BoxRef(b) = v {
+                    if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                        instance_id = p.instance_id(); type_id = p.inner.type_id; box_type = Some(p.box_type.clone());
+                        invoke = Some(p.inner.invoke_fn); break;
+                    }
+                }
+            }
+        });
+    }
+    if invoke.is_none() { return 0; }
+    let box_type = box_type.unwrap_or_default();
+    // Resolve method_id via PluginHost
+    let mh = if let Ok(host) = plugin_loader_unified::get_global_plugin_host().read() { host.resolve_method(&box_type, method) } else { return 0 };
+    let method_id = match mh { Ok(h) => h.method_id, Err(_) => return 0 } as u32;
+    // Build TLV args from legacy (skip receiver=pos0)
+    let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+    let mut add_from_legacy = |pos: usize| {
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            if let Some(v) = args.get(pos) {
+                use crate::backend::vm::VMValue as V;
+                match v {
+                    V::String(s) => crate::runtime::plugin_ffi_common::encode::string(&mut buf, s),
+                    V::Integer(i) => crate::runtime::plugin_ffi_common::encode::i64(&mut buf, *i),
+                    V::Float(f) => crate::runtime::plugin_ffi_common::encode::f64(&mut buf, *f),
+                    V::Bool(b) => crate::runtime::plugin_ffi_common::encode::bool(&mut buf, *b),
+                    V::BoxRef(b) => {
+                        if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                            let host = crate::runtime::get_global_plugin_host();
+                            if let Ok(hg) = host.read() {
+                                if p.box_type == "StringBox" {
+                                    if let Ok(Some(sb)) = hg.invoke_instance_method("StringBox", "toUtf8", p.instance_id(), &[]) {
+                                        if let Some(s) = sb.as_any().downcast_ref::<crate::box_trait::StringBox>() { crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value); return; }
+                                    }
+                                } else if p.box_type == "IntegerBox" {
+                                    if let Ok(Some(ibx)) = hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[]) {
+                                        if let Some(i) = ibx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { crate::runtime::plugin_ffi_common::encode::i64(&mut buf, i.value); return; }
+                                    }
+                                }
+                            }
+                            crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id());
+                        } else {
+                            let s = b.to_string_box().value; crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+    };
+    if argc >= 2 { add_from_legacy(1); }
+    if argc >= 3 { add_from_legacy(2); }
+    let mut out = vec![0u8; 4096]; let mut out_len: usize = out.len();
+    let rc = unsafe { invoke.unwrap()(type_id as u32, method_id, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
+    if rc != 0 { return 0; }
+    let out_slice = &out[..out_len];
+    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
+        match tag {
+            3 => { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b); } }
+            1 => { return if crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false) { 1 } else { 0 }; }
+            5 => { if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref()==Some("1") { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); let f=f64::from_le_bytes(b); return f as i64; } } }
+            _ => {}
         }
     }
     0
