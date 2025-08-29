@@ -397,3 +397,16 @@ bash tools/build_aot.sh examples/aot_min_string_len.nyash -o app
 - 状態確認: `git status` / `git log --oneline -3` / `cargo check`
 - スモーク: `bash tools/smoke_phase_10_10.sh`
 - 次の一手: core_hostcall → core_ops の順に分割、毎回ビルド/スモークで確認
+
+---
+
+### 新規フェーズ（提案）: Phase 10.11 Builtins → Plugins 移行
+- 目的: 内蔵Box経路を段階的に廃止し、プラグイン/ユーザーBoxに一本化する（不具合の温床を解消）
+- 現在の足場（済）:
+  - ConsoleBox コンストラクタをレジストリ委譲（プラグイン優先）に変更
+  - `NYASH_DISABLE_BUILTINS=1` でビルトインFactory登録を抑止可能
+  - 設計ドキュメント: docs/development/roadmap/phases/phase-10.11-builtins-to-plugins.md
+- 次ステップ:
+  - 非基本コンストラクタの委譲徹底（Math/Random/Sound/Debugなど）
+  - 主要ビルトインの plugin 化（nyash_box.toml 整備）
+  - CIに `NYASH_USE_PLUGIN_BUILTINS=1` / `NYASH_PLUGIN_OVERRIDE_TYPES` のスモークを追加

@@ -365,7 +365,10 @@ impl NyashInterpreter {
                     });
                 }
                 
-                let math_box = MathBox::new();
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(_b) = reg.create_box("MathBox", &[]) { return Ok(Box::new(VoidBox::new())); }
+                }
+                let _math_box = MathBox::new();
                 Ok(Box::new(VoidBox::new()))
             }
             // 他のビルトインBoxは必要に応じて追加

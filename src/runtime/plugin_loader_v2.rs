@@ -44,6 +44,16 @@ mod enabled {
         finalized: std::sync::atomic::AtomicBool,
     }
 
+    // Loaded box spec from plugins/<name>/nyash_box.toml
+    #[derive(Debug, Clone, Default)]
+    struct LoadedBoxSpec {
+        type_id: Option<u32>,
+        methods: HashMap<String, MethodSpec>,
+        fini_method_id: Option<u32>,
+    }
+    #[derive(Debug, Clone, Copy)]
+    struct MethodSpec { method_id: u32, returns_result: bool }
+
     impl Drop for PluginHandleInner {
         fn drop(&mut self) {
             // Finalize exactly once when the last shared handle is dropped
@@ -208,6 +218,8 @@ impl PluginBoxV2 {
 
     /// Singleton instances: (lib_name, box_type) -> shared handle
     singletons: RwLock<HashMap<(String,String), std::sync::Arc<PluginHandleInner>>>,
+    /// Loaded per-plugin box specs from nyash_box.toml: (lib_name, box_type) -> spec
+    box_specs: RwLock<HashMap<(String,String), LoadedBoxSpec>>,
 }
 
     impl PluginLoaderV2 {
@@ -230,6 +242,7 @@ impl PluginBoxV2 {
             config: None,
             config_path: None,
             singletons: RwLock::new(HashMap::new()),
+            box_specs: RwLock::new(HashMap::new()),
         }
     }
     
@@ -275,18 +288,67 @@ impl PluginBoxV2 {
             // Synthesize a LibraryDefinition from plugin spec (nyash_box.toml) if present; otherwise minimal
             let mut boxes: Vec<String> = Vec::new();
             let spec_path = std::path::Path::new(root).join("nyash_box.toml");
+            // Optional artifact path from spec
+            let mut artifact_override: Option<String> = None;
             if let Ok(txt) = std::fs::read_to_string(&spec_path) {
                 if let Ok(val) = txt.parse::<toml::Value>() {
                     if let Some(prov) = val.get("provides").and_then(|t| t.get("boxes")).and_then(|a| a.as_array()) {
                         for it in prov.iter() { if let Some(s) = it.as_str() { boxes.push(s.to_string()); } }
                     }
+                    // Artifacts section: choose OS-specific path template if provided
+                    if let Some(arts) = val.get("artifacts").and_then(|t| t.as_table()) {
+                        let key = if cfg!(target_os = "windows") { "windows" } else if cfg!(target_os = "macos") { "macos" } else { "linux" };
+                        if let Some(p) = arts.get(key).and_then(|v| v.as_str()) {
+                            artifact_override = Some(p.to_string());
+                        }
+                    }
+                    // Build per-box specs
+                    for bname in &boxes {
+                        let mut spec = LoadedBoxSpec::default();
+                        if let Some(tb) = val.get(bname) {
+                            if let Some(tid) = tb.get("type_id").and_then(|v| v.as_integer()) { spec.type_id = Some(tid as u32); }
+                            if let Some(lc) = tb.get("lifecycle") {
+                                if let Some(fini) = lc.get("fini").and_then(|m| m.get("id")).and_then(|v| v.as_integer()) { spec.fini_method_id = Some(fini as u32); }
+                            }
+                            if let Some(mtbl) = tb.get("methods").and_then(|t| t.as_table()) {
+                                for (mname, md) in mtbl.iter() {
+                                    if let Some(mid) = md.get("id").and_then(|v| v.as_integer()) {
+                                        let rr = md.get("returns_result").and_then(|v| v.as_bool()).unwrap_or(false);
+                                        spec.methods.insert(mname.clone(), MethodSpec { method_id: mid as u32, returns_result: rr });
+                                    }
+                                }
+                            }
+                        }
+                        if spec.type_id.is_some() || !spec.methods.is_empty() {
+                            self.box_specs.write().unwrap().insert((plugin_name.clone(), bname.clone()), spec);
+                        }
+                    }
                 }
             }
-            // Path heuristic: use "<root>/<plugin_name>" (extension will be adapted by resolver)
-            let synth_path = std::path::Path::new(root).join(plugin_name).to_string_lossy().to_string();
+            // Path heuristic: use artifact override if present, else "<root>/<plugin_name>"
+            let synth_path = if let Some(p) = artifact_override {
+                let jp = std::path::Path::new(root).join(p);
+                jp.to_string_lossy().to_string()
+            } else {
+                std::path::Path::new(root).join(plugin_name).to_string_lossy().to_string()
+            };
             let lib_def = LibraryDefinition { boxes: boxes.clone(), path: synth_path };
             if let Err(e) = self.load_plugin(plugin_name, &lib_def) {
                 eprintln!("Warning: Failed to load plugin {} from [plugins]: {:?}", plugin_name, e);
+            }
+        }
+        // Strict validation: central [box_types] vs plugin spec type_id
+        let strict = std::env::var("NYASH_PLUGIN_STRICT").ok().as_deref() == Some("1");
+        if !config.box_types.is_empty() {
+            for ((lib, bname), spec) in self.box_specs.read().unwrap().iter() {
+                if let Some(cid) = config.box_types.get(bname) {
+                    if let Some(tid) = spec.type_id {
+                        if tid != *cid {
+                            eprintln!("[PluginLoaderV2] type_id mismatch for {} (plugin={}): central={}, spec={}", bname, lib, cid, tid);
+                            if strict { return Err(BidError::PluginError); }
+                        }
+                    }
+                }
             }
         }
         // Pre-birth singletons configured in nyash.toml
@@ -306,6 +368,16 @@ impl PluginBoxV2 {
         Ok(())
     }
 
+    fn find_lib_name_for_box(&self, box_type: &str) -> Option<String> {
+        if let Some(cfg) = &self.config {
+            if let Some((name, _)) = cfg.find_library_for_box(box_type) { return Some(name.to_string()); }
+        }
+        for ((lib, b), _) in self.box_specs.read().unwrap().iter() {
+            if b == box_type { return Some(lib.clone()); }
+        }
+        None
+    }
+
     /// Ensure a singleton handle is created and stored
     fn ensure_singleton_handle(&self, lib_name: &str, box_type: &str) -> BidResult<()> {
         // Fast path: already present
@@ -319,8 +391,13 @@ impl PluginBoxV2 {
         let config = self.config.as_ref().ok_or(BidError::PluginError)?;
         let plugins = self.plugins.read().unwrap();
         let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
-        let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
-        let type_id = box_conf.type_id;
+        // Prefer spec-loaded type_id
+        let type_id = if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.to_string(), box_type.to_string())) {
+            spec.type_id.unwrap_or_else(|| config.box_types.get(box_type).copied().unwrap_or(0))
+        } else {
+            let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+            box_conf.type_id
+        };
         // Call birth
         let mut output_buffer = vec![0u8; 1024];
         let mut output_len = output_buffer.len();
@@ -330,7 +407,12 @@ impl PluginBoxV2 {
         };
         if birth_result != 0 || output_len < 4 { return Err(BidError::PluginError); }
         let instance_id = u32::from_le_bytes([output_buffer[0], output_buffer[1], output_buffer[2], output_buffer[3]]);
-        let fini_id = box_conf.methods.get("fini").map(|m| m.method_id);
+        let fini_id = if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.to_string(), box_type.to_string())) {
+            spec.fini_method_id
+        } else {
+            let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+            box_conf.methods.get("fini").map(|m| m.method_id)
+        };
         let handle = std::sync::Arc::new(PluginHandleInner {
             type_id,
             invoke_fn: plugin.invoke_fn,
@@ -372,12 +454,16 @@ impl PluginBoxV2 {
 
         fn resolve_method_id_from_file(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
             let config = self.config.as_ref().ok_or(BidError::PluginError)?;
-            let (lib_name, _lib_def) = config.find_library_for_box(box_type)
-                .ok_or(BidError::InvalidType)?;
+            let lib_name = self.find_lib_name_for_box(box_type).ok_or(BidError::InvalidType)?;
+            // Prefer spec-loaded methods
+            if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.clone(), box_type.to_string())) {
+                if let Some(m) = spec.methods.get(method_name) { return Ok(m.method_id); }
+            }
+            // Fallback to central nyash.toml nested box config
             let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
             let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
             let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
-            let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+            let box_conf = config.get_box_config(&lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
             let method = box_conf.methods.get(method_name).ok_or_else(|| {
                 eprintln!("[PluginLoaderV2] Method '{}' not found for box '{}' in {}", method_name, box_type, cfg_path);
                 eprintln!("[PluginLoaderV2] Available methods: {:?}", box_conf.methods.keys().collect::<Vec<_>>());
@@ -398,21 +484,34 @@ impl PluginBoxV2 {
             let method_id = self.resolve_method_id_from_file(box_type, method_name)?;
             // Find plugin and type_id
             let config = self.config.as_ref().ok_or(BidError::PluginError)?;
-            let (lib_name, _lib_def) = config.find_library_for_box(box_type).ok_or(BidError::InvalidType)?;
+            let lib_name = self.find_lib_name_for_box(box_type).ok_or(BidError::InvalidType)?;
             let plugins = self.plugins.read().unwrap();
-            let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+            let plugin = plugins.get(&lib_name).ok_or(BidError::PluginError)?;
             let cfg_path = self.config_path.as_ref().map(|s| s.as_str()).unwrap_or("nyash.toml");
             let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
             let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
-            let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
-            let type_id = box_conf.type_id;
-            let returns_result = box_conf.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false);
+            // Prefer spec-loaded type_id/method returns_result
+            let (type_id, returns_result) = if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.clone(), box_type.to_string())) {
+                let tid = spec.type_id.unwrap_or_else(|| config.box_types.get(box_type).copied().unwrap_or(0));
+                let rr = spec.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false);
+                (tid, rr)
+            } else {
+                let box_conf = config.get_box_config(&lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+                let rr = box_conf.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false);
+                (box_conf.type_id, rr)
+            };
             eprintln!("[PluginLoaderV2] Invoke {}.{}: resolving and encoding args (argc={})", box_type, method_name, args.len());
             // TLV args: encode using BID-1 style (u16 ver, u16 argc, then entries)
             let tlv_args = {
                 let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(args.len() as u16);
                 // Validate against nyash.toml method args schema if present
-                let expected_args = box_conf.methods.get(method_name).and_then(|m| m.args.clone());
+                let expected_args = if self.box_specs.read().unwrap().get(&(lib_name.clone(), box_type.to_string())).is_some() {
+                    None
+                } else {
+                    config
+                        .get_box_config(&lib_name, box_type, &toml_value)
+                        .and_then(|bc| bc.methods.get(method_name).and_then(|m| m.args.clone()))
+                };
                 if let Some(exp) = expected_args.as_ref() {
                     if exp.len() != args.len() {
                         eprintln!(
@@ -598,6 +697,12 @@ impl PluginBoxV2 {
                         let b = crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false);
                         let val: Box<dyn NyashBox> = Box::new(crate::box_trait::BoolBox::new(b));
                         if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
+                    }
+                    5 if size == 8 => { // F64
+                        if let Some(f) = crate::runtime::plugin_ffi_common::decode::f64(payload) {
+                            let val: Box<dyn NyashBox> = Box::new(crate::boxes::math_box::FloatBox::new(f));
+                            if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
+                        } else { None }
                     }
                     8 if size == 8 => { // Handle -> PluginBoxV2
                         let mut t = [0u8;4]; t.copy_from_slice(&payload[0..4]);
@@ -838,27 +943,42 @@ impl PluginBoxV2 {
         
         eprintln!("🔍 Plugin loaded successfully");
         
-        // Get type_id from config - read actual nyash.toml content
-        eprintln!("🔍 Reading nyash.toml for type configuration...");
-        let (type_id, fini_method_id) = if let Ok(toml_content) = std::fs::read_to_string(cfg_path) {
-            eprintln!("🔍 nyash.toml read successfully");
-            if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
-                eprintln!("🔍 nyash.toml parsed successfully");
-                if let Some(box_config) = config.get_box_config(lib_name, box_type, &toml_value) {
-                    eprintln!("🔍 Found box config for {} with type_id: {}", box_type, box_config.type_id);
-                    let fini_id = box_config.methods.get("fini").map(|m| m.method_id);
-                    (box_config.type_id, fini_id)
+        // Resolve type_id/fini: prefer per-plugin spec (nyash_box.toml), fallback to central nyash.toml
+        let (type_id, fini_method_id) = if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.to_string(), box_type.to_string())) {
+            // Prefer explicit spec values; if missing, fallback to central [box_types] and no fini
+            let tid = spec
+                .type_id
+                .or_else(|| config.box_types.get(box_type).copied())
+                .ok_or_else(|| {
+                    eprintln!(
+                        "No type_id found for {} (plugin spec missing and central [box_types] not set)",
+                        box_type
+                    );
+                    BidError::InvalidType
+                })?;
+            (tid, spec.fini_method_id)
+        } else {
+            eprintln!("🔍 Reading nyash.toml for type configuration...");
+            if let Ok(toml_content) = std::fs::read_to_string(cfg_path) {
+                eprintln!("🔍 nyash.toml read successfully");
+                if let Ok(toml_value) = toml::from_str::<toml::Value>(&toml_content) {
+                    eprintln!("🔍 nyash.toml parsed successfully");
+                    if let Some(box_config) = config.get_box_config(lib_name, box_type, &toml_value) {
+                        eprintln!("🔍 Found box config for {} with type_id: {}", box_type, box_config.type_id);
+                        let fini_id = box_config.methods.get("fini").map(|m| m.method_id);
+                        (box_config.type_id, fini_id)
+                    } else {
+                        eprintln!("No type configuration for {} in {}", box_type, lib_name);
+                        return Err(BidError::InvalidType);
+                    }
                 } else {
-                    eprintln!("No type configuration for {} in {}", box_type, lib_name);
-                    return Err(BidError::InvalidType);
+                    eprintln!("Failed to parse nyash.toml");
+                    return Err(BidError::PluginError);
                 }
             } else {
-                eprintln!("Failed to parse nyash.toml");
+                eprintln!("Failed to read nyash.toml");
                 return Err(BidError::PluginError);
             }
-        } else {
-            eprintln!("Failed to read nyash.toml");
-            return Err(BidError::PluginError);
         };
         
         // Call birth constructor (method_id = 0) via TLV encoding

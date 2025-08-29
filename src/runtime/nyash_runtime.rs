@@ -92,7 +92,13 @@ fn create_default_registry() -> Arc<Mutex<UnifiedBoxRegistry>> {
 
 fn create_registry_with_groups(groups: BuiltinGroups) -> Arc<Mutex<UnifiedBoxRegistry>> {
     let mut registry = UnifiedBoxRegistry::new();
-    registry.register(Arc::new(BuiltinBoxFactory::new_with_groups(groups)));
+    // Optional: disable builtin boxes entirely to flush out conflicts
+    let disable_builtins = std::env::var("NYASH_DISABLE_BUILTINS").ok().as_deref() == Some("1");
+    if !disable_builtins {
+        registry.register(Arc::new(BuiltinBoxFactory::new_with_groups(groups)));
+    } else {
+        eprintln!("[UnifiedRegistry] Builtin boxes disabled via NYASH_DISABLE_BUILTINS=1");
+    }
     #[cfg(feature = "plugins")]
     {
         registry.register(Arc::new(PluginBoxFactory::new()));

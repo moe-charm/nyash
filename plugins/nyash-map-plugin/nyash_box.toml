@@ -1,0 +1,35 @@
+[box]
+name = "MapBox"
+version = "1.0.0"
+description = "Key-value map Box"
+author = "Nyash Team"
+
+[provides]
+boxes = ["MapBox"]
+
+[MapBox]
+type_id = 12
+
+[MapBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[MapBox.methods.size]
+id = 1
+args = []
+returns = { type = "i64" }
+
+[MapBox.methods.get]
+id = 2
+args = [ { name = "key", type = "i64" } ]
+returns = { type = "box" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_map_plugin.dll"
+linux   = "target/release/libnyash_map_plugin.so"
+macos   = "target/release/libnyash_map_plugin.dylib"
+

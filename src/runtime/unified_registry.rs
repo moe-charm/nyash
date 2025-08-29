@@ -18,8 +18,13 @@ pub fn init_global_unified_registry() {
     GLOBAL_REGISTRY.get_or_init(|| {
         let mut registry = UnifiedBoxRegistry::new();
         
-        // Register built-in Box factory (highest priority)
-        registry.register(Arc::new(BuiltinBoxFactory::new()));
+        // Register built-in Box factory (highest priority) unless disabled
+        let disable_builtins = std::env::var("NYASH_DISABLE_BUILTINS").ok().as_deref() == Some("1");
+        if !disable_builtins {
+            registry.register(Arc::new(BuiltinBoxFactory::new()));
+        } else {
+            eprintln!("[UnifiedRegistry] Builtin boxes disabled via NYASH_DISABLE_BUILTINS=1");
+        }
         
         // Register plugin Box factory (lowest priority)
         #[cfg(feature = "plugins")]

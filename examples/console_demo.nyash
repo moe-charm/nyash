@@ -1,0 +1,13 @@
+// ConsoleBox plugin demo
+
+static box Main {
+  main() {
+    local c
+    c = new ConsoleBox()
+    c.println("Hello from ConsoleBox!")
+    c.log("no newline...")
+    c.println(" done")
+    return 0
+  }
+}
+

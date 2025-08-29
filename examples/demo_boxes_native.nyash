@@ -1,0 +1,28 @@
+// Demo for native build
+print("📦 1. Basic Box Creation:")
+
+local str
+str = new StringBox("Hello, Nyash!")
+print("  StringBox: " + str)
+
+local num
+num = new IntegerBox(42)
+print("  IntegerBox: " + num)
+
+local bool
+bool = new BoolBox(true)
+print("  BoolBox: " + bool)
+
+print("")
+print("🔄 2. Box Operations:")
+
+local result
+result = new IntegerBox(10) + new IntegerBox(32)
+print("  10 + 32 = " + result)
+
+local hello
+hello = new StringBox("Hello, ")
+local world
+world = new StringBox("World!")
+result = hello + world
+print("  \"Hello, \" + \"World!\" = " + result)

@@ -1,0 +1,35 @@
+[box]
+name = "CounterBox"
+version = "1.0.0"
+description = "Process-wide counter (singleton)"
+author = "Nyash Team"
+
+[provides]
+boxes = ["CounterBox"]
+
+[CounterBox]
+type_id = 7
+
+[CounterBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[CounterBox.methods.inc]
+id = 1
+args = []
+returns = { type = "i64" }
+
+[CounterBox.methods.get]
+id = 2
+args = []
+returns = { type = "i64" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_counter_plugin.dll"
+linux   = "target/release/libnyash_counter_plugin.so"
+macos   = "target/release/libnyash_counter_plugin.dylib"
+

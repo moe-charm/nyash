@@ -125,6 +125,25 @@ cargo build --release
 ./target/release/plugin-tester check path/to/your/plugin.so
 ```
 
+### 5. **nyash_box.toml テンプレ & スモーク** 🆕
+- テンプレート: `docs/reference/plugin-system/nyash_box.toml.template`
+- スモーク実行（VM・厳格チェックON）:
+```bash
+bash tools/smoke_plugins.sh
+```
+  - 実行内容: Python デモと Integer デモを `NYASH_PLUGIN_STRICT=1` で起動し、nyash_box.toml 経路のロードと実行を確認
+  - 事前条件: `cargo build --release --features cranelift-jit` 済み、各プラグインも release ビルド済み
+
+### 6. **プラグイン優先（ビルトイン上書き）設定** 🆕
+- 既定では、ビルトインの実装が優先されます（安全第一）。
+- プラグインで置き換えたい型（ConsoleBox など）がある場合は環境変数で上書き可能:
+```bash
+export NYASH_USE_PLUGIN_BUILTINS=1
+export NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox,ConsoleBox"
+```
+  - 上記により、`new ConsoleBox()` などの生成がプラグイン経路に切替わります。
+  - 後方互換のため `[libraries]` にも対象プラグインを登録しておくと、解決の一貫性が高まります。
+
 ## 🔧 For Nyash Core Developers
 
 ### Implementation Files

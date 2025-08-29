@@ -128,6 +128,40 @@ search_paths = [
     "/usr/local/lib/nyash/plugins",
     "~/.nyash/plugins"
 ]
+
+# 中央タイプIDレジストリ（新）: 各プラグインの nyash_box.toml と一致させる
+[box_types]
+FileBox     = 6
+ConsoleBox  = 5
+StringBox   = 10
+ArrayBox    = 11
+MapBox      = 12
+IntegerBox  = 12
+CounterBox  = 7
+HttpServerBox   = 20
+HttpRequestBox  = 21
+HttpResponseBox = 22
+HttpClientBox   = 23
+SocketServerBox = 30
+SocketConnBox   = 31
+SocketClientBox = 32
+MathBox     = 50
+TimeBox     = 51
+PyRuntimeBox= 40
+PyObjectBox = 41
+
+# 新スタイルのプラグインルート（併用可・[libraries]は後方互換）
+[plugins]
+"libnyash_filebox_plugin" = "./plugins/nyash-filebox-plugin"
+"libnyash_console_plugin" = "./plugins/nyash-console-plugin"
+"libnyash_string_plugin"  = "./plugins/nyash-string-plugin"
+"libnyash_map_plugin"     = "./plugins/nyash-map-plugin"
+"libnyash_array_plugin"   = "./plugins/nyash-array-plugin"
+"libnyash_python_plugin"  = "./plugins/nyash-python-plugin"
+"libnyash_integer_plugin" = "./plugins/nyash-integer-plugin"
+"libnyash_counter_plugin" = "./plugins/nyash-counter-plugin"
+"libnyash_net_plugin"     = "./plugins/nyash-net-plugin"
+"libnyash_math_plugin"    = "./plugins/nyash-math-plugin"
 [libraries."libnyash_array_plugin"]
 boxes = ["ArrayBox"]
 path = "./plugins/nyash-array-plugin/target/release/libnyash_array_plugin"
@@ -217,3 +251,37 @@ fini    = { method_id = 4294967295 }
 getattrR= { method_id = 11, args = ["name"], returns_result = true }
 callR   = { method_id = 12, args = ["args"], returns_result = true }
 callKwR = { method_id = 15, returns_result = true }
+[libraries."libnyash_console_plugin"]
+boxes = ["ConsoleBox"]
+path = "./plugins/nyash-console-plugin/target/release/libnyash_console_plugin"
+
+[libraries."libnyash_console_plugin".ConsoleBox]
+type_id = 5
+
+[libraries."libnyash_console_plugin".ConsoleBox.methods]
+birth   = { method_id = 0 }
+log     = { method_id = 1, args = ["text"] }
+println = { method_id = 2, args = ["text"] }
+fini    = { method_id = 4294967295 }
+[libraries."libnyash_math_plugin"]
+boxes = ["MathBox", "TimeBox"]
+path = "./plugins/nyash-math-plugin/target/release/libnyash_math_plugin"
+
+[libraries."libnyash_math_plugin".MathBox]
+type_id = 50
+
+[libraries."libnyash_math_plugin".MathBox.methods]
+birth = { method_id = 0 }
+sqrt  = { method_id = 1, args = ["x"] }
+sin   = { method_id = 2, args = ["x"] }
+cos   = { method_id = 3, args = ["x"] }
+round = { method_id = 4, args = ["x"] }
+fini  = { method_id = 4294967295 }
+
+[libraries."libnyash_math_plugin".TimeBox]
+type_id = 51
+
+[libraries."libnyash_math_plugin".TimeBox.methods]
+birth = { method_id = 0 }
+now   = { method_id = 1 }
+fini  = { method_id = 4294967295 }

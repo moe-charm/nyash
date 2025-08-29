@@ -1,0 +1,62 @@
+[box]
+name = "Nyash Python Plugin"
+version = "0.1.0"
+description = "CPython runtime and object interop"
+author = "Nyash Team"
+
+[provides]
+boxes = ["PyRuntimeBox", "PyObjectBox"]
+
+[PyRuntimeBox]
+type_id = 40
+
+[PyRuntimeBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[PyRuntimeBox.methods.eval]
+id = 1
+args = [ { name = "code", type = "string" } ]
+returns = { type = "box" }
+
+[PyRuntimeBox.methods.import]
+id = 2
+args = [ { name = "name", type = "string" } ]
+returns = { type = "box" }
+
+[PyObjectBox]
+type_id = 41
+
+[PyObjectBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[PyObjectBox.methods.getattr]
+id = 1
+args = [ { name = "name", type = "string" } ]
+returns = { type = "box" }
+
+[PyObjectBox.methods.call]
+id = 2
+args = [ { name = "args", type = "varargs" } ]
+returns = { type = "box" }
+
+[PyObjectBox.methods.str]
+id = 3
+args = []
+returns = { type = "string" }
+
+[PyObjectBox.methods.callKw]
+id = 5
+args = [ { name = "kwargs", type = "dict" } ]
+returns = { type = "box" }
+
+[implementation]
+ffi_version = 1
+thread_safe = false
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_python_plugin.dll"
+linux   = "target/release/libnyash_python_plugin.so"
+macos   = "target/release/libnyash_python_plugin.dylib"
+

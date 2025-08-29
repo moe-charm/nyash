@@ -1,0 +1,160 @@
+[box]
+name = "Nyash Net Plugin"
+version = "0.2.0"
+description = "HTTP/TCP networking boxes"
+author = "Nyash Team"
+
+[provides]
+boxes = [
+  "HttpServerBox", "HttpClientBox", "HttpResponseBox", "HttpRequestBox",
+  "SocketServerBox", "SocketClientBox", "SocketConnBox"
+]
+
+[HttpServerBox]
+type_id = 20
+[HttpServerBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+[HttpServerBox.methods.start]
+id = 1
+args = [ { name = "port", type = "i64" } ]
+returns = { type = "void" }
+returns_result = true
+[HttpServerBox.methods.stop]
+id = 2
+args = []
+returns = { type = "void" }
+returns_result = true
+[HttpServerBox.methods.accept]
+id = 3
+args = []
+returns = { type = "box" }
+returns_result = true
+
+[HttpClientBox]
+type_id = 23
+[HttpClientBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+[HttpClientBox.methods.get]
+id = 1
+args = [ { name = "url", type = "string" } ]
+returns = { type = "box" }
+returns_result = true
+[HttpClientBox.methods.post]
+id = 2
+args = [ { name = "url", type = "string" }, { name = "body", type = "string" } ]
+returns = { type = "box" }
+returns_result = true
+
+[HttpResponseBox]
+type_id = 22
+[HttpResponseBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+[HttpResponseBox.methods.setStatus]
+id = 1
+args = [ { name = "status", type = "i64" } ]
+returns = { type = "void" }
+[HttpResponseBox.methods.setHeader]
+id = 2
+args = [ { name = "key", type = "string" }, { name = "value", type = "string" } ]
+returns = { type = "void" }
+[HttpResponseBox.methods.write]
+id = 3
+args = [ { name = "body", type = "string" } ]
+returns = { type = "void" }
+[HttpResponseBox.methods.readBody]
+id = 4
+args = []
+returns = { type = "string" }
+[HttpResponseBox.methods.getStatus]
+id = 5
+args = []
+returns = { type = "i64" }
+[HttpResponseBox.methods.getHeader]
+id = 6
+args = [ { name = "key", type = "string" } ]
+returns = { type = "string" }
+
+[HttpRequestBox]
+type_id = 21
+[HttpRequestBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+[HttpRequestBox.methods.path]
+id = 1
+args = []
+returns = { type = "string" }
+[HttpRequestBox.methods.readBody]
+id = 2
+args = []
+returns = { type = "string" }
+[HttpRequestBox.methods.respond]
+id = 3
+args = [ { name = "resp", type = "box" } ]
+returns = { type = "void" }
+
+[SocketServerBox]
+type_id = 30
+[SocketServerBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+[SocketServerBox.methods.bind]
+id = 1
+args = [ { name = "port", type = "i64" } ]
+returns = { type = "void" }
+[SocketServerBox.methods.accept]
+id = 2
+args = []
+returns = { type = "box" }
+
+[SocketClientBox]
+type_id = 32
+[SocketClientBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+[SocketClientBox.methods.connect]
+id = 1
+args = [ { name = "host", type = "string" }, { name = "port", type = "i64" } ]
+returns = { type = "void" }
+[SocketClientBox.methods.send]
+id = 2
+args = [ { name = "data", type = "string" } ]
+returns = { type = "void" }
+[SocketClientBox.methods.receive]
+id = 3
+args = []
+returns = { type = "string" }
+[SocketClientBox.methods.close]
+id = 4
+args = []
+returns = { type = "void" }
+
+[SocketConnBox]
+type_id = 31
+[SocketConnBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+[SocketConnBox.methods.send]
+id = 1
+args = [ { name = "data", type = "string" } ]
+returns = { type = "void" }
+[SocketConnBox.methods.recv]
+id = 2
+args = []
+returns = { type = "string" }
+[SocketConnBox.methods.close]
+id = 3
+args = []
+returns = { type = "void" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_net_plugin.dll"
+linux   = "target/release/libnyash_net_plugin.so"
+macos   = "target/release/libnyash_net_plugin.dylib"
+

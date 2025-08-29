@@ -1,0 +1,35 @@
+[box]
+name = "ConsoleBox"
+version = "0.1.0"
+description = "Standard output (stdout) printing"
+author = "Nyash Team"
+
+[provides]
+boxes = ["ConsoleBox"]
+
+[ConsoleBox]
+type_id = 5
+
+[ConsoleBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[ConsoleBox.methods.log]
+id = 1
+args = [ { name = "text", type = "string" } ]
+returns = { type = "void" }
+
+[ConsoleBox.methods.println]
+id = 2
+args = [ { name = "text", type = "string" } ]
+returns = { type = "void" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_console_plugin.dll"
+linux   = "target/release/libnyash_console_plugin.so"
+macos   = "target/release/libnyash_console_plugin.dylib"
+

@@ -1,0 +1,35 @@
+[box]
+name = "IntegerBox"
+version = "1.0.0"
+description = "Basic integer box (get/set)"
+author = "Nyash Team"
+
+[provides]
+boxes = ["IntegerBox"]
+
+[IntegerBox]
+type_id = 12
+
+[IntegerBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[IntegerBox.methods.get]
+id = 1
+args = []
+returns = { type = "i64" }
+
+[IntegerBox.methods.set]
+id = 2
+args = [ { name = "value", type = "i64" } ]
+returns = { type = "void" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_integer_plugin.dll"
+linux   = "target/release/libnyash_integer_plugin.so"
+macos   = "target/release/libnyash_integer_plugin.dylib"
+

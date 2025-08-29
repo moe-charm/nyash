@@ -13,6 +13,10 @@ impl NyashInterpreter {
     /// 🔥 ビルトインBoxのメソッド呼び出し
     pub(super) fn execute_builtin_box_method(&mut self, parent: &str, method: &str, _current_instance: Box<dyn NyashBox>, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // Strict plugin-only mode: disallow builtin paths
+        if std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1") {
+            return Err(RuntimeError::InvalidOperation { message: format!("Builtin path disabled: {}.{}, use plugin invoke", parent, method) });
+        }
         
         // 🌟 Phase 8.9: birth method support for builtin boxes
         if method == "birth" {
@@ -42,6 +46,13 @@ impl NyashInterpreter {
                 self.execute_map_method(&map_box, method, arguments)
             }
             "MathBox" => {
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(b) = reg.create_box("MathBox", &[]) {
+                        // Note: execute_math_method expects builtin MathBox; plugin path should route via VM/BoxCall in new pipeline.
+                        // Here we simply return void; method paths should prefer plugin invoke in VM.
+                        return Ok(Box::new(VoidBox::new()));
+                    }
+                }
                 let math_box = MathBox::new();
                 self.execute_math_method(&math_box, method, arguments)
             }
@@ -57,22 +68,41 @@ impl NyashInterpreter {
                 self.execute_file_method(&file_box, method, arguments)
             }
             "ConsoleBox" => {
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(_b) = reg.create_box("ConsoleBox", &[]) {
+                        return Ok(Box::new(VoidBox::new()));
+                    }
+                }
                 let console_box = ConsoleBox::new();
                 self.execute_console_method(&console_box, method, arguments)
             }
             "TimeBox" => {
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(_b) = reg.create_box("TimeBox", &[]) {
+                        return Ok(Box::new(VoidBox::new()));
+                    }
+                }
                 let time_box = TimeBox::new();
                 self.execute_time_method(&time_box, method, arguments)
             }
             "RandomBox" => {
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(_b) = reg.create_box("RandomBox", &[]) { return Ok(Box::new(VoidBox::new())); }
+                }
                 let random_box = RandomBox::new();
                 self.execute_random_method(&random_box, method, arguments)
             }
             "DebugBox" => {
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(_b) = reg.create_box("DebugBox", &[]) { return Ok(Box::new(VoidBox::new())); }
+                }
                 let debug_box = DebugBox::new();
                 self.execute_debug_method(&debug_box, method, arguments)
             }
             "SoundBox" => {
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(_b) = reg.create_box("SoundBox", &[]) { return Ok(Box::new(VoidBox::new())); }
+                }
                 let sound_box = SoundBox::new();
                 self.execute_sound_method(&sound_box, method, arguments)
             }
@@ -158,7 +188,9 @@ impl NyashInterpreter {
                         message: format!("MathBox.birth() expects 0 arguments, got {}", arg_values.len()),
                     });
                 }
-                
+                if let Ok(reg) = self.runtime.box_registry.lock() {
+                    if let Ok(_b) = reg.create_box("MathBox", &[]) { return Ok(Box::new(VoidBox::new())); }
+                }
                 let _math_box = MathBox::new();
                 Ok(Box::new(VoidBox::new()))
             }

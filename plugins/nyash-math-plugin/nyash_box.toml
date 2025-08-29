@@ -1,0 +1,56 @@
+[box]
+name = "Nyash Math/Time Plugin"
+version = "0.1.0"
+description = "Minimal MathBox/TimeBox"
+author = "Nyash Team"
+
+[provides]
+boxes = ["MathBox", "TimeBox"]
+
+[MathBox]
+type_id = 50
+
+[MathBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[MathBox.methods.sqrt]
+id = 1
+args = [ { name = "x", type = "i64" } ]
+returns = { type = "f64" }
+
+[MathBox.methods.sin]
+id = 2
+args = [ { name = "x", type = "i64" } ]
+returns = { type = "f64" }
+
+[MathBox.methods.cos]
+id = 3
+args = [ { name = "x", type = "i64" } ]
+returns = { type = "f64" }
+
+[MathBox.methods.round]
+id = 4
+args = [ { name = "x", type = "i64" } ]
+returns = { type = "f64" }
+
+[TimeBox]
+type_id = 51
+
+[TimeBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[TimeBox.methods.now]
+id = 1
+args = []
+returns = { type = "i64" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_math_plugin.dll"
+linux   = "target/release/libnyash_math_plugin.so"
+macos   = "target/release/libnyash_math_plugin.dylib"

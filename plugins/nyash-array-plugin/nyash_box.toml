@@ -1,0 +1,40 @@
+[box]
+name = "ArrayBox"
+version = "1.0.0"
+description = "Array operations Box"
+author = "Nyash Team"
+
+[provides]
+boxes = ["ArrayBox"]
+
+[ArrayBox]
+type_id = 11
+
+[ArrayBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[ArrayBox.methods.len]
+id = 1
+args = []
+returns = { type = "i64" }
+
+[ArrayBox.methods.get]
+id = 2
+args = [ { name = "index", type = "i64" } ]
+returns = { type = "box" }
+
+[ArrayBox.methods.push]
+id = 3
+args = [ { name = "value", type = "box" } ]
+returns = { type = "i64" }
+
+[implementation]
+ffi_version = 1
+thread_safe = true
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_array_plugin.dll"
+linux   = "target/release/libnyash_array_plugin.so"
+macos   = "target/release/libnyash_array_plugin.dylib"
+

@@ -1,0 +1,133 @@
+//! Nyash ConsoleBox Plugin - BID-FFI v1
+//! Provides simple stdout printing via ConsoleBox
+
+use std::collections::HashMap;
+use std::os::raw::c_char;
+use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
+
+// ===== Error Codes (BID-1) =====
+const NYB_SUCCESS: i32 = 0;
+const NYB_E_SHORT_BUFFER: i32 = -1;
+const NYB_E_INVALID_TYPE: i32 = -2;
+const NYB_E_INVALID_METHOD: i32 = -3;
+const NYB_E_INVALID_ARGS: i32 = -4;
+const NYB_E_PLUGIN_ERROR: i32 = -5;
+
+// ===== Method IDs =====
+const METHOD_BIRTH: u32 = 0;
+const METHOD_LOG: u32 = 1;     // log(text)
+const METHOD_PRINTLN: u32 = 2; // println(text)
+const METHOD_FINI: u32 = u32::MAX;
+
+// ===== Type ID =====
+const TYPE_ID_CONSOLE_BOX: u32 = 5; // keep in sync with nyash.toml [box_types]
+
+// ===== Instance management =====
+struct ConsoleInstance { /* no state for now */ }
+
+use once_cell::sync::Lazy;
+static INSTANCES: Lazy<Mutex<HashMap<u32, ConsoleInstance>>> = Lazy::new(|| {
+    Mutex::new(HashMap::new())
+});
+static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+
+// ===== TLV helpers (minimal) =====
+// TLV layout: [u16 ver=1][u16 argc][entries...]
+// Entry: [u16 tag][u16 size][payload...]
+fn parse_first_string(args: &[u8]) -> Result<String, ()> {
+    if args.len() < 4 { return Err(()); }
+    let argc = u16::from_le_bytes([args[2], args[3]]) as usize;
+    if argc == 0 { return Err(()); }
+    let mut p = 4usize;
+    // first entry
+    if args.len() < p + 4 { return Err(()); }
+    let tag = u16::from_le_bytes([args[p], args[p+1]]); p += 2;
+    let sz  = u16::from_le_bytes([args[p], args[p+1]]) as usize; p += 2;
+    if tag != 6 && tag != 7 { // String or Bytes
+        return Err(());
+    }
+    if args.len() < p + sz { return Err(()); }
+    let s = String::from_utf8_lossy(&args[p..p+sz]).to_string();
+    Ok(s)
+}
+
+// Write TLV birth result: Handle(tag=8,size=8) with (type_id, instance_id)
+unsafe fn write_tlv_birth(type_id: u32, instance_id: u32, out: *mut u8, out_len: *mut usize) -> i32 {
+    let need = 4 + 4 + 8; // header + entry + payload
+    if *out_len < need { *out_len = need; return NYB_E_SHORT_BUFFER; }
+    let mut buf = Vec::with_capacity(need);
+    // header
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    // entry: Handle
+    buf.extend_from_slice(&8u16.to_le_bytes());
+    buf.extend_from_slice(&8u16.to_le_bytes());
+    buf.extend_from_slice(&type_id.to_le_bytes());
+    buf.extend_from_slice(&instance_id.to_le_bytes());
+    std::ptr::copy_nonoverlapping(buf.as_ptr(), out, need);
+    *out_len = need;
+    NYB_SUCCESS
+}
+
+unsafe fn write_tlv_void(out: *mut u8, out_len: *mut usize) -> i32 {
+    let need = 4 + 4; // header + entry
+    if *out_len < need { *out_len = need; return NYB_E_SHORT_BUFFER; }
+    let mut buf = Vec::with_capacity(need);
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&9u16.to_le_bytes()); // Void
+    buf.extend_from_slice(&0u16.to_le_bytes());
+    std::ptr::copy_nonoverlapping(buf.as_ptr(), out, need);
+    *out_len = need;
+    NYB_SUCCESS
+}
+
+// ===== Entry points =====
+#[no_mangle]
+pub extern "C" fn nyash_plugin_abi() -> u32 { 1 }
+
+#[no_mangle]
+pub extern "C" fn nyash_plugin_init() -> i32 {
+    eprintln!("[ConsoleBox] Plugin initialized");
+    NYB_SUCCESS
+}
+
+#[no_mangle]
+pub extern "C" fn nyash_plugin_invoke(
+    type_id: u32,
+    method_id: u32,
+    instance_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    if type_id != TYPE_ID_CONSOLE_BOX { return NYB_E_INVALID_TYPE; }
+    unsafe {
+        match method_id {
+            METHOD_BIRTH => {
+                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut m) = INSTANCES.lock() {
+                    m.insert(id, ConsoleInstance{});
+                } else { return NYB_E_PLUGIN_ERROR; }
+                return write_tlv_birth(TYPE_ID_CONSOLE_BOX, id, result, result_len);
+            }
+            METHOD_FINI => {
+                if let Ok(mut m) = INSTANCES.lock() { m.remove(&instance_id); }
+                return NYB_SUCCESS;
+            }
+            METHOD_LOG | METHOD_PRINTLN => {
+                let slice = std::slice::from_raw_parts(args, args_len);
+                match parse_first_string(slice) {
+                    Ok(s) => {
+                        if method_id == METHOD_LOG { print!("{}", s); } else { println!("{}", s); }
+                        return write_tlv_void(result, result_len);
+                    }
+                    Err(_) => return NYB_E_INVALID_ARGS,
+                }
+            }
+            _ => NYB_E_INVALID_METHOD,
+        }
+    }
+}
+
