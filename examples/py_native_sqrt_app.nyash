@@ -1,0 +1,35 @@
+// Python native build demo (AOT/EXE) via plugin
+//
+// Build prerequisites:
+//   1) System has CPython shared library available (e.g. libpython3.11.so)
+//      - Linux: export LD_LIBRARY_PATH=/usr/lib:/usr/local/lib:$LD_LIBRARY_PATH
+//      - macOS: export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH
+//      - Windows: python3xx.dll resolvable via PATH or set PYTHONHOME
+//   2) Build nyash and python plugin in release mode
+//      cargo build --release --features cranelift-jit
+//      (cd plugins/nyash-python-plugin && cargo build --release)
+//
+// Build native EXE:
+//   bash tools/build_aot.sh examples/py_native_sqrt_app.nyash -o app
+//
+// Run (autodecode on makes float results come back as primitives):
+//   NYASH_PY_AUTODECODE=1 ./app
+//
+// Expected output line (among others):
+//   Result: 0
+
+static box Main {
+  main() {
+    local c, py, mod, fun, r
+    c = new ConsoleBox()
+    py = new PyRuntimeBox()
+    mod = py.import("math")
+    fun = mod.getattr("sqrt")
+    // With NYASH_PY_AUTODECODE=1, this returns a primitive float 3.0
+    r = fun.call(9)
+    // Avoid string concatenation for AOT strict; print in two calls
+    c.println("sqrt(9) = ")
+    c.println(r)
+    return 0
+  }
+}

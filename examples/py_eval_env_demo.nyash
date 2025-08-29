@@ -1,0 +1,17 @@
+// Python plugin demo via env-provided code (avoids StringBox arg path)
+// Build:
+//   cargo build --release && (cd plugins/nyash-python-plugin && cargo build --release)
+// Run:
+//   NYASH_PY_EVAL_CODE="'hello' * 3" ./target/release/nyash --backend vm examples/py_eval_env_demo.nyash
+
+static box Main {
+  main() {
+    local py, obj
+    py = new PyRuntimeBox()
+    // Evaluate code from env var (NYASH_PY_EVAL_CODE)
+    obj = py.eval()
+    me.console.println(obj.str())
+    return 0
+  }
+}
+

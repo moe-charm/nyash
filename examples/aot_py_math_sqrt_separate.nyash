@@ -1,0 +1,37 @@
+// AOT Python math.sqrt with separate print calls
+static box Main {
+  main() {
+    local py, math, sqrt_func, sixteen, result, console
+    
+    // Create console for output
+    console = new ConsoleBox()
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Print just text first
+    local msg1
+    msg1 = new StringBox("Starting calculation")
+    console.log(msg1)
+    
+    // Import math module
+    math = py.import("math")
+    
+    // Get sqrt function
+    sqrt_func = py.getattr(math, "sqrt")
+    
+    // Create number
+    sixteen = new IntegerBox(16)
+    
+    // Call sqrt(16)
+    result = py.call(sqrt_func, sixteen)
+    
+    // Print just text again
+    local msg2
+    msg2 = new StringBox("Calculation done")
+    console.log(msg2)
+    
+    // Return result (should be 4.0)
+    return result
+  }
+}

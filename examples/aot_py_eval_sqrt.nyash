@@ -1,0 +1,18 @@
+// AOT Python eval sqrt - direct eval approach
+static box Main {
+  main() {
+    local py, code, result
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Create code string for sqrt
+    code = new StringBox("(__import__('math').sqrt)(16)")
+    
+    // Eval the code
+    result = py.eval(code)
+    
+    // Return result directly (should be 4.0)
+    return result
+  }
+}

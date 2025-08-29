@@ -51,6 +51,9 @@ NYASH_USE_PLUGIN_BUILTINS=1 \
 NYASH_JIT_EXEC=1 \
 NYASH_JIT_ONLY=1 \
 NYASH_JIT_STRICT=1 \
+NYASH_JIT_NATIVE_F64=1 \
+# Allow f64 shim for PyObjectBox.call (type_id=41, method_id=2)
+NYASH_JIT_PLUGIN_F64="${NYASH_JIT_PLUGIN_F64:-41:2}" \
 NYASH_JIT_ARGS_HANDLE_ONLY=1 \
 NYASH_JIT_THRESHOLD=1 \
 ./target/release/nyash --backend vm "$INPUT" >/dev/null || true

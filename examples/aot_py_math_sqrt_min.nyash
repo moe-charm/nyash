@@ -1,0 +1,24 @@
+// AOT Python math.sqrt minimal - no println
+static box Main {
+  main() {
+    local py, math, sqrt_func, sixteen, result
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Import math module
+    math = py.import("math")
+    
+    // Get sqrt function
+    sqrt_func = py.getattr(math, "sqrt")
+    
+    // Create number
+    sixteen = new IntegerBox(16)
+    
+    // Call sqrt(16)
+    result = py.call(sqrt_func, sixteen)
+    
+    // Return result directly (should be 4.0)
+    return result
+  }
+}

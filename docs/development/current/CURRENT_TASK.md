@@ -1,3 +1,109 @@
+# 🎯 CURRENT TASK - 2025-08-30 Restart Snapshot（Plugin-First / Core最小化）
+
+このスナップショットは最新の到達点へ更新済み。再起動時はここから辿る。
+
+## ✅ 現在の着地（実装済み）
+- プラグイン仕様・ローダー（二層）
+  - 各プラグインに `plugins/<name>/nyash_box.toml`（type_id/methods/lifecycle/artifacts）。
+  - 中央 `nyash.toml`: `[plugins]` と `[box_types]` を利用、`[libraries]` は最小互換で維持。
+  - Loader: `nyash_box.toml` 優先で type_id/メソッド解決、従来ネストへフォールバック。
+- 追加プラグイン（最低限）
+  - ConsoleBox: stdout 出力（log/println）。
+  - Math/Time: MathBox(sqrt/sin/cos/round: f64返り)/TimeBox(now: i64)。
+  - 既存: filebox/string/map/array/python/integer/counter/net。
+- MIR/VM 統一
+  - 新 MIR 命令 `PluginInvoke` を導入。Builder は常に `PluginInvoke` を生成（BoxCall廃止方向）。
+  - VM: `execute_plugin_invoke` 実装（TLV encode/戻り decode、f64/handle含む）。Handle(tag=8)→PluginBoxV2 復元対応。
+- ビルトイン制御
+  - レガシーのビルトインBox工場を削除（plugins専用化）。
+  - `NYASH_PLUGIN_ONLY=1` で完全プラグイン運用（既定運用）。
+  - `env.console` をプラグインConsoleBoxに自動バインド（VMのref_get特例）。
+  - VM側で static birth 緩和（プリミティブ受け手→プラグインBox生成）。
+  - 文字列/整数の自動変換: Plugin StringBox→toUtf8()でTLV string、Plugin IntegerBox→get()でTLV i64。
+- Pythonプラグイン（Phase 10.5c 足場）
+  - eval/import/getattr/call/str のRO経路をVMで動作（autodecode: NYASH_PY_AUTODECODE=1）。
+  - returns_result（…R系）をVMが尊重し、Ok/ErrをResultに包んで返却。
+  - 追加サンプル: `py_eval_env_demo.nyash`, `py_math_sqrt_demo.nyash`, `py_result_ok_demo.nyash`, `py_result_error_demo.nyash`, `py_getattrR_ok_demo.nyash`, `py_callR_ok_demo.nyash`。
+- スモーク
+  - `tools/smoke_plugins.sh`: python/integer/console/math_time をVMで実行（STRICT/デフォルト）。
+
+### ✅ AOT/ネイティブ（最小経路の到達点）
+- `tools/build_aot.sh` + `crates/nyrt`: JIT→.o 生成→ libnyrt.a とリンクしEXE化に成功。
+- 最小AOT例: `examples/aot_py_eval_env_min.nyash`（`NYASH_PY_EVAL_CODE` で式注入）でバイナリ生成・実行OK。
+- nyrtシム強化: `nyash_plugin_invoke3_{i64,f64}` が StringBox/IntegerBox ハンドルを TLV(string/i64) に自動変換（import/getattr/call で使用可能）。
+- Lowerer緩和: strict時の `new/birth/eval`（PyRuntime/Integer）を no-op 許容→未サポカウントを抑制。
+- 現状のAOT結果: 未サポート命令は大幅削減（27→5→今後0を目標）。
+
+## 🎯 次のやること（短期）
+1) Python3メソッドの AOT 実Emit（最小）:
+   - Lowerer: `emit_plugin_invoke` で `PyRuntimeBox.import/getattr` と `PyObjectBox.call` を直接生成（has_ret/argc 正規化）。
+   - nyrtシム: 追加の型（Bool/Float/Bytes）の引数TLVパスを確認し、必要なら拡張。
+2) AOTの結果出力の最小対応:
+   - ConsoleBox.println の strict 経路（extern寄せ or 直接 PluginInvoke）の緩和で簡易表示を可能に。
+3) returns_result サンプルの拡充:
+   - importR/getattrR/callR/callKwR の OK/Err を網羅、表示体裁（Ok(...)/Err(...)）の最終化。
+4) CI/Golden 更新:
+   - AOT最小ルート（eval/env）と VM Python スモークを追加。将来 {vm,jit,aot} × {gc on,off} に拡張。
+5) ドキュメント整備:
+   - Plugin-First 運用（`NYASH_PLUGIN_ONLY=1`）、`@env` ディレクティブ、最小AOT手順と制約の明記。
+
+### 🆕 2025-08-30 PM — Python/AOT 進捗と残タスク（引き継ぎ）
+#### ✅ 到達
+- eval方式（`NYASH_PY_EVAL_CODE` または `py.eval(<code>)`）で AOT unsupported=0 達成。`.o` 生成OK、Console出力OK。
+- NYASH_PY_AUTODECODE=1 でプリミティブ返り（FloatBox→f64）を確認（例: 4.0）。
+- Console 橋渡し（`env.console.log/println` → ConsoleBox）を strict 経路で実行可能に。
+- nyrtシムで String/Integer 引数を TLV(tag=6/3) に自動変換（import/getattr/call の基盤整備）。
+- 戻りバッファの動的拡張で AOT 実行時の短バッファ起因の不安定さを軽減。
+
+#### ❗ 現状の制約 / 不具合
+- VM: `py.import("math")` の後に `py.eval("math.sqrt(16)")` が "name 'math' is not defined"（文脈共有が未確立）。
+  - 対策方針: PyRuntimeInstance に per-runtime globals(dict) を持たせ、birth 時に `__main__` の dict を確保。import 成功時は globals に挿入、eval は当該 globals を使う。
+- getattr/call（PyObjectBox）: AOT 実Emitはまだ限定（Lowerer が import 返りの Box 型を把握できない）。
+  - 対策方針: Lowerer の box_type 伝搬を拡張し、`plugin_invoke %rt.import -> PyObjectBox` を box_type_map に記録。`getattr/call` を確実に `emit_plugin_invoke` に誘導。
+
+#### 🎯 次タスク（実装順）
+1) Pythonプラグイン: per-runtime globals の完全実装
+   - birth: `__main__` dict を PyRuntimeInstance に保持
+   - import: 成功時に runtime.globals へ `name` で登録
+   - eval: runtime.globals を global/local に指定して評価
+   - VM/E2E で `py.import("math"); py.eval("math.sqrt(16)")` を Green に
+2) Lowerer: PyObjectBox の戻り型伝搬
+   - `import → PyObjectBox`、`getattr → PyObjectBox` の関係を box_type_map に反映
+   - getattr/call を `emit_plugin_invoke` で実Emit（has_ret/argc 正規化）
+3) AOT 実行の安定化
+   - nyrt シム: Bytes/Bool/Float を含む複数引数 TLV のカバレッジ拡大（必要に応じて）
+   - 実行ログ（`NYASH_DEBUG_PLUGIN=1`）で TLV 入出力を継続監視
+4) ドキュメント/サンプル更新
+   - eval 方式の最小AOT（成功例）をガイドへ明記
+   - import/getattr/call のAOT例を追加（通り次第）
+
+## 🔧 実行方法（再起動手順）
+```bash
+cargo build --release --features cranelift-jit
+# プラグインをビルドし、VMスモーク
+bash tools/smoke_plugins.sh
+# 厳格（ビルトイン無効）2ndパス
+NYASH_SMOKE_STRICT_PLUGINS=1 bash tools/smoke_plugins.sh
+```
+
+## 📌 方針（ChatGPT5助言に基づく抜粋）
+- Coreは Box/意図/MIR だけ（演算・コレクション等は全部プラグイン）。
+- 呼び出しは常に `plugin_invoke(type_id, method_id, argv[])`（VM/JIT共通）。
+- フォールバックなし: 未実装は即エラー（場所とVM参照関数名を出す）。
+- MIR 生成の一本化: 既存の built-in 特例を削除し、必ず `MIR::PluginInvoke` に落とす。
+- VM/JIT の特例削除: if (is_string_length) 等の分岐は撤去。
+- 静的同梱: profile=minimal/std/full で nyplug_*.a/.lib をバンドル（動的読込は将来の nyplug.toml）。
+- バージョン整合: 起動時に Core v0 ⇔ 各 `nyash_plugin_abi()` 照合（ミスマッチ即終了）。
+- テスト/CI: 各プラグインに Golden（VM→JIT→AOTの trace_hash 一致）、CIマトリクス {vm,jit,aot} × {gc on,off}。
+
+### 箱を固める（Box-First 原則の再確認）
+- 問題は必ず「箱」に包む: 設定/状態/橋渡し/シムは Box/Host/Registry 経由に集約し、境界を越える処理（TLV変換・型正規化）は1箇所に固定。
+- 目的優先で足場を積む: 先に no-op/strict緩和で「落ちない足場」を作り、次に値の実Emit・型/戻りの厳密化を段階導入。
+- いつでも戻せる: `@env`/env変数/featureフラグで切替点を1行に集約。実験→可視化→固定化のサイクルを高速化。
+
+
+---
+
 # 🎯 CURRENT TASK - 2025-08-29（Phase 10.5 転回：JIT分離=EXE専用）
 
 Phase 10.10 は完了（DoD確認済）。アーキテクチャ転回：JITは「EXE/AOT生成専用コンパイラ」、実行はVM一本に統一。

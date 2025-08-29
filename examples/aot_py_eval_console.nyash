@@ -1,0 +1,27 @@
+// AOT Python eval with ConsoleBox output
+static box Main {
+  main() {
+    local py, code, result, console, msg1, msg2
+    
+    // Create console for output
+    console = new ConsoleBox()
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Print start message
+    msg1 = new StringBox("Starting calculation...")
+    console.log(msg1)
+    
+    // Eval-only approach for sqrt(16)
+    code = new StringBox("(__import__('math').sqrt)(16)")
+    result = py.eval(code)
+    
+    // Print done message
+    msg2 = new StringBox("Calculation complete!")
+    console.log(msg2)
+    
+    // Return result (should be 4.0)
+    return result
+  }
+}
