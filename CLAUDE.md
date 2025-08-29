@@ -74,6 +74,7 @@ Notes:
 - **実行バックエンド完全ガイド**: [docs/reference/architecture/execution-backends.md](docs/reference/architecture/execution-backends.md) 
   - インタープリター（開発・デバッグ）/ VM（高速実行）/ WASM（Web配布）
   - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較（13.5倍実行高速化実証済み！）
+- **ビルド方法完全ガイド**: [docs/guides/build/](docs/guides/build/) - プラットフォーム別ビルド手順
 
 ### 🐧 Linux/WSL版
 ```bash
@@ -97,9 +98,15 @@ cargo build --release -j32
 cargo install cargo-xwin
 cargo xwin build --target x86_64-pc-windows-msvc --release
 
-# 生成された実行ファイル (916KB)
+# 生成された実行ファイル (4.1MB)
 target/x86_64-pc-windows-msvc/release/nyash.exe
 ```
+
+### 📚 完全ビルドガイド
+- **🏗️ [ビルドパターン総合ガイド](docs/guides/build/)** - すべてのビルド方法を網羅
+  - 📦 [Windows配布版作成ガイド](docs/guides/build/windows-distribution.md) - 実践的な配布パッケージ作成
+  - 🌍 [クロスプラットフォーム開発](docs/guides/build/cross-platform.md) - Write Once, Run Everywhere
+  - 🔌 プラグインのマルチプラットフォームビルド
 
 ### 🌐 WebAssembly版（2種類あるので注意！）
 
