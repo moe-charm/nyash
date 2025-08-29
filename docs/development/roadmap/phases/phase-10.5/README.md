@@ -1,5 +1,5 @@
-# Phase 10.5 – Python ネイティブ統合（Embedding & FFI）/ JIT分離（EXE専用化）
-*(旧10.1の一部を後段フェーズに再編。Everything is Plugin/AOTの基盤上で実現)*
+# Phase 10.5 – ネイティブ基盤固め + Python ネイティブ統合
+*(旧10.1の一部を後段フェーズに再編。まずネイティブ/AOT基盤を固め、その上でPythonを統合する方針に整理)*
 
 本フェーズでは方針を明確化する：実行はVMが唯一の基準系、JITは「EXE/AOT生成専用のコンパイラ」として分離運用する。
 
@@ -12,10 +12,10 @@
 - 役割分担の明確化: VM=仕様/挙動の唯一の基準、JIT=ネイティブ生成器。
 - プラグイン整合: VM/EXEとも同一のBID/FFIプラグインを利用（Everything is Plugin）。
 
-## 📂 サブフェーズ構成（10.5a → 10.5e）
+## 📂 サブフェーズ構成（10.5s → 10.5e）
 
 先行タスク（最優先）
-- 10.5s JIT Strict/分離の確定（Fail-Fast / ノーフォールバック）
+- 10.5s JIT Strict/分離の確定（Fail-Fast / ノーフォールバック） [DONE]
   - 目的: 「VM=実行・JIT=コンパイル」の二系統で混在を排除し、検証を単純化
   - 仕様:
     - JITは実行経路から外し、`--compile-native`（AOT）でのみ使用
@@ -25,7 +25,7 @@
     - CLIに `--compile-native` を追加し、OBJ/EXE生成が一発で通る
     - VM実行は常にVMのみ（JITディスパッチ既定OFF）。
 
-### 10.5a 設計・ABI整合（1–2日）
+### 10.5a（Python）設計・ABI整合（1–2日）
 - ルート選択: 
   - Embedding: NyashプロセスにCPythonを埋め込み、PyObject*をハンドル管理
   - Extending: Python拡張モジュール（nyashrt）を提供し、PythonからNyashを呼ぶ
@@ -34,7 +34,20 @@
   - 変換: Nyash ⇄ Python で Bool/I64/String/Bytes/Handle を相互変換
   - GIL: birth/invoke/decRef中はGIL確保。AOTでも同等
 
-### 10.5b PyRuntimeBox / PyObjectBox 実装（3–5日）
+### 10.5b ネイティブビルド基盤の固め（AOT/EXE）（2–4日）
+- 目的: Python統合の前に、AOT/EXE配布体験・クロスプラットフォーム実行の足回りを先に完成させる
+- 範囲:
+  - VMとJITの分離（JIT=EXE専用）とStrict運用の徹底
+  - AOTパイプラインの実働（CLIF→.o→libnyrtリンク→EXE）
+  - プラグイン解決のクロスプラットフォーム化（.so/.dll/.dylib、自動lib剥がし、検索パス）
+  - Windowsビルド/リンク（clang優先、MSYS2/WSL fallback）
+  - EXE出力の統一（`Result: <val>`）とスモークテスト
+- DoD:
+  - Linux/Windowsで `--compile-native` が通り、`plugins/` のDLL/so/dylibを自動解決
+  - `tools/build_aot.{sh,ps1}` で配布しやすいEXEが生成される
+  - `tools/smoke_aot_vs_vm.sh` でVM/EXEの出力照合が可能
+
+### 10.5c PyRuntimeBox / PyObjectBox 実装（3–5日）
 - `PyRuntimeBox`（シングルトン）: `eval(code) -> Handle` / `import(name) -> Handle`
 - `PyObjectBox`: `getattr(name) -> Handle` / `call(args...) -> Handle` / `str() -> String`
 - 参照管理: `Py_INCREF`/`Py_DECREF` をBoxライフサイクル（fini）に接続

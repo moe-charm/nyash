@@ -16,6 +16,14 @@ pub struct NyashConfigV2 {
     /// Plugin search paths
     #[serde(default)]
     pub plugin_paths: PluginPaths,
+
+    /// New: Plugins registry (name -> plugin root directory)
+    #[serde(default)]
+    pub plugins: HashMap<String, String>,
+
+    /// Optional central type_id mapping (box name -> type_id)
+    #[serde(default)]
+    pub box_types: HashMap<String, u32>,
 }
 
 /// Library definition (simplified)
@@ -116,7 +124,23 @@ impl NyashConfigV2 {
             PluginPaths::default()
         };
 
-        Ok(NyashConfigV2 { libraries, plugin_paths })
+        // Extract plugins map
+        let plugins = if let Some(tbl) = config.get("plugins").and_then(|v| v.as_table()) {
+            let mut m = HashMap::new();
+            for (k, v) in tbl.iter() {
+                if let Some(s) = v.as_str() { m.insert(k.clone(), s.to_string()); }
+            }
+            m
+        } else { HashMap::new() };
+
+        // Extract optional box_types map
+        let box_types = if let Some(tbl) = config.get("box_types").and_then(|v| v.as_table()) {
+            let mut m = HashMap::new();
+            for (k, v) in tbl.iter() { if let Some(id) = v.as_integer() { m.insert(k.clone(), id as u32); } }
+            m
+        } else { HashMap::new() };
+
+        Ok(NyashConfigV2 { libraries, plugin_paths, plugins, box_types })
     }
     
     /// Parse library definitions with nested box configs
@@ -175,9 +199,15 @@ impl NyashConfigV2 {
         if std::path::Path::new(plugin_name).exists() {
             return Some(plugin_name.to_string());
         }
-        
-        // Search in configured paths
-        for search_path in &self.plugin_paths.search_paths {
+        // Build effective search paths: config + ENV:NYASH_PLUGIN_PATHS (sep=';' or ':')
+        let mut paths: Vec<String> = Vec::new();
+        paths.extend(self.plugin_paths.search_paths.iter().cloned());
+        if let Ok(envp) = std::env::var("NYASH_PLUGIN_PATHS") {
+            let sep = if cfg!(target_os = "windows") { ';' } else { ':' };
+            for p in envp.split(sep).filter(|s| !s.is_empty()) { paths.push(p.to_string()); }
+        }
+        // Search in effective paths
+        for search_path in &paths {
             let path = std::path::Path::new(search_path).join(plugin_name);
             if path.exists() {
                 return Some(path.to_string_lossy().to_string());

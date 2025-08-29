@@ -79,9 +79,43 @@ cat src/lib.rs
 
 ### 3. **Configure Your Plugin**
 ```bash
-# nyash.tomlで設定
-cat nyash.toml  # 実際の設定形式を確認
+# 新スタイル（推奨）: 中央=nyash.toml（レジストリ最小） + 各プラグイン=nyash_box.toml（仕様書）
+cat nyash.toml
+cat plugins/<your-plugin>/nyash_box.toml
 ```
+
+中央の `nyash.toml` 例（抜粋）
+```toml
+[plugins]
+"libnyash_filebox_plugin" = "./plugins/nyash-filebox-plugin"
+
+[plugin_paths]
+search_paths = ["./plugins/*/target/release", "./plugins/*/target/debug"]
+
+[box_types]
+FileBox = 6
+```
+
+各プラグインの `nyash_box.toml` 例（抜粋）
+```toml
+[box]
+name = "FileBox"
+version = "1.0.0"
+description = "File I/O operations Box"
+
+[provides]
+boxes = ["FileBox"]
+
+[FileBox]
+type_id = 6
+
+[FileBox.methods.open]
+id = 1
+args = [ { name = "path", type = "string" }, { name = "mode", type = "string", default = "r" } ]
+returns = { type = "void", error = "string" }
+```
+
+ロード時は `nyash_box.toml` が優先参照され、OS差（.so/.dll/.dylib、libプリフィックス）は自動吸収されます。従来の `[libraries]` 設定も当面は後方互換で有効です。
 
 ### 4. **Test Your Plugin**
 ```bash

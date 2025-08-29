@@ -41,7 +41,7 @@ Phase 10.10 は完了（DoD確認済）。アーキテクチャ転回：JITは�
 
 ---
 
-## 2025-08-29 PM3 再起動スナップショット（Strict/分離確定版）
+## 2025-08-29 PM3 再起動スナップショット（Strict/分離・ネイティブ基盤固め・Python準備）
 
 ### 現在の着地（Strict準備済み）
 - InvokePolicy/Observe を導入し、Lowerer の分岐をスリム化
@@ -107,10 +107,18 @@ NYASH_JIT_EVENTS_PATH=jit_events.jsonl \
 ```
 
 ### これからの実装（優先順）
-1) 算術/比較 emit の穴埋め（Strictで落ちる箇所を優先）
-2) String RO の必要最小を policy に追加（過剰に増やさない）
-3) 追加サンプルは最小限（回帰用の小粒のみ）
-4) 必要に応じて Strict 診断のJSONイベントを最小追加（compile-fail時）
+1) ネイティブ基盤の仕上げ（10.5b）
+   - `tools/build_aot.{sh,ps1}` の導線統一、Windows clang/cl内蔵化の検討
+   - プラグイン解決の安定（拡張子変換/lib剥がし/検索パス/警告整備）
+2) プラグイン仕様分離（中央=nyash.toml / 各プラグイン=nyash_box.toml）
+   - Loaderが `plugins/<name>/nyash_box.toml` を読み、type_id/メソッドIDを反映
+   - 旧[libraries]も後方互換で維持（当面）
+3) Python統合（10.5c）
+   - PyRuntimeBox/PyObjectBox のRO経路（eval/import/getattr/call/str）をVM/EXEで安定
+   - autodecode/エラー伝搬の強化、WindowsでのDLL探索（PYTHONHOME/PATH）
+4) 観測・サンプル
+   - EXEの `Result:` 統一、VM/EXEスモークのGreen化
+   - 追加サンプルは最小限（回帰用の小粒のみ）
 
 ### 現在の達成状況（✅）
 - ✅ static box メソッドのMIR関数化に成功

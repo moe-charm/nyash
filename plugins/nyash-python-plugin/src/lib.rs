@@ -106,26 +106,35 @@ struct CPython {
 static CPY: Lazy<Mutex<Option<CPython>>> = Lazy::new(|| Mutex::new(None));
 
 fn try_load_cpython() -> Result<(), ()> {
-    let candidates = [
+    let mut candidates: Vec<String> = vec![
         // Linux/WSL common
-        "libpython3.12.so",
-        "libpython3.12.so.1.0",
-        "libpython3.11.so",
-        "libpython3.11.so.1.0",
-        "libpython3.10.so",
-        "libpython3.10.so.1.0",
-        "libpython3.9.so",
-        "libpython3.9.so.1.0",
+        "libpython3.12.so".into(),
+        "libpython3.12.so.1.0".into(),
+        "libpython3.11.so".into(),
+        "libpython3.11.so.1.0".into(),
+        "libpython3.10.so".into(),
+        "libpython3.10.so.1.0".into(),
+        "libpython3.9.so".into(),
+        "libpython3.9.so.1.0".into(),
         // macOS
-        "libpython3.12.dylib",
-        "libpython3.11.dylib",
-        "libpython3.10.dylib",
-        "libpython3.9.dylib",
-        // Windows (not targeted in 10.5b)
-        // "python312.dll", "python311.dll",
+        "libpython3.12.dylib".into(),
+        "libpython3.11.dylib".into(),
+        "libpython3.10.dylib".into(),
+        "libpython3.9.dylib".into(),
     ];
-    for name in candidates {
-        if let Ok(lib) = unsafe { Library::new(name) } {
+    // Windows DLLs (search via PATH / System32)
+    if cfg!(target_os = "windows") {
+        let dlls = ["python312.dll","python311.dll","python310.dll","python39.dll"];
+        for d in dlls.iter() { candidates.push((*d).into()); }
+        if let Ok(pyhome) = std::env::var("PYTHONHOME") {
+            for d in dlls.iter() {
+                let p = std::path::Path::new(&pyhome).join(d);
+                if p.exists() { candidates.push(p.to_string_lossy().to_string()); }
+            }
+        }
+    }
+    for name in candidates.into_iter() {
+        if let Ok(lib) = unsafe { Library::new(&name) } {
             unsafe {
                 let Py_Initialize = *lib.get::<unsafe extern "C" fn()>(b"Py_Initialize\0").map_err(|_| ())?;
                 let Py_Finalize = *lib.get::<unsafe extern "C" fn()>(b"Py_Finalize\0").map_err(|_| ())?;

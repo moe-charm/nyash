@@ -260,13 +260,33 @@ impl PluginBoxV2 {
     }
     
     /// Load all plugins from config
-        pub fn load_all_plugins(&self) -> BidResult<()> {
+    pub fn load_all_plugins(&self) -> BidResult<()> {
         let config = self.config.as_ref()
             .ok_or(BidError::PluginError)?;
         
+        // Load legacy libraries (backward compatible)
         for (lib_name, lib_def) in &config.libraries {
             if let Err(e) = self.load_plugin(lib_name, lib_def) {
                 eprintln!("Warning: Failed to load plugin {}: {:?}", lib_name, e);
+            }
+        }
+        // Load new-style plugins from [plugins] map (name -> root dir)
+        for (plugin_name, root) in &config.plugins {
+            // Synthesize a LibraryDefinition from plugin spec (nyash_box.toml) if present; otherwise minimal
+            let mut boxes: Vec<String> = Vec::new();
+            let spec_path = std::path::Path::new(root).join("nyash_box.toml");
+            if let Ok(txt) = std::fs::read_to_string(&spec_path) {
+                if let Ok(val) = txt.parse::<toml::Value>() {
+                    if let Some(prov) = val.get("provides").and_then(|t| t.get("boxes")).and_then(|a| a.as_array()) {
+                        for it in prov.iter() { if let Some(s) = it.as_str() { boxes.push(s.to_string()); } }
+                    }
+                }
+            }
+            // Path heuristic: use "<root>/<plugin_name>" (extension will be adapted by resolver)
+            let synth_path = std::path::Path::new(root).join(plugin_name).to_string_lossy().to_string();
+            let lib_def = LibraryDefinition { boxes: boxes.clone(), path: synth_path };
+            if let Err(e) = self.load_plugin(plugin_name, &lib_def) {
+                eprintln!("Warning: Failed to load plugin {} from [plugins]: {:?}", plugin_name, e);
             }
         }
         // Pre-birth singletons configured in nyash.toml

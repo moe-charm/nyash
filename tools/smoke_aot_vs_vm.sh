@@ -59,7 +59,7 @@ run_test() {
     # Run native executable
     echo -n "  Native execution... "
     if ./app > /tmp/${test_name}_aot.out 2>&1; then
-        AOT_RESULT=$(grep -oP 'ny_main\(\) returned: \K.*' /tmp/${test_name}_aot.out || echo "NO_RESULT")
+        AOT_RESULT=$(grep -oP '^Result: \K.*' /tmp/${test_name}_aot.out || echo "NO_RESULT")
         echo "OK (Result: $AOT_RESULT)"
     else
         echo -e "${RED}FAILED${NC}"
