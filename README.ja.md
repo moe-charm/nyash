@@ -1,319 +1,331 @@
 # 🐱 Nyash プログラミング言語
-**次世代ブラウザーネイティブ開発体験**
+**20日でゼロからネイティブバイナリへ - AI駆動の言語革命**
 
 *[🇺🇸 English Version / 英語版はこちら](README.md)*
 
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](#)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
-[![WebAssembly](https://img.shields.io/badge/WebAssembly-Ready-orange.svg)](#webassembly)
-[![Try Now](https://img.shields.io/badge/Try%20Now-Browser%20Playground-ff6b6b.svg)](https://moe-charm.github.io/nyash/projects/nyash-wasm/nyash_playground.html)
+[![Performance](https://img.shields.io/badge/Performance-13.5x%20高速化-ff6b6b.svg)](#performance)
+[![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20搭載-orange.svg)](#execution-modes)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
 
-## 🚀 **今すぐNyashを体験！**
+## 🚀 **速報: ネイティブEXE達成！**
 
-**インストール不要、設定不要 - ブラウザーを開くだけ！**
+**2025年8月29日** - 誕生からわずか20日で、Nyashがネイティブ実行ファイルへのコンパイルを実現！
 
-👉 **[🎮 Nyashブラウザープレイグラウンド起動](https://moe-charm.github.io/nyash/projects/nyash-wasm/nyash_playground.html)** 👈
-
-体験できる機能：
-- 🎨 **アーティスト協同制作デモ** - 複数Boxインスタンスの連携
-- ⚡ **非同期計算処理** - シンプルな並列処理
-- 🎮 **Canvas ゲームグラフィック** - ブラウザーでの直接グラフィック描画
-- 🔍 **ライブデバッグ可視化** - プログラムのメモリ状態をリアルタイム表示
-
----
-
-## ✨ **Nyashが革命を起こす理由**
-
-### 🎯 **メモリ安全性の革命**
-```nyash
-// 従来の言語: 手動メモリ管理、クラッシュ、セキュリティ問題
-// Nyash: Everything is Box - 自動的、安全、エレガント
-
-static box Main {
-    init { player, enemies, canvas }
-    
-    main() {
-        me.player = new PlayerBox("勇者", 100)
-        me.canvas = new WebCanvasBox("game", 800, 600)
-        
-        // メモリは自動管理 - クラッシュなし、メモリリークなし！
-        me.player.render(me.canvas)
-        return "ゲーム安全実行中！"
-    }
-}
-```
-
-### 🌐 **ブラウザーファースト設計**
-- **ゼロインストール**: WebAssembly経由でWebブラウザーで直接実行
-- **Web API内蔵**: Canvas、DOM、ストレージ - すべてが言語ネイティブ機能
-- **リアルタイム協業**: コードを即座に共有、どこでも実行
-- **モバイル対応**: スマートフォン、タブレット、すべての現代デバイスで動作
-
-### 🎨 **創作プログラミングが簡単に**
-```nyash
-// コードでアートを作る - 自然に！
-box Artist {
-    init { name, color }
-    
-    paintMasterpiece(canvas) {
-        canvas.fillCircle(100, 100, 50, me.color)
-        canvas.fillText("Art by " + me.name, 10, 200, "24px Arial", me.color)
-    }
-}
-
-// 複数のアーティストが協力
-picasso = new Artist("ピカソ", "red")
-monet = new Artist("モネ", "blue")
-// 各Boxが独自の状態と動作を維持！
-```
-
-### ⚡ **非同期処理の簡潔性**
-```nyash
-// 複雑さなしの並列処理
-nowait future1 = heavyComputation(10000)
-nowait future2 = renderGraphics()
-
-// 実行中に他の作業を...
-setupUI()
-
-// 準備ができたら結果を取得
-result1 = await future1
-result2 = await future2
-```
-
----
-
-## 🏗️ **革命的アーキテクチャ**
-
-### 例とスモーク（開発者向けクイック）
-- 代表例: `examples/README.md`（HH直実行・mutating opt-in・GCデモ）
-- スモーク実行: `bash tools/smoke_phase_10_10.sh`
-- JITイベント最小スキーマ: `docs/reference/jit/jit_events_json_v0_1.md`
-
-### Everything is Box 哲学
-Nyashのすべての値は **Box** - 統一された、メモリ安全なコンテナです：
-
-| 従来の言語 | Nyash |
-|-----------|-------|
-| `int x = 42;` | `x = new IntegerBox(42)` |
-| `string name = "Hello";` | `name = new StringBox("Hello")` |
-| 複雑なcanvas設定 | `canvas = new WebCanvasBox("game", 800, 600)` |
-| 手動メモリ管理 | 自動Boxライフサイクル管理 |
-
-### Static Box Main パターン
-```nyash
-// クリーンで予測可能なプログラム構造
-static box Main {
-    init { database, ui, gameState }  // すべてのフィールドを事前宣言
-    
-    main() {
-        // 論理的順序で初期化
-        me.database = new DatabaseBox("save.db")
-        me.ui = new UIManagerBox()
-        me.gameState = new GameStateBox()
-        
-        // プログラムロジックここに
-        return runGameLoop()
-    }
-}
-```
-
-### 視覚的デバッグ統合
-```nyash
-debug = new DebugBox()
-debug.startTracking()
-
-player = new PlayerBox("勇者")
-debug.trackBox(player, "メインキャラクター")
-
-// ブラウザーでリアルタイムメモリ可視化！
-print(debug.memoryReport())  // ライブ統計、デバッグ地獄なし
-```
-
----
-
-## 🎮 **創作コーディングに最適**
-
-### ゲーム開発
-- **内蔵Canvas API**: 外部ライブラリなしでグラフィック
-- **入力ハンドリング**: マウス、キーボード、タッチ - すべてネイティブ
-- **オーディオサポート**: 音楽と効果音用のSoundBox
-- **物理準備済み**: 数学演算最適化
-
-### 教育的プログラミング
-- **視覚的フィードバック**: コードの効果を即座に確認
-- **メモリ可視化**: プログラムの動作を理解
-- **設定バリアなし**: 学生はブラウザーで即座にコーディング
-- **段階的学習**: 簡単なスクリプトから複雑なアプリケーションまで
-
-### Webアプリケーション
-- **直接DOM制御**: WebDisplayBoxでHTML操作
-- **フレームワーク不要**: 言語がネイティブでWeb相互作用を処理
-- **リアルタイム更新**: 変更が即座に反映
-- **クロスプラットフォーム**: 同じコード、どこでも
-
----
-
-## 📖 **言語の特徴**
-
-### クリーンで表現力豊かな構文
-```nyash
-// 自然なオブジェクト指向プログラミング
-box Player {
-    init { name, health, inventory }
-    
-    Player(playerName) {
-        me.name = playerName
-        me.health = 100
-        me.inventory = new ArrayBox()
-    }
-    
-    takeDamage(amount) {
-        me.health = me.health - amount
-        if me.health <= 0 {
-            me.respawn()
-        }
-    }
-    
-    respawn() {
-        me.health = 100
-        print(me.name + " がリスポーンしました！")
-    }
-}
-```
-
-### 強力な演算子
-```nyash
-// 明確性のための自然言語演算子
-isAlive = health > 0 and not poisoned
-canCast = mana >= spellCost or hasItem("魔法の指輪")
-gameOver = playerDead or timeUp
-
-// 内蔵数学演算
-distance = sqrt((x2 - x1)^2 + (y2 - y1)^2)
-angle = atan2(deltaY, deltaX)
-```
-
-### ジェネリックプログラミング
-```nyash
-// 型安全なジェネリックコンテナ
-box Container<T> {
-    init { value }
-    
-    Container(item) { me.value = item }
-    getValue() { return me.value }
-}
-
-numbers = new Container<IntegerBox>(42)
-texts = new Container<StringBox>("こんにちは")
-```
-
----
-
-## 🛠️ **使い始める**
-
-### ブラウザー開発（推奨）
 ```bash
-# 1. リポジトリクローン
+# Nyashソースからネイティブバイナリへ
+./target/release/nyash --backend vm program.nyash  # JITコンパイル
+./tools/build_aot.sh program.nyash -o app         # ネイティブEXE
+./app                                              # スタンドアロン実行！
+```
+
+**20日間で達成したこと：**
+- ✅ インタープリター付き完全プログラミング言語
+- ✅ 13.5倍高速化を実現したVM
+- ✅ JITコンパイラ（Cranelift統合）
+- ✅ WebAssemblyサポート
+- ✅ プラグインシステム（C ABI）
+- ✅ ネイティブバイナリ生成
+- ✅ プラグイン経由のPython統合
+
+---
+
+## ✨ **なぜNyashなのか？**
+
+### 🎯 **Everything is Box 哲学**
+```nyash
+// 従来の言語は複雑な型システムを持つ
+// Nyash: 一つの概念がすべてを支配する - Box
+
+static box Main {
+    main() {
+        // すべての値はBox - 統一、安全、シンプル
+        local name = new StringBox("Nyash")
+        local count = new IntegerBox(42)
+        local data = new MapBox()
+        
+        // PythonオブジェクトもBox！
+        local py = new PyRuntimeBox()
+        local math = py.import("math")
+        print("sqrt(9) = " + math.getattr("sqrt").call(9).str())
+        
+        return 0
+    }
+}
+```
+
+### ⚡ **前例のない開発速度**
+- **1日目**: 基本インタープリター動作
+- **4日目**: すでにJIT計画開始
+- **13日目**: VMが13.5倍高速化達成
+- **20日目**: ネイティブ実行ファイル生成！
+
+### 🔌 **プラグインファースト・アーキテクチャ**
+```nyash
+// あらゆる機能がプラグインBoxになれる
+local file = new FileBox()          // ファイルI/Oプラグイン
+local http = new HttpClientBox()    // ネットワークプラグイン
+local py = new PyRuntimeBox()       // Pythonプラグイン
+
+// プラグインもネイティブコードにコンパイル！
+```
+
+---
+
+## 🏗️ **複数の実行モード**
+
+### 1. **インタープリターモード** （開発用）
+```bash
+./target/release/nyash program.nyash
+```
+- 即座に実行
+- 完全なデバッグ情報
+- 開発に最適
+
+### 2. **VMモード** （本番用）
+```bash
+./target/release/nyash --backend vm program.nyash
+```
+- インタープリターより13.5倍高速
+- 最適化されたバイトコード実行
+- 本番環境対応のパフォーマンス
+
+### 3. **JITモード** （高性能）
+```bash
+NYASH_JIT_EXEC=1 ./target/release/nyash --backend vm program.nyash
+```
+- Cranelift搭載JITコンパイル
+- ほぼネイティブ性能
+- ホット関数最適化
+
+### 4. **ネイティブバイナリ** （配布用）
+```bash
+./tools/build_aot.sh program.nyash -o myapp
+./myapp  # スタンドアロン実行！
+```
+- 依存関係ゼロ
+- 最高性能
+- 簡単配布
+
+### 5. **WebAssembly** （ブラウザ用）
+```bash
+./target/release/nyash --compile-wasm program.nyash
+```
+- ブラウザで実行
+- デフォルトでクロスプラットフォーム
+- Webファースト開発
+
+---
+
+## 📊 **パフォーマンスベンチマーク**
+
+実世界ベンチマーク結果 (ny_bench.nyash)：
+
+```
+モード           | 時間      | 相対速度
+----------------|-----------|---------------
+インタープリター | 110.10ms  | 1.0x (基準)
+VM              | 8.14ms    | 13.5倍高速
+VM + JIT        | 5.8ms     | 19.0倍高速
+ネイティブ      | ~4ms      | ~27倍高速
+```
+
+---
+
+## 🎮 **言語機能**
+
+### クリーンな構文
+```nyash
+box GameCharacter {
+    init { name, health, skills }
+    
+    // birthコンストラクタ - Boxに生命を与える！
+    birth(characterName) {
+        me.name = characterName
+        me.health = 100
+        me.skills = new ArrayBox()
+        print("🌟 " + characterName + " が誕生しました！")
+    }
+    
+    learnSkill(skill) {
+        me.skills.push(skill)
+        return me  // メソッドチェーン
+    }
+}
+
+// 使用例
+local hero = new GameCharacter("ネコ")
+hero.learnSkill("火魔法").learnSkill("回復")
+```
+
+### モダンなAsync/Await
+```nyash
+// シンプルな並行処理
+nowait task1 = fetchDataFromAPI()
+nowait task2 = processLocalFiles()
+
+// 待機中に他の作業
+updateUI()
+
+// 結果収集
+local apiData = await task1
+local files = await task2
+```
+
+### デリゲーションパターン
+```nyash
+// 継承よりコンポジション
+box EnhancedArray from ArrayBox {
+    init { logger }
+    
+    override push(item) {
+        me.logger.log("追加中: " + item)
+        from ArrayBox.push(item)  // 親に委譲
+    }
+}
+```
+
+---
+
+## 🔌 **プラグインシステム**
+
+Nyashは「Everything is Plugin」アーキテクチャを開拓：
+
+```toml
+# nyash.toml - プラグイン設定
+[libraries."libnyash_python_plugin.so"]
+boxes = ["PyRuntimeBox", "PyObjectBox"]
+
+[libraries."libnyash_net_plugin.so"]  
+boxes = ["HttpServerBox", "HttpClientBox", "WebSocketBox"]
+```
+
+C/Rustで独自のBox型を作成してシームレスに統合！
+
+---
+
+## 🛠️ **はじめる**
+
+### クイックインストール (Linux/Mac/WSL)
+```bash
+# クローンとビルド
 git clone https://github.com/moe-charm/nyash.git
 cd nyash
+cargo build --release --features cranelift-jit
 
-# 2. WebAssemblyバージョンビルド
-cd projects/nyash-wasm
-./build.sh
-
-# 3. ブラウザーでプレイグラウンドを開く
-# 任意の現代ブラウザーでnyash_playground.htmlを開く
+# 最初のプログラムを実行
+echo 'print("Hello Nyash!")' > hello.nyash
+./target/release/nyash hello.nyash
 ```
 
-### ネイティブ開発
-
-#### 🐧 Linux/WSL
+### Windows
 ```bash
-# ネイティブバージョンビルド
-cargo build --release
-
-# プログラムをローカルで実行
-./target/release/nyash program.nyash
-
-# 例を試す
-./target/release/nyash test_async_demo.nyash
-./target/release/nyash app_dice_rpg.nyash
-```
-
-#### 🪟 Windows版 (クロスコンパイル)
-```bash
-# クロスコンパイラーインストール
+# Windows向けクロスコンパイル
 cargo install cargo-xwin
-
-# Windows実行ファイルビルド
 cargo xwin build --target x86_64-pc-windows-msvc --release
-
-# 生成された実行ファイル (916KB)
-target/x86_64-pc-windows-msvc/release/nyash.exe
+# target/x86_64-pc-windows-msvc/release/nyash.exe を使用
 ```
 
 ---
 
-## 🎯 **対象ユーザー**
+## 🌟 **独自のイノベーション**
 
-- 🎨 **クリエイター**: アーティスト、ゲーム開発者
-- 🎓 **教育者**: プログラミング講師、学生
-- 🌐 **Web開発者**: インタラクティブコンテンツ制作者
-- 🔬 **研究者**: 新しいプログラミングパラダイムの探求者
+### 1. **AI駆動開発**
+- Claude、ChatGPT、Codexの協力で開発
+- コンセプトからネイティブコンパイルまで20日間の旅
+- AIが言語開発を30倍加速できることを証明
+
+### 2. **Box-Firstアーキテクチャ**
+- すべての最適化がBox抽象を保持
+- プラグインもBox、JITもBoxを保持、ネイティブコードもBoxを尊重
+- すべての実行モードで前例のない一貫性
+
+### 3. **観測可能な設計**
+- 組み込みのデバッグとプロファイリング
+- JITコンパイルのJSONイベントストリーム
+- 最適化のDOTグラフ可視化
+
+---
+
+## 📚 **例**
+
+### Python統合
+```nyash
+// NyashからPythonライブラリを使用！
+local py = new PyRuntimeBox()
+local np = py.import("numpy")
+local array = np.getattr("array").call([1, 2, 3])
+print("NumPy配列: " + array.str())
+```
+
+### Webサーバー
+```nyash
+local server = new HttpServerBox()
+server.start(8080)
+
+loop(true) {
+    local request = server.accept()
+    local response = new HttpResponseBox()
+    response.setStatus(200)
+    response.write("Nyashからこんにちは！")
+    request.respond(response)
+}
+```
+
+### ゲーム開発
+```nyash
+box GameObject {
+    init { x, y, sprite }
+    
+    update(deltaTime) {
+        // 物理シミュレーション
+        me.y = me.y + gravity * deltaTime
+    }
+    
+    render(canvas) {
+        canvas.drawImage(me.sprite, me.x, me.y)
+    }
+}
+```
 
 ---
 
 ## 🤝 **貢献**
 
-Nyashはオープンソースで、貢献を歓迎しています！
-
-- **Issues**: バグ報告、機能リクエスト
-- **Pull Requests**: コード改善、新しい例
-- **ドキュメント**: ガイドと例の改善支援
-- **コミュニティ**: Nyash作品を共有！
+革命に参加しよう！以下を歓迎します：
+- 🐛 バグ報告と修正
+- ✨ プラグイン経由の新しいBox型
+- 📚 ドキュメントの改善
+- 🎮 クールなサンプルプログラム
 
 ## 📄 **ライセンス**
 
-MIT ライセンス - 個人および商用利用無料。
+MIT ライセンス - プロジェクトで自由に使用してください！
 
 ---
-
-## 🔗 **リンク**
-
-- **[🎮 今すぐ試す - ブラウザープレイグラウンド](https://moe-charm.github.io/nyash/projects/nyash-wasm/nyash_playground.html)**
-- **[📚 ドキュメント](docs/)**
-- **[🎯 例](examples/)**
-- **[💬 コミュニティディスカッション](https://github.com/moe-charm/nyash/discussions)**
 
 ## 👨‍💻 **作者**
 
-**Moe Charm** - プログラミング言語デザイナー・開発者
-- 🐙 GitHub: [@moe-charm](https://github.com/moe-charm)  
-- 🐦 Twitter/X: [@CharmNexusCore](https://x.com/CharmNexusCore)
-- ☕ 開発サポート: [coff.ee/moecharmde6](http://coff.ee/moecharmde6)
-
-*AI支援と献身的開発で革新的プログラミング言語を創造 🤖*
+**Tomoaki** - 言語設計者＆革命家
+- 🐱 GitHub: [@moe-charm](https://github.com/moe-charm)
+- 🌟 協力: Claude、ChatGPT、Codexとのコラボレーション
 
 ---
 
-## 🤖 **プロジェクトのサポート**
+## 🎉 **歴史的タイムライン**
 
-Nyashは最先端のAI協業で開発されています！
+- **2025年8月9日**: 最初のコミット - "Hello Nyash!"
+- **2025年8月13日**: JIT計画開始（4日目！）
+- **2025年8月20日**: VMが13.5倍性能達成
+- **2025年8月29日**: ネイティブEXEコンパイル実現！
 
-継続的な開発をサポートしたい場合：
-
-**☕ [開発サポート](http://coff.ee/moecharmde6)** - イノベーションの燃料を！
-
-*Claude Code による支援 - 高度なAI開発ツールは無料ではありません！ 🤖*
-
-あなたのサポートはプロジェクトの維持、新機能の開発、プログラミング言語設計の境界を押し広げることに役立ちます。すべての貢献が違いを生みます！ 🙏
+*ゼロからネイティブバイナリまで20日間 - 言語開発の新記録！*
 
 ---
 
-*❤️、🤖 Claude Code、そしてEverything is Box哲学で構築*
+**🚀 Nyash - すべてがBoxであり、Boxがネイティブコードにコンパイルされる場所！**
 
-**Nyash - すべての値がBoxであり、すべてのBoxが物語を語る場所。**
+*❤️、🤖 AIコラボレーション、そしてプログラミング言語は思考の速度で作れるという信念で構築*
