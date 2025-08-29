@@ -187,3 +187,28 @@ charCodeAt = { method_id = 3, args = ["index"] }
 concat     = { method_id = 4, args = ["other"] }
 fromUtf8   = { method_id = 5, args = ["data"] }
 fini       = { method_id = 4294967295 }
+
+# Python plugin (Phase 10.5 – Embedding & FFI, initial scaffold)
+[libraries."libnyash_python_plugin.so"]
+boxes = ["PyRuntimeBox", "PyObjectBox"]
+path = "./plugins/nyash-python-plugin/target/release/libnyash_python_plugin.so"
+
+[libraries."libnyash_python_plugin.so".PyRuntimeBox]
+type_id = 40
+
+[libraries."libnyash_python_plugin.so".PyRuntimeBox.methods]
+birth  = { method_id = 0 }
+eval   = { method_id = 1, args = ["code"] }
+import = { method_id = 2, args = ["name"] }
+fini   = { method_id = 4294967295 }
+
+[libraries."libnyash_python_plugin.so".PyObjectBox]
+type_id = 41
+
+[libraries."libnyash_python_plugin.so".PyObjectBox.methods]
+birth   = { method_id = 0 }
+getattr = { method_id = 1, args = ["name"] }
+call    = { method_id = 2, args = ["args"] }
+callKw  = { method_id = 5 }
+str     = { method_id = 3 }
+fini    = { method_id = 4294967295 }

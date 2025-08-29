@@ -54,7 +54,6 @@ pub extern "C" fn nyash_plugin_invoke3_i64(
 // ---- Handle-based birth shims for AOT/JIT object linkage ----
 // These resolve symbols like "nyash.string.birth_h" referenced by ObjectModule.
 
-#[no_mangle]
 #[export_name = "nyash.string.birth_h"]
 pub extern "C" fn nyash_string_birth_h_export() -> i64 {
     // Create a new StringBox via unified plugin host; return runtime handle as i64
@@ -68,7 +67,6 @@ pub extern "C" fn nyash_string_birth_h_export() -> i64 {
     0
 }
 
-#[no_mangle]
 #[export_name = "nyash.integer.birth_h"]
 pub extern "C" fn nyash_integer_birth_h_export() -> i64 {
     if let Ok(host_g) = nyash_rust::runtime::get_global_plugin_host().read() {
@@ -84,11 +82,25 @@ pub extern "C" fn nyash_integer_birth_h_export() -> i64 {
 // ---- Process entry (driver) ----
 #[no_mangle]
 pub extern "C" fn main() -> i32 {
-    // Initialize plugin host from nyash.toml (if present)
-    let _ = nyash_rust::runtime::init_global_plugin_host("nyash.toml");
+    // Initialize plugin host: prefer nyash.toml next to the executable; fallback to CWD
+    let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
+    let mut inited = false;
+    if let Some(dir) = &exe_dir {
+        let candidate = dir.join("nyash.toml");
+        if candidate.exists() {
+            let _ = nyash_rust::runtime::init_global_plugin_host(candidate.to_string_lossy().as_ref());
+            inited = true;
+        }
+    }
+    if !inited {
+        let _ = nyash_rust::runtime::init_global_plugin_host("nyash.toml");
+    }
     // Optional verbosity
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-        println!("🔌 nyrt: plugin host init attempted");
+        println!("🔌 nyrt: plugin host init attempted (exe_dir={}, cwd={})",
+            exe_dir.as_ref().map(|p| p.display().to_string()).unwrap_or_else(||"?".into()),
+            std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_else(|_|"?".into())
+        );
     }
     // Call exported Nyash entry if linked: `ny_main` (i64 -> return code normalized)
     unsafe {

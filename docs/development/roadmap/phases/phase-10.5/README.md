@@ -1,80 +1,60 @@
-# Phase 10.5 - PythonParserBox実装
-*(旧Phase 10.1 - プラグインBox統一化の発見により番号変更)*
+# Phase 10.5 – Python ネイティブ統合（Embedding & FFI）
+*(旧10.1の一部を後段フェーズに再編。Everything is Plugin/AOTの基盤上で実現)*
 
-見ただけで実装手順が分かる！順番通りに進めてください。
+NyashとPythonを双方向に“ネイティブ”接続する。第一段はNyash→Python呼び出し（Embedding）、続いてPython→Nyash（Extending）。JIT/AOT/Pluginの統一面を活かし、最小のC ABIで着地する。
 
-## 📂 サブフェーズ構成（順番に実行）
+## 📂 サブフェーズ構成（10.5a → 10.5e）
 
-### 📋 Phase 10.1a - 計画と設計
-最初にここから！全体像を理解する。
-- 統合実装計画を読む
-- エキスパート評価を確認
-- 5つの核心戦略を把握
+### 10.5a 設計・ABI整合（1–2日）
+- ルート選択: 
+  - Embedding: NyashプロセスにCPythonを埋め込み、PyObject*をハンドル管理
+  - Extending: Python拡張モジュール（nyashrt）を提供し、PythonからNyashを呼ぶ
+- ABI方針:
+  - ハンドル: TLV tag=8（type_id+instance_id）。Pythonオブジェクトは `PyObjectBox` として格納
+  - 変換: Nyash ⇄ Python で Bool/I64/String/Bytes/Handle を相互変換
+  - GIL: birth/invoke/decRef中はGIL確保。AOTでも同等
 
-### ⚙️ Phase 10.1b - 環境設定
-開発環境を整える。
-- Python 3.11.9をインストール
-- Cargo.tomlに依存関係追加
-- ディレクトリ構造準備
+### 10.5b PyRuntimeBox / PyObjectBox 実装（3–5日）
+- `PyRuntimeBox`（シングルトン）: `eval(code) -> Handle` / `import(name) -> Handle`
+- `PyObjectBox`: `getattr(name) -> Handle` / `call(args...) -> Handle` / `str() -> String`
+- 参照管理: `Py_INCREF`/`Py_DECREF` をBoxライフサイクル（fini）に接続
+- プラグイン化: `nyash-python-plugin`（cdylib/staticlib）で `nyplug_python_invoke` を提供（将来の静的同梱に対応）
 
-### 🔧 Phase 10.1c - パーサー統合
-CPythonパーサーをNyashに統合。
-- PythonParserBox実装
-- GIL管理の実装
-- JSON中間表現への変換
+### 10.5c 境界の双方向化（3–5日）
+- Nyash→Python: BoxCall→plugin_invokeでCPython C-APIに橋渡し
+- Python→Nyash: `nyashrt`（CPython拡張）で `nyash.call(func, args)` を提供
+- エラーハンドリング: 例外は文字列化（tag=6）でNyashに返却、またはResult化
 
-### 💻 Phase 10.1d - Core実装
-基本的なPython構文の変換。
-- Phase 1機能（def/if/for/while）
-- 意味論の正確な実装
-- 70%コンパイル率達成
+### 10.5d JIT/AOT 統合（3–5日）
+- JIT: `emit_plugin_invoke` で Pythonメソッド呼びを許可（ROから開始）
+- AOT: libnyrt.a に `nyash.python.*` シム（birth_hなど）を追加し、ObjectModuleの未解決を解決
+- 静的同梱経路: `nyrt` に type_id→`nyplug_python_invoke` ディスパッチテーブルを実装（または各プラグイン名ごとのルータ）。第一段は動的ロード優先
 
-### 🔄 Phase 10.1e - トランスパイラー
-Python→Nyashソース変換。
-- AST→Nyashソース生成
-- フォーマッター実装
-- コマンドラインツール
+### 10.5e サンプル/テスト/ドキュメント（1週間）
+- サンプル: `py.eval("'hello' * 3").str()`、`numpy`の軽量ケース（import/shape参照などRO中心）
+- テスト: GILの再入・参照カウントリーク検知・例外伝搬・多プラットフォーム
+- ドキュメント: 使用例、制約（GIL/スレッド）、AOT時のリンク・ランタイム要件
 
-### 🧪 Phase 10.1f - テスト
-Differential Testingでバグ発見。
-- CPython vs Nyash比較
-- ベンチマーク実行
-- バグ修正とCI統合
+## 🎯 DoD（定義）
+- NyashからPythonコードを評価し、PyObjectをHandleで往復できる
+- 代表的なプロパティ取得/呼び出し（RO）がJIT/VMで動作
+- AOTリンク後のEXEで `py.eval()` 代表例が起動できる（動的ロード前提）
 
-### 📚 Phase 10.1g - ドキュメント
-使い方を文書化してリリース。
-- ユーザーガイド作成
-- APIリファレンス
-- サンプルプロジェクト
+## ⌛ 目安
+| サブフェーズ | 目安 |
+|---|---|
+| 10.5a 設計 | 1–2日 |
+| 10.5b 実装 | 3–5日 |
+| 10.5c 双方向 | 3–5日 |
+| 10.5d JIT/AOT | 3–5日 |
+| 10.5e 仕上げ | 1週間 |
 
-## 🎯 各フェーズの目安時間
-
-| フェーズ | 内容 | 目安時間 |
-|---------|------|----------|
-| 10.1a | 計画理解 | 2-3時間 |
-| 10.1b | 環境設定 | 1-2時間 |
-| 10.1c | パーサー統合 | 3-5日 |
-| 10.1d | Core実装 | 1-2週間 |
-| 10.1e | トランスパイラー | 3-5日 |
-| 10.1f | テスト | 1週間 |
-| 10.1g | ドキュメント | 3-5日 |
-
-**合計**: 約1ヶ月
-
-## 🌟 最終目標
-
-- **70%以上**の関数がコンパイル可能
-- **2-10倍**の性能向上
-- **10件以上**のNyashバグ発見
-- **実用的な**Python→Nyash移行ツール
-
-## 💡 Tips
-
-- 各フェーズのREADME.mdを必ず読む
-- 完了条件をチェックしながら進める
-- テレメトリーで進捗を確認
-- 困ったらarchive/の資料も参照
+## ⚠️ リスクと対策
+- GILデッドロック: 入口/出口で厳格に確保/解放。ネスト呼び出しの方針を文書化
+- 参照カウント漏れ: BoxライフサイクルでDECREFを必ず実施、リークテストを追加
+- リンク/配布: Linux/macOS優先。WindowsのPythonリンクは後段で対応
+- 性能: RO先行でJITに寄せ、ミューテーションはポリシー制御
 
 ---
 
-**さあ、Phase 10.1a から始めましょう！**
+次は 10.5a（設計・ABI整合）から着手。Everything is Plugin / libnyrt シムの成功パターンをPythonにも適用し、最小リスクで“Pythonネイティブ”を実現する。

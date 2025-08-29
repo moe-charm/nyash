@@ -466,6 +466,34 @@ impl PluginBoxV2 {
                         crate::runtime::plugin_ffi_common::encode::i32(&mut buf, v);
                         continue;
                     }
+                    // Bool
+                    if let Some(b) = a.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                        eprintln!("[PluginLoaderV2]  arg[{}]: Bool({}) -> Bool(tag=1)", idx, b.value);
+                        crate::runtime::plugin_ffi_common::encode::bool(&mut buf, b.value);
+                        continue;
+                    }
+                    // Float (F64)
+                    if let Some(f) = a.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                        eprintln!("[PluginLoaderV2]  arg[{}]: Float({}) -> F64(tag=5)", idx, f.value);
+                        crate::runtime::plugin_ffi_common::encode::f64(&mut buf, f.value);
+                        continue;
+                    }
+                    // Bytes from Array<uint8>
+                    if let Some(arr) = a.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        let items = arr.items.read().unwrap();
+                        let mut tmp = Vec::with_capacity(items.len());
+                        let mut ok = true;
+                        for item in items.iter() {
+                            if let Some(intb) = item.as_any().downcast_ref::<IntegerBox>() {
+                                if intb.value >= 0 && intb.value <= 255 { tmp.push(intb.value as u8); } else { ok = false; break; }
+                            } else { ok = false; break; }
+                        }
+                        if ok {
+                            eprintln!("[PluginLoaderV2]  arg[{}]: Array<uint8>[{}] -> Bytes(tag=7)", idx, tmp.len());
+                            crate::runtime::plugin_ffi_common::encode::bytes(&mut buf, &tmp);
+                            continue;
+                        }
+                    }
                     // String: tag=6
                     if let Some(s) = a.as_any().downcast_ref::<StringBox>() {
                         eprintln!("[PluginLoaderV2]  arg[{}]: String(len={}) -> String(tag=6)", idx, s.value.len());

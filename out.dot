@@ -1,4 +1,0 @@
-digraph "Helper.getv/2" {
-  node [shape=box, fontsize=10];
-  n2 [label="bb2\nENTRY"];
-}

@@ -28,7 +28,9 @@ dist/
 
 # Rust
 /target/
+**/target/
 Cargo.lock
+plugins/**/Cargo.lock
 
 # 🔧 Rust開発用ディレクトリ（Git追跡除外）
 nyash-rust/
@@ -90,6 +92,8 @@ current_task
 *.log
 debug_output.txt
 stats_output.txt
+*.jsonl
+*.dot
 
 # LLVM
 *.ll

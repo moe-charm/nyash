@@ -1171,10 +1171,22 @@ impl VM {
             if method == "toString" {
                 return Ok(Box::new(StringBox::new(format!("{}(id={})", plugin_box.box_type, plugin_box.inner.instance_id))));
             }
-            
-            // Other plugin methods should be called via BoxCall instruction
-            // This path shouldn't normally be reached for plugin methods
-            eprintln!("Warning: Plugin method '{}' called via call_box_method - should use BoxCall", method);
+
+            // Name-based fallback: delegate to unified PluginHost to invoke by (box_type, method)
+            // This preserves existing semantics but actually performs the plugin call instead of no-op.
+            let host = crate::runtime::get_global_plugin_host();
+            if let Ok(h) = host.read() {
+                // Prepare args as NyashBox list; they are already Box<dyn NyashBox>
+                let nyash_args: Vec<Box<dyn NyashBox>> = _args.into_iter().map(|b| b).collect();
+                match h.invoke_instance_method(&plugin_box.box_type, method, plugin_box.inner.instance_id, &nyash_args) {
+                    Ok(Some(ret)) => return Ok(ret),
+                    Ok(None) => return Ok(Box::new(VoidBox::new())),
+                    Err(e) => {
+                        eprintln!("[VM] Plugin invoke error: {}.{} -> {}", plugin_box.box_type, method, e.message());
+                        return Ok(Box::new(VoidBox::new()));
+                    }
+                }
+            }
             return Ok(Box::new(VoidBox::new()));
         }
         

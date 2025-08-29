@@ -1,0 +1,22 @@
+// Python plugin demo: import math, getattr sqrt, call(9), str()
+// Build plugin:
+//   (cd plugins/nyash-python-plugin && cargo build --release)
+// Run:
+//   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_math_sqrt_demo.nyash
+
+static box Main {
+  init { console }
+  
+  main() {
+    me.console = new ConsoleBox()
+    
+    local py, m, f, r
+    py = new PyRuntimeBox()
+    m = py.import("math")
+    f = m.getattr("sqrt")
+    r = f.call(9)
+    print("sqrt(9) = " + r.str())
+    return 0
+  }
+}
+

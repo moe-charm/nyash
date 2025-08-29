@@ -420,7 +420,7 @@ impl IRBuilder for CraneliftBuilder {
 
         // Clear context for next compilation and finalize definitions
         self.module.clear_context(&mut self.ctx);
-        self.module.finalize_definitions();
+        let _ = self.module.finalize_definitions();
 
         // Get finalized code pointer and wrap into a safe closure
         let code = self.module.get_finalized_function(func_id);
