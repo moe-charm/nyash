@@ -1,21 +1,29 @@
-# Phase 10.5 – Python ネイティブ統合（Embedding & FFI）/ JIT Strict 化の前倒し
+# Phase 10.5 – Python ネイティブ統合（Embedding & FFI）/ JIT分離（EXE専用化）
 *(旧10.1の一部を後段フェーズに再編。Everything is Plugin/AOTの基盤上で実現)*
 
-NyashとPythonを双方向に“ネイティブ”接続する前に、JITの開発・検証効率を最大化するため、VM=仕様/JIT=高速実装 という原則に沿った「JIT Strict モード」を前倒し導入し、フォールバック起因の複雑性を排除する。
+本フェーズでは方針を明確化する：実行はVMが唯一の基準系、JITは「EXE/AOT生成専用のコンパイラ」として分離運用する。
+
+アーキテクチャの整理（決定）
+- 開発/デバッグ: MIR → VM（完全実行）
+- 本番/配布:     MIR → JIT（CLIF）→ OBJ → EXE（完全コンパイル）
+
+ポイント
+- フォールバック不要/禁止: JITが未対応ならコンパイルエラー。VMへは落とさない。
+- 役割分担の明確化: VM=仕様/挙動の唯一の基準、JIT=ネイティブ生成器。
+- プラグイン整合: VM/EXEとも同一のBID/FFIプラグインを利用（Everything is Plugin）。
 
 ## 📂 サブフェーズ構成（10.5a → 10.5e）
 
 先行タスク（最優先）
-- 10.5s JIT Strict モード導入（Fail-Fast / ノーフォールバック）
-  - 目的: 「VMで動く＝正。JITで動かない＝JITのバグ」を可視化、開発ループを短縮
+- 10.5s JIT Strict/分離の確定（Fail-Fast / ノーフォールバック）
+  - 目的: 「VM=実行・JIT=コンパイル」の二系統で混在を排除し、検証を単純化
   - 仕様:
-    - // @jit-strict または NYASH_JIT_STRICT=1 で有効化
-    - Lowerer: unsupported>0 の場合はコンパイルを中止（診断を返す）
-    - 実行: JIT_ONLY と併用時はフォールバック禁止（失敗は明示エラー）
-    - シム: 受け手解決は HandleRegistry 優先。param-index 互換経路は無効化
+    - JITは実行経路から外し、`--compile-native`（AOT）でのみ使用
+    - Lowerer/Engine: unsupported>0 または fallback判定>0 でコンパイル中止（Fail-Fast）
+    - 実行: VMのみ。フォールバックという概念自体を削除
   - DoD:
-    - Array/Map の代表ケースで Strict 実行時に compile/runtime/シムイベントの整合が取れる
-    - VM=JIT の差が発生したときに即座に落ち、原因特定がしやすい（フォールバックに逃げない）
+    - CLIに `--compile-native` を追加し、OBJ/EXE生成が一発で通る
+    - VM実行は常にVMのみ（JITディスパッチ既定OFF）。
 
 ### 10.5a 設計・ABI整合（1–2日）
 - ルート選択: 
@@ -38,9 +46,10 @@ NyashとPythonを双方向に“ネイティブ”接続する前に、JITの開
 - エラーハンドリング: 例外は文字列化（tag=6）でNyashに返却、またはResult化
 
 ### 10.5d JIT/AOT 統合（3–5日）
-- JIT: `emit_plugin_invoke` で Pythonメソッド呼びを許可（ROから開始）
-- AOT: libnyrt.a に `nyash.python.*` シム（birth_hなど）を追加し、ObjectModuleの未解決を解決
-- 静的同梱経路: `nyrt` に type_id→`nyplug_python_invoke` ディスパッチテーブルを実装（または各プラグイン名ごとのルータ）。第一段は動的ロード優先
+- AOTパイプライン固定: Lower→CLIF→OBJ出力→`ny_main`+`libnyrt.a`リンク→EXE
+- CLI: `nyash --compile-native file.nyash -o app` を追加（失敗は非ゼロ終了）
+- libnyrt: `nyash.python.*` 等のシムを提供し、未解決シンボル解決
+- ディスパッチ: type_id→`nyplug_*_invoke` の静的/動的ルート（第一段は動的優先）
 
 ### 10.5e サンプル/テスト/ドキュメント（1週間）
 - サンプル: `py.eval("'hello' * 3").str()`、`numpy`の軽量ケース（import/shape参照などRO中心）

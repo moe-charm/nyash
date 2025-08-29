@@ -1,6 +1,6 @@
-# 🎯 CURRENT TASK - 2025-08-29（Phase 10.1 革新的転換）
+# 🎯 CURRENT TASK - 2025-08-29（Phase 10.5 転回：JIT分離=EXE専用）
 
-Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグインシステムを活用したJIT→EXE実現の道を発見！
+Phase 10.10 は完了（DoD確認済）。アーキテクチャ転回：JITは「EXE/AOT生成専用コンパイラ」、実行はVM一本に統一。
 
 ## 🚀 革新的発見：プラグインBox統一化
 
@@ -41,7 +41,7 @@ Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグイン�
 
 ---
 
-## 2025-08-29 PM3 再起動スナップショット（Strict前倒し版）
+## 2025-08-29 PM3 再起動スナップショット（Strict/分離確定版）
 
 ### 現在の着地（Strict準備済み）
 - InvokePolicy/Observe を導入し、Lowerer の分岐をスリム化
@@ -57,13 +57,13 @@ Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグイン�
 - 特殊コメント（最小）
   - `// @env KEY=VALUE`, `// @jit-debug`, `// @plugin-builtins`, `// @jit-strict`
 
-### Strict モード（Fail-Fast / ノーフォールバック）
-- 目的: 「VM=仕様 / JIT=高速実装」。JITで動かない＝JITのバグを即可視化
-- 有効化: `// @jit-strict`（または `NYASH_JIT_STRICT=1`）
+### Strict/分離（Fail-Fast / ノーフォールバック）
+- 目的: 「VM=仕様 / JIT=コンパイル」。JITで未対応/フォールバックがあれば即コンパイル失敗
+- 有効化: 実行はVM固定、JITは `--compile-native`（AOT）でのみ使用
 - 仕様（現状）
-  - Lowerer/Engine: unsupported>0 がある関数はコンパイル中止（fail-fast）
-  - 実行: `NYASH_JIT_ONLY=1` と併用でフォールバック禁止（エラー）
-  - シム: 受け手解決は HandleRegistry 優先（`NYASH_JIT_ARGS_HANDLE_ONLY=1` 自動ON）
+  - Lowerer/Engine: unsupported>0 または compile-phase fallback>0 でコンパイル中止
+  - 実行: JITディスパッチ既定OFF（VMのみ）。StrictはJITを常時JIT-only/handle-only相当で動かす
+  - シム: 受け手解決は HandleRegistry 優先（`NYASH_JIT_ARGS_HANDLE_ONLY=1`）
 
 ### 再起動チェックリスト
 - Build（Cranelift有効）: `cargo build --release -j32 --features cranelift-jit`
@@ -164,17 +164,19 @@ cat jit_events.jsonl
 - InvokePolicyPass（新規）: `src/jit/policy/invoke.rs` — plugin/hostcall/ANY の経路選択を一元化（Lowerer から分離）
 - Observe（新規）: `src/jit/observe.rs` — compile/runtime/trace 出力の統一（ガード/出力先/JSONスキーマ）
 
-### 今後のToDo（優先度順）
-1) InvokePolicyPass の導入
-   - 目的: Lowerer 内の分岐を薄くし、経路選択を一箇所に固定（read-only/allowlist/ANY fallbackを明確化）
-   - DoD: length()/push/get/set の経路が policy 設定で一意に決まる（compile/runtimeのイベント差異が「設定」由来で説明可能）
-2) Observe の導入
-   - 目的: runtime/trace の出力有無を一箇所で制御、`NYASH_JIT_EVENTS(_COMPILE/_RUNTIME)` の挙動を統一
-   - DoD: `NYASH_JIT_EVENTS=1` で compile/runtime が必ず出る。PATH 指定時はJSONLに確実追記
-3) String/Array の誤ラベル最終解消
-   - 型不明時は `Any.length` としてcompile-phaseに出す／または plugin_invoke の type_id を runtime で必ず記録
-4) f64戻り/ハンドル返却（tag=8）の仕上げ
-   - `NYASH_JIT_PLUGIN_F64` なしの自動選択、handle返却シムの導入（tag=8）
+### 今後のToDo（優先度順：分離/AOT）
+1) 実行モード分離（CLI/Runner）
+   - 目的: `nyash file.nyash` は常にVM実行。`--compile-native -o app` でEXE生成。
+   - DoD: VM内のJITディスパッチは既定OFF。StrictはJIT=AOTで常時Fail-Fast。
+2) AOTパイプライン確立（obj→exe）
+   - 目的: Lower→CLIF→OBJ→`ny_main`+`libnyrt.a`リンクの一発通し
+   - DoD: `tools/build_aot.sh` の内製依存をCLIサブコマンド化。Windows/macOSは後段。
+3) AOT箱の追加
+   - AotConfigBox: 出力先/ターゲット/リンクフラグ/プラグイン探索を管理し、apply()でenv同期
+   - AotCompilerBox: `compile(file, out)` でOBJ/EXEを生成、events/結果文字列を返す
+4) 観測の統一
+   - 目的: `NYASH_JIT_EVENTS=1` で compile/runtime が必ず出力。PATH指定はJSONL追記
+   - DoD: `jit::observe` 経由へ集約
 
 ### 受け入れ条件（DoD）
 - compile-phase: `plugin:*` のイベントが関数ごとに安定
@@ -192,10 +194,10 @@ cat jit_events.jsonl
   - GC Switchable Runtime（GcConfigBox）/ Unified Debug（DebugConfigBox）
   - JitPolicyBox（allowlist/presets）/ HostCallのRO運用（events連携）
   - CIスモーク導入（runtime/compile-events）/ 代表サンプル整備
-- 🔧 Doing（Phase 10.1 新計画）
-  - NewBox→birthのJIT lowering（String/Integer、handleベース）
-  - AOT最小EXE: libnyrt.aシム + ny_main ドライバ + build_aot.sh 整備
-  - リファクタリング作業は継続（core_hostcall.rs完了）
+- 🔧 Doing（Phase 10.5 分離/AOT）
+  - VM実行の既定固定（JITディスパッチは既定OFF）
+  - AOT最小EXE: libnyrt.aシム + ny_main ドライバ + build_aot.sh → CLI化
+  - リファクタリング継続（core_hostcall.rs→observe/policy統合）
 - ⏭️ Next（Phase 10.1 実装）
   - Week1: 主要ビルトインBoxの移行（RO中心）
   - Week2: 静的同梱基盤の設計（type_id→nyplug_*_invoke ディスパッチ）

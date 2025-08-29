@@ -26,10 +26,10 @@ No installation needed - experience Nyash instantly in your web browser!
 **August 29, 2025** - Just 20 days after inception, Nyash can now compile to native executables!
 
 ```bash
-# From Nyash source to native binary
-./target/release/nyash --backend vm program.nyash  # JIT compilation
+# From Nyash source to native binary (Cranelift required)
+cargo build --release --features cranelift-jit
 ./tools/build_aot.sh program.nyash -o app         # Native EXE
-./app                                              # Standalone execution!
+./app                                             # Standalone execution!
 ```
 
 **What we achieved in 20 days:**
@@ -113,6 +113,9 @@ NYASH_JIT_EXEC=1 ./target/release/nyash --backend vm program.nyash
 
 ### 4. **Native Binary** (Distribution)
 ```bash
+# Build once (Cranelift)
+cargo build --release --features cranelift-jit
+
 ./tools/build_aot.sh program.nyash -o myapp
 ./myapp  # Standalone executable!
 ```
@@ -120,8 +123,14 @@ NYASH_JIT_EXEC=1 ./target/release/nyash --backend vm program.nyash
 - Maximum performance
 - Easy distribution
 
+Quick smoke test (VM vs EXE):
+```bash
+tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
+```
+
 ### 5. **WebAssembly** (Browser)
 ```bash
+cargo build --release --features wasm-backend
 ./target/release/nyash --compile-wasm program.nyash
 ```
 - Run in browsers
@@ -237,6 +246,11 @@ echo 'print("Hello Nyash!")' > hello.nyash
 cargo install cargo-xwin
 cargo xwin build --target x86_64-pc-windows-msvc --release
 # Use target/x86_64-pc-windows-msvc/release/nyash.exe
+
+# Native EXE (AOT) on Windows (requires Cranelift and MSYS2/WSL toolchain for linking)
+cargo build --release --features cranelift-jit
+powershell -ExecutionPolicy Bypass -File tools\build_aot.ps1 -Input examples\aot_min_string_len.nyash -Out app.exe
+./app.exe
 ```
 
 ---

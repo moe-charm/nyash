@@ -141,13 +141,15 @@ python3 -m http.server 8010
 - **Rust→WASM**: Nyashインタープリター自体をブラウザで動かす（フル機能）
 - **Nyash→WASM**: Nyashプログラムを単体WASMに変換（限定機能）
 
-#### 3️⃣ **Nyash→AOT/Native（将来実装予定）**
+#### 3️⃣ **Nyash→AOT/Native（Cranelift必要）**
 ```bash
 # NyashコードをネイティブバイナリにAOTコンパイル（現在開発中）
-./target/release/nyash --compile-native program.nyash -o program.exe
+cargo build --release --features cranelift-jit
+./target/release/nyash --backend vm --compile-native program.nyash -o program.exe
 # または
 ./target/release/nyash --aot program.nyash -o program.exe
 ```
+Note: --compile-native は Cranelift JIT を必要とします（`--features cranelift-jit`）。
 
 ### 🔧 JIT-direct（独立JIT）運用メモ（最小）
 - 方針: 当面は read-only（書き込み命令はjit-directで拒否）

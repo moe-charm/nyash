@@ -1,40 +1,36 @@
 use super::super::NyashRunner;
-#[cfg(feature = "wasm-backend")]
-use nyash_rust::{parser::NyashParser, mir::MirCompiler, backend::aot::AotBackend};
-#[cfg(feature = "wasm-backend")]
-use std::{fs, process};
+#[cfg(feature = "cranelift-jit")]
+use std::{process::Command, process};
 
 impl NyashRunner {
     /// Execute AOT compilation mode (split)
-    #[cfg(feature = "wasm-backend")]
+    #[cfg(feature = "cranelift-jit")]
     pub(crate) fn execute_aot_mode(&self, filename: &str) {
-        // Read the file
-        let code = match fs::read_to_string(filename) {
-            Ok(content) => content,
-            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+        let output = self.config.output_file.as_deref().unwrap_or("app");
+        // Prefer using provided helper scripts to ensure link flags and runtime integration
+        let status = if cfg!(target_os = "windows") {
+            // Use PowerShell helper; falls back to bash if available inside the script
+            Command::new("powershell")
+                .args(["-ExecutionPolicy","Bypass","-File","tools/build_aot.ps1","-Input", filename, "-Out", &format!("{}.exe", output)])
+                .status()
+        } else {
+            Command::new("bash")
+                .args(["tools/build_aot.sh", filename, "-o", output])
+                .status()
         };
-
-        // Parse to AST
-        let ast = match NyashParser::parse_from_string(&code) {
-            Ok(ast) => ast,
-            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
-        };
-
-        // Compile to MIR
-        let mut mir_compiler = MirCompiler::new();
-        let compile_result = match mir_compiler.compile(ast) {
-            Ok(result) => result,
-            Err(e) => { eprintln!("❌ MIR compilation error: {}", e); process::exit(1); }
-        };
-
-        // Determine output file (no extension change)
-        let output = self.config.output_file.as_deref().unwrap_or(filename);
-
-        let mut aot_backend = AotBackend::new();
-        match aot_backend.compile_to_executable(compile_result.module, output) {
-            Ok(()) => { println!("✅ AOT compilation successful!\nExecutable written to: {}", output); },
-            Err(e) => { eprintln!("❌ AOT compilation error: {}", e); process::exit(1); }
+        match status {
+            Ok(s) if s.success() => {
+                println!("✅ AOT compilation successful!\nExecutable written to: {}", output);
+            }
+            Ok(s) => {
+                eprintln!("❌ AOT compilation failed (exit={} ). See logs above.", s.code().unwrap_or(-1));
+                process::exit(1);
+            }
+            Err(e) => {
+                eprintln!("❌ Failed to invoke build_aot.sh: {}", e);
+                eprintln!("Hint: ensure bash is available, or run: bash tools/build_aot.sh {} -o {}", filename, output);
+                process::exit(1);
+            }
         }
     }
 }
-

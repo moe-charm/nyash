@@ -5,6 +5,31 @@
 //! - NYASH_JIT_EVENTS_PATH=/path/to/file.jsonl appends to file
 
 use serde::Serialize;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+// Compile-phase counters (process-local)
+static LOWER_FALLBACK_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Reset compile-phase counters (call at the beginning of each lower/compile)
+pub fn lower_counters_reset() {
+    LOWER_FALLBACK_COUNT.store(0, Ordering::Relaxed);
+}
+
+/// Get number of fallback decisions observed during lowering
+pub fn lower_fallbacks_get() -> u64 {
+    LOWER_FALLBACK_COUNT.load(Ordering::Relaxed)
+}
+
+fn record_lower_decision(extra: &serde_json::Value) {
+    // We record even when emission is disabled, to allow strict-mode checks.
+    if let serde_json::Value::Object(map) = extra {
+        if let Some(serde_json::Value::String(dec)) = map.get("decision") {
+            if dec == "fallback" {
+                LOWER_FALLBACK_COUNT.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
 
 fn base_emit_enabled() -> bool {
     std::env::var("NYASH_JIT_EVENTS").ok().as_deref() == Some("1")
@@ -12,8 +37,8 @@ fn base_emit_enabled() -> bool {
 }
 
 fn should_emit_lower() -> bool {
-    // Compile-phase events are opt-in to avoid noisy logs by default.
-    std::env::var("NYASH_JIT_EVENTS_COMPILE").ok().as_deref() == Some("1")
+    // Unify observability: if base events are on (stdout/file) or explicit compile flag, emit.
+    base_emit_enabled() || std::env::var("NYASH_JIT_EVENTS_COMPILE").ok().as_deref() == Some("1")
 }
 
 fn should_emit_runtime() -> bool {
@@ -56,6 +81,8 @@ fn emit_any(kind: &str, function: &str, handle: Option<u64>, ms: Option<u128>, e
 
 /// Emit an event during lowering (compile-time planning). Adds phase="lower".
 pub fn emit_lower(mut extra: serde_json::Value, kind: &str, function: &str) {
+    // Always record decisions for strict-mode enforcement
+    record_lower_decision(&extra);
     if !should_emit_lower() { return; }
     if let serde_json::Value::Object(ref mut map) = extra { map.insert("phase".into(), serde_json::Value::String("lower".into())); }
     emit_any(kind, function, None, None, extra);

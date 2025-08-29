@@ -75,13 +75,13 @@ pub fn lower_box_call(
                     b.emit_param_i64(pidx as i64 as usize);
                     b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
                 } else {
-                    crate::jit::events::emit(
-                        "hostcall","<jit>",None,None,
+                    crate::jit::events::emit_lower(
                         serde_json::json!({
                             "id": crate::jit::r#extern::collections::SYM_ARRAY_LEN,
                             "decision": "fallback", "reason": "receiver_not_param",
                             "argc": 1, "arg_types": ["I64(index)"]
-                        })
+                        }),
+                        "hostcall","<jit>"
                     );
                     b.emit_const_i64(-1);
                     b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
@@ -159,9 +159,9 @@ pub fn lower_box_call(
                         }
                     }
                     Err(reason) => {
-                        crate::jit::events::emit(
-                            "hostcall","<jit>",None,None,
-                            serde_json::json!({"id": sym, "decision":"fallback", "reason": reason, "argc": observed.len(), "arg_types": arg_types})
+                        crate::jit::events::emit_lower(
+                            serde_json::json!({"id": sym, "decision":"fallback", "reason": reason, "argc": observed.len(), "arg_types": arg_types}),
+                            "hostcall","<jit>"
                         );
                     }
                 }
@@ -257,9 +257,9 @@ pub fn lower_box_call(
                             );
                             b.emit_host_call(sym, 2, false);
                         } else {
-                            crate::jit::events::emit(
-                                "hostcall","<jit>",None,None,
-                                serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating", "argc": args.len()})
+                            crate::jit::events::emit_lower(
+                                serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating", "argc": args.len()}),
+                                "hostcall","<jit>"
                             );
                         }
                     }
@@ -564,9 +564,9 @@ pub fn lower_math_call(
             }
         }
         Err(reason) => {
-            crate::jit::events::emit(
-                "hostcall","<jit>",None,None,
-                serde_json::json!({"id": sym, "decision":"fallback", "reason": reason, "argc": observed_kinds.len(), "arg_types": arg_types})
+            crate::jit::events::emit_lower(
+                serde_json::json!({"id": sym, "decision":"fallback", "reason": reason, "argc": observed_kinds.len(), "arg_types": arg_types}),
+                "hostcall","<jit>"
             );
         }
     }

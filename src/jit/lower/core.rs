@@ -862,18 +862,16 @@ impl LowerCore {
                                     }
                                 }
                                 Err(reason) => {
-                                    crate::jit::events::emit(
-                                        "hostcall",
-                                        "<jit>",
-                                        None,
-                                        None,
+                                    crate::jit::events::emit_lower(
                                         serde_json::json!({
                                             "id": sym,
                                             "decision": "fallback",
                                             "reason": reason,
                                             "argc": observed.len(),
                                             "arg_types": arg_types
-                                        })
+                                        }),
+                                        "hostcall",
+                                        "<jit>"
                                     );
                                 }
                             }

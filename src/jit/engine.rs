@@ -45,6 +45,8 @@ impl JitEngine {
     pub fn compile_function(&mut self, func_name: &str, mir: &crate::mir::MirFunction) -> Option<u64> {
         let t0 = std::time::Instant::now();
         // Phase 10_b skeleton: walk MIR with LowerCore and report coverage
+        // Reset compile-phase counters (e.g., fallback decisions) before lowering this function
+        crate::jit::events::lower_counters_reset();
         let mut lower = crate::jit::lower::core::LowerCore::new();
         #[cfg(feature = "cranelift-jit")]
         let mut builder = crate::jit::lower::builder::CraneliftBuilder::new();
@@ -52,6 +54,12 @@ impl JitEngine {
         let mut builder = crate::jit::lower::builder::NoopBuilder::new();
         if let Err(e) = lower.lower_function(mir, &mut builder) {
             eprintln!("[JIT] lower failed for {}: {}", func_name, e);
+            return None;
+        }
+        // Strict: fail compile if any fallback decisions were taken during lowering
+        let lower_fallbacks = crate::jit::events::lower_fallbacks_get();
+        if lower_fallbacks > 0 && std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
+            eprintln!("[JIT][strict] lower produced fallback decisions for {}: {} — failing compile", func_name, lower_fallbacks);
             return None;
         }
         // Capture per-function lower stats for manager to query later

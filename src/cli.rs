@@ -45,6 +45,8 @@ pub struct CliConfig {
     pub jit_direct: bool,
     // DOT emit helper
     pub emit_cfg: Option<String>,
+    // Verbose CLI
+    pub cli_verbose: bool,
 }
 
 impl CliConfig {
@@ -117,15 +119,22 @@ impl CliConfig {
                     .default_value("interpreter")
             )
             .arg(
+                Arg::new("verbose")
+                    .long("verbose")
+                    .short('v')
+                    .help("Verbose CLI output (sets NYASH_CLI_VERBOSE=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
                 Arg::new("compile-wasm")
                     .long("compile-wasm")
-                    .help("Compile to WebAssembly (WAT format) instead of executing")
+                    .help("Compile to WebAssembly (WAT/WASM). Requires --features wasm-backend")
                     .action(clap::ArgAction::SetTrue)
             )
             .arg(
                 Arg::new("compile-native")
                     .long("compile-native")
-                    .help("Compile to native AOT executable using wasmtime precompilation")
+                    .help("Compile to native executable (AOT). Requires --features cranelift-jit")
                     .action(clap::ArgAction::SetTrue)
             )
             .arg(
@@ -306,6 +315,7 @@ impl CliConfig {
             emit_cfg: matches.get_one::<String>("emit-cfg").cloned(),
             jit_only: matches.get_flag("jit-only"),
             jit_direct: matches.get_flag("jit-direct"),
+            cli_verbose: matches.get_flag("verbose"),
         }
     }
 }

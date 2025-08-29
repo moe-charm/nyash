@@ -37,10 +37,10 @@ impl NyashRunner {
             { eprintln!("❌ WASM backend not available. Please rebuild with: cargo build --features wasm-backend"); process::exit(1); }
         }
         if self.config.compile_native {
-            #[cfg(feature = "wasm-backend")]
+            #[cfg(feature = "cranelift-jit")]
             { self.execute_aot_mode(filename); return; }
-            #[cfg(not(feature = "wasm-backend"))]
-            { eprintln!("❌ AOT backend not available. Please rebuild with: cargo build --features wasm-backend"); process::exit(1); }
+            #[cfg(not(feature = "cranelift-jit"))]
+            { eprintln!("❌ Native AOT compilation requires Cranelift. Please rebuild: cargo build --features cranelift-jit"); process::exit(1); }
         }
 
         // Backend selection

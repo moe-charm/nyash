@@ -660,11 +660,18 @@ impl PluginBoxV2 {
             }
         }
         
+        // Resolve platform-specific path (.so/.dll/.dylib) and optional search paths
+        let resolved_path = self.resolve_library_path(&lib_def.path)
+            .or_else(|| self.config.as_ref().and_then(|c| c.resolve_plugin_path(&lib_def.path)))
+            .unwrap_or_else(|| lib_def.path.clone());
         // Load library
         let lib = unsafe {
-            libloading::Library::new(&lib_def.path)
+            libloading::Library::new(&resolved_path)
                 .map_err(|e| {
-                    eprintln!("Failed to load library: {}", e);
+                    eprintln!(
+                        "Failed to load library '{}': {}\n  raw='{}'",
+                        resolved_path, e, lib_def.path
+                    );
                     BidError::PluginError
                 })?
         };
@@ -722,6 +729,48 @@ impl PluginBoxV2 {
         plugins.insert(lib_name.to_string(), plugin);
         
         Ok(())
+    }
+
+    /// Resolve a plugin library path for the current OS by adapting extensions and common prefixes.
+    /// - Maps .so/.dylib/.dll according to target OS
+    /// - On Windows also tries removing leading 'lib' prefix
+    /// - Searches configured plugin_paths if only filename is provided
+    fn resolve_library_path(&self, raw: &str) -> Option<String> {
+        use std::path::{Path, PathBuf};
+        let p = Path::new(raw);
+        if p.exists() { return Some(raw.to_string()); }
+        let dir = p.parent().map(|d| d.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
+        let file = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| raw.to_string());
+        let stem = Path::new(&file).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or(file.clone());
+        let cur_ext: &str = if cfg!(target_os = "windows") { "dll" } else if cfg!(target_os = "macos") { "dylib" } else { "so" };
+
+        // Candidate A: replace extension with OS-specific
+        let mut cand_a = dir.join(Path::new(&stem).with_extension(cur_ext));
+        if cand_a.exists() { return Some(cand_a.to_string_lossy().to_string()); }
+
+        // Candidate B (Windows): drop 'lib' prefix if present
+        if cfg!(target_os = "windows") {
+            if let Some(stripped) = stem.strip_prefix("lib") {
+                let cand_b = dir.join(Path::new(stripped).with_extension(cur_ext));
+                if cand_b.exists() { return Some(cand_b.to_string_lossy().to_string()); }
+            }
+        }
+
+        // Candidate C: search in configured plugin_paths with adapted filename
+        if let Some(cfg) = &self.config {
+            // try original filename
+            if let Some(path) = cfg.resolve_plugin_path(&file) { return Some(path); }
+            // try adapted A
+            if let Some(path) = cfg.resolve_plugin_path(&cand_a.file_name().unwrap_or_default().to_string_lossy()) { return Some(path); }
+            // try adapted B on windows
+            if cfg!(target_os = "windows") {
+                if let Some(stripped) = stem.strip_prefix("lib") {
+                    let name = format!("{}.{}", stripped, cur_ext);
+                    if let Some(path) = cfg.resolve_plugin_path(&name) { return Some(path); }
+                }
+            }
+        }
+        None
     }
 
     /// Create a Box instance

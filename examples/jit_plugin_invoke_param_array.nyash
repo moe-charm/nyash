@@ -1,3 +1,7 @@
+// @jit-strict
+// @jit-debug
+// @plugin-builtins
+
 // JIT plugin_invoke smoke: no NewBox in JITed function
 // Requires: array plugin built + nyash.toml configured
 // Build plugins:

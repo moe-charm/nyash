@@ -26,10 +26,10 @@
 **2025年8月29日** - 誕生からわずか20日で、Nyashがネイティブ実行ファイルへのコンパイルを実現！
 
 ```bash
-# Nyashソースからネイティブバイナリへ
-./target/release/nyash --backend vm program.nyash  # JITコンパイル
+# Nyashソースからネイティブバイナリへ（Craneliftが必要）
+cargo build --release --features cranelift-jit
 ./tools/build_aot.sh program.nyash -o app         # ネイティブEXE
-./app                                              # スタンドアロン実行！
+./app                                             # スタンドアロン実行！
 ```
 
 **20日間で達成したこと：**
@@ -113,6 +113,9 @@ NYASH_JIT_EXEC=1 ./target/release/nyash --backend vm program.nyash
 
 ### 4. **ネイティブバイナリ** （配布用）
 ```bash
+# 事前ビルド（Cranelift）
+cargo build --release --features cranelift-jit
+
 ./tools/build_aot.sh program.nyash -o myapp
 ./myapp  # スタンドアロン実行！
 ```
@@ -120,8 +123,14 @@ NYASH_JIT_EXEC=1 ./target/release/nyash --backend vm program.nyash
 - 最高性能
 - 簡単配布
 
+簡易スモークテスト（VM と EXE の出力一致確認）:
+```bash
+tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
+```
+
 ### 5. **WebAssembly** （ブラウザ用）
 ```bash
+cargo build --release --features wasm-backend
 ./target/release/nyash --compile-wasm program.nyash
 ```
 - ブラウザで実行
@@ -237,6 +246,11 @@ echo 'print("Hello Nyash!")' > hello.nyash
 cargo install cargo-xwin
 cargo xwin build --target x86_64-pc-windows-msvc --release
 # target/x86_64-pc-windows-msvc/release/nyash.exe を使用
+
+# WindowsでのネイティブEXE（AOT）ビルド（Cranelift と MSYS2/WSL が必要）
+cargo build --release --features cranelift-jit
+powershell -ExecutionPolicy Bypass -File tools\build_aot.ps1 -Input examples\aot_min_string_len.nyash -Out app.exe
+./app.exe
 ```
 
 ---

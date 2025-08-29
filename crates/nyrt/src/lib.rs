@@ -109,8 +109,8 @@ pub extern "C" fn main() -> i32 {
         }
         // SAFETY: if not linked, calling will be an unresolved symbol at link-time; we rely on link step to include ny_main.
         let v = ny_main();
-        // Print minimal observation
-        println!("ny_main() returned: {}", v);
-        0
+        // Print standardized result line for golden comparisons
+        println!("Result: {}", v);
+        v as i32
     }
 }

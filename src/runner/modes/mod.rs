@@ -5,5 +5,5 @@ pub mod bench;
 pub mod common;
 #[cfg(feature = "wasm-backend")]
 pub mod wasm;
-#[cfg(feature = "wasm-backend")]
+#[cfg(feature = "cranelift-jit")]
 pub mod aot;

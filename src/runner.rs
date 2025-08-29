@@ -47,6 +47,8 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // Verbose CLI flag maps to env for downstream helpers/scripts
+        if self.config.cli_verbose { std::env::set_var("NYASH_CLI_VERBOSE", "1"); }
         // Script-level env directives (special comments) — parse early
         // Supported:
         //   // @env KEY=VALUE
@@ -80,6 +82,8 @@ impl NyashRunner {
                         } else if rest == "@jit-strict" {
                             std::env::set_var("NYASH_JIT_STRICT", "1");
                             std::env::set_var("NYASH_JIT_ARGS_HANDLE_ONLY", "1");
+                            // In strict mode, default to JIT-only (no VM fallback)
+                            if std::env::var("NYASH_JIT_ONLY").ok().is_none() { std::env::set_var("NYASH_JIT_ONLY", "1"); }
                         }
                     }
                 }
@@ -90,6 +94,10 @@ impl NyashRunner {
         if std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
             if std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().is_none() {
                 std::env::set_var("NYASH_JIT_ARGS_HANDLE_ONLY", "1");
+            }
+            // Enforce JIT-only by default in strict mode unless explicitly overridden
+            if std::env::var("NYASH_JIT_ONLY").ok().is_none() {
+                std::env::set_var("NYASH_JIT_ONLY", "1");
             }
         }
 
@@ -145,6 +153,16 @@ impl NyashRunner {
             // Persist to env (CLI parity) and set as current
             jc.apply_env();
             nyash_rust::jit::config::set_current(jc.clone());
+        }
+        // Architectural pivot: JIT is compiler-only (EXE/AOT). Ensure VM runtime does not dispatch to JIT
+        // unless explicitly requested via independent JIT mode, or when emitting AOT objects.
+        if !self.config.compile_native && !self.config.jit_direct {
+            // When AOT object emission is requested, allow JIT to run for object generation
+            let aot_obj = std::env::var("NYASH_AOT_OBJECT_OUT").ok();
+            if aot_obj.is_none() || aot_obj.as_deref() == Some("") {
+                // Force-disable runtime JIT execution path for VM/Interpreter flows
+                std::env::set_var("NYASH_JIT_EXEC", "0");
+            }
         }
         // Benchmark mode - can run without a file
         if self.config.benchmark {

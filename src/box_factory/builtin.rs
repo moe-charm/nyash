@@ -303,6 +303,30 @@ impl BuiltinBoxFactory {
             Ok(Box::new(crate::boxes::jit_policy_box::JitPolicyBox::new()))
         });
 
+        // JitStrictBox (strict-mode toggles & counters)
+        self.register("JitStrictBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation {
+                    message: format!("JitStrictBox constructor expects 0 arguments, got {}", args.len()),
+                });
+            }
+            Ok(Box::new(crate::boxes::jit_strict_box::JitStrictBox::new()))
+        });
+
+        // AOT configuration and compiler boxes
+        self.register("AotConfigBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation { message: format!("AotConfigBox constructor expects 0 arguments, got {}", args.len()) });
+            }
+            Ok(Box::new(crate::boxes::aot_config_box::AotConfigBox::new()))
+        });
+        self.register("AotCompilerBox", |args| {
+            if !args.is_empty() {
+                return Err(RuntimeError::InvalidOperation { message: format!("AotCompilerBox constructor expects 0 arguments, got {}", args.len()) });
+            }
+            Ok(Box::new(crate::boxes::aot_compiler_box::AotCompilerBox::new()))
+        });
+
         // DebugConfigBox (runtime debug/observability switches)
         self.register("DebugConfigBox", |args| {
             if !args.is_empty() {
