@@ -15,6 +15,178 @@ Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグイン�
 - サンプル: array/map デモを追加し VM 実行で正常動作確認
 - 次: 10.2（Craneliftの実呼び出し）に着手
 
+### 10.2 追加アップデート（2025-08-29 PM）
+- ✅ static box 内メソッドのMIR関数化に成功
+  - 例: `Main.helper/1`, `Main.add/2` が独立関数として生成（MIR dumpで確認）
+  - VM実行でも JIT マネージャの sites に現れる（`sites=2`）
+- ✅ JITコンパイル成功
+  - `Main.helper/1` が JIT コンパイルされ handle 付与（handle=1）
+  - 単純算術（`Main.add/2` 等）は JIT 実行 `exec_ok=1` を確認
+- ✅ ArrayBox.length() の値は正しく返る（JIT無効時に Result: 3）
+
+- ❌ 残課題（ブロッカー）
+  1) プラグイン呼び出しの JIT 実行時に Segfault 発生
+     - 事象: `arr.length()` のようなプラグインメソッドで JIT 実行時にクラッシュ
+     - 状態: JITコンパイル自体は成功するが実行で落ちるため、DebugBox の i64 シムイベント取得に未到達
+  2) i64 シムトレース未取得
+     - Segfault解消後に `DebugBox.tracePluginCalls(true)` → `getJitEvents()` で i64.start/end, tlv 等を観測予定
+
+- ▶ 次の具体ステップ（提案）
+  - [ ] Lowerer: `ArrayBox.length()` を hostcall 経路（ANY_LEN_H）から plugin_invoke 経路へ切替
+        - 目的: i64 シム（`nyash_plugin_invoke3_i64`）を真正面から踏ませ、シムの前後でのcanary・TLVを観測
+  - [ ] Segfault 再現最小ケースの確立と原因究明
+        - 候補: 受け手 a0（param index）/ argc / TLV ヘッダの組み立て、戻りTLVのdecode、ハンドル走査の境界
+  - [ ] DebugBox での i64 シムイベントログ取得（start/end, tlv, rc/out_len/canary）
+  - [ ] 必要に応じて f64 シム (`NYASH_JIT_PLUGIN_F64="type:method"`) の点検
+
+---
+
+## 2025-08-29 PM3 再起動スナップショット（Strict前倒し版）
+
+### 現在の着地（Strict準備済み）
+- InvokePolicy/Observe を導入し、Lowerer の分岐をスリム化
+  - ArrayBox: length/get/push/set → policy+observe 経由（plugin/hostcallの一元化）
+  - MapBox: size/get/has/set → 同上
+  - StringBox: length/is_empty/charCodeAt → 同上
+- VM→Plugin 引数整合の安定化
+  - 整数は I64 (tag=3) に統一／Plugin IntegerBox は自動プリミティブ化（get）
+- 予約型の安全な上書き制御
+  - `NYASH_PLUGIN_OVERRIDE_TYPES=ArrayBox,MapBox`（デフォルト同値）で型別に制御
+- StringBoxのpost-birth初期化
+  - `new StringBox()` 直後の `length()` でsegfaultしないよう、空文字で初期化
+- 特殊コメント（最小）
+  - `// @env KEY=VALUE`, `// @jit-debug`, `// @plugin-builtins`, `// @jit-strict`
+
+### Strict モード（Fail-Fast / ノーフォールバック）
+- 目的: 「VM=仕様 / JIT=高速実装」。JITで動かない＝JITのバグを即可視化
+- 有効化: `// @jit-strict`（または `NYASH_JIT_STRICT=1`）
+- 仕様（現状）
+  - Lowerer/Engine: unsupported>0 がある関数はコンパイル中止（fail-fast）
+  - 実行: `NYASH_JIT_ONLY=1` と併用でフォールバック禁止（エラー）
+  - シム: 受け手解決は HandleRegistry 優先（`NYASH_JIT_ARGS_HANDLE_ONLY=1` 自動ON）
+
+### 再起動チェックリスト
+- Build（Cranelift有効）: `cargo build --release -j32 --features cranelift-jit`
+- Array（param受け）: `examples/jit_plugin_invoke_param_array.nyash` → Result: 3
+- Map（E2E）: `examples/jit_map_policy_demo.nyash` → Result: 2
+- String（RO）: `examples/jit_string_length_policy_demo.nyash` → Result: 0（空文字）
+- Strict 観測（fail-fast動作確認）:
+  - ファイル先頭: `// @jit-strict` `// @jit-debug` `// @plugin-builtins`
+  - 実行: `NYASH_JIT_ONLY=1 ./target/release/nyash --backend vm <file>`
+  - 期待: 未対応lowerがあれば compile失敗→JIT-onlyでエラー（フォールバックなし）
+
+### 観測の標準手順（compile/runtime/シム）
+```bash
+cargo build --release --features cranelift-jit
+
+# Array（param受け、JIT観測一式）
+NYASH_USE_PLUGIN_BUILTINS=1 \
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+NYASH_JIT_EVENTS=1 NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_EVENTS_RUNTIME=1 \
+NYASH_JIT_EVENTS_PATH=jit_events.jsonl NYASH_JIT_SHIM_TRACE=1 \
+  ./target/release/nyash --backend vm examples/jit_plugin_invoke_param_array.nyash
+
+# Map（policy/observe経由の確認）
+NYASH_USE_PLUGIN_BUILTINS=1 NYASH_PLUGIN_OVERRIDE_TYPES=ArrayBox,MapBox \
+NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+NYASH_JIT_EVENTS=1 NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_EVENTS_RUNTIME=1 \
+NYASH_JIT_EVENTS_PATH=jit_events.jsonl \
+  ./target/release/nyash --backend vm examples/jit_map_policy_demo.nyash
+
+# String（length RO）
+NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+NYASH_JIT_EVENTS=1 NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_EVENTS_RUNTIME=1 \
+NYASH_JIT_EVENTS_PATH=jit_events.jsonl \
+  ./target/release/nyash --backend vm examples/jit_string_length_policy_demo.nyash
+
+# Strictモード（フォールバック禁止）最小観測
+NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_ONLY=1 NYASH_JIT_STRICT=1 \
+NYASH_JIT_EVENTS=1 NYASH_JIT_EVENTS_RUNTIME=1 NYASH_JIT_EVENTS_COMPILE=1 \
+NYASH_JIT_EVENTS_PATH=jit_events.jsonl \
+  ./target/release/nyash --backend vm examples/jit_plugin_invoke_param_array.nyash
+```
+
+### これからの実装（優先順）
+1) 算術/比較 emit の穴埋め（Strictで落ちる箇所を優先）
+2) String RO の必要最小を policy に追加（過剰に増やさない）
+3) 追加サンプルは最小限（回帰用の小粒のみ）
+4) 必要に応じて Strict 診断のJSONイベントを最小追加（compile-fail時）
+
+### 現在の達成状況（✅）
+- ✅ static box メソッドのMIR関数化に成功
+  - 例: `Main.helper/1`, `Main.add/2` が独立関数として生成され、JITの sites に出現
+- ✅ JITコンパイル成功／実行成功
+  - `Main.helper/1` に handle が付与（handle=1）、`compiled=1`、`exec_ok=1`
+- ✅ compile-phase イベント出力
+  - `plugin:ArrayBox:push` / `plugin:ArrayBox:length`（型ヒントにより StringBox へ寄るケースも増加見込み）
+- ✅ length() の正値化
+  - `arr.length()` が 3 を返す（受け手解決の安全化・フォールバック整備済み）
+
+### 既知の課題（❌）
+- ❌ runtime-phase イベントが出ない環境がある
+  - 対処: `NYASH_JIT_EVENTS=1` を併用（ベース出力ON）、必要に応じて `NYASH_JIT_EVENTS_PATH=jit_events.jsonl`
+  - 純JIT固定: `NYASH_JIT_ONLY=1` を付与してフォールバック経路を抑止
+- ❌ シムトレース（[JIT-SHIM i64]）が出ない環境がある
+  - 対処: 上記と同時に `NYASH_JIT_SHIM_TRACE=1` を指定。plugin_invoke シム経路を確実に踏むため length は plugin 優先
+
+### 直近で入れた変更（要点）
+- 「型ヒント伝搬」パスを追加（箱化）
+  - 追加: `src/mir/passes/type_hints.rs`、呼び出し元→callee の param 型反映（String/Integer/Bool/Float）
+  - 反映: `optimizer.rs` から呼び出し、責務を分割
+- length() の plugin_invoke 優先
+  - BoxCall簡易hostcall（simple_reads）から length を除外、Lowerer の plugin_invoke 経路に誘導
+- シムの受け手解釈を「ハンドル優先」に変更
+  - `nyash_plugin_invoke3_{i64,f64}` で a0 を HandleRegistry から解決→PluginBoxV2/ネイティブ(Array/String)
+  - レガシー互換のparam indexも残し、安全フォールバック
+- runtime観測の強化
+  - シム入り口で runtime JSON を出力（kind:"plugin", id:"plugin_invoke.i64/f64"、type_id/method_id/inst/argc）
+  - ANY長さ（`nyash_any_length_h`）にparam indexフォールバックを追加
+
+### 観測の標準手順（必ずこれで確認）
+```bash
+cargo build --release --features cranelift-jit
+
+# 標準出力に compile/runtime/シムトレースを出す（純JIT固定）
+NYASH_USE_PLUGIN_BUILTINS=1 \
+NYASH_JIT_EXEC=1 NYASH_JIT_ONLY=1 NYASH_JIT_THRESHOLD=1 \
+NYASH_JIT_EVENTS=1 NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_EVENTS_RUNTIME=1 \
+NYASH_JIT_SHIM_TRACE=1 \
+  ./target/release/nyash --backend vm examples/jit_plugin_invoke_param_array.nyash
+
+# もしくはruntime JSONをファイルに
+NYASH_JIT_EVENTS_RUNTIME=1 NYASH_JIT_EVENTS_PATH=jit_events.jsonl \
+  ./target/release/nyash --backend vm examples/jit_plugin_invoke_param_array.nyash
+cat jit_events.jsonl
+```
+
+### 設計ルールの曖昧さと「箱」整理（次の箱）
+- TypeHintPass（完了）: `src/mir/passes/type_hints.rs` — 型伝搬をここに集約（最小実装済）
+- InvokePolicyPass（新規）: `src/jit/policy/invoke.rs` — plugin/hostcall/ANY の経路選択を一元化（Lowerer から分離）
+- Observe（新規）: `src/jit/observe.rs` — compile/runtime/trace 出力の統一（ガード/出力先/JSONスキーマ）
+
+### 今後のToDo（優先度順）
+1) InvokePolicyPass の導入
+   - 目的: Lowerer 内の分岐を薄くし、経路選択を一箇所に固定（read-only/allowlist/ANY fallbackを明確化）
+   - DoD: length()/push/get/set の経路が policy 設定で一意に決まる（compile/runtimeのイベント差異が「設定」由来で説明可能）
+2) Observe の導入
+   - 目的: runtime/trace の出力有無を一箇所で制御、`NYASH_JIT_EVENTS(_COMPILE/_RUNTIME)` の挙動を統一
+   - DoD: `NYASH_JIT_EVENTS=1` で compile/runtime が必ず出る。PATH 指定時はJSONLに確実追記
+3) String/Array の誤ラベル最終解消
+   - 型不明時は `Any.length` としてcompile-phaseに出す／または plugin_invoke の type_id を runtime で必ず記録
+4) f64戻り/ハンドル返却（tag=8）の仕上げ
+   - `NYASH_JIT_PLUGIN_F64` なしの自動選択、handle返却シムの導入（tag=8）
+
+### 受け入れ条件（DoD）
+- compile-phase: `plugin:*` のイベントが関数ごとに安定
+- runtime-phase: `plugin_invoke.*` が必ず出力（stdout または JSONL）
+- シムトレース: `NYASH_JIT_SHIM_TRACE=1` で [JIT-SHIM …] が可視
+- length(): `arr=ArrayBox([…])`→3、`s=StringBox("Hello")`→5（どちらもJIT実行時に正値）
+
+### 備考（TIPS）
+- ConsoleBox.log はVMでは標準出力に流れません。観測は `print(...)` か runtime JSON を利用してください。
+- runtime JSON が見えない場合は `NYASH_JIT_EVENTS=1` を必ず併用（ベース出力ON）。
+
+
 ## 現在地（Done / Doing / Next）
 - ✅ Done（Phase 10.10）
   - GC Switchable Runtime（GcConfigBox）/ Unified Debug（DebugConfigBox）
@@ -56,7 +228,7 @@ Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグイン�
   - JIT→Plugin呼び出しパス確立
   - パフォーマンス測定と最適化
   
-## Phase 10.5（旧10.1）：Python統合
+## Phase 10.5（旧10.1）：Python統合 / JIT Strict 前倒し
 - 参照: `docs/development/roadmap/phases/phase-10.5/` （移動済み）
 - ChatGPT5の当初計画を後段フェーズへ
 
@@ -89,10 +261,15 @@ Phase 10.10 は完了（DoD確認済）。**重大な発見**：プラグイン�
 - 例・テスト・CIをプラグイン経路に寄せ、十分に安定してから段階的に外す。
 
 ### 次アクション（小さく通す）
-1) DebugBox（Phase 1）: JITシムイベント取得（getJitEvents）/プラグイン呼び出し履歴トレース（tracePluginCalls）
-2) JIT typedシムの拡張: f64の自動選択（Lowerer型ヒント）→ Handle/String返却シムの導入（ハンドルID/文字列返却）
-3) AOTスモーク: Python数値戻りの .o 生成をもう1本追加（f64/Bool/i64いずれか）
-4) ガイド: R系APIとNYASH_PY_AUTODECODEの使い分け、JITシムトレースの使い方を追記
+1) JIT Strict モード（最優先）
+   - // @jit-strict（ENV: NYASH_JIT_STRICT=1）で有効化
+   - Lowerer: unsupported>0 でコンパイル中止（診断を返す）
+   - 実行: JIT_ONLYと併用でフォールバック禁止（fail-fast）
+   - シム: 受け手解決は HandleRegistry 優先（param-index 経路は無効化）
+2) Array/Map のパリティ検証（strict）
+   - examples/jit_plugin_invoke_param_array.nyash / examples/jit_map_policy_demo.nyash で compile/runtime/シム整合を確認
+3) Python統合（RO中心）の継続
+   - eval/import/getattr/call の strict 観測と整合、数値/Bool/文字列の戻りデコード
 
 ## すぐ試せるコマンド（現状維持の確認）
 ```bash
@@ -114,6 +291,12 @@ NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 \
 # compileイベントのみ（必要時）
 NYASH_JIT_EVENTS_COMPILE=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS_PATH=events.jsonl \
   ./target/release/nyash --backend vm examples/jit_map_get_param_hh.nyash
+
+# Strictモード（フォールバック禁止）最小観測
+NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_ONLY=1 NYASH_JIT_STRICT=1 \
+  NYASH_JIT_EVENTS=1 NYASH_JIT_EVENTS_RUNTIME=1 NYASH_JIT_EVENTS_COMPILE=1 \
+  NYASH_JIT_EVENTS_PATH=jit_events.jsonl \
+  ./target/release/nyash --backend vm examples/jit_plugin_invoke_param_array.nyash
 
 # Plugin demos（Array/Map）
 (cd plugins/nyash-array-plugin && cargo build --release)

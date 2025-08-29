@@ -47,6 +47,52 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // Script-level env directives (special comments) — parse early
+        // Supported:
+        //   // @env KEY=VALUE
+        //   // @jit-debug           (preset: exec, threshold=1, events+trace)
+        //   // @plugin-builtins     (NYASH_USE_PLUGIN_BUILTINS=1)
+        if let Some(ref filename) = self.config.file {
+            if let Ok(code) = fs::read_to_string(filename) {
+                // Scan first 128 lines for directives
+                for (i, line) in code.lines().take(128).enumerate() {
+                    let l = line.trim();
+                    if !(l.starts_with("//") || l.starts_with("#!") || l.is_empty()) {
+                        // Stop early at first non-comment line to avoid scanning full file
+                        if i > 0 { break; }
+                    }
+                    // Shebang with envs: handled by shell normally; keep placeholder
+                    if let Some(rest) = l.strip_prefix("//") { let rest = rest.trim();
+                        if let Some(dir) = rest.strip_prefix("@env ") {
+                            if let Some((k,v)) = dir.split_once('=') {
+                                let key = k.trim(); let val = v.trim();
+                                if !key.is_empty() { std::env::set_var(key, val); }
+                            }
+                        } else if rest == "@jit-debug" {
+                            std::env::set_var("NYASH_JIT_EXEC", "1");
+                            std::env::set_var("NYASH_JIT_THRESHOLD", "1");
+                            std::env::set_var("NYASH_JIT_EVENTS", "1");
+                            std::env::set_var("NYASH_JIT_EVENTS_COMPILE", "1");
+                            std::env::set_var("NYASH_JIT_EVENTS_RUNTIME", "1");
+                            std::env::set_var("NYASH_JIT_SHIM_TRACE", "1");
+                        } else if rest == "@plugin-builtins" {
+                            std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
+                        } else if rest == "@jit-strict" {
+                            std::env::set_var("NYASH_JIT_STRICT", "1");
+                            std::env::set_var("NYASH_JIT_ARGS_HANDLE_ONLY", "1");
+                        }
+                    }
+                }
+            }
+        }
+
+        // If strict mode requested via env, ensure handle-only shim behavior is enabled
+        if std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
+            if std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().is_none() {
+                std::env::set_var("NYASH_JIT_ARGS_HANDLE_ONLY", "1");
+            }
+        }
+
         // 🏭 Phase 9.78b: Initialize unified registry
         runtime::init_global_unified_registry();
         

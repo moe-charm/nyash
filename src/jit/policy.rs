@@ -40,3 +40,5 @@ pub fn set_current(p: JitPolicy) {
     let _ = GLOBAL.set(RwLock::new(p));
 }
 
+// Submodule: invoke decision policy
+pub mod invoke;

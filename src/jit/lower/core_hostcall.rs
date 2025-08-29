@@ -68,18 +68,19 @@ pub fn lower_box_call(
             "len" | "length" => {
                 if let Some(pidx) = param_index.get(recv).copied() {
                     crate::jit::events::emit_lower(
-                        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"allow", "reason":"sig_ok", "argc":1, "arg_types":["Handle"]}),
+                        serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ARRAY_LEN, "decision":"allow", "reason":"sig_ok", "argc":1, "arg_types":["I64(index)"]}),
                         "hostcall","<jit>"
                     );
-                    b.emit_param_i64(pidx);
-                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, dst.is_some());
+                    // Pass parameter index directly (JIT thunks read legacy VM args by index)
+                    b.emit_param_i64(pidx as i64 as usize);
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
                 } else {
                     crate::jit::events::emit(
                         "hostcall","<jit>",None,None,
                         serde_json::json!({
                             "id": crate::jit::r#extern::collections::SYM_ARRAY_LEN,
                             "decision": "fallback", "reason": "receiver_not_param",
-                            "argc": 1, "arg_types": ["I64"]
+                            "argc": 1, "arg_types": ["I64(index)"]
                         })
                     );
                     b.emit_const_i64(-1);
@@ -279,9 +280,12 @@ pub fn lower_boxcall_simple_reads(
     dst: Option<ValueId>,
 ) -> bool {
     if !crate::jit::config::current().hostcall { return false; }
+    // When plugin builtins are enabled, prefer plugin_invoke for length to exercise shim path
+    let use_plugin = std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1");
     match method {
         // Any.length / Array.length
         "len" | "length" => {
+            if use_plugin { return false; }
             if let Some(pidx) = param_index.get(recv).copied() {
                 crate::jit::events::emit_lower(
                     serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"allow", "reason":"sig_ok", "argc":1, "arg_types":["Handle"]}),

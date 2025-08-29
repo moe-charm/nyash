@@ -22,6 +22,7 @@ pub mod value_id;
 pub mod effect;
 pub mod optimizer;
 pub mod slot_registry; // Phase 9.79b.1: method slot resolution (IDs)
+pub mod passes; // Optimization subpasses (e.g., type_hints)
 
 // Re-export main types for easy access
 pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, MirType, TypeOpKind, WeakRefOp, BarrierOp};

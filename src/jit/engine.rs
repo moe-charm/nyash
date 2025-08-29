@@ -59,6 +59,11 @@ impl JitEngine {
         self.last_phi_total = phi_t; self.last_phi_b1 = phi_b1; self.last_ret_bool_hint = ret_b;
         // Record per-function stats into manager via callback if available (handled by caller)
         let cfg_now = crate::jit::config::current();
+        // Strict mode: any unsupported lowering must fail-fast
+        if lower.unsupported > 0 && std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
+            eprintln!("[JIT][strict] unsupported lowering ops for {}: {} — failing compile", func_name, lower.unsupported);
+            return None;
+        }
         if cfg_now.dump {
             let phi_min = cfg_now.phi_min;
             let native_f64 = cfg_now.native_f64;

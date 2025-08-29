@@ -1,9 +1,21 @@
-# Phase 10.5 – Python ネイティブ統合（Embedding & FFI）
+# Phase 10.5 – Python ネイティブ統合（Embedding & FFI）/ JIT Strict 化の前倒し
 *(旧10.1の一部を後段フェーズに再編。Everything is Plugin/AOTの基盤上で実現)*
 
-NyashとPythonを双方向に“ネイティブ”接続する。第一段はNyash→Python呼び出し（Embedding）、続いてPython→Nyash（Extending）。JIT/AOT/Pluginの統一面を活かし、最小のC ABIで着地する。
+NyashとPythonを双方向に“ネイティブ”接続する前に、JITの開発・検証効率を最大化するため、VM=仕様/JIT=高速実装 という原則に沿った「JIT Strict モード」を前倒し導入し、フォールバック起因の複雑性を排除する。
 
 ## 📂 サブフェーズ構成（10.5a → 10.5e）
+
+先行タスク（最優先）
+- 10.5s JIT Strict モード導入（Fail-Fast / ノーフォールバック）
+  - 目的: 「VMで動く＝正。JITで動かない＝JITのバグ」を可視化、開発ループを短縮
+  - 仕様:
+    - // @jit-strict または NYASH_JIT_STRICT=1 で有効化
+    - Lowerer: unsupported>0 の場合はコンパイルを中止（診断を返す）
+    - 実行: JIT_ONLY と併用時はフォールバック禁止（失敗は明示エラー）
+    - シム: 受け手解決は HandleRegistry 優先。param-index 互換経路は無効化
+  - DoD:
+    - Array/Map の代表ケースで Strict 実行時に compile/runtime/シムイベントの整合が取れる
+    - VM=JIT の差が発生したときに即座に落ち、原因特定がしやすい（フォールバックに逃げない）
 
 ### 10.5a 設計・ABI整合（1–2日）
 - ルート選択: 
@@ -39,6 +51,7 @@ NyashとPythonを双方向に“ネイティブ”接続する。第一段はNya
 - NyashからPythonコードを評価し、PyObjectをHandleで往復できる
 - 代表的なプロパティ取得/呼び出し（RO）がJIT/VMで動作
 - AOTリンク後のEXEで `py.eval()` 代表例が起動できる（動的ロード前提）
+ - 10.5s Strict: VM=仕様/JIT=高速実装の原則に基づき、フォールバック無しで fail-fast が機能
 
 ## ⌛ 目安
 | サブフェーズ | 目安 |

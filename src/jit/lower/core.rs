@@ -595,49 +595,40 @@ impl LowerCore {
                 }
             }
             I::ArrayGet { array, index, .. } => {
-                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
-                    // Plugin path: ArrayBox.get(index)
-                    if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
-                        if let Ok(h) = ph.resolve_method("ArrayBox", "get") {
-                            // receiver
-                            if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                            // index
-                            if let Some(iv) = self.known_i64.get(index).copied() { b.emit_const_i64(iv); } else { self.push_value_if_known_or_param(b, index); }
-                            b.emit_plugin_invoke(h.type_id, h.method_id, 2, true);
-                            crate::jit::events::emit_lower(
-                                serde_json::json!({
-                                    "id": format!("plugin:{}:{}", h.box_type, "get"),
-                                    "decision":"allow","reason":"plugin_invoke","argc": 2,
-                                    "type_id": h.type_id, "method_id": h.method_id
-                                }),
-                                "plugin","<jit>"
-                            );
-                        }
+                // Prepare receiver + index on stack
+                let argc = 2usize;
+                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                if let Some(iv) = self.known_i64.get(index).copied() { b.emit_const_i64(iv); } else { self.push_value_if_known_or_param(b, index); }
+                // Decide policy
+                let decision = crate::jit::policy::invoke::decide_box_method("ArrayBox", "get", argc, true);
+                match decision {
+                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                        b.emit_plugin_invoke(type_id, method_id, argc, true);
+                        crate::jit::observe::lower_plugin_invoke(&box_type, "get", type_id, method_id, argc);
                     }
-                } else {
-                    super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index);
+                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                        crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle","I64"], "allow", "mapped_symbol");
+                        b.emit_host_call(&symbol, argc, true);
+                    }
+                    _ => super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index),
                 }
             }
             I::ArraySet { array, index, value } => {
-                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
-                    if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
-                        if let Ok(h) = ph.resolve_method("ArrayBox", "set") {
-                            if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                            if let Some(iv) = self.known_i64.get(index).copied() { b.emit_const_i64(iv); } else { self.push_value_if_known_or_param(b, index); }
-                            if let Some(vv) = self.known_i64.get(value).copied() { b.emit_const_i64(vv); } else { self.push_value_if_known_or_param(b, value); }
-                            b.emit_plugin_invoke(h.type_id, h.method_id, 3, false);
-                            crate::jit::events::emit_lower(
-                                serde_json::json!({
-                                    "id": format!("plugin:{}:{}", h.box_type, "set"),
-                                    "decision":"allow","reason":"plugin_invoke","argc": 3,
-                                    "type_id": h.type_id, "method_id": h.method_id
-                                }),
-                                "plugin","<jit>"
-                            );
-                        }
+                let argc = 3usize;
+                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                if let Some(iv) = self.known_i64.get(index).copied() { b.emit_const_i64(iv); } else { self.push_value_if_known_or_param(b, index); }
+                if let Some(vv) = self.known_i64.get(value).copied() { b.emit_const_i64(vv); } else { self.push_value_if_known_or_param(b, value); }
+                let decision = crate::jit::policy::invoke::decide_box_method("ArrayBox", "set", argc, false);
+                match decision {
+                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                        b.emit_plugin_invoke(type_id, method_id, argc, false);
+                        crate::jit::observe::lower_plugin_invoke(&box_type, "set", type_id, method_id, argc);
                     }
-                } else {
-                    super::core_hostcall::lower_array_set(b, &self.param_index, &self.known_i64, array, index, value);
+                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                        crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle","I64","I64"], "allow", "mapped_symbol");
+                        b.emit_host_call(&symbol, argc, false);
+                    }
+                    _ => super::core_hostcall::lower_array_set(b, &self.param_index, &self.known_i64, array, index, value),
                 }
             }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
@@ -655,50 +646,29 @@ impl LowerCore {
                         dst.clone(),
                     );
                 } else if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
-                    // Prefer unique StringBox methods first to avoid name collisions with Array/Map
-                    if matches!(method.as_str(), "is_empty" | "charCodeAt") {
-                        if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
-                            if let Ok(h) = ph.resolve_method("StringBox", method.as_str()) {
-                                // Receiver
-                                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                                let mut argc = 1usize;
-                                if method.as_str() == "charCodeAt" {
-                                    if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
-                                    argc = 2;
-                                }
-                                if method.as_str() == "is_empty" { b.hint_ret_bool(true); }
-                                b.emit_plugin_invoke(h.type_id, h.method_id, argc, dst.is_some());
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({
-                                        "id": format!("plugin:{}:{}", h.box_type, method.as_str()),
-                                        "decision":"allow","reason":"plugin_invoke","argc": argc,
-                                        "type_id": h.type_id, "method_id": h.method_id
-                                    }),
-                                    "plugin","<jit>"
-                                );
+                    // StringBox（length/is_empty/charCodeAt）: policy+observe経由に統一
+                    if matches!(method.as_str(), "length" | "is_empty" | "charCodeAt") {
+                        // receiver
+                        if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                        let mut argc = 1usize;
+                        if method.as_str() == "charCodeAt" {
+                            if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
+                            argc = 2;
+                        }
+                        if method.as_str() == "is_empty" { b.hint_ret_bool(true); }
+                        let decision = crate::jit::policy::invoke::decide_box_method("StringBox", method.as_str(), argc, dst.is_some());
+                        match decision {
+                            crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                                b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some());
+                                crate::jit::observe::lower_plugin_invoke(&box_type, method.as_str(), type_id, method_id, argc);
                                 return Ok(());
                             }
-                        }
-                    }
-                    // String.length() specialized when receiver is String (avoid Array collision)
-                    if method.as_str() == "length" {
-                        let recv_is_string = func.metadata.value_types.get(array).map(|mt| matches!(mt, crate::mir::MirType::String)).unwrap_or(false);
-                        if recv_is_string {
-                            if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
-                                if let Ok(h) = ph.resolve_method("StringBox", "length") {
-                                    if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                                    b.emit_plugin_invoke(h.type_id, h.method_id, 1, dst.is_some());
-                                    crate::jit::events::emit_lower(
-                                        serde_json::json!({
-                                            "id": format!("plugin:{}:{}", h.box_type, "length"),
-                                            "decision":"allow","reason":"plugin_invoke","argc": 1,
-                                            "type_id": h.type_id, "method_id": h.method_id
-                                        }),
-                                        "plugin","<jit>"
-                                    );
-                                    return Ok(());
-                                }
+                            crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                                crate::jit::observe::lower_hostcall(&symbol, argc, &if argc==1 { ["Handle"][..].to_vec() } else { ["Handle","I64"][..].to_vec() }, "allow", "mapped_symbol");
+                                b.emit_host_call(&symbol, argc, dst.is_some());
+                                return Ok(());
                             }
+                            _ => {}
                         }
                     }
                     // Integer.get/set specialized when receiver is Integer (avoid Map collision)
@@ -728,27 +698,15 @@ impl LowerCore {
                         }
                     }
                     match method.as_str() {
-                        "len" | "length" | "push" | "get" | "set" => {
+                        "len" | "length" => {
                             // Resolve ArrayBox plugin method and emit plugin_invoke (symbolic)
                             if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
-                                let mname = if method.as_str() == "len" { "length" } else { method.as_str() };
+                                let mname = "length";
                                 if let Ok(h) = ph.resolve_method("ArrayBox", mname) {
                                     // Receiver
                                     if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
                                     let mut argc = 1usize;
-                                    match mname {
-                                        "push" | "get" => {
-                                            if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
-                                            argc += 1;
-                                        }
-                                        "set" => {
-                                            // two args: index, value
-                                            if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
-                                            if let Some(v2) = args.get(1) { self.push_value_if_known_or_param(b, v2); } else { b.emit_const_i64(0); }
-                                            argc += 2;
-                                        }
-                                        _ => {}
-                                    }
+                                    // length only
                                     b.emit_plugin_invoke(h.type_id, h.method_id, argc, dst.is_some());
                                     crate::jit::events::emit_lower(
                                         serde_json::json!({
@@ -938,200 +896,124 @@ impl LowerCore {
                             }
                         }
                         "push" => {
-                            // argc=2: (array_handle, value)
+                            // argc=2: (array, value)
+                            let argc = 2usize;
                             let val = args.get(0).and_then(|v| self.known_i64.get(v)).copied().unwrap_or(0);
                             if let Some(pidx) = self.param_index.get(array).copied() {
-                                let pol = crate::jit::policy::current();
-                                let wh = &pol.hostcall_whitelist;
-                                let sym = crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H;
-                                let allowed = !pol.read_only || wh.iter().any(|s| s == sym);
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({
-                                        "id": sym,
-                                        "decision": if allowed {"allow"} else {"fallback"},
-                                        "reason": if allowed {"sig_ok"} else {"policy_denied_mutating"},
-                                        "argc": 2,
-                                        "arg_types": ["Handle","I64"]
-                                    }),
-                                    "hostcall","<jit>"
-                                );
+                                // Prepare args
                                 b.emit_param_i64(pidx);
                                 b.emit_const_i64(val);
-                                b.emit_host_call(sym, 2, false);
-                            } else {
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H, "decision":"fallback", "reason":"receiver_not_param", "argc":2, "arg_types":["Handle","I64"]}),
-                                    "hostcall","<jit>"
-                                );
-                                let arr_idx = -1;
-                                b.emit_const_i64(arr_idx);
-                                b.emit_const_i64(val);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_PUSH, 2, false);
-                            }
-                        }
-                        "size" => {
-                            // MapBox.size(): argc=1 (map_handle)
-                            if let Some(pidx) = self.param_index.get(array).copied() {
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SIZE_H, "decision":"allow", "reason":"sig_ok", "argc":1, "arg_types":["Handle"]}),
-                                    "hostcall","<jit>"
-                                );
-                                b.emit_param_i64(pidx);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_SIZE_H, 1, dst.is_some());
-                            } else {
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SIZE_H, "decision":"fallback", "reason":"receiver_not_param", "argc":1, "arg_types":["Handle"]}),
-                                    "hostcall","<jit>"
-                                );
-                                let map_idx = -1;
-                                b.emit_const_i64(map_idx);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_SIZE, 1, dst.is_some());
-                            }
-                        }
-                        "get" => {
-                            // MapBox.get(key): check TyEnv to choose signature (handle|i64)
-                            if let Some(pidx) = self.param_index.get(array).copied() {
-                                // Build observed arg kinds using TyEnv when available
-                                let mut observed_kinds: Vec<crate::jit::hostcall_registry::ArgKind> = Vec::new();
-                                // First arg = map handle
-                                observed_kinds.push(crate::jit::hostcall_registry::ArgKind::Handle);
-                                // Second arg = key (classify from TyEnv; fallback to I64 if known integer literal)
-                                let key_kind = if let Some(key_vid) = args.get(0) {
-                                    if let Some(mt) = func.metadata.value_types.get(key_vid) {
-                                        match mt {
-                                            crate::mir::MirType::Float => crate::jit::hostcall_registry::ArgKind::I64, // coerced via VM path
-                                            crate::mir::MirType::Integer => crate::jit::hostcall_registry::ArgKind::I64,
-                                            crate::mir::MirType::Bool => crate::jit::hostcall_registry::ArgKind::I64,
-                                            crate::mir::MirType::String | crate::mir::MirType::Box(_) => crate::jit::hostcall_registry::ArgKind::Handle,
-                                            _ => {
-                                                if let Some(_) = self.known_i64.get(key_vid) { crate::jit::hostcall_registry::ArgKind::I64 } else { crate::jit::hostcall_registry::ArgKind::Handle }
-                                            }
-                                        }
-                                    } else if let Some(_) = self.known_i64.get(key_vid) {
-                                        crate::jit::hostcall_registry::ArgKind::I64
-                                    } else {
-                                        crate::jit::hostcall_registry::ArgKind::Handle
+                                // Decide policy
+                                let decision = crate::jit::policy::invoke::decide_box_method("ArrayBox", "push", argc, false);
+                                match decision {
+                                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                                        b.emit_plugin_invoke(type_id, method_id, argc, false);
+                                        crate::jit::observe::lower_plugin_invoke(&box_type, "push", type_id, method_id, argc);
                                     }
-                                } else { crate::jit::hostcall_registry::ArgKind::I64 };
-                                observed_kinds.push(key_kind);
-
-                                // Prepare arg_types strings for events
-                                let arg_types: Vec<&'static str> = observed_kinds.iter().map(|k| match k { crate::jit::hostcall_registry::ArgKind::I64 => "I64", crate::jit::hostcall_registry::ArgKind::F64 => "F64", crate::jit::hostcall_registry::ArgKind::Handle => "Handle" }).collect();
-
-                                // Signature check against registry (supports overloads) using canonical id
-                                let canonical = "nyash.map.get_h";
-                                match crate::jit::hostcall_registry::check_signature(canonical, &observed_kinds) {
-                                    Ok(()) => {
-                                        // Choose symbol id for event/emit
-                                        let event_id = if matches!(key_kind, crate::jit::hostcall_registry::ArgKind::Handle)
-                                            && args.get(0).and_then(|v| self.param_index.get(v)).is_some() {
-                                            crate::jit::r#extern::collections::SYM_MAP_GET_HH
-                                        } else {
-                                            crate::jit::r#extern::collections::SYM_MAP_GET_H
-                                        };
-                                        // Emit allow event
-                                crate::jit::events::emit_lower(
-                                            serde_json::json!({
-                                                "id": event_id,
-                                                "decision": "allow",
-                                                "reason": "sig_ok",
-                                                "argc": observed_kinds.len(),
-                                                "arg_types": arg_types
-                                            }),
-                                            "hostcall","<jit>"
-                                        );
-                                        // If key is i64, emit hostcall; if key is Handle and also a param, emit HH variant; otherwise fallback
-                                        if matches!(key_kind, crate::jit::hostcall_registry::ArgKind::I64) {
-                                            let key_i = args.get(0).and_then(|v| self.known_i64.get(v)).copied().unwrap_or(0);
-                                            b.emit_param_i64(pidx);
-                                            b.emit_const_i64(key_i);
-                                            b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_GET_H, 2, dst.is_some());
-                                        } else if let Some(kp) = args.get(0).and_then(|v| self.param_index.get(v)).copied() {
-                                            // key is a function parameter (handle), use HH variant
-                                            b.emit_param_i64(pidx);
-                                            b.emit_param_i64(kp);
-                                            b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_GET_HH, 2, dst.is_some());
-                                        } else {
-                                            // Not a param: fall back (receiver_not_param or key_not_param already logged)
-                                            // no emission; VM will execute
-                                        }
+                                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                                        crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle","I64"], "allow", "mapped_symbol");
+                                        b.emit_host_call(&symbol, argc, false);
                                     }
-                                    Err(reason) => {
-                                        // Signature mismatch - log and fallback
-                                        crate::jit::events::emit_lower(
-                                            serde_json::json!({
-                                                "id": canonical,
-                                                "decision": "fallback",
-                                                "reason": reason,
-                                                "argc": observed_kinds.len(),
-                                                "arg_types": arg_types
-                                            }),
-                                            "hostcall","<jit>"
-                                        );
-                                        // No emission; VM path will handle
+                                    _ => {
+                                        // Fallback to existing hostcall path
+                                        let sym = crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H;
+                                        crate::jit::observe::lower_hostcall(sym, argc, &["Handle","I64"], "fallback", "policy_or_unknown");
+                                        b.emit_host_call(sym, argc, false);
                                     }
                                 }
                             } else {
-                                // Receiver is not a function parameter; we cannot obtain a stable runtime handle.
-                                // Still classify and emit an event for visibility, then fallback to VM.
-                                let mut observed_kinds: Vec<crate::jit::hostcall_registry::ArgKind> = Vec::new();
-                                observed_kinds.push(crate::jit::hostcall_registry::ArgKind::Handle); // Map receiver (conceptually a handle)
-                                let key_kind = if let Some(key_vid) = args.get(0) {
-                                    if let Some(mt) = func.metadata.value_types.get(key_vid) {
-                                        match mt {
-                                            crate::mir::MirType::Integer => crate::jit::hostcall_registry::ArgKind::I64,
-                                            crate::mir::MirType::Float => crate::jit::hostcall_registry::ArgKind::I64,
-                                            crate::mir::MirType::Bool => crate::jit::hostcall_registry::ArgKind::I64,
-                                            crate::mir::MirType::String | crate::mir::MirType::Box(_) => crate::jit::hostcall_registry::ArgKind::Handle,
-                                            _ => crate::jit::hostcall_registry::ArgKind::Handle,
-                                        }
-                                    } else { crate::jit::hostcall_registry::ArgKind::Handle }
-                                } else { crate::jit::hostcall_registry::ArgKind::Handle };
-                                observed_kinds.push(key_kind);
-                                let arg_types: Vec<&'static str> = observed_kinds.iter().map(|k| match k { crate::jit::hostcall_registry::ArgKind::I64 => "I64", crate::jit::hostcall_registry::ArgKind::F64 => "F64", crate::jit::hostcall_registry::ArgKind::Handle => "Handle" }).collect();
-                                let sym = "nyash.map.get_h";
-                                let decision = match crate::jit::hostcall_registry::check_signature(sym, &observed_kinds) { Ok(()) => ("fallback", "receiver_not_param"), Err(reason) => ("fallback", reason) };
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({
-                                        "id": sym,
-                                        "decision": decision.0,
-                                        "reason": decision.1,
-                                        "argc": observed_kinds.len(),
-                                        "arg_types": arg_types
-                                    }),
-                                    "hostcall","<jit>"
-                                );
-                                // no-op: VM側が処理する
+                                // No receiver param index
+                                let arr_idx = -1;
+                                b.emit_const_i64(arr_idx);
+                                b.emit_const_i64(val);
+                                let sym = crate::jit::r#extern::collections::SYM_ARRAY_PUSH;
+                                crate::jit::observe::lower_hostcall(sym, argc, &["I64","I64"], "fallback", "receiver_not_param");
+                                b.emit_host_call(sym, argc, false);
+                            }
+                        }
+                        "size" => {
+                            let argc = 1usize;
+                            if let Some(pidx) = self.param_index.get(array).copied() {
+                                b.emit_param_i64(pidx);
+                                let decision = crate::jit::policy::invoke::decide_box_method("MapBox", "size", argc, dst.is_some());
+                                match decision {
+                                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                                        b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some());
+                                        crate::jit::observe::lower_plugin_invoke(&box_type, "size", type_id, method_id, argc);
+                                    }
+                                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                                        crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle"], "allow", "mapped_symbol");
+                                        b.emit_host_call(&symbol, argc, dst.is_some());
+                                    }
+                                    _ => {
+                                        let sym = crate::jit::r#extern::collections::SYM_MAP_SIZE_H;
+                                        crate::jit::observe::lower_hostcall(sym, argc, &["Handle"], "fallback", "policy_or_unknown");
+                                        b.emit_host_call(sym, argc, dst.is_some());
+                                    }
+                                }
+                            } else {
+                                let map_idx = -1;
+                                b.emit_const_i64(map_idx);
+                                let sym = crate::jit::r#extern::collections::SYM_MAP_SIZE;
+                                crate::jit::observe::lower_hostcall(sym, argc, &["I64"], "fallback", "receiver_not_param");
+                                b.emit_host_call(sym, argc, dst.is_some());
+                            }
+                        }
+                        "get" => {
+                            let argc = 2usize;
+                            if let Some(pidx) = self.param_index.get(array).copied() {
+                                b.emit_param_i64(pidx);
+                                if let Some(k) = args.get(0).and_then(|v| self.known_i64.get(v)).copied() { b.emit_const_i64(k); } else if let Some(kvid) = args.get(0) { self.push_value_if_known_or_param(b, kvid); } else { b.emit_const_i64(0); }
+                                let decision = crate::jit::policy::invoke::decide_box_method("MapBox", "get", argc, dst.is_some());
+                                match decision {
+                                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                                        b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some());
+                                        crate::jit::observe::lower_plugin_invoke(&box_type, "get", type_id, method_id, argc);
+                                    }
+                                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                                        crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle","I64"], "allow", "mapped_symbol");
+                                        b.emit_host_call(&symbol, argc, dst.is_some());
+                                    }
+                                    _ => {
+                                        let sym = crate::jit::r#extern::collections::SYM_MAP_GET_H;
+                                        crate::jit::observe::lower_hostcall(sym, argc, &["Handle","I64"], "fallback", "policy_or_unknown");
+                                        b.emit_host_call(sym, argc, dst.is_some());
+                                    }
+                                }
+                            } else {
+                                let sym = crate::jit::r#extern::collections::SYM_MAP_GET_H;
+                                crate::jit::observe::lower_hostcall(sym, argc, &["I64","I64"], "fallback", "receiver_not_param");
+                                b.emit_host_call(sym, argc, dst.is_some());
                             }
                         }
                         "set" => {
-                            // MapBox.set(key, value): (map_handle, key_i64, val_i64) — PoC: integer-only
+                            let argc = 3usize;
                             if let Some(pidx) = self.param_index.get(array).copied() {
                                 let key = args.get(0).and_then(|v| self.known_i64.get(v)).copied().unwrap_or(0);
                                 let val = args.get(1).and_then(|v| self.known_i64.get(v)).copied().unwrap_or(0);
-                                let pol = crate::jit::policy::current();
-                                let wh = &pol.hostcall_whitelist;
-                                let sym = crate::jit::r#extern::collections::SYM_MAP_SET_H;
-                                let allowed = !pol.read_only || wh.iter().any(|s| s == sym);
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({
-                                        "id": sym,
-                                        "decision": if allowed {"allow"} else {"fallback"},
-                                        "reason": if allowed {"sig_ok"} else {"policy_denied_mutating"},
-                                        "argc": 3,
-                                        "arg_types": ["Handle","I64","I64"]
-                                    }),
-                                    "hostcall","<jit>"
-                                );
                                 b.emit_param_i64(pidx);
                                 b.emit_const_i64(key);
                                 b.emit_const_i64(val);
-                                b.emit_host_call(sym, 3, false);
+                                let decision = crate::jit::policy::invoke::decide_box_method("MapBox", "set", argc, false);
+                                match decision {
+                                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                                        b.emit_plugin_invoke(type_id, method_id, argc, false);
+                                        crate::jit::observe::lower_plugin_invoke(&box_type, "set", type_id, method_id, argc);
+                                    }
+                                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                                        crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle","I64","I64"], "allow", "mapped_symbol");
+                                        b.emit_host_call(&symbol, argc, false);
+                                    }
+                                    _ => {
+                                        let sym = crate::jit::r#extern::collections::SYM_MAP_SET_H;
+                                        crate::jit::observe::lower_hostcall(sym, argc, &["Handle","I64","I64"], "fallback", "policy_or_unknown");
+                                        b.emit_host_call(sym, argc, false);
+                                    }
+                                }
                             } else {
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SET_H, "decision":"fallback", "reason":"receiver_not_param", "argc":3, "arg_types":["Handle","I64","I64"]}),
-                                    "hostcall","<jit>"
-                                );
+                                let sym = crate::jit::r#extern::collections::SYM_MAP_SET;
+                                crate::jit::observe::lower_hostcall(sym, argc, &["I64","I64","I64"], "fallback", "receiver_not_param");
+                                b.emit_host_call(sym, argc, false);
                             }
                         }
                         "charCodeAt" => {
@@ -1153,12 +1035,27 @@ impl LowerCore {
                             }
                         }
                         "has" => {
-                            // MapBox.has(key_i64) -> 0/1
+                            let argc = 2usize;
                             if let Some(pidx) = self.param_index.get(array).copied() {
                                 let key = args.get(0).and_then(|v| self.known_i64.get(v)).copied().unwrap_or(0);
                                 b.emit_param_i64(pidx);
                                 b.emit_const_i64(key);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_HAS_H, 2, dst.is_some());
+                                let decision = crate::jit::policy::invoke::decide_box_method("MapBox", "has", argc, dst.is_some());
+                                match decision {
+                                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
+                                        b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some());
+                                        crate::jit::observe::lower_plugin_invoke(&box_type, "has", type_id, method_id, argc);
+                                    }
+                                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
+                                        crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle","I64"], "allow", "mapped_symbol");
+                                        b.emit_host_call(&symbol, argc, dst.is_some());
+                                    }
+                                    _ => {
+                                        let sym = crate::jit::r#extern::collections::SYM_MAP_HAS_H;
+                                        crate::jit::observe::lower_hostcall(sym, argc, &["Handle","I64"], "fallback", "policy_or_unknown");
+                                        b.emit_host_call(sym, argc, dst.is_some());
+                                    }
+                                }
                             }
                         }
                         _ => {}

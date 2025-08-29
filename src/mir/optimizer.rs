@@ -59,6 +59,13 @@ impl MirOptimizer {
         
         // Pass 5: BoxField dependency optimization
         stats.merge(self.optimize_boxfield_operations(module));
+
+        // Pass 6: 受け手型ヒントの伝搬（callsite→callee）
+        // 目的: helper(arr){ return arr.length() } のようなケースで、
+        //       呼び出し元の引数型（String/Integer/Bool/Float）を callee の params に反映し、
+        //       Lowererがより正確にBox種別を選べるようにする。
+        let updates = crate::mir::passes::type_hints::propagate_param_type_hints(module);
+        if updates > 0 { stats.intrinsic_optimizations += updates as usize; }
         
         if self.debug {
             println!("✅ Optimization complete: {}", stats);
@@ -72,6 +79,7 @@ impl MirOptimizer {
         
         stats
     }
+
     
     /// Eliminate dead code (unused values)
     fn eliminate_dead_code(&mut self, module: &mut MirModule) -> OptimizationStats {

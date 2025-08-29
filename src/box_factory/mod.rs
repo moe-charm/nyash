@@ -115,6 +115,25 @@ impl UnifiedBoxRegistry {
         name: &str,
         args: &[Box<dyn NyashBox>],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // Prefer plugin-builtins when enabled and provider is available in v2 registry
+        if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
+            use crate::runtime::{get_global_registry, BoxProvider};
+            // Allowlist types for override: env NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox" (default: ArrayBox,MapBox)
+            let allow: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
+                list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+            } else {
+                vec!["ArrayBox".into(), "MapBox".into()]
+            };
+            if allow.iter().any(|t| t == name) {
+                let v2 = get_global_registry();
+                if let Some(provider) = v2.get_provider(name) {
+                    if let BoxProvider::Plugin(_lib) = provider {
+                        return v2.create_box(name, args)
+                            .map_err(|e| RuntimeError::InvalidOperation { message: format!("Plugin Box creation failed: {}", e) });
+                    }
+                }
+            }
+        }
         // Check cache first
         let cache = self.type_cache.read().unwrap();
         if let Some(&factory_index) = cache.get(name) {

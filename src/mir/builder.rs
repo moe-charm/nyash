@@ -64,6 +64,8 @@ pub struct MirBuilder {
 
     /// Optional per-value type annotations (MIR-level): ValueId -> MirType
     pub(super) value_types: HashMap<ValueId, super::MirType>,
+    /// Current static box name when lowering a static box body (e.g., "Main")
+    current_static_box: Option<String>,
 }
 
 impl MirBuilder {
@@ -82,6 +84,7 @@ impl MirBuilder {
             weak_fields_by_box: HashMap::new(),
             field_origin_class: HashMap::new(),
             value_types: HashMap::new(),
+            current_static_box: None,
         }
     }
 
@@ -399,7 +402,7 @@ impl MirBuilder {
             
             ASTNode::BoxDeclaration { name, methods, is_static, fields, constructors, weak_fields, .. } => {
                 if is_static && name == "Main" {
-                    self.build_static_main_box(methods.clone())
+                    self.build_static_main_box(name.clone(), methods.clone())
                 } else {
                     // Support user-defined boxes - handle as statement, return void
                     // Track as user-defined (eligible for method lowering)
@@ -1035,10 +1038,22 @@ impl MirBuilder {
         Ok(return_value)
     }
     
-    /// Build static box Main - extracts main() method body and converts to Program
-    fn build_static_main_box(&mut self, methods: std::collections::HashMap<String, ASTNode>) -> Result<ValueId, String> {
+    /// Build static box (e.g., Main) - extracts main() method body and converts to Program
+    /// Also lowers other static methods into standalone MIR functions: BoxName.method/N
+    fn build_static_main_box(&mut self, box_name: String, methods: std::collections::HashMap<String, ASTNode>) -> Result<ValueId, String> {
+        // Lower other static methods (except main) to standalone MIR functions so JIT can see them
+        for (mname, mast) in methods.iter() {
+            if mname == "main" { continue; }
+            if let ASTNode::FunctionDeclaration { params, body, .. } = mast {
+                let func_name = format!("{}.{}{}", box_name, mname, format!("/{}", params.len()));
+                self.lower_static_method_as_function(func_name, params.clone(), body.clone())?;
+            }
+        }
+        // Within this lowering, treat `me` receiver as this static box
+        let saved_static = self.current_static_box.clone();
+        self.current_static_box = Some(box_name.clone());
         // Look for the main() method
-        if let Some(main_method) = methods.get("main") {
+        let out = if let Some(main_method) = methods.get("main") {
             if let ASTNode::FunctionDeclaration { body, .. } = main_method {
                 // Convert the method body to a Program AST node and lower it
                 let program_ast = ASTNode::Program {
@@ -1049,11 +1064,14 @@ impl MirBuilder {
                 // Use existing Program lowering logic
                 self.build_expression(program_ast)
             } else {
-                Err("main method in static box Main is not a FunctionDeclaration".to_string())
+                Err("main method in static box is not a FunctionDeclaration".to_string())
             }
         } else {
-            Err("static box Main must contain a main() method".to_string())
-        }
+            Err("static box must contain a main() method".to_string())
+        };
+        // Restore static box context
+        self.current_static_box = saved_static;
+        out
     }
     
     /// Build field access: object.field
@@ -1287,10 +1305,8 @@ impl MirBuilder {
 
         // Fallback: use a symbolic constant (legacy behavior)
         let me_value = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: me_value,
-            value: ConstValue::String("__me__".to_string()),
-        })?;
+        let me_tag = if let Some(ref cls) = self.current_static_box { cls.clone() } else { "__me__".to_string() };
+        self.emit_instruction(MirInstruction::Const { dst: me_value, value: ConstValue::String(me_tag) })?;
         // Register a stable mapping so subsequent 'me' resolves to the same ValueId
         self.variable_map.insert("me".to_string(), me_value);
         Ok(me_value)
@@ -1344,6 +1360,23 @@ impl MirBuilder {
                     return Ok(void_id);
                 },
                 _ => {}
+            }
+        }
+
+        // If object is `me` within a static box, lower to direct Call: BoxName.method/N
+        if let ASTNode::Me { .. } = object {
+            if let Some(cls_name) = self.current_static_box.clone() {
+                // Build args first
+                let mut arg_values: Vec<ValueId> = Vec::new();
+                for a in &arguments { arg_values.push(self.build_expression(a.clone())?); }
+                let result_id = self.value_gen.next();
+                // Create const function name
+                let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
+                let fun_val = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const { dst: fun_val, value: ConstValue::String(fun_name) })?;
+                // Emit Call
+                self.emit_instruction(MirInstruction::Call { dst: Some(result_id), func: fun_val, args: arg_values, effects: EffectMask::READ.add(Effect::ReadHeap) })?;
+                return Ok(result_id);
             }
         }
 
@@ -1527,6 +1560,65 @@ impl MirBuilder {
         })?;
         
         Ok(result_id)
+    }
+
+    /// Lower a static method body into a standalone MIR function (no `me` parameter)
+    fn lower_static_method_as_function(
+        &mut self,
+        func_name: String,
+        params: Vec<String>,
+        body: Vec<ASTNode>,
+    ) -> Result<(), String> {
+        let mut param_types = Vec::new();
+        for _ in &params { param_types.push(MirType::Unknown); }
+        let mut returns_value = false;
+        for st in &body { if let ASTNode::Return { value: Some(_), .. } = st { returns_value = true; break; } }
+        let ret_ty = if returns_value { MirType::Unknown } else { MirType::Void };
+
+        let signature = FunctionSignature { name: func_name, params: param_types, return_type: ret_ty, effects: EffectMask::READ.add(Effect::ReadHeap) };
+        let entry = self.block_gen.next();
+        let function = MirFunction::new(signature, entry);
+
+        // Save state
+        let saved_function = self.current_function.take();
+        let saved_block = self.current_block.take();
+        let saved_var_map = std::mem::take(&mut self.variable_map);
+        let saved_value_gen = self.value_gen.clone();
+        self.value_gen.reset();
+
+        // Switch
+        self.current_function = Some(function);
+        self.current_block = Some(entry);
+        self.ensure_block_exists(entry)?;
+
+        // Bind parameters
+        if let Some(ref mut f) = self.current_function {
+            for p in &params { let pid = self.value_gen.next(); f.params.push(pid); self.variable_map.insert(p.clone(), pid); }
+        }
+
+        // Lower body
+        let program_ast = ASTNode::Program { statements: body, span: crate::ast::Span::unknown() };
+        let _last = self.build_expression(program_ast)?;
+
+        // Ensure terminator
+        if let Some(ref mut f) = self.current_function {
+            if let Some(block) = f.get_block(self.current_block.unwrap()) { if !block.is_terminated() {
+                let void_val = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const { dst: void_val, value: ConstValue::Void })?;
+                self.emit_instruction(MirInstruction::Return { value: Some(void_val) })?;
+            }}
+        }
+
+        // Add to module
+        let finalized = self.current_function.take().unwrap();
+        if let Some(ref mut module) = self.current_module { module.add_function(finalized); }
+
+        // Restore state
+        self.current_function = saved_function;
+        self.current_block = saved_block;
+        self.variable_map = saved_var_map;
+        self.value_gen = saved_value_gen;
+        Ok(())
     }
     
     /// Build box declaration: box Name { fields... methods... }

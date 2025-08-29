@@ -143,20 +143,68 @@ extern "C" fn nyash_host_stub0() -> i64 { 0 }
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     use crate::runtime::plugin_loader_v2::PluginBoxV2;
-    let trace = crate::jit::shim_trace::is_enabled();
+    let trace = crate::jit::observe::trace_enabled();
+    // Emit early shim-enter event for observability regardless of path taken
+    crate::jit::events::emit_runtime(
+        serde_json::json!({
+            "id": "shim.enter.i64", "type_id": type_id, "method_id": method_id, "argc": argc
+        }),
+        "shim", "<jit>"
+    );
     // Resolve receiver instance from legacy VM args (param index)
     let mut instance_id: u32 = 0;
     let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
-    if a0 >= 0 {
+    // Try handle registry first: a0 may be a handle (preferred)
+    if a0 > 0 {
+        if let Some(obj) = crate::jit::rt::handles::get(a0 as u64) {
+            if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
+                instance_id = p.instance_id();
+                invoke = Some(p.inner.invoke_fn);
+            } else {
+                // Builtin/native object fallback for common methods
+                if method_id as u32 == 1 {
+                    // length
+                    if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
+                    }
+                    if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                        return sb.value.len() as i64;
+                    }
+                }
+            }
+        }
+    }
+    // Also capture a direct pointer to native objects via legacy VM args index (compat)
+    let mut native_array_len: Option<i64> = None;
+    if a0 >= 0 && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
         crate::jit::rt::with_legacy_vm_args(|args| {
             let idx = a0 as usize;
             if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
                 if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
                     instance_id = p.instance_id();
                     invoke = Some(p.inner.invoke_fn);
+                } else if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    // Fallback length for ArrayBox when not plugin-backed
+                    if method_id as u32 == 1 { // length
+                        if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                            native_array_len = Some(ib.value);
+                        }
+                    }
                 }
             }
         });
+    }
+    if invoke.is_none() {
+        if let Some(v) = native_array_len {
+            if trace { eprintln!("[JIT-SHIM i64] native_fallback return {}", v); }
+            crate::jit::events::emit_runtime(
+                serde_json::json!({
+                    "id": "shim.native.i64", "type_id": type_id, "method_id": method_id, "argc": argc, "ret": v
+                }),
+                "shim", "<jit>"
+            );
+            return v;
+        }
     }
     // If not resolved, scan all VM args for a matching PluginBoxV2 by type_id
     if invoke.is_none() {
@@ -190,18 +238,19 @@ extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, 
     let mut out_len: usize = 4096;
     let out_ptr = unsafe { out.as_mut_ptr().add(canary_len) };
     if trace { eprintln!("[JIT-SHIM i64] invoke type={} method={} argc={} inst_id={} a1={} a2={} buf_len={}", type_id, method_id, argc, instance_id, a1, a2, buf.len()); }
-    crate::jit::shim_trace::push(format!("i64.start type={} method={} argc={} inst={} a1={} a2={}", type_id, method_id, argc, instance_id, a1, a2));
+    crate::jit::observe::runtime_plugin_shim_i64(type_id, method_id, argc, instance_id);
+    crate::jit::observe::trace_push(format!("i64.start type={} method={} argc={} inst={} a1={} a2={}", type_id, method_id, argc, instance_id, a1, a2));
     let rc = unsafe { invoke.unwrap()(type_id as u32, method_id as u32, instance_id, buf.as_ptr(), buf.len(), out_ptr, &mut out_len) };
     // Canary check
     let pre_ok = out[..canary_len].iter().all(|&b| b==canary_val);
     let post_ok = out[canary_len + out_len .. canary_len + out_len + canary_len].iter().all(|&b| b==canary_val);
     if trace { eprintln!("[JIT-SHIM i64] rc={} out_len={} canary_pre={} canary_post={}", rc, out_len, pre_ok, post_ok); }
-    crate::jit::shim_trace::push(format!("i64.end rc={} out_len={} pre_ok={} post_ok={}", rc, out_len, pre_ok, post_ok));
+    crate::jit::observe::trace_push(format!("i64.end rc={} out_len={} pre_ok={} post_ok={}", rc, out_len, pre_ok, post_ok));
     if rc != 0 { return 0; }
     let out_slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len) };
     if let Some((tag, sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
         if trace { eprintln!("[JIT-SHIM i64] TLV tag={} sz={}", tag, sz); }
-        crate::jit::shim_trace::push(format!("i64.tlv tag={} sz={}", tag, sz));
+        crate::jit::observe::trace_push(format!("i64.tlv tag={} sz={}", tag, sz));
         match tag {
             2 => { // I32
                 if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) { return v as i64; }
@@ -231,20 +280,59 @@ extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, 
 // F64-typed shim: decodes TLV first entry and returns f64 when possible
 extern "C" fn nyash_plugin_invoke3_f64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> f64 {
     use crate::runtime::plugin_loader_v2::PluginBoxV2;
-    let trace = crate::jit::shim_trace::is_enabled();
+    let trace = crate::jit::observe::trace_enabled();
+    crate::jit::events::emit_runtime(
+        serde_json::json!({
+            "id": "shim.enter.f64", "type_id": type_id, "method_id": method_id, "argc": argc
+        }),
+        "shim", "<jit>"
+    );
     // Resolve receiver + invoke_fn from legacy VM args
     let mut instance_id: u32 = 0;
     let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
-    if a0 >= 0 {
+    // Try handle registry first
+    let mut native_array_len: Option<f64> = None;
+    if a0 > 0 {
+        if let Some(obj) = crate::jit::rt::handles::get(a0 as u64) {
+            if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
+                instance_id = p.instance_id();
+                invoke = Some(p.inner.invoke_fn);
+            } else if method_id as u32 == 1 {
+                if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { native_array_len = Some(ib.value as f64); }
+                }
+                if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() { native_array_len = Some(sb.value.len() as f64); }
+            }
+        }
+    }
+    if a0 >= 0 && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
         crate::jit::rt::with_legacy_vm_args(|args| {
             let idx = a0 as usize;
             if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
                 if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
                     instance_id = p.instance_id();
                     invoke = Some(p.inner.invoke_fn);
+                } else if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    if method_id as u32 == 1 { // length
+                        if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                            native_array_len = Some(ib.value as f64);
+                        }
+                    }
                 }
             }
         });
+    }
+    if invoke.is_none() {
+        if let Some(v) = native_array_len {
+            if trace { eprintln!("[JIT-SHIM f64] native_fallback return {}", v); }
+            crate::jit::events::emit_runtime(
+                serde_json::json!({
+                    "id": "shim.native.f64", "type_id": type_id, "method_id": method_id, "argc": argc, "ret": v
+                }),
+                "shim", "<jit>"
+            );
+            return v;
+        }
     }
     if invoke.is_none() {
         crate::jit::rt::with_legacy_vm_args(|args| {
@@ -276,17 +364,28 @@ extern "C" fn nyash_plugin_invoke3_f64(type_id: i64, method_id: i64, argc: i64, 
     let mut out_len: usize = 4096;
     let out_ptr = unsafe { out.as_mut_ptr().add(canary_len) };
     if trace { eprintln!("[JIT-SHIM f64] invoke type={} method={} argc={} inst_id={} a1={} a2={} buf_len={}", type_id, method_id, argc, instance_id, a1, a2, buf.len()); }
-    crate::jit::shim_trace::push(format!("f64.start type={} method={} argc={} inst={} a1={} a2={}", type_id, method_id, argc, instance_id, a1, a2));
+    crate::jit::events::emit_runtime(
+        serde_json::json!({
+            "id": "plugin_invoke.f64",
+            "type_id": type_id,
+            "method_id": method_id,
+            "argc": argc,
+            "inst": instance_id
+        }),
+        "plugin", "<jit>"
+    );
+    crate::jit::observe::runtime_plugin_shim_i64(type_id, method_id, argc, instance_id);
+    crate::jit::observe::trace_push(format!("f64.start type={} method={} argc={} inst={} a1={} a2={}", type_id, method_id, argc, instance_id, a1, a2));
     let rc = unsafe { invoke.unwrap()(type_id as u32, method_id as u32, instance_id, buf.as_ptr(), buf.len(), out_ptr, &mut out_len) };
     let pre_ok = out[..canary_len].iter().all(|&b| b==canary_val);
     let post_ok = out[canary_len + out_len .. canary_len + out_len + canary_len].iter().all(|&b| b==canary_val);
     if trace { eprintln!("[JIT-SHIM f64] rc={} out_len={} canary_pre={} canary_post={}", rc, out_len, pre_ok, post_ok); }
-    crate::jit::shim_trace::push(format!("f64.end rc={} out_len={} pre_ok={} post_ok={}", rc, out_len, pre_ok, post_ok));
+    crate::jit::observe::trace_push(format!("f64.end rc={} out_len={} pre_ok={} post_ok={}", rc, out_len, pre_ok, post_ok));
     if rc != 0 { return 0.0; }
     let out_slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len) };
     if let Some((tag, sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
         if trace { eprintln!("[JIT-SHIM f64] TLV tag={} sz={}", tag, sz); }
-        crate::jit::shim_trace::push(format!("f64.tlv tag={} sz={}", tag, sz));
+        crate::jit::observe::trace_push(format!("f64.tlv tag={} sz={}", tag, sz));
         match tag {
             5 => { // F64
                 if sz == 8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return f64::from_le_bytes(b); }
@@ -861,20 +960,21 @@ impl IRBuilder for CraneliftBuilder {
         use cranelift_frontend::FunctionBuilder;
         use cranelift_module::{Linkage, Module};
 
+        // Use a single FunctionBuilder to construct all IR in this method to avoid dominance issues
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+
         // Pop argc values (right-to-left): receiver + up to 2 args
         let mut arg_vals: Vec<cranelift_codegen::ir::Value> = Vec::new();
         let take_n = argc.min(self.value_stack.len());
         for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { arg_vals.push(v); } }
         arg_vals.reverse();
-        // Pad to 3 values (receiver + a1 + a2)
-        while arg_vals.len() < 3 { arg_vals.push({
-            let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        // Pad to 3 values (receiver + a1 + a2) using the same builder
+        while arg_vals.len() < 3 {
             let z = fb.ins().iconst(types::I64, 0);
-            fb.finalize();
-            z
-        }); }
+            arg_vals.push(z);
+        }
 
         // Choose f64 shim if allowlisted
         let use_f64 = if has_ret {
@@ -895,11 +995,8 @@ impl IRBuilder for CraneliftBuilder {
         let func_id = self.module
             .declare_function(symbol, Linkage::Import, &sig)
             .expect("declare plugin shim failed");
-
-        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let fref = self.module.declare_func_in_func(func_id, fb.func);
+
         let c_type = fb.ins().iconst(types::I64, type_id as i64);
         let c_meth = fb.ins().iconst(types::I64, method_id as i64);
         let c_argc = fb.ins().iconst(types::I64, argc as i64);
@@ -1441,6 +1538,9 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_STRING_CHARCODE_AT_H, nyash_string_charcode_at_h as *const u8);
             builder.symbol(c::SYM_STRING_BIRTH_H, nyash_string_birth_h as *const u8);
             builder.symbol(c::SYM_INTEGER_BIRTH_H, nyash_integer_birth_h as *const u8);
+            // Plugin invoke shims (i64/f64)
+            builder.symbol("nyash_plugin_invoke3_i64", nyash_plugin_invoke3_i64 as *const u8);
+            builder.symbol("nyash_plugin_invoke3_f64", nyash_plugin_invoke3_f64 as *const u8);
         }
         let module = cranelift_jit::JITModule::new(builder);
         let ctx = cranelift_codegen::Context::new();

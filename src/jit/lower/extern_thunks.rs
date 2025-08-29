@@ -187,6 +187,27 @@ pub(super) extern "C" fn nyash_any_length_h(handle: u64) -> i64 {
         if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() {
             return sb.value.len() as i64;
         }
+    } else {
+        // Fallback: some call sites may still pass a parameter index instead of a handle (legacy path)
+        // Try to interpret small values as param index and read from legacy VM args
+        if handle <= 16 {
+            let idx = handle as usize;
+            let val = crate::jit::rt::with_legacy_vm_args(|args| args.get(idx).cloned());
+            if let Some(v) = val {
+                match v {
+                    crate::backend::vm::VMValue::BoxRef(b) => {
+                        if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                            if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { return ib.value; }
+                        }
+                        if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                            return sb.value.len() as i64;
+                        }
+                    }
+                    crate::backend::vm::VMValue::String(s) => { return s.len() as i64; }
+                    _ => {}
+                }
+            }
+        }
     }
     0
 }
