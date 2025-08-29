@@ -767,6 +767,7 @@ impl VM {
             MirInstruction::FutureSet { .. } => "FutureSet",
             MirInstruction::Await { .. } => "Await",
             MirInstruction::ExternCall { .. } => "ExternCall",
+            MirInstruction::PluginInvoke { .. } => "PluginInvoke",
         };
         *self.instr_counter.entry(key).or_insert(0) += 1;
     }

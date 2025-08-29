@@ -983,6 +983,79 @@ impl VM {
         
         Ok(ControlFlow::Continue)
     }
+
+    /// Execute a forced plugin invocation (no builtin fallback)
+    pub(super) fn execute_plugin_invoke(&mut self, dst: Option<ValueId>, box_val: ValueId, method: &str, args: &[ValueId]) -> Result<ControlFlow, VMError> {
+        let recv = self.get_value(box_val)?;
+        // Only allowed on plugin boxes
+        if let VMValue::BoxRef(pbox) = &recv {
+            if let Some(p) = pbox.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                // Resolve method_id via unified host
+                let host = crate::runtime::get_global_plugin_host();
+                let host = host.read().unwrap();
+                let mh = host.resolve_method(&p.box_type, method)
+                    .map_err(|_| VMError::InvalidInstruction(format!("Plugin method not found: {}.{}", p.box_type, method)))?;
+
+                // Encode args to TLV
+                let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(args.len() as u16);
+                for a in args.iter() {
+                    let v = self.get_value(*a)?;
+                    match v {
+                        VMValue::Integer(n) => crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, n),
+                        VMValue::Float(x) => crate::runtime::plugin_ffi_common::encode::f64(&mut tlv, x),
+                        VMValue::Bool(b) => crate::runtime::plugin_ffi_common::encode::bool(&mut tlv, b),
+                        VMValue::String(ref s) => crate::runtime::plugin_ffi_common::encode::string(&mut tlv, s),
+                        VMValue::BoxRef(ref b) => {
+                            if let Some(h) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut tlv, h.inner.type_id, h.inner.instance_id);
+                            } else {
+                                // Best effort: stringify non-plugin boxes
+                                let s = b.to_string_box().value;
+                                crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &s);
+                            }
+                        }
+                        VMValue::Void => crate::runtime::plugin_ffi_common::encode::string(&mut tlv, "void"),
+                        _ => {
+                            return Err(VMError::TypeError(format!("Unsupported VMValue in PluginInvoke args: {:?}", v)));
+                        }
+                    }
+                }
+
+                let mut out = vec![0u8; 4096];
+                let mut out_len: usize = out.len();
+                let code = unsafe {
+                    (p.inner.invoke_fn)(
+                        p.inner.type_id,
+                        mh.method_id,
+                        p.inner.instance_id,
+                        tlv.as_ptr(),
+                        tlv.len(),
+                        out.as_mut_ptr(),
+                        &mut out_len,
+                    )
+                };
+                if code != 0 {
+                    return Err(VMError::InvalidInstruction(format!("PluginInvoke failed: {}.{} rc={}", p.box_type, method, code)));
+                }
+                let vm_out = if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                    match tag {
+                        1 => crate::runtime::plugin_ffi_common::decode::bool(payload).map(VMValue::Bool).unwrap_or(VMValue::Void),
+                        2 => crate::runtime::plugin_ffi_common::decode::i32(payload).map(|v| VMValue::Integer(v as i64)).unwrap_or(VMValue::Void),
+                        3 => { // I64
+                            if payload.len() == 8 { let mut b=[0u8;8]; b.copy_from_slice(&payload[0..8]); VMValue::Integer(i64::from_le_bytes(b)) } else { VMValue::Void }
+                        }
+                        5 => crate::runtime::plugin_ffi_common::decode::f64(payload).map(VMValue::Float).unwrap_or(VMValue::Void),
+                        6 => VMValue::String(crate::runtime::plugin_ffi_common::decode::string(payload)),
+                        8 => VMValue::Void,
+                        _ => VMValue::Void,
+                    }
+                } else { VMValue::Void };
+                if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
+                return Ok(ControlFlow::Continue);
+            }
+        }
+        Err(VMError::InvalidInstruction(format!("PluginInvoke requires PluginBox receiver; got {:?}", recv)))
+    }
 }
 
 impl VM {

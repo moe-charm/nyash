@@ -84,6 +84,16 @@ pub enum MirInstruction {
         args: Vec<ValueId>,
         effects: EffectMask,
     },
+
+    /// Plugin invocation (forces plugin path; no builtin fallback)
+    /// `%dst = plugin_invoke %box.method(%args...)`
+    PluginInvoke {
+        dst: Option<ValueId>,
+        box_val: ValueId,
+        method: String,
+        args: Vec<ValueId>,
+        effects: EffectMask,
+    },
     
     // === Control Flow ===
     /// Conditional branch
@@ -397,7 +407,8 @@ impl MirInstruction {
             
             // Function calls use provided effect mask
             MirInstruction::Call { effects, .. } |
-            MirInstruction::BoxCall { effects, .. } => *effects,
+            MirInstruction::BoxCall { effects, .. } |
+            MirInstruction::PluginInvoke { effects, .. } => *effects,
             
             // Control flow (pure but affects execution)
             MirInstruction::Branch { .. } |
@@ -471,6 +482,7 @@ impl MirInstruction {
             
             MirInstruction::Call { dst, .. } |
             MirInstruction::BoxCall { dst, .. } |
+            MirInstruction::PluginInvoke { dst, .. } |
             MirInstruction::ExternCall { dst, .. } => *dst,
             
             MirInstruction::Store { .. } |
@@ -529,7 +541,7 @@ impl MirInstruction {
                 used
             },
             
-            MirInstruction::BoxCall { box_val, args, .. } => {
+            MirInstruction::BoxCall { box_val, args, .. } | MirInstruction::PluginInvoke { box_val, args, .. } => {
                 let mut used = vec![*box_val];
                 used.extend(args);
                 used
@@ -642,6 +654,15 @@ impl fmt::Display for MirInstruction {
                     write!(f, "call {}({}); effects: {}", func, 
                            args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
                            effects)
+                }
+            },
+            MirInstruction::PluginInvoke { dst, box_val, method, args, effects: _ } => {
+                if let Some(dst) = dst {
+                    write!(f, "{} = plugin_invoke {}.{}({})", dst, box_val, method,
+                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "))
+                } else {
+                    write!(f, "plugin_invoke {}.{}({})", box_val, method,
+                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "))
                 }
             },
             MirInstruction::Return { value } => {

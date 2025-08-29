@@ -324,6 +324,17 @@ impl MirPrinter {
                     format!("call {}.{}{}({})", box_val, method, id_suffix, args_str)
                 }
             },
+            MirInstruction::PluginInvoke { dst, box_val, method, args, effects: _ } => {
+                let args_str = args.iter()
+                    .map(|v| format!("{}", v))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if let Some(dst) = dst {
+                    format!("{} = plugin_invoke {}.{}({})", dst, box_val, method, args_str)
+                } else {
+                    format!("plugin_invoke {}.{}({})", box_val, method, args_str)
+                }
+            },
             
             MirInstruction::Branch { condition, then_bb, else_bb } => {
                 format!("br {}, label {}, label {}", condition, then_bb, else_bb)

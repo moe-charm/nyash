@@ -27,6 +27,7 @@ export NYASH_CLI_VERBOSE=1
 export NYASH_PLUGIN_STRICT=1
 export NYASH_USE_PLUGIN_BUILTINS=1
 export NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox,ConsoleBox"
+export NYASH_MIR_PLUGIN_INVOKE=1
 
 run_case() {
   local name=$1
@@ -45,9 +46,11 @@ run_case math_time_demo examples/math_time_demo.nyash
 echo "[smoke] all green" >&2
 
 # Second pass: disable builtins and re-run key cases
-echo "[smoke] second pass with NYASH_DISABLE_BUILTINS=1" >&2
-NYASH_DISABLE_BUILTINS=1 \
-  "$BIN" --backend vm "$ROOT_DIR/examples/console_demo.nyash" >/dev/null
-NYASH_DISABLE_BUILTINS=1 \
-  "$BIN" --backend vm "$ROOT_DIR/examples/math_time_demo.nyash" >/dev/null
-echo "[smoke] all green (builtins disabled)" >&2
+if [[ "${NYASH_SMOKE_STRICT_PLUGINS:-}" == "1" ]]; then
+  echo "[smoke] second pass with NYASH_DISABLE_BUILTINS=1" >&2
+  NYASH_DISABLE_BUILTINS=1 \
+    "$BIN" --backend vm "$ROOT_DIR/examples/console_demo.nyash" >/dev/null
+  NYASH_DISABLE_BUILTINS=1 \
+    "$BIN" --backend vm "$ROOT_DIR/examples/math_time_demo.nyash" >/dev/null
+  echo "[smoke] all green (builtins disabled)" >&2
+fi

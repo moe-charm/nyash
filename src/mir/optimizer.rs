@@ -43,6 +43,12 @@ impl MirOptimizer {
         // Pass 0: Normalize legacy instructions to unified forms (TypeOp/WeakRef/Barrier)
         stats.merge(self.normalize_legacy_instructions(module));
         
+        // Option: Force BoxCall → PluginInvoke (env)
+        if std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1") {
+            stats.merge(self.force_plugin_invoke(module));
+        }
+
         // Pass 1: Dead code elimination
         stats.merge(self.eliminate_dead_code(module));
         
@@ -304,6 +310,22 @@ impl MirOptimizer {
 }
 
 impl MirOptimizer {
+    /// Rewrite all BoxCall to PluginInvoke to force plugin path (no builtin fallback)
+    fn force_plugin_invoke(&mut self, module: &mut MirModule) -> OptimizationStats {
+        use super::MirInstruction as I;
+        let mut stats = OptimizationStats::new();
+        for (_fname, function) in &mut module.functions {
+            for (_bb, block) in &mut function.blocks {
+                for inst in &mut block.instructions {
+                    if let I::BoxCall { dst, box_val, method, args, effects, .. } = inst.clone() {
+                        *inst = I::PluginInvoke { dst, box_val, method, args, effects };
+                        stats.intrinsic_optimizations += 1;
+                    }
+                }
+            }
+        }
+        stats
+    }
     /// Normalize legacy instructions into unified MIR26 forms.
     /// - TypeCheck/Cast → TypeOp(Check/Cast)
     /// - WeakNew/WeakLoad → WeakRef(New/Load)

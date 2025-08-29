@@ -375,13 +375,13 @@ impl MirBuilder {
             }
         }
 
-        // Fallback: Emit a BoxCall instruction for regular or plugin/builtin method calls
-        self.emit_instruction(MirInstruction::BoxCall {
+        // Fallback: Emit a PluginInvoke instruction for regular method calls
+        self.emit_instruction(MirInstruction::PluginInvoke {
             dst: Some(result_id),
             box_val: object_value,
             method,
             args: arg_values,
-            effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
+            effects: EffectMask::READ.add(Effect::ReadHeap),
         })?;
         Ok(result_id)
     }
@@ -567,9 +567,8 @@ impl MirBuilder {
         // Record origin for optimization: dst was created by NewBox of class
         self.value_origin_newbox.insert(dst, class);
 
-        // Immediately call birth(...) on the created instance to run constructor semantics.
-        // birth typically returns void; we don't capture the result here (dst: None)
-        self.emit_instruction(MirInstruction::BoxCall {
+        // Immediately call birth(...) (plugin invoke) on the created instance
+        self.emit_instruction(MirInstruction::PluginInvoke {
             dst: None,
             box_val: dst,
             method: "birth".to_string(),

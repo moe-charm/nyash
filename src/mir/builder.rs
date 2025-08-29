@@ -69,6 +69,19 @@ pub struct MirBuilder {
 }
 
 impl MirBuilder {
+    /// Emit a Box method call (PluginInvoke unified)
+    fn emit_box_or_plugin_call(
+        &mut self,
+        dst: Option<ValueId>,
+        box_val: ValueId,
+        method: String,
+        method_id: Option<u16>,
+        args: Vec<ValueId>,
+        effects: EffectMask,
+    ) -> Result<(), String> {
+        let _ = method_id; // slot is no longer used in unified plugin invoke path
+        self.emit_instruction(MirInstruction::PluginInvoke { dst, box_val, method, args, effects })
+    }
     /// Create a new MIR builder
     pub fn new() -> Self {
         Self {
@@ -621,24 +634,24 @@ impl MirBuilder {
             self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
             // birth()
             let birt_mid = resolve_slot_by_type_name("MathBox", "birth");
-            self.emit_instruction(MirInstruction::BoxCall {
-                dst: None,
-                box_val: math_recv,
-                method: "birth".to_string(),
-                method_id: birt_mid,
-                args: vec![],
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
+            self.emit_box_or_plugin_call(
+                None,
+                math_recv,
+                "birth".to_string(),
+                birt_mid,
+                vec![],
+                EffectMask::READ.add(Effect::ReadHeap),
+            )?;
 
             let method_id = resolve_slot_by_type_name("MathBox", &name);
-            self.emit_instruction(MirInstruction::BoxCall {
-                dst: Some(dst),
-                box_val: math_recv,
-                method: name,
+            self.emit_box_or_plugin_call(
+                Some(dst),
+                math_recv,
+                name,
                 method_id,
-                args: math_args,
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
+                math_args,
+                EffectMask::READ.add(Effect::ReadHeap),
+            )?;
             // math.* returns Float
             self.value_types.insert(dst, super::MirType::Float);
             return Ok(dst);
@@ -658,14 +671,14 @@ impl MirBuilder {
             .get(&box_val)
             .and_then(|class_name| resolve_slot_by_type_name(class_name, &name));
 
-        self.emit_instruction(MirInstruction::BoxCall {
-            dst: Some(dst),
+        self.emit_box_or_plugin_call(
+            Some(dst),
             box_val,
-            method: name,
+            name,
             method_id,
-            args: arg_values,
-            effects: EffectMask::PURE.add(Effect::ReadHeap), // Conservative default
-        })?;
+            arg_values,
+            EffectMask::PURE.add(Effect::ReadHeap),
+        )?;
         
         Ok(dst)
     }
@@ -1159,14 +1172,14 @@ impl MirBuilder {
         // Immediately call birth(...) on the created instance to run constructor semantics.
         // birth typically returns void; we don't capture the result here (dst: None)
         let birt_mid = resolve_slot_by_type_name(&class, "birth");
-        self.emit_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: dst,
-            method: "birth".to_string(),
-            method_id: birt_mid,
-            args: arg_values,
-            effects: EffectMask::READ.add(Effect::ReadHeap),
-        })?;
+        self.emit_box_or_plugin_call(
+            None,
+            dst,
+            "birth".to_string(),
+            birt_mid,
+            arg_values,
+            EffectMask::READ.add(Effect::ReadHeap),
+        )?;
         
         Ok(dst)
     }
@@ -1492,14 +1505,14 @@ impl MirBuilder {
         let mid = maybe_class
             .as_ref()
             .and_then(|cls| resolve_slot_by_type_name(cls, &method));
-        self.emit_instruction(MirInstruction::BoxCall {
-            dst: Some(result_id),
-            box_val: object_value,
+        self.emit_box_or_plugin_call(
+            Some(result_id),
+            object_value,
             method,
-            method_id: mid,
-            args: arg_values,
-            effects: EffectMask::READ.add(Effect::ReadHeap), // Method calls may have side effects
-        })?;
+            mid,
+            arg_values,
+            EffectMask::READ.add(Effect::ReadHeap),
+        )?;
         Ok(result_id)
     }
 
@@ -1549,15 +1562,15 @@ impl MirBuilder {
         // Create result value
         let result_id = self.value_gen.next();
         
-        // Emit a BoxCall instruction for delegation
-        self.emit_instruction(MirInstruction::BoxCall {
-            dst: Some(result_id),
-            box_val: parent_value,
+        // Emit a PluginInvoke instruction for delegation
+        self.emit_box_or_plugin_call(
+            Some(result_id),
+            parent_value,
             method,
-            method_id: None,
-            args: arg_values,
-            effects: EffectMask::READ.add(Effect::ReadHeap),
-        })?;
+            None,
+            arg_values,
+            EffectMask::READ.add(Effect::ReadHeap),
+        )?;
         
         Ok(result_id)
     }
