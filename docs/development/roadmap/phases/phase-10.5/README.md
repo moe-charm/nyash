@@ -56,6 +56,12 @@
 - 参照管理: `Py_INCREF`/`Py_DECREF` をBoxライフサイクル（fini）に接続
 - プラグイン化: `nyash-python-plugin`（cdylib/staticlib）で `nyplug_python_invoke` を提供（将来の静的同梱に対応）
 
+追加方針（10.5c Handle-First/TLV 統一）
+- Lowerer は Handle-First を徹底（a0 は常に `nyash.handle.of(receiver)`）。
+- 引数TLVは String/Integer をプリミティブ化、その他は Handle(tag=8) に統一。
+- 受け手箱名が未確定な経路には by-name シムを導入（後方安全の回避路）。
+- 参考: `docs/reference/abi/ffi_calling_convention_min.md`
+
 ### 10.5c 境界の双方向化（3–5日）
 - Nyash→Python: BoxCall→plugin_invokeでCPython C-APIに橋渡し
 - Python→Nyash: `nyashrt`（CPython拡張）で `nyash.call(func, args)` を提供
@@ -71,6 +77,10 @@
 - サンプル: `py.eval("'hello' * 3").str()`、`numpy`の軽量ケース（import/shape参照などRO中心）
 - テスト: GILの再入・参照カウントリーク検知・例外伝搬・多プラットフォーム
 - ドキュメント: 使用例、制約（GIL/スレッド）、AOT時のリンク・ランタイム要件
+
+追加済みサンプル（最小チェーン）
+- VM: `examples/py_min_chain_vm.nyash`（import→getattr→call→println）
+- AOT: `examples/aot_py_min_chain.nyash`（import→getattr→call→return）
 
 ## 🎯 DoD（定義）
 - NyashからPythonコードを評価し、PyObjectをHandleで往復できる

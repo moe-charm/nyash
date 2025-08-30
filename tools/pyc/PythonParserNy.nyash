@@ -1,0 +1,32 @@
+// Nyash-only Python parser using PyRuntimeBox (no Rust build)
+static box PythonParserNy {
+  parse(code) {
+    local src
+    if (code == null || code.toString() == "") {
+      // Fallback: read from env via Python os.getenv
+      local os, getenv
+      local py = new PyRuntimeBox()
+      os = py.import("os")
+      getenv = os.getattr("getenv")
+      src = getenv.call("NYASH_PY_CODE").toString()
+    } else {
+      src = code.toString()
+    }
+
+    // ast.dump(ast.parse(src))
+    local ast, parsef, dumpf, tree, dump, dump_str
+    local py2 = new PyRuntimeBox()
+    ast = py2.import("ast")
+    parsef = ast.getattr("parse")
+    tree = parsef.call(src)
+    dumpf = ast.getattr("dump")
+    dump = dumpf.call(tree)
+    dump_str = dump.str()
+
+    // Minimal JSON (escape quotes minimally by replacing \" -> \\\" )
+    // Note: for robust escaping, prefer Python json.dumps in a later pass
+    local esc
+    esc = dump_str.replace("\"", "\\\"")
+    return new StringBox("{\"ast\":\"Module\",\"dump\":\"" + esc + "\"}")
+  }
+}

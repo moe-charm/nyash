@@ -1,0 +1,51 @@
+// Nyash-side Python compiler (Phase 10.7 C2 - minimal)
+// Orchestrates: Parser(JSON) -> IR(JSON) -> Nyash source (string)
+
+static box PyCompiler {
+  parseToJson() {
+    // Use Nyash-only parser via PyRuntimeBox (no Rust build)
+    local p
+    p = new PythonParserNy()
+    return p.parse("")
+  }
+
+  buildIRFromParse(json) {
+    // Minimal: analyze Python source from env and build IR with a constant return when possible
+    // Python snippet: parse code from os.getenv("NYASH_PY_CODE"), find first Return(Constant)
+    local os, getenv, src, ast, parsef, walkf, first_ret
+    local py = new PyRuntimeBox()
+    os = py.import("os")
+    getenv = os.getattr("getenv")
+    src = getenv.call("NYASH_PY_CODE").toString()
+    if (src == null || src == "") {
+      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":0}]}}")
+    }
+
+    ast = py.import("ast")
+    parsef = ast.getattr("parse")
+    local tree
+    tree = parsef.call(src)
+
+    // Walk via Python: extract first constant return value if present
+    local res
+    res = py.eval("next((n.value.value for n in __import__('ast').walk(__import__('ast').parse(__import__('os').getenv('NYASH_PY_CODE') or '')) if isinstance(n, __import__('ast').Return) and isinstance(n.value, __import__('ast').Constant)), None)")
+    // If number -> return that number; if string -> quoted
+    local val
+    val = res.str()
+    if (val.matches("^[0-9]+$")) {
+      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":" + val + "]}}")
+    } else if (val.length() > 0) {
+      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":\"" + val + "\"}]}}")
+    } else {
+      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":0}]}}")
+    }
+  }
+
+  irToNyashSource(irJson) {
+    // Build Nyash source from IR (minimal: assume IR has return_value embedded by PyIR.buildReturn)
+    local src
+    src = "static box Generated {\n  main() {\n    return 0\n  }\n}"
+    // Future: parse irJson and extract return_value
+    return new StringBox(src)
+  }
+}

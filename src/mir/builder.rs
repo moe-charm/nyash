@@ -14,6 +14,36 @@ use super::slot_registry::resolve_slot_by_type_name;
 use crate::ast::{ASTNode, LiteralValue, BinaryOperator};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fs;
+
+fn resolve_include_path_builder(filename: &str) -> String {
+    // If relative path provided, keep as is
+    if filename.starts_with("./") || filename.starts_with("../") {
+        return filename.to_string();
+    }
+    // Try nyash.toml roots: key/rest
+    let parts: Vec<&str> = filename.splitn(2, '/').collect();
+    if parts.len() == 2 {
+        let root = parts[0];
+        let rest = parts[1];
+        let cfg_path = "nyash.toml";
+        if let Ok(toml_str) = fs::read_to_string(cfg_path) {
+            if let Ok(toml_val) = toml::from_str::<toml::Value>(&toml_str) {
+                if let Some(include) = toml_val.get("include") {
+                    if let Some(roots) = include.get("roots").and_then(|v| v.as_table()) {
+                        if let Some(root_path) = roots.get(root).and_then(|v| v.as_str()) {
+                            let mut base = root_path.to_string();
+                            if !base.ends_with('/') && !base.ends_with('\\') { base.push('/'); }
+                            return format!("{}{}", base, rest);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Default to ./filename
+    format!("./{}", filename)
+}
 
 fn builder_debug_enabled() -> bool {
     std::env::var("NYASH_BUILDER_DEBUG").is_ok()
@@ -467,6 +497,35 @@ impl MirBuilder {
             
             ASTNode::AwaitExpression { expression, .. } => {
                 self.build_await_expression(*expression.clone())
+            },
+            
+            ASTNode::Include { filename, .. } => {
+                // Resolve and read included file
+                let mut path = resolve_include_path_builder(&filename);
+                if std::path::Path::new(&path).is_dir() {
+                    path = format!("{}/index.nyash", path.trim_end_matches('/'));
+                } else if std::path::Path::new(&path).extension().is_none() {
+                    path.push_str(".nyash");
+                }
+                let content = fs::read_to_string(&path)
+                    .map_err(|e| format!("Include read error '{}': {}", filename, e))?;
+                // Parse to AST
+                let included_ast = crate::parser::NyashParser::parse_from_string(&content)
+                    .map_err(|e| format!("Include parse error '{}': {:?}", filename, e))?;
+                // Find first static box name
+                let mut box_name: Option<String> = None;
+                if let crate::ast::ASTNode::Program { statements, .. } = &included_ast {
+                    for st in statements {
+                        if let crate::ast::ASTNode::BoxDeclaration { name, is_static, .. } = st {
+                            if *is_static { box_name = Some(name.clone()); break; }
+                        }
+                    }
+                }
+                let bname = box_name.ok_or_else(|| format!("Include target '{}' has no static box", filename))?;
+                // Lower included AST into current MIR (register types/methods)
+                let _ = self.build_expression(included_ast)?;
+                // Return a new instance of included box (no args)
+                self.build_new_expression(bname, vec![])
             },
             
             _ => {
@@ -1140,6 +1199,16 @@ impl MirBuilder {
     fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // Phase 9.78a: Unified Box creation using NewBox instruction
         
+        // Optimization: Primitive wrappers → emit Const directly when possible
+        if class == "IntegerBox" && arguments.len() == 1 {
+            if let ASTNode::Literal { value: LiteralValue::Integer(n), .. } = arguments[0].clone() {
+                let dst = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const { dst, value: ConstValue::Integer(n) })?;
+                self.value_types.insert(dst, super::MirType::Integer);
+                return Ok(dst);
+            }
+        }
+        
         // First, evaluate all arguments to get their ValueIds
         let mut arg_values = Vec::new();
         for arg in arguments {
@@ -1169,17 +1238,18 @@ impl MirBuilder {
         // Record origin for optimization: dst was created by NewBox of class
         self.value_origin_newbox.insert(dst, class.clone());
 
-        // Immediately call birth(...) on the created instance to run constructor semantics.
-        // birth typically returns void; we don't capture the result here (dst: None)
-        let birt_mid = resolve_slot_by_type_name(&class, "birth");
-        self.emit_box_or_plugin_call(
-            None,
-            dst,
-            "birth".to_string(),
-            birt_mid,
-            arg_values,
-            EffectMask::READ.add(Effect::ReadHeap),
-        )?;
+        // For plugin/builtin boxes, call birth(...). For user-defined boxes, skip (InstanceBox already constructed)
+        if !self.user_defined_boxes.contains(&class) {
+            let birt_mid = resolve_slot_by_type_name(&class, "birth");
+            self.emit_box_or_plugin_call(
+                None,
+                dst,
+                "birth".to_string(),
+                birt_mid,
+                arg_values,
+                EffectMask::READ.add(Effect::ReadHeap),
+            )?;
+        }
         
         Ok(dst)
     }

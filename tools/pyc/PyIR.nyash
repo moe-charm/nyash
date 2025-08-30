@@ -1,0 +1,11 @@
+// Minimal IR helper (Phase 10.7 C2)
+// Builds small JSON snippets for the compiler pipeline
+
+static box PyIR {
+  buildReturn(value) {
+    local s
+    // value can be integer or string literal already
+    s = "{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":" + value + "}]}}"
+    return new StringBox(s)
+  }
+}

@@ -137,6 +137,18 @@ impl JitManager {
 
     /// 10_c: execute compiled function if present (stub: empty args). Returns Some(VMValue) if JIT path was taken.
     pub fn execute_compiled(&mut self, func: &str, ret_ty: &crate::mir::MirType, args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> {
+        // Strict/Fail‑FastモードではJITは"コンパイル専用"（実行しない）
+        if std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
+            // 観測のためイベントだけ出す
+            crate::jit::events::emit_runtime(
+                serde_json::json!({
+                    "id": "jit_skip_execute_strict",
+                    "func": func
+                }),
+                "jit", func
+            );
+            return None;
+        }
         if let Some(h) = self.handle_of(func) {
             // Expose args to both legacy VM hostcalls and new JIT ABI TLS
             crate::jit::rt::set_legacy_vm_args(args);

@@ -1,0 +1,24 @@
+// Nyash Python Compiler entry (Phase 10.7 workbench)
+// Nyash-only pipeline: Parser/Compiler are implemented in Nyash using PyRuntimeBox
+// Usage:
+//   NYASH_PY_CODE=$'def main():\n    return 0' ./target/release/nyash --backend vm tools/pyc/pyc.nyash
+
+static box Main {
+  main() {
+    // Load modules via include (returns module boxes)
+    local PyIR = include "tools/pyc/PyIR.nyash"
+    local Parser = include "tools/pyc/PythonParserNy.nyash"
+    local Compiler = include "tools/pyc/PyCompiler.nyash"
+
+    local json, ir, src
+
+    // Skip echo of source to avoid plugin toString issues
+
+    json = Compiler.parseToJson()
+
+    ir = Compiler.buildIRFromParse(json)
+
+    src = Compiler.irToNyashSource(ir)
+    return 0
+  }
+}

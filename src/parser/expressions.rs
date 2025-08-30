@@ -286,6 +286,10 @@ impl NyashParser {
     /// 基本式をパース: リテラル、変数、括弧、this、new
     fn parse_primary(&mut self) -> Result<ASTNode, ParseError> {
         match &self.current_token().token_type {
+            TokenType::INCLUDE => {
+                // Allow include as an expression: include "path"
+                self.parse_include()
+            }
             TokenType::STRING(s) => {
                 let value = s.clone();
                 self.advance();

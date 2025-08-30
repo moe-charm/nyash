@@ -11,6 +11,124 @@ use crate::runtime::plugin_loader_unified;
 #[cfg(feature = "cranelift-jit")]
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
+// ---- Generic Birth (handle) ----
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_box_birth_h(type_id: i64) -> i64 {
+    // Map type_id -> type name and create via plugin host; return runtime handle
+    if type_id <= 0 { return 0; }
+    let tid = type_id as u32;
+    let name_opt = crate::runtime::plugin_loader_unified::get_global_plugin_host()
+        .read().ok()
+        .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
+        .and_then(|m| m.into_iter().find(|(_k,v)| *v == tid).map(|(k,_v)| k));
+    if let Some(box_type) = name_opt {
+        if let Ok(host) = crate::runtime::get_global_plugin_host().read() {
+            if let Ok(b) = host.create_box(&box_type, &[]) {
+                let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(b);
+                let h = crate::jit::rt::handles::to_handle(arc);
+                events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_h", "box_type": box_type, "type_id": tid, "handle": h}), "hostcall", "<jit>");
+                return h as i64;
+            } else {
+                events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_h", "error": "create_failed", "box_type": box_type, "type_id": tid}), "hostcall", "<jit>");
+            }
+        }
+    } else {
+        events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_h", "error": "type_map_failed", "type_id": tid}), "hostcall", "<jit>");
+    }
+    0
+}
+// Generic birth with args on JIT side: (type_id, argc, a1, a2) -> handle
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_box_birth_i64(type_id: i64, argc: i64, a1: i64, a2: i64) -> i64 {
+    use crate::runtime::plugin_loader_v2::PluginBoxV2;
+    if type_id <= 0 { return 0; }
+    // Resolve invoke for the type by creating a temp instance
+    let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
+    let mut box_type = String::new();
+    if let Some(name) = crate::runtime::plugin_loader_unified::get_global_plugin_host()
+        .read().ok()
+        .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
+        .and_then(|m| m.into_iter().find(|(_k,v)| *v == (type_id as u32)).map(|(k,_v)| k))
+    {
+        box_type = name;
+        if let Ok(host) = crate::runtime::get_global_plugin_host().read() {
+            if let Ok(b) = host.create_box(&box_type, &[]) {
+                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() { invoke = Some(p.inner.invoke_fn); }
+            }
+        }
+    }
+    if invoke.is_none() {
+        events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "error": "no_invoke", "type_id": type_id}), "hostcall", "<jit>");
+        return 0;
+    }
+    let method_id: u32 = 0; let instance_id: u32 = 0;
+    // Build TLV from a1/a2
+    let nargs = argc.max(0) as usize;
+    let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(nargs as u16);
+    let mut encode_val = |h: i64| {
+        if h > 0 {
+            if let Some(obj) = crate::jit::rt::handles::get(h as u64) {
+                if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
+                    let host = crate::runtime::get_global_plugin_host();
+                    if let Ok(hg) = host.read() {
+                        if p.box_type == "StringBox" {
+                            if let Ok(Some(sb)) = hg.invoke_instance_method("StringBox", "toUtf8", p.instance_id(), &[]) {
+                                if let Some(s) = sb.as_any().downcast_ref::<crate::box_trait::StringBox>() { crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value); return; }
+                            }
+                        } else if p.box_type == "IntegerBox" {
+                            if let Ok(Some(ibx)) = hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[]) {
+                                if let Some(i) = ibx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { crate::runtime::plugin_ffi_common::encode::i64(&mut buf, i.value); return; }
+                            }
+                        }
+                    }
+                    crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id());
+                    return;
+                }
+            }
+        }
+        crate::runtime::plugin_ffi_common::encode::i64(&mut buf, h);
+    };
+    if nargs >= 1 { encode_val(a1); }
+    if nargs >= 2 { encode_val(a2); }
+    // Invoke
+    let mut out = vec![0u8; 1024]; let mut out_len: usize = out.len();
+    let rc = unsafe { invoke.unwrap()(type_id as u32, method_id, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
+    if rc != 0 { events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "error": "invoke_failed", "type_id": type_id}), "hostcall", "<jit>"); return 0; }
+    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+        if tag == 8 && payload.len()==8 {
+            let mut t=[0u8;4]; t.copy_from_slice(&payload[0..4]); let mut i=[0u8;4]; i.copy_from_slice(&payload[4..8]);
+            let r_type = u32::from_le_bytes(t); let r_inst = u32::from_le_bytes(i);
+            let pb = crate::runtime::plugin_loader_v2::make_plugin_box_v2(box_type.clone(), r_type, r_inst, invoke.unwrap());
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(pb);
+            let h = crate::jit::rt::handles::to_handle(arc);
+            events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "box_type": box_type, "type_id": type_id, "argc": nargs, "handle": h}), "hostcall", "<jit>");
+            return h as i64;
+        }
+    }
+    events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "error": "decode_failed", "type_id": type_id}), "hostcall", "<jit>");
+    0
+}
+
+// ---- Handle helpers ----
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_handle_of(v: i64) -> i64 {
+    // If already a positive handle, pass through
+    if v > 0 { return v; }
+    // Otherwise interpret as legacy param index and convert BoxRef -> handle
+    if v >= 0 {
+        let idx = v as usize;
+        let mut out: i64 = 0;
+        crate::jit::rt::with_legacy_vm_args(|args| {
+            if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+                let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(b.clone());
+                out = crate::jit::rt::handles::to_handle(arc) as i64;
+            }
+        });
+        return out;
+    }
+    0
+}
+
 // ---- Math (native f64) ----
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_math_sin_f64(x: f64) -> f64 { x.sin() }
@@ -243,7 +361,7 @@ pub(super) extern "C" fn nyash_plugin_invoke_name_call_i64(argc: i64, a0: i64, a
     nyash_plugin_invoke_name_common_i64("call", argc, a0, a1, a2)
 }
 #[cfg(feature = "cranelift-jit")]
-fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, _a1: i64, _a2: i64) -> i64 {
+fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     // Resolve receiver
     let mut instance_id: u32 = 0;
     let mut type_id: u32 = 0;
@@ -280,60 +398,87 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, _a1: i6
             }
         });
     }
-    if invoke.is_none() { return 0; }
+    if invoke.is_none() { events::emit_runtime(serde_json::json!({"id": "plugin_invoke_by_name", "method": method, "error": "no_invoke"}), "hostcall", "<jit>"); return 0; }
     let box_type = box_type.unwrap_or_default();
     // Resolve method_id via PluginHost
-    let mh = if let Ok(host) = plugin_loader_unified::get_global_plugin_host().read() { host.resolve_method(&box_type, method) } else { return 0 };
-    let method_id = match mh { Ok(h) => h.method_id, Err(_) => return 0 } as u32;
-    // Build TLV args from legacy (skip receiver=pos0)
-    let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
-    let mut add_from_legacy = |pos: usize| {
-        crate::jit::rt::with_legacy_vm_args(|args| {
-            if let Some(v) = args.get(pos) {
-                use crate::backend::vm::VMValue as V;
-                match v {
-                    V::String(s) => crate::runtime::plugin_ffi_common::encode::string(&mut buf, s),
-                    V::Integer(i) => crate::runtime::plugin_ffi_common::encode::i64(&mut buf, *i),
-                    V::Float(f) => crate::runtime::plugin_ffi_common::encode::f64(&mut buf, *f),
-                    V::Bool(b) => crate::runtime::plugin_ffi_common::encode::bool(&mut buf, *b),
-                    V::BoxRef(b) => {
-                        if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
-                            let host = crate::runtime::get_global_plugin_host();
-                            if let Ok(hg) = host.read() {
-                                if p.box_type == "StringBox" {
-                                    if let Ok(Some(sb)) = hg.invoke_instance_method("StringBox", "toUtf8", p.instance_id(), &[]) {
-                                        if let Some(s) = sb.as_any().downcast_ref::<crate::box_trait::StringBox>() { crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value); return; }
-                                    }
-                                } else if p.box_type == "IntegerBox" {
-                                    if let Ok(Some(ibx)) = hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[]) {
-                                        if let Some(i) = ibx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { crate::runtime::plugin_ffi_common::encode::i64(&mut buf, i.value); return; }
-                                    }
-                                }
+    let mh = if let Ok(host) = plugin_loader_unified::get_global_plugin_host().read() { host.resolve_method(&box_type, method) } else { events::emit_runtime(serde_json::json!({"id": "plugin_invoke_by_name", "method": method, "box_type": box_type, "error": "host_read_failed"}), "hostcall", "<jit>"); return 0 };
+    let method_id = match mh { Ok(h) => h.method_id, Err(_) => { events::emit_runtime(serde_json::json!({"id": "plugin_invoke_by_name", "method": method, "box_type": box_type, "error": "resolve_failed"}), "hostcall", "<jit>"); return 0 } } as u32;
+    // Build TLV args from a1/a2 preferring handles; fallback to legacy (skip receiver=pos0)
+    let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(argc.saturating_sub(1).max(0) as u16);
+    let mut encode_arg = |val: i64, pos: usize| {
+        let mut appended = false;
+        if val > 0 {
+            if let Some(obj) = crate::jit::rt::handles::get(val as u64) {
+                if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
+                    let host = crate::runtime::get_global_plugin_host();
+                    if let Ok(hg) = host.read() {
+                        if p.box_type == "StringBox" {
+                            if let Ok(Some(sb)) = hg.invoke_instance_method("StringBox", "toUtf8", p.instance_id(), &[]) {
+                                if let Some(s) = sb.as_any().downcast_ref::<crate::box_trait::StringBox>() { crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value); appended = true; }
                             }
-                            crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id());
-                        } else {
-                            let s = b.to_string_box().value; crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
+                        } else if p.box_type == "IntegerBox" {
+                            if let Ok(Some(ibx)) = hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[]) {
+                                if let Some(i) = ibx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { crate::runtime::plugin_ffi_common::encode::i64(&mut buf, i.value); appended = true; }
+                            }
                         }
                     }
-                    _ => {}
+                    if !appended { crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id()); appended = true; }
                 }
             }
-        });
+        }
+        if !appended {
+            // Fallback: encode from legacy VM args at position
+            crate::jit::rt::with_legacy_vm_args(|args| {
+                if let Some(v) = args.get(pos) {
+                    use crate::backend::vm::VMValue as V;
+                    match v {
+                        V::String(s) => crate::runtime::plugin_ffi_common::encode::string(&mut buf, s),
+                        V::Integer(i) => crate::runtime::plugin_ffi_common::encode::i64(&mut buf, *i),
+                        V::Float(f) => crate::runtime::plugin_ffi_common::encode::f64(&mut buf, *f),
+                        V::Bool(b) => crate::runtime::plugin_ffi_common::encode::bool(&mut buf, *b),
+                        V::BoxRef(b) => {
+                            if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                                let host = crate::runtime::get_global_plugin_host();
+                                if let Ok(hg) = host.read() {
+                                    if p.box_type == "StringBox" {
+                                        if let Ok(Some(sb)) = hg.invoke_instance_method("StringBox", "toUtf8", p.instance_id(), &[]) {
+                                            if let Some(s) = sb.as_any().downcast_ref::<crate::box_trait::StringBox>() { crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s.value); return; }
+                                        }
+                                    } else if p.box_type == "IntegerBox" {
+                                        if let Ok(Some(ibx)) = hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[]) {
+                                            if let Some(i) = ibx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { crate::runtime::plugin_ffi_common::encode::i64(&mut buf, i.value); return; }
+                                        }
+                                    }
+                                }
+                                crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id());
+                            } else {
+                                let s = b.to_string_box().value; crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    // No legacy arg: encode raw i64 as last resort
+                    crate::runtime::plugin_ffi_common::encode::i64(&mut buf, val);
+                }
+            });
+        }
     };
-    if argc >= 2 { add_from_legacy(1); }
-    if argc >= 3 { add_from_legacy(2); }
+    if argc >= 2 { encode_arg(a1, 1); }
+    if argc >= 3 { encode_arg(a2, 2); }
     let mut out = vec![0u8; 4096]; let mut out_len: usize = out.len();
     let rc = unsafe { invoke.unwrap()(type_id as u32, method_id, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
-    if rc != 0 { return 0; }
+    if rc != 0 { events::emit_runtime(serde_json::json!({"id": "plugin_invoke_by_name", "method": method, "box_type": box_type, "error": "invoke_failed"}), "hostcall", "<jit>"); return 0; }
     let out_slice = &out[..out_len];
     if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
         match tag {
             3 => { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b); } }
             1 => { return if crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false) { 1 } else { 0 }; }
             5 => { if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref()==Some("1") { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); let f=f64::from_le_bytes(b); return f as i64; } } }
-            _ => {}
+            _ => { events::emit_runtime(serde_json::json!({"id": "plugin_invoke_by_name", "method": method, "box_type": box_type, "warn": "first_tlv_not_primitive_or_handle", "tag": tag}), "hostcall", "<jit>"); }
         }
     }
+    events::emit_runtime(serde_json::json!({"id": "plugin_invoke_by_name", "method": method, "box_type": box_type, "error": "decode_failed"}), "hostcall", "<jit>");
     0
 }
 

@@ -10,14 +10,53 @@ use super::*;
 use crate::parser::NyashParser;
 
 impl NyashInterpreter {
+    /// Resolve include path using nyash.toml [include.roots]
+    fn resolve_include_path(&self, filename: &str, caller_dir: Option<&str>) -> String {
+        // If explicit relative path, resolve relative to caller when provided
+        if filename.starts_with("./") || filename.starts_with("../") {
+            return filename.to_string();
+        }
+        // Try nyash.toml roots: key/path where key is first segment before '/'
+        let parts: Vec<&str> = filename.splitn(2, '/').collect();
+        if parts.len() == 2 {
+            let root = parts[0];
+            let rest = parts[1];
+            let cfg_path = "nyash.toml";
+            if let Ok(toml_str) = std::fs::read_to_string(cfg_path) {
+                if let Ok(toml_val) = toml::from_str::<toml::Value>(&toml_str) {
+                    if let Some(include) = toml_val.get("include") {
+                        if let Some(roots) = include.get("roots").and_then(|v| v.as_table()) {
+                            if let Some(root_path_val) = roots.get(root).and_then(|v| v.as_str()) {
+                                let mut base = root_path_val.to_string();
+                                if !base.ends_with('/') && !base.ends_with('\\') { base.push('/'); }
+                                let joined = format!("{}{}", base, rest);
+                                return joined;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback: if caller_dir provided, join relative
+        if let Some(dir) = caller_dir {
+            if !filename.starts_with('/') && !filename.contains(":\\") && !filename.contains(":/") {
+                return format!("{}/{}", dir.trim_end_matches('/'), filename);
+            }
+        }
+        // Default to ./filename
+        format!("./{}", filename)
+    }
     /// include文を実行：ファイル読み込み・パース・実行 - File inclusion system
     pub(super) fn execute_include(&mut self, filename: &str) -> Result<(), RuntimeError> {
-        // パス正規化（簡易版）
-        let canonical_path = if filename.starts_with("./") || filename.starts_with("../") {
-            filename.to_string()
-        } else {
-            format!("./{}", filename)
-        };
+        // パス解決（nyash.toml include.roots + 相対）
+        let mut canonical_path = self.resolve_include_path(filename, None);
+        // 拡張子補完・index対応
+        if std::path::Path::new(&canonical_path).is_dir() {
+            let idx = format!("{}/index.nyash", canonical_path.trim_end_matches('/'));
+            canonical_path = idx;
+        } else if std::path::Path::new(&canonical_path).extension().is_none() {
+            canonical_path.push_str(".nyash");
+        }
         
         // 重複読み込みチェック
         if self.shared.included_files.lock().unwrap().contains(&canonical_path) {
@@ -43,6 +82,72 @@ impl NyashInterpreter {
         self.execute(ast)?;
         
         Ok(())
+    }
+    
+    /// include式を実行：ファイルを評価し、最初のstatic boxを返す
+    pub(super) fn execute_include_expr(&mut self, filename: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // パス解決（nyash.toml include.roots + 相対）
+        let mut canonical_path = self.resolve_include_path(filename, None);
+        // 拡張子補完・index対応
+        if std::path::Path::new(&canonical_path).is_dir() {
+            let idx = format!("{}/index.nyash", canonical_path.trim_end_matches('/'));
+            canonical_path = idx;
+        } else if std::path::Path::new(&canonical_path).extension().is_none() {
+            canonical_path.push_str(".nyash");
+        }
+
+        // ファイル読み込み（static box名検出用）
+        let content = std::fs::read_to_string(&canonical_path)
+            .map_err(|e| RuntimeError::InvalidOperation {
+                message: format!("Failed to read file '{}': {}", filename, e),
+            })?;
+
+        // パースして最初のstatic box名を特定
+        let ast = NyashParser::parse_from_string(&content)
+            .map_err(|e| RuntimeError::InvalidOperation {
+                message: format!("Parse error in '{}': {:?}", filename, e),
+            })?;
+
+        let mut static_names: Vec<String> = Vec::new();
+        if let crate::ast::ASTNode::Program { statements, .. } = &ast {
+            for st in statements {
+                if let crate::ast::ASTNode::BoxDeclaration { name, is_static, .. } = st {
+                    if *is_static { static_names.push(name.clone()); }
+                }
+            }
+        }
+
+        if static_names.is_empty() {
+            return Err(RuntimeError::InvalidOperation { message: format!("include target '{}' does not define a static box", filename) });
+        }
+        if static_names.len() > 1 {
+            return Err(RuntimeError::InvalidOperation { message: format!("include target '{}' defines multiple static boxes; exactly one is required", filename) });
+        }
+        let box_name = static_names.remove(0);
+
+        // まだ未読なら評価（重複読み込みはスキップ）
+        let already = {
+            let set = self.shared.included_files.lock().unwrap();
+            set.contains(&canonical_path)
+        };
+        if !already {
+            self.shared.included_files.lock().unwrap().insert(canonical_path);
+            self.execute(ast)?;
+        }
+
+        // static boxを初期化・取得して返す
+        self.ensure_static_box_initialized(&box_name)?;
+
+        // statics名前空間からインスタンスを取り出す
+        let global_box = self.shared.global_box.lock()
+            .map_err(|_| RuntimeError::RuntimeFailure { message: "Failed to acquire global box lock".to_string() })?;
+        let statics = global_box.get_field("statics").ok_or(RuntimeError::TypeError { message: "statics namespace not found in GlobalBox".to_string() })?;
+        let statics_inst = statics.as_any().downcast_ref::<crate::instance_v2::InstanceBox>()
+            .ok_or(RuntimeError::TypeError { message: "statics field is not an InstanceBox".to_string() })?;
+        let value = statics_inst.get_field(&box_name)
+            .ok_or(RuntimeError::InvalidOperation { message: format!("Static box '{}' not found after include", box_name) })?;
+
+        Ok((*value).clone_or_share())
     }
     
     /// Arrow演算子を実行: sender >> receiver - Channel communication

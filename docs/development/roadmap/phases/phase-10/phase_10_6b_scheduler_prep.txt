@@ -5,6 +5,7 @@ What’s added
 - Queue + delayed tasks (spawn/spawn_after) and `poll()` to run work.
 - VM calls `scheduler.poll()` at MIR `Safepoint` to integrate cooperative scheduling.
  - Poll budget via env `NYASH_SCHED_POLL_BUDGET` (default: 1)
+ - Trace via `NYASH_SCHED_TRACE=1` (diagnostic)
 
 How to use (dev)
 - Build runtime with default SingleThreadScheduler (already default via builder), or inject custom via:

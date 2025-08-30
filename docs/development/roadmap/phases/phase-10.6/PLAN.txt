@@ -1,0 +1,87 @@
+# Phase 10.6 計画（整理版 / txt）
+
+目的: Thread-Safety（監査→仕込み）と協調スケジューラ（Safepoint連携）を最小構成で通し、次段の並列GC/並列実行に備える。
+
+====================
+1) ゴール（DoD）
+====================
+- 10.6a: Thread-Safety Audit の完了（一次）
+  - NyashBox/Runtime の共有戦略（Arc+RwLock/Mutex）を棚卸し、未整備箇所はTODO化
+  - Plugin-First 前提（PluginBoxV2 はクロススレッド未サポ運用を明記）
+- 10.6b: 協調スケジューラの足場
+  - SingleThreadScheduler（queue + delayed + poll）を Safepoint に接続済み
+  - デモ/トレース（NYASH_SCHED_DEMO=1, NYASH_SCHED_TRACE=1, 予算NYASH_SCHED_POLL_BUDGET）で観測可
+- 10.6c: 並列GC 設計の下準備
+  - Per-thread roots / Safepoint協調 / カードマーキングの設計メモを確定（段階導入方針）
+
+====================
+2) スコープ
+====================
+- 実装は“最小で通す”に限定（最適化は後続）。
+- 既存のVM=仕様、JIT=AOT生成専用という原則は維持。
+- Python/Plugin 経路は Plugin-First/Handle-First/TLV 統一の上に載せる（10.5で固定済）。
+
+====================
+3) サブフェーズとタスク
+====================
+3.1) 10.6a Thread-Safety Audit（1–2日）
+- ドキュメント: phase-10/phase_10_6a_thread_safety_audit.md（既存）に一次棚卸しを反映
+- Grepチェック: Arc/Mutex/RwLock/Send/Sync の確認と未整備箇所の列挙
+- 確認対象:
+  - ArrayBox/MapBox/BufferBox の共有戦略（Arc<RwLock<...>>）
+  - NyashRuntime メンバのSend+Sync前提（Arcで包む）
+  - Scheduler/GC Hooks のSend+Sync前提
+  - PluginBoxV2: クロススレッド未サポ運用を明記（将来設計のTODO）
+
+3.2) 10.6b Scheduler Prep（1–2日）
+- 仕様固定: poll() を MIR Safepoint で呼ぶ（既実装の確認）
+- 観測: NYASH_SCHED_DEMO=1 / NYASH_SCHED_TRACE=1 / NYASH_SCHED_POLL_BUDGET で動作確認
+- 最小API: spawn/spawn_after/poll/yield_now（SingleThreadScheduler）
+- ドキュメント: phase-10/phase_10_6b_scheduler_prep.txt 更新（Trace/観測例追加済）
+
+3.3) 10.6c Parallel GC Design（2–3日）
+- 設計メモ: phase-10/phase_10_6c_parallel_gc_design.txt（既存）を最終化
+- 方針:
+  - Per-thread roots, Safepoint協調、カードマーキングの段階導入
+  - デフォルトは単一スレッド継続（featureで並列ON）
+  - API拡張は後方互換シムを用意（barrier引数拡張など）
+
+====================
+4) 成果物（Artifacts）
+====================
+- Docs
+  - 10.6a 監査メモ: phase-10/phase_10_6a_thread_safety_audit.md（一次棚卸し完了）
+  - 10.6b スケジューラ: phase-10/phase_10_6b_scheduler_prep.txt（Trace/デモ手順）
+  - 10.6c 並列GC設計: phase-10/phase_10_6c_parallel_gc_design.txt（確定版）
+- Code
+  - src/runtime/scheduler.rs（SingleThreadScheduler / Send+Sync）
+  - MIR Safepoint → VM Runtime.scheduler.poll()（済）
+
+====================
+5) リスクと緩和
+====================
+- 共有の粒度: 競合を避けるため、Box内部は最小限のロックで運用（RwLock優先）。
+- 並列前倒しの誘惑: 10.6では並列化を“設計と足場”に限定、実実装は次フェーズ（feature）
+- Plugin/FFI: クロススレッド呼出しは明示的に非対応（ドキュメントで制約明記）。
+
+====================
+6) タイムライン（目安）
+====================
+- 10.6a: 1–2日
+- 10.6b: 1–2日
+- 10.6c: 2–3日
+
+====================
+7) 依存関係
+====================
+- 10.5 完了（AOT/nyrt/Handle-First/TLV統一/Strict運用）を前提
+- Docsの最新導線: docs/development/roadmap/phases/phase-10.5/INDEX.md
+
+====================
+8) 参照リンク
+====================
+- phase-10/phase_10_6_thread_safe_revolution.md（設計準備）
+- phase-10/phase_10_6a_thread_safety_audit.md（監査）
+- phase-10/phase_10_6b_scheduler_prep.txt（スケジューラ）
+- phase-10/phase_10_6c_parallel_gc_design.txt（並列GC）
+

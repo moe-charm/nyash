@@ -1,0 +1,16 @@
+// AOT Python evalR Err demo (returns Result.Err)
+// Build:
+//   cargo build --release --features cranelift-jit
+//   ./target/release/nyash --compile-native examples/aot_py_result_err.nyash -o app && ./app
+
+static box Main {
+  main() {
+    local py, r
+    py = new PyRuntimeBox()
+    // Division by zero triggers a Python exception → Err(...)
+    r = py.evalR(1/0)
+    me.console.println(r)
+    return 0
+  }
+}
+

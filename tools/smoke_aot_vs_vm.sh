@@ -17,6 +17,7 @@ TEST_FILES=(
     "examples/aot_min_string_len.nyash"
     "examples/aot_string_len_simple.nyash"
     "examples/jit_stats_bool_ret.nyash"
+    "examples/aot_py_min_chain.nyash"
 )
 
 # Counter for results
@@ -35,7 +36,7 @@ run_test() {
     
     # Run with VM backend
     echo -n "  VM execution... "
-    if NYASH_USE_PLUGIN_BUILTINS=1 ./target/release/nyash --backend vm "$test_file" > /tmp/${test_name}_vm.out 2>&1; then
+    if NYASH_USE_PLUGIN_BUILTINS=1 NYASH_PY_AUTODECODE=1 ./target/release/nyash --backend vm "$test_file" > /tmp/${test_name}_vm.out 2>&1; then
         VM_RESULT=$(tail -1 /tmp/${test_name}_vm.out | grep -oP 'Result: \K.*' || echo "NO_RESULT")
         echo "OK (Result: $VM_RESULT)"
     else

@@ -149,6 +149,8 @@ MathBox     = 50
 TimeBox     = 51
 PyRuntimeBox= 40
 PyObjectBox = 41
+PythonParserBox = 60
+PythonCompilerBox = 61
 
 # 新スタイルのプラグインルート（併用可・[libraries]は後方互換）
 [plugins]
@@ -162,6 +164,8 @@ PyObjectBox = 41
 "libnyash_counter_plugin" = "./plugins/nyash-counter-plugin"
 "libnyash_net_plugin"     = "./plugins/nyash-net-plugin"
 "libnyash_math_plugin"    = "./plugins/nyash-math-plugin"
+"libnyash_python_parser_plugin"  = "./plugins/nyash-python-parser-plugin"
+"libnyash_python_compiler_plugin"  = "./plugins/nyash-python-compiler-plugin"
 [libraries."libnyash_array_plugin"]
 boxes = ["ArrayBox"]
 path = "./plugins/nyash-array-plugin/target/release/libnyash_array_plugin"

@@ -1,0 +1,29 @@
+[box]
+name = "Nyash Python Parser Plugin"
+version = "0.1.0"
+description = "Python -> AST/IR (Phase 10.7 C1)"
+author = "Nyash Team"
+
+[provides]
+boxes = ["PythonParserBox"]
+
+[PythonParserBox]
+type_id = 60
+
+[PythonParserBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[PythonParserBox.methods.parse]
+id = 1
+args = [ { name = "code", type = "string" } ]
+returns = { type = "string" } # JSON AST (暫定)
+
+[implementation]
+ffi_version = 1
+thread_safe = false
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_python_parser_plugin.dll"
+linux   = "target/release/libnyash_python_parser_plugin.so"
+macos   = "target/release/libnyash_python_parser_plugin.dylib"

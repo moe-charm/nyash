@@ -251,22 +251,38 @@ extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, 
     crate::jit::observe::trace_push(format!("i64.end rc={} out_len={} pre_ok={} post_ok={}", rc, out_len, pre_ok, post_ok));
     if rc != 0 { return 0; }
     let out_slice = unsafe { std::slice::from_raw_parts(out_ptr, out_len) };
-    if let Some((tag, sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
-        if trace { eprintln!("[JIT-SHIM i64] TLV tag={} sz={}", tag, sz); }
-        crate::jit::observe::trace_push(format!("i64.tlv tag={} sz={}", tag, sz));
-        match tag {
-            2 => { // I32
-                if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) { return v as i64; }
-            }
-            3 => { // I64
-                if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) { return v as i64; }
-                if payload.len() == 8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b); }
-            }
-            1 => { // Bool
-                return if crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false) { 1 } else { 0 };
-            }
-            5 => { // F64 → optional conversion to i64 when enabled
-                if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref() == Some("1") {
+        if let Some((tag, sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
+            if trace { eprintln!("[JIT-SHIM i64] TLV tag={} sz={}", tag, sz); }
+            crate::jit::observe::trace_push(format!("i64.tlv tag={} sz={}", tag, sz));
+            match tag {
+                2 => { // I32
+                    if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) { return v as i64; }
+                }
+                3 => { // I64
+                    if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) { return v as i64; }
+                    if payload.len() == 8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b); }
+                }
+                8 => { // Handle(tag=8)
+                    if sz == 8 {
+                        let mut t=[0u8;4]; t.copy_from_slice(&payload[0..4]);
+                        let mut i=[0u8;4]; i.copy_from_slice(&payload[4..8]);
+                        let r_type = u32::from_le_bytes(t); let r_inst = u32::from_le_bytes(i);
+                        let box_type_name = crate::runtime::plugin_loader_unified::get_global_plugin_host()
+                            .read().ok()
+                            .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
+                            .and_then(|m| m.into_iter().find(|(_k,v)| *v == r_type).map(|(k,_v)| k))
+                            .unwrap_or_else(|| "PluginBox".to_string());
+                        let pb = crate::runtime::plugin_loader_v2::make_plugin_box_v2(box_type_name, r_type, r_inst, invoke.unwrap());
+                        let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(pb);
+                        let h = crate::jit::rt::handles::to_handle(arc);
+                        return h as i64;
+                    }
+                }
+                1 => { // Bool
+                    return if crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false) { 1 } else { 0 };
+                }
+                5 => { // F64 → optional conversion to i64 when enabled
+                    if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref() == Some("1") {
                     if sz == 8 {
                         let mut b=[0u8;8]; b.copy_from_slice(payload);
                         let f = f64::from_le_bytes(b);
@@ -1084,6 +1100,22 @@ impl IRBuilder for CraneliftBuilder {
             arg_vals.push(z);
         }
 
+        // Ensure receiver (a0) is a runtime handle via nyash.handle.of (Handle-First)
+        {
+            use cranelift_module::Linkage;
+            use crate::jit::r#extern::handles as h;
+            let call_conv_h = self.module.isa().default_call_conv();
+            let mut sig_h = Signature::new(call_conv_h);
+            sig_h.params.push(AbiParam::new(types::I64));
+            sig_h.returns.push(AbiParam::new(types::I64));
+            let func_id_h = self.module
+                .declare_function(h::SYM_HANDLE_OF, Linkage::Import, &sig_h)
+                .expect("declare handle.of failed");
+            let fref_h = self.module.declare_func_in_func(func_id_h, fb.func);
+            let call_h = fb.ins().call(fref_h, &[arg_vals[0]]);
+            if let Some(rv) = fb.inst_results(call_h).get(0).copied() { arg_vals[0] = rv; }
+        }
+
         // Choose f64 shim if allowlisted
         let use_f64 = if has_ret {
             if let Ok(list) = std::env::var("NYASH_JIT_PLUGIN_F64") {
@@ -1134,6 +1166,23 @@ impl IRBuilder for CraneliftBuilder {
         while arg_vals.len() < 3 {
             let z = fb.ins().iconst(types::I64, 0);
             arg_vals.push(z);
+        }
+
+        // Ensure receiver (a0) is a runtime handle via nyash.handle.of
+        {
+            use cranelift_module::Linkage;
+            use crate::jit::r#extern::handles as h;
+            let call_conv_h = self.module.isa().default_call_conv();
+            let mut sig_h = Signature::new(call_conv_h);
+            sig_h.params.push(AbiParam::new(types::I64));
+            sig_h.returns.push(AbiParam::new(types::I64));
+            let func_id_h = self.module
+                .declare_function(h::SYM_HANDLE_OF, Linkage::Import, &sig_h)
+                .expect("declare handle.of failed");
+            let fref_h = self.module.declare_func_in_func(func_id_h, fb.func);
+            let call_h = fb.ins().call(fref_h, &[arg_vals[0]]);
+            // Replace a0 with handle result
+            if let Some(rv) = fb.inst_results(call_h).get(0).copied() { arg_vals[0] = rv; }
         }
 
         // Signature: (i64 argc, i64 a0, i64 a1, i64 a2) -> i64
@@ -1400,6 +1449,7 @@ pub struct ObjectBuilder {
     desired_ret_is_f64: bool,
     ret_hint_is_b1: bool,
     local_slots: std::collections::HashMap<usize, cranelift_codegen::ir::StackSlot>,
+    block_param_counts: std::collections::HashMap<usize, usize>,
     pub stats: (u64,u64,u64,u64,u64),
     pub object_bytes: Option<Vec<u8>>,
 }
@@ -1435,6 +1485,7 @@ impl ObjectBuilder {
             desired_ret_is_f64: false,
             ret_hint_is_b1: false,
             local_slots: std::collections::HashMap::new(),
+            block_param_counts: std::collections::HashMap::new(),
             stats: (0,0,0,0,0),
             object_bytes: None,
         }
@@ -1632,9 +1683,57 @@ impl IRBuilder for ObjectBuilder {
     fn prepare_blocks(&mut self, count: usize) { use cranelift_frontend::FunctionBuilder; if count == 0 { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if self.blocks.len() < count { for _ in 0..(count - self.blocks.len()) { self.blocks.push(fb.create_block()); } } fb.finalize(); }
     fn switch_to_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.switch_to_block(self.blocks[index]); self.current_block_index = Some(index); fb.finalize(); }
     fn seal_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.seal_block(self.blocks[index]); fb.finalize(); }
-    fn br_if_top_is_true(&mut self, _: usize, _: usize) { /* control-flow omitted for AOT PoC */ }
-    fn ensure_block_params_i64(&mut self, _index: usize, _count: usize) { /* PHI omitted for AOT PoC */ }
-    fn push_block_param_i64_at(&mut self, _pos: usize) { /* omitted */ }
+    fn br_if_top_is_true(&mut self, then_index: usize, else_index: usize) {
+        use cranelift_codegen::ir::{types, condcodes::IntCC};
+        use cranelift_frontend::FunctionBuilder;
+        if then_index >= self.blocks.len() || else_index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        let cond_b1 = if let Some(v) = self.value_stack.pop() {
+            let ty = fb.func.dfg.value_type(v);
+            if ty == types::I64 { fb.ins().icmp_imm(IntCC::NotEqual, v, 0) } else { v }
+        } else {
+            let z = fb.ins().iconst(types::I64, 0);
+            fb.ins().icmp_imm(IntCC::NotEqual, z, 0)
+        };
+        fb.ins().brif(cond_b1, self.blocks[then_index], &[], self.blocks[else_index], &[]);
+        self.stats.3 += 1;
+        fb.finalize();
+    }
+    fn ensure_block_params_i64(&mut self, index: usize, count: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        if index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        let have = self.block_param_counts.get(&index).copied().unwrap_or(0);
+        if count > have {
+            let b = self.blocks[index];
+            for _ in have..count { let _ = fb.append_block_param(b, cranelift_codegen::ir::types::I64); }
+            self.block_param_counts.insert(index, count);
+        }
+        fb.finalize();
+    }
+    fn push_block_param_i64_at(&mut self, pos: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        use cranelift_codegen::ir::types;
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        let b = if let Some(idx) = self.current_block_index { self.blocks[idx] } else if let Some(b) = self.entry_block { b } else { fb.create_block() };
+        fb.switch_to_block(b);
+        let params = fb.func.dfg.block_params(b).to_vec();
+        if let Some(v) = params.get(pos).copied() { self.value_stack.push(v); }
+        else { let z = fb.ins().iconst(types::I64, 0); self.value_stack.push(z); }
+        fb.finalize();
+    }
+    fn jump_to(&mut self, target_index: usize) {
+        use cranelift_frontend::FunctionBuilder;
+        if target_index >= self.blocks.len() { return; }
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        fb.ins().jump(self.blocks[target_index], &[]);
+        self.stats.3 += 1;
+        fb.finalize();
+    }
     fn hint_ret_bool(&mut self, is_b1: bool) { self.ret_hint_is_b1 = is_b1; }
     fn ensure_local_i64(&mut self, index: usize) { use cranelift_codegen::ir::{StackSlotData, StackSlotKind}; use cranelift_frontend::FunctionBuilder; if self.local_slots.contains_key(&index) { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); let slot = fb.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8)); self.local_slots.insert(index, slot); fb.finalize(); }
     fn store_local_i64(&mut self, index: usize) { use cranelift_codegen::ir::{types, condcodes::IntCC}; use cranelift_frontend::FunctionBuilder; if let Some(mut v) = self.value_stack.pop() { if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); } let slot = self.local_slots.get(&index).copied(); let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); } else if let Some(b) = self.entry_block { fb.switch_to_block(b); } let ty = fb.func.dfg.value_type(v); if ty != types::I64 { if ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); } else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); } } if let Some(slot) = slot { fb.ins().stack_store(v, slot, 0); } fb.finalize(); } }
@@ -1653,7 +1752,8 @@ impl CraneliftBuilder {
         builder.symbol("nyash.host.stub0", nyash_host_stub0 as *const u8);
         {
             use crate::jit::r#extern::collections as c;
-            use super::extern_thunks::{nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64};
+            use crate::jit::r#extern::{handles as h, birth as b};
+            use super::extern_thunks::{nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64, nyash_handle_of, nyash_box_birth_h, nyash_box_birth_i64};
             builder.symbol(c::SYM_ARRAY_LEN, nyash_array_len as *const u8);
             builder.symbol(c::SYM_ARRAY_GET, nyash_array_get as *const u8);
             builder.symbol(c::SYM_ARRAY_SET, nyash_array_set as *const u8);
@@ -1683,6 +1783,10 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_STRING_CHARCODE_AT_H, nyash_string_charcode_at_h as *const u8);
             builder.symbol(c::SYM_STRING_BIRTH_H, nyash_string_birth_h as *const u8);
             builder.symbol(c::SYM_INTEGER_BIRTH_H, nyash_integer_birth_h as *const u8);
+            builder.symbol(b::SYM_BOX_BIRTH_H, nyash_box_birth_h as *const u8);
+            builder.symbol("nyash.box.birth_i64", nyash_box_birth_i64 as *const u8);
+            // Handle helpers
+            builder.symbol(h::SYM_HANDLE_OF, nyash_handle_of as *const u8);
             // Plugin invoke shims (i64/f64)
             builder.symbol("nyash_plugin_invoke3_i64", nyash_plugin_invoke3_i64 as *const u8);
             builder.symbol("nyash_plugin_invoke3_f64", nyash_plugin_invoke3_f64 as *const u8);

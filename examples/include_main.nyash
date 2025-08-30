@@ -1,0 +1,7 @@
+static box Main {
+  main() {
+    local Math = include "examples/include_math.nyash"
+    local r = Math.add(1, 2)
+    return r
+  }
+}

@@ -1,7 +1,7 @@
 //! Boxファクトリレジストリ - Box生成の中央管理
 //! 
-//! ビルトインBoxとプラグインBoxを統一的に管理し、
-//! 透過的な置き換えを実現する
+//! プラグインBoxを中心にBox生成を管理する（Plugin-First）。
+//! 旧ビルトイン経路は互換目的のAPIとして最小限に保持（テスト用途）。
 
 use crate::box_trait::NyashBox;
 use crate::runtime::plugin_config::PluginConfig;
@@ -10,14 +10,14 @@ use std::sync::{Arc, RwLock};
 
 /// Box生成方法を表す列挙型
 pub enum BoxProvider {
-    /// ビルトイン実装（Rust関数）
+    /// 互換用ビルトイン実装（Rust関数、現在は原則未使用）
     Builtin(BoxConstructor),
     
     /// プラグイン実装（プラグイン名を保持）
     Plugin(String),
 }
 
-/// ビルトインBoxのコンストラクタ関数型
+/// 互換用ビルトインBoxのコンストラクタ関数型
 pub type BoxConstructor = fn(&[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, String>;
 
 /// Boxファクトリレジストリ
@@ -34,7 +34,7 @@ impl BoxFactoryRegistry {
         }
     }
     
-    /// ビルトインBoxを登録
+    /// 互換用ビルトインBoxを登録（通常は使用しない）
     pub fn register_builtin(&self, name: &str, constructor: BoxConstructor) {
         let mut providers = self.providers.write().unwrap();
         providers.insert(name.to_string(), BoxProvider::Builtin(constructor));

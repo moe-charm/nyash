@@ -80,6 +80,55 @@
 6) ドキュメント/サンプル更新
    - Handle-First のガイドと最小AOT手順の追記。
 
+### 10.5c ドキュメント/サンプル 追加（本スナップショット）
+- FFI最小仕様（a0/a1/a2, 戻りTLV）を短文化: `docs/reference/abi/ffi_calling_convention_min.md`
+- birth引数の一般化メモ（可変長TLV/例外伝搬）: `docs/ideas/new-features/2025-08-30-birth-args-tlv-generalization.md`
+- Python最小チェーンの追加:
+  - VM: `examples/py_min_chain_vm.nyash`
+  - AOT: `examples/aot_py_min_chain.nyash`
+
+### 10.5d AOT統合 仕上げ（今回）
+- ガイド追加: `docs/guides/build/aot_quickstart.md`（CLI/スクリプト/内部フロー/FAQ）
+- by-nameシム整理: nyrtの `nyash_plugin_invoke_name_{getattr,call}_i64` をFFI要約へ反映
+- スモーク更新: `tools/smoke_aot_vs_vm.sh` に Python最小チェーンを追加（VM側は `NYASH_PY_AUTODECODE=1`）
+- 今後: nyrtシムのTLV拡充（bytes/N引数）、Windowsのプラグイン探索微調整
+
+### 10.5e 小仕上げ（今回）
+- nyrtシム TLV拡充: BufferBox→bytes(tag=7) 自動エンコード、3引数目以降はレガシー引数からTLVに詰める暫定N引数対応
+- Windows探索調整: EXE起動時に PATHへexe/`plugins/`を追加、`PYTHONHOME` 未設定時は `exe\python` を自動採用（存在時）。相対PYTHONHOMEはexe基準に正規化
+
+### 次フェーズ: 10.6（Thread-Safety / Scheduler）
+- 計画: docs/development/roadmap/phases/phase-10.6/PLAN.txt（新規）
+- 10.6a 監査: Array/Map/Buffer/NyashRuntime/Scheduler の共有戦略（Arc+RwLock/Mutex）を確認し、未整備箇所をTODO化
+- 10.6b スケジューラ: SingleThreadScheduler を Safepoint で `poll()` 連携（観測: `NYASH_SCHED_DEMO/TRACE/POLL_BUDGET`）
+- 10.6c 並列GC設計: per-thread roots / safepoint協調 / カードマーキングの段階導入メモ確定
+
+### 橋渡し: 10.7 Python Native（トランスパイル / All-or-Nothing）
+- 方針と計画: docs/development/roadmap/phases/phase-10.7/PLAN.txt（新規）
+- 二本立て明確化: 実行系（現行PyRuntimeBox）と トランスパイル系（Python→Nyash→MIR→AOT）を併走。自動フォールバック無し
+- サブフェーズ: C1 Parser（1週）→ C2 Compiler Core（2週）→ C3 CLI配線（3日）→ C4 テスト（並行）
+- 既存導線の活用: 生成Nyashは既存 `--compile-native` でAOT化（Strict）
+
+### Nyash-only パイプライン（作業場 / 最小導線）
+- 目的: すべてNyashで書き、即実行・即修正できる足場を先に用意
+- 追加ファイル: tools/pyc/
+  - PythonParserNy.nyash（PyRuntimeBox経由で ast.parse/dump。NYASH_PY_CODE を参照）
+  - PyIR.nyash（IR最小ヘルパ）/ PyCompiler.nyash（Nyash側コンパイラ骨組み）/ pyc.nyash（エントリ）
+- Parser/Compiler Rustプラグインは雛形として併存（将来削減）。当面はNyash実装を優先
+
+### 次の順番（小粒で進める）
+1) Parser JSON→IR 変換の最小実装（def/return）。tools/pyc/PyCompiler.nyash に追加（env NYASH_PY_CODE を Pythonで解析→IR生成）
+2) IR→Nyash 生成の最小拡張（Return定数→Return文字列/数値に対応、If/Assignは後続）
+3) All-or-NothingのStrictスイッチ（unsupported_nodes 非空ならErr）。開閉はenvで制御
+4) CLI隠しフラグ `--pyc/--pyc-native` を追加し、Parser→Compiler→AOT を一本化（内部で現行AOTを使用）
+5) サンプル/回帰: tools/pyc の最小ケースをVM/AOTで回し、差分を記録
+
+### Python AOTサンプルの追加（最小）
+- `examples/aot_py_min_chain.nyash`（import→getattr→call）
+- `examples/aot_py_result_ok.nyash`（returns_result: Ok）
+- `examples/aot_py_result_err.nyash`（returns_result: Err）
+- kwargs暫定ブリッジ（env eval + **dict）: `examples/aot_py_eval_kwargs_env.nyash`
+
 ## 🔧 実行方法（再起動手順）
 ```bash
 cargo build --release --features cranelift-jit

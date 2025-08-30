@@ -104,10 +104,79 @@ impl NyashRunner {
 
     /// Collect Box declarations from AST and register into runtime
     pub(crate) fn collect_box_declarations(&self, ast: &ASTNode, runtime: &NyashRuntime) {
+        fn resolve_include_path(filename: &str) -> String {
+            if filename.starts_with("./") || filename.starts_with("../") { return filename.to_string(); }
+            let parts: Vec<&str> = filename.splitn(2, '/').collect();
+            if parts.len() == 2 {
+                let root = parts[0]; let rest = parts[1];
+                let cfg_path = "nyash.toml";
+                if let Ok(toml_str) = std::fs::read_to_string(cfg_path) {
+                    if let Ok(toml_val) = toml::from_str::<toml::Value>(&toml_str) {
+                        if let Some(include) = toml_val.get("include") {
+                            if let Some(roots) = include.get("roots").and_then(|v| v.as_table()) {
+                                if let Some(base) = roots.get(root).and_then(|v| v.as_str()) {
+                                    let mut b = base.to_string(); if !b.ends_with('/') && !b.ends_with('\\') { b.push('/'); }
+                                    return format!("{}{}", b, rest);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            format!("./{}", filename)
+        }
+
         fn walk(node: &ASTNode, runtime: &NyashRuntime) {
             match node {
                 ASTNode::Program { statements, .. } => { for st in statements { walk(st, runtime); } }
                 ASTNode::FunctionDeclaration { body, .. } => { for st in body { walk(st, runtime); } }
+                ASTNode::Include { filename, .. } => {
+                    let mut path = resolve_include_path(filename);
+                    if std::path::Path::new(&path).is_dir() {
+                        path = format!("{}/index.nyash", path.trim_end_matches('/'));
+                    } else if std::path::Path::new(&path).extension().is_none() {
+                        path.push_str(".nyash");
+                    }
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Ok(inc_ast) = NyashParser::parse_from_string(&content) {
+                            walk(&inc_ast, runtime);
+                        }
+                    }
+                }
+                ASTNode::Assignment { target, value, .. } => {
+                    walk(target, runtime); walk(value, runtime);
+                }
+                ASTNode::Return { value, .. } => { if let Some(v) = value { walk(v, runtime); } }
+                ASTNode::Print { expression, .. } => { walk(expression, runtime); }
+                ASTNode::If { condition, then_body, else_body, .. } => {
+                    walk(condition, runtime);
+                    for st in then_body { walk(st, runtime); }
+                    if let Some(eb) = else_body { for st in eb { walk(st, runtime); } }
+                }
+                ASTNode::Loop { condition, body, .. } => {
+                    walk(condition, runtime); for st in body { walk(st, runtime); }
+                }
+                ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => {
+                    for st in try_body { walk(st, runtime); }
+                    for cc in catch_clauses { for st in &cc.body { walk(st, runtime); } }
+                    if let Some(fb) = finally_body { for st in fb { walk(st, runtime); } }
+                }
+                ASTNode::Throw { expression, .. } => { walk(expression, runtime); }
+                ASTNode::Local { initial_values, .. } => {
+                    for iv in initial_values { if let Some(v) = iv { walk(v, runtime); } }
+                }
+                ASTNode::Outbox { initial_values, .. } => {
+                    for iv in initial_values { if let Some(v) = iv { walk(v, runtime); } }
+                }
+                ASTNode::FunctionCall { arguments, .. } => { for a in arguments { walk(a, runtime); } }
+                ASTNode::MethodCall { object, arguments, .. } => { walk(object, runtime); for a in arguments { walk(a, runtime); } }
+                ASTNode::FieldAccess { object, .. } => { walk(object, runtime); }
+                ASTNode::New { arguments, .. } => { for a in arguments { walk(a, runtime); } }
+                ASTNode::BinaryOp { left, right, .. } => { walk(left, runtime); walk(right, runtime); }
+                ASTNode::UnaryOp { operand, .. } => { walk(operand, runtime); }
+                ASTNode::AwaitExpression { expression, .. } => { walk(expression, runtime); }
+                ASTNode::Arrow { sender, receiver, .. } => { walk(sender, runtime); walk(receiver, runtime); }
+                ASTNode::Nowait { expression, .. } => { walk(expression, runtime); }
                 ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
                     for (_mname, mnode) in methods { walk(mnode, runtime); }
                     for (_ckey, cnode) in constructors { walk(cnode, runtime); }

@@ -467,6 +467,12 @@ impl LowerCore {
         }
         if let Some(v) = self.known_i64.get(id).copied() {
             b.emit_const_i64(v);
+            return;
+        }
+        // Load from a local slot if this ValueId was previously materialized (e.g., handle results)
+        if let Some(slot) = self.local_index.get(id).copied() {
+            b.load_local_i64(slot);
+            return;
         }
     }
 
@@ -534,35 +540,60 @@ impl LowerCore {
                 }
             }
             I::NewBox { dst, box_type, args } => {
-                // Minimal JIT lowering for builtin pluginized boxes: birth() via handle-based shim
-                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") && args.is_empty() {
-                    let bt = box_type.as_str();
-                    match bt {
-                        "StringBox" => {
-                            // Emit host-call to create a new StringBox handle; push as i64
-                            b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_BIRTH_H, 0, true);
-                        }
-                        "IntegerBox" => {
-                            b.emit_host_call(crate::jit::r#extern::collections::SYM_INTEGER_BIRTH_H, 0, true);
-                        }
-                        _ => {
-                            // Any other NewBox (e.g., ArrayBox/MapBox/etc.) is UNSUPPORTED in JIT for now
-                            // Allow plugin boxes to be created at runtime; treat as no-op for lowering
-                            if bt != "PyRuntimeBox" && bt != "StringBox" && bt != "ConsoleBox" { self.unsupported += 1; }
-                        }
-                    }
-                } else {
-                    // NewBox with args or NYASH_USE_PLUGIN_BUILTINS!=1
-                    // Special-case: IntegerBox(v) → track known i64, but do not treat as unsupported
-                    if box_type == "IntegerBox" {
-                        if let Some(src) = args.get(0) { if let Some(iv) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, iv); } }
-                        // no-op lowering; avoid marking unsupported
-                    } else if box_type == "PyRuntimeBox" && args.is_empty() {
-                        // Allow PyRuntimeBox creation as no-op in strict AOT path
-                    } else if box_type == "StringBox" || box_type == "ConsoleBox" {
-                        // Allow StringBox creation (with/without arg) as no-op; valueはシム/実行時にTLVへ
+                // 最適化は後段へ（現状は汎用・安全な実装に徹する）
+                // 通常経路:
+                // - 引数なし: 汎用 birth_h（type_idのみ）でハンドル生成
+                // - 引数あり: 既存のチェーン（直後の plugin_invoke birth で初期化）を維持（段階的導入）
+                if args.is_empty() {
+                    let decision = crate::jit::policy::invoke::decide_box_method(box_type, "birth", 0, true);
+                    if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, .. } = decision {
+                        b.emit_const_i64(type_id as i64);
+                        b.emit_host_call(crate::jit::r#extern::birth::SYM_BOX_BIRTH_H, 1, true);
+                        self.handle_values.insert(*dst);
+                        let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                        b.store_local_i64(slot);
                     } else {
                         self.unsupported += 1;
+                    }
+                } else {
+                    // 引数あり: 安全なパターンから段階的に birth_i64 に切替
+                    // 1) IntegerBox(const i64)
+                    if box_type == "IntegerBox" && args.len() == 1 {
+                        if let Some(src) = args.get(0) {
+                            if let Some(iv) = self.known_i64.get(src).copied() {
+                                // 汎用 birth_i64(type_id, argc=1, a1=iv)
+                                if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, .. } = crate::jit::policy::invoke::decide_box_method(box_type, "birth", 1, true) {
+                                    b.emit_const_i64(type_id as i64);
+                                    b.emit_const_i64(1);
+                                    b.emit_const_i64(iv);
+                                    b.emit_host_call("nyash.box.birth_i64", 3, true);
+                                    self.handle_values.insert(*dst);
+                                    let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                    b.store_local_i64(slot);
+                                    // 値伝搬も継続
+                                    self.known_i64.insert(*dst, iv);
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
+                    // 2) 引数がハンドル（StringBox等）で既に存在する場合（最大2引数）
+                    if args.len() <= 2 && args.iter().all(|a| self.handle_values.contains(a)) {
+                        if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, .. } = crate::jit::policy::invoke::decide_box_method(box_type, "birth", args.len(), true) {
+                            b.emit_const_i64(type_id as i64);
+                            b.emit_const_i64(args.len() as i64);
+                            // a1, a2 を push（ローカルに保存済みのハンドルをロード）
+                            for a in args.iter().take(2) { self.push_value_if_known_or_param(b, a); }
+                            b.emit_host_call("nyash.box.birth_i64", 2 + args.len(), true);
+                            self.handle_values.insert(*dst);
+                            let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                            b.store_local_i64(slot);
+                            return Ok(());
+                        }
+                    }
+                    // フォールバック: 既存チェーンに委譲（互換）+ 既知値伝搬のみ
+                    if box_type == "IntegerBox" {
+                        if let Some(src) = args.get(0) { if let Some(iv) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, iv); } }
                     }
                 }
                 // Track boxed numeric literals to aid signature checks (FloatBox/IntegerBox)
@@ -603,15 +634,27 @@ impl LowerCore {
                     let argc = 1 + args.len();
                     // push receiver param index (a0) if known
                     if let Some(pidx) = self.param_index.get(box_val).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                    // push primary arguments if available（a1, a2 ...）
+                    for a in args.iter() { self.push_value_if_known_or_param(b, a); }
                     b.emit_plugin_invoke_by_name(m, argc, dst.is_some());
-                    if let Some(d) = dst { self.handle_values.insert(*d); }
+                    if let Some(d) = dst {
+                        self.handle_values.insert(*d);
+                        // Store handle result into a local slot so it can be used as argument later
+                        let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                        b.store_local_i64(slot);
+                    }
                 } else if self.handle_values.contains(box_val) && (m == "getattr" || m == "call") {
                     let argc = 1 + args.len();
                     // push receiver handle/param index if possible (here receiver is a handle result previously returned)
                     // We cannot reconstruct handle here; pass -1 to allow shim fallback.
                     b.emit_const_i64(-1);
+                    for a in args.iter() { self.push_value_if_known_or_param(b, a); }
                     b.emit_plugin_invoke_by_name(m, argc, dst.is_some());
-                    if let Some(d) = dst { self.handle_values.insert(*d); }
+                    if let Some(d) = dst {
+                        self.handle_values.insert(*d);
+                        let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                        b.store_local_i64(slot);
+                    }
                 } else if (bt == "PyRuntimeBox" && (m == "birth" || m == "eval"))
                     || (bt == "IntegerBox" && m == "birth")
                     || (bt == "StringBox" && m == "birth")

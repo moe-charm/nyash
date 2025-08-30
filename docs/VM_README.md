@@ -3,12 +3,11 @@
 - プラグインBox引数の最小対応を追加（TLV: BoxRef）
 - TLVタグ: 1=Bool, 2=I32, 3=I64, 4=F32, 5=F64, 6=String, 7=Bytes, 8=Handle(BoxRef)
   - BoxRefはプラグインBox参照（type_id:u32, instance_id:u32）を8バイトでエンコード
-  - ユーザー定義Box・複雑なビルトインは当面非対応（toStringフォールバック）
+  - ユーザー定義/複雑なBoxは当面一部非対応（toStringフォールバック）。標準Boxはプラグイン経由で統一
 
-現状のルーティング:
+現状のルーティング（Plugin-First）:
 - User-defined: MIR関数（{Box}.{method}/{N}) にCall化（関数存在時）。それ以外はBoxCall。
-- Builtin: BoxCall → VM内の簡易ディスパッチ。
-- Plugin: BoxCall → PluginLoaderV2.invoke_instance_method。
+- Plugin: BoxCall → PluginInvoke（method_idが解決可能）→ それ以外は名前解決で PluginHost.invoke_instance_method。
 
 今後のタスク:
 - VM側のfrom Parent.method対応（Builder/VM両対応）
@@ -74,7 +73,7 @@ NYASH_VM_PIC_DEBUG=1       # PICヒットのしきい値通過時にログ
 ```
 
 今後の拡張:
-- 一般`method_id`（ユーザー/ビルトイン/プラグイン）に対するvtableスロット→thunk直呼び。
+- 一般`method_id`（ユーザー/プラグイン）に対するvtableスロット→thunk直呼び。
 - PICのキャッシュ無効化（型version）と多相PICへの拡張（Phase 10）。
  - SocketBox（VM）
    - 基本API: `bind/listen/accept/connect/read/write/close/isServer/isConnected`

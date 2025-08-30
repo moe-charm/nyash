@@ -6,9 +6,9 @@ Purpose: Claude×Copilot×ChatGPT協調開発の総合ロードマップ
 
 ## 📍 現在位置
 
-- **現在フェーズ**: Phase 8.6 VM性能改善（進行中）
-- **次フェーズ**: Phase 9 JIT実装
-- **詳細タスク**: [CURRENT_TASK.md](../../current/CURRENT_TASK.md)
+- 現在フェーズ: Phase 10.5b ネイティブビルド基盤の固め（MIR→VM→AOTの足固め）
+- 次フェーズ: Phase 10.5c Handle-First PluginInvoke（Python統合の実装着手）
+- 備考: 旧10.1系（10.1c/d）は「PythonをNyashで動かすフェーズ」の設計資料（Archived）。順番を入れ替え、先にネイティブビルド基盤を完成させています。
 
 ## 🗺️ フェーズ概要
 

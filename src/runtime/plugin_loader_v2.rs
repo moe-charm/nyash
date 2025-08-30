@@ -34,6 +34,8 @@ mod enabled {
     invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
 }
 
+// (moved: public constructor wrapper is declared after the enabled module)
+
 /// v2 Plugin Box wrapper - temporary implementation
 #[derive(Debug)]
     pub struct PluginHandleInner {
@@ -101,6 +103,11 @@ mod enabled {
                 }
             }
         }
+    }
+
+    /// Helper to construct a PluginBoxV2 from raw ids and invoke pointer safely
+    pub fn make_plugin_box_v2_inner(box_type: String, type_id: u32, instance_id: u32, invoke_fn: unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize) -> i32) -> PluginBoxV2 {
+        PluginBoxV2 { box_type, inner: std::sync::Arc::new(PluginHandleInner { type_id, invoke_fn, instance_id, fini_method_id: None, finalized: std::sync::atomic::AtomicBool::new(false) }) }
     }
 
 #[derive(Debug, Clone)]
@@ -1206,6 +1213,10 @@ impl PluginLoaderV2 {
         Ok(())
     }
 }
+
+// Public constructor wrapper for PluginBoxV2 (enabled build)
+#[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+pub use self::enabled::make_plugin_box_v2_inner as make_plugin_box_v2;
 
 #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
 mod stub {

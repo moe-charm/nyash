@@ -131,8 +131,8 @@ impl NyashInterpreter {
             }
             
             ASTNode::Include { filename, .. } => {
-                self.execute_include(filename)?;
-                Ok(Box::new(VoidBox::new()))
+                // include式: 最初のstatic boxを返す
+                self.execute_include_expr(filename)
             }
             
             ASTNode::FromCall { parent, method, arguments, .. } => {

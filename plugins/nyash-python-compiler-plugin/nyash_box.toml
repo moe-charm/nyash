@@ -1,0 +1,29 @@
+[box]
+name = "Nyash Python Compiler Plugin"
+version = "0.1.0"
+description = "CorePy IR -> Nyash Source (Phase 10.7 C2)"
+author = "Nyash Team"
+
+[provides]
+boxes = ["PythonCompilerBox"]
+
+[PythonCompilerBox]
+type_id = 61
+
+[PythonCompilerBox.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }
+
+[PythonCompilerBox.methods.compile]
+id = 1
+args = [ { name = "ir_json", type = "string" } ]
+returns = { type = "string" } # Nyash source (暫定)
+
+[implementation]
+ffi_version = 1
+thread_safe = false
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/nyash_python_compiler_plugin.dll"
+linux   = "target/release/libnyash_python_compiler_plugin.so"
+macos   = "target/release/libnyash_python_compiler_plugin.dylib"

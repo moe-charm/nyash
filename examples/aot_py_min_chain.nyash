@@ -1,0 +1,17 @@
+// AOT Python minimal chain: import -> getattr -> call
+// Build AOT (example):
+//   cargo build --release --features cranelift-jit
+//   ./target/release/nyash --compile-native examples/aot_py_min_chain.nyash -o app && ./app
+
+static box Main {
+  main() {
+    local py, math, sqrt_fn, x, r
+    py = new PyRuntimeBox()
+    math = py.import("math")
+    sqrt_fn = py.getattr(math, "sqrt")
+    x = new IntegerBox(16)
+    r = py.call(sqrt_fn, x)
+    return r // expects 4.0 (autodecode may convert FloatBox→f64)
+  }
+}
+

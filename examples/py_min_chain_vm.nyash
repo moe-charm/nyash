@@ -1,0 +1,19 @@
+// Python minimal chain (VM): import -> getattr -> call
+// @env NYASH_PLUGIN_ONLY=1
+// @env NYASH_PY_AUTODECODE=1
+// Run:
+//   cargo build --release && ./target/release/nyash --backend vm examples/py_min_chain_vm.nyash
+
+static box Main {
+  main() {
+    local py, math, sqrt_fn, x, r
+    py = new PyRuntimeBox()
+    math = py.import("math")
+    sqrt_fn = py.getattr(math, "sqrt")
+    x = new IntegerBox(16)
+    r = py.call(sqrt_fn, x)
+    print(r) // expects 4.0
+    return 0
+  }
+}
+
