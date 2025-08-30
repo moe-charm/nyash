@@ -147,6 +147,10 @@ SocketConnBox   = 31
 SocketClientBox = 32
 MathBox     = 50
 TimeBox     = 51
+RegexBox    = 52
+EncodingBox = 53
+TOMLBox     = 54
+PathBox     = 55
 PyRuntimeBox= 40
 PyObjectBox = 41
 PythonParserBox = 60
@@ -166,6 +170,10 @@ PythonCompilerBox = 61
 "libnyash_math_plugin"    = "./plugins/nyash-math-plugin"
 "libnyash_python_parser_plugin"  = "./plugins/nyash-python-parser-plugin"
 "libnyash_python_compiler_plugin"  = "./plugins/nyash-python-compiler-plugin"
+"libnyash_regex_plugin"    = "./plugins/nyash-regex-plugin"
+"libnyash_encoding_plugin" = "./plugins/nyash-encoding-plugin"
+"libnyash_toml_plugin"     = "./plugins/nyash-toml-plugin"
+"libnyash_path_plugin"     = "./plugins/nyash-path-plugin"
 [libraries."libnyash_array_plugin"]
 boxes = ["ArrayBox"]
 path = "./plugins/nyash-array-plugin/target/release/libnyash_array_plugin"
@@ -289,3 +297,65 @@ type_id = 51
 birth = { method_id = 0 }
 now   = { method_id = 1 }
 fini  = { method_id = 4294967295 }
+[libraries."libnyash_regex_plugin"]
+boxes = ["RegexBox"]
+path = "./plugins/nyash-regex-plugin/target/release/libnyash_regex_plugin"
+
+[libraries."libnyash_regex_plugin".RegexBox]
+type_id = 52
+
+[libraries."libnyash_regex_plugin".RegexBox.methods]
+birth      = { method_id = 0, args = ["pattern?"] }
+compile    = { method_id = 1, args = ["pattern"] }
+isMatch    = { method_id = 2, args = ["text"], returns_result = true }
+find       = { method_id = 3, args = ["text"], returns_result = true }
+replaceAll = { method_id = 4, args = ["text", "repl"], returns_result = true }
+split      = { method_id = 5, args = ["text", "limit"], returns_result = true }
+fini       = { method_id = 4294967295 }
+
+[libraries."libnyash_encoding_plugin"]
+boxes = ["EncodingBox"]
+path = "./plugins/nyash-encoding-plugin/target/release/libnyash_encoding_plugin"
+
+[libraries."libnyash_encoding_plugin".EncodingBox]
+type_id = 53
+
+[libraries."libnyash_encoding_plugin".EncodingBox.methods]
+birth          = { method_id = 0 }
+toUtf8Bytes    = { method_id = 1, args = ["s"], returns_result = true }
+fromUtf8Bytes  = { method_id = 2, args = ["bytes"], returns_result = true }
+base64Encode   = { method_id = 3, args = ["data"], returns_result = true }
+base64Decode   = { method_id = 4, args = ["text"], returns_result = true }
+hexEncode      = { method_id = 5, args = ["data"], returns_result = true }
+hexDecode      = { method_id = 6, args = ["text"], returns_result = true }
+fini           = { method_id = 4294967295 }
+[libraries."libnyash_toml_plugin"]
+boxes = ["TOMLBox"]
+path = "./plugins/nyash-toml-plugin/target/release/libnyash_toml_plugin"
+
+[libraries."libnyash_toml_plugin".TOMLBox]
+type_id = 54
+
+[libraries."libnyash_toml_plugin".TOMLBox.methods]
+birth   = { method_id = 0 }
+parse   = { method_id = 1, args = ["text"], returns_result = true }
+get     = { method_id = 2, args = ["path"], returns_result = true }
+toJson  = { method_id = 3, returns_result = true }
+fini    = { method_id = 4294967295 }
+
+[libraries."libnyash_path_plugin"]
+boxes = ["PathBox"]
+path = "./plugins/nyash-path-plugin/target/release/libnyash_path_plugin"
+
+[libraries."libnyash_path_plugin".PathBox]
+type_id = 55
+
+[libraries."libnyash_path_plugin".PathBox.methods]
+birth     = { method_id = 0 }
+join      = { method_id = 1, args = ["base", "rest"], returns_result = true }
+dirname   = { method_id = 2, args = ["path"], returns_result = true }
+basename  = { method_id = 3, args = ["path"], returns_result = true }
+extname   = { method_id = 4, args = ["path"], returns_result = true }
+isAbs     = { method_id = 5, args = ["path"], returns_result = true }
+normalize = { method_id = 6, args = ["path"], returns_result = true }
+fini      = { method_id = 4294967295 }

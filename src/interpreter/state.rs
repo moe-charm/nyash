@@ -20,6 +20,9 @@ pub struct SharedState {
 
     /// 読み込み済みファイル（重複防止）
     pub included_files: Arc<Mutex<HashSet<String>>>,
+
+    /// includeロード中スタック（循環検出用: A -> B -> A を検出）
+    pub include_stack: Arc<Mutex<Vec<String>>>,
 }
 
 impl SharedState {
@@ -37,6 +40,7 @@ impl SharedState {
             static_functions: Arc::new(RwLock::new(HashMap::new())),
             static_box_definitions: Arc::new(RwLock::new(HashMap::new())),
             included_files: Arc::new(Mutex::new(HashSet::new())),
+            include_stack: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }

@@ -1,0 +1,78 @@
+// ny-echo - 最小CLI実装
+// 目的: I/O・StringBoxの道通し確認
+// 使用法: ny-echo [--upper|--lower]
+
+static box Main {
+    init { console, options }
+    
+    main(args) {
+        me.console = new ConsoleBox()
+        me.options = me.parseArgs(args)
+        
+        // バージョン表示
+        if me.options.get("version") {
+            me.console.log("ny-echo v1.0.0 (Nyash " + NYASH_VERSION + ")")
+            return 0
+        }
+        
+        // ヘルプ表示
+        if me.options.get("help") {
+            me.showHelp()
+            return 0
+        }
+        
+        // メインループ
+        me.processInput()
+        return 0
+    }
+    
+    parseArgs(args) {
+        local options = new MapBox()
+        
+        loop(arg in args) {
+            if arg == "--upper" {
+                options.set("upper", true)
+            } else if arg == "--lower" {
+                options.set("lower", true)
+            } else if arg == "--version" || arg == "-v" {
+                options.set("version", true)
+            } else if arg == "--help" || arg == "-h" {
+                options.set("help", true)
+            }
+        }
+        
+        return options
+    }
+    
+    processInput() {
+        loop(true) {
+            local input = me.console.readLine()
+            if input == null { break }  // EOF
+            
+            local output = me.transformText(input)
+            me.console.log(output)
+        }
+    }
+    
+    transformText(text) {
+        if me.options.get("upper") {
+            return text.toUpperCase()
+        } else if me.options.get("lower") {
+            return text.toLowerCase()
+        } else {
+            return text  // そのまま出力
+        }
+    }
+    
+    showHelp() {
+        me.console.log("Usage: ny-echo [OPTIONS]")
+        me.console.log("")
+        me.console.log("Options:")
+        me.console.log("  --upper     Convert input to uppercase")
+        me.console.log("  --lower     Convert input to lowercase")
+        me.console.log("  -v, --version  Show version information")
+        me.console.log("  -h, --help     Show this help message")
+        me.console.log("")
+        me.console.log("Reads from stdin and echoes to stdout with optional transformation.")
+    }
+}

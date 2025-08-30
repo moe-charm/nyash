@@ -213,6 +213,33 @@ impl VM {
                         li.type_name(), ri.type_name(), li.to_string_box().value, ri.to_string_box().value
                     );
                 }
+                // String-like comparison: internal StringBox or Plugin StringBox
+                fn boxref_to_string(b: &dyn crate::box_trait::NyashBox) -> Option<String> {
+                    if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                        return Some(sb.value.clone());
+                    }
+                    if let Some(pb) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        if pb.box_type == "StringBox" {
+                            let host = crate::runtime::get_global_plugin_host();
+                            let s_opt: Option<String> = {
+                                if let Ok(ro) = host.read() {
+                                    if let Ok(val_opt) = ro.invoke_instance_method("StringBox", "toUtf8", pb.inner.instance_id, &[]) {
+                                        if let Some(vb) = val_opt {
+                                            if let Some(sbb) = vb.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                                                Some(sbb.value.clone())
+                                            } else { None }
+                                        } else { None }
+                                    } else { None }
+                                } else { None }
+                            };
+                            if s_opt.is_some() { return s_opt; }
+                        }
+                    }
+                    None
+                }
+                if let (Some(ls), Some(rs)) = (boxref_to_string(li.as_ref()), boxref_to_string(ri.as_ref())) {
+                    return Ok(match op { CompareOp::Eq => ls == rs, CompareOp::Ne => ls != rs, CompareOp::Lt => ls < rs, CompareOp::Le => ls <= rs, CompareOp::Gt => ls > rs, CompareOp::Ge => ls >= rs });
+                }
                 // Try integer comparisons via downcast or parse fallback
                 let l_opt = li.as_any().downcast_ref::<crate::box_trait::IntegerBox>().map(|x| x.value)
                     .or_else(|| li.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>().map(|x| x.value))
@@ -224,6 +251,43 @@ impl VM {
                     return Ok(match op { CompareOp::Eq => l == r, CompareOp::Ne => l != r, CompareOp::Lt => l < r, CompareOp::Le => l <= r, CompareOp::Gt => l > r, CompareOp::Ge => l >= r });
                 }
                 Err(VMError::TypeError(format!("[BoxRef-BoxRef] Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+            }
+            // Mixed String vs BoxRef (string-like)
+            (VMValue::String(ls), VMValue::BoxRef(ri)) => {
+                let rs_opt = if let Some(sb) = ri.as_any().downcast_ref::<crate::box_trait::StringBox>() { Some(sb.value.clone()) } else {
+                    if let Some(pb) = ri.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        if pb.box_type == "StringBox" {
+                            let host = crate::runtime::get_global_plugin_host();
+                            let tmp = if let Ok(ro) = host.read() {
+                                if let Ok(val_opt) = ro.invoke_instance_method("StringBox", "toUtf8", pb.inner.instance_id, &[]) {
+                                    if let Some(vb) = val_opt {
+                                        if let Some(sbb) = vb.as_any().downcast_ref::<crate::box_trait::StringBox>() { Some(sbb.value.clone()) } else { None }
+                                    } else { None }
+                                } else { None }
+                            } else { None };
+                            tmp
+                        } else { None }
+                    } else { None }
+                };
+                if let Some(rs) = rs_opt { return Ok(match op { CompareOp::Eq => *ls == rs, CompareOp::Ne => *ls != rs, CompareOp::Lt => *ls < rs, CompareOp::Le => *ls <= rs, CompareOp::Gt => *ls > rs, CompareOp::Ge => *ls >= rs }); }
+                Err(VMError::TypeError(format!("[String-BoxRef] Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
+            }
+            (VMValue::BoxRef(li), VMValue::String(rs)) => {
+                let ls_opt = if let Some(sb) = li.as_any().downcast_ref::<crate::box_trait::StringBox>() { Some(sb.value.clone()) } else {
+                    if let Some(pb) = li.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        if pb.box_type == "StringBox" {
+                            let host = crate::runtime::get_global_plugin_host();
+                            let tmp = if let Ok(ro) = host.read() {
+                                if let Ok(val_opt) = ro.invoke_instance_method("StringBox", "toUtf8", pb.inner.instance_id, &[]) {
+                                    if let Some(vb) = val_opt { if let Some(sbb) = vb.as_any().downcast_ref::<crate::box_trait::StringBox>() { Some(sbb.value.clone()) } else { None } } else { None }
+                                } else { None }
+                            } else { None };
+                            tmp
+                        } else { None }
+                    } else { None }
+                };
+                if let Some(ls) = ls_opt { return Ok(match op { CompareOp::Eq => ls == *rs, CompareOp::Ne => ls != *rs, CompareOp::Lt => ls < *rs, CompareOp::Le => ls <= *rs, CompareOp::Gt => ls > *rs, CompareOp::Ge => ls >= *rs }); }
+                Err(VMError::TypeError(format!("[BoxRef-String] Unsupported comparison: {:?} on {:?} and {:?}", op, left, right)))
             }
             // Mixed Integer (BoxRef vs Integer)
             (VMValue::BoxRef(li), VMValue::Integer(r)) => {

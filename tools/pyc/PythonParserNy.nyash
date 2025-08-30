@@ -2,15 +2,15 @@
 static box PythonParserNy {
   parse(code) {
     local src
-    if (code == null || code.toString() == "") {
+    if (code == null || code.length() == 0) {
       // Fallback: read from env via Python os.getenv
       local os, getenv
       local py = new PyRuntimeBox()
       os = py.import("os")
       getenv = os.getattr("getenv")
-      src = getenv.call("NYASH_PY_CODE").toString()
+      src = getenv.call("NYASH_PY_CODE").str()
     } else {
-      src = code.toString()
+      src = code.str()
     }
 
     // ast.dump(ast.parse(src))

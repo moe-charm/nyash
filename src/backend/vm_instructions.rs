@@ -1215,6 +1215,42 @@ impl VM {
                 return Ok(ControlFlow::Continue);
             }
         }
+        // Fallback: support common methods on internal StringBox without requiring PluginBox receiver
+        if let VMValue::BoxRef(ref bx) = recv {
+            if let Some(sb) = bx.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                match method {
+                    "length" => {
+                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Integer(sb.value.len() as i64)); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    "is_empty" | "isEmpty" => {
+                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Bool(sb.value.is_empty())); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    "charCodeAt" => {
+                        let idx_v = if let Some(a0) = args.get(0) { self.get_value(*a0)? } else { VMValue::Integer(0) };
+                        let idx = match idx_v { VMValue::Integer(i) => i.max(0) as usize, _ => 0 };
+                        let code = sb.value.chars().nth(idx).map(|c| c as u32 as i64).unwrap_or(0);
+                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Integer(code)); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    "concat" => {
+                        let rhs_v = if let Some(a0) = args.get(0) { self.get_value(*a0)? } else { VMValue::String(String::new()) };
+                        let rhs_s = match rhs_v {
+                            VMValue::String(s) => s,
+                            VMValue::BoxRef(br) => br.to_string_box().value,
+                            _ => rhs_v.to_string(),
+                        };
+                        let mut new_s = sb.value.clone();
+                        new_s.push_str(&rhs_s);
+                        let out = Box::new(crate::box_trait::StringBox::new(new_s));
+                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::BoxRef(std::sync::Arc::from(out as Box<dyn crate::box_trait::NyashBox>))); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    _ => {}
+                }
+            }
+        }
         Err(VMError::InvalidInstruction(format!("PluginInvoke requires PluginBox receiver; method={} got {:?}", method, recv)))
     }
 }

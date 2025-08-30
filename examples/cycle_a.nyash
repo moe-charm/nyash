@@ -1,0 +1,9 @@
+// Cycle test A -> B -> A
+include "examples/cycle_b.nyash"
+
+static box A {
+  main() {
+    return 0
+  }
+}
+

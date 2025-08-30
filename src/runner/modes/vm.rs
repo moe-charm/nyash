@@ -126,10 +126,12 @@ impl NyashRunner {
             format!("./{}", filename)
         }
 
-        fn walk(node: &ASTNode, runtime: &NyashRuntime) {
+        use std::collections::{HashSet, VecDeque};
+
+        fn walk_with_state(node: &ASTNode, runtime: &NyashRuntime, stack: &mut Vec<String>, visited: &mut HashSet<String>) {
             match node {
-                ASTNode::Program { statements, .. } => { for st in statements { walk(st, runtime); } }
-                ASTNode::FunctionDeclaration { body, .. } => { for st in body { walk(st, runtime); } }
+                ASTNode::Program { statements, .. } => { for st in statements { walk_with_state(st, runtime, stack, visited); } }
+                ASTNode::FunctionDeclaration { body, .. } => { for st in body { walk_with_state(st, runtime, stack, visited); } }
                 ASTNode::Include { filename, .. } => {
                     let mut path = resolve_include_path(filename);
                     if std::path::Path::new(&path).is_dir() {
@@ -137,49 +139,62 @@ impl NyashRunner {
                     } else if std::path::Path::new(&path).extension().is_none() {
                         path.push_str(".nyash");
                     }
+                    // Cycle detection using stack
+                    if let Some(pos) = stack.iter().position(|p| p == &path) {
+                        let mut chain = stack[pos..].to_vec();
+                        chain.push(path.clone());
+                        eprintln!("include cycle detected (collector): {}", chain.join(" -> "));
+                        return; // Skip to avoid infinite recursion
+                    }
+                    if visited.contains(&path) {
+                        return; // Already processed
+                    }
+                    stack.push(path.clone());
                     if let Ok(content) = std::fs::read_to_string(&path) {
                         if let Ok(inc_ast) = NyashParser::parse_from_string(&content) {
-                            walk(&inc_ast, runtime);
+                            walk_with_state(&inc_ast, runtime, stack, visited);
+                            visited.insert(path);
                         }
                     }
+                    stack.pop();
                 }
                 ASTNode::Assignment { target, value, .. } => {
-                    walk(target, runtime); walk(value, runtime);
+                    walk_with_state(target, runtime, stack, visited); walk_with_state(value, runtime, stack, visited);
                 }
-                ASTNode::Return { value, .. } => { if let Some(v) = value { walk(v, runtime); } }
-                ASTNode::Print { expression, .. } => { walk(expression, runtime); }
+                ASTNode::Return { value, .. } => { if let Some(v) = value { walk_with_state(v, runtime, stack, visited); } }
+                ASTNode::Print { expression, .. } => { walk_with_state(expression, runtime, stack, visited); }
                 ASTNode::If { condition, then_body, else_body, .. } => {
-                    walk(condition, runtime);
-                    for st in then_body { walk(st, runtime); }
-                    if let Some(eb) = else_body { for st in eb { walk(st, runtime); } }
+                    walk_with_state(condition, runtime, stack, visited);
+                    for st in then_body { walk_with_state(st, runtime, stack, visited); }
+                    if let Some(eb) = else_body { for st in eb { walk_with_state(st, runtime, stack, visited); } }
                 }
                 ASTNode::Loop { condition, body, .. } => {
-                    walk(condition, runtime); for st in body { walk(st, runtime); }
+                    walk_with_state(condition, runtime, stack, visited); for st in body { walk_with_state(st, runtime, stack, visited); }
                 }
                 ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => {
-                    for st in try_body { walk(st, runtime); }
-                    for cc in catch_clauses { for st in &cc.body { walk(st, runtime); } }
-                    if let Some(fb) = finally_body { for st in fb { walk(st, runtime); } }
+                    for st in try_body { walk_with_state(st, runtime, stack, visited); }
+                    for cc in catch_clauses { for st in &cc.body { walk_with_state(st, runtime, stack, visited); } }
+                    if let Some(fb) = finally_body { for st in fb { walk_with_state(st, runtime, stack, visited); } }
                 }
-                ASTNode::Throw { expression, .. } => { walk(expression, runtime); }
+                ASTNode::Throw { expression, .. } => { walk_with_state(expression, runtime, stack, visited); }
                 ASTNode::Local { initial_values, .. } => {
-                    for iv in initial_values { if let Some(v) = iv { walk(v, runtime); } }
+                    for iv in initial_values { if let Some(v) = iv { walk_with_state(v, runtime, stack, visited); } }
                 }
                 ASTNode::Outbox { initial_values, .. } => {
-                    for iv in initial_values { if let Some(v) = iv { walk(v, runtime); } }
+                    for iv in initial_values { if let Some(v) = iv { walk_with_state(v, runtime, stack, visited); } }
                 }
-                ASTNode::FunctionCall { arguments, .. } => { for a in arguments { walk(a, runtime); } }
-                ASTNode::MethodCall { object, arguments, .. } => { walk(object, runtime); for a in arguments { walk(a, runtime); } }
-                ASTNode::FieldAccess { object, .. } => { walk(object, runtime); }
-                ASTNode::New { arguments, .. } => { for a in arguments { walk(a, runtime); } }
-                ASTNode::BinaryOp { left, right, .. } => { walk(left, runtime); walk(right, runtime); }
-                ASTNode::UnaryOp { operand, .. } => { walk(operand, runtime); }
-                ASTNode::AwaitExpression { expression, .. } => { walk(expression, runtime); }
-                ASTNode::Arrow { sender, receiver, .. } => { walk(sender, runtime); walk(receiver, runtime); }
-                ASTNode::Nowait { expression, .. } => { walk(expression, runtime); }
+                ASTNode::FunctionCall { arguments, .. } => { for a in arguments { walk_with_state(a, runtime, stack, visited); } }
+                ASTNode::MethodCall { object, arguments, .. } => { walk_with_state(object, runtime, stack, visited); for a in arguments { walk_with_state(a, runtime, stack, visited); } }
+                ASTNode::FieldAccess { object, .. } => { walk_with_state(object, runtime, stack, visited); }
+                ASTNode::New { arguments, .. } => { for a in arguments { walk_with_state(a, runtime, stack, visited); } }
+                ASTNode::BinaryOp { left, right, .. } => { walk_with_state(left, runtime, stack, visited); walk_with_state(right, runtime, stack, visited); }
+                ASTNode::UnaryOp { operand, .. } => { walk_with_state(operand, runtime, stack, visited); }
+                ASTNode::AwaitExpression { expression, .. } => { walk_with_state(expression, runtime, stack, visited); }
+                ASTNode::Arrow { sender, receiver, .. } => { walk_with_state(sender, runtime, stack, visited); walk_with_state(receiver, runtime, stack, visited); }
+                ASTNode::Nowait { expression, .. } => { walk_with_state(expression, runtime, stack, visited); }
                 ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, .. } => {
-                    for (_mname, mnode) in methods { walk(mnode, runtime); }
-                    for (_ckey, cnode) in constructors { walk(cnode, runtime); }
+                    for (_mname, mnode) in methods { walk_with_state(mnode, runtime, stack, visited); }
+                    for (_ckey, cnode) in constructors { walk_with_state(cnode, runtime, stack, visited); }
                     let decl = CoreBoxDecl {
                         name: name.clone(),
                         fields: fields.clone(),
@@ -199,6 +214,8 @@ impl NyashRunner {
                 _ => {}
             }
         }
-        walk(ast, runtime);
+        let mut stack: Vec<String> = Vec::new();
+        let mut visited: HashSet<String> = HashSet::new();
+        walk_with_state(ast, runtime, &mut stack, &mut visited);
     }
 }

@@ -1,6 +1,54 @@
-# CURRENT TASK (Phase 10.5c)
+# CURRENT TASK (Phase 10.7 workbench + 10.5c 継続)
 
-目的: Handle-First + by-name を軸に、Python統合（PyRuntimeBox/PyObjectBox）を汎用・安全に実装する。最適化は後段。
+直近スナップショット（2025-08-30 更新）
+
+Current State
+
+- Plugin-First/Handle-First/TLVはAOT/VMで安定（10.5e完了状態を継続）
+- 10.6計画（Thread-Safety/Scheduler）と10.7計画（トランスパイルAll-or-Nothing）を確定
+- Nyash-onlyパイプライン（tools/pyc）を開始（Parser/CompilerはNyashで実装方針）
+- include式の最小実装を追加（式でBoxを返す／1ファイル=1static box）
+  - インタプリタ: include式は実行時評価
+  - VM/AOT: MIRビルダーが取り込み先を同一MIRに連結（MIR命令は増やさない）
+  - nyash.tomlの[include.roots]でルート解決（拡張子省略、index.nyash対応）
+- tools/pycをモジュール分割
+  - tools/pyc/pyc.nyash（エントリ: includeでPyIR/PythonParserNy/PyCompilerを取り込み）
+  - tools/pyc/PyIR.nyash, PythonParserNy.nyash, PyCompiler.nyash（Nyash-only実装）
+
+How To Run（Nyash-only）
+
+- VM: `NYASH_PY_CODE=$'def main():\n  return 42' ./target/release/nyash --backend vm tools/pyc/pyc.nyash`
+  - 出力: Parser JSON → IR（return 42）→ 生成Nyashソース（現状は骨組み）
+- include動作サンプル: `./target/release/nyash --backend vm examples/include_main.nyash`（Math.add(1,2)=3）
+
+進捗（2025-08-30 夜）
+
+- include: 循環検出を追加（インタプリタ/VM収集器ともにロード中スタックで経路出力）。examples/cycle_a/b で検証
+- tools/pyc: 最小IR（return定数）→Nyash生成を通し、出力をprintまで接続
+- 文字列基盤: VMにString統一ブリッジを着手（内部StringBoxとプラグインStringBoxの比較互換、内部Stringメソッドのフォールバック）
+- 追加プラグイン（小粒・基底）
+  - RegexBox（compile/isMatch/find/replaceAll/split）: examples/regex_min.nyash
+  - EncodingBox（utf8/base64/hex）: examples/encoding_min.nyash
+  - TOMLBox（parse/get/toJson）: examples/toml_min.nyash
+  - PathBox（join/dirname/basename/extname/isAbs/normalize）: examples/path_min.nyash
+
+Next Steps（優先順・更新）
+
+1. String統一ブリッジの完了
+   - VM: 内部String受けのフォールバックを全パスで拾う（length/isEmpty/charCodeAt/concat/+）
+   - Interpreter: 同等のフォールバック/正規化（比較・結合・代表メソッド）
+   - 混在比較/結合の回帰ケース追加（内部/プラグイン/プリミティブ混在）
+2. tools/pyc: IR→Nyashの反映強化（return/If/Assignを安定化、Strictスイッチ連動）
+3. Strictスイッチ: tools/pyc（unsupported_nodes非空でErr、envでON/OFF）
+4. CLI隠しフラグ `--pyc`/`--pyc-native`（Parser→Compiler→AOTの一本化導線）
+5. 最小回帰（VM/AOTの差分記録）とdocs追補（include/exportとpyc、Regex/Encoding/TOML/PathのAPI概要）
+
+Env Keys（pyc）
+
+- NYASH_PY_CODE: Pythonソース文字列（Nyash-onlyパイプライン/Parser用）
+- NYASH_PY_IR: IR(JSON)直接注入（Rust雛形Compilerの確認用・オプション）
+
+目的: Handle-First + by-name を軸に、Python統合（PyRuntimeBox/PyObjectBox）を汎用・安全に実装する。最適化は後段。さらに10.7のNyash-onlyトランスパイルC2（pyc）を最小構成で立ち上げる。
 
 ステータス（2025-08-30 更新）
 

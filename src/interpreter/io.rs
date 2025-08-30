@@ -57,9 +57,24 @@ impl NyashInterpreter {
         } else if std::path::Path::new(&canonical_path).extension().is_none() {
             canonical_path.push_str(".nyash");
         }
-        
+        // 循環検出（ロード中スタック）
+        {
+            let mut stack = self.shared.include_stack.lock().unwrap();
+            if let Some(pos) = stack.iter().position(|p| p == &canonical_path) {
+                // 検出: A -> ... -> B -> A
+                let mut chain: Vec<String> = stack[pos..].to_vec();
+                chain.push(canonical_path.clone());
+                let msg = format!("include cycle detected: {}",
+                    chain.join(" -> "));
+                return Err(RuntimeError::InvalidOperation { message: msg });
+            }
+            stack.push(canonical_path.clone());
+        }
+
         // 重複読み込みチェック
         if self.shared.included_files.lock().unwrap().contains(&canonical_path) {
+            // スタックから外して早期終了
+            self.shared.include_stack.lock().unwrap().pop();
             return Ok(()); // 既に読み込み済み
         }
         
@@ -76,10 +91,14 @@ impl NyashInterpreter {
             })?;
         
         // 重複防止リストに追加
-        self.shared.included_files.lock().unwrap().insert(canonical_path);
+        self.shared.included_files.lock().unwrap().insert(canonical_path.clone());
         
         // 現在の環境で実行
-        self.execute(ast)?;
+        let exec_res = self.execute(ast);
+        // スタックを外す
+        self.shared.include_stack.lock().unwrap().pop();
+        // 実行結果を伝播
+        exec_res?;
         
         Ok(())
     }
@@ -94,6 +113,18 @@ impl NyashInterpreter {
             canonical_path = idx;
         } else if std::path::Path::new(&canonical_path).extension().is_none() {
             canonical_path.push_str(".nyash");
+        }
+
+        // 循環検出（ロード中スタック）
+        {
+            let mut stack = self.shared.include_stack.lock().unwrap();
+            if let Some(pos) = stack.iter().position(|p| p == &canonical_path) {
+                let mut chain: Vec<String> = stack[pos..].to_vec();
+                chain.push(canonical_path.clone());
+                let msg = format!("include cycle detected: {}", chain.join(" -> "));
+                return Err(RuntimeError::InvalidOperation { message: msg });
+            }
+            stack.push(canonical_path.clone());
         }
 
         // ファイル読み込み（static box名検出用）
@@ -131,8 +162,14 @@ impl NyashInterpreter {
             set.contains(&canonical_path)
         };
         if !already {
-            self.shared.included_files.lock().unwrap().insert(canonical_path);
-            self.execute(ast)?;
+            self.shared.included_files.lock().unwrap().insert(canonical_path.clone());
+            let exec_res = self.execute(ast);
+            // スタックを外す
+            self.shared.include_stack.lock().unwrap().pop();
+            exec_res?;
+        } else {
+            // スタックを外す（既に読み込み済みのため）
+            self.shared.include_stack.lock().unwrap().pop();
         }
 
         // static boxを初期化・取得して返す

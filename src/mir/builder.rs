@@ -96,6 +96,11 @@ pub struct MirBuilder {
     pub(super) value_types: HashMap<ValueId, super::MirType>,
     /// Current static box name when lowering a static box body (e.g., "Main")
     current_static_box: Option<String>,
+
+    /// Include guards: currently loading file canonical paths
+    include_loading: HashSet<String>,
+    /// Include visited cache: canonical path -> box name
+    include_box_map: HashMap<String, String>,
 }
 
 impl MirBuilder {
@@ -128,6 +133,8 @@ impl MirBuilder {
             field_origin_class: HashMap::new(),
             value_types: HashMap::new(),
             current_static_box: None,
+            include_loading: HashSet::new(),
+            include_box_map: HashMap::new(),
         }
     }
 
@@ -507,6 +514,15 @@ impl MirBuilder {
                 } else if std::path::Path::new(&path).extension().is_none() {
                     path.push_str(".nyash");
                 }
+                // Cycle detection
+                if self.include_loading.contains(&path) {
+                    return Err(format!("Circular include detected: {}", path));
+                }
+                // Cache hit: build only the instance
+                if let Some(name) = self.include_box_map.get(&path).cloned() {
+                    return self.build_new_expression(name, vec![]);
+                }
+                self.include_loading.insert(path.clone());
                 let content = fs::read_to_string(&path)
                     .map_err(|e| format!("Include read error '{}': {}", filename, e))?;
                 // Parse to AST
@@ -524,6 +540,9 @@ impl MirBuilder {
                 let bname = box_name.ok_or_else(|| format!("Include target '{}' has no static box", filename))?;
                 // Lower included AST into current MIR (register types/methods)
                 let _ = self.build_expression(included_ast)?;
+                // Mark caches
+                self.include_loading.remove(&path);
+                self.include_box_map.insert(path.clone(), bname.clone());
                 // Return a new instance of included box (no args)
                 self.build_new_expression(bname, vec![])
             },

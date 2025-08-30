@@ -14,11 +14,12 @@ static box Main {
 
     // Skip echo of source to avoid plugin toString issues
 
-    json = Compiler.parseToJson()
-
+    json = new StringBox("{}")
+    // Build minimal IR from Python AST (env: NYASH_PY_CODE)
     ir = Compiler.buildIRFromParse(json)
-
+    // Emit generated Nyash source (reflect return/if/assign when present)
     src = Compiler.irToNyashSource(ir)
+    print(src)
     return 0
   }
 }

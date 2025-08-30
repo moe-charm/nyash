@@ -10,42 +10,23 @@ static box PyCompiler {
   }
 
   buildIRFromParse(json) {
-    // Minimal: analyze Python source from env and build IR with a constant return when possible
+    // Minimal: analyze Python source from env and extract first constant return as JSON scalar string
     // Python snippet: parse code from os.getenv("NYASH_PY_CODE"), find first Return(Constant)
     local os, getenv, src, ast, parsef, walkf, first_ret
     local py = new PyRuntimeBox()
-    os = py.import("os")
-    getenv = os.getattr("getenv")
-    src = getenv.call("NYASH_PY_CODE").toString()
-    if (src == null || src == "") {
-      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":0}]}}")
-    }
-
-    ast = py.import("ast")
-    parsef = ast.getattr("parse")
-    local tree
-    tree = parsef.call(src)
-
     // Walk via Python: extract first constant return value if present
     local res
     res = py.eval("next((n.value.value for n in __import__('ast').walk(__import__('ast').parse(__import__('os').getenv('NYASH_PY_CODE') or '')) if isinstance(n, __import__('ast').Return) and isinstance(n.value, __import__('ast').Constant)), None)")
-    // If number -> return that number; if string -> quoted
-    local val
-    val = res.str()
-    if (val.matches("^[0-9]+$")) {
-      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":" + val + "]}}")
-    } else if (val.length() > 0) {
-      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":\"" + val + "\"}]}}")
-    } else {
-      return new StringBox("{\"module\":{\"functions\":[{\"name\":\"main\",\"return_value\":0}]}}")
-    }
+    // JSON-encode result (number or None) and return as StringBox directly
+    local ret_json
+    ret_json = py.import("json").getattr("dumps").call(res).str()
+    return new StringBox(ret_json)
   }
 
-  irToNyashSource(irJson) {
-    // Build Nyash source from IR (minimal: assume IR has return_value embedded by PyIR.buildReturn)
+  irToNyashSource(retJson) {
+    // Build Nyash source directly from the scalar JSON value string
     local src
-    src = "static box Generated {\n  main() {\n    return 0\n  }\n}"
-    // Future: parse irJson and extract return_value
+    src = "static box Generated {\n  main() {\n    return " + retJson + "\n  }\n}"
     return new StringBox(src)
   }
 }
