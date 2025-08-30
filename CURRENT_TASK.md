@@ -38,10 +38,16 @@ Next Steps（優先順・更新）
    - VM: 比較/加算/代表メソッドのフォールバック（length/isEmpty/charCodeAt/concat/+）をstring-like正規化で実装
    - Interpreter: 比較/加算はstring-like正規化を適用（メソッドは後続で最小追補があれば対応）
    - 例: encoding_min/regex_min/toml_min/path_min で回帰確認
-2. tools/pyc: IR→Nyashの反映強化（return/If/Assignを安定化、Strictスイッチ連動）
-3. Strictスイッチ: tools/pyc（unsupported_nodes非空でErr、envでON/OFF）
-4. CLI隠しフラグ `--pyc`/`--pyc-native`（Parser→Compiler→AOTの一本化導線）
-5. 最小回帰（VM/AOTの差分記録）とdocs追補（include/exportとpyc、Regex/Encoding/TOML/PathのAPI概要）
+2. AOT/JITへのブリッジ降ろし（MIR→VM→JIT→exeの汎用性維持・ハードコーディング禁止）
+   - 文字列演算のhostcall化（read-only）: nyash.string.concat_hh / eq_hh / lt_hh
+   - Lowerer: BinOp(Add) / Compare(Eq/Lt) を「string-like」判定時にhostcallへフォールバック
+   - 代表メソッド: length/isEmpty/charCodeAtは既存hostcall経由で維持、concat(メソッド)も追加検討
+   - Registry: 署名/権限（ReadOnly）登録、シンボル解決とJITビルダー登録
+   - 目標: examples/string_bridge_min.nyash をAOTでも成功
+3. tools/pyc: IR→Nyashの反映強化（return/If/Assignを安定化、Strictスイッチ連動）
+4. Strictスイッチ: tools/pyc（unsupported_nodes非空でErr、envでON/OFF）
+5. CLI隠しフラグ `--pyc`/`--pyc-native`（Parser→Compiler→AOTの一本化導線）
+6. 最小回帰（VM/AOTの差分記録）とdocs追補（include/exportとpyc、Regex/Encoding/TOML/PathのAPI概要）
 
 Env Keys（pyc）
 
