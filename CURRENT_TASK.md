@@ -34,10 +34,10 @@ How To Run（Nyash-only）
 
 Next Steps（優先順・更新）
 
-1. String統一ブリッジの完了
-   - VM: 内部String受けのフォールバックを全パスで拾う（length/isEmpty/charCodeAt/concat/+）
-   - Interpreter: 同等のフォールバック/正規化（比較・結合・代表メソッド）
-   - 混在比較/結合の回帰ケース追加（内部/プラグイン/プリミティブ混在）
+1. String統一ブリッジ（実装済・一次完了）
+   - VM: 比較/加算/代表メソッドのフォールバック（length/isEmpty/charCodeAt/concat/+）をstring-like正規化で実装
+   - Interpreter: 比較/加算はstring-like正規化を適用（メソッドは後続で最小追補があれば対応）
+   - 例: encoding_min/regex_min/toml_min/path_min で回帰確認
 2. tools/pyc: IR→Nyashの反映強化（return/If/Assignを安定化、Strictスイッチ連動）
 3. Strictスイッチ: tools/pyc（unsupported_nodes非空でErr、envでON/OFF）
 4. CLI隠しフラグ `--pyc`/`--pyc-native`（Parser→Compiler→AOTの一本化導線）

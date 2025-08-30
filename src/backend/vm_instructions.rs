@@ -1003,6 +1003,34 @@ impl VM {
 
     /// Execute a forced plugin invocation (no builtin fallback)
     pub(super) fn execute_plugin_invoke(&mut self, dst: Option<ValueId>, box_val: ValueId, method: &str, args: &[ValueId]) -> Result<ControlFlow, VMError> {
+        // Helper: extract UTF-8 string from internal StringBox, Result.Ok(String-like), or plugin StringBox via toUtf8
+        fn extract_string_from_box(bx: &dyn crate::box_trait::NyashBox) -> Option<String> {
+            // Internal StringBox
+            if let Some(sb) = bx.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                return Some(sb.value.clone());
+            }
+            // Result.Ok(inner) → recurse
+            if let Some(res) = bx.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
+                if let crate::boxes::result::NyashResultBox::Ok(inner) = res { return extract_string_from_box(inner.as_ref()); }
+            }
+            // Plugin StringBox → call toUtf8
+            if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                if p.box_type == "StringBox" {
+                    let host = crate::runtime::get_global_plugin_host();
+                    let tmp: Option<String> = if let Ok(ro) = host.read() {
+                        if let Ok(val_opt) = ro.invoke_instance_method("StringBox", "toUtf8", p.inner.instance_id, &[]) {
+                            if let Some(vb) = val_opt {
+                                if let Some(sb2) = vb.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                                    Some(sb2.value.clone())
+                                } else { None }
+                            } else { None }
+                        } else { None }
+                    } else { None };
+                    if tmp.is_some() { return tmp; }
+                }
+            }
+            None
+        }
         let recv = self.get_value(box_val)?;
         // Allow static birth on primitives/builtin boxes to create a plugin instance.
         if method == "birth" && !matches!(recv, VMValue::BoxRef(ref b) if b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some()) {
@@ -1215,33 +1243,34 @@ impl VM {
                 return Ok(ControlFlow::Continue);
             }
         }
-        // Fallback: support common methods on internal StringBox without requiring PluginBox receiver
+        // Fallback: support common string-like methods without requiring PluginBox receiver
         if let VMValue::BoxRef(ref bx) = recv {
-            if let Some(sb) = bx.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+            // Try to view receiver as string (internal, plugin, or Result.Ok)
+            if let Some(s) = extract_string_from_box(bx.as_ref()) {
                 match method {
                     "length" => {
-                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Integer(sb.value.len() as i64)); }
+                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Integer(s.len() as i64)); }
                         return Ok(ControlFlow::Continue);
                     }
                     "is_empty" | "isEmpty" => {
-                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Bool(sb.value.is_empty())); }
+                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Bool(s.is_empty())); }
                         return Ok(ControlFlow::Continue);
                     }
                     "charCodeAt" => {
                         let idx_v = if let Some(a0) = args.get(0) { self.get_value(*a0)? } else { VMValue::Integer(0) };
                         let idx = match idx_v { VMValue::Integer(i) => i.max(0) as usize, _ => 0 };
-                        let code = sb.value.chars().nth(idx).map(|c| c as u32 as i64).unwrap_or(0);
+                        let code = s.chars().nth(idx).map(|c| c as u32 as i64).unwrap_or(0);
                         if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Integer(code)); }
                         return Ok(ControlFlow::Continue);
                     }
                     "concat" => {
                         let rhs_v = if let Some(a0) = args.get(0) { self.get_value(*a0)? } else { VMValue::String(String::new()) };
                         let rhs_s = match rhs_v {
-                            VMValue::String(s) => s,
-                            VMValue::BoxRef(br) => br.to_string_box().value,
+                            VMValue::String(ss) => ss,
+                            VMValue::BoxRef(br) => extract_string_from_box(br.as_ref()).unwrap_or_else(|| br.to_string_box().value),
                             _ => rhs_v.to_string(),
                         };
-                        let mut new_s = sb.value.clone();
+                        let mut new_s = s.clone();
                         new_s.push_str(&rhs_s);
                         let out = Box::new(crate::box_trait::StringBox::new(new_s));
                         if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::BoxRef(std::sync::Arc::from(out as Box<dyn crate::box_trait::NyashBox>))); }

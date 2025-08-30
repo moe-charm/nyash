@@ -107,6 +107,33 @@ pub(super) fn try_mod_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Re
 // ========================================================================================
 
 impl NyashInterpreter {
+    /// Try to extract a UTF-8 string from a NyashBox: supports internal StringBox,
+    /// Result.Ok(String-like), and Plugin StringBox via toUtf8 (when plugins enabled).
+    fn try_box_to_string(&self, b: &dyn NyashBox) -> Option<String> {
+        // Internal StringBox
+        if let Some(sb) = b.as_any().downcast_ref::<StringBox>() { return Some(sb.value.clone()); }
+        // Result.Ok(inner) → recurse
+        if let Some(res) = b.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
+            if let crate::boxes::result::NyashResultBox::Ok(inner) = res { return self.try_box_to_string(inner.as_ref()); }
+        }
+        // Plugin StringBox via toUtf8
+        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+        {
+            if let Some(pb) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                if pb.box_type == "StringBox" {
+                    let host = crate::runtime::get_global_plugin_host();
+                    if let Ok(ro) = host.read() {
+                        if let Ok(val_opt) = ro.invoke_instance_method("StringBox", "toUtf8", pb.inner.instance_id, &[]) {
+                            if let Some(vb) = val_opt {
+                                if let Some(sb2) = vb.as_any().downcast_ref::<StringBox>() { return Some(sb2.value.clone()); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
     /// 二項演算を実行
     pub(super) fn execute_binary_op(&mut self, op: &BinaryOperator, left: &ASTNode, right: &ASTNode) 
         -> Result<Box<dyn NyashBox>, RuntimeError> 
@@ -119,6 +146,16 @@ impl NyashInterpreter {
         
         match op {
             BinaryOperator::Add => {
+                // Prefer string-like concatenation when either side is string-like
+                if let (Some(ls), Some(rs)) = (self.try_box_to_string(left_val), self.try_box_to_string(right_val)) {
+                    return Ok(Box::new(StringBox::new(format!("{}{}", ls, rs))));
+                }
+                if let Some(ls) = self.try_box_to_string(left_val) {
+                    return Ok(Box::new(StringBox::new(format!("{}{}", ls, right_val.to_string_box().value))));
+                }
+                if let Some(rs) = self.try_box_to_string(right_val) {
+                    return Ok(Box::new(StringBox::new(format!("{}{}", left_val.to_string_box().value, rs))));
+                }
                 if let Some(result) = try_add_operation(left_val, right_val) {
                     Ok(result)
                 } else {
@@ -252,12 +289,9 @@ impl NyashInterpreter {
             return Ok(left_int.value == right_int.value);
         }
         
-        // StringBox comparison
-        if let (Some(left_str), Some(right_str)) = (
-            left.as_any().downcast_ref::<StringBox>(),
-            right.as_any().downcast_ref::<StringBox>()
-        ) {
-            return Ok(left_str.value == right_str.value);
+        // String-like comparison (internal/Result.Ok/plugin StringBox)
+        if let (Some(ls), Some(rs)) = (self.try_box_to_string(left), self.try_box_to_string(right)) {
+            return Ok(ls == rs);
         }
         
         // BoolBox comparison
@@ -287,12 +321,9 @@ impl NyashInterpreter {
             return Ok(left_int.value < right_int.value);
         }
         
-        // StringBox comparison (lexicographic)
-        if let (Some(left_str), Some(right_str)) = (
-            left.as_any().downcast_ref::<StringBox>(),
-            right.as_any().downcast_ref::<StringBox>()
-        ) {
-            return Ok(left_str.value < right_str.value);
+        // String-like comparison (lexicographic)
+        if let (Some(ls), Some(rs)) = (self.try_box_to_string(left), self.try_box_to_string(right)) {
+            return Ok(ls < rs);
         }
         
         Err(RuntimeError::InvalidOperation {
