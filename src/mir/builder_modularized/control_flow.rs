@@ -119,7 +119,9 @@ impl MirBuilder {
         let exit_block = self.block_gen.next();
         
         // Set up exception handler for the try block (before we enter it)
-        if let Some(catch_clause) = catch_clauses.first() {
+        if std::env::var("NYASH_BUILDER_DISABLE_TRYCATCH").ok().as_deref() == Some("1") {
+            // Fallback: build try body only
+        } else if let Some(catch_clause) = catch_clauses.first() {
             let exception_value = self.value_gen.next();
             
             // Register catch handler for exceptions that may occur in try block
@@ -152,6 +154,7 @@ impl MirBuilder {
         self.start_new_block(catch_block)?;
         
         // Handle catch clause
+        if std::env::var("NYASH_BUILDER_DISABLE_TRYCATCH").ok().as_deref() != Some("1") {
         if let Some(catch_clause) = catch_clauses.first() {
             // Build catch body
             let catch_ast = ASTNode::Program {
@@ -159,7 +162,7 @@ impl MirBuilder {
                 span: crate::ast::Span::unknown(),
             };
             self.build_expression(catch_ast)?;
-        }
+        }}
         
         // Catch completion - jump to finally or exit (if not already terminated)
         if !self.is_current_block_terminated() {

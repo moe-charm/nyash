@@ -167,6 +167,27 @@ Note: --compile-native は Cranelift JIT を必要とします（`--features cra
   - `examples/jit_direct_f64_ret.nyash`（F64戻り → 3.75, `NYASH_JIT_NATIVE_F64=1`）
 - Box-First運用キット: `docs/engineering/box_first_enforcement.md`（PRテンプレ/CIガード/運用指標）
 
+## 📝 Update (2025-08-31)
+- MIR移行: Print/Type/Weak/BarrierはRewrite完了、Debug/SafepointはトグルでExternCall化
+- ランタイムextern_callに `env.debug.trace` / `env.runtime.checkpoint` を追加
+- JIT/AOT 予約シンボルを登録（no-op, 将来拡張用）
+  - `nyash.rt.checkpoint`（セーフポイント到達フック）
+  - `nyash.gc.barrier_write`（書き込みバリアヒント）
+- トレース環境変数
+  - `NYASH_DEBUG_TRACE=1` / `NYASH_RUNTIME_CHECKPOINT_TRACE=1` / `NYASH_GC_BARRIER_TRACE=1`
+- Rewriteトグル（追加）
+  - `NYASH_REWRITE_FUTURE=1`: FutureNew/Set/Await → `ExternCall(env.future.*)` に変換（スキャフォールド）。`env.future.new/set/await` の最小実装をruntimeに追加
+ - LLVM足場: Cargo feature `llvm` を追加（ビルド時に`--features llvm`指定で警告を抑止）。実装はモック→本実装はinkwell導入後
+ - MIRコアカバレッジ: docs/reference/mir/MIR15_COVERAGE_CHECKLIST.md を追加（VM/JIT確認手順）
+  
+### BuilderレガシーAPIの段階停止（デフォルトOFF）
+- 旧Weak/Barrier命令の発行を無効化（統一命令に切替）
+  - 既定: WeakRef(New/Load), Barrier(Read/Write) を直接発行
+  - レガシーを明示的に使う場合のみトグルをON
+    - `NYASH_BUILDER_LEGACY_WEAK=1`
+    - `NYASH_BUILDER_LEGACY_BARRIER=1`
+- 次の手順: Docs仕上げ → Future/Await Rewriteのスキャフォールド → Builder legacy APIの非推奨化 → JIT directのSeal調整
+
 ## 📚 ドキュメント構造
 
 ### 🎯 **最重要ドキュメント（開発者向け）**

@@ -25,7 +25,7 @@ impl MirBuilder {
                     let op = if name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
                     builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
-                    self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;
+                    self.emit_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![dst], effects: EffectMask::PURE.add(Effect::Io) })?;
                     return Ok(dst);
                 } else {
                     builder_debug_log("extract_string_literal FAIL");
@@ -41,7 +41,7 @@ impl MirBuilder {
                     let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
                     builder_debug_log(&format!("emit TypeOp {:?} obj={} dst= {}", op, obj_val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
-                    self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;
+                    self.emit_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![dst], effects: EffectMask::PURE.add(Effect::Io) })?;
                     return Ok(dst);
                 } else {
                     builder_debug_log("extract_string_literal FAIL");
@@ -53,11 +53,7 @@ impl MirBuilder {
         let value = self.build_expression(expression)?;
         builder_debug_log(&format!("fallback print value={}", value));
         
-        // For now, use a special Print instruction (minimal scope)
-        self.emit_instruction(MirInstruction::Print {
-            value,
-            effects: EffectMask::PURE.add(Effect::Io),
-        })?;
+        self.emit_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![value], effects: EffectMask::PURE.add(Effect::Io) })?;
         
         // Return the value that was printed
         Ok(value)
@@ -134,16 +130,13 @@ impl MirBuilder {
     
     /// Build a throw statement
     pub(super) fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+        if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
+            let v = self.build_expression(expression)?;
+            self.emit_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.debug".to_string(), method_name: "trace".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Debug) })?;
+            return Ok(v);
+        }
         let exception_value = self.build_expression(expression)?;
-        
-        // Emit throw instruction with PANIC effect (this is a terminator)
-        self.emit_instruction(MirInstruction::Throw {
-            exception: exception_value,
-            effects: EffectMask::PANIC,
-        })?;
-        
-        // Throw doesn't return normally, but we need to return a value for the type system
-        // We can't add more instructions after throw, so just return the exception value
+        self.emit_instruction(MirInstruction::Throw { exception: exception_value, effects: EffectMask::PANIC })?;
         Ok(exception_value)
     }
     

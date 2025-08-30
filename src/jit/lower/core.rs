@@ -11,7 +11,7 @@ pub struct LowerCore {
     /// Minimal constant propagation for f64 (math.* signature checks)
     known_f64: std::collections::HashMap<ValueId, f64>,
     /// Parameter index mapping for ValueId
-    param_index: std::collections::HashMap<ValueId, usize>,
+    pub(super) param_index: std::collections::HashMap<ValueId, usize>,
     /// Track values produced by Phi (for minimal PHI path)
     phi_values: std::collections::HashSet<ValueId>,
     /// Map (block, phi dst) -> param index in that block (for multi-PHI)
@@ -23,16 +23,16 @@ pub struct LowerCore {
     /// Track values that are FloatBox instances (for arg type classification)
     float_box_values: std::collections::HashSet<ValueId>,
     /// Track values that are plugin handles (generic box/handle, type unknown at compile time)
-    handle_values: std::collections::HashSet<ValueId>,
+    pub(super) handle_values: std::collections::HashSet<ValueId>,
     // Per-function statistics (last lowered)
     last_phi_total: u64,
     last_phi_b1: u64,
     last_ret_bool_hint_used: bool,
     // Minimal local slot mapping for Load/Store (ptr ValueId -> slot index)
-    local_index: std::collections::HashMap<ValueId, usize>,
-    next_local: usize,
+    pub(super) local_index: std::collections::HashMap<ValueId, usize>,
+    pub(super) next_local: usize,
     /// Track NewBox origins: ValueId -> box type name (e.g., "PyRuntimeBox")
-    box_type_map: std::collections::HashMap<ValueId, String>,
+    pub(super) box_type_map: std::collections::HashMap<ValueId, String>,
 }
 
 impl LowerCore {
@@ -44,7 +44,7 @@ impl LowerCore {
     /// Walk the MIR function and count supported/unsupported instructions.
     /// In the future, this will build CLIF via Cranelift builders.
     pub fn lower_function(&mut self, func: &MirFunction, builder: &mut dyn IRBuilder) -> Result<(), String> {
-        // Prepare a simple i64 ABI based on param count; always assume i64 return for now
+        // Prepare ABI based on MIR signature
         // Reset per-function stats
         self.last_phi_total = 0; self.last_phi_b1 = 0; self.last_ret_bool_hint_used = false;
         // Build param index map
@@ -235,10 +235,11 @@ impl LowerCore {
             crate::jit::rt::ret_bool_hint_inc(1);
             self.last_ret_bool_hint_used = true;
         }
+        let has_ret = !matches!(func.signature.return_type, crate::mir::MirType::Void);
         if use_typed || ret_is_f64 {
-            builder.prepare_signature_typed(&kinds, ret_is_f64);
+            builder.prepare_signature_typed(&kinds, ret_is_f64 && has_ret);
         } else {
-            builder.prepare_signature_i64(func.params.len(), true);
+            builder.prepare_signature_i64(func.params.len(), has_ret);
         }
         // Pre-scan FloatBox creations across all blocks for arg classification
         self.float_box_values.clear();
@@ -725,8 +726,8 @@ impl LowerCore {
                 if self.bool_values.contains(src) { self.bool_values.insert(*dst); }
                 // Otherwise no-op for codegen (stack-machine handles sources directly later)
             }
-            I::BinOp { dst, op, lhs, rhs } => { self.lower_binop(b, op, lhs, rhs, dst); }
-            I::Compare { op, lhs, rhs, dst } => { self.lower_compare(b, op, lhs, rhs, dst); }
+            I::BinOp { dst, op, lhs, rhs } => { self.lower_binop(b, op, lhs, rhs, dst, func); }
+            I::Compare { op, lhs, rhs, dst } => { self.lower_compare(b, op, lhs, rhs, dst, func); }
             I::Jump { .. } => self.lower_jump(b),
             I::Branch { .. } => self.lower_branch(b),
             I::Return { value } => {

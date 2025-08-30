@@ -296,8 +296,10 @@ impl MirBuilder {
         self.current_function = Some(main_function);
         self.current_block = Some(entry_block);
         
-        // Add safepoint at function entry
-        self.emit_instruction(MirInstruction::Safepoint)?;
+        // Optional: Add safepoint at function entry (disabled by default)
+        if std::env::var("NYASH_BUILDER_SAFEPOINT_ENTRY").ok().as_deref() == Some("1") {
+            self.emit_instruction(MirInstruction::Safepoint)?;
+        }
         
         // Convert AST to MIR
         let result_value = self.build_expression(ast)?;
@@ -761,7 +763,7 @@ impl MirBuilder {
         Ok(dst)
     }
     
-    /// Build print statement - converts to console output
+    /// Build print statement - ExternCall to env.console.log (Box哲学準拠)
     fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         builder_debug_log("enter build_print_statement");
         // 根治: print(isType(...)) / print(asType(...)) / print(obj.is(...)) / print(obj.as(...)) は必ずTypeOpを先に生成してからprintする
@@ -776,7 +778,14 @@ impl MirBuilder {
                     let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
                     builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
-                    self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;
+                    // console.log(dst)
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None,
+                        iface_name: "env.console".to_string(),
+                        method_name: "log".to_string(),
+                        args: vec![dst],
+                        effects: EffectMask::PURE.add(Effect::Io),
+                    })?;
                     return Ok(dst);
                 } else {
                     builder_debug_log("extract_string_literal FAIL");
@@ -792,7 +801,14 @@ impl MirBuilder {
                     let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
                     builder_debug_log(&format!("emit TypeOp {:?} obj={} dst= {}", op, obj_val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
-                    self.emit_instruction(MirInstruction::Print { value: dst, effects: EffectMask::PURE.add(Effect::Io) })?;
+                    // console.log(dst)
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None,
+                        iface_name: "env.console".to_string(),
+                        method_name: "log".to_string(),
+                        args: vec![dst],
+                        effects: EffectMask::PURE.add(Effect::Io),
+                    })?;
                     return Ok(dst);
                 } else {
                     builder_debug_log("extract_string_literal FAIL");
@@ -804,9 +820,12 @@ impl MirBuilder {
         let value = self.build_expression(expression)?;
         builder_debug_log(&format!("fallback print value={}", value));
         
-        // For now, use a special Print instruction (minimal scope)
-        self.emit_instruction(MirInstruction::Print {
-            value,
+        // 統一: env.console.log(value)
+        self.emit_instruction(MirInstruction::ExternCall {
+            dst: None,
+            iface_name: "env.console".to_string(),
+            method_name: "log".to_string(),
+            args: vec![value],
             effects: EffectMask::PURE.add(Effect::Io),
         })?;
         
@@ -975,6 +994,12 @@ impl MirBuilder {
     
     /// Build a try/catch statement
     fn build_try_catch_statement(&mut self, try_body: Vec<ASTNode>, catch_clauses: Vec<crate::ast::CatchClause>, finally_body: Option<Vec<ASTNode>>) -> Result<ValueId, String> {
+        if std::env::var("NYASH_BUILDER_DISABLE_TRYCATCH").ok().as_deref() == Some("1") {
+            // Compatibility fallback: build try body only; ignore handlers/finally
+            let try_ast = ASTNode::Program { statements: try_body, span: crate::ast::Span::unknown() };
+            let result = self.build_expression(try_ast)?;
+            return Ok(result);
+        }
         let try_block = self.block_gen.next();
         let catch_block = self.block_gen.next();
         let finally_block = if finally_body.is_some() { Some(self.block_gen.next()) } else { None };
@@ -1066,6 +1091,18 @@ impl MirBuilder {
     
     /// Build a throw statement
     fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+        if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
+            // Fallback: route to debug trace and return the value
+            let v = self.build_expression(expression)?;
+            self.emit_instruction(MirInstruction::ExternCall {
+                dst: None,
+                iface_name: "env.debug".to_string(),
+                method_name: "trace".to_string(),
+                args: vec![v],
+                effects: EffectMask::PURE.add(Effect::Debug),
+            })?;
+            return Ok(v);
+        }
         let exception_value = self.build_expression(expression)?;
         
         // Emit throw instruction with PANIC effect (this is a terminator)

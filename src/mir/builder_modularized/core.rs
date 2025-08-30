@@ -95,27 +95,59 @@ impl MirBuilder {
     }
 
     pub(super) fn emit_weak_new(&mut self, box_val: ValueId) -> Result<ValueId, String> {
+        // Legacy emission toggle (default OFF): NYASH_BUILDER_LEGACY_WEAK=1
+        let legacy = std::env::var("NYASH_BUILDER_LEGACY_WEAK").ok().as_deref() == Some("1");
         let dst = self.value_gen.next();
-        let instruction = MirInstruction::WeakNew { dst, box_val };
+        let instruction = if legacy {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit WeakNew (legacy on)"); }
+            MirInstruction::WeakNew { dst, box_val }
+        } else {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit WeakRef(New)"); }
+            MirInstruction::WeakRef { dst, op: super::super::WeakRefOp::New, value: box_val }
+        };
         self.emit_instruction(instruction)?;
         Ok(dst)
     }
 
     pub(super) fn emit_weak_load(&mut self, weak_ref: ValueId) -> Result<ValueId, String> {
+        // Legacy emission toggle (default OFF): NYASH_BUILDER_LEGACY_WEAK=1
+        let legacy = std::env::var("NYASH_BUILDER_LEGACY_WEAK").ok().as_deref() == Some("1");
         let dst = self.value_gen.next();
-        let instruction = MirInstruction::WeakLoad { dst, weak_ref };
+        let instruction = if legacy {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit WeakLoad (legacy on)"); }
+            MirInstruction::WeakLoad { dst, weak_ref }
+        } else {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit WeakRef(Load)"); }
+            MirInstruction::WeakRef { dst, op: super::super::WeakRefOp::Load, value: weak_ref }
+        };
         self.emit_instruction(instruction)?;
         Ok(dst)
     }
 
     pub(super) fn emit_barrier_read(&mut self, ptr: ValueId) -> Result<(), String> {
-        let instruction = MirInstruction::BarrierRead { ptr };
+        // Legacy emission toggle (default OFF): NYASH_BUILDER_LEGACY_BARRIER=1
+        let legacy = std::env::var("NYASH_BUILDER_LEGACY_BARRIER").ok().as_deref() == Some("1");
+        let instruction = if legacy {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit BarrierRead (legacy on)"); }
+            MirInstruction::BarrierRead { ptr }
+        } else {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit Barrier(Read)"); }
+            MirInstruction::Barrier { op: super::super::BarrierOp::Read, ptr }
+        };
         self.emit_instruction(instruction)?;
         Ok(())
     }
 
     pub(super) fn emit_barrier_write(&mut self, ptr: ValueId) -> Result<(), String> {
-        let instruction = MirInstruction::BarrierWrite { ptr };
+        // Legacy emission toggle (default OFF): NYASH_BUILDER_LEGACY_BARRIER=1
+        let legacy = std::env::var("NYASH_BUILDER_LEGACY_BARRIER").ok().as_deref() == Some("1");
+        let instruction = if legacy {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit BarrierWrite (legacy on)"); }
+            MirInstruction::BarrierWrite { ptr }
+        } else {
+            if builder_debug_enabled() { eprintln!("[BUILDER] emit Barrier(Write)"); }
+            MirInstruction::Barrier { op: super::super::BarrierOp::Write, ptr }
+        };
         self.emit_instruction(instruction)?;
         Ok(())
     }
@@ -189,8 +221,10 @@ impl MirBuilder {
         self.current_function = Some(main_function);
         self.current_block = Some(entry_block);
 
-        // Entry safepoint
-        self.emit_instruction(MirInstruction::Safepoint)?;
+        // Optional entry safepoint
+        if std::env::var("NYASH_BUILDER_SAFEPOINT_ENTRY").ok().as_deref() == Some("1") {
+            self.emit_instruction(MirInstruction::Safepoint)?;
+        }
 
         // Lower AST to MIR
         let result_value = self.build_expression(ast)?;

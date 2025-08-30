@@ -27,8 +27,8 @@ mod tests {
         let v1 = func.next_value_id();
         func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::TypeOp { dst: v1, op: crate::mir::TypeOpKind::Check, value: v0, ty: MirType::Integer });
 
-        // Print result (should be true)
-        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Print { value: v1, effects: EffectMask::IO });
+        // console.log(result) via ExternCall
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v1], effects: EffectMask::IO });
 
         // Cast (no-op for PoC semantics)
         let v2 = func.next_value_id();
@@ -109,7 +109,7 @@ mod tests {
 
         let v1 = func.next_value_id();
         func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::TypeCheck { dst: v1, value: v0, expected_type: "IntegerBox".to_string() });
-        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Print { value: v1, effects: EffectMask::IO });
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v1], effects: EffectMask::IO });
 
         let v2 = func.next_value_id();
         func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Cast { dst: v2, value: v0, target_type: MirType::Integer });
@@ -141,8 +141,8 @@ mod tests {
         func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Barrier { op: crate::mir::BarrierOp::Read, ptr: v2 });
         func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Barrier { op: crate::mir::BarrierOp::Write, ptr: v2 });
 
-        // Print loaded value
-        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Print { value: v2, effects: EffectMask::IO });
+        // Print loaded value via env.console.log
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v2], effects: EffectMask::IO });
 
         func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: None });
 

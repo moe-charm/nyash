@@ -30,6 +30,9 @@ fn ensure_default() {
         "nyash.map.get_h",
         "nyash.map.has_h",
         "nyash.string.charCodeAt_h",
+        "nyash.string.concat_hh",
+        "nyash.string.eq_hh",
+        "nyash.string.lt_hh",
         "nyash.array.get_h",
     ] { r.ro.insert(s.to_string()); }
     // Mutating defaults
@@ -52,6 +55,9 @@ fn ensure_default() {
     r.sig.entry("nyash.array.len_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
     // String helpers
     r.sig.entry("nyash.string.charCodeAt_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::I64 });
+    r.sig.entry("nyash.string.concat_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::Handle });
+    r.sig.entry("nyash.string.eq_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::I64 });
+    r.sig.entry("nyash.string.lt_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::I64 });
     // Any helpers (length/is_empty)
     r.sig.entry("nyash.any.length_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
     r.sig.entry("nyash.any.is_empty_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });

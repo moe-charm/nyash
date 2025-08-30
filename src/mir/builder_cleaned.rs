@@ -45,8 +45,10 @@ impl MirBuilder {
         self.current_function = Some(main_function);
         self.current_block = Some(entry_block);
         
-        // Add safepoint at function entry
-        self.emit_instruction(MirInstruction::Safepoint)?;
+        // Optional: Add safepoint at function entry
+        if std::env::var("NYASH_BUILDER_SAFEPOINT_ENTRY").ok().as_deref() == Some("1") {
+            self.emit_instruction(MirInstruction::Safepoint)?;
+        }
         
         // Convert AST to MIR
         let result_value = self.build_expression(ast)?;

@@ -8,7 +8,7 @@
  * - Dead code elimination
  */
 
-use super::{MirModule, MirFunction, MirInstruction, ValueId, MirType, TypeOpKind};
+use super::{MirModule, MirFunction, MirInstruction, ValueId, MirType, TypeOpKind, EffectMask, Effect};
 use std::collections::{HashMap, HashSet};
 
 /// MIR optimization passes
@@ -367,9 +367,13 @@ impl MirOptimizer {
     /// - TypeCheck/Cast → TypeOp(Check/Cast)
     /// - WeakNew/WeakLoad → WeakRef(New/Load)
     /// - BarrierRead/BarrierWrite → Barrier(Read/Write)
+    /// - Print → ExternCall(env.console.log)
     fn normalize_legacy_instructions(&mut self, module: &mut MirModule) -> OptimizationStats {
         use super::{TypeOpKind, WeakRefOp, BarrierOp, MirInstruction as I, MirType};
         let mut stats = OptimizationStats::new();
+        let rw_dbg = std::env::var("NYASH_REWRITE_DEBUG").ok().as_deref() == Some("1");
+        let rw_sp = std::env::var("NYASH_REWRITE_SAFEPOINT").ok().as_deref() == Some("1");
+        let rw_future = std::env::var("NYASH_REWRITE_FUTURE").ok().as_deref() == Some("1");
         for (_fname, function) in &mut module.functions {
             for (_bb, block) in &mut function.blocks {
                 // Rewrite in-place for normal instructions
@@ -400,6 +404,30 @@ impl MirOptimizer {
                             let val = *ptr;
                             *inst = I::Barrier { op: BarrierOp::Write, ptr: val };
                         }
+                        I::Print { value, .. } => {
+                            let v = *value;
+                            *inst = I::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
+                        }
+                        I::Debug { value, .. } if rw_dbg => {
+                            let v = *value;
+                            *inst = I::ExternCall { dst: None, iface_name: "env.debug".to_string(), method_name: "trace".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Debug) };
+                        }
+                        I::Safepoint if rw_sp => {
+                            *inst = I::ExternCall { dst: None, iface_name: "env.runtime".to_string(), method_name: "checkpoint".to_string(), args: vec![], effects: EffectMask::PURE };
+                        }
+                        // Future/Await の段階移行: ExternCall(env.future.*) に書き換え（トグル）
+                        I::FutureNew { dst, value } if rw_future => {
+                            let d = *dst; let v = *value;
+                            *inst = I::ExternCall { dst: Some(d), iface_name: "env.future".to_string(), method_name: "new".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
+                        }
+                        I::FutureSet { future, value } if rw_future => {
+                            let f = *future; let v = *value;
+                            *inst = I::ExternCall { dst: None, iface_name: "env.future".to_string(), method_name: "set".to_string(), args: vec![f, v], effects: EffectMask::PURE.add(Effect::Io) };
+                        }
+                        I::Await { dst, future } if rw_future => {
+                            let d = *dst; let f = *future;
+                            *inst = I::ExternCall { dst: Some(d), iface_name: "env.future".to_string(), method_name: "await".to_string(), args: vec![f], effects: EffectMask::PURE.add(Effect::Io) };
+                        }
                         _ => {}
                     }
                 }
@@ -429,6 +457,30 @@ impl MirOptimizer {
                         I::BarrierWrite { ptr } => {
                             let val = *ptr;
                             *term = I::Barrier { op: BarrierOp::Write, ptr: val };
+                        }
+                        I::Print { value, .. } => {
+                            let v = *value;
+                            *term = I::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
+                        }
+                        I::Debug { value, .. } if rw_dbg => {
+                            let v = *value;
+                            *term = I::ExternCall { dst: None, iface_name: "env.debug".to_string(), method_name: "trace".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Debug) };
+                        }
+                        I::Safepoint if rw_sp => {
+                            *term = I::ExternCall { dst: None, iface_name: "env.runtime".to_string(), method_name: "checkpoint".to_string(), args: vec![], effects: EffectMask::PURE };
+                        }
+                        // Future/Await （終端側）
+                        I::FutureNew { dst, value } if rw_future => {
+                            let d = *dst; let v = *value;
+                            *term = I::ExternCall { dst: Some(d), iface_name: "env.future".to_string(), method_name: "new".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
+                        }
+                        I::FutureSet { future, value } if rw_future => {
+                            let f = *future; let v = *value;
+                            *term = I::ExternCall { dst: None, iface_name: "env.future".to_string(), method_name: "set".to_string(), args: vec![f, v], effects: EffectMask::PURE.add(Effect::Io) };
+                        }
+                        I::Await { dst, future } if rw_future => {
+                            let d = *dst; let f = *future;
+                            *term = I::ExternCall { dst: Some(d), iface_name: "env.future".to_string(), method_name: "await".to_string(), args: vec![f], effects: EffectMask::PURE.add(Effect::Io) };
                         }
                         _ => {}
                     }
@@ -682,8 +734,8 @@ mod tests {
     }
 
     #[test]
-    fn test_dce_does_not_drop_typeop_used_by_print() {
-        // Build a simple function: %v=TypeOp(check); print %v; ensure TypeOp remains after optimize
+    fn test_dce_does_not_drop_typeop_used_by_console_log() {
+        // Build: %v=TypeOp(check); extern_call env.console.log(%v); ensure TypeOp remains after optimize
         let signature = FunctionSignature {
             name: "main".to_string(),
             params: vec![],
@@ -697,7 +749,7 @@ mod tests {
         let v1 = ValueId::new(1);
         b0.add_instruction(MirInstruction::NewBox { dst: v0, box_type: "IntegerBox".to_string(), args: vec![] });
         b0.add_instruction(MirInstruction::TypeOp { dst: v1, op: TypeOpKind::Check, value: v0, ty: MirType::Integer });
-        b0.add_instruction(MirInstruction::Print { value: v1, effects: super::super::effect::EffectMask::IO });
+        b0.add_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v1], effects: super::super::effect::EffectMask::IO });
         b0.add_instruction(MirInstruction::Return { value: None });
         func.add_block(b0);
         let mut module = MirModule::new("test".to_string());
@@ -710,6 +762,6 @@ mod tests {
         let f = module.get_function("main").unwrap();
         let block = f.get_block(bb0).unwrap();
         let has_typeop = block.all_instructions().any(|i| matches!(i, MirInstruction::TypeOp { .. }));
-        assert!(has_typeop, "TypeOp should not be dropped by DCE when used by print");
+        assert!(has_typeop, "TypeOp should not be dropped by DCE when used by console.log (ExternCall)");
     }
 }

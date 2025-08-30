@@ -145,6 +145,30 @@ impl JitEngine {
                 return Some(h);
             }
             // If Cranelift path did not produce a closure, treat as not compiled
+            // Even if a closure was not produced, attempt AOT object emission when requested
+            if let Ok(path) = std::env::var("NYASH_AOT_OBJECT_OUT") {
+                if !path.is_empty() {
+                    let mut lower2 = crate::jit::lower::core::LowerCore::new();
+                    let mut objb = crate::jit::lower::builder::ObjectBuilder::new();
+                    match lower2.lower_function(mir, &mut objb) {
+                        Err(e) => eprintln!("[AOT] lower failed for {}: {}", func_name, e),
+                        Ok(()) => {
+                            if let Some(bytes) = objb.take_object_bytes() {
+                                use std::path::Path;
+                                let p = Path::new(&path);
+                                let out_path = if p.is_dir() || path.ends_with('/') { p.join(format!("{}.o", func_name)) } else { p.to_path_buf() };
+                                if let Some(parent) = out_path.parent() { let _ = std::fs::create_dir_all(parent); }
+                                match std::fs::write(&out_path, bytes) {
+                                    Ok(_) => eprintln!("[AOT] wrote object: {}", out_path.display()),
+                                    Err(e) => eprintln!("[AOT] failed to write object {}: {}", out_path.display(), e),
+                                }
+                            } else {
+                                eprintln!("[AOT] no object bytes available for {}", func_name);
+                            }
+                        }
+                    }
+                }
+            }
             return None;
         }
         #[cfg(not(feature = "cranelift-jit"))]

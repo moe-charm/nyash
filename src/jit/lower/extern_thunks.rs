@@ -141,6 +141,38 @@ pub(super) extern "C" fn nyash_math_min_f64(a: f64, b: f64) -> f64 { a.min(b) }
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_math_max_f64(a: f64, b: f64) -> f64 { a.max(b) }
 
+// ---- Console (handle) ----
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_console_birth_h() -> i64 {
+    if let Ok(host_g) = crate::runtime::get_global_plugin_host().read() {
+        if let Ok(b) = host_g.create_box("ConsoleBox", &[]) {
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(b);
+            let h = crate::jit::rt::handles::to_handle(arc);
+            return h as i64;
+        }
+    }
+    0
+}
+
+// ---- Runtime/GC stubs ----
+// Minimal no-op checkpoints and barriers for reservation. They optionally trace when envs are set.
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_rt_checkpoint() -> i64 {
+    if std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") {
+        eprintln!("[nyash.rt.checkpoint] reached");
+    }
+    0
+}
+
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_gc_barrier_write(handle_or_ptr: u64) -> i64 {
+    let _ = handle_or_ptr; // reserved; currently unused
+    if std::env::var("NYASH_GC_BARRIER_TRACE").ok().as_deref() == Some("1") {
+        eprintln!("[nyash.gc.barrier_write] h=0x{:x}", handle_or_ptr);
+    }
+    0
+}
+
 // ---- Array (handle) ----
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_array_len_h(handle: u64) -> i64 {
@@ -521,4 +553,70 @@ pub(super) extern "C" fn nyash_integer_birth_h() -> i64 {
         }
     }
     0
+}
+
+// ---- String-like helpers and ops (handle, handle) ----
+#[cfg(feature = "cranelift-jit")]
+fn handle_to_string_like(handle: u64) -> Option<String> {
+    // Prefer runtime handle registry
+    if let Some(obj) = crate::jit::rt::handles::get(handle) {
+        if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+            return Some(sb.value.clone());
+        }
+        if let Some(pb) = obj.as_any().downcast_ref::<PluginBoxV2>() {
+            if pb.box_type == "StringBox" {
+                if let Ok(host) = crate::runtime::get_global_plugin_host().read() {
+                    if let Ok(val_opt) = host.invoke_instance_method("StringBox", "toUtf8", pb.instance_id(), &[]) {
+                        if let Some(vb) = val_opt { if let Some(sbb) = vb.as_any().downcast_ref::<crate::box_trait::StringBox>() { return Some(sbb.value.clone()); } }
+                    }
+                }
+            }
+        }
+        // Fallback for any NyashBox
+        return Some(obj.to_string_box().value);
+    }
+    // Legacy fallback: treat small values as VM arg index
+    if handle <= 16 {
+        let idx = handle as usize;
+        let val = crate::jit::rt::with_legacy_vm_args(|args| args.get(idx).cloned());
+        if let Some(v) = val {
+            use crate::backend::vm::VMValue as V;
+            return match v {
+                V::String(s) => Some(s),
+                V::BoxRef(b) => Some(b.to_string_box().value),
+                V::Integer(i) => Some(i.to_string()),
+                V::Float(f) => Some(f.to_string()),
+                V::Bool(b) => Some(b.to_string()),
+                _ => None,
+            };
+        }
+    }
+    None
+}
+
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_string_concat_hh(a_h: u64, b_h: u64) -> i64 {
+    events::emit_runtime(serde_json::json!({"id": c::SYM_STRING_CONCAT_HH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]}), "hostcall", "<jit>");
+    let a = handle_to_string_like(a_h).unwrap_or_default();
+    let b = handle_to_string_like(b_h).unwrap_or_default();
+    let s = format!("{}{}", a, b);
+    let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(crate::box_trait::StringBox::new(s));
+    let h = crate::jit::rt::handles::to_handle(arc);
+    h as i64
+}
+
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_string_eq_hh(a_h: u64, b_h: u64) -> i64 {
+    events::emit_runtime(serde_json::json!({"id": c::SYM_STRING_EQ_HH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]}), "hostcall", "<jit>");
+    let a = handle_to_string_like(a_h).unwrap_or_default();
+    let b = handle_to_string_like(b_h).unwrap_or_default();
+    if a == b { 1 } else { 0 }
+}
+
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_string_lt_hh(a_h: u64, b_h: u64) -> i64 {
+    events::emit_runtime(serde_json::json!({"id": c::SYM_STRING_LT_HH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]}), "hostcall", "<jit>");
+    let a = handle_to_string_like(a_h).unwrap_or_default();
+    let b = handle_to_string_like(b_h).unwrap_or_default();
+    if a < b { 1 } else { 0 }
 }

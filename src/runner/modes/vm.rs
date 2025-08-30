@@ -55,9 +55,18 @@ impl NyashRunner {
             }
         }
 
+        // Optional: VM-only escape analysis to elide barriers before execution
+        let mut module_vm = compile_result.module.clone();
+        if std::env::var("NYASH_VM_ESCAPE_ANALYSIS").ok().as_deref() == Some("1") {
+            let removed = nyash_rust::mir::passes::escape::escape_elide_barriers_vm(&mut module_vm);
+            if removed > 0 && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[VM] escape_elide_barriers: removed {} barriers", removed);
+            }
+        }
+
         // Execute with VM using prepared runtime
         let mut vm = VM::with_runtime(runtime);
-        match vm.execute_module(&compile_result.module) {
+        match vm.execute_module(&module_vm) {
             Ok(result) => {
                 println!("✅ VM execution completed successfully!");
                 // Pretty-print using MIR return type when available to avoid Void-looking floats/bools

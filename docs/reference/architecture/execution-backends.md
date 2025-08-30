@@ -505,3 +505,15 @@ NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_STATS=1 \
   - 分岐条件はb1化（i64の場合は !=0 で正規化）
   - 直線＋if/elseでのreturnをJITで実行（副作用は未対応のためVMへ）
   - PHIは将来の`NYASH_JIT_PHI_MIN=1`で最小導入予定
+
+#### 予約シンボル（Runtime/GC 橋渡し）
+- `nyash.rt.checkpoint`（セーフポイント）
+  - JIT: no-op スタブを登録済み（将来のスケジューラ/GC連携用）
+  - AOT: `nyrt` が同名シンボルをエクスポート（`#[export_name]`）。リンク済み
+  - トレース: `NYASH_RUNTIME_CHECKPOINT_TRACE=1` でstderrに到達ログ
+- `nyash.gc.barrier_write`（書き込みバリア）
+  - JIT: no-op スタブを登録済み（将来のインクリメンタルGC向けフック）
+  - AOT: `nyrt` が同名シンボルをエクスポート（`#[export_name]`）
+  - トレース: `NYASH_GC_BARRIER_TRACE=1` でstderrに到達ログ
+
+メモ: 現時点では両シンボルとも副作用なし（no-op）。MIR側では `Safepoint` → `ExternCall(env.runtime.checkpoint)` へ段階移行中です。

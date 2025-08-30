@@ -468,6 +468,50 @@ impl PluginLoaderV2 {
                 }
                 Ok(None)
             }
+            ("env.debug", "trace") => {
+                // Minimal debug trace; prints to stderr when enabled
+                if std::env::var("NYASH_DEBUG_TRACE").ok().as_deref() == Some("1") {
+                    for a in args { eprintln!("[debug.trace] {}", a.to_string_box().value); }
+                }
+                Ok(None)
+            }
+            ("env.runtime", "checkpoint") => {
+                // Minimal safepoint checkpoint stub (no-op)
+                if std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!("[runtime.checkpoint] reached");
+                }
+                Ok(None)
+            }
+            // Future/Await bridge (scaffold): maps MIR Future* to Box operations
+            ("env.future", "new") => {
+                // new(value) -> FutureBox(set to value)
+                let fut = crate::boxes::future::FutureBox::new();
+                if let Some(v) = args.get(0) { fut.set_result(v.clone_box()); }
+                Ok(Some(Box::new(fut)))
+            }
+            ("env.future", "set") => {
+                // set(future, value)
+                if args.len() >= 2 {
+                    if let Some(fut) = args[0].as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
+                        fut.set_result(args[1].clone_box());
+                    }
+                }
+                Ok(None)
+            }
+            ("env.future", "await") => {
+                // await(future) -> value (pass-through if not a FutureBox)
+                if let Some(arg) = args.get(0) {
+                    if let Some(fut) = arg.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
+                        match fut.wait_and_get() { Ok(v) => return Ok(Some(v)), Err(e) => {
+                            eprintln!("[env.future.await] error: {}", e);
+                            return Ok(None);
+                        } }
+                    } else {
+                        return Ok(Some(arg.clone_box()));
+                    }
+                }
+                Ok(None)
+            }
             ("env.canvas", _) => {
                 eprintln!("[env.canvas] {} invoked (stub)", method_name);
                 Ok(None)

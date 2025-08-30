@@ -1086,6 +1086,25 @@ mod tests {
             iterations: 10,
             vm_stats: false,
             vm_stats_json: false,
+            // JIT defaults for test
+            jit_exec: false,
+            jit_stats: false,
+            jit_stats_json: false,
+            jit_dump: false,
+            jit_events: false,
+            jit_events_compile: false,
+            jit_events_runtime: false,
+            jit_events_path: None,
+            jit_threshold: None,
+            jit_phi_min: false,
+            jit_hostcall: false,
+            jit_handle_debug: false,
+            jit_native_f64: false,
+            jit_native_bool: false,
+            emit_cfg: None,
+            jit_only: false,
+            jit_direct: false,
+            cli_verbose: false,
         };
         
         let runner = NyashRunner::new(config);

@@ -536,7 +536,8 @@ use super::extern_thunks::{
     nyash_array_last_h, nyash_map_size_h, nyash_map_get_h, nyash_map_get_hh,
     nyash_map_set_h, nyash_map_has_h,
     nyash_string_charcode_at_h, nyash_string_birth_h, nyash_integer_birth_h,
-    nyash_any_length_h, nyash_any_is_empty_h,
+    nyash_string_concat_hh, nyash_string_eq_hh, nyash_string_lt_hh,
+    nyash_any_length_h, nyash_any_is_empty_h, nyash_console_birth_h,
 };
 
 #[cfg(feature = "cranelift-jit")]
@@ -742,8 +743,7 @@ impl IRBuilder for CraneliftBuilder {
         let entry = self.blocks[0];
         fb.append_block_params_for_function_params(entry);
         fb.switch_to_block(entry);
-        // Entry block can be sealed immediately
-        fb.seal_block(entry);
+        // Defer sealing to allow entry PHI params when needed
         self.entry_block = Some(entry);
         self.current_block_index = Some(0);
         fb.finalize();
@@ -775,6 +775,7 @@ impl IRBuilder for CraneliftBuilder {
         // SAFETY: We compiled a function with simple (i64 x N) -> i64/f64 というABIだよ。
         // ランタイムでは JitValue から i64 へ正規化して、引数個数に応じた関数型にtransmuteして呼び出すにゃ。
         let argc = self.desired_argc;
+        let has_ret = self.desired_has_ret;
         let ret_is_f64 = self.desired_has_ret && self.desired_ret_is_f64;
         // capture code as usize to avoid raw pointer Send/Sync issues in closure
         let code_usize = code as usize;
@@ -786,35 +787,26 @@ impl IRBuilder for CraneliftBuilder {
                 for i in 0..take {
                     a[i] = match args[i] { crate::jit::abi::JitValue::I64(v) => v, crate::jit::abi::JitValue::Bool(b) => if b {1} else {0}, crate::jit::abi::JitValue::F64(f) => f as i64, crate::jit::abi::JitValue::Handle(h) => h as i64 };
                 }
-                let ret_i64 = match argc {
-                    0 => {
-                        let f: extern "C" fn() -> i64 = std::mem::transmute(code_usize);
-                        f()
+                // Call according to return type expectation
+                let ret_i64 = if has_ret {
+                    match argc {
+                        0 => { let f: extern "C" fn() -> i64 = std::mem::transmute(code_usize); f() }
+                        1 => { let f: extern "C" fn(i64) -> i64 = std::mem::transmute(code_usize); f(a[0]) }
+                        2 => { let f: extern "C" fn(i64,i64) -> i64 = std::mem::transmute(code_usize); f(a[0],a[1]) }
+                        3 => { let f: extern "C" fn(i64,i64,i64) -> i64 = std::mem::transmute(code_usize); f(a[0],a[1],a[2]) }
+                        4 => { let f: extern "C" fn(i64,i64,i64,i64) -> i64 = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3]) }
+                        5 => { let f: extern "C" fn(i64,i64,i64,i64,i64) -> i64 = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3],a[4]) }
+                        _ => { let f: extern "C" fn(i64,i64,i64,i64,i64,i64) -> i64 = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3],a[4],a[5]) }
                     }
-                    1 => {
-                        let f: extern "C" fn(i64) -> i64 = std::mem::transmute(code_usize);
-                        f(a[0])
-                    }
-                    2 => {
-                        let f: extern "C" fn(i64, i64) -> i64 = std::mem::transmute(code_usize);
-                        f(a[0], a[1])
-                    }
-                    3 => {
-                        let f: extern "C" fn(i64, i64, i64) -> i64 = std::mem::transmute(code_usize);
-                        f(a[0], a[1], a[2])
-                    }
-                    4 => {
-                        let f: extern "C" fn(i64, i64, i64, i64) -> i64 = std::mem::transmute(code_usize);
-                        f(a[0], a[1], a[2], a[3])
-                    }
-                    5 => {
-                        let f: extern "C" fn(i64, i64, i64, i64, i64) -> i64 = std::mem::transmute(code_usize);
-                        f(a[0], a[1], a[2], a[3], a[4])
-                    }
-                    _ => {
-                        // 上限6（十分なPoC）
-                        let f: extern "C" fn(i64, i64, i64, i64, i64, i64) -> i64 = std::mem::transmute(code_usize);
-                        f(a[0], a[1], a[2], a[3], a[4], a[5])
+                } else {
+                    match argc {
+                        0 => { let f: extern "C" fn() = std::mem::transmute(code_usize); f(); 0 }
+                        1 => { let f: extern "C" fn(i64) = std::mem::transmute(code_usize); f(a[0]); 0 }
+                        2 => { let f: extern "C" fn(i64,i64) = std::mem::transmute(code_usize); f(a[0],a[1]); 0 }
+                        3 => { let f: extern "C" fn(i64,i64,i64) = std::mem::transmute(code_usize); f(a[0],a[1],a[2]); 0 }
+                        4 => { let f: extern "C" fn(i64,i64,i64,i64) = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3]); 0 }
+                        5 => { let f: extern "C" fn(i64,i64,i64,i64,i64) = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3],a[4]); 0 }
+                        _ => { let f: extern "C" fn(i64,i64,i64,i64,i64,i64) = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3],a[4],a[5]); 0 }
                     }
                 };
                 if ret_is_f64 {
@@ -832,6 +824,73 @@ impl IRBuilder for CraneliftBuilder {
                 crate::jit::abi::JitValue::I64(ret_i64)
             });
             self.compiled_closure = Some(closure);
+        }
+        // Important: keep finalized code alive by preserving the JITModule.
+        // Swap current module with a fresh one and leak the old module to avoid freeing code memory.
+        {
+            // Build a fresh JITModule with the same symbol registrations for the next compilation
+            let mut jb = cranelift_jit::JITBuilder::new(cranelift_module::default_libcall_names())
+                .expect("failed to create JITBuilder");
+            // Register host-call symbols (keep in sync with new())
+            jb.symbol("nyash.host.stub0", nyash_host_stub0 as *const u8);
+            {
+                use crate::jit::r#extern::collections as c;
+                use crate::jit::r#extern::{handles as h, birth as b, runtime as r};
+                use super::extern_thunks::{
+                    nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64,
+                    nyash_handle_of, nyash_box_birth_h, nyash_box_birth_i64,
+                    nyash_rt_checkpoint, nyash_gc_barrier_write,
+                };
+                jb.symbol(c::SYM_ARRAY_LEN, nyash_array_len as *const u8);
+                jb.symbol(c::SYM_ARRAY_GET, nyash_array_get as *const u8);
+                jb.symbol(c::SYM_ARRAY_SET, nyash_array_set as *const u8);
+                jb.symbol(c::SYM_ARRAY_PUSH, nyash_array_push as *const u8);
+                jb.symbol(c::SYM_MAP_GET, nyash_map_get as *const u8);
+                jb.symbol(c::SYM_MAP_SET, nyash_map_set as *const u8);
+                jb.symbol(c::SYM_MAP_SIZE, nyash_map_size as *const u8);
+                jb.symbol("nyash.math.sin_f64", nyash_math_sin_f64 as *const u8);
+                jb.symbol("nyash.math.cos_f64", nyash_math_cos_f64 as *const u8);
+                jb.symbol("nyash.math.abs_f64", nyash_math_abs_f64 as *const u8);
+                jb.symbol("nyash.math.min_f64", nyash_math_min_f64 as *const u8);
+                jb.symbol("nyash.math.max_f64", nyash_math_max_f64 as *const u8);
+                // Handle-based symbols
+                jb.symbol(c::SYM_ARRAY_LEN_H, nyash_array_len_h as *const u8);
+                jb.symbol(c::SYM_ARRAY_GET_H, nyash_array_get_h as *const u8);
+                jb.symbol(c::SYM_ARRAY_SET_H, nyash_array_set_h as *const u8);
+                jb.symbol(c::SYM_ARRAY_PUSH_H, nyash_array_push_h as *const u8);
+                jb.symbol(c::SYM_ARRAY_LAST_H, nyash_array_last_h as *const u8);
+                jb.symbol(c::SYM_MAP_SIZE_H, nyash_map_size_h as *const u8);
+                jb.symbol(c::SYM_MAP_GET_H, nyash_map_get_h as *const u8);
+                jb.symbol(c::SYM_MAP_GET_HH, nyash_map_get_hh as *const u8);
+                jb.symbol(c::SYM_MAP_SET_H, nyash_map_set_h as *const u8);
+                jb.symbol(c::SYM_MAP_HAS_H, nyash_map_has_h as *const u8);
+                jb.symbol(c::SYM_ANY_LEN_H, nyash_any_length_h as *const u8);
+                jb.symbol(c::SYM_ANY_IS_EMPTY_H, nyash_any_is_empty_h as *const u8);
+                jb.symbol(c::SYM_STRING_CHARCODE_AT_H, nyash_string_charcode_at_h as *const u8);
+                jb.symbol(c::SYM_STRING_BIRTH_H, nyash_string_birth_h as *const u8);
+                jb.symbol(c::SYM_INTEGER_BIRTH_H, nyash_integer_birth_h as *const u8);
+                // String-like binary ops (handle, handle)
+                jb.symbol(c::SYM_STRING_CONCAT_HH, nyash_string_concat_hh as *const u8);
+                jb.symbol(c::SYM_STRING_EQ_HH, nyash_string_eq_hh as *const u8);
+                jb.symbol(c::SYM_STRING_LT_HH, nyash_string_lt_hh as *const u8);
+                jb.symbol(b::SYM_BOX_BIRTH_H, nyash_box_birth_h as *const u8);
+                jb.symbol("nyash.box.birth_i64", nyash_box_birth_i64 as *const u8);
+                // Handle helpers
+                jb.symbol(h::SYM_HANDLE_OF, nyash_handle_of as *const u8);
+                // Plugin invoke shims (i64/f64)
+                jb.symbol("nyash_plugin_invoke3_i64", nyash_plugin_invoke3_i64 as *const u8);
+                jb.symbol("nyash_plugin_invoke3_f64", nyash_plugin_invoke3_f64 as *const u8);
+                // By-name plugin invoke shims (method-name specific)
+                jb.symbol("nyash_plugin_invoke_name_getattr_i64", nyash_plugin_invoke_name_getattr_i64 as *const u8);
+                jb.symbol("nyash_plugin_invoke_name_call_i64", nyash_plugin_invoke_name_call_i64 as *const u8);
+                // Reserved runtime/GC symbols
+                jb.symbol(r::SYM_RT_CHECKPOINT, nyash_rt_checkpoint as *const u8);
+                jb.symbol(r::SYM_GC_BARRIER_WRITE, nyash_gc_barrier_write as *const u8);
+            }
+            let new_module = cranelift_jit::JITModule::new(jb);
+            // Leak the old module so finalized code stays valid
+            let old = std::mem::replace(&mut self.module, new_module);
+            let _leaked: &'static mut cranelift_jit::JITModule = Box::leak(Box::new(old));
         }
         // Reset typed signature flag for next function
         self.typed_sig_prepared = false;
@@ -956,6 +1015,12 @@ impl IRBuilder for CraneliftBuilder {
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        // If function has no return values, emit a plain return
+        if fb.func.signature.returns.is_empty() {
+            fb.ins().return_(&[]);
+            fb.finalize();
+            return;
+        }
         if let Some(mut v) = self.value_stack.pop() {
             // Normalize return type if needed
             let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(cranelift_codegen::ir::types::I64);
@@ -1528,7 +1593,7 @@ impl IRBuilder for ObjectBuilder {
         let entry = self.blocks[0];
         fb.append_block_params_for_function_params(entry);
         fb.switch_to_block(entry);
-        fb.seal_block(entry);
+        // Defer sealing to allow entry PHI params when needed
         self.entry_block = Some(entry);
         self.current_block_index = Some(0);
         fb.finalize();
@@ -1621,6 +1686,11 @@ impl IRBuilder for ObjectBuilder {
         use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::types;
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); } else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        if fb.func.signature.returns.is_empty() {
+            fb.ins().return_(&[]);
+            fb.finalize();
+            return;
+        }
         if let Some(mut v) = self.value_stack.pop() {
             let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(types::I64);
             let v_ty = fb.func.dfg.value_type(v);
@@ -1748,12 +1818,16 @@ impl CraneliftBuilder {
         // Initialize a minimal JITModule to validate linking; not used yet
         let mut builder = cranelift_jit::JITBuilder::new(cranelift_module::default_libcall_names())
             .expect("failed to create JITBuilder");
-        // Register host-call symbols (PoC: map to simple C-ABI stubs)
-        builder.symbol("nyash.host.stub0", nyash_host_stub0 as *const u8);
+            // Register host-call symbols (PoC: map to simple C-ABI stubs)
+            builder.symbol("nyash.host.stub0", nyash_host_stub0 as *const u8);
         {
             use crate::jit::r#extern::collections as c;
-            use crate::jit::r#extern::{handles as h, birth as b};
-            use super::extern_thunks::{nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64, nyash_handle_of, nyash_box_birth_h, nyash_box_birth_i64};
+            use crate::jit::r#extern::{handles as h, birth as b, runtime as r};
+            use super::extern_thunks::{
+                nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64,
+                nyash_handle_of, nyash_box_birth_h, nyash_box_birth_i64,
+                nyash_rt_checkpoint, nyash_gc_barrier_write,
+            };
             builder.symbol(c::SYM_ARRAY_LEN, nyash_array_len as *const u8);
             builder.symbol(c::SYM_ARRAY_GET, nyash_array_get as *const u8);
             builder.symbol(c::SYM_ARRAY_SET, nyash_array_set as *const u8);
@@ -1783,6 +1857,11 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_STRING_CHARCODE_AT_H, nyash_string_charcode_at_h as *const u8);
             builder.symbol(c::SYM_STRING_BIRTH_H, nyash_string_birth_h as *const u8);
             builder.symbol(c::SYM_INTEGER_BIRTH_H, nyash_integer_birth_h as *const u8);
+            builder.symbol("nyash.console.birth_h", nyash_console_birth_h as *const u8);
+            // String-like binary ops (handle, handle)
+            builder.symbol(c::SYM_STRING_CONCAT_HH, nyash_string_concat_hh as *const u8);
+            builder.symbol(c::SYM_STRING_EQ_HH, nyash_string_eq_hh as *const u8);
+            builder.symbol(c::SYM_STRING_LT_HH, nyash_string_lt_hh as *const u8);
             builder.symbol(b::SYM_BOX_BIRTH_H, nyash_box_birth_h as *const u8);
             builder.symbol("nyash.box.birth_i64", nyash_box_birth_i64 as *const u8);
             // Handle helpers
@@ -1793,6 +1872,9 @@ impl CraneliftBuilder {
             // By-name plugin invoke shims (method-name specific)
             builder.symbol("nyash_plugin_invoke_name_getattr_i64", nyash_plugin_invoke_name_getattr_i64 as *const u8);
             builder.symbol("nyash_plugin_invoke_name_call_i64", nyash_plugin_invoke_name_call_i64 as *const u8);
+            // Reserved runtime/GC symbols
+            builder.symbol(r::SYM_RT_CHECKPOINT, nyash_rt_checkpoint as *const u8);
+            builder.symbol(r::SYM_GC_BARRIER_WRITE, nyash_gc_barrier_write as *const u8);
         }
         let module = cranelift_jit::JITModule::new(builder);
         let ctx = cranelift_codegen::Context::new();

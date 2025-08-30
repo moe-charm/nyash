@@ -44,11 +44,10 @@ if ! cargo build --release --features cranelift-jit >/dev/null; then
   exit 1
 fi
 
-echo "[2/4] Emitting object (.o) via JIT (Strict/No-fallback) ..."
+echo "[2/4] Emitting object (.o) via JIT (Strict/No-fallback, jit-direct) ..."
 rm -rf target/aot_objects && mkdir -p target/aot_objects
 NYASH_AOT_OBJECT_OUT=target/aot_objects \
 NYASH_USE_PLUGIN_BUILTINS=1 \
-NYASH_JIT_EXEC=1 \
 NYASH_JIT_ONLY=1 \
 NYASH_JIT_STRICT=1 \
 NYASH_JIT_NATIVE_F64=1 \
@@ -56,13 +55,13 @@ NYASH_JIT_NATIVE_F64=1 \
 NYASH_JIT_PLUGIN_F64="${NYASH_JIT_PLUGIN_F64:-41:2}" \
 NYASH_JIT_ARGS_HANDLE_ONLY=1 \
 NYASH_JIT_THRESHOLD=1 \
-./target/release/nyash --backend vm "$INPUT" >/dev/null || true
+./target/release/nyash --jit-direct "$INPUT" >/dev/null || true
 
 OBJ="target/aot_objects/main.o"
 if [[ ! -f "$OBJ" ]]; then
   echo "error: object not generated: $OBJ" >&2
   echo "hint: Strict mode forbids fallback. Ensure main() is lowerable under current JIT coverage." >&2
-  echo "hint: Try a simpler RO example first, or expand JIT coverage for used ops." >&2
+  echo "hint: Try running jit-direct manually with envs above to see details." >&2
   exit 2
 fi
 

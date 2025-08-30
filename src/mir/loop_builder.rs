@@ -81,7 +81,10 @@ impl<'a> LoopBuilder<'a> {
         
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
-        self.emit_safepoint()?;
+        // Optional safepoint per loop-iteration
+        if std::env::var("NYASH_BUILDER_SAFEPOINT_LOOP").ok().as_deref() == Some("1") {
+            self.emit_safepoint()?;
+        }
 
         // ボディをビルド
         for stmt in body {
