@@ -1,0 +1,36 @@
+// Rich demo for string interop across internal and plugin strings
+static box Main {
+  main() {
+    local plain = "Hello, Nyash!"
+    local enc = new EncodingBox()
+    local b64 = enc.base64Encode(plain)
+
+    // lengths
+    println("Plain string length:")
+    println(plain.length())
+    println("Encoded string length:")
+    println(b64.length())
+
+    // concat
+    local concat_plain = plain + " World"
+    println("Concat result: " + concat_plain)
+    local concat_encoded = enc.base64Encode(concat_plain)
+    println("Encoded concat: " + concat_encoded)
+
+    // charCodeAt
+    println("charCodeAt(0):")
+    println(plain.charCodeAt(0))
+
+    // compare
+    println("Compare plain:")
+    println(plain == "Hello, Nyash!")
+    println("Compare encoded:")
+    println(b64 == "SGVsbG8sIE55YXNoIQ==")
+    println("Length comparison:")
+    println(plain.length() < b64.length())
+
+    // final result
+    return true
+  }
+}
+
