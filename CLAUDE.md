@@ -3,10 +3,10 @@
 このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
 ## Start Here (必ずここから)
-- 現在のタスク: docs/development/current/CURRENT_TASK.md
-- ドキュメントハブ: README.md
-- 🚀 **開発マスタープラン**: docs/development/roadmap/phases/00_MASTER_ROADMAP.md
- - 📊 **JIT統計JSONスキーマ(v1)**: docs/reference/jit/jit_stats_json_v1.md
+- 現在のタスク: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+- ドキュメントハブ: [README.md](README.md)
+- 🚀 **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
+ - 📊 **JIT統計JSONスキーマ(v1)**: [jit_stats_json_v1.md](docs/reference/jit/jit_stats_json_v1.md)
 
 ## 🧱 先頭原則: 「箱理論（Box-First）」で足場を積む
 Nyashは「Everything is Box」。実装・最適化・検証のすべてを「箱」で分離・固定し、いつでも戻せる足場を積み木のように重ねる。
@@ -18,38 +18,17 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
   - 「限定スコープの足場」を先に立ててから最適化（戻りやすい積み木）
 - AI補助時の注意: 「力づく最適化」を抑え、まず箱で境界を確立→小さく通す→可視化→次の一手
 
-進め方（積み木が大きくなりすぎないために）
-- 1) 足場は最小限（設定/境界/可視化/フォールバック）→ 2) すぐ実効カバレッジ拡大へ
-- 返り値ヒントなどは「フックだけ」用意し、切替ポイントを1箇所に固定（将来1行切替）
-- 同じ分岐を複数箇所に作らない（ParamKind→型決定は1関数に集約）
-- 観測（統計/CFG）で回れるようにして「止まらない実装サイクル」を維持
-
-
 実践テンプレート（開発時の合言葉）
 - 「箱にする」: 設定・状態・橋渡しはBox化（例: JitConfigBox, HandleRegistry）
 - 「境界を作る」: 変換は境界1箇所で（VMValue↔JitValue, Handle↔Arc）
 - 「戻せる」: フラグ・feature・env/Boxで切替。panic→フォールバック経路を常設
 - 「見える化」: ダンプ/JSON/DOTで可視化、回帰テストを最小構成で先に入れる
 
-標準化（例）
-- 設定の箱: JIT/VMフラグは `JitConfigBox` に集約し、`apply()`でenvにも反映
-- 実行時読み: ホットパスでは `jit::config::current()` を参照（env直読みを排除）
-- ハンドルの箱: JIT↔Hostは `HandleRegistry`（u64↔Arc）で疎結合化
-- 可視化: `NYASH_JIT_DUMP/…_JSON/NYASH_JIT_DOT` を活用し、変化を常に観測
-
-Notes:
-- ここから先の導線は README.md に集約。Claude Codeくんがこのファイルを上書きしても最低限のリンクは保たれるよ。
-
 ## 🤖 **Claude×Copilot×ChatGPT協調開発**
 ### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
 **すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-- **Phase 8.6**: VM性能改善（0.9倍 → 2倍以上）**← 現在ここ**
-- **Phase 9**: JIT実装
-- **Phase 10**: Cranelift JIT（主経路）/ LLVM AOTは後段
-- **Phase 9.8**: BIDレジストリ（プラグイン全バックエンド対応）
-
-**迷ったらマスタープランを確認せよ！**
+**現在のフェーズ：Phase 11 (MIR Core-15確定 → LLVM準備)**
 
 ## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
 
@@ -64,17 +43,13 @@ Notes:
 2. **改善アイデアは `docs/ideas/` フォルダに記録**（20%）
 3. **優先度に応じて後から改善**
 
-例: VM and/or実装
-- 80%: `as_bool()`で基本動作 → コミット ✅
-- 20%: 短絡評価、型最適化 → `docs/ideas/improvements/2025-08-25-vm-andor-shortcircuit.md`
-
 ## 🚀 クイックスタート
 
 ### 🎯 実行方式選択 (重要!)
-- **実行バックエンド完全ガイド**: [docs/reference/architecture/execution-backends.md](docs/reference/architecture/execution-backends.md) 
+- **[実行バックエンド完全ガイド](docs/reference/architecture/execution-backends.md)** 
   - インタープリター（開発・デバッグ）/ VM（高速実行）/ WASM（Web配布）
-  - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較（13.5倍実行高速化実証済み！）
-- **ビルド方法完全ガイド**: [docs/guides/build/](docs/guides/build/) - プラットフォーム別ビルド手順
+  - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較
+- **[ビルド方法完全ガイド](docs/guides/build/)** - プラットフォーム別ビルド手順
 
 ### 🐧 Linux/WSL版
 ```bash
@@ -92,7 +67,7 @@ cargo build --release -j32
 ./target/release/nyash --benchmark --iterations 100
 ```
 
-### 🪟 Windows版 (NEW!)
+### 🪟 Windows版
 ```bash
 # クロスコンパイルでWindows実行ファイル生成
 cargo install cargo-xwin
@@ -102,119 +77,43 @@ cargo xwin build --target x86_64-pc-windows-msvc --release
 target/x86_64-pc-windows-msvc/release/nyash.exe
 ```
 
-### 📚 完全ビルドガイド
-- **🏗️ [ビルドパターン総合ガイド](docs/guides/build/)** - すべてのビルド方法を網羅
-  - 📦 [Windows配布版作成ガイド](docs/guides/build/windows-distribution.md) - 実践的な配布パッケージ作成
-  - 🌍 [クロスプラットフォーム開発](docs/guides/build/cross-platform.md) - Write Once, Run Everywhere
-  - 🔌 プラグインのマルチプラットフォームビルド
-
-### 🌐 WebAssembly版（2種類あるので注意！）
+### 🌐 WebAssembly版（2種類）
 
 #### 1️⃣ **Rust→WASM（ブラウザでNyashインタープリター実行）**
 ```bash
 # WASMビルド（ルートディレクトリで実行）
 wasm-pack build --target web
 
-# ビルド結果は pkg/ ディレクトリに生成される
-# - pkg/nyash_rust_bg.wasm   # Rustで書かれたNyashインタープリター全体
-# - pkg/nyash_rust.js
-# - pkg/nyash_rust.d.ts
-
-# 開発サーバー起動（ポート8010推奨）
+# 開発サーバー起動
 python3 -m http.server 8010
 
 # ブラウザでアクセス
-# ローカルテスト: http://localhost:8010/nyash_playground.html
-# 公開プレイグラウンド: https://moe-charm.github.io/nyash/projects/nyash-wasm/nyash_playground.html
+# http://localhost:8010/nyash_playground.html
 ```
-
-**注意**: WASMビルドでは一部のBox（TimerBox、AudioBox等）は除外されます。
 
 #### 2️⃣ **Nyash→MIR→WASM（Nyashプログラムをコンパイル）**
 ```bash
 # NyashコードをWASMにコンパイル（WAT形式で出力）
-./target/release/nyash --compile-wasm program.nyash
-
-# ファイルに出力
 ./target/release/nyash --compile-wasm program.nyash -o output.wat
-
-# 現在の実装状況：
-# - 基本的なMIR→WASM変換は動作
-# - print文などの基本機能のみ
-# - 実行にはwasmtimeなどのランタイムが必要
 ```
 
-**違いのまとめ:**
-- **Rust→WASM**: Nyashインタープリター自体をブラウザで動かす（フル機能）
-- **Nyash→WASM**: Nyashプログラムを単体WASMに変換（限定機能）
-
-#### 3️⃣ **Nyash→AOT/Native（Cranelift必要）**
+#### 3️⃣ **Nyash→AOT/Native（Cranelift/LLVM）**
 ```bash
-# NyashコードをネイティブバイナリにAOTコンパイル（現在開発中）
+# Cranelift JIT
 cargo build --release --features cranelift-jit
 ./target/release/nyash --backend vm --compile-native program.nyash -o program.exe
-# または
+
+# LLVM (開発中)
+cargo build --release --features llvm
 ./target/release/nyash --aot program.nyash -o program.exe
 ```
-Note: --compile-native は Cranelift JIT を必要とします（`--features cranelift-jit`）。
-
-### 🔧 JIT-direct（独立JIT）運用メモ（最小）
-- 方針: 当面は read-only（書き込み命令はjit-directで拒否）
-- 失敗の見える化: `NYASH_JIT_STATS_JSON=1` または `NYASH_JIT_ERROR_JSON=1` でエラーを1行JSON出力
-- すぐ試す例（Cranelift有効時）
-  - `examples/jit_direct_local_store_load.nyash`（最小Store/Load → 3）
-  - `examples/jit_direct_bool_ret.nyash`（Bool戻り → true）
-  - `examples/jit_direct_f64_ret.nyash`（F64戻り → 3.75, `NYASH_JIT_NATIVE_F64=1`）
-- Box-First運用キット: `docs/engineering/box_first_enforcement.md`（PRテンプレ/CIガード/運用指標）
 
 ## 📝 Update (2025-08-31)
-- MIR移行: Print/Type/Weak/BarrierはRewrite完了、Debug/SafepointはトグルでExternCall化
-- ランタイムextern_callに `env.debug.trace` / `env.runtime.checkpoint` を追加
-- JIT/AOT 予約シンボルを登録（no-op, 将来拡張用）
-  - `nyash.rt.checkpoint`（セーフポイント到達フック）
-  - `nyash.gc.barrier_write`（書き込みバリアヒント）
-- トレース環境変数
-  - `NYASH_DEBUG_TRACE=1` / `NYASH_RUNTIME_CHECKPOINT_TRACE=1` / `NYASH_GC_BARRIER_TRACE=1`
-- Rewriteトグル（追加）
-  - `NYASH_REWRITE_FUTURE=1`: FutureNew/Set/Await → `ExternCall(env.future.*)` に変換（スキャフォールド）。`env.future.new/set/await` の最小実装をruntimeに追加
- - LLVM足場: Cargo feature `llvm` を追加（ビルド時に`--features llvm`指定で警告を抑止）。実装はモック→本実装はinkwell導入後
- - MIRコアカバレッジ: docs/reference/mir/MIR15_COVERAGE_CHECKLIST.md を追加（VM/JIT確認手順）
-  
-### BuilderレガシーAPIの段階停止（デフォルトOFF）
-- 旧Weak/Barrier命令の発行を無効化（統一命令に切替）
-  - 既定: WeakRef(New/Load), Barrier(Read/Write) を直接発行
-  - レガシーを明示的に使う場合のみトグルをON
-    - `NYASH_BUILDER_LEGACY_WEAK=1`
-    - `NYASH_BUILDER_LEGACY_BARRIER=1`
-- 次の手順: Docs仕上げ → Future/Await Rewriteのスキャフォールド → Builder legacy APIの非推奨化 → JIT directのSeal調整
-
-## 📚 ドキュメント構造
-
-### 🎯 **最重要ドキュメント（開発者向け）**
-- **[copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt)** - **Phase順開発計画の軸**
-- **[CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)** - 現在進行状況詳細
-- **[native-plan/README.md](docs/development/roadmap/native-plan/README.md)** - ネイティブビルド計画
-
-### 📖 利用者向けドキュメント
-- 入口: [docs/README.md](docs/README.md)
-  - Getting Started: [docs/guides/getting-started.md](docs/guides/getting-started.md)
-  - Language Guide: [docs/guides/language-guide.md](docs/guides/language-guide.md)
-  - Reference: [docs/reference/](docs/reference/)
-- 開発計画/進捗: [docs/development/](docs/development/)
-  - 現在タスク: [docs/development/current/CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
-  - ネイティブ計画: [docs/development/roadmap/native-plan/](docs/development/roadmap/native-plan/)
-  - フェーズ課題: [docs/development/roadmap/](docs/development/roadmap/)
-- アーカイブ: [docs/archive/](docs/archive/)
-
-### 🎯 よく使う情報（クイックアクセス）
-- **🔴 現在のタスク**: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md) ← 今ココ！
-- **🎮 Phase 9.78h**: [phase_9_78h_mir_pipeline_stabilization.md](docs/development/roadmap/phases/phase-9/phase_9_78h_mir_pipeline_stabilization.md)
-- **📐 言語仕様**: [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
-- **🤖 MIR 26命令**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
-- **📦 Box API**: [boxes-system/](docs/reference/boxes-system/)
-- **⚡ VM実装**: [VM_README.md](docs/VM_README.md)
-- **🌐 Netプラグイン**: [net-plugin.md](docs/reference/plugin-system/net-plugin.md)
-- **🎮 実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
+- MIR Core-15への統合（37命令→15命令）
+- LLVM導入開始（Phase 11）
+- 各種Rewriteトグル追加
+- JIT/AOT 予約シンボル登録
+- 詳細: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
 
 ## ⚡ 重要な設計原則
 
@@ -222,7 +121,7 @@ Note: --compile-native は Cranelift JIT を必要とします（`--features cra
 - すべての値がBox（StringBox, IntegerBox, BoolBox等）
 - ユーザー定義Box: `box ClassName { init { field1, field2 } }`
 
-### 🌟 完全明示デリゲーション（2025-08-11革命）
+### 🌟 完全明示デリゲーション
 ```nyash
 // デリゲーション構文（すべてのBoxで統一的に使える！）
 box Child from Parent {  // from構文でデリゲーション
@@ -252,7 +151,7 @@ while condition { }  // 使用不可
 loop() { }          // 使用不可
 ```
 
-### 🌟 birth構文 - 生命をBoxに与える（2025-08-15実装）
+### 🌟 birth構文 - 生命をBoxに与える
 ```nyash
 // 🌟 「Boxに生命を与える」直感的コンストラクタ
 box Life {
@@ -265,46 +164,21 @@ box Life {
     }
 }
 
-// 🔄 デリゲーションでのbirth
-box Human from Life {
-    init { intelligence }
-    
-    birth(humanName) {
-        from Life.birth(humanName)  // 親のbirthを呼び出し
-        me.intelligence = 50
-    }
-}
-
 // ✅ 優先順位: birth > pack > init > Box名形式
-local alice = new Human("Alice")  // birthが使われる
+local alice = new Life("Alice")  // birthが使われる
 ```
 
 ### 🚨 pack構文 - ビルトインBox継承専用
 ```nyash
 // ⚠️ pack構文はビルトインBox継承専用！ユーザー定義Boxでは使わない
 box EnhancedP2P from P2PBox {
-    init { features }
-    
     pack(nodeId, transport) {
         from P2PBox.pack(nodeId, transport)  // ビルトイン初期化
-        me.features = new ArrayBox()
-    }
-    
-    override send(intent, data, target) {
-        me.features.push("send:" + intent)
-        return from P2PBox.send(intent, data, target)
-    }
-}
-
-// ❌ 間違い: ユーザー定義Boxでpack使用
-box RegularUser {
-    pack(name) {  // これは間違い！birth()を使う
-        me.name = name
     }
 }
 ```
 
-### 🎯 正統派Nyashスタイル（2025-08-09実装）
+### 🎯 正統派Nyashスタイル
 ```nyash
 // 🚀 Static Box Main パターン - エントリーポイントの統一スタイル
 static box Main {
@@ -325,7 +199,7 @@ static box Main {
 }
 ```
 
-### 📝 変数宣言厳密化システム（2025-08-09実装）
+### 📝 変数宣言厳密化システム
 ```nyash
 // 🔥 すべての変数は明示宣言必須！（メモリ安全性・非同期安全性保証）
 
@@ -341,18 +215,11 @@ static box Calculator {
     }
 }
 
-// ✅ static関数内の所有権移転
-static function Factory.create() {
-    outbox product  // 呼び出し側に所有権移転
-    product = new Item()
-    return product
-}
-
 // ❌ 未宣言変数への代入はエラー
 x = 42  // Runtime Error: 未宣言変数 + 修正提案
 ```
 
-### ⚡ 実装済み演算子（Production Ready）
+### ⚡ 実装済み演算子
 ```nyash
 // 論理演算子（完全実装）
 not condition    // NOT演算子
@@ -373,7 +240,28 @@ init { field1, field2 }  // カンマ必須（CPU暴走防止）
 init { field1 field2 }   // カンマなし→CPU暴走
 ```
 
-## 🎨 GUI開発（NEW!）
+## 📚 ドキュメント構造
+
+### 🎯 最重要ドキュメント（開発者向け）
+- **[copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt)** - Phase順開発計画
+- **[CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)** - 現在進行状況詳細
+- **[native-plan/README.md](docs/development/roadmap/native-plan/README.md)** - ネイティブビルド計画
+
+### 📖 利用者向けドキュメント
+- 入口: [docs/README.md](docs/README.md)
+  - Getting Started: [docs/guides/getting-started.md](docs/guides/getting-started.md)
+  - Language Guide: [docs/guides/language-guide.md](docs/guides/language-guide.md)
+  - Reference: [docs/reference/](docs/reference/)
+
+### 🎯 よく使う情報（クイックアクセス）
+- **📐 言語仕様**: [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
+- **🤖 MIR命令セット**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
+- **📦 Box API**: [boxes-system/](docs/reference/boxes-system/)
+- **⚡ VM実装**: [VM_README.md](docs/VM_README.md)
+- **🌐 Netプラグイン**: [net-plugin.md](docs/reference/plugin-system/net-plugin.md)
+- **🎮 実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
+
+## 🎨 GUI開発
 
 ### EguiBox - GUIアプリケーション開発
 ```nyash
@@ -398,19 +286,6 @@ app.setSize(800, 600)
 2. **🔄 ドキュメント更新** - 古い/不足している場合は更新
 3. **💻 ソース確認** - それでも解決しない場合のみソースコード参照
 
-### 🎯 最重要ドキュメント（2つの核心）
-
-#### 🔤 言語仕様
-- **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
-- **[完全リファレンス](docs/reference/)** - 言語仕様詳細
-- 予約語や構文: [docs/reference/language/LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
-
-#### 📦 主要BOXのAPI
-- **[Box/プラグイン関連](docs/reference/boxes-system/)** - APIと設計
-- **P2PBox & IntentBox** - `docs/reference/boxes-system/` を参照
-- **StringBox, IntegerBox, ConsoleBox** - 基本Box API
-- **EguiBox, DebugBox, MathBox** - 特殊Box API
-
 ### ⚡ API確認の実践例
 ```bash
 # ❌ 悪い例：いきなりソース読む
@@ -422,176 +297,15 @@ Read docs/reference/  # まずドキュメント（API/言語仕様の入口）
 # → それでも不明 → ソース確認
 ```
 
-## 🏗️ 開発設計原則（綺麗で破綻しない作り）
-
-### 📦 Everything is Box - 内部実装でも箱原理を貫く
-
-#### 1. **単一責任の箱**
-```rust
-// ✅ 良い例：各モジュールが単一の責任を持つ
-MirBuilder: AST → MIR変換のみ（最適化しない）
-MirOptimizer: MIRの最適化のみ（変換しない）
-VM: 実行のみ（最適化しない）
-
-// ❌ 悪い例：複数の責任が混在
-BuilderOptimizer: 変換も最適化も実行も...
-```
-
-#### 2. **明確なインターフェース**
-```rust
-// ✅ エフェクトは単純に
-enum Effect {
-    Pure,       // 副作用なし
-    ReadOnly,   // 読み取りのみ  
-    SideEffect  // 書き込み/IO/例外
-}
-
-// ❌ 複雑な組み合わせは避ける
-PURE.add(IO) // これがpureかどうか分からない！
-```
-
-#### 3. **段階的な処理パイプライン**
-```
-AST → Builder → MIR → Optimizer → VM
-  ↑      ↑       ↑        ↑         ↑
-明確な入力  明確な出力  不変保証  最適化のみ  実行のみ
-```
-
-### 🎯 カプセル化の徹底
-
-#### 1. **内部状態を隠蔽**
-```rust
-// ✅ 良い例：内部実装を隠す
-pub struct MirOptimizer {
-    debug: bool,              // 設定のみ公開
-    enable_typeop_net: bool,  // 設定のみ公開
-    // 内部の複雑な状態は隠蔽
-}
-
-impl MirOptimizer {
-    pub fn new() -> Self { ... }
-    pub fn with_debug(self) -> Self { ... }
-    pub fn optimize(&mut self, module: &mut MirModule) { ... }
-}
-```
-
-#### 2. **変更の局所化**
-- 新機能追加時：1つのモジュールのみ変更
-- バグ修正時：影響範囲が明確
-- テスト：各モジュール独立でテスト可能
-
-### 🌟 美しさの基準
-
-#### 1. **読みやすさ > 賢さ**
-```rust
-// ✅ 単純で分かりやすい
-if effect == Effect::Pure {
-    can_eliminate = true;
-}
-
-// ❌ 賢いが分かりにくい
-can_eliminate = effect.0 & 0x01 == 0x01 && !(effect.0 & 0xFE);
-```
-
-#### 2. **一貫性**
-- 命名規則の統一
-- エラー処理の統一
-- コメントスタイルの統一
-
-### 🚀 大規模化への備え
-
-#### 1. **モジュール分割の原則**
-```
-src/
-├── ast/        # AST定義のみ
-├── parser/     # パース処理のみ
-├── mir/        # MIR定義と基本操作
-│   ├── builder.rs      # AST→MIR変換
-│   └── optimizer.rs    # MIR最適化
-├── backend/    # 実行バックエンド
-│   ├── interpreter.rs  # インタープリター
-│   ├── vm.rs          # VM実行
-│   └── codegen_c.rs   # C言語生成
-```
-
-#### 2. **テストの階層化**
-- 単体テスト：各モジュール内で完結
-- 統合テスト：モジュール間の連携
-- E2Eテスト：全体の動作確認
-
-#### 3. **設定の外部化**
-```rust
-// ✅ フラグで挙動を制御（再コンパイル不要）
-optimizer.enable_typeop_safety_net(flag);
-
-// ❌ ハードコードされた挙動
-#[cfg(feature = "typeop_safety_net")]
-```
-
-### 💡 デバッグとメンテナンス
-
-#### 1. **段階的なデバッグ出力**
-```bash
-NYASH_BUILDER_DEBUG=1   # Builder のみ
-NYASH_OPT_DEBUG=1      # Optimizer のみ
-NYASH_VM_DEBUG=1       # VM のみ
-```
-
-#### 2. **問題の早期発見**
-- 各段階でのアサーション
-- 不変条件の明示的チェック
-- 診断機能の組み込み
-
-### 🎭 複雑さの管理
-
-**複雑さは避けられないが、管理はできる**
-1. 複雑な部分を局所化
-2. インターフェースは単純に
-3. ドキュメントで意図を明示
-
-**判断基準：3ヶ月後の自分が理解できるか？**
-
-## ⚠️ Claude実行環境の既知のバグ（重要！）
-
-### 🐛 Bash Glob展開バグ（Issue #5811）
-
-**問題：** Claude Code v1.0.61-1.0.81でglob展開がパイプと一緒に使うと動作しない
-
-```bash
-# ❌ 失敗するパターン（asteriskが"glob"という文字列に置換される）
-ls *.md | wc -l          # エラー: "ls: 'glob' にアクセスできません"
-find . -name "*.rs"      # エラー: "glob"になる
-ls src/backend/vm_*.rs   # エラー: "glob: そのようなファイルやディレクトリはありません"
-
-# ✅ 回避策1: bash -c でラップ（最も簡単）
-bash -c 'ls *.md | wc -l'
-bash -c 'ls src/backend/vm_*.rs | xargs wc -l'
-# → Claudeではなくbash自身がglob展開するので動作する
-
-# ✅ 回避策2: findコマンドを使う（最も確実）
-find src/backend -name "vm_*.rs" -exec wc -l {} \;
-
-# ✅ 回避策3: 明示的にファイル名を列挙
-wc -l src/backend/vm.rs src/backend/vm_values.rs
-
-# ✅ 回避策4: ls + grepパターン  
-ls src/backend/ | grep "^vm_" | xargs -I{} wc -l src/backend/{}
-```
-
-**影響を受けるパターン：**
-- `*.md`, `*.rs` - 通常のglob
-- `src/*.py` - パス付きglob  
-- `file[12].md` - 文字クラス
-- `file{1,2}.md` - ブレース展開
-
-**根本原因：** Claudeのコマンド再構築機能のバグ（`pattern`ではなく`op`フィールドを使用）
-
 ## 🔧 開発サポート
 
 ### 🤖 AI相談
 ```bash
 # Gemini CLIで相談
 gemini -p "Nyashの実装で困っています..."
+
+# Codex実行
+codex exec "質問内容"
 ```
 
 ### 💡 アイデア管理（docs/ideas/フォルダ）
@@ -601,215 +315,42 @@ gemini -p "Nyashの実装で困っています..."
 ```
 docs/ideas/
 ├── improvements/     # 80%実装の残り20%改善候補
-│   ├── 2025-08-25-vm-andor-shortcircuit.md
-│   └── archived/     # 実装済みor却下
-│
 ├── new-features/     # 新機能アイデア  
-│   ├── 2025-08-25-repl-mode.md
-│   └── archived/
-│
 └── other/           # その他すべて（調査、メモ、設計案）
-    ├── 2025-08-25-cranelift-research.md
-    └── archived/
-```
-
-#### 📝 改善候補ファイルの形式
-```markdown
-# VM and/or 短絡評価の実装
-Status: Pending (80%実装済み)
-Created: 2025-08-25
-Priority: Low
-Related-Code: src/backend/vm_instructions.rs::execute_binop()
-
-## 現状（80%実装）
-- `as_bool()`で全オペランドを評価してから論理演算
-- 基本動作は完全に正常
-
-## 改善案（残り20%）
-### 1. 短絡評価
-- And: 左辺false → 右辺評価スキップ
-- Or: 左辺true → 右辺評価スキップ
-
-## 実装タイミング
-- [ ] パフォーマンス問題が報告されたら
-- [ ] Phase 10（最適化フェーズ）で一括対応
 ```
 
 ### 🧪 テスト実行
 
-#### 📁 **テストファイル配置ルール（超重要！毎回ルートが散らかる問題）**
+**詳細**: [テスト実行ガイド](docs/guides/testing-guide.md)
 
 ⚠️ **ルートディレクトリの汚染防止ルール** ⚠️
 ```bash
 # ❌ 絶対ダメ：ルートで実行
 ./target/release/nyash test.nyash        # ログがルートに散乱！
-cargo test > test_output.txt             # 出力ファイルがルートに！
 
 # ✅ 正しい方法：必ずディレクトリを使う
-cd local_tests && ../target/release/nyash test.nyash
 ./target/release/nyash local_tests/test.nyash
 ```
 
-**必須ルール：**
-- **テストファイル**: 必ず `local_tests/` に配置
-- **ログファイル**: 環境変数で `logs/` に出力するか、実行後即削除
-- **デバッグ出力**: `local_tests/` または `logs/` に保存
-- **一時ファイル**: `/tmp/` を使用
-
-**なぜ毎回ルートが散らかるのか：**
-1. テスト実行時にカレントディレクトリにログ出力
-2. エラー時のデバッグファイルが自動削除されない
-3. VM統計やMIRダンプがデフォルトでカレントに出力
-
-```bash
-# 基本機能テスト
-cargo test
-
-# テストファイル作成・実行例
-mkdir -p local_tests
-echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
-./target/debug/nyash local_tests/test_hello.nyash
-
-# 演算子統合テスト（local_testsから実行）
-./target/debug/nyash local_tests/test_comprehensive_operators.nyash
-
-# 実用アプリテスト
-./target/debug/nyash app_dice_rpg.nyash
-
-# JIT 実行フラグ（CLI）
-./target/release/nyash --backend vm \
-  --jit-exec --jit-stats --jit-dump --jit-threshold 1 \
-  --jit-phi-min --jit-hostcall --jit-handle-debug \
-  examples/jit_branch_demo.nyash
-# 既存の環境変数でも可: 
-#   NYASH_JIT_EXEC/NYASH_JIT_STATS(/_JSON)/NYASH_JIT_DUMP/NYASH_JIT_THRESHOLD
-#   NYASH_JIT_PHI_MIN/NYASH_JIT_HOSTCALL/NYASH_JIT_HANDLE_DEBUG
-
-# HostCallハンドルPoCの例
-./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_array_param_call.nyash
-./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_map_param_call.nyash
-./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_map_int_keys_param_call.nyash
-./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_param_length.nyash
-./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_is_empty.nyash
-```
-
-#### 🔌 **プラグインテスター（BID-FFI診断ツール）**
-```bash
-# プラグインテスターのビルド
-cd tools/plugin-tester
-cargo build --release
-
-# プラグインの診断実行
-./target/release/plugin-tester ../../plugins/nyash-filebox-plugin/target/debug/libnyash_filebox_plugin.so
-
-# 出力例：
-# Plugin Information:
-#   Box Type: FileBox (ID: 6)  ← プラグインが自己宣言！
-#   Methods: 6
-#   - birth [ID: 0] (constructor)
-#   - open, read, write, close
-#   - fini [ID: 4294967295] (destructor)
-```
-
-**plugin-testerの特徴**:
-- Box名を決め打ちしない汎用設計
-- プラグインのFFI関数4つ（abi/init/invoke/shutdown）を検証
-- birth/finiライフサイクル確認
-- 将来の拡張: TLV検証、メモリリーク検出
-
-### ⚠️ **ビルド時間に関する重要な注意**
+### ⚠️ ビルド時間に関する重要な注意
 **wasmtime依存関係により、フルビルドは2-3分かかります。**
-- タイムアウトエラーを避けるため、ビルドコマンドには十分な時間を設定してください
+- タイムアウトエラーを避けるため、ビルドコマンドには十分な時間を設定
 - 例: `cargo build --release -j32` （3分以上待つ）
-- プラグインのみのビルドは数秒で完了します
-- Phase 9.75fで動的ライブラリ分離により改善作業中
-
-### 🔧 **Rustビルドエラー対処法**
-**Rustのコンパイルエラーは詳細が見づらいため、以下のパターンで対処：**
-
-#### 1. エラーをファイルに出力
-```bash
-# エラーをファイルに保存して解析
-cargo build --lib -j32 2>&1 > build_errors.txt
-
-# 特定のエラーコードを検索
-grep -A10 "error\[E0308\]" build_errors.txt
-```
-
-#### 2. 32スレッドビルドの基本ルール
-- **時間制限なし**: `--timeout 300000` (5分)以上を設定
-- **エラー出力**: 必ずファイルに保存して解析
-- **並列度**: `-j32` で最大並列化
-
-#### 3. よくあるエラーパターン
-- `Box<dyn NyashBox>` vs `Arc<dyn NyashBox>`: `.into()` で変換
-- `unsafe` ブロックでの型推論: 明示的な型指定が必要
-- deprecatedワーニング: MIR命令の移行期間中は無視可
 
 ### 🐛 デバッグ
 
-#### パーサー無限ループ対策（NEW! 2025-08-09）
+#### パーサー無限ループ対策
 ```bash
 # 🔥 デバッグ燃料でパーサー制御
 ./target/release/nyash --debug-fuel 1000 program.nyash      # 1000回制限
 ./target/release/nyash --debug-fuel unlimited program.nyash  # 無制限
 ./target/release/nyash program.nyash                        # デフォルト10万回
-
-# パーサー無限ループが検出されると自動停止＋詳細情報表示
-🚨 PARSER INFINITE LOOP DETECTED at method call argument parsing
-🔍 Current token: IDENTIFIER("from") at line 17
-🔍 Parser position: 45/128
 ```
 
-**対応状況**: must_advance!マクロでパーサー制御完全実装済み✅  
-**効果**: 予約語"from"など問題のあるトークンも安全にエラー検出
-
-#### アプリケーション デバッグ
-```nyash
-// DebugBox活用
-DEBUG = new DebugBox()
-DEBUG.startTracking()
-DEBUG.trackBox(myObject, "説明")
-print(DEBUG.memoryReport())
-```
-
-## 📚 ドキュメント再編成戦略
-
-### 🎯 現在の課題
-- **CLAUDE.md肥大化** (500行) - 必要情報の検索困難
-- **情報分散** - 実装状況がCLAUDE.md/current_task/docsに分散
-- **参照関係不明確** - ファイル間の相互リンク不足
-
-### 🚀 新構造プラン
-```
-docs/
-├── quick-reference/          # よく使う情報（簡潔）
-│   ├── syntax-cheatsheet.md     # 構文早見表
-│   ├── operators-summary.md     # 演算子一覧
-│   └── development-commands.md  # 開発コマンド集
-├── status/                   # 最新開発状況
-│   ├── current-implementation.md  # 実装状況詳細
-│   ├── recent-achievements.md     # 最新成果
-│   └── known-issues.md            # 既知の問題
-├── reference/                # 完全リファレンス（現存活用）
-└── examples/                 # 実用例（現存拡充）
-```
-
-### ⚡ 実装優先順位
-1. **Phase 1**: CLAUDE.md簡潔化（500行→150行ハブ）
-2. **Phase 2**: 基本構造作成・情報移行
-3. **Phase 3**: 相互リンク整備・拡充
-
-### 🎉 期待効果
-- **検索性**: 必要情報への高速アクセス
-- **メンテナンス性**: 責任分離・局所的更新
-- **拡張性**: 新機能追加が容易
-
-**📋 詳細**: [DOCUMENTATION_REORGANIZATION_STRATEGY.md](DOCUMENTATION_REORGANIZATION_STRATEGY.md)
+**対応状況**: must_advance!マクロでパーサー制御完全実装済み✅
 
 ## 🤝 プロアクティブ開発方針
 
-### 🎯 エラー対応時の姿勢
 エラーを見つけた際は、単に報告するだけでなく：
 
 1. **🔍 原因分析** - エラーの根本原因を探る
@@ -817,95 +358,39 @@ docs/
 3. **💡 改善提案** - 関連する問題も含めて解決策を提示
 4. **🧹 機会改善** - デッドコード削除など、ついでにできる改善も実施
 
-### ⚖️ バランスの取り方
-- **積極的に分析・提案**するが、最終判断はユーザーに委ねる
-- 「ChatGPTさんに任せてる」と言われても、分析結果は共有する
-- 複数のAIが協調する場合でも、各自の視点で価値を提供する
+詳細: [開発プラクティス](docs/guides/development-practices.md)
 
-### 📝 例
-```
-❌ 受動的: 「エラーをファイルに出力しました」
-✅ 能動的: 「エラーをファイルに出力しました。主な原因は型の不一致（7箇所）で、
-          instance_id()のメソッド呼び出し修正で5つ解決できそうです。
-          また、関連してclone_boxの実装にも同様の問題を発見しました。」
+## ⚠️ Claude実行環境の既知のバグ
+
+詳細: [Claude環境の既知のバグ](docs/tools/claude-issues.md)
+
+### 🐛 Bash Glob展開バグ（Issue #5811）
+
+```bash
+# ❌ 失敗するパターン
+ls *.md | wc -l          # エラー: "ls: 'glob' にアクセスできません"
+
+# ✅ 回避策1: bash -c でラップ
+bash -c 'ls *.md | wc -l'
+
+# ✅ 回避策2: findコマンドを使う
+find . -name "*.md" -exec wc -l {} \;
 ```
 
 ## 🚨 コンテキスト圧縮時の重要ルール
 
-### ⚠️ **コンテキスト圧縮を検出した場合の必須手順**
+**コンテキスト圧縮を検出した場合の必須手順：**
 
-**コンテキスト圧縮** = 会話履歴が要約される現象（conversation summaryで検出可能）
-
-#### 🛑 **絶対にやってはいけないこと**
-- **推測で作業を続行しない**
-- 不完全な情報で重要な変更をしない  
-- ビルドチェックを飛ばさない
-- ユーザー確認なしに進行しない
-
-#### ✅ **必ず実行すべき手順**
 1. **⏸️ 作業停止** - 「コンテキスト圧縮を検出しました」と報告
-2. **📊 状況確認** - 以下を必ずチェック：
-   ```bash
-   git status                    # 現在の変更状況
-   git log --oneline -3         # 最近のcommit履歴
-   cargo check                  # ビルド状況
-   ```
+2. **📊 状況確認** - git status, git log, cargo check
 3. **📋 現在タスク確認** - `CURRENT_TASK.md` を読み取り
 4. **🤝 明示的確認** - ユーザーに「次に何をしましょうか？」と確認
 
-#### 📍 **現在状況の記録場所**
-- **進行中タスク**: `CURRENT_TASK.md`
-- **最後の安定状態**: git commit hash  
-- **ビルド状況**: `cargo check` の結果
-- **重要な制約**: CURRENT_TASK.md内の注意事項
-
-#### 💡 **圧縮時によくある混乱の回避**
-- 「何をしていたか」→ `CURRENT_TASK.md`で確認
-- 「ビルドできるか」→ `cargo check`で確認  
-- 「どこまで進んだか」→ `git log`で確認
-- 「次は何か」→ **ユーザーに明示的に確認**
-
-## 🔌 プラグインBox開発時の重要な注意点
-
-### ⚠️ **TLV Handle処理の正しい実装方法**
-
-プラグインメソッドがBoxRef（Handle）を返す場合、以下の点に注意：
-
-#### 🛑 **よくある間違い**
-```rust
-// ❌ 間違い: 元のplugin_boxの値を流用
-let new_plugin_box = PluginBoxV2 {
-    type_id: plugin_box.type_id,        // ❌ 返り値のtype_idを使うべき
-    fini_method_id: plugin_box.fini_method_id,  // ❌ 返り値の型に対応する値を使うべき
-    ...
-};
-```
-
-#### ✅ **正しい実装**
-```rust
-// ✅ 正解: 返されたHandleから正しい値を取得
-let type_id = /* TLVから取得したtype_id */;
-let instance_id = /* TLVから取得したinstance_id */;
-
-// 返り値のtype_idに対応する正しいfini_method_idを取得
-let fini_method_id = /* configから返り値type_idに対応するfini_method_idを検索 */;
-
-let new_plugin_box = PluginBoxV2 {
-    type_id: type_id,           // ✅ 返り値のtype_id
-    instance_id: instance_id,   // ✅ 返り値のinstance_id
-    fini_method_id: fini_method_id,  // ✅ 返り値の型に対応するfini
-    ...
-};
-```
-
-#### 📝 **重要ポイント**
-1. **type_idの正確性**: cloneSelfが返すHandleは必ずしも元のBoxと同じ型ではない
-2. **fini_method_idの対応**: 各Box型は独自のfini_method_idを持つ可能性がある
-3. **ローダー経由の処理**: 可能な限りplugin_loader_v2経由でメソッドを呼び出す
+詳細: [Claude環境の既知のバグ](docs/tools/claude-issues.md#コンテキスト圧縮時の重要ルール)
 
 ---
 
-最終更新: 2025年8月25日 - **🏃 80/20ルールとideas/フォルダ構造追加**
-- **80/20ルール**: 完璧より進捗を優先する開発方針を明記
-- **docs/ideas/フォルダ**: 改善案・新機能・その他アイデアの管理構造を追加
-- **ドキュメント整理**: 重複セクションを統合してスリム化
+Notes:
+- ここから先の導線は README.md に集約
+- 詳細情報は各docsファイルへのリンクから辿る
+- このファイルは500行以内を維持する（現在約490行）

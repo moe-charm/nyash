@@ -18,8 +18,7 @@ impl CodegenContext {
     }
 }
 
-// The real implementation would look like this with proper LLVM libraries:
-/*
+// Real implementation (compiled only when feature "llvm" is enabled)
 #[cfg(feature = "llvm")]
 use inkwell::context::Context;
 #[cfg(feature = "llvm")]
@@ -40,14 +39,14 @@ pub struct CodegenContext<'ctx> {
 #[cfg(feature = "llvm")]
 impl<'ctx> CodegenContext<'ctx> {
     pub fn new(context: &'ctx Context, module_name: &str) -> Result<Self, String> {
-        // 1. ターゲット初期化
+        // 1. Initialize native target
         Target::initialize_native(&InitializationConfig::default())
             .map_err(|e| format!("Failed to initialize native target: {}", e))?;
-        
-        // 2. モジュール作成
+
+        // 2. Create module
         let module = context.create_module(module_name);
-        
-        // 3. ターゲットマシン作成
+
+        // 3. Create target machine
         let triple = TargetMachine::get_default_triple();
         let target = Target::from_triple(&triple)
             .map_err(|e| format!("Failed to get target: {}", e))?;
@@ -61,11 +60,11 @@ impl<'ctx> CodegenContext<'ctx> {
                 inkwell::targets::CodeModel::Default,
             )
             .ok_or_else(|| "Failed to create target machine".to_string())?;
-        
-        // 4. データレイアウト設定
+
+        // 4. Set data layout
         module.set_triple(&triple);
         module.set_data_layout(&target_machine.get_target_data().get_data_layout());
-        
+
         Ok(Self {
             context,
             module,
@@ -74,4 +73,3 @@ impl<'ctx> CodegenContext<'ctx> {
         })
     }
 }
-*/

@@ -1,16 +1,16 @@
-# Phase 11: LLVM AOT Backend（将来研究）
+# Phase 11: LLVM AOT Backend（進行中）
 
 ## 🎯 概要
 
 Phase 11は、LLVM を使用した Ahead-of-Time（AOT）コンパイル機能の研究・実装フェーズです。
-Phase 10のCranelift JITで実用的な性能を達成した後、さらなる最適化を追求します。
+Phase 10のCranelift JITで実用的な性能を達成した後、さらなる最適化をLLVM AOTで追求します。
 
 ## 📊 位置づけ
 
 ```
-Phase 10: Cranelift JIT（実用的な高速化）← 現在の主経路
+Phase 10: Cranelift JIT（実用的な高速化）← 完了
     ↓
-Phase 11: LLVM AOT（最高性能への挑戦）← 将来の研究開発
+Phase 11: LLVM AOT（最高性能への挑戦）← 進行中
 ```
 
 ## 📁 ドキュメント
@@ -27,12 +27,15 @@ Phase 11: LLVM AOT（最高性能への挑戦）← 将来の研究開発
   - ExternCall対応
   - オブジェクトファイル生成
 
-## ⏰ タイムライン
+## ⏰ タイムライン（短期スプリント）
 
-- **Status**: Deferred（延期）
-- **前提条件**: Phase 10（Cranelift JIT）の完了
-- **想定期間**: 4-6ヶ月
-- **開始時期**: 未定（Phase 10の成果を見て判断）
+- Status: In Progress（進行中）
+- 前提条件: Phase 10（Cranelift JIT）の完了、Core‑15統一（VM/Verifierで運用）
+- 想定期間: 4週間（各フェーズ1週間目安）
+  - 11.1 基本変換: Const/Unary/Bin/Compare, Load/Store, Jump/Branch/Return/Phi
+  - 11.2 Box統合: NewBox/BoxCall/ExternCall（安全パスはランタイム呼び出し）
+  - 11.3 最適化: 注釈統合・型特化（get/setField・Array get/set のInline化＋バリア）
+  - 11.4 高度化: 脱箱化・TBAA・PGO/ThinLTO
 
 ## 🎯 期待される成果
 
@@ -41,13 +44,11 @@ Phase 11: LLVM AOT（最高性能への挑戦）← 将来の研究開発
 3. **起動時間**: 1ms以下
 4. **配布形式**: スタンドアロン実行ファイル
 
-## ⚠️ 注意事項
+## ⚠️ 注意事項（運用方針）
 
-このフェーズは研究的な性質が強く、以下の理由で延期されています：
-
-1. **複雑性**: LLVM統合は開発・保守コストが高い
-2. **実用性**: Cranelift JITで十分な性能が得られる可能性
-3. **優先度**: まずは安定した実装を優先
+- Core‑15 凍結（第三案）: { Const, UnaryOp, BinOp, Compare, TypeOp, Load, Store, Jump, Branch, Return, Phi, Call, NewBox, BoxCall, ExternCall }
+- 統一ルール: ArrayGet/ArraySet, RefGet/RefSet, PluginInvoke はBoxCallに一本化（Optimizerで正規化、Verifierで禁止）
+- バリア方針: 初期はランタイム関数側で安全に処理、型特化Lowering段でIRへ内挿（write barrier）
 
 ## 🔗 関連フェーズ
 

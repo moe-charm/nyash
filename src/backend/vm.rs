@@ -835,6 +835,28 @@ impl VM {
 
         // Legacy box_trait::ResultBox is no longer handled here (migration complete)
 
+        // InstanceBox field access unification: getField/setField
+        if let Some(instance) = box_value.as_any().downcast_ref::<InstanceBox>() {
+            match method {
+                "getField" => {
+                    if _args.len() != 1 { return Ok(Box::new(StringBox::new("getField(name) requires 1 arg"))); }
+                    let name = _args[0].to_string_box().value;
+                    if let Some(shared) = instance.get_field(&name) {
+                        return Ok(shared.clone_box());
+                    }
+                    return Ok(Box::new(VoidBox::new()));
+                }
+                "setField" => {
+                    if _args.len() != 2 { return Ok(Box::new(StringBox::new("setField(name, value) requires 2 args"))); }
+                    let name = _args[0].to_string_box().value;
+                    let val_arc: crate::box_trait::SharedNyashBox = std::sync::Arc::from(_args[1].clone_or_share());
+                    let _ = instance.set_field(&name, val_arc);
+                    return Ok(Box::new(VoidBox::new()));
+                }
+                _ => {}
+            }
+        }
+
         // JitStatsBox methods (process-local JIT counters)
         if let Some(_jsb) = box_value.as_any().downcast_ref::<crate::boxes::jit_stats_box::JitStatsBox>() {
             match method {

@@ -1,0 +1,9 @@
+// LLVM 11.2 minimal smoke: console.log with string literal only
+
+static box Main {
+  main() {
+    console.log("LLVM 11.2 smoke")
+    return 0
+  }
+}
+

@@ -63,16 +63,13 @@ Call {
 }
 ```
 
-### 2. RefSet命令へのGCヒント
+### 2. フィールド書き込み（setField）へのGCヒント
 ```rust
-RefSet {
-    reference: %obj,
-    field: "data",
-    value: %new_val,
-    annotations: Some(OptimizationHints {
-        gc: Some(GcHint::YoungGen), // 若い世代への書き込み
-        ..Default::default()
-    })
+BoxCall {
+    box_val: %obj,
+    method: "setField",
+    args: [ Const("data"), %new_val ],
+    annotations: Some(OptimizationHints { gc: Some(GcHint::YoungGen), ..Default::default() })
 }
 ```
 
@@ -156,8 +153,9 @@ pub enum GcHint {
 
 ```rust
 // RefSetの例
-RefSet { reference, field, value, annotations } => {
-    let ptr = builder.build_gep(...);
+BoxCall { box_val, method: "setField", args: [name, value], annotations } => {
+    // 型特化Lowering時:
+    let ptr = builder.build_gep(...); // name→オフセット解決
     
     // アノテーションからLLVMメタデータを生成
     if let Some(hints) = annotations {

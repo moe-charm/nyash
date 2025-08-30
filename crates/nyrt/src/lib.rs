@@ -710,6 +710,54 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
     0
 }
 
+// ---- String helpers for LLVM lowering ----
+// Exported as: nyash_string_new(i8* ptr, i32 len) -> i8*
+#[no_mangle]
+pub extern "C" fn nyash_string_new(ptr: *const u8, len: i32) -> *mut i8 {
+    use std::ptr;
+    if ptr.is_null() || len < 0 { return std::ptr::null_mut(); }
+    let n = len as usize;
+    // Allocate n+1 and null-terminate for C interop (puts, etc.)
+    let mut buf = Vec::<u8>::with_capacity(n + 1);
+    unsafe {
+        ptr::copy_nonoverlapping(ptr, buf.as_mut_ptr(), n);
+        buf.set_len(n);
+    }
+    buf.push(0);
+    let boxed = buf.into_boxed_slice();
+    let raw = Box::into_raw(boxed) as *mut u8;
+    raw as *mut i8
+}
+
+// ---- Array helpers for LLVM lowering (handle-based) ----
+// Exported as: nyash_array_get_h(i64 handle, i64 idx) -> i64
+#[no_mangle]
+pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
+    use nyash_rust::{jit::rt::handles, box_trait::IntegerBox};
+    if handle <= 0 || idx < 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(arr) = obj.as_any().downcast_ref::<nyash_rust::boxes::array::ArrayBox>() {
+            let val = arr.get(Box::new(IntegerBox::new(idx)));
+            if let Some(ib) = val.as_any().downcast_ref::<IntegerBox>() { return ib.value; }
+        }
+    }
+    0
+}
+
+// Exported as: nyash_array_set_h(i64 handle, i64 idx, i64 val) -> i64
+#[no_mangle]
+pub extern "C" fn nyash_array_set_h(handle: i64, idx: i64, val: i64) -> i64 {
+    use nyash_rust::{jit::rt::handles, box_trait::IntegerBox};
+    if handle <= 0 || idx < 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(arr) = obj.as_any().downcast_ref::<nyash_rust::boxes::array::ArrayBox>() {
+            let _ = arr.set(Box::new(IntegerBox::new(idx)), Box::new(IntegerBox::new(val)));
+            return 0;
+        }
+    }
+    0
+}
+
 // Convert a VM argument (param index or existing handle) into a runtime handle
 // Exported as: nyash.handle.of
 #[export_name = "nyash.handle.of"]

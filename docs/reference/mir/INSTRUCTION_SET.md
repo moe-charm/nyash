@@ -14,6 +14,7 @@ Transition Note
   - WeakNew/WeakLoad → WeakRef
   - BarrierRead/BarrierWrite → Barrier
   - Print → ExternCall(env.console.log)（Deprecated）
+  - PluginInvoke → BoxCall（Deprecated; 名前/スロット解決はBoxCall側で処理）
 - VM/JIT の代表的な Core-15 カバー手順は `docs/reference/mir/MIR15_COVERAGE_CHECKLIST.md` を参照。
 - Core-15 安定後に本ドキュメントの「Core Instructions」を15命令へ更新し、マッピング表を併記する。
 
@@ -56,7 +57,7 @@ Transition Note
 Notes
 - Print/Debug/Safepointはメタ/Extern化（Print→ExternCall）。
 - WeakRef/Barrier は統合済み（旧WeakNew/WeakLoad/BarrierRead/WriteはRewriteで互換）。
-- Call は BoxCall/PluginInvoke へ集約（通常の関数呼び出しは将来Box化方針のもと整理）。
+- Call は BoxCall へ集約（PluginInvokeはDeprecated）。
 
 ## Meta (降格対象; カウント外)
 - Debug

@@ -40,8 +40,10 @@ impl MirOptimizer {
             println!("🚀 Starting MIR optimization passes");
         }
         
-        // Pass 0: Normalize legacy instructions to unified forms (TypeOp/WeakRef/Barrier)
+        // Pass 0: Normalize legacy instructions to unified forms (TypeOp/WeakRef/Barrier/Array→BoxCall/Plugin→BoxCall)
         stats.merge(self.normalize_legacy_instructions(module));
+        // Pass 0.1: RefGet/RefSet → BoxCall(getField/setField)
+        stats.merge(self.normalize_ref_field_access(module));
         
         // Option: Force BoxCall → PluginInvoke (env)
         if std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1")
@@ -408,6 +410,19 @@ impl MirOptimizer {
                             let v = *value;
                             *inst = I::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
                         }
+                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass */ }
+                        I::ArrayGet { dst, array, index } => {
+                            let d = *dst; let a = *array; let i = *index;
+                            *inst = I::BoxCall { dst: Some(d), box_val: a, method: "get".to_string(), method_id: None, args: vec![i], effects: EffectMask::READ };
+                        }
+                        I::ArraySet { array, index, value } => {
+                            let a = *array; let i = *index; let v = *value;
+                            *inst = I::BoxCall { dst: None, box_val: a, method: "set".to_string(), method_id: None, args: vec![i, v], effects: EffectMask::WRITE };
+                        }
+                        I::PluginInvoke { dst, box_val, method, args, effects } => {
+                            let d = *dst; let recv = *box_val; let m = method.clone(); let as_ = args.clone(); let eff = *effects;
+                            *inst = I::BoxCall { dst: d, box_val: recv, method: m, method_id: None, args: as_, effects: eff };
+                        }
                         I::Debug { value, .. } if rw_dbg => {
                             let v = *value;
                             *inst = I::ExternCall { dst: None, iface_name: "env.debug".to_string(), method_name: "trace".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Debug) };
@@ -462,6 +477,16 @@ impl MirOptimizer {
                             let v = *value;
                             *term = I::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
                         }
+                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass */ }
+                        I::ArrayGet { dst, array, index } => {
+                            *term = I::BoxCall { dst: Some(*dst), box_val: *array, method: "get".to_string(), method_id: None, args: vec![*index], effects: EffectMask::READ };
+                        }
+                        I::ArraySet { array, index, value } => {
+                            *term = I::BoxCall { dst: None, box_val: *array, method: "set".to_string(), method_id: None, args: vec![*index, *value], effects: EffectMask::WRITE };
+                        }
+                        I::PluginInvoke { dst, box_val, method, args, effects } => {
+                            *term = I::BoxCall { dst: *dst, box_val: *box_val, method: method.clone(), method_id: None, args: args.clone(), effects: *effects };
+                        }
                         I::Debug { value, .. } if rw_dbg => {
                             let v = *value;
                             *term = I::ExternCall { dst: None, iface_name: "env.debug".to_string(), method_name: "trace".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Debug) };
@@ -484,6 +509,57 @@ impl MirOptimizer {
                         }
                         _ => {}
                     }
+                }
+            }
+        }
+        stats
+    }
+
+    /// Normalize RefGet/RefSet to BoxCall("getField"/"setField") with Const String field argument.
+    fn normalize_ref_field_access(&mut self, module: &mut MirModule) -> OptimizationStats {
+        use super::MirInstruction as I;
+        let mut stats = OptimizationStats::new();
+        for (_fname, function) in &mut module.functions {
+            for (_bb, block) in &mut function.blocks {
+                let mut out: Vec<I> = Vec::with_capacity(block.instructions.len() + 2);
+                let old = std::mem::take(&mut block.instructions);
+                for inst in old.into_iter() {
+                    match inst {
+                        I::RefGet { dst, reference, field } => {
+                            let new_id = super::ValueId::new(function.next_value_id);
+                            function.next_value_id += 1;
+                            out.push(I::Const { dst: new_id, value: super::instruction::ConstValue::String(field) });
+                            out.push(I::BoxCall { dst: Some(dst), box_val: reference, method: "getField".to_string(), method_id: None, args: vec![new_id], effects: super::EffectMask::READ });
+                            stats.intrinsic_optimizations += 1;
+                        }
+                        I::RefSet { reference, field, value } => {
+                            let new_id = super::ValueId::new(function.next_value_id);
+                            function.next_value_id += 1;
+                            out.push(I::Const { dst: new_id, value: super::instruction::ConstValue::String(field) });
+                            out.push(I::BoxCall { dst: None, box_val: reference, method: "setField".to_string(), method_id: None, args: vec![new_id, value], effects: super::EffectMask::WRITE });
+                            stats.intrinsic_optimizations += 1;
+                        }
+                        other => out.push(other),
+                    }
+                }
+                block.instructions = out;
+
+                if let Some(term) = block.terminator.take() {
+                    block.terminator = Some(match term {
+                        I::RefGet { dst, reference, field } => {
+                            let new_id = super::ValueId::new(function.next_value_id);
+                            function.next_value_id += 1;
+                            block.instructions.push(I::Const { dst: new_id, value: super::instruction::ConstValue::String(field) });
+                            I::BoxCall { dst: Some(dst), box_val: reference, method: "getField".to_string(), method_id: None, args: vec![new_id], effects: super::EffectMask::READ }
+                        }
+                        I::RefSet { reference, field, value } => {
+                            let new_id = super::ValueId::new(function.next_value_id);
+                            function.next_value_id += 1;
+                            block.instructions.push(I::Const { dst: new_id, value: super::instruction::ConstValue::String(field) });
+                            I::BoxCall { dst: None, box_val: reference, method: "setField".to_string(), method_id: None, args: vec![new_id, value], effects: super::EffectMask::WRITE }
+                        }
+                        other => other,
+                    });
                 }
             }
         }

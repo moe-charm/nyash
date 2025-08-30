@@ -1,0 +1,15 @@
+// LLVM 11.2 minimal smoke: ArrayBox new/set/get and console.log
+
+static box Main {
+  main() {
+    console.log("LLVM 11.2 smoke start")
+
+    local arr, x
+    arr = new ArrayBox()
+    arr.set(0, 42)
+    x = arr.get(0)
+
+    console.log("OK")
+    return 0
+  }
+}

@@ -1,5 +1,101 @@
 # CURRENT TASK (Phase 10.8: MIR Core-15 確定 → LLVM 準備)
 
+Update (2025-08-31 AM / Phase 11.1 quick pass)
+
+Update (2025-08-31 PM / Phase 11.2 partial)
+
+- 方式A（LLVM専用 NyRT 静的ライブラリ）で前進。by-id を本線、by-name はデバッグ用ラッパ方針。
+- Lowering 更新
+  - NewBox（引数あり 1～2個）→ `nyash.box.birth_i64(type_id, argc, a1, a2)`（int/handle ptr の最小対応）。0引数は `birth_h`
+  - BoxCall（by-id, method_idあり）→ `nyash_plugin_invoke3_i64(type_id, method_id, argc, a0, a1, a2)` 接続（a0=receiver handle）
+    - 戻り: dstが整数/真偽ならi64のまま、Box/String/Array等は i64(handle)→i8*(ptr)
+    - ArrayBox.get/set は既存の `nyash_array_get_h/set_h` 安全パスを存続
+  - 生成関数名: `ny_main` に変更（NyRTの起動ルーチンから呼び出し）
+- NyRT(libnyrt.a) 追加シンボル
+  - `nyash_string_new(i8*, i32)->i8*`（Const String用）
+  - `nyash_array_get_h(i64,i64)->i64`, `nyash_array_set_h(i64,i64,i64)->i64`
+  - 既存の `nyash.box.birth_h/i64`, `nyash.rt.checkpoint`, `nyash.gc.barrier_write` などは維持
+- ツール
+  - `tools/build_llvm.sh` 追加（.o → libnyrt.a リンク → EXE）
+  - `tools/llvm_smoke.sh`（.o生成のスモーク）
+- スモーク
+  - `examples/llvm11_core_smoke.nyash` で EXE 実行し `Result: 3` を確認
+
+残作業（合意順）
+
+1) method_id 埋め込みと by-id 本線化
+   - ロード時に 名前→id を確定・キャッシュ（PluginLoaderV2）し、MIR へ `method_id` 注入（実行時は常に by-id）
+2) BoxCall 汎用拡張
+   - 引数3個以上/戻り型の拡張（i64/handle/f64 等）。Field 系（getField/setField）を BoxCall として安全パス接続
+3) by-name ラッパ（デバッグ/テスト用）
+   - Lowering フォールバックとして薄く導入（env/flag 下でのみ使用）、本番は by-id 固定
+4) ExternCall 網羅
+   - `env.console/debug/runtime/future` 等を puts 暫定から RT関数に置換、署名整備
+5) スモーク/CI 拡張
+   - by-id の代表例（CounterBox等）、console/array/field/extern を .o→EXE→起動まで
+
+- LLVM Lowering: Phi/Load/Store の最小実装を追加（inkwell 0.5 / LLVM 18）
+  - Phi: 事前に各BB先頭でPhiノード生成→Branch/Jump時にincomingを配線
+  - Load/Store: entryでのalloca管理（型は注釈/値から推定）。i1/i64の簡易変換、ポインタはpointer_cast対応
+  - 型なしポインタ（opaque）対応のため、`alloca`の要素型を別マップで追跡
+- ビルド検証: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --features llvm` 成功
+- 既存のConst/Unary/BinOp/Compare/Branch/Jump/Return と併せ、Phase 11.1の目標範囲は到達
+
+
+Handoff Snapshot (2025-08-31 / Phase 11 kick-off)
+
+- Core-15 凍結（第三案 / Box-SSA）
+  - セット: { Const, UnaryOp, BinOp, Compare, TypeOp, Load, Store, Jump, Branch, Return, Phi, Call, NewBox, BoxCall, ExternCall }
+  - Optimizer: ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke → BoxCall に正規化（get/set/getField/setField）
+  - Verifier: 上記レガシー命令を UnsupportedLegacyInstruction としてエラー化（環境で一時解除可: NYASH_VERIFY_ALLOW_LEGACY=1）
+- VM: BoxCall("getField"/"setField") を InstanceBox に配線（fieldsへ委譲）。Arrayの get/set は既存BoxCall経路で動作
+- 命令数固定テスト: Core‑15（第三案）へ切替済（tests/mir_instruction_set_sync.rs）
+- LLVM 導入（Phase 11 開始）
+  - 依存: LLVM 18 + inkwell 0.5.0（features=["llvm18-0"]）。feature `llvm` で有効化
+  - ビルド要件: LLVM_SYS_180_PREFIX（例: /usr/lib/llvm-18）, 追加依存: polly, zstd（libzstd-dev 等）
+  - 現状のLowering（11.1の最小スケルトン → 11.2 反映）:
+    - 対応: Const(Integer/Float/Bool/String/Null), Unary(Neg/Not/BitNot), BinOp（整数/浮動の主要演算）, Compare, Branch/Jump, Return
+    - 追加: Phi/Load/Store（最小実装）
+    - 追加: NewBox（引数なし→nyash.box.birth_hへ; nyash.tomlの[box_types]からtype_id解決）
+    - 追加: BoxCall（ArrayBox.get/set→nyash_array_get_h/set_h 経由の安全パス）
+    - 追加: ExternCall（env.console.log/env.debug.trace→libc putsで暫定出力）
+    - 未対応（次タスク）: NewBox（引数あり）, 一般BoxCall（by-name/slot 汎用化）, その他ExternCall
+  - エントリ: Main.main のみ対象に .o 出力（backend::llvm::compile_to_object）
+- ドキュメント更新（phase‑11）
+  - README.md: 進行中に更新 / 4週スプリント計画（11.1→11.4）
+  - MIR_TO_LLVM_CONVERSION_PLAN.md: PluginInvoke→BoxCall統一、配列はBoxCallとして安全パス→型特化の二段階Lowering
+  - MIR_ANNOTATION_SYSTEM.md: setField/getField（BoxCall）前提に更新
+  - INSTRUCTION_SET.md: PluginInvokeはDeprecated（BoxCallに統一）
+
+How to Build/Run (recap)
+
+- 通常/JIT: `cargo build --release --features cranelift-jit`
+- LLVM（AOTスケルトン）: 
+  - 事前: LLVM 18 / inkwell 0.5.0, polly, zstd を導入
+  - 例: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- スモーク: `tools/mir15_smoke.sh release`
+
+Next Steps (Phase 11)
+
+1) 11.1 仕上げ（本タスク）
+   - Phi のLowering（BB事前作成→incoming追加）
+   - Load/Store（alloca/ローカル表現の最小規約、整数/浮動/ポインタ）
+2) 11.2 安全パス（Box/Extern）
+   - [実装] NewBox(引数なし)→ `nyash.box.birth_h(type_id:i64)->i64` を呼び、i8*にinttoptr（type_idはnyash.tomlから解決）
+   - [実装] Arrayの BoxCall("get"/"set") → `nyash_array_get_h/set_h`（ハンドルi64渡し）
+   - [実装] ExternCall: `env.console.log`/`env.debug.trace` は暫定で `puts` に接続（AOTデバッグ用）
+   - [残] BoxCall 汎用（by-name/slot）, Field系（getField/setField）, ExternCallの網羅
+3) 11.3 最適化導線
+   - 注釈（inline/purity/gc/alias）→ LLVM属性/メタデータ
+   - 型特化: Array/Field の inline GEP + write barrier
+4) 11.4 高度化
+   - 脱箱化、TBAA、PGO/ThinLTO
+
+メモ
+
+- Verifier の緩和スイッチ: `NYASH_VERIFY_ALLOW_LEGACY=1`（移行用）。通常はOFFで運用。
+- Optimizer のRewrite はLLVM前提のBoxCall統一規約と整合済み。
+
 最優先: MIR命令セットをCore-15に統一し、VM/JIT/AOTを整えてからLLVM(inkwell)へ移行する。
 
 目的: MIR→VM→JIT→AOT の汎用化・単純化を一気に進める。命令の重複・メタ・実装露出を撤去/統合し、Builderが実際に発行するコア命令を最小化する。

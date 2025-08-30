@@ -75,6 +75,12 @@ pub enum VerificationError {
         instruction_index: usize,
         note: String,
     },
+    /// Legacy/Deprecated instruction encountered (should have been rewritten to Core-15)
+    UnsupportedLegacyInstruction {
+        block: BasicBlockId,
+        instruction_index: usize,
+        name: String,
+    },
 }
 
 /// MIR verifier for SSA form and semantic correctness
@@ -142,6 +148,10 @@ impl MirVerifier {
         if let Err(mut barrier_ctx) = self.verify_barrier_context(function) {
             local_errors.append(&mut barrier_ctx);
         }
+        // 7. Forbid legacy instructions (must be rewritten to Core-15)
+        if let Err(mut legacy_errors) = self.verify_no_legacy_ops(function) {
+            local_errors.append(&mut legacy_errors);
+        }
         
         if local_errors.is_empty() {
             Ok(())
@@ -194,6 +204,46 @@ impl MirVerifier {
             }
             Err(local_errors)
         }
+    }
+
+    /// Reject legacy instructions that should be rewritten to Core-15 equivalents
+    /// Skips check when NYASH_VERIFY_ALLOW_LEGACY=1
+    fn verify_no_legacy_ops(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        if std::env::var("NYASH_VERIFY_ALLOW_LEGACY").ok().as_deref() == Some("1") {
+            return Ok(());
+        }
+        use super::MirInstruction as I;
+        let mut errors = Vec::new();
+        for (bid, block) in &function.blocks {
+            for (idx, inst) in block.all_instructions().enumerate() {
+                let legacy_name = match inst {
+                    // Explicit legacy forms that must be rewritten to unified/core ops
+                    I::TypeCheck { .. } => Some("TypeCheck"),   // -> TypeOp(Check)
+                    I::Cast { .. } => Some("Cast"),             // -> TypeOp(Cast)
+                    I::WeakNew { .. } => Some("WeakNew"),       // -> WeakRef(New)
+                    I::WeakLoad { .. } => Some("WeakLoad"),     // -> WeakRef(Load)
+                    I::BarrierRead { .. } => Some("BarrierRead"),   // -> Barrier(Read)
+                    I::BarrierWrite { .. } => Some("BarrierWrite"), // -> Barrier(Write)
+                    I::Print { .. } => Some("Print"),           // -> ExternCall(env.console.log)
+                    I::ArrayGet { .. } => Some("ArrayGet"),     // -> BoxCall("get")
+                    I::ArraySet { .. } => Some("ArraySet"),     // -> BoxCall("set")
+                    I::RefGet { .. } => Some("RefGet"),         // -> BoxCall("getField")
+                    I::RefSet { .. } => Some("RefSet"),         // -> BoxCall("setField")
+                    I::PluginInvoke { .. } => Some("PluginInvoke"), // -> BoxCall
+                    // Keep generic Call for now (migration ongoing)
+                    // Meta/exceptional ops are handled separately; not hard-forbidden here
+                    _ => None,
+                };
+                if let Some(name) = legacy_name {
+                    errors.push(VerificationError::UnsupportedLegacyInstruction {
+                        block: *bid,
+                        instruction_index: idx,
+                        name: name.to_string(),
+                    });
+                }
+            }
+        }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
 
     /// Verify WeakRef/Barrier minimal semantics
@@ -642,6 +692,9 @@ impl std::fmt::Display for VerificationError {
             },
             VerificationError::SuspiciousBarrierContext { block, instruction_index, note } => {
                 write!(f, "Suspicious Barrier context in block {} at {}: {}", block, instruction_index, note)
+            },
+            VerificationError::UnsupportedLegacyInstruction { block, instruction_index, name } => {
+                write!(f, "Unsupported legacy instruction '{}' in block {} at {} (enable rewrite passes)", name, block, instruction_index)
             },
         }
     }
