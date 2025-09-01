@@ -1,0 +1,21 @@
+// semantics-unified: check + for plugin strings and integers
+
+static box Main {
+    main() {
+        // plugin StringBox concat (both sides)
+        local a = new StringBox("12")
+        local b = new StringBox("30")
+        print(a + b)         // expect 1230
+
+        // mixed concat (host string + plugin string)
+        print("x = " + a)    // expect x = 12
+
+        // plugin IntegerBox add
+        local i = new IntegerBox(10)
+        local j = new IntegerBox(5)
+        print(i + j)         // expect 15
+
+        return 0
+    }
+}
+

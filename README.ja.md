@@ -128,6 +128,13 @@ cargo build --release --features cranelift-jit
 tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
 ```
 
+### LLVM バックエンドの補足
+- `NYASH_LLVM_OBJ_OUT`: `--backend llvm` 実行時に `.o` を出力するパス。
+  - 例: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+- `NYASH_LLVM_ALLOW_BY_NAME=1`: デバッグ専用の by-name フォールバック（by-id が未提供の場合の暫定措置）。
+  - 開発時のみ有効化してください（本番では無効）。
+
+
 ### 5. **WebAssembly** （ブラウザ用）
 ```bash
 cargo build --release --features wasm-backend
@@ -136,6 +143,35 @@ cargo build --release --features wasm-backend
 - ブラウザで実行
 - デフォルトでクロスプラットフォーム
 - Webファースト開発
+
+---
+
+## 🧰 タスク実行 (nyash.toml)
+
+`nyash.toml` の `[tasks]` と `[env]` で、ビルド/スモークなどのタスクを簡単に実行できます（MVP）。
+
+例（nyash.toml の末尾に追記）:
+
+```
+[env]
+RUST_BACKTRACE = "1"
+
+[tasks]
+build_llvm = "LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm"
+smoke_obj_array = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash"
+```
+
+実行:
+
+```
+./target/release/nyash --run-task build_llvm
+./target/release/nyash --run-task smoke_obj_array
+```
+
+補足:
+- `[env]` の値は実行前に環境へ適用されます。
+- `{root}` は現在のプロジェクトルートに展開されます。
+- 現状は最小機能（OS別/依存/並列は未対応）。
 
 ---
 
@@ -324,6 +360,8 @@ box GameObject {
 - ✨ プラグイン経由の新しいBox型
 - 📚 ドキュメントの改善
 - 🎮 クールなサンプルプログラム
+
+詳細は `AGENTS.md`（Repository Guidelines）をご参照ください。プロジェクト構成、ビルド/テスト手順、PRの要件を簡潔にまとめています。
 
 ## 📄 **ライセンス**
 

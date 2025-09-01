@@ -45,11 +45,31 @@ impl NyashRunner {
 
         // Backend selection
         match self.config.backend.as_str() {
+            "mir" => {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    println!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
+                }
+                self.execute_mir_interpreter_mode(filename);
+            }
             "vm" => {
                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                     println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
                 }
                 self.execute_vm_mode(filename);
+            }
+            "cranelift" => {
+                #[cfg(feature = "cranelift-jit")]
+                {
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        println!("⚙️  Nyash Cranelift JIT - Executing file: {}", filename);
+                    }
+                    self.execute_cranelift_mode(filename);
+                }
+                #[cfg(not(feature = "cranelift-jit"))]
+                {
+                    eprintln!("❌ Cranelift backend not available. Please rebuild with: cargo build --features cranelift-jit");
+                    process::exit(1);
+                }
             }
             "llvm" => {
                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {

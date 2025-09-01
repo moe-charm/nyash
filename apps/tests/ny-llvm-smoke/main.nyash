@@ -1,0 +1,16 @@
+// ny-llvm-smoke - 最小LLVM/AOTスモーク
+// 目的: ArrayBox.get/set と ExternCall(console.log) の実行確認
+
+static box Main {
+    main() {
+        // ArrayBox を生成し、push で 3 を追加してから取得
+        local a = new ArrayBox()
+        a.push(3)
+        local v = a.get(0)
+
+        // 代表出力（ExternCallに正規化される print を使用）
+        print("Result: " + v)
+
+        return 0
+    }
+}

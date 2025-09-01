@@ -286,6 +286,15 @@ app.setSize(800, 600)
 2. **🔄 ドキュメント更新** - 古い/不足している場合は更新
 3. **💻 ソース確認** - それでも解決しない場合のみソースコード参照
 
+### 🎯 最重要ドキュメント（2つの核心）
+
+#### 🔤 言語仕様
+- **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
+- **[完全リファレンス](docs/reference/language/LANGUAGE_REFERENCE_2025.md)** - 言語仕様詳細
+
+#### 📦 主要BOXのAPI
+- **[Box/プラグイン関連](docs/reference/boxes-system/)** - APIと設計
+
 ### ⚡ API確認の実践例
 ```bash
 # ❌ 悪い例：いきなりソース読む

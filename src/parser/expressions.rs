@@ -293,74 +293,30 @@ impl NyashParser {
             TokenType::STRING(s) => {
                 let value = s.clone();
                 self.advance();
-                // 🌟 文字列リテラル自動変換: "text" → new StringBox("text")
-                Ok(ASTNode::New {
-                    class: "StringBox".to_string(),
-                    arguments: vec![ASTNode::Literal {
-                        value: LiteralValue::String(value),
-                        span: Span::unknown(),
-                    }],
-                    type_arguments: vec![],
-                    span: Span::unknown(),
-                })
+                // Use plain literal to keep primitives simple in interpreter/VM paths
+                Ok(ASTNode::Literal { value: LiteralValue::String(value), span: Span::unknown() })
             }
             
             TokenType::NUMBER(n) => {
                 let value = *n;
                 self.advance();
-                // 🌟 整数リテラル自動変換: 42 → new IntegerBox(42)
-                Ok(ASTNode::New {
-                    class: "IntegerBox".to_string(),
-                    arguments: vec![ASTNode::Literal {
-                        value: LiteralValue::Integer(value),
-                        span: Span::unknown(),
-                    }],
-                    type_arguments: vec![],
-                    span: Span::unknown(),
-                })
+                Ok(ASTNode::Literal { value: LiteralValue::Integer(value), span: Span::unknown() })
             }
             
             TokenType::FLOAT(f) => {
                 let value = *f;
                 self.advance();
-                // 🌟 浮動小数点リテラル自動変換: 3.14 → new FloatBox(3.14)
-                Ok(ASTNode::New {
-                    class: "FloatBox".to_string(),
-                    arguments: vec![ASTNode::Literal {
-                        value: LiteralValue::Float(value),
-                        span: Span::unknown(),
-                    }],
-                    type_arguments: vec![],
-                    span: Span::unknown(),
-                })
+                Ok(ASTNode::Literal { value: LiteralValue::Float(value), span: Span::unknown() })
             }
             
             TokenType::TRUE => {
                 self.advance();
-                // 🌟 真偽値リテラル自動変換: true → new BoolBox(true)
-                Ok(ASTNode::New {
-                    class: "BoolBox".to_string(),
-                    arguments: vec![ASTNode::Literal {
-                        value: LiteralValue::Bool(true),
-                        span: Span::unknown(),
-                    }],
-                    type_arguments: vec![],
-                    span: Span::unknown(),
-                })
+                Ok(ASTNode::Literal { value: LiteralValue::Bool(true), span: Span::unknown() })
             }
             
             TokenType::FALSE => {
                 self.advance();
-                // 🌟 真偽値リテラル自動変換: false → new BoolBox(false)
-                Ok(ASTNode::New {
-                    class: "BoolBox".to_string(),
-                    arguments: vec![ASTNode::Literal {
-                        value: LiteralValue::Bool(false),
-                        span: Span::unknown(),
-                    }],
-                    type_arguments: vec![],
-                    span: Span::unknown(),
-                })
+                Ok(ASTNode::Literal { value: LiteralValue::Bool(false), span: Span::unknown() })
             }
             
             TokenType::NULL => {

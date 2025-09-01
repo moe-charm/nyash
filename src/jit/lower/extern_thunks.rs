@@ -161,6 +161,8 @@ pub(super) extern "C" fn nyash_rt_checkpoint() -> i64 {
     if std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") {
         eprintln!("[nyash.rt.checkpoint] reached");
     }
+    // Bridge to GC/scheduler if configured
+    crate::runtime::global_hooks::safepoint_and_poll();
     0
 }
 
@@ -619,4 +621,32 @@ pub(super) extern "C" fn nyash_string_lt_hh(a_h: u64, b_h: u64) -> i64 {
     let a = handle_to_string_like(a_h).unwrap_or_default();
     let b = handle_to_string_like(b_h).unwrap_or_default();
     if a < b { 1 } else { 0 }
+}
+
+// Unified semantics: addition for dynamic boxes via shared coercions
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_semantics_add_hh(lhs_h: u64, rhs_h: u64) -> i64 {
+    events::emit_runtime(serde_json::json!({"id": crate::jit::r#extern::collections::SYM_SEMANTICS_ADD_HH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]}), "hostcall", "<jit>");
+    use crate::runtime::semantics;
+    use crate::box_trait::{StringBox, IntegerBox};
+    use crate::jit::rt::handles;
+    let lhs = if let Some(o) = handles::get(lhs_h) { o } else { return 0 };
+    let rhs = if let Some(o) = handles::get(rhs_h) { o } else { return 0 };
+    let ls_opt = semantics::coerce_to_string(lhs.as_ref());
+    let rs_opt = semantics::coerce_to_string(rhs.as_ref());
+    if ls_opt.is_some() || rs_opt.is_some() {
+        let ls = ls_opt.unwrap_or_else(|| lhs.to_string_box().value);
+        let rs = rs_opt.unwrap_or_else(|| rhs.to_string_box().value);
+        let s = format!("{}{}", ls, rs);
+        let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(StringBox::new(s));
+        return handles::to_handle(arc) as i64;
+    }
+    if let (Some(li), Some(ri)) = (semantics::coerce_to_i64(lhs.as_ref()), semantics::coerce_to_i64(rhs.as_ref())) {
+        let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(IntegerBox::new(li + ri));
+        return handles::to_handle(arc) as i64;
+    }
+    // Fallback stringify concat
+    let s = format!("{}{}", lhs.to_string_box().value, rhs.to_string_box().value);
+    let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(StringBox::new(s));
+    handles::to_handle(arc) as i64
 }

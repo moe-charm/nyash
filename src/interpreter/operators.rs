@@ -156,6 +156,14 @@ impl NyashInterpreter {
                 if let Some(rs) = self.try_box_to_string(right_val) {
                     return Ok(Box::new(StringBox::new(format!("{}{}", left_val.to_string_box().value, rs))));
                 }
+                // Numeric fallback: if both sides stringify to valid integers, add them
+                {
+                    let ls = left_val.to_string_box().value;
+                    let rs = right_val.to_string_box().value;
+                    if let (Ok(li), Ok(ri)) = (ls.trim().parse::<i64>(), rs.trim().parse::<i64>()) {
+                        return Ok(Box::new(IntegerBox::new(li + ri)));
+                    }
+                }
                 if let Some(result) = try_add_operation(left_val, right_val) {
                     Ok(result)
                 } else {

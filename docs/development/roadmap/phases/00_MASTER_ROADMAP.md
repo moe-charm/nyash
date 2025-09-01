@@ -15,7 +15,7 @@ Purpose: Claude×Copilot×ChatGPT協調開発の総合ロードマップ
 | Phase | 状態 | 概要 | 詳細リンク |
 |-------|------|------|------------|
 | 8.4 | ✅完了 | AST→MIR Lowering完全実装 | [phase_8_4_ast_mir_lowering.md](phase-8/phase_8_4_ast_mir_lowering.md) |
-| 8.5 | ✅完了 | MIRダイエット（35→26命令） | [phase_8_5_mir_35_to_26_reduction.md](phase-8/phase_8_5_mir_35_to_26_reduction.md) |
+| 8.5 | ✅完了 | MIRダイエット（35→26→15命令） | [phase_8_5_mir_35_to_26_reduction.md](phase-8/phase_8_5_mir_35_to_26_reduction.md) |
 | 8.6 | 🔄進行中 | VM性能改善（0.9倍→2倍以上） | [phase_8_6_vm_performance_improvement.md](phase-8/phase_8_6_vm_performance_improvement.md) |
 | 9 | 📅予定 | JIT実装 | [phase-9/](phase-9/) |
 | 9.75g-0 | ✅完了 | BID-FFI Plugin System | [Phase-9.75g-0-BID-FFI-Developer-Guide.md](phase-9/Phase-9.75g-0-BID-FFI-Developer-Guide.md) |
@@ -114,7 +114,7 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 - **🌟 NEW: GC切り替え可能ランタイム（世界初の柔軟なメモリ管理）**
 
 **Start Gate（着手前の必須完了）**:
-- ✅ MIRダイエット（26命令）整合完了
+- ✅ MIRダイエット（15命令）整合完了
 - ✅ VM統計: `--vm-stats` でホット関数抽出可能
 - 🔄 Proof of Concept: MIR→CLIFの最小Lower
 - ❓ BoxCall/Array/MapのJIT最適化
@@ -185,7 +185,7 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 
 ### 達成済み
 - 🏆 RefNew/RefGet/RefSet WASM完全動作
-- 🏆 26命令MIR階層化完了（Phase 8.5）
+- 🏆 MIR命令削減完了（35→26→15命令、Phase 8.5）
 - 🏆 Phase 9.75g-0 BID-FFI Plugin System完全完了
 - 🏆 警告削減100%達成（Phase 9.75j）
 

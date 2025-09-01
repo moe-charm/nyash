@@ -166,6 +166,61 @@ MIR → VM → JIT/AOT マッピング:
 - 保守可能な言語の作り方
 - 拡張可能なアーキテクチャ設計
 
+## 🔥 実例：LLVM統合の地獄からCranelift採用へ（2025-09-01追記）
+
+### LLVM統合で直面した問題
+```
+問題1: バージョン地獄
+- llvm-sys v180.0.0 → LLVM 18.0.x要求
+- 実際のLLVM: 18.1.3（WSL）、18.1.6（vcpkg）
+- 環境変数LLVM_SYS_180_STRICT_VERSIONING=0も効果なし
+
+問題2: Windows環境の複雑性
+- 環境変数が伝わらない（WSL→cmd.exe境界）
+- 文字化けによるバッチファイル実行失敗
+- vcpkgでのLLVMビルドに数時間...
+
+問題3: ユーザー体験の悪夢
+- LLVMインストールだけで1日
+- バージョン確認で混乱
+- 環境変数設定で挫折
+```
+
+### Cranelift採用という解決策
+```
+利点:
+- Rust製で統合が簡単（Cargo.tomlに追加のみ）
+- バイナリサイズ: LLVM 100MB+ → Cranelift 5-10MB
+- ビルド時間: 数時間 → 数分
+- 環境依存: 複雑 → ゼロ
+
+ユーザー体験の改善:
+Before: LLVM地獄（環境構築で1日以上）
+After: cargo install nyash（5分で完了）
+```
+
+### 戦略的転換：LLVMからCraneliftへ（2025-09-01）
+
+**経緯**：
+1. LLVM統合を試みる → バージョン地獄、ビルド困難、巨大サイズ
+2. ユーザー体験の危機を認識 → 「これではユーザーが使えない」
+3. **既存のCranelift実装に立ち返る** → Phase 10.7で既に実装済み！
+
+```bash
+# LLVM: 100MB+、環境構築地獄、ビルド数時間
+# ↓ 戦略的転換
+# Cranelift: 5-10MB、Rust native、ビルド数分
+
+cargo build --release --features cranelift-jit -j24
+./target/release/nyash --backend cranelift apps/tests/mir-const-add/main.nyash
+# 結果: "Cranelift JIT execution completed (skeleton)!"
+```
+
+### 教訓：コンパイラは環境も知らない
+- 外部依存（LLVM）= 制御不能な複雑性
+- 「大きい・難しい」に気づいたら既存の軽量案を再評価
+- Cranelift重視への転換 = 正しい判断
+
 ## 📚 参考文献（予定）
 - The Cathedral and the Bazaar (ESR)
 - Design Patterns (GoF)

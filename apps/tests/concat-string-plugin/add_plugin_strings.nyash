@@ -1,0 +1,9 @@
+static box Main {
+    main() {
+        local a = new StringBox("12")
+        local b = new StringBox("30")
+        local r = a + b
+        print(r)
+        return 0
+    }
+}

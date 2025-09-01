@@ -28,8 +28,11 @@ static box Main {
     
     parseArgs(args) {
         local options = new MapBox()
-        
-        loop(arg in args) {
+        // foreach は未対応のため、index で明示ループ
+        local i = 0
+        local n = args.length()
+        loop(i < n) {
+            local arg = args.get(i)
             if arg == "--upper" {
                 options.set("upper", true)
             } else if arg == "--lower" {
@@ -39,6 +42,7 @@ static box Main {
             } else if arg == "--help" || arg == "-h" {
                 options.set("help", true)
             }
+            i = i + 1
         }
         
         return options
@@ -47,8 +51,7 @@ static box Main {
     processInput() {
         loop(true) {
             local input = me.console.readLine()
-            if input == null { break }  // EOF
-            
+            if input == null { return 0 }  // EOF → 関数終了に変更（break未対応MIR対策）
             local output = me.transformText(input)
             me.console.log(output)
         }

@@ -476,14 +476,15 @@ impl PluginLoaderV2 {
                 Ok(None)
             }
             ("env.runtime", "checkpoint") => {
-                // Minimal safepoint checkpoint stub (no-op)
+                // Safepoint + scheduler poll via global hooks
                 if std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") {
                     eprintln!("[runtime.checkpoint] reached");
                 }
+                crate::runtime::global_hooks::safepoint_and_poll();
                 Ok(None)
             }
             // Future/Await bridge (scaffold): maps MIR Future* to Box operations
-            ("env.future", "new") => {
+            ("env.future", "new") | ("env.future", "birth") => {
                 // new(value) -> FutureBox(set to value)
                 let fut = crate::boxes::future::FutureBox::new();
                 if let Some(v) = args.get(0) { fut.set_result(v.clone_box()); }
@@ -511,6 +512,51 @@ impl PluginLoaderV2 {
                     }
                 }
                 Ok(None)
+            }
+            ("env.future", "spawn_instance") => {
+                // spawn_instance(recv, method_name, args...) -> FutureBox
+                // If a scheduler is available, schedule the call; else invoke synchronously.
+                use crate::box_trait::{NyashBox, VoidBox, ErrorBox};
+                let fut = crate::boxes::future::FutureBox::new();
+                if args.len() >= 2 {
+                    if let Some(pb) = args[0].as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        let method_name = if let Some(sb) = args[1].as_any().downcast_ref::<crate::box_trait::StringBox>() { sb.value.clone() } else { args[1].to_string_box().value };
+                        // Clone boxes for scheduled call (same-thread scheduler; no Send bound)
+                        let tail: Vec<Box<dyn NyashBox>> = args.iter().skip(2).map(|a| a.clone_box()).collect();
+                        let recv_type = pb.box_type.clone();
+                        let recv_id = pb.instance_id();
+                        // Clones for fallback inline path
+                        let recv_type_inline = recv_type.clone();
+                        let method_name_inline = method_name.clone();
+                        let tail_inline: Vec<Box<dyn NyashBox>> = tail.iter().map(|a| a.clone_box()).collect();
+                        let fut_setter = fut.clone();
+                        let scheduled = crate::runtime::global_hooks::spawn_task("spawn_instance", Box::new(move || {
+                            let host = crate::runtime::get_global_plugin_host();
+                            let read_res = host.read();
+                            if let Ok(ro) = read_res {
+                                match ro.invoke_instance_method(&recv_type, &method_name, recv_id, &tail) {
+                                    Ok(ret) => { if let Some(v) = ret { fut_setter.set_result(v); } else { fut_setter.set_result(Box::new(VoidBox::new())); } }
+                                    Err(e) => { fut_setter.set_result(Box::new(ErrorBox::new("InvokeError", &format!("{}.{}: {:?}", recv_type, method_name, e)))); }
+                                }
+                            }
+                        }));
+                        if !scheduled {
+                            // Fallback: run inline synchronously
+                            let host = crate::runtime::get_global_plugin_host();
+                            let read_res = host.read();
+                            if let Ok(ro) = read_res {
+                                match ro.invoke_instance_method(&recv_type_inline, &method_name_inline, recv_id, &tail_inline) {
+                                    Ok(ret) => { if let Some(v) = ret { fut.set_result(v); } else { fut.set_result(Box::new(VoidBox::new())); } }
+                                    Err(e) => { fut.set_result(Box::new(ErrorBox::new("InvokeError", &format!("{}.{}: {:?}", recv_type_inline, method_name_inline, e)))); }
+                                }
+                            }
+                        }
+                        return Ok(Some(Box::new(fut)));
+                    }
+                }
+                // Fallback: resolved future of first arg
+                if let Some(v) = args.get(0) { fut.set_result(v.clone_box()); }
+                Ok(Some(Box::new(fut)))
             }
             ("env.canvas", _) => {
                 eprintln!("[env.canvas] {} invoked (stub)", method_name);

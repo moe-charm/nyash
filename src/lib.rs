@@ -42,6 +42,7 @@ pub mod mir;
 // 🚀 Backend Infrastructure (NEW!)
 pub mod backend;
 pub mod jit; // Phase 10: Cranelift JIT subsystem (skeleton)
+pub mod semantics; // Unified semantics trait for MIR evaluation/lowering
 
 // 📊 Performance Benchmarks (NEW!)
 pub mod benchmarks;

@@ -15,6 +15,9 @@ research/
 ├── paper-07-nyash-one-month/        # 1ヶ月開発論文 ⭐執筆中
 ├── paper-08-tmux-emergence/         # tmux創発的対話論文 ⭐執筆中
 ├── paper-09-ai-collaboration-pitfall/ # AI協調開発の落とし穴論文 🆕
+├── paper-10-box-mir15-theory/       # Box理論とMIR Core-15 (準備中)
+├── paper-11-compiler-knows-nothing/ # コンパイラは何も知らない (準備中)
+├── paper-12-vm-stepping-stone/      # VM as a Stepping Stone論文 🆕⭐
 ├── papers-shared/                   # 共通リソース・テンプレート
 ├── ai-dual-mode-development/        # AI協調開発の追加研究
 ├── papers-under-review/             # 査読中（Git追跡除外）
@@ -92,7 +95,7 @@ research/
 
 ### 6. 🚨 **AI協調開発の落とし穴**（[paper-09-ai-collaboration-pitfall/](paper-09-ai-collaboration-pitfall/)）
 - **タイトル**: "設計哲学を守る本能的回避：AI協調開発における危機管理"
-- **状態**: 事例分析完了（2025-08-30）
+- **状態**: 事例分析完了（2024-08-30）
 - **概要**:
   - Python統合でのLowerer特殊化危機の回避事例
   - 「Everything is Box」哲学 vs 技術的正しさの対立
@@ -101,6 +104,21 @@ research/
   - 爆速開発における批判的思考の重要性
   - AI提案の無批判受容の危険性
   - 設計原則を守る人間の役割
+
+### 7. 🚀 **VM as a Stepping Stone**（[paper-12-vm-stepping-stone/](paper-12-vm-stepping-stone/)）【新規】
+- **タイトル**: "VM層を介した段階的ネイティブコンパイラ実装手法"
+- **状態**: 執筆準備中（2025-01-31発見）
+- **概要**:
+  - 当初並列予定だったVM/LLVM実装を直列化した結果の発見
+  - MIR→VM→LLVMの段階的実装による開発効率向上
+  - 5ヶ月でネイティブコンパイラ完成（2024年8月〜2025年1月）
+- **主要な貢献**:
+  - VM層の5つの役割（生きた仕様書、検証層、デバッグ基準、パターン確立、段階的複雑性）
+  - 開発時間30-40%短縮、デバッグ時間60-70%削減
+  - プラグインFFIコード80%再利用
+- **実績**:
+  - VInvokeバグ30分解決（VM比較による）
+  - 可変長引数対応完了（2025-01-31）
 
 ## 🌟 研究の特徴と共通テーマ
 
@@ -132,7 +150,7 @@ research/
 3. **完成・投稿** → `papers-under-review/`
 4. **採択・公開** → `papers-published/` ✅
 
-### 優先順位（2025年8月時点）
+### 優先順位（2025年1月時点）
 
 #### 🚀 新戦略：AI先生たちの助言に基づく2段階展開
 **ai-advisors/ディレクトリにGemini・ChatGPT5の詳細な執筆戦略を保存済み！**
@@ -141,13 +159,16 @@ research/
 1. **最優先**: arXiv即時投稿論文「1ヶ月完走×AI協調開発」（2週間で執筆）
    - 物語性重視、実績報告型
    - 世界への即時発信でインパクト最大化
+2. **新・高優先**: VM as a Stepping Stone論文（OOPSLA 2025狙い、締切4月）
+   - 実装手法論として新規性高い
+   - 実データ（5ヶ月でLLVM完成）が説得力
 
 ##### 第2段階（技術的深堀り）
-2. **高優先**: 統一実行モデル論文（PLDI/OOPSLA狙い）
+3. **高優先**: 統一実行モデル論文（PLDI/OOPSLA狙い）
    - Box契約＋Debug-Only GCの技術的詳細
-3. **中優先**: Debug-Only GC技術ノート（ISMM狙い）
-4. **中優先**: AI協調開発方法論（ICSE/FSE狙い）
-5. **継続**: Box理論シリーズ（arXiv連載形式）
+4. **中優先**: Debug-Only GC技術ノート（ISMM狙い）
+5. **中優先**: AI協調開発方法論（ICSE/FSE狙い）
+6. **継続**: Box理論シリーズ（arXiv連載形式）
 
 ## 🚀 今後の展開
 
@@ -177,4 +198,4 @@ Nyashプロジェクトは学術的な貢献を歓迎します：
 
 *Everything is Box, Everything is Research, Everything is Observable*
 
-**最終更新**: 2025年8月30日 - AI協調開発の落とし穴事例を追加（設計哲学の危機を本能で回避） 🛡️
+**最終更新**: 2025年1月31日 - VM as a Stepping Stone論文を追加（段階的コンパイラ実装手法の発見） 🚀

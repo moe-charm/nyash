@@ -30,7 +30,7 @@ Nyash Source → Parser → AST → MIR Builder → MIR
 ```
 
 ### 3.2 MIR設計
-- 26命令の最小命令セット
+- 15命令の最小命令セット（当初26命令から削減）
 - 型安全性と最適化容易性
 
 ### 3.3 JIT/AOTパイプライン

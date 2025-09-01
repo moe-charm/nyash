@@ -1,0 +1,19 @@
+// mir-branch-multi - composite compare + nested branch
+
+static box Main {
+    main() {
+        local a, b
+        a = 5
+        b = 3
+        if a > b {
+            if a == 5 {
+                return 1
+            } else {
+                return 2
+            }
+        } else {
+            return 0
+        }
+    }
+}
+

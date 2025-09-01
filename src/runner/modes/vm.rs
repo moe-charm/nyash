@@ -64,6 +64,9 @@ impl NyashRunner {
             }
         }
 
+        // Expose GC/scheduler hooks globally for JIT externs (checkpoint/await, etc.)
+        nyash_rust::runtime::global_hooks::set_from_runtime(&runtime);
+
         // Execute with VM using prepared runtime
         let mut vm = VM::with_runtime(runtime);
         match vm.execute_module(&module_vm) {

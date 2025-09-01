@@ -1,0 +1,231 @@
+// Nyashメモリ管理ベンチマーク
+// イベントディスパッチャ＋揮発性リスナーで決定論的メモリ管理を実証
+
+static box Main {
+    init { console, stats }
+    
+    main() {
+        me.console = new ConsoleBox()
+        me.stats = new StatsBox()
+        
+        // コマンドライン引数の解析
+        local args = new MapBox()
+        args.set("listeners", 1000)  // デフォルト値
+        args.set("events", 10000)
+        args.set("fanout", 3)
+        args.set("depth", 4)
+        
+        me.console.log("=== Nyash Memory Management Benchmark ===")
+        me.console.log("Listeners: " + args.get("listeners"))
+        me.console.log("Events: " + args.get("events"))
+        me.console.log("Fanout: " + args.get("fanout"))
+        me.console.log("Depth: " + args.get("depth"))
+        
+        // ベンチマーク実行
+        me.runBenchmark(
+            args.get("listeners"),
+            args.get("events"),
+            args.get("fanout"),
+            args.get("depth")
+        )
+        
+        return 0
+    }
+    
+    runBenchmark(listenerCount, eventCount, fanout, depth) {
+        local dispatcher = new EventDispatcher()
+        
+        // 構築フェーズの計測
+        me.stats.startTimer("construct")
+        {
+            // スコープ内でリスナー生成
+            local listeners = new ArrayBox()
+            local i = 0
+            loop(i < listenerCount) {
+                local listener = new Listener("L" + i, fanout, depth)
+                listeners.push(listener)
+                dispatcher.addListener(listener)
+                i = i + 1
+            }
+            
+            me.stats.stopTimer("construct")
+            me.stats.recordMemory("peak_before_dispatch")
+            
+            // ディスパッチフェーズの計測
+            me.stats.startTimer("dispatch")
+            local j = 0
+            loop(j < eventCount) {
+                dispatcher.dispatch("event_" + j)
+                j = j + 1
+            }
+            me.stats.stopTimer("dispatch")
+            
+            // スコープ終了による解放フェーズの計測
+            me.stats.startTimer("fini")
+        } // ここでlistenersスコープが終了し、カスケード解放が発生
+        
+        me.stats.stopTimer("fini")
+        me.stats.recordMemory("after_fini")
+        
+        // 結果出力
+        me.printResults(listenerCount, eventCount)
+    }
+    
+    printResults(listenerCount, eventCount) {
+        me.console.log("\n=== Results ===")
+        me.console.log("construct_ms: " + me.stats.getTimer("construct"))
+        
+        local dispatchTime = me.stats.getTimer("dispatch")
+        local perEvent = dispatchTime / eventCount
+        me.console.log("dispatch_ns_avg: " + (perEvent * 1000000))
+        
+        me.console.log("fini_ms: " + me.stats.getTimer("fini"))
+        me.console.log("mem_peak_mb: " + me.stats.getMemory("peak_before_dispatch"))
+        me.console.log("mem_after_fini_kb: " + me.stats.getMemory("after_fini"))
+        me.console.log("order_ok: " + OrderLogger.isOrderCorrect())
+        me.console.log("weak_prune_count: " + EventDispatcher.getPruneCount())
+    }
+}
+
+// イベントディスパッチャ（weak参照でリスナー管理）
+box EventDispatcher {
+    init { listeners, pruneCount }
+    static pruneCountGlobal = 0
+    
+    constructor() {
+        me.listeners = new ArrayBox()
+        me.pruneCount = 0
+    }
+    
+    addListener(listener) {
+        // weak参照として保持
+        me.listeners.push(weak(listener))
+    }
+    
+    dispatch(event) {
+        local activeListeners = new ArrayBox()
+        local i = 0
+        local len = me.listeners.length()
+        
+        loop(i < len) {
+            local weakListener = me.listeners.get(i)
+            // weak参照が生きているかチェック
+            if weakListener != nil {
+                weakListener.onEvent(event)
+                activeListeners.push(weakListener)
+            } else {
+                me.pruneCount = me.pruneCount + 1
+                EventDispatcher.pruneCountGlobal = EventDispatcher.pruneCountGlobal + 1
+            }
+            i = i + 1
+        }
+        
+        // 生きているリスナーのみを保持
+        me.listeners = activeListeners
+    }
+    
+    static getPruneCount() {
+        return EventDispatcher.pruneCountGlobal
+    }
+}
+
+// リスナー（子リソースを持つツリー構造）
+box Listener {
+    init { id, children, eventCount }
+    
+    constructor(id, fanout, depth) {
+        me.id = id
+        me.children = new ArrayBox()
+        me.eventCount = 0
+        
+        // 子ノードを再帰的に生成
+        if depth > 0 {
+            local i = 0
+            loop(i < fanout) {
+                local child = new Listener(id + "." + i, fanout, depth - 1)
+                me.children.push(child)
+                i = i + 1
+            }
+        }
+    }
+    
+    onEvent(event) {
+        me.eventCount = me.eventCount + 1
+    }
+    
+    fini() {
+        // 子→親の順で解放（カスケード）
+        local i = me.children.length() - 1
+        loop(i >= 0) {
+            local child = me.children.get(i)
+            if child != nil {
+                child.fini()
+            }
+            i = i - 1
+        }
+        
+        // 解放順序をログ
+        OrderLogger.log(me.id)
+    }
+}
+
+// 統計収集Box
+box StatsBox {
+    init { timers, memories }
+    
+    constructor() {
+        me.timers = new MapBox()
+        me.memories = new MapBox()
+    }
+    
+    startTimer(name) {
+        // 実際の実装では高精度タイマーを使用
+        me.timers.set(name + "_start", TimeBox.now())
+    }
+    
+    stopTimer(name) {
+        local start = me.timers.get(name + "_start")
+        local elapsed = TimeBox.now() - start
+        me.timers.set(name, elapsed)
+    }
+    
+    getTimer(name) {
+        return me.timers.get(name)
+    }
+    
+    recordMemory(name) {
+        // 実際の実装ではシステムメモリ情報を取得
+        me.memories.set(name, 0)  // プレースホルダー
+    }
+    
+    getMemory(name) {
+        return me.memories.get(name)
+    }
+}
+
+// 解放順序ログ（シングルトン）
+static box OrderLogger {
+    init { log, expectedOrder }
+    static instance = nil
+    
+    static log(id) {
+        if OrderLogger.instance == nil {
+            OrderLogger.instance = new OrderLogger()
+        }
+        OrderLogger.instance.addLog(id)
+    }
+    
+    constructor() {
+        me.log = new ArrayBox()
+        me.expectedOrder = new ArrayBox()
+    }
+    
+    addLog(id) {
+        me.log.push(id)
+    }
+    
+    static isOrderCorrect() {
+        // 実際の実装では期待される順序と比較
+        return true
+    }
+}

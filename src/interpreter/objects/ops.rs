@@ -76,7 +76,15 @@ impl NyashInterpreter {
                 // Not a user-defined box or no constructor needed
                 Ok(box_instance)
             },
-            Err(e) => Err(e),
+            Err(e) => {
+                // Fallback: handle basic built-in boxes directly (e.g., FutureBox)
+                // This keeps interpreter usability when registry has no provider.
+                drop(registry_lock);
+                match self.create_basic_box(target_class, arguments) {
+                    Ok(b) => Ok(b),
+                    Err(_) => Err(e),
+                }
+            },
         }
     }
 

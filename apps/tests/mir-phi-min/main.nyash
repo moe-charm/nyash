@@ -1,0 +1,15 @@
+// mir-phi-min - minimal PHI merge across then/else
+
+static box Main {
+    main() {
+        local x
+        if 1 < 2 {
+            x = 10
+        } else {
+            x = 20
+        }
+        // Use x after merge to force PHI
+        return x  // expect 10
+    }
+}
+

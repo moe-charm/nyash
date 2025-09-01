@@ -147,6 +147,23 @@ fn main() {
     }
 }
 
+fn resolve_plugin_path(base: &Path, raw: &str) -> PathBuf {
+    let candidate = if Path::new(raw).is_absolute() { PathBuf::from(raw) } else { base.join(raw) };
+    if candidate.exists() {
+        return candidate;
+    }
+    // If missing, try appending platform-specific extension
+    let ext = if cfg!(target_os = "windows") { "dll" } else if cfg!(target_os = "macos") { "dylib" } else { "so" };
+    let mut with_ext = candidate.clone();
+    if with_ext.extension().is_none() {
+        with_ext.set_extension(ext);
+    } else {
+        // If an extension exists but file is missing, try replacing it
+        with_ext.set_extension(ext);
+    }
+    with_ext
+}
+
 fn check_v2(config_path: &PathBuf, library_filter: Option<&str>) {
     println!("{}", "=== Plugin Check v2 (nyash.toml centric) ===".bold());
     
@@ -194,11 +211,7 @@ fn check_v2(config_path: &PathBuf, library_filter: Option<&str>) {
         println!("  Box types: {:?}", lib_def.boxes);
         
         // Try to load the plugin
-        let lib_path = if Path::new(&lib_def.path).is_absolute() {
-            PathBuf::from(&lib_def.path)
-        } else {
-            config_base.join(&lib_def.path)
-        };
+        let lib_path = resolve_plugin_path(config_base, &lib_def.path);
         let library = match unsafe { Library::new(&lib_path) } {
             Ok(lib) => lib,
             Err(e) => {
@@ -300,9 +313,7 @@ fn test_lifecycle_v2(config_path: &PathBuf, box_type: &str) {
     
     // Resolve plugin path relative to config dir
     let config_base = config_path.parent().unwrap_or(Path::new("."));
-    let lib_path = if Path::new(&lib_def.path).is_absolute() {
-        PathBuf::from(&lib_def.path)
-    } else { config_base.join(&lib_def.path) };
+    let lib_path = resolve_plugin_path(config_base, &lib_def.path);
 
     // Load plugin
     let library = match unsafe { Library::new(&lib_path) } {

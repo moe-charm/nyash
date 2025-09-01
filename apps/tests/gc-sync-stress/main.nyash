@@ -1,0 +1,16 @@
+// gc-sync-stress: allocate many small boxes to pass through checkpoints
+
+static box Main {
+    main() {
+        local n = 5000
+        local arr = new ArrayBox()
+        local i = 0
+        loop(i < n) {
+            arr.push(new IntegerBox(i))
+            i = i + 1
+        }
+        print(arr.length())
+        return 0
+    }
+}
+

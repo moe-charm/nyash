@@ -1,0 +1,12 @@
+// Test await without FutureBox (using integer for now)
+
+static box Main {
+    main() {
+        local value
+        value = 42
+        
+        // Note: await expects a future, but we'll test with integer
+        // This should fail, but will show if await instruction is recognized
+        return await value
+    }
+}

@@ -1,0 +1,361 @@
+# Nyash Configuration File v2
+# マルチBox型プラグイン対応
+
+[libraries]
+# ライブラリ定義（1つのプラグインで複数のBox型を提供可能）
+[libraries."libnyash_filebox_plugin"]
+boxes = ["FileBox"]
+path = "./plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin"
+
+[libraries."libnyash_counter_plugin"]
+boxes = ["CounterBox"]
+path = "./plugins/nyash-counter-plugin/target/release/libnyash_counter_plugin"
+
+[libraries."libnyash_net_plugin"]
+boxes = ["HttpServerBox", "HttpClientBox", "HttpResponseBox", "HttpRequestBox", "SocketServerBox", "SocketClientBox", "SocketConnBox"]
+path = "./plugins/nyash-net-plugin/target/release/libnyash_net_plugin"
+
+# FileBoxの型情報定義
+[libraries."libnyash_filebox_plugin".FileBox]
+type_id = 6
+
+[libraries."libnyash_filebox_plugin".FileBox.methods]
+birth = { method_id = 0 }
+open = { method_id = 1, args = ["path", "mode"] }
+read = { method_id = 2 }
+write = { method_id = 3, args = ["data"] }
+close = { method_id = 4 }
+fini = { method_id = 4294967295 }
+copyFrom = { method_id = 7, args = [ { kind = "box", category = "plugin" } ] }
+cloneSelf = { method_id = 8 }
+
+[libraries."libnyash_counter_plugin".CounterBox]
+type_id = 7
+singleton = true
+
+[libraries."libnyash_counter_plugin".CounterBox.methods]
+birth = { method_id = 0 }
+inc = { method_id = 1 }
+get = { method_id = 2 }
+fini = { method_id = 4294967295 }
+
+# HttpServerBox
+[libraries."libnyash_net_plugin".HttpServerBox]
+type_id = 20
+
+[libraries."libnyash_net_plugin".HttpServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 1, args = ["port"], returns_result = true }
+stop  = { method_id = 2, returns_result = true }
+accept = { method_id = 3, returns_result = true }
+fini = { method_id = 4294967295 }
+
+# HttpClientBox
+[libraries."libnyash_net_plugin".HttpClientBox]
+type_id = 23
+
+[libraries."libnyash_net_plugin".HttpClientBox.methods]
+birth = { method_id = 0 }
+get = { method_id = 1, args = ["url"], returns_result = true }
+post = { method_id = 2, args = ["url", "body"], returns_result = true }
+fini = { method_id = 4294967295 }
+
+# HttpResponseBox
+[libraries."libnyash_net_plugin".HttpResponseBox]
+type_id = 22
+
+[libraries."libnyash_net_plugin".HttpResponseBox.methods]
+birth = { method_id = 0 }
+setStatus = { method_id = 1, args = ["status"] }
+setHeader = { method_id = 2, args = ["key", "value"] }
+write = { method_id = 3, args = ["body"] }
+readBody = { method_id = 4 }
+getStatus = { method_id = 5 }
+getHeader = { method_id = 6, args = ["key"] }
+fini = { method_id = 4294967295 }
+
+# HttpRequestBox
+[libraries."libnyash_net_plugin".HttpRequestBox]
+type_id = 21
+
+[libraries."libnyash_net_plugin".HttpRequestBox.methods]
+birth = { method_id = 0 }
+path = { method_id = 1 }
+readBody = { method_id = 2 }
+respond = { method_id = 3, args = [{ kind = "box", category = "plugin" }] }
+fini = { method_id = 4294967295 }
+
+# SocketServerBox
+[libraries."libnyash_net_plugin".SocketServerBox]
+type_id = 30
+
+[libraries."libnyash_net_plugin".SocketServerBox.methods]
+birth = { method_id = 0 }
+bind = { method_id = 1, args = ["port"] }
+accept = { method_id = 2 }
+fini = { method_id = 4294967295 }
+
+# SocketClientBox
+[libraries."libnyash_net_plugin".SocketClientBox]
+type_id = 32
+
+[libraries."libnyash_net_plugin".SocketClientBox.methods]
+birth = { method_id = 0 }
+connect = { method_id = 1, args = ["host", "port"] }
+send = { method_id = 2, args = ["data"] }
+receive = { method_id = 3 }
+close = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+# SocketConnBox
+[libraries."libnyash_net_plugin".SocketConnBox]
+type_id = 31
+
+[libraries."libnyash_net_plugin".SocketConnBox.methods]
+birth = { method_id = 0 }
+send = { method_id = 1, args = ["data"] }
+recv = { method_id = 2 }
+close = { method_id = 3 }
+fini = { method_id = 4294967295 }
+
+[plugin_paths]
+# プラグインの検索パス（デフォルト）
+search_paths = [
+    "./target/release",
+    "./target/debug",
+    "./plugins/*/target/release",
+    "./plugins/*/target/debug",
+    "/usr/local/lib/nyash/plugins",
+    "~/.nyash/plugins"
+]
+
+# 中央タイプIDレジストリ（新）: 各プラグインの nyash_box.toml と一致させる
+[box_types]
+FileBox     = 6
+ConsoleBox  = 5
+ArrayBox    = 10
+MapBox      = 11
+IntegerBox  = 12
+StringBox   = 13
+CounterBox  = 7
+HttpServerBox   = 20
+HttpRequestBox  = 21
+HttpResponseBox = 22
+HttpClientBox   = 23
+SocketServerBox = 30
+SocketConnBox   = 31
+SocketClientBox = 32
+MathBox     = 50
+TimeBox     = 51
+RegexBox    = 52
+EncodingBox = 53
+TOMLBox     = 54
+PathBox     = 55
+PyRuntimeBox= 40
+PyObjectBox = 41
+PythonParserBox = 60
+PythonCompilerBox = 61
+
+# 新スタイルのプラグインルート（併用可・[libraries]は後方互換）
+[plugins]
+"libnyash_filebox_plugin" = "./plugins/nyash-filebox-plugin"
+"libnyash_console_plugin" = "./plugins/nyash-console-plugin"
+"libnyash_string_plugin"  = "./plugins/nyash-string-plugin"
+"libnyash_map_plugin"     = "./plugins/nyash-map-plugin"
+"libnyash_array_plugin"   = "./plugins/nyash-array-plugin"
+"libnyash_python_plugin"  = "./plugins/nyash-python-plugin"
+"libnyash_integer_plugin" = "./plugins/nyash-integer-plugin"
+"libnyash_counter_plugin" = "./plugins/nyash-counter-plugin"
+"libnyash_net_plugin"     = "./plugins/nyash-net-plugin"
+"libnyash_math_plugin"    = "./plugins/nyash-math-plugin"
+"libnyash_python_parser_plugin"  = "./plugins/nyash-python-parser-plugin"
+"libnyash_python_compiler_plugin"  = "./plugins/nyash-python-compiler-plugin"
+"libnyash_regex_plugin"    = "./plugins/nyash-regex-plugin"
+"libnyash_encoding_plugin" = "./plugins/nyash-encoding-plugin"
+"libnyash_toml_plugin"     = "./plugins/nyash-toml-plugin"
+"libnyash_path_plugin"     = "./plugins/nyash-path-plugin"
+[libraries."libnyash_array_plugin"]
+boxes = ["ArrayBox"]
+path = "./plugins/nyash-array-plugin/target/release/libnyash_array_plugin"
+
+[libraries."libnyash_array_plugin".ArrayBox]
+type_id = 10
+
+[libraries."libnyash_array_plugin".ArrayBox.methods]
+birth = { method_id = 0 }
+length = { method_id = 1 }
+get = { method_id = 2, args = ["index"] }
+push = { method_id = 3, args = ["value"] }
+set = { method_id = 4, args = ["index", "value"] }
+fini = { method_id = 4294967295 }
+[libraries."libnyash_map_plugin"]
+boxes = ["MapBox"]
+path = "./plugins/nyash-map-plugin/target/release/libnyash_map_plugin"
+
+[libraries."libnyash_map_plugin".MapBox]
+type_id = 11
+
+[libraries."libnyash_map_plugin".MapBox.methods]
+birth = { method_id = 0 }
+size  = { method_id = 1 }
+get   = { method_id = 2, args = ["key"] }
+has   = { method_id = 3, args = ["key"] }
+set   = { method_id = 4, args = ["key", "value"] }
+fini  = { method_id = 4294967295 }
+
+# IntegerBox plugin (basic numeric box)
+[libraries."libnyash_integer_plugin"]
+boxes = ["IntegerBox"]
+path = "./plugins/nyash-integer-plugin/target/release/libnyash_integer_plugin"
+
+[libraries."libnyash_integer_plugin".IntegerBox]
+type_id = 12
+
+[libraries."libnyash_integer_plugin".IntegerBox.methods]
+birth = { method_id = 0 }
+get   = { method_id = 1 }
+set   = { method_id = 2, args = ["value"] }
+fini  = { method_id = 4294967295 }
+
+# StringBox plugin (read-only methods first)
+[libraries."libnyash_string_plugin"]
+boxes = ["StringBox"]
+path = "./plugins/nyash-string-plugin/target/release/libnyash_string_plugin"
+
+[libraries."libnyash_string_plugin".StringBox]
+type_id = 13
+
+[libraries."libnyash_string_plugin".StringBox.methods]
+birth      = { method_id = 0 }
+length     = { method_id = 1 }
+is_empty   = { method_id = 2 }
+charCodeAt = { method_id = 3, args = ["index"] }
+concat     = { method_id = 4, args = ["other"] }
+fromUtf8   = { method_id = 5, args = ["data"] }
+fini       = { method_id = 4294967295 }
+
+# Python plugin (Phase 10.5 – Embedding & FFI, initial scaffold)
+[libraries."libnyash_python_plugin"]
+boxes = ["PyRuntimeBox", "PyObjectBox"]
+path = "./plugins/nyash-python-plugin/target/release/libnyash_python_plugin"
+
+[libraries."libnyash_python_plugin".PyRuntimeBox]
+type_id = 40
+
+[libraries."libnyash_python_plugin".PyRuntimeBox.methods]
+birth  = { method_id = 0 }
+eval   = { method_id = 1, args = ["code"] }
+import = { method_id = 2, args = ["name"] }
+fini   = { method_id = 4294967295 }
+evalR  = { method_id = 11, args = ["code"], returns_result = true }
+importR= { method_id = 12, args = ["name"], returns_result = true }
+
+[libraries."libnyash_python_plugin".PyObjectBox]
+type_id = 41
+
+[libraries."libnyash_python_plugin".PyObjectBox.methods]
+birth   = { method_id = 0 }
+getattr = { method_id = 1, args = ["name"] }
+call    = { method_id = 2, args = ["args"] }
+callKw  = { method_id = 5 }
+str     = { method_id = 3 }
+fini    = { method_id = 4294967295 }
+getattrR= { method_id = 11, args = ["name"], returns_result = true }
+callR   = { method_id = 12, args = ["args"], returns_result = true }
+callKwR = { method_id = 15, returns_result = true }
+[libraries."libnyash_console_plugin"]
+boxes = ["ConsoleBox"]
+path = "./plugins/nyash-console-plugin/target/release/libnyash_console_plugin"
+
+[libraries."libnyash_console_plugin".ConsoleBox]
+type_id = 5
+
+[libraries."libnyash_console_plugin".ConsoleBox.methods]
+birth   = { method_id = 0 }
+log     = { method_id = 1, args = ["text"] }
+println = { method_id = 2, args = ["text"] }
+fini    = { method_id = 4294967295 }
+[libraries."libnyash_math_plugin"]
+boxes = ["MathBox", "TimeBox"]
+path = "./plugins/nyash-math-plugin/target/release/libnyash_math_plugin"
+
+[libraries."libnyash_math_plugin".MathBox]
+type_id = 50
+
+[libraries."libnyash_math_plugin".MathBox.methods]
+birth = { method_id = 0 }
+sqrt  = { method_id = 1, args = ["x"] }
+sin   = { method_id = 2, args = ["x"] }
+cos   = { method_id = 3, args = ["x"] }
+round = { method_id = 4, args = ["x"] }
+fini  = { method_id = 4294967295 }
+
+[libraries."libnyash_math_plugin".TimeBox]
+type_id = 51
+
+[libraries."libnyash_math_plugin".TimeBox.methods]
+birth = { method_id = 0 }
+now   = { method_id = 1 }
+fini  = { method_id = 4294967295 }
+[libraries."libnyash_regex_plugin"]
+boxes = ["RegexBox"]
+path = "./plugins/nyash-regex-plugin/target/release/libnyash_regex_plugin"
+
+[libraries."libnyash_regex_plugin".RegexBox]
+type_id = 52
+
+[libraries."libnyash_regex_plugin".RegexBox.methods]
+birth      = { method_id = 0, args = ["pattern?"] }
+compile    = { method_id = 1, args = ["pattern"] }
+isMatch    = { method_id = 2, args = ["text"], returns_result = true }
+find       = { method_id = 3, args = ["text"], returns_result = true }
+replaceAll = { method_id = 4, args = ["text", "repl"], returns_result = true }
+split      = { method_id = 5, args = ["text", "limit"], returns_result = true }
+fini       = { method_id = 4294967295 }
+
+[libraries."libnyash_encoding_plugin"]
+boxes = ["EncodingBox"]
+path = "./plugins/nyash-encoding-plugin/target/release/libnyash_encoding_plugin"
+
+[libraries."libnyash_encoding_plugin".EncodingBox]
+type_id = 53
+
+[libraries."libnyash_encoding_plugin".EncodingBox.methods]
+birth          = { method_id = 0 }
+toUtf8Bytes    = { method_id = 1, args = ["s"], returns_result = true }
+fromUtf8Bytes  = { method_id = 2, args = ["bytes"], returns_result = true }
+base64Encode   = { method_id = 3, args = ["data"], returns_result = true }
+base64Decode   = { method_id = 4, args = ["text"], returns_result = true }
+hexEncode      = { method_id = 5, args = ["data"], returns_result = true }
+hexDecode      = { method_id = 6, args = ["text"], returns_result = true }
+fini           = { method_id = 4294967295 }
+[libraries."libnyash_toml_plugin"]
+boxes = ["TOMLBox"]
+path = "./plugins/nyash-toml-plugin/target/release/libnyash_toml_plugin"
+
+[libraries."libnyash_toml_plugin".TOMLBox]
+type_id = 54
+
+[libraries."libnyash_toml_plugin".TOMLBox.methods]
+birth   = { method_id = 0 }
+parse   = { method_id = 1, args = ["text"], returns_result = true }
+get     = { method_id = 2, args = ["path"], returns_result = true }
+toJson  = { method_id = 3, returns_result = true }
+fini    = { method_id = 4294967295 }
+
+[libraries."libnyash_path_plugin"]
+boxes = ["PathBox"]
+path = "./plugins/nyash-path-plugin/target/release/libnyash_path_plugin"
+
+[libraries."libnyash_path_plugin".PathBox]
+type_id = 55
+
+[libraries."libnyash_path_plugin".PathBox.methods]
+birth     = { method_id = 0 }
+join      = { method_id = 1, args = ["base", "rest"], returns_result = true }
+dirname   = { method_id = 2, args = ["path"], returns_result = true }
+basename  = { method_id = 3, args = ["path"], returns_result = true }
+extname   = { method_id = 4, args = ["path"], returns_result = true }
+isAbs     = { method_id = 5, args = ["path"], returns_result = true }
+normalize = { method_id = 6, args = ["path"], returns_result = true }
+fini      = { method_id = 4294967295 }

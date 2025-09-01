@@ -11,29 +11,9 @@ use crate::mir::{BinaryOp, CompareOp, UnaryOp};
 use super::vm::{VM, VMError, VMValue};
 
 impl VM {
-    /// Try to view a BoxRef as a UTF-8 string (internal StringBox, Result.Ok(String-like), or plugin StringBox via toUtf8)
+    /// Try to view a BoxRef as a UTF-8 string using unified semantics
     fn try_boxref_to_string(&self, b: &dyn crate::box_trait::NyashBox) -> Option<String> {
-        // Internal StringBox
-        if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() {
-            return Some(sb.value.clone());
-        }
-        // Result.Ok(inner) → recurse
-        if let Some(res) = b.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
-            if let crate::boxes::result::NyashResultBox::Ok(inner) = res { return self.try_boxref_to_string(inner.as_ref()); }
-        }
-        // Plugin StringBox → call toUtf8
-        if let Some(pb) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-            if pb.box_type == "StringBox" {
-                let host = crate::runtime::get_global_plugin_host();
-                let tmp: Option<String> = if let Ok(ro) = host.read() {
-                    if let Ok(val_opt) = ro.invoke_instance_method("StringBox", "toUtf8", pb.inner.instance_id, &[]) {
-                        if let Some(vb) = val_opt { if let Some(sb2) = vb.as_any().downcast_ref::<crate::box_trait::StringBox>() { Some(sb2.value.clone()) } else { None } } else { None }
-                    } else { None }
-                } else { None };
-                if tmp.is_some() { return tmp; }
-            }
-        }
-        None
+        crate::runtime::semantics::coerce_to_string(b)
     }
     /// Execute binary operation
     pub(super) fn execute_binary_op(&self, op: &BinaryOp, left: &VMValue, right: &VMValue) -> Result<VMValue, VMError> {

@@ -28,6 +28,9 @@ pub trait IRBuilder {
     fn emit_jump(&mut self);
     fn emit_branch(&mut self);
     fn emit_return(&mut self);
+    /// Select between two i64 values using top-of-stack condition (b1 or i64 0/1).
+    /// Stack order: ... cond then_val else_val -> result
+    fn emit_select_i64(&mut self) { }
     /// Phase 10_d scaffolding: host-call emission (symbolic)
     fn emit_host_call(&mut self, _symbol: &str, _argc: usize, _has_ret: bool) { }
     /// Typed host-call emission: params kinds and return type hint (f64 when true)
@@ -101,6 +104,7 @@ impl IRBuilder for NoopBuilder {
     fn emit_jump(&mut self) { self.branches += 1; }
     fn emit_branch(&mut self) { self.branches += 1; }
     fn emit_return(&mut self) { self.rets += 1; }
+    fn emit_select_i64(&mut self) { self.binops += 1; }
     fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], has_ret: bool, _ret_is_f64: bool) { if has_ret { self.consts += 1; } }
     fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
     fn emit_plugin_invoke_by_name(&mut self, _method: &str, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
@@ -134,6 +138,9 @@ pub struct CraneliftBuilder {
     typed_sig_prepared: bool,
     // Return-type hint: function returns boolean (footing only; ABI remains i64 for now)
     ret_hint_is_b1: bool,
+    // Single-exit epilogue (jit-direct stability): ret block + i64 slot
+    ret_block: Option<cranelift_codegen::ir::Block>,
+    ret_slot: Option<cranelift_codegen::ir::StackSlot>,
 }
 
 #[cfg(feature = "cranelift-jit")]
@@ -143,6 +150,15 @@ use cranelift_codegen::ir::InstBuilder;
 
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_host_stub0() -> i64 { 0 }
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_jit_dbg_i64(tag: i64, val: i64) -> i64 {
+    eprintln!("[JIT-DBG] tag={} val={}", tag, val);
+    val
+}
+#[cfg(feature = "cranelift-jit")]
+extern "C" fn nyash_jit_block_enter(idx: i64) {
+    eprintln!("[JIT-BLOCK] enter={}", idx);
+}
 #[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     use crate::runtime::plugin_loader_v2::PluginBoxV2;
@@ -539,6 +555,8 @@ use super::extern_thunks::{
     nyash_string_concat_hh, nyash_string_eq_hh, nyash_string_lt_hh,
     nyash_any_length_h, nyash_any_is_empty_h, nyash_console_birth_h,
 };
+#[cfg(feature = "cranelift-jit")]
+use crate::jit::r#extern::r#async::nyash_future_await_h;
 
 #[cfg(feature = "cranelift-jit")]
 use crate::{
@@ -746,6 +764,16 @@ impl IRBuilder for CraneliftBuilder {
         // Defer sealing to allow entry PHI params when needed
         self.entry_block = Some(entry);
         self.current_block_index = Some(0);
+        // Prepare single-exit epilogue artifacts (ret_block with one i64 param)
+        {
+            use cranelift_codegen::ir::types;
+            let rb = fb.create_block();
+            self.ret_block = Some(rb);
+            // Single i64 param to carry merged return value
+            fb.append_block_param(rb, types::I64);
+            // Stop using ret_slot in block-param mode
+            self.ret_slot = None;
+        }
         fb.finalize();
     }
 
@@ -754,6 +782,38 @@ impl IRBuilder for CraneliftBuilder {
         use cranelift_module::{Linkage, Module};
         if self.entry_block.is_none() {
             return;
+        }
+
+        // Build single-exit epilogue before defining function
+        {
+            use cranelift_frontend::FunctionBuilder;
+            use cranelift_codegen::ir::types;
+            if let Some(rb) = self.ret_block {
+                let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+                fb.switch_to_block(rb);
+                if fb.func.signature.returns.is_empty() {
+                    fb.ins().return_(&[]);
+                } else {
+                    let params = fb.func.dfg.block_params(rb).to_vec();
+                    let mut v = params.get(0).copied().unwrap_or_else(|| fb.ins().iconst(types::I64, 0));
+                    // Optional debug
+                    if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") {
+                        use cranelift_codegen::ir::{AbiParam, Signature}; use cranelift_module::Linkage;
+                        let mut sig = Signature::new(self.module.isa().default_call_conv());
+                        sig.params.push(AbiParam::new(types::I64));
+                        sig.params.push(AbiParam::new(types::I64));
+                        sig.returns.push(AbiParam::new(types::I64));
+                        let fid = self.module.declare_function("nyash.jit.dbg_i64", Linkage::Import, &sig).expect("declare dbg_i64");
+                        let fref = self.module.declare_func_in_func(fid, fb.func);
+                        let tag = fb.ins().iconst(types::I64, 200);
+                        let _ = fb.ins().call(fref, &[tag, v]);
+                    }
+                    let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(types::I64);
+                    if ret_ty == types::F64 { v = fb.ins().fcvt_from_sint(types::F64, v); }
+                    fb.ins().return_(&[v]);
+                }
+                fb.finalize();
+            }
         }
 
         // Declare a unique function symbol for JIT
@@ -873,6 +933,9 @@ impl IRBuilder for CraneliftBuilder {
                 jb.symbol(c::SYM_STRING_CONCAT_HH, nyash_string_concat_hh as *const u8);
                 jb.symbol(c::SYM_STRING_EQ_HH, nyash_string_eq_hh as *const u8);
                 jb.symbol(c::SYM_STRING_LT_HH, nyash_string_lt_hh as *const u8);
+                use crate::jit::lower::extern_thunks::nyash_semantics_add_hh;
+                // Unified semantics ops
+                jb.symbol(crate::jit::r#extern::collections::SYM_SEMANTICS_ADD_HH, nyash_semantics_add_hh as *const u8);
                 jb.symbol(b::SYM_BOX_BIRTH_H, nyash_box_birth_h as *const u8);
                 jb.symbol("nyash.box.birth_i64", nyash_box_birth_i64 as *const u8);
                 // Handle helpers
@@ -1006,60 +1069,85 @@ impl IRBuilder for CraneliftBuilder {
         self.stats.2 += 1;
         fb.finalize();
     }
+    fn emit_select_i64(&mut self) {
+        use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::{types, condcodes::IntCC};
+        // Expect stack: ... cond then else
+        if self.value_stack.len() < 3 { return; }
+        let mut else_v = self.value_stack.pop().unwrap();
+        let mut then_v = self.value_stack.pop().unwrap();
+        let mut cond_v = self.value_stack.pop().unwrap();
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        // Normalize types
+        let cty = fb.func.dfg.value_type(cond_v);
+        if cty == types::I64 {
+            cond_v = fb.ins().icmp_imm(IntCC::NotEqual, cond_v, 0);
+            crate::jit::rt::b1_norm_inc(1);
+        }
+        let tty = fb.func.dfg.value_type(then_v);
+        if tty != types::I64 { then_v = fb.ins().fcvt_to_sint(types::I64, then_v); }
+        let ety = fb.func.dfg.value_type(else_v);
+        if ety != types::I64 { else_v = fb.ins().fcvt_to_sint(types::I64, else_v); }
+        // Optional runtime debug
+        if std::env::var("NYASH_JIT_TRACE_SEL").ok().as_deref() == Some("1") {
+            use cranelift_codegen::ir::{AbiParam, Signature};
+            use cranelift_module::Linkage;
+            let mut sig = Signature::new(self.module.isa().default_call_conv());
+            sig.params.push(AbiParam::new(types::I64));
+            sig.params.push(AbiParam::new(types::I64));
+            sig.returns.push(AbiParam::new(types::I64));
+            let fid = self.module
+                .declare_function("nyash.jit.dbg_i64", Linkage::Import, &sig)
+                .expect("declare dbg_i64");
+            let fref = self.module.declare_func_in_func(fid, fb.func);
+            let t_cond = fb.ins().iconst(types::I64, 100);
+            let one = fb.ins().iconst(types::I64, 1);
+            let zero = fb.ins().iconst(types::I64, 0);
+            let ci = fb.ins().select(cond_v, one, zero);
+            let _ = fb.ins().call(fref, &[t_cond, ci]);
+            let t_then = fb.ins().iconst(types::I64, 101);
+            let _ = fb.ins().call(fref, &[t_then, then_v]);
+            let t_else = fb.ins().iconst(types::I64, 102);
+            let _ = fb.ins().call(fref, &[t_else, else_v]);
+        }
+        let sel = fb.ins().select(cond_v, then_v, else_v);
+        self.value_stack.push(sel);
+        fb.finalize();
+    }
     fn emit_jump(&mut self) { self.stats.3 += 1; }
     fn emit_branch(&mut self) { self.stats.3 += 1; }
 
     fn emit_return(&mut self) {
         use cranelift_frontend::FunctionBuilder;
+        use cranelift_codegen::ir::{types, condcodes::IntCC};
         self.stats.4 += 1;
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-        // If function has no return values, emit a plain return
         if fb.func.signature.returns.is_empty() {
             fb.ins().return_(&[]);
             fb.finalize();
             return;
         }
-        if let Some(mut v) = self.value_stack.pop() {
-            // Normalize return type if needed
-            let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(cranelift_codegen::ir::types::I64);
-            let v_ty = fb.func.dfg.value_type(v);
-            if v_ty != ret_ty {
-                use cranelift_codegen::ir::types;
-                if ret_ty == types::F64 && v_ty == types::I64 {
-                    v = fb.ins().fcvt_from_sint(types::F64, v);
-                } else if ret_ty == types::I64 && v_ty == types::F64 {
-                    v = fb.ins().fcvt_to_sint(types::I64, v);
-                } else if ret_ty == types::I64 {
-                    // If returning i64 but we currently have a boolean, normalize via select(b1,1,0)
-                    use cranelift_codegen::ir::types;
-                    let one = fb.ins().iconst(types::I64, 1);
-                    let zero = fb.ins().iconst(types::I64, 0);
-                    v = fb.ins().select(v, one, zero);
-                }
-                #[cfg(feature = "jit-b1-abi")]
-                {
-                    use cranelift_codegen::ir::types;
-                    if ret_ty == types::B1 && v_ty == types::I64 {
-                        use cranelift_codegen::ir::condcodes::IntCC;
-                        v = fb.ins().icmp_imm(IntCC::NotEqual, v, 0);
-                    }
-                }
-            }
-            fb.ins().return_(&[v]);
-        } else {
-            // Return 0 if empty stack (defensive)
-            use cranelift_codegen::ir::types;
-            let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(types::I64);
-            if ret_ty == types::F64 {
-                let z = fb.ins().f64const(0.0);
-                fb.ins().return_(&[z]);
-            } else {
-                let zero = fb.ins().iconst(types::I64, 0);
-                fb.ins().return_(&[zero]);
-            }
+        let mut v = if let Some(x) = self.value_stack.pop() { x } else { fb.ins().iconst(types::I64, 0) };
+        let v_ty = fb.func.dfg.value_type(v);
+        if v_ty != types::I64 {
+            if v_ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); }
+            else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); v = fb.ins().select(v, one, zero); }
         }
+        if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") {
+            use cranelift_codegen::ir::{AbiParam, Signature}; use cranelift_module::Linkage;
+            let mut sig = Signature::new(self.module.isa().default_call_conv());
+            sig.params.push(AbiParam::new(types::I64));
+            sig.params.push(AbiParam::new(types::I64));
+            sig.returns.push(AbiParam::new(types::I64));
+            let fid = self.module.declare_function("nyash.jit.dbg_i64", Linkage::Import, &sig).expect("declare dbg_i64");
+            let fref = self.module.declare_func_in_func(fid, fb.func);
+            let tag = fb.ins().iconst(types::I64, 201);
+            let _ = fb.ins().call(fref, &[tag, v]);
+        }
+        if let Some(rb) = self.ret_block { fb.ins().jump(rb, &[v]); }
         fb.finalize();
     }
 
@@ -1303,6 +1391,7 @@ impl IRBuilder for CraneliftBuilder {
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         // Take top-of-stack as cond; if it's i64, normalize to b1 via icmp_imm != 0
+        let had_cond = !self.value_stack.is_empty();
         let cond_b1 = if let Some(v) = self.value_stack.pop() {
             let ty = fb.func.dfg.value_type(v);
             if ty == types::I64 {
@@ -1319,7 +1408,16 @@ impl IRBuilder for CraneliftBuilder {
             crate::jit::rt::b1_norm_inc(1);
             out
         };
-        fb.ins().brif(cond_b1, self.blocks[then_index], &[], self.blocks[else_index], &[]);
+        if std::env::var("NYASH_JIT_TRACE_BR").ok().as_deref() == Some("1") {
+            eprintln!("[JIT-CLIF] br_if cond_present={} then={} else={}", had_cond, then_index, else_index);
+        }
+        // NOTE: If branch direction appears inverted, swap targets here to validate mapping.
+        let swap = std::env::var("NYASH_JIT_SWAP_THEN_ELSE").ok().as_deref() == Some("1");
+        if swap {
+            fb.ins().brif(cond_b1, self.blocks[else_index], &[], self.blocks[then_index], &[]);
+        } else {
+            fb.ins().brif(cond_b1, self.blocks[then_index], &[], self.blocks[else_index], &[]);
+        }
         self.stats.3 += 1;
         fb.finalize();
     }
@@ -1348,6 +1446,9 @@ impl IRBuilder for CraneliftBuilder {
                 let _v = fb.append_block_param(b, types::I64);
             }
             self.block_param_counts.insert(index, needed);
+            if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+                eprintln!("[JIT-CLIF] ensure_block_params bb={} now={}", index, needed);
+            }
         }
         fb.finalize();
     }
@@ -1363,6 +1464,9 @@ impl IRBuilder for CraneliftBuilder {
         // Ensure we have an active insertion point before emitting any instructions
         fb.switch_to_block(b);
         let params = fb.func.dfg.block_params(b).to_vec();
+        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+            eprintln!("[JIT-CLIF] push_block_param_i64_at pos={} available={}", pos, params.len());
+        }
         if let Some(v) = params.get(pos).copied() { self.value_stack.push(v); }
         else {
             // defensive fallback
@@ -1377,6 +1481,9 @@ impl IRBuilder for CraneliftBuilder {
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         let b = if let Some(idx) = self.current_block_index { self.blocks[idx] } else if let Some(b) = self.entry_block { b } else { fb.create_block() };
         let params = fb.func.dfg.block_params(b).to_vec();
+        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+            eprintln!("[JIT-CLIF] push_block_param_b1_at pos={} available={}", pos, params.len());
+        }
         if let Some(v) = params.get(pos).copied() {
             let ty = fb.func.dfg.value_type(v);
             let b1 = if ty == types::I64 { fb.ins().icmp_imm(IntCC::NotEqual, v, 0) } else { v };
@@ -1395,7 +1502,14 @@ impl IRBuilder for CraneliftBuilder {
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-        // Condition
+        // Pop else args then then args (so stack order can be value-friendly)
+        let mut else_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        for _ in 0..else_n { if let Some(v) = self.value_stack.pop() { else_args.push(v); } }
+        else_args.reverse();
+        let mut then_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        for _ in 0..then_n { if let Some(v) = self.value_stack.pop() { then_args.push(v); } }
+        then_args.reverse();
+        // Now pop condition last (it was pushed first by LowerCore)
         let cond_b1 = if let Some(v) = self.value_stack.pop() {
             let ty = fb.func.dfg.value_type(v);
             if ty == types::I64 { let out = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); crate::jit::rt::b1_norm_inc(1); out } else { v }
@@ -1405,13 +1519,9 @@ impl IRBuilder for CraneliftBuilder {
             crate::jit::rt::b1_norm_inc(1);
             out
         };
-        // Pop else args then then args (so stack order can be value-friendly)
-        let mut else_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
-        for _ in 0..else_n { if let Some(v) = self.value_stack.pop() { else_args.push(v); } }
-        else_args.reverse();
-        let mut then_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
-        for _ in 0..then_n { if let Some(v) = self.value_stack.pop() { then_args.push(v); } }
-        then_args.reverse();
+        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+            eprintln!("[JIT-CLIF] br_if_with_args then_n={} else_n={}", then_n, else_n);
+        }
         fb.ins().brif(cond_b1, self.blocks[then_index], &then_args, self.blocks[else_index], &else_args);
         self.stats.3 += 1;
         fb.finalize();
@@ -1425,6 +1535,9 @@ impl IRBuilder for CraneliftBuilder {
         let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
         for _ in 0..n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
         args.reverse();
+        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+            eprintln!("[JIT-CLIF] jump_with_args target={} n={}", target_index, n);
+        }
         fb.ins().jump(self.blocks[target_index], &args);
         self.stats.3 += 1;
         fb.finalize();
@@ -1683,26 +1796,25 @@ impl IRBuilder for ObjectBuilder {
     fn emit_jump(&mut self) { self.stats.3 += 1; }
     fn emit_branch(&mut self) { self.stats.3 += 1; }
     fn emit_return(&mut self) {
-        use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::types;
+        use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::{types, condcodes::IntCC};
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); } else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+        // If function has no return, just return
         if fb.func.signature.returns.is_empty() {
             fb.ins().return_(&[]);
             fb.finalize();
             return;
         }
-        if let Some(mut v) = self.value_stack.pop() {
-            let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(types::I64);
-            let v_ty = fb.func.dfg.value_type(v);
-            if v_ty != ret_ty {
-                if ret_ty == types::F64 && v_ty == types::I64 { v = fb.ins().fcvt_from_sint(types::F64, v); }
-                else if ret_ty == types::I64 && v_ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); }
-                else if ret_ty == types::I64 { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); use cranelift_codegen::ir::condcodes::IntCC; let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); }
-            }
-            fb.ins().return_(&[v]);
-        } else {
-            let z = fb.ins().iconst(types::I64, 0); fb.ins().return_(&[z]);
+        // Normalize to function return type and return directly (ObjectBuilder has no ret_block)
+        let mut v = if let Some(x) = self.value_stack.pop() { x } else { fb.ins().iconst(types::I64, 0) };
+        let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(types::I64);
+        let v_ty = fb.func.dfg.value_type(v);
+        if ret_ty != v_ty {
+            if ret_ty == types::F64 && v_ty == types::I64 { v = fb.ins().fcvt_from_sint(types::F64, v); }
+            else if ret_ty == types::I64 && v_ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); }
+            else if ret_ty == types::I64 { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); }
         }
+        fb.ins().return_(&[v]);
         fb.finalize();
     }
     fn emit_host_call(&mut self, symbol: &str, argc: usize, has_ret: bool) {
@@ -1751,7 +1863,7 @@ impl IRBuilder for ObjectBuilder {
         fb.finalize();
     }
     fn prepare_blocks(&mut self, count: usize) { use cranelift_frontend::FunctionBuilder; if count == 0 { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if self.blocks.len() < count { for _ in 0..(count - self.blocks.len()) { self.blocks.push(fb.create_block()); } } fb.finalize(); }
-    fn switch_to_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.switch_to_block(self.blocks[index]); self.current_block_index = Some(index); fb.finalize(); }
+    fn switch_to_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::{types, AbiParam, Signature}; use cranelift_module::Linkage; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.switch_to_block(self.blocks[index]); if std::env::var("NYASH_JIT_TRACE_BLOCKS").ok().as_deref() == Some("1") { let mut sig = Signature::new(self.module.isa().default_call_conv()); sig.params.push(AbiParam::new(types::I64)); let fid = self.module.declare_function("nyash.jit.block_enter", Linkage::Import, &sig).expect("declare block_enter"); let fref = self.module.declare_func_in_func(fid, fb.func); let bi = fb.ins().iconst(types::I64, index as i64); let _ = fb.ins().call(fref, &[bi]); } self.current_block_index = Some(index); fb.finalize(); }
     fn seal_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.seal_block(self.blocks[index]); fb.finalize(); }
     fn br_if_top_is_true(&mut self, then_index: usize, else_index: usize) {
         use cranelift_codegen::ir::{types, condcodes::IntCC};
@@ -1780,6 +1892,9 @@ impl IRBuilder for ObjectBuilder {
             let b = self.blocks[index];
             for _ in have..count { let _ = fb.append_block_param(b, cranelift_codegen::ir::types::I64); }
             self.block_param_counts.insert(index, count);
+            if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+                eprintln!("[JIT-CLIF] ensure_block_params bb={} now={}", index, count);
+            }
         }
         fb.finalize();
     }
@@ -1790,6 +1905,9 @@ impl IRBuilder for ObjectBuilder {
         let b = if let Some(idx) = self.current_block_index { self.blocks[idx] } else if let Some(b) = self.entry_block { b } else { fb.create_block() };
         fb.switch_to_block(b);
         let params = fb.func.dfg.block_params(b).to_vec();
+        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+            eprintln!("[JIT-CLIF] push_block_param_i64_at pos={} available={}", pos, params.len());
+        }
         if let Some(v) = params.get(pos).copied() { self.value_stack.push(v); }
         else { let z = fb.ins().iconst(types::I64, 0); self.value_stack.push(z); }
         fb.finalize();
@@ -1820,6 +1938,13 @@ impl CraneliftBuilder {
             .expect("failed to create JITBuilder");
             // Register host-call symbols (PoC: map to simple C-ABI stubs)
             builder.symbol("nyash.host.stub0", nyash_host_stub0 as *const u8);
+            builder.symbol("nyash.jit.dbg_i64", nyash_jit_dbg_i64 as *const u8);
+            // Async/Future
+            builder.symbol(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, nyash_future_await_h as *const u8);
+            builder.symbol("nyash.jit.block_enter", nyash_jit_block_enter as *const u8);
+            // Async/Future
+            builder.symbol(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, nyash_future_await_h as *const u8);
+            builder.symbol("nyash.jit.dbg_i64", nyash_jit_dbg_i64 as *const u8);
         {
             use crate::jit::r#extern::collections as c;
             use crate::jit::r#extern::{handles as h, birth as b, runtime as r};
@@ -1869,6 +1994,9 @@ impl CraneliftBuilder {
             // Plugin invoke shims (i64/f64)
             builder.symbol("nyash_plugin_invoke3_i64", nyash_plugin_invoke3_i64 as *const u8);
             builder.symbol("nyash_plugin_invoke3_f64", nyash_plugin_invoke3_f64 as *const u8);
+            // JIT debug helpers (conditionally called when env toggles are set)
+            builder.symbol("nyash.jit.dbg_i64", nyash_jit_dbg_i64 as *const u8);
+            builder.symbol("nyash.jit.block_enter", nyash_jit_block_enter as *const u8);
             // By-name plugin invoke shims (method-name specific)
             builder.symbol("nyash_plugin_invoke_name_getattr_i64", nyash_plugin_invoke_name_getattr_i64 as *const u8);
             builder.symbol("nyash_plugin_invoke_name_call_i64", nyash_plugin_invoke_name_call_i64 as *const u8);
@@ -1895,6 +2023,8 @@ impl CraneliftBuilder {
             desired_ret_is_f64: false,
             typed_sig_prepared: false,
             ret_hint_is_b1: false,
+            ret_block: None,
+            ret_slot: None,
         }
     }
 

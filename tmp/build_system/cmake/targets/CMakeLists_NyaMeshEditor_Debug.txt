@@ -1,0 +1,301 @@
+# ===============================================
+# NyaMesh Editor DEBUG - CMake Build Configuration
+# ===============================================
+# 
+# デバッグ用コンソールアプリケーション:
+# - コンソール出力有効
+# - WIN32_EXECUTABLE FALSE（コンソール表示）
+# - 詳細ログ出力
+# - デバッグ情報付きビルド
+# 
+# Generated: 2025-07-29
+# ===============================================
+
+cmake_minimum_required(VERSION 3.20)
+
+# プロジェクト設定
+project(NyaMeshEditorDebug 
+    VERSION 1.0.0 
+    DESCRIPTION "NyaMesh Editor DEBUG - Console Application"
+    LANGUAGES CXX
+)
+
+# C++標準設定
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# プロジェクトルート設定（安全なパス解決）
+get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" ABSOLUTE)
+while(NOT EXISTS "${PROJECT_ROOT}/cores_v23")
+    get_filename_component(PROJECT_ROOT "${PROJECT_ROOT}/.." ABSOLUTE)
+    if("${PROJECT_ROOT}" STREQUAL "/")
+        message(FATAL_ERROR "Could not find project root (cores_v23 directory not found)")
+    endif()
+endwhile()
+message(STATUS "Project Root: ${PROJECT_ROOT}")
+
+# ===============================================
+# 依存関係設定
+# ===============================================
+
+# Qt6検索・設定
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+set(CMAKE_AUTOMOC ON)
+
+# nlohmann::json取得（FetchContent使用）
+include(FetchContent)
+
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+    URL_HASH SHA256=8c4b26bf4b422252e13f332bc5e388ec0ab5c3443d24399acb675e68278d341f
+    DOWNLOAD_EXTRACT_TIMESTAMP true
+)
+
+FetchContent_MakeAvailable(nlohmann_json)
+
+# ===============================================
+# インクルードディレクトリ設定
+# ===============================================
+
+include_directories(
+    ${PROJECT_ROOT}
+    ${PROJECT_ROOT}/nyamesh/core
+    ${PROJECT_ROOT}/cores_v23/base
+    ${PROJECT_ROOT}/cores_v23/editor
+    ${PROJECT_ROOT}/cores_v23/settings
+    ${PROJECT_ROOT}/cores_v23/filesystem
+    ${PROJECT_ROOT}/cores_v23/ui
+    ${PROJECT_ROOT}/cores_v23/localization
+    ${PROJECT_ROOT}/cores_v23/quickaccess
+    ${PROJECT_ROOT}/cores_v23/app
+    ${Qt6Core_INCLUDE_DIRS}
+    ${Qt6Widgets_INCLUDE_DIRS}
+    ${Qt6Gui_INCLUDE_DIRS}
+)
+
+# ===============================================
+# ソースファイル定義
+# ===============================================
+
+# NyaMesh Editor メインアプリケーション
+set(NYAMESH_EDITOR_SOURCES
+    ${PROJECT_ROOT}/cores_v23/app/nyamesh_editor.cpp
+    ${PROJECT_ROOT}/cores_v23/app/nyamesh_editor.h
+)
+
+# 6コア統合ソース
+set(CORES_V23_SOURCES
+    # Base Classes
+    ${PROJECT_ROOT}/cores_v23/base/UltraLightCoreBase_Integrated.cpp
+    ${PROJECT_ROOT}/cores_v23/base/UltraLightCoreBase_Integrated.h
+    
+    # Editor Core
+    ${PROJECT_ROOT}/cores_v23/editor/EditorCore_v23_Integrated.cpp
+    ${PROJECT_ROOT}/cores_v23/editor/EditorCore_v23_Integrated.h
+    
+    # Settings Core
+    ${PROJECT_ROOT}/cores_v23/settings/SettingsCore_v23_Integrated.cpp
+    ${PROJECT_ROOT}/cores_v23/settings/SettingsCore_v23_Integrated.h
+    
+    # FileSystem Core
+    ${PROJECT_ROOT}/cores_v23/filesystem/FileSystemCore_v23_Integrated.cpp
+    ${PROJECT_ROOT}/cores_v23/filesystem/FileSystemCore_v23_Integrated.h
+    
+    # UI Core
+    ${PROJECT_ROOT}/cores_v23/ui/UICore_v23_Integrated.cpp
+    ${PROJECT_ROOT}/cores_v23/ui/UICore_v23_Integrated.h
+    
+    # Localization Core
+    ${PROJECT_ROOT}/cores_v23/localization/LocalizationCore_v23_Integrated.cpp
+    ${PROJECT_ROOT}/cores_v23/localization/LocalizationCore_v23_Integrated.h
+    
+    # QuickAccess Core  
+    ${PROJECT_ROOT}/cores_v23/quickaccess/QuickAccessCore_v23_Integrated_HeaderCompliant.cpp
+    ${PROJECT_ROOT}/cores_v23/quickaccess/QuickAccessCore_v23_Integrated.h
+)
+
+# NyaMesh Transport Layer
+set(NYAMESH_SOURCES
+    ${PROJECT_ROOT}/nyamesh/core/nyamesh.cpp
+    ${PROJECT_ROOT}/nyamesh/core/nyamesh.h
+    ${PROJECT_ROOT}/nyamesh/messages/CoreMessages.cpp
+    ${PROJECT_ROOT}/nyamesh/messages/CoreMessages.h
+    ${PROJECT_ROOT}/nyamesh/transport/NyaMesh2TransportAdapter.cpp
+    ${PROJECT_ROOT}/nyamesh/transport/NyaMesh2TransportAdapter.h
+    ${PROJECT_ROOT}/nyamesh/transport/InProcessTransport.cpp
+    ${PROJECT_ROOT}/nyamesh/transport/InProcessTransport.h
+    ${PROJECT_ROOT}/nyamesh/debug/NyaMeshDebugLogger.cpp
+    ${PROJECT_ROOT}/nyamesh/debug/NyaMeshDebugLogger.h
+    ${PROJECT_ROOT}/nyamesh/intents/IntentCommonOptions.cpp
+    ${PROJECT_ROOT}/nyamesh/intents/IntentCommonOptions.h
+)
+
+# デバッグ用テストアプリケーション作成（メイン関数）
+set(DEBUG_MAIN_SOURCE
+    ${CMAKE_CURRENT_BINARY_DIR}/debug_nyamesh_editor_main.cpp
+)
+
+# デバッグ用メイン関数自動生成
+file(WRITE ${DEBUG_MAIN_SOURCE} "
+/**
+ * @file debug_nyamesh_editor_main.cpp
+ * @brief NyaMesh Editor DEBUG テストアプリケーション - 自動生成
+ */
+
+#include \"cores_v23/app/nyamesh_editor.h\"
+#include <QApplication>
+#include <iostream>
+#include <QWidget>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QLabel>
+#include <QTextEdit>
+
+// Simple debug widget to test Qt display
+class DebugWidget : public QWidget {
+public:
+    DebugWidget() {
+        std::cout << \"[DEBUG] Creating DebugWidget...\" << std::endl;
+        
+        setWindowTitle(\"NyaMesh Editor DEBUG - Window Test\");
+        setMinimumSize(800, 600);
+        
+        auto* layout = new QVBoxLayout(this);
+        
+        auto* label = new QLabel(\"DEBUG: If you can see this, Qt rendering works!\", this);
+        auto* button = new QPushButton(\"Test Button - Click to verify Qt events\", this);
+        auto* textEdit = new QTextEdit(\"Type here to test text input...\", this);
+        
+        layout->addWidget(label);
+        layout->addWidget(button);
+        layout->addWidget(textEdit);
+        
+        // Connect button to test events
+        connect(button, &QPushButton::clicked, [this]() {
+            std::cout << \"[DEBUG] Button clicked - Qt events working!\" << std::endl;
+        });
+        
+        std::cout << \"[DEBUG] DebugWidget created successfully\" << std::endl;
+    }
+};
+
+int main(int argc, char* argv[]) {
+    std::cout << \"=== NyaMesh Editor v23 DEBUG Starting ===\" << std::endl;
+    
+    QApplication app(argc, argv);
+    app.setApplicationName(\"NyaMesh Editor DEBUG\");
+    app.setApplicationVersion(\"1.0.0-DEBUG\");
+    app.setOrganizationName(\"NyaMesh Project\");
+    
+    std::cout << \"[DEBUG] QApplication created successfully\" << std::endl;
+    
+    try {
+        std::cout << \"[DEBUG] Testing simple Qt widget first...\" << std::endl;
+        
+        // First test: Simple Qt widget
+        auto debugWidget = std::make_unique<DebugWidget>();
+        debugWidget->show();
+        
+        std::cout << \"[DEBUG] Simple widget shown, now testing NyaMeshEditor...\" << std::endl;
+        
+        // Second test: NyaMeshEditor
+        auto editor = std::make_unique<charmcode::NyaMeshEditor>();
+        editor->show();
+        
+        std::cout << \"[DEBUG] NyaMeshEditor created and shown\" << std::endl;
+        std::cout << \"[DEBUG] Features: 6-Core Integration, Intent-Driven UI, VSCode-style Interface\" << std::endl;
+        std::cout << \"[DEBUG] Starting Qt event loop...\" << std::endl;
+        
+        int result = app.exec();
+        
+        std::cout << \"=== NyaMesh Editor DEBUG Shutdown ===\" << std::endl;
+        return result;
+        
+    } catch (const std::exception& e) {
+        std::cerr << \"[DEBUG] ERROR: \" << e.what() << std::endl;
+        return 1;
+    }
+}
+")
+
+# ===============================================
+# ターゲット定義
+# ===============================================
+
+# 実行ファイル作成（コンソールアプリケーション）
+add_executable(NyaMeshEditorDebug
+    ${NYAMESH_EDITOR_SOURCES}
+    ${CORES_V23_SOURCES}
+    ${NYAMESH_SOURCES}
+    ${DEBUG_MAIN_SOURCE}
+)
+
+# ターゲットプロパティ設定
+set_target_properties(NyaMeshEditorDebug PROPERTIES
+    OUTPUT_NAME "NyaMeshEditor_v23_Debug"
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    WIN32_EXECUTABLE FALSE  # コンソールアプリケーション（重要！）
+)
+
+# ===============================================
+# リンク設定
+# ===============================================
+
+# Qt6ライブラリリンク
+target_link_libraries(NyaMeshEditorDebug
+    Qt6::Core
+    Qt6::Widgets  
+    Qt6::Gui
+    nlohmann_json::nlohmann_json
+)
+
+# Windows固有設定
+if(WIN32)
+    # デバッグ用コンソール設定
+    set_target_properties(NyaMeshEditorDebug PROPERTIES
+        WIN32_EXECUTABLE FALSE
+        LINK_FLAGS "/SUBSYSTEM:CONSOLE"
+    )
+endif()
+
+# Linux固有設定  
+if(UNIX AND NOT APPLE)
+    target_link_libraries(NyaMeshEditorDebug
+        pthread
+        dl
+    )
+endif()
+
+# ===============================================
+# コンパイル設定
+# ===============================================
+
+# デバッグ用コンパイル定義
+target_compile_definitions(NyaMeshEditorDebug PRIVATE
+    NYAMESH_EDITOR_DEBUG
+    NYAMESH_EDITOR_VERSION="1.0.0-DEBUG"
+    NYAMESH_6CORE_INTEGRATED
+)
+
+# 警告レベル設定（デバッグ用）
+if(MSVC)
+    target_compile_options(NyaMeshEditorDebug PRIVATE /W3 /utf-8 /Zi)
+else()
+    target_compile_options(NyaMeshEditorDebug PRIVATE -Wall -Wextra -Wpedantic -g)
+endif()
+
+# ===============================================
+# ビルド情報表示
+# ===============================================
+
+message(STATUS "=== NyaMesh Editor DEBUG Build Configuration ===")
+message(STATUS "Build Type: DEBUG (Console Application)")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Qt Version: ${Qt6_VERSION}")
+message(STATUS "Project Root: ${PROJECT_ROOT}")
+message(STATUS "Target: NyaMeshEditor_v23_Debug (Console)")
+message(STATUS "Features: Debug Logging, Console Output, Simple Widget Test")
+message(STATUS "===============================================")

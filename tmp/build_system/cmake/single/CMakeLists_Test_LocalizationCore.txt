@@ -1,0 +1,82 @@
+# CMakeLists_Test_LocalizationCore.txt
+# LocalizationCore単体テスト用 CMake設定ファイル
+
+cmake_minimum_required(VERSION 3.16)
+project(Test_LocalizationCore_v23_Integrated)
+
+# C++20標準を使用
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Qt6パッケージの検索
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+
+# MSVCでUTF-8サポートを有効化（日本語コメント対応）
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
+# インクルードディレクトリ
+include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/nyamesh/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/nyamesh/transport
+    ${CMAKE_CURRENT_SOURCE_DIR}/nyamesh/messages
+    ${CMAKE_CURRENT_SOURCE_DIR}/cores_v23/base
+    ${CMAKE_CURRENT_SOURCE_DIR}/cores_v23/localization
+)
+
+# nlohmann/json（FetchContent使用）
+include(FetchContent)
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE
+)
+
+# JSON_BuildTests OFF: テスト無効化（高速化）
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+FetchContent_MakeAvailable(nlohmann_json)
+
+# ソースファイル
+set(NYAMESH_SOURCES
+    # NyaMesh Core (minimum)
+    nyamesh/core/nyamesh.cpp
+    nyamesh/transport/InProcessTransport.cpp
+    nyamesh/transport/NyaMesh2TransportAdapter.cpp
+    nyamesh/debug/NyaMeshDebugLogger.cpp
+    nyamesh/intents/IntentCommonOptions.cpp
+    
+    # UltraLightCoreBase統合基盤
+    cores_v23/base/UltraLightCoreBase_Integrated.cpp
+    
+    # LocalizationCore実装
+    cores_v23/localization/LocalizationCore_v23_Integrated.cpp
+)
+
+# 実行ファイル作成
+add_executable(Test_LocalizationCore_v23_Integrated
+    tests/Test_LocalizationCore_v23_Integrated.cpp
+    ${NYAMESH_SOURCES}
+)
+
+# ライブラリリンク
+target_link_libraries(Test_LocalizationCore_v23_Integrated
+    Qt6::Core
+    Qt6::Widgets
+    nlohmann_json::nlohmann_json
+)
+
+# Qt MOCファイル処理
+set_target_properties(Test_LocalizationCore_v23_Integrated PROPERTIES
+    AUTOMOC ON
+    AUTORCC ON
+    AUTOUIC ON
+)
+
+# プリプロセッサ定義
+target_compile_definitions(Test_LocalizationCore_v23_Integrated PRIVATE
+    QT_NO_DEBUG_OUTPUT
+    NYAMESH_QT_INTEGRATION
+)

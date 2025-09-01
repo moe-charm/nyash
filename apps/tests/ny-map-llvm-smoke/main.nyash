@@ -1,0 +1,19 @@
+// ny-map-llvm-smoke - MapBox by-id plugin path smoke
+// 目的: MapBox(size/get/set) を by-id 経由で実行し代表出力を確認
+
+static box Main {
+    main() {
+        // Map を生成し、1->42 を設定
+        local m = new MapBox()
+        m.set(1, 42)
+        
+        // 取得とサイズ
+        local v = m.get(1)
+        local s = m.size()
+
+        // 代表出力（連結は1回ずつに限定してLLVM簡易対応）
+        print("Map: v=" + v)
+        print("size=" + s)
+        return 0
+    }
+}

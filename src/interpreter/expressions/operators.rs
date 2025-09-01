@@ -26,6 +26,15 @@ fn unwrap_instance(boxed: &dyn NyashBox) -> &dyn NyashBox {
     eprintln!("  ❌ Not InstanceBox, returning as is");
     boxed
 }
+
+fn best_effort_to_string(val: &dyn NyashBox) -> String {
+    crate::runtime::semantics::coerce_to_string(val)
+        .unwrap_or_else(|| val.to_string_box().value)
+}
+
+fn best_effort_to_i64(val: &dyn NyashBox) -> Option<i64> {
+    crate::runtime::semantics::coerce_to_i64(val)
+}
 pub(super) fn try_add_operation(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
     // 🎯 InstanceBoxのunwrap処理
     let left = unwrap_instance(left);
@@ -156,12 +165,23 @@ impl NyashInterpreter {
         
         match op {
             BinaryOperator::Add => {
-                // 🚀 Direct trait-based operator resolution (temporary workaround)
-                // Use helper function instead of trait methods
+                // 1) Intrinsic fast-paths (Integer+Integer, String+*, Bool+Bool)
                 if let Some(result) = try_add_operation(left_val.as_ref(), right_val.as_ref()) {
                     return Ok(result);
                 }
-                
+                // 2) Concatenation if either side is string-like (semantics)
+                let ls_opt = crate::runtime::semantics::coerce_to_string(left_val.as_ref());
+                let rs_opt = crate::runtime::semantics::coerce_to_string(right_val.as_ref());
+                if ls_opt.is_some() || rs_opt.is_some() {
+                    let ls = ls_opt.unwrap_or_else(|| left_val.to_string_box().value);
+                    let rs = rs_opt.unwrap_or_else(|| right_val.to_string_box().value);
+                    return Ok(Box::new(StringBox::new(format!("{}{}", ls, rs))));
+                }
+                // 3) Numeric fallback via coerce_to_i64
+                if let (Some(li), Some(ri)) = (crate::runtime::semantics::coerce_to_i64(left_val.as_ref()), crate::runtime::semantics::coerce_to_i64(right_val.as_ref())) {
+                    return Ok(Box::new(IntegerBox::new(li + ri)));
+                }
+                // 4) Final error
                 Err(RuntimeError::InvalidOperation { 
                     message: format!("Addition not supported between {} and {}", 
                                    left_val.type_name(), right_val.type_name()) 

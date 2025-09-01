@@ -1,4 +1,5 @@
 pub mod mir;
+pub mod mir_interpreter;
 pub mod vm;
 pub mod llvm;
 pub mod bench;
@@ -7,3 +8,5 @@ pub mod common;
 pub mod wasm;
 #[cfg(feature = "cranelift-jit")]
 pub mod aot;
+#[cfg(feature = "cranelift-jit")]
+pub mod cranelift;

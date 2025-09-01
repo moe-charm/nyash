@@ -1,0 +1,12 @@
+// mir-branch-ret - simple conditional branch returning 1 or 0
+
+static box Main {
+    main() {
+        if 1 < 2 {
+            return 1
+        } else {
+            return 0
+        }
+    }
+}
+

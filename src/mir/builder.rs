@@ -55,6 +55,29 @@ fn builder_debug_log(msg: &str) {
     }
 }
 
+/// PHIの入力型から戻り値型を推定するヘルパー
+fn infer_type_from_phi(
+    function: &super::MirFunction,
+    ret_val: super::ValueId,
+    types: &std::collections::HashMap<super::ValueId, super::MirType>,
+) -> Option<super::MirType> {
+    for (_bid, bb) in function.blocks.iter() {
+        for inst in bb.instructions.iter() {
+            if let super::MirInstruction::Phi { dst, inputs } = inst {
+                if *dst == ret_val {
+                    let mut it = inputs.iter().filter_map(|(_, v)| types.get(v));
+                    if let Some(first) = it.next() {
+                        if it.all(|mt| mt == first) {
+                            return Some(first.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// MIR builder for converting AST to SSA form
 pub struct MirBuilder {
     /// Current module being built
@@ -326,7 +349,27 @@ impl MirBuilder {
         let mut function = self.current_function.take().unwrap();
         // Flush value_types (TyEnv) into function metadata
         function.metadata.value_types = self.value_types.clone();
+        // 補助: 本文中に明示的な return <expr> が存在する場合、
+        // 末尾returnを挿入しなかった関数でも戻り型を推定する。
+        if matches!(function.signature.return_type, super::MirType::Void | super::MirType::Unknown) {
+            let mut inferred: Option<super::MirType> = None;
+            'outer: for (_bid, bb) in function.blocks.iter() {
+                for inst in bb.instructions.iter() {
+                    if let super::MirInstruction::Return { value: Some(v) } = inst {
+                        if let Some(mt) = self.value_types.get(v).cloned() { inferred = Some(mt); break 'outer; }
+                        // 追加: v が PHI の場合は入力側の型から推定
+                        if let Some(mt) = infer_type_from_phi(&function, *v, &self.value_types) { inferred = Some(mt); break 'outer; }
+                    }
+                }
+                if let Some(super::MirInstruction::Return { value: Some(v) }) = &bb.terminator {
+                    if let Some(mt) = self.value_types.get(v).cloned() { inferred = Some(mt); break; }
+                    if let Some(mt) = infer_type_from_phi(&function, *v, &self.value_types) { inferred = Some(mt); break; }
+                }
+            }
+            if let Some(mt) = inferred { function.signature.return_type = mt; }
+        }
         module.add_function(function);
+
         
         Ok(module)
     }
@@ -1485,6 +1528,18 @@ impl MirBuilder {
                     let void_id = self.value_gen.next();
                     self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
                     return Ok(void_id);
+                },
+                ("console", "readLine") => {
+                    // env.console.readLine() → ExternCall returning string
+                    let result_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: Some(result_id),
+                        iface_name: "env.console".to_string(),
+                        method_name: "readLine".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO,
+                    })?;
+                    return Ok(result_id);
                 },
                 ("canvas", "fillRect") | ("canvas", "fillText") => {
                     self.emit_instruction(MirInstruction::ExternCall {

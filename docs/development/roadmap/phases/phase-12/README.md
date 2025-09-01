@@ -1,115 +1,107 @@
-# Phase 12: Nyashスクリプトプラグインシステム革命
+# Phase 12: Nyashコード共有エコシステム - Everything is Box の実現
 
-## 🚀 概要
+## 🎯 重要な変更 (2025-09-01)
 
-Nyashスクリプト自体でプラグインを作成できる革命的発見！ビルド不要で、既存のネイティブプラグインを組み合わせて新機能を作成可能。
+Phase 12の議論とビルトインBox廃止により、プラグインシステムが進化：
 
-## 💡 発見の経緯
-
-include/export仕様の検討中に、以下の重要な気づきが：
+**新しい3層プラグインシステムが確立されました！**
 
 ```nyash
-# custom_math_plugin.ny
-export box CustomMathPlugin {
-    init { 
-        _math = new MathBox()  # 既存プラグイン活用
-        _cache = new MapBox()  # 結果キャッシュ
+# Nyashスクリプトプラグイン（ユーザー定義Box）
+box DataProcessor {
+    init {
+        me.file = new FileBox()    # C ABIプラグイン使用
+        me.math = new MathBox()    # C ABIプラグイン使用
+        me.cache = new MapBox()    # これもC ABIプラグイン（ビルトイン廃止）
     }
     
-    // カスタム拡張
-    cached_sin(x) {
-        local key = x.toString()
-        if me._cache.has(key) {
-            return me._cache.get(key)
-        }
-        local result = me._math.sin(x)
-        me._cache.set(key, result)
+    process(data) {
+        local result = me.math.sin(data)
+        me.file.write("log.txt", result.toString())
         return result
     }
 }
+
+# 使用例
+local processor = new DataProcessor()
+processor.process(3.14)  # すべてプラグインで動作！
 ```
 
-これにより、Rust/C++のビルドなしでプラグイン開発が可能に！
+## 📝 なぜ誤解が生まれたのか
 
-## 🎯 統一Box ABI設計
+「プラグイン」という言葉から、特別な仕組みが必要だと考えてしまいましたが、Nyashの「Everything is Box」哲学により、ユーザー定義Boxこそが最高のプラグインシステムでした。
 
-### 基本インターフェース
+詳細な分析：[なぜ天才AIたちは間違えたのか](./WHY-AIS-FAILED.md)
 
-```rust
-// Rust側の統一インターフェース
-trait BoxInterface {
-    fn invoke(&self, method_id: u32, args: NyashValue) -> NyashValue;
-    fn get_methods(&self) -> Vec<MethodInfo>;
-    fn init(&mut self, ctx: Context);
-    fn drop(&mut self);
-}
+## 🚀 Phase 12の真の価値：コード共有エコシステム
+
+### 本当に必要なもの
+
+1. **export/import構文**
+   ```nyash
+   # math_utils.ny
+   export box MathUtils {
+       factorial(n) { ... }
+       fibonacci(n) { ... }
+   }
+   
+   # main.ny
+   import { MathUtils } from "math_utils.ny"
+   local utils = new MathUtils()
+   ```
+
+2. **パッケージマネージャー**
+   ```bash
+   nyash install awesome-math-utils
+   nyash publish my-cool-box
+   ```
+
+3. **ドキュメント生成**
+   ```nyash
+   # @doc 素晴らしい数学ユーティリティ
+   # @param n 計算したい数値
+   # @return 階乗の結果
+   export box MathUtils { ... }
+   ```
+
+## 📊 新しい3層プラグインシステム
+
+```
+Nyashエコシステム（ビルトインBox廃止後）：
+├── Nyashスクリプトプラグイン（ユーザー定義Box）← .nyashファイル
+├── C ABIプラグイン（既存のまま使用）← シンプル・高速・安定
+└── Nyash ABIプラグイン（必要時のみ）← 言語間相互運用・将来拡張
+    └── MIR命令は増やさない（BoxCallにabi_hint追加のみ）
 ```
 
-### Nyashスクリプトプラグインの要件
+### プラグイン選択の指針
+- **C ABIで済むなら、C ABIを使う**（シンプルイズベスト）
+- Nyash ABIは以下の場合のみ：
+  - 他言語（Python/Go等）からの呼び出し
+  - 複雑な型の相互運用が必要
+  - 将来の拡張性を重視する場合
 
-```nyash
-export box MyPlugin {
-    // 必須：初期化
-    init { ... }
-    
-    // 推奨：FFI互換インターフェース
-    invoke(method_id, args) {
-        // method_idに基づいてディスパッチ
-    }
-    
-    // オプション：メソッド情報
-    get_methods() {
-        return [
-            { name: "method1", id: 1 },
-            { name: "method2", id: 2 }
-        ]
-    }
-}
-```
+## 🛣️ 実装ロードマップ（修正版）
 
-## 📊 エコシステムへの影響
+### Phase 12.1: export/import構文（2週間）
+- [ ] exportキーワードのパーサー実装
+- [ ] importステートメントの実装
+- [ ] モジュール解決システム
+- 📄 **[詳細仕様書](./export-import-spec.md)**
 
-### 開発の民主化
-- **参入障壁の劇的低下**: Rust/C++環境不要
-- **即座の開発**: ビルド待ち時間ゼロ
-- **コミュニティ拡大**: より多くの開発者が参加可能
+### Phase 12.2: パッケージ管理（3週間）
+- [ ] nyash.tomlのdependencies対応
+- [ ] 中央リポジトリ設計
+- [ ] CLIツール（install/publish）
+- 📄 **[パッケージマネージャー設計書](./package-manager-design.md)**
 
-### 新しい開発パターン
-1. **プラグインの合成**: 複数のネイティブプラグインを組み合わせ
-2. **ラピッドプロトタイピング**: アイデアを即座に実装
-3. **ホットリロード**: 実行中の更新が可能
-
-## 🛣️ 実装ロードマップ
-
-### Phase 12.1: 基盤構築
-- [ ] Box ABI仕様の最終決定
-- [ ] export box構文のパーサー実装
-- [ ] 基本的なPluginRegistry実装
-
-### Phase 12.2: 統一インターフェース
-- [ ] FFIプラグインのBoxInterface対応
-- [ ] NyashスクリプトのBoxInterface実装
-- [ ] 相互運用テスト
-
-### Phase 12.3: 動的機能
-- [ ] 動的ロード/アンロード機能
-- [ ] ホットリロード対応
-- [ ] プラグイン間依存関係管理
-
-### Phase 12.4: セキュリティと最適化
-- [ ] サンドボックス実装
-- [ ] ケイパビリティベース権限
-- [ ] パフォーマンス最適化
-
-## 📚 関連ドキュメント
-- [Gemini先生の分析](./gemini-analysis-script-plugins.md)
-- [Codex先生の技術提案](./codex-technical-proposal.md)
-- [統合分析まとめ](./synthesis-script-plugin-revolution.md)
-
-## 🎯 次のアクション
-1. Box ABI仕様書の作成
-2. export box構文の実装開始
-3. 既存FFIプラグイン1つを統一インターフェースに移行
+### Phase 12.3: 開発者体験向上（継続的）
+- [ ] ドキュメント生成ツール
+- [ ] VSCode拡張（補完・定義ジャンプ）
+- [ ] サンプルパッケージ作成
 
 ---
-*Everything is Box - そしてプラグインもBoxになる！*
+
+### 🗄️ 議論の過程
+
+AIたちがなぜ複雑な解決策を提案したのか、その議論の過程は `archive/` ディレクトリに保存されています。良い教訓として残しておきます。

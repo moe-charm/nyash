@@ -16,7 +16,7 @@
 ```
 Source → AST → MIR → {Interpreter, VM, JIT, AOT, WASM}
               ↑
-         統一中間表現（26命令）
+         統一中間表現（15命令）
 ```
 - **利点**: 
   - バックエンドの独立開発

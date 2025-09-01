@@ -34,6 +34,8 @@ pub const SYM_INTEGER_BIRTH_H: &str = "nyash.integer.birth_h";
 pub const SYM_STRING_CONCAT_HH: &str = "nyash.string.concat_hh";
 pub const SYM_STRING_EQ_HH: &str = "nyash.string.eq_hh";
 pub const SYM_STRING_LT_HH: &str = "nyash.string.lt_hh";
+// Unified semantics: addition for dynamic boxes (handle,handle)
+pub const SYM_SEMANTICS_ADD_HH: &str = "nyash.semantics.add_hh";
 
 fn as_array(args: &[VMValue]) -> Option<&crate::boxes::array::ArrayBox> {
     match args.get(0) {

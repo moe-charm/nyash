@@ -3,3 +3,4 @@
 
 pub mod type_hints;
 pub mod escape;
+pub mod method_id_inject;

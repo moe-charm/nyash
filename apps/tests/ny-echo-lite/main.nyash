@@ -1,0 +1,16 @@
+// ny-echo-lite - minimal echo for LLVM/AOT smoke
+// Reads one line from stdin and prints it back. EOF -> exit(0)
+
+static box Main {
+    init { console }
+
+    main() {
+        me.console = new ConsoleBox()
+        local line = me.console.readLine()
+        if line != null {
+            print(line)
+        }
+        return 0
+    }
+}
+

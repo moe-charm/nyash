@@ -37,6 +37,20 @@ impl LowerCore {
                     b.store_local_i64(slot);
                     return;
                 }
+                // If dynamic Box/Unknown types, route to unified semantics add (handle,handle)
+                let is_dynamic = match (func.metadata.value_types.get(lhs), func.metadata.value_types.get(rhs)) {
+                    (Some(MirType::Box(_)) | Some(MirType::Unknown) | None, _) | (_, Some(MirType::Box(_)) | Some(MirType::Unknown) | None) => true,
+                    _ => false,
+                };
+                if is_dynamic {
+                    self.push_value_if_known_or_param(b, lhs);
+                    self.push_value_if_known_or_param(b, rhs);
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_SEMANTICS_ADD_HH, 2, true);
+                    self.handle_values.insert(*dst);
+                    let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    b.store_local_i64(slot);
+                    return;
+                }
             }
         }
         self.push_value_if_known_or_param(b, lhs);
@@ -88,7 +102,10 @@ impl LowerCore {
             CompareOp::Ge => CmpKind::Ge,
         };
         b.emit_compare(kind);
+        // Persist compare result in a local slot so terminators (Branch) can reload it reliably
         self.bool_values.insert(*dst);
+        let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+        b.store_local_i64(slot);
     }
 
     pub fn lower_jump(&mut self, b: &mut dyn IRBuilder) { b.emit_jump(); }

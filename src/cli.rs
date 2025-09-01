@@ -47,6 +47,8 @@ pub struct CliConfig {
     pub emit_cfg: Option<String>,
     // Verbose CLI
     pub cli_verbose: bool,
+    // Tasks
+    pub run_task: Option<String>,
 }
 
 impl CliConfig {
@@ -277,6 +279,12 @@ impl CliConfig {
                     .value_name("DOT_FILE")
                     .help("Emit JIT CFG as DOT to file (equivalent to setting NYASH_JIT_DOT)")
             )
+            .arg(
+                Arg::new("run-task")
+                    .long("run-task")
+                    .value_name("NAME")
+                    .help("Run a named task defined in nyash.toml [tasks]")
+            )
     }
 
     /// Convert ArgMatches to CliConfig
@@ -316,6 +324,7 @@ impl CliConfig {
             jit_only: matches.get_flag("jit-only"),
             jit_direct: matches.get_flag("jit-direct"),
             cli_verbose: matches.get_flag("verbose"),
+            run_task: matches.get_one::<String>("run-task").cloned(),
         }
     }
 }

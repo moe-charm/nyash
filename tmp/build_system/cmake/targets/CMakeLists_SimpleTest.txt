@@ -1,0 +1,44 @@
+# Simple Qt Test - UI問題分離用
+cmake_minimum_required(VERSION 3.20)
+
+project(SimpleQtTest VERSION 1.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Qt6設定
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+set(CMAKE_AUTOMOC ON)
+
+# プロジェクトルート設定
+get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}" ABSOLUTE)
+while(NOT EXISTS "${PROJECT_ROOT}/cores_v23")
+    get_filename_component(PROJECT_ROOT "${PROJECT_ROOT}/.." ABSOLUTE)
+    if("${PROJECT_ROOT}" STREQUAL "/")
+        message(FATAL_ERROR "Could not find project root")
+    endif()
+endwhile()
+
+# 実行ファイル作成
+add_executable(SimpleQtTest
+    ${PROJECT_ROOT}/cores_v23/app/simple_test_widget.cpp
+)
+
+# ターゲットプロパティ
+set_target_properties(SimpleQtTest PROPERTIES
+    OUTPUT_NAME "SimpleQtTest"
+    WIN32_EXECUTABLE FALSE  # コンソール版
+)
+
+# リンク
+target_link_libraries(SimpleQtTest
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Gui
+)
+
+if(WIN32)
+    set_target_properties(SimpleQtTest PROPERTIES
+        LINK_FLAGS "/SUBSYSTEM:CONSOLE"
+    )
+endif()

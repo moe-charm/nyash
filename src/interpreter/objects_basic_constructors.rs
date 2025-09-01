@@ -146,6 +146,21 @@ impl Interpreter {
                 }
             }
             
+            "FutureBox" => {
+                // FutureBox([value]) — optional initial value
+                if arguments.len() > 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("FutureBox constructor expects 0 or 1 argument, got {}", arguments.len()),
+                    });
+                }
+                let fut = crate::boxes::future::NyashFutureBox::new();
+                if arguments.len() == 1 {
+                    let value = self.execute_expression(&arguments[0])?;
+                    fut.set_result(value);
+                }
+                return Ok(Box::new(fut));
+            }
+            
             _ => {
                 // Not a basic type
                 Err(RuntimeError::TypeError {

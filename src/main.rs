@@ -39,6 +39,7 @@ pub mod mir;
 pub mod backend;
 // JIT subsystem (Phase 10)
 pub mod jit;
+pub mod semantics; // mirror library semantics module for crate path consistency in bin
 
 // 📊 Performance Benchmarks
 pub mod benchmarks;

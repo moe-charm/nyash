@@ -13,6 +13,8 @@ pub mod control_flow;
 pub mod dispatch;
 pub mod frame;
 pub mod gc_helpers;
+pub mod abi_util; // Shared ABI/utility helpers
+pub mod mir_interpreter; // Lightweight MIR interpreter
 
 #[cfg(feature = "wasm-backend")]
 pub mod wasm;
@@ -21,8 +23,11 @@ pub mod aot;
 
 #[cfg(feature = "llvm")]
 pub mod llvm;
+#[cfg(feature = "cranelift-jit")]
+pub mod cranelift;
 
 pub use vm::{VM, VMError, VMValue};
+pub use mir_interpreter::MirInterpreter;
 
 #[cfg(feature = "wasm-backend")]
 pub use wasm::{WasmBackend, WasmError};
@@ -31,3 +36,5 @@ pub use aot::{AotBackend, AotError, AotConfig, AotStats};
 
 #[cfg(feature = "llvm")]
 pub use llvm::{compile_and_execute as llvm_compile_and_execute, compile_to_object as llvm_compile_to_object};
+#[cfg(feature = "cranelift-jit")]
+pub use cranelift::{compile_and_execute as cranelift_compile_and_execute, compile_to_object as cranelift_compile_to_object};

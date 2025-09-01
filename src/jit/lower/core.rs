@@ -309,6 +309,40 @@ impl LowerCore {
                 // Branch/Jump need block mapping: pass indices
                 match term {
                     crate::mir::MirInstruction::Branch { condition, then_bb, else_bb } => {
+                        // Fast-path (opt-in): if both successors immediately return known i64 constants,
+                        // lower as select+return（branchless）。NYASH_JIT_FASTPATH_SELECT=1 のときだけ有効。
+                        let mut fastpath_done = false;
+                        let fastpath_on = std::env::var("NYASH_JIT_FASTPATH_SELECT").ok().as_deref() == Some("1");
+                        let succ_returns_const = |succ: &crate::mir::BasicBlock| -> Option<i64> {
+                            // Pattern: [optional Nops] Const(Integer k) ; Return(Some that const))
+                            use crate::mir::MirInstruction as I;
+                            // find last Const and matching Return
+                            if let Some(I::Return { value: Some(v) }) = &succ.terminator {
+                                // Find definition of v in succ.instructions as a Const Integer
+                                for ins in succ.instructions.iter() {
+                                    if let I::Const { dst, value } = ins {
+                                        if dst == v {
+                                            if let crate::mir::ConstValue::Integer(k) = value { return Some(*k); }
+                                        }
+                                    }
+                                }
+                            }
+                            None
+                        };
+                        if fastpath_on { if let (Some(bb_then), Some(bb_else)) = (func.blocks.get(then_bb), func.blocks.get(else_bb)) {
+                            if let (Some(k_then), Some(k_else)) = (succ_returns_const(bb_then), succ_returns_const(bb_else)) {
+                                // cond, then, else on stack → select → return
+                                self.push_value_if_known_or_param(builder, condition);
+                                builder.emit_const_i64(k_then);
+                                builder.emit_const_i64(k_else);
+                                builder.emit_select_i64();
+                                builder.emit_return();
+                                fastpath_done = true;
+                            }
+                        } }
+                        if fastpath_done { continue; }
+
+                        // Otherwise, emit CFG branch
                         // Try to place condition on stack (param/const path); builder will adapt
                         self.push_value_if_known_or_param(builder, condition);
                         // Map BasicBlockId -> index
@@ -329,6 +363,16 @@ impl LowerCore {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
                                                         self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
+                                                    } else {
+                                                        // Fallback: if any input value is a PHI defined in current block, pass that
+                                                        if let Some((_, alt_val)) = inputs.iter().find(|(_pred, v)| {
+                                                            if let Some(bb_cur) = func.blocks.get(bb_id) {
+                                                                bb_cur.instructions.iter().any(|ins2| matches!(ins2, crate::mir::MirInstruction::Phi { dst: dphi, .. } if *dphi == *v))
+                                                            } else { false }
+                                                        }) {
+                                                            self.push_value_if_known_or_param(builder, alt_val);
+                                                            cnt += 1;
+                                                        }
                                                     }
                                                 }
                                             }
@@ -348,6 +392,15 @@ impl LowerCore {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
                                                         self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
+                                                    } else {
+                                                        if let Some((_, alt_val)) = inputs.iter().find(|(_pred, v)| {
+                                                            if let Some(bb_cur) = func.blocks.get(bb_id) {
+                                                                bb_cur.instructions.iter().any(|ins2| matches!(ins2, crate::mir::MirInstruction::Phi { dst: dphi, .. } if *dphi == *v))
+                                                            } else { false }
+                                                        }) {
+                                                            self.push_value_if_known_or_param(builder, alt_val);
+                                                            cnt += 1;
+                                                        }
                                                     }
                                                 }
                                             }
@@ -378,6 +431,15 @@ impl LowerCore {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
                                                         self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
+                                                    } else {
+                                                        if let Some((_, alt_val)) = inputs.iter().find(|(_pred, v)| {
+                                                            if let Some(bb_cur) = func.blocks.get(bb_id) {
+                                                                bb_cur.instructions.iter().any(|ins2| matches!(ins2, crate::mir::MirInstruction::Phi { dst: dphi, .. } if *dphi == *v))
+                                                            } else { false }
+                                                        }) {
+                                                            self.push_value_if_known_or_param(builder, alt_val);
+                                                            cnt += 1;
+                                                        }
                                                     }
                                                 }
                                             }
@@ -449,6 +511,11 @@ impl LowerCore {
 
     /// Push a value onto the builder stack if it is a known i64 const or a parameter.
     pub(super) fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
+        // Prefer materialized locals first (e.g., PHI stored into a local slot)
+        if let Some(slot) = self.local_index.get(id).copied() {
+            b.load_local_i64(slot);
+            return;
+        }
         if self.phi_values.contains(id) {
             // Multi-PHI: find the param index for this phi in the current block
             // We don't have the current block id here; rely on builder's current block context and our stored index being positional.
@@ -468,11 +535,6 @@ impl LowerCore {
         }
         if let Some(v) = self.known_i64.get(id).copied() {
             b.emit_const_i64(v);
-            return;
-        }
-        // Load from a local slot if this ValueId was previously materialized (e.g., handle results)
-        if let Some(slot) = self.local_index.get(id).copied() {
-            b.load_local_i64(slot);
             return;
         }
     }
@@ -513,6 +575,20 @@ impl LowerCore {
     fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId, func: &crate::mir::MirFunction) -> Result<(), String> {
         use crate::mir::MirInstruction as I;
         match instr {
+            I::Await { dst, future } => {
+                // Push future param index when known; otherwise -1 to trigger legacy search in shim
+                if let Some(pidx) = self.param_index.get(future).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                b.emit_host_call(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, 1, true);
+                // Treat result as handle (or primitive packed into i64). Store for reuse.
+                let d = *dst;
+                self.handle_values.insert(d);
+                let slot = *self.local_index.entry(d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                b.store_local_i64(slot);
+            }
+            I::Safepoint => {
+                // Emit a runtime checkpoint (safepoint + scheduler poll via NyRT/JIT stubs)
+                b.emit_host_call(crate::jit::r#extern::runtime::SYM_RT_CHECKPOINT, 0, false);
+            }
             I::RefGet { dst, reference: _, field } => {
                 // Minimal: env.console をハンドル化（hostcall）
                 if field == "console" {
@@ -731,7 +807,29 @@ impl LowerCore {
             I::Jump { .. } => self.lower_jump(b),
             I::Branch { .. } => self.lower_branch(b),
             I::Return { value } => {
-                if let Some(v) = value { self.push_value_if_known_or_param(b, v); }
+                if let Some(v) = value {
+                    // Prefer known/param/materialized path
+                    if self.known_i64.get(v).is_some() || self.param_index.get(v).is_some() || self.local_index.get(v).is_some() {
+                        self.push_value_if_known_or_param(b, v);
+                    } else {
+                        // Fallback: search a Const definition for this value in the current block and emit directly
+                        if let Some(bb) = func.blocks.get(&cur_bb) {
+                            for ins in bb.instructions.iter() {
+                                if let crate::mir::MirInstruction::Const { dst, value: cval } = ins {
+                                    if dst == v {
+                                        match cval {
+                                            crate::mir::ConstValue::Integer(i) => { b.emit_const_i64(*i); }
+                                            crate::mir::ConstValue::Bool(bv) => { b.emit_const_i64(if *bv {1} else {0}); }
+                                            crate::mir::ConstValue::Float(f) => { b.emit_const_f64(*f); }
+                                            _ => {}
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 b.emit_return()
             }
             I::Store { value, ptr } => {
@@ -748,13 +846,13 @@ impl LowerCore {
                 b.load_local_i64(slot);
             }
             I::Phi { dst, .. } => {
-                // Minimal PHI: load current block param; b1 when classified boolean
+                // PHI をローカルに materialize して後続の Return で安定参照
                 let pos = self.phi_param_index.get(&(cur_bb, *dst)).copied().unwrap_or(0);
-                if self.bool_phi_values.contains(dst) {
-                    b.push_block_param_b1_at(pos);
-                } else {
-                    b.push_block_param_i64_at(pos);
-                }
+                if self.bool_phi_values.contains(dst) { b.push_block_param_b1_at(pos); }
+                else { b.push_block_param_i64_at(pos); }
+                let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                b.ensure_local_i64(slot);
+                b.store_local_i64(slot);
             }
             I::ArrayGet { array, index, .. } => {
                 // Prepare receiver + index on stack
@@ -778,6 +876,8 @@ impl LowerCore {
             I::ArraySet { array, index, value } => {
                 let argc = 3usize;
                 if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                // GC write barrier hint for mutating array operations (pass receiver handle/index as site id: receiver preferred)
+                b.emit_host_call(crate::jit::r#extern::runtime::SYM_GC_BARRIER_WRITE, 1, false);
                 if let Some(iv) = self.known_i64.get(index).copied() { b.emit_const_i64(iv); } else { self.push_value_if_known_or_param(b, index); }
                 if let Some(vv) = self.known_i64.get(value).copied() { b.emit_const_i64(vv); } else { self.push_value_if_known_or_param(b, value); }
                 let decision = crate::jit::policy::invoke::decide_box_method("ArrayBox", "set", argc, false);
@@ -898,6 +998,10 @@ impl LowerCore {
                                         return Ok(());
                                     }
                                     if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                                    // Insert GC write barrier before mutating Map.set
+                                    if method.as_str() == "set" {
+                                        b.emit_host_call(crate::jit::r#extern::runtime::SYM_GC_BARRIER_WRITE, 1, false);
+                                    }
                                     let mut argc = 1usize;
                                     if matches!(method.as_str(), "get" | "has") {
                                         if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }

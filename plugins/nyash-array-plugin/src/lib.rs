@@ -103,8 +103,14 @@ pub extern "C" fn nyash_plugin_invoke(
                 if let Ok(mut map) = INSTANCES.lock() {
                     if let Some(inst) = map.get_mut(&instance_id) {
                         let i = idx as usize;
-                        if i >= inst.data.len() { return NYB_E_INVALID_ARGS; }
-                        inst.data[i] = val;
+                        let len = inst.data.len();
+                        if i < len {
+                            inst.data[i] = val;
+                        } else if i == len {
+                            inst.data.push(val);
+                        } else {
+                            return NYB_E_INVALID_ARGS;
+                        }
                         return write_tlv_i64(inst.data.len() as i64, result, result_len);
                     } else { return NYB_E_INVALID_HANDLE; }
                 } else { return NYB_E_PLUGIN_ERROR; }

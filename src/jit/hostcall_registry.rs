@@ -56,6 +56,7 @@ fn ensure_default() {
     // String helpers
     r.sig.entry("nyash.string.charCodeAt_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::I64 });
     r.sig.entry("nyash.string.concat_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::Handle });
+    r.sig.entry("nyash.semantics.add_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::Handle });
     r.sig.entry("nyash.string.eq_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::I64 });
     r.sig.entry("nyash.string.lt_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::I64 });
     // Any helpers (length/is_empty)

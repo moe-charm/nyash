@@ -359,3 +359,27 @@ extname   = { method_id = 4, args = ["path"], returns_result = true }
 isAbs     = { method_id = 5, args = ["path"], returns_result = true }
 normalize = { method_id = 6, args = ["path"], returns_result = true }
 fini      = { method_id = 4294967295 }
+
+[env]
+RUST_BACKTRACE = "1"
+# 任意。verboseログ
+NYASH_CLI_VERBOSE = "1"
+
+[tasks]
+# LLVMビルド（nyash本体）
+build_llvm = "LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm"
+
+# ny-llvm-smoke を .o に出力（NYASH_LLVM_OBJ_OUTを使う）
+smoke_obj_array = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash && ls -l {root}/nyash_llvm_temp.o"
+
+# ny-echo-lite を .o に出力（標準入力1行→そのまま出力）
+smoke_obj_echo = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-echo-lite/main.nyash"
+
+# ny-llvm-smoke をEXEまで（NyRTリンク）
+build_exe_array = "tools/build_llvm.sh apps/ny-llvm-smoke/main.nyash -o app_llvm"
+
+# EXE実行
+run_exe_array = "./app_llvm"
+
+# 掃除
+clean = "cargo clean && rm -f {root}/nyash_llvm_temp.o app_llvm || true"

@@ -1,0 +1,11 @@
+# Async/Await minimal smoke
+
+static box Main {
+  main() {
+    // Create a resolved future using nowait sugar
+    nowait fut = 42
+    // Await and return the value
+    local v = await fut
+    return v
+  }
+}

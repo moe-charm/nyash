@@ -1,0 +1,11 @@
+以下のディレクトリはテスト用で、apps/tests/に移動済みです。
+手動で削除してください：
+
+rm -rf ny-echo-lite/
+rm -rf ny-map-llvm-smoke/
+rm -rf ny-vinvoke-smoke/
+rm -rf ny-vinvoke-llvm-ret/
+rm -rf ny-vinvoke-llvm-ret-size/
+
+これらはすでに apps/tests/ にコピー済みで、
+tools/llvm_smoke.sh も更新済みです。

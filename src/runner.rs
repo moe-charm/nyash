@@ -32,10 +32,37 @@ mod modes;
 // v2 plugin system imports
 use nyash_rust::runtime;
 use nyash_rust::runner_plugin_init;
+use std::path::PathBuf;
 
 /// Main execution coordinator
 pub struct NyashRunner {
     config: CliConfig,
+}
+
+/// Minimal task runner: read nyash.toml [env] and [tasks], run the named task via shell
+fn run_named_task(name: &str) -> Result<(), String> {
+    let cfg_path = "nyash.toml";
+    let text = fs::read_to_string(cfg_path).map_err(|e| format!("read {}: {}", cfg_path, e))?;
+    let doc = toml::from_str::<toml::Value>(&text).map_err(|e| format!("parse {}: {}", cfg_path, e))?;
+    // Apply [env]
+    if let Some(env_tbl) = doc.get("env").and_then(|v| v.as_table()) {
+        for (k, v) in env_tbl.iter() {
+            if let Some(s) = v.as_str() { std::env::set_var(k, s); }
+        }
+    }
+    // Lookup [tasks]
+    let tasks = doc.get("tasks").and_then(|v| v.as_table()).ok_or("[tasks] not found in nyash.toml")?;
+    let cmd = tasks.get(name).and_then(|v| v.as_str()).ok_or_else(|| format!("task '{}' not found", name))?;
+    // Basic variable substitution
+    let root = std::env::current_dir().unwrap_or(PathBuf::from(".")).display().to_string();
+    let cmd = cmd.replace("{root}", &root);
+    // Run via shell
+    #[cfg(windows)]
+    let status = std::process::Command::new("cmd").args(["/C", &cmd]).status().map_err(|e| e.to_string())?;
+    #[cfg(not(windows))]
+    let status = std::process::Command::new("sh").arg("-lc").arg(&cmd).status().map_err(|e| e.to_string())?;
+    if !status.success() { return Err(format!("task '{}' failed with status {:?}", name, status.code())); }
+    Ok(())
 }
 
 impl NyashRunner {
@@ -46,6 +73,22 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // Run named task from nyash.toml (MVP)
+        if let Some(task) = self.config.run_task.clone() {
+            if let Err(e) = run_named_task(&task) {
+                eprintln!("❌ Task error: {}", e);
+                process::exit(1);
+            }
+            return;
+        }
+        // Run named task from nyash.toml (MVP)
+        if let Some(task) = self.config.run_task.clone() {
+            if let Err(e) = run_named_task(&task) {
+                eprintln!("❌ Task error: {}", e);
+                process::exit(1);
+            }
+            return;
+        }
         // Verbose CLI flag maps to env for downstream helpers/scripts
         if self.config.cli_verbose { std::env::set_var("NYASH_CLI_VERBOSE", "1"); }
         // Script-level env directives (special comments) — parse early
@@ -696,6 +739,17 @@ impl NyashRunner {
             }
         }
 
+        // jit-direct 安定化: 分岐合流(PHI)は明示ブロック引数で配線
+        {
+            let mut cfg = nyash_rust::jit::config::current();
+            cfg.phi_min = true; // enable multi-PHI arg passing/join
+            nyash_rust::jit::config::set_current(cfg);
+        }
+        // Prepare minimal runtime hooks so JIT externs (checkpoint/await) can reach GC/scheduler
+        {
+            let rt = nyash_rust::runtime::NyashRuntime::new();
+            nyash_rust::runtime::global_hooks::set_from_runtime(&rt);
+        }
         let mut engine = nyash_rust::jit::engine::JitEngine::new();
         match engine.compile_function("main", func) {
             Some(h) => {
