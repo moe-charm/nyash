@@ -153,17 +153,27 @@ impl NyashInterpreter {
     }
     
     
-    /// await式を実行 - Execute await expression
+    /// await式を実行 - Execute await expression (Result.Ok/Err統一)
     pub(super) fn execute_await(&mut self, expression: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let value = self.execute_expression(expression)?;
-        
-        // FutureBoxなら待機して結果を取得
         if let Some(future) = value.as_any().downcast_ref::<FutureBox>() {
-            future.wait_and_get()
-                .map_err(|msg| RuntimeError::InvalidOperation { message: msg })
+            let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+            let start = std::time::Instant::now();
+            let mut spins = 0usize;
+            while !future.ready() {
+                crate::runtime::global_hooks::safepoint_and_poll();
+                std::thread::yield_now();
+                spins += 1;
+                if spins % 1024 == 0 { std::thread::sleep(std::time::Duration::from_millis(1)); }
+                if start.elapsed() >= std::time::Duration::from_millis(max_ms) {
+                    let err = Box::new(crate::box_trait::StringBox::new("Timeout"));
+                    return Ok(Box::new(crate::boxes::result::NyashResultBox::new_err(err)));
+                }
+            }
+            let v = future.get();
+            Ok(Box::new(crate::boxes::result::NyashResultBox::new_ok(v)))
         } else {
-            // FutureBoxでなければそのまま返す
-            Ok(value)
+            Ok(Box::new(crate::boxes::result::NyashResultBox::new_ok(value)))
         }
     }
 }

@@ -21,7 +21,11 @@ Purpose: Claude×Copilot×ChatGPT協調開発の総合ロードマップ
 | 9.75g-0 | ✅完了 | BID-FFI Plugin System | [Phase-9.75g-0-BID-FFI-Developer-Guide.md](phase-9/Phase-9.75g-0-BID-FFI-Developer-Guide.md) |
 | 9.8 | 📅予定 | BIDレジストリ + 自動コード生成 | [phase_9_8_bid_registry_and_codegen.md](phase-9/phase_9_8_bid_registry_and_codegen.md) |
 | 10 | 📅予定 | Cranelift JIT（主経路） | [phase_10_cranelift_jit_backend.md](phase-10/phase_10_cranelift_jit_backend.md) |
-| 11+ | 🔮将来 | LLVM AOT（研究段階） | 後段検討 |
+| 11 | ✅完了 | LLVM統合・AOT実装（依存重い） | [phase-11/](phase-11/) |
+| 11.8 | 📅予定 | MIR整理（Core-15→Core-13） | [phase-11.8_mir_cleanup/](phase-11.8_mir_cleanup/) |
+| 12 | 🔄進行中 | MIR Core-15確定・プラグイン統一 | [phase-12/](phase-12/) |
+| 12.5 | 📅予定 | MIR15最適化戦略 | [phase-12.5/](phase-12.5/) |
+| 15 | 🌟将来 | セルフホスティング（Nyashコンパイラ） | [phase-15/](phase-15/) |
 
 ---
 
@@ -125,6 +129,65 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 3. **Phase 10.3**: 非同期の扱い（最小）
 4. **Phase 10.4**: GC切り替え可能ランタイム（2-3ヶ月）
 5. **Phase 10.5**: セルフホスティング（並行実装）
+
+---
+
+### 🔧 Phase 11: LLVM統合・AOT実装（完了 - 依存重い）
+
+**Summary**:
+- ✅ LLVM IRへの変換実装完了
+- ✅ AOT（Ahead-of-Time）コンパイル動作確認
+- ✅ ネイティブ実行ファイル生成成功
+
+**得られた知見**:
+- **依存関係が重い**: LLVM自体のビルド時間・サイズが巨大
+- **動作は確認**: 技術的には成功、実用性に課題
+- **Cranelift回帰**: 軽量な代替として再評価
+
+---
+
+### 📐 Phase 11.8: MIR整理（Core-15→Core-13）
+
+**Summary**:
+- ArrayGet/ArraySet → BoxCall統合
+- PluginInvoke → BoxCall統合  
+- 最終的にCore-13を目指す
+
+**詳細**: [phase-11.8_mir_cleanup/](phase-11.8_mir_cleanup/)
+
+---
+
+### 🎯 Phase 12: MIR Core-15確定・プラグイン統一（進行中）
+
+**Summary**:
+- MIR Core-15（14）の最終確定
+- プラグインシステムの3層統一
+- Nyash ABI設計
+
+**3層プラグインシステム**:
+1. Nyashスクリプトプラグイン（.nyash）
+2. C ABIプラグイン（高速・安定）
+3. Nyash ABIプラグイン（将来拡張）
+
+---
+
+### ⚡ Phase 12.5: MIR15最適化戦略 - コンパイラ丸投げ作戦
+
+**Summary**:
+- 「CPU（コンパイラ）に丸投げできるところは丸投げ」
+- MIR15の美しさ（15命令）を保ちながら実用的性能達成
+- 自前最適化は最小限、成熟したコンパイラ技術を活用
+
+**最適化境界線**:
+- **MIR側**: カノニカル化・軽量最適化のみ
+- **コンパイラ側**: ループ最適化・SIMD・レジスタ割当等
+
+**ヒントシステム**:
+- 命令は増やさずメタデータでヒント付与
+- pure/readonly/noalias/likely等の属性
+- Cコンパイラ/Cranelift/LLVMへ機械的マップ
+
+**詳細**: [phase-12.5/](phase-12.5/)
 
 ---
 

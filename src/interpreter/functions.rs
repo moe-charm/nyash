@@ -74,11 +74,12 @@ impl NyashInterpreter {
                 self.declare_local_variable(param, value.clone_or_share());
             }
             
-            // 関数本体を実行
+            // 関数本体を実行（TaskGroupスコープをプッシュ）
+            crate::runtime::global_hooks::push_task_scope();
             let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
             for statement in &body {
                 result = self.execute_statement(statement)?;
-                
+
                 // return文チェック
                 if let super::ControlFlow::Return(return_val) = &self.control_flow {
                     result = return_val.clone_box();
@@ -86,10 +87,11 @@ impl NyashInterpreter {
                     break;
                 }
             }
-            
+
             // 🌍 local変数スタックを復元（関数呼び出し終了）
+            crate::runtime::global_hooks::pop_task_scope();
             self.restore_local_vars(saved_locals);
-            
+
             Ok(result)
         } else {
             Err(RuntimeError::InvalidOperation {

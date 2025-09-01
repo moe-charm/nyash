@@ -247,10 +247,12 @@ impl NyashInterpreter {
             }
         });
         
+        // FutureBoxを現在のTaskGroupに登録（暗黙グループ best-effort）
+        crate::runtime::global_hooks::register_future_to_current_group(&future_box);
         // FutureBoxを変数に保存
         let future_box_instance = Box::new(future_box) as Box<dyn NyashBox>;
         self.set_variable(variable, future_box_instance)?;
-        
+
         Ok(Box::new(VoidBox::new()))
     }
 }

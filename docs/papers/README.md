@@ -8,10 +8,11 @@
 papers/
 ├── README.md                      # このファイル
 ├── active/                        # 現在執筆中の論文
-│   ├── mir15-implementation/      # MIR15実装論文（速報版）
-│   └── unified-lifecycle/         # 統一ライフサイクル論文（本格版）
+│   ├── mir15-fullstack/          # MIR15フルスタック論文（二本柱戦略）★NEW
+│   └── unified-lifecycle/         # 統一ライフサイクル論文（LLVM待ち）
 ├── archive/                       # 過去の検討・下書き
-│   └── initial-proposals/         # 初期提案資料
+│   ├── initial-proposals/         # 初期提案資料
+│   └── mir15-implementation/      # 旧MIR15論文（統合済み）
 └── resources/                     # 共通リソース
     ├── bibliography/              # 参考文献
     └── templates/                 # 論文テンプレート
@@ -19,11 +20,14 @@ papers/
 
 ## 📊 現在の論文プロジェクト
 
-### 1. MIR15実装論文（速報版）
-**状態**: 執筆準備中  
-**投稿先**: arXiv → Programming (MDPI)  
-**締切**: 即時投稿可能  
-**内容**: 30日間でのMIR15命令実装、教育的価値
+### 1. MIR15フルスタック論文（二本柱戦略）🎯
+**状態**: 執筆開始  
+**投稿先**: arXiv → POPL/PLDI/ICFP 2026  
+**締切**: 2025年9月（arXiv速報）→ 2025年11月（本投稿）  
+**内容**: 
+- **実証**: MIR15でUbuntu/Windows GUI動作
+- **理論**: Everything is Box - The Atomic Theory
+- 30日実装、4000行、性能評価
 
 ### 2. 統一ライフサイクル論文（本格版）
 **状態**: LLVM実装待ち  

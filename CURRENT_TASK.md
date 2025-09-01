@@ -823,3 +823,66 @@ Env Keys（pyc）
 - まず汎用・安全に動かす（最適化は内部に隠し、後段）
 - StringBox 等の個別特化は入れない。Handle/TLV で統一し、Box 追加を阻害しない
 - Strict/Fail‑Fast を維持（fallback で隠さない）
+Update (2025-09-02 AM / Async unify + VM await fix + JIT AOT builder plan)
+
+- What’s implemented (since last update)
+  - Interpreter/VM/JIT await semantics unified to Result.Ok/Err.
+    - Interpreter: await now returns Ok(value) or Err("Timeout") with cooperative polling and NYASH_AWAIT_MAX_MS guard.
+    - VM: execute_await() changed to safepoint + scheduler.poll loop with timeout → Err("Timeout") on expiry, Ok(value) on success.
+    - JIT: await_h produces handle (0 on timeout), then ok_h/err_h wrap into Result.Ok/Err (already wired).
+  - TaskGroup scaffolding connected to Interpreter
+    - nowait registers Future into implicit TaskGroup; function/static/parent calls push/pop task scopes to enable join on scope exit.
+  - TokenBox added as a first-class Box
+    - New Box: TokenBox (wraps CancellationToken). Externs: env.task.currentToken() → TokenBox, env.task.cancelCurrent() → cancel current scope token.
+  - Delay future (scheduler-backed)
+    - Extern: env.future.delay(ms) → FutureBox that resolves to void after ms (uses SingleThreadScheduler.spawn_after or thread fallback).
+  - CLI result normalization (interpreter path)
+    - When printing results, prefer semantics::coerce_to_i64/coerce_to_string and special-case plugin IntegerBox.get() so “IntegerBox(id)” prints as numeric value.
+
+- New samples (smoke-friendly)
+  - apps/tests/mir-safe-min: minimal MIR (plugins disabled)
+    - Run: `NYASH_DISABLE_PLUGINS=1 ./target/debug/nyash --backend mir apps/tests/mir-safe-min/main.nyash` → Result: 3
+  - apps/tests/async-nowait-basic: Interpreter nowait/await using threads
+    - Run: `NYASH_DISABLE_PLUGINS=1 ./target/debug/nyash apps/tests/async-nowait-basic/main.nyash` → Result: 33
+  - apps/tests/async-scope-token: VM token + delay demo (plugins on)
+    - Run: `./target/debug/nyash --backend vm apps/tests/async-scope-token/main.nyash`
+    - Output: token: …; after delay; token after cancel: …; Result: 0
+  - apps/tests/async-await-timeout: VM await timeout demo
+    - Run: `./target/debug/nyash --backend vm apps/tests/async-await-timeout/main.nyash`
+    - Output: `Err(Timeout)` then Result: 0
+
+- JIT (execute) status
+  - `--backend cranelift` (skeleton) runs: `apps/tests/mir-branch-ret` → Result: 1
+  - JIT-direct path compiles/executes for simple cases (single-exit return strategy in place, PHI materialization to locals, etc.).
+
+- JIT (AOT/EXE) current blocker and plan
+  - Symptom: jit-direct path panics in Cranelift FunctionBuilder finalize: “FunctionBuilder finalized, but block block0 is not sealed”.
+  - Root cause: Current CraneliftBuilder repeatedly creates short‑lived FunctionBuilder instances and finalizes them per emission step; sealing discipline diverges from expected pattern (single FunctionBuilder per function, seal blocks after predecessors known). Entry sealing/ret-epilogue sealing were added, but per‑step finalize still violates constraints.
+  - Plan (box-first, clean layering)
+    1) Refactor CraneliftBuilder to hold a single FunctionBuilder per function lifetime.
+       - Maintain current block, value stack, and IR emission without re‑creating/finalizing FB on every op.
+       - Emit jump/branch/hostcall/phi consistently in the same FB.
+       - Seal blocks when predecessors are determined (via LowerCore callbacks), and perform a final seal sweep before define_function.
+    2) Keep ObjectBuilder (AOT .o path) returning directly (no ret_block), unchanged aside from any minimal alignment with single‑FB pattern (it already returns directly and finishes module per function).
+    3) Target sample: apps/tests/mir-branch-ret for first green AOT object emission.
+       - Success criteria: tools/build_aot.sh invoked via `--compile-native -o app` produces an executable that prints Result: 1.
+    4) After branch/ret green, extend to minimal PHI case (mir-phi-min) ensuring paramized block args are declared prior to seals.
+
+- Interim guidance
+  - For JIT testing use `--backend cranelift` (skeleton exec) or VM path with `NYASH_JIT_EXEC=0` unless running jit-direct read‑only smokes.
+  - For AOT/EXE, wait for the single‑FB refactor merge; current tools/build_aot.sh in strict mode forbids fallback and will fail on the sealing assertion.
+
+- Env toggles / helpers
+  - Await timeout: `NYASH_AWAIT_MAX_MS` (default 5000)
+  - Scheduler trace/budget: `NYASH_SCHED_TRACE=1`, `NYASH_SCHED_POLL_BUDGET=N`
+  - JIT lower dump/trace: `NYASH_JIT_DUMP=1`, `NYASH_JIT_TRACE_RET=1`, `NYASH_JIT_TRACE_BLOCKS=1`
+  - JIT policy (read-only in jit-direct): `NYASH_JIT_STRICT=1` and policy.read_only enforced
+
+- Next actions (execution order)
+  1) CraneliftBuilder: single FunctionBuilder per function（finalize at end_functionのみ）。
+     - Remove per‑op new/finalize; switch emit_* to use the persistent FB.
+     - Seal entry immediately; seal successors when wiring is complete; final global seal sweep before define_function.
+  2) Verify jit-direct with `apps/tests/mir-branch-ret` (NYASH_JIT_THRESHOLD=1).
+  3) Enable AOT object emission for the sample and link via tools/build_aot.sh; run resulting EXE (expect Result: 1).
+  4) Extend to `mir-phi-min` (ensure ensure_block_params + sealing order correct).
+  5) Wire tri-backend/async/timeout smokes in tools/ (minimal, concise outputs) and add to CI.

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub(crate) struct TaskGroupInner {
-    pub(super) strong: Mutex<Vec<crate::boxes::future::FutureBox>>,
+    pub strong: Mutex<Vec<crate::boxes::future::FutureBox>>,
 }
 
 #[derive(Debug, Clone)]

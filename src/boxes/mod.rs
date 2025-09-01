@@ -85,6 +85,7 @@ pub mod gc_config_box;
 pub mod aot_config_box;
 pub mod aot_compiler_box;
 pub mod task_group_box;
+pub mod token_box;
 
 // Web専用Box群（ブラウザ環境でのみ利用可能）
 #[cfg(target_arch = "wasm32")]
@@ -124,6 +125,7 @@ pub use jit_hostcall_registry_box::JitHostcallRegistryBox;
 pub use aot_config_box::AotConfigBox;
 pub use aot_compiler_box::AotCompilerBox;
 pub use task_group_box::TaskGroupBox;
+pub use token_box::TokenBox;
 
 // EguiBoxの再エクスポート（非WASM環境のみ）
 #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]

@@ -1,0 +1,11 @@
+// @env NYASH_AWAIT_MAX_MS=100
+// Force timeout by delaying beyond the await max
+static box Main {
+  main() {
+    fut = future.delay(500)
+    res = await fut
+    // Expect Result.Err("Timeout")
+    print(res.toString())
+    return 0
+  }
+}

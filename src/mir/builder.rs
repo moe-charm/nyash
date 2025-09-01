@@ -1546,6 +1546,40 @@ impl MirBuilder {
                     self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
                     return Ok(void_id);
                 },
+                ("task", "currentToken") => {
+                    let result_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: Some(result_id),
+                        iface_name: "env.task".to_string(),
+                        method_name: "currentToken".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::READ,
+                    })?;
+                    return Ok(result_id);
+                },
+                ("task", "cancelCurrent") => {
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None,
+                        iface_name: "env.task".to_string(),
+                        method_name: "cancelCurrent".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::IO,
+                    })?;
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
+                    return Ok(void_id);
+                },
+                ("future", "delay") => {
+                    let result_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: Some(result_id),
+                        iface_name: "env.future".to_string(),
+                        method_name: "delay".to_string(),
+                        args: arg_values,
+                        effects: EffectMask::READ.add(Effect::Io),
+                    })?;
+                    return Ok(result_id);
+                },
                 ("console", "readLine") => {
                     // env.console.readLine() → ExternCall returning string
                     let result_id = self.value_gen.next();

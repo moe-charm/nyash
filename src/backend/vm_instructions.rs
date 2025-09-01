@@ -589,9 +589,28 @@ impl VM {
         let future_val = self.get_value(future)?;
         
         if let VMValue::Future(ref future_box) = future_val {
-            // This blocks until the future is ready (Condvar-based)
+            // Cooperative wait with scheduler polling and timeout to avoid deadlocks
+            let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+            let start = std::time::Instant::now();
+            let mut spins = 0usize;
+            while !future_box.ready() {
+                // Poll GC/scheduler similar to Safepoint
+                self.runtime.gc.safepoint();
+                if let Some(s) = &self.runtime.scheduler { s.poll(); }
+                std::thread::yield_now();
+                spins += 1;
+                if spins % 1024 == 0 { std::thread::sleep(std::time::Duration::from_millis(1)); }
+                if start.elapsed() >= std::time::Duration::from_millis(max_ms) {
+                    // Timeout -> Result.Err("Timeout")
+                    let err = Box::new(crate::box_trait::StringBox::new("Timeout"));
+                    let rb = crate::boxes::result::NyashResultBox::new_err(err);
+                    let vm_value = VMValue::from_nyash_box(Box::new(rb));
+                    self.set_value(dst, vm_value);
+                    return Ok(ControlFlow::Continue);
+                }
+            }
+            // Ready: get value and wrap into Result.Ok
             let result = future_box.get();
-            // Wrap into Result.Ok for unified semantics
             let ok = crate::boxes::result::NyashResultBox::new_ok(result);
             let vm_value = VMValue::from_nyash_box(Box::new(ok));
             self.set_value(dst, vm_value);

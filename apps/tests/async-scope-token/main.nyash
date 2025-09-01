@@ -1,0 +1,21 @@
+// VM-only demo: TaskGroup token + delayed future
+
+static box Main {
+  main() {
+    // Obtain current task token
+    tok = task.currentToken()
+    print("token: " + tok.toString())
+
+    // Delay 200ms via scheduler-backed future
+    fut = future.delay(200)
+    _ = await fut
+    print("after delay")
+
+    // Cancel current token (for demo, no effect yet on delay)
+    task.cancelCurrent()
+    tok2 = task.currentToken()
+    print("token after cancel: " + tok2.toString())
+
+    return 0
+  }
+}

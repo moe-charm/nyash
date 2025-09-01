@@ -75,7 +75,8 @@ impl NyashInterpreter {
                             self.declare_local_variable(param, value.clone_or_share());
                         }
                         
-                        // static関数の本体を実行
+                        // static関数の本体を実行（TaskGroupスコープ）
+                        crate::runtime::global_hooks::push_task_scope();
                         let mut result = Box::new(VoidBox::new()) as Box<dyn NyashBox>;
                         for statement in &body {
                             result = self.execute_statement(statement)?;
@@ -89,6 +90,7 @@ impl NyashInterpreter {
                         }
                         
                         // local変数スタックを復元
+                        crate::runtime::global_hooks::pop_task_scope();
                         self.restore_local_vars(saved_locals);
                         
                         // outbox変数スタックを復元
@@ -204,25 +206,27 @@ impl NyashInterpreter {
                         self.declare_local_variable(param, value.clone_or_share());
                     }
                     
-                    // メソッドの本体を実行
-                    let mut result = Box::new(VoidBox::new()) as Box<dyn NyashBox>;
-                    for statement in body {
-                        result = self.execute_statement(statement)?;
-                        
-                        // return文チェック
-                        if let super::ControlFlow::Return(return_val) = &self.control_flow {
-                            result = return_val.clone_box();
-                            self.control_flow = super::ControlFlow::None;
-                            break;
-                        }
+                // メソッドの本体を実行（TaskGroupスコープ）
+                crate::runtime::global_hooks::push_task_scope();
+                let mut result = Box::new(VoidBox::new()) as Box<dyn NyashBox>;
+                for statement in body {
+                    result = self.execute_statement(statement)?;
+                    
+                    // return文チェック
+                    if let super::ControlFlow::Return(return_val) = &self.control_flow {
+                        result = return_val.clone_box();
+                        self.control_flow = super::ControlFlow::None;
+                        break;
                     }
-                    
-                    // local変数スタックを復元
-                    self.restore_local_vars(saved_locals);
-                    
-                    idebug!("✅ Static box method completed: {}.{}", name, method);
-                    return Ok(result);
                 }
+                
+                // local変数スタックを復元
+                crate::runtime::global_hooks::pop_task_scope();
+                self.restore_local_vars(saved_locals);
+                
+                idebug!("✅ Static box method completed: {}.{}", name, method);
+                return Ok(result);
+            }
             }
         }
         
@@ -598,7 +602,8 @@ impl NyashInterpreter {
                 self.declare_local_variable(param, value.clone_or_share());
             }
             
-            // 親メソッドの本体を実行
+            // 親メソッドの本体を実行（TaskGroupスコープ）
+            crate::runtime::global_hooks::push_task_scope();
             let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
             for statement in &body {
                 result = self.execute_statement(statement)?;
@@ -615,6 +620,7 @@ impl NyashInterpreter {
             idebug!("🔍 DEBUG: FromCall {}.{} result: {}", parent, method, result.to_string_box().value);
             
             // local変数スタックを復元
+            crate::runtime::global_hooks::pop_task_scope();
             self.restore_local_vars(saved_locals);
             
             Ok(result)

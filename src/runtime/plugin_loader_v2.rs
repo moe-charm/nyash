@@ -468,6 +468,17 @@ impl PluginLoaderV2 {
                 }
                 Ok(None)
             }
+            ("env.task", "cancelCurrent") => {
+                let tok = crate::runtime::global_hooks::current_group_token();
+                tok.cancel();
+                Ok(None)
+            }
+            ("env.task", "currentToken") => {
+                // Return a TokenBox representing current task group's cancellation token
+                let tok = crate::runtime::global_hooks::current_group_token();
+                let tb = crate::boxes::token_box::TokenBox::from_token(tok);
+                Ok(Some(Box::new(tb)))
+            }
             ("env.debug", "trace") => {
                 // Minimal debug trace; prints to stderr when enabled
                 if std::env::var("NYASH_DEBUG_TRACE").ok().as_deref() == Some("1") {
@@ -529,6 +540,21 @@ impl PluginLoaderV2 {
                     }
                 }
                 Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_err(Box::new(crate::box_trait::StringBox::new("InvalidArgs"))))))
+            }
+            ("env.future", "delay") => {
+                // delay(ms) -> FutureBox resolved to void after ms
+                use crate::box_trait::NyashBox as _;
+                let fut = crate::boxes::future::FutureBox::new();
+                let ms = if let Some(arg0) = args.get(0) {
+                    if let Some(i) = arg0.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { i.value.max(0) as u64 }
+                    else { arg0.to_string_box().value.trim().parse::<i64>().unwrap_or(0).max(0) as u64 }
+                } else { 0 };
+                let fut_setter = fut.clone();
+                let _scheduled = crate::runtime::global_hooks::spawn_task_after(ms, "env.future.delay", Box::new(move || {
+                    fut_setter.set_result(Box::new(crate::box_trait::VoidBox::new()));
+                }));
+                crate::runtime::global_hooks::register_future_to_current_group(&fut);
+                Ok(Some(Box::new(fut)))
             }
             ("env.future", "spawn_instance") => {
                 // spawn_instance(recv, method_name, args...) -> FutureBox

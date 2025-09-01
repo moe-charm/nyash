@@ -763,7 +763,8 @@ impl IRBuilder for CraneliftBuilder {
         let entry = self.blocks[0];
         fb.append_block_params_for_function_params(entry);
         fb.switch_to_block(entry);
-        // Defer sealing to allow entry PHI params when needed
+        // Seal entry immediately (no predecessors by definition)
+        fb.seal_block(entry);
         self.entry_block = Some(entry);
         self.current_block_index = Some(0);
         // Prepare single-exit epilogue artifacts (ret_block with one i64 param)
@@ -816,6 +817,16 @@ impl IRBuilder for CraneliftBuilder {
                 }
                 fb.finalize();
             }
+        }
+
+        // Seal all blocks including entry and ret to satisfy builder constraints
+        {
+            use cranelift_frontend::FunctionBuilder;
+            let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+            if let Some(en) = self.entry_block { fb.seal_block(en); }
+            for b in &self.blocks { fb.seal_block(*b); }
+            if let Some(rb) = self.ret_block { fb.seal_block(rb); }
+            fb.finalize();
         }
 
         // Declare a unique function symbol for JIT
@@ -1798,23 +1809,20 @@ impl IRBuilder for ObjectBuilder {
     fn emit_jump(&mut self) { self.stats.3 += 1; }
     fn emit_branch(&mut self) { self.stats.3 += 1; }
     fn emit_return(&mut self) {
+        // ObjectBuilder: return directly (no dedicated ret_block)
         use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::{types, condcodes::IntCC};
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); } else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-        // If function has no return, just return
         if fb.func.signature.returns.is_empty() {
             fb.ins().return_(&[]);
             fb.finalize();
             return;
         }
-        // Normalize to function return type and return directly (ObjectBuilder has no ret_block)
         let mut v = if let Some(x) = self.value_stack.pop() { x } else { fb.ins().iconst(types::I64, 0) };
-        let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(types::I64);
         let v_ty = fb.func.dfg.value_type(v);
-        if ret_ty != v_ty {
-            if ret_ty == types::F64 && v_ty == types::I64 { v = fb.ins().fcvt_from_sint(types::F64, v); }
-            else if ret_ty == types::I64 && v_ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); }
-            else if ret_ty == types::I64 { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); }
+        if v_ty != types::I64 {
+            if v_ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); }
+            else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); v = fb.ins().select(v, one, zero); }
         }
         fb.ins().return_(&[v]);
         fb.finalize();

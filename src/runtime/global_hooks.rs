@@ -105,6 +105,8 @@ pub fn push_task_scope() {
     if let Ok(mut st) = group_stack_cell().write() {
         st.push(std::sync::Arc::new(crate::boxes::task_group_box::TaskGroupInner { strong: std::sync::Mutex::new(Vec::new()) }));
     }
+    // Set a fresh cancellation token for this scope (best-effort)
+    set_current_group_token(CancellationToken::new());
 }
 
 /// Pop a task scope. When depth reaches 0, join outstanding futures.
@@ -137,6 +139,8 @@ pub fn pop_task_scope() {
             join_all_registered_futures(ms);
         }
     }
+    // Reset token (best-effort)
+    set_current_group_token(CancellationToken::new());
 }
 
 /// Perform a runtime safepoint and poll the scheduler if available.
@@ -172,5 +176,21 @@ pub fn spawn_task_with_token(name: &str, token: crate::runtime::scheduler::Cance
         }
     }
     f();
+    false
+}
+
+/// Spawn a delayed task via scheduler if available; returns true if scheduled.
+pub fn spawn_task_after(delay_ms: u64, name: &str, f: Box<dyn FnOnce() + Send + 'static>) -> bool {
+    if let Ok(s) = sched_cell().read() {
+        if let Some(sched) = s.as_ref() {
+            sched.spawn_after(delay_ms, name, f);
+            return true;
+        }
+    }
+    // Fallback: run inline after blocking sleep
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        f();
+    });
     false
 }

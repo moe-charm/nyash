@@ -118,7 +118,45 @@ impl NyashRunner {
         match interpreter.execute(ast) {
             Ok(result) => {
                 println!("✅ Execution completed successfully!");
-                println!("Result: {}", result.to_string_box().value);
+                // Normalize display via semantics: prefer numeric, then string, then fallback
+                let disp = {
+                    // Special-case: plugin IntegerBox → call .get to fetch numeric value
+                    if let Some(p) = result.as_any().downcast_ref::<nyash_rust::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        if p.box_type == "IntegerBox" {
+                            // Scope the lock strictly to this block
+                            let fetched = {
+                                let host = nyash_rust::runtime::get_global_plugin_host();
+                                let res = if let Ok(ro) = host.read() {
+                                    if let Ok(Some(vb)) = ro.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[]) {
+                                        if let Some(ib) = vb.as_any().downcast_ref::<nyash_rust::box_trait::IntegerBox>() {
+                                            Some(ib.value.to_string())
+                                        } else {
+                                            Some(vb.to_string_box().value)
+                                        }
+                                    } else { None }
+                                } else { None };
+                                res
+                            };
+                            if let Some(s) = fetched { s } else {
+                                nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref())
+                                    .map(|i| i.to_string())
+                                    .or_else(|| nyash_rust::runtime::semantics::coerce_to_string(result.as_ref()))
+                                    .unwrap_or_else(|| result.to_string_box().value)
+                            }
+                        } else {
+                            nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref())
+                                .map(|i| i.to_string())
+                                .or_else(|| nyash_rust::runtime::semantics::coerce_to_string(result.as_ref()))
+                                .unwrap_or_else(|| result.to_string_box().value)
+                        }
+                    } else {
+                        nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref())
+                            .map(|i| i.to_string())
+                            .or_else(|| nyash_rust::runtime::semantics::coerce_to_string(result.as_ref()))
+                            .unwrap_or_else(|| result.to_string_box().value)
+                    }
+                };
+                println!("Result: {}", disp);
             },
             Err(e) => {
                 eprintln!("❌ Runtime error:\n{}", e.detailed_message(Some(&code)));
