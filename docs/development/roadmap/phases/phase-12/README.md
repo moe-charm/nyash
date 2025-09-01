@@ -81,6 +81,13 @@ Nyashエコシステム（ビルトインBox廃止後）：
   - 複雑な型の相互運用が必要
   - 将来の拡張性を重視する場合
 
+### 📝 MIR命令統合（Phase 12での変更）
+- **PluginInvoke → BoxCall 統合**
+  - ビルトインBox廃止によりフォールバックがなくなる
+  - BoxCallとPluginInvokeの区別が不要に
+  - VM層でC ABI/Nyash ABI/Scriptを自動判定
+  - Core-15 → Core-14 へ（命令数削減）
+
 ## 🛣️ 実装ロードマップ（修正版）
 
 ### Phase 12.1: export/import構文（2週間）
@@ -100,8 +107,20 @@ Nyashエコシステム（ビルトインBox廃止後）：
 - [ ] VSCode拡張（補完・定義ジャンプ）
 - [ ] サンプルパッケージ作成
 
+## 📚 関連ドキュメント
+
+### 🎯 主要設計ドキュメント
+- **[Nyash ABI統合設計図](./NYASH-ABI-DESIGN.md)** ← 🆕 具体的な技術仕様！
+- [export/import仕様](./export-import-spec.md)
+- [パッケージマネージャー設計](./package-manager-design.md)
+- [なぜ天才AIたちは間違えたのか](./WHY-AIS-FAILED.md)
+
+### 📂 議論の過程
+
+- ABI戦略議論: `abi-strategy-discussion/`
+- Nyash ABI詳細: `nyash-abi-discussion/`
+- 初期提案アーカイブ: `archive/`
+
 ---
 
-### 🗄️ 議論の過程
-
-AIたちがなぜ複雑な解決策を提案したのか、その議論の過程は `archive/` ディレクトリに保存されています。良い教訓として残しておきます。
+*AIたちがなぜ複雑な解決策を提案したのか、その議論の過程は `archive/` ディレクトリに保存されています。良い教訓として残しておきます。*

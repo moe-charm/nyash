@@ -1,0 +1,15 @@
+// async-spawn-instance smoke
+// Create an ArrayBox with 3 elements, then spawn length() asynchronously
+// and await the future. Expect 3.
+
+static box Main {
+  main() {
+    local arr = new ArrayBox()
+    arr.push(1)
+    arr.push(2)
+    arr.push(3)
+    nowait fut = arr.length()
+    local result = await fut
+    return result
+  }
+}

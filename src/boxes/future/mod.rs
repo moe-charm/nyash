@@ -4,69 +4,74 @@
 
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
-use std::sync::RwLock;
+use std::sync::{Mutex, Condvar, Arc, Weak};
 
 #[derive(Debug)]
 pub struct NyashFutureBox {
-    pub result: RwLock<Option<Box<dyn NyashBox>>>,
-    pub is_ready: RwLock<bool>,
+    inner: Arc<Inner>,
     base: BoxBase,
+}
+
+#[derive(Debug)]
+struct FutureState {
+    result: Option<Box<dyn NyashBox>>,
+    ready: bool,
+}
+
+#[derive(Debug)]
+struct Inner {
+    state: Mutex<FutureState>,
+    cv: Condvar,
+}
+
+/// A weak handle to a Future's inner state.
+/// Used for non-owning registries (TaskGroup/implicit group) to avoid leaks.
+#[derive(Clone, Debug)]
+pub struct FutureWeak {
+    pub(crate) inner: Weak<Inner>,
 }
 
 impl Clone for NyashFutureBox {
     fn clone(&self) -> Self {
-        let result_guard = self.result.read().unwrap();
-        let result_val = match result_guard.as_ref() {
-            Some(box_value) => Some(box_value.clone_box()),
-            None => None,
-        };
-        let is_ready_val = *self.is_ready.read().unwrap();
-        
-        Self {
-            result: RwLock::new(result_val),
-            is_ready: RwLock::new(is_ready_val),
-            base: BoxBase::new(), // Create a new base with unique ID for the clone
-        }
+        Self { inner: self.inner.clone(), base: BoxBase::new() }
     }
 }
 
 impl NyashFutureBox {
     pub fn new() -> Self {
         Self {
-            result: RwLock::new(None),
-            is_ready: RwLock::new(false),
+            inner: Arc::new(Inner {
+                state: Mutex::new(FutureState { result: None, ready: false }),
+                cv: Condvar::new(),
+            }),
             base: BoxBase::new(),
         }
     }
     
     /// Set the result of the future
     pub fn set_result(&self, value: Box<dyn NyashBox>) {
-        let mut result = self.result.write().unwrap();
-        *result = Some(value);
-        let mut ready = self.is_ready.write().unwrap();
-        *ready = true;
+        let mut st = self.inner.state.lock().unwrap();
+        st.result = Some(value);
+        st.ready = true;
+        self.inner.cv.notify_all();
     }
     
     /// Get the result (blocks until ready)
     pub fn get(&self) -> Box<dyn NyashBox> {
-        // Simple busy wait (could be improved with condvar)
-        loop {
-            let ready = self.is_ready.read().unwrap();
-            if *ready {
-                break;
-            }
-            drop(ready);
-            std::thread::yield_now();
+        let mut st = self.inner.state.lock().unwrap();
+        while !st.ready {
+            st = self.inner.cv.wait(st).unwrap();
         }
-        
-        let result = self.result.read().unwrap();
-        result.as_ref().unwrap().clone_box()
+        st.result.as_ref().unwrap().clone_box()
     }
     
     /// Check if the future is ready
     pub fn ready(&self) -> bool {
-        *self.is_ready.read().unwrap()
+        self.inner.state.lock().unwrap().ready
     }
+
+    /// Create a non-owning weak handle to this Future's state
+    pub fn downgrade(&self) -> FutureWeak { FutureWeak { inner: Arc::downgrade(&self.inner) } }
 }
 
 impl NyashBox for NyashFutureBox {
@@ -80,10 +85,10 @@ impl NyashBox for NyashFutureBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        let ready = *self.is_ready.read().unwrap();
+        let ready = self.inner.state.lock().unwrap().ready;
         if ready {
-            let result = self.result.read().unwrap();
-            if let Some(value) = result.as_ref() {
+            let st = self.inner.state.lock().unwrap();
+            if let Some(value) = st.result.as_ref() {
                 StringBox::new(format!("Future(ready: {})", value.to_string_box().value))
             } else {
                 StringBox::new("Future(ready: void)".to_string())
@@ -118,10 +123,10 @@ impl BoxCore for NyashFutureBox {
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ready = *self.is_ready.read().unwrap();
+        let ready = self.inner.state.lock().unwrap().ready;
         if ready {
-            let result = self.result.read().unwrap();
-            if let Some(value) = result.as_ref() {
+            let st = self.inner.state.lock().unwrap();
+            if let Some(value) = st.result.as_ref() {
                 write!(f, "Future(ready: {})", value.to_string_box().value)
             } else {
                 write!(f, "Future(ready: void)")
@@ -153,5 +158,12 @@ impl FutureBox {
     /// wait_and_get()の実装 - await演算子で使用
     pub fn wait_and_get(&self) -> Result<Box<dyn NyashBox>, String> {
         Ok(self.get())
+    }
+}
+
+impl FutureWeak {
+    /// Try to upgrade and check readiness
+    pub(crate) fn is_ready(&self) -> Option<bool> {
+        self.inner.upgrade().map(|arc| arc.state.lock().unwrap().ready)
     }
 }

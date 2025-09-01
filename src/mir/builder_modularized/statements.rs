@@ -142,19 +142,36 @@ impl MirBuilder {
     
     /// Build nowait statement: nowait variable = expression
     pub(super) fn build_nowait_statement(&mut self, variable: String, expression: ASTNode) -> Result<ValueId, String> {
-        // Evaluate the expression
+        // If the expression is a method call on a receiver, spawn it asynchronously via env.future.spawn_instance
+        if let ASTNode::MethodCall { object, method, arguments, .. } = expression.clone() {
+            // Build receiver value
+            let recv_val = self.build_expression(*object)?;
+            // Build method name as Const String
+            let mname_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: mname_id, value: crate::mir::ConstValue::String(method.clone()) })?;
+            // Build argument values
+            let mut arg_vals: Vec<ValueId> = Vec::with_capacity(2 + arguments.len());
+            arg_vals.push(recv_val);
+            arg_vals.push(mname_id);
+            for a in arguments.into_iter() { arg_vals.push(self.build_expression(a)?); }
+            // Emit extern call to env.future.spawn_instance, capturing Future result
+            let future_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::ExternCall {
+                dst: Some(future_id),
+                iface_name: "env.future".to_string(),
+                method_name: "spawn_instance".to_string(),
+                args: arg_vals,
+                effects: crate::mir::effect::EffectMask::PURE.add(crate::mir::effect::Effect::Io),
+            })?;
+            // Store the future in the variable
+            self.variable_map.insert(variable.clone(), future_id);
+            return Ok(future_id);
+        }
+        // Fallback: evaluate synchronously and wrap into a resolved Future
         let expression_value = self.build_expression(expression)?;
-        
-        // Create a new Future with the evaluated expression as the initial value
         let future_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::FutureNew {
-            dst: future_id,
-            value: expression_value,
-        })?;
-        
-        // Store the future in the variable
+        self.emit_instruction(MirInstruction::FutureNew { dst: future_id, value: expression_value })?;
         self.variable_map.insert(variable.clone(), future_id);
-        
         Ok(future_id)
     }
 }

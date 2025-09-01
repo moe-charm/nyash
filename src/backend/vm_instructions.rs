@@ -589,10 +589,11 @@ impl VM {
         let future_val = self.get_value(future)?;
         
         if let VMValue::Future(ref future_box) = future_val {
-            // This blocks until the future is ready
+            // This blocks until the future is ready (Condvar-based)
             let result = future_box.get();
-            // Convert NyashBox back to VMValue
-            let vm_value = VMValue::from_nyash_box(result);
+            // Wrap into Result.Ok for unified semantics
+            let ok = crate::boxes::result::NyashResultBox::new_ok(result);
+            let vm_value = VMValue::from_nyash_box(Box::new(ok));
             self.set_value(dst, vm_value);
             Ok(ControlFlow::Continue)
         } else {

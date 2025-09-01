@@ -11,6 +11,78 @@ Docs: docs/development/roadmap/phases/phase-11.7_jit_complete/{README.md, PLAN.m
 
 以降は下記の旧計画（LLVM準備）をアーカイブ参照。スモークやツールは必要箇所を段階で引継ぎ。
 
+次の候補（再開時）
+- spawn を本当の非同期化（TLV化＋Scheduler投入）
+- JIT/EXE用 nyash.future.spawn_method_h C-ABI 追加
+
+Async Task System (Structured Concurrency)
+- Spec/Plan: docs/development/roadmap/phases/phase-11.7_jit_complete/async_task_system/{SPEC.md, PLAN.md}
+- 目的: Nyash→MIR→VM→JIT/EXE まで一貫した構造化並行を実現（TaskGroup/Future を Box化）
+- 進捗（P1）: FutureBox を Mutex+Condvar 化、await は safepoint+timeout（NYASH_AWAIT_MAX_MS）で無限待ち防止済み。
+
+Update (2025-09-01 late / Async P2 skeleton + P3 await.Result unify)
+- P2（雛形）
+  - CancellationToken 型（cancel/is_cancelled）を追加: src/runtime/scheduler.rs
+  - Scheduler::spawn_with_token / global_hooks::spawn_task_with_token（現状はspawnへ委譲）
+  - TaskGroupBox 雛形: src/boxes/task_group_box.rs（API: new/cancel_all/is_cancelled）
+- P3（awaitのResult化・第一弾）
+  - VM Await: Futureの値を NyashResultBox::Ok で返す（src/backend/vm_instructions.rs）
+  - env.future.await（VM/Unified）: Ok(value)／Err("Timeout") を返す（timeoutは NYASH_AWAIT_MAX_MS 既定5秒）
+  - JIT Await: await_h は常にハンドル返却→ nyash.result.ok_h で Ok(handle) にラップ
+    - 追加: src/jit/extern/result.rs（SYM_RESULT_OK_H）／lowerで await 後に ok_h を差し込み
+- Smokes/安全ガード
+  - tools/smoke_async_spawn.sh（timeout 10s + NYASH_AWAIT_MAX_MS=5000）。apps/tests/async-spawn-instance は nowait/awaitの安全版
+  - ハングした場合もOS timeoutで残存プロセスを避ける
+
+次の実装順（合意があれば即着手）
+1) Phase 2: VM 経路への最小配線（暗黙 TaskGroup）
+   - nowait の着地点を TaskGroup.current().spawn(...) に切替（内部は現行 spawn_instance を踏む）
+   - scope 終了時の cancelAll→joinAll（LIFO）は雛形から段階導入（まずは no-op フック）
+2) Phase 3: JIT 側の Err 統一
+   - nyash.result.err_h(handle_or_msg) をNyRT/JITに追加し、timeout/キャンセル時に Err 化（await ラッパで分岐）
+   - 0/None フォールバックを撤去（VM/Externは実装済み／JITを揃える）
+3) Verifier: await 前後の checkpoint 検証
+   - Lowerer/パスで ExternCall(env.runtime.checkpoint) の前後挿入・検証ルールを追加
+4) CI/Smokes 最終化
+   - async-await-min, async-spawn-instance（VM/JIT）、timeout系（await_timeout）の3本を最小温存
+   - {vm,jit} × {default,strict} で timeout(10s) ガード
+
+Update (2025-09-01 PM / Semantics unify + Async Phase-2 prep)
+
+- Semantics layer in place and adopted by Interpreter/VM/JIT
+  - New: `src/runtime/semantics.rs` with `coerce_to_string` / `coerce_to_i64` and unified `+` ordering
+  - Interpreter/VM now delegate to semantics (string concat matches VM path; plugin String toUtf8→toString→fallback)
+  - JIT: added hostcall `nyash.semantics.add_hh` (handle,handle) for dynamic add; wired in builder/core
+- Cross-backend smokes (Script/VM/JIT via VM+jit-exec)
+  - `apps/tests/mir-branch-ret` → 1 (all three)
+  - `apps/tests/semantics-unified` → 0 (concat/numeric semantics aligned across backends)
+  - Tool: `tools/apps_tri_backend_smoke.sh` (summarizes Result lines for 3 modes)
+- Async Phase‑2 (front): minimal spawn API and await path
+  - Exposed `env.future.spawn_instance(recv, method_name, args...) -> FutureBox`
+    - For now resolves synchronously (safe baseline). Hooked to `PluginHost::invoke_instance_method`
+  - `env.runtime.checkpoint` now calls `global_hooks::safepoint_and_poll()` for future scheduler integration
+  - `env.future.await(value)` pass‑through unless value is FutureBox (then wait_and_get)
+  - `apps/tests/async-await-min`: uses `nowait fut = 42; await fut;` → VM/JIT return 42; Interpreter runs (CLI does not print standardized Result line)
+
+Delta to code
+- Added: `src/runtime/semantics.rs`
+- Updated: `src/interpreter/expressions/operators.rs`, `src/backend/vm_values.rs` → use semantics layer
+- JIT: `src/jit/lower/{builder.rs, core_ops.rs, extern_thunks.rs}`, `src/jit/extern/collections.rs`
+- NyRT C‑ABI: `crates/nyrt/src/lib.rs` exported `nyash.semantics.add_hh`
+- Runtime externs: `src/runtime/plugin_loader_v2.rs` added `env.future.spawn_instance`, improved `env.runtime.checkpoint`
+- Hooks/Scheduler: `src/runtime/global_hooks.rs` (safepoint+poll, spawn_task stub), `src/runtime/scheduler.rs` (single‑thread scheduler API scaffold present)
+- Smokes/tools: `apps/tests/semantics-unified`, `apps/tests/gc-sync-stress`, `tools/apps_tri_backend_smoke.sh`
+
+Open items / Next steps (proposed)
+1) True async spawn (Phase‑2 complete)
+   - Change `spawn_instance` to queue a task (Scheduler) instead of inline: capture `recv(type_id/instance_id)`, `method_name`, and TLV‑encoded args
+   - On run: decode TLV and `invoke_instance_method`, set Future result; ensure safepoint via `checkpoint`
+   - Add NyRT C‑ABI `nyash.future.spawn_method_h` for JIT/EXE and wire lowering
+2) Interpreter CLI result normalization (optional)
+   - Align “Result:” line for static box Main return to make Script mode consistent with VM/JIT in smokes
+3) Keep smokes minimal (avoid bloat); current trio is sufficient for gating
+
+—
 Update (2025-09-01 AM / JIT handoff follow-up)
 
 - Cranelift 最小JITの下地は進捗良好（LowerCore→CraneliftBuilder 経路）

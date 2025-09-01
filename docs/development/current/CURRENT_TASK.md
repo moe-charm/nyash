@@ -1,3 +1,98 @@
+# 🎯 CURRENT TASK - 2025-09-01 Snapshot（Async Task System / Phase 11.7 + Plugin-First）
+
+このスナップショットは Phase 11.7 の Async Task System 進捗を反映しました。詳細仕様/計画は下記を参照。
+- SPEC: docs/development/roadmap/phases/phase-11.7_jit_complete/async_task_system/SPEC.md
+- PLAN: docs/development/roadmap/phases/phase-11.7_jit_complete/async_task_system/PLAN.md
+
+## ✅ Async Task System（進捗サマリ）
+- P1 完了: FutureBox を Mutex+Condvar化。await は safepoint + timeout でハング抑止。
+  - VM/Unified: `env.future.await` は `Result.Ok(value)` / `Result.Err("Timeout")` を返却。
+  - JIT: `await_h` → `result.ok_h` ラップ済。さらに `result.err_h` 追加と `Ok/Err` 分岐を Lowerer に実装。
+  - 修正: FutureBox クローンを共有化（Arc<Inner>）し、spawn側のsetterと呼び出し側のFutureが同一待機点を共有。
+- P2（着手・足場）: CancellationToken / TaskGroup（雛形）
+  - VM 経路: `env.future.spawn_instance` を `spawn_task_with_token(current_group_token(), ..)` に配線（no-opトークン）。
+  - 付随: 暗黙グループの子Futureをグローバル登録（best-effort）し、簡易joinAllの足場（global_hooks.join_all_registered_futures）。
+  - TaskGroupBox: `cancelAll()`/`joinAll(ms?)` をVM BoxCallで受付（plugins-only環境では new は不可）。
+  - Runner終端: `NYASH_JOIN_ALL_MS`(既定2000ms)で暗黙グループの子Futureをbest-effort join。
+  - グループ/トークンはスカフォールド（Phase 2で実体実装: 伝播/キャンセル/join順序）。
+- P3（第一弾）: Await の Result 化（JIT側）
+  - 新規シム: `nyash.result.err_h(handle)` 追加（<=0時は `Err("Timeout")` を生成）。
+  - Lowerer: `await` を `await_h → (ok_h, err_h) → handle==0 で select` に更新。
+
+### MIR 層の設計（合意メモ）
+- 原則: 「すべては箱」+「汎用呼び出し」で表現し、専用命令は最小限。
+- 箱の面（MIRから見えるもの）
+  - TaskGroupBox: `spawn(recv, method, args…) -> Future`, `cancelAll()`, `joinAll(timeout_ms?)`, `fini(将来)`
+  - FutureBox: `await(timeout_ms?) -> Result<T, Err>`, `cancel()`, `isReady()`
+  - ResultBox: 既存（Ok/Err）
+- MIR表現
+  - nowait: 当面は `ExternCall("env.future","spawn_instance", [recv, mname, ...])`。TaskGroup実体が固まり次第 `BoxCall TaskGroup.spawn(...)` に移行。
+  - await: 既存 `MirInstruction::Await` を使用（Lowererが await 前後に `env.runtime.checkpoint` を自動挿入）。
+  - checkpoint: `ExternCall("env.runtime","checkpoint")` 相当。Verifierで Await の前後必須（実装済）。
+- Loweringと実装対応
+  - VM: `spawn_instance`→scheduler enqueue、`Future.get()`+timeout→`Result.Ok/Err("Timeout")`、checkpointでGC+scheduler.poll
+  - JIT/AOT: `await_h`→i64 handle(0=timeout)→`result.ok_h/err_h`でResult化。checkpointは `nyash.rt.checkpoint` シムに集約。
+- 効果: VM/JIT/AOTが同形のMIRを見て、JIT/EXEは既存のシムで統一挙動を実現。Verifierでawait安全性を機械チェック。
+
+### 引き継ぎ（2025-09-01, late）
+- これまでに着地したもの（コード）
+  - Await 正規化（JIT）: `nyash.result.err_h` 追加、`await_h → ok_h/err_h → select` で Result.Ok/Err に統一。
+  - Await 安全性: Builder が await 前後に `Safepoint` 自動挿入、Verifier が前後 checkpoint 必須を検証（`--verify`）。
+  - Future 共有/弱化: `FutureBox` を Arc 共有に、`FutureWeak` を追加（`downgrade()/is_ready()`）。
+  - 暗黙/明示 TaskGroup 足場:
+    - `global_hooks`: 強/弱レジストリ、関数スコープ `push_task_scope()/pop_task_scope()`（外側でbest‑effort join）。
+    - VM: 関数入口/出口にスコープ push/pop を配線（JIT早期return含む）。
+    - TaskGroupBox: `inner.strong` で子Futureを強参照所有、`add_future()` / `joinAll(ms)` / `cancelAll()`（scaffold）。
+    - `env.future.spawn_instance` 生成Futureは「現スコープのTaskGroup」または暗黙グループへ登録。
+
+- 次の実装順（小粒から順に）
+  1) TaskGroupBox.spawn(recv, method, args…)->Future を実装（所有は TaskGroupBox）。
+     - Builder の nowait を `BoxCall TaskGroup.spawn` に段階移行（fallback: `ExternCall env.future.spawn_instance`）。
+  2) LIFO join/cancel: スコープTaskGroupをネスト順で `cancelAll→joinAll`（まずは join、次段で token 伝播）。
+  3) Err 統一（P3後半）: Cancelled/Panic を Result.Err に統一（JIT/AOT：必要なら NyRT シム追加）。
+  4) テスト/CI: 
+     - 単体（feature-gated）: Futureの強/弱参照・join・スコープjoinの確認。
+     - E2E: nowait→await（Ok/Timeout）、終端join を {vm, jit, aot}×{default, strict} でスモーク化。
+     - CI に async 3本（timeoutガード付き）を最小マトリクスで追加。
+
+- 実行・フラグ
+  - `NYASH_AWAIT_MAX_MS`（既定5000）: await のタイムアウト。
+  - `NYASH_JOIN_ALL_MS`（既定2000）: Runner 終端 join のタイムアウト。
+  - `NYASH_TASK_SCOPE_JOIN_MS`（既定1000）: 関数スコープ pop 時の join タイムアウト。
+
+- 参考（動かし方）
+  - ビルド: `cargo build --release --features cranelift-jit`
+  - スモーク: `tools/smoke_async_spawn.sh`（VM/JIT, timeout 10s + `NYASH_AWAIT_MAX_MS=5000`）
+  - デモ: `apps/tests/taskgroup-join-demo/main.nyash`（スコープ/終端 join の挙動確認）
+
+- 既知の制約/注意
+  - plugins‑only 環境では `new TaskGroupBox()` は未実装（箱自体はVM側で動くが、プラグイン同梱は未）。
+  - cancel はフラグのみ（次段で CancellationToken 伝播と await 時の Cancelled をErrで返す）。
+  - いくつかの既存テストが赤（別領域の初期化不備）。asyncテストはfeatureゲートで段階導入予定。
+
+
+### 参考コード（主要差分）
+- Runtime/スケジューラ+フック
+  - `src/runtime/scheduler.rs`: `spawn_with_token` を含む Scheduler スケルトン。
+  - `src/runtime/global_hooks.rs`: `spawn_task_with_token`・`current_group_token()` を追加。
+- TaskGroup（雛形）
+  - `src/boxes/task_group_box.rs`: 取消状態のみ保持（将来の伝播に備える）。
+- Await の Result 化
+  - VM: `src/backend/vm_instructions.rs`（Result.Okへ包む）。
+  - Unified/V2: `src/runtime/plugin_loader_{unified,v2}.rs`（`env.future.await` を Ok/Err(Timeout) で返却）。
+  - JIT: `src/jit/extern/{async.rs,result.rs}`（`await_h` と `ok_h/err_h`）、`src/jit/lower/core.rs`（await分岐）、`src/jit/lower/builder.rs`（シンボル登録）。
+- スモーク
+  - `tools/smoke_async_spawn.sh`（timeout 10s + `NYASH_AWAIT_MAX_MS=5000`）。
+  - 参考デモ: `apps/tests/taskgroup-join-demo/main.nyash`（Runner終端joinの動作確認）。
+
+### 次の実装順（合意済み）
+1) Phase 2: VMの暗黙TaskGroup配線（現状no-opトークンで着地→次にグループ実体／join/cancel実装）
+2) Phase 3: JIT側のErr統一（Timeout以外: Cancelled/Panicの表出整理、0/None撤去の完了）
+3) Verifier: await前後のcheckpoint検証ルール追加（実装済・--verifyで有効）
+4) CI/Smokes: async系3本を最小マトリクスでtimeoutガード
+
+---
+
 # 🎯 CURRENT TASK - 2025-08-30 Restart Snapshot（Plugin-First / Core最小化）
 
 このスナップショットは最新の到達点へ更新済み。再起動時はここから辿る。

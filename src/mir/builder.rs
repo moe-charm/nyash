@@ -1445,19 +1445,31 @@ impl MirBuilder {
     
     /// Build nowait statement: nowait variable = expression
     fn build_nowait_statement(&mut self, variable: String, expression: ASTNode) -> Result<ValueId, String> {
-        // Evaluate the expression
+        // If expression is a method call, prefer true async via env.future.spawn_instance
+        if let ASTNode::MethodCall { object, method, arguments, .. } = expression.clone() {
+            let recv_val = self.build_expression(*object)?;
+            let mname_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: mname_id, value: crate::mir::ConstValue::String(method.clone()) })?;
+            let mut arg_vals: Vec<ValueId> = Vec::with_capacity(2 + arguments.len());
+            arg_vals.push(recv_val);
+            arg_vals.push(mname_id);
+            for a in arguments.into_iter() { arg_vals.push(self.build_expression(a)?); }
+            let future_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::ExternCall {
+                dst: Some(future_id),
+                iface_name: "env.future".to_string(),
+                method_name: "spawn_instance".to_string(),
+                args: arg_vals,
+                effects: crate::mir::effect::EffectMask::PURE.add(crate::mir::effect::Effect::Io),
+            })?;
+            self.variable_map.insert(variable.clone(), future_id);
+            return Ok(future_id);
+        }
+        // Fallback: resolved future
         let expression_value = self.build_expression(expression)?;
-        
-        // Create a new Future with the evaluated expression as the initial value
         let future_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::FutureNew {
-            dst: future_id,
-            value: expression_value,
-        })?;
-        
-        // Store the future in the variable
+        self.emit_instruction(MirInstruction::FutureNew { dst: future_id, value: expression_value })?;
         self.variable_map.insert(variable.clone(), future_id);
-        
         Ok(future_id)
     }
     
@@ -1466,6 +1478,9 @@ impl MirBuilder {
         // Evaluate the expression (should be a Future)
         let future_value = self.build_expression(expression)?;
         
+        // Insert checkpoint before await (safepoint)
+        self.emit_instruction(MirInstruction::Safepoint)?;
+
         // Create destination for await result
         let result_id = self.value_gen.next();
         
@@ -1474,6 +1489,8 @@ impl MirBuilder {
             dst: result_id,
             future: future_value,
         })?;
+        // Insert checkpoint after await (safepoint)
+        self.emit_instruction(MirInstruction::Safepoint)?;
         
         Ok(result_id)
     }

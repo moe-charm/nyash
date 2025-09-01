@@ -500,18 +500,35 @@ impl PluginLoaderV2 {
                 Ok(None)
             }
             ("env.future", "await") => {
-                // await(future) -> value (pass-through if not a FutureBox)
+                // await(future) -> Result.Ok(value) / Result.Err(Timeout|Error)
+                use crate::boxes::result::NyashResultBox;
                 if let Some(arg) = args.get(0) {
                     if let Some(fut) = arg.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
-                        match fut.wait_and_get() { Ok(v) => return Ok(Some(v)), Err(e) => {
-                            eprintln!("[env.future.await] error: {}", e);
-                            return Ok(None);
-                        } }
+                        let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+                        let start = std::time::Instant::now();
+                        let mut spins = 0usize;
+                        while !fut.ready() {
+                            crate::runtime::global_hooks::safepoint_and_poll();
+                            std::thread::yield_now();
+                            spins += 1;
+                            if spins % 1024 == 0 { std::thread::sleep(std::time::Duration::from_millis(1)); }
+                            if start.elapsed() >= std::time::Duration::from_millis(max_ms) {
+                                let err = crate::box_trait::StringBox::new("Timeout");
+                                return Ok(Some(Box::new(NyashResultBox::new_err(Box::new(err)))));
+                            }
+                        }
+                        return match fut.wait_and_get() {
+                            Ok(v) => Ok(Some(Box::new(NyashResultBox::new_ok(v)))),
+                            Err(e) => {
+                                let err = crate::box_trait::StringBox::new(format!("Error: {}", e));
+                                Ok(Some(Box::new(NyashResultBox::new_err(Box::new(err)))))
+                            }
+                        };
                     } else {
-                        return Ok(Some(arg.clone_box()));
+                        return Ok(Some(Box::new(NyashResultBox::new_ok(arg.clone_box()))));
                     }
                 }
-                Ok(None)
+                Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_err(Box::new(crate::box_trait::StringBox::new("InvalidArgs"))))))
             }
             ("env.future", "spawn_instance") => {
                 // spawn_instance(recv, method_name, args...) -> FutureBox
@@ -530,7 +547,9 @@ impl PluginLoaderV2 {
                         let method_name_inline = method_name.clone();
                         let tail_inline: Vec<Box<dyn NyashBox>> = tail.iter().map(|a| a.clone_box()).collect();
                         let fut_setter = fut.clone();
-                        let scheduled = crate::runtime::global_hooks::spawn_task("spawn_instance", Box::new(move || {
+                        // Phase 2: attempt to bind to current task group's token (no-op if unset)
+                        let token = crate::runtime::global_hooks::current_group_token();
+                        let scheduled = crate::runtime::global_hooks::spawn_task_with_token("spawn_instance", token, Box::new(move || {
                             let host = crate::runtime::get_global_plugin_host();
                             let read_res = host.read();
                             if let Ok(ro) = read_res {
@@ -551,11 +570,14 @@ impl PluginLoaderV2 {
                                 }
                             }
                         }
+                        // Register into current TaskGroup (if any) or implicit group (best-effort)
+                        crate::runtime::global_hooks::register_future_to_current_group(&fut);
                         return Ok(Some(Box::new(fut)));
                     }
                 }
                 // Fallback: resolved future of first arg
                 if let Some(v) = args.get(0) { fut.set_result(v.clone_box()); }
+                crate::runtime::global_hooks::register_future_to_current_group(&fut);
                 Ok(Some(Box::new(fut)))
             }
             ("env.canvas", _) => {

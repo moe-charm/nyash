@@ -557,6 +557,8 @@ use super::extern_thunks::{
 };
 #[cfg(feature = "cranelift-jit")]
 use crate::jit::r#extern::r#async::nyash_future_await_h;
+#[cfg(feature = "cranelift-jit")]
+use crate::jit::r#extern::result::{nyash_result_ok_h, nyash_result_err_h};
 
 #[cfg(feature = "cranelift-jit")]
 use crate::{
@@ -1941,9 +1943,13 @@ impl CraneliftBuilder {
             builder.symbol("nyash.jit.dbg_i64", nyash_jit_dbg_i64 as *const u8);
             // Async/Future
             builder.symbol(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, nyash_future_await_h as *const u8);
+            builder.symbol(crate::jit::r#extern::result::SYM_RESULT_OK_H, nyash_result_ok_h as *const u8);
+            builder.symbol(crate::jit::r#extern::result::SYM_RESULT_ERR_H, nyash_result_err_h as *const u8);
             builder.symbol("nyash.jit.block_enter", nyash_jit_block_enter as *const u8);
             // Async/Future
             builder.symbol(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, nyash_future_await_h as *const u8);
+            builder.symbol(crate::jit::r#extern::result::SYM_RESULT_OK_H, nyash_result_ok_h as *const u8);
+            builder.symbol(crate::jit::r#extern::result::SYM_RESULT_ERR_H, nyash_result_err_h as *const u8);
             builder.symbol("nyash.jit.dbg_i64", nyash_jit_dbg_i64 as *const u8);
         {
             use crate::jit::r#extern::collections as c;

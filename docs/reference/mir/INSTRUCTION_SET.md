@@ -1,9 +1,9 @@
-# Nyash MIR Instruction Set (Canonical 26 → migrating to Core-15)
+# Nyash MIR Instruction Set (Canonical 26 → migrating to Core-15 → Core-14)
 
 Status: Canonical (Source of Truth) — transitioning
-Last Updated: 2025-08-25
+Last Updated: 2025-09-01
 
-この文書はNyashのMIR命令セットの唯一の参照（現状は26命令）だよ。Core-15 への段階移行を進めており、安定次第この文書を15命令へ更新し、テスト固定数も切り替える（移行中は26を維持）。
+この文書はNyashのMIR命令セットの唯一の参照（現状は26命令）だよ。Core-15 への段階移行を進めており、さらに Phase 12 で Core-14 へ（PluginInvoke → BoxCall 統合）。安定次第この文書を14命令へ更新し、テスト固定数も切り替える（移行中は26を維持）。
 
 注意: Debug/Nop/Safepointはビルドモードでの降格用メタ命令であり、コア命令数には数えない。
 
@@ -15,8 +15,11 @@ Transition Note
   - BarrierRead/BarrierWrite → Barrier
   - Print → ExternCall(env.console.log)（Deprecated）
   - PluginInvoke → BoxCall（Deprecated; 名前/スロット解決はBoxCall側で処理）
+- Phase 12（ビルトインBox廃止）での追加統合
+  - PluginInvoke → BoxCall 完全統合（ビルトインフォールバックがなくなるため区別不要）
+  - VM層でC ABI/Nyash ABI/Scriptプラグインを自動判定
 - VM/JIT の代表的な Core-15 カバー手順は `docs/reference/mir/MIR15_COVERAGE_CHECKLIST.md` を参照。
-- Core-15 安定後に本ドキュメントの「Core Instructions」を15命令へ更新し、マッピング表を併記する。
+- Core-14 安定後に本ドキュメントの「Core Instructions」を14命令へ更新し、マッピング表を併記する。
 
 ## Core Instructions（26）
 - Const
@@ -54,10 +57,19 @@ Transition Note
 - 配列(2): ArrayGet, ArraySet
 - 外部(1): ExternCall
 
+## Core-14（Phase 12 Target; PluginInvoke統合後）
+- 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
+- メモリ(2): Load, Store
+- 制御(4): Branch, Jump, Return, Phi
+- Box(2): NewBox, BoxCall  ← PluginInvokeを吸収
+- 配列(2): ArrayGet, ArraySet
+- 外部(1): ExternCall
+
 Notes
 - Print/Debug/Safepointはメタ/Extern化（Print→ExternCall）。
 - WeakRef/Barrier は統合済み（旧WeakNew/WeakLoad/BarrierRead/WriteはRewriteで互換）。
-- Call は BoxCall へ集約（PluginInvokeはDeprecated）。
+- Call は BoxCall へ集約（PluginInvokeはDeprecated → Phase 12で完全統合）。
+- Phase 12: ビルトインBox廃止により、BoxCallとPluginInvokeの区別が不要に。VM層でABI判定。
 
 ## Meta (降格対象; カウント外)
 - Debug

@@ -580,6 +580,7 @@ impl VM {
         
         // Enter a new scope for this function
         self.scope_tracker.push_scope();
+        crate::runtime::global_hooks::push_task_scope();
         
         // Phase 10_c: try a JIT dispatch when enabled; fallback to VM on trap/miss
         // Prepare arguments from current frame params before borrowing jit_manager mutably
@@ -599,6 +600,7 @@ impl VM {
                         // Exit scope before returning
                         self.leave_root_region();
                         self.scope_tracker.pop_scope();
+                        crate::runtime::global_hooks::pop_task_scope();
                         return Ok(val);
                     } else if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") ||
                               std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1") {
@@ -606,6 +608,7 @@ impl VM {
                         if jit_only {
                             self.leave_root_region();
                             self.scope_tracker.pop_scope();
+                            crate::runtime::global_hooks::pop_task_scope();
                             return Err(VMError::InvalidInstruction(format!("JIT-only enabled and JIT trap occurred for {}", function.signature.name)));
                         }
                     }
@@ -616,15 +619,18 @@ impl VM {
                         if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) {
                             self.leave_root_region();
                             self.scope_tracker.pop_scope();
+                            crate::runtime::global_hooks::pop_task_scope();
                             return Ok(val);
                         } else {
                             self.leave_root_region();
                             self.scope_tracker.pop_scope();
+                            crate::runtime::global_hooks::pop_task_scope();
                             return Err(VMError::InvalidInstruction(format!("JIT-only enabled and JIT execution failed for {}", function.signature.name)));
                         }
                     } else {
                         self.leave_root_region();
                         self.scope_tracker.pop_scope();
+                        crate::runtime::global_hooks::pop_task_scope();
                         return Err(VMError::InvalidInstruction(format!("JIT-only enabled but function not compiled: {}", function.signature.name)));
                     }
                 }
@@ -673,6 +679,7 @@ impl VM {
             if let Some(return_value) = should_return {
                 // Exit scope before returning
                 self.scope_tracker.pop_scope();
+                crate::runtime::global_hooks::pop_task_scope();
                 return Ok(return_value);
             } else if let Some(target) = next_block {
                 // Update previous block before jumping and record transition via control_flow helper
@@ -683,6 +690,7 @@ impl VM {
                 // but let's handle it gracefully by returning void
                 // Exit scope before returning
                 self.scope_tracker.pop_scope();
+                crate::runtime::global_hooks::pop_task_scope();
                 return Ok(VMValue::Void);
             }
         }

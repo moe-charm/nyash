@@ -118,6 +118,31 @@ impl PluginHost {
         method_name: &str,
         args: &[Box<dyn crate::box_trait::NyashBox>],
     ) -> BidResult<Option<Box<dyn crate::box_trait::NyashBox>>> {
+        // Special-case env.future.await to avoid holding loader RwLock while polling scheduler
+        if iface_name == "env.future" && method_name == "await" {
+            use crate::boxes::result::NyashResultBox;
+            if let Some(arg0) = args.get(0) {
+                if let Some(fut) = arg0.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
+                    let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+                    let start = std::time::Instant::now();
+                    let mut spins = 0usize;
+                    while !fut.ready() {
+                        crate::runtime::global_hooks::safepoint_and_poll();
+                        std::thread::yield_now();
+                        spins += 1;
+                        if spins % 1024 == 0 { std::thread::sleep(std::time::Duration::from_millis(1)); }
+                        if start.elapsed() >= std::time::Duration::from_millis(max_ms) {
+                            let err = crate::box_trait::StringBox::new("Timeout");
+                            return Ok(Some(Box::new(NyashResultBox::new_err(Box::new(err)))));
+                        }
+                    }
+                    return Ok(fut.wait_and_get().ok().map(|v| Box::new(NyashResultBox::new_ok(v)) as Box<dyn crate::box_trait::NyashBox>));
+                } else {
+                    return Ok(Some(Box::new(NyashResultBox::new_ok(arg0.clone_box()))));
+                }
+            }
+            return Ok(Some(Box::new(NyashResultBox::new_err(Box::new(crate::box_trait::StringBox::new("InvalidArgs"))))));
+        }
         let l = self.loader.read().unwrap();
         l.extern_call(iface_name, method_name, args)
     }

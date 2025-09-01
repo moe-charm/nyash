@@ -1,0 +1,27 @@
+// @env NYASH_PLUGIN_ONLY=1
+// @env NYASH_AWAIT_MAX_MS=500
+
+// Demo: TaskGroupBox.joinAll() scaffold
+// Note: In plugins-only mode, new TaskGroupBox() may be a no-op; this demo
+// focuses on end-of-program joinAll via runner and explicit call safety.
+
+local fut, arr
+
+// Prepare a plugin-backed Array and spawn a method via env.future.spawn_instance
+arr = new ArrayBox()
+arr.push(1)
+arr.push(2)
+arr.push(3)
+
+// nowait: simulate async by invoking plugin via env.future.spawn_instance
+// Note: In current pipeline, MIR builder lowers nowait ... to env.future.spawn_instance
+nowait fut = arr.length()
+
+// Optionally wait with timeout (builder inserts safepoint before/after)
+local r
+r = await fut
+
+// Runner will best-effort join all registered futures at program end
+
+// Print result for visual confirmation
+print("Result: " + r)

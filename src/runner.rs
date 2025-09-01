@@ -320,6 +320,9 @@ impl NyashRunner {
             Ok(result) => {
                 println!("✅ Execution completed successfully!");
                 println!("Result: {}", result.to_string_box().value);
+                // Structured concurrency: best-effort join of spawned tasks at program end
+                let join_ms: u64 = std::env::var("NYASH_JOIN_ALL_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
+                nyash_rust::runtime::global_hooks::join_all_registered_futures(join_ms);
             },
             Err(e) => {
                 // Use enhanced error reporting with source context

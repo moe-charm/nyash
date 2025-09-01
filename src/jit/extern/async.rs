@@ -5,6 +5,7 @@ use crate::{backend::vm::VMValue, box_trait::{NyashBox, IntegerBox, BoolBox, Str
 
 /// Symbol name for awaiting a FutureBox and returning a value/handle (i64)
 pub const SYM_FUTURE_AWAIT_H: &str = "nyash.future.await_h";
+pub const SYM_FUTURE_SPAWN_INSTANCE3_I64: &str = "nyash.future.spawn_instance3_i64";
 
 #[cfg(feature = "cranelift-jit")]
 pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
@@ -34,12 +35,19 @@ pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
         });
     }
     let Some(fut) = fut_opt else { return 0; };
-    // Block until completion, get NyashBox result
+    // Cooperative wait with scheduler polling and timeout
+    let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+    let start = std::time::Instant::now();
+    while !fut.ready() {
+        crate::runtime::global_hooks::safepoint_and_poll();
+        std::thread::yield_now();
+        if start.elapsed() >= std::time::Duration::from_millis(max_ms) {
+            // Timeout: return 0 (caller may handle as failure)
+            return 0;
+        }
+    }
+    // Get NyashBox result and always return a handle
     let out_box: Box<dyn NyashBox> = fut.get();
-    // Fast-path: primitive returns
-    if let Some(ib) = out_box.as_any().downcast_ref::<IntegerBox>() { return ib.value; }
-    if let Some(bb) = out_box.as_any().downcast_ref::<BoolBox>() { return if bb.value { 1 } else { 0 }; }
-    // Otherwise, register handle and return id (works for String/Map/Array/Instance/etc.)
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::from(out_box);
     let h = handles::to_handle(arc);
     h as i64

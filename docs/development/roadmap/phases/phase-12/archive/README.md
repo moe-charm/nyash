@@ -84,14 +84,16 @@ abi = "nyash"  # 型安全・拡張性
 ### BoxCall拡張による実装
 
 **重要な発見**：MIR層の変更は不要！VM実行時の型判定で十分。
+**Phase 12での追加発見**：PluginInvokeも不要！BoxCallに統合可能。
 
 ```rust
-// MIR層：変更なし（15命令維持）
+// MIR層：変更なし → さらにシンプルに（14命令へ）
 MirInstruction::BoxCall {
     receiver: Value,
     method: String,
     args: Vec<Value>,
 }
+// PluginInvoke は廃止（BoxCallに統合）
 
 // VM層：賢い判定
 fn execute_boxcall(...) {

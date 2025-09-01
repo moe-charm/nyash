@@ -262,6 +262,22 @@ impl VM {
             }
         }
 
+        // TaskGroupBox methods (scaffold → instance内の所有Futureに対して実行)
+        if box_value.as_any().downcast_ref::<crate::boxes::task_group_box::TaskGroupBox>().is_some() {
+            let mut owned = box_value;
+            if let Some(tg) = (&mut *owned).as_any_mut().downcast_mut::<crate::boxes::task_group_box::TaskGroupBox>() {
+                match method {
+                    "cancelAll" | "cancel_all" => { return Ok(tg.cancelAll()); }
+                    "joinAll" | "join_all" => {
+                        let ms = _args.get(0).map(|a| a.to_string_box().value.parse::<i64>().unwrap_or(2000));
+                        return Ok(tg.joinAll(ms));
+                    }
+                    _ => { return Ok(Box::new(VoidBox::new())); }
+                }
+            }
+            return Ok(Box::new(VoidBox::new()));
+        }
+
         // P2PBox methods (minimal)
         if let Some(p2p) = box_value.as_any().downcast_ref::<crate::boxes::p2p_box::P2PBox>() {
             match method {

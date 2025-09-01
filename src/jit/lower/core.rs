@@ -578,8 +578,30 @@ impl LowerCore {
             I::Await { dst, future } => {
                 // Push future param index when known; otherwise -1 to trigger legacy search in shim
                 if let Some(pidx) = self.param_index.get(future).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                // Call await_h to obtain a handle to the value (0 on timeout)
                 b.emit_host_call(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, 1, true);
-                // Treat result as handle (or primitive packed into i64). Store for reuse.
+                // Store the awaited handle temporarily
+                let hslot = { let id = self.next_local; self.next_local += 1; id };
+                b.store_local_i64(hslot);
+                // Build Ok result: ok_h(handle)
+                b.load_local_i64(hslot);
+                b.emit_host_call(crate::jit::r#extern::result::SYM_RESULT_OK_H, 1, true);
+                let ok_slot = { let id = self.next_local; self.next_local += 1; id };
+                b.store_local_i64(ok_slot);
+                // Build Err result: err_h(0) → Timeout
+                b.emit_const_i64(0);
+                b.emit_host_call(crate::jit::r#extern::result::SYM_RESULT_ERR_H, 1, true);
+                let err_slot = { let id = self.next_local; self.next_local += 1; id };
+                b.store_local_i64(err_slot);
+                // Cond: (handle == 0)
+                b.load_local_i64(hslot);
+                b.emit_const_i64(0);
+                b.emit_compare(crate::jit::lower::builder::CmpKind::Eq);
+                // Stack for select: cond, then(err), else(ok)
+                b.load_local_i64(err_slot);
+                b.load_local_i64(ok_slot);
+                b.emit_select_i64();
+                // Store selected Result handle to destination
                 let d = *dst;
                 self.handle_values.insert(d);
                 let slot = *self.local_index.entry(d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
@@ -757,6 +779,29 @@ impl LowerCore {
                         if dst.is_some() { b.emit_const_i64(0); }
                     }
                 } else {
+                    // Async spawn bridge: env.future.spawn_instance(recv, method_name, args...)
+                    if iface_name == "env.future" && method_name == "spawn_instance" {
+                        // Stack layout for hostcall: argc_total, a0(recv), a1(method_name), a2(first payload)
+                        // 1) receiver
+                        if let Some(recv) = args.get(0) {
+                            if let Some(pidx) = self.param_index.get(recv).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
+                        } else { b.emit_const_i64(-1); }
+                        // 2) method name (best-effort)
+                        if let Some(meth) = args.get(1) { self.push_value_if_known_or_param(b, meth); } else { b.emit_const_i64(0); }
+                        // 3) first payload argument if present
+                        if let Some(arg2) = args.get(2) { self.push_value_if_known_or_param(b, arg2); } else { b.emit_const_i64(0); }
+                        // argc_total = explicit args including method name and payload (exclude receiver)
+                        let argc_total = args.len().saturating_sub(1).max(0);
+                        b.emit_const_i64(argc_total as i64);
+                        // Call spawn shim; it returns Future handle
+                        b.emit_host_call(crate::jit::r#extern::r#async::SYM_FUTURE_SPAWN_INSTANCE3_I64, 4, true);
+                        if let Some(d) = dst {
+                            self.handle_values.insert(*d);
+                            let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                            b.store_local_i64(slot);
+                        }
+                        return Ok(());
+                    }
                     // Unknown extern: strictではno-opにしてfailを避ける
                     if dst.is_some() { b.emit_const_i64(0); }
                 }

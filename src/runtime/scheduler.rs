@@ -11,6 +11,11 @@ pub trait Scheduler: Send + Sync {
     fn poll(&self) {}
     /// Cooperative yield point (no-op for single-thread).
     fn yield_now(&self) { }
+
+    /// Optional: spawn with a cancellation token. Default delegates to spawn.
+    fn spawn_with_token(&self, name: &str, _token: CancellationToken, f: Box<dyn FnOnce() + Send + 'static>) {
+        self.spawn(name, f)
+    }
 }
 
 use std::collections::VecDeque;
@@ -66,4 +71,16 @@ impl Scheduler for SingleThreadScheduler {
             eprintln!("[SCHED] poll moved={} ran={} budget={}", moved, ran, budget);
         }
     }
+}
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Simple idempotent cancellation token for structured concurrency (skeleton)
+#[derive(Clone, Debug)]
+pub struct CancellationToken(Arc<AtomicBool>);
+
+impl CancellationToken {
+    pub fn new() -> Self { Self(Arc::new(AtomicBool::new(false))) }
+    pub fn cancel(&self) { self.0.store(true, Ordering::SeqCst); }
+    pub fn is_cancelled(&self) -> bool { self.0.load(Ordering::SeqCst) }
 }

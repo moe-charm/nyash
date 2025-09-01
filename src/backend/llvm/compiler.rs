@@ -788,6 +788,58 @@ impl LLVMCompiler {
                                 let rv = call.try_as_basic_value().left().ok_or("readline returned void".to_string())?;
                                 vmap.insert(*d, rv);
                             }
+                        } else if iface_name == "env.future" && method_name == "spawn_instance" {
+                            // Lower to NyRT: i64 nyash.future.spawn_instance3_i64(i64 a0, i64 a1, i64 a2, i64 argc)
+                            // a0: receiver handle (or param index→handle via nyash.handle.of upstream if needed)
+                            // a1: method name pointer (i8*) or handle; we pass pointer as i64 here
+                            // a2: first payload (i64/handle); more args currently unsupported in LLVM lowering
+                            if args.len() < 2 { return Err("env.future.spawn_instance expects at least (recv, method_name)".to_string()); }
+                            let i64t = codegen.context.i64_type();
+                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                            // a0
+                            let a0_v = *vmap.get(&args[0]).ok_or("recv missing")?;
+                            let a0 = to_i64_any(codegen.context, &codegen.builder, a0_v)?;
+                            // a1 (method name)
+                            let a1_v = *vmap.get(&args[1]).ok_or("method_name missing")?;
+                            let a1 = match a1_v {
+                                BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "mname_p2i").map_err(|e| e.to_string())?,
+                                _ => to_i64_any(codegen.context, &codegen.builder, a1_v)?,
+                            };
+                            // a2 (first payload if any)
+                            let a2 = if args.len() >= 3 {
+                                let v = *vmap.get(&args[2]).ok_or("arg2 missing")?;
+                                to_i64_any(codegen.context, &codegen.builder, v)?
+                            } else { i64t.const_zero() };
+                            let argc_total = i64t.const_int(args.len().saturating_sub(1) as u64, false);
+                            // declare and call
+                            let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into(), i64t.into()], false);
+                            let callee = codegen
+                                .module
+                                .get_function("nyash.future.spawn_instance3_i64")
+                                .unwrap_or_else(|| codegen.module.add_function("nyash.future.spawn_instance3_i64", fnty, None));
+                            let call = codegen
+                                .builder
+                                .build_call(callee, &[a0.into(), a1.into(), a2.into(), argc_total.into()], "spawn_i3")
+                                .map_err(|e| e.to_string())?;
+                            if let Some(d) = dst {
+                                let rv = call
+                                    .try_as_basic_value()
+                                    .left()
+                                    .ok_or("spawn_instance3 returned void".to_string())?;
+                                // Treat as handle → pointer for Box return types; otherwise keep i64
+                                if let Some(mt) = func.metadata.value_types.get(d) {
+                                    match mt {
+                                        crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
+                                        crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
+                                            let iv = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("spawn ret expected i64".to_string()); };
+                                            let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                            let ptr = codegen.builder.build_int_to_ptr(iv, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
+                                            vmap.insert(*d, ptr.into());
+                                        }
+                                        _ => { vmap.insert(*d, rv); }
+                                    }
+                                } else { vmap.insert(*d, rv); }
+                            }
                         } else {
                             return Err(format!("ExternCall lowering unsupported: {}.{} (enable NYASH_LLVM_ALLOW_BY_NAME=1 to try by-name, or add a NyRT shim)", iface_name, method_name));
                         }
