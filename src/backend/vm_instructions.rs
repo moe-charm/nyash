@@ -630,6 +630,14 @@ impl VM {
             nyash_args.push(arg_value.to_nyash_box());
         }
         
+        // Optional trace
+        if crate::config::env::extern_trace() {
+            if let Some(slot) = crate::runtime::extern_registry::resolve_slot(iface_name, method_name) {
+                eprintln!("[EXT] call {}.{} slot={} argc={}", iface_name, method_name, slot, nyash_args.len());
+            } else {
+                eprintln!("[EXT] call {}.{} argc={}", iface_name, method_name, nyash_args.len());
+            }
+        }
         // Route through unified plugin host (delegates to v2, handles env.* stubs)
         let host = crate::runtime::get_global_plugin_host();
         let host = host.read().map_err(|_| VMError::InvalidInstruction("Plugin host lock poisoned".into()))?;
@@ -650,6 +658,10 @@ impl VM {
                 let mut msg = String::new();
                 if strict { msg.push_str("ExternCall STRICT: unregistered or unsupported call "); } else { msg.push_str("ExternCall failed: "); }
                 msg.push_str(&format!("{}.{}", iface_name, method_name));
+                // Arity check when known
+                if let Err(detail) = crate::runtime::extern_registry::check_arity(iface_name, method_name, nyash_args.len()) {
+                    msg.push_str(&format!(" ({})", detail));
+                }
                 if let Some(spec) = crate::runtime::extern_registry::resolve(iface_name, method_name) {
                     msg.push_str(&format!(" (expected arity {}..{})", spec.min_arity, spec.max_arity));
                 } else {

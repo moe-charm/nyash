@@ -125,3 +125,4 @@ pub fn abi_strict() -> bool { std::env::var("NYASH_ABI_STRICT").ok().as_deref() 
 
 // ---- ExternCall strict diagnostics ----
 pub fn extern_strict() -> bool { std::env::var("NYASH_EXTERN_STRICT").ok().as_deref() == Some("1") }
+pub fn extern_trace() -> bool { std::env::var("NYASH_EXTERN_TRACE").ok().as_deref() == Some("1") }
