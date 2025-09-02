@@ -34,12 +34,22 @@ const STRING_METHODS: &[MethodEntry] = &[
 ];
 static STRINGBOX_TB: TypeBox = TypeBox::new_with("StringBox", STRING_METHODS);
 
+// --- ConsoleBox ---
+const CONSOLE_METHODS: &[MethodEntry] = &[
+    MethodEntry { name: "log", arity: 1, slot: 400 },
+    MethodEntry { name: "warn", arity: 1, slot: 401 },
+    MethodEntry { name: "error", arity: 1, slot: 402 },
+    MethodEntry { name: "clear", arity: 0, slot: 403 },
+];
+static CONSOLEBOX_TB: TypeBox = TypeBox::new_with("ConsoleBox", CONSOLE_METHODS);
+
 /// 型名から TypeBox を解決（雛形）。現在は常に None。
 pub fn resolve_typebox_by_name(type_name: &str) -> Option<&'static TypeBox> {
     match type_name {
         "MapBox" => Some(&MAPBOX_TB),
         "ArrayBox" => Some(&ARRAYBOX_TB),
         "StringBox" => Some(&STRINGBOX_TB),
+        "ConsoleBox" => Some(&CONSOLEBOX_TB),
         _ => None,
     }
 }
