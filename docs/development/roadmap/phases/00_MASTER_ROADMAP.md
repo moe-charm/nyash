@@ -1,14 +1,15 @@
 # 🚀 Nyash開発マスタープラン
 
 Status: Active Development  
-Last Updated: 2025-08-26  
-Purpose: Claude×Copilot×ChatGPT協調開発の総合ロードマップ
+Last Updated: 2025-09-02  
+Purpose: Claude×Copilot×ChatGPT×Gemini×Codex協調開発の総合ロードマップ
 
 ## 📍 現在位置
 
-- 現在フェーズ: Phase 10.5b ネイティブビルド基盤の固め（MIR→VM→AOTの足固め）
-- 次フェーズ: Phase 10.5c Handle-First PluginInvoke（Python統合の実装着手）
-- 備考: 旧10.1系（10.1c/d）は「PythonをNyashで動かすフェーズ」の設計資料（Archived）。順番を入れ替え、先にネイティブビルド基盤を完成させています。
+- 現在フェーズ: Phase 12 TypeBox統合ABI・セルフホスティング準備
+- 最新成果: 🔥 **Nyash ABIをC実装TypeBoxで提供** - Rust依存排除への道！
+- 次フェーズ: Phase 12.0.5 Nyash ABI C実装開始
+- 備考: GeminiとCodexの深い考察により、セルフホスティングへの明確な道筋が見えました。
 
 ## 🗺️ フェーズ概要
 
@@ -23,9 +24,9 @@ Purpose: Claude×Copilot×ChatGPT協調開発の総合ロードマップ
 | 10 | 📅予定 | Cranelift JIT（主経路） | [phase_10_cranelift_jit_backend.md](phase-10/phase_10_cranelift_jit_backend.md) |
 | 11 | ✅完了 | LLVM統合・AOT実装（依存重い） | [phase-11/](phase-11/) |
 | 11.8 | 📅予定 | MIR整理（Core-15→Core-13） | [phase-11.8_mir_cleanup/](phase-11.8_mir_cleanup/) |
-| 12 | 🔄進行中 | MIR Core-15確定・プラグイン統一 | [phase-12/](phase-12/) |
+| 12 | 🔄進行中 | TypeBox統合ABI・セルフホスティング準備 | [phase-12/](phase-12/) |
 | 12.5 | 📅予定 | MIR15最適化戦略 | [phase-12.5/](phase-12.5/) |
-| 15 | 🌟将来 | セルフホスティング（Nyashコンパイラ） | [phase-15/](phase-15/) |
+| 15 | 🌟実現可能 | セルフホスティング（C実装ABI経由） | [phase-15/](phase-15/) |
 
 ---
 
@@ -157,17 +158,21 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 
 ---
 
-### 🎯 Phase 12: MIR Core-15確定・プラグイン統一（進行中）
+### 🎯 Phase 12: TypeBox統合ABI・セルフホスティング準備（進行中）
 
 **Summary**:
-- MIR Core-15（14）の最終確定
-- プラグインシステムの3層統一
-- Nyash ABI設計
+- TypeBox革命：型情報もBoxとして扱う統一設計
+- C ABI + Nyash ABI完全統合
+- 🔥 **Nyash ABIのC実装**でRust依存排除！
 
-**3層プラグインシステム**:
-1. Nyashスクリプトプラグイン（.nyash）
-2. C ABIプラグイン（高速・安定）
-3. Nyash ABIプラグイン（将来拡張）
+**革命的成果**:
+1. TypeBox：プラグイン間Box生成を可能に
+2. 統合ABI：C/Nyash ABIをシームレス統合
+3. **セルフホスティング**：C実装ABIで実現可能！
+
+**AI専門家の評価**:
+- Gemini：「技術的妥当性が高く、哲学とも合致した極めて優れた設計」
+- Codex：「16バイトアライメント、セレクターキャッシング等の具体案」
 
 ---
 
@@ -229,12 +234,30 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 
 ---
 
+## 🌟 Phase 15: セルフホスティング（実現可能！）
+
+**革命的発見**: Nyash ABIをC実装TypeBoxで提供することで、Rust依存を排除！
+
+### 実現への道筋（明確化）
+1. **Phase 12.0.5**: Nyash ABI C Shim実装（Rust FFI経由）
+2. **Phase 13**: C実装の完全化（基本型・参照カウント）
+3. **Phase 14**: NyashでABI再実装（AOTでC ABI公開）
+4. **Phase 15**: Nyashコンパイラ自身をNyashで実装！
+
+### 技術的革新
+- **TypeBox哲学**: ABIすらBoxとして扱う究極の統一
+- **C ABI基盤**: 最も安定した普遍的インターフェース
+- **段階的移行**: 既存Rust実装との共存期間を確保
+
+---
+
 ## 📊 進捗管理・コミュニケーション
 
 ### 🤝 協調開発ルール
 - ✅ 大きな変更前にはdocs/CURRENT_TASK.mdで情報共有
 - ✅ ベンチマーク機能は最優先で維持
 - ✅ 競合発生時は機能優先度で解決
+- ✅ AI専門家（Gemini/Codex）の深い考察を活用
 
 ### 品質保証
 - ✅ cargo check でビルドエラーなし

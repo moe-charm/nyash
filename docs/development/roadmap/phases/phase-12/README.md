@@ -1,23 +1,33 @@
 # Phase 12: Nyashコード共有エコシステム - Everything is Box の実現
 
-## 🚀 最新ブレイクスルー (2025-09-01)
+## 🚀 最新ブレイクスルー (2025-09-02)
 
-### TypeBox統合ABI - プラグイン革命の実現！
-「Everything is Box」哲学の究極形態：**型情報すらBoxとして扱う**TypeBoxにより、C ABI + Nyash ABIの完全統合を達成！
+### 🔥 セルフホスティングへの道 - ABIすらBoxとして扱う！
+「Everything is Box」哲学の究極形態：**ABIそのものをBoxとして実装**することで、Rust依存を完全排除！
 
 ```c
-// TypeBox - 型情報をBoxとして扱う最小構造
+// Nyash ABIもTypeBoxとして提供（C言語実装）
 typedef struct {
-    uint32_t abi_tag;       // 'TYBX'
-    const char* name;       // "ArrayBox"
-    void* (*create)(void);  // Box生成関数
-} NyrtTypeBox;
+    uint32_t abi_tag;           // 'NABI'
+    const char* name;           // "NyashABIProvider"
+    void* (*create)(void);      // ABIプロバイダ生成
+    
+    // Nyash ABI操作（Rust非依存）
+    struct {
+        nyash_status (*call)(nyash_ctx*, void* obj, nyash_selector, ...);
+        void (*retain)(void* obj);
+        void (*release)(void* obj);
+    } nyash_ops;
+} NyashABITypeBox;
 ```
 
-**3大AI専門家の一致した結論**:
-- **Codex**: 「TypeBoxブリッジは理想的なアーキテクチャ」
-- **ChatGPT5**: 「実装に耐える設計。10の改善点で完璧」
-- **Gemini**: 「Nyash哲学に最適なシンプルさ」
+**AI専門家たちの深い考察**:
+- **Gemini**: 「技術的妥当性が高く、言語哲学とも合致した、極めて優れた設計」
+- **Codex**: 「Feasible and attractive: 16バイトアライメント、セレクターキャッシング等の具体的実装提案」
+- **ChatGPT5**: 「統合ABI設計に10の改善点を提供」（反映済み）
+
+### TypeBox統合ABI - プラグイン革命の実現！
+「Everything is Box」哲学：**型情報すらBoxとして扱う**TypeBoxにより、C ABI + Nyash ABIの完全統合を達成！
 
 ## 🎯 重要な変更 (2025-09-01)
 
@@ -131,14 +141,21 @@ void* map_keys(void* self, void* array_type_box) {
   - VM層でC ABI/Nyash ABI/Scriptを自動判定
   - Core-15 → Core-14 へ（命令数削減）
 
-## 🛣️ 実装ロードマップ（TypeBox優先版）
+## 🛣️ 実装ロードマップ（セルフホスティング対応版）
 
 ### Phase 12.0: TypeBox統合ABI実装（1週間）🆕
-- [ ] nyrt_typebox.h完全ヘッダー定義
-- [ ] Rust FFIミラー実装
+- [ ] nyrt_typebox.h完全ヘッダー定義（16バイトアライメント）
+- [ ] セレクターキャッシング機構
 - [ ] MapBox両ABI実装（実証テスト）
 - [ ] 所有権ファズテスト
 - 📄 **[統合ABI設計仕様書](./UNIFIED-ABI-DESIGN.md)**
+
+### Phase 12.0.5: Nyash ABI C実装（2週間）🔥🆕
+- [ ] C Shim実装（既存Rustへのラッパー）
+- [ ] 基本型のC完全実装（Integer/String/Bool）
+- [ ] アトミック参照カウント + 弱参照
+- [ ] 適合性テストスイート
+- 📄 **[Nyash ABI C実装設計書](./NYASH-ABI-C-IMPLEMENTATION.md)**
 
 ---
 
@@ -174,6 +191,7 @@ void* map_keys(void* self, void* array_type_box) {
 ### 🎯 主要設計ドキュメント
 - **[統合ABI設計仕様書](./UNIFIED-ABI-DESIGN.md)** ← 🆕🚀 C ABI + Nyash ABI統合の完全設計！**3大AI専門家検証済み**
 - **[C ABI TypeBox設計仕様書](./C-ABI-BOX-FACTORY-DESIGN.md)** ← 🆕 シンプルなプラグイン間Box生成！
+- **[Nyash ABI C実装設計書](./NYASH-ABI-C-IMPLEMENTATION.md)** ← 🆕🔥 セルフホスティング実現！**Gemini/Codex絶賛**
 - **[Nyash ABI統合設計図](./NYASH-ABI-DESIGN.md)** ← 将来拡張用の高度なABI
 - [export/import仕様](./export-import-spec.md)
 - [パッケージマネージャー設計](./package-manager-design.md)

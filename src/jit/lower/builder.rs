@@ -145,6 +145,8 @@ pub struct CraneliftBuilder {
     pending_blocks: usize,
     // Whether current block needs a terminator before switching away
     cur_needs_term: bool,
+    // Track blocks sealed to avoid resealing
+    sealed_blocks: std::collections::HashSet<usize>,
 }
 
 #[cfg(feature = "cranelift-jit")]
@@ -850,14 +852,16 @@ impl IRBuilder for CraneliftBuilder {
                 let entry = self.blocks[0];
                 fb.append_block_params_for_function_params(entry);
                 fb.switch_to_block(entry);
-                fb.seal_block(entry);
                 self.entry_block = Some(entry);
                 self.current_block_index = Some(0);
                 self.cur_needs_term = true;
                 let rb = fb.create_block();
                 self.ret_block = Some(rb);
                 fb.append_block_param(rb, types::I64);
+                // Ensure ret_block is part of the managed blocks vector for final sealing
+                self.blocks.push(rb);
                 self.ret_slot = None;
+                // Do not seal any block here; final sealing happens in end_function
             });
             cell.replace(Some(tls));
         });
@@ -873,6 +877,13 @@ impl IRBuilder for CraneliftBuilder {
                 tls.with(|fb| {
                     use cranelift_codegen::ir::types;
                     if let Some(rb) = self.ret_block {
+                        // If current block not terminated, jump to ret_block before switching
+                        if let Some(cur) = self.current_block_index {
+                            if self.cur_needs_term && self.blocks[cur] != rb {
+                                fb.ins().jump(rb, &[]);
+                                self.cur_needs_term = false;
+                            }
+                        }
                         fb.switch_to_block(rb);
                         if fb.func.signature.returns.is_empty() {
                             fb.ins().return_(&[]);
@@ -895,9 +906,16 @@ impl IRBuilder for CraneliftBuilder {
                             fb.ins().return_(&[v]);
                         }
                     }
-                    if let Some(en) = self.entry_block { fb.seal_block(en); }
-                    for b in &self.blocks { fb.seal_block(*b); }
-                    if let Some(rb) = self.ret_block { fb.seal_block(rb); }
+                    // Final sealing: ensure every block, including ret_block, is in self.blocks
+                    if let Some(rb) = self.ret_block {
+                        if !self.blocks.contains(&rb) {
+                            self.blocks.push(rb);
+                        }
+                    }
+                    // Seal blocks we haven't sealed via explicit calls
+                    for (i, &bb) in self.blocks.iter().enumerate() {
+                        if !self.sealed_blocks.contains(&i) { fb.seal_block(bb); }
+                    }
                 });
                 unsafe { tls.finalize_drop(); }
                 ctx_opt = Some(*tls.ctx);
@@ -1083,8 +1101,6 @@ impl IRBuilder for CraneliftBuilder {
         let mut rhs = self.value_stack.pop().unwrap();
         let mut lhs = self.value_stack.pop().unwrap();
         CraneliftBuilder::with_fb(|fb| {
-            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
             let lty = fb.func.dfg.value_type(lhs);
             let rty = fb.func.dfg.value_type(rhs);
             let native_f64 = crate::jit::config::current().native_f64;
@@ -1390,13 +1406,41 @@ impl IRBuilder for CraneliftBuilder {
         if count > self.pending_blocks { self.pending_blocks = count; }
     }
     fn switch_to_block(&mut self, index: usize) {
+        use cranelift_codegen::ir::{types, AbiParam, Signature};
+        use cranelift_module::Linkage;
         if index >= self.blocks.len() { return; }
-        CraneliftBuilder::with_fb(|fb| { fb.switch_to_block(self.blocks[index]); });
+        if self.current_block_index == Some(index) { return; }
+        CraneliftBuilder::with_fb(|fb| {
+            // Append declared block parameters before any instruction in this block
+            let b = self.blocks[index];
+            let desired = self.block_param_counts.get(&index).copied().unwrap_or(0);
+            let current = fb.func.dfg.block_params(b).len();
+            if desired > current {
+                use cranelift_codegen::ir::types;
+                for _ in current..desired { let _ = fb.append_block_param(b, types::I64); }
+            }
+            // Do not inject implicit jumps here; caller is responsible for proper terminators.
+            fb.switch_to_block(self.blocks[index]);
+            if std::env::var("NYASH_JIT_TRACE_BLOCKS").ok().as_deref() == Some("1") {
+                let mut sig = Signature::new(self.module.isa().default_call_conv());
+                sig.params.push(AbiParam::new(types::I64));
+                let fid = self.module
+                    .declare_function("nyash.jit.block_enter", Linkage::Import, &sig)
+                    .expect("declare block_enter");
+                let fref = self.module.declare_func_in_func(fid, fb.func);
+                let bi = fb.ins().iconst(types::I64, index as i64);
+                let _ = fb.ins().call(fref, &[bi]);
+            }
+        });
         self.current_block_index = Some(index);
     }
     fn seal_block(&mut self, index: usize) {
         if index >= self.blocks.len() { return; }
         CraneliftBuilder::with_fb(|fb| { fb.seal_block(self.blocks[index]); });
+        // Track sealed to avoid resealing at end_function
+        // Note: index refers to position in self.blocks
+        // Safe to insert here after successful seal
+        self.sealed_blocks.insert(index);
     }
     fn br_if_top_is_true(&mut self, then_index: usize, else_index: usize) {
         use cranelift_codegen::ir::{types, condcodes::IntCC};
@@ -1429,36 +1473,24 @@ impl IRBuilder for CraneliftBuilder {
                 fb.ins().brif(cond_b1, self.blocks[then_index], &[], self.blocks[else_index], &[]);
             }
         });
+        // Conditional branch is a terminator for the current block in our lowering
+        self.cur_needs_term = false;
         self.stats.3 += 1;
     }
     fn jump_to(&mut self, target_index: usize) {
         if target_index >= self.blocks.len() { return; }
-        CraneliftBuilder::with_fb(|fb| {
-            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-            fb.ins().jump(self.blocks[target_index], &[]);
-        });
+        CraneliftBuilder::with_fb(|fb| { fb.ins().jump(self.blocks[target_index], &[]); });
+        // Unconditional jump terminates the current block
+        self.cur_needs_term = false;
         self.stats.3 += 1;
     }
     fn ensure_block_param_i64(&mut self, index: usize) {
         self.ensure_block_params_i64(index, 1);
     }
     fn ensure_block_params_i64(&mut self, index: usize, needed: usize) {
-        use cranelift_codegen::ir::types;
         if index >= self.blocks.len() { return; }
         let have = self.block_param_counts.get(&index).copied().unwrap_or(0);
-        if needed > have {
-            CraneliftBuilder::with_fb(|fb| {
-                let b = self.blocks[index];
-                for _ in have..needed {
-                    let _v = fb.append_block_param(b, types::I64);
-                }
-            });
-            self.block_param_counts.insert(index, needed);
-            if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-                eprintln!("[JIT-CLIF] ensure_block_params bb={} now={}", index, needed);
-            }
-        }
+        if needed > have { self.block_param_counts.insert(index, needed); }
     }
     fn ensure_block_params_b1(&mut self, index: usize, needed: usize) {
         // Store as i64 block params for ABI stability; consumers can convert to b1
@@ -1468,7 +1500,7 @@ impl IRBuilder for CraneliftBuilder {
         use cranelift_codegen::ir::types;
         let v = CraneliftBuilder::with_fb(|fb| {
             let b_opt = if let Some(idx) = self.current_block_index { Some(self.blocks[idx]) } else { self.entry_block };
-            let params = if let Some(b) = b_opt { fb.switch_to_block(b); fb.func.dfg.block_params(b).to_vec() } else { Vec::new() };
+            let params = if let Some(b) = b_opt { fb.func.dfg.block_params(b).to_vec() } else { Vec::new() };
             if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
                 eprintln!("[JIT-CLIF] push_block_param_i64_at pos={} available={}", pos, params.len());
             }
@@ -1496,11 +1528,7 @@ impl IRBuilder for CraneliftBuilder {
     }
     fn br_if_with_args(&mut self, then_index: usize, else_index: usize, then_n: usize, else_n: usize) {
         use cranelift_codegen::ir::{types, condcodes::IntCC};
-        use cranelift_frontend::FunctionBuilder;
         if then_index >= self.blocks.len() || else_index >= self.blocks.len() { return; }
-        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         // Pop else args then then args (so stack order can be value-friendly)
         let mut else_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
         for _ in 0..else_n { if let Some(v) = self.value_stack.pop() { else_args.push(v); } }
@@ -1508,89 +1536,102 @@ impl IRBuilder for CraneliftBuilder {
         let mut then_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
         for _ in 0..then_n { if let Some(v) = self.value_stack.pop() { then_args.push(v); } }
         then_args.reverse();
-        // Now pop condition last (it was pushed first by LowerCore)
-        let cond_b1 = if let Some(v) = self.value_stack.pop() {
-            let ty = fb.func.dfg.value_type(v);
-            if ty == types::I64 { let out = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); crate::jit::rt::b1_norm_inc(1); out } else { v }
-        } else {
-            let zero = fb.ins().iconst(types::I64, 0);
-            let out = fb.ins().icmp_imm(IntCC::NotEqual, zero, 0);
-            crate::jit::rt::b1_norm_inc(1);
-            out
-        };
-        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-            eprintln!("[JIT-CLIF] br_if_with_args then_n={} else_n={}", then_n, else_n);
-        }
-        fb.ins().brif(cond_b1, self.blocks[then_index], &then_args, self.blocks[else_index], &else_args);
+        CraneliftBuilder::with_fb(|fb| {
+            use cranelift_codegen::ir::types;
+            // Ensure successor block params are declared before emitting branch
+            let b_then = self.blocks[then_index];
+            let b_else = self.blocks[else_index];
+            let desired_then = self.block_param_counts.get(&then_index).copied().unwrap_or(0);
+            let desired_else = self.block_param_counts.get(&else_index).copied().unwrap_or(0);
+            let cur_then = fb.func.dfg.block_params(b_then).len();
+            let cur_else = fb.func.dfg.block_params(b_else).len();
+            let then_has_inst = fb.func.layout.first_inst(b_then).is_some();
+            let else_has_inst = fb.func.layout.first_inst(b_else).is_some();
+            if !then_has_inst { if desired_then > cur_then { for _ in cur_then..desired_then { let _ = fb.append_block_param(b_then, types::I64); } } }
+            if !else_has_inst { if desired_else > cur_else { for _ in cur_else..desired_else { let _ = fb.append_block_param(b_else, types::I64); } } }
+            // Now pop condition last (it was pushed first by LowerCore)
+            let cond_b1 = if let Some(v) = self.value_stack.pop() {
+                let ty = fb.func.dfg.value_type(v);
+                if ty == types::I64 { let out = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); crate::jit::rt::b1_norm_inc(1); out } else { v }
+            } else {
+                let zero = fb.ins().iconst(types::I64, 0);
+                let out = fb.ins().icmp_imm(IntCC::NotEqual, zero, 0);
+                crate::jit::rt::b1_norm_inc(1);
+                out
+            };
+            if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+                eprintln!("[JIT-CLIF] br_if_with_args then_n={} else_n={}", then_n, else_n);
+            }
+            // If successor blocks already started, drop any arg passing to avoid mismatch
+            let targs = if then_has_inst { Vec::new() } else { then_args };
+            let eargs = if else_has_inst { Vec::new() } else { else_args };
+            fb.ins().brif(cond_b1, self.blocks[then_index], &targs, self.blocks[else_index], &eargs);
+        });
+        self.cur_needs_term = false;
         self.stats.3 += 1;
-        fb.finalize();
     }
     fn jump_with_args(&mut self, target_index: usize, n: usize) {
-        use cranelift_frontend::FunctionBuilder;
         if target_index >= self.blocks.len() { return; }
-        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
         for _ in 0..n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
         args.reverse();
-        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-            eprintln!("[JIT-CLIF] jump_with_args target={} n={}", target_index, n);
-        }
-        fb.ins().jump(self.blocks[target_index], &args);
+        CraneliftBuilder::with_fb(|fb| {
+            use cranelift_codegen::ir::types;
+            // Ensure successor block params are declared before emitting jump
+            let b_tgt = self.blocks[target_index];
+            let desired = self.block_param_counts.get(&target_index).copied().unwrap_or(0);
+            let cur = fb.func.dfg.block_params(b_tgt).len();
+            if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+                let has_inst = fb.func.layout.first_inst(b_tgt).is_some();
+                eprintln!("[JIT-CLIF] jump prep: cur_block={:?} target={} desired={} current={} has_inst_before={}", self.current_block_index, target_index, desired, cur, has_inst);
+            }
+            let has_inst = fb.func.layout.first_inst(b_tgt).is_some();
+            if !has_inst {
+                if desired > cur { for _ in cur..desired { let _ = fb.append_block_param(b_tgt, types::I64); } }
+            }
+            if has_inst { args.clear(); }
+            if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+                eprintln!("[JIT-CLIF] jump_with_args target={} n={}", target_index, n);
+            }
+            fb.ins().jump(self.blocks[target_index], &args);
+        });
+        // Unconditional jump terminates the current block
+        self.cur_needs_term = false;
         self.stats.3 += 1;
-        fb.finalize();
     }
 
     fn hint_ret_bool(&mut self, is_b1: bool) { self.ret_hint_is_b1 = is_b1; }
 
     fn ensure_local_i64(&mut self, index: usize) {
         use cranelift_codegen::ir::{StackSlotData, StackSlotKind};
-        use cranelift_frontend::FunctionBuilder;
         if self.local_slots.contains_key(&index) { return; }
-        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        let slot = fb.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8));
-        self.local_slots.insert(index, slot);
-        fb.finalize();
+        CraneliftBuilder::with_fb(|fb| {
+            let slot = fb.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8));
+            self.local_slots.insert(index, slot);
+        });
     }
     fn store_local_i64(&mut self, index: usize) {
         use cranelift_codegen::ir::{types, condcodes::IntCC};
-        use cranelift_frontend::FunctionBuilder;
         if let Some(mut v) = self.value_stack.pop() {
-            // Ensure slot without overlapping FunctionBuilder borrows
             if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); }
             let slot = self.local_slots.get(&index).copied();
-            let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-            let ty = fb.func.dfg.value_type(v);
-            if ty != types::I64 {
-                if ty == types::F64 {
-                    v = fb.ins().fcvt_to_sint(types::I64, v);
-                } else {
-                    // Convert unknown ints/bools to i64 via (v!=0)?1:0
-                    let one = fb.ins().iconst(types::I64, 1);
-                    let zero = fb.ins().iconst(types::I64, 0);
-                    let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0);
-                    v = fb.ins().select(b1, one, zero);
+            CraneliftBuilder::with_fb(|fb| {
+                let ty = fb.func.dfg.value_type(v);
+                if ty != types::I64 {
+                    if ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); }
+                    else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); }
                 }
-            }
-            if let Some(slot) = slot { fb.ins().stack_store(v, slot, 0); }
-            fb.finalize();
+                if let Some(slot) = slot { fb.ins().stack_store(v, slot, 0); }
+            });
         }
     }
     fn load_local_i64(&mut self, index: usize) {
         use cranelift_codegen::ir::types;
-        use cranelift_frontend::FunctionBuilder;
         if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); }
         if let Some(&slot) = self.local_slots.get(&index) {
-            let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-            let v = fb.ins().stack_load(types::I64, slot, 0);
+            let v = CraneliftBuilder::with_fb(|fb| fb.ins().stack_load(types::I64, slot, 0));
             self.value_stack.push(v);
             self.stats.0 += 1;
-            fb.finalize();
         }
     }
 }
@@ -1605,10 +1646,7 @@ impl CraneliftBuilder {
     }
     fn entry_param(&mut self, index: usize) -> Option<cranelift_codegen::ir::Value> {
         if let Some(b) = self.entry_block {
-            return CraneliftBuilder::with_fb(|fb| {
-                fb.switch_to_block(b);
-                fb.func.dfg.block_params(b).get(index).copied()
-            });
+            return CraneliftBuilder::with_fb(|fb| fb.func.dfg.block_params(b).get(index).copied());
         }
         None
     }
@@ -1864,40 +1902,42 @@ impl IRBuilder for ObjectBuilder {
         fb.finalize();
     }
     fn prepare_blocks(&mut self, count: usize) { use cranelift_frontend::FunctionBuilder; if count == 0 { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if self.blocks.len() < count { for _ in 0..(count - self.blocks.len()) { self.blocks.push(fb.create_block()); } } fb.finalize(); }
-    fn switch_to_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::{types, AbiParam, Signature}; use cranelift_module::Linkage; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.switch_to_block(self.blocks[index]); if std::env::var("NYASH_JIT_TRACE_BLOCKS").ok().as_deref() == Some("1") { let mut sig = Signature::new(self.module.isa().default_call_conv()); sig.params.push(AbiParam::new(types::I64)); let fid = self.module.declare_function("nyash.jit.block_enter", Linkage::Import, &sig).expect("declare block_enter"); let fref = self.module.declare_func_in_func(fid, fb.func); let bi = fb.ins().iconst(types::I64, index as i64); let _ = fb.ins().call(fref, &[bi]); } self.current_block_index = Some(index); fb.finalize(); }
-    fn seal_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.seal_block(self.blocks[index]); fb.finalize(); }
-    fn br_if_top_is_true(&mut self, then_index: usize, else_index: usize) {
-        use cranelift_codegen::ir::{types, condcodes::IntCC};
+    fn switch_to_block(&mut self, index: usize) {
         use cranelift_frontend::FunctionBuilder;
-        if then_index >= self.blocks.len() || else_index >= self.blocks.len() { return; }
-        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-        let cond_b1 = if let Some(v) = self.value_stack.pop() {
-            let ty = fb.func.dfg.value_type(v);
-            if ty == types::I64 { fb.ins().icmp_imm(IntCC::NotEqual, v, 0) } else { v }
-        } else {
-            let z = fb.ins().iconst(types::I64, 0);
-            fb.ins().icmp_imm(IntCC::NotEqual, z, 0)
-        };
-        fb.ins().brif(cond_b1, self.blocks[then_index], &[], self.blocks[else_index], &[]);
-        self.stats.3 += 1;
-        fb.finalize();
-    }
-    fn ensure_block_params_i64(&mut self, index: usize, count: usize) {
-        use cranelift_frontend::FunctionBuilder;
+        use cranelift_codegen::ir::{types, AbiParam, Signature};
+        use cranelift_module::Linkage;
         if index >= self.blocks.len() { return; }
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        // Ensure block params are appended before any instruction in this block
+        let b = self.blocks[index];
+        let desired = self.block_param_counts.get(&index).copied().unwrap_or(0);
+        let current = fb.func.dfg.block_params(b).len();
+        if desired > current {
+            for _ in current..desired { let _ = fb.append_block_param(b, types::I64); }
+        }
+        fb.switch_to_block(b);
+        if std::env::var("NYASH_JIT_TRACE_BLOCKS").ok().as_deref() == Some("1") {
+            let mut sig = Signature::new(self.module.isa().default_call_conv());
+            sig.params.push(AbiParam::new(types::I64));
+            let fid = self.module.declare_function("nyash.jit.block_enter", Linkage::Import, &sig).expect("declare block_enter");
+            let fref = self.module.declare_func_in_func(fid, fb.func);
+            let bi = fb.ins().iconst(types::I64, index as i64);
+            let _ = fb.ins().call(fref, &[bi]);
+        }
+        self.current_block_index = Some(index);
+        fb.finalize();
+    }
+    fn seal_block(&mut self, index: usize) { use cranelift_frontend::FunctionBuilder; if index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); fb.seal_block(self.blocks[index]); fb.finalize(); }
+    fn br_if_top_is_true(&mut self, then_index: usize, else_index: usize) { use cranelift_codegen::ir::{types, condcodes::IntCC}; use cranelift_frontend::FunctionBuilder; if then_index >= self.blocks.len() || else_index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); } else if let Some(b) = self.entry_block { fb.switch_to_block(b); } let cond_b1 = if let Some(v) = self.value_stack.pop() { let ty = fb.func.dfg.value_type(v); if ty == types::I64 { fb.ins().icmp_imm(IntCC::NotEqual, v, 0) } else { v } } else { let z = fb.ins().iconst(types::I64, 0); fb.ins().icmp_imm(IntCC::NotEqual, z, 0) }; fb.ins().brif(cond_b1, self.blocks[then_index], &[], self.blocks[else_index], &[]); self.stats.3 += 1; fb.finalize(); }
+    fn ensure_block_params_i64(&mut self, index: usize, count: usize) {
+        if index >= self.blocks.len() { return; }
         let have = self.block_param_counts.get(&index).copied().unwrap_or(0);
         if count > have {
-            let b = self.blocks[index];
-            for _ in have..count { let _ = fb.append_block_param(b, cranelift_codegen::ir::types::I64); }
             self.block_param_counts.insert(index, count);
             if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-                eprintln!("[JIT-CLIF] ensure_block_params bb={} now={}", index, count);
+                eprintln!("[JIT-CLIF] ensure_block_params (deferred) bb={} now={}", index, count);
             }
         }
-        fb.finalize();
     }
     fn push_block_param_i64_at(&mut self, pos: usize) {
         use cranelift_frontend::FunctionBuilder;
@@ -1912,15 +1952,7 @@ impl IRBuilder for ObjectBuilder {
         if let Some(v) = params.get(pos).copied() { self.value_stack.push(v); }
         else { let z = fb.ins().iconst(types::I64, 0); self.value_stack.push(z); }
     }
-    fn jump_to(&mut self, target_index: usize) {
-        use cranelift_frontend::FunctionBuilder;
-        if target_index >= self.blocks.len() { return; }
-        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-        fb.ins().jump(self.blocks[target_index], &[]);
-        self.stats.3 += 1;
-    }
+    fn jump_to(&mut self, target_index: usize) { use cranelift_frontend::FunctionBuilder; if target_index >= self.blocks.len() { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); } else if let Some(b) = self.entry_block { fb.switch_to_block(b); } fb.ins().jump(self.blocks[target_index], &[]); self.stats.3 += 1; }
     fn hint_ret_bool(&mut self, is_b1: bool) { self.ret_hint_is_b1 = is_b1; }
     fn ensure_local_i64(&mut self, index: usize) { use cranelift_codegen::ir::{StackSlotData, StackSlotKind}; use cranelift_frontend::FunctionBuilder; if self.local_slots.contains_key(&index) { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); let slot = fb.create_sized_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 8)); self.local_slots.insert(index, slot); }
     fn store_local_i64(&mut self, index: usize) { use cranelift_codegen::ir::{types, condcodes::IntCC}; use cranelift_frontend::FunctionBuilder; if let Some(mut v) = self.value_stack.pop() { if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); } let slot = self.local_slots.get(&index).copied(); let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); } else if let Some(b) = self.entry_block { fb.switch_to_block(b); } let ty = fb.func.dfg.value_type(v); if ty != types::I64 { if ty == types::F64 { v = fb.ins().fcvt_to_sint(types::I64, v); } else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); } } if let Some(slot) = slot { fb.ins().stack_store(v, slot, 0); } } }
@@ -2038,6 +2070,7 @@ impl CraneliftBuilder {
             ret_slot: None,
             pending_blocks: 0,
             cur_needs_term: false,
+            sealed_blocks: std::collections::HashSet::new(),
         }
     }
 

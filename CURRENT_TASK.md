@@ -199,6 +199,39 @@ Update (2025-09-01 PM2 / Interpreter parity blockers)
   - [ ] test_string_concat の失敗パターン収集→ try_box_to_string の対象拡張
   - [ ] SemanticsVM/ClifAdapter パリティ小スモーク追加（分岐/配列/extern/await）
 
+
+Update (2025-09-02 late / jit-direct TLS単一FBリファクタ step-2 部分反映)
+
+- Runner 小リファクタ（計画どおりの分割）
+  - `src/runner.rs` → `src/runner/mod.rs` に移動。
+  - `NyashRunner::run()` の `run_task` 重複分岐を削除（無害な重複除去）。
+
+- jit-direct（CraneliftBuilder）: 単一FunctionBuilder（TLS）化の前進
+  - ローカル（store/load）をTLS単一FB経由に統一。
+  - `switch_to_block`: 未終端のまま別ブロックへ切替時に `jump` 注入→`cur_needs_term=false` に更新。
+  - `br_if_with_args`: TLS単一FBで発行し、分岐を明示的に終端扱い（`cur_needs_term=false`）。
+  - エントリを `seal_block(entry)` 済みに変更（入口でのPHI完了を前提）。
+  - ブロックパラメータ（PHI）: その場のappendはやめて「必要数を記録」→`switch_to_block` 前に不足分をappendする方式に変更（命令追加後のparam禁止アサート回避）。
+  - `end_function`: 未sealedブロックを最終sealするフェーズを追加（内部追跡セットで二重seal回避）。
+
+- 現状の挙動
+  - `cargo build --features cranelift-jit` は通過（警告あり）。
+  - `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+    - 以前の「未終端での切替」アサートは抑止済み。
+    - なお finalize 時に「未sealed blockN」が残るケースを観測（例: block4）。seal の最終整合に取りこぼしがある。
+
+- 追加で必要な作業（次の小ステップ）
+  1) LowerCore 側の `seal_block` 呼び出し順序の確認・補強（分岐/合流直後に seal されるよう統一）。
+  2) 生成ブロックが `self.blocks` に全て含まれることの確認（ret_block を含む）。不足時は `begin_function` で `pending_blocks` を尊重して作成。
+  3) 最小スモークの緑化: `mir-branch-ret` → 1, 続いて `mir-phi-min` → 10, `mir-branch-multi` → 1。
+  4) 上記が通ったら、終端注入・最終sealの実装を整理（不要な箇所の削減、ログスイッチ固定）。
+
+- 実行/検証メモ（再掲）
+  - ビルド: `cargo build --features cranelift-jit`
+  - 実行: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+  - 追跡: `NYASH_JIT_TRACE_BLOCKS=1`（ブロック切替）/`NYASH_JIT_TRACE_RET=1`（返り値）
+
+
 開発メモ / 注意点
 - 分岐の取り違えは「ブロックまたぎの共有スタック」が原因になりがち。根治策として BlockParam 経由の合流・単一出口 return を徹底。
 - デバッグログは “必要時のみ ON” の方針で仕込む。収束後に不要箇所は落とす（本番は静かに）。

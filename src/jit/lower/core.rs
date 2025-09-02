@@ -212,6 +212,12 @@ impl LowerCore {
                 }
                 if !order.is_empty() { succ_phi_order.insert(*bb_id, order); }
             }
+            // Pre-declare block parameter counts per successor to avoid late appends
+            for (succ, order) in succ_phi_order.iter() {
+                if let Some(idx) = bb_ids.iter().position(|x| x == succ) {
+                    builder.ensure_block_params_i64(idx, order.len());
+                }
+            }
         }
         // Decide ABI: typed or i64-only
         let native_f64 = cfg_now.native_f64;
@@ -348,6 +354,9 @@ impl LowerCore {
                         // Map BasicBlockId -> index
                         let then_index = bb_ids.iter().position(|x| x == then_bb).unwrap_or(0);
                         let else_index = bb_ids.iter().position(|x| x == else_bb).unwrap_or(0);
+                        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+                            eprintln!("[LowerCore] br_if: cur_bb={} then_idx={} else_idx={}", bb_id.0, then_index, else_index);
+                        }
                         if enable_phi_min {
                             // For multi-PHI, push args in successor's phi order
                             let mut then_n = 0usize; let mut else_n = 0usize;
@@ -363,16 +372,6 @@ impl LowerCore {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
                                                         self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
-                                                    } else {
-                                                        // Fallback: if any input value is a PHI defined in current block, pass that
-                                                        if let Some((_, alt_val)) = inputs.iter().find(|(_pred, v)| {
-                                                            if let Some(bb_cur) = func.blocks.get(bb_id) {
-                                                                bb_cur.instructions.iter().any(|ins2| matches!(ins2, crate::mir::MirInstruction::Phi { dst: dphi, .. } if *dphi == *v))
-                                                            } else { false }
-                                                        }) {
-                                                            self.push_value_if_known_or_param(builder, alt_val);
-                                                            cnt += 1;
-                                                        }
                                                     }
                                                 }
                                             }
@@ -392,15 +391,6 @@ impl LowerCore {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
                                                         self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
-                                                    } else {
-                                                        if let Some((_, alt_val)) = inputs.iter().find(|(_pred, v)| {
-                                                            if let Some(bb_cur) = func.blocks.get(bb_id) {
-                                                                bb_cur.instructions.iter().any(|ins2| matches!(ins2, crate::mir::MirInstruction::Phi { dst: dphi, .. } if *dphi == *v))
-                                                            } else { false }
-                                                        }) {
-                                                            self.push_value_if_known_or_param(builder, alt_val);
-                                                            cnt += 1;
-                                                        }
                                                     }
                                                 }
                                             }
@@ -414,11 +404,13 @@ impl LowerCore {
                         } else {
                             builder.br_if_top_is_true(then_index, else_index);
                         }
-                        builder.seal_block(then_index);
-                        builder.seal_block(else_index);
+                        // Sealing is deferred to end_function to avoid premature seals during CFG construction
                     }
                     crate::mir::MirInstruction::Jump { target } => {
                         let target_index = bb_ids.iter().position(|x| x == target).unwrap_or(0);
+                        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+                            eprintln!("[LowerCore] jump: cur_bb={} target_idx={}", bb_id.0, target_index);
+                        }
                         if enable_phi_min {
                             let mut n = 0usize;
                             if let Some(order) = succ_phi_order.get(target) {
@@ -431,15 +423,6 @@ impl LowerCore {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
                                                         self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
-                                                    } else {
-                                                        if let Some((_, alt_val)) = inputs.iter().find(|(_pred, v)| {
-                                                            if let Some(bb_cur) = func.blocks.get(bb_id) {
-                                                                bb_cur.instructions.iter().any(|ins2| matches!(ins2, crate::mir::MirInstruction::Phi { dst: dphi, .. } if *dphi == *v))
-                                                            } else { false }
-                                                        }) {
-                                                            self.push_value_if_known_or_param(builder, alt_val);
-                                                            cnt += 1;
-                                                        }
                                                     }
                                                 }
                                             }
@@ -453,7 +436,7 @@ impl LowerCore {
                         } else {
                             builder.jump_to(target_index);
                         }
-                        builder.seal_block(target_index);
+                        // Sealing is deferred to end_function to avoid premature seals during CFG construction
                     }
                     _ => { /* other terminators handled via generic emission below */ }
                 }

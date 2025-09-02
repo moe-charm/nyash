@@ -1,6 +1,6 @@
-# Phase 12 Task Board (v1)
+# Phase 12 Task Board (v2 - セルフホスティング対応)
 
-目的: C ABI を壊さず、TypeBox + 統一ディスパッチで Nyash ABI を段階導入。MIR→VM→JIT を「綺麗な箱」で統一。
+目的: C ABI を壊さず、TypeBox + 統一ディスパッチで Nyash ABI を段階導入。MIR→VM→JIT を「綺麗な箱」で統一。**最終的にRust依存を排除し、セルフホスティングを実現。**
 
 ## Tier-0（直近・安全に積める）
 - [x] MapBoxの実用拡張（stringキー/便利API）
@@ -27,6 +27,20 @@
   - 選択肢A: ランタイムで ArrayBox を構築
   - 選択肢B: Mapプラグインに KeysArrayBox を同梱（要設定追加）
 
+## Tier-3（セルフホスティング）🔥新規
+- [ ] Nyash ABI C実装の開始
+  - [ ] nyash_abi_provider.h定義（16バイトアライメント）
+  - [ ] C Shim実装（Rust FFI経由）
+  - [ ] 基本型実装（Tagged Pointers対応）
+  - [ ] アトミック参照カウント実装
+  - [ ] 弱参照による循環参照対策
+- [ ] セレクターキャッシング実装
+  - [ ] lookup_selector API
+  - [ ] JIT統合（vtable_slot直接呼び出し）
+- [ ] 適合性テストスイート構築
+  - [ ] Rust/C実装の差分テスト
+  - [ ] パフォーマンス測定（1.5x以内）
+
 ## ドキュメント/管理
 - [ ] UNIFIED-ABI-DESIGN.md の「最小導入プロファイル」明記
 - [ ] VM/JIT実装メモ（統一ディスパッチの呼出し順）
@@ -38,10 +52,12 @@
 - GCセーフポイントのMAY_BLOCK以外の一般化
 - keys()/values() の正式ArrayBox返却（現状はシム）
 - AOT(LLVM)のbuild失敗（nyrt借用修正、後回し方針）
+- Nyash ABI C実装（セルフホスティングの要）🔥新規
 
-## Doneの定義（Phase 12）
+## Doneの定義（Phase 12 - 更新版）
 1) TypeBoxレジストリと統一ディスパッチがVMに入り、C ABI互換で全プラグインが動作
 2) 1プラグインでNyash ABIの成功パスが通る（VM/JIT）
 3) keys()/values() が ArrayBox 返却で安定
 4) 基本の所有権・セーフポイントルールが守られる
+5) **Nyash ABI C実装の基礎が動作し、セルフホスティングへの道筋が明確**🔥新規
 

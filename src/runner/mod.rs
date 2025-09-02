@@ -81,14 +81,6 @@ impl NyashRunner {
             }
             return;
         }
-        // Run named task from nyash.toml (MVP)
-        if let Some(task) = self.config.run_task.clone() {
-            if let Err(e) = run_named_task(&task) {
-                eprintln!("❌ Task error: {}", e);
-                process::exit(1);
-            }
-            return;
-        }
         // Verbose CLI flag maps to env for downstream helpers/scripts
         if self.config.cli_verbose { std::env::set_var("NYASH_CLI_VERBOSE", "1"); }
         // Script-level env directives (special comments) — parse early
