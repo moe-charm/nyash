@@ -2,38 +2,48 @@
 
 このディレクトリはNyashに関する学術論文の執筆プロジェクトを管理します。
 
-## 📁 ディレクトリ構造
+## 📁 ディレクトリ構造（ChatGPT5提案による再編成済み）
 
 ```
 papers/
-├── README.md                      # このファイル
-├── active/                        # 現在執筆中の論文
-│   ├── mir15-fullstack/          # MIR15フルスタック論文（二本柱戦略）★NEW
-│   └── unified-lifecycle/         # 統一ライフサイクル論文（LLVM待ち）
-├── archive/                       # 過去の検討・下書き
-│   ├── initial-proposals/         # 初期提案資料
-│   └── mir15-implementation/      # 旧MIR15論文（統合済み）
-└── resources/                     # 共通リソース
-    ├── bibliography/              # 参考文献
-    └── templates/                 # 論文テンプレート
+├── README.md                          # このファイル
+├── active/                            # 現在執筆中の論文
+│   ├── paper-a-mir13-ir-design/      # 論文A: MIR13命令とIR設計
+│   └── paper-b-nyash-execution-model/ # 論文B: Nyash言語と実行モデル
+├── archive/                           # 過去の検討・下書き
+│   ├── initial-proposals/             # 初期提案資料
+│   ├── mir15-implementation/          # 旧MIR15論文
+│   ├── mir15-fullstack/              # MIR15フルスタック論文（論文Aに統合）
+│   └── unified-lifecycle/             # 統一ライフサイクル論文（論文Bに統合）
+└── resources/                         # 共通リソース
+    ├── bibliography/                  # 参考文献
+    └── templates/                     # 論文テンプレート
 ```
 
-## 📊 現在の論文プロジェクト
+## 📊 現在の論文プロジェクト（2本立て戦略）
 
-### 1. MIR15フルスタック論文（二本柱戦略）🎯
-**状態**: 執筆開始  
-**投稿先**: arXiv → POPL/PLDI/ICFP 2026  
-**締切**: 2025年9月（arXiv速報）→ 2025年11月（本投稿）  
-**内容**: 
-- **実証**: MIR15でUbuntu/Windows GUI動作
-- **理論**: Everything is Box - The Atomic Theory
-- 30日実装、4000行、性能評価
+### 論文A: MIR13命令とIR設計 🎯
+**主題**: 中間表現（MIR）の統合設計  
+**対象読者**: コンパイラ・言語処理系の研究者、PL実装者  
+**ポイント**:
+- ArrayGet/Set などを BoxCall に吸収する思想
+- IC, AOT, TypedArray 最適化
+- 「Everything is Box」哲学が MIR にどう落ちるか
 
-### 2. 統一ライフサイクル論文（本格版）
-**状態**: LLVM実装待ち  
-**投稿先**: OOPSLA 2026 / PLDI 2026  
-**締切**: 2025年10月（OOPSLA）  
-**内容**: 全バックエンド等価性、GCオン/オフ、プラグイン統一
+**投稿先**: arXiv → POPL/PLDI 2026  
+**締切**: 2025年9月（arXiv速報）→ 2025年11月（本投稿）
+
+### 論文B: Nyash言語と実行モデル 🚀
+**主題**: Nyash言語そのものの設計と実装  
+**対象読者**: 言語理論・分散システム・アプリ開発寄り  
+**ポイント**:
+- init/fini 対称性によるメモリ管理
+- P2P Intent モデルと Box 構造
+- VM → JIT → AOT の多層アーキテクチャ
+- 実験例（NyashCoin、プラグインストア）
+
+**投稿先**: OOPSLA 2026 / Onward! 2026  
+**締切**: 2025年10月（OOPSLA）
 
 ## 🎯 投稿戦略
 
