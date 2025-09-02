@@ -58,6 +58,9 @@ pub const SYM_HOST_MAP_GET: &str = "nyash.host.map.get";   // (MapBox, key)
 pub const SYM_HOST_MAP_SET: &str = "nyash.host.map.set";   // (MapBox, key, val)
 pub const SYM_HOST_MAP_SIZE: &str = "nyash.host.map.size"; // (MapBox)
 pub const SYM_HOST_MAP_HAS: &str = "nyash.host.map.has";   // (MapBox, key)
+pub const SYM_HOST_CONSOLE_LOG: &str = "nyash.host.console.log";   // (value)
+pub const SYM_HOST_CONSOLE_WARN: &str = "nyash.host.console.warn"; // (value)
+pub const SYM_HOST_CONSOLE_ERROR: &str = "nyash.host.console.error"; // (value)
 
 pub fn array_get(args: &[VMValue]) -> VMValue {
     if let Some(h) = to_handle(args.get(0).unwrap_or(&VMValue::Void)) { call_slot(h, 100, &args[1..]) } else { VMValue::Void }
@@ -81,3 +84,20 @@ pub fn map_has(args: &[VMValue]) -> VMValue {
     if let Some(h) = to_handle(args.get(0).unwrap_or(&VMValue::Void)) { call_slot(h, 202, &args[1..]) } else { VMValue::Bool(false) }
 }
 
+pub fn console_log(args: &[VMValue]) -> VMValue {
+    // JIT host-bridge簡易版: 最初の引数を文字列化してstdoutへ
+    if let Some(a0) = args.get(0) {
+        println!("{}", a0.to_string());
+    }
+    VMValue::Void
+}
+
+pub fn console_warn(args: &[VMValue]) -> VMValue {
+    if let Some(a0) = args.get(0) { eprintln!("[warn] {}", a0.to_string()); }
+    VMValue::Void
+}
+
+pub fn console_error(args: &[VMValue]) -> VMValue {
+    if let Some(a0) = args.get(0) { eprintln!("[error] {}", a0.to_string()); }
+    VMValue::Void
+}

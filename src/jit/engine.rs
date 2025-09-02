@@ -223,6 +223,9 @@ impl JitEngine {
             self.register_extern(hb::SYM_HOST_MAP_GET, Arc::new(|args| hb::map_get(args)));
             self.register_extern(hb::SYM_HOST_MAP_SET, Arc::new(|args| hb::map_set(args)));
             self.register_extern(hb::SYM_HOST_MAP_HAS, Arc::new(|args| hb::map_has(args)));
+            self.register_extern(hb::SYM_HOST_CONSOLE_LOG, Arc::new(|args| hb::console_log(args)));
+            self.register_extern(hb::SYM_HOST_CONSOLE_WARN, Arc::new(|args| hb::console_warn(args)));
+            self.register_extern(hb::SYM_HOST_CONSOLE_ERROR, Arc::new(|args| hb::console_error(args)));
         }
     }
 

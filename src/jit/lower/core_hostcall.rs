@@ -28,6 +28,71 @@ pub fn lower_array_get(
     }
 }
 
+pub fn lower_map_size(
+    b: &mut dyn IRBuilder,
+    param_index: &HashMap<ValueId, usize>,
+    recv: &ValueId,
+    dst_is_some: bool,
+) {
+    let use_bridge = std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1");
+    if let Some(pidx) = param_index.get(recv).copied() {
+        b.emit_param_i64(pidx);
+        let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_MAP_SIZE } else { crate::jit::r#extern::collections::SYM_MAP_SIZE_H };
+        b.emit_host_call(sym, 1, dst_is_some);
+    }
+}
+
+pub fn lower_map_get(
+    b: &mut dyn IRBuilder,
+    param_index: &HashMap<ValueId, usize>,
+    known_i64: &HashMap<ValueId, i64>,
+    recv: &ValueId,
+    key: &ValueId,
+    dst_is_some: bool,
+) {
+    let use_bridge = std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1");
+    if let Some(pidx) = param_index.get(recv).copied() {
+        b.emit_param_i64(pidx);
+        if let Some(i) = known_i64.get(key).copied() { b.emit_const_i64(i); } else if let Some(kp) = param_index.get(key).copied() { b.emit_param_i64(kp); } else { b.emit_const_i64(0); }
+        let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_MAP_GET } else { crate::jit::r#extern::collections::SYM_MAP_GET_H };
+        b.emit_host_call(sym, 2, dst_is_some);
+    }
+}
+
+pub fn lower_map_has(
+    b: &mut dyn IRBuilder,
+    param_index: &HashMap<ValueId, usize>,
+    known_i64: &HashMap<ValueId, i64>,
+    recv: &ValueId,
+    key: &ValueId,
+    dst_is_some: bool,
+) {
+    let use_bridge = std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1");
+    if let Some(pidx) = param_index.get(recv).copied() {
+        b.emit_param_i64(pidx);
+        if let Some(i) = known_i64.get(key).copied() { b.emit_const_i64(i); } else if let Some(kp) = param_index.get(key).copied() { b.emit_param_i64(kp); } else { b.emit_const_i64(0); }
+        let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_MAP_HAS } else { crate::jit::r#extern::collections::SYM_MAP_HAS_H };
+        b.emit_host_call(sym, 2, dst_is_some);
+    }
+}
+
+pub fn lower_map_set(
+    b: &mut dyn IRBuilder,
+    param_index: &HashMap<ValueId, usize>,
+    known_i64: &HashMap<ValueId, i64>,
+    recv: &ValueId,
+    key: &ValueId,
+    value: &ValueId,
+) {
+    let use_bridge = std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1");
+    if let Some(pidx) = param_index.get(recv).copied() {
+        b.emit_param_i64(pidx);
+        if let Some(i) = known_i64.get(key).copied() { b.emit_const_i64(i); } else if let Some(kp) = param_index.get(key).copied() { b.emit_param_i64(kp); } else { b.emit_const_i64(0); }
+        if let Some(i) = known_i64.get(value).copied() { b.emit_const_i64(i); } else if let Some(vp) = param_index.get(value).copied() { b.emit_param_i64(vp); } else { b.emit_const_i64(0); }
+        let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_MAP_SET } else { crate::jit::r#extern::collections::SYM_MAP_SET_H };
+        b.emit_host_call(sym, 3, false);
+    }
+}
 pub fn lower_array_set(
     b: &mut dyn IRBuilder,
     param_index: &HashMap<ValueId, usize>,
@@ -192,26 +257,10 @@ pub fn lower_box_call(
                         }
                     }
                     // Map
-                    "size" => {
-                        crate::jit::events::emit_lower(
-                            serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SIZE_H, "decision":"allow", "reason":"sig_ok", "argc":1, "arg_types":["Handle"]}),
-                            "hostcall","<jit>"
-                        );
-                        if let Some(pidx) = param_index.get(recv).copied() {
-                            b.emit_param_i64(pidx);
-                            let sym = if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") { crate::jit::r#extern::host_bridge::SYM_HOST_MAP_SIZE } else { crate::jit::r#extern::collections::SYM_MAP_SIZE_H };
-                            b.emit_host_call(sym, 1, dst.is_some());
-                        } else {
-                            // fallback: id-only (receiver not param)
-                            crate::jit::events::emit_lower(
-                                serde_json::json!({"id": crate::jit::r#extern::collections::SYM_MAP_SIZE, "decision":"fallback", "reason":"receiver_not_param", "argc":1, "arg_types":["I64"]}),
-                                "hostcall","<jit>"
-                            );
-                            b.emit_const_i64(-1);
-                            b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_SIZE, 1, dst.is_some());
-                        }
-                    }
-                    // get/has/set: keep generic path for now (no special lowering here)
+                    "size" => { lower_map_size(b, param_index, recv, dst.is_some()); }
+                    "get" => { if let Some(k) = args.get(0) { lower_map_get(b, param_index, known_i64, recv, k, dst.is_some()); } }
+                    "has" => { if let Some(k) = args.get(0) { lower_map_has(b, param_index, known_i64, recv, k, dst.is_some()); } }
+                    "set" => { if args.len() >= 2 { lower_map_set(b, param_index, known_i64, recv, &args[0], &args[1]); } }
                     "has" => {
                         // Decide on key kind via registry and known values
                         use crate::jit::hostcall_registry::{check_signature, ArgKind};

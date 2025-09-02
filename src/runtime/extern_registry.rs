@@ -15,7 +15,9 @@ pub struct ExternSpec {
 
 static EXTERNS: Lazy<Vec<ExternSpec>> = Lazy::new(|| vec![
     // console
-    ExternSpec { iface: "env.console", method: "log", min_arity: 1, max_arity: 1, slot: Some(10) },
+    ExternSpec { iface: "env.console", method: "log",  min_arity: 1, max_arity: 255, slot: Some(10) },
+    ExternSpec { iface: "env.console", method: "warn", min_arity: 1, max_arity: 255, slot: Some(10) },
+    ExternSpec { iface: "env.console", method: "error", min_arity: 1, max_arity: 255, slot: Some(10) },
     // debug
     ExternSpec { iface: "env.debug", method: "trace", min_arity: 1, max_arity: 255, slot: Some(11) },
     // runtime

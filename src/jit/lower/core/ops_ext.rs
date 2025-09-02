@@ -63,8 +63,14 @@ impl LowerCore {
         args: &Vec<ValueId>,
         _func: &MirFunction,
     ) -> Result<(), String> {
-        // env.console.log/println → ConsoleBox に委譲
+        // env.console.log/println → ConsoleBox に委譲（host-bridge有効時は直接ログ）
         if iface_name == "env.console" && (method_name == "log" || method_name == "println") {
+            if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
+                // a0: 先頭引数を最小限で積む
+                if let Some(arg0) = args.get(0) { self.push_value_if_known_or_param(b, arg0); } else { b.emit_const_i64(0); }
+                b.emit_host_call(crate::jit::r#extern::host_bridge::SYM_HOST_CONSOLE_LOG, 1, false);
+                return Ok(());
+            }
             // Ensure we have a Console handle (hostcall birth shim)
             b.emit_host_call("nyash.console.birth_h", 0, true);
             // a1: first argument best-effort
