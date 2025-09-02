@@ -81,37 +81,8 @@ pub trait IRBuilder {
     fn load_local_i64(&mut self, _index: usize) { }
 }
 
-pub struct NoopBuilder {
-    pub consts: usize,
-    pub binops: usize,
-    pub cmps: usize,
-    pub branches: usize,
-    pub rets: usize,
-}
-
-impl NoopBuilder {
-    pub fn new() -> Self { Self { consts: 0, binops: 0, cmps: 0, branches: 0, rets: 0 } }
-}
-
-impl IRBuilder for NoopBuilder {
-    fn begin_function(&mut self, _name: &str) {}
-    fn end_function(&mut self) {}
-    fn emit_param_i64(&mut self, _index: usize) { self.consts += 1; }
-    fn emit_const_i64(&mut self, _val: i64) { self.consts += 1; }
-    fn emit_const_f64(&mut self, _val: f64) { self.consts += 1; }
-    fn emit_binop(&mut self, _op: BinOpKind) { self.binops += 1; }
-    fn emit_compare(&mut self, _op: CmpKind) { self.cmps += 1; }
-    fn emit_jump(&mut self) { self.branches += 1; }
-    fn emit_branch(&mut self) { self.branches += 1; }
-    fn emit_return(&mut self) { self.rets += 1; }
-    fn emit_select_i64(&mut self) { self.binops += 1; }
-    fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], has_ret: bool, _ret_is_f64: bool) { if has_ret { self.consts += 1; } }
-    fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
-    fn emit_plugin_invoke_by_name(&mut self, _method: &str, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
-    fn ensure_local_i64(&mut self, _index: usize) { /* no-op */ }
-    fn store_local_i64(&mut self, _index: usize) { self.consts += 1; }
-    fn load_local_i64(&mut self, _index: usize) { self.consts += 1; }
-}
+mod noop;
+pub use noop::NoopBuilder;
 
 #[cfg(feature = "cranelift-jit")]
 pub struct CraneliftBuilder {
@@ -153,6 +124,11 @@ pub struct CraneliftBuilder {
 use cranelift_module::Module;
 #[cfg(feature = "cranelift-jit")]
 use cranelift_codegen::ir::InstBuilder;
+
+#[cfg(feature = "cranelift-jit")]
+mod object;
+#[cfg(feature = "cranelift-jit")]
+pub use object::ObjectBuilder;
 
 // TLS: 単一関数あたり1つの FunctionBuilder を保持（jit-direct 専用）
 #[cfg(feature = "cranelift-jit")]
@@ -232,18 +208,14 @@ fn tls_call_import_with_iconsts(
 }
 
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_host_stub0() -> i64 { 0 }
+use self::rt_shims::{nyash_host_stub0, nyash_jit_dbg_i64, nyash_jit_block_enter, nyash_plugin_invoke3_i64, nyash_plugin_invoke3_f64, nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64};
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_jit_dbg_i64(tag: i64, val: i64) -> i64 {
-    eprintln!("[JIT-DBG] tag={} val={}", tag, val);
-    val
-}
+mod rt_shims;
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_jit_block_enter(idx: i64) {
-    eprintln!("[JIT-BLOCK] enter={}", idx);
-}
+use rt_shims::*;
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+// moved into rt_shims.rs
+/*extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     use crate::runtime::plugin_loader_v2::PluginBoxV2;
     let trace = crate::jit::observe::trace_enabled();
     // Emit early shim-enter event for observability regardless of path taken
@@ -393,10 +365,10 @@ extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, argc: i64, 
         }
     }
     0
-}
+}*/
 
 // F64-typed shim: decodes TLV first entry and returns f64 when possible
-extern "C" fn nyash_plugin_invoke3_f64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> f64 {
+/*extern "C" fn nyash_plugin_invoke3_f64(type_id: i64, method_id: i64, argc: i64, a0: i64, a1: i64, a2: i64) -> f64 {
     use crate::runtime::plugin_loader_v2::PluginBoxV2;
     let trace = crate::jit::observe::trace_enabled();
     crate::jit::events::emit_runtime(
@@ -522,18 +494,16 @@ extern "C" fn nyash_plugin_invoke3_f64(type_id: i64, method_id: i64, argc: i64, 
         }
     }
     0.0
-}
+}*/
 
 // === By-name plugin shims (JIT) ===
 #[cfg(feature = "cranelift-jit")]
-extern "C" fn nyash_plugin_invoke_name_getattr_i64(argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+/*extern "C" fn nyash_plugin_invoke_name_getattr_i64(argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     nyash_plugin_invoke_name_common_i64("getattr", argc, a0, a1, a2)
 }
-#[cfg(feature = "cranelift-jit")]
 extern "C" fn nyash_plugin_invoke_name_call_i64(argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     nyash_plugin_invoke_name_common_i64("call", argc, a0, a1, a2)
 }
-#[cfg(feature = "cranelift-jit")]
 fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     use crate::runtime::plugin_loader_v2::PluginBoxV2;
     // Resolve receiver
@@ -627,7 +597,7 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
         }
     }
     0
-}
+}*/
 #[cfg(feature = "cranelift-jit")]
 use super::extern_thunks::{
     nyash_math_sin_f64, nyash_math_cos_f64, nyash_math_abs_f64, nyash_math_min_f64, nyash_math_max_f64,
@@ -1537,18 +1507,9 @@ impl IRBuilder for CraneliftBuilder {
         for _ in 0..then_n { if let Some(v) = self.value_stack.pop() { then_args.push(v); } }
         then_args.reverse();
         CraneliftBuilder::with_fb(|fb| {
-            use cranelift_codegen::ir::types;
             // Ensure successor block params are declared before emitting branch
-            let b_then = self.blocks[then_index];
-            let b_else = self.blocks[else_index];
-            let desired_then = self.block_param_counts.get(&then_index).copied().unwrap_or(0);
-            let desired_else = self.block_param_counts.get(&else_index).copied().unwrap_or(0);
-            let cur_then = fb.func.dfg.block_params(b_then).len();
-            let cur_else = fb.func.dfg.block_params(b_else).len();
-            let then_has_inst = fb.func.layout.first_inst(b_then).is_some();
-            let else_has_inst = fb.func.layout.first_inst(b_else).is_some();
-            if !then_has_inst { if desired_then > cur_then { for _ in cur_then..desired_then { let _ = fb.append_block_param(b_then, types::I64); } } }
-            if !else_has_inst { if desired_else > cur_else { for _ in cur_else..desired_else { let _ = fb.append_block_param(b_else, types::I64); } } }
+            let then_has_inst = self.materialize_succ_params(fb, then_index);
+            let else_has_inst = self.materialize_succ_params(fb, else_index);
             // Now pop condition last (it was pushed first by LowerCore)
             let cond_b1 = if let Some(v) = self.value_stack.pop() {
                 let ty = fb.func.dfg.value_type(v);
@@ -1576,19 +1537,8 @@ impl IRBuilder for CraneliftBuilder {
         for _ in 0..n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
         args.reverse();
         CraneliftBuilder::with_fb(|fb| {
-            use cranelift_codegen::ir::types;
             // Ensure successor block params are declared before emitting jump
-            let b_tgt = self.blocks[target_index];
-            let desired = self.block_param_counts.get(&target_index).copied().unwrap_or(0);
-            let cur = fb.func.dfg.block_params(b_tgt).len();
-            if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-                let has_inst = fb.func.layout.first_inst(b_tgt).is_some();
-                eprintln!("[JIT-CLIF] jump prep: cur_block={:?} target={} desired={} current={} has_inst_before={}", self.current_block_index, target_index, desired, cur, has_inst);
-            }
-            let has_inst = fb.func.layout.first_inst(b_tgt).is_some();
-            if !has_inst {
-                if desired > cur { for _ in cur..desired { let _ = fb.append_block_param(b_tgt, types::I64); } }
-            }
+            let has_inst = self.materialize_succ_params(fb, target_index);
             if has_inst { args.clear(); }
             if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
                 eprintln!("[JIT-CLIF] jump_with_args target={} n={}", target_index, n);
@@ -1638,11 +1588,26 @@ impl IRBuilder for CraneliftBuilder {
 
 #[cfg(feature = "cranelift-jit")]
 impl CraneliftBuilder {
-    #[cfg(feature = "cranelift-jit")]
-    fn mk_fb(&mut self) -> cranelift_frontend::FunctionBuilder {
-        // Reset FunctionBuilderContext to satisfy Cranelift's requirement when instantiating a new builder.
-        self.fbc = cranelift_frontend::FunctionBuilderContext::new();
-        cranelift_frontend::FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc)
+    /// Ensure block parameters for a successor are materialized before emitting edges.
+    /// If the target block already has instructions, we must not append params; caller should
+    /// drop any argument passing in that case to keep CLIF verifier happy.
+    fn materialize_succ_params(
+        &mut self,
+        fb: &mut cranelift_frontend::FunctionBuilder<'static>,
+        succ_index: usize,
+    ) -> bool {
+        use cranelift_codegen::ir::types;
+        if succ_index >= self.blocks.len() { return false; }
+        let b = self.blocks[succ_index];
+        let has_inst = fb.func.layout.first_inst(b).is_some();
+        if !has_inst {
+            let desired = self.block_param_counts.get(&succ_index).copied().unwrap_or(0);
+            let current = fb.func.dfg.block_params(b).len();
+            if desired > current {
+                for _ in current..desired { let _ = fb.append_block_param(b, types::I64); }
+            }
+        }
+        has_inst
     }
     fn entry_param(&mut self, index: usize) -> Option<cranelift_codegen::ir::Value> {
         if let Some(b) = self.entry_block {
@@ -1653,7 +1618,7 @@ impl CraneliftBuilder {
 }
 
 // ==== Minimal ObjectModule-based builder for AOT .o emission (Phase 10.2) ====
-#[cfg(feature = "cranelift-jit")]
+#[cfg(feature = "never")]
 pub struct ObjectBuilder {
     module: cranelift_object::ObjectModule,
     ctx: cranelift_codegen::Context,
@@ -1674,7 +1639,7 @@ pub struct ObjectBuilder {
     pub object_bytes: Option<Vec<u8>>,
 }
 
-#[cfg(feature = "cranelift-jit")]
+#[cfg(feature = "never")]
 impl ObjectBuilder {
     pub fn new() -> Self {
         use cranelift_codegen::settings;
@@ -1725,7 +1690,7 @@ impl ObjectBuilder {
     }
 }
 
-#[cfg(feature = "cranelift-jit")]
+#[cfg(feature = "never")]
 impl IRBuilder for ObjectBuilder {
     fn begin_function(&mut self, name: &str) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
