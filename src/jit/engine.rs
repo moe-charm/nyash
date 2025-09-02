@@ -206,6 +206,7 @@ impl JitEngine {
     /// Register built-in externs (collections)
     fn register_default_externs(&mut self) {
         use crate::jit::r#extern::collections as c;
+        use crate::jit::r#extern::host_bridge as hb;
         self.register_extern(c::SYM_ARRAY_LEN, Arc::new(|args| c::array_len(args)));
         self.register_extern(c::SYM_ARRAY_GET, Arc::new(|args| c::array_get(args)));
         self.register_extern(c::SYM_ARRAY_SET, Arc::new(|args| c::array_set(args)));
@@ -213,6 +214,16 @@ impl JitEngine {
         self.register_extern(c::SYM_MAP_GET, Arc::new(|args| c::map_get(args)));
         self.register_extern(c::SYM_MAP_SET, Arc::new(|args| c::map_set(args)));
         self.register_extern(c::SYM_MAP_SIZE, Arc::new(|args| c::map_size(args)));
+        // Host-bridge variants (by-slot via C symbol). Guarded by env opt-in for now.
+        if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
+            self.register_extern(hb::SYM_HOST_ARRAY_LEN, Arc::new(|args| hb::array_len(args)));
+            self.register_extern(hb::SYM_HOST_ARRAY_GET, Arc::new(|args| hb::array_get(args)));
+            self.register_extern(hb::SYM_HOST_ARRAY_SET, Arc::new(|args| hb::array_set(args)));
+            self.register_extern(hb::SYM_HOST_MAP_SIZE, Arc::new(|args| hb::map_size(args)));
+            self.register_extern(hb::SYM_HOST_MAP_GET, Arc::new(|args| hb::map_get(args)));
+            self.register_extern(hb::SYM_HOST_MAP_SET, Arc::new(|args| hb::map_set(args)));
+            self.register_extern(hb::SYM_HOST_MAP_HAS, Arc::new(|args| hb::map_has(args)));
+        }
     }
 
     pub fn register_extern(&mut self, name: &str, f: Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>) {

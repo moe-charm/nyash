@@ -5,6 +5,7 @@
 //! these externs once call emission is added.
 
 pub mod collections;
+pub mod host_bridge;
 pub mod handles;
 pub mod birth;
 pub mod runtime;

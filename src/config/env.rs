@@ -99,6 +99,8 @@ pub fn gc_trace() -> bool { std::env::var("NYASH_GC_TRACE").ok().as_deref() == S
 pub fn gc_barrier_trace() -> bool { std::env::var("NYASH_GC_BARRIER_TRACE").ok().as_deref() == Some("1") }
 pub fn runtime_checkpoint_trace() -> bool { std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") }
 pub fn vm_pic_stats() -> bool { std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") }
+pub fn vm_vt_trace() -> bool { std::env::var("NYASH_VM_VT_TRACE").ok().as_deref() == Some("1") }
+pub fn vm_pic_trace() -> bool { std::env::var("NYASH_VM_PIC_TRACE").ok().as_deref() == Some("1") }
 pub fn gc_barrier_strict() -> bool { std::env::var("NYASH_GC_BARRIER_STRICT").ok().as_deref() == Some("1") }
 
 /// Return 0 (off) to 3 (max) for `NYASH_GC_TRACE`.

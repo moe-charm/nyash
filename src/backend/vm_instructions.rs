@@ -646,11 +646,22 @@ impl VM {
             }
             Err(_) => {
                 let strict = crate::config::env::extern_strict() || crate::config::env::abi_strict();
-                if strict {
-                    return Err(VMError::InvalidInstruction(format!("ExternCall STRICT: unregistered or unsupported call {}.{}", iface_name, method_name)));
+                // Build suggestion list
+                let mut msg = String::new();
+                if strict { msg.push_str("ExternCall STRICT: unregistered or unsupported call "); } else { msg.push_str("ExternCall failed: "); }
+                msg.push_str(&format!("{}.{}", iface_name, method_name));
+                if let Some(spec) = crate::runtime::extern_registry::resolve(iface_name, method_name) {
+                    msg.push_str(&format!(" (expected arity {}..{})", spec.min_arity, spec.max_arity));
                 } else {
-                    return Err(VMError::InvalidInstruction(format!("ExternCall failed: {}.{}", iface_name, method_name)));
+                    let known = crate::runtime::extern_registry::known_for_iface(iface_name);
+                    if !known.is_empty() {
+                        msg.push_str(&format!("; known methods: {}", known.join(", ")));
+                    } else {
+                        let ifaces = crate::runtime::extern_registry::all_ifaces();
+                        msg.push_str(&format!("; known interfaces: {}", ifaces.join(", ")));
+                    }
                 }
+                return Err(VMError::InvalidInstruction(msg));
             }
         }
         Ok(ControlFlow::Continue)
@@ -918,6 +929,7 @@ impl VM {
         if let VMValue::BoxRef(arc_box) = &recv {
             if arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
                 if let Some(func_name) = self.try_poly_pic(&pic_key, &recv) {
+                    if crate::config::env::vm_pic_trace() { eprintln!("[PIC] poly hit {}", pic_key); }
                     self.boxcall_hits_poly_pic = self.boxcall_hits_poly_pic.saturating_add(1);
                     let mut vm_args = Vec::with_capacity(1 + args.len());
                     vm_args.push(recv.clone());
@@ -928,6 +940,7 @@ impl VM {
                 }
                 // Fallback to Mono-PIC (legacy) if present
                 if let Some(func_name) = self.boxcall_pic_funcname.get(&pic_key).cloned() {
+                    if crate::config::env::vm_pic_trace() { eprintln!("[PIC] mono hit {}", pic_key); }
                     self.boxcall_hits_mono_pic = self.boxcall_hits_mono_pic.saturating_add(1);
                     // Build VM args: receiver first, then original args
                     let mut vm_args = Vec::with_capacity(1 + args.len());
@@ -1131,10 +1144,11 @@ impl VM {
             if let Some(_tb) = crate::runtime::type_registry::resolve_typebox_by_name(ty_name) {
                 // name+arity→slot 解決
                 let slot = crate::runtime::type_registry::resolve_slot_by_name(ty_name, _method, _args.len());
-                // MapBox: size/len/has/get
+                // MapBox: size/len/has/get/set
                 if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
                     if matches!(slot, Some(200|201)) {
                         self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] MapBox.size/len slot={:?}", slot); }
                         let out = map.size();
                         if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                         return Some(Ok(ControlFlow::Continue));
@@ -1151,6 +1165,8 @@ impl VM {
                                 VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
                             };
                             self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            if crate::config::env::vm_vt_trace() { eprintln!("[VT] MapBox.has"); }
                             let out = map.has(key_box);
                             if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                             return Some(Ok(ControlFlow::Continue));
@@ -1168,7 +1184,38 @@ impl VM {
                                 VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
                             };
                             self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            if crate::config::env::vm_vt_trace() { eprintln!("[VT] MapBox.get"); }
                             let out = map.get(key_box);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }
+                    }
+                    if matches!(slot, Some(204)) {
+                        if let (Ok(a0), Ok(a1)) = (self.get_value(_args[0]), self.get_value(_args[1])) {
+                            let key_box: Box<dyn NyashBox> = match a0 {
+                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)),
+                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                                VMValue::BoxRef(ref bx) => bx.share_box(),
+                                VMValue::Future(ref fut) => Box::new(fut.clone()),
+                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let val_box: Box<dyn NyashBox> = match a1 {
+                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)),
+                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                                VMValue::BoxRef(ref bx) => bx.share_box(),
+                                VMValue::Future(ref fut) => Box::new(fut.clone()),
+                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            // Barrier: mutation
+                            crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Map.set");
+                            self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            if crate::config::env::vm_vt_trace() { eprintln!("[VT] MapBox.set"); }
+                            let out = map.set(key_box, val_box);
                             if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                             return Some(Ok(ControlFlow::Continue));
                         }
@@ -1178,6 +1225,7 @@ impl VM {
                 if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
                     if matches!(slot, Some(102)) {
                         self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.len"); }
                         let out = arr.length();
                         if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                         return Some(Ok(ControlFlow::Continue));
@@ -1192,6 +1240,8 @@ impl VM {
                                 VMValue::BoxRef(_) | VMValue::Future(_) | VMValue::Void => Box::new(crate::box_trait::IntegerBox::new(0)),
                             };
                             self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.get"); }
                             let out = arr.get(idx_box);
                             if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                             return Some(Ok(ControlFlow::Continue));
@@ -1216,6 +1266,10 @@ impl VM {
                                 VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
                             };
                             self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            // Barrier: mutation
+                            crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Array.set");
+                            self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.set"); }
                             let out = arr.set(idx_box, val_box);
                             if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                             return Some(Ok(ControlFlow::Continue));
@@ -1226,6 +1280,7 @@ impl VM {
                 if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() {
                     if matches!(slot, Some(300)) {
                         self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] StringBox.len"); }
                         let out = crate::box_trait::IntegerBox::new(sb.value.len() as i64);
                         if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(Box::new(out))); }
                         return Some(Ok(ControlFlow::Continue));
