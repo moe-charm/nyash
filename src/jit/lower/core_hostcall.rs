@@ -11,16 +11,19 @@ pub fn lower_array_get(
     index: &ValueId,
 ) {
     if crate::jit::config::current().hostcall {
+        let use_bridge = std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1");
         let idx = known_i64.get(index).copied().unwrap_or(0);
         if let Some(pidx) = param_index.get(array).copied() {
             b.emit_param_i64(pidx);
             b.emit_const_i64(idx);
-            b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_GET_H, 2, true);
+            let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_ARRAY_GET } else { crate::jit::r#extern::collections::SYM_ARRAY_GET_H };
+            b.emit_host_call(sym, 2, true);
         } else {
             let arr_idx = -1;
             b.emit_const_i64(arr_idx);
             b.emit_const_i64(idx);
-            b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_GET, 2, true);
+            let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_ARRAY_GET } else { crate::jit::r#extern::collections::SYM_ARRAY_GET };
+            b.emit_host_call(sym, 2, true);
         }
     }
 }
@@ -34,19 +37,22 @@ pub fn lower_array_set(
     value: &ValueId,
 ) {
     if crate::jit::config::current().hostcall {
+        let use_bridge = std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1");
         let idx = known_i64.get(index).copied().unwrap_or(0);
         let val = known_i64.get(value).copied().unwrap_or(0);
         if let Some(pidx) = param_index.get(array).copied() {
             b.emit_param_i64(pidx);
             b.emit_const_i64(idx);
             b.emit_const_i64(val);
-            b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_SET_H, 3, false);
+            let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_ARRAY_SET } else { crate::jit::r#extern::collections::SYM_ARRAY_SET_H };
+            b.emit_host_call(sym, 3, false);
         } else {
             let arr_idx = -1;
             b.emit_const_i64(arr_idx);
             b.emit_const_i64(idx);
             b.emit_const_i64(val);
-            b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_SET, 3, false);
+            let sym = if use_bridge { crate::jit::r#extern::host_bridge::SYM_HOST_ARRAY_SET } else { crate::jit::r#extern::collections::SYM_ARRAY_SET };
+            b.emit_host_call(sym, 3, false);
         }
     }
 }
@@ -193,7 +199,8 @@ pub fn lower_box_call(
                         );
                         if let Some(pidx) = param_index.get(recv).copied() {
                             b.emit_param_i64(pidx);
-                            b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_SIZE_H, 1, dst.is_some());
+                            let sym = if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") { crate::jit::r#extern::host_bridge::SYM_HOST_MAP_SIZE } else { crate::jit::r#extern::collections::SYM_MAP_SIZE_H };
+                            b.emit_host_call(sym, 1, dst.is_some());
                         } else {
                             // fallback: id-only (receiver not param)
                             crate::jit::events::emit_lower(
@@ -204,6 +211,7 @@ pub fn lower_box_call(
                             b.emit_host_call(crate::jit::r#extern::collections::SYM_MAP_SIZE, 1, dst.is_some());
                         }
                     }
+                    // get/has/set: keep generic path for now (no special lowering here)
                     "has" => {
                         // Decide on key kind via registry and known values
                         use crate::jit::hostcall_registry::{check_signature, ArgKind};
