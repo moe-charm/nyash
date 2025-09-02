@@ -303,7 +303,7 @@ impl LowerCore {
                     }
                 }
             }
-            for instr in bb.instructions.iter() {
+                    for instr in bb.instructions.iter() {
                 self.cover_if_supported(instr);
                 if let Err(e) = self.try_emit(builder, instr, *bb_id, func) { return Err(e); }
                 // Track FloatBox creations for later arg classification
@@ -370,7 +370,7 @@ impl LowerCore {
                                             if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
                                                 if d2 == dst {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        self.push_value_if_known_or_param(builder, val);
+                                                        ops::push_value_if_known_or_param(self, builder, val);
                                                         cnt += 1;
                                                     }
                                                 }
@@ -389,7 +389,7 @@ impl LowerCore {
                                             if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
                                                 if d2 == dst {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        self.push_value_if_known_or_param(builder, val);
+                                                        ops::push_value_if_known_or_param(self, builder, val);
                                                         cnt += 1;
                                                     }
                                                 }
@@ -421,7 +421,7 @@ impl LowerCore {
                                             if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
                                                 if d2 == dst {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        self.push_value_if_known_or_param(builder, val);
+                                                        ops::push_value_if_known_or_param(self, builder, val);
                                                         cnt += 1;
                                                     }
                                                 }

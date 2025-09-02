@@ -4,12 +4,21 @@
 
 Nyashの文法知識が分散している問題を解決し、AIがNyashコードを正しく書けるよう支援する包括的な文法統一化フェーズ。
 
+## 🔥 核心的な問題
+
+現在のNyashは各層（Tokenizer/Parser/Interpreter/MIR/VM/JIT）で予約語・文法解釈がバラバラに実装されており、これが以下の問題を引き起こしている：
+
+- 同じ `me` キーワードが各層で独自解釈される
+- `+` 演算子の動作がInterpreter/VM/JITで微妙に異なる
+- 新しい予約語追加時に6箇所以上の修正が必要
+- AIが正しいコードを書けない（どの層の解釈に従うべきか不明）
+
 ## 🎯 フェーズの目的
 
-1. **文法の一元管理**: 分散した文法知識を統一
-2. **AIエラー削減**: 文法間違いを90%以上削減
-3. **開発効率向上**: 新構文追加を簡単に
-4. **ANCP連携**: AI通信の効率化
+1. **完全統一文法エンジン**: すべての層が単一の文法定義を参照
+2. **セマンティクス一元化**: 演算子・型変換・実行規則の完全統一
+3. **AIエラー削減**: 文法間違いを90%以上削減
+4. **保守性革命**: 新機能追加が1箇所の修正で完了
 
 ## 📊 主要成果物
 
@@ -66,7 +75,12 @@ keywords:
 
 ## 🔗 関連ドキュメント
 
+- [統一文法アーキテクチャ設計書](unified-grammar-architecture.md) ← **🔥 核心設計**
+- [統一予約語システム仕様](unified-keyword-system.md) ← **🎯 具体的実装**
+- [AI深層考察: 統一文法アーキテクチャ](ai-deep-thoughts-unified-grammar.md) ← **💡 Gemini/Codex分析**
 - [文法統一化詳細設計](grammar-unification.txt)
+- [統一文法定義YAML](nyash-grammar-v1.yaml)
+- [実装計画](implementation-plan.txt)
 - [AI-Nyash Compact Notation Protocol](../../ideas/new-features/2025-08-29-ai-compact-notation-protocol.md)
 - [Phase 12: プラグインシステム](../phase-12/)
 

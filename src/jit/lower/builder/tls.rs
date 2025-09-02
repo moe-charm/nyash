@@ -34,6 +34,13 @@ pub(crate) mod clif_tls {
                 self.fb = core::ptr::null_mut();
             }
         }
+        /// Finalize the current FunctionBuilder and take ownership of the underlying Context.
+        pub fn take_context(&mut self) -> cranelift_codegen::Context {
+            unsafe { self.finalize_drop(); }
+            // Move the current context out and replace with a fresh one
+            let old = std::mem::replace(&mut self.ctx, Box::new(cranelift_codegen::Context::new()));
+            *old
+        }
     }
 }
 
