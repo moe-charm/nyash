@@ -20,6 +20,8 @@ pub mod mir_interpreter; // Lightweight MIR interpreter
 pub mod wasm;
 #[cfg(feature = "wasm-backend")]
 pub mod aot;
+#[cfg(feature = "wasm-backend")]
+pub mod wasm_v2;
 
 #[cfg(feature = "llvm")]
 pub mod llvm;

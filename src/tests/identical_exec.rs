@@ -40,5 +40,37 @@ mod tests {
 
         assert_eq!(vm_s, jit_s, "VM and JIT results should match");
     }
-}
 
+    #[cfg(feature = "cranelift-jit")]
+    #[test]
+    fn identical_vm_and_jit_console_log_side_effect_free() {
+        // Build: const 1; extern_call env.console.log(1); return 1
+        use crate::mir::{MirModule, MirFunction, FunctionSignature, MirInstruction, EffectMask};
+        let sig = FunctionSignature { name: "main".into(), params: vec![], return_type: crate::mir::MirType::Integer, effects: EffectMask::PURE };
+        let mut func = MirFunction::new(sig, crate::mir::BasicBlockId::new(0));
+        let bb = func.entry_block;
+        let v0 = func.next_value_id();
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: v0, value: crate::mir::ConstValue::Integer(1) });
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::ExternCall {
+            dst: None,
+            iface_name: "env.console".to_string(),
+            method_name: "log".to_string(),
+            args: vec![v0],
+            effects: EffectMask::IO,
+        });
+        func.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: Some(v0) });
+        let mut module = MirModule::new("identical_console".into());
+        module.add_function(func);
+
+        // Run VM
+        let mut vm = VM::new();
+        let vm_out = vm.execute_module(&module).expect("VM exec");
+        let vm_s = vm_out.to_string_box().value;
+
+        // Run JIT (Cranelift minimal) — ExternCallはスキップされる想定
+        let jit_out = crate::backend::cranelift_compile_and_execute(&module, "identical_console").expect("JIT exec");
+        let jit_s = jit_out.to_string_box().value;
+
+        assert_eq!(vm_s, jit_s, "VM and JIT results should match despite console.log side effects");
+    }
+}

@@ -208,6 +208,14 @@ pub struct VM {
     pub(super) instr_counter: std::collections::HashMap<&'static str, usize>,
     /// Execution start time for optional stats
     pub(super) exec_start: Option<Instant>,
+    /// Stats: number of BoxCall hits via VTable path
+    pub(super) boxcall_hits_vtable: u64,
+    /// Stats: number of BoxCall hits via Poly-PIC path
+    pub(super) boxcall_hits_poly_pic: u64,
+    /// Stats: number of BoxCall hits via Mono-PIC path
+    pub(super) boxcall_hits_mono_pic: u64,
+    /// Stats: number of BoxCall hits via generic fallback path
+    pub(super) boxcall_hits_generic: u64,
     /// Mono-PIC skeleton: global hit counters keyed by (recv_type, method_id/name)
     pub(super) boxcall_pic_hits: std::collections::HashMap<String, u32>,
     /// Mono-PIC: cached direct targets (currently InstanceBox function name)
@@ -372,6 +380,10 @@ impl VM {
             module: None,
             instr_counter: std::collections::HashMap::new(),
             exec_start: None,
+            boxcall_hits_vtable: 0,
+            boxcall_hits_poly_pic: 0,
+            boxcall_hits_mono_pic: 0,
+            boxcall_hits_generic: 0,
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
             boxcall_poly_pic: std::collections::HashMap::new(),
@@ -403,6 +415,10 @@ impl VM {
             module: None,
             instr_counter: std::collections::HashMap::new(),
             exec_start: None,
+            boxcall_hits_vtable: 0,
+            boxcall_hits_poly_pic: 0,
+            boxcall_hits_mono_pic: 0,
+            boxcall_hits_generic: 0,
             boxcall_pic_hits: std::collections::HashMap::new(),
             boxcall_pic_funcname: std::collections::HashMap::new(),
             boxcall_poly_pic: std::collections::HashMap::new(),
@@ -494,8 +510,9 @@ impl VM {
         let hits_total: u64 = self.boxcall_pic_hits.values().map(|v| *v as u64).sum();
         let vt_entries = self.boxcall_vtable_funcname.len();
         eprintln!(
-            "[VM] PIC/VT summary: poly_sites={} avg_entries={:.2} mono_sites={} hits_total={} vt_entries={}",
-            sites_poly, avg_entries, sites_mono, hits_total, vt_entries
+            "[VM] PIC/VT summary: poly_sites={} avg_entries={:.2} mono_sites={} hits_total={} vt_entries={} | hits: vt={} poly={} mono={} generic={}",
+            sites_poly, avg_entries, sites_mono, hits_total, vt_entries,
+            self.boxcall_hits_vtable, self.boxcall_hits_poly_pic, self.boxcall_hits_mono_pic, self.boxcall_hits_generic
         );
         // Top sites by hits (up to 5)
         let mut hits: Vec<(&String, &u32)> = self.boxcall_pic_hits.iter().collect();

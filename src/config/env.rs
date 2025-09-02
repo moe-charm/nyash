@@ -120,3 +120,6 @@ pub fn rewrite_future() -> bool { std::env::var("NYASH_REWRITE_FUTURE").ok().as_
 // ---- Phase 12: Nyash ABI (vtable) toggles ----
 pub fn abi_vtable() -> bool { std::env::var("NYASH_ABI_VTABLE").ok().as_deref() == Some("1") }
 pub fn abi_strict() -> bool { std::env::var("NYASH_ABI_STRICT").ok().as_deref() == Some("1") }
+
+// ---- ExternCall strict diagnostics ----
+pub fn extern_strict() -> bool { std::env::var("NYASH_EXTERN_STRICT").ok().as_deref() == Some("1") }

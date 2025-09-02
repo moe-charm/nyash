@@ -197,6 +197,12 @@ fn plugin_box_from_handle(_type_id: u32, _instance_id: u32) -> Option<std::sync:
 // 100: ArrayBox.get(index: i64) -> any
 // 101: ArrayBox.set(index: i64, value: any) -> any
 // 102: ArrayBox.len() -> i64
+// 200: MapBox.size() -> i64
+// 201: MapBox.len() -> i64
+// 202: MapBox.has(key:any) -> bool
+// 203: MapBox.get(key:any) -> any
+// 204: MapBox.set(key:any, value:any) -> any
+// 300: StringBox.len() -> i64
 #[no_mangle]
 pub extern "C" fn nyrt_host_call_slot(handle: u64, selector_id: u64,
                                        args_ptr: *const u8, args_len: usize,
@@ -294,6 +300,86 @@ pub extern "C" fn nyrt_host_call_slot(handle: u64, selector_id: u64,
                     }
                     _ => {}
                 }
+            }
+        }
+        200 | 201 | 202 | 203 | 204 => {
+            if let Some(map) = recv_arc.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                match selector_id {
+                    200 | 201 => {
+                        let out = map.size();
+                        let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
+                        let buf = tlv_encode_one(&vmv);
+                        return encode_out(out_ptr, out_len, &buf);
+                    }
+                    202 => { // has(key)
+                        if argv.len() >= 1 {
+                            let key_box: Box<dyn NyashBox> = match argv[0].clone() {
+                                crate::backend::vm::VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                crate::backend::vm::VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                                crate::backend::vm::VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                crate::backend::vm::VMValue::String(s) => Box::new(crate::box_trait::StringBox::new(s)),
+                                crate::backend::vm::VMValue::BoxRef(b) => b.share_box(),
+                                crate::backend::vm::VMValue::Future(fu) => Box::new(fu),
+                                crate::backend::vm::VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let out = map.has(key_box);
+                            let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
+                            let buf = tlv_encode_one(&vmv);
+                            return encode_out(out_ptr, out_len, &buf);
+                        }
+                    }
+                    203 => { // get(key)
+                        if argv.len() >= 1 {
+                            let key_box: Box<dyn NyashBox> = match argv[0].clone() {
+                                crate::backend::vm::VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                crate::backend::vm::VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                                crate::backend::vm::VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                crate::backend::vm::VMValue::String(s) => Box::new(crate::box_trait::StringBox::new(s)),
+                                crate::backend::vm::VMValue::BoxRef(b) => b.share_box(),
+                                crate::backend::vm::VMValue::Future(fu) => Box::new(fu),
+                                crate::backend::vm::VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let out = map.get(key_box);
+                            let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
+                            let buf = tlv_encode_one(&vmv);
+                            return encode_out(out_ptr, out_len, &buf);
+                        }
+                    }
+                    204 => { // set(key, value)
+                        if argv.len() >= 2 {
+                            let key_box: Box<dyn NyashBox> = match argv[0].clone() {
+                                crate::backend::vm::VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                crate::backend::vm::VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                                crate::backend::vm::VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                crate::backend::vm::VMValue::String(s) => Box::new(crate::box_trait::StringBox::new(s)),
+                                crate::backend::vm::VMValue::BoxRef(b) => b.share_box(),
+                                crate::backend::vm::VMValue::Future(fu) => Box::new(fu),
+                                crate::backend::vm::VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let val_box: Box<dyn NyashBox> = match argv[1].clone() {
+                                crate::backend::vm::VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                crate::backend::vm::VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                                crate::backend::vm::VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                crate::backend::vm::VMValue::String(s) => Box::new(crate::box_trait::StringBox::new(s)),
+                                crate::backend::vm::VMValue::BoxRef(b) => b.share_box(),
+                                crate::backend::vm::VMValue::Future(fu) => Box::new(fu),
+                                crate::backend::vm::VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let out = map.set(key_box, val_box);
+                            let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
+                            let buf = tlv_encode_one(&vmv);
+                            return encode_out(out_ptr, out_len, &buf);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        300 => {
+            if let Some(sb) = recv_arc.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                let out = crate::backend::vm::VMValue::Integer(sb.value.len() as i64);
+                let buf = tlv_encode_one(&out);
+                return encode_out(out_ptr, out_len, &buf);
             }
         }
         _ => {}
