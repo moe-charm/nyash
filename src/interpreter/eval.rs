@@ -61,18 +61,27 @@ impl NyashInterpreter {
                     // Main static boxを初期化
                     self.ensure_static_box_initialized("Main")?;
 
-                    // Main.main() を呼び出し
+                    // Main.main(args?) を呼び出し（引数が1つなら空配列をデフォルト注入）
+                    let mut default_args: Vec<ASTNode> = Vec::new();
+                    if let Ok(defs) = self.shared.static_box_definitions.read() {
+                        if let Some(main_def) = defs.get("Main") {
+                            if let Some(m) = main_def.methods.get("main") {
+                                if let ASTNode::FunctionDeclaration { params, .. } = m {
+                                    if params.len() == 1 {
+                                        default_args.push(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     let main_call_ast = ASTNode::MethodCall {
                         object: Box::new(ASTNode::FieldAccess {
-                            object: Box::new(ASTNode::Variable {
-                                name: "statics".to_string(),
-                                span: crate::ast::Span::unknown(),
-                            }),
+                            object: Box::new(ASTNode::Variable { name: "statics".to_string(), span: crate::ast::Span::unknown() }),
                             field: "Main".to_string(),
                             span: crate::ast::Span::unknown(),
                         }),
                         method: "main".to_string(),
-                        arguments: vec![],
+                        arguments: default_args,
                         span: crate::ast::Span::unknown(),
                     };
 
@@ -86,4 +95,3 @@ impl NyashInterpreter {
         }
     }
 }
-

@@ -1,0 +1,12 @@
+// MapBox toJson smoke (int values only in current impl)
+static box Main {
+  main() {
+    local m = new MapBox()
+    m.setS("x", 1)
+    m.setS("y", 2)
+    local js = m.toJson()
+    if js.length() == 0 { return 1 }
+    return 0
+  }
+}
+

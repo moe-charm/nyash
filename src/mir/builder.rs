@@ -1225,15 +1225,34 @@ impl MirBuilder {
         self.current_static_box = Some(box_name.clone());
         // Look for the main() method
         let out = if let Some(main_method) = methods.get("main") {
-            if let ASTNode::FunctionDeclaration { body, .. } = main_method {
+            if let ASTNode::FunctionDeclaration { params, body, .. } = main_method {
                 // Convert the method body to a Program AST node and lower it
                 let program_ast = ASTNode::Program {
                     statements: body.clone(),
                     span: crate::ast::Span::unknown(),
                 };
                 
+                // Bind default parameters if present (e.g., args=[])
+                // Save current var map; inject defaults; restore after lowering
+                let saved_var_map = std::mem::take(&mut self.variable_map);
+                // Prepare defaults for known patterns
+                for p in params.iter() {
+                    let pid = self.value_gen.next();
+                    // Heuristic: for parameter named "args", create new ArrayBox(); else use Void
+                    if p == "args" {
+                        // new ArrayBox() -> pid
+                        // Emit NewBox for ArrayBox with no args
+                        self.emit_instruction(MirInstruction::NewBox { dst: pid, box_type: "ArrayBox".to_string(), args: vec![] })?;
+                    } else {
+                        self.emit_instruction(MirInstruction::Const { dst: pid, value: ConstValue::Void })?;
+                    }
+                    self.variable_map.insert(p.clone(), pid);
+                }
                 // Use existing Program lowering logic
-                self.build_expression(program_ast)
+                let lowered = self.build_expression(program_ast);
+                // Restore variable map
+                self.variable_map = saved_var_map;
+                lowered
             } else {
                 Err("main method in static box is not a FunctionDeclaration".to_string())
             }
@@ -1524,6 +1543,65 @@ impl MirBuilder {
                 let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
                 self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
                 return Ok(dst);
+            }
+        }
+        // ExternCall: env.X.* pattern via field access (e.g., env.future.delay)
+        if let ASTNode::FieldAccess { object: env_obj, field: env_field, .. } = object.clone() {
+            if let ASTNode::Variable { name: env_name, .. } = *env_obj {
+                if env_name == "env" {
+                    // Build args first (extern uses evaluated args only)
+                    let mut arg_values = Vec::new();
+                    for arg in &arguments { arg_values.push(self.build_expression(arg.clone())?); }
+                    match (env_field.as_str(), method.as_str()) {
+                        ("future", "delay") => {
+                            let result_id = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::ExternCall {
+                                dst: Some(result_id),
+                                iface_name: "env.future".to_string(),
+                                method_name: "delay".to_string(),
+                                args: arg_values,
+                                effects: EffectMask::READ.add(Effect::Io),
+                            })?;
+                            return Ok(result_id);
+                        }
+                        ("task", "currentToken") => {
+                            let result_id = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::ExternCall {
+                                dst: Some(result_id),
+                                iface_name: "env.task".to_string(),
+                                method_name: "currentToken".to_string(),
+                                args: arg_values,
+                                effects: EffectMask::READ,
+                            })?;
+                            return Ok(result_id);
+                        }
+                        ("task", "cancelCurrent") => {
+                            self.emit_instruction(MirInstruction::ExternCall {
+                                dst: None,
+                                iface_name: "env.task".to_string(),
+                                method_name: "cancelCurrent".to_string(),
+                                args: arg_values,
+                                effects: EffectMask::IO,
+                            })?;
+                            let void_id = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
+                            return Ok(void_id);
+                        }
+                        ("console", "log") => {
+                            self.emit_instruction(MirInstruction::ExternCall {
+                                dst: None,
+                                iface_name: "env.console".to_string(),
+                                method_name: "log".to_string(),
+                                args: arg_values,
+                                effects: EffectMask::IO,
+                            })?;
+                            let void_id = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::Const { dst: void_id, value: ConstValue::Void })?;
+                            return Ok(void_id);
+                        }
+                        _ => { /* fallthrough to normal method lowering */ }
+                    }
+                }
             }
         }
         // ExternCall判定はobjectの変数解決より先に行う（未定義変数で落とさない）

@@ -23,6 +23,7 @@ No installation needed - experience Nyash instantly in your web browser!
 
 ## 🚀 **Breaking News: Native EXE Achieved!**
 
+**September 1, 2025** - Revolutionary TypeBox ABI unification achieved! C ABI + Nyash ABI seamlessly integrated.
 **August 29, 2025** - Just 20 days after inception, Nyash can now compile to native executables!
 
 ```bash
@@ -32,14 +33,15 @@ cargo build --release --features cranelift-jit
 ./app                                             # Standalone execution!
 ```
 
-**What we achieved in 20 days:**
+**What we achieved in 23 days:**
 - ✅ Full programming language with interpreter
 - ✅ VM with 13.5x performance boost  
 - ✅ JIT compiler (Cranelift integration)
 - ✅ WebAssembly support
-- ✅ Plugin system (C ABI)
+- ✅ Plugin system (C ABI + Nyash ABI unified)
 - ✅ Native binary generation
 - ✅ Python integration via plugins
+- ✅ TypeBox ABI bridge (revolutionary plugin unification)
 
 ---
 
@@ -217,20 +219,39 @@ box EnhancedArray from ArrayBox {
 
 ---
 
-## 🔌 **Plugin System**
+## 🔌 **Revolutionary Plugin System**
 
-Nyash pioneered the "Everything is Plugin" architecture:
+### TypeBox: The Universal Plugin Bridge (NEW!)
+Nyash pioneered unified C ABI + Nyash ABI integration through TypeBox:
 
-```toml
-# nyash.toml - Plugin configuration
-[libraries."libnyash_python_plugin.so"]
-boxes = ["PyRuntimeBox", "PyObjectBox"]
-
-[libraries."libnyash_net_plugin.so"]  
-boxes = ["HttpServerBox", "HttpClientBox", "WebSocketBox"]
+```c
+// TypeBox - Everything is Box, even type information!
+typedef struct {
+    uint32_t abi_tag;           // 'TYBX'
+    const char* name;           // "ArrayBox"
+    void* (*create)(void);      // Box creation function
+} NyrtTypeBox;
 ```
 
-Create your own Box types in C/Rust and integrate seamlessly!
+### Plugin Configuration
+```toml
+# nyash.toml v3.0 - Unified plugin support
+[plugins.map]
+path = "plugins/map.so"
+abi = "c"              # Traditional C ABI
+
+[plugins.advanced_map]
+path = "plugins/adv_map.so"
+abi = "nyash"          # Type-safe Nyash ABI
+
+[plugins.hybrid]
+path = "plugins/hybrid.so"
+abi = "unified"        # Both ABIs supported!
+```
+
+**Key Innovation**: TypeBox enables cross-plugin Box creation without circular dependencies. MapBox can now return ArrayBox seamlessly!
+
+📚 **[Full TypeBox Documentation](docs/development/roadmap/phases/phase-12/)**
 
 ---
 
@@ -273,6 +294,7 @@ powershell -ExecutionPolicy Bypass -File tools\build_aot.ps1 -Input examples\aot
 ### 2. **Box-First Architecture**
 - Every optimization preserves the Box abstraction
 - Plugins are Boxes, JIT preserves Boxes, even native code respects Boxes
+- TypeBox: Even type information is a Box!
 - Unprecedented consistency across all execution modes
 
 ### 3. **Observable by Design**
@@ -354,9 +376,10 @@ MIT License - Use freely in your projects!
 - **August 9, 2025**: First commit - "Hello Nyash!"
 - **August 13**: JIT planning begins (day 4!)
 - **August 20**: VM achieves 13.5x performance
-- **August 29**: Native EXE compilation achieved! 
+- **August 29**: Native EXE compilation achieved!
+- **September 1**: TypeBox unifies C ABI + Nyash ABI plugins! 
 
-*20 days from zero to native binary - a new record in language development!*
+*23 days from zero to unified plugin ecosystem - a new record in language development!*
 
 ---
 

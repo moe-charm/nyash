@@ -9,9 +9,10 @@ static box Main {
         me.console = new ConsoleBox()
         me.options = me.parseArgs(args)
         
-        // バージョン表示
+        // バージョン表示（グローバルNYASH_VERSION依存を避ける）
         if me.options.get("version") {
-            me.console.log("ny-echo v1.0.0 (Nyash " + NYASH_VERSION + ")")
+            local ver = "1.0.0"
+            me.console.log("ny-echo v" + ver)
             return 0
         }
         

@@ -1,5 +1,19 @@
 # CURRENT TASK (Phase 11.7 kick-off: JIT Complete / Semantics Layer)
 
+> Quick Resume (Phase 12 bridge)
+
+- Where to look next:
+  - Phase 12 overview: docs/development/roadmap/phases/phase-12/README.md
+  - Task board: docs/development/roadmap/phases/phase-12/TASKS.md
+  - ABI digest: docs/development/roadmap/phases/phase-12/NYASH-ABI-DESIGN.md
+  - Refactoring plan: docs/development/roadmap/phases/phase-12/REFACTORING_PLAN.md
+- Build/run (VM/JIT):
+  - VM: `cargo build --release --features cranelift-jit && ./target/release/nyash --backend vm apps/tests/ny-echo-lite/main.nyash`
+  - JIT: `./target/release/nyash --backend jit apps/tests/ny-echo-lite/main.nyash`
+- MapBox extensions (VM/JIT): remove/clear/getOr/keys/values/JSON are available; keys/values currently return newline-joined String (shim).
+- First refactor candidate: split `src/runner.rs` into `runner/mod.rs` + `runner/modes/*` (see REFACTORING_PLAN.md).
+
+
 Phase 11.7 へ仕切り直し（会議合意）
 
 - 単一意味論層: MIR→Semantics→{VM/Cranelift/LLVM/WASM} の設計に切替。VMは参照実装、実行/生成はCodegen側で一本化。
@@ -10,6 +24,10 @@ Phase 11.7 へ仕切り直し（会議合意）
 Docs: docs/development/roadmap/phases/phase-11.7_jit_complete/{README.md, PLAN.md, CURRENT_TASK.md, MEETING_NOTES.md}
 
 以降は下記の旧計画（LLVM準備）をアーカイブ参照。スモークやツールは必要箇所を段階で引継ぎ。
+
+開発哲学（Box-First）
+- 「箱を作って下に積む」原則で進める。境界を先に置き、no-op足場→小さく通す→観測→厳密化の順で段階導入。
+- 詳細: docs/development/philosophy/box-first-manifesto.md
 
 次の候補（再開時）
 - spawn を本当の非同期化（TLV化＋Scheduler投入）
@@ -194,6 +212,61 @@ Update (2025-09-01 PM2 / Interpreter parity blockers)
 - 既知の注意（jit-direct 経路のみ）
   - 条件分岐系（Branch/Jump）で戻り値が 0 になる事象を確認。`--backend cranelift`（統合経路）では期待値どおり（例: mir-branch-ret → 1）。
   - 影響範囲: jit-direct 実験フラグのみ。LowerCore/CraneliftBuilder の IR 自体は生成されており、統合経路では正しく実行される。
+
+---
+
+最終確認（apps フォルダ tri‑backend 実行計画 / 実行ログ用）
+
+対象: C:\git\nyash-project\nyash\apps 下の各アプリ（インタープリター／VM／JIT(exe)）
+
+前提
+- ビルド: `cargo build --release --features cranelift-jit`
+- 実行パス（Linux/Mac）: `./target/release/nyash`
+- 実行パス（Windows PowerShell）: `target\release\nyash.exe`
+- 3モードの呼び分け:
+  - Script(インタープリター): `nyash apps/APP/main.nyash`
+  - VM: `nyash --backend vm apps/APP/main.nyash`
+  - JIT(exe): `nyash --backend vm --jit-exec --jit-hostcall apps/APP/main.nyash`
+
+補足/既知
+- 一部アプリは CLI 入力/標準入力/環境定数に依存（例: ny-echo の標準入力、NYASH_VERSION の参照）。必要に応じて簡易入力をパイプで与えるか、定数をスクリプト先頭に仮定義して実行確認する。
+- PluginOnly 強制は apps では無効化する（toString 経路が PluginInvoke 固定になると出力整形に影響）。
+
+進め方（手順テンプレート）
+1) 共通ビルド
+   - [ ] `cargo build --release --features cranelift-jit`
+2) アプリごとに 3 モード実行（下記テンプレートをコピーして使用）
+
+テンプレート（各アプリ用）
+- アプリ名: <app-name>
+  - Script: `nyash apps/<app-name>/main.nyash`
+    - [ ] 実行OK / 出力: <貼付>
+  - VM: `nyash --backend vm apps/<app-name>/main.nyash`
+    - [ ] 実行OK / 出力: <貼付>
+  - JIT(exe): `nyash --backend vm --jit-exec --jit-hostcall apps/<app-name>/main.nyash`
+    - [ ] 実行OK / 出力: <貼付>
+  - 備考: 例）標準入力が必要 → `echo "Hello" | ...`、定数 `NYASH_VERSION` を仮定義 等
+
+対象アプリ（初期リスト）
+- ny-echo
+  - 入力例（Script）: `echo "Hello" | nyash apps/ny-echo/main.nyash`
+  - 入力例（VM）:     `echo "Hello" | nyash --backend vm apps/ny-echo/main.nyash`
+  - 入力例（JIT）:    `echo "Hello" | nyash --backend vm --jit-exec --jit-hostcall apps/ny-echo/main.nyash`
+  - 既知: `NYASH_VERSION` を参照するため、未定義時はエラー。必要ならスクリプト先頭で仮定義（例: `version = "dev"`）して確認。
+
+- ny-array-bench
+  - Script/VM/JIT で 3 モード実行し、処理完了を確認（所要時間・出力サマリを記録）。
+
+- ny-mem-bench
+  - Script/VM/JIT で 3 モード実行し、処理完了を確認（所要時間・出力サマリを記録）。
+
+クロスチェック（簡易スクリプト）
+- 補助: `tools/apps_tri_backend_smoke.sh apps/ny-echo/main.nyash apps/ny-array-bench/main.nyash apps/ny-mem-bench/main.nyash`
+  - 3 モードの Result ライン要約を出力（インタラクティブ入出力が必要なものは手動実行を推奨）。
+
+ゴール/合格基準
+- 各アプリで Script/VM/JIT(exe) の 3 モードがクラッシュ無しで完走し、期待する出力/挙動が観測できること。
+- 不一致/未定義エラーが出た場合は「備考」に記録し、必要に応じて最小限の仮定義（標準入力や定数）での再実行結果も併記する。
   - 次回対応: brif 直後のブロック制御/シール順の見直し（entry/sealing）、条件値スタック消費タイミングの再点検。
 
 
@@ -235,6 +308,43 @@ Update (2025-09-01 night / JIT-direct branch/PHI fix)
   2) Multi-PHI (limited):
      - Add one smoke with two PHI slots; confirm arg counts/ordering under `phi_min`.
   3) Logging remains env-gated; no default noise. No broad refactors until the above are green.
+
+
+Update (2025-09-02 / jit-direct FB lifecycle refactor)
+
+いま動くもの
+- Interpreter/VM/MIR の基本スモーク: OK
+- await の Result.Ok/Err 統一: Interpreter/VM/JIT で整合
+- Cranelift 実行（`--backend cranelift`）: OK（例: `mir-branch-ret` → 1）
+
+いま詰まっている点（要修正）
+- jit-direct で Cranelift FunctionBuilder が「block0 not sealed」でパニック
+  - begin/end のたびに短命の FunctionBuilder を作って finalize している設計が、最新の Cranelift の前提（全ブロック seal 済みで finalize）と合っていない
+  - 単一出口（ret_block）方針は Cranelift 側に途中まで入っているが、ObjectBuilder と二重実装があり、Cranelift 側の finalize 前にブロックを seal しきれていない箇所が残っている
+
+直近の変更（対策の第一歩）
+- CraneliftBuilder
+  - return は ret_block へ jump（エピローグで最終 return）に変更（単一出口に合わせて安全化）
+  - entry block の seal を begin_function で実施
+  - end_function 最後に blocks/entry/ret の seal を実施
+- ObjectBuilder
+  - emit_return は従来通りダイレクト return（ret_block を持たないため）
+
+現状の評価
+- 上記を入れても FunctionBuilder finalize のアサーションは残存。
+- jit-direct の builder ライフサイクル（複数回 finalize する設計）そのものを見直す必要あり。
+
+次の実装（推奨順）
+1) CraneliftBuilder のビルドモデルを単一 FunctionBuilder 方式へ
+   - 関数スコープで1つの FunctionBuilder を保持し、lower 中は finalize しない
+   - switch/jump/phi/hostcall も同一 FB で emit（現状の都度 new/finalize を撤廃）
+   - seal は then/else/target を LowerCore 側からタイミング良く呼ぶ＋end_function で最終チェック
+2) jit-direct での AOT emit パス（ObjectBuilder）は現状通りだが、strict 判定を整理
+   - `mir-branch-ret` のような最小ケースは unsupported=0 を確実に維持
+   - まずはこの1本で .o 生成→リンク→EXE 実行を通す
+3) ツールチェイン側（`tools/build_aot.sh`）の strict モードヒントを活かしつつ、上記の最小成功ケースを CI スモークに追加
+
+全側で続けてこのリファクタに着手。まずは FunctionBuilder のライフサイクル一本化から進め、`mir-branch-ret` の AOT（EXE）生成・実行まで通し切る。
 
 
 # （以下、旧タスク: Phase 10.8 記録）
@@ -477,6 +587,50 @@ Update (2025-08-31 PM3 / LLVM VInvoke triage)
 
 既知の注意/制限（80/20の割り切り）
 - BoolはI64の0/1として扱っており、B1専用ABIは未導入（将来拡張）。
+
+---
+
+Update (2025-09-02 night / jit-direct TLS単一FBリファクタ 進捗・引き継ぎ)
+
+- 目的: jit-direct の Cranelift FunctionBuilder ライフサイクルを「関数ごとに1つ」に統一し、finalizeは end_function の一度のみとする（Craneliftの前提に整合）。
+
+- 実装済み（最小スコープ）
+  - TLSに Context/FBC/FunctionBuilder を保持（begin_functionで生成→end_functionでfinalize）。
+  - per-op finalize の撤去。主要経路（const/binop/compare/select/branch/jump/return/hostcall 等）を TLS 単一FB に切替中。
+  - 単一出口（ret_block + i64 block param）維持。emit_return は ret_block へ jump、end_function で epilogue return を生成。
+  - prepare_blocks は begin_function 前はTLSに触れず pending_blocks に貯め、begin_function で create_block。
+  - host/import 呼び出しは tls_call_import_ret/tls_call_import_with_iconsts ヘルパへ分離（module.declare_func_in_func + call を安全化）。
+  - 未終端ブロック切替の安全弁: IRBuilder::switch_to_block に「未終端なら jump 注入」（cur_needs_term）を導入。
+
+- 現状ステータス
+  - cargo build --features cranelift-jit: OK
+  - jit-direct 実行: まだ1箇所「you have to fill your block before switching」（未終端での block 切替）アサートが残存。
+    - 再現: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+    - 多くの switch_to_block は closure から排除済みだが、特定条件下で未終端のまま切替が残っている模様。
+
+- 次の小ステップ（箱を下に積む順）
+  1) IRBuilder::switch_to_block の重複抑止（同一 index への再切替は no-op）。
+  2) cur_needs_term の更新確認（emit_return/br_if/jump 後は必ず false）。主要箇所は反映済みだが再点検。
+  3) emit_* 内の残存 switch_to_block を整理（挿入点は LowerCore 側の switch_to_block に一本化）。
+  4) トレースで最終合流（ret_block）直前の切替を観測：
+     - 環境: `NYASH_JIT_TRACE_BLOCKS=1 NYASH_JIT_TRACE_BR=1`
+  5) スモーク（jit-direct）を順に通す:
+     - `mir-branch-ret` → 1
+     - `mir-phi-min` → 10
+     - `mir-branch-multi` → 1
+  6) hostcall_typed / plugin_by_name の TLS 呼び出し統一（未対応部分があれば最小限で補完）。
+
+- 実行/検証メモ
+  - ビルド: `cargo build --features cranelift-jit`
+  - 実行: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+  - 追跡ログ: `NYASH_JIT_TRACE_BR=1`（brif出力）、`NYASH_JIT_TRACE_BLOCKS=1`（block切替通知）
+
+- 影響範囲
+  - jit-direct（CraneliftBuilder）限定。ObjectBuilder（AOT .o生成）は従来通り。
+  - docs/development/roadmap/phases/phase-11.7_jit_complete 配下のフェーズ文書・計画は維持（削除・変更なし）。
+
+備考
+- まずは TLS 方式で単一FBモデルを安定化（動かすことを最優先）。その後、余力があれば IRBuilder/LowerCore に FB を明示渡しするクリーン版へ段階移行を検討。
 - String/Null/Void のConstは暫定的に0へ丸め（必要箇所から段階的に正規化）。
 - `jit-b1-abi` 等のunexpected cfg警告は今後整理対象。
 

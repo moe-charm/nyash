@@ -1,0 +1,39 @@
+// MapBox extended ops smoke: remove/clear/keysStr/getOr and string keys
+static box Main {
+  init { console }
+  main() {
+    me.console = new ConsoleBox()
+    local m = new MapBox()
+    // int keys
+    m.set(1, 10)
+    m.set(2, 20)
+    // string keys via typed helpers
+    m.setS("alpha", 100)
+    m.setS("beta", 200)
+
+    // getOr for missing keys
+    local gx = m.getOr("missing", 7)
+    if gx != 7 { return 1 }
+
+    // remove existing
+    local r1 = m.remove("alpha")
+    // remove non-existing
+    local r2 = m.remove("zzz")
+    if r1 != true { return 2 }
+    if r2 != false { return 3 }
+
+    // keysStr contains beta and not alpha
+    local ks = m.keysStr()
+    // naive contains check using StringBox concat/length
+    // we leverage toString and simple equality by building markers
+    me.console.log(ks)
+    // Simple heuristic: ensure size > 0
+    if ks.length() == 0 { return 4 }
+
+    // clear
+    m.clear()
+    if m.size() != 0 { return 5 }
+    return 0
+  }
+}
+

@@ -1,0 +1,398 @@
+================================================================================
+Phase 11.9: 文法統一化 実装計画
+================================================================================
+
+【実装の優先順位と依存関係】
+
+1. 基礎インフラ（必須・最優先）
+   └→ 2. 文法定義ローダー
+      └→ 3. 既存コンポーネント統合
+         └→ 4. AI機能追加
+
+================================================================================
+Step 1: 基礎インフラ構築（3日）
+================================================================================
+
+■ ディレクトリ構造
+src/
+├── grammar/
+│   ├── mod.rs          # メインモジュール
+│   ├── definition.rs   # 文法定義構造体
+│   ├── loader.rs       # YAML読み込み
+│   ├── validator.rs    # 検証ロジック
+│   └── export.rs       # AI向けエクスポート
+│
+grammar/
+└── nyash-grammar-v1.yaml  # 文法定義ファイル
+
+■ 基本構造体設計
+```rust
+// src/grammar/definition.rs
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GrammarDefinition {
+    pub version: String,
+    pub language: String,
+    pub keywords: HashMap<String, KeywordCategory>,
+    pub syntax_rules: HashMap<String, SyntaxRule>,
+    pub ai_common_mistakes: Vec<CommonMistake>,
+    pub ancp_mappings: AncpMappings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct KeywordDef {
+    pub token: String,
+    pub category: String,
+    pub semantic: String,
+    pub syntax: Option<String>,
+    pub example: Option<String>,
+    pub deprecated_aliases: Vec<String>,
+    pub ai_hint: String,
+}
+```
+
+■ Cargo.toml追加
+```toml
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+once_cell = "1.19"  # グローバルシングルトン用
+```
+
+================================================================================
+Step 2: 文法定義ローダー実装（2日）
+================================================================================
+
+■ シングルトンローダー
+```rust
+// src/grammar/loader.rs
+use once_cell::sync::Lazy;
+use std::sync::Arc;
+
+pub static NYASH_GRAMMAR: Lazy<Arc<NyashGrammar>> = Lazy::new(|| {
+    Arc::new(NyashGrammar::load().expect("Failed to load grammar"))
+});
+
+impl NyashGrammar {
+    fn load() -> Result<Self, Error> {
+        let yaml_path = concat!(
+            env!("CARGO_MANIFEST_DIR"), 
+            "/grammar/nyash-grammar-v1.yaml"
+        );
+        let yaml_str = std::fs::read_to_string(yaml_path)?;
+        let def: GrammarDefinition = serde_yaml::from_str(&yaml_str)?;
+        
+        Ok(Self::from_definition(def))
+    }
+}
+```
+
+■ キャッシュ付き検証
+```rust
+// src/grammar/validator.rs
+pub struct KeywordValidator {
+    valid_keywords: HashSet<&'static str>,
+    deprecated_map: HashMap<&'static str, &'static str>,
+}
+
+impl KeywordValidator {
+    pub fn validate(&self, word: &str) -> KeywordValidation {
+        if self.valid_keywords.contains(word) {
+            KeywordValidation::Valid
+        } else if let Some(&correct) = self.deprecated_map.get(word) {
+            KeywordValidation::Deprecated { 
+                correct,
+                hint: self.get_hint(word) 
+            }
+        } else {
+            KeywordValidation::Unknown
+        }
+    }
+}
+```
+
+================================================================================
+Step 3: Tokenizer統合（3日）
+================================================================================
+
+■ 最小限の変更で統合
+```rust
+// src/tokenizer.rs の修正
+use crate::grammar::NYASH_GRAMMAR;
+
+impl NyashTokenizer {
+    fn read_keyword_or_identifier(&mut self) -> TokenType {
+        let word = self.read_identifier_string();
+        
+        // 文法定義ベースの判定に切り替え
+        match NYASH_GRAMMAR.validate_keyword(&word) {
+            KeywordValidation::Valid(token_type) => token_type,
+            KeywordValidation::Deprecated { correct, .. } => {
+                // 警告を出しつつ、正しいトークンを返す
+                self.warnings.push(Warning::DeprecatedKeyword {
+                    used: word.clone(),
+                    correct: correct.to_string(),
+                    line: self.line,
+                });
+                NYASH_GRAMMAR.get_token_type(correct)
+            }
+            KeywordValidation::Unknown => {
+                TokenType::IDENTIFIER(word)
+            }
+        }
+    }
+}
+```
+
+■ 互換性維持
+```rust
+// 既存のmatch文を段階的に置き換え
+// Phase 1: 並行実行して差分チェック
+#[cfg(debug_assertions)]
+{
+    let old_result = self.old_keyword_match(&word);
+    let new_result = NYASH_GRAMMAR.validate_keyword(&word);
+    debug_assert_eq!(old_result, new_result, "Grammar mismatch: {}", word);
+}
+```
+
+================================================================================
+Step 4: Parser統合（3日）
+================================================================================
+
+■ 構文ルールの適用
+```rust
+// src/parser/mod.rs
+impl Parser {
+    fn parse_box_definition(&mut self) -> Result<ASTNode, ParseError> {
+        // 文法ルールを取得
+        let rule = NYASH_GRAMMAR.get_syntax_rule("box_definition")?;
+        
+        // ルールに基づいて解析
+        self.consume(TokenType::BOX)?;
+        let name = self.parse_identifier()?;
+        
+        // 親クラスの解析（文法定義に従う）
+        let extends = if self.match_token(&TokenType::FROM) {
+            self.parse_delegation_list()?
+        } else {
+            vec![]
+        };
+        
+        // 制約チェック
+        self.check_constraints(&rule, &parsed_node)?;
+        
+        Ok(parsed_node)
+    }
+}
+```
+
+================================================================================
+Step 5: AI機能実装（4日）
+================================================================================
+
+■ エクスポートツール
+```rust
+// tools/export-grammar.rs
+use nyash::grammar::NYASH_GRAMMAR;
+
+fn main() {
+    // 1. 基本文法JSON
+    let json = NYASH_GRAMMAR.export_as_json();
+    std::fs::write("nyash-grammar.json", json)?;
+    
+    // 2. AI用プロンプト
+    let prompt = generate_ai_prompt(&NYASH_GRAMMAR);
+    std::fs::write("ai-prompt.txt", prompt)?;
+    
+    // 3. VSCode snippets
+    let snippets = generate_vscode_snippets(&NYASH_GRAMMAR);
+    std::fs::write("nyash.code-snippets", snippets)?;
+}
+```
+
+■ AIコード検証器
+```rust
+// src/grammar/ai_validator.rs
+pub struct AiCodeValidator {
+    grammar: Arc<NyashGrammar>,
+    mistake_patterns: Vec<CompiledPattern>,
+}
+
+impl AiCodeValidator {
+    pub fn validate_code(&self, code: &str) -> Vec<CodeIssue> {
+        let mut issues = vec![];
+        
+        // 1. よくある間違いパターンをチェック
+        for pattern in &self.mistake_patterns {
+            if let Some(matches) = pattern.find_in(code) {
+                issues.push(CodeIssue::CommonMistake {
+                    pattern: pattern.name.clone(),
+                    correction: pattern.correction.clone(),
+                    locations: matches,
+                });
+            }
+        }
+        
+        // 2. パース可能かチェック
+        match NyashParser::parse(code) {
+            Ok(ast) => {
+                // AST検証
+                issues.extend(self.validate_ast(&ast));
+            }
+            Err(e) => {
+                issues.push(CodeIssue::ParseError(e));
+            }
+        }
+        
+        issues
+    }
+}
+```
+
+================================================================================
+Step 6: ANCP統合（3日）
+================================================================================
+
+■ 文法aware圧縮
+```rust
+// src/ancp/grammar_aware.rs
+impl GrammarAwareTranscoder {
+    pub fn new() -> Self {
+        let grammar = NYASH_GRAMMAR.clone();
+        let mappings = &grammar.ancp_mappings;
+        
+        Self {
+            grammar,
+            keyword_map: build_keyword_map(mappings),
+            reverse_map: build_reverse_map(mappings),
+        }
+    }
+    
+    pub fn compress(&self, token: &Token) -> String {
+        // 文法定義のマッピングを使用
+        if let Some(compressed) = self.keyword_map.get(&token.text) {
+            compressed.clone()
+        } else {
+            token.text.clone()
+        }
+    }
+}
+```
+
+================================================================================
+テスト戦略
+================================================================================
+
+■ 単体テスト
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_grammar_loading() {
+        let grammar = NyashGrammar::load().unwrap();
+        assert_eq!(grammar.version, "1.0");
+    }
+    
+    #[test]
+    fn test_keyword_validation() {
+        let grammar = NYASH_GRAMMAR.clone();
+        
+        // 正しいキーワード
+        assert!(matches!(
+            grammar.validate_keyword("me"),
+            KeywordValidation::Valid(_)
+        ));
+        
+        // 非推奨キーワード
+        assert!(matches!(
+            grammar.validate_keyword("this"),
+            KeywordValidation::Deprecated { correct: "me", .. }
+        ));
+    }
+}
+```
+
+■ 統合テスト
+```rust
+// tests/grammar_integration.rs
+#[test]
+fn test_tokenizer_parser_consistency() {
+    let code = "box Cat from Animal { me.name = 'Fluffy' }";
+    
+    // Tokenize with grammar
+    let tokens = tokenize_with_grammar(code);
+    
+    // Parse with grammar
+    let ast = parse_with_grammar(&tokens);
+    
+    // Validate consistency
+    assert!(ast.is_ok());
+}
+```
+
+■ スナップショットテスト
+```rust
+#[test]
+fn test_ai_export_stability() {
+    let export = NYASH_GRAMMAR.export_for_ai();
+    insta::assert_json_snapshot!(export);
+}
+```
+
+================================================================================
+CI/CD統合
+================================================================================
+
+■ GitHub Actions追加
+```yaml
+- name: Validate Grammar
+  run: |
+    cargo run --bin validate-grammar -- grammar/nyash-grammar-v1.yaml
+    
+- name: Generate AI Artifacts
+  run: |
+    cargo run --bin export-grammar
+    # アーティファクトとして保存
+    
+- name: Test Grammar Integration
+  run: |
+    cargo test --test grammar_integration
+```
+
+================================================================================
+移行計画
+================================================================================
+
+1. **既存コードの互換性維持**
+   - 古いキーワードも一時的に受け入れ
+   - 警告を出しながら段階的に厳格化
+
+2. **ドキュメント更新**
+   - 言語リファレンスを文法定義から自動生成
+   - VSCode拡張に統合
+
+3. **コミュニティへの告知**
+   - 変更点の明確な説明
+   - 移行ツールの提供
+
+================================================================================
+成果物チェックリスト
+================================================================================
+
+□ grammar/nyash-grammar-v1.yaml
+□ src/grammar/mod.rs（実装完了）
+□ Tokenizer統合（警告付き動作）
+□ Parser統合（制約チェック）
+□ export-grammar ツール
+□ AIコード検証器
+□ ANCP統合
+□ 包括的テストスイート
+□ ドキュメント更新
+□ CI/CD統合
+
+================================================================================

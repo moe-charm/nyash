@@ -258,6 +258,39 @@ mod tests {
         let dump = MirPrinter::new().print_module(&result.module);
         assert!(dump.contains("await"), "Expected await in MIR dump. Got:\n{}", dump);
     }
+
+    #[test]
+    fn test_await_has_checkpoints() {
+        use crate::ast::{LiteralValue, Span};
+        // Build: await 1
+        let ast = ASTNode::AwaitExpression { expression: Box::new(ASTNode::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }), span: Span::unknown() };
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile");
+        // Verifier should pass (await flanked by safepoints)
+        assert!(result.verification_result.is_ok(), "Verifier failed for await checkpoints: {:?}", result.verification_result);
+        let dump = compiler.dump_mir(&result.module);
+        // Expect at least two safepoints in the function (before/after await)
+        let sp_count = dump.matches("safepoint").count();
+        assert!(sp_count >= 2, "Expected >=2 safepoints around await, got {}. Dump:\n{}", sp_count, dump);
+    }
+
+    #[test]
+    fn test_rewritten_await_still_checkpoints() {
+        use crate::ast::{LiteralValue, Span};
+        // Enable rewrite so Await → ExternCall(env.future.await)
+        std::env::set_var("NYASH_REWRITE_FUTURE", "1");
+        let ast = ASTNode::AwaitExpression { expression: Box::new(ASTNode::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }), span: Span::unknown() };
+        let mut compiler = MirCompiler::new();
+        let result = compiler.compile(ast).expect("compile");
+        // Verifier should still pass (checkpoint verification includes ExternCall await)
+        assert!(result.verification_result.is_ok(), "Verifier failed for rewritten await checkpoints: {:?}", result.verification_result);
+        let dump = compiler.dump_mir(&result.module);
+        assert!(dump.contains("env.future.await"), "Expected rewritten await extern call. Dump:\n{}", dump);
+        let sp_count = dump.matches("safepoint").count();
+        assert!(sp_count >= 2, "Expected >=2 safepoints around rewritten await, got {}. Dump:\n{}", sp_count, dump);
+        // Cleanup env
+        std::env::remove_var("NYASH_REWRITE_FUTURE");
+    }
     
     #[test]
     fn test_throw_compilation() {

@@ -583,13 +583,14 @@ impl MirBuilder {
     pub(super) fn build_await_expression(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         // Evaluate the expression (should be a Future)
         let future_value = self.build_expression(expression)?;
-        
+        // Insert checkpoint before await (safepoint)
+        self.emit_instruction(MirInstruction::Safepoint)?;
         // Create result value for the await
         let result_id = self.value_gen.next();
-        
         // Emit await instruction
         self.emit_instruction(MirInstruction::Await { dst: result_id, future: future_value })?;
-        
+        // Insert checkpoint after await (safepoint)
+        self.emit_instruction(MirInstruction::Safepoint)?;
         Ok(result_id)
     }
 }

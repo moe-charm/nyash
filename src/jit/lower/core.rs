@@ -779,6 +779,52 @@ impl LowerCore {
                         if dst.is_some() { b.emit_const_i64(0); }
                     }
                 } else {
+                    // Await bridge: env.future.await(fut) → await_h + ok_h/err_h select
+                    if iface_name == "env.future" && method_name == "await" {
+                        // Load future: prefer param, then local, then known const, else -1 scan
+                        if let Some(arg0) = args.get(0) {
+                            if let Some(pidx) = self.param_index.get(arg0).copied() {
+                                b.emit_param_i64(pidx);
+                            } else if let Some(slot) = self.local_index.get(arg0).copied() {
+                                b.load_local_i64(slot);
+                            } else if let Some(v) = self.known_i64.get(arg0).copied() {
+                                b.emit_const_i64(v);
+                            } else {
+                                b.emit_const_i64(-1);
+                            }
+                        } else {
+                            b.emit_const_i64(-1);
+                        }
+                        // await_h → handle (0 on timeout)
+                        b.emit_host_call(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, 1, true);
+                        let hslot = { let id = self.next_local; self.next_local += 1; id };
+                        b.store_local_i64(hslot);
+                        // ok_h(handle)
+                        b.load_local_i64(hslot);
+                        b.emit_host_call(crate::jit::r#extern::result::SYM_RESULT_OK_H, 1, true);
+                        let ok_slot = { let id = self.next_local; self.next_local += 1; id };
+                        b.store_local_i64(ok_slot);
+                        // err_h(0) => Timeout
+                        b.emit_const_i64(0);
+                        b.emit_host_call(crate::jit::r#extern::result::SYM_RESULT_ERR_H, 1, true);
+                        let err_slot = { let id = self.next_local; self.next_local += 1; id };
+                        b.store_local_i64(err_slot);
+                        // Select by (handle==0)
+                        b.load_local_i64(hslot);
+                        b.emit_const_i64(0);
+                        b.emit_compare(crate::jit::lower::builder::CmpKind::Eq);
+                        b.load_local_i64(err_slot);
+                        b.load_local_i64(ok_slot);
+                        b.emit_select_i64();
+                        if let Some(d) = dst {
+                            self.handle_values.insert(*d);
+                            let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                            b.store_local_i64(slot);
+                        } else {
+                            // drop
+                        }
+                        return Ok(());
+                    }
                     // Async spawn bridge: env.future.spawn_instance(recv, method_name, args...)
                     if iface_name == "env.future" && method_name == "spawn_instance" {
                         // Stack layout for hostcall: argc_total, a0(recv), a1(method_name), a2(first payload)

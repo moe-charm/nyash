@@ -13,6 +13,7 @@
 - **architecture/** - システムアーキテクチャ（MIR、VM、実行バックエンド）
 - **api/** - ビルトインBoxのAPI仕様
 - **plugin-system/** - プラグインシステム、BID-FFI仕様
+  - 🆕 **[TypeBox ABI統合](../development/roadmap/phases/phase-12/)** - C ABI + Nyash ABI統一設計
   - まずはこちら: `reference/boxes-system/plugin_lifecycle.md`（PluginBoxV2のライフサイクル、singleton、nyash.tomlの要点）
 
 ### 📚 [guides/](guides/) - 利用者向けガイド
@@ -24,7 +25,8 @@
 ### 🔧 [development/](development/) - 開発者向け
 - **current/** - 現在進行中のタスク（CURRENT_TASK.md等）
 - **roadmap/** - 開発計画
-  - phases/ - Phase 8～10の詳細計画
+  - phases/ - Phase 8～12の詳細計画
+  - phase-12/ - 🆕 TypeBox統合ABI設計（革命的プラグイン統一）
   - native-plan/ - ネイティブビルド計画
 - **proposals/** - RFC、新機能提案
 
@@ -57,6 +59,7 @@
 - [現在のタスク](development/current/CURRENT_TASK.md)
 - [開発ロードマップ](development/roadmap/)
 - [Phase別計画](development/roadmap/phases/)
+  - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)** - プラグイン革命！
 
 ---
 

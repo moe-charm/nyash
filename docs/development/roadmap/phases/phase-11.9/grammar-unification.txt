@@ -1,0 +1,485 @@
+================================================================================
+Phase 11.9: 文法統一化とAI連携強化 - Grammar as Single Source of Truth
+================================================================================
+
+【概要】
+Nyashの文法知識が分散している問題を解決し、AIがNyashコードを正しく書けるよう
+文法定義を一元化する。ANCPと連携して、AIとの効率的な通信も実現。
+
+【現在の問題】
+1. 文法知識の分散
+   - Tokenizer: キーワードのハードコード定義
+   - Parser: TokenTypeに基づく個別実装
+   - Interpreter: AST実行の独自ロジック
+   - MIR Builder: 変換ルールの散在
+
+2. AIの文法エラー
+   - "while" vs "loop" の混同
+   - "this" vs "me" の間違い
+   - セミコロン使用などの古い構文
+
+3. 文法の揺らぎ
+   - 同じ意味の複数表現が存在
+   - 非推奨構文の明確な定義なし
+   - 統一的な検証メカニズムの欠如
+
+================================================================================
+1. 文法統一化アーキテクチャ
+================================================================================
+
+■ 3層構造の導入
+┌─────────────────────────────────────┐
+│  Grammar Definition Layer (YAML/TOML) │ ← 唯一の真実
+├─────────────────────────────────────┤
+│  Grammar Runtime (Rust)               │ ← 共通実装
+├─────────────────────────────────────┤
+│  Components (Tokenizer/Parser/etc)    │ ← 利用者
+└─────────────────────────────────────┘
+
+■ 統一文法定義ファイル
+nyash-grammar-v1.yaml
+├─ keywords（予約語定義）
+├─ syntax_rules（構文規則）
+├─ semantic_rules（意味規則）
+├─ deprecated（非推奨定義）
+└─ ai_hints（AI向けヒント）
+
+================================================================================
+2. 文法定義仕様（YAML形式）
+================================================================================
+
+# nyash-grammar-v1.yaml
+version: "1.0"
+language: "nyash"
+
+keywords:
+  # デリゲーション関連
+  delegation:
+    from:
+      token: FROM
+      category: delegation
+      semantic: parent_method_call
+      syntax: "from <parent>.<method>(<args>)"
+      example: "from Animal.init(name)"
+      deprecated_aliases: ["super", "parent", "base"]
+      ai_hint: "Always use 'from' for parent calls"
+      
+  # 自己参照
+  self_reference:
+    me:
+      token: ME
+      category: object_reference
+      semantic: current_instance
+      syntax: "me.<field>"
+      example: "me.name = value"
+      deprecated_aliases: ["this", "self", "@"]
+      ai_hint: "Use 'me' for self-reference, never 'this'"
+      
+  # 制御フロー
+  control_flow:
+    loop:
+      token: LOOP
+      category: control_flow
+      semantic: conditional_iteration
+      syntax: "loop(<condition>) { <body> }"
+      example: "loop(i < 10) { i = i + 1 }"
+      deprecated_aliases: ["while", "for"]
+      ai_hint: "Only 'loop' for iteration"
+      
+  # クラス定義
+  class_definition:
+    box:
+      token: BOX
+      category: declaration
+      semantic: class_declaration
+      syntax: "box <name> from <parent>? { <body> }"
+      example: "box Cat from Animal { }"
+      deprecated_aliases: ["class", "struct", "type"]
+      ai_hint: "Use 'box' for all class definitions"
+
+syntax_rules:
+  # Box定義ルール
+  box_definition:
+    pattern: "box <identifier> (from <identifier_list>)? { <box_body> }"
+    constraints:
+      - name: init_comma_required
+        rule: "init block fields must be comma-separated"
+        valid: "init { name, age }"
+        invalid: "init { name age }"
+        
+      - name: constructor_exclusive
+        rule: "Only one of birth/pack/init() can be defined"
+        valid: "birth() { }"
+        invalid: "birth() { } pack() { }"
+        
+  # デリゲーション呼び出し
+  delegation_call:
+    pattern: "from <identifier>.<identifier>(<expression_list>?)"
+    constraints:
+      - name: parent_must_exist
+        rule: "Parent must be declared in 'from' clause"
+        
+      - name: method_resolution
+        rule: "Method lookup follows delegation chain"
+
+semantic_rules:
+  # 変数宣言
+  variable_declaration:
+    local_scope:
+      keyword: "local"
+      rule: "Variables must be declared before use"
+      scope: "function"
+      
+    implicit_global:
+      rule: "Undeclared assignment creates global (deprecated)"
+      warning: "Use 'local' for clarity"
+      
+  # メソッド解決
+  method_resolution:
+    order:
+      1: "Current instance methods"
+      2: "Delegated parent methods"
+      3: "Error: method not found"
+
+# AI向け特別セクション
+ai_training:
+  # 正しいパターン
+  correct_patterns:
+    - pattern: "loop(condition) { }"
+      category: "iteration"
+      
+    - pattern: "me.field = value"
+      category: "assignment"
+      
+    - pattern: "from Parent.method()"
+      category: "delegation"
+      
+  # よくある間違いと修正
+  common_mistakes:
+    - mistake: "while(true) { }"
+      correction: "loop(true) { }"
+      severity: "error"
+      
+    - mistake: "this.value"
+      correction: "me.value"
+      severity: "error"
+      
+    - mistake: "super.init()"
+      correction: "from Parent.init()"
+      severity: "error"
+      
+    - mistake: "for i in array { }"
+      correction: "Not supported, use loop with index"
+      severity: "error"
+
+# ANCP統合
+ancp_mapping:
+  # キーワードの圧縮マッピング
+  compression:
+    "box": "$"
+    "from": "@"
+    "me": "m"
+    "loop": "L"
+    "local": "l"
+    "return": "r"
+    
+  # 圧縮時の保持ルール
+  preservation:
+    - "Semantic meaning must be preserved"
+    - "AST structure must be identical"
+    - "Round-trip must be lossless"
+
+================================================================================
+3. Grammar Runtime実装
+================================================================================
+
+// src/grammar/mod.rs
+pub struct NyashGrammar {
+    version: String,
+    keywords: KeywordRegistry,
+    syntax_rules: SyntaxRuleSet,
+    semantic_rules: SemanticRuleSet,
+    ai_hints: AiHintCollection,
+}
+
+impl NyashGrammar {
+    /// YAMLファイルから文法定義を読み込み
+    pub fn load() -> Result<Self, Error> {
+        let yaml_path = concat!(env!("CARGO_MANIFEST_DIR"), "/grammar/nyash-grammar-v1.yaml");
+        let yaml_str = std::fs::read_to_string(yaml_path)?;
+        let grammar: GrammarDefinition = serde_yaml::from_str(&yaml_str)?;
+        Ok(Self::from_definition(grammar))
+    }
+    
+    /// キーワードの検証
+    pub fn validate_keyword(&self, word: &str) -> KeywordValidation {
+        if let Some(keyword) = self.keywords.get(word) {
+            KeywordValidation::Valid(keyword)
+        } else if let Some(deprecated) = self.keywords.find_deprecated(word) {
+            KeywordValidation::Deprecated {
+                used: word,
+                correct: deprecated.correct_form,
+                hint: deprecated.ai_hint,
+            }
+        } else {
+            KeywordValidation::Unknown
+        }
+    }
+    
+    /// AI向けの文法エクスポート
+    pub fn export_for_ai(&self) -> AiGrammarExport {
+        AiGrammarExport {
+            version: self.version.clone(),
+            keywords: self.keywords.export_correct_only(),
+            patterns: self.ai_hints.correct_patterns.clone(),
+            mistakes: self.ai_hints.common_mistakes.clone(),
+            examples: self.generate_examples(),
+        }
+    }
+}
+
+// キーワードレジストリ
+pub struct KeywordRegistry {
+    keywords: HashMap<String, KeywordDef>,
+    deprecated_map: HashMap<String, String>, // old -> new
+}
+
+// 構文検証器
+pub struct SyntaxValidator {
+    grammar: Arc<NyashGrammar>,
+}
+
+impl SyntaxValidator {
+    pub fn validate_ast(&self, ast: &ASTNode) -> Vec<SyntaxIssue> {
+        let mut issues = Vec::new();
+        self.visit_node(ast, &mut issues);
+        issues
+    }
+}
+
+================================================================================
+4. コンポーネント統合
+================================================================================
+
+■ Tokenizer統合
+impl NyashTokenizer {
+    pub fn new() -> Self {
+        let grammar = NyashGrammar::load()
+            .expect("Failed to load grammar definition");
+        Self { grammar, ... }
+    }
+    
+    fn read_keyword_or_identifier(&mut self) -> TokenType {
+        let word = self.read_word();
+        
+        // 文法定義に基づいて判定
+        match self.grammar.validate_keyword(&word) {
+            KeywordValidation::Valid(keyword) => keyword.token,
+            KeywordValidation::Deprecated { correct, .. } => {
+                self.emit_warning(format!("'{}' is deprecated, use '{}'", word, correct));
+                // エラーリカバリ: 正しいトークンを返す
+                self.grammar.keywords.get(correct).unwrap().token
+            }
+            KeywordValidation::Unknown => TokenType::IDENTIFIER(word),
+        }
+    }
+}
+
+■ Parser統合
+impl Parser {
+    fn parse_box_definition(&mut self) -> Result<ASTNode, ParseError> {
+        // 文法ルールに基づいて検証
+        let rule = self.grammar.syntax_rules.get("box_definition")?;
+        
+        self.consume(TokenType::BOX)?;
+        let name = self.parse_identifier()?;
+        
+        // from句の処理も文法定義に従う
+        let extends = if self.match_token(&TokenType::FROM) {
+            self.parse_parent_list()?
+        } else {
+            vec![]
+        };
+        
+        // 制約チェック
+        rule.validate(&parsed_node)?;
+        
+        Ok(ASTNode::BoxDeclaration { name, extends, ... })
+    }
+}
+
+■ Interpreter統合
+impl NyashInterpreter {
+    fn execute_from_call(&mut self, parent: &str, method: &str, args: &[ASTNode]) 
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        
+        // 文法定義に基づいてセマンティクスを適用
+        let semantic = self.grammar.semantic_rules.get("delegation_call")?;
+        semantic.validate_runtime(parent, method)?;
+        
+        // 既存の実行ロジック
+        self.delegate_to_parent(parent, method, args)
+    }
+}
+
+================================================================================
+5. AI連携機能
+================================================================================
+
+■ Grammar Export Tool
+// tools/export-grammar-for-ai.rs
+fn main() {
+    let grammar = NyashGrammar::load().unwrap();
+    
+    // 1. 基本文法エクスポート
+    let basic = grammar.export_for_ai();
+    std::fs::write("nyash-grammar-ai.json", serde_json::to_string_pretty(&basic)?)?;
+    
+    // 2. トレーニングデータ生成
+    let training_data = generate_training_pairs(&grammar);
+    std::fs::write("nyash-training-data.jsonl", training_data)?;
+    
+    // 3. プロンプト生成
+    let prompt = generate_ai_prompt(&grammar);
+    std::fs::write("nyash-ai-prompt.txt", prompt)?;
+}
+
+■ AI Grammar Checker
+// AIが生成したコードをチェック
+pub struct AiCodeValidator {
+    grammar: Arc<NyashGrammar>,
+}
+
+impl AiCodeValidator {
+    pub fn validate(&self, code: &str) -> ValidationResult {
+        let mut issues = Vec::new();
+        
+        // 1. 非推奨構文チェック
+        for (pattern, correction) in &self.grammar.deprecated_patterns {
+            if code.contains(pattern) {
+                issues.push(Issue::Deprecated { pattern, correction });
+            }
+        }
+        
+        // 2. 構文検証
+        match NyashParser::parse_with_grammar(code, &self.grammar) {
+            Ok(ast) => {
+                // ASTレベルでの検証
+                issues.extend(self.validate_ast(&ast));
+            }
+            Err(e) => issues.push(Issue::ParseError(e)),
+        }
+        
+        ValidationResult { issues, suggestions: self.generate_suggestions(&issues) }
+    }
+}
+
+================================================================================
+6. ANCP統合
+================================================================================
+
+■ Grammar-Aware ANCP
+pub struct GrammarAwareTranscoder {
+    grammar: Arc<NyashGrammar>,
+    ancp_mappings: AncpMappings,
+}
+
+impl GrammarAwareTranscoder {
+    pub fn encode(&self, code: &str) -> Result<String, Error> {
+        let ast = NyashParser::parse_with_grammar(code, &self.grammar)?;
+        
+        // 文法定義に基づいて圧縮
+        let compressed = self.compress_with_grammar(&ast)?;
+        
+        // ヘッダー付与
+        Ok(format!(";ancp:1.0 nyash:{} grammar:{};\n{}", 
+            env!("CARGO_PKG_VERSION"),
+            self.grammar.version,
+            compressed))
+    }
+    
+    fn compress_with_grammar(&self, ast: &ASTNode) -> Result<String, Error> {
+        // 文法定義のANCPマッピングを使用
+        let mappings = &self.grammar.ancp_mapping;
+        // ... 圧縮ロジック
+    }
+}
+
+================================================================================
+7. 実装計画
+================================================================================
+
+■ Phase 1: 基礎実装（1週間）
+□ nyash-grammar-v1.yaml作成
+□ GrammarDefinition構造体設計
+□ YAMLパーサー統合
+□ 基本的な検証機能
+
+■ Phase 2: コンポーネント統合（2週間）
+□ Tokenizer改修
+□ Parser改修
+□ Interpreter統合
+□ エラーメッセージ改善
+
+■ Phase 3: AI機能（1週間）
+□ export-grammar-for-ai実装
+□ AiCodeValidator実装
+□ トレーニングデータ生成
+□ VSCode拡張対応
+
+■ Phase 4: ANCP連携（1週間）
+□ Grammar-Aware Transcoder
+□ 圧縮効率の最適化
+□ デバッグ情報保持
+□ テスト統合
+
+================================================================================
+8. 期待される効果
+================================================================================
+
+1. **文法の一元管理**
+   - 単一の真実の源（YAML）
+   - 変更が全コンポーネントに自動反映
+   - バージョン管理が容易
+
+2. **AIエラーの削減**
+   - 明確な文法定義で学習効率向上
+   - 非推奨構文の自動検出・修正
+   - トレーニングデータの品質向上
+
+3. **開発効率の向上**
+   - 新構文追加が簡単
+   - 文法ドキュメントの自動生成
+   - テストケースの自動生成
+
+4. **ANCP効率化**
+   - 文法aware圧縮で効率向上
+   - セマンティクス保持の保証
+   - デバッグ性の維持
+
+================================================================================
+9. リスクと対策
+================================================================================
+
+■ リスク1: パフォーマンス低下
+対策: 文法定義をコンパイル時に静的化
+
+■ リスク2: 後方互換性
+対策: バージョニングとマイグレーションツール
+
+■ リスク3: 複雑性増大
+対策: 段階的実装と十分なテスト
+
+================================================================================
+10. 成功指標
+================================================================================
+
+□ AIの文法エラー率: 90%以上削減
+□ 新構文追加時間: 1時間以内
+□ パフォーマンス影響: 5%以内
+□ テストカバレッジ: 95%以上
+
+================================================================================
+
+これにより、Nyashの文法が統一され、AIとの協働開発が劇的に改善される。
+「文法の揺らぎ」を完全に排除し、高品質なコード生成を実現する。

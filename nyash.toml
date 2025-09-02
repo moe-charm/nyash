@@ -201,7 +201,19 @@ size  = { method_id = 1 }
 get   = { method_id = 2, args = ["key"] }
 has   = { method_id = 3, args = ["key"] }
 set   = { method_id = 4, args = ["key", "value"] }
+remove= { method_id = 6, args = ["key"] }
+clear = { method_id = 7 }
+keysStr = { method_id = 8 }
+keys = { method_id = 8 } # runtime shim: returns newline-separated StringBox
+getOr = { method_id = 9, args = ["key", "default"] }
+valuesStr = { method_id = 13 }
+values = { method_id = 13 } # runtime shim: returns newline-separated StringBox
+toJson = { method_id = 14 }
 fini  = { method_id = 4294967295 }
+# Extended string-key helpers
+setS  = { method_id = 10, args = [ { kind = "string" }, { kind = "integer" } ] }
+getS  = { method_id = 11, args = [ { kind = "string" } ] }
+hasS  = { method_id = 12, args = [ { kind = "string" } ] }
 
 # IntegerBox plugin (basic numeric box)
 [libraries."libnyash_integer_plugin"]

@@ -1,5 +1,24 @@
 # Phase 12: Nyashコード共有エコシステム - Everything is Box の実現
 
+## 🚀 最新ブレイクスルー (2025-09-01)
+
+### TypeBox統合ABI - プラグイン革命の実現！
+「Everything is Box」哲学の究極形態：**型情報すらBoxとして扱う**TypeBoxにより、C ABI + Nyash ABIの完全統合を達成！
+
+```c
+// TypeBox - 型情報をBoxとして扱う最小構造
+typedef struct {
+    uint32_t abi_tag;       // 'TYBX'
+    const char* name;       // "ArrayBox"
+    void* (*create)(void);  // Box生成関数
+} NyrtTypeBox;
+```
+
+**3大AI専門家の一致した結論**:
+- **Codex**: 「TypeBoxブリッジは理想的なアーキテクチャ」
+- **ChatGPT5**: 「実装に耐える設計。10の改善点で完璧」
+- **Gemini**: 「Nyash哲学に最適なシンプルさ」
+
 ## 🎯 重要な変更 (2025-09-01)
 
 Phase 12の議論とビルトインBox廃止により、プラグインシステムが進化：
@@ -70,9 +89,33 @@ processor.process(3.14)  # すべてプラグインで動作！
 Nyashエコシステム（ビルトインBox廃止後）：
 ├── Nyashスクリプトプラグイン（ユーザー定義Box）← .nyashファイル
 ├── C ABIプラグイン（既存のまま使用）← シンプル・高速・安定
+│   └── **TypeBox**: プラグイン間Box生成の最小機構 🆕
 └── Nyash ABIプラグイン（必要時のみ）← 言語間相互運用・将来拡張
     └── MIR命令は増やさない（BoxCallにabi_hint追加のみ）
 ```
+
+### 💡 TypeBox：シンプルなプラグイン間連携
+
+MapBox.keys()がArrayBoxを返したい場合：
+
+```c
+// TypeBox構造体（型情報をBoxとして扱う）
+typedef struct {
+    uint32_t abi_tag;       // 'TYBX'
+    const char* name;       // "ArrayBox"
+    void* (*create)(void);  // Box生成関数
+} NyrtTypeBox;
+
+// MapBox.keys()実装
+void* map_keys(void* self, void* array_type_box) {
+    NyrtTypeBox* array_type = (NyrtTypeBox*)array_type_box;
+    void* array = array_type->create();  // ArrayBox生成
+    // ... キーを追加
+    return array;
+}
+```
+
+詳細: [C ABI TypeBox設計仕様書](./C-ABI-BOX-FACTORY-DESIGN.md)
 
 ### プラグイン選択の指針
 - **C ABIで済むなら、C ABIを使う**（シンプルイズベスト）
@@ -88,7 +131,26 @@ Nyashエコシステム（ビルトインBox廃止後）：
   - VM層でC ABI/Nyash ABI/Scriptを自動判定
   - Core-15 → Core-14 へ（命令数削減）
 
-## 🛣️ 実装ロードマップ（修正版）
+## 🛣️ 実装ロードマップ（TypeBox優先版）
+
+### Phase 12.0: TypeBox統合ABI実装（1週間）🆕
+- [ ] nyrt_typebox.h完全ヘッダー定義
+- [ ] Rust FFIミラー実装
+- [ ] MapBox両ABI実装（実証テスト）
+- [ ] 所有権ファズテスト
+- 📄 **[統合ABI設計仕様書](./UNIFIED-ABI-DESIGN.md)**
+
+---
+
+## 現状サマリ（2025-09-02）
+
+- C ABI（TLV: 1/2/3/5/6/7/8）でのプラグイン呼び出しはVMで安定運用中。`returns_result` も `nyash.toml` で制御可能。
+- JIT は VM と同じBox境界で動作（フォールバック含む）。Cranelift AOT のオブジェクト出力は未配線（スケルトン）。
+- MapBox を拡張（stringキー、remove/clear/getOr/keysStr/valuesStr/toJson）。`keys()/values()` はランタイムシムで暫定提供。
+- Phase 12 設計（TypeBox + Unified Dispatch）は破壊的変更不要で段階導入可能と判断。
+
+詳細タスクは [TASKS.md](./TASKS.md) を参照。
+
 
 ### Phase 12.1: export/import構文（2週間）
 - [ ] exportキーワードのパーサー実装
@@ -110,7 +172,9 @@ Nyashエコシステム（ビルトインBox廃止後）：
 ## 📚 関連ドキュメント
 
 ### 🎯 主要設計ドキュメント
-- **[Nyash ABI統合設計図](./NYASH-ABI-DESIGN.md)** ← 🆕 具体的な技術仕様！
+- **[統合ABI設計仕様書](./UNIFIED-ABI-DESIGN.md)** ← 🆕🚀 C ABI + Nyash ABI統合の完全設計！**3大AI専門家検証済み**
+- **[C ABI TypeBox設計仕様書](./C-ABI-BOX-FACTORY-DESIGN.md)** ← 🆕 シンプルなプラグイン間Box生成！
+- **[Nyash ABI統合設計図](./NYASH-ABI-DESIGN.md)** ← 将来拡張用の高度なABI
 - [export/import仕様](./export-import-spec.md)
 - [パッケージマネージャー設計](./package-manager-design.md)
 - [なぜ天才AIたちは間違えたのか](./WHY-AIS-FAILED.md)

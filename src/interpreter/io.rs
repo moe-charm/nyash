@@ -219,33 +219,50 @@ impl NyashInterpreter {
     /// nowait文を実行 - 非同期実行（真の非同期実装） - Async execution
     pub(super) fn execute_nowait(&mut self, variable: &str, expression: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
         use crate::boxes::FutureBox;
-        use std::thread;
         
         // FutureBoxを作成
         let future_box = FutureBox::new();
-        let future_box_clone = future_box.clone();
+        // 個別のクローンを用意（スケジュール経路とフォールバック経路で別々に使う）
+        let future_for_sched = future_box.clone();
+        let future_for_thread = future_box.clone();
         
-        // 式をクローンして別スレッドで実行
-        let expr_clone = expression.clone();
-        let shared_state = self.shared.clone();
-        
-        // 別スレッドで非同期実行
-        thread::spawn(move || {
-            // 新しいインタープリタインスタンスを作成（SharedStateを使用）
-            let mut async_interpreter = NyashInterpreter::with_shared(shared_state);
-            
-            // 式を評価
-            match async_interpreter.execute_expression(&expr_clone) {
-                Ok(result) => {
-                    future_box_clone.set_result(result);
+        // 式をクローンしてスケジューラ（なければフォールバック）で実行
+        // それぞれの経路で独立に所有させるためクローンを分けておく
+        let expr_for_sched = expression.clone();
+        let expr_for_thread = expression.clone();
+        let shared_for_sched = self.shared.clone();
+        let shared_for_thread = self.shared.clone();
+        // Phase-2: try scheduler first (bound to current TaskGroup token); fallback to thread
+        let token = crate::runtime::global_hooks::current_group_token();
+        let scheduled = crate::runtime::global_hooks::spawn_task_with_token(
+            "nowait",
+            token,
+            Box::new(move || {
+                // 新しいインタープリタインスタンスを作成（SharedStateを使用）
+                let mut async_interpreter = NyashInterpreter::with_shared(shared_for_sched);
+                // 式を評価
+                match async_interpreter.execute_expression(&expr_for_sched) {
+                    Ok(result) => { future_for_sched.set_result(result); }
+                    Err(e) => {
+                        // エラーをErrorBoxとして設定
+                        let error_box = Box::new(ErrorBox::new("RuntimeError", &format!("{:?}", e)));
+                        future_for_sched.set_result(error_box);
+                    }
                 }
-                Err(e) => {
-                    // エラーをErrorBoxとして設定
-                    let error_box = Box::new(ErrorBox::new("RuntimeError", &format!("{:?}", e)));
-                    future_box_clone.set_result(error_box);
+            })
+        );
+        if !scheduled {
+            std::thread::spawn(move || {
+                let mut async_interpreter = NyashInterpreter::with_shared(shared_for_thread);
+                match async_interpreter.execute_expression(&expr_for_thread) {
+                    Ok(result) => { future_for_thread.set_result(result); }
+                    Err(e) => {
+                        let error_box = Box::new(ErrorBox::new("RuntimeError", &format!("{:?}", e)));
+                        future_for_thread.set_result(error_box);
+                    }
                 }
-            }
-        });
+            });
+        }
         
         // FutureBoxを現在のTaskGroupに登録（暗黙グループ best-effort）
         crate::runtime::global_hooks::register_future_to_current_group(&future_box);

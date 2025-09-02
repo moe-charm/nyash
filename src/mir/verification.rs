@@ -256,7 +256,8 @@ impl MirVerifier {
         if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
 
-    /// Ensure that each Await instruction is immediately preceded and followed by a checkpoint
+    /// Ensure that each Await instruction (or ExternCall(env.future.await)) is immediately
+    /// preceded and followed by a checkpoint.
     /// A checkpoint is either MirInstruction::Safepoint or ExternCall("env.runtime", "checkpoint").
     fn verify_await_checkpoints(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
         use super::MirInstruction as I;
@@ -269,7 +270,12 @@ impl MirVerifier {
         for (bid, block) in &function.blocks {
             let instrs = &block.instructions;
             for (idx, inst) in instrs.iter().enumerate() {
-                if let I::Await { .. } = inst {
+                let is_await_like = match inst {
+                    I::Await { .. } => true,
+                    I::ExternCall { iface_name, method_name, .. } => iface_name == "env.future" && method_name == "await",
+                    _ => false,
+                };
+                if is_await_like {
                     // Check immediate previous
                     if idx == 0 || !is_cp(&instrs[idx - 1]) {
                         errors.push(VerificationError::MissingCheckpointAroundAwait { block: *bid, instruction_index: idx, position: "before" });

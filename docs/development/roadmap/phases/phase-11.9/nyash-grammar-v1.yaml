@@ -1,0 +1,298 @@
+# Nyash Grammar Definition v1.0
+# This is the single source of truth for Nyash syntax
+version: "1.0"
+language: "nyash"
+
+keywords:
+  # Class/Box definition
+  class_definition:
+    box:
+      token: BOX
+      category: declaration
+      semantic: class_declaration
+      syntax: "box <name> from <parent>? { <body> }"
+      example: "box Cat from Animal { }"
+      deprecated_aliases: ["class", "struct", "type", "object"]
+      ai_hint: "Always use 'box' for class definitions"
+      
+  # Self reference
+  self_reference:
+    me:
+      token: ME
+      category: object_reference
+      semantic: current_instance
+      syntax: "me.<field>"
+      example: "me.name = value"
+      deprecated_aliases: ["this", "self", "@", "my"]
+      ai_hint: "Use 'me' for self-reference, NEVER 'this'"
+      
+  # Delegation/Inheritance
+  delegation:
+    from:
+      token: FROM
+      category: delegation
+      semantic: parent_reference
+      syntax_contexts:
+        - context: class_declaration
+          pattern: "box Child from Parent"
+          meaning: "establishes delegation relationship"
+        - context: method_call
+          pattern: "from Parent.method(args)"
+          meaning: "calls parent's method"
+      deprecated_aliases: ["extends", "super", "parent", "base", "inherits"]
+      ai_hint: "Use 'from' for both inheritance and parent calls"
+      
+  # Control flow
+  control_flow:
+    loop:
+      token: LOOP
+      category: control_flow
+      semantic: conditional_iteration
+      syntax: "loop(condition) { body }"
+      example: "loop(i < 10) { i = i + 1 }"
+      deprecated_aliases: ["while", "for", "repeat", "until"]
+      ai_hint: "Only 'loop' exists for iteration"
+      
+    if:
+      token: IF
+      category: control_flow
+      semantic: conditional_branch
+      syntax: "if condition { body } else { body }"
+      example: "if x > 0 { print(x) }"
+      ai_hint: "No parentheses needed around condition"
+      
+  # Variable declaration
+  variables:
+    local:
+      token: LOCAL
+      category: declaration
+      semantic: local_variable
+      syntax: "local <name>"
+      example: "local counter"
+      ai_hint: "Always declare variables with 'local'"
+      
+    static:
+      token: STATIC
+      category: modifier
+      semantic: static_member
+      syntax: "static box Name { }"
+      example: "static box Main { }"
+      ai_hint: "Use for singleton/utility boxes"
+      
+  # Constructor variants
+  constructors:
+    birth:
+      token: BIRTH
+      category: method
+      semantic: primary_constructor
+      syntax: "birth(params) { body }"
+      priority: 1
+      ai_hint: "Preferred constructor name"
+      
+    pack:
+      token: PACK
+      category: method
+      semantic: alternative_constructor
+      syntax: "pack(params) { body }"
+      priority: 2
+      deprecated: true
+      ai_hint: "Use 'birth' instead"
+      
+    init:
+      token: INIT
+      category: special
+      semantic: field_declaration_or_constructor
+      syntax_contexts:
+        - context: field_list
+          pattern: "init { field1, field2 }"
+          meaning: "declares instance fields"
+        - context: method
+          pattern: "init(params) { body }"
+          meaning: "constructor method"
+      ai_hint: "Dual purpose: fields or constructor"
+      
+  # Method modifiers
+  modifiers:
+    override:
+      token: OVERRIDE
+      category: modifier
+      semantic: method_override
+      syntax: "override methodName() { }"
+      required_when: "overriding parent method"
+      ai_hint: "Required for clarity"
+      
+  # Special methods
+  special_methods:
+    new:
+      token: NEW
+      category: operator
+      semantic: instance_creation
+      syntax: "new BoxName(args)"
+      example: "new Cat('Fluffy')"
+      ai_hint: "Creates instances"
+      
+  # Logical operators
+  logical_operators:
+    and:
+      token: AND
+      category: operator
+      semantic: logical_and
+      syntax: "a and b"
+      aliases: ["&&"]
+      ai_hint: "Prefer 'and' over '&&'"
+      
+    or:
+      token: OR
+      category: operator
+      semantic: logical_or
+      syntax: "a or b"
+      aliases: ["||"]
+      ai_hint: "Prefer 'or' over '||'"
+      
+    not:
+      token: NOT
+      category: operator
+      semantic: logical_not
+      syntax: "not condition"
+      aliases: ["!"]
+      ai_hint: "Prefer 'not' over '!'"
+
+# Syntax rules with constraints
+syntax_rules:
+  box_definition:
+    pattern: "box <identifier> (from <identifier_list>)? { <box_body> }"
+    constraints:
+      - id: init_comma_separator
+        rule: "init fields must be comma-separated"
+        valid: "init { name, age, type }"
+        invalid: "init { name age type }"
+        error: "Missing comma in init block"
+        
+      - id: single_constructor
+        rule: "Only one constructor (birth/pack/init) allowed"
+        valid: "birth() { }"
+        invalid: "birth() { } pack() { }"
+        error: "Multiple constructors not allowed"
+        
+      - id: override_required
+        rule: "Override keyword required when overriding"
+        valid: "override toString() { }"
+        invalid: "toString() { } // when parent has toString"
+        error: "Missing 'override' keyword"
+        
+  variable_usage:
+    constraints:
+      - id: declare_before_use
+        rule: "Variables must be declared with 'local'"
+        valid: "local x\nx = 42"
+        invalid: "x = 42  // without declaration"
+        warning: "Implicit global (deprecated)"
+        
+  delegation_calls:
+    pattern: "from <identifier>.<method>(<args>?)"
+    constraints:
+      - id: parent_must_exist
+        rule: "Parent must be in delegation chain"
+        error: "No delegation to specified parent"
+        
+# Common mistakes by AI
+ai_common_mistakes:
+  - pattern: "while\\s*\\("
+    correction: "loop("
+    explanation: "Nyash only has 'loop', not 'while'"
+    severity: error
+    
+  - pattern: "this\\."
+    correction: "me."
+    explanation: "Use 'me' for self-reference"
+    severity: error
+    
+  - pattern: "super\\."
+    correction: "from ParentName."
+    explanation: "Use 'from ParentName.' for parent calls"
+    severity: error
+    
+  - pattern: "for\\s+\\w+\\s+in"
+    correction: "Use loop with index"
+    explanation: "Nyash doesn't have for-in loops"
+    severity: error
+    
+  - pattern: "class\\s+\\w+"
+    correction: "box"
+    explanation: "Use 'box' for class definitions"
+    severity: error
+    
+  - pattern: ";\\s*$"
+    correction: "Remove semicolon"
+    explanation: "Nyash doesn't use semicolons"
+    severity: warning
+
+# ANCP (AI-Nyash Compact Protocol) mappings
+ancp_mappings:
+  version: "1.0"
+  compression_rules:
+    keywords:
+      "box": "$"
+      "from": "@"
+      "me": "m"
+      "new": "n"
+      "loop": "L"
+      "if": "?"
+      "else": ":"
+      "local": "l"
+      "return": "r"
+      "static": "S"
+      "init": "#"
+      "birth": "b"
+      "override": "O"
+      
+    structures:
+      "{ }": "{}"
+      "( )": "()"
+      " = ": "="
+      
+# Training data generation hints
+training_hints:
+  positive_examples:
+    - description: "Simple box definition"
+      code: |
+        box Animal {
+          init { name, age }
+          birth(name, age) {
+            me.name = name
+            me.age = age
+          }
+        }
+        
+    - description: "Delegation example"
+      code: |
+        box Cat from Animal {
+          init { color }
+          birth(name, age, color) {
+            from Animal.birth(name, age)
+            me.color = color
+          }
+        }
+        
+    - description: "Loop usage"
+      code: |
+        local i, sum
+        i = 0
+        sum = 0
+        loop(i < 10) {
+          sum = sum + i
+          i = i + 1
+        }
+        
+  negative_examples:
+    - description: "Don't use while"
+      wrong: "while(true) { }"
+      correct: "loop(true) { }"
+      
+    - description: "Don't use this"
+      wrong: "this.value = 10"
+      correct: "me.value = 10"
+      
+    - description: "Don't use class"
+      wrong: "class MyClass { }"
+      correct: "box MyClass { }"

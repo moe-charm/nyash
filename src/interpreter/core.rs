@@ -112,6 +112,9 @@ impl NyashInterpreter {
             discard_context: false,
         };
 
+        // Bind runtime services (GC/scheduler/token scope) to global hooks for async/safepoints
+        crate::runtime::global_hooks::set_from_runtime(&this.runtime);
+
         // Register MethodBox invoker once (idempotent)
         self::register_methodbox_invoker();
 
@@ -149,6 +152,8 @@ impl NyashInterpreter {
             runtime,
             discard_context: false,
         };
+        // Bind runtime services (GC/scheduler/token scope) to global hooks for async/safepoints
+        crate::runtime::global_hooks::set_from_runtime(&this.runtime);
         self::register_methodbox_invoker();
         this
     }
