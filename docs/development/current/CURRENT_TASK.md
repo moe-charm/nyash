@@ -663,3 +663,79 @@ bash tools/build_aot.sh examples/aot_min_string_len.nyash -o app
   - 非基本コンストラクタの委譲徹底（Math/Random/Sound/Debugなど）
   - 主要ビルトインの plugin 化（nyash_box.toml 整備）
   - CIに `NYASH_USE_PLUGIN_BUILTINS=1` / `NYASH_PLUGIN_OVERRIDE_TYPES` のスモークを追加
+
+---
+
+## 引き継ぎ（Phase 11.9 / 統一文法アーキテクチャ + JIT分割）
+
+現状サマリ（実装済み）
+- 統一文法スキャフォールド
+  - build時コード生成: `build.rs` → `src/grammar/generated.rs`
+    - `KEYWORDS`（最小）と `OPERATORS_ADD_COERCION`, `OPERATORS_ADD_RULES` を生成
+    - TOML未整備でも add 既定規則を生成側で補完
+  - エンジン: `src/grammar/engine.rs`（`is_keyword_str`/`add_coercion_strategy`/`add_rules`/`decide_add_result`）
+  - Tokenizerに非侵襲差分ログ（`NYASH_GRAMMAR_DIFF=1`）
+- Add 規則の非侵襲導入
+  - JIT: `lower_binop(Add)` で grammar ヒントをイベント出力
+  - VM/Interpreter: 期待と実際の型を差分ログ（`NYASH_GRAMMAR_DIFF=1`）
+  - オプトイン強制適用（挙動変更は未既定）: `NYASH_GRAMMAR_ENFORCE_ADD=1`
+- スナップショットテスト
+  - `tests/grammar_add_rules.rs`（grammar 期待 と 現行セマンティクスの一致検証）→ 単体実行で緑
+
+JIT分割 進捗（継続観点）
+- 完了: builder分割（`builder/cranelift.rs`）、core 第一段階分割（`core_ops.rs`、`core/analysis.rs`、`core/cfg.rs`）
+- jit-direct スモーク緑（debug）: mir-branch-ret=1 / mir-phi-min=10 / mir-branch-multi=1
+
+使い方（開発時）
+- 差分ログ: `NYASH_GRAMMAR_DIFF=1`（Tokenizer/VM/Interp/JIT各所）
+- 規則強制: `NYASH_GRAMMAR_ENFORCE_ADD=1`（Add のみ、他は非侵襲）
+- JITスモーク例: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+- テスト（本件のみ）: `cargo test -q --test grammar_add_rules`
+
+次のTODO（優先順）
+1) JITロワラー分割の続き
+   - 大きい分岐（Extern/PluginInvoke/BoxCall）を `src/jit/lower/core/ops_ext.rs` へ抽出
+   - 各ステップごとに jit-direct スモーク確認
+2) 統一文法の拡張
+   - operators: Sub/Mul/Div の `type_rules` を TOML → 生成 → VM/Interp/JIT に非侵襲ログ（必要なら `*_ENFORCE_*`を用意）
+   - keywords/alias/context の雛形を TOML 化（差分ログ継続）
+3) スナップショット整備
+   - add 以外の演算子でも「grammar期待 vs 実際」の表テストを追加
+   - 将来、Tokenizer/Parser でも「grammar期待 vs 実際構文」のスナップショットを追加
+
+注意
+- 既存の他テストには未整備部分があり全体 `cargo test` は赤が出るため、当面は個別テスト/スモークを推奨
+- Release の jit-direct 実行は `--features cranelift-jit` が必要
+
+## Update: Phase 11.9 – 統一文法アーキテクチャ（MVP導入計画）
+
+目的: Tokenizer/Parser/Interpreter/MIR/VM/JIT の解釈差異を解消するため、単一の文法・意味・実行定義を導入（詳細は `docs/development/roadmap/phases/phase-11.9/unified-grammar-architecture.md` と `docs/development/roadmap/phases/phase-11.9/PLAN.md`）。
+
+直近TODO（M1/M2のMVP範囲）
+- [ ] scaffolding: `build.rs` + `src/grammar/{mod.rs,engine.rs}` + `src/grammar/generated.rs`（codegen方式）
+- [ ] `grammar/unified-grammar.toml` 初期化（keywords: `me`,`from`,`loop`; operators: `add`）
+- [ ] Tokenizer に `engine.is_keyword()` を差し込み（`NYASH_GRAMMAR_DIFF=1` で差分ログ）
+- [ ] `ExecutionSemantics` に `operators.add` を実装し、Interpreter/VM/JIT へ薄く統合（既存実装はフォールバック）
+- [ ] 予約語マッピングの一貫性テストと、加算セマンティクスの VM/JIT/Interpreter 一致テスト
+
+備考
+- ランタイム I/O は避け、TOML→生成コードに変換して起動/ホットパスへの影響を最小化
+- プラグイン拡張は将来の統合対象（優先度・名前空間・競合検知を設計）
+
+## Progress: JIT Lowering リファクタ状況（11.8/12系）
+
+完了
+- [x] builder 分割（`src/jit/lower/builder.rs` を薄いハブ化、`builder/cranelift.rs` へ移動）
+- [x] jit-direct の最小スモーク安定（debug）：
+  - apps/tests/mir-branch-ret → 1
+  - apps/tests/mir-phi-min → 10
+  - apps/tests/mir-branch-multi → 1
+- [x] core.rs の第一段階分割：
+  - `src/jit/lower/core_ops.rs` にヘルパー移設（push_value_if_known_or_param, cover_if_supported, BinOp/Compareなど）
+-  - `src/jit/lower/core/analysis.rs` 追加（Bool/PHI推論＋統計）
+-  - `src/jit/lower/core/cfg.rs` 追加（PHI受け口順序とCFGダンプ）
+
+次の分割候補
+- [ ] Extern/PluginInvoke/BoxCall 周辺の肥大化した分岐を `core/ops_ext.rs` に整理
+- [ ] `analysis`/`cfg` の補助関数（succ_phi_inputs など）の関数化
+- [ ] 分割ごとに jit-direct スモークの緑維持（debug / release+feature）

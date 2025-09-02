@@ -24,6 +24,28 @@ impl LowerCore {
     }
 
     pub fn lower_binop(&mut self, b: &mut dyn IRBuilder, op: &BinaryOp, lhs: &ValueId, rhs: &ValueId, dst: &ValueId, func: &MirFunction) {
+        // Optional: consult unified grammar for operator strategy (non-invasive logging)
+        if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+            match op {
+                BinaryOp::Add => {
+                    let strat = crate::grammar::engine::get().add_coercion_strategy();
+                    crate::jit::events::emit("grammar","add", None, None, serde_json::json!({"coercion": strat}));
+                }
+                BinaryOp::Sub => {
+                    let strat = crate::grammar::engine::get().sub_coercion_strategy();
+                    crate::jit::events::emit("grammar","sub", None, None, serde_json::json!({"coercion": strat}));
+                }
+                BinaryOp::Mul => {
+                    let strat = crate::grammar::engine::get().mul_coercion_strategy();
+                    crate::jit::events::emit("grammar","mul", None, None, serde_json::json!({"coercion": strat}));
+                }
+                BinaryOp::Div => {
+                    let strat = crate::grammar::engine::get().div_coercion_strategy();
+                    crate::jit::events::emit("grammar","div", None, None, serde_json::json!({"coercion": strat}));
+                }
+                _ => {}
+            }
+        }
         // Route string-like addition to hostcall (handle,handle)
         if crate::jit::config::current().hostcall {
             if matches!(op, BinaryOp::Add) {
@@ -110,4 +132,56 @@ impl LowerCore {
 
     pub fn lower_jump(&mut self, b: &mut dyn IRBuilder) { b.emit_jump(); }
     pub fn lower_branch(&mut self, b: &mut dyn IRBuilder) { b.emit_branch(); }
+}
+
+// Methods moved from core.rs to reduce file size and centralize op helpers
+impl LowerCore {
+    // Push a value if known or param/local/phi
+    pub(super) fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
+        if let Some(slot) = self.local_index.get(id).copied() { b.load_local_i64(slot); return; }
+        if self.phi_values.contains(id) {
+            let pos = self.phi_param_index.iter().find_map(|((_, vid), idx)| if vid == id { Some(*idx) } else { None }).unwrap_or(0);
+            if crate::jit::config::current().native_bool && self.bool_phi_values.contains(id) {
+                b.push_block_param_b1_at(pos);
+            } else {
+                b.push_block_param_i64_at(pos);
+            }
+            return;
+        }
+        if let Some(pidx) = self.param_index.get(id).copied() { b.emit_param_i64(pidx); return; }
+        if let Some(v) = self.known_i64.get(id).copied() { b.emit_const_i64(v); return; }
+    }
+
+    // Coverage helper: increments covered/unsupported counts
+    pub(super) fn cover_if_supported(&mut self, instr: &crate::mir::MirInstruction) {
+        use crate::mir::MirInstruction as I;
+        let supported = matches!(
+            instr,
+            I::Const { .. }
+                | I::Copy { .. }
+                | I::Cast { .. }
+                | I::TypeCheck { .. }
+                | I::TypeOp { .. }
+                | I::BinOp { .. }
+                | I::Compare { .. }
+                | I::Jump { .. }
+                | I::Branch { .. }
+                | I::Return { .. }
+                | I::Call { .. }
+                | I::BoxCall { .. }
+                | I::ArrayGet { .. }
+                | I::ArraySet { .. }
+                | I::NewBox { .. }
+                | I::Store { .. }
+                | I::Load { .. }
+                | I::Phi { .. }
+                | I::Debug { .. }
+                | I::ExternCall { .. }
+                | I::Safepoint
+                | I::Nop
+                | I::PluginInvoke { .. }
+        );
+        if supported { self.covered += 1; } else { self.unsupported += 1; }
+    }
+
 }

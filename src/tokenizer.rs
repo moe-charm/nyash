@@ -6,6 +6,7 @@
  */
 
 use thiserror::Error;
+use crate::grammar::engine;
 
 /// トークンの種類を表すenum
 #[derive(Debug, Clone, PartialEq)]
@@ -385,7 +386,7 @@ impl NyashTokenizer {
         }
         
         // キーワードチェック
-        match identifier.as_str() {
+        let tok = match identifier.as_str() {
             "box" => TokenType::BOX,
             "global" => TokenType::GLOBAL,
             "singleton" => TokenType::SINGLETON,
@@ -425,8 +426,27 @@ impl NyashTokenizer {
             "true" => TokenType::TRUE,
             "false" => TokenType::FALSE,
             "null" => TokenType::NULL,
-            _ => TokenType::IDENTIFIER(identifier),
+            _ => TokenType::IDENTIFIER(identifier.clone()),
+        };
+
+        // 統一文法エンジンとの差分チェック（動作は変更しない）
+        if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+            // 安全に参照（初期導入のため、存在しない場合は無視）
+            let kw = engine::get().is_keyword_str(&identifier);
+            match (&tok, kw) {
+                (TokenType::IDENTIFIER(_), Some(name)) => {
+                    eprintln!("[GRAMMAR-DIFF] tokenizer=IDENT, grammar=KEYWORD({}) word='{}'", name, identifier);
+                }
+                (TokenType::IDENTIFIER(_), None) => {}
+                // tokenizerがキーワード、grammarが未定義
+                (t, None) if !matches!(t, TokenType::IDENTIFIER(_)) => {
+                    eprintln!("[GRAMMAR-DIFF] tokenizer=KEYWORD, grammar=IDENT word='{}'", identifier);
+                }
+                _ => {}
+            }
         }
+
+        tok
     }
     
     /// 行コメントをスキップ

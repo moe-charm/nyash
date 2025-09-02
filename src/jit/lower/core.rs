@@ -1,27 +1,31 @@
 use crate::mir::{MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, ValueId};
 use super::builder::{IRBuilder, BinOpKind, CmpKind};
 
+mod analysis;
+mod cfg;
+mod ops_ext;
+
 /// Lower(Core-1): Minimal lowering skeleton for Const/Move/BinOp/Cmp/Branch/Ret
 /// This does not emit real CLIF yet; it only walks MIR and validates coverage.
 pub struct LowerCore {
-    pub unsupported: usize,
-    pub covered: usize,
+    pub(crate) unsupported: usize,
+    pub(crate) covered: usize,
     /// Minimal constant propagation for i64 to feed host-call args
     pub(super) known_i64: std::collections::HashMap<ValueId, i64>,
     /// Minimal constant propagation for f64 (math.* signature checks)
-    known_f64: std::collections::HashMap<ValueId, f64>,
+    pub(super) known_f64: std::collections::HashMap<ValueId, f64>,
     /// Parameter index mapping for ValueId
     pub(super) param_index: std::collections::HashMap<ValueId, usize>,
     /// Track values produced by Phi (for minimal PHI path)
-    phi_values: std::collections::HashSet<ValueId>,
+    pub(super) phi_values: std::collections::HashSet<ValueId>,
     /// Map (block, phi dst) -> param index in that block (for multi-PHI)
-    phi_param_index: std::collections::HashMap<(crate::mir::BasicBlockId, ValueId), usize>,
+    pub(super) phi_param_index: std::collections::HashMap<(crate::mir::BasicBlockId, ValueId), usize>,
     /// Track values that are boolean (b1) results, e.g., Compare destinations
     pub(super) bool_values: std::collections::HashSet<ValueId>,
     /// Track PHI destinations that are boolean (all inputs derived from bool_values)
-    bool_phi_values: std::collections::HashSet<ValueId>,
+    pub(super) bool_phi_values: std::collections::HashSet<ValueId>,
     /// Track values that are FloatBox instances (for arg type classification)
-    float_box_values: std::collections::HashSet<ValueId>,
+    pub(super) float_box_values: std::collections::HashSet<ValueId>,
     /// Track values that are plugin handles (generic box/handle, type unknown at compile time)
     pub(super) handle_values: std::collections::HashSet<ValueId>,
     // Per-function statistics (last lowered)
@@ -56,169 +60,13 @@ impl LowerCore {
         let mut bb_ids: Vec<_> = func.blocks.keys().copied().collect();
         bb_ids.sort_by_key(|b| b.0);
         builder.prepare_blocks(bb_ids.len());
-        // Seed boolean lattice with boolean parameters from MIR signature
-        if !func.signature.params.is_empty() {
-            for (idx, vid) in func.params.iter().copied().enumerate() {
-                if let Some(mt) = func.signature.params.get(idx) {
-                    if matches!(mt, crate::mir::MirType::Bool) {
-                        self.bool_values.insert(vid);
-                    }
-                }
-            }
-        }
-        // Pre-scan to classify boolean-producing values and propagate via Copy/Phi/Load-Store heuristics.
-        self.bool_values.clear();
-        let mut copy_edges: Vec<(crate::mir::ValueId, crate::mir::ValueId)> = Vec::new();
-        let mut phi_defs: Vec<(crate::mir::ValueId, Vec<crate::mir::ValueId>)> = Vec::new();
-        let mut stores: Vec<(crate::mir::ValueId, crate::mir::ValueId)> = Vec::new(); // (ptr, value)
-        let mut loads: Vec<(crate::mir::ValueId, crate::mir::ValueId)> = Vec::new();  // (dst, ptr)
-        for bb in bb_ids.iter() {
-            if let Some(block) = func.blocks.get(bb) {
-                for ins in block.instructions.iter() {
-                    match ins {
-                        crate::mir::MirInstruction::Compare { dst, .. } => { self.bool_values.insert(*dst); }
-                        crate::mir::MirInstruction::Const { dst, value } => {
-                            if let ConstValue::Bool(_) = value { self.bool_values.insert(*dst); }
-                        }
-                        crate::mir::MirInstruction::Cast { dst, target_type, .. } => {
-                            if matches!(target_type, crate::mir::MirType::Bool) { self.bool_values.insert(*dst); }
-                        }
-                        crate::mir::MirInstruction::TypeOp { dst, op, ty, .. } => {
-                            // Check and cast-to-bool produce boolean
-                            if matches!(op, crate::mir::TypeOpKind::Check) || matches!(ty, crate::mir::MirType::Bool) { self.bool_values.insert(*dst); }
-                        }
-                        crate::mir::MirInstruction::Copy { dst, src } => { copy_edges.push((*dst, *src)); }
-                        crate::mir::MirInstruction::Phi { dst, inputs } => {
-                            let vs: Vec<_> = inputs.iter().map(|(_, v)| *v).collect();
-                            phi_defs.push((*dst, vs));
-                        }
-                        crate::mir::MirInstruction::Store { value, ptr } => { stores.push((*ptr, *value)); }
-                        crate::mir::MirInstruction::Load { dst, ptr } => { loads.push((*dst, *ptr)); }
-                        _ => {}
-                    }
-                }
-                if let Some(term) = &block.terminator {
-                    match term {
-                        crate::mir::MirInstruction::Compare { dst, .. } => { self.bool_values.insert(*dst); }
-                        crate::mir::MirInstruction::Const { dst, value } => {
-                            if let ConstValue::Bool(_) = value { self.bool_values.insert(*dst); }
-                        }
-                        crate::mir::MirInstruction::Cast { dst, target_type, .. } => {
-                            if matches!(target_type, crate::mir::MirType::Bool) { self.bool_values.insert(*dst); }
-                        }
-                        crate::mir::MirInstruction::TypeOp { dst, op, ty, .. } => {
-                            if matches!(op, crate::mir::TypeOpKind::Check) || matches!(ty, crate::mir::MirType::Bool) { self.bool_values.insert(*dst); }
-                        }
-                        crate::mir::MirInstruction::Copy { dst, src } => { copy_edges.push((*dst, *src)); }
-                        crate::mir::MirInstruction::Phi { dst, inputs } => {
-                            let vs: Vec<_> = inputs.iter().map(|(_, v)| *v).collect();
-                            phi_defs.push((*dst, vs));
-                        }
-                        crate::mir::MirInstruction::Branch { condition, .. } => { self.bool_values.insert(*condition); }
-                        crate::mir::MirInstruction::Store { value, ptr } => { stores.push((*ptr, *value)); }
-                        crate::mir::MirInstruction::Load { dst, ptr } => { loads.push((*dst, *ptr)); }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        // Fixed-point boolean lattice propagation
-        let mut changed = true;
-        let mut store_bool_ptrs: std::collections::HashSet<crate::mir::ValueId> = std::collections::HashSet::new();
-        while changed {
-            changed = false;
-            // Copy propagation
-            for (dst, src) in copy_edges.iter().copied() {
-                if self.bool_values.contains(&src) && !self.bool_values.contains(&dst) {
-                    self.bool_values.insert(dst);
-                    changed = true;
-                }
-                // Pointer alias propagation for Store/Load lattice
-                if store_bool_ptrs.contains(&src) && !store_bool_ptrs.contains(&dst) {
-                    store_bool_ptrs.insert(dst);
-                    changed = true;
-                }
-            }
-            // Store marking
-            for (ptr, val) in stores.iter().copied() {
-                if self.bool_values.contains(&val) && !store_bool_ptrs.contains(&ptr) {
-                    store_bool_ptrs.insert(ptr);
-                    changed = true;
-                }
-            }
-            // Load propagation
-            for (dst, ptr) in loads.iter().copied() {
-                if store_bool_ptrs.contains(&ptr) && !self.bool_values.contains(&dst) {
-                    self.bool_values.insert(dst);
-                    changed = true;
-                }
-            }
-            // PHI closure for value booleans
-            for (dst, inputs) in phi_defs.iter() {
-                if inputs.iter().all(|v| self.bool_values.contains(v)) && !self.bool_values.contains(dst) {
-                    self.bool_values.insert(*dst);
-                    self.bool_phi_values.insert(*dst);
-                    changed = true;
-                }
-            }
-            // PHI closure for pointer aliases: if all inputs are bool-storing pointers, mark dst pointer as such
-            for (dst, inputs) in phi_defs.iter() {
-                if inputs.iter().all(|v| store_bool_ptrs.contains(v)) && !store_bool_ptrs.contains(dst) {
-                    store_bool_ptrs.insert(*dst);
-                    changed = true;
-                }
-            }
-        }
-        // Always-on PHI statistics: count total/b1 phi slots using current heuristics
-        {
-            use crate::mir::MirInstruction;
-            let mut total_phi_slots: usize = 0;
-            let mut total_phi_b1_slots: usize = 0;
-            for (dst, inputs) in phi_defs.iter() {
-                total_phi_slots += 1;
-                // Heuristics consistent with dump path
-                let used_as_branch = func.blocks.values().any(|bbx| {
-                    if let Some(MirInstruction::Branch { condition, .. }) = &bbx.terminator { condition == dst } else { false }
-                });
-                let is_b1 = self.bool_phi_values.contains(dst)
-                    || inputs.iter().all(|v| {
-                        self.bool_values.contains(v) || self.known_i64.get(v).map(|&iv| iv == 0 || iv == 1).unwrap_or(false)
-                    })
-                    || used_as_branch;
-                if is_b1 { total_phi_b1_slots += 1; }
-            }
-            if total_phi_slots > 0 {
-                crate::jit::rt::phi_total_inc(total_phi_slots as u64);
-                crate::jit::rt::phi_b1_inc(total_phi_b1_slots as u64);
-                self.last_phi_total = total_phi_slots as u64;
-                self.last_phi_b1 = total_phi_b1_slots as u64;
-            }
-        }
+        self.analyze(func, &bb_ids);
         // Optional: collect PHI targets and ordering per successor for minimal/multi PHI path
         let cfg_now = crate::jit::config::current();
         let enable_phi_min = cfg_now.phi_min;
-        // For each successor block, store ordered list of phi dst and a map pred->input for each phi
-        let mut succ_phi_order: std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::ValueId>> = std::collections::HashMap::new();
-        let mut succ_phi_inputs: std::collections::HashMap<crate::mir::BasicBlockId, Vec<(crate::mir::BasicBlockId, crate::mir::ValueId)>> = std::collections::HashMap::new();
-        if enable_phi_min {
-            for (bb_id, bb) in func.blocks.iter() {
-                let mut order: Vec<crate::mir::ValueId> = Vec::new();
-                for ins in bb.instructions.iter() {
-                    if let crate::mir::MirInstruction::Phi { dst, inputs } = ins {
-                        order.push(*dst);
-                        // store all (pred,val) pairs in flat vec grouped by succ
-                        for (pred, val) in inputs.iter() { succ_phi_inputs.entry(*bb_id).or_default().push((*pred, *val)); }
-                    }
-                }
-                if !order.is_empty() { succ_phi_order.insert(*bb_id, order); }
-            }
-            // Pre-declare block parameter counts per successor to avoid late appends
-            for (succ, order) in succ_phi_order.iter() {
-                if let Some(idx) = bb_ids.iter().position(|x| x == succ) {
-                    builder.ensure_block_params_i64(idx, order.len());
-                }
-            }
-        }
+        // Build successor → phi order and predeclare block params
+        let succ_phi_order: std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::ValueId>> =
+            self.build_phi_succords(func, &bb_ids, builder, enable_phi_min);
         // Decide ABI: typed or i64-only
         let native_f64 = cfg_now.native_f64;
         let native_bool = cfg_now.native_bool;
@@ -370,7 +218,7 @@ impl LowerCore {
                                             if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
                                                 if d2 == dst {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        ops::push_value_if_known_or_param(self, builder, val);
+                                                        self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
                                                     }
                                                 }
@@ -389,7 +237,7 @@ impl LowerCore {
                                             if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
                                                 if d2 == dst {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        ops::push_value_if_known_or_param(self, builder, val);
+                                                        self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
                                                     }
                                                 }
@@ -421,7 +269,7 @@ impl LowerCore {
                                             if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
                                                 if d2 == dst {
                                                     if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        ops::push_value_if_known_or_param(self, builder, val);
+                                                        self.push_value_if_known_or_param(builder, val);
                                                         cnt += 1;
                                                     }
                                                 }
@@ -445,115 +293,11 @@ impl LowerCore {
             }
         }
         builder.end_function();
-        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-            let succs = succ_phi_order.len();
-            eprintln!("[JIT] cfg: blocks={} phi_succ={} (phi_min={})", bb_ids.len(), succs, enable_phi_min);
-            if enable_phi_min {
-                let mut total_phi_slots: usize = 0;
-                let mut total_phi_b1_slots: usize = 0;
-                for (succ, order) in succ_phi_order.iter() {
-                    let mut preds_set: std::collections::BTreeSet<i64> = std::collections::BTreeSet::new();
-                    let mut phi_lines: Vec<String> = Vec::new();
-                    if let Some(bb_succ) = func.blocks.get(succ) {
-                        for ins in bb_succ.instructions.iter() {
-                            if let crate::mir::MirInstruction::Phi { dst, inputs } = ins {
-                                // collect preds for block-level summary
-                                for (pred, _) in inputs.iter() { preds_set.insert(pred.0 as i64); }
-                                // build detailed mapping text: dst<-pred:val,...
-                                let mut pairs: Vec<String> = Vec::new();
-                                for (pred, val) in inputs.iter() {
-                                    pairs.push(format!("{}:{}", pred.0, val.0));
-                                }
-                                // Heuristics: boolean PHI if (1) pre-analysis marked it, or
-                                // (2) all inputs look boolean-like (from bool producers or 0/1 const), or
-                                // (3) used as a branch condition somewhere.
-                                let used_as_branch = func.blocks.values().any(|bbx| {
-                                    if let Some(MirInstruction::Branch { condition, .. }) = &bbx.terminator { condition == dst } else { false }
-                                });
-                                let is_b1 = self.bool_phi_values.contains(dst)
-                                    || inputs.iter().all(|(_, v)| {
-                                        self.bool_values.contains(v) || self.known_i64.get(v).map(|&iv| iv == 0 || iv == 1).unwrap_or(false)
-                                    })
-                                    || used_as_branch;
-                                let tag = if is_b1 { " (b1)" } else { "" };
-                                phi_lines.push(format!("  dst v{}{} <- {}", dst.0, tag, pairs.join(", ")));
-                                total_phi_slots += 1;
-                                if is_b1 { total_phi_b1_slots += 1; }
-                            }
-                        }
-                    }
-                    let preds_list: Vec<String> = preds_set.into_iter().map(|p| p.to_string()).collect();
-                    eprintln!("[JIT] phi: bb={} slots={} preds={}", succ.0, order.len(), preds_list.join("|"));
-                    for ln in phi_lines { eprintln!("[JIT]{}", ln); }
-                }
-                eprintln!("[JIT] phi_summary: total_slots={} b1_slots={}", total_phi_slots, total_phi_b1_slots);
-            }
-        }
+        // Dump CFG/PHI diagnostics
+        self.dump_phi_cfg(&succ_phi_order, func, bb_ids.len(), enable_phi_min);
         Ok(())
     }
 
-    /// Push a value onto the builder stack if it is a known i64 const or a parameter.
-    pub(super) fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
-        // Prefer materialized locals first (e.g., PHI stored into a local slot)
-        if let Some(slot) = self.local_index.get(id).copied() {
-            b.load_local_i64(slot);
-            return;
-        }
-        if self.phi_values.contains(id) {
-            // Multi-PHI: find the param index for this phi in the current block
-            // We don't have the current block id here; rely on builder's current block context and our stored index being positional.
-            // As an approximation, prefer position 0 if unknown.
-            let pos = self.phi_param_index.iter().find_map(|((_, vid), idx)| if vid == id { Some(*idx) } else { None }).unwrap_or(0);
-            // Use b1 loader for boolean PHIs when enabled
-            if crate::jit::config::current().native_bool && self.bool_phi_values.contains(id) {
-                b.push_block_param_b1_at(pos);
-            } else {
-                b.push_block_param_i64_at(pos);
-            }
-            return;
-        }
-        if let Some(pidx) = self.param_index.get(id).copied() {
-            b.emit_param_i64(pidx);
-            return;
-        }
-        if let Some(v) = self.known_i64.get(id).copied() {
-            b.emit_const_i64(v);
-            return;
-        }
-    }
-
-    fn cover_if_supported(&mut self, instr: &MirInstruction) {
-        use crate::mir::MirInstruction as I;
-        let supported = matches!(
-            instr,
-            I::Const { .. }
-                | I::Copy { .. }
-                | I::Cast { .. }
-                | I::TypeCheck { .. }
-                | I::TypeOp { .. }
-                | I::BinOp { .. }
-                | I::Compare { .. }
-                | I::Jump { .. }
-                | I::Branch { .. }
-                | I::Return { .. }
-                | I::Call { .. }
-                | I::BoxCall { .. }
-                | I::ArrayGet { .. }
-                | I::ArraySet { .. }
-                | I::NewBox { .. }
-                | I::Store { .. }
-                | I::Load { .. }
-                | I::Phi { .. }
-                // PrintはJIT経路では未対応（VMにフォールバックしてコンソール出力を保持）
-                // | I::Print { .. }
-                | I::Debug { .. }
-                | I::ExternCall { .. }
-                | I::Safepoint
-                | I::Nop
-                | I::PluginInvoke { .. }
-        );
-        if supported { self.covered += 1; } else { self.unsupported += 1; }
-    }
 
     fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId, func: &crate::mir::MirFunction) -> Result<(), String> {
         use crate::mir::MirInstruction as I;
@@ -696,144 +440,10 @@ impl LowerCore {
                 }
             }
             I::PluginInvoke { dst, box_val, method, args, .. } => {
-                // Minimal PluginInvoke footing (AOT strict path):
-                // - Python3メソッド（import/getattr/call）は実Emitする（型/引数はシム側でTLV化）
-                // - PyRuntimeBox.birth/eval と IntegerBox.birth は no-op許容
-                let bt = self.box_type_map.get(box_val).cloned().unwrap_or_default();
-                let m = method.as_str();
-                // import/getattr/call 実Emit
-                if (bt == "PyRuntimeBox" && (m == "import")) {
-                    let argc = 1 + args.len();
-                    // push receiver param index (a0) if known
-                    if let Some(pidx) = self.param_index.get(box_val).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                    let decision = crate::jit::policy::invoke::decide_box_method(&bt, m, argc, dst.is_some());
-                    if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, .. } = decision {
-                        b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some());
-                        if let Some(d) = dst { self.handle_values.insert(*d); }
-                    } else { if dst.is_some() { b.emit_const_i64(0); } }
-                } else if (bt == "PyRuntimeBox" && (m == "getattr" || m == "call")) {
-                    // getattr/call invoked via PyRuntimeBox helper形式 → by-nameで解決
-                    let argc = 1 + args.len();
-                    // push receiver param index (a0) if known
-                    if let Some(pidx) = self.param_index.get(box_val).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                    // push primary arguments if available（a1, a2 ...）
-                    for a in args.iter() { self.push_value_if_known_or_param(b, a); }
-                    b.emit_plugin_invoke_by_name(m, argc, dst.is_some());
-                    if let Some(d) = dst {
-                        self.handle_values.insert(*d);
-                        // Store handle result into a local slot so it can be used as argument later
-                        let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
-                        b.store_local_i64(slot);
-                    }
-                } else if self.handle_values.contains(box_val) && (m == "getattr" || m == "call") {
-                    let argc = 1 + args.len();
-                    // push receiver handle/param index if possible (here receiver is a handle result previously returned)
-                    // We cannot reconstruct handle here; pass -1 to allow shim fallback.
-                    b.emit_const_i64(-1);
-                    for a in args.iter() { self.push_value_if_known_or_param(b, a); }
-                    b.emit_plugin_invoke_by_name(m, argc, dst.is_some());
-                    if let Some(d) = dst {
-                        self.handle_values.insert(*d);
-                        let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
-                        b.store_local_i64(slot);
-                    }
-                } else if (bt == "PyRuntimeBox" && (m == "birth" || m == "eval"))
-                    || (bt == "IntegerBox" && m == "birth")
-                    || (bt == "StringBox" && m == "birth")
-                    || (bt == "ConsoleBox" && m == "birth") {
-                    if dst.is_some() { b.emit_const_i64(0); }
-                } else {
-                    self.unsupported += 1;
-                }
+                self.lower_plugin_invoke(b, &dst, &box_val, method.as_str(), args, func)?;
             }
             I::ExternCall { dst, iface_name, method_name, args, .. } => {
-                // Minimal extern→plugin bridge: env.console.log/println を ConsoleBox に委譲
-                if iface_name == "env.console" && (method_name == "log" || method_name == "println") {
-                    // Ensure we have a ConsoleBox handle on the stack
-                    b.emit_host_call("nyash.console.birth_h", 0, true);
-                    // Push first argument if known/param
-                    if let Some(arg0) = args.get(0) { self.push_value_if_known_or_param(b, arg0); }
-                    // Resolve and emit plugin_invoke for ConsoleBox.method
-                    let decision = crate::jit::policy::invoke::decide_box_method("ConsoleBox", method_name, 2, dst.is_some());
-                    if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, .. } = decision {
-                        b.emit_plugin_invoke(type_id, method_id, 2, dst.is_some());
-                    } else {
-                        // Fallback: drop result if any
-                        if dst.is_some() { b.emit_const_i64(0); }
-                    }
-                } else {
-                    // Await bridge: env.future.await(fut) → await_h + ok_h/err_h select
-                    if iface_name == "env.future" && method_name == "await" {
-                        // Load future: prefer param, then local, then known const, else -1 scan
-                        if let Some(arg0) = args.get(0) {
-                            if let Some(pidx) = self.param_index.get(arg0).copied() {
-                                b.emit_param_i64(pidx);
-                            } else if let Some(slot) = self.local_index.get(arg0).copied() {
-                                b.load_local_i64(slot);
-                            } else if let Some(v) = self.known_i64.get(arg0).copied() {
-                                b.emit_const_i64(v);
-                            } else {
-                                b.emit_const_i64(-1);
-                            }
-                        } else {
-                            b.emit_const_i64(-1);
-                        }
-                        // await_h → handle (0 on timeout)
-                        b.emit_host_call(crate::jit::r#extern::r#async::SYM_FUTURE_AWAIT_H, 1, true);
-                        let hslot = { let id = self.next_local; self.next_local += 1; id };
-                        b.store_local_i64(hslot);
-                        // ok_h(handle)
-                        b.load_local_i64(hslot);
-                        b.emit_host_call(crate::jit::r#extern::result::SYM_RESULT_OK_H, 1, true);
-                        let ok_slot = { let id = self.next_local; self.next_local += 1; id };
-                        b.store_local_i64(ok_slot);
-                        // err_h(0) => Timeout
-                        b.emit_const_i64(0);
-                        b.emit_host_call(crate::jit::r#extern::result::SYM_RESULT_ERR_H, 1, true);
-                        let err_slot = { let id = self.next_local; self.next_local += 1; id };
-                        b.store_local_i64(err_slot);
-                        // Select by (handle==0)
-                        b.load_local_i64(hslot);
-                        b.emit_const_i64(0);
-                        b.emit_compare(crate::jit::lower::builder::CmpKind::Eq);
-                        b.load_local_i64(err_slot);
-                        b.load_local_i64(ok_slot);
-                        b.emit_select_i64();
-                        if let Some(d) = dst {
-                            self.handle_values.insert(*d);
-                            let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
-                            b.store_local_i64(slot);
-                        } else {
-                            // drop
-                        }
-                        return Ok(());
-                    }
-                    // Async spawn bridge: env.future.spawn_instance(recv, method_name, args...)
-                    if iface_name == "env.future" && method_name == "spawn_instance" {
-                        // Stack layout for hostcall: argc_total, a0(recv), a1(method_name), a2(first payload)
-                        // 1) receiver
-                        if let Some(recv) = args.get(0) {
-                            if let Some(pidx) = self.param_index.get(recv).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                        } else { b.emit_const_i64(-1); }
-                        // 2) method name (best-effort)
-                        if let Some(meth) = args.get(1) { self.push_value_if_known_or_param(b, meth); } else { b.emit_const_i64(0); }
-                        // 3) first payload argument if present
-                        if let Some(arg2) = args.get(2) { self.push_value_if_known_or_param(b, arg2); } else { b.emit_const_i64(0); }
-                        // argc_total = explicit args including method name and payload (exclude receiver)
-                        let argc_total = args.len().saturating_sub(1).max(0);
-                        b.emit_const_i64(argc_total as i64);
-                        // Call spawn shim; it returns Future handle
-                        b.emit_host_call(crate::jit::r#extern::r#async::SYM_FUTURE_SPAWN_INSTANCE3_I64, 4, true);
-                        if let Some(d) = dst {
-                            self.handle_values.insert(*d);
-                            let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
-                            b.store_local_i64(slot);
-                        }
-                        return Ok(());
-                    }
-                    // Unknown extern: strictではno-opにしてfailを避ける
-                    if dst.is_some() { b.emit_const_i64(0); }
-                }
+                self.lower_extern_call(b, &dst, iface_name.as_str(), method_name.as_str(), args, func)?;
             }
             I::Cast { dst, value, target_type } => {
                 // Minimal cast footing: materialize source when param/known
@@ -968,6 +578,9 @@ impl LowerCore {
                 }
             }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
+                // Clean path: delegate to ops_ext and return
+                let _ = self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())?;
+                return Ok(());
                 if super::core_hostcall::lower_boxcall_simple_reads(b, &self.param_index, &self.known_i64, array, method.as_str(), args, dst.clone()) {
                     // handled in helper (read-only simple methods)
                 } else if matches!(method.as_str(), "sin" | "cos" | "abs" | "min" | "max") {
@@ -981,7 +594,7 @@ impl LowerCore {
                         args,
                         dst.clone(),
                     );
-                } else if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
+                } else if false /* moved to ops_ext: NYASH_USE_PLUGIN_BUILTINS */ {
                     // StringBox（length/is_empty/charCodeAt）: policy+observe経由に統一
                     if matches!(method.as_str(), "length" | "is_empty" | "charCodeAt") {
                         // receiver

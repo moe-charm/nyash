@@ -1,0 +1,22 @@
+
+[keywords.me]
+token = "ME"
+
+[keywords.from]
+token = "FROM"
+
+[keywords.loop]
+token = "LOOP"
+
+[operators.add]
+symbol = "+"
+
+[syntax.statements]
+allow = [
+  "box","global","function","static",
+  "if","loop","break","return","print",
+  "nowait","include","local","outbox","try","throw","using","from"
+]
+
+[syntax.expressions]
+allow_binops = ["add","sub","mul","div","and","or","eq","ne"]

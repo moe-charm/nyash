@@ -75,12 +75,28 @@ keywords:
 
 ## 🔗 関連ドキュメント
 
-- [統一文法アーキテクチャ設計書](unified-grammar-architecture.md) ← **🔥 核心設計**
-- [統一予約語システム仕様](unified-keyword-system.md) ← **🎯 具体的実装**
-- [AI深層考察: 統一文法アーキテクチャ](ai-deep-thoughts-unified-grammar.md) ← **💡 Gemini/Codex分析**
-- [文法統一化詳細設計](grammar-unification.txt)
-- [統一文法定義YAML](nyash-grammar-v1.yaml)
-- [実装計画](implementation-plan.txt)
+### 📌 まず読むべき資料
+- **[統一セマンティクス実装設計](unified-semantics-implementation.txt)** ← **🎯 最新の実装方針**
+- **[統一文法設計総合まとめ](UNIFIED-GRAMMAR-DESIGN-SUMMARY.md)** ← 設計思想の理解
+
+### 🔥 核心設計ドキュメント
+- [統一文法アーキテクチャ設計書](unified-grammar-architecture.md) - 基本設計
+- [統一予約語システム仕様](unified-keyword-system.md) - 具体的実装
+- [AI深層考察: 統一文法アーキテクチャ](ai-deep-thoughts-unified-grammar.md) - Gemini/Codex分析
+
+### 📚 発展的設計（参考）
+- [発展的設計集](advanced-designs/) - より深い設計思想
+  - box-first-grammar-architecture.md - 箱化アプローチ
+  - root-cutting-architecture.md - 疎結合設計
+  - zero-knowledge-architecture.md - 究極の分離
+
+### 🔧 実装資料
+- [アーカイブ](archive/) - 過去の詳細設計ドキュメント
+  - grammar-unification.txt - 初期の文法統一化詳細設計
+  - nyash-grammar-v1.yaml - 統一文法定義YAML（初版）
+  - implementation-plan.txt - 実装計画
+
+### 🔗 関連フェーズ
 - [AI-Nyash Compact Notation Protocol](../../ideas/new-features/2025-08-29-ai-compact-notation-protocol.md)
 - [Phase 12: プラグインシステム](../phase-12/)
 

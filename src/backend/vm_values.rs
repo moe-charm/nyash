@@ -19,6 +19,64 @@ impl VM {
     pub(super) fn execute_binary_op(&self, op: &BinaryOp, left: &VMValue, right: &VMValue) -> Result<VMValue, VMError> {
         let debug_bin = std::env::var("NYASH_VM_DEBUG_BIN").ok().as_deref() == Some("1");
         if debug_bin { eprintln!("[VM] binop {:?} {:?} {:?}", op, left, right); }
+        if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+            let lty = match left { VMValue::String(_) => "String", VMValue::Integer(_) => "Integer", VMValue::Float(_) => "Float", VMValue::Bool(_) => "Bool", _ => "Other" };
+            let rty = match right { VMValue::String(_) => "String", VMValue::Integer(_) => "Integer", VMValue::Float(_) => "Float", VMValue::Bool(_) => "Bool", _ => "Other" };
+            match *op {
+                BinaryOp::Add => {
+                    let strat = crate::grammar::engine::get().add_coercion_strategy();
+                    let rule = crate::grammar::engine::get().decide_add_result(lty, rty);
+                    eprintln!("[GRAMMAR-DIFF][VM] add.coercion_strategy={} left={} right={} rule={:?}", strat, lty, rty, rule);
+                }
+                BinaryOp::Sub => {
+                    let strat = crate::grammar::engine::get().sub_coercion_strategy();
+                    let rule = crate::grammar::engine::get().decide_sub_result(lty, rty);
+                    eprintln!("[GRAMMAR-DIFF][VM] sub.coercion_strategy={} left={} right={} rule={:?}", strat, lty, rty, rule);
+                }
+                BinaryOp::Mul => {
+                    let strat = crate::grammar::engine::get().mul_coercion_strategy();
+                    let rule = crate::grammar::engine::get().decide_mul_result(lty, rty);
+                    eprintln!("[GRAMMAR-DIFF][VM] mul.coercion_strategy={} left={} right={} rule={:?}", strat, lty, rty, rule);
+                }
+                BinaryOp::Div => {
+                    let strat = crate::grammar::engine::get().div_coercion_strategy();
+                    let rule = crate::grammar::engine::get().decide_div_result(lty, rty);
+                    eprintln!("[GRAMMAR-DIFF][VM] div.coercion_strategy={} left={} right={} rule={:?}", strat, lty, rty, rule);
+                }
+                _ => {}
+            }
+        }
+        if matches!(*op, BinaryOp::Add) && std::env::var("NYASH_GRAMMAR_ENFORCE_ADD").ok().as_deref() == Some("1") {
+            let lty = match left { VMValue::String(_) => "String", VMValue::Integer(_) => "Integer", VMValue::Float(_) => "Float", VMValue::Bool(_) => "Bool", _ => "Other" };
+            let rty = match right { VMValue::String(_) => "String", VMValue::Integer(_) => "Integer", VMValue::Float(_) => "Float", VMValue::Bool(_) => "Bool", _ => "Other" };
+            if let Some((res, _)) = crate::grammar::engine::get().decide_add_result(lty, rty) {
+                match res {
+                    "String" => {
+                        // Best-effort toString concat
+                        fn vmv_to_string(v: &VMValue) -> String {
+                            match v {
+                                VMValue::String(s) => s.clone(),
+                                VMValue::Integer(i) => i.to_string(),
+                                VMValue::Float(f) => f.to_string(),
+                                VMValue::Bool(b) => b.to_string(),
+                                VMValue::Void => "void".to_string(),
+                                VMValue::BoxRef(b) => b.to_string_box().value,
+                                VMValue::Future(_) => "<future>".to_string(),
+                            }
+                        }
+                        let ls = vmv_to_string(left);
+                        let rs = vmv_to_string(right);
+                        return Ok(VMValue::String(format!("{}{}", ls, rs)));
+                    }
+                    "Integer" => {
+                        if let (VMValue::Integer(l), VMValue::Integer(r)) = (left, right) {
+                            return Ok(VMValue::Integer(l + r));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         // Fast path: logical AND/OR accept any truthy via as_bool
         if matches!(*op, BinaryOp::And | BinaryOp::Or) {
             let l = left.as_bool()?;

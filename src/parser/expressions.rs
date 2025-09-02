@@ -27,6 +27,11 @@ impl NyashParser {
             let operator = BinaryOperator::Or;
             self.advance();
             let right = self.parse_and()?;
+            // Non-invasive syntax diff: record binop
+            if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                let ok = crate::grammar::engine::get().syntax_is_allowed_binop("or");
+                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop 'or' not allowed by syntax rules"); }
+            }
             expr = ASTNode::BinaryOp {
                 operator,
                 left: Box::new(expr),
@@ -46,6 +51,10 @@ impl NyashParser {
             let operator = BinaryOperator::And;
             self.advance();
             let right = self.parse_equality()?;
+            if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                let ok = crate::grammar::engine::get().syntax_is_allowed_binop("and");
+                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop 'and' not allowed by syntax rules"); }
+            }
             expr = ASTNode::BinaryOp {
                 operator,
                 left: Box::new(expr),
@@ -69,6 +78,11 @@ impl NyashParser {
             };
             self.advance();
             let right = self.parse_comparison()?;
+            if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                let name = match operator { BinaryOperator::Equal=>"eq", BinaryOperator::NotEqual=>"ne", _=>"cmp" };
+                let ok = crate::grammar::engine::get().syntax_is_allowed_binop(name);
+                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop '{}' not allowed by syntax rules", name); }
+            }
             expr = ASTNode::BinaryOp {
                 operator,
                 left: Box::new(expr),
@@ -130,6 +144,11 @@ impl NyashParser {
                 };
                 self.advance();
                 let right = self.parse_factor()?;
+                if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                    let name = match operator { BinaryOperator::Add=>"add", BinaryOperator::Subtract=>"sub", _=>"term" };
+                    let ok = crate::grammar::engine::get().syntax_is_allowed_binop(name);
+                    if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop '{}' not allowed by syntax rules", name); }
+                }
                 expr = ASTNode::BinaryOp {
                     operator,
                     left: Box::new(expr),
@@ -155,6 +174,11 @@ impl NyashParser {
             };
             self.advance();
             let right = self.parse_unary()?;
+            if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                let name = match operator { BinaryOperator::Multiply=>"mul", BinaryOperator::Divide=>"div", _=>"mod" };
+                let ok = crate::grammar::engine::get().syntax_is_allowed_binop(name);
+                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop '{}' not allowed by syntax rules", name); }
+            }
             expr = ASTNode::BinaryOp {
                 operator,
                 left: Box::new(expr),

@@ -13,8 +13,9 @@ use super::common::ParserUtils;
 impl NyashParser {
     /// 文をパース
     pub(super) fn parse_statement(&mut self) -> Result<ASTNode, ParseError> {
-        
-        let result = match &self.current_token().token_type {
+        // For grammar diff: capture starting token to classify statement keyword
+        let start_tok = self.current_token().token_type.clone();
+        let result = match &start_tok {
             TokenType::BOX => {
                 self.parse_box_declaration()
             },
@@ -84,6 +85,33 @@ impl NyashParser {
             }
         };
         
+        // Non-invasive syntax rule check
+        if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+            let kw = match start_tok {
+                TokenType::BOX => Some("box"),
+                TokenType::GLOBAL => Some("global"),
+                TokenType::FUNCTION => Some("function"),
+                TokenType::STATIC => Some("static"),
+                TokenType::IF => Some("if"),
+                TokenType::LOOP => Some("loop"),
+                TokenType::BREAK => Some("break"),
+                TokenType::RETURN => Some("return"),
+                TokenType::PRINT => Some("print"),
+                TokenType::NOWAIT => Some("nowait"),
+                TokenType::INCLUDE => Some("include"),
+                TokenType::LOCAL => Some("local"),
+                TokenType::OUTBOX => Some("outbox"),
+                TokenType::TRY => Some("try"),
+                TokenType::THROW => Some("throw"),
+                TokenType::USING => Some("using"),
+                TokenType::FROM => Some("from"),
+                _ => None,
+            };
+            if let Some(k) = kw {
+                let ok = crate::grammar::engine::get().syntax_is_allowed_statement(k);
+                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] statement '{}' not allowed by syntax rules", k); }
+            }
+        }
         result
     }
     

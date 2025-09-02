@@ -57,6 +57,7 @@ pub mod config;
 // Runtime system (plugins, registry, etc.)
 pub mod runtime;
 pub mod debug;
+pub mod grammar; // Phase 11.9 unified grammar scaffolding
 
 use nyash_rust::cli::CliConfig;
 use runner::NyashRunner;

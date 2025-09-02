@@ -60,6 +60,8 @@ pub mod cli;
 pub mod runtime;
 pub mod runner_plugin_init;
 pub mod debug;
+// Unified Grammar (Phase 11.9 scaffolding)
+pub mod grammar;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;

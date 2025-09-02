@@ -165,8 +165,39 @@ impl NyashInterpreter {
         
         match op {
             BinaryOperator::Add => {
+                // Optional: enforce grammar rule for add (behind env)
+                if std::env::var("NYASH_GRAMMAR_ENFORCE_ADD").ok().as_deref() == Some("1") {
+                    let lty = if crate::runtime::semantics::coerce_to_string(left_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(left_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rty = if crate::runtime::semantics::coerce_to_string(right_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(right_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    if let Some((res, _act)) = crate::grammar::engine::get().decide_add_result(lty, rty) {
+                        match res {
+                            "String" => {
+                                let ls = crate::runtime::semantics::coerce_to_string(left_val.as_ref()).unwrap_or_else(|| left_val.to_string_box().value);
+                                let rs = crate::runtime::semantics::coerce_to_string(right_val.as_ref()).unwrap_or_else(|| right_val.to_string_box().value);
+                                return Ok(Box::new(StringBox::new(format!("{}{}", ls, rs))));
+                            }
+                            "Integer" => {
+                                if let (Some(li), Some(ri)) = (crate::runtime::semantics::coerce_to_i64(left_val.as_ref()), crate::runtime::semantics::coerce_to_i64(right_val.as_ref())) {
+                                    return Ok(Box::new(IntegerBox::new(li + ri)));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                let (strat, lty, rty, expect) = if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                    let strat = crate::grammar::engine::get().add_coercion_strategy();
+                    let lty = if crate::runtime::semantics::coerce_to_string(left_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(left_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rty = if crate::runtime::semantics::coerce_to_string(right_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(right_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rule = crate::grammar::engine::get().decide_add_result(lty, rty);
+                    (Some(strat.to_string()), Some(lty.to_string()), Some(rty.to_string()), rule.map(|(res, act)| (res.to_string(), act.to_string())))
+                } else { (None, None, None, None) };
                 // 1) Intrinsic fast-paths (Integer+Integer, String+*, Bool+Bool)
                 if let Some(result) = try_add_operation(left_val.as_ref(), right_val.as_ref()) {
+                    if let (Some(s), Some(l), Some(r)) = (strat.as_ref(), lty.as_ref(), rty.as_ref()) {
+                        let actual = if result.as_any().downcast_ref::<StringBox>().is_some() { "String" } else if result.as_any().downcast_ref::<IntegerBox>().is_some() { "Integer" } else { "Other" };
+                        eprintln!("[GRAMMAR-DIFF][Interp] add strat={} lty={} rty={} expect={:?} actual={} match={}", s, l, r, expect, actual, expect.as_ref().map(|(res,_)| res.as_str())==Some(actual));
+                    }
                     return Ok(result);
                 }
                 // 2) Concatenation if either side is string-like (semantics)
@@ -175,13 +206,22 @@ impl NyashInterpreter {
                 if ls_opt.is_some() || rs_opt.is_some() {
                     let ls = ls_opt.unwrap_or_else(|| left_val.to_string_box().value);
                     let rs = rs_opt.unwrap_or_else(|| right_val.to_string_box().value);
+                    if let (Some(s), Some(l), Some(r)) = (strat.as_ref(), lty.as_ref(), rty.as_ref()) {
+                        eprintln!("[GRAMMAR-DIFF][Interp] add strat={} lty={} rty={} expect={:?} actual=String match={}", s, l, r, expect, expect.as_ref().map(|(res,_)| res=="String").unwrap_or(false));
+                    }
                     return Ok(Box::new(StringBox::new(format!("{}{}", ls, rs))));
                 }
                 // 3) Numeric fallback via coerce_to_i64
                 if let (Some(li), Some(ri)) = (crate::runtime::semantics::coerce_to_i64(left_val.as_ref()), crate::runtime::semantics::coerce_to_i64(right_val.as_ref())) {
+                    if let (Some(s), Some(l), Some(r)) = (strat.as_ref(), lty.as_ref(), rty.as_ref()) {
+                        eprintln!("[GRAMMAR-DIFF][Interp] add strat={} lty={} rty={} expect={:?} actual=Integer match={}", s, l, r, expect, expect.as_ref().map(|(res,_)| res=="Integer").unwrap_or(false));
+                    }
                     return Ok(Box::new(IntegerBox::new(li + ri)));
                 }
                 // 4) Final error
+                if let (Some(s), Some(l), Some(r)) = (strat.as_ref(), lty.as_ref(), rty.as_ref()) {
+                    eprintln!("[GRAMMAR-DIFF][Interp] add strat={} lty={} rty={} expect={:?} actual=Error", s, l, r, expect);
+                }
                 Err(RuntimeError::InvalidOperation { 
                     message: format!("Addition not supported between {} and {}", 
                                    left_val.type_name(), right_val.type_name()) 
@@ -219,6 +259,13 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Subtract => {
+                if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                    let strat = crate::grammar::engine::get().sub_coercion_strategy();
+                    let lty = if crate::runtime::semantics::coerce_to_string(left_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(left_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rty = if crate::runtime::semantics::coerce_to_string(right_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(right_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rule = crate::grammar::engine::get().decide_sub_result(lty, rty);
+                    eprintln!("[GRAMMAR-DIFF][Interp] sub strat={} lty={} rty={} expect={:?}", strat, lty, rty, rule);
+                }
                 // Use helper function instead of trait methods
                 if let Some(result) = try_sub_operation(left_val.as_ref(), right_val.as_ref()) {
                     return Ok(result);
@@ -231,6 +278,13 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Multiply => {
+                if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                    let strat = crate::grammar::engine::get().mul_coercion_strategy();
+                    let lty = if crate::runtime::semantics::coerce_to_string(left_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(left_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rty = if crate::runtime::semantics::coerce_to_string(right_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(right_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rule = crate::grammar::engine::get().decide_mul_result(lty, rty);
+                    eprintln!("[GRAMMAR-DIFF][Interp] mul strat={} lty={} rty={} expect={:?}", strat, lty, rty, rule);
+                }
                 // Use helper function instead of trait methods
                 if let Some(result) = try_mul_operation(left_val.as_ref(), right_val.as_ref()) {
                     return Ok(result);
@@ -243,6 +297,13 @@ impl NyashInterpreter {
             }
             
             BinaryOperator::Divide => {
+                if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                    let strat = crate::grammar::engine::get().div_coercion_strategy();
+                    let lty = if crate::runtime::semantics::coerce_to_string(left_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(left_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rty = if crate::runtime::semantics::coerce_to_string(right_val.as_ref()).is_some() { "String" } else if crate::runtime::semantics::coerce_to_i64(right_val.as_ref()).is_some() { "Integer" } else { "Other" };
+                    let rule = crate::grammar::engine::get().decide_div_result(lty, rty);
+                    eprintln!("[GRAMMAR-DIFF][Interp] div strat={} lty={} rty={} expect={:?}", strat, lty, rty, rule);
+                }
                 // Use helper function instead of trait methods
                 match try_div_operation(left_val.as_ref(), right_val.as_ref()) {
                     Ok(result) => Ok(result),

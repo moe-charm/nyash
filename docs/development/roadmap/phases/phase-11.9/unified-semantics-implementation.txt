@@ -1,0 +1,255 @@
+# Nyash統一セマンティクス実装設計
+# 作成日: 2025-09-02
+# 目的: Interpreter/VM/JIT全層での予約語・文法解釈の完全統一
+
+## 概要
+すべての実行層が同じセマンティクスに従うよう、MIR正規化層を中心とした統一実装を行う。
+
+## 核心的な問題
+現在、同じ式が各層で異なる解釈をされている：
+- "hello" + 123
+  - Interpreter: エラーを出す
+  - VM: 型変換してから連結
+  - JIT: 数値を文字列化してから連結
+
+## 解決策：MIR統一セマンティクス + 軽量UIRタグ
+
+### 1. 統一セマンティクス定義（grammar/semantics.yml）
+```yaml
+# すべての層が従う唯一の定義
+version: "1.0"
+semantics:
+  add:
+    - pattern: [String, String]
+      action: concat
+      mir: StringConcat
+      vm: OP_STR_CONCAT
+      
+    - pattern: [String, Any]
+      action: coerce_concat
+      steps:
+        - ToString($2)
+        - StringConcat($1, $2)
+      
+    - pattern: [Integer, Integer]
+      action: add_i64
+      mir: AddI64
+      vm: OP_ADD_I64
+      
+  toString:
+    - pattern: [String]
+      action: identity
+    - pattern: [Integer]
+      action: int_to_string
+    - pattern: [Float]
+      action: float_to_string
+    - pattern: [Bool]
+      action: bool_to_string
+    - pattern: [Null]
+      action: const_null_string
+```
+
+### 2. UIRタグシステム（層間通信）
+```rust
+// generated/uir_tags.rs (build.rsで生成)
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum UIRTag {
+    // 予約語
+    ME = 1,
+    FROM = 2,
+    LOOP = 3,
+    BOX = 4,
+    INIT = 5,
+    
+    // 演算子
+    ADD = 100,
+    SUB = 101,
+    MUL = 102,
+    DIV = 103,
+    
+    // セマンティクスアクション
+    STRING_CONCAT = 200,
+    TO_STRING = 201,
+    ADD_I64 = 202,
+    ADD_F64 = 203,
+}
+```
+
+### 3. MIR正規化層（真実の基盤）
+```rust
+// src/mir/normalizer.rs
+pub struct MIRNormalizer {
+    semantics_table: SemanticRuleTable,
+}
+
+impl MIRNormalizer {
+    pub fn normalize(&self, expr: &Expression) -> MIR {
+        match expr {
+            Expression::BinaryOp(op, left, right) => {
+                let left_type = self.infer_type(left);
+                let right_type = self.infer_type(right);
+                
+                // 統一ルールを適用
+                let rule = self.semantics_table.lookup(op, &[left_type, right_type]);
+                
+                match rule.action {
+                    Action::Concat => {
+                        MIR::StringConcat(
+                            Box::new(self.normalize(left)),
+                            Box::new(self.normalize(right))
+                        )
+                    }
+                    Action::CoerceConcat => {
+                        // 右辺を文字列に変換してから連結
+                        MIR::Sequence(vec![
+                            self.normalize(left),
+                            MIR::ToString(Box::new(self.normalize(right))),
+                            MIR::StringConcat
+                        ])
+                    }
+                    Action::AddI64 => {
+                        MIR::AddI64(
+                            Box::new(self.normalize(left)),
+                            Box::new(self.normalize(right))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### 4. 各層の統一実装
+
+#### Interpreter層
+```rust
+impl Interpreter {
+    fn execute_expression(&mut self, expr: &Expression) -> Result<Value> {
+        // すべてMIR経由で実行
+        let mir = self.mir_normalizer.normalize(expr);
+        self.execute_mir(&mir)
+    }
+    
+    fn execute_mir(&mut self, mir: &MIR) -> Result<Value> {
+        match mir {
+            MIR::StringConcat(left, right) => {
+                let left_val = self.execute_mir(left)?;
+                let right_val = self.execute_mir(right)?;
+                Ok(Value::String(format!("{}{}", left_val, right_val)))
+            }
+            MIR::ToString(expr) => {
+                let val = self.execute_mir(expr)?;
+                Ok(Value::String(self.value_to_string(&val)))
+            }
+            MIR::AddI64(left, right) => {
+                let left_val = self.execute_mir(left)?;
+                let right_val = self.execute_mir(right)?;
+                Ok(Value::Integer(left_val.as_i64()? + right_val.as_i64()?))
+            }
+        }
+    }
+}
+```
+
+#### VM層
+```rust
+impl VM {
+    fn compile_mir(&mut self, mir: &MIR) -> Vec<Opcode> {
+        // MIRから機械的にバイトコード生成
+        match mir {
+            MIR::StringConcat(left, right) => {
+                let mut code = vec![];
+                code.extend(self.compile_mir(left));
+                code.extend(self.compile_mir(right));
+                code.push(Opcode::StringConcat);
+                code
+            }
+            MIR::ToString(expr) => {
+                let mut code = self.compile_mir(expr);
+                code.push(Opcode::ToString);
+                code
+            }
+            MIR::AddI64(left, right) => {
+                let mut code = vec![];
+                code.extend(self.compile_mir(left));
+                code.extend(self.compile_mir(right));
+                code.push(Opcode::AddI64);
+                code
+            }
+        }
+    }
+}
+```
+
+#### JIT層
+```rust
+impl JITCompiler {
+    fn compile_mir(&mut self, mir: &MIR) {
+        // MIRから最適化されたネイティブコード生成
+        match mir {
+            MIR::StringConcat(left, right) => {
+                self.compile_mir(left);
+                self.compile_mir(right);
+                // 高速な文字列連結関数を呼び出し
+                self.emit_call(fast_string_concat);
+            }
+            MIR::ToString(expr) => {
+                self.compile_mir(expr);
+                // 型に応じた最適な変換
+                self.emit_call(optimized_to_string);
+            }
+            MIR::AddI64(left, right) => {
+                self.compile_mir(left);
+                self.compile_mir(right);
+                // ネイティブな加算命令
+                self.emit_add_i64();
+            }
+        }
+    }
+}
+```
+
+## 実装手順
+
+### Phase 1: 基盤構築（1週間）
+1. grammar/semantics.yml 作成
+2. UIRTag定義とbuild.rs生成
+3. SemanticRuleTable実装
+
+### Phase 2: MIR正規化層（1週間）
+1. MIRNormalizer実装
+2. 型推論システム構築
+3. セマンティクステーブル連携
+
+### Phase 3: 各層統合（2週間）
+1. Interpreterを MIR経由に変更
+2. VMのMIRコンパイラ実装
+3. JITのMIRコンパイラ実装
+
+### Phase 4: テストと検証（1週間）
+1. 統一セマンティクステスト作成
+2. 各層での一貫性検証
+3. パフォーマンス測定
+
+## 期待される効果
+
+1. **完全な一貫性**: すべての層が同じ動作
+2. **保守性向上**: セマンティクス変更が1箇所
+3. **拡張性**: 新しい演算子の追加が容易
+4. **AI対応**: 単一の仕様から学習可能
+5. **デバッグ容易性**: MIRレベルでの統一デバッグ
+
+## 注意事項
+
+- 既存のコードとの互換性を保つため、フィーチャーフラグで段階的移行
+- パフォーマンスへの影響を最小限にするため、ビルド時最適化を活用
+- テストカバレッジを十分に確保してから本番移行
+
+## 関連ファイル
+
+- grammar/semantics.yml - セマンティクス定義
+- src/mir/normalizer.rs - MIR正規化実装
+- build.rs - コード生成
+- tests/unified_semantics.rs - 統一テスト
