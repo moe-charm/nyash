@@ -101,6 +101,10 @@ stats_output.txt
 *.o
 *.exe
 a.out
+app_*_llvm
+app_link
+string_len_app
+*_app
 
 # Nekocode analysis files (大きなJSONファイル)
 .nekocode_sessions/

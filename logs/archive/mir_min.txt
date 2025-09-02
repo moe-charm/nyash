@@ -1,0 +1,29 @@
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_map_plugin
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_integer_plugin
+[FileBox] Plugin initialized
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_filebox_plugin
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_python_plugin
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_array_plugin
+[ConsoleBox] Plugin initialized
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_console_plugin
+Net plugin: LOG_ON=false, LOG_PATH=net_plugin.log
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_net_plugin
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_math_plugin
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_counter_plugin
+[PluginLoaderV2] nyash_plugin_init rc=0 for libnyash_string_plugin
+🚀 MIR Output for examples/aot_py_eval_env_min.nyash:
+; MIR Module: main
+
+define i64 @main() {
+bb0:
+    0: safepoint
+    1: %2 = new PyRuntimeBox()
+    2: plugin_invoke %2.birth()
+    3: %3 = plugin_invoke %2.eval()
+    4: %4 = const 0
+    5: %5 = new IntegerBox(%4)
+    6: plugin_invoke %5.birth(%4)
+    7: ret %5
+}
+
+

@@ -161,6 +161,34 @@ Update (2025-09-01 AM / JIT handoff follow-up)
 2) b1 返り値 ABI を有効化する場合の経路確認（feature `jit-b1-abi`）。
 3) ドキュメント整備（CraneliftBuilder 単一出口方針と TRACE 変数の最終化）。
 
+Update (2025-09-02 / JIT seal・PHI安定化 + builder分割 進捗)
+
+- 完了（JIT / jit-direct 最小3本グリーン）
+  - seal 管理の一本化（途中seal撤廃、end_functionで最終seal）。
+  - PHI(min) 合流: 事前スキャン→ensure_block_params、br/jump時のargs/append秩序確立。
+  - Return の安定化（known/param/slot優先、フォールバック const materialize）。
+  - 診断ログ整備（NYASH_JIT_DUMP/TRACE_*）。
+- スモーク（debug/release）: mir-branch-ret=1, mir-phi-min=10, mir-branch-multi=1。
+
+- リファクタリング（builder 1,000行目安に向けて段階実施）
+  - 分離済み:
+    - `src/jit/lower/builder/noop.rs`（NoopBuilder）
+    - `src/jit/lower/builder/object.rs`（AOT .o 用 ObjectBuilder、finish対応）
+    - `src/jit/lower/builder/rt_shims.rs`（nyash_jit_dbg_i64 等の小シム群）
+    - `src/jit/lower/builder/tls.rs`（clif_tls と TLS 呼び出しヘルパ）
+  - 動作維持: pub use で既存パス互換。jit-direct スモーク通過。
+
+- 残タスク（次手）
+  - [ ] CraneliftBuilder 本体を `builder/cranelift.rs` に分離（大枠）。
+  - [ ] `builder.rs` を薄い “ハブ” 化（trait/enum/API公開 + pub use）。
+  - [ ] 分離ごとに jit-direct 3本（debug/release）スモーク再確認。
+  - [ ] LowerCore の段階分割（`analysis.rs` / `cfg.rs` / `ops.rs`）検討（別PRでも可）。
+
+- 実行メモ（JIT）
+  - Build: `cargo build --release --features cranelift-jit`
+  - jit-direct: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+  - 診断: `NYASH_JIT_DUMP=1 NYASH_JIT_TRACE_BLOCKS=1 NYASH_JIT_TRACE_RET=1` 併用可。
+
 Update (2025-09-01 PM2 / Interpreter parity blockers)
 
 - 目的: Semantics 層での VM/JIT/Interpreter パリティ検証に向け、Interpreter 側の既知不具合を記録・引き継ぎ。

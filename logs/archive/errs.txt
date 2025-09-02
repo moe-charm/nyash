@@ -1,0 +1,15 @@
+   Compiling cranelift-codegen v0.103.0
+   Compiling cranelift-module v0.103.0
+   Compiling cranelift-native v0.103.0
+   Compiling cranelift-frontend v0.103.0
+   Compiling cranelift-jit v0.103.0
+   Compiling cranelift-object v0.103.0
+   Compiling nyash-rust v0.1.0 (/mnt/c/git/nyash-project/nyash)
+error[E0599]: no method named `finalize_definitions` found for struct `ObjectModule` in the current scope
+  --> src/jit/lower/builder/object.rs:79:29
+   |
+79 |         let _ = self.module.finalize_definitions();
+   |                             ^^^^^^^^^^^^^^^^^^^^ method not found in `ObjectModule`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `nyash-rust` (lib) due to 1 previous error

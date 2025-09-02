@@ -1,0 +1,606 @@
+   Compiling nyash-rust v0.1.0 (/mnt/c/git/nyash-project/nyash)
+warning: unused imports: `IntegerBox` and `VoidBox`
+ --> src/boxes/jit_stats_box.rs:1:54
+  |
+1 | use crate::box_trait::{NyashBox, StringBox, BoolBox, IntegerBox, VoidBox, BoxCore, BoxBase};
+  |                                                      ^^^^^^^^^^  ^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `VoidBox`
+ --> src/boxes/aot_compiler_box.rs:1:54
+  |
+1 | use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase};
+  |                                                      ^^^^^^^
+
+warning: unused import: `NyashResultBox`
+  --> src/boxes/p2p_box.rs:41:39
+   |
+41 | use crate::boxes::result::{ResultBox, NyashResultBox};
+   |                                       ^^^^^^^^^^^^^^
+
+warning: unused import: `IntegerBox`
+  --> src/interpreter/mod.rs:10:45
+   |
+10 | use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, ErrorBox, BoxCore};
+   |                                             ^^^^^^^^^^
+
+warning: unused import: `RangeBox`
+  --> src/interpreter/mod.rs:14:39
+   |
+14 | use crate::boxes::math_box::{MathBox, RangeBox};
+   |                                       ^^^^^^^^
+
+warning: unused import: `TimeBox`
+  --> src/interpreter/mod.rs:15:30
+   |
+15 | use crate::boxes::time_box::{TimeBox, TimerBox};
+   |                              ^^^^^^^
+
+warning: unused import: `crate::boxes::map_box::MapBox`
+  --> src/interpreter/mod.rs:16:5
+   |
+16 | use crate::boxes::map_box::MapBox;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::boxes::sound_box::SoundBox`
+  --> src/interpreter/mod.rs:18:5
+   |
+18 | use crate::boxes::sound_box::SoundBox;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::method_box::MethodBox`
+  --> src/interpreter/mod.rs:20:5
+   |
+20 | use crate::method_box::MethodBox;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::parser::ParseError`
+  --> src/interpreter/core.rs:11:5
+   |
+11 | use crate::parser::ParseError;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `RwLock`
+  --> src/interpreter/core.rs:15:29
+   |
+15 | use std::sync::{Arc, Mutex, RwLock};
+   |                             ^^^^^^
+
+warning: unused import: `BoxDeclaration`
+  --> src/interpreter/core.rs:17:26
+   |
+17 | use super::{ControlFlow, BoxDeclaration, ConstructorContext, StaticBoxDefinition, StaticBoxState};
+   |                          ^^^^^^^^^^^^^^
+
+warning: unused macro definition: `debug_trace`
+  --> src/interpreter/core.rs:35:14
+   |
+35 | macro_rules! debug_trace {
+   |              ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_macros)]` on by default
+
+warning: unused import: `StringBox`
+ --> src/interpreter/eval.rs:4:43
+  |
+4 | use crate::box_trait::{NyashBox, VoidBox, StringBox};
+  |                                           ^^^^^^^^^
+
+warning: unused import: `BoolBox`
+ --> src/interpreter/expressions/calls.rs:7:57
+  |
+7 | use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
+  |                                                         ^^^^^^^
+
+warning: unused imports: `ArrayBox`, `FloatBox`, and `FutureBox`
+ --> src/interpreter/expressions/calls.rs:8:20
+  |
+8 | use crate::boxes::{ArrayBox, FloatBox, MapBox, FutureBox};
+  |                    ^^^^^^^^  ^^^^^^^^          ^^^^^^^^^
+
+warning: unused imports: `BufferBox`, `HttpClientBox`, `JSONBox`, `RegexBox`, and `StreamBox`
+ --> src/interpreter/expressions/calls.rs:9:20
+  |
+9 | use crate::boxes::{BufferBox, JSONBox, HttpClientBox, StreamBox, RegexBox, IntentBox, SocketBox};
+  |                    ^^^^^^^^^  ^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^  ^^^^^^^^
+
+warning: unused imports: `MathBox` and `TimeBox`
+  --> src/interpreter/expressions/calls.rs:10:68
+   |
+10 | use crate::boxes::{HTTPServerBox, HTTPRequestBox, HTTPResponseBox, MathBox, TimeBox, DateTimeBox};
+   |                                                                    ^^^^^^^  ^^^^^^^
+
+warning: unused import: `crate::channel_box::ChannelBox`
+  --> src/interpreter/expressions/calls.rs:13:5
+   |
+13 | use crate::channel_box::ChannelBox;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::interpreter::finalization`
+  --> src/interpreter/expressions/calls.rs:15:5
+   |
+15 | use crate::interpreter::finalization;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::box_trait::BoolBox`
+  --> src/interpreter/methods/p2p_methods.rs:11:5
+   |
+11 | use crate::box_trait::BoolBox;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `StringBox` and `VoidBox`
+  --> src/interpreter/methods/system_methods.rs:10:34
+   |
+10 | use crate::box_trait::{NyashBox, VoidBox, StringBox, BoolBox};
+   |                                  ^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `core::*`
+   --> src/interpreter/mod.rs:109:9
+    |
+109 | pub use core::*;
+    |         ^^^^^^^
+
+warning: unused import: `TypeOpKind`
+  --> src/mir/optimizer.rs:11:71
+   |
+11 | use super::{MirModule, MirFunction, MirInstruction, ValueId, MirType, TypeOpKind, EffectMask, Effect};
+   |                                                                       ^^^^^^^^^^
+
+warning: unused import: `MirType`
+   --> src/mir/optimizer.rs:340:42
+    |
+340 |         use super::{MirInstruction as I, MirType};
+    |                                          ^^^^^^^
+
+warning: unnecessary parentheses around function argument
+  --> src/mir/passes/method_id_inject.rs:48:56
+   |
+48 | ...                   Ok(mh) => Some((mh.method_id as u16)),
+   |                                      ^                   ^
+   |
+   = note: `#[warn(unused_parens)]` on by default
+help: remove these parentheses
+   |
+48 -                                         Ok(mh) => Some((mh.method_id as u16)),
+48 +                                         Ok(mh) => Some(mh.method_id as u16),
+   |
+
+warning: unnecessary parentheses around function argument
+  --> src/mir/passes/method_id_inject.rs:66:52
+   |
+66 | ...                   Ok(mh) => Some((mh.method_id as u16)),
+   |                                      ^                   ^
+   |
+help: remove these parentheses
+   |
+66 -                                     Ok(mh) => Some((mh.method_id as u16)),
+66 +                                     Ok(mh) => Some(mh.method_id as u16),
+   |
+
+warning: unused imports: `BinaryOp`, `CompareOp`, and `UnaryOp`
+  --> src/backend/vm.rs:10:70
+   |
+10 | use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId};
+   |                                                                      ^^^^^^^^  ^^^^^^^^^  ^^^^^^^
+
+warning: unused import: `IRBuilder`
+  --> src/backend/cranelift/mod.rs:14:48
+   |
+14 | use crate::jit::lower::{builder::{NoopBuilder, IRBuilder}, core::LowerCore};
+   |                                                ^^^^^^^^^
+
+warning: unused import: `FunctionBuilderContext`
+ --> src/backend/cranelift/context.rs:6:43
+  |
+6 | use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
+  |                                           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cranelift_codegen::isa`
+ --> src/backend/cranelift/jit.rs:4:5
+  |
+4 | use cranelift_codegen::isa;
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::backend::vm::VMValue as V`
+  --> src/backend/cranelift/mod.rs:89:21
+   |
+89 |                 use crate::backend::vm::VMValue as V;
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `BinaryOp` and `CompareOp`
+ --> src/jit/lower/core.rs:1:59
+  |
+1 | use crate::mir::{MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, ValueId};
+  |                                                           ^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `CmpKind`
+ --> src/jit/lower/core.rs:2:44
+  |
+2 | use super::builder::{IRBuilder, BinOpKind, CmpKind};
+  |                                            ^^^^^^^
+
+warning: unnecessary parentheses around `if` condition
+   --> src/jit/lower/core.rs:705:20
+    |
+705 |                 if (bt == "PyRuntimeBox" && (m == "import")) {
+    |                    ^                                       ^
+    |
+help: remove these parentheses
+    |
+705 -                 if (bt == "PyRuntimeBox" && (m == "import")) {
+705 +                 if bt == "PyRuntimeBox" && (m == "import") {
+    |
+
+warning: unnecessary parentheses around `if` condition
+   --> src/jit/lower/core.rs:714:27
+    |
+714 |                 } else if (bt == "PyRuntimeBox" && (m == "getattr" || m == "call")) {
+    |                           ^                                                       ^
+    |
+help: remove these parentheses
+    |
+714 -                 } else if (bt == "PyRuntimeBox" && (m == "getattr" || m == "call")) {
+714 +                 } else if bt == "PyRuntimeBox" && (m == "getattr" || m == "call") {
+    |
+
+warning: unexpected `cfg` condition value: `never`
+    --> src/jit/lower/builder.rs:1627:7
+     |
+1627 | #[cfg(feature = "never")]
+     |       ^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `all-examples`, `cli`, `cranelift-jit`, `default`, `dynamic-file`, `gui`, `gui-examples`, `llvm`, `mir_modular_builder`, `mir_refbarrier_unify_poc`, `mir_typeop_poc`, `plugins`, and `wasm-backend`
+     = help: consider adding `never` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `never`
+    --> src/jit/lower/builder.rs:1648:7
+     |
+1648 | #[cfg(feature = "never")]
+     |       ^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `all-examples`, `cli`, `cranelift-jit`, `default`, `dynamic-file`, `gui`, `gui-examples`, `llvm`, `mir_modular_builder`, `mir_refbarrier_unify_poc`, `mir_typeop_poc`, `plugins`, and `wasm-backend`
+     = help: consider adding `never` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `never`
+    --> src/jit/lower/builder.rs:1699:7
+     |
+1699 | #[cfg(feature = "never")]
+     |       ^^^^^^^^^^^^^^^^^
+     |
+     = note: expected values for `feature` are: `all-examples`, `cli`, `cranelift-jit`, `default`, `dynamic-file`, `gui`, `gui-examples`, `llvm`, `mir_modular_builder`, `mir_refbarrier_unify_poc`, `mir_typeop_poc`, `plugins`, and `wasm-backend`
+     = help: consider adding `never` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `cranelift_codegen::ir::StackSlotData`
+  --> src/jit/lower/builder/object.rs:71:13
+   |
+71 |         use cranelift_codegen::ir::StackSlotData;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cranelift_codegen::ir::types`
+  --> src/jit/lower/builder/object.rs:87:91
+   |
+87 |     fn emit_const_f64(&mut self, val: f64) { use cranelift_frontend::FunctionBuilder; use cranelift_codegen::ir::types; let mut fb = Func...
+   |                                                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unnecessary parentheses around function argument
+   --> src/jit/lower/builder.rs:306:72
+    |
+306 |     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+    |                                                                        ^                                    ^
+    |
+help: remove these parentheses
+    |
+306 -     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+306 +     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(argc.saturating_sub(1).max(0) as u16);
+    |
+
+warning: unnecessary parentheses around function argument
+   --> src/jit/lower/builder.rs:448:72
+    |
+448 |     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+    |                                                                        ^                                    ^
+    |
+help: remove these parentheses
+    |
+448 -     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+448 +     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(argc.saturating_sub(1).max(0) as u16);
+    |
+
+warning: unnecessary parentheses around function argument
+   --> src/jit/lower/builder.rs:557:72
+    |
+557 |     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+    |                                                                        ^                                    ^
+    |
+help: remove these parentheses
+    |
+557 -     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+557 +     let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(argc.saturating_sub(1).max(0) as u16);
+    |
+
+warning: unused imports: `Effect as OpEffect`, `MirFunction`, `MirType`, and `jit::events`
+   --> src/jit/lower/builder.rs:624:11
+    |
+624 |     mir::{MirType, Effect as OpEffect, MirFunction},
+    |           ^^^^^^^  ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^
+625 |     jit::events,
+    |     ^^^^^^^^^^^
+
+warning: unexpected `cfg` condition value: `jit-b1-abi`
+   --> src/jit/lower/builder.rs:739:27
+    |
+739 |                     #[cfg(feature = "jit-b1-abi")]
+    |                           ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `all-examples`, `cli`, `cranelift-jit`, `default`, `dynamic-file`, `gui`, `gui-examples`, `llvm`, `mir_modular_builder`, `mir_refbarrier_unify_poc`, `mir_typeop_poc`, `plugins`, and `wasm-backend`
+    = help: consider adding `jit-b1-abi` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `jit-b1-abi`
+   --> src/jit/lower/builder.rs:759:23
+    |
+759 |                 #[cfg(feature = "jit-b1-abi")]
+    |                       ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `all-examples`, `cli`, `cranelift-jit`, `default`, `dynamic-file`, `gui`, `gui-examples`, `llvm`, `mir_modular_builder`, `mir_refbarrier_unify_poc`, `mir_typeop_poc`, `plugins`, and `wasm-backend`
+    = help: consider adding `jit-b1-abi` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `jit-b1-abi`
+   --> src/jit/lower/builder.rs:804:31
+    |
+804 |                         #[cfg(feature = "jit-b1-abi")]
+    |                               ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `feature` are: `all-examples`, `cli`, `cranelift-jit`, `default`, `dynamic-file`, `gui`, `gui-examples`, `llvm`, `mir_modular_builder`, `mir_refbarrier_unify_poc`, `mir_typeop_poc`, `plugins`, and `wasm-backend`
+    = help: consider adding `jit-b1-abi` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `cranelift_codegen::ir::types`
+    --> src/jit/lower/builder.rs:1045:13
+     |
+1045 |         use cranelift_codegen::ir::types;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `condcodes::IntCC`
+    --> src/jit/lower/builder.rs:1159:44
+     |
+1159 |         use cranelift_codegen::ir::{types, condcodes::IntCC};
+     |                                            ^^^^^^^^^^^^^^^^
+
+warning: unused import: `cranelift_frontend::FunctionBuilder`
+    --> src/jit/lower/builder.rs:1187:13
+     |
+1187 |         use cranelift_frontend::FunctionBuilder;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cranelift_frontend::FunctionBuilder`
+    --> src/jit/lower/builder.rs:1211:13
+     |
+1211 |         use cranelift_frontend::FunctionBuilder;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cranelift_frontend::FunctionBuilder`
+    --> src/jit/lower/builder.rs:1249:13
+     |
+1249 |         use cranelift_frontend::FunctionBuilder;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `cranelift_frontend::FunctionBuilder`
+    --> src/jit/lower/builder.rs:1328:13
+     |
+1328 |         use cranelift_frontend::FunctionBuilder;
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::io::Write`
+ --> src/jit/lower/cfg_dot.rs:2:9
+  |
+2 |     use std::io::Write;
+  |         ^^^^^^^^^^^^^^
+
+warning: unused import: `ParamKind`
+ --> src/semantics/clif_adapter.rs:2:65
+  |
+2 | use crate::jit::lower::builder::{IRBuilder, BinOpKind, CmpKind, ParamKind};
+  |                                                                 ^^^^^^^^^
+
+error[E0599]: no method named `finalize_definitions` found for struct `ObjectModule` in the current scope
+  --> src/jit/lower/builder/object.rs:79:29
+   |
+79 |         let _ = self.module.finalize_definitions();
+   |                             ^^^^^^^^^^^^^^^^^^^^ method not found in `ObjectModule`
+
+warning: unused import: `crate::box_trait::NyashBox`
+   --> src/runtime/plugin_loader_v2.rs:546:21
+    |
+546 |                 use crate::box_trait::NyashBox as _;
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super`
+   --> src/jit/lower/builder.rs:136:9
+    |
+136 |     use super::*;
+    |         ^^^^^
+
+warning: variable does not need to be mutable
+  --> src/boxes/aot_compiler_box.rs:34:13
+   |
+34 |         let mut c = cmd.arg("--backend").arg("vm") // ensures runner path
+   |             ----^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> src/boxes/socket_box.rs:218:19
+    |
+218 |         if let Ok(mut guard) = self.listener.write() {
+    |                   ----^^^^^
+    |                   |
+    |                   help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/boxes/socket_box.rs:322:20
+    |
+322 |                 Ok(mut stream_clone) => {
+    |                    ----^^^^^^^^^^^^
+    |                    |
+    |                    help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/boxes/p2p_box.rs:109:21
+    |
+109 |                 let mut t = InProcessTransport::new(node_id.clone());
+    |                     ----^
+    |                     |
+    |                     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/interpreter/core.rs:102:13
+    |
+102 |         let mut this = Self {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/interpreter/core.rs:143:13
+    |
+143 |         let mut this = Self {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `b`
+  --> src/interpreter/expressions/builtins.rs:50:31
+   |
+50 |                     if let Ok(b) = reg.create_box("MathBox", &[]) {
+   |                               ^ help: if this is intentional, prefix it with an underscore: `_b`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> src/interpreter/objects/fields.rs:105:17
+    |
+105 |             let mut is_builtin = is_builtin_box(parent_name);
+    |                 ----^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> src/backend/vm.rs:1059:17
+     |
+1059 |             let mut coerce_num = |b: &Box<dyn NyashBox>| -> Box<dyn NyashBox> {
+     |                 ----^^^^^^^^^^
+     |                 |
+     |                 help: remove this `mut`
+
+warning: value assigned to `class_label` is never read
+   --> src/backend/vm_instructions.rs:668:21
+    |
+668 |             let mut class_label: Option<String> = None;
+    |                     ^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` on by default
+
+warning: unreachable pattern
+   --> src/backend/vm_values.rs:142:13
+    |
+100 |             (VMValue::BoxRef(li), VMValue::BoxRef(ri)) => {
+    |             ------------------------------------------ matches all the relevant values
+...
+142 |             (VMValue::BoxRef(lb), VMValue::BoxRef(rb)) => {
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no value can reach this
+    |
+    = note: `#[warn(unreachable_patterns)]` on by default
+
+warning: variable does not need to be mutable
+    --> src/jit/lower/core.rs:1044:41
+     |
+1044 | ...                   let mut argc = 1usize;
+     |                           ----^^^^
+     |                           |
+     |                           help: remove this `mut`
+
+warning: unused variable: `a1`
+   --> src/jit/lower/builder.rs:513:74
+    |
+513 | fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    |                                                                          ^^ help: if this is intentional, prefix it with an underscore: `_a1`
+
+warning: unused variable: `a2`
+   --> src/jit/lower/builder.rs:513:83
+    |
+513 | fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
+    |                                                                                   ^^ help: if this is intentional, prefix it with an underscore: `_a2`
+
+warning: variable does not need to be mutable
+   --> src/jit/lower/builder.rs:758:21
+    |
+758 |                 let mut used_b1 = false;
+    |                     ----^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> src/jit/lower/builder.rs:803:29
+    |
+803 |                         let mut used_b1 = false;
+    |                             ----^^^^^^^
+    |                             |
+    |                             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> src/jit/lower/builder.rs:1059:17
+     |
+1059 |             let mut use_f64 = native_f64 && (lty == types::F64 || rty == types::F64);
+     |                 ----^^^^^^^
+     |                 |
+     |                 help: remove this `mut`
+
+warning: unused variable: `arg_types`
+   --> src/jit/lower/core_hostcall.rs:226:29
+    |
+226 | ...   let arg_types: Vec<&'static str> = observed_kinds.iter().map(|k| match k { ArgKind::I64 => "I64", ArgKind::F64 => "F64", ArgKind::H...
+    |           ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_arg_types`
+
+warning: value assigned to `enc_owned` is never read
+   --> src/runtime/plugin_loader_v2.rs:728:29
+    |
+728 |                     let mut enc_owned: Option<Box<dyn NyashBox>> = None;
+    |                             ^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: variable does not need to be mutable
+    --> src/runtime/plugin_loader_v2.rs:1091:13
+     |
+1091 |         let mut cand_a = dir.join(Path::new(&stem).with_extension(cur_ext));
+     |             ----^^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: unused variable: `idx`
+    --> src/runtime/plugin_loader_v2.rs:1210:18
+     |
+1210 |             for (idx, a) in _args.iter().enumerate() {
+     |                  ^^^ help: if this is intentional, prefix it with an underscore: `_idx`
+
+warning: value assigned to `enc_owned` is never read
+    --> src/runtime/plugin_loader_v2.rs:1213:25
+     |
+1213 |                 let mut enc_owned: Option<Box<dyn NyashBox>> = None;
+     |                         ^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `nyash-rust` (lib) generated 80 warnings
+error: could not compile `nyash-rust` (lib) due to 1 previous error; 80 warnings emitted

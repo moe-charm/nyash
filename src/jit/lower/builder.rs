@@ -130,82 +130,13 @@ mod object;
 #[cfg(feature = "cranelift-jit")]
 pub use object::ObjectBuilder;
 
-// TLS: 単一関数あたり1つの FunctionBuilder を保持（jit-direct 専用）
+// TLS utilities moved to a separate module
 #[cfg(feature = "cranelift-jit")]
-mod clif_tls {
-    use super::*;
-    thread_local! {
-        pub static FB: std::cell::RefCell<Option<TlsCtx>> = std::cell::RefCell::new(None);
-    }
-    pub struct TlsCtx {
-        pub ctx: Box<cranelift_codegen::Context>,
-        pub fbc: Box<cranelift_frontend::FunctionBuilderContext>,
-        fb: *mut cranelift_frontend::FunctionBuilder<'static>,
-    }
-    impl TlsCtx {
-        pub fn new() -> Self {
-            Self { ctx: Box::new(cranelift_codegen::Context::new()), fbc: Box::new(cranelift_frontend::FunctionBuilderContext::new()), fb: core::ptr::null_mut() }
-        }
-        pub unsafe fn create(&mut self) {
-            let func_ptr: *mut cranelift_codegen::ir::Function = &mut self.ctx.func;
-            let fbc_ptr: *mut cranelift_frontend::FunctionBuilderContext = &mut *self.fbc;
-            let fb = Box::new(cranelift_frontend::FunctionBuilder::new(&mut *func_ptr, &mut *fbc_ptr));
-            self.fb = Box::into_raw(fb);
-        }
-        pub fn with<R>(&mut self, f: impl FnOnce(&mut cranelift_frontend::FunctionBuilder<'static>) -> R) -> R {
-            unsafe { f(&mut *self.fb) }
-        }
-        pub unsafe fn finalize_drop(&mut self) {
-            if !self.fb.is_null() {
-                let fb = Box::from_raw(self.fb);
-                fb.finalize();
-                self.fb = core::ptr::null_mut();
-            }
-        }
-    }
-}
-
-// Small TLS helpers to call imported functions via the single FunctionBuilder
+mod tls;
 #[cfg(feature = "cranelift-jit")]
-fn tls_call_import_ret(
-    module: &mut cranelift_jit::JITModule,
-    func_id: cranelift_module::FuncId,
-    args: &[cranelift_codegen::ir::Value],
-    has_ret: bool,
-) -> Option<cranelift_codegen::ir::Value> {
-    clif_tls::FB.with(|cell| {
-        let mut opt = cell.borrow_mut();
-        let tls = opt.as_mut().expect("FunctionBuilder TLS not initialized");
-        tls.with(|fb| {
-            let fref = module.declare_func_in_func(func_id, fb.func);
-            let call_inst = fb.ins().call(fref, args);
-            if has_ret { fb.inst_results(call_inst).get(0).copied() } else { None }
-        })
-    })
-}
-
+pub(crate) use tls::clif_tls;
 #[cfg(feature = "cranelift-jit")]
-fn tls_call_import_with_iconsts(
-    module: &mut cranelift_jit::JITModule,
-    func_id: cranelift_module::FuncId,
-    iconsts: &[i64],
-    tail_args: &[cranelift_codegen::ir::Value],
-    has_ret: bool,
-) -> Option<cranelift_codegen::ir::Value> {
-    use cranelift_codegen::ir::types;
-    clif_tls::FB.with(|cell| {
-        let mut opt = cell.borrow_mut();
-        let tls = opt.as_mut().expect("FunctionBuilder TLS not initialized");
-        tls.with(|fb| {
-            let mut all_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
-            for &c in iconsts { all_args.push(fb.ins().iconst(types::I64, c)); }
-            all_args.extend_from_slice(tail_args);
-            let fref = module.declare_func_in_func(func_id, fb.func);
-            let call_inst = fb.ins().call(fref, &all_args);
-            if has_ret { fb.inst_results(call_inst).get(0).copied() } else { None }
-        })
-    })
-}
+use tls::{tls_call_import_ret, tls_call_import_with_iconsts};
 
 #[cfg(feature = "cranelift-jit")]
 use self::rt_shims::{nyash_host_stub0, nyash_jit_dbg_i64, nyash_jit_block_enter, nyash_plugin_invoke3_i64, nyash_plugin_invoke3_f64, nyash_plugin_invoke_name_getattr_i64, nyash_plugin_invoke_name_call_i64};
