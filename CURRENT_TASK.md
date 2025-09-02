@@ -1,5 +1,25 @@
 # CURRENT TASK (Phase 11.7 kick-off: JIT Complete / Semantics Layer)
 
+- Phase 12 準備（下準備・計画確定）
+- 目的: ユーザー箱/プラグイン箱/内蔵箱の境界撤廃（TypeBox+Instance統一）＋ Nyash ABI(vtable)導入の段階計画を確定。最終ゴールは「Nyashコード（言語）→ VM → JIT の同一実行（意味・結果・副作用が一致）」。
+- 参照: docs/development/roadmap/phases/phase-12/PLAN.md
+- 参考: docs/reference/abi/NYASH_ABI_MIN_CORE.md（最小ABIと進化戦略）
+- TODO（Tier‑0）
+  - [ ] type_box_abi雛形（`src/runtime/type_box_abi.rs`）の設計固め（NyrtValue/TypeBox/関数ポインタ）
+  - [ ] type_registry雛形（`src/runtime/type_registry.rs`）の役割定義（TypeId→TypeBox）
+  - [ ] VM `execute_boxcall` に vtable優先stubを入れる設計（`NYASH_ABI_VTABLE=1`で有効）
+  - [ ] 管理棟: `NYASH_ABI_VTABLE`/`NYASH_ABI_STRICT` トグルの仕様確定（実装は次フェーズ）
+
+Docs（Phase 12 直近）
+- [x] Minimal Core ABI方針の文書化（NYASH_ABI_MIN_CORE.md）
+- [ ] TECHNICAL_DECISIONSの最小ABI/API交渉・互換・安全の章を精緻化（進行中）
+- [ ] PLAN/READMEへのリンク整備と“同一実行テスト”の詳細化
+
+Phase 12 ゴール（検証観点）
+- Cross-backend 同値性: 同一プログラム（Nyashコード）が VM と JIT で同一の最終結果・ログ・副作用（Box状態）を生む。
+- ゴールデン/スモーク: 共通テストハーネスで VM/JIT を同条件で走らせ比較（差分があれば落とす）。
+
+
 > Quick Resume (Phase 12 bridge)
 
 - Where to look next:
@@ -189,11 +209,12 @@ Update (2025-09-02 / JIT seal・PHI安定化 + builder分割 進捗)
     - ビルド/スモーク: release + jit-direct 3本（branch-ret/phi-min/branch-multi）緑維持。
 
   - 次のステップ（builder 分割 続き）
-    1) Stmts 本体移設: `builder.rs` の `build_block/if/loop/try/return/local/nowait/await/me/print/throw` 実装（`*_legacy`）を `builder/stmts.rs` へ完全移動し、`builder.rs` から削除。
-    2) Ops 抽出: `build_binary_op/unary_op` + `convert_binary_operator/convert_unary_operator` を `builder/ops.rs` へ。
-    3) Utils 抽出: `resolve_include_path_builder` / `builder_debug_*` / `infer_type_from_phi` などを `builder/utils.rs` へ。
-    4) 残存 `*_legacy` の削除と最終ビルド＋jit-direct 3本スモークで回帰確認。
-    5) 目標: `src/mir/builder.rs` を < 1,000 行に縮小（薄いハブ化）。
+    - [x] 1) Stmts 本体移設: `builder/stmts.rs` に移動し、`builder.rs` から削除。
+    - [x] 2) Ops 抽出: `builder/ops.rs` に移動。
+    - [x] 3) Utils 抽出: `builder/utils.rs` に移動。
+    - [x] 4) 残存 `*_legacy` の削除と最終ビルド＋jit-direct 3本スモークで回帰確認。
+    - [x] 5) 目標: `src/mir/builder.rs` を < 1,000 行に縮小（現状: 967 行）。
+    - Docs: 新モジュール構成のメモを `docs/development/mir/MIR_BUILDER_MODULES.md` に追加（参照）。
 
 - 残タスク（次手）
   - [ ] CraneliftBuilder 本体を `builder/cranelift.rs` に分離（大枠）。
@@ -398,6 +419,25 @@ Update (2025-09-02 / jit-direct FB lifecycle refactor)
 - Cranelift 実行（`--backend cranelift`）: OK（例: `mir-branch-ret` → 1）
 
 いま詰まっている点（要修正）
+
+Update (2025-09-03 / Phase 11.8 MIR cleanup 準備・判断固め)
+
+- 方針（箱言語原則 × 軽快最適化）
+  - ArrayGet/Set と RefGet/Set を BoxCall に集約（Core‑13 化）。
+  - 算術/比較（BinOp/Compare）は現状維持（MIR に残す）。定数畳み込みや分岐簡約の主戦場として維持し、型不明ケースは Lower/セマンティクス側でBoxCall/Hostcallにフォールバック。
+  - EffectMask 正確化（READ/WRITE/MAY_GC/IO）と WriteBarrier の確実化。
+  - 最適化は VM の execute_boxcall / JIT の lower_boxcall に集約（脱仮想化・境界消去・Barrier）。
+
+- 準備タスク（Phase 11.8 Kickoff）
+  1) Docs: 仕様と着手順を `docs/development/roadmap/phases/phase-11.8_mir_cleanup/PLAN.md` に確定（このコミットで追加）。
+  2) Env 設計: 段階導入トグルを定義（NYASH_MIR_ARRAY_BOXCALL / NYASH_MIR_REF_BOXCALL / NYASH_MIR_CORE13 など）。管理棟（config::env）での一括適用方針。
+  3) Optimizer: Array/Field→BoxCall 変換パスのスケルトン追加（デフォルトOFF）。
+  4) VM: execute_boxcall に予約IDの fast‑path フック（Array get/set・Field get/set）雛形。
+  5) JIT: lower_boxcall の fast‑path 雛形（Bounds/Barrier含む、失敗時 plugin_invoke）。
+  6) Smokes/Bench: array/field/arithmetic_loop の最小3種を用意・回帰基準±5%/±10%を導入。
+  7) Cleanup sweep: 残存のレガシー/未使用コード・コメントの一括整理（claude code指摘の残骸候補を含む）。
+
+- 参照: docs/development/roadmap/phases/phase-11.8_mir_cleanup/TECHNICAL_SPEC.md / PLAN.md
 - jit-direct で Cranelift FunctionBuilder が「block0 not sealed」でパニック
   - begin/end のたびに短命の FunctionBuilder を作って finalize している設計が、最新の Cranelift の前提（全ブロック seal 済みで finalize）と合っていない
   - 単一出口（ret_block）方針は Cranelift 側に途中まで入っているが、ObjectBuilder と二重実装があり、Cranelift 側の finalize 前にブロックを seal しきれていない箇所が残っている

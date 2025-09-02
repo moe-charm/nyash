@@ -83,7 +83,7 @@ impl ScopeTracker {
     // ===== GC root region API (Phase 10.4 prep) =====
     /// Enter a new GC root region
     pub fn enter_root_region(&mut self) {
-        if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+        if crate::config::env::gc_trace() {
             eprintln!("[GC] roots: enter");
         }
         self.roots.push(Vec::new());
@@ -92,7 +92,7 @@ impl ScopeTracker {
     /// Leave current GC root region (dropping all pinned values)
     pub fn leave_root_region(&mut self) {
         if let Some(_) = self.roots.pop() {
-            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::gc_trace() {
                 eprintln!("[GC] roots: leave");
             }
         }
@@ -103,7 +103,7 @@ impl ScopeTracker {
     pub fn pin_root(&mut self, v: &crate::backend::vm::VMValue) {
         if let Some(cur) = self.roots.last_mut() {
             cur.push(v.clone());
-            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::gc_trace() {
                 eprintln!("[GC] roots: pin {:?}", v);
             }
         }

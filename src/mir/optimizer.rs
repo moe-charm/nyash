@@ -40,14 +40,22 @@ impl MirOptimizer {
             println!("🚀 Starting MIR optimization passes");
         }
         
-        // Pass 0: Normalize legacy instructions to unified forms (TypeOp/WeakRef/Barrier/Array→BoxCall/Plugin→BoxCall)
+        // Env toggles for phased MIR cleanup
+        let core13 = crate::config::env::mir_core13();
+        let mut ref_to_boxcall = crate::config::env::mir_ref_boxcall();
+        if core13 { ref_to_boxcall = true; }
+
+        // Pass 0: Normalize legacy instructions to unified forms
+        //  - Includes optional Array→BoxCall guarded by env (inside the pass)
         stats.merge(self.normalize_legacy_instructions(module));
-        // Pass 0.1: RefGet/RefSet → BoxCall(getField/setField)
-        stats.merge(self.normalize_ref_field_access(module));
+        // Pass 0.1: RefGet/RefSet → BoxCall(getField/setField) (guarded)
+        if ref_to_boxcall {
+            stats.merge(self.normalize_ref_field_access(module));
+        }
         
         // Option: Force BoxCall → PluginInvoke (env)
-        if std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1")
-            || std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1") {
+        if crate::config::env::mir_plugin_invoke()
+            || crate::config::env::plugin_only() {
             stats.merge(self.force_plugin_invoke(module));
         }
 
@@ -373,9 +381,13 @@ impl MirOptimizer {
     fn normalize_legacy_instructions(&mut self, module: &mut MirModule) -> OptimizationStats {
         use super::{TypeOpKind, WeakRefOp, BarrierOp, MirInstruction as I, MirType};
         let mut stats = OptimizationStats::new();
-        let rw_dbg = std::env::var("NYASH_REWRITE_DEBUG").ok().as_deref() == Some("1");
-        let rw_sp = std::env::var("NYASH_REWRITE_SAFEPOINT").ok().as_deref() == Some("1");
-        let rw_future = std::env::var("NYASH_REWRITE_FUTURE").ok().as_deref() == Some("1");
+        let rw_dbg = crate::config::env::rewrite_debug();
+        let rw_sp = crate::config::env::rewrite_safepoint();
+        let rw_future = crate::config::env::rewrite_future();
+        // Phase 11.8 toggles
+        let core13 = crate::config::env::mir_core13();
+        let mut array_to_boxcall = crate::config::env::mir_array_boxcall();
+        if core13 { array_to_boxcall = true; }
         for (_fname, function) in &mut module.functions {
             for (_bb, block) in &mut function.blocks {
                 // Rewrite in-place for normal instructions
@@ -410,14 +422,16 @@ impl MirOptimizer {
                             let v = *value;
                             *inst = I::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
                         }
-                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass */ }
-                        I::ArrayGet { dst, array, index } => {
+                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass (guarded) */ }
+                        I::ArrayGet { dst, array, index } if array_to_boxcall => {
                             let d = *dst; let a = *array; let i = *index;
-                            *inst = I::BoxCall { dst: Some(d), box_val: a, method: "get".to_string(), method_id: None, args: vec![i], effects: EffectMask::READ };
+                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "get");
+                            *inst = I::BoxCall { dst: Some(d), box_val: a, method: "get".to_string(), method_id: mid, args: vec![i], effects: EffectMask::READ };
                         }
-                        I::ArraySet { array, index, value } => {
+                        I::ArraySet { array, index, value } if array_to_boxcall => {
                             let a = *array; let i = *index; let v = *value;
-                            *inst = I::BoxCall { dst: None, box_val: a, method: "set".to_string(), method_id: None, args: vec![i, v], effects: EffectMask::WRITE };
+                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "set");
+                            *inst = I::BoxCall { dst: None, box_val: a, method: "set".to_string(), method_id: mid, args: vec![i, v], effects: EffectMask::WRITE };
                         }
                         I::PluginInvoke { dst, box_val, method, args, effects } => {
                             let d = *dst; let recv = *box_val; let m = method.clone(); let as_ = args.clone(); let eff = *effects;
@@ -477,12 +491,14 @@ impl MirOptimizer {
                             let v = *value;
                             *term = I::ExternCall { dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: vec![v], effects: EffectMask::PURE.add(Effect::Io) };
                         }
-                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass */ }
-                        I::ArrayGet { dst, array, index } => {
-                            *term = I::BoxCall { dst: Some(*dst), box_val: *array, method: "get".to_string(), method_id: None, args: vec![*index], effects: EffectMask::READ };
+                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass (guarded) */ }
+                        I::ArrayGet { dst, array, index } if array_to_boxcall => {
+                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "get");
+                            *term = I::BoxCall { dst: Some(*dst), box_val: *array, method: "get".to_string(), method_id: mid, args: vec![*index], effects: EffectMask::READ };
                         }
-                        I::ArraySet { array, index, value } => {
-                            *term = I::BoxCall { dst: None, box_val: *array, method: "set".to_string(), method_id: None, args: vec![*index, *value], effects: EffectMask::WRITE };
+                        I::ArraySet { array, index, value } if array_to_boxcall => {
+                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "set");
+                            *term = I::BoxCall { dst: None, box_val: *array, method: "set".to_string(), method_id: mid, args: vec![*index, *value], effects: EffectMask::WRITE };
                         }
                         I::PluginInvoke { dst, box_val, method, args, effects } => {
                             *term = I::BoxCall { dst: *dst, box_val: *box_val, method: method.clone(), method_id: None, args: args.clone(), effects: *effects };
@@ -517,7 +533,7 @@ impl MirOptimizer {
 
     /// Normalize RefGet/RefSet to BoxCall("getField"/"setField") with Const String field argument.
     fn normalize_ref_field_access(&mut self, module: &mut MirModule) -> OptimizationStats {
-        use super::MirInstruction as I;
+        use super::{MirInstruction as I, BarrierOp};
         let mut stats = OptimizationStats::new();
         for (_fname, function) in &mut module.functions {
             for (_bb, block) in &mut function.blocks {
@@ -536,6 +552,8 @@ impl MirOptimizer {
                             let new_id = super::ValueId::new(function.next_value_id);
                             function.next_value_id += 1;
                             out.push(I::Const { dst: new_id, value: super::instruction::ConstValue::String(field) });
+                            // Prepend an explicit write barrier before setField to make side-effects visible
+                            out.push(I::Barrier { op: BarrierOp::Write, ptr: reference });
                             out.push(I::BoxCall { dst: None, box_val: reference, method: "setField".to_string(), method_id: None, args: vec![new_id, value], effects: super::EffectMask::WRITE });
                             stats.intrinsic_optimizations += 1;
                         }
@@ -556,6 +574,7 @@ impl MirOptimizer {
                             let new_id = super::ValueId::new(function.next_value_id);
                             function.next_value_id += 1;
                             block.instructions.push(I::Const { dst: new_id, value: super::instruction::ConstValue::String(field) });
+                            block.instructions.push(I::Barrier { op: BarrierOp::Write, ptr: reference });
                             I::BoxCall { dst: None, box_val: reference, method: "setField".to_string(), method_id: None, args: vec![new_id, value], effects: super::EffectMask::WRITE }
                         }
                         other => other,
@@ -579,7 +598,7 @@ fn map_type_name(name: &str) -> MirType {
     }
 }
 
-fn opt_debug_enabled() -> bool { std::env::var("NYASH_OPT_DEBUG").is_ok() }
+fn opt_debug_enabled() -> bool { crate::config::env::opt_debug() }
 fn opt_debug(msg: &str) { if opt_debug_enabled() { eprintln!("[OPT] {}", msg); } }
 
 /// Resolve a MIR type from a value id that should represent a type name
@@ -672,7 +691,7 @@ impl MirOptimizer {
     /// Diagnostic: detect unlowered is/as/isType/asType after Builder
     fn diagnose_unlowered_type_ops(&mut self, module: &MirModule) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
-        let diag_on = self.debug || std::env::var("NYASH_OPT_DIAG").is_ok();
+        let diag_on = self.debug || crate::config::env::opt_diag();
         for (fname, function) in &module.functions {
             // def map for resolving constants
             let mut def_map: std::collections::HashMap<ValueId, (super::basic_block::BasicBlockId, usize)> = std::collections::HashMap::new();
@@ -718,8 +737,8 @@ impl MirOptimizer {
     fn diagnose_legacy_instructions(&mut self, module: &MirModule) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
         let diag_on = self.debug
-            || std::env::var("NYASH_OPT_DIAG").is_ok()
-            || std::env::var("NYASH_OPT_DIAG_FORBID_LEGACY").is_ok();
+            || crate::config::env::opt_diag()
+            || crate::config::env::opt_diag_forbid_legacy();
         for (fname, function) in &module.functions {
             let mut count = 0usize;
             for (_bb, block) in &function.blocks {

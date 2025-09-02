@@ -17,6 +17,10 @@ pub mod semantics;
 // pub mod plugin_box;  // legacy - 古いPluginBox
 // pub mod plugin_loader;  // legacy - Host VTable使用
 pub mod type_meta;
+pub mod type_box_abi; // Phase 12: Nyash ABI (vtable) 雛形
+pub mod type_registry; // Phase 12: TypeId→TypeBox 解決（雛形）
+pub mod host_handles; // C ABI(TLV) 向け HostHandle レジストリ（ユーザー/内蔵Box受け渡し）
+pub mod host_api; // C ABI: plugins -> host 逆呼び出しAPI（TLSでVMに橋渡し）
 
 #[cfg(test)]
 mod tests;

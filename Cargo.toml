@@ -26,8 +26,7 @@ mir_refbarrier_unify_poc = []
 # Note: LLVM feature requires inkwell dependency and LLVM development libraries
 # LLVM 18 + inkwell 0.5.0 を使用
 llvm = ["dep:inkwell"]
-# Optional: modular MIR builder (off by default)
-mir_modular_builder = []
+# (removed) Optional modular MIR builder feature
 cranelift-jit = [
   "dep:cranelift-codegen",
   "dep:cranelift-frontend",

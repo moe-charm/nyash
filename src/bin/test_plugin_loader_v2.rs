@@ -1,12 +1,12 @@
-//! Test program for multi-box plugin loader
+//! Test program for v2 plugin loader (Phase 12 prep)
 
 use nyash_rust::config::NyashConfigV2;
-use nyash_rust::runtime::get_global_loader;
+use nyash_rust::runtime::{get_global_loader_v2, init_global_loader_v2};
 
 fn main() {
     env_logger::init();
     
-    println!("=== Multi-Box Plugin Loader Test ===\n");
+    println!("=== v2 Plugin Loader Test (Phase 12 prep) ===\n");
     
     // Load configuration
     let config_path = "test_nyash_v2.toml";
@@ -31,26 +31,65 @@ fn main() {
         }
     }
     
-    // Load plugins
+    // Initialize and load plugins
     println!("\nLoading plugins...");
-    let loader = get_global_loader();
-    
-    match loader.load_from_config(&config) {
-        Ok(_) => println!("Plugins loaded successfully!"),
-        Err(e) => {
-            eprintln!("Failed to load plugins: {}", e);
-            return;
-        }
+    if let Err(e) = init_global_loader_v2(config_path) {
+        eprintln!("Failed to init loader: {:?}", e);
+        return;
     }
+    let loader = get_global_loader_v2();
+    let loader = loader.read().unwrap();
     
     // Test box type resolution
     println!("\nTesting box type resolution:");
-    for box_type in ["TestBoxA", "TestBoxB", "UnknownBox"] {
-        if let Some(lib_name) = loader.get_library_for_box(box_type) {
-            println!("  {} -> library: {}", box_type, lib_name);
-        } else {
-            println!("  {} -> not found", box_type);
+    for box_type in ["StringBox", "FileBox", "MapBox"] {
+        match config.find_library_for_box(box_type) {
+            Some((name, lib)) => println!("  {} -> library: {} (path={})", box_type, name, lib.path),
+            None => println!("  {} -> not found in config", box_type),
         }
+    }
+
+    // Optional: try creating a simple box via loader API (if present)
+    if let Ok(bx) = loader.create_box("StringBox", &[]) {
+        println!("Created box: {}", bx.to_string_box().value);
+    } else {
+        println!("create_box(StringBox) not available or failed (ok for stub)");
+    }
+    
+    // Simple reverse host-call exercise (simulate plugin calling host via C ABI by-slot)
+    println!("\nReverse host-call (by-slot) quick test:");
+    // Create ArrayBox and obtain HostHandle
+    let mut arr = nyash_rust::boxes::ArrayBox::new();
+    arr.push(Box::new(nyash_rust::box_trait::StringBox::new("init")) as Box<dyn nyash_rust::box_trait::NyashBox>);
+    let handle = nyash_rust::runtime::host_handles::to_handle_box(Box::new(arr));
+    // Call Array.set(0, "hello") via slot=101
+    let mut tlv = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(2);
+    nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut tlv, 0);
+    nyash_rust::runtime::plugin_ffi_common::encode::string(&mut tlv, "hello");
+    let mut out = vec![0u8; 256];
+    let mut out_len: usize = out.len();
+    let code = unsafe { nyash_rust::runtime::host_api::nyrt_host_call_slot(handle, 101, tlv.as_ptr(), tlv.len(), out.as_mut_ptr(), &mut out_len) };
+    println!("  set(slot=101) -> code={}, out_len={}", code, out_len);
+    // Call Array.get(0) via slot=100 and decode
+    let mut tlv2 = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(1);
+    nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut tlv2, 0);
+    let mut out2 = vec![0u8; 256];
+    let mut out2_len: usize = out2.len();
+    let code2 = unsafe { nyash_rust::runtime::host_api::nyrt_host_call_slot(handle, 100, tlv2.as_ptr(), tlv2.len(), out2.as_mut_ptr(), &mut out2_len) };
+    if code2 == 0 {
+        if let Some((tag, _sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out2[..out2_len]) {
+            if tag == 6 || tag == 7 { // string/bytes
+                let s = nyash_rust::runtime::plugin_ffi_common::decode::string(payload);
+                println!("  get(slot=100) -> tag={}, value='{}'", tag, s);
+            } else if tag == 3 { // i64
+                let v = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload).unwrap_or_default();
+                println!("  get(slot=100) -> tag={}, i32={}", tag, v);
+            } else {
+                println!("  get(slot=100) -> tag={}, size={}", tag, _sz);
+            }
+        }
+    } else {
+        println!("  get(slot=100) failed with code {}", code2);
     }
     
     println!("\nTest completed!");

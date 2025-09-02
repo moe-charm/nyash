@@ -388,6 +388,7 @@ mod tests {
             jit_only: false,
             jit_direct: false,
             cli_verbose: false,
+            run_task: None,
         };
         
         assert_eq!(config.backend, "interpreter");

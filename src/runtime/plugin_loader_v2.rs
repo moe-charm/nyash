@@ -395,6 +395,27 @@ impl PluginLoaderV2 {
         Ok(())
     }
 
+    /// Construct a PluginBoxV2 from an existing (type_id, instance_id) pair.
+    /// Used by reverse host API to materialize PluginHandle(tag=8) as a VMValue::BoxRef.
+    pub fn construct_existing_instance(&self, type_id: u32, instance_id: u32) -> Option<Box<dyn NyashBox>> {
+        let config = self.config.as_ref()?;
+        let cfg_path = self.config_path.as_ref()?;
+        let toml_content = std::fs::read_to_string(cfg_path).ok()?;
+        let toml_value: toml::Value = toml::from_str(&toml_content).ok()?;
+        let (lib_name, box_type) = self.find_box_by_type_id(config, &toml_value, type_id)?;
+        let plugins = self.plugins.read().ok()?;
+        let plugin = plugins.get(lib_name)?.clone();
+        // fini method id from spec or config
+        let fini_method_id = if let Some(spec) = self.box_specs.read().ok()?.get(&(lib_name.to_string(), box_type.to_string())) {
+            spec.fini_method_id
+        } else {
+            let box_conf = config.get_box_config(lib_name, box_type, &toml_value)?;
+            box_conf.methods.get("fini").map(|m| m.method_id)
+        };
+        let bx = construct_plugin_box(box_type.to_string(), type_id, plugin.invoke_fn, instance_id, fini_method_id);
+        Some(Box::new(bx))
+    }
+
     fn find_lib_name_for_box(&self, box_type: &str) -> Option<String> {
         if let Some(cfg) = &self.config {
             if let Some((name, _)) = cfg.find_library_for_box(box_type) { return Some(name.to_string()); }
@@ -488,7 +509,7 @@ impl PluginLoaderV2 {
             }
             ("env.runtime", "checkpoint") => {
                 // Safepoint + scheduler poll via global hooks
-                if std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") {
+                if crate::config::env::runtime_checkpoint_trace() {
                     eprintln!("[runtime.checkpoint] reached");
                 }
                 crate::runtime::global_hooks::safepoint_and_poll();
@@ -515,7 +536,7 @@ impl PluginLoaderV2 {
                 use crate::boxes::result::NyashResultBox;
                 if let Some(arg) = args.get(0) {
                     if let Some(fut) = arg.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
-                        let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+                        let max_ms: u64 = crate::config::env::await_max_ms();
                         let start = std::time::Instant::now();
                         let mut spins = 0usize;
                         while !fut.ready() {
@@ -961,6 +982,15 @@ impl PluginLoaderV2 {
                         }
                         None
                     }
+                    9 if size == 8 => { // HostHandle -> Box (user/builtin)
+                        if let Some(h) = crate::runtime::plugin_ffi_common::decode::u64(payload) {
+                            if dbg_on() { eprintln!("[Plugin→VM] return host_handle={} (returns_result={})", h, returns_result); }
+                            if let Some(arc) = crate::runtime::host_handles::get(h) {
+                                let val: Box<dyn NyashBox> = arc.as_ref().share_box();
+                                if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
+                            } else { None }
+                        } else { None }
+                    }
                     2 if size == 4 => { // I32
                         let n = crate::runtime::plugin_ffi_common::decode::i32(payload).unwrap();
                         let val: Box<dyn NyashBox> = Box::new(IntegerBox::new(n as i64));
@@ -983,9 +1013,14 @@ impl PluginLoaderV2 {
                         let val: Box<dyn NyashBox> = Box::new(IntegerBox::new(n));
                         if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
                     }
-                    9 => {
-                        if dbg_on() { eprintln!("[Plugin→VM] return void (returns_result={})", returns_result); }
-                        if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(Box::new(crate::box_trait::VoidBox::new()))) as Box<dyn NyashBox>) } else { None }
+                    9 if size == 8 => {
+                        if let Some(h) = crate::runtime::plugin_ffi_common::decode::u64(payload) {
+                            if dbg_on() { eprintln!("[Plugin→VM] return host_handle={} (returns_result={})", h, returns_result); }
+                            if let Some(arc) = crate::runtime::host_handles::get(h) {
+                                let val: Box<dyn NyashBox> = arc.as_ref().share_box();
+                                if returns_result { Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(val)) as Box<dyn NyashBox>) } else { Some(val) }
+                            } else { None }
+                        } else { None }
                     },
                     _ => None,
                 }} else { None }
@@ -1238,9 +1273,9 @@ impl PluginLoaderV2 {
                     crate::runtime::plugin_ffi_common::encode::f64(&mut buf, f.value);
                     continue;
                 }
-                // Fallback: stringify
-                let sv = enc_ref.to_string_box().value;
-                crate::runtime::plugin_ffi_common::encode::string(&mut buf, &sv);
+                // Fallback: HostHandle for user/builtin boxes
+                let h = crate::runtime::host_handles::to_handle_box(enc_ref.clone_box());
+                crate::runtime::plugin_ffi_common::encode::host_handle(&mut buf, h);
             }
             buf
         };

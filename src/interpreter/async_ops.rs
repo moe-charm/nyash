@@ -17,7 +17,7 @@ impl NyashInterpreter {
         
         // FutureBoxなら協調待機して Result.Ok/Err を返す
         if let Some(future) = value.as_any().downcast_ref::<FutureBox>() {
-            let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+            let max_ms: u64 = crate::config::env::await_max_ms();
             let start = std::time::Instant::now();
             let mut spins = 0usize;
             while !future.ready() {

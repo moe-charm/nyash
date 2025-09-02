@@ -123,7 +123,7 @@ impl PluginHost {
             use crate::boxes::result::NyashResultBox;
             if let Some(arg0) = args.get(0) {
                 if let Some(fut) = arg0.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
-                    let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+                    let max_ms: u64 = crate::config::env::await_max_ms();
                     let start = std::time::Instant::now();
                     let mut spins = 0usize;
                     while !fut.ready() {

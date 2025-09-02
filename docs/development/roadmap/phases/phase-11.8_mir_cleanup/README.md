@@ -152,6 +152,17 @@ weak.get()       → BoxCall(weak, "get", [])
 
 ## 📋 実装ロードマップ
 
+### ステータス（進捗メモ）
+- 実装済み（トグルONで有効化）
+  - Optimizer: ArrayGet/Set・RefGet/Set → BoxCall 変換（`NYASH_MIR_ARRAY_BOXCALL`, `NYASH_MIR_REF_BOXCALL`, `NYASH_MIR_CORE13`）
+  - VM: BoxCall(setField)のWriteBarrier、Array/Instanceの軽量fast-path（by-name/slot併用）
+  - 管理棟: 主要なMIR/GC/Optimizerフラグを `config::env` に集約
+- 未了/次段
+  - JIT: BoxCall fast-path の inlining（bounds/Barrier含む）
+  - ベンチ追加とCIゲート（array/field/arithmetic_loop）
+  - フィールドfast-pathのslot化（name→slot化の検討）
+  - 直env参照の残りの段階移行（ログ用途は後段）
+
 ### Phase 11.8.1: 準備と分析（1週間）
 
 - [ ] 現在のMIR使用状況の詳細分析

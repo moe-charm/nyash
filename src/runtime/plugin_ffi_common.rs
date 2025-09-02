@@ -28,6 +28,12 @@ pub mod decode {
         if buf.len() < 8 + size { return None; }
         Some((tag, size, &buf[8..8 + size]))
     }
+    /// Decode u64 payload (size must be 8)
+    pub fn u64(payload: &[u8]) -> Option<u64> {
+        if payload.len() != 8 { return None; }
+        let mut b = [0u8;8]; b.copy_from_slice(payload);
+        Some(u64::from_le_bytes(b))
+    }
     /// Decode bool payload (size must be 1; nonzero => true)
     pub fn bool(payload: &[u8]) -> Option<bool> {
         if payload.len() != 1 { return None; }
@@ -48,6 +54,16 @@ pub mod decode {
     /// Decode UTF-8 string/bytes
     pub fn string(payload: &[u8]) -> String {
         String::from_utf8_lossy(payload).to_string()
+    }
+
+    /// Decode plugin handle payload (type_id:u32 + instance_id:u32)
+    pub fn plugin_handle(payload: &[u8]) -> Option<(u32, u32)> {
+        if payload.len() != 8 { return None; }
+        let mut a = [0u8;4];
+        let mut b = [0u8;4];
+        a.copy_from_slice(&payload[0..4]);
+        b.copy_from_slice(&payload[4..8]);
+        Some((u32::from_le_bytes(a), u32::from_le_bytes(b)))
     }
 
     /// Get nth TLV entry from a buffer with header
@@ -87,6 +103,8 @@ pub mod encode {
     const TAG_BYTES: u8 = 7;
     /// tag for Plugin Handle (type_id + instance_id)
     const TAG_HANDLE: u8 = 8;
+    /// tag for Host Handle (host-managed handle id u64)
+    const TAG_HOST_HANDLE: u8 = 9;
 
     /// Append a bool TLV entry (tag=1, size=1)
     pub fn bool(buf: &mut Vec<u8>, v: bool) {
@@ -149,6 +167,13 @@ pub mod encode {
         buf.extend_from_slice(&(8u16).to_le_bytes());
         buf.extend_from_slice(&type_id.to_le_bytes());
         buf.extend_from_slice(&instance_id.to_le_bytes());
+    }
+    /// Append a host handle TLV entry (tag=9, size=8, handle_id:u64)
+    pub fn host_handle(buf: &mut Vec<u8>, handle_id: u64) {
+        buf.push(TAG_HOST_HANDLE);
+        buf.push(0u8);
+        buf.extend_from_slice(&(8u16).to_le_bytes());
+        buf.extend_from_slice(&handle_id.to_le_bytes());
     }
 }
 

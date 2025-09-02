@@ -35,8 +35,8 @@ AI相談記録の保管場所
 - コード解析レポート
 
 ## ⚠️ 注意事項
-このディレクトリの内容は歴史的参照用です。
-最新情報は以下を参照してください：
-- 現在の仕様: `/reference/`
-- 利用ガイド: `/guides/`
-- 開発状況: `/development/`
+このディレクトリの内容は歴史的参照用です。重複・旧版の資料が含まれます。
+最新の計画・仕様は以下を参照してください：
+- 現行の計画（PLAN）: `docs/development/roadmap/phases/phase-11.8_mir_cleanup/PLAN.md`
+- 技術仕様（TECHNICAL_SPEC）: `docs/development/roadmap/phases/phase-11.8_mir_cleanup/TECHNICAL_SPEC.md`
+- そのほか: `/reference/`（リファレンス）, `/guides/`（利用ガイド）, `/development/`（開発状況）

@@ -11,8 +11,6 @@ pub mod instruction_introspection; // Introspection helpers for tests (core inst
 pub mod basic_block;
 pub mod function;
 pub mod builder;
-#[cfg(feature = "mir_modular_builder")]
-pub mod builder_modularized; // Modular split of MIR builder (optional)
 pub mod loop_builder; // SSA loop construction with phi nodes
 pub mod loop_api;     // Minimal LoopBuilder facade (adapter-ready)
 pub mod verification;
@@ -29,10 +27,7 @@ pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, 
 pub use instruction_v2::{MirInstructionV2, AtomicOrdering}; // New 25-instruction set
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use function::{MirFunction, MirModule, FunctionSignature};
-#[cfg(not(feature = "mir_modular_builder"))]
 pub use builder::MirBuilder;
-#[cfg(feature = "mir_modular_builder")]
-pub use builder_modularized::MirBuilder;
 pub use verification::{MirVerifier, VerificationError};
 pub use ownership_verifier_simple::{OwnershipVerifier, OwnershipError, OwnershipStats}; // Simple ownership forest verification
 pub use printer::MirPrinter;
@@ -81,8 +76,8 @@ impl MirCompiler {
         if self.optimize {
             let mut optimizer = MirOptimizer::new();
             let stats = optimizer.optimize_module(&mut module);
-            if (std::env::var("NYASH_OPT_DIAG_FAIL").is_ok()
-                || std::env::var("NYASH_OPT_DIAG_FORBID_LEGACY").is_ok())
+            if (crate::config::env::opt_diag_fail()
+                || crate::config::env::opt_diag_forbid_legacy())
                 && stats.diagnostics_reported > 0 {
                 return Err(format!("Diagnostic failure: {} issues detected (unlowered/legacy)", stats.diagnostics_reported));
             }

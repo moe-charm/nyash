@@ -158,7 +158,7 @@ pub(super) extern "C" fn nyash_console_birth_h() -> i64 {
 // Minimal no-op checkpoints and barriers for reservation. They optionally trace when envs are set.
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_rt_checkpoint() -> i64 {
-    if std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") {
+    if crate::config::env::runtime_checkpoint_trace() {
         eprintln!("[nyash.rt.checkpoint] reached");
     }
     // Bridge to GC/scheduler if configured
@@ -169,7 +169,7 @@ pub(super) extern "C" fn nyash_rt_checkpoint() -> i64 {
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_gc_barrier_write(handle_or_ptr: u64) -> i64 {
     let _ = handle_or_ptr; // reserved; currently unused
-    if std::env::var("NYASH_GC_BARRIER_TRACE").ok().as_deref() == Some("1") {
+    if crate::config::env::gc_barrier_trace() {
         eprintln!("[nyash.gc.barrier_write] h=0x{:x}", handle_or_ptr);
     }
     0
@@ -457,6 +457,10 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
                         }
                     }
                     if !appended { crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id()); appended = true; }
+                } else {
+                    // HostHandle for user/builtin boxes
+                    let h = crate::runtime::host_handles::to_handle_arc(obj);
+                    crate::runtime::plugin_ffi_common::encode::host_handle(&mut buf, h); appended = true;
                 }
             }
         }
@@ -486,7 +490,9 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
                                 }
                                 crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut buf, p.inner.type_id, p.instance_id());
                             } else {
-                                let s = b.to_string_box().value; crate::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
+                                // HostHandle fallback
+                                let h = crate::runtime::host_handles::to_handle_arc(b.clone());
+                                crate::runtime::plugin_ffi_common::encode::host_handle(&mut buf, h);
                             }
                         }
                         _ => {}

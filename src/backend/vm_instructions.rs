@@ -590,7 +590,7 @@ impl VM {
         
         if let VMValue::Future(ref future_box) = future_val {
             // Cooperative wait with scheduler polling and timeout to avoid deadlocks
-            let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+            let max_ms: u64 = crate::config::env::await_max_ms();
             let start = std::time::Instant::now();
             let mut spins = 0usize;
             while !future_box.ready() {
@@ -658,9 +658,94 @@ impl VM {
         // Debug logging if enabled
         let debug_boxcall = std::env::var("NYASH_VM_DEBUG_BOXCALL").is_ok();
         
+        // Phase 12 Tier-0: vtable優先経路（雛形）
+        if crate::config::env::abi_vtable() {
+            if let Some(res) = self.try_boxcall_vtable_stub(dst, &recv, method, method_id, args) { return res; }
+        }
+
         // Record PIC hit (per-receiver-type × method)
         let pic_key = self.build_pic_key(&recv, method, method_id);
         self.pic_record_hit(&pic_key);
+
+        // Explicit fast-path: ArrayBox get/set by (type, slot) or method name
+        if let VMValue::BoxRef(arc_box) = &recv {
+            if arc_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
+                let get_slot = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "get");
+                let set_slot = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "set");
+                let is_get = (method_id.is_some() && method_id == get_slot) || method == "get";
+                let is_set = (method_id.is_some() && method_id == set_slot) || method == "set";
+                if is_get && args.len() >= 1 {
+                    // Convert index
+                    let idx_val = self.get_value(args[0])?;
+                    let idx_box = idx_val.to_nyash_box();
+                    // Call builtin directly
+                    let arr = arc_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().unwrap();
+                    let out = arr.get(idx_box);
+                    if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                    return Ok(ControlFlow::Continue);
+                } else if is_set && args.len() >= 2 {
+                    // Barrier for mutation
+                    crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall.fastpath.Array.set");
+                    let idx_val = self.get_value(args[0])?;
+                    let val_val = self.get_value(args[1])?;
+                    let idx_box = idx_val.to_nyash_box();
+                    let val_box = val_val.to_nyash_box();
+                    let arr = arc_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().unwrap();
+                    let out = arr.set(idx_box, val_box);
+                    if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                    return Ok(ControlFlow::Continue);
+                }
+            }
+            // Explicit fast-path: InstanceBox getField/setField by name
+            if let Some(inst) = arc_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                let is_getf = method == "getField";
+                let is_setf = method == "setField";
+                if (is_getf && args.len() >= 1) || (is_setf && args.len() >= 2) {
+                    // Extract field name
+                    let name_val = self.get_value(args[0])?;
+                    let field_name = match &name_val {
+                        VMValue::String(s) => s.clone(),
+                        _ => name_val.to_string(),
+                    };
+                    if is_getf {
+                        let out_opt = inst.get_field_unified(&field_name);
+                        let out_vm = match out_opt {
+                            Some(nv) => match nv {
+                                crate::value::NyashValue::Integer(i) => VMValue::Integer(i),
+                                crate::value::NyashValue::Float(f) => VMValue::Float(f),
+                                crate::value::NyashValue::Bool(b) => VMValue::Bool(b),
+                                crate::value::NyashValue::String(s) => VMValue::String(s),
+                                crate::value::NyashValue::Void | crate::value::NyashValue::Null => VMValue::Void,
+                                crate::value::NyashValue::Box(b) => {
+                                    if let Ok(g) = b.lock() { VMValue::from_nyash_box(g.share_box()) } else { VMValue::Void }
+                                }
+                                _ => VMValue::Void,
+                            },
+                            None => VMValue::Void,
+                        };
+                        if let Some(dst_id) = dst { self.set_value(dst_id, out_vm); }
+                        return Ok(ControlFlow::Continue);
+                    } else {
+                        // setField
+                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall.fastpath.Instance.setField");
+                        let val_vm = self.get_value(args[1])?;
+                        let nv_opt = match val_vm.clone() {
+                            VMValue::Integer(i) => Some(crate::value::NyashValue::Integer(i)),
+                            VMValue::Float(f) => Some(crate::value::NyashValue::Float(f)),
+                            VMValue::Bool(b) => Some(crate::value::NyashValue::Bool(b)),
+                            VMValue::String(s) => Some(crate::value::NyashValue::String(s)),
+                            VMValue::Void => Some(crate::value::NyashValue::Void),
+                            _ => None,
+                        };
+                        if let Some(nv) = nv_opt {
+                            let _ = inst.set_field_unified(field_name, nv);
+                            if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::Void); }
+                            return Ok(ControlFlow::Continue);
+                        }
+                    }
+                }
+            }
+        }
 
         // VTable-like direct call using method_id via TypeMeta thunk table (InstanceBox/PluginBoxV2/Builtin)
         if let (Some(mid), VMValue::BoxRef(arc_box)) = (method_id, &recv) {
@@ -744,30 +829,33 @@ impl VM {
                                         if !enc_failed {
                                             let mut out = vec![0u8; 4096];
                                             let mut out_len: usize = out.len();
-                                            let code = unsafe {
-                                                (p.inner.invoke_fn)(
-                                                    p.inner.type_id,
-                                                    mid2 as u32,
-                                                    p.inner.instance_id,
-                                                    tlv.as_ptr(),
-                                                    tlv.len(),
-                                                    out.as_mut_ptr(),
-                                                    &mut out_len,
-                                                )
-                                            };
+                // Bind current VM for potential reverse host calls
+                crate::runtime::host_api::set_current_vm(self as *mut _);
+                let code = unsafe {
+                    (p.inner.invoke_fn)(
+                        p.inner.type_id,
+                        mid2 as u32,
+                        p.inner.instance_id,
+                        tlv.as_ptr(),
+                        tlv.len(),
+                        out.as_mut_ptr(),
+                        &mut out_len,
+                    )
+                };
+                crate::runtime::host_api::clear_current_vm();
                                             if code == 0 {
-                                                let vm_out = if let Some((_tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
-                                                    let s = crate::runtime::plugin_ffi_common::decode::string(payload);
-                                                    if !s.is_empty() {
-                                                        VMValue::String(s)
-                                                    } else if let Some(v) = crate::runtime::plugin_ffi_common::decode::i32(payload) {
-                                                        VMValue::Integer(v as i64)
-                                                    } else {
-                                                        VMValue::Void
+                                                let vm_out = if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                                                    match tag {
+                                                        6 | 7 => VMValue::String(crate::runtime::plugin_ffi_common::decode::string(payload)),
+                                                        2 => crate::runtime::plugin_ffi_common::decode::i32(payload).map(|v| VMValue::Integer(v as i64)).unwrap_or(VMValue::Void),
+                                                        9 => {
+                                                            if let Some(h) = crate::runtime::plugin_ffi_common::decode::u64(payload) {
+                                                                if let Some(arc) = crate::runtime::host_handles::get(h) { VMValue::BoxRef(arc) } else { VMValue::Void }
+                                                            } else { VMValue::Void }
+                                                        }
+                                                        _ => VMValue::Void,
                                                     }
-                                                } else {
-                                                    VMValue::Void
-                                                };
+                                                } else { VMValue::Void };
                                                 if let Some(dst_id) = dst { self.set_value(dst_id, vm_out); }
                                                 // Leave root region
                                                 self.leave_root_region();
@@ -788,9 +876,11 @@ impl VM {
                                             Ok(val.to_nyash_box())
                                         })
                                         .collect::<Result<Vec<_>, VMError>>()?;
-                                    // Write barrier for known mutating builtins
+                                    // Write barrier for known mutating builtins or setField
                                     if crate::backend::gc_helpers::is_mutating_builtin_call(&recv, m) {
                                         crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall.builtin");
+                                    } else if m == "setField" {
+                                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall.setField");
                                     }
                                     let cloned_box = arc_box.share_box();
                                     let out = self.call_box_method(cloned_box, m, nyash_args)?;
@@ -991,9 +1081,11 @@ impl VM {
                     let tm = crate::runtime::type_meta::get_or_create_type_meta(&label);
                     tm.set_thunk_builtin(mid as usize, method.to_string());
                 }
-                // Write barrier for known mutating builtins
+                // Write barrier for known mutating builtins or setField
                 if crate::backend::gc_helpers::is_mutating_builtin_call(&recv, method) {
                     crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall");
+                } else if method == "setField" {
+                    crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "BoxCall.setField");
                 }
                 let cloned_box = arc_box.share_box();
                 self.call_box_method(cloned_box, method, nyash_args)?
@@ -1019,6 +1111,118 @@ impl VM {
         }
         
         Ok(ControlFlow::Continue)
+    }
+
+    /// Phase 12 Tier-0: vtable優先経路の雛形（常に未処理）。
+    /// 目的: 将来のTypeBox ABI配線ポイントを先置きしても既存挙動を変えないこと。
+    fn try_boxcall_vtable_stub(&mut self, _dst: Option<ValueId>, _recv: &VMValue, _method: &str, _method_id: Option<u16>, _args: &[ValueId]) -> Option<Result<ControlFlow, VMError>> {
+        // Tier-1 PoC: Array/Map/String の get/set/len/size/has を vtable 経路で処理（read-onlyまたは明示barrier不要）
+        if let VMValue::BoxRef(b) = _recv {
+            // 型解決（雛形レジストリ使用）
+            let ty_name = b.type_name();
+            if let Some(_tb) = crate::runtime::type_registry::resolve_typebox_by_name(ty_name) {
+                // name+arity→slot 解決
+                let slot = crate::runtime::type_registry::resolve_slot_by_name(ty_name, _method, _args.len());
+                // MapBox: size/len/has/get
+                if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                    if matches!(slot, Some(200|201)) {
+                        let out = map.size();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    if matches!(slot, Some(202)) {
+                        if let Ok(arg_v) = self.get_value(_args[0]) {
+                            let key_box = match arg_v {
+                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)) as Box<dyn NyashBox>,
+                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                VMValue::BoxRef(ref bx) => bx.share_box(),
+                                VMValue::Float(f) => Box::new(crate::boxes::FloatBox::new(f)),
+                                VMValue::Future(ref fut) => Box::new(fut.clone()),
+                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let out = map.has(key_box);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }
+                    }
+                    if matches!(slot, Some(203)) {
+                        if let Ok(arg_v) = self.get_value(_args[0]) {
+                            let key_box = match arg_v {
+                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)) as Box<dyn NyashBox>,
+                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                VMValue::BoxRef(ref bx) => bx.share_box(),
+                                VMValue::Float(f) => Box::new(crate::boxes::FloatBox::new(f)),
+                                VMValue::Future(ref fut) => Box::new(fut.clone()),
+                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let out = map.get(key_box);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }
+                    }
+                }
+                // ArrayBox: get/set/len
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    if matches!(slot, Some(102)) {
+                        let out = arr.length();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    if matches!(slot, Some(100)) {
+                        if let Ok(arg_v) = self.get_value(_args[0]) {
+                            let idx_box: Box<dyn NyashBox> = match arg_v {
+                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                VMValue::String(ref s) => Box::new(crate::box_trait::IntegerBox::new(s.parse::<i64>().unwrap_or(0))),
+                                VMValue::Bool(b) => Box::new(crate::box_trait::IntegerBox::new(if b {1} else {0})),
+                                VMValue::Float(f) => Box::new(crate::box_trait::IntegerBox::new(f as i64)),
+                                VMValue::BoxRef(_) | VMValue::Future(_) | VMValue::Void => Box::new(crate::box_trait::IntegerBox::new(0)),
+                            };
+                            let out = arr.get(idx_box);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }
+                    }
+                    if matches!(slot, Some(101)) {
+                        if let (Ok(a0), Ok(a1)) = (self.get_value(_args[0]), self.get_value(_args[1])) {
+                            let idx_box: Box<dyn NyashBox> = match a0 {
+                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                VMValue::String(ref s) => Box::new(crate::box_trait::IntegerBox::new(s.parse::<i64>().unwrap_or(0))),
+                                VMValue::Bool(b) => Box::new(crate::box_trait::IntegerBox::new(if b {1} else {0})),
+                                VMValue::Float(f) => Box::new(crate::box_trait::IntegerBox::new(f as i64)),
+                                VMValue::BoxRef(_) | VMValue::Future(_) | VMValue::Void => Box::new(crate::box_trait::IntegerBox::new(0)),
+                            };
+                            let val_box: Box<dyn NyashBox> = match a1 {
+                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
+                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)),
+                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
+                                VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
+                                VMValue::BoxRef(ref bx) => bx.share_box(),
+                                VMValue::Future(ref fut) => Box::new(fut.clone()),
+                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+                            };
+                            let out = arr.set(idx_box, val_box);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }
+                    }
+                }
+                // StringBox: len
+                if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                    if matches!(slot, Some(300)) {
+                        let out = crate::box_trait::IntegerBox::new(sb.value.len() as i64);
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(Box::new(out))); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                }
+                // STRICT: 型は登録されているがメソッドが未対応 → エラー
+                if crate::config::env::abi_strict() {
+                    return Some(Err(VMError::TypeError(format!("ABI_STRICT: vtable method not found: {}.{}", ty_name, _method))));
+                }
+            }
+        }
+        None
     }
 
     /// Execute a forced plugin invocation (no builtin fallback)
@@ -1137,12 +1341,12 @@ impl VM {
                                         }
                                     }
                                 }
-                                // Fallback: pass handle
+                                // Fallback: pass plugin handle
                                 crate::runtime::plugin_ffi_common::encode::plugin_handle(&mut tlv, h.inner.type_id, h.inner.instance_id);
                             } else {
-                                // Best effort: stringify non-plugin boxes
-                                let s = b.to_string_box().value;
-                                crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &s);
+                                // HostHandle: expose user/builtin box via host-managed handle (tag=9)
+                                let h = crate::runtime::host_handles::to_handle_arc(b.clone());
+                                crate::runtime::plugin_ffi_common::encode::host_handle(&mut tlv, h);
                             }
                         }
                         VMValue::Void => crate::runtime::plugin_ffi_common::encode::string(&mut tlv, "void"),

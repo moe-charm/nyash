@@ -36,7 +36,7 @@ pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
     }
     let Some(fut) = fut_opt else { return 0; };
     // Cooperative wait with scheduler polling and timeout
-    let max_ms: u64 = std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000);
+    let max_ms: u64 = crate::config::env::await_max_ms();
     let start = std::time::Instant::now();
     while !fut.ready() {
         crate::runtime::global_hooks::safepoint_and_poll();

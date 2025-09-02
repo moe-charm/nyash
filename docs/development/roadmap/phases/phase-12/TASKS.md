@@ -11,6 +11,7 @@
 - [ ] 統一ディスパッチ層（VM）
   - Nyash ABI vtable優先 → 無ければ C ABI（TLV）へフォールバック
   - 所有権・セーフポイントのガード（MAY_BLOCKのみ初期対応）
+  - [x] プラグインテスター更新（v2ローダに対応）: `src/bin/test_plugin_loader_v2.rs`
 
 ## Tier-1（実証）
 - [ ] Nyash ABI vtable の最小サンプル（1プラグイン・1メソッド）
@@ -49,6 +50,7 @@
 ## 既知のやり残し（Phase 12 関連）
 - TypeBoxレジストリ/統一ディスパッチのコード未導入
 - Nyash ABI vtableの実装サンプル未着手
+- 既存プラグインの対応（TypeBox vtable移行 or 互換レイヤ継続）
 - GCセーフポイントのMAY_BLOCK以外の一般化
 - keys()/values() の正式ArrayBox返却（現状はシム）
 - AOT(LLVM)のbuild失敗（nyrt借用修正、後回し方針）
@@ -60,4 +62,3 @@
 3) keys()/values() が ArrayBox 返却で安定
 4) 基本の所有権・セーフポイントルールが守られる
 5) **Nyash ABI C実装の基礎が動作し、セルフホスティングへの道筋が明確**🔥新規
-

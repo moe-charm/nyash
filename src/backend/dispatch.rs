@@ -90,7 +90,7 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
 
         // Barriers
         MirInstruction::BarrierRead { .. } => {
-            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::gc_trace() {
                 let (func, bb, pc) = vm.gc_site_info();
                 eprintln!("[GC] barrier: Read @{} bb={} pc={}", func, bb, pc);
             }
@@ -98,7 +98,7 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
             Ok(ControlFlow::Continue)
         }
         MirInstruction::BarrierWrite { .. } => {
-            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::gc_trace() {
                 let (func, bb, pc) = vm.gc_site_info();
                 eprintln!("[GC] barrier: Write @{} bb={} pc={}", func, bb, pc);
             }
@@ -107,7 +107,7 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
         }
         MirInstruction::Barrier { op, .. } => {
             let k = match op { crate::mir::BarrierOp::Read => crate::runtime::gc::BarrierKind::Read, crate::mir::BarrierOp::Write => crate::runtime::gc::BarrierKind::Write };
-            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::gc_trace() {
                 let (func, bb, pc) = vm.gc_site_info();
                 eprintln!("[GC] barrier: {:?} @{} bb={} pc={}", k, func, bb, pc);
             }
@@ -147,7 +147,7 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
         MirInstruction::Debug { .. } => Ok(ControlFlow::Continue),
         MirInstruction::Nop => Ok(ControlFlow::Continue),
         MirInstruction::Safepoint => {
-            if std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::gc_trace() {
                 let (func, bb, pc) = vm.gc_site_info();
                 eprintln!("[GC] safepoint @{} bb={} pc={}", func, bb, pc);
             }

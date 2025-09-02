@@ -26,8 +26,8 @@ pub fn is_mutating_builtin_call(recv: &VMValue, method: &str) -> bool {
 
 /// Unified trigger for GC Write-Barrier with site logging
 pub fn gc_write_barrier_site(runtime: &crate::runtime::NyashRuntime, site: &str) {
-    let trace = std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1");
-    let strict = std::env::var("NYASH_GC_BARRIER_STRICT").ok().as_deref() == Some("1");
+    let trace = crate::config::env::gc_trace();
+    let strict = crate::config::env::gc_barrier_strict();
     let before = if strict { runtime.gc.snapshot_counters() } else { None };
     if trace {
         eprintln!("[GC] barrier: Write @{}", site);

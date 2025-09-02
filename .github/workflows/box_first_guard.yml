@@ -28,6 +28,24 @@ jobs:
             echo "[OK] No direct env reads outside jit::config/rt"
           fi
 
+      - name: Report direct env reads (global advisory)
+        run: |
+          echo "[ADVISORY] Listing direct std::env::var reads outside config aggregators..."
+          rg -n "std::env::var\(" src \
+            | rg -v 'src/jit/config\.rs|src/config/env\.rs' \
+            || true
+          echo "[NOTE] Above is advisory; prefer using config::env or jit::config for critical flags."
+
+      - name: Prevent reintroducing removed modular builder feature (advisory)
+        run: |
+          set -e
+          if rg -n "mir_modular_builder" Cargo.toml src || true; then
+            echo "[GUARD] Found 'mir_modular_builder' mention (advisory). This feature was removed."
+            exit 1
+          else
+            echo "[OK] No 'mir_modular_builder' mentions found"
+          fi
+
       - name: Enforce single B1 ABI switch point (advisory)
         run: |
           set -e
@@ -43,4 +61,3 @@ jobs:
       - name: Print reminder for stats.jsonl (advisory)
         run: |
           echo "[NOTE] Consider emitting stats.jsonl with {function, abi_mode, reason} at least once per run."
-

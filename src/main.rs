@@ -60,10 +60,13 @@ pub mod debug;
 pub mod grammar; // Phase 11.9 unified grammar scaffolding
 
 use nyash_rust::cli::CliConfig;
+use nyash_rust::config::env as env_config;
 use runner::NyashRunner;
 
 /// Thin entry point - delegates to CLI parsing and runner execution
 fn main() {
+    // Bootstrap env overrides from nyash.toml [env] early (管理棟)
+    env_config::bootstrap_from_toml_env();
     // Parse command-line arguments
     let config = CliConfig::parse();
     

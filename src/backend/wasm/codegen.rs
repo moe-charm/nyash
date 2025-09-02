@@ -403,7 +403,7 @@ impl WasmCodegen {
                 Ok(instructions)
             },
             
-            // Phase 9.77: BoxCall Implementation - Critical Box method calls
+            // BoxCall codegen - critical Box method calls
             MirInstruction::BoxCall { dst, box_val, method, args, effects: _ , .. } => {
                 self.generate_box_call(*dst, *box_val, method, args)
             },
@@ -576,7 +576,7 @@ impl WasmCodegen {
             .ok_or_else(|| WasmError::CodegenError(format!("Local variable not found for ValueId: {:?}", value_id)))
     }
     
-    /// Phase 9.77: Generate BoxCall method invocation
+    /// Generate BoxCall method invocation
     /// Implements critical Box methods: toString, print, equals, clone
     fn generate_box_call(&mut self, dst: Option<ValueId>, box_val: ValueId, method: &str, args: &[ValueId]) -> Result<Vec<String>, WasmError> {
         match method {

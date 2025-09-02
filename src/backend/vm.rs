@@ -234,6 +234,7 @@ pub struct VM {
 }
 
 impl VM {
+    pub fn runtime_ref(&self) -> &NyashRuntime { &self.runtime }
     /// Enter a GC root region and return a guard that leaves on drop
     pub(super) fn enter_root_region(&mut self) {
         self.scope_tracker.enter_root_region();
@@ -458,7 +459,7 @@ impl VM {
         self.maybe_print_jit_unified_stats();
 
         // Optional: print cache stats summary
-        if std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") {
+        if crate::config::env::vm_pic_stats() {
             self.print_cache_stats_summary();
         }
 
@@ -466,8 +467,9 @@ impl VM {
         if let Some(jm) = &self.jit_manager { jm.print_summary(); }
 
         // Optional: GC diagnostics if enabled
-        if let Ok(val) = std::env::var("NYASH_GC_TRACE") {
-            if val == "1" || val == "2" || val == "3" {
+        {
+            let lvl = crate::config::env::gc_trace_level();
+            if lvl > 0 {
                 if let Some((sp, rd, wr)) = self.runtime.gc.snapshot_counters() {
                     eprintln!("[GC] counters: safepoints={} read_barriers={} write_barriers={}", sp, rd, wr);
                 }
@@ -475,8 +477,8 @@ impl VM {
                 let root_regions = self.scope_tracker.root_regions();
                 let field_slots: usize = self.object_fields.values().map(|m| m.len()).sum();
                 eprintln!("[GC] mock_mark: roots_total={} regions={} object_field_slots={}", roots_total, root_regions, field_slots);
-                if val == "2" || val == "3" { self.gc_print_roots_breakdown(); }
-                if val == "3" { self.gc_print_reachability_depth2(); }
+                if lvl >= 2 { self.gc_print_roots_breakdown(); }
+                if lvl >= 3 { self.gc_print_reachability_depth2(); }
             }
         }
 

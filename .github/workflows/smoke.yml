@@ -49,6 +49,10 @@ jobs:
 
   jit-direct-smoke:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [debug, release]
     env:
       CARGO_TERM_COLOR: always
       # Disable external plugins to keep CI deterministic
@@ -73,17 +77,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build (release, cranelift-jit)
-        run: cargo build --release --features cranelift-jit
+      - name: Build (${{ matrix.profile }}, cranelift-jit)
+        run: |
+          if [ "${{ matrix.profile }}" = "release" ]; then
+            cargo build --release --features cranelift-jit
+          else
+            cargo build --features cranelift-jit
+          fi
 
       - name: JIT-direct smoke: mir-branch-ret
-        run: timeout 15s ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash
+        run: |
+          BIN=./target/${{ matrix.profile }}/nyash
+          timeout 15s "$BIN" --jit-direct apps/tests/mir-branch-ret/main.nyash
 
       - name: JIT-direct smoke: mir-phi-min
-        run: timeout 15s ./target/release/nyash --jit-direct apps/tests/mir-phi-min/main.nyash
+        run: |
+          BIN=./target/${{ matrix.profile }}/nyash
+          timeout 15s "$BIN" --jit-direct apps/tests/mir-phi-min/main.nyash
 
       - name: JIT-direct smoke: mir-branch-multi
-        run: timeout 15s ./target/release/nyash --jit-direct apps/tests/mir-branch-multi/main.nyash
+        run: |
+          BIN=./target/${{ matrix.profile }}/nyash
+          timeout 15s "$BIN" --jit-direct apps/tests/mir-branch-multi/main.nyash
 
   smoke-compile-events:
     runs-on: ubuntu-latest
