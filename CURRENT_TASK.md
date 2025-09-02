@@ -111,10 +111,7 @@ Update (2025-09-01 AM / JIT handoff follow-up)
   - apps/tests/mir-phi-min: if(1<2){x=10}else{x=20}; return x → 10
   - apps/tests/mir-branch-multi: 入れ子条件分岐 → 1
   - 実行例: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-store-load/main.nyash`
-- jit-direct 分岐/PHI 根治（進行中）
-  - 現象: select/compare の実行時観測では cond=1/then=1/else=0 と正しいが、最終結果が 0 に落ちるケースあり。
-  - 統合JIT（`--backend cranelift`）は期待どおり→LowerCore の意味論は正しく、jit-direct のCFG/合流が疑わしい。
-  - 主因（仮説→確度高）: 関数共有の value_stack をブロック間で使い回し→分岐/合流で返値取り違え。
+  - jit-direct 分岐/PHI 根治: 単一出口＋BlockParam 合流で安定（fast-path は常時有効）。
 
 変更点（犯人切り分けと根治のための構造改革＋ログ）
 - CraneliftBuilder（jit-direct 経路）
@@ -130,7 +127,7 @@ Update (2025-09-01 AM / JIT handoff follow-up)
     - `nyash.jit.block_enter(idx: i64) -> void`（ブロック入場ログ）
 - LowerCore（return 値の堅牢化）
   - Return 値が known/param/slot 経路に乗らない場合、同一ブロックの Const 定義をスキャンして materialize。
-  - Fast-path（読みやすさ＆単純化）: then/else が定数 return の場合、`select(cond, K_then, K_else)`→`emit_return` に縮約（`NYASH_JIT_FASTPATH_SELECT=1` で強制）。
+  - Fast-path（読みやすさ＆単純化）: then/else が定数 return の場合、`select(cond, K_then, K_else)`→`emit_return` に縮約（常時有効）。
 
 診断ログ（必要時のみ ON）
 - `NYASH_JIT_TRACE_BLOCKS=1` … ブロック入場ログ（`[JIT-BLOCK] enter=<idx>`）
@@ -170,6 +167,11 @@ Update (2025-09-02 / JIT seal・PHI安定化 + builder分割 進捗)
   - 診断ログ整備（NYASH_JIT_DUMP/TRACE_*）。
 - スモーク（debug/release）: mir-branch-ret=1, mir-phi-min=10, mir-branch-multi=1。
 
+- 追加（2025-09-02 PM / fast-path 簡素化）
+  - Branch fast-path を常時有効化（両後続が i64 定数 return の場合に限り `select+return` で縮約）。
+  - 環境変数 `NYASH_JIT_FASTPATH_SELECT` は不要になりました（存在しても無視）。
+  - jit-direct の3本スモーク（debug/release）で回帰なしを確認。
+
 - リファクタリング（builder 1,000行目安に向けて段階実施）
   - 分離済み:
     - `src/jit/lower/builder/noop.rs`（NoopBuilder）
@@ -177,6 +179,21 @@ Update (2025-09-02 / JIT seal・PHI安定化 + builder分割 進捗)
     - `src/jit/lower/builder/rt_shims.rs`（nyash_jit_dbg_i64 等の小シム群）
     - `src/jit/lower/builder/tls.rs`（clif_tls と TLS 呼び出しヘルパ）
   - 動作維持: pub use で既存パス互換。jit-direct スモーク通過。
+
+  - 追加（2025-09-02 PM / MIR builder 分割の第一段）
+    - Calls 抽出: `src/mir/builder/builder_calls.rs` 新設。
+      - 移動: `build_function_call` / `build_method_call` / `build_from_expression` / `lower_method_as_function` / `lower_static_method_as_function` + 補助 `parse_type_name_to_mir` / `extract_string_literal`。
+      - 依存を明示（`use crate::mir::{TypeOpKind, slot_registry};`）。
+    - Stmts ラッパ導入: `src/mir/builder/stmts.rs` 新設。
+      - 現状は `build_*` 系をラッパで委譲（`*_legacy`）し、動作回帰チェックを優先。
+    - ビルド/スモーク: release + jit-direct 3本（branch-ret/phi-min/branch-multi）緑維持。
+
+  - 次のステップ（builder 分割 続き）
+    1) Stmts 本体移設: `builder.rs` の `build_block/if/loop/try/return/local/nowait/await/me/print/throw` 実装（`*_legacy`）を `builder/stmts.rs` へ完全移動し、`builder.rs` から削除。
+    2) Ops 抽出: `build_binary_op/unary_op` + `convert_binary_operator/convert_unary_operator` を `builder/ops.rs` へ。
+    3) Utils 抽出: `resolve_include_path_builder` / `builder_debug_*` / `infer_type_from_phi` などを `builder/utils.rs` へ。
+    4) 残存 `*_legacy` の削除と最終ビルド＋jit-direct 3本スモークで回帰確認。
+    5) 目標: `src/mir/builder.rs` を < 1,000 行に縮小（薄いハブ化）。
 
 - 残タスク（次手）
   - [ ] CraneliftBuilder 本体を `builder/cranelift.rs` に分離（大枠）。
@@ -188,6 +205,8 @@ Update (2025-09-02 / JIT seal・PHI安定化 + builder分割 進捗)
   - Build: `cargo build --release --features cranelift-jit`
   - jit-direct: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
   - 診断: `NYASH_JIT_DUMP=1 NYASH_JIT_TRACE_BLOCKS=1 NYASH_JIT_TRACE_RET=1` 併用可。
+  - 単一出口方針: jit-direct は関数終端で単一の ret ブロックに合流し、PHI(min) は BlockParam で表現。
+  - TRACE 変数一覧（JIT）: `NYASH_JIT_DUMP`, `NYASH_JIT_TRACE_BLOCKS`, `NYASH_JIT_TRACE_BR`, `NYASH_JIT_TRACE_SEL`, `NYASH_JIT_TRACE_RET`
 
 Update (2025-09-01 PM2 / Interpreter parity blockers)
 
@@ -214,8 +233,8 @@ Update (2025-09-01 PM2 / Interpreter parity blockers)
 
 - 未解決（最優先）
   1) 返り値が変数IDになる（examples/semantics_test_branch.nyash）
-     - 調査方針: execute_statement(Return)→execute_function_call の伝播経路、Variable 解決/共有の箇所を追跡し、Box 値ではなく内部ID/インデックスを返している箇所を特定・修正。
-     - 対応: Return 直前と関数エピローグでの実値/型ログ（限定ログ）を差し込み、最小修正。
+     - 現状: 再現せず（CLI実行で Result: 100 を確認）。
+     - 対応: Return 直前と関数エピローグに限定トレース追加（`NYASH_INT_RET_TRACE=1`）。再発時に型/値を即観測可。
   2) PluginBox 同士の演算の包括対応
      - 暫定は toString→数値/文字列へ正規化で回避。恒久対応は Semantics/VM と同じ規約（handle-first + 文字列like/数値like）に寄せる。
   3) 文字列連結の広範囲対応

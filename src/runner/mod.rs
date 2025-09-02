@@ -28,6 +28,7 @@ use nyash_rust::backend::{wasm::WasmBackend, aot::AotBackend};
 use nyash_rust::backend::{llvm_compile_and_execute};
 use std::{fs, process};
 mod modes;
+mod demos;
 
 // v2 plugin system imports
 use nyash_rust::runtime;
@@ -230,28 +231,13 @@ impl NyashRunner {
     fn execute_demo_mode(&self) {
         println!("🦀 Nyash Rust Implementation - Everything is Box! 🦀");
         println!("====================================================");
-        
-        // Demonstrate basic Box creation and operations
-        demo_basic_boxes();
-        
-        // Demonstrate Box operations
-        demo_box_operations();
-        
-        // Demonstrate Box collections
-        demo_box_collections();
-        
-        // Demonstrate Environment & Scope management
-        demo_environment_system();
-        
-        // Demonstrate Tokenizer system  
-        demo_tokenizer_system();
-        
-        // Demonstrate Parser system
-        demo_parser_system();
-        
-        // Demonstrate Interpreter system
-        demo_interpreter_system();
-        
+        demos::demo_basic_boxes();
+        demos::demo_box_operations();
+        demos::demo_box_collections();
+        demos::demo_environment_system();
+        demos::demo_tokenizer_system();
+        demos::demo_parser_system();
+        demos::demo_interpreter_system();
         println!("\n🎉 All Box operations completed successfully!");
         println!("Memory safety guaranteed by Rust's borrow checker! 🛡️");
     }
@@ -886,277 +872,14 @@ impl NyashRunner {
 }
 
 // Demo functions (moved from main.rs)
-fn demo_basic_boxes() {
-    println!("\n📦 1. Basic Box Creation:");
-    
-    // Create different types of boxes
-    let string_box = StringBox::new("Hello, Nyash!".to_string());
-    let int_box = IntegerBox::new(42);
-    let bool_box = BoolBox::new(true);
-    let void_box = VoidBox::new();
-    
-    println!("  StringBox: {}", string_box.to_string_box().value);
-    println!("  IntegerBox: {}", int_box.to_string_box().value);
-    println!("  BoolBox: {}", bool_box.to_string_box().value);
-    println!("  VoidBox: {}", void_box.to_string_box().value);
-    
-    // Show unique IDs
-    println!("  Box IDs: String={}, Integer={}, Bool={}, Void={}", 
-        string_box.box_id(), int_box.box_id(), bool_box.box_id(), void_box.box_id());
-}
+// moved to demos.rs
 
-fn demo_box_operations() {
-    println!("\n🔄 2. Box Operations:");
-    
-    // Addition between boxes
-    let left = IntegerBox::new(10);
-    let right = IntegerBox::new(32);
-    let add_box = AddBox::new(Box::new(left), Box::new(right));
-    
-    println!("  10 + 32 = {}", add_box.to_string_box().value);
-    
-    // String concatenation
-    let str1 = StringBox::new("Hello, ".to_string());
-    let str2 = StringBox::new("World!".to_string());
-    let concat_box = AddBox::new(Box::new(str1), Box::new(str2));
-    
-    println!("  \"Hello, \" + \"World!\" = {}", concat_box.to_string_box().value);
-}
+// moved to demos.rs
 
-fn demo_box_collections() {
-    println!("\n📚 3. Box Collections:");
-    
-    // This would be expanded when ArrayBox is implemented
-    println!("  Box collections functionality placeholder");
-    println!("  (ArrayBox and other collection types will be demonstrated here)");
-}
+// moved to demos.rs
 
-fn demo_environment_system() {
-    println!("\n🌍 4. Environment & Scope Management:");
-    println!("  Environment demo placeholder - full testing done in interpreter");
-}
+// moved to demos.rs
 
-fn demo_tokenizer_system() {
-    println!("\n🔤 5. Tokenizer System:");
-    
-    // Test code to tokenize
-    let test_code = "x = 42 + y";
-    println!("  Input: {}", test_code);
-    
-    // Tokenize the code
-    let mut tokenizer = NyashTokenizer::new(test_code);
-    
-    match tokenizer.tokenize() {
-        Ok(tokens) => {
-            println!("  Tokenized {} tokens successfully", tokens.len());
-        },
-        Err(e) => println!("  Tokenization error: {}", e),
-    }
-}
+// moved to demos.rs
 
-fn demo_parser_system() {
-    println!("\n🌳 6. Parser & AST System:");
-    
-    // Test simple box declaration
-    println!("  📝 Simple Box Declaration Test:");
-    let simple_code = r#"
-    box TestBox {
-        value
-        
-        getValue() {
-            return this.value
-        }
-    }
-    "#;
-    
-    match NyashParser::parse_from_string(simple_code) {
-        Ok(ast) => {
-            println!("    Input: {}", simple_code.trim());
-            println!("    AST: {}", ast);
-            
-            if let ASTNode::Program { statements, .. } = &ast {
-                println!("    Program has {} statements", statements.len());
-                for (i, stmt) in statements.iter().enumerate() {
-                    println!("      [{}] {}", i, stmt.info());
-                }
-            }
-        }
-        Err(e) => println!("    Error: {}", e),
-    }
-    
-    // Test assignment and method call
-    println!("\n  🚀 Assignment & Method Call Test:");
-    let assignment_code = r#"
-    obj = new TestBox()
-    obj.value = "test123"
-    print("Direct field: " + obj.value)
-    print("Method call: " + obj.getValue())
-    "#;
-    
-    match NyashParser::parse_from_string(assignment_code) {
-        Ok(ast) => {
-            println!("    Successfully parsed assignment & method call code");
-            
-            if let ASTNode::Program { statements, .. } = &ast {
-                println!("    Parsed {} statements:", statements.len());
-                for (i, stmt) in statements.iter().enumerate() {
-                    println!("      [{}] {} ({})", i, stmt.info(), stmt.node_type());
-                }
-            }
-        }
-        Err(e) => println!("    Error: {}", e),
-    }
-    
-    // Test expression parsing
-    println!("\n  ⚡ Expression Parsing Test:");
-    let expr_code = r#"
-    result = x + y * z
-    condition = a == b && c < d
-    "#;
-    
-    match NyashParser::parse_from_string(expr_code) {
-        Ok(ast) => {
-            println!("    Successfully parsed complex expressions");
-            
-            if let ASTNode::Program { statements, .. } = &ast {
-                for (i, stmt) in statements.iter().enumerate() {
-                    if let ASTNode::Assignment { target, value, .. } = stmt {
-                        println!("      Assignment [{}]: {} = {}", i, target.info(), value.info());
-                    }
-                }
-            }
-        }
-        Err(e) => println!("    Error: {}", e),
-    }
-    
-    // Test control structures
-    println!("\n  🔄 Control Structure Test:");
-    let control_code = r#"
-    if condition {
-        print("True branch")
-    } else {
-        print("False branch")
-    }
-    
-    loop {
-        print("Loop body")
-        return
-    }
-    "#;
-    
-    match NyashParser::parse_from_string(control_code) {
-        Ok(ast) => {
-            println!("    Successfully parsed control structures");
-            
-            if let ASTNode::Program { statements, .. } = &ast {
-                for (i, stmt) in statements.iter().enumerate() {
-                    println!("      [{}] {} ({})", i, stmt.info(), stmt.node_type());
-                }
-            }
-        }
-        Err(e) => println!("    Error: {}", e),
-    }
-}
-
-fn demo_interpreter_system() {
-    println!("\n🎭 7. Interpreter System:");
-    
-    // Simple execution test
-    let simple_code = r#"
-    local x
-    x = 42
-    return x
-    "#;
-    
-    println!("  📝 Simple Variable Test:");
-    println!("    Code: {}", simple_code.trim());
-    
-    match NyashParser::parse_from_string(simple_code) {
-        Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new();
-            match interpreter.execute(ast) {
-                Ok(result) => {
-                    println!("    ✅ Result: {}", result.to_string_box().value);
-                },
-                Err(e) => {
-                    println!("    ❌ Execution error: {}", e);
-                }
-            }
-        }
-        Err(e) => println!("    ❌ Parse error: {}", e),
-    }
-    
-    // Expression evaluation test
-    let expr_code = r#"
-    local result
-    result = 10 + 32
-    return result
-    "#;
-    
-    println!("\n  ⚡ Expression Evaluation Test:");
-    println!("    Code: {}", expr_code.trim());
-    
-    match NyashParser::parse_from_string(expr_code) {
-        Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new();
-            match interpreter.execute(ast) {
-                Ok(result) => {
-                    println!("    ✅ Result: {}", result.to_string_box().value);
-                },
-                Err(e) => {
-                    println!("    ❌ Execution error: {}", e);
-                }
-            }
-        }
-        Err(e) => println!("    ❌ Parse error: {}", e),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_runner_creation() {
-        let config = CliConfig {
-            file: None,
-            debug_fuel: Some(100000),
-            dump_ast: false,
-            dump_mir: false,
-            verify_mir: false,
-            mir_verbose: false,
-            mir_verbose_effects: false,
-            no_optimize: false,
-            backend: "interpreter".to_string(),
-            compile_wasm: false,
-            compile_native: false,
-            output_file: None,
-            benchmark: false,
-            iterations: 10,
-            vm_stats: false,
-            vm_stats_json: false,
-            // JIT defaults for test
-            jit_exec: false,
-            jit_stats: false,
-            jit_stats_json: false,
-            jit_dump: false,
-            jit_events: false,
-            jit_events_compile: false,
-            jit_events_runtime: false,
-            jit_events_path: None,
-            jit_threshold: None,
-            jit_phi_min: false,
-            jit_hostcall: false,
-            jit_handle_debug: false,
-            jit_native_f64: false,
-            jit_native_bool: false,
-            emit_cfg: None,
-            jit_only: false,
-            jit_direct: false,
-            cli_verbose: false,
-        };
-        
-        let runner = NyashRunner::new(config);
-        assert_eq!(runner.config.backend, "interpreter");
-    }
-}
+// moved to demos.rs

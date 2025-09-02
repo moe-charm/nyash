@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::mir::{BasicBlockId, MirFunction, MirInstruction};
 use super::super::builder::IRBuilder;
 use super::LowerCore;
+use std::collections::HashMap;
 
 impl LowerCore {
     pub(crate) fn build_phi_succords(
@@ -76,3 +75,139 @@ impl LowerCore {
     }
 }
 
+impl LowerCore {
+    /// Lower a Branch terminator, including fast-path select+return and PHI(min) argument wiring.
+    pub(crate) fn lower_branch_terminator(
+        &mut self,
+        builder: &mut dyn IRBuilder,
+        func: &MirFunction,
+        bb_ids: &Vec<BasicBlockId>,
+        bb_id: BasicBlockId,
+        condition: &crate::mir::ValueId,
+        then_bb: &BasicBlockId,
+        else_bb: &BasicBlockId,
+        succ_phi_order: &HashMap<BasicBlockId, Vec<crate::mir::ValueId>>,
+        enable_phi_min: bool,
+    ) {
+        // Fast-path: if both successors immediately return known i64 constants, lower as select+return
+        let mut fastpath_done = false;
+        let succ_returns_const = |succ: &crate::mir::BasicBlock| -> Option<i64> {
+            use crate::mir::MirInstruction as I;
+            if let Some(I::Return { value: Some(v) }) = &succ.terminator {
+                for ins in succ.instructions.iter() {
+                    if let I::Const { dst, value } = ins {
+                        if dst == v {
+                            if let crate::mir::ConstValue::Integer(k) = value { return Some(*k); }
+                        }
+                    }
+                }
+            }
+            None
+        };
+        if let (Some(bb_then), Some(bb_else)) = (func.blocks.get(then_bb), func.blocks.get(else_bb)) {
+            if let (Some(k_then), Some(k_else)) = (succ_returns_const(bb_then), succ_returns_const(bb_else)) {
+                self.push_value_if_known_or_param(builder, condition);
+                builder.emit_const_i64(k_then);
+                builder.emit_const_i64(k_else);
+                builder.emit_select_i64();
+                builder.emit_return();
+                fastpath_done = true;
+            }
+        }
+        if fastpath_done { return; }
+
+        // Otherwise, emit CFG branch with optional PHI(min) argument wiring
+        self.push_value_if_known_or_param(builder, condition);
+        let then_index = bb_ids.iter().position(|x| x == then_bb).unwrap_or(0);
+        let else_index = bb_ids.iter().position(|x| x == else_bb).unwrap_or(0);
+        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+            eprintln!("[LowerCore] br_if: cur_bb={} then_idx={} else_idx={}", bb_id.0, then_index, else_index);
+        }
+        if enable_phi_min {
+            let mut then_n = 0usize; let mut else_n = 0usize;
+            if let Some(order) = succ_phi_order.get(then_bb) {
+                let mut cnt = 0usize;
+                if let Some(bb_succ) = func.blocks.get(then_bb) {
+                    for dst in order.iter() {
+                        for ins in bb_succ.instructions.iter() {
+                            if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
+                                if d2 == dst {
+                                    if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == &bb_id) {
+                                        self.push_value_if_known_or_param(builder, val);
+                                        cnt += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if cnt > 0 { builder.ensure_block_params_i64(then_index, cnt); }
+                then_n = cnt;
+            }
+            if let Some(order) = succ_phi_order.get(else_bb) {
+                let mut cnt = 0usize;
+                if let Some(bb_succ) = func.blocks.get(else_bb) {
+                    for dst in order.iter() {
+                        for ins in bb_succ.instructions.iter() {
+                            if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
+                                if d2 == dst {
+                                    if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == &bb_id) {
+                                        self.push_value_if_known_or_param(builder, val);
+                                        cnt += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if cnt > 0 { builder.ensure_block_params_i64(else_index, cnt); }
+                else_n = cnt;
+            }
+            builder.br_if_with_args(then_index, else_index, then_n, else_n);
+        } else {
+            builder.br_if_top_is_true(then_index, else_index);
+        }
+    }
+
+    /// Lower a Jump terminator with optional PHI(min) argument wiring.
+    pub(crate) fn lower_jump_terminator(
+        &mut self,
+        builder: &mut dyn IRBuilder,
+        func: &MirFunction,
+        bb_ids: &Vec<BasicBlockId>,
+        bb_id: BasicBlockId,
+        target: &BasicBlockId,
+        succ_phi_order: &HashMap<BasicBlockId, Vec<crate::mir::ValueId>>,
+        enable_phi_min: bool,
+    ) {
+        let target_index = bb_ids.iter().position(|x| x == target).unwrap_or(0);
+        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
+            eprintln!("[LowerCore] jump: cur_bb={} target_idx={}", bb_id.0, target_index);
+        }
+        if enable_phi_min {
+            let mut n = 0usize;
+            if let Some(order) = succ_phi_order.get(target) {
+                let mut cnt = 0usize;
+                if let Some(bb_succ) = func.blocks.get(target) {
+                    for dst in order.iter() {
+                        for ins in bb_succ.instructions.iter() {
+                            if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
+                                if d2 == dst {
+                                    if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == &bb_id) {
+                                        self.push_value_if_known_or_param(builder, val);
+                                        cnt += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if cnt > 0 { builder.ensure_block_params_i64(target_index, cnt); }
+                n = cnt;
+            }
+            builder.jump_with_args(target_index, n);
+        } else {
+            builder.jump_to(target_index);
+        }
+    }
+}

@@ -82,6 +82,11 @@ impl NyashInterpreter {
 
                 // return文チェック
                 if let super::ControlFlow::Return(return_val) = &self.control_flow {
+                    if std::env::var("NYASH_INT_RET_TRACE").ok().as_deref() == Some("1") {
+                        let ty = return_val.type_name();
+                        let sv = return_val.to_string_box().value;
+                        eprintln!("[INT-RET] epilogue capture: type={} value={}", ty, sv);
+                    }
                     result = return_val.clone_box();
                     self.control_flow = super::ControlFlow::None;
                     break;

@@ -163,128 +163,10 @@ impl LowerCore {
                 // Branch/Jump need block mapping: pass indices
                 match term {
                     crate::mir::MirInstruction::Branch { condition, then_bb, else_bb } => {
-                        // Fast-path (opt-in): if both successors immediately return known i64 constants,
-                        // lower as select+return（branchless）。NYASH_JIT_FASTPATH_SELECT=1 のときだけ有効。
-                        let mut fastpath_done = false;
-                        let fastpath_on = std::env::var("NYASH_JIT_FASTPATH_SELECT").ok().as_deref() == Some("1");
-                        let succ_returns_const = |succ: &crate::mir::BasicBlock| -> Option<i64> {
-                            // Pattern: [optional Nops] Const(Integer k) ; Return(Some that const))
-                            use crate::mir::MirInstruction as I;
-                            // find last Const and matching Return
-                            if let Some(I::Return { value: Some(v) }) = &succ.terminator {
-                                // Find definition of v in succ.instructions as a Const Integer
-                                for ins in succ.instructions.iter() {
-                                    if let I::Const { dst, value } = ins {
-                                        if dst == v {
-                                            if let crate::mir::ConstValue::Integer(k) = value { return Some(*k); }
-                                        }
-                                    }
-                                }
-                            }
-                            None
-                        };
-                        if fastpath_on { if let (Some(bb_then), Some(bb_else)) = (func.blocks.get(then_bb), func.blocks.get(else_bb)) {
-                            if let (Some(k_then), Some(k_else)) = (succ_returns_const(bb_then), succ_returns_const(bb_else)) {
-                                // cond, then, else on stack → select → return
-                                self.push_value_if_known_or_param(builder, condition);
-                                builder.emit_const_i64(k_then);
-                                builder.emit_const_i64(k_else);
-                                builder.emit_select_i64();
-                                builder.emit_return();
-                                fastpath_done = true;
-                            }
-                        } }
-                        if fastpath_done { continue; }
-
-                        // Otherwise, emit CFG branch
-                        // Try to place condition on stack (param/const path); builder will adapt
-                        self.push_value_if_known_or_param(builder, condition);
-                        // Map BasicBlockId -> index
-                        let then_index = bb_ids.iter().position(|x| x == then_bb).unwrap_or(0);
-                        let else_index = bb_ids.iter().position(|x| x == else_bb).unwrap_or(0);
-                        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-                            eprintln!("[LowerCore] br_if: cur_bb={} then_idx={} else_idx={}", bb_id.0, then_index, else_index);
-                        }
-                        if enable_phi_min {
-                            // For multi-PHI, push args in successor's phi order
-                            let mut then_n = 0usize; let mut else_n = 0usize;
-                            if let Some(order) = succ_phi_order.get(then_bb) {
-                                let mut cnt = 0usize;
-                                for dst in order.iter() {
-                                    // find input from current block
-                                    if let Some(bb_succ) = func.blocks.get(then_bb) {
-                                        // locate the specific phi to read its inputs
-                                        for ins in bb_succ.instructions.iter() {
-                                            if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
-                                                if d2 == dst {
-                                                    if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        self.push_value_if_known_or_param(builder, val);
-                                                        cnt += 1;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                if cnt > 0 { builder.ensure_block_params_i64(then_index, cnt); }
-                                then_n = cnt;
-                            }
-                            if let Some(order) = succ_phi_order.get(else_bb) {
-                                let mut cnt = 0usize;
-                                for dst in order.iter() {
-                                    if let Some(bb_succ) = func.blocks.get(else_bb) {
-                                        for ins in bb_succ.instructions.iter() {
-                                            if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
-                                                if d2 == dst {
-                                                    if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        self.push_value_if_known_or_param(builder, val);
-                                                        cnt += 1;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                if cnt > 0 { builder.ensure_block_params_i64(else_index, cnt); }
-                                else_n = cnt;
-                            }
-                            builder.br_if_with_args(then_index, else_index, then_n, else_n);
-                        } else {
-                            builder.br_if_top_is_true(then_index, else_index);
-                        }
-                        // Sealing is deferred to end_function to avoid premature seals during CFG construction
+                        self.lower_branch_terminator(builder, func, &bb_ids, *bb_id, condition, then_bb, else_bb, &succ_phi_order, enable_phi_min);
                     }
                     crate::mir::MirInstruction::Jump { target } => {
-                        let target_index = bb_ids.iter().position(|x| x == target).unwrap_or(0);
-                        if std::env::var("NYASH_JIT_DUMP").ok().as_deref() == Some("1") {
-                            eprintln!("[LowerCore] jump: cur_bb={} target_idx={}", bb_id.0, target_index);
-                        }
-                        if enable_phi_min {
-                            let mut n = 0usize;
-                            if let Some(order) = succ_phi_order.get(target) {
-                                let mut cnt = 0usize;
-                                if let Some(bb_succ) = func.blocks.get(target) {
-                                    for dst in order.iter() {
-                                        for ins in bb_succ.instructions.iter() {
-                                            if let crate::mir::MirInstruction::Phi { dst: d2, inputs } = ins {
-                                                if d2 == dst {
-                                                    if let Some((_, val)) = inputs.iter().find(|(pred, _)| pred == bb_id) {
-                                                        self.push_value_if_known_or_param(builder, val);
-                                                        cnt += 1;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                if cnt > 0 { builder.ensure_block_params_i64(target_index, cnt); }
-                                n = cnt;
-                            }
-                            builder.jump_with_args(target_index, n);
-                        } else {
-                            builder.jump_to(target_index);
-                        }
-                        // Sealing is deferred to end_function to avoid premature seals during CFG construction
+                        self.lower_jump_terminator(builder, func, &bb_ids, *bb_id, target, &succ_phi_order, enable_phi_min);
                     }
                     _ => { /* other terminators handled via generic emission below */ }
                 }
@@ -581,7 +463,8 @@ impl LowerCore {
                 // Clean path: delegate to ops_ext and return
                 let _ = self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())?;
                 return Ok(());
-                if super::core_hostcall::lower_boxcall_simple_reads(b, &self.param_index, &self.known_i64, array, method.as_str(), args, dst.clone()) {
+            }
+                    /* legacy BoxCall branch removed (now handled in ops_ext)
                     // handled in helper (read-only simple methods)
                 } else if matches!(method.as_str(), "sin" | "cos" | "abs" | "min" | "max") {
                     super::core_hostcall::lower_math_call(
@@ -1011,8 +894,7 @@ impl LowerCore {
                         }
                         _ => {}
                     }
-                }
-            }
+                */
             _ => {}
         }
         Ok(())

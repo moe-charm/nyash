@@ -15,6 +15,8 @@ use crate::ast::{ASTNode, LiteralValue, BinaryOperator};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
+mod builder_calls;
+mod stmts;
 
 fn resolve_include_path_builder(filename: &str) -> String {
     // If relative path provided, keep as is
@@ -205,97 +207,7 @@ impl MirBuilder {
         self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Write, ptr })
     }
 
-    /// Lower a box method (e.g., birth) into a standalone MIR function
-    /// func_name: Fully-qualified name like "Person.birth/1"
-    /// box_name: Owning box type name (used for 'me' param type)
-    fn lower_method_as_function(
-        &mut self,
-        func_name: String,
-        box_name: String,
-        params: Vec<String>,
-        body: Vec<ASTNode>,
-    ) -> Result<(), String> {
-        // Prepare function signature: (me: Box(box_name), args: Unknown...)-> Void
-        let mut param_types = Vec::new();
-        param_types.push(MirType::Box(box_name.clone())); // me
-        for _ in &params {
-            param_types.push(MirType::Unknown);
-        }
-        // Lightweight return type inference: if there is an explicit `return <expr>`
-        // in the top-level body, mark return type as Unknown; otherwise Void.
-        let mut returns_value = false;
-        for st in &body {
-            if let ASTNode::Return { value: Some(_), .. } = st { returns_value = true; break; }
-        }
-        let ret_ty = if returns_value { MirType::Unknown } else { MirType::Void };
-
-        let signature = FunctionSignature {
-            name: func_name,
-            params: param_types,
-            return_type: ret_ty,
-            effects: EffectMask::READ.add(Effect::ReadHeap), // conservative
-        };
-        let entry = self.block_gen.next();
-        let function = MirFunction::new(signature, entry);
-
-        // Save current builder state
-        let saved_function = self.current_function.take();
-        let saved_block = self.current_block.take();
-        let saved_var_map = std::mem::take(&mut self.variable_map);
-        let saved_value_gen = self.value_gen.clone();
-        // Reset value id generator so that params start from %0, %1, ...
-        self.value_gen.reset();
-
-        // Switch context to new function
-        self.current_function = Some(function);
-        self.current_block = Some(entry);
-        self.ensure_block_exists(entry)?;
-
-        // Create parameter value ids and bind variable names
-        if let Some(ref mut f) = self.current_function {
-            // 'me' parameter will be %0
-            let me_id = self.value_gen.next();
-            f.params.push(me_id);
-            self.variable_map.insert("me".to_string(), me_id);
-            // Record origin: 'me' belongs to this box type (enables weak field wiring)
-            self.value_origin_newbox.insert(me_id, box_name.clone());
-            // user parameters continue as %1..N
-            for p in &params {
-                let pid = self.value_gen.next();
-                f.params.push(pid);
-                self.variable_map.insert(p.clone(), pid);
-            }
-        }
-
-        // Lower body as a Program block
-        let program_ast = ASTNode::Program { statements: body, span: crate::ast::Span::unknown() };
-        let _last = self.build_expression(program_ast)?;
-
-        // Ensure function is properly terminated
-        if let Some(ref mut f) = self.current_function {
-            if let Some(block) = f.get_block(self.current_block.unwrap()) {
-                if !block.is_terminated() {
-                    let void_val = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: void_val, value: ConstValue::Void })?;
-                    self.emit_instruction(MirInstruction::Return { value: Some(void_val) })?;
-                }
-            }
-        }
-
-        // Take the function out and add to module
-        let finalized_function = self.current_function.take().unwrap();
-        if let Some(ref mut module) = self.current_module {
-            module.add_function(finalized_function);
-        }
-
-        // Restore builder state
-        self.current_function = saved_function;
-        self.current_block = saved_block;
-        self.variable_map = saved_var_map;
-        self.value_gen = saved_value_gen;
-
-        Ok(())
-    }
+    // moved to builder_calls.rs: lower_method_as_function
     
     /// Build a complete MIR module from AST
     pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
@@ -704,7 +616,7 @@ impl MirBuilder {
     }
     
     /// Build function call
-    fn build_function_call(&mut self, name: String, args: Vec<ASTNode>) -> Result<ValueId, String> {
+    fn build_function_call_legacy(&mut self, name: String, args: Vec<ASTNode>) -> Result<ValueId, String> {
         // Minimal TypeOp wiring via function-style: isType(value, "Type"), asType(value, "Type")
         if (name == "isType" || name == "asType") && args.len() == 2 {
             if let Some(type_name) = Self::extract_string_literal(&args[1]) {
@@ -807,7 +719,7 @@ impl MirBuilder {
     }
     
     /// Build print statement - ExternCall to env.console.log (Box哲学準拠)
-    fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+    fn build_print_statement_legacy(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         builder_debug_log("enter build_print_statement");
         // 根治: print(isType(...)) / print(asType(...)) / print(obj.is(...)) / print(obj.as(...)) は必ずTypeOpを先に生成してからprintする
         match &expression {
@@ -877,7 +789,7 @@ impl MirBuilder {
     }
     
     /// Build a block of statements
-    fn build_block(&mut self, statements: Vec<ASTNode>) -> Result<ValueId, String> {
+    fn build_block_legacy(&mut self, statements: Vec<ASTNode>) -> Result<ValueId, String> {
         let mut last_value = None;
         
         for statement in statements {
@@ -896,7 +808,7 @@ impl MirBuilder {
     }
     
     /// Build if statement with conditional branches
-    fn build_if_statement(&mut self, condition: ASTNode, then_branch: ASTNode, else_branch: Option<ASTNode>) -> Result<ValueId, String> {
+    fn build_if_statement_legacy(&mut self, condition: ASTNode, then_branch: ASTNode, else_branch: Option<ASTNode>) -> Result<ValueId, String> {
         let condition_val = self.build_expression(condition)?;
         
         // Create basic blocks for then/else/merge
@@ -1029,14 +941,14 @@ impl MirBuilder {
     }
     
     /// Build a loop statement: loop(condition) { body }
-    fn build_loop_statement(&mut self, condition: ASTNode, body: Vec<ASTNode>) -> Result<ValueId, String> {
+    fn build_loop_statement_legacy(&mut self, condition: ASTNode, body: Vec<ASTNode>) -> Result<ValueId, String> {
         // Use the specialized LoopBuilder for proper SSA loop construction
         let mut loop_builder = super::loop_builder::LoopBuilder::new(self);
         loop_builder.build_loop(condition, body)
     }
     
     /// Build a try/catch statement
-    fn build_try_catch_statement(&mut self, try_body: Vec<ASTNode>, catch_clauses: Vec<crate::ast::CatchClause>, finally_body: Option<Vec<ASTNode>>) -> Result<ValueId, String> {
+    fn build_try_catch_statement_legacy(&mut self, try_body: Vec<ASTNode>, catch_clauses: Vec<crate::ast::CatchClause>, finally_body: Option<Vec<ASTNode>>) -> Result<ValueId, String> {
         if std::env::var("NYASH_BUILDER_DISABLE_TRYCATCH").ok().as_deref() == Some("1") {
             // Compatibility fallback: build try body only; ignore handlers/finally
             let try_ast = ASTNode::Program { statements: try_body, span: crate::ast::Span::unknown() };
@@ -1133,7 +1045,7 @@ impl MirBuilder {
     }
     
     /// Build a throw statement
-    fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+    fn build_throw_statement_legacy(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
             // Fallback: route to debug trace and return the value
             let v = self.build_expression(expression)?;
@@ -1160,7 +1072,7 @@ impl MirBuilder {
     }
     
     /// Build local variable declarations with optional initial values
-    fn build_local_statement(&mut self, variables: Vec<String>, initial_values: Vec<Option<Box<ASTNode>>>) -> Result<ValueId, String> {
+    fn build_local_statement_legacy(&mut self, variables: Vec<String>, initial_values: Vec<Option<Box<ASTNode>>>) -> Result<ValueId, String> {
         let mut last_value = None;
         
         // Process each variable declaration
@@ -1188,7 +1100,7 @@ impl MirBuilder {
     }
     
     /// Build return statement
-    fn build_return_statement(&mut self, value: Option<Box<ASTNode>>) -> Result<ValueId, String> {
+    fn build_return_statement_legacy(&mut self, value: Option<Box<ASTNode>>) -> Result<ValueId, String> {
         let return_value = if let Some(expr) = value {
             self.build_expression(*expr)?
         } else {
@@ -1463,7 +1375,7 @@ impl MirBuilder {
     }
     
     /// Build nowait statement: nowait variable = expression
-    fn build_nowait_statement(&mut self, variable: String, expression: ASTNode) -> Result<ValueId, String> {
+    fn build_nowait_statement_legacy(&mut self, variable: String, expression: ASTNode) -> Result<ValueId, String> {
         // If expression is a method call, prefer true async via env.future.spawn_instance
         if let ASTNode::MethodCall { object, method, arguments, .. } = expression.clone() {
             let recv_val = self.build_expression(*object)?;
@@ -1493,7 +1405,7 @@ impl MirBuilder {
     }
     
     /// Build await expression: await expression
-    fn build_await_expression(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+    fn build_await_expression_legacy(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         // Evaluate the expression (should be a Future)
         let future_value = self.build_expression(expression)?;
         
@@ -1515,7 +1427,7 @@ impl MirBuilder {
     }
     
     /// Build me expression: me
-    fn build_me_expression(&mut self) -> Result<ValueId, String> {
+    fn build_me_expression_legacy(&mut self) -> Result<ValueId, String> {
         // If lowering a method/birth function, "me" should be a parameter
         if let Some(id) = self.variable_map.get("me").cloned() {
             return Ok(id);
@@ -1531,7 +1443,7 @@ impl MirBuilder {
     }
     
     /// Build method call: object.method(arguments)
-    fn build_method_call(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+    fn build_method_call_legacy(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // Minimal TypeOp wiring via method-style syntax: value.is("Type") / value.as("Type")
         if (method == "is" || method == "as") && arguments.len() == 1 {
             if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
@@ -1827,7 +1739,7 @@ impl MirBuilder {
     }
 
     /// Map a user-facing type name to MIR type
-    fn parse_type_name_to_mir(name: &str) -> super::MirType {
+    fn parse_type_name_to_mir_legacy(name: &str) -> super::MirType {
         match name {
             "Integer" | "Int" | "I64" => super::MirType::Integer,
             "Float" | "F64" => super::MirType::Float,
@@ -1840,7 +1752,7 @@ impl MirBuilder {
     
     /// Extract string literal from AST node if possible
     /// Supports: Literal("Type") and new StringBox("Type")
-    fn extract_string_literal(node: &ASTNode) -> Option<String> {
+    fn extract_string_literal_legacy(node: &ASTNode) -> Option<String> {
         let mut cur = node;
         loop {
             match cur {
@@ -1855,7 +1767,7 @@ impl MirBuilder {
     }
     
     /// Build from expression: from Parent.method(arguments)
-    fn build_from_expression(&mut self, parent: String, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+    fn build_from_expression_legacy(&mut self, parent: String, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // Build argument expressions
         let mut arg_values = Vec::new();
         for arg in arguments {
@@ -1886,7 +1798,7 @@ impl MirBuilder {
     }
 
     /// Lower a static method body into a standalone MIR function (no `me` parameter)
-    fn lower_static_method_as_function(
+    fn lower_static_method_as_function_legacy(
         &mut self,
         func_name: String,
         params: Vec<String>,

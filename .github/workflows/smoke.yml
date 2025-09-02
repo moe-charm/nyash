@@ -47,6 +47,44 @@ jobs:
       - name: Run smoke script
         run: bash tools/smoke_phase_10_10.sh
 
+  jit-direct-smoke:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      # Disable external plugins to keep CI deterministic
+      NYASH_DISABLE_PLUGINS: '1'
+      # Ensure lowering runs
+      NYASH_JIT_THRESHOLD: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build (release, cranelift-jit)
+        run: cargo build --release --features cranelift-jit
+
+      - name: JIT-direct smoke: mir-branch-ret
+        run: timeout 15s ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash
+
+      - name: JIT-direct smoke: mir-phi-min
+        run: timeout 15s ./target/release/nyash --jit-direct apps/tests/mir-phi-min/main.nyash
+
+      - name: JIT-direct smoke: mir-branch-multi
+        run: timeout 15s ./target/release/nyash --jit-direct apps/tests/mir-branch-multi/main.nyash
+
   smoke-compile-events:
     runs-on: ubuntu-latest
     env:

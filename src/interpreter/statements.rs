@@ -72,6 +72,12 @@ impl NyashInterpreter {
                 } else {
                     Box::new(VoidBox::new())
                 };
+                // Optional diagnostic: trace return value (type + string view)
+                if std::env::var("NYASH_INT_RET_TRACE").ok().as_deref() == Some("1") {
+                    let ty = return_value.type_name();
+                    let sv = return_value.to_string_box().value;
+                    eprintln!("[INT-RET] return set: type={} value={}", ty, sv);
+                }
                 self.control_flow = super::ControlFlow::Return(return_value);
                 Ok(Box::new(VoidBox::new()))
             }

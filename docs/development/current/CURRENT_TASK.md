@@ -739,3 +739,47 @@ JIT分割 進捗（継続観点）
 - [ ] Extern/PluginInvoke/BoxCall 周辺の肥大化した分岐を `core/ops_ext.rs` に整理
 - [ ] `analysis`/`cfg` の補助関数（succ_phi_inputs など）の関数化
 - [ ] 分割ごとに jit-direct スモークの緑維持（debug / release+feature）
+
+---
+
+## 🆕 Update (Phase 11.9) — M3→M4 引き継ぎメモ（2025-09-02）
+
+到達（M1–M3 要約）
+- M1: 予約語レジストリ（build.rs→generated.rs）、Tokenizer 後段に `engine.is_keyword_str()`（`NYASH_GRAMMAR_DIFF=1` 差分ログ）
+- M2: `operators.{add,sub,mul,div}` を TOML→生成（未記載は既定補完）。VM/Interp/JIT に `NYASH_GRAMMAR_DIFF=1` ログ、Add 強制は `NYASH_GRAMMAR_ENFORCE_ADD=1`
+- M3: 構文規則スキャフォールド（`syntax.statements.allow` / `syntax.expressions.allow_binops`）を生成し、Parser に非侵襲統合（差分ログのみ）
+- JIT: `ops_ext.rs` 新設。`I::BoxCall` は ops_ext に完全委譲（core 旧分岐は削除/到達不能化）。jit-direct スモーク（branch-ret/phi-min/branch-multi）緑維持
+
+提案（M4: スナップショット/差分検出・CI 整備）
+- 目的: 新旧ルートの整合をスナップショット＋マトリクスで機械的に検証し、回帰を防止
+- スコープ:
+  - Parser→MIR のスナップショットテスト（代表ケースから開始）
+  - 実行マトリクス `{vm,jit,aot} × {gc on,off}` の最小スモークを追加。出力/trace のハッシュ一致で検証
+  - ログ: `NYASH_GRAMMAR_DIFF=1` をCIで有効化（初期は Allow-failure 的に集計・監視、収束後に強化）
+
+実施順（小粒→段階導入）
+1) スナップショット追加
+   - `tests/snapshots/parser_mir/` に代表ケース（if/loop/return、二項演算 add/sub/mul/div、簡単なメソッド呼び）
+   - `assert_snapshot!(print_mir(func))` 形式 or 既存プリンタ出力の文字列一致
+2) マトリクス・スモーク
+   - `tools/smoke_matrix.sh` を追加（VM/JIT/AOT × GC on/off）。既存 `apps/tests/*` を利用
+   - 出力ハッシュ（`sha256sum`）と軽量 trace（行フィルタ後の hash）で一致確認
+   - JIT は `--features cranelift-jit`、AOT は LLVM18 前提（`LLVM_SYS_180_PREFIX`）
+3) CI 連携
+   - Workflow にマトリクスを追加。最初は JIT/VM のみ → AOT は opt-in（CI 環境用意後に拡張）
+   - `NYASH_GRAMMAR_DIFF=1` を付与し差分ログを保存（失敗条件には含めない）。収束後に閾値/厳格化を検討
+4) ドキュメント
+   - `docs/guides/testing/unified-grammar-ci.md`（テスト方針/実行方法/FAQ）を追加
+
+注意/メモ
+- AOT は LLVM18 が前提（CIでは apt.llvm.org を想定）。Windows 環境は別途 runner で段階導入
+- リポ全体 `cargo test` は未整備テストで赤があり得るため、当面は対象テスト/スモークに集中
+- 差分ログは冗長になり得るため、CIではフィルタ（例: INFO/WARN のみ、件数集計）を併用
+
+実行/確認コマンド（ローカル）
+- ビルド（JIT/VM）: `cargo build --features cranelift-jit`
+- jit 直実行（例）: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+- テスト（本領域）:
+  - `cargo test -q --test grammar_add_rules`
+  - `cargo test -q --test grammar_other_ops`
+  - 追加予定: `tests/snapshots/parser_mir_*`
