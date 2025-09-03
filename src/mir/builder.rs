@@ -19,6 +19,7 @@ mod builder_calls;
 mod stmts;
 mod ops;
 mod utils;
+mod exprs; // expression lowering split
 
 // moved helpers to builder/utils.rs
 
@@ -230,6 +231,12 @@ impl MirBuilder {
     
     /// Build an expression and return its value ID
     pub(super) fn build_expression(&mut self, ast: ASTNode) -> Result<ValueId, String> {
+        // Delegated to exprs.rs to keep this file lean
+        self.build_expression_impl(ast)
+    }
+    
+    // Moved implementation to exprs.rs; keeping a small shim here improves readability
+    pub(super) fn build_expression_impl_legacy(&mut self, ast: ASTNode) -> Result<ValueId, String> {
         match ast {
             ASTNode::Literal { value, .. } => {
                 self.build_literal(value)
@@ -616,7 +623,7 @@ impl MirBuilder {
     }
     
     /// Build a literal value
-    fn build_literal(&mut self, literal: LiteralValue) -> Result<ValueId, String> {
+    pub(super) fn build_literal(&mut self, literal: LiteralValue) -> Result<ValueId, String> {
         // Determine type without moving literal
         let ty_for_dst = match &literal {
             LiteralValue::Integer(_) => Some(super::MirType::Integer),
@@ -650,7 +657,7 @@ impl MirBuilder {
     // build_unary_op moved to builder/ops.rs
     
     /// Build variable access
-    fn build_variable_access(&mut self, name: String) -> Result<ValueId, String> {
+    pub(super) fn build_variable_access(&mut self, name: String) -> Result<ValueId, String> {
         if let Some(&value_id) = self.variable_map.get(&name) {
             Ok(value_id)
         } else {
@@ -659,7 +666,7 @@ impl MirBuilder {
     }
     
     /// Build assignment
-    fn build_assignment(&mut self, var_name: String, value: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_assignment(&mut self, var_name: String, value: ASTNode) -> Result<ValueId, String> {
         let value_id = self.build_expression(value)?;
         
         // In SSA form, each assignment creates a new value
@@ -738,7 +745,7 @@ impl MirBuilder {
     
     /// Build static box (e.g., Main) - extracts main() method body and converts to Program
     /// Also lowers other static methods into standalone MIR functions: BoxName.method/N
-    fn build_static_main_box(&mut self, box_name: String, methods: std::collections::HashMap<String, ASTNode>) -> Result<ValueId, String> {
+    pub(super) fn build_static_main_box(&mut self, box_name: String, methods: std::collections::HashMap<String, ASTNode>) -> Result<ValueId, String> {
         // Lower other static methods (except main) to standalone MIR functions so JIT can see them
         for (mname, mast) in methods.iter() {
             if mname == "main" { continue; }
@@ -792,7 +799,7 @@ impl MirBuilder {
     }
     
     /// Build field access: object.field
-    fn build_field_access(&mut self, object: ASTNode, field: String) -> Result<ValueId, String> {
+    pub(super) fn build_field_access(&mut self, object: ASTNode, field: String) -> Result<ValueId, String> {
         // Clone the object before building expression if we need to check it later
         let object_clone = object.clone();
         
@@ -841,7 +848,7 @@ impl MirBuilder {
     }
     
     /// Build new expression: new ClassName(arguments)
-    fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+    pub(super) fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // Phase 9.78a: Unified Box creation using NewBox instruction
         
         // Optimization: Primitive wrappers → emit Const directly when possible
@@ -900,7 +907,7 @@ impl MirBuilder {
     }
     
     /// Build field assignment: object.field = value
-    fn build_field_assignment(&mut self, object: ASTNode, field: String, value: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_field_assignment(&mut self, object: ASTNode, field: String, value: ASTNode) -> Result<ValueId, String> {
         // Build the object and value expressions
         let object_value = self.build_expression(object)?;
         let mut value_result = self.build_expression(value)?;
@@ -978,7 +985,7 @@ impl MirBuilder {
     // lower_static_method_as_function_legacy removed (use builder_calls::lower_static_method_as_function)
     
     /// Build box declaration: box Name { fields... methods... }
-    fn build_box_declaration(&mut self, name: String, methods: std::collections::HashMap<String, ASTNode>, fields: Vec<String>, weak_fields: Vec<String>) -> Result<(), String> {
+    pub(super) fn build_box_declaration(&mut self, name: String, methods: std::collections::HashMap<String, ASTNode>, fields: Vec<String>, weak_fields: Vec<String>) -> Result<(), String> {
         // For Phase 8.4, we'll emit metadata instructions to register the box type
         // In a full implementation, this would register type information for later use
         

@@ -244,67 +244,7 @@ pub struct VM {
 impl VM {
     pub fn runtime_ref(&self) -> &NyashRuntime { &self.runtime }
 
-    /// Print a simple breakdown of root VMValue kinds and top BoxRef types (old-moved placeholder)
-    pub(super) fn gc_print_roots_breakdown_old(&self) {
-        use std::collections::HashMap;
-        let roots = self.scope_tracker.roots_snapshot();
-        let mut kinds: HashMap<&'static str, u64> = HashMap::new();
-        let mut box_types: HashMap<String, u64> = HashMap::new();
-        for v in &roots {
-            match v {
-                VMValue::Integer(_) => *kinds.entry("Integer").or_insert(0) += 1,
-                VMValue::Float(_) => *kinds.entry("Float").or_insert(0) += 1,
-                VMValue::Bool(_) => *kinds.entry("Bool").or_insert(0) += 1,
-                VMValue::String(_) => *kinds.entry("String").or_insert(0) += 1,
-                VMValue::Future(_) => *kinds.entry("Future").or_insert(0) += 1,
-                VMValue::Void => *kinds.entry("Void").or_insert(0) += 1,
-                VMValue::BoxRef(b) => {
-                    let tn = b.type_name().to_string();
-                    *box_types.entry(tn).or_insert(0) += 1;
-                }
-            }
-        }
-        eprintln!("[GC] roots_breakdown: kinds={:?}", kinds);
-        let mut top: Vec<(String, u64)> = box_types.into_iter().collect();
-        top.sort_by(|a, b| b.1.cmp(&a.1));
-        top.truncate(5);
-        eprintln!("[GC] roots_boxref_top5: {:?}", top);
-    }
-    pub(super) fn gc_print_reachability_depth2_old(&self) {
-        use std::collections::HashMap;
-        let roots = self.scope_tracker.roots_snapshot();
-        let mut child_types: HashMap<String, u64> = HashMap::new();
-        let mut child_count = 0u64;
-        for v in &roots {
-            if let VMValue::BoxRef(b) = v {
-                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                    if let Ok(items) = arr.items.read() {
-                        for item in items.iter() {
-                            let tn = item.type_name().to_string();
-                            *child_types.entry(tn).or_insert(0) += 1;
-                            child_count += 1;
-                        }
-                    }
-                }
-                if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                    let vals = map.values();
-                    if let Some(arr2) = vals.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                        if let Ok(items) = arr2.items.read() {
-                            for item in items.iter() {
-                                let tn = item.type_name().to_string();
-                                *child_types.entry(tn).or_insert(0) += 1;
-                                child_count += 1;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        let mut top: Vec<(String, u64)> = child_types.into_iter().collect();
-        top.sort_by(|a, b| b.1.cmp(&a.1));
-        top.truncate(5);
-        eprintln!("[GC] depth2_children: total={} top5={:?}", child_count, top);
-    }
+    
     
     
     // TODO: Re-enable when interpreter refactoring is complete
@@ -330,232 +270,11 @@ impl VM {
     }
     */
     
-    /// Execute a MIR module (old placeholder; moved to vm_exec.rs)
-    pub fn execute_module_old_moved(&mut self, _module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
-        Ok(Box::new(VoidBox::new()))
-    }
-
-    fn print_cache_stats_summary_old(&self) {
-        let sites_poly = self.boxcall_poly_pic.len();
-        let entries_poly: usize = self.boxcall_poly_pic.values().map(|v| v.len()).sum();
-        let avg_entries = if sites_poly > 0 { (entries_poly as f64) / (sites_poly as f64) } else { 0.0 };
-        let sites_mono = self.boxcall_pic_funcname.len();
-        let hits_total: u64 = self.boxcall_pic_hits.values().map(|v| *v as u64).sum();
-        let vt_entries = self.boxcall_vtable_funcname.len();
-        eprintln!(
-            "[VM] PIC/VT summary: poly_sites={} avg_entries={:.2} mono_sites={} hits_total={} vt_entries={} | hits: vt={} poly={} mono={} generic={}",
-            sites_poly, avg_entries, sites_mono, hits_total, vt_entries,
-            self.boxcall_hits_vtable, self.boxcall_hits_poly_pic, self.boxcall_hits_mono_pic, self.boxcall_hits_generic
-        );
-        // Top sites by hits (up to 5)
-        let mut hits: Vec<(&String, &u32)> = self.boxcall_pic_hits.iter().collect();
-        hits.sort_by(|a, b| b.1.cmp(a.1));
-        for (i, (k, v)) in hits.into_iter().take(5).enumerate() {
-            eprintln!("  #{} {} hits={}", i+1, k, v);
-        }
-    }
-
-    /// Call a MIR function by name with VMValue arguments
-    pub(super) fn call_function_by_name_old(&mut self, func_name: &str, args: Vec<VMValue>) -> Result<VMValue, VMError> {
-        // Root region: ensure args stay rooted during nested call
-        self.enter_root_region();
-        self.pin_roots(args.iter());
-        let module_ref = self.module.as_ref().ok_or_else(|| VMError::InvalidInstruction("No active module".to_string()))?;
-        let function_ref = module_ref.get_function(func_name)
-            .ok_or_else(|| VMError::InvalidInstruction(format!("Function '{}' not found", func_name)))?;
-        // Clone function to avoid borrowing conflicts during execution
-        let function = function_ref.clone();
-
-        // Save current frame
-        let saved_values = std::mem::take(&mut self.values);
-        let saved_current_function = self.current_function.clone();
-        let saved_current_block = self.frame.current_block;
-        let saved_previous_block = self.previous_block;
-        let saved_pc = self.frame.pc;
-        let saved_last_result = self.frame.last_result;
-
-        // Bind parameters
-        for (i, param_id) in function.params.iter().enumerate() {
-            if let Some(arg) = args.get(i) {
-                self.set_value(*param_id, arg.clone());
-            }
-        }
-
-        // Heuristic: map `me` (first param) to class name parsed from function name (e.g., User.method/N)
-        if let Some(first) = function.params.get(0) {
-            if let Some((class_part, _rest)) = func_name.split_once('.') {
-                // Record class for internal field visibility checks
-                self.object_class.insert(*first, class_part.to_string());
-                // Mark internal reference
-                self.object_internal.insert(*first);
-            }
-        }
-
-        // Execute the function
-        let result = self.execute_function(&function);
-
-        // Restore frame
-        self.values = saved_values;
-        self.current_function = saved_current_function;
-        self.frame.current_block = saved_current_block;
-        self.previous_block = saved_previous_block;
-        self.frame.pc = saved_pc;
-        self.frame.last_result = saved_last_result;
-        // Leave GC root region
-        self.scope_tracker.leave_root_region();
-        result
-    }
     
-    /// Execute a single function
-    fn execute_function_old(&mut self, function: &MirFunction) -> Result<VMValue, VMError> {
-        self.current_function = Some(function.signature.name.clone());
-        // Phase 10_a: JIT profiling (function entry)
-        if let Some(jm) = &mut self.jit_manager {
-            // Allow threshold to react to env updates (e.g., DebugConfigBox.apply at runtime)
-            if let Ok(s) = std::env::var("NYASH_JIT_THRESHOLD") {
-                if let Ok(t) = s.parse::<u32>() { if t > 0 { jm.set_threshold(t); } }
-            }
-            jm.record_entry(&function.signature.name);
-            // Try compile if hot (no-op for now, returns fake handle)
-            let _ = jm.maybe_compile(&function.signature.name, function);
-            // Record per-function lower stats captured during last JIT lower (if any)
-            // Note: The current engine encapsulates its LowerCore; expose via last_stats on a new instance as needed.
-            if jm.is_compiled(&function.signature.name) && std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
-                if let Some(h) = jm.handle_of(&function.signature.name) {
-                    eprintln!("[JIT] dispatch would go to handle={} for {} (stub)", h, function.signature.name);
-                }
-            }
-        }
-        
-        // Initialize loop executor for this function
-        self.loop_executor.initialize();
-        
-        // Enter a new scope for this function
-        self.scope_tracker.push_scope();
-        crate::runtime::global_hooks::push_task_scope();
-        
-        // Phase 10_c: try a JIT dispatch when enabled; fallback to VM on trap/miss
-        // Prepare arguments from current frame params before borrowing jit_manager mutably
-        let args_vec: Vec<VMValue> = function
-            .params
-            .iter()
-            .filter_map(|pid| self.get_value(*pid).ok())
-            .collect();
-        if std::env::var("NYASH_JIT_EXEC").ok().as_deref() == Some("1") {
-            let jit_only = std::env::var("NYASH_JIT_ONLY").ok().as_deref() == Some("1");
-            // Root regionize args for JIT call
-            self.enter_root_region();
-            self.pin_roots(args_vec.iter());
-            if let Some(compiled) = self.jit_manager.as_ref().map(|jm| jm.is_compiled(&function.signature.name)) {
-                if compiled {
-                    crate::runtime::host_api::set_current_vm(self as *mut _);
-                    let jit_val = if let Some(jm_mut) = self.jit_manager.as_mut() { jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) } else { None };
-                    crate::runtime::host_api::clear_current_vm();
-                    if let Some(val) = jit_val {
-                        // Exit scope before returning
-                        self.leave_root_region();
-                        self.scope_tracker.pop_scope();
-                        crate::runtime::global_hooks::pop_task_scope();
-                        return Ok(val);
-                    } else if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") ||
-                              std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1") {
-                        eprintln!("[JIT] fallback: VM path taken for {}", function.signature.name);
-                        if jit_only {
-                            self.leave_root_region();
-                            self.scope_tracker.pop_scope();
-                            crate::runtime::global_hooks::pop_task_scope();
-                            return Err(VMError::InvalidInstruction(format!("JIT-only enabled and JIT trap occurred for {}", function.signature.name)));
-                        }
-                    }
-                } else if jit_only {
-                    // Try to compile now and execute; if not possible, error out
-                    if let Some(jm_mut) = self.jit_manager.as_mut() { let _ = jm_mut.maybe_compile(&function.signature.name, function); }
-                    if self.jit_manager.as_ref().map(|jm| jm.is_compiled(&function.signature.name)).unwrap_or(false) {
-                        crate::runtime::host_api::set_current_vm(self as *mut _);
-                        let jit_val = if let Some(jm_mut) = self.jit_manager.as_mut() { jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) } else { None };
-                        crate::runtime::host_api::clear_current_vm();
-                        if let Some(val) = jit_val {
-                            self.leave_root_region();
-                            self.scope_tracker.pop_scope();
-                            crate::runtime::global_hooks::pop_task_scope();
-                            return Ok(val);
-                        } else {
-                            self.leave_root_region();
-                            self.scope_tracker.pop_scope();
-                            crate::runtime::global_hooks::pop_task_scope();
-                            return Err(VMError::InvalidInstruction(format!("JIT-only enabled and JIT execution failed for {}", function.signature.name)));
-                        }
-                    } else {
-                        self.leave_root_region();
-                        self.scope_tracker.pop_scope();
-                        crate::runtime::global_hooks::pop_task_scope();
-                        return Err(VMError::InvalidInstruction(format!("JIT-only enabled but function not compiled: {}", function.signature.name)));
-                    }
-                }
-            }
-            // Leave root region if not compiled or after fallback
-            self.leave_root_region();
-        } else {
-            if let Some(jm_mut) = &mut self.jit_manager {
-                let argc = function.params.len();
-                let _would = jm_mut.maybe_dispatch(&function.signature.name, argc);
-            }
-        }
 
-        // Start at entry block
-        let mut current_block = function.entry_block;
-        
-        loop {
-            let block = function.get_block(current_block)
-                .ok_or_else(|| VMError::InvalidBasicBlock(format!("Block {} not found", current_block)))?;
-            
-            self.frame.current_block = Some(current_block);
-            self.frame.pc = 0;
-            
-            let mut next_block = None;
-            let mut should_return = None;
-            
-            // Execute instructions in this block (including terminator)
-            let all_instructions: Vec<_> = block.all_instructions().collect();
-            for (index, instruction) in all_instructions.iter().enumerate() {
-                self.frame.pc = index;
-                
-                match self.execute_instruction(instruction)? {
-                    ControlFlow::Continue => continue,
-                    ControlFlow::Jump(target) => {
-                        next_block = Some(target);
-                        break;
-                    },
-                    ControlFlow::Return(value) => {
-                        should_return = Some(value);
-                        break;
-                    },
-                }
-            }
-            
-            // Handle control flow
-            if let Some(return_value) = should_return {
-                // Exit scope before returning
-                self.scope_tracker.pop_scope();
-                crate::runtime::global_hooks::pop_task_scope();
-                return Ok(return_value);
-            } else if let Some(target) = next_block {
-                // Update previous block before jumping and record transition via control_flow helper
-                control_flow::record_transition(&mut self.previous_block, &mut self.loop_executor, current_block, target).ok();
-                current_block = target;
-            } else {
-                // Block ended without terminator - this shouldn't happen in well-formed MIR
-                // but let's handle it gracefully by returning void
-                // Exit scope before returning
-                self.scope_tracker.pop_scope();
-                crate::runtime::global_hooks::pop_task_scope();
-                return Ok(VMValue::Void);
-            }
-        }
-    }
     
-    /// Execute a single instruction (old placeholder; moved to vm_exec.rs)
-    fn execute_instruction_old(&mut self, _instruction: &MirInstruction) -> Result<ControlFlow, VMError> { unreachable!("moved") }
+    
+    
        
 
     
@@ -565,49 +284,11 @@ impl VM {
     
 
     
-    /// Phase 9.78a: Unified method dispatch for all Box types
-    fn call_unified_method(&self, box_value: Box<dyn NyashBox>, method: &str, args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
-        // For now, we use the simplified method dispatch
-        // In a full implementation, this would check for InstanceBox and dispatch appropriately
-        self.call_box_method_impl(box_value, method, args)
-    }
     
-    /// Call a method on a Box - simplified version of interpreter method dispatch
-    pub(super) fn call_box_method(&self, box_value: Box<dyn NyashBox>, method: &str, mut _args: Vec<Box<dyn NyashBox>>) -> Result<Box<dyn NyashBox>, VMError> {
-        // For now, implement basic methods for common box types
-        // This is a simplified version - real implementation would need full method dispatch
-
-        // 🌟 Universal methods pre-dispatch (non-invasive)
-        match method {
-            "toString" => {
-                if !_args.is_empty() {
-                    return Ok(Box::new(StringBox::new(format!("Error: toString() expects 0 arguments, got {}", _args.len()))));
-                }
-                return Ok(Box::new(StringBox::new(box_value.to_string_box().value)));
-            }
-            "type" => {
-                if !_args.is_empty() {
-                    return Ok(Box::new(StringBox::new(format!("Error: type() expects 0 arguments, got {}", _args.len()))));
-                }
-                return Ok(Box::new(StringBox::new(box_value.type_name())));
-            }
-            "equals" => {
-                if _args.len() != 1 {
-                    return Ok(Box::new(StringBox::new(format!("Error: equals() expects 1 argument, got {}", _args.len()))));
-                }
-                let rhs = _args.remove(0);
-                let eq = box_value.equals(&*rhs);
-                return Ok(Box::new(eq));
-            }
-            "clone" => {
-                if !_args.is_empty() {
-                    return Ok(Box::new(StringBox::new(format!("Error: clone() expects 0 arguments, got {}", _args.len()))));
-                }
-                return Ok(box_value.clone_box());
-            }
-            _ => {}
-        }
-
+    
+    // Call a method on a Box - moved to vm_methods.rs (wrapper now in vm_methods)
+    // removed: old inline implementation
+        /*
         // ResultBox (NyashResultBox - new)
         if let Some(result_box) = box_value.as_any().downcast_ref::<crate::boxes::result::NyashResultBox>() {
             match method {
@@ -1004,10 +685,7 @@ impl VM {
             }
             return Ok(Box::new(VoidBox::new()));
         }
-        
-        // Default: return void for any unrecognized box type or method
-        Ok(Box::new(VoidBox::new()))
-    }
+        */
 }
 
 /// RAII guard for GC root regions
@@ -1024,7 +702,7 @@ impl Default for VM {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock};
+    use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, EffectMask, BasicBlock, BinaryOp};
     use crate::parser::NyashParser;
     use crate::runtime::NyashRuntime;
     use crate::core::model::BoxDeclaration as CoreBoxDecl;

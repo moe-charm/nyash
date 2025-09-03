@@ -119,7 +119,7 @@ cargo build --release --features llvm
 
 ### 🏗️ Everything is Box
 - すべての値がBox（StringBox, IntegerBox, BoolBox等）
-- ユーザー定義Box: `box ClassName { init { field1, field2 } }`
+- ユーザー定義Box: `box ClassName { field1: TypeBox field2: TypeBox }`
 
 ### 🌟 完全明示デリゲーション
 ```nyash
@@ -155,7 +155,8 @@ loop() { }          // 使用不可
 ```nyash
 // 🌟 「Boxに生命を与える」直感的コンストラクタ
 box Life {
-    init { name, energy }
+    name: StringBox
+    energy: IntegerBox
     
     birth(lifeName) {  // ← Everything is Box哲学を体現！
         me.name = lifeName
@@ -164,16 +165,19 @@ box Life {
     }
 }
 
-// ✅ 優先順位: birth > pack > init > Box名形式
+// ✅ birth統一: すべてのBoxでbirthを使用
 local alice = new Life("Alice")  // birthが使われる
 ```
 
-### 🚨 pack構文 - ビルトインBox継承専用
+### 🌟 ビルトインBox継承
 ```nyash
-// ⚠️ pack構文はビルトインBox継承専用！ユーザー定義Boxでは使わない
+// ✅ Phase 12.7以降: birthで統一（packは廃止）
 box EnhancedP2P from P2PBox {
-    pack(nodeId, transport) {
-        from P2PBox.pack(nodeId, transport)  // ビルトイン初期化
+    additionalData: MapBox
+    
+    birth(nodeId, transport) {
+        from P2PBox.birth(nodeId, transport)  // 親のbirth呼び出し
+        me.additionalData = new MapBox()
     }
 }
 ```
@@ -182,7 +186,8 @@ box EnhancedP2P from P2PBox {
 ```nyash
 // 🚀 Static Box Main パターン - エントリーポイントの統一スタイル
 static box Main {
-    init { console, result }  // フィールド宣言
+    console: ConsoleBox    // フィールド宣言
+    result: IntegerBox
     
     main() {
         // ここから始まる！他の言語と同じエントリーポイント
@@ -205,7 +210,8 @@ static box Main {
 
 // ✅ static box内のフィールド
 static box Calculator {
-    init { result, memory }  // 明示宣言
+    result: IntegerBox     // 明示宣言
+    memory: ArrayBox
     
     calculate() {
         me.result = 42  // ✅ フィールドアクセス
@@ -233,11 +239,15 @@ a + b, a - b, a * b  // 加算・減算・乗算
 
 ### ⚠️ 重要な注意点
 ```nyash
-// ✅ 正しい書き方
-init { field1, field2 }  // カンマ必須（CPU暴走防止）
-
-// ❌ 間違い
-init { field1 field2 }   // カンマなし→CPU暴走
+// ✅ 正しい書き方（Phase 12.7文法改革後）
+box MyBox {
+    field1: TypeBox
+    field2: TypeBox
+    
+    birth() {
+        // 初期化処理
+    }
+}
 ```
 
 ## 📚 ドキュメント構造

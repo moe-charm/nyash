@@ -13,14 +13,13 @@ local x = 10, y = 20, z   # 混合初期化
 ### Box定義（クラス）
 ```nyash
 box ClassName {
-    init { field1, field2 }    # フィールド宣言（旧形式）
+    # フィールド宣言（Phase 12.7形式）
+    field1: TypeBox           # デフォルト非公開
+    public field2: TypeBox    # 公開フィールド
+    private field3: TypeBox   # 明示的非公開
     
-    # または新形式（推奨）
-    public { name, age }       # 公開フィールド
-    private { password }       # 非公開フィールド
-    
-    init(args) {              # コンストラクタ
-        me.name = args
+    birth(args) {            # コンストラクタ（birth統一）
+        me.field1 = args
     }
 }
 ```
@@ -28,7 +27,7 @@ box ClassName {
 ### Static Box（エントリーポイント）
 ```nyash
 static box Main {
-    init { console }
+    console: ConsoleBox
     
     main() {
         me.console = new ConsoleBox()
@@ -70,11 +69,11 @@ loop() { }          # エラー！
 ### 基本デリゲーション
 ```nyash
 box Child from Parent {
-    init(args) {
-        from Parent.init(args)  # 親の初期化
+    birth(args) {
+        from Parent.birth(args)  # 親のbirth呼び出し
     }
     
-    override method() {         # オーバーライド必須
+    method() {                  # メソッド定義
         from Parent.method()    # 親メソッド呼び出し
     }
 }

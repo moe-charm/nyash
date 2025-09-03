@@ -17,6 +17,7 @@ pub mod vm_control_flow;
 mod vm_gc; // A3: GC roots & diagnostics extracted
 mod vm_exec; // A3: execution loop extracted
 mod vm_state; // A3: state & basic helpers extracted
+mod vm_methods; // A3-S1: method dispatch wrappers extracted
 pub mod abi_util; // Shared ABI/utility helpers
 pub mod mir_interpreter; // Lightweight MIR interpreter
 

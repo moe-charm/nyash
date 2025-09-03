@@ -99,7 +99,7 @@ Compact Snapshot（2025‑09‑03/Finalize）
   - 公開API/パス互換: 既存の `crate::runtime::plugin_loader_v2::*` 参照はそのまま
   - ビルド: `cargo build` 緑（警告のみ）
 
-- A3 進行中: `backend/vm.rs` の段階分割
+- A3 進行中: `backend/vm.rs` の段階分割（最新: 2025-09-04）
   - 第1段: `ControlFlow` を `src/backend/vm_control_flow.rs` に抽出し、`vm.rs` から再エクスポート（完了）
   - 第2段: 実行ループを `src/backend/vm_exec.rs` へ抽出（完了）
     - 移動対象: `VM::execute_module`、`VM::execute_function`、`VM::call_function_by_name`、`VM::execute_instruction`、`VM::print_cache_stats_summary`
@@ -110,7 +110,26 @@ Compact Snapshot（2025‑09‑03/Finalize）
     - 移動対象: `enter_root_region`、`pin_roots`、`leave_root_region`、`gc_site_info`、`gc_print_roots_breakdown`、`gc_print_reachability_depth2`
     - 既存呼び出しは変更なし（同名メソッドとして移設）。旧定義は一時的に `*_old` 名へ退避し、後続で削除予定。
     - 注記: `vm.rs` 内の旧メソッドは一時的に `*_old` 名へリネームし残置（安全移行用）。後続ステップで完全削除予定。
-  - 次段候補: VM状態→ `vm_state.rs`（構造体フィールド/コンストラクタ/値のget/set/記録系）、GC/診断→ `vm_gc.rs`（ルート管理ラッパ/統計出力など）。
+  - 第4段: VM 基本状態を `src/backend/vm_state.rs` へ抽出（完了）
+    - 生成・状態・値アクセス・統計・phi 補助
+  - 第5段: Box メソッドディスパッチのラッパを `src/backend/vm_methods.rs` へ抽出（完了）
+    - `VM::call_box_method` / `call_unified_method` は委譲に変更（実装は `vm_boxcall.rs`）
+  - 旧プレースホルダ削除（完了）
+    - `execute_module_old_moved` / `*_old` 系を撤去
+  - 現在の行数スナップショット: `src/backend/vm.rs` ≈ 973 行（< 1000 行達成）
+
+## 次タスク（2025-09-04 更新）
+- フェーズA/B 優先順（影響大→小）
+  1) interpreter/plugin_loader.rs を役割別へ分割（B2）
+     - ステップ1: ディレクトリ化（plugin_loader/mod.rs へ移行）済
+     - 構成案: `interpreter/plugin_loader/{scan.rs,link.rs,abi.rs,registry.rs,errors.rs,util.rs}`
+     - 互換: `interpreter/plugin_loader/mod.rs` で再エクスポート、既存API維持
+  2) backend/llvm/compiler.rs の機能別分割
+     - `llvm/{init.rs,types.rs, instr_*.rs}`（算術/比較/制御/メモリ/呼出/Box/配列/Map/文字列/Ref/Weak/Future/Phi/Cast/Type）
+     - `mod.rs` で `Compiler` の `impl` を分散読み込み
+  3) mir/builder.rs の `builder/{exprs.rs,stmts.rs,decls.rs,utils.rs}` への抽出
+
+注記: 公開APIは維持。各段階ごとに `cargo build` と限定ユニットで確認して進める。
 
 ## 残タスク（To‑Do）
 1) リファクタフェーズA/B/C 実施（段階コミット＋スモーク）
@@ -158,6 +177,45 @@ Phase 12 ゴール（検証観点）
   - 症状: Array/Map などの生成で Unknown Box type（プラグインのみのレジストリ）。
   - 対応: 既定を Builtin 登録に戻し、plugins-only は feature 化。
     - 実装: BuiltinBoxFactory を追加し、NyashRuntime/UnifiedRegistry 初期化時に登録（plugins-only 時はスキップ）。
+
+## 引継ぎメモ（再起動用 / 2025-09-04）
+
+- 進捗サマリ
+  - A3(vm) 分割 S1/S2 完了: `vm_exec.rs`/`vm_gc.rs`/`vm_state.rs`/`vm_methods.rs` 抽出、`*_old` 削除。
+    - 現在: `src/backend/vm.rs` ≈ 973 行（<1000行）。ビルド成功（警告のみ）。
+  - B2(interpreter/plugin_loader) 着手: ディレクトリ化＋下位ファイル用意。
+    - 変更: `src/interpreter/plugin_loader.rs` → `src/interpreter/plugin_loader/mod.rs` へ移動（API互換維持）。
+    - 追加: 下位モジュール（現時点では未読み込みのため重複は未発生）
+      - `src/interpreter/plugin_loader/types.rs`（PLUGIN_CACHE／LoadedPlugin／PluginInfo／各Handle）
+      - `src/interpreter/plugin_loader/proxies.rs`（File/Math/Random/Time/DateTime 各 Proxy）
+      - `src/interpreter/plugin_loader/loader.rs`（PluginLoader: load_*/create_* エントリ）
+
+- 再開手順（最短ルート）
+  1) `src/interpreter/plugin_loader/mod.rs` を分割モードに切替
+     - 先頭に `mod types; mod proxies; mod loader;` を追加
+     - 末尾付近で `pub use` を追加（互換維持）:
+       - `pub use types::{PLUGIN_CACHE, LoadedPlugin, PluginInfo, FileBoxHandle, MathBoxHandle, RandomBoxHandle, TimeBoxHandle, DateTimeBoxHandle};`
+       - `pub use loader::PluginLoader;`
+       - `pub use proxies::{FileBoxProxy, MathBoxProxy, RandomBoxProxy, TimeBoxProxy, DateTimeBoxProxy};`
+  2) `mod.rs` 内の重複定義を削除
+     - `lazy_static!` PLUGIN_CACHE／構造体（LoadedPlugin/PluginInfo/各Handle）／各Proxy実装／PluginLoader 実装を、types/proxies/loader に移った分だけ除去。
+     - 目標: `mod.rs` にはドキュメント＋`mod`/`pub use` のみ残す。
+  3) ビルド確認（feature注意）
+     - `cargo build`（通常）
+     - 動的ロード経路は `--features dynamic-file` が必要な箇所あり。
+  4) 呼び出し側の互換確認
+     - 例: `src/interpreter/methods/math_methods.rs` は `crate::interpreter::plugin_loader::{MathBoxProxy, RandomBoxProxy, TimeBoxProxy, DateTimeBoxProxy}` を参照 → `pub use` により互換のはず。
+
+- 注意点
+  - 分割ファイル（types/proxies/loader）は現在 `mod.rs` から未参照（意図的）。上記(1)の `mod` 追加で参照されコンパイル対象になります。
+  - `#[cfg(feature = "dynamic-file")]` の条件分岐により libloading/FFI シンボルが有効化されます。ビルド時の feature セットに留意。
+  - 公開API互換を維持すること（`crate::interpreter::plugin_loader::*` の既存呼び出しが動作するよう `pub use` を整備）。
+
+- 次の大物（plugin_loader 完了後）
+  - llvm/compiler.rs: `llvm/{init.rs,types.rs,instr_*.rs}` へ段階分割
+  - mir/builder.rs: `builder/{exprs.rs,stmts.rs,decls.rs,utils.rs}` へ抽出
+
+（この引継ぎに沿って再開すれば、直ちに plugin_loader の分割完了→ビルド確認まで進められます）
     - 追加: Cargo.toml に `plugins-only` feature を定義。
 
 - P2PBox の once/ping 安定化方針

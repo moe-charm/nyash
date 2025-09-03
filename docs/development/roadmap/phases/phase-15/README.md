@@ -21,7 +21,9 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 - [ ] Nyashパーサー（800行目標）
 - [ ] MIR Lowerer（2,500行目標）
 - [ ] CraneliftBox（JITエンジンラッパー）
-- [ ] LinkerBox（リンカー統合）
+- [ ] LinkerBox（lld内蔵リンカー統合）
+- [ ] nyashrtランタイム（静的/動的ライブラリ）
+- [ ] ToolchainBox（環境診断・SDK検出）
 
 ### 自動生成基盤
 - [ ] boxes.yaml（Box型定義）
@@ -46,12 +48,14 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 この究極のシンプルさにより、直接x86変換も現実的に！
 
 ### バックエンドの選択肢
-#### 1. Cranelift（現在の主力）
+#### 1. Cranelift + lld内蔵（ChatGPT5推奨）
 - **軽量**: 3-5MB程度（LLVMの1/10以下）
 - **JIT特化**: メモリ上での動的コンパイル
 - **Rust統合**: 静的リンクで配布容易
+- **lld内蔵**: Windows(lld-link)/Linux(ld.lld)で完全自立
+- **C ABIファサード**: `ny_mir_to_obj()`で美しい境界
 
-#### 2. 直接x86エミッタ（革新的アプローチ）
+#### 2. 直接x86エミッタ（将来の革新的アプローチ）
 - **dynasm-rs/iced-x86**: Rust内で直接アセンブリ生成
 - **テンプレート・スティッチャ方式**: 2-3KBの超小型バイナリ可能
 - **完全な制御**: 依存ゼロの究極形
@@ -66,7 +70,15 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 ```nyash
 // 80,000行のRust実装が20,000行のNyashに！
 box NyashCompiler {
-    init { parser, lowerer, backend }
+    parser: ParserBox
+    lowerer: LowererBox
+    backend: BackendBox
+    
+    birth() {
+        me.parser = new ParserBox()
+        me.lowerer = new LowererBox()
+        me.backend = new BackendBox()
+    }
     
     compile(source) {
         local ast = me.parser.parse(source)
@@ -77,9 +89,33 @@ box NyashCompiler {
 
 // MIR実行器も動的ディスパッチで簡潔に
 box MirExecutor {
+    values: MapBox
+    
+    birth() {
+        me.values = new MapBox()
+    }
+    
     execute(inst) { return me[inst.type](inst) }
     Const(inst) { me.values[inst.result] = inst.value }
     BinOp(inst) { /* 実装 */ }
+}
+
+// lld内蔵リンカー（ChatGPT5協議）
+box LinkerBox {
+    platform: PlatformBox
+    lld_path: StringBox
+    libraries: ArrayBox
+    
+    birth(platform) {
+        me.platform = platform
+        me.lld_path = platform.findLldPath()
+        me.libraries = new ArrayBox()
+    }
+    
+    link(objects, output) {
+        local cmd = me.build_command(objects, output)
+        return me.platform.execute(cmd)
+    }
 }
 ```
 
@@ -113,23 +149,36 @@ box TemplateStitcher {
 
 ## 🔗 EXEファイル生成・リンク戦略
 
-### 段階的アプローチ
-1. **Phase 1**: 外部リンカー（lld/gcc）利用
-2. **Phase 2**: lld内蔵で配布容易化
-3. **Phase 3**: ミニリンカー自作（究極の自立）
+### 統合ツールチェーン（ChatGPT5協議済み）
+```bash
+nyash build main.ny --backend=cranelift --target=x86_64-pc-windows-msvc
+```
+
+### 実装戦略
+1. **MIR→Cranelift**: MIR13をCranelift IRに変換
+2. **Cranelift→Object**: ネイティブオブジェクトファイル生成（.o/.obj）
+3. **lld内蔵リンク**: lld-link（Win）/ld.lld（Linux）でEXE作成
+4. **nyashrtランタイム**: 静的/動的リンク選択可能
 
 ### C ABI境界設計
-- **プレフィクス**: `ny_v1_*`で統一
-- **呼出規約**: Windows(fastcall) / Linux(sysv_amd64)
-- **必須関数**: `ny_init()`, `ny_fini()`
-- **型マッピング**: `ny_handle=uint64_t`
+```c
+// 最小限の美しいインターフェース
+ny_mir_to_obj(mir_bin, target_triple) -> obj_bytes
+ny_mir_jit_entry(mir_bin) -> exit_code
+ny_free_buf(buffer)
+```
+
+詳細は[**自己ホスティングlld戦略**](self-hosting-lld-strategy.md)を参照。
 
 ## 🔗 関連ドキュメント
 
+- [🚀 自己ホスティングlld戦略](self-hosting-lld-strategy.md) **← NEW!**
+- [🧱 箱積み上げ準備メモ](box-stacking-preparation.txt) **← NEW!**
 - [セルフホスティング詳細計画](self-hosting-plan.txt)
 - [技術的実装詳細](technical-details.md)
 - [Phase 10: Cranelift JIT](../phase-10/)
 - [Phase 12.5: 最適化戦略](../phase-12.5/)
+- [Phase 12.7: ANCP圧縮](../phase-12.7/)
 
 ## 📅 実施時期
 

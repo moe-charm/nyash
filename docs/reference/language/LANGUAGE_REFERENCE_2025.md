@@ -27,8 +27,8 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 | `local` | ローカル変数宣言 | `local x, y = 10` |
 | `outbox` | 所有権移転変数 | `outbox result = compute()` |
 | `global` | グローバル変数 | `global CONFIG = "dev"` |
-| `public` | 公開フィールド宣言 | `public { name, age }` |
-| `private` | 非公開フィールド宣言 | `private { password, cache }` |
+| `public` | 公開フィールド修飾子 | `public field: TypeBox` |
+| `private` | 非公開フィールド修飾子 | `private field: TypeBox` |
 
 ### **制御構文**
 | 予約語 | 用途 | 例 |
@@ -77,11 +77,13 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 #### **基本Box**
 ```nyash
 box ClassName {
-    public { field1, field2 }    # 公開フィールド
-    private { field3 }           # 非公開フィールド
+    # フィールド宣言（Phase 12.7形式）
+    public field1: TypeBox       # 公開フィールド
+    public field2: TypeBox
+    field3: TypeBox              # デフォルト非公開
     
     # コンストラクタ
-    init(param1, param2) {  # init構文に統一
+    birth(param1, param2) {      # birth構文に統一
         me.field1 = param1
         me.field2 = param2
         me.field3 = defaultValue()
@@ -102,15 +104,15 @@ box ClassName {
 #### **デリゲーションBox**
 ```nyash
 box Child from Parent interface Comparable {
-    private { childField }    # プライベートフィールド
+    private childField: TypeBox    # プライベートフィールド
     
-    init(parentParam, childParam) {  # init構文に統一
-        from Parent.init(parentParam)  # 親コンストラクタ明示呼び出し
+    birth(parentParam, childParam) {  # birth構文に統一
+        from Parent.birth(parentParam)  # 親コンストラクタ明示呼び出し
         me.childField = childParam
     }
     
-    # メソッドオーバーライド
-    override process(data) {  # override必須
+    # メソッド定義
+    process(data) {  # overrideキーワードは廃止
         local result = from Parent.process(data)  # 親メソッド呼び出し
         return result + " (Child processed)"
     }
@@ -125,7 +127,8 @@ box Child from Parent interface Comparable {
 #### **Static Box（推奨エントリーポイント）**
 ```nyash
 static box Main {
-    public { console, result }
+    public console: ConsoleBox
+    public result: IntegerBox
     
     main() {
         me.console = new ConsoleBox()
@@ -138,9 +141,9 @@ static box Main {
 #### **ジェネリックBox**
 ```nyash
 box Container<T> {
-    public { value }
+    public value: T
     
-    Container(item) {
+    birth(item) {
         me.value = item
     }
     
@@ -261,10 +264,11 @@ console.log("Everything is Box!")   # コンソール出力
 #### **パラメータ付きコンストラクタ**
 ```nyash
 box Person {
-    public { name, email }
-    private { age }
+    public name: StringBox
+    public email: StringBox
+    private age: IntegerBox
     
-    init(personName, personAge) {  # init構文に統一
+    birth(personName, personAge) {  # birth構文に統一
         me.name = personName
         me.age = personAge  
         me.email = me.name + "@example.com"  # 計算フィールド
@@ -289,9 +293,10 @@ guest = Person.createGuest()
 ```nyash
 # 基底Box
 box Animal {
-    public { name, species }
+    public name: StringBox
+    public species: StringBox
     
-    init(animalName, animalSpecies) {
+    birth(animalName, animalSpecies) {
         me.name = animalName
         me.species = animalSpecies
     }
@@ -303,10 +308,10 @@ box Animal {
 
 # デリゲーション
 box Dog from Animal {
-    public { breed }  # 追加フィールド
+    public breed: StringBox  # 追加フィールド
     
-    init(dogName, dogBreed) {
-        from Animal.init(dogName, "Canine")  # 親コンストラクタ呼び出し
+    birth(dogName, dogBreed) {
+        from Animal.birth(dogName, "Canine")  # 親コンストラクタ呼び出し
         me.breed = dogBreed
     }
     
@@ -326,7 +331,8 @@ box Cat from Animal interface Playful {
 #### **名前空間・ユーティリティ**
 ```nyash
 static box MathUtils {
-    public { PI, E }
+    public PI: FloatBox
+    public E: FloatBox
     
     static {
         me.PI = 3.14159265
@@ -352,7 +358,8 @@ pi = MathUtils.PI
 ```nyash
 # 🎯 推奨: Static Box Main パターン
 static box Main {
-    public { console, result }
+    public console: ConsoleBox
+    public result: IntegerBox
     
     main() {
         me.console = new ConsoleBox()
@@ -410,7 +417,7 @@ boolSum = true + false           # 1 (IntegerBox)
 # メモリ安全性・非同期安全性保証システム
 
 static box Calculator {
-    private { memory }  # 必須フィールド宣言
+    private memory: ArrayBox  # 必須フィールド宣言
     
     calculate() {
         local temp       # 必須ローカル変数宣言
@@ -494,7 +501,8 @@ static box Calculator {
 ```nyash
 # ✅ 推奨スタイル
 static box Main {
-    public { console, result }    # 公開フィールド明示
+    public console: ConsoleBox    # 公開フィールド明示
+    public result: IntegerBox
     
     main() {
         me.console = new ConsoleBox()
@@ -511,13 +519,13 @@ static box Main {
 ### **7.3 よくある間違いと対策**
 ```nyash
 # ❌ よくある間違い
-public { field1 field2 }    # カンマなし → CPU暴走
+public { field1 field2 }    # 旧構文 → Phase 12.7で廃止
 x = 42                      # 変数未宣言 → ランタイムエラー
 while condition { }         # 非対応構文 → パーサーエラー
 
-# ✅ 正しい書き方
-public { field1, field2 }   # カンマ必須
-private { internalData }    # 非公開フィールド
+# ✅ 正しい書き方（Phase 12.7後）
+public field1: TypeBox      # 公開フィールド
+private field2: TypeBox     # 非公開フィールド
 local x = 42               # 事前宣言
 loop(condition) { }        # 統一ループ構文
 ```
