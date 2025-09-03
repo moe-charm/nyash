@@ -1,0 +1,14 @@
+// continue demo: sum of 1..5 skipping 3
+local i = 0
+local sum = 0
+
+loop (i < 5) {
+  i = i + 1
+  if i == 3 {
+    continue
+  }
+  sum = sum + i
+}
+
+local con = new ConsoleBox()
+con.println("sum=" + sum)

@@ -86,6 +86,10 @@ impl NyashInterpreter {
                 self.control_flow = super::ControlFlow::Break;
                 Ok(Box::new(VoidBox::new()))
             }
+            ASTNode::Continue { .. } => {
+                self.control_flow = super::ControlFlow::Continue;
+                Ok(Box::new(VoidBox::new()))
+            }
             
             ASTNode::Nowait { variable, expression, .. } => {
                 self.execute_nowait(variable, expression)
@@ -271,6 +275,10 @@ impl NyashInterpreter {
                     super::ControlFlow::Break => {
                         self.control_flow = super::ControlFlow::None;
                         return Ok(Box::new(VoidBox::new()));
+                    }
+                    super::ControlFlow::Continue => {
+                        self.control_flow = super::ControlFlow::None;
+                        continue;
                     }
                     super::ControlFlow::Return(_) => {
                         // returnはループを抜けるが、上位に伝播

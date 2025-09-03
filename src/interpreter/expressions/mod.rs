@@ -129,6 +129,24 @@ impl NyashInterpreter {
             ASTNode::Arrow { sender, receiver, .. } => {
                 self.execute_arrow(sender, receiver)
             }
+            ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => {
+                let val = self.execute_expression(scrutinee)?;
+                let sval = val.to_string_box().value;
+                for (pat, expr) in arms {
+                    let pv = match pat {
+                        crate::ast::LiteralValue::String(s) => s.clone(),
+                        crate::ast::LiteralValue::Integer(i) => i.to_string(),
+                        crate::ast::LiteralValue::Float(f) => f.to_string(),
+                        crate::ast::LiteralValue::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
+                        crate::ast::LiteralValue::Null => "null".to_string(),
+                        crate::ast::LiteralValue::Void => "void".to_string(),
+                    };
+                    if pv == sval {
+                        return self.execute_expression(expr);
+                    }
+                }
+                self.execute_expression(else_expr)
+            }
             
             ASTNode::Include { filename, .. } => {
                 // include式: 最初のstatic boxを返す

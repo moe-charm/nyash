@@ -40,6 +40,9 @@ impl NyashParser {
             TokenType::BREAK => {
                 self.parse_break()
             },
+            TokenType::CONTINUE => {
+                self.parse_continue()
+            },
             TokenType::RETURN => {
                 self.parse_return()
             },
@@ -203,6 +206,12 @@ impl NyashParser {
     pub(super) fn parse_break(&mut self) -> Result<ASTNode, ParseError> {
         self.advance(); // consume 'break'
         Ok(ASTNode::Break { span: Span::unknown() })
+    }
+
+    /// continue文をパース
+    pub(super) fn parse_continue(&mut self) -> Result<ASTNode, ParseError> {
+        self.advance(); // consume 'continue'
+        Ok(ASTNode::Continue { span: Span::unknown() })
     }
     
     /// return文をパース

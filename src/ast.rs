@@ -194,6 +194,13 @@ pub enum ExpressionNode {
     MeExpression {
         span: Span,
     },
+    /// peek式: peek <expr> { lit => expr, ... else => expr }
+    PeekExpr {
+        scrutinee: Box<ASTNode>,
+        arms: Vec<(LiteralValue, ASTNode)>,
+        else_expr: Box<ASTNode>,
+        span: Span,
+    },
 }
 
 /// 文ノード - 実行可能なアクション  
@@ -213,6 +220,9 @@ pub enum StatementNode {
         span: Span,
     },
     Break {
+        span: Span,
+    },
+    Continue {
         span: Span,
     },
     Include {
@@ -413,6 +423,10 @@ pub enum ASTNode {
     Break {
         span: Span,
     },
+    /// continue文
+    Continue {
+        span: Span,
+    },
     
     /// using文: using namespace_name
     UsingStatement {
@@ -430,6 +444,14 @@ pub enum ASTNode {
     /// await式: await expression
     AwaitExpression {
         expression: Box<ASTNode>,
+        span: Span,
+    },
+    
+    /// peek式: peek <expr> { lit => expr, ... else => expr }
+    PeekExpr {
+        scrutinee: Box<ASTNode>,
+        arms: Vec<(LiteralValue, ASTNode)>,
+        else_expr: Box<ASTNode>,
         span: Span,
     },
     
@@ -619,6 +641,7 @@ impl ASTNode {
             ASTNode::Loop { .. } => "Loop",
             ASTNode::Return { .. } => "Return",
             ASTNode::Break { .. } => "Break",
+            ASTNode::Continue { .. } => "Continue",
             ASTNode::UsingStatement { .. } => "UsingStatement",
             ASTNode::BoxDeclaration { .. } => "BoxDeclaration",
             ASTNode::FunctionDeclaration { .. } => "FunctionDeclaration",
@@ -644,6 +667,7 @@ impl ASTNode {
             ASTNode::TryCatch { .. } => "TryCatch",
             ASTNode::Throw { .. } => "Throw",
             ASTNode::AwaitExpression { .. } => "AwaitExpression",
+            ASTNode::PeekExpr { .. } => "PeekExpr",
         }
     }
     
@@ -672,6 +696,7 @@ impl ASTNode {
             ASTNode::FromCall { .. } => ASTNodeType::Expression,
             ASTNode::ThisField { .. } => ASTNodeType::Expression,
             ASTNode::MeField { .. } => ASTNodeType::Expression,
+            ASTNode::PeekExpr { .. } => ASTNodeType::Expression,
             
             // Statement nodes - 実行可能なアクション
             ASTNode::Program { .. } => ASTNodeType::Statement, // プログラム全体
@@ -679,6 +704,7 @@ impl ASTNode {
             ASTNode::Print { .. } => ASTNodeType::Statement,
             ASTNode::Return { .. } => ASTNodeType::Statement,
             ASTNode::Break { .. } => ASTNodeType::Statement,
+            ASTNode::Continue { .. } => ASTNodeType::Statement,
             ASTNode::UsingStatement { .. } => ASTNodeType::Statement,
             ASTNode::GlobalVar { .. } => ASTNodeType::Statement,
             ASTNode::Include { .. } => ASTNodeType::Statement,
@@ -728,6 +754,7 @@ impl ASTNode {
                 }
             }
             ASTNode::Break { .. } => "Break".to_string(),
+            ASTNode::Continue { .. } => "Continue".to_string(),
             ASTNode::UsingStatement { namespace_name, .. } => {
                 format!("UsingStatement({})", namespace_name)
             }
@@ -823,6 +850,7 @@ impl ASTNode {
             ASTNode::AwaitExpression { expression, .. } => {
                 format!("Await({:?})", expression)
             }
+            ASTNode::PeekExpr { .. } => "PeekExpr".to_string(),
         }
     }
     
@@ -836,6 +864,7 @@ impl ASTNode {
             ASTNode::Loop { span, .. } => *span,
             ASTNode::Return { span, .. } => *span,
             ASTNode::Break { span, .. } => *span,
+            ASTNode::Continue { span, .. } => *span,
             ASTNode::UsingStatement { span, .. } => *span,
             ASTNode::Nowait { span, .. } => *span,
             ASTNode::Arrow { span, .. } => *span,
@@ -861,6 +890,7 @@ impl ASTNode {
             ASTNode::Outbox { span, .. } => *span,
             ASTNode::FunctionCall { span, .. } => *span,
             ASTNode::AwaitExpression { span, .. } => *span,
+            ASTNode::PeekExpr { span, .. } => *span,
         }
     }
 }

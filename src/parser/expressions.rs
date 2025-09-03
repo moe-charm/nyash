@@ -192,6 +192,10 @@ impl NyashParser {
     
     /// 単項演算子をパース
     fn parse_unary(&mut self) -> Result<ASTNode, ParseError> {
+        // peek式の先読み
+        if self.match_token(&TokenType::PEEK) {
+            return self.parse_peek_expr();
+        }
         if self.match_token(&TokenType::MINUS) {
             self.advance(); // consume '-'
             let operand = self.parse_unary()?; // 再帰的に単項演算をパース
@@ -222,6 +226,73 @@ impl NyashParser {
         }
         
         self.parse_call()
+    }
+
+    /// peek式: peek <expr> { lit => expr ... else => expr }
+    fn parse_peek_expr(&mut self) -> Result<ASTNode, ParseError> {
+        self.advance(); // consume 'peek'
+        let scrutinee = self.parse_expression()?;
+        self.consume(TokenType::LBRACE)?;
+
+        let mut arms: Vec<(crate::ast::LiteralValue, ASTNode)> = Vec::new();
+        let mut else_expr: Option<ASTNode> = None;
+
+        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            self.skip_newlines();
+            while self.match_token(&TokenType::COMMA) || self.match_token(&TokenType::NEWLINE) {
+                self.advance();
+                self.skip_newlines();
+            }
+            if self.match_token(&TokenType::RBRACE) { break; }
+
+            // else or literal
+            let is_else = matches!(self.current_token().token_type, TokenType::ELSE);
+            if is_else {
+                self.advance(); // consume 'else'
+                self.consume(TokenType::FAT_ARROW)?;
+                let expr = self.parse_expression()?;
+                else_expr = Some(expr);
+            } else {
+                // リテラルのみ許可（P0）
+                let lit = self.parse_literal_only()?;
+                self.consume(TokenType::FAT_ARROW)?;
+                let expr = self.parse_expression()?;
+                arms.push((lit, expr));
+            }
+
+            // 区切り（カンマや改行を許可）
+            if self.match_token(&TokenType::COMMA) { self.advance(); }
+            if self.match_token(&TokenType::NEWLINE) { self.advance(); }
+        }
+
+        self.consume(TokenType::RBRACE)?;
+        let else_expr = else_expr.ok_or(ParseError::UnexpectedToken {
+            found: self.current_token().token_type.clone(),
+            expected: "else => <expr> in peek".to_string(),
+            line: self.current_token().line,
+        })?;
+
+        Ok(ASTNode::PeekExpr {
+            scrutinee: Box::new(scrutinee),
+            arms,
+            else_expr: Box::new(else_expr),
+            span: Span::unknown(),
+        })
+    }
+
+    fn parse_literal_only(&mut self) -> Result<crate::ast::LiteralValue, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::STRING(s) => { let v = crate::ast::LiteralValue::String(s.clone()); self.advance(); Ok(v) }
+            TokenType::NUMBER(n) => { let v = crate::ast::LiteralValue::Integer(*n); self.advance(); Ok(v) }
+            TokenType::FLOAT(f) => { let v = crate::ast::LiteralValue::Float(*f); self.advance(); Ok(v) }
+            TokenType::TRUE => { self.advance(); Ok(crate::ast::LiteralValue::Bool(true)) }
+            TokenType::FALSE => { self.advance(); Ok(crate::ast::LiteralValue::Bool(false)) }
+            TokenType::NULL => { self.advance(); Ok(crate::ast::LiteralValue::Null) }
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "literal".to_string(), line })
+            }
+        }
     }
     
     /// 関数・メソッド呼び出しをパース

@@ -156,6 +156,54 @@ NYASH_DISABLE_TYPEBOX=1 cargo test --lib typebox_tlv_diff -- --nocapture
 
 ---
 
+**Phase 12.7: 文法改革（P0 即実装スコープ）**
+
+- 決定仕様: docs/development/roadmap/phases/phase-12.7/grammar-reform-final-decision.txt
+- レガシー互換: 不要（開発中言語のためブレイク可）
+
+【目的】
+- P0 の文法変更（peek/continue/フィールド宣言/birth統一）を最小差分で実装し、apps の Nyash サンプルで動作確認する。
+
+【実装項目（P0）】
+- Tokenizer:
+  - 予約語追加: `peek`, `continue`, `public`
+  - 記号トークン追加: `=>`(FAT_ARROW), `::`(DOUBLE_COLON：P1用、定義のみ)
+  - 既存の `>>`→ARROW は廃止（未使用）。
+- Parser:
+  - peek式: `peek <expr> { <lit> => <arm> ... else => <arm> }`
+    - else必須。<arm>は式 or ブロック（最後の式が値。空はvoid） or 関数Box
+    - AST: `PeekExpr { scrutinee, arms: [(PatternLiteral, Expr)], else_expr }`
+    - P0: パターンはリテラルのみ（文字列/数値/bool/null）
+  - continue文: `continue`（loop内で ControlFlow::Continue）
+  - フィールド宣言: box先頭で `name: Type`（`public` 修飾子対応）。P0 は「型注釈の受理のみ」。
+  - birth統一: 現状維持（Box名コンストラクタ禁止）。
+- VM/MIR:
+  - peekは if-else 連鎖へデシュガ（文字列はequals、数値は==）。
+  - continue は既存の ControlFlow::Continue に接続。
+- ResultBox 方針（実装最小）:
+  - まずは現状APIで利用（is_ok/is_err/get_value/get_error）。? 演算子はP1で導入予定。
+
+【アプリ更新（ゴール）】
+- apps/ 配下に P0 文法を使った最小デモを追加・更新して動作確認（VM）：
+  - `apps/peek-demo/main.nyash`: peek の式/ブロック/関数Box 3種の例
+  - `apps/loop-continue-demo/main.nyash`: continue の確認（カウントスキップ）
+  - `apps/box-field-decl-demo/main.nyash`: `box` 内フィールド `name: Type` と `public` の受理（birth内で代入）
+
+【テスト更新】
+- 既存 test を壊さない範囲で追加（Rust 側の parser 単体テスト）：
+  - `src/tests/parser_peek_test.rs`: peek の構文/AST/評価（if-else相当と一致）
+  - `src/tests/parser_continue_test.rs`: continue の挙動確認
+  - `src/tests/parser_field_decl_test.rs`: `name: Type` の受理（型名は文字列一致でOK）
+
+【DoD】
+- apps の上記3デモが VM で実行成功（peek分岐が正しく値を返す／continue がスキップ動作／field 宣言受理）。
+- 追加の parser テストが Green（最低1本/項目）。
+- 既存サンプルの動作に回帰なし（ビルド/VM実行）。
+
+【補足】
+- P1 以降：Parent::method の `::` 記法、fn{} クロージャ完全化、? 演算子導入、Resultユーティリティ（andThen/map 等）、フィールドのデフォルト初期化を予定。
+
+
 # 🎯 CURRENT TASK - 2025-08-30 Restart Snapshot（Plugin-First / Core最小化）
 
 このスナップショットは最新の到達点へ更新済み。再起動時はここから辿る。

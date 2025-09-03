@@ -482,8 +482,16 @@ impl NyashParser {
                     
                     methods.insert(field_or_method, method);
                 } else {
-                    // フィールド定義
-                    fields.push(field_or_method);
+                    // フィールド定義（P0: 型注釈 name: Type を受理して破棄）
+                    let fname = field_or_method;
+                    if self.match_token(&TokenType::COLON) {
+                        self.advance(); // consume ':'
+                        // 型名（識別子）を許可（P0は保持せず破棄）
+                        if let TokenType::IDENTIFIER(_ty) = &self.current_token().token_type {
+                            self.advance();
+                        }
+                    }
+                    fields.push(fname);
                 }
             } else {
                 return Err(ParseError::UnexpectedToken {

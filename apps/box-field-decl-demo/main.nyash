@@ -1,0 +1,18 @@
+// box field declaration demo (P0)
+box Counter {
+  count: IntegerBox
+  public { name }
+
+  birth(name) {
+    me.name = name
+    me.count = 0
+  }
+
+  inc() { me.count = me.count + 1 }
+  get() { return me.count }
+}
+
+local c = new Counter("nyash")
+c.inc()
+local con = new ConsoleBox()
+con.println(c.get())

@@ -24,10 +24,12 @@ pub enum TokenType {
     GLOBAL,
     SINGLETON,
     NEW,
+    PEEK,
     IF,
     ELSE,
     LOOP,
     BREAK,
+    CONTINUE,
     RETURN,
     FUNCTION,
     PRINT,
@@ -55,7 +57,8 @@ pub enum TokenType {
     USING,           // using (名前空間インポート)
     
     // 演算子 (長いものから先に定義)
-    ARROW,           // >>
+    ARROW,           // >> (legacy arrow)
+    FAT_ARROW,       // => (peek arms)
     EQUALS,          // ==
     NotEquals,       // !=
     LessEquals,      // <=
@@ -73,6 +76,7 @@ pub enum TokenType {
     
     // 記号
     DOT,             // .
+    DOUBLE_COLON,    // :: (Parent::method) - P1用（定義のみ）
     LPAREN,          // (
     RPAREN,          // )
     LBRACE,          // {
@@ -192,6 +196,16 @@ impl NyashTokenizer {
                 self.advance();
                 self.advance();
                 Ok(Token::new(TokenType::ARROW, start_line, start_column))
+            }
+            Some(':') if self.peek_char() == Some(':') => {
+                self.advance();
+                self.advance();
+                Ok(Token::new(TokenType::DOUBLE_COLON, start_line, start_column))
+            }
+            Some('=') if self.peek_char() == Some('>') => {
+                self.advance();
+                self.advance();
+                Ok(Token::new(TokenType::FAT_ARROW, start_line, start_column))
             }
             Some('=') if self.peek_char() == Some('=') => {
                 self.advance();
@@ -385,16 +399,18 @@ impl NyashTokenizer {
             }
         }
         
-        // キーワードチェック
+    // キーワードチェック
         let tok = match identifier.as_str() {
             "box" => TokenType::BOX,
             "global" => TokenType::GLOBAL,
             "singleton" => TokenType::SINGLETON,
             "new" => TokenType::NEW,
+            "peek" => TokenType::PEEK,
             "if" => TokenType::IF,
             "else" => TokenType::ELSE,
             "loop" => TokenType::LOOP,
             "break" => TokenType::BREAK,
+            "continue" => TokenType::CONTINUE,
             "return" => TokenType::RETURN,
             "function" => TokenType::FUNCTION,
             // Alias support: `fn` as shorthand for function

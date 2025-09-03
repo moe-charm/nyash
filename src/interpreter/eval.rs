@@ -34,6 +34,9 @@ impl NyashInterpreter {
                         ControlFlow::Break => {
                             return Err(RuntimeError::BreakOutsideLoop);
                         }
+                        ControlFlow::Continue => {
+                            return Err(RuntimeError::BreakOutsideLoop);
+                        }
                         ControlFlow::Return(_) => {
                             return Err(RuntimeError::ReturnOutsideFunction);
                         }

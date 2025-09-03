@@ -59,6 +59,7 @@ pub use errors::RuntimeError;
 pub enum ControlFlow {
     None,
     Break,
+    Continue,
     Return(Box<dyn NyashBox>),
     Throw(Box<dyn NyashBox>),
 }
