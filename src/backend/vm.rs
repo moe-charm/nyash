@@ -7,7 +7,7 @@
  * Typical Callers: runner (VM backend), instruction handlers (vm_instructions)
  */
 
-use crate::mir::{MirModule, MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId};
+use crate::mir::{ConstValue, ValueId, BasicBlockId, MirModule, MirFunction, MirInstruction};
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -183,13 +183,13 @@ impl From<&ConstValue> for VMValue {
 /// Virtual Machine state
 pub struct VM {
     /// Value storage (uses ValueId as direct index into Vec for O(1) access)
-    values: Vec<Option<VMValue>>,
+    pub(super) values: Vec<Option<VMValue>>,
     /// Current function being executed
-    current_function: Option<String>,
+    pub(super) current_function: Option<String>,
     /// Frame state (current block, pc, last result)
-    frame: ExecutionFrame,
+    pub(super) frame: ExecutionFrame,
     /// Previous basic block (for phi node resolution)
-    previous_block: Option<BasicBlockId>,
+    pub(super) previous_block: Option<BasicBlockId>,
     /// Simple field storage for objects (maps reference -> field -> value)
     pub(super) object_fields: HashMap<ValueId, HashMap<String, VMValue>>,
     /// Class name mapping for objects (for visibility checks)
@@ -197,13 +197,13 @@ pub struct VM {
     /// Marks ValueIds that represent internal (me/this) references within the current function
     pub(super) object_internal: std::collections::HashSet<ValueId>,
     /// Loop executor for handling phi nodes and loop-specific logic
-    loop_executor: LoopExecutor,
+    pub(super) loop_executor: LoopExecutor,
     /// Shared runtime for box creation and declarations
     pub(super) runtime: NyashRuntime,
     /// Scope tracker for calling fini on scope exit
-    scope_tracker: ScopeTracker,
+    pub(super) scope_tracker: ScopeTracker,
     /// Active MIR module during execution (for function calls)
-    module: Option<MirModule>,
+    pub(super) module: Option<MirModule>,
     /// Instruction execution counters (by MIR opcode)
     pub(super) instr_counter: std::collections::HashMap<&'static str, usize>,
     /// Execution start time for optional stats
@@ -243,31 +243,9 @@ pub struct VM {
 
 impl VM {
     pub fn runtime_ref(&self) -> &NyashRuntime { &self.runtime }
-    /// Enter a GC root region and return a guard that leaves on drop
-    pub(super) fn enter_root_region(&mut self) {
-        self.scope_tracker.enter_root_region();
-    }
 
-    /// Pin a slice of VMValue as roots in the current region
-    pub(super) fn pin_roots<'a>(&mut self, values: impl IntoIterator<Item = &'a VMValue>) {
-        for v in values {
-            self.scope_tracker.pin_root(v);
-        }
-    }
-
-    /// Leave current GC root region
-    pub(super) fn leave_root_region(&mut self) { self.scope_tracker.leave_root_region(); }
-
-    /// Site info for GC logs: (func, bb, pc)
-    pub(super) fn gc_site_info(&self) -> (String, i64, i64) {
-        let func = self.current_function.as_deref().unwrap_or("<none>").to_string();
-        let bb = self.frame.current_block.map(|b| b.0 as i64).unwrap_or(-1);
-        let pc = self.frame.pc as i64;
-        (func, bb, pc)
-    }
-
-    /// Print a simple breakdown of root VMValue kinds and top BoxRef types
-    fn gc_print_roots_breakdown(&self) {
+    /// Print a simple breakdown of root VMValue kinds and top BoxRef types (old-moved placeholder)
+    pub(super) fn gc_print_roots_breakdown_old(&self) {
         use std::collections::HashMap;
         let roots = self.scope_tracker.roots_snapshot();
         let mut kinds: HashMap<&'static str, u64> = HashMap::new();
@@ -292,7 +270,7 @@ impl VM {
         top.truncate(5);
         eprintln!("[GC] roots_boxref_top5: {:?}", top);
     }
-    fn gc_print_reachability_depth2(&self) {
+    pub(super) fn gc_print_reachability_depth2_old(&self) {
         use std::collections::HashMap;
         let roots = self.scope_tracker.roots_snapshot();
         let mut child_types: HashMap<String, u64> = HashMap::new();
@@ -327,106 +305,7 @@ impl VM {
         top.truncate(5);
         eprintln!("[GC] depth2_children: total={} top5={:?}", child_count, top);
     }
-    fn jit_threshold_from_env() -> u32 {
-        std::env::var("NYASH_JIT_THRESHOLD")
-            .ok()
-            .and_then(|s| s.parse::<u32>().ok())
-            .filter(|&v| v > 0)
-            .unwrap_or(64)
-    }
-    /// Helper: execute phi via LoopExecutor with previous_block-based selection (Step2 skeleton)
-    pub(super) fn loop_execute_phi(&mut self, dst: ValueId, inputs: &[(BasicBlockId, ValueId)]) -> Result<VMValue, VMError> {
-        if inputs.is_empty() {
-            return Err(VMError::InvalidInstruction("Phi node has no inputs".to_string()));
-        }
-        let debug_phi = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1")
-            || std::env::var("NYASH_VM_DEBUG_PHI").ok().as_deref() == Some("1");
-        if debug_phi { eprintln!("[VM] phi-select (delegated) prev={:?} inputs={:?}", self.previous_block, inputs); }
-        // Borrow just the values storage immutably to avoid borrowing entire &self in closure
-        let values_ref = &self.values;
-        let res = self.loop_executor.execute_phi(dst, inputs, |val_id| {
-            let index = val_id.to_usize();
-            if index < values_ref.len() {
-                if let Some(ref value) = values_ref[index] {
-                    Ok(value.clone())
-                } else {
-                    Err(VMError::InvalidValue(format!("Value {} not set", val_id)))
-                }
-            } else {
-                Err(VMError::InvalidValue(format!("Value {} out of bounds", val_id)))
-            }
-        });
-        if debug_phi {
-            match &res {
-                Ok(v) => eprintln!("[VM] phi-result -> {:?}", v),
-                Err(e) => eprintln!("[VM] phi-error -> {:?}", e),
-            }
-        }
-        res
-    }
-    /// Create a new VM instance
-    pub fn new() -> Self {
-        Self {
-            values: Vec::new(),
-            current_function: None,
-            frame: ExecutionFrame::new(),
-            previous_block: None,
-            object_fields: HashMap::new(),
-            object_class: HashMap::new(),
-            object_internal: std::collections::HashSet::new(),
-            loop_executor: LoopExecutor::new(),
-            runtime: NyashRuntime::new(),
-            scope_tracker: ScopeTracker::new(),
-            module: None,
-            instr_counter: std::collections::HashMap::new(),
-            exec_start: None,
-            boxcall_hits_vtable: 0,
-            boxcall_hits_poly_pic: 0,
-            boxcall_hits_mono_pic: 0,
-            boxcall_hits_generic: 0,
-            boxcall_pic_hits: std::collections::HashMap::new(),
-            boxcall_pic_funcname: std::collections::HashMap::new(),
-            boxcall_poly_pic: std::collections::HashMap::new(),
-            boxcall_vtable_funcname: std::collections::HashMap::new(),
-            type_versions: std::collections::HashMap::new(),
-            jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
-            // TODO: Re-enable when interpreter refactoring is complete
-            // box_registry: Arc::new(UnifiedBoxRegistry::new()),
-            // #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
-            // plugin_loader: None,
-            // scope_tracker: ScopeTracker::new(),
-            // box_declarations: Arc::new(RwLock::new(HashMap::new())),
-        }
-    }
-
-    /// Create a VM with an external runtime (dependency injection)
-    pub fn with_runtime(runtime: NyashRuntime) -> Self {
-        Self {
-            values: Vec::new(),
-            current_function: None,
-            frame: ExecutionFrame::new(),
-            previous_block: None,
-            object_fields: HashMap::new(),
-            object_class: HashMap::new(),
-            object_internal: std::collections::HashSet::new(),
-            loop_executor: LoopExecutor::new(),
-            runtime,
-            scope_tracker: ScopeTracker::new(),
-            module: None,
-            instr_counter: std::collections::HashMap::new(),
-            exec_start: None,
-            boxcall_hits_vtable: 0,
-            boxcall_hits_poly_pic: 0,
-            boxcall_hits_mono_pic: 0,
-            boxcall_hits_generic: 0,
-            boxcall_pic_hits: std::collections::HashMap::new(),
-            boxcall_pic_funcname: std::collections::HashMap::new(),
-            boxcall_poly_pic: std::collections::HashMap::new(),
-            boxcall_vtable_funcname: std::collections::HashMap::new(),
-            type_versions: std::collections::HashMap::new(),
-            jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
-        }
-    }
+    
     
     // TODO: Re-enable when interpreter refactoring is complete
     /*
@@ -451,58 +330,12 @@ impl VM {
     }
     */
     
-    /// Execute a MIR module
-    pub fn execute_module(&mut self, module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
-        // Store module for nested calls
-        self.module = Some(module.clone());
-        // Optional: dump registry for debugging
-        if std::env::var("NYASH_REG_DUMP").ok().as_deref() == Some("1") {
-            crate::runtime::type_meta::dump_registry();
-        }
-        // Reset stats
-        self.instr_counter.clear();
-        self.exec_start = Some(Instant::now());
-        // Find main function
-        let main_function = module.get_function("main")
-            .ok_or_else(|| VMError::InvalidInstruction("No main function found".to_string()))?;
-        
-        // Execute main function
-        let result = self.execute_function(main_function)?;
-        
-        // Optional: print VM stats
-        self.maybe_print_stats();
-        // Optional: print concise JIT unified stats
-        self.maybe_print_jit_unified_stats();
-
-        // Optional: print cache stats summary
-        if crate::config::env::vm_pic_stats() {
-            self.print_cache_stats_summary();
-        }
-
-        // Optional: print JIT detailed summary (top functions)
-        if let Some(jm) = &self.jit_manager { jm.print_summary(); }
-
-        // Optional: GC diagnostics if enabled
-        {
-            let lvl = crate::config::env::gc_trace_level();
-            if lvl > 0 {
-                if let Some((sp, rd, wr)) = self.runtime.gc.snapshot_counters() {
-                    eprintln!("[GC] counters: safepoints={} read_barriers={} write_barriers={}", sp, rd, wr);
-                }
-                let roots_total = self.scope_tracker.root_count_total();
-                let root_regions = self.scope_tracker.root_regions();
-                let field_slots: usize = self.object_fields.values().map(|m| m.len()).sum();
-                eprintln!("[GC] mock_mark: roots_total={} regions={} object_field_slots={}", roots_total, root_regions, field_slots);
-                if lvl >= 2 { self.gc_print_roots_breakdown(); }
-                if lvl >= 3 { self.gc_print_reachability_depth2(); }
-            }
-        }
-
-        // Convert result to NyashBox
-        Ok(result.to_nyash_box())
+    /// Execute a MIR module (old placeholder; moved to vm_exec.rs)
+    pub fn execute_module_old_moved(&mut self, _module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
+        Ok(Box::new(VoidBox::new()))
     }
 
-    fn print_cache_stats_summary(&self) {
+    fn print_cache_stats_summary_old(&self) {
         let sites_poly = self.boxcall_poly_pic.len();
         let entries_poly: usize = self.boxcall_poly_pic.values().map(|v| v.len()).sum();
         let avg_entries = if sites_poly > 0 { (entries_poly as f64) / (sites_poly as f64) } else { 0.0 };
@@ -523,7 +356,7 @@ impl VM {
     }
 
     /// Call a MIR function by name with VMValue arguments
-    pub(super) fn call_function_by_name(&mut self, func_name: &str, args: Vec<VMValue>) -> Result<VMValue, VMError> {
+    pub(super) fn call_function_by_name_old(&mut self, func_name: &str, args: Vec<VMValue>) -> Result<VMValue, VMError> {
         // Root region: ensure args stay rooted during nested call
         self.enter_root_region();
         self.pin_roots(args.iter());
@@ -574,7 +407,7 @@ impl VM {
     }
     
     /// Execute a single function
-    fn execute_function(&mut self, function: &MirFunction) -> Result<VMValue, VMError> {
+    fn execute_function_old(&mut self, function: &MirFunction) -> Result<VMValue, VMError> {
         self.current_function = Some(function.signature.name.clone());
         // Phase 10_a: JIT profiling (function entry)
         if let Some(jm) = &mut self.jit_manager {
@@ -721,89 +554,15 @@ impl VM {
         }
     }
     
-    /// Execute a single instruction
-    fn execute_instruction(&mut self, instruction: &MirInstruction) -> Result<ControlFlow, VMError> {
-        // Record instruction for stats
-        let debug_global = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1");
-        let debug_exec = debug_global || std::env::var("NYASH_VM_DEBUG_EXEC").ok().as_deref() == Some("1");
-        if debug_exec { eprintln!("[VM] execute_instruction: {:?}", instruction); }
-        self.record_instruction(instruction);
-        super::dispatch::execute_instruction(self, instruction, debug_global)
-        
-    }
+    /// Execute a single instruction (old placeholder; moved to vm_exec.rs)
+    fn execute_instruction_old(&mut self, _instruction: &MirInstruction) -> Result<ControlFlow, VMError> { unreachable!("moved") }
        
 
     
-    /// Get a value from storage
-    pub(super) fn get_value(&self, value_id: ValueId) -> Result<VMValue, VMError> {
-        let index = value_id.to_usize();
-        if index < self.values.len() {
-            if let Some(ref value) = self.values[index] {
-                Ok(value.clone())
-            } else {
-                Err(VMError::InvalidValue(format!("Value {} not set", value_id)))
-            }
-        } else {
-            Err(VMError::InvalidValue(format!("Value {} out of bounds", value_id)))
-        }
-    }
     
-    /// Set a value in the VM storage
-    pub(super) fn set_value(&mut self, value_id: ValueId, value: VMValue) {
-        let index = value_id.to_usize();
-        // Resize Vec if necessary
-        if index >= self.values.len() {
-            self.values.resize(index + 1, None);
-        }
-        self.values[index] = Some(value);
-    }
     
 
-    /// Record an instruction execution for statistics
-    pub(super) fn record_instruction(&mut self, instruction: &MirInstruction) {
-        let key: &'static str = match instruction {
-            MirInstruction::Const { .. } => "Const",
-            MirInstruction::BinOp { .. } => "BinOp",
-            MirInstruction::UnaryOp { .. } => "UnaryOp",
-            MirInstruction::Compare { .. } => "Compare",
-            MirInstruction::Load { .. } => "Load",
-            MirInstruction::Store { .. } => "Store",
-            MirInstruction::Call { .. } => "Call",
-            MirInstruction::BoxCall { .. } => "BoxCall",
-            MirInstruction::Branch { .. } => "Branch",
-            MirInstruction::Jump { .. } => "Jump",
-            MirInstruction::Return { .. } => "Return",
-            MirInstruction::Phi { .. } => "Phi",
-            MirInstruction::NewBox { .. } => "NewBox",
-            MirInstruction::TypeCheck { .. } => "TypeCheck",
-            MirInstruction::Cast { .. } => "Cast",
-            MirInstruction::TypeOp { .. } => "TypeOp",
-            MirInstruction::ArrayGet { .. } => "ArrayGet",
-            MirInstruction::ArraySet { .. } => "ArraySet",
-            MirInstruction::Copy { .. } => "Copy",
-            MirInstruction::Debug { .. } => "Debug",
-            MirInstruction::Print { .. } => "Print",
-            MirInstruction::Nop => "Nop",
-            MirInstruction::Throw { .. } => "Throw",
-            MirInstruction::Catch { .. } => "Catch",
-            MirInstruction::Safepoint => "Safepoint",
-            MirInstruction::RefNew { .. } => "RefNew",
-            MirInstruction::RefGet { .. } => "RefGet",
-            MirInstruction::RefSet { .. } => "RefSet",
-            MirInstruction::WeakNew { .. } => "WeakNew",
-            MirInstruction::WeakLoad { .. } => "WeakLoad",
-            MirInstruction::BarrierRead { .. } => "BarrierRead",
-            MirInstruction::BarrierWrite { .. } => "BarrierWrite",
-            MirInstruction::WeakRef { .. } => "WeakRef",
-            MirInstruction::Barrier { .. } => "Barrier",
-            MirInstruction::FutureNew { .. } => "FutureNew",
-            MirInstruction::FutureSet { .. } => "FutureSet",
-            MirInstruction::Await { .. } => "Await",
-            MirInstruction::ExternCall { .. } => "ExternCall",
-            MirInstruction::PluginInvoke { .. } => "PluginInvoke",
-        };
-        *self.instr_counter.entry(key).or_insert(0) += 1;
-    }
+    
 
     
     /// Phase 9.78a: Unified method dispatch for all Box types
@@ -1254,12 +1013,7 @@ impl VM {
 /// RAII guard for GC root regions
 // Root region guard removed in favor of explicit enter/leave to avoid borrow conflicts
 
-/// Control flow result from instruction execution
-pub(super) enum ControlFlow {
-    Continue,
-    Jump(BasicBlockId),
-    Return(VMValue),
-}
+pub(super) use crate::backend::vm_control_flow::ControlFlow;
 
 impl Default for VM {
     fn default() -> Self {

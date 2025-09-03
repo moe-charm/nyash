@@ -761,6 +761,53 @@ pub(super) extern "C" fn nyash_string_from_ptr(ptr: u64, len: u64) -> i64 {
     }
 }
 
+// ===== FunctionBox call shims (by arity, up to 4) =====
+#[cfg(feature = "cranelift-jit")]
+fn vmvalue_from_jit_arg_i64(v: i64) -> crate::backend::vm::VMValue { super::vmvalue_from_jit_arg_i64(v) }
+#[cfg(feature = "cranelift-jit")]
+fn i64_from_vmvalue(v: crate::backend::vm::VMValue) -> i64 { super::i64_from_vmvalue(v) }
+
+#[cfg(feature = "cranelift-jit")]
+fn fn_call_impl(func_h: u64, args: &[i64]) -> i64 {
+    use crate::box_trait::NyashBox;
+    let f_arc = match crate::jit::rt::handles::get(func_h) { Some(a) => a, None => return 0 };
+    if let Some(fun) = f_arc.as_any().downcast_ref::<crate::boxes::function_box::FunctionBox>() {
+        let mut ny_args: Vec<Box<dyn NyashBox>> = Vec::new();
+        for &ai in args {
+            let v = vmvalue_from_jit_arg_i64(ai);
+            ny_args.push(v.to_nyash_box());
+        }
+        match crate::interpreter::run_function_box(fun, ny_args) {
+            Ok(out) => {
+                let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
+                i64_from_vmvalue(vmv)
+            }
+            Err(_) => 0,
+        }
+    } else { 0 }
+}
+
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call0(func_h: u64) -> i64 { fn_call_impl(func_h, &[]) }
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call1(func_h: u64, a0: i64) -> i64 { fn_call_impl(func_h, &[a0]) }
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call2(func_h: u64, a0: i64, a1: i64) -> i64 { fn_call_impl(func_h, &[a0,a1]) }
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call3(func_h: u64, a0: i64, a1: i64, a2: i64) -> i64 { fn_call_impl(func_h, &[a0,a1,a2]) }
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call4(func_h: u64, a0: i64, a1: i64, a2: i64, a3: i64) -> i64 { fn_call_impl(func_h, &[a0,a1,a2,a3]) }
+
+// extended arities (5..8)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call5(func_h: u64, a0: i64, a1: i64, a2: i64, a3: i64, a4: i64) -> i64 { fn_call_impl(func_h, &[a0,a1,a2,a3,a4]) }
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call6(func_h: u64, a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64) -> i64 { fn_call_impl(func_h, &[a0,a1,a2,a3,a4,a5]) }
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call7(func_h: u64, a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64) -> i64 { fn_call_impl(func_h, &[a0,a1,a2,a3,a4,a5,a6]) }
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_fn_call8(func_h: u64, a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64, a7: i64) -> i64 { fn_call_impl(func_h, &[a0,a1,a2,a3,a4,a5,a6,a7]) }
+
 // Build a StringBox handle from two u64 chunks (little-endian) and length (<=16)
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_string_from_u64x2(lo: u64, hi: u64, len: i64) -> i64 {

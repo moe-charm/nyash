@@ -67,6 +67,7 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
 
         // Complex operations
         MirInstruction::Call { dst, func, args, effects: _ } => vm.execute_call(*dst, *func, args),
+        MirInstruction::FunctionNew { dst, params, body, captures, me } => vm.execute_function_new(*dst, params, body, captures, me),
         MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects: _ , .. } => vm.execute_boxcall(*dst, *box_val, method, *method_id, args),
         MirInstruction::PluginInvoke { dst, box_val, method, args, effects: _ } => vm.execute_plugin_invoke(*dst, *box_val, method, args),
         MirInstruction::NewBox { dst, box_type, args } => vm.execute_newbox(*dst, box_type, args),

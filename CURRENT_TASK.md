@@ -5,9 +5,59 @@
 - ドキュメント: `docs/development/roadmap/phases/phase-12/{README.md, PLAN.md, TASKS.md}`
 - ABI 最小コア: `docs/reference/abi/NYASH_ABI_MIN_CORE.md`
 
-## 概要（Executive Summary）
+## 概要（Executive Summary / 圧縮版）
 - 目的: ユーザー/プラグイン/内蔵を TypeBox+VTable で統一し、VM/JIT/WASM の同一実行を実現。
-- 現状: Tier‑0/Tier‑1 相当の配線完了。VM vtable→Plugin 経路も接続済み。WASM v2の最小ディスパッチ実装も導入。
+- 現状: Phase 12 完了（JIT/VM FunctionBox 呼び出し統一、Lambda→FunctionBox 値化、最小Builtin方針）。WASM v2 最小ディスパッチ導入。
+
+次フェーズ: リファクタリング（Phase 13）開始
+- 目標: 1ファイル1000行以内を目安に分割・整理。他AI/将来タスクが読みやすい構造へ。
+- 制約: 挙動不変・公開API維持・段階的分割＋逐次ビルド/テスト。
+
+Compact Snapshot（2025‑09‑03/Finalize）
+- Builtin（最小/条件付き）: 既定は plugins-only。wasm32 と cargo test では自動でBuiltin登録。任意で `--features builtin-core` で明示ON。
+- P2P 安定化: `sys.pong` 返信3ms遅延・`ping()`既定300ms。`on_once` 自己送信は deliver直後のflag無効化＋flag配列クリア＋`debug_active_handler_count` の最短確定で安定化。
+- FunctionBox 呼び出しの MIR/VM 統一:
+  - C1: `ASTNode::Call` 正規化（Lambda以外は `MirInstruction::Call(func,args)`）。
+  - C2: VM `execute_call` が 文字列（関数名）/ `FunctionBox`（BoxRef）両対応。`FunctionBox` 実行は interpreter ヘルパで return を正しく伝播。
+  - テスト: `src/tests/functionbox_call_tests.rs`（インタープリタ）、`src/tests/vm_functionbox_call.rs`（MIR→VM）。
+
+- Lambda→FunctionBox 値化（最小）: `MirInstruction::FunctionNew` を導入。簡易キャプチャ/`me`を MIR で値として保持。
+- JIT: `Call`→`nyash_fn_call0..8` シムで FunctionBox 実行をブリッジ（最大8引数）。
+- LLVM: 本実装は低優先のため保留中（モック実行経路で FunctionNew/Call をサポート）。
+
+次タスク（新フェーズ: リファクタリング / 圧縮）
+- A1) `backend/vm_instructions.rs` を機能別へ分割（目安: <1000行）
+- A2) `runtime/plugin_loader_v2.rs` を役割別へ分割（ffi_tlv/registry/host_bridge/loader）
+  - 完了: `src/runtime/plugin_loader_v2/` へ分割（enabled/{types,loader,globals}.rs + stub.rs）。公開APIは据え置き（`PluginLoaderV2`/`PluginBoxV2`/`make_plugin_box_v2`/`get_global_loader_v2` 等）
+  - A3) `backend/vm.rs` の状態/実行/GC/診断を分離
+    - 進捗: `ControlFlow` を `src/backend/vm_control_flow.rs` に抽出し、`vm.rs` から再エクスポートで互換維持（次は実行ループの段階切り出し）
+- B1) `mir/builder.rs` の `build_expression` 群を `builder/exprs.rs` へ抽出
+- B2) `interpreter/plugin_loader.rs` 分割（scan/link/abi/util）
+- C) 命名/コメント整備・公開APIのre-export最適化・軽微な util 抽出
+
+実行メモ（抜粋）
+- ユニット: `cargo test`（test時はBuiltin自動ON）
+- E2E: `cargo test --features e2e -- --nocapture`（普段は無効）
+- FunctionBoxテスト: 
+  - `cargo test --lib functionbox_call_tests -- --nocapture`
+  - `cargo test --lib vm_functionbox_call -- --nocapture`
+
+運用フラグ
+- 既定: `plugins-only`（Builtin未登録）
+- 自動ON: `wasm32` / `test` では Builtin 有効
+- 手動ON: `--features builtin-core`（Builtin最小コアを有効化）
+
+
+## 次タスク（優先順）
+- フェーズA（安全分割・挙動不変）
+  - A1) vm_instructions を 10前後のモジュールへ分割（consts/arith/compare/flow/call/boxcall/array/refs/future/newbox/print_debug）
+  - A2) plugin_loader_v2 を 4〜5ファイルへ分割（ffi_tlv/registry/host_bridge/loader/errors）
+  - A3) vm を 3〜4ファイルへ分割（state/exec/gc/format）
+- フェーズB（読みやすさ整形）
+  - B1) mir/builder の expr系切り出し
+  - B2) interpreter/plugin_loader の役割分離
+- フェーズC（軽整理）
+  - 命名/コメント整備、公開API re-export、1000行未満へ微調整
 
 ## 完了（Done）
 - TypeBox ABI 雛形: `src/runtime/type_box_abi.rs`
@@ -24,12 +74,48 @@
 - Console.readLine フォールバック（VM/Plugin 両経路）: stdin 読み込み/EOF=Null 返却で無限ループ防止
 - WASM v2 統一ディスパッチ（最小）: console/array/map のスロット対応
 
+進捗アップデート（Phase 13 / 2025-09-03）
+- A1 完了: `src/backend/vm_instructions.rs` をモジュール分割
+  - 新構成: `src/backend/vm_instructions/{mod.rs, core.rs, call.rs, newbox.rs, function_new.rs, extern_call.rs, boxcall.rs, plugin_invoke.rs}`
+  - 役割:
+    - `core.rs`: const/binop/unary/compare/print/ctrl/type/phi/mem/array/refs/weak/barriers/exn/await
+    - `call.rs`: 関数呼び出し（FunctionBox対応）
+    - `newbox.rs`: NewBox
+    - `function_new.rs`: Lambda→FunctionBox 値化
+    - `extern_call.rs`: ExternCall（env./registry経路）
+    - `boxcall.rs`: BoxCall + VTableスタブ + 汎用フォールバック
+    - `plugin_invoke.rs`: PluginInvoke（強制プラグイン経路）
+  - 可視性: `pub(crate)`/`pub(super)` 調整、`dispatch.rs` 経由の呼び出し互換維持
+  - ビルド: `cargo build` 緑（警告のみ／挙動不変）
+
+- A2 完了: `runtime/plugin_loader_v2.rs` をサブモジュール化
+  - 新構成: `src/runtime/plugin_loader_v2/`
+    - `mod.rs`（cfg切替）
+    - `enabled/{types.rs, loader.rs, globals.rs}`
+      - `types.rs`: `PluginBoxV2`/`PluginHandleInner`/`NyashTypeBoxFfi`、`make_plugin_box_v2`/`construct_plugin_box`
+      - `loader.rs`: `PluginLoaderV2`（extern_call/invoke_instance_method/create_box 等のAPIを維持）
+      - `globals.rs`: `get_global_loader_v2`/`init_global_loader_v2`/`shutdown_plugins_v2`
+    - `stub.rs`: plugins無効/wasm 用スタブ（同名API維持）
+  - 公開API/パス互換: 既存の `crate::runtime::plugin_loader_v2::*` 参照はそのまま
+  - ビルド: `cargo build` 緑（警告のみ）
+
+- A3 進行中: `backend/vm.rs` の段階分割
+  - 第1段: `ControlFlow` を `src/backend/vm_control_flow.rs` に抽出し、`vm.rs` から再エクスポート（完了）
+  - 第2段: 実行ループを `src/backend/vm_exec.rs` へ抽出（完了）
+    - 移動対象: `VM::execute_module`、`VM::execute_function`、`VM::call_function_by_name`、`VM::execute_instruction`、`VM::print_cache_stats_summary`
+    - 可視性調整: `VM` の内部状態（`values/current_function/frame/previous_block/loop_executor/module/instr_counter/exec_start/scope_tracker` 等）を `pub(super)` に変更し、`vm_exec.rs` から安全に参照できるようにした。GCダイアグ用メソッド（`gc_print_roots_breakdown`/`gc_print_reachability_depth2`）も `pub(super)` 化。
+    - `ControlFlow` を `pub(crate)` に変更し、`vm_instructions` サブモジュールの `pub(crate)` API と可視性を整合。
+    - ビルド: 成功（警告あり）。`private_interfaces`/`unused_*`/`unexpected_cfg` などの警告は機能的影響なし。
+  - 第3段: GC ルート管理と診断を `src/backend/vm_gc.rs` へ抽出（完了）
+    - 移動対象: `enter_root_region`、`pin_roots`、`leave_root_region`、`gc_site_info`、`gc_print_roots_breakdown`、`gc_print_reachability_depth2`
+    - 既存呼び出しは変更なし（同名メソッドとして移設）。旧定義は一時的に `*_old` 名へ退避し、後続で削除予定。
+    - 注記: `vm.rs` 内の旧メソッドは一時的に `*_old` 名へリネームし残置（安全移行用）。後続ステップで完全削除予定。
+  - 次段候補: VM状態→ `vm_state.rs`（構造体フィールド/コンストラクタ/値のget/set/記録系）、GC/診断→ `vm_gc.rs`（ルート管理ラッパ/統計出力など）。
+
 ## 残タスク（To‑Do）
-1) アプリ3モード実行（Script/VM/JIT）の整合確認（ny-echo/ny-array-bench/ny-mem-bench）
-   - ログ抑制（`NYASH_CLI_VERBOSE=0`）で確認
-   - `StatsBox` 未定義は別件として扱う
-2) Docs 最終化（slot表・vtable優先方針・トレース変数）
-3) Phase 12 クローズ準備（チェックリスト/次フェーズへの接続）
+1) リファクタフェーズA/B/C 実施（段階コミット＋スモーク）
+2) ドキュメント更新（開発者向け構成図・分割指針・API安定ポリシー）
+3) LLVM（本実装）は低優先：Call シム import/Lower の設計だけ先に下書き
 
 ## 実行コマンド（サマリ）
 - ビルド: `cargo build --release --features cranelift-jit`
@@ -49,6 +135,14 @@
 ---
 詳細な履歴や議事録は docs 配下の Phase 12 セクションを参照してください。
 
+## フェーズ13（リファクタ）方針・成功条件
+- 方針: 公開APIを維持しつつ内部構造を機能別に分割。1ファイル1000行以内を目安に段階導入。
+- 手順: 1モジュールずつ分割→ビルド→限定ユニット/スモーク→次へ。
+- 成功条件:
+  - 大規模ファイル（>1000行）が解消（vm_instructions / plugin_loader_v2 / vm / builder）
+  - ビルド/主要ユニットが従来通り通る（挙動不変）
+  - 他AI/将来タスクが読みやすいレイアウト（役割ごとに参照しやすい）
+
 Docs（Phase 12 直近）
 - [x] Minimal Core ABI方針の文書化（NYASH_ABI_MIN_CORE.md）
 - [ ] TECHNICAL_DECISIONSの最小ABI/API交渉・互換・安全の章を精緻化（進行中）
@@ -57,6 +151,32 @@ Docs（Phase 12 直近）
 Phase 12 ゴール（検証観点）
 - Cross-backend 同値性: 同一プログラム（Nyashコード）が VM と JIT で同一の最終結果・ログ・副作用（Box状態）を生む。
 - ゴールデン/スモーク: 共通テストハーネスで VM/JIT を同条件で走らせ比較（差分があれば落とす）。
+
+## 残件・課題と対応方針（2025-09-03）
+
+- VMユニット赤の原因と対応（plugins-onlyでBuiltin未登録）
+  - 症状: Array/Map などの生成で Unknown Box type（プラグインのみのレジストリ）。
+  - 対応: 既定を Builtin 登録に戻し、plugins-only は feature 化。
+    - 実装: BuiltinBoxFactory を追加し、NyashRuntime/UnifiedRegistry 初期化時に登録（plugins-only 時はスキップ）。
+    - 追加: Cargo.toml に `plugins-only` feature を定義。
+
+- P2PBox の once/ping 安定化方針
+  - once: deliver 後にフラグ無効化（現行仕様維持、分岐独立を再確認）。
+  - ping: `sys.pong` 返信スレッドの遅延を 3ms に調整、`ping()` 既定タイムアウトは 300ms に。
+  - 目的: 記録タイミング（last_from/last_intent）競合の低減とCI安定化。
+
+- FunctionBox 呼び出しの MIR/VM 統一（段階計画）
+  - C1) MIR 正規化: `ASTNode::Call` は Lambda 以外を `MirInstruction::Call(func, args)` に正規化（完了）。
+  - C2) VM 実行: `func` が 文字列なら名前呼び出し、`FunctionBox` ならインタープリタヘルパで本体実行（完了）。
+  - C3) LLVM/JIT: C2 のシムを後続で移植（VMで安定化→JITへ）。Lambda→FunctionBox 値化は小PRで導入予定（MIRのみで関数値を生成できるように）。
+
+- テスト整理
+  - E2E は feature で切替済み（`--features e2e`）。
+  - ユニットは初期化ヘルパ（Builtin登録）で安定化。plugins-only 依存は `#[cfg(feature="plugins-only")]` で保護。
+
+- ドキュメント/デモ更新
+  - FunctionBox ハンドラのデモを追加（`apps/p2p-function-handler-demo`）。
+  - function values / captures / `this→me` / `Parent::` / `?` / `peek` のガイドを `docs/development/current/function_values_and_captures.md` に追記済み。
 
 
 > Quick Resume (Phase 12 bridge)
@@ -1248,3 +1368,27 @@ How to Run（再現手順）
 - NewBox(Instance) はJIT側で UnifiedRegistry を直接叩くため、グローバルに必要Factoryを登録しておく（テスト内で注入済み）
 
 （以下、旧詳細ログは履歴のため残置）
+  - 第4段: VM 基本状態を `src/backend/vm_state.rs` へ抽出（完了）
+    - 移動: `new/with_runtime`、`get_value/set_value`、`record_instruction`、`jit_threshold_from_env`、`loop_execute_phi`（各 `impl VM`）
+    - `mod.rs` に `mod vm_state;` を追加。各呼び出し元のシンボルは従来どおり `VM::...` で参照可。
+    - ビルド: 成功。
+
+現状のレイアウト（A3 途中）
+- `backend/vm.rs`: VM 本体（構造体・値型・最小グルー）。現在 ~1295 行（旧メソッド退避を除き圧縮済み）
+- `backend/vm_exec.rs`: 実行エントリ/ループ/1命令実行
+- `backend/vm_gc.rs`: ルート領域 API と GC 診断出力
+- `backend/vm_state.rs`: 生成・状態・値アクセス・統計・phi 補助
+- `backend/vm_values.rs`: 算術/論理/比較の内部演算
+- `backend/vm_instructions/`: 命令ハンドラ群
+- `backend/vm_boxcall.rs`: VTable/PIC スタブと BoxCall 補助
+- `backend/dispatch.rs`: MIR 命令 → 実行関数 振り分け
+
+次の分割（提案 / おすすめ）
+- S1) `vm_methods.rs` 抽出（Box メソッドディスパッチ）
+  - 対象: `VM::call_box_method`（大ブロック）＋`call_unified_method` ラッパ
+  - 期待効果: `vm.rs` を < 1000 行へ。呼び出しは現行どおり `VM::call_box_method`。
+- S2) `vm.rs` 旧プレースホルダ（`*_old`, `execute_module_old_moved` など）を段階削除
+  - 互換検証後に削除してノイズ低減。
+- S3) `vm_types.rs`（任意）
+  - `VMError`/`VMValue` 定義を分離し参照しやすく。
+  - ただし変更範囲が大きいため最後に予定。

@@ -412,6 +412,54 @@ impl NyashInterpreter {
     }
 }
 
+/// Execute a FunctionBox with given NyashBox arguments (crate-visible helper for VM)
+pub(crate) fn run_function_box(
+    fun: &crate::boxes::function_box::FunctionBox,
+    args: Vec<Box<dyn crate::box_trait::NyashBox>>,
+) -> Result<Box<dyn crate::box_trait::NyashBox>, RuntimeError> {
+    use crate::box_trait::{NyashBox, VoidBox};
+    if args.len() != fun.params.len() {
+        return Err(RuntimeError::InvalidOperation { message: format!(
+            "Function expects {} args, got {}", fun.params.len(), args.len()
+        )});
+    }
+
+    let mut interp = NyashInterpreter::new();
+    // Captures
+    for (k, v) in fun.env.captures.iter() {
+        interp.declare_local_variable(k, v.clone_or_share());
+    }
+    if let Some(me_w) = &fun.env.me_value {
+        if let Some(me_arc) = me_w.upgrade() {
+            interp.declare_local_variable("me", (*me_arc).clone_or_share());
+        } else {
+            interp.declare_local_variable("me", Box::new(crate::boxes::null_box::NullBox::new()));
+        }
+    }
+    // Params
+    for (p, v) in fun.params.iter().zip(args.into_iter()) {
+        interp.declare_local_variable(p, v);
+    }
+    // Execute body
+    crate::runtime::global_hooks::push_task_scope();
+    let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
+    for st in &fun.body {
+        match interp.execute_statement(st) {
+            Ok(val) => {
+                result = val;
+                if let super::ControlFlow::Return(rv) = &interp.control_flow {
+                    result = rv.clone_box();
+                    interp.control_flow = super::ControlFlow::None;
+                    break;
+                }
+            }
+            Err(e) => { crate::runtime::global_hooks::pop_task_scope(); return Err(e); }
+        }
+    }
+    crate::runtime::global_hooks::pop_task_scope();
+    Ok(result)
+}
+
 // ===== Tests =====
 
 #[cfg(test)]

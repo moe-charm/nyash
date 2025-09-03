@@ -301,28 +301,27 @@ impl MirBuilder {
                 self.build_function_call(name.clone(), arguments.clone())
             },
             ASTNode::Call { callee, arguments, .. } => {
-                // 最小P1: callee が Lambda の場合のみ対応
+                // P1.5: Lambdaはインライン、それ以外は Call に正規化
                 if let ASTNode::Lambda { params, body, .. } = callee.as_ref() {
                     if params.len() != arguments.len() {
                         return Err(format!("Lambda expects {} args, got {}", params.len(), arguments.len()));
                     }
-                    // 引数を評価
                     let mut arg_vals: Vec<ValueId> = Vec::new();
                     for a in arguments { arg_vals.push(self.build_expression(a)?); }
-                    // スコープ保存
                     let saved_vars = self.variable_map.clone();
-                    // パラメータ束縛
-                    for (p, v) in params.iter().zip(arg_vals.iter()) {
-                        self.variable_map.insert(p.clone(), *v);
-                    }
-                    // 本体を Program として Lower
+                    for (p, v) in params.iter().zip(arg_vals.iter()) { self.variable_map.insert(p.clone(), *v); }
                     let prog = ASTNode::Program { statements: body.clone(), span: crate::ast::Span::unknown() };
                     let out = self.build_expression(prog)?;
-                    // 復元
                     self.variable_map = saved_vars;
                     Ok(out)
                 } else {
-                    Err("Callee is not callable (lambda required)".to_string())
+                    // callee/args を評価し、Call を発行（VM 側で FunctionBox/関数名の両対応）
+                    let callee_id = self.build_expression(*callee.clone())?;
+                    let mut arg_ids = Vec::new();
+                    for a in arguments { arg_ids.push(self.build_expression(a)?); }
+                    let dst = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Call { dst: Some(dst), func: callee_id, args: arg_ids, effects: EffectMask::PURE })?;
+                    Ok(dst)
                 }
             },
             
@@ -440,11 +439,68 @@ impl MirBuilder {
             },
             
             ASTNode::Lambda { params, body, .. } => {
-                // Minimal P1: represent as constant string for now
+                // Lambda→FunctionBox 値 Lower（最小 + 簡易キャプチャ解析）
                 let dst = self.value_gen.next();
-                let s = format!("Lambda(params={}, body={})", params.len(), body.len());
-                self.emit_instruction(MirInstruction::Const { dst, value: ConstValue::String(s) })?;
-                self.value_types.insert(dst, super::MirType::String);
+                // Collect free variable names: variables used in body but not in params, and not 'me'/'this'
+                use std::collections::HashSet;
+                let mut used: HashSet<String> = HashSet::new();
+                let mut locals: HashSet<String> = HashSet::new();
+                for p in params.iter() { locals.insert(p.clone()); }
+                fn collect_vars(node: &crate::ast::ASTNode, used: &mut HashSet<String>, locals: &mut HashSet<String>) {
+                    match node {
+                        crate::ast::ASTNode::Variable { name, .. } => {
+                            if name != "me" && name != "this" && !locals.contains(name) {
+                                used.insert(name.clone());
+                            }
+                        }
+                        crate::ast::ASTNode::Local { variables, .. } => { for v in variables { locals.insert(v.clone()); } }
+                        crate::ast::ASTNode::Assignment { target, value, .. } => { collect_vars(target, used, locals); collect_vars(value, used, locals); }
+                        crate::ast::ASTNode::BinaryOp { left, right, .. } => { collect_vars(left, used, locals); collect_vars(right, used, locals); }
+                        crate::ast::ASTNode::UnaryOp { operand, .. } => { collect_vars(operand, used, locals); }
+                        crate::ast::ASTNode::MethodCall { object, arguments, .. } => { collect_vars(object, used, locals); for a in arguments { collect_vars(a, used, locals); } }
+                        crate::ast::ASTNode::FunctionCall { arguments, .. } => { for a in arguments { collect_vars(a, used, locals); } }
+                        crate::ast::ASTNode::Call { callee, arguments, .. } => { collect_vars(callee, used, locals); for a in arguments { collect_vars(a, used, locals); } }
+                        crate::ast::ASTNode::FieldAccess { object, .. } => { collect_vars(object, used, locals); }
+                        crate::ast::ASTNode::New { arguments, .. } => { for a in arguments { collect_vars(a, used, locals); } }
+                        crate::ast::ASTNode::If { condition, then_body, else_body, .. } => {
+                            collect_vars(condition, used, locals);
+                            for st in then_body { collect_vars(st, used, locals); }
+                            if let Some(eb) = else_body { for st in eb { collect_vars(st, used, locals); } }
+                        }
+                        crate::ast::ASTNode::Loop { condition, body, .. } => { collect_vars(condition, used, locals); for st in body { collect_vars(st, used, locals); } }
+                        crate::ast::ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => {
+                            for st in try_body { collect_vars(st, used, locals); }
+                            for c in catch_clauses { for st in &c.body { collect_vars(st, used, locals); } }
+                            if let Some(fb) = finally_body { for st in fb { collect_vars(st, used, locals); } }
+                        }
+                        crate::ast::ASTNode::Throw { expression, .. } => { collect_vars(expression, used, locals); }
+                        crate::ast::ASTNode::Print { expression, .. } => { collect_vars(expression, used, locals); }
+                        crate::ast::ASTNode::Return { value, .. } => { if let Some(v) = value { collect_vars(v, used, locals); } }
+                        crate::ast::ASTNode::AwaitExpression { expression, .. } => { collect_vars(expression, used, locals); }
+                        crate::ast::ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => {
+                            collect_vars(scrutinee, used, locals);
+                            for (_, e) in arms { collect_vars(e, used, locals); }
+                            collect_vars(else_expr, used, locals);
+                        }
+                        crate::ast::ASTNode::Program { statements, .. } => { for st in statements { collect_vars(st, used, locals); } }
+                        crate::ast::ASTNode::FunctionDeclaration { params, body, .. } => {
+                            let mut inner = locals.clone();
+                            for p in params { inner.insert(p.clone()); }
+                            for st in body { collect_vars(st, used, &mut inner); }
+                        }
+                        _ => {}
+                    }
+                }
+                for st in body.iter() { collect_vars(st, &mut used, &mut locals); }
+                // Materialize captures from current variable_map if known
+                let mut captures: Vec<(String, ValueId)> = Vec::new();
+                for name in used.into_iter() {
+                    if let Some(&vid) = self.variable_map.get(&name) { captures.push((name, vid)); }
+                }
+                // me capture（存在すれば）
+                let me = self.variable_map.get("me").copied();
+                self.emit_instruction(MirInstruction::FunctionNew { dst, params: params.clone(), body: body.clone(), captures, me })?;
+                self.value_types.insert(dst, super::MirType::Box("FunctionBox".to_string()));
                 Ok(dst)
             },
             

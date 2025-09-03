@@ -13,6 +13,10 @@ pub mod control_flow;
 pub mod dispatch;
 pub mod frame;
 pub mod gc_helpers;
+pub mod vm_control_flow;
+mod vm_gc; // A3: GC roots & diagnostics extracted
+mod vm_exec; // A3: execution loop extracted
+mod vm_state; // A3: state & basic helpers extracted
 pub mod abi_util; // Shared ABI/utility helpers
 pub mod mir_interpreter; // Lightweight MIR interpreter
 

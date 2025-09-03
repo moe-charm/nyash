@@ -6,6 +6,7 @@
  */
 
 use crate::box_factory::UnifiedBoxRegistry;
+use crate::box_factory::builtin::BuiltinBoxFactory;
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -17,6 +18,11 @@ static GLOBAL_REGISTRY: OnceLock<Arc<Mutex<UnifiedBoxRegistry>>> = OnceLock::new
 pub fn init_global_unified_registry() {
     GLOBAL_REGISTRY.get_or_init(|| {
         let mut registry = UnifiedBoxRegistry::new();
+        // Builtins enabled only for wasm32, tests, or when feature "builtin-core" is set
+        #[cfg(any(test, target_arch = "wasm32", feature = "builtin-core"))]
+        {
+            registry.register(std::sync::Arc::new(BuiltinBoxFactory::new()));
+        }
         
         // Register plugin Box factory (primary)
         #[cfg(feature = "plugins")]

@@ -7,6 +7,7 @@ use crate::mir::instruction::{MirInstruction, ConstValue, BinaryOp, UnaryOp, Com
 use crate::mir::ValueId;
 use crate::box_trait::{NyashBox, IntegerBox, StringBox, BoolBox};
 use crate::boxes::math_box::FloatBox;
+use crate::boxes::function_box::FunctionBox;
 use crate::boxes::null_box::NullBox;
 use super::context::CodegenContext;
 use std::collections::HashMap;
@@ -157,6 +158,50 @@ impl LLVMCompiler {
                         }
                     }
                     
+                    MirInstruction::FunctionNew { dst, params, body, captures, me } => {
+                        // Minimal: build FunctionBox with empty captures unless provided
+                        let mut env = crate::boxes::function_box::ClosureEnv::new();
+                        // Materialize captures (by value) if any
+                        for (name, vid) in captures.iter() {
+                            let v = self.values.get(vid).ok_or_else(|| format!("Value %{} not found for capture {}", vid.0, name))?;
+                            env.captures.insert(name.clone(), v.clone_box());
+                        }
+                        // me capture (weak) if provided and is a box
+                        if let Some(m) = me {
+                            if let Some(b) = self.values.get(m) {
+                                if let Some(arc) = std::sync::Arc::downcast::<dyn NyashBox>({
+                                    let bx: std::sync::Arc<dyn NyashBox> = std::sync::Arc::from(b.clone_box());
+                                    bx
+                                }).ok() {
+                                    env.me_value = Some(std::sync::Arc::downgrade(&arc));
+                                }
+                            }
+                        }
+                        let fun = FunctionBox::with_env(params.clone(), body.clone(), env);
+                        self.values.insert(*dst, Box::new(fun));
+                        println!("   🧰 %{} = function_new (params={})", dst.0, params.len());
+                    }
+
+                    MirInstruction::Call { dst, func, args, .. } => {
+                        // Resolve callee
+                        let cal = self.values.get(func)
+                            .ok_or_else(|| format!("Call target %{} not found", func.0))?;
+                        if let Some(fb) = cal.as_any().downcast_ref::<FunctionBox>() {
+                            // Collect args as NyashBox
+                            let mut argv: Vec<Box<dyn NyashBox>> = Vec::new();
+                            for a in args {
+                                let av = self.values.get(a).ok_or_else(|| format!("Arg %{} not found", a.0))?;
+                                argv.push(av.clone_box());
+                            }
+                            let out = crate::interpreter::run_function_box(fb, argv)
+                                .map_err(|e| format!("FunctionBox call failed: {:?}", e))?;
+                            if let Some(d) = dst { self.values.insert(*d, out); }
+                            println!("   📞 call %{} -> {}", func.0, dst.map(|v| v.0).unwrap_or(u32::MAX));
+                        } else {
+                            println!("   ⚠️  Skipping call: callee not FunctionBox");
+                        }
+                    }
+
                     _ => {
                         // Other instructions not yet implemented
                         println!("   ⚠️  Skipping instruction: {:?}", inst);

@@ -62,14 +62,26 @@ $NyashCompiler{compile(src){l ast=m.parse(src)l mir=m.lower(ast)r m.codegen(mir)
 ## 🎯 最重要ドキュメント
 
 ### 📚 実装者必読
-- **[🔥 究極のAIコーディングガイド](ULTIMATE-AI-CODING-GUIDE.md)** ← ⭐ START HERE! ⭐
-- [📝 文法改革最終決定](grammar-reform-final-decision.txt)
-- [🔧 実装チェックリスト](implementation-final-checklist.txt)
-- [⚡ 極限糖衣構文提案](extreme-sugar-proposals.txt)
-- [🔄 糖衣構文フォーマッター](sugar-formatter-tool.txt)
+- **[🚀 ANCP実装計画（統合版）](implementation/ANCP-IMPLEMENTATION-PLAN.md)** ← ⭐ START HERE! ⭐
+- **[📋 ANCP Token仕様書 v1](ancp-specs/ANCP-Token-Specification-v1.md)** - ChatGPT5作成の最新仕様
+- [🔧 実装チェックリスト](implementation/implementation-final-checklist.txt)
 
-### 🏗️ 技術仕様
-- [📐 文法技術仕様書](grammar-technical-spec.txt)
+### 📐 ANCP仕様書
+- **[🔥 究極のAIコーディングガイド](ancp-specs/ULTIMATE-AI-CODING-GUIDE.md)** - 5層圧縮体系
+- [⚡ 極限糖衣構文提案](ancp-specs/extreme-sugar-proposals.txt)
+- [🔄 糖衣構文フォーマッター](ancp-specs/sugar-formatter-tool.txt)
+- [🔬 圧縮技術参考ライブラリ](ancp-specs/compression-reference-libraries.md)
+
+### 📝 文法仕様書
+- [📝 文法改革最終決定](grammar-specs/grammar-reform-final-decision.txt)
+- [📐 文法技術仕様書](grammar-specs/grammar-technical-spec.txt)
+
+### 🤖 AIアドバイザーフィードバック
+- **[📋 統合フィードバック](ai-feedback/)** - 全AIアドバイザーの知見
+  - [ChatGPT5実装アドバイス](ai-feedback/chatgpt5-ancp-implementation-advice.md)
+  - [Claude/Codex技術分析](ai-feedback/codex-ancp-response.md)
+  - [Gemini革命的評価](ai-feedback/gemini-ancp-response.md)
+  - [即座実装ガイド](ai-feedback/quick-implementation-guide.md)
 
 ### 📁 アーカイブ（検討過程）
 - [🗃️ 過去の議論・検討資料](archive/)

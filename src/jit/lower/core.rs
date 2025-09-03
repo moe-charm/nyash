@@ -186,6 +186,34 @@ impl LowerCore {
     fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId, func: &crate::mir::MirFunction) -> Result<(), String> {
         use crate::mir::MirInstruction as I;
         match instr {
+            I::Call { dst, func, args, .. } => {
+                // FunctionBox call shim: emit hostcall nyash_fn_callN(func_h, args...)
+                // Push function operand (param or known)
+                self.push_value_if_known_or_param(b, func);
+                // Push up to 4 args (unknown become iconst 0 via helper)
+                for a in args.iter() { self.push_value_if_known_or_param(b, a); }
+                // Choose symbol by arity
+                let argc = args.len();
+                let sym = match argc {
+                    0 => "nyash_fn_call0",
+                    1 => "nyash_fn_call1",
+                    2 => "nyash_fn_call2",
+                    3 => "nyash_fn_call3",
+                    4 => "nyash_fn_call4",
+                    5 => "nyash_fn_call5",
+                    6 => "nyash_fn_call6",
+                    7 => "nyash_fn_call7",
+                    _ => "nyash_fn_call8",
+                };
+                // Emit typed call: all params as I64, returning I64 handle
+                // Build param kinds vector: 1 (func) + argc (args)
+                let mut params: Vec<crate::jit::lower::builder::ParamKind> = Vec::new();
+                params.push(crate::jit::lower::builder::ParamKind::I64);
+                for _ in 0..core::cmp::min(argc, 8) { params.push(crate::jit::lower::builder::ParamKind::I64); }
+                b.emit_host_call_typed(sym, &params, true, false);
+                // Mark destination as handle-like
+                if let Some(d) = dst { self.handle_values.insert(*d); }
+            }
             I::Await { dst, future } => {
                 // Push future param index when known; otherwise -1 to trigger legacy search in shim
                 if let Some(pidx) = self.param_index.get(future).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }

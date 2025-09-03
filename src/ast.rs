@@ -245,7 +245,7 @@ pub enum StatementNode {
 }
 
 /// Catch節の構造体
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
     pub exception_type: Option<String>,  // None = catch-all
     pub variable_name: Option<String>,   // 例外を受け取る変数名
@@ -254,7 +254,7 @@ pub struct CatchClause {
 }
 
 /// リテラル値の型 (Clone可能)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LiteralValue {
     String(String),
     Integer(i64),
@@ -375,7 +375,7 @@ impl fmt::Display for BinaryOperator {
 }
 
 /// AST Node - Everything is Box哲学に基づく統一構造
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ASTNode {
     /// プログラム全体 - 文のリスト
     Program {

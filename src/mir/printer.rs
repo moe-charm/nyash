@@ -311,6 +311,13 @@ impl MirPrinter {
                     format!("call {}({})", func, args_str)
                 }
             },
+            MirInstruction::FunctionNew { dst, params, body, captures, me } => {
+                let p = params.join(", ");
+                let c = captures.iter().map(|(n, v)| format!("{}={}", n, v)).collect::<Vec<_>>().join(", ");
+                let me_s = me.map(|m| format!(" me={}", m)).unwrap_or_default();
+                let cap_s = if c.is_empty() { String::new() } else { format!(" [{}]", c) };
+                format!("{} = function_new ({}) {{...{}}}{}{}", dst, p, body.len(), cap_s, me_s)
+            },
             
             MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects: _ } => {
                 let args_str = args.iter()

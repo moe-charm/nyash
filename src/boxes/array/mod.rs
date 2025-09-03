@@ -81,6 +81,10 @@ impl ArrayBox {
             if idx < items.len() {
                 items[idx] = value;
                 Box::new(StringBox::new("ok"))
+            } else if idx == items.len() {
+                // Pragmatic semantics: allow set at exact end to append
+                items.push(value);
+                Box::new(StringBox::new("ok"))
             } else {
                 Box::new(StringBox::new("Error: index out of bounds"))
             }

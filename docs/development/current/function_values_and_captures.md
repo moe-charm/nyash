@@ -21,3 +21,10 @@ Notes
 - RefCell-backed locals captured by closures will reflect assignments (`x = ...`) in the outer scope.
 - For plugin-backed boxes, assignment and argument passing uses share semantics to preserve identity.
 
+MIR/VM call unification (Phase 12)
+
+- MIR `Call`: accepts either a function name (String) or a `FunctionBox` value.
+  - If the callee is a String, VM performs a named-function dispatch (existing path).
+  - If the callee is a `FunctionBox` (BoxRef), VM runs it via the interpreter helper with captures/`me` injected and proper return propagation.
+- Lambda immediate calls are still directly lowered inline for P1 compatibility.
+- Lambda→FunctionBox: Lambda expressions now lower to a `FunctionNew` MIR instruction that constructs a `FunctionBox` value (minimal: captures currently omitted). This enables MIR-only pipelines to construct and call function values.

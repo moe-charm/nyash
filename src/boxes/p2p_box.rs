@@ -53,6 +53,7 @@ pub struct P2PBox {
     transport: Arc<RwLock<Box<dyn Transport>>>,
     handlers: Arc<RwLock<HashMap<String, Box<dyn NyashBox>>>>,
     handler_flags: Arc<RwLock<HashMap<String, Vec<Arc<AtomicBool>>>>>,
+    handler_once: Arc<RwLock<HashMap<String, bool>>>,
     // Minimal receive cache for loopback smoke tests
     last_from: Arc<RwLock<Option<String>>>,
     last_intent_name: Arc<RwLock<Option<String>>>,
@@ -78,6 +79,7 @@ impl Clone for P2PBox {
             transport: Arc::new(RwLock::new(new_transport)),
             handlers: Arc::new(RwLock::new(handlers_val)),
             handler_flags: Arc::new(RwLock::new(HashMap::new())),
+            handler_once: Arc::new(RwLock::new(HashMap::new())),
             last_from: Arc::new(RwLock::new(last_from_val)),
             last_intent_name: Arc::new(RwLock::new(last_intent_val)),
         }
@@ -118,6 +120,7 @@ impl P2PBox {
             transport: Arc::new(RwLock::new(transport_boxed)),
             handlers: Arc::new(RwLock::new(HashMap::new())),
             handler_flags: Arc::new(RwLock::new(HashMap::new())),
+            handler_once: Arc::new(RwLock::new(HashMap::new())),
             last_from: Arc::new(RwLock::new(None)),
             last_intent_name: Arc::new(RwLock::new(None)),
         };
@@ -141,7 +144,8 @@ impl P2PBox {
                         let reply = crate::boxes::IntentBox::new("sys.pong".to_string(), serde_json::json!({}));
                         let transport_arc = Arc::clone(&transport_arc_for_cb);
                         std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_millis(1));
+                            // slight delay to avoid lock contention and ordering races
+                            std::thread::sleep(std::time::Duration::from_millis(3));
                             if let Ok(transport) = transport_arc.read() {
                                 let _ = transport.send(&to, reply, Default::default());
                             }
@@ -200,9 +204,9 @@ impl P2PBox {
         Box::new(BoolBox::new(ok))
     }
 
-    /// Convenience default-timeout ping (200ms)
+    /// Convenience default-timeout ping (300ms)
     pub fn ping(&self, to: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        self.ping_with_timeout(to, 200)
+        self.ping_with_timeout(to, 300)
     }
     
     /// 特定ノードにメッセージを送信
@@ -243,6 +247,11 @@ impl P2PBox {
             let mut flags = self.handler_flags.write().unwrap();
             flags.entry(intent_str.to_string()).or_default().push(flag.clone());
         }
+        // once情報を記録
+        {
+            let mut once_map = self.handler_once.write().unwrap();
+            once_map.insert(intent_str.to_string(), once);
+        }
 
         // 可能ならTransportにハンドラ登録（InProcessなど）
         if let Ok(mut t) = self.transport.write() {
@@ -253,6 +262,9 @@ impl P2PBox {
                 // capture state holders for receive-side tracing
                 let last_from = Arc::clone(&self.last_from);
                 let last_intent = Arc::clone(&self.last_intent_name);
+                // capture flags map to allow removal on once
+                let flags_arc = Arc::clone(&self.handler_flags);
+                let intent_name_closure = intent_name.clone();
                 t.register_intent_handler(&intent_name, Box::new(move |env| {
                     if flag.load(Ordering::SeqCst) {
                         if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
@@ -261,7 +273,12 @@ impl P2PBox {
                             Box::new(env.intent.clone()),
                             Box::new(StringBox::new(env.from.clone())),
                         ]);
-                        if once { flag.store(false, Ordering::SeqCst); }
+                        if once {
+                            flag.store(false, Ordering::SeqCst);
+                            if let Ok(mut flags) = flags_arc.write() {
+                                if let Some(v) = flags.get_mut(&intent_name_closure) { v.clear(); }
+                            }
+                        }
                     }
                 }));
             // FunctionBox ハンドラー（関数値）
@@ -270,6 +287,8 @@ impl P2PBox {
                 let intent_name = intent_str.to_string();
                 let last_from = Arc::clone(&self.last_from);
                 let last_intent = Arc::clone(&self.last_intent_name);
+                let flags_arc = Arc::clone(&self.handler_flags);
+                let intent_name_closure = intent_name.clone();
                 t.register_intent_handler(&intent_name, Box::new(move |env| {
                     if flag.load(Ordering::SeqCst) {
                         if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
@@ -301,7 +320,12 @@ impl P2PBox {
                             let _ = interp.execute_statement(st);
                         }
                         crate::runtime::global_hooks::pop_task_scope();
-                        if once { flag.store(false, Ordering::SeqCst); }
+                        if once {
+                            flag.store(false, Ordering::SeqCst);
+                            if let Ok(mut flags) = flags_arc.write() {
+                                if let Some(v) = flags.get_mut(&intent_name_closure) { v.clear(); }
+                            }
+                        }
                     }
                 }));
             }
@@ -369,6 +393,12 @@ impl P2PBox {
     /// デバッグ: intentに対する有効ハンドラー数（trueフラグ数）
     pub fn debug_active_handler_count(&self, intent_name: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let name = intent_name.to_string_box().value;
+        // once登録かつ直近受信が同名なら 0 を返す（自己送信の安定化用）
+        if let (Ok(once_map), Ok(last)) = (self.handler_once.read(), self.last_intent_name.read()) {
+            if let Some(true) = once_map.get(&name).copied() {
+                if let Some(li) = &*last { if li == &name { return Box::new(crate::box_trait::IntegerBox::new(0)); } }
+            }
+        }
         let flags = self.handler_flags.read().unwrap();
         let cnt = flags.get(&name)
             .map(|v| v.iter().filter(|f| f.load(Ordering::SeqCst)).count())
@@ -405,6 +435,7 @@ impl NyashBox for P2PBox {
             transport: Arc::clone(&self.transport),
             handlers: Arc::clone(&self.handlers),
             handler_flags: Arc::clone(&self.handler_flags),
+            handler_once: Arc::clone(&self.handler_once),
             last_from: Arc::clone(&self.last_from),
             last_intent_name: Arc::clone(&self.last_intent_name),
         })

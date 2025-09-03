@@ -208,6 +208,7 @@ impl UnifiedBoxRegistry {
 /// Re-export submodules
 pub mod user_defined;
 pub mod plugin;
+pub mod builtin;
 
 #[cfg(test)]
 mod tests {

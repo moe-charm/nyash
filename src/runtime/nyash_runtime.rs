@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use crate::core::model::BoxDeclaration;
 use crate::box_factory::{UnifiedBoxRegistry, BoxFactory};
+use crate::box_factory::builtin::BuiltinBoxFactory;
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
 
@@ -80,7 +81,15 @@ impl NyashRuntimeBuilder {
 
 fn create_default_registry() -> Arc<Mutex<UnifiedBoxRegistry>> {
     let mut registry = UnifiedBoxRegistry::new();
-    eprintln!("[UnifiedRegistry] Builtin boxes removed; using plugins-only registry");
+    // Simple rule:
+    // - Default: plugins-only (no builtins)
+    // - wasm32: enable builtins
+    // - tests: enable builtins
+    // - feature "builtin-core": enable builtins manually
+    #[cfg(any(test, target_arch = "wasm32", feature = "builtin-core"))]
+    {
+        registry.register(Arc::new(BuiltinBoxFactory::new()));
+    }
     #[cfg(feature = "plugins")]
     {
         registry.register(Arc::new(PluginBoxFactory::new()));
