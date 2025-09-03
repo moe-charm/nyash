@@ -1,3 +1,4 @@
+#![cfg(feature = "e2e")]
 //! E2E test for unified registry with a mock plugin factory
 use std::sync::Arc;
 

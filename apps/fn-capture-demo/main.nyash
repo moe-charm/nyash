@@ -1,0 +1,10 @@
+// Capture demo:
+// - locals are captured by reference using RefCellBox (use .get/.set)
+// - non-locals (global/statics) are captured by value (P1)
+local y = 41
+local ycell = new RefCellBox(y)
+local f = fn(x){ ycell.set(ycell.get() + 1); x + ycell.get() }
+// outer writes through RefCellBox
+// y itself remains 41; ycell holds the mutable state
+local con = new ConsoleBox()
+con.println(f(1)) // 43 (ycell started 41, incremented to 42, x=1 -> 43)

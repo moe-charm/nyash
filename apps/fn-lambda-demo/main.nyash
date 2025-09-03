@@ -1,0 +1,8 @@
+// fn{} lambda minimal (value placeholder in P1)
+local f = fn(a) {
+  // 最後の式が返り値
+  a + 1
+}
+local con = new ConsoleBox()
+// 値として持ち回れる（toStringは関数情報を表示）
+con.println(f.toString())

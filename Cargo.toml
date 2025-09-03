@@ -12,6 +12,7 @@ categories = ["development-tools::parsing", "interpreters"]
 # Default features - minimal CLI only
 [features]
 default = ["cli", "plugins"]
+e2e = []
 cli = []
 gui = ["dep:egui", "dep:eframe", "dep:egui_extras", "dep:image"]
 gui-examples = ["gui"]

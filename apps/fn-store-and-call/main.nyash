@@ -1,0 +1,6 @@
+// Store lambda into a variable and call later
+local inc = fn(a){ a + 1 }
+local x = inc(41)
+local con = new ConsoleBox()
+con.println(x) // 42
+

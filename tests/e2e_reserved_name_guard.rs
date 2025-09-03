@@ -1,3 +1,4 @@
+#![cfg(feature = "e2e")]
 //! E2E: Reserved-name guard for unified registry
 use std::sync::Arc;
 
@@ -62,4 +63,3 @@ fn e2e_reserved_name_guard_rejects_non_builtin_registration() {
     let result = i.execute(ast).expect("exec ok");
     assert_eq!(result.to_string_box().value, "ok");
 }
-

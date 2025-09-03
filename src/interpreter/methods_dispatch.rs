@@ -5,6 +5,7 @@ use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore};
 use crate::boxes::{ArrayBox, FloatBox, BufferBox, ResultBox, FutureBox, JSONBox, HttpClientBox, StreamBox, RegexBox, MathBox};
 use crate::boxes::{null_box, time_box, map_box, random_box, sound_box, debug_box, console_box};
 use crate::boxes::{gc_config_box::GcConfigBox, debug_config_box::DebugConfigBox};
+use crate::boxes::ref_cell_box::RefCellBox as RcCell;
 use crate::boxes::file;
 use crate::channel_box::ChannelBox;
 use super::{NyashInterpreter, RuntimeError};
@@ -117,6 +118,10 @@ impl NyashInterpreter {
         // DebugConfigBox
         if let Some(b) = obj.as_any().downcast_ref::<DebugConfigBox>() {
             return Some(self.execute_debug_config_method(b, method, arguments));
+        }
+        // RefCellBox (by-ref proxy)
+        if let Some(b) = obj.as_any().downcast_ref::<RcCell>() {
+            return Some(self.execute_refcell_method(b, method, arguments));
         }
 
         None

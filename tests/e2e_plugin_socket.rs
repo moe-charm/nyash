@@ -1,3 +1,4 @@
+
 #![cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 
 use nyash_rust::parser::NyashParser;

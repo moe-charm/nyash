@@ -1,0 +1,6 @@
+// ? operator demo with await (Ok path)
+// await <expr> returns ResultBox Ok(expr) in this minimal path
+local x = (await 42)?
+local con = new ConsoleBox()
+con.println(x)
+

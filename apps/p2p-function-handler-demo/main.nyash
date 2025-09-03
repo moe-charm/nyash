@@ -1,0 +1,19 @@
+// P2PBox + FunctionBox handler demo
+
+local alice, bob, i
+
+// create two nodes (inprocess transport)
+alice = new P2PBox("alice", "inprocess")
+bob   = new P2PBox("bob",   "inprocess")
+
+// register a FunctionBox handler on bob
+bob.on("hello", function(intent, from) {
+    print("[bob] received '" + intent.getName() + "' from " + from)
+})
+
+// build Intent and send from alice to bob
+i = new IntentBox("hello", new MapBox())
+alice.send("bob", i)
+
+print("done")
+

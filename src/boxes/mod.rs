@@ -86,6 +86,8 @@ pub mod aot_config_box;
 pub mod aot_compiler_box;
 pub mod task_group_box;
 pub mod token_box;
+pub mod function_box;
+pub mod ref_cell_box;
 
 // Web専用Box群（ブラウザ環境でのみ利用可能）
 #[cfg(target_arch = "wasm32")]

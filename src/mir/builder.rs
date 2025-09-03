@@ -300,6 +300,52 @@ impl MirBuilder {
                 }
                 self.build_function_call(name.clone(), arguments.clone())
             },
+            ASTNode::Call { callee, arguments, .. } => {
+                // 最小P1: callee が Lambda の場合のみ対応
+                if let ASTNode::Lambda { params, body, .. } = callee.as_ref() {
+                    if params.len() != arguments.len() {
+                        return Err(format!("Lambda expects {} args, got {}", params.len(), arguments.len()));
+                    }
+                    // 引数を評価
+                    let mut arg_vals: Vec<ValueId> = Vec::new();
+                    for a in arguments { arg_vals.push(self.build_expression(a)?); }
+                    // スコープ保存
+                    let saved_vars = self.variable_map.clone();
+                    // パラメータ束縛
+                    for (p, v) in params.iter().zip(arg_vals.iter()) {
+                        self.variable_map.insert(p.clone(), *v);
+                    }
+                    // 本体を Program として Lower
+                    let prog = ASTNode::Program { statements: body.clone(), span: crate::ast::Span::unknown() };
+                    let out = self.build_expression(prog)?;
+                    // 復元
+                    self.variable_map = saved_vars;
+                    Ok(out)
+                } else {
+                    Err("Callee is not callable (lambda required)".to_string())
+                }
+            },
+            
+            ASTNode::QMarkPropagate { expression, .. } => {
+                // Lower: ok = expr.isOk(); br ok then else; else => return expr; then => expr.getValue()
+                let res_val = self.build_expression(*expression.clone())?;
+                let ok_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::PluginInvoke { dst: Some(ok_id), box_val: res_val, method: "isOk".to_string(), args: vec![], effects: EffectMask::PURE })?;
+                let then_block = self.block_gen.next();
+                let else_block = self.block_gen.next();
+                self.emit_instruction(MirInstruction::Branch { condition: ok_id, then_bb: then_block, else_bb: else_block })?;
+                // else: return res_val
+                self.current_block = Some(else_block);
+                self.ensure_block_exists(else_block)?;
+                self.emit_instruction(MirInstruction::Return { value: Some(res_val) })?;
+                // then: getValue()
+                self.current_block = Some(then_block);
+                self.ensure_block_exists(then_block)?;
+                let val_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::PluginInvoke { dst: Some(val_id), box_val: res_val, method: "getValue".to_string(), args: vec![], effects: EffectMask::PURE })?;
+                self.value_types.insert(val_id, super::MirType::Unknown);
+                Ok(val_id)
+            },
             
             ASTNode::Print { expression, .. } => {
                 self.build_print_statement(*expression.clone())
@@ -339,6 +385,67 @@ impl MirBuilder {
             
             ASTNode::Throw { expression, .. } => {
                 self.build_throw_statement(*expression.clone())
+            },
+
+            // P1: Lower peek expression into if-else chain with phi
+            ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => {
+                // Evaluate scrutinee once
+                let scr_val = self.build_expression(*scrutinee.clone())?;
+
+                // Prepare a merge block and collect phi inputs
+                let merge_block = self.block_gen.next();
+                let mut phi_inputs: Vec<(super::BasicBlockId, super::ValueId)> = Vec::new();
+
+                // Start chaining from the current block
+                for (lit, arm_expr) in arms.into_iter() {
+                    // Build condition: scr_val == lit
+                    let lit_id = self.build_literal(lit)?;
+                    let cond_id = self.value_gen.next();
+                    self.emit_instruction(super::MirInstruction::Compare { dst: cond_id, op: super::CompareOp::Eq, lhs: scr_val, rhs: lit_id })?;
+
+                    // Create then and next blocks
+                    let then_block = self.block_gen.next();
+                    let next_block = self.block_gen.next();
+                    self.emit_instruction(super::MirInstruction::Branch { condition: cond_id, then_bb: then_block, else_bb: next_block })?;
+
+                    // then: evaluate arm expr, jump to merge
+                    self.current_block = Some(then_block);
+                    self.ensure_block_exists(then_block)?;
+                    let then_val = self.build_expression(arm_expr)?;
+                    if !self.is_current_block_terminated() {
+                        self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
+                    }
+                    phi_inputs.push((then_block, then_val));
+
+                    // else path continues chaining
+                    self.current_block = Some(next_block);
+                    self.ensure_block_exists(next_block)?;
+                    // Loop continues from next_block
+                }
+
+                // Final else branch
+                let cur_block = self.current_block.ok_or("No current basic block")?;
+                let else_val = self.build_expression(*else_expr.clone())?;
+                if !self.is_current_block_terminated() {
+                    self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
+                }
+                phi_inputs.push((cur_block, else_val));
+
+                // Merge and phi
+                self.current_block = Some(merge_block);
+                self.ensure_block_exists(merge_block)?;
+                let result_val = self.value_gen.next();
+                self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+                Ok(result_val)
+            },
+            
+            ASTNode::Lambda { params, body, .. } => {
+                // Minimal P1: represent as constant string for now
+                let dst = self.value_gen.next();
+                let s = format!("Lambda(params={}, body={})", params.len(), body.len());
+                self.emit_instruction(MirInstruction::Const { dst, value: ConstValue::String(s) })?;
+                self.value_types.insert(dst, super::MirType::String);
+                Ok(dst)
             },
             
             ASTNode::Return { value, .. } => {

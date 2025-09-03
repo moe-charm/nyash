@@ -1,9 +1,9 @@
-// peek expression demo (P0: arms are single expressions)
+// peek expression demo (P1: arms support blocks)
 local animal = "cat"
 local sound = peek animal {
-  "dog" => "bark"
-  "cat" => "meow"
-  else => "silent"
+  "dog" => { "bark" }
+  "cat" => { local s = "meow" s }
+  else => { "silent" }
 }
 local con = new ConsoleBox()
 con.println(sound)

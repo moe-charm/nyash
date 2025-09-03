@@ -1,0 +1,5 @@
+// Lambda immediate call demo
+local result = (fn(a){ a + 1 })(41)
+local con = new ConsoleBox()
+con.println(result)  // 42 を期待
+

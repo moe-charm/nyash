@@ -447,11 +447,24 @@ pub enum ASTNode {
         span: Span,
     },
     
+    /// result伝播: expr? （ResultBoxなら isOk/getValue or 早期return）
+    QMarkPropagate {
+        expression: Box<ASTNode>,
+        span: Span,
+    },
+    
     /// peek式: peek <expr> { lit => expr, ... else => expr }
     PeekExpr {
         scrutinee: Box<ASTNode>,
         arms: Vec<(LiteralValue, ASTNode)>,
         else_expr: Box<ASTNode>,
+        span: Span,
+    },
+    
+    /// 無名関数（最小P1: 値としてのみ。呼び出しは未対応）
+    Lambda {
+        params: Vec<String>,
+        body: Vec<ASTNode>,
         span: Span,
     },
     
@@ -628,6 +641,13 @@ pub enum ASTNode {
         arguments: Vec<ASTNode>,
         span: Span,
     },
+    
+    /// 一般式呼び出し: (callee)(arguments)
+    Call {
+        callee: Box<ASTNode>,
+        arguments: Vec<ASTNode>,
+        span: Span,
+    },
 }
 
 impl ASTNode {
@@ -662,12 +682,15 @@ impl ASTNode {
             ASTNode::Local { .. } => "Local",
             ASTNode::Outbox { .. } => "Outbox",
             ASTNode::FunctionCall { .. } => "FunctionCall",
+            ASTNode::Call { .. } => "Call",
             ASTNode::Nowait { .. } => "Nowait",
             ASTNode::Arrow { .. } => "Arrow",
             ASTNode::TryCatch { .. } => "TryCatch",
             ASTNode::Throw { .. } => "Throw",
             ASTNode::AwaitExpression { .. } => "AwaitExpression",
+            ASTNode::QMarkPropagate { .. } => "QMarkPropagate",
             ASTNode::PeekExpr { .. } => "PeekExpr",
+            ASTNode::Lambda { .. } => "Lambda",
         }
     }
     
@@ -688,6 +711,7 @@ impl ASTNode {
             ASTNode::BinaryOp { .. } => ASTNodeType::Expression,
             ASTNode::UnaryOp { .. } => ASTNodeType::Expression,
             ASTNode::FunctionCall { .. } => ASTNodeType::Expression,
+            ASTNode::Call { .. } => ASTNodeType::Expression,
             ASTNode::MethodCall { .. } => ASTNodeType::Expression,
             ASTNode::FieldAccess { .. } => ASTNodeType::Expression,
             ASTNode::New { .. } => ASTNodeType::Expression,
@@ -697,6 +721,8 @@ impl ASTNode {
             ASTNode::ThisField { .. } => ASTNodeType::Expression,
             ASTNode::MeField { .. } => ASTNodeType::Expression,
             ASTNode::PeekExpr { .. } => ASTNodeType::Expression,
+            ASTNode::QMarkPropagate { .. } => ASTNodeType::Expression,
+            ASTNode::Lambda { .. } => ASTNodeType::Expression,
             
             // Statement nodes - 実行可能なアクション
             ASTNode::Program { .. } => ASTNodeType::Statement, // プログラム全体
@@ -831,6 +857,7 @@ impl ASTNode {
             ASTNode::FunctionCall { name, arguments, .. } => {
                 format!("FunctionCall({}, {} args)", name, arguments.len())
             }
+            ASTNode::Call { .. } => "Call".to_string(),
             ASTNode::Nowait { variable, .. } => {
                 format!("Nowait({})", variable)
             }
@@ -851,6 +878,10 @@ impl ASTNode {
                 format!("Await({:?})", expression)
             }
             ASTNode::PeekExpr { .. } => "PeekExpr".to_string(),
+            ASTNode::QMarkPropagate { .. } => "QMarkPropagate".to_string(),
+            ASTNode::Lambda { params, body, .. } => {
+                format!("Lambda({} params, {} statements)", params.len(), body.len())
+            }
         }
     }
     
@@ -889,8 +920,11 @@ impl ASTNode {
             ASTNode::Local { span, .. } => *span,
             ASTNode::Outbox { span, .. } => *span,
             ASTNode::FunctionCall { span, .. } => *span,
+            ASTNode::Call { span, .. } => *span,
             ASTNode::AwaitExpression { span, .. } => *span,
             ASTNode::PeekExpr { span, .. } => *span,
+            ASTNode::QMarkPropagate { span, .. } => *span,
+            ASTNode::Lambda { span, .. } => *span,
         }
     }
 }

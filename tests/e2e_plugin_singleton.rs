@@ -1,3 +1,4 @@
+
 #![cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 
 use nyash_rust::parser::NyashParser;
@@ -36,4 +37,3 @@ v
     let result = interpreter.execute(ast).expect("exec");
     assert_eq!(result.to_string_box().value, "1");
 }
-

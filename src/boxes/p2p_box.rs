@@ -246,6 +246,7 @@ impl P2PBox {
 
         // 可能ならTransportにハンドラ登録（InProcessなど）
         if let Ok(mut t) = self.transport.write() {
+            // MethodBox ハンドラー
             if let Some(method_box) = handler.as_any().downcast_ref::<MethodBox>() {
                 let method_clone = method_box.clone();
                 let intent_name = intent_str.to_string();
@@ -253,18 +254,54 @@ impl P2PBox {
                 let last_from = Arc::clone(&self.last_from);
                 let last_intent = Arc::clone(&self.last_intent_name);
                 t.register_intent_handler(&intent_name, Box::new(move |env| {
-                    // flagがtrueのときのみ実行
                     if flag.load(Ordering::SeqCst) {
-                        // Update receive-side traces for E2E visibility
                         if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
                         if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
                         let _ = method_clone.invoke(vec![
                             Box::new(env.intent.clone()),
                             Box::new(StringBox::new(env.from.clone())),
                         ]);
-                        if once {
-                            flag.store(false, Ordering::SeqCst);
+                        if once { flag.store(false, Ordering::SeqCst); }
+                    }
+                }));
+            // FunctionBox ハンドラー（関数値）
+            } else if let Some(func_box) = handler.as_any().downcast_ref::<crate::boxes::function_box::FunctionBox>() {
+                let func_clone = func_box.clone();
+                let intent_name = intent_str.to_string();
+                let last_from = Arc::clone(&self.last_from);
+                let last_intent = Arc::clone(&self.last_intent_name);
+                t.register_intent_handler(&intent_name, Box::new(move |env| {
+                    if flag.load(Ordering::SeqCst) {
+                        if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
+                        if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
+                        // 最小インタープリタで FunctionBox を実行
+                        let mut interp = crate::interpreter::NyashInterpreter::new();
+                        // キャプチャ注入
+                        for (k, v) in func_clone.env.captures.iter() {
+                            interp.declare_local_variable(k, v.clone_or_share());
                         }
+                        if let Some(me_w) = &func_clone.env.me_value {
+                            if let Some(me_arc) = me_w.upgrade() {
+                                interp.declare_local_variable("me", (*me_arc).clone_or_share());
+                            }
+                        }
+                        // 引数束縛: intent, from（必要数だけ）
+                        let args: Vec<Box<dyn NyashBox>> = vec![
+                            Box::new(env.intent.clone()),
+                            Box::new(StringBox::new(env.from.clone())),
+                        ];
+                        for (i, p) in func_clone.params.iter().enumerate() {
+                            if let Some(av) = args.get(i) {
+                                interp.declare_local_variable(p, av.clone_or_share());
+                            }
+                        }
+                        // 本体実行
+                        crate::runtime::global_hooks::push_task_scope();
+                        for st in &func_clone.body {
+                            let _ = interp.execute_statement(st);
+                        }
+                        crate::runtime::global_hooks::pop_task_scope();
+                        if once { flag.store(false, Ordering::SeqCst); }
                     }
                 }));
             }

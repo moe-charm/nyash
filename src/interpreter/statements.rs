@@ -7,6 +7,7 @@
  */
 
 use super::*;
+use crate::boxes::ref_cell_box::RefCellBox;
 use super::BuiltinStdlib;
 use std::sync::Arc;
 
@@ -46,7 +47,7 @@ impl NyashInterpreter {
         }
     }
     /// 文を実行 - Core statement execution engine
-    pub(super) fn execute_statement(&mut self, statement: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(crate) fn execute_statement(&mut self, statement: &ASTNode) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match statement {
             ASTNode::Assignment { target, value, .. } => {
                 self.execute_assignment(target, value)
@@ -340,6 +341,13 @@ impl NyashInterpreter {
                         val.clone_box()
                     }
                 };
+                // セル反映: 既存が RefCellBox なら中身のみ置換
+                if let Ok(existing) = self.resolve_variable(name) {
+                    if let Some(rc) = existing.as_any().downcast_ref::<RefCellBox>() {
+                        rc.replace(assigned);
+                        return Ok(val);
+                    }
+                }
                 self.set_variable(name, assigned)?;
                 Ok(val)
             }
@@ -399,6 +407,13 @@ impl NyashInterpreter {
                         #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
                         { val.clone_box() }
                     };
+                    // セル反映: 既存フィールドが RefCellBox なら中身を置換
+                    if let Some(cur) = instance.get_field(field) {
+                        if let Some(rc) = cur.as_any().downcast_ref::<RefCellBox>() {
+                            rc.replace(stored);
+                            return Ok(val);
+                        }
+                    }
                     instance.set_field(field, Arc::from(stored))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)
@@ -433,6 +448,13 @@ impl NyashInterpreter {
                         #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
                         { val.clone_box() }
                     };
+                    // セル反映: 既存フィールドが RefCellBox なら中身を置換
+                    if let Some(cur) = instance.get_field(field) {
+                        if let Some(rc) = cur.as_any().downcast_ref::<RefCellBox>() {
+                            rc.replace(stored);
+                            return Ok(val);
+                        }
+                    }
                     instance.set_field(field, Arc::from(stored))
                         .map_err(|e| RuntimeError::InvalidOperation { message: e })?;
                     Ok(val)

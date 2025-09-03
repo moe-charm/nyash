@@ -11,6 +11,7 @@ use super::super::*;
 use crate::boxes::ResultBox;
 use crate::box_trait::{StringBox, NyashBox};
 use crate::boxes::FileBox;
+use crate::boxes::ref_cell_box::RefCellBox;
 // use crate::bid::plugin_box::PluginFileBox;  // legacy - FileBox専用
 
 impl NyashInterpreter {
@@ -105,6 +106,26 @@ impl NyashInterpreter {
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for ResultBox", method),
             })
+        }
+    }
+
+    /// RefCellBox のメソッド: get()/set(value)
+    pub(in crate::interpreter) fn execute_refcell_method(&mut self, cell: &RefCellBox, method: &str, arguments: &[ASTNode])
+        -> Result<Box<dyn NyashBox>, RuntimeError> {
+        match method {
+            "get" => {
+                if !arguments.is_empty() {
+                    return Err(RuntimeError::InvalidOperation { message: format!("get() expects 0 arguments, got {}", arguments.len()) });
+                }
+                Ok(cell.borrow())
+            }
+            "set" => {
+                if arguments.len() != 1 { return Err(RuntimeError::InvalidOperation { message: format!("set() expects 1 argument, got {}", arguments.len()) }); }
+                let v = self.execute_expression(&arguments[0])?;
+                cell.replace(v);
+                Ok(Box::new(crate::box_trait::VoidBox::new()))
+            }
+            _ => Err(RuntimeError::InvalidOperation { message: format!("Unknown method '{}' for RefCellBox", method) })
         }
     }
 

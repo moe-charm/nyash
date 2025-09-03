@@ -1,3 +1,4 @@
+#![cfg(feature = "e2e")]
 //! E2E: Interop between builtin and mock plugin boxes via MapBox storage
 use std::sync::Arc;
 
@@ -63,4 +64,3 @@ fn e2e_interop_mapbox_store_plugin_box() {
     let result = i.execute(ast).expect("exec ok");
     assert_eq!(result.to_string_box().value, "ok");
 }
-

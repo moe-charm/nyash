@@ -243,7 +243,7 @@ impl NyashInterpreter {
     }
     
     /// 🔥 厳密変数設定: 明示的宣言のみ許可 - Everything is Box哲学
-    pub(super) fn set_variable(&mut self, name: &str, value: Box<dyn NyashBox>) -> Result<(), RuntimeError> {
+    pub(crate) fn set_variable(&mut self, name: &str, value: Box<dyn NyashBox>) -> Result<(), RuntimeError> {
         let shared_value = Arc::from(value); // Convert Box to Arc
         
         // 1. outbox変数が存在する場合は更新
@@ -278,7 +278,7 @@ impl NyashInterpreter {
     }
     
     /// local変数を宣言（関数内でのみ有効）
-    pub(super) fn declare_local_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
+    pub(crate) fn declare_local_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
         // Pass-by-share for plugin handle types; by-value (clone) semantics can be applied at call sites
         #[allow(unused_mut)]
         let mut store_value = value;
@@ -292,7 +292,7 @@ impl NyashInterpreter {
     }
     
     /// outbox変数を宣言（static関数内で所有権移転）
-    pub(super) fn declare_outbox_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
+    pub(crate) fn declare_outbox_variable(&mut self, name: &str, value: Box<dyn NyashBox>) {
         #[allow(unused_mut)]
         let mut store_value = value;
         #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]

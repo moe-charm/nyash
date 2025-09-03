@@ -32,6 +32,7 @@ pub enum TokenType {
     CONTINUE,
     RETURN,
     FUNCTION,
+    FN,
     PRINT,
     THIS,
     ME,
@@ -82,6 +83,7 @@ pub enum TokenType {
     LBRACE,          // {
     RBRACE,          // }
     COMMA,           // ,
+    QUESTION,        // ? (postfix result propagation)
     NEWLINE,         // \n
     
     // 識別子
@@ -293,6 +295,10 @@ impl NyashTokenizer {
                 self.advance();
                 Ok(Token::new(TokenType::COMMA, start_line, start_column))
             }
+            Some('?') => {
+                self.advance();
+                Ok(Token::new(TokenType::QUESTION, start_line, start_column))
+            }
             Some(':') => {
                 self.advance();
                 Ok(Token::new(TokenType::COLON, start_line, start_column))
@@ -413,6 +419,7 @@ impl NyashTokenizer {
             "continue" => TokenType::CONTINUE,
             "return" => TokenType::RETURN,
             "function" => TokenType::FUNCTION,
+            "fn" => TokenType::FN,
             // Alias support: `fn` as shorthand for function
             "fn" => TokenType::FUNCTION,
             "print" => TokenType::PRINT,

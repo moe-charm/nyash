@@ -228,7 +228,8 @@ impl NyashParser {
         self.parse_call()
     }
 
-    /// peek式: peek <expr> { lit => expr ... else => expr }
+    /// peek式: peek <expr> { lit => arm ... else => arm }
+    /// P1: arm は 式 または ブロック（{ ... } 最後の式が値）
     fn parse_peek_expr(&mut self) -> Result<ASTNode, ParseError> {
         self.advance(); // consume 'peek'
         let scrutinee = self.parse_expression()?;
@@ -250,13 +251,42 @@ impl NyashParser {
             if is_else {
                 self.advance(); // consume 'else'
                 self.consume(TokenType::FAT_ARROW)?;
-                let expr = self.parse_expression()?;
+                // else アーム: ブロック or 式
+                let expr = if self.match_token(&TokenType::LBRACE) {
+                    // ブロックを式として扱う（最後の文の値が返る）
+                    self.advance(); // consume '{'
+                    let mut stmts: Vec<ASTNode> = Vec::new();
+                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                        self.skip_newlines();
+                        if !self.match_token(&TokenType::RBRACE) {
+                            stmts.push(self.parse_statement()?);
+                        }
+                    }
+                    self.consume(TokenType::RBRACE)?;
+                    ASTNode::Program { statements: stmts, span: Span::unknown() }
+                } else {
+                    self.parse_expression()?
+                };
                 else_expr = Some(expr);
             } else {
                 // リテラルのみ許可（P0）
                 let lit = self.parse_literal_only()?;
                 self.consume(TokenType::FAT_ARROW)?;
-                let expr = self.parse_expression()?;
+                // アーム: ブロック or 式
+                let expr = if self.match_token(&TokenType::LBRACE) {
+                    self.advance(); // consume '{'
+                    let mut stmts: Vec<ASTNode> = Vec::new();
+                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                        self.skip_newlines();
+                        if !self.match_token(&TokenType::RBRACE) {
+                            stmts.push(self.parse_statement()?);
+                        }
+                    }
+                    self.consume(TokenType::RBRACE)?;
+                    ASTNode::Program { statements: stmts, span: Span::unknown() }
+                } else {
+                    self.parse_expression()?
+                };
                 arms.push((lit, expr));
             }
 
@@ -350,26 +380,25 @@ impl NyashParser {
                     });
                 }
             } else if self.match_token(&TokenType::LPAREN) {
-                // 関数呼び出し: function(args)
-                if let ASTNode::Variable { name, .. } = expr {
-                    self.advance(); // consume '('
-                    let mut arguments = Vec::new();
-                    
-                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
-                        must_advance!(self, _unused, "function call argument parsing");
-                        
-                        arguments.push(self.parse_expression()?);
-                        if self.match_token(&TokenType::COMMA) {
-                            self.advance();
-                        }
-                    }
-                    
-                    self.consume(TokenType::RPAREN)?;
-                    
+                // 関数呼び出し: function(args) または 一般式呼び出し: (callee)(args)
+                self.advance(); // consume '('
+                let mut arguments = Vec::new();
+                while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                    must_advance!(self, _unused, "function call argument parsing");
+                    arguments.push(self.parse_expression()?);
+                    if self.match_token(&TokenType::COMMA) { self.advance(); }
+                }
+                self.consume(TokenType::RPAREN)?;
+
+                if let ASTNode::Variable { name, .. } = expr.clone() {
                     expr = ASTNode::FunctionCall { name, arguments, span: Span::unknown() };
                 } else {
-                    break;
+                    expr = ASTNode::Call { callee: Box::new(expr), arguments, span: Span::unknown() };
                 }
+            } else if self.match_token(&TokenType::QUESTION) {
+                // 後置 ?（Result伝播）
+                self.advance();
+                expr = ASTNode::QMarkPropagate { expression: Box::new(expr), span: Span::unknown() };
             } else {
                 break;
             }
@@ -423,8 +452,12 @@ impl NyashParser {
             }
             
             TokenType::THIS => {
+                // Deprecation: normalize 'this' to 'me'
+                if std::env::var("NYASH_DEPRECATE_THIS").ok().as_deref() == Some("1") {
+                    eprintln!("[deprecate:this] 'this' is deprecated; use 'me' instead (line {})", self.current_token().line);
+                }
                 self.advance();
-                Ok(ASTNode::This { span: Span::unknown() })
+                Ok(ASTNode::Me { span: Span::unknown() })
             }
             
             TokenType::ME => {
@@ -506,9 +539,33 @@ impl NyashParser {
             }
             
             TokenType::IDENTIFIER(name) => {
-                let name = name.clone();
+                let parent = name.clone();
                 self.advance();
-                Ok(ASTNode::Variable { name, span: Span::unknown() })
+                if self.match_token(&TokenType::DOUBLE_COLON) {
+                    // Parent::method(args)
+                    self.advance(); // consume '::'
+                    let method = match &self.current_token().token_type {
+                        TokenType::IDENTIFIER(m) => { let s=m.clone(); self.advance(); s }
+                        TokenType::INIT => { self.advance(); "init".to_string() }
+                        TokenType::PACK => { self.advance(); "pack".to_string() }
+                        TokenType::BIRTH => { self.advance(); "birth".to_string() }
+                        _ => {
+                            let line = self.current_token().line;
+                            return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "method name".to_string(), line });
+                        }
+                    };
+                    self.consume(TokenType::LPAREN)?;
+                    let mut arguments = Vec::new();
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        must_advance!(self, _unused, "Parent::method call argument parsing");
+                        arguments.push(self.parse_expression()?);
+                        if self.match_token(&TokenType::COMMA) { self.advance(); }
+                    }
+                    self.consume(TokenType::RPAREN)?;
+                    Ok(ASTNode::FromCall { parent, method, arguments, span: Span::unknown() })
+                } else {
+                    Ok(ASTNode::Variable { name: parent, span: Span::unknown() })
+                }
             }
             
             TokenType::LPAREN => {
@@ -516,6 +573,36 @@ impl NyashParser {
                 let expr = self.parse_expression()?;
                 self.consume(TokenType::RPAREN)?;
                 Ok(expr)
+            }
+            
+            TokenType::FN => {
+                // 無名関数: fn (params?) { body }
+                self.advance(); // consume 'fn'
+                let mut params: Vec<String> = Vec::new();
+                if self.match_token(&TokenType::LPAREN) {
+                    self.advance();
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        if let TokenType::IDENTIFIER(p) = &self.current_token().token_type {
+                            params.push(p.clone());
+                            self.advance();
+                            if self.match_token(&TokenType::COMMA) { self.advance(); }
+                        } else {
+                            let line = self.current_token().line;
+                            return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "parameter name".to_string(), line });
+                        }
+                    }
+                    self.consume(TokenType::RPAREN)?;
+                }
+                self.consume(TokenType::LBRACE)?;
+                let mut body: Vec<ASTNode> = Vec::new();
+                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                    self.skip_newlines();
+                    if !self.match_token(&TokenType::RBRACE) {
+                        body.push(self.parse_statement()?);
+                    }
+                }
+                self.consume(TokenType::RBRACE)?;
+                Ok(ASTNode::Lambda { params, body, span: Span::unknown() })
             }
             
             _ => {

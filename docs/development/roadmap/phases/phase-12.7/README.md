@@ -1,8 +1,22 @@
-# Phase 12.7: AI-Nyash Compact Notation Protocol (ANCP)
+# Phase 12.7 - 文法改革 + AI統合最適化
 
-## 📋 概要
+🚀 **究極の挑戦**: 文法革新 × 極限圧縮 = 90%コード削減！
 
-AIとNyashの効率的な通信のための圧縮記法プロトコル。予約語を1-2文字の記号に変換し、トークン数を50-90%削減。さらに副次的効果として、コード整形機能とスモークテスト統合による品質保証も実現。
+## 📋 統合概要
+
+Phase 12.7は2つの革命的な改革の融合です：
+
+### 1. 文法改革（Language Reform）
+- 予約語15個への削減（peek, birth統一）
+- peek構文による分岐革命
+- フィールド宣言の明示化
+- 極限糖衣構文（|>, ?., /:）
+
+### 2. 圧縮記法（Compression Notation）
+- ANCP（48%削減）
+- 極限糖衣構文（75%削減）
+- 融合記法（90%削減）
+- 可逆フォーマッター完備
 
 ## 🎯 なぜPhase 12.7なのか？
 
@@ -45,24 +59,36 @@ $NyashCompiler{compile(src){l ast=m.parse(src)l mir=m.lower(ast)r m.codegen(mir)
 - **Claude** (200k tokens): 通常4万行 → ANCP で8万行扱える！
 - **Nyash全体のソースコード** がAIのコンテキストに収まる！
 
+## 🎯 最重要ドキュメント
+
+### 📚 実装者必読
+- **[🔥 究極のAIコーディングガイド](ULTIMATE-AI-CODING-GUIDE.md)** ← ⭐ START HERE! ⭐
+- [📝 文法改革最終決定](grammar-reform-final-decision.txt)
+- [🔧 実装チェックリスト](implementation-final-checklist.txt)
+- [⚡ 極限糖衣構文提案](extreme-sugar-proposals.txt)
+- [🔄 糖衣構文フォーマッター](sugar-formatter-tool.txt)
+
+### 🏗️ 技術仕様
+- [📐 文法技術仕様書](grammar-technical-spec.txt)
+
+### 📁 アーカイブ（検討過程）
+- [🗃️ 過去の議論・検討資料](archive/)
+
 ## 📊 主要成果物
 
-### コア実装
-- [ ] ANCP Transcoder（双方向変換器）
-- [ ] Lexer拡張（Dialect検出）
-- [ ] VSCode拡張（リアルタイム変換）
-- [ ] CLIツール（nyash2ancp/ancp2nyash）
+### 文法改革
+- ✅ 予約語15個確定（peek, birth, continue追加）
+- ✅ peek構文設計完了
+- ✅ フィールド宣言構文確定
+- 🔄 パーサー実装（Phase 12.7-A）
 
-### 品質保証
-- [ ] 往復テストスイート（100%一致保証）
-- [ ] スモークテスト統合
-- [ ] ファジングテスト
-- [ ] パフォーマンスベンチマーク
-
-### AI連携
-- [ ] tiktoken最適化（実測ベース記号選定）
-- [ ] AIコード検証器
-- [ ] トレーニングデータ生成
+### AI統合最適化
+- ✅ ANCP v1.0完成（48%圧縮）
+- ✅ 極限糖衣構文設計（75%圧縮）
+- ✅ 融合記法考案（90%圧縮）
+- ✅ 可逆フォーマッター仕様完成
+- 🔄 統合ツール実装中
+- 📅 VSCode拡張（計画中）
 
 ## 🔧 技術的アプローチ
 

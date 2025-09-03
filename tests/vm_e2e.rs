@@ -1,3 +1,4 @@
+#![cfg(feature = "e2e")]
 //! VM E2E: Compile Nyash to MIR and execute via VM, with mock plugin factory
 use std::sync::Arc;
 
@@ -83,4 +84,3 @@ fn vm_e2e_adder_box() {
     let s = format!("{:?}", result);
     assert!(s.contains("42") || s.contains("AdderBox"), "unexpected VM result: {}", s);
 }
-

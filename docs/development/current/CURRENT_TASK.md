@@ -60,6 +60,55 @@ cargo test --lib typebox_tlv_diff -- --nocapture
 NYASH_DISABLE_TYPEBOX=1 cargo test --lib typebox_tlv_diff -- --nocapture
 ```
 
+## 次タスク（優先順）
+- 1) 代入(=)のセル反映（RefCell なら中身更新）
+- 2) FunctionBox 呼び出しの VM 統一（PluginInvoke）
+- 3) イベントAPIで FunctionBox/MethodBox 両受け
+- 4) Lambda/Closure のテスト拡充
+- 5) ドキュメント整備（関数値/参照キャプチャ/this→me/Parent::/?/peek）
+
+補足ドキュメント: docs/development/current/function_values_and_captures.md を参照。
+
+## 残件・課題と対応方針（2025-09-03）
+
+- VMユニットテストの一部が赤（レガシー/レジストリ経路）
+  - 症状: ArrayBox/MapBox の生成で Unknown Box type（plugins-onlyレジストリでBuiltin未登録）。
+  - 影響: `tests::vtable_*`、`backend::vm::tests::test_vm_user_box_*`、MIR周辺（BoxCall method_id）
+  - 方針:
+    - A1) 既定を Builtin + Plugins に戻す（ランタイム初期化時にBuiltinを常に登録）。
+    - A2) テスト側で `NyashRuntimeBuilder` に「builtin有効」フラグを追加し明示登録。
+    - A3) 当面は feature `plugins-only` を導入し、デフォルトは builtin 有効に戻す。
+
+- P2PBox テスト赤（on_once/ping 系）
+  - 症状: 期待値とズレ（once後のカウント、ping応答の記録）。
+  - 可能性: FunctionBox対応追加に伴うハンドラ登録周りの挙動差/時機、last_from/last_intent記録タイミング。
+  - 方針:
+    - B1) 既存 `MethodBox` 経路に影響がないか分岐を再確認（現状は分岐独立）。
+    - B2) `on_once` の once フラグ無効化タイミングを deliver 後即時に固定（現状OKだが再検証）。
+    - B3) pingロジック（sys.ping/sys.pong）の登録順・遅延スレッドのsleep/ms再調整（1〜5ms→安定値に）。
+
+- FunctionBox 呼び出しの VM 統一（MIR/VM 経路）
+  - 現状: Interpreter直実行（Call: FunctionBox or Lambda）とVM/LLVM側のCallは別経路。
+  - 方針:
+    - C1) MIR: `ASTNode::Call(FunctionBox)` を `MirInstruction::Call` に正規化（func が NyashBox関数値を指す表現を定義）。
+    - C2) VM: `execute_call` に関数値（FunctionBox）経路を追加し、引数束縛・キャプチャ注入・return 伝播を統一。
+    - C3) LLVM/JIT: C2のシムを段階適用（最初はVMのみで安定化→JITに移植）。
+
+- テスト整理（短期）
+  - D1) E2Eテストは `--features e2e` でのみ有効（対応済）。
+  - D2) レガシー依存のユニットテストを `#[cfg(not(feature = "plugins-only"))]` で保護 or ランタイム初期化ヘルパでBuiltin登録を強制。
+  - D3) P2Pの flaky を抑えるために待機/timeoutの見直し（CIでも安定する閾値）。
+
+- ドキュメント/サンプル（短期）
+  - E1) apps/p2p-function-handler-demo を追加（FunctionBox ハンドラの最小例）。
+  - E2) function_values_and_captures.md に「イベントハンドラの引数束縛（(intent, from)）」と once 動作の注意を追記。
+
+【次の着手候補（優先）】
+1) A1/A2によりVMユニットをGreen化（Builtin BoxFactoryの既定登録を戻す）
+2) B系（P2P on_once/ping）を安定化（sleep/flag/登録順の整備）
+3) C系（FunctionBoxのMIR/VM統一）を小さめPRに分割して段階導入
+4) D2でテスト揺れを抑止（featureガード/初期化ヘルパ）
+
 ## 次のマイルストーン（参照）
 - Phase 12 Final: Nyash ABI(TypeBox) で egui をサポート（Windows GUI表示）。本タスク完了後に着手（Python/Netは除外）。
 
@@ -894,3 +943,60 @@ JIT分割 進捗（継続観点）
   - `cargo test -q --test grammar_add_rules`
   - `cargo test -q --test grammar_other_ops`
   - 追加予定: `tests/snapshots/parser_mir_*`
+【2025-09-03 P1 進捗メモ】
+- peek: ブロックアーム対応済み（`=> { ... }` 最後の式が値）。
+- MIR/VM: PeekExpr の Lower を if-else 連鎖 + phi で実装。VM バックエンドで実行可。
+- Interpreter: Program ノードを式位置で評価できるよう拡張（ブロック式対応）。
+- 残件（P1 継続）: fn{}（関数Box）アーム、`Parent::` 記法、`?` 演算子。
+
+【2025-09-03 P1.2 追加】
+- Parent::記法: `Parent::method(args)` を `FromCall` AST にパースし、既存の from 呼び出し経路に接続。
+- ? 演算子: 後置 `expr?` を追加。MIRでは `isOk` 分岐→`getValue`/`return expr` に Lower。Interpreter も早期returnに対応。
+- fn{}: 無名関数を式として受理（P1最小）。現段階では値としてプレースホルダを返す（呼び出しは後続）。
+
+【2025-09-03 P1.3〜P1.4 追加（ハンドオフ）】
+- Lambda/Call:
+  - 一般式呼び出し `Call{callee, args}` を追加（`(expr)(args)`）。
+  - 直書き `fn{}` 即時呼び出しに加え、変数に格納した関数の呼び出しも可能に。
+  - Interpreter: `Lambda` 評価 → `FunctionBox` 生成（値として持ち回し可能）。
+- FunctionBox/ClosureEnv（最小）:
+  - `FunctionBox{ params, body, env }`。`env` は `me` と自由変数を保持。
+  - 自由変数: まずは by-value キャプチャ（生成時の値を閉じ込める）。
+  - `me`: Weak 化（生成時に downgrade、呼び出し時に upgrade。失敗時は `Null` 注入）。
+- RefCellBox（参照キャプチャの下地）:
+  - `RefCellBox` を追加（`get()/set(v)`）。
+  - Lambda 生成時、ローカル変数を捕捉する場合はローカルを RefCell に包み直し、env へも同じ RefCell を格納。
+  - これにより `.get/.set` による共有更新が可能（代入`=`は現状バインディング差し替え）。
+- PeekExpr（P1）:
+  - アームのブロック `{ ... }` を式として受理。Lower は if-else 連鎖 + phi。
+- Parent:: / `?` は P1.2 のとおり。
+- this 非推奨/正規化:
+  - パーサで `this` → AST 上は `me` に正規化。
+  - `NYASH_DEPRECATE_THIS=1` で `this` 使用時に警告を出力。
+
+【動作確認（VM）】
+- Lambda 即時呼び出し: `apps/fn-call-demo/main.nyash`
+- 変数保持→呼び出し: `apps/fn-store-and-call/main.nyash`
+- 参照キャプチャ（RefCell）: `apps/fn-capture-demo/main.nyash`
+- 関数値 toString: `apps/fn-lambda-demo/main.nyash`
+- peek ブロックアーム: `apps/peek-demo/main.nyash`
+- `?` 演算子: `apps/result-qmark-demo/main.nyash`
+
+【次にやること（優先度順）】
+1) 代入 `=` のセル反映（P1.4b）
+   - `set_variable()` を拡張し、ローカルが RefCellBox の場合は中身更新（`.set`）へ切り替える。
+   - これにより `.get/.set` を書かなくても by-ref 振る舞いが自然化。
+2) FunctionBox 呼び出しの VM 統一（P1.5）
+   - `PluginInvoke(FunctionBox, "call")` 経路を実装（VM→Interpreter ブリッジ）。
+   - 将来の CallCallee 命令・最適化の足がかりに。
+3) イベントAPI両受け（P1.6）
+   - 既存の MethodBox に加えて FunctionBox も受け付けるアダプタ（Callable 化）を導入。
+4) Lambda/Closure のテスト拡充
+   - 自由変数解析（ネスト/複数）、me Weak の失効ケース、RefCell 共有更新の回帰テスト。
+5) ドキュメント反映
+   - 「関数値（FunctionBox）」「参照キャプチャ（RefCell）」「this→me 方針」「Parent::/ ? / peek」のサンプルとガイド整備。
+
+【メモ/既知事項】
+- 現行 `cargo test` は既存の vm_e2e.rs（別件API）で失敗あり。本変更とは独立。`cargo build` は成功。
+- MIR: 直書き Lambda 即時呼び出しのみ Lower 済み。変数に入れた FunctionBox 呼び出しは Interpreter 経由で安定。
+- 将来: ClosureEnv の by-ref 完全対応（Upvalue セル化の一般化）や me Weak の利用箇所拡大は引き続き検討。
