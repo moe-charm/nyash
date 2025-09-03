@@ -226,6 +226,9 @@ impl JitEngine {
             self.register_extern(hb::SYM_HOST_CONSOLE_LOG, Arc::new(|args| hb::console_log(args)));
             self.register_extern(hb::SYM_HOST_CONSOLE_WARN, Arc::new(|args| hb::console_warn(args)));
             self.register_extern(hb::SYM_HOST_CONSOLE_ERROR, Arc::new(|args| hb::console_error(args)));
+            self.register_extern(hb::SYM_HOST_INSTANCE_GETFIELD, Arc::new(|args| hb::instance_getfield(args)));
+            self.register_extern(hb::SYM_HOST_INSTANCE_SETFIELD, Arc::new(|args| hb::instance_setfield(args)));
+            self.register_extern(hb::SYM_HOST_STRING_LEN, Arc::new(|args| hb::string_len(args)));
         }
     }
 

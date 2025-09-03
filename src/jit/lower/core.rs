@@ -285,6 +285,31 @@ impl LowerCore {
                             }
                         }
                     }
+                    // 2) StringBox(const string) → 文字列リテラルから直接ハンドル生成
+                    if box_type == "StringBox" && args.len() == 1 {
+                        if let Some(src) = args.get(0) {
+                            // 探索: 同一関数内で src を定義する Const(String)
+                            let mut lit: Option<String> = None;
+                            for (_bid, bb) in func.blocks.iter() {
+                                for ins in bb.instructions.iter() {
+                                    if let crate::mir::MirInstruction::Const { dst: cdst, value } = ins {
+                                        if cdst == src {
+                                            if let crate::mir::ConstValue::String(s) = value { lit = Some(s.clone()); }
+                                            break;
+                                        }
+                                    }
+                                }
+                                if lit.is_some() { break; }
+                            }
+                            if let Some(s) = lit {
+                                b.emit_string_handle_from_literal(&s);
+                                self.handle_values.insert(*dst);
+                                let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                b.store_local_i64(slot);
+                                return Ok(());
+                            }
+                        }
+                    }
                     // 2) 引数がハンドル（StringBox等）で既に存在する場合（最大2引数）
                     if args.len() <= 2 && args.iter().all(|a| self.handle_values.contains(a)) {
                         if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, .. } = crate::jit::policy::invoke::decide_box_method(box_type, "birth", args.len(), true) {

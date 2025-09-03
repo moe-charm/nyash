@@ -622,7 +622,94 @@ impl VM {
 
     /// Execute ExternCall instruction
     pub(super) fn execute_extern_call(&mut self, dst: Option<ValueId>, iface_name: &str, method_name: &str, args: &[ValueId]) -> Result<ControlFlow, VMError> {
-        
+        // Optional routing to name→slot handlers for stability and diagnostics
+        if crate::config::env::extern_route_slots() {
+            if let Some(slot) = crate::runtime::extern_registry::resolve_slot(iface_name, method_name) {
+                // Decode args to VMValue as needed by handlers below
+                let vm_args: Vec<VMValue> = args.iter().filter_map(|a| self.get_value(*a).ok()).collect();
+                match (iface_name, method_name, slot) {
+                    ("env.console", m @ ("log" | "warn" | "error" | "println"), 10) => {
+                        if let Some(a0) = vm_args.get(0) {
+                            match m {
+                                "warn" => eprintln!("[warn] {}", a0.to_string()),
+                                "error" => eprintln!("[error] {}", a0.to_string()),
+                                _ => println!("{}", a0.to_string()),
+                            }
+                        }
+                        if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.debug", "trace", 11) => {
+                        if let Some(a0) = vm_args.get(0) { eprintln!("[trace] {}", a0.to_string()); }
+                        if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.runtime", "checkpoint", 12) => {
+                        if crate::config::env::runtime_checkpoint_trace() {
+                            let (func, bb, pc) = self.gc_site_info();
+                            eprintln!("[rt] checkpoint @{} bb={} pc={}", func, bb, pc);
+                        }
+                        self.runtime.gc.safepoint();
+                        if let Some(s) = &self.runtime.scheduler { s.poll(); }
+                        if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.future", "new", 20) | ("env.future", "birth", 20) => {
+                        // Create a new Future and optionally set initial value from arg0
+                        let fut = crate::boxes::future::FutureBox::new();
+                        if let Some(a0) = vm_args.get(0) { fut.set_result(a0.to_nyash_box()); }
+                        if let Some(d) = dst { self.set_value(d, VMValue::Future(fut)); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.future", "set", 21) => {
+                        // set(future, value)
+                        if vm_args.len() >= 2 {
+                            if let VMValue::Future(f) = &vm_args[0] { f.set_result(vm_args[1].to_nyash_box()); }
+                        }
+                        if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.future", "await", 22) => {
+                        if let Some(VMValue::Future(fb)) = vm_args.get(0) {
+                            // Simple blocking await using existing helper pattern
+                            let start = std::time::Instant::now();
+                            let max_ms = crate::config::env::await_max_ms();
+                            while !fb.ready() {
+                                std::thread::yield_now();
+                                if start.elapsed() >= std::time::Duration::from_millis(max_ms) { break; }
+                            }
+                            let result = if fb.ready() { fb.get() } else { Box::new(crate::box_trait::StringBox::new("Timeout")) };
+                            let ok = crate::boxes::result::NyashResultBox::new_ok(result);
+                            if let Some(d) = dst { self.set_value(d, VMValue::from_nyash_box(Box::new(ok))); }
+                        } else if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.task", "cancelCurrent", 30) => {
+                        // No-op scaffold
+                        if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.task", "currentToken", 31) => {
+                        // Minimal token placeholder (0)
+                        if let Some(d) = dst { self.set_value(d, VMValue::Integer(0)); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.task", "yieldNow", 32) => {
+                        std::thread::yield_now();
+                        if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    ("env.task", "sleepMs", 33) => {
+                        let ms = vm_args.get(0).map(|v| match v { VMValue::Integer(i) => *i, _ => 0 }).unwrap_or(0);
+                        if ms > 0 { std::thread::sleep(std::time::Duration::from_millis(ms as u64)); }
+                        if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                    _ => { /* fallthrough to host */ }
+                }
+            }
+        }
+
         // Evaluate arguments as NyashBox for loader
         let mut nyash_args: Vec<Box<dyn NyashBox>> = Vec::new();
         for arg_id in args {
@@ -811,8 +898,8 @@ impl VM {
                                 // - Poly-PIC: 直ちに記録（最大4件ローカルLRU）
                                 self.record_poly_pic(&pic_key, &recv, &func_name);
                                 // - HotならMono-PICにも格納（しきい値=8）
-                                const PIC_THRESHOLD: u32 = 8;
-                                if self.pic_hits(&pic_key) >= PIC_THRESHOLD {
+                                let threshold = crate::config::env::vm_pic_threshold();
+                                if self.pic_hits(&pic_key) >= threshold {
                                     self.boxcall_pic_funcname.insert(pic_key.clone(), func_name.clone());
                                 }
                                 // - InstanceBoxならVTableキーにも登録（method_id/arity直結）
@@ -1091,8 +1178,8 @@ impl VM {
                     // Record in Poly-PIC immediately (size <= 4)
                     self.record_poly_pic(&pic_key, &recv, &func_name);
                     // If this call-site is hot, also cache in legacy Mono-PIC for backward behavior
-                    const PIC_THRESHOLD: u32 = 8;
-                    if self.pic_hits(&pic_key) >= PIC_THRESHOLD {
+                    let threshold = crate::config::env::vm_pic_threshold();
+                    if self.pic_hits(&pic_key) >= threshold {
                         self.boxcall_pic_funcname.insert(pic_key.clone(), func_name.clone());
                     }
                     if debug_boxcall { eprintln!("[BoxCall] InstanceBox -> call {}", func_name); }
@@ -1156,6 +1243,69 @@ impl VM {
             if let Some(_tb) = crate::runtime::type_registry::resolve_typebox_by_name(ty_name) {
                 // name+arity→slot 解決
                 let slot = crate::runtime::type_registry::resolve_slot_by_name(ty_name, _method, _args.len());
+                // InstanceBox: getField/setField/has/size
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    match slot {
+                        Some(1) => { // getField
+                            if let Ok(a0) = self.get_value(_args[0]) {
+                                let fname = match a0 { VMValue::String(s) => s, v => v.to_string() };
+                                let out_vm = match inst.get_field_unified(&fname) {
+                                    Some(nv) => match nv {
+                                        crate::value::NyashValue::Integer(i) => VMValue::Integer(i),
+                                        crate::value::NyashValue::Float(f) => VMValue::Float(f),
+                                        crate::value::NyashValue::Bool(b) => VMValue::Bool(b),
+                                        crate::value::NyashValue::String(s) => VMValue::String(s),
+                                        crate::value::NyashValue::Void | crate::value::NyashValue::Null => VMValue::Void,
+                                        crate::value::NyashValue::Box(bx) => {
+                                            if let Ok(g) = bx.lock() { VMValue::from_nyash_box(g.share_box()) } else { VMValue::Void }
+                                        }
+                                        _ => VMValue::Void,
+                                    },
+                                    None => VMValue::Void,
+                                };
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, out_vm); }
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                        Some(2) => { // setField
+                            if let (Ok(a0), Ok(a1)) = (self.get_value(_args[0]), self.get_value(_args[1])) {
+                                let fname = match a0 { VMValue::String(s) => s, v => v.to_string() };
+                                let nv_opt = match a1.clone() {
+                                    VMValue::Integer(i) => Some(crate::value::NyashValue::Integer(i)),
+                                    VMValue::Float(f) => Some(crate::value::NyashValue::Float(f)),
+                                    VMValue::Bool(b) => Some(crate::value::NyashValue::Bool(b)),
+                                    VMValue::String(s) => Some(crate::value::NyashValue::String(s)),
+                                    VMValue::Void => Some(crate::value::NyashValue::Void),
+                                    _ => None,
+                                };
+                                if let Some(nv) = nv_opt {
+                                    crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Instance.setField");
+                                    let _ = inst.set_field_unified(fname, nv);
+                                    if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::Void); }
+                                    self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                    return Some(Ok(ControlFlow::Continue));
+                                }
+                            }
+                        }
+                        Some(3) => { // has
+                            if let Ok(a0) = self.get_value(_args[0]) {
+                                let fname = match a0 { VMValue::String(s) => s, v => v.to_string() };
+                                let has = inst.get_field_unified(&fname).is_some();
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::Bool(has)); }
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                        Some(4) => { // size
+                            let sz = inst.fields_ng.lock().map(|m| m.len() as i64).unwrap_or(0);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::Integer(sz)); }
+                            self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                            return Some(Ok(ControlFlow::Continue));
+                        }
+                        _ => {}
+                    }
+                }
                 // MapBox: size/len/has/get/set
                 if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
                     if matches!(slot, Some(200|201)) {
@@ -1298,9 +1448,16 @@ impl VM {
                         return Some(Ok(ControlFlow::Continue));
                     }
                 }
-                // STRICT: 型は登録されているがメソッドが未対応 → エラー
+                // STRICT: 型は登録されているがメソッドが未対応 → エラー（最終仕様フォーマット）
                 if crate::config::env::abi_strict() {
-                    return Some(Err(VMError::TypeError(format!("ABI_STRICT: vtable method not found: {}.{}", ty_name, _method))));
+                    let known = crate::runtime::type_registry::known_methods_for(ty_name)
+                        .unwrap_or_default()
+                        .join(", ");
+                    let msg = format!(
+                        "ABI_STRICT: undefined vtable method {}.{}(arity={}) — known: {}",
+                        ty_name, _method, _args.len(), known
+                    );
+                    return Some(Err(VMError::TypeError(msg)));
                 }
             }
         }

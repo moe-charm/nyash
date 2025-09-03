@@ -1160,3 +1160,67 @@ Update (2025-09-02 AM / Async unify + VM await fix + JIT AOT builder plan)
   3) Enable AOT object emission for the sample and link via tools/build_aot.sh; run resulting EXE (expect Result: 1).
   4) Extend to `mir-phi-min` (ensure ensure_block_params + sealing order correct).
   5) Wire tri-backend/async/timeout smokes in tools/ (minimal, concise outputs) and add to CI.
+## Phase 12 — Handoff (VM/JIT 統一経路・Nyash ABI vtable/by-slot)
+
+目的
+- VM/JIT の挙動を vtable/slot ベースで統一。Extern と BoxCall の経路分離と診断の安定化。
+- 逆呼び（plugins→host）by-slot 安定化、HostHandle/PluginHandle のTLV往復、GCバリア安全性（TLS）担保。
+
+実装済み（主要ポイント）
+- TypeRegistry: InstanceBox の代表スロットを固定化（1:getField, 2:setField, 3:has, 4:size）。Array/Map/String は既存の100/200/300番台。
+- VM（vtable→PIC→汎用）正式化: Instance/Array/Map/String の get/set/len/size/has をVTで実行。STRICT時は型.メソッド(arity)＋known一覧でエラー。
+- Extern（env.*）: レジストリ拡充（console.info/debug, task.yieldNow/sleepMs）。`NYASH_EXTERN_ROUTE_SLOTS=1` で name→slot→専用ハンドラ経路を追加（console/debug/runtime.checkpoint/future.new|set|await/task.*）。
+- 逆呼びAPI（C ABI）: `nyrt_host_call_{name,slot}` 実装。slot表は Instance(1/2/3/4)/Array(100/101/102)/Map(200..204)/String(300)。テスト時の no_mangle 多重定義は feature=`c-abi-export` に切替。
+- JITパリティ（host-bridge）: VM側JIT境界で `set_current_vm/clear_current_vm` を挿入（GCバリア安全性）。host-bridgeに Instance.getField/setField（slot1/2）/String.len（slot300）を登録。Lowerer(ops_ext) で getField/setField と String.len を host-bridge へ降ろす分岐を追加（NYASH_JIT_HOST_BRIDGE=1）。
+- テスト追加:
+  - `src/tests/identical_exec_instance.rs`: new Person → setField/getField → "Alice" を返す（VM/JIT一致）
+  - `src/tests/identical_exec_string.rs`: String.len 一致（"hello"→5）
+  - `src/tests/identical_exec_collections.rs`: Array/Map/String の一致（最小）
+  - `src/tests/host_reverse_slot.rs`: 逆呼び by-slot（Map.set/size）
+  - 既存 vtable_* 系テストは残置
+- CI: `.github/workflows/vm-jit-identical.yml` を STRICT×VT のマトリクスに拡張。サブセット（identical/host_reverse/vtable_*）を実行。
+- ドキュメント:
+  - `include/nyrt_host_api.h`: 逆呼び C ヘッダ雛形
+  - `docs/development/abi/host_api.md`: TLVタグ/スロット/バリア(TLS) 要点
+  - `docs/development/design/extern-vs-boxcall.md`: 分離方針・スロット/アリティ一覧・STRICT・環境変数
+
+ブランチ現状の課題/未了タスク（優先度順）
+1) JIT host-bridge の Cranelift 外部thunk配線（要）
+   - 現状: host-bridge シンボル（`nyash.host.instance.getField`, `setField`, `string.len`）は Engine に登録済みだが、Cranelift の外部呼び → ランタイム関数への橋渡し（thunk）が未配線のため、戻り値（String/BoxRef）が JIT 側で 0 に潰れる。
+   - 対応: `jit/lower/builder/rt_shims.rs` or `jit/lower/extern_thunks.rs` に、上記シンボルの関数を追加し、戻り値は i64 ハンドル（JitValue::I64）で返す。`CallBoundaryBox::to_vm` が handle→BoxRef を復元。
+   - これにより以下の一致テストが通る見込み:
+     - `identical_exec_instance.rs`（VM=Alice, JIT=Alice）
+     - `identical_exec_string.rs`（VM=5, JIT=5）
+
+2) Array/Map の NewBox が Unit 環境で失敗（要）
+   - 理由: 既定 `NyashRuntime` が「プラグイン専用レジストリ」構成で、ArrayBox/MapBox を持たない。
+   - 対応: vtable_* 系ユニットテスト内で、簡易ビルトインFactoryを差し込む or CI 側で plugins を有効化する。手早いのは各テストでビルトインFactory注入（`NyashRuntimeBuilder.with_factory(...)`）。
+
+3) CI 失敗時のトレース収集（任意だが推奨）
+   - 落ちたマトリクスのとき、`NYASH_VM_VT_TRACE=1`, `NYASH_VM_PIC_TRACE=1`, `NYASH_EXTERN_TRACE=1` を追加した再実行とログアーティファクト化。
+
+既存の既知制約
+- 一部の広域テストはレガシー/プラグイン依存のため、本Phase対象外の赤が残る。CIは一致テスト系のサブセットに限定。
+- greet() 等のユーザーメソッド実行（文字列連結）は AST/Interpreter 依存が強いため、Instance一致テストは get/setField の slot 検証に留めている。
+
+環境変数早見表
+- `NYASH_ABI_VTABLE=1`（VM vtable 経路）
+- `NYASH_ABI_STRICT=1`（STRICT診断ON）
+- `NYASH_EXTERN_ROUTE_SLOTS=1`（Extern name→slot 統一ルート）
+- `NYASH_JIT_HOST_BRIDGE=1`（JIT host-bridge 経路）
+- `NYASH_VM_PIC_THRESHOLD=8`（PICモノ化しきい値）
+- 任意: `NYASH_VM_VT_TRACE=1`, `NYASH_VM_PIC_TRACE=1`, `NYASH_EXTERN_TRACE=1`, `NYASH_RUNTIME_CHECKPOINT_TRACE=1`
+
+コード参照（主な変更点）
+- 逆呼びAPI: `src/runtime/host_api.rs`（TLS, TLV, slot switch）
+- TypeRegistry: `src/runtime/type_registry.rs`（Instance/Array/Map/String のスロット定義）
+- VM vtable 経路: `src/backend/vm_instructions.rs`（try_boxcall_vtable_stub, Extern name→slot）
+- JIT host-bridge: `src/jit/extern/host_bridge.rs`（by-slot 呼び出し）/ `src/jit/engine.rs`（シンボル登録）/ `src/jit/lower/core/ops_ext.rs`（getField/setField/String.len を host-bridge に降ろす）
+- 一致テスト/逆呼びテスト: `src/tests/*.rs`（identical_* / vtable_* / host_reverse_slot）
+- CI: `.github/workflows/vm-jit-identical.yml`
+
+直近の作業手順（提案）
+1. Cranelift 外部thunkを追加（instance.getField/setField, string.len 用）し、戻り値を i64 handle で返す
+2. vtable_* ユニットテストに簡易ビルトインFactoryを注入して Array/Map の NewBox 失敗を解消
+3. 一致テストサブセットを再実行（Person/String/Collections/逆呼び/vtable_*）
+4. CI 失敗時のトレース収集を追加

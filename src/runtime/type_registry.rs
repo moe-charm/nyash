@@ -34,12 +34,27 @@ const STRING_METHODS: &[MethodEntry] = &[
 ];
 static STRINGBOX_TB: TypeBox = TypeBox::new_with("StringBox", STRING_METHODS);
 
+// --- InstanceBox ---
+// Representative methods exposed via unified slots for field access and diagnostics.
+// 1: getField(name)
+// 2: setField(name, value)
+// 3: has(name)
+// 4: size()
+const INSTANCE_METHODS: &[MethodEntry] = &[
+    MethodEntry { name: "getField", arity: 1, slot: 1 },
+    MethodEntry { name: "setField", arity: 2, slot: 2 },
+    MethodEntry { name: "has", arity: 1, slot: 3 },
+    MethodEntry { name: "size", arity: 0, slot: 4 },
+];
+static INSTANCEBOX_TB: TypeBox = TypeBox::new_with("InstanceBox", INSTANCE_METHODS);
+
 /// 型名から TypeBox を解決（雛形）。現在は常に None。
 pub fn resolve_typebox_by_name(type_name: &str) -> Option<&'static TypeBox> {
     match type_name {
         "MapBox" => Some(&MAPBOX_TB),
         "ArrayBox" => Some(&ARRAYBOX_TB),
         "StringBox" => Some(&STRINGBOX_TB),
+        "InstanceBox" => Some(&INSTANCEBOX_TB),
         _ => None,
     }
 }
@@ -52,4 +67,13 @@ pub fn resolve_slot_by_name(type_name: &str, method: &str, arity: usize) -> Opti
         if m.name == method && m.arity == ar { return Some(m.slot); }
     }
     None
+}
+
+/// Return list of known methods for a type (names only) for diagnostics.
+pub fn known_methods_for(type_name: &str) -> Option<Vec<&'static str>> {
+    let tb = resolve_typebox_by_name(type_name)?;
+    let mut v: Vec<&'static str> = tb.methods.iter().map(|m| m.name).collect();
+    v.sort();
+    v.dedup();
+    Some(v)
 }

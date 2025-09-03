@@ -18,10 +18,17 @@ static EXTERNS: Lazy<Vec<ExternSpec>> = Lazy::new(|| vec![
     ExternSpec { iface: "env.console", method: "log",  min_arity: 1, max_arity: 255, slot: Some(10) },
     ExternSpec { iface: "env.console", method: "warn", min_arity: 1, max_arity: 255, slot: Some(10) },
     ExternSpec { iface: "env.console", method: "error", min_arity: 1, max_arity: 255, slot: Some(10) },
+    ExternSpec { iface: "env.console", method: "info",  min_arity: 1, max_arity: 255, slot: Some(10) },
+    ExternSpec { iface: "env.console", method: "debug", min_arity: 1, max_arity: 255, slot: Some(10) },
     // debug
     ExternSpec { iface: "env.debug", method: "trace", min_arity: 1, max_arity: 255, slot: Some(11) },
     // runtime
     ExternSpec { iface: "env.runtime", method: "checkpoint", min_arity: 0, max_arity: 0, slot: Some(12) },
+    // task
+    ExternSpec { iface: "env.task", method: "cancelCurrent", min_arity: 0, max_arity: 0, slot: Some(30) },
+    ExternSpec { iface: "env.task", method: "currentToken", min_arity: 0, max_arity: 0, slot: Some(31) },
+    ExternSpec { iface: "env.task", method: "yieldNow", min_arity: 0, max_arity: 0, slot: Some(32) },
+    ExternSpec { iface: "env.task", method: "sleepMs", min_arity: 1, max_arity: 1, slot: Some(33) },
     // future (scaffold)
     ExternSpec { iface: "env.future", method: "new", min_arity: 1, max_arity: 1, slot: Some(20) },
     ExternSpec { iface: "env.future", method: "birth", min_arity: 1, max_arity: 1, slot: Some(20) },

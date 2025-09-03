@@ -613,9 +613,12 @@ impl VM {
             // Root regionize args for JIT call
             self.enter_root_region();
             self.pin_roots(args_vec.iter());
-            if let Some(jm_mut) = self.jit_manager.as_mut() {
-                if jm_mut.is_compiled(&function.signature.name) {
-                    if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) {
+            if let Some(compiled) = self.jit_manager.as_ref().map(|jm| jm.is_compiled(&function.signature.name)) {
+                if compiled {
+                    crate::runtime::host_api::set_current_vm(self as *mut _);
+                    let jit_val = if let Some(jm_mut) = self.jit_manager.as_mut() { jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) } else { None };
+                    crate::runtime::host_api::clear_current_vm();
+                    if let Some(val) = jit_val {
                         // Exit scope before returning
                         self.leave_root_region();
                         self.scope_tracker.pop_scope();
@@ -633,9 +636,12 @@ impl VM {
                     }
                 } else if jit_only {
                     // Try to compile now and execute; if not possible, error out
-                    let _ = jm_mut.maybe_compile(&function.signature.name, function);
-                    if jm_mut.is_compiled(&function.signature.name) {
-                        if let Some(val) = jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) {
+                    if let Some(jm_mut) = self.jit_manager.as_mut() { let _ = jm_mut.maybe_compile(&function.signature.name, function); }
+                    if self.jit_manager.as_ref().map(|jm| jm.is_compiled(&function.signature.name)).unwrap_or(false) {
+                        crate::runtime::host_api::set_current_vm(self as *mut _);
+                        let jit_val = if let Some(jm_mut) = self.jit_manager.as_mut() { jm_mut.execute_compiled(&function.signature.name, &function.signature.return_type, &args_vec) } else { None };
+                        crate::runtime::host_api::clear_current_vm();
+                        if let Some(val) = jit_val {
                             self.leave_root_region();
                             self.scope_tracker.pop_scope();
                             crate::runtime::global_hooks::pop_task_scope();

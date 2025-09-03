@@ -29,7 +29,7 @@ use super::super::extern_thunks::{
     nyash_box_birth_h, nyash_box_birth_i64,
     nyash_handle_of,
     nyash_rt_checkpoint, nyash_gc_barrier_write,
-    nyash_console_birth_h,
+    nyash_console_birth_h, nyash_string_from_ptr,
 };
 
 use crate::jit::r#extern::r#async::nyash_future_await_h;
@@ -542,6 +542,33 @@ impl IRBuilder for CraneliftBuilder {
         });
         if let Some(v) = ret_val { self.value_stack.push(v); }
     }
+    fn emit_string_handle_from_literal(&mut self, s: &str) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        // Pack up to 16 bytes into two u64 words (little-endian)
+        let bytes = s.as_bytes();
+        let mut lo: u64 = 0; let mut hi: u64 = 0;
+        let take = core::cmp::min(16, bytes.len());
+        for i in 0..take.min(8) { lo |= (bytes[i] as u64) << (8 * i as u32); }
+        for i in 8..take { hi |= (bytes[i] as u64) << (8 * (i - 8) as u32); }
+        // Call thunk: nyash.string.from_u64x2(lo, hi, len) -> handle(i64)
+        let call_conv = self.module.isa().default_call_conv();
+        let mut sig = Signature::new(call_conv);
+        sig.params.push(AbiParam::new(types::I64)); // lo
+        sig.params.push(AbiParam::new(types::I64)); // hi
+        sig.params.push(AbiParam::new(types::I64)); // len
+        sig.returns.push(AbiParam::new(types::I64));
+        let func_id = self.module.declare_function("nyash.string.from_u64x2", cranelift_module::Linkage::Import, &sig).expect("declare string.from_u64x2");
+        let v = Self::with_fb(|fb| {
+            let lo_v = fb.ins().iconst(types::I64, lo as i64);
+            let hi_v = fb.ins().iconst(types::I64, hi as i64);
+            let len_v = fb.ins().iconst(types::I64, bytes.len() as i64);
+            let fref = self.module.declare_func_in_func(func_id, fb.func);
+            let call_inst = fb.ins().call(fref, &[lo_v, hi_v, len_v]);
+            fb.inst_results(call_inst).get(0).copied().expect("str.from_ptr ret")
+        });
+        self.value_stack.push(v);
+        self.stats.0 += 1;
+    }
     fn prepare_blocks(&mut self, count: usize) {
         // Allow being called before begin_function; stash desired count
         let mut need_tls = false;
@@ -724,6 +751,17 @@ impl CraneliftBuilder {
         builder.symbol("nyash_plugin_invoke3_f64", nyash_plugin_invoke3_f64 as *const u8);
         builder.symbol("nyash_plugin_invoke_name_getattr_i64", nyash_plugin_invoke_name_getattr_i64 as *const u8);
         builder.symbol("nyash_plugin_invoke_name_call_i64", nyash_plugin_invoke_name_call_i64 as *const u8);
+        builder.symbol("nyash.string.from_u64x2", super::super::extern_thunks::nyash_string_from_u64x2 as *const u8);
+
+        // Host-bridge (by-slot) imports (opt-in)
+        if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
+            use crate::jit::r#extern::host_bridge as hb;
+            // Instance.getField/setField (recv_h, name_i[, val_i])
+            builder.symbol(hb::SYM_HOST_INSTANCE_GETFIELD, super::super::extern_thunks::nyash_host_instance_getfield as *const u8);
+            builder.symbol(hb::SYM_HOST_INSTANCE_SETFIELD, super::super::extern_thunks::nyash_host_instance_setfield as *const u8);
+            // String.len (recv_h)
+            builder.symbol(hb::SYM_HOST_STRING_LEN, super::super::extern_thunks::nyash_host_string_len as *const u8);
+        }
 
         let module = cranelift_jit::JITModule::new(builder);
         let ctx = cranelift_codegen::Context::new();

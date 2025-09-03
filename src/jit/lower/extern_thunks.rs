@@ -7,6 +7,8 @@ use crate::jit::events;
 #[cfg(feature = "cranelift-jit")]
 use crate::jit::r#extern::collections as c;
 #[cfg(feature = "cranelift-jit")]
+use crate::jit::r#extern::host_bridge as hb;
+#[cfg(feature = "cranelift-jit")]
 use crate::runtime::plugin_loader_unified;
 #[cfg(feature = "cranelift-jit")]
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
@@ -655,4 +657,102 @@ pub(super) extern "C" fn nyash_semantics_add_hh(lhs_h: u64, rhs_h: u64) -> i64 {
     let s = format!("{}{}", lhs.to_string_box().value, rhs.to_string_box().value);
     let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(StringBox::new(s));
     handles::to_handle(arc) as i64
+}
+
+// ==== Host-bridge (by-slot) external thunks ====
+// These thunks adapt JIT runtime handles and primitive args into VMValue vectors
+// and call the host-bridge helpers, which TLV-encode and invoke NyRT C-ABI by slot.
+
+#[cfg(feature = "cranelift-jit")]
+fn vmvalue_from_jit_arg_i64(v: i64) -> crate::backend::vm::VMValue {
+    use crate::backend::vm::VMValue as V;
+    if v <= 0 { return V::Integer(v); }
+    if let Some(obj) = crate::jit::rt::handles::get(v as u64) {
+        return V::BoxRef(obj);
+    }
+    // Legacy fallback: allow small indices to refer into legacy VM args for string/name lookups
+    if (v as u64) <= 16 {
+        return crate::jit::rt::with_legacy_vm_args(|args| args.get(v as usize).cloned()).unwrap_or(V::Integer(v));
+    }
+    V::Integer(v)
+}
+
+#[cfg(feature = "cranelift-jit")]
+fn i64_from_vmvalue(v: crate::backend::vm::VMValue) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    match v {
+        V::Integer(i) => i,
+        V::Bool(b) => if b { 1 } else { 0 },
+        V::Float(f) => f as i64,
+        V::String(s) => {
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(crate::box_trait::StringBox::new(&s));
+            crate::jit::rt::handles::to_handle(arc) as i64
+        }
+        V::BoxRef(b) => crate::jit::rt::handles::to_handle(b) as i64,
+        V::Future(fu) => {
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(fu);
+            crate::jit::rt::handles::to_handle(arc) as i64
+        }
+        V::Void => 0,
+    }
+}
+
+// nyash.host.instance.getField(recv, name)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_host_instance_getfield(recv_h: u64, name_i: i64) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    let recv = match crate::jit::rt::handles::get(recv_h) { Some(a) => a, None => return 0 };
+    let name_v = vmvalue_from_jit_arg_i64(name_i);
+    if std::env::var("NYASH_JIT_TRACE_BRIDGE").ok().as_deref() == Some("1") {
+        eprintln!("[HB|getField] name_i={} kind={}", name_i, match &name_v { V::String(_) => "String", V::BoxRef(b) => if b.as_any().downcast_ref::<crate::box_trait::StringBox>().is_some() {"StringBox"} else {"BoxRef"}, V::Integer(_) => "Integer", V::Bool(_) => "Bool", V::Float(_) => "Float", V::Void => "Void", V::Future(_) => "Future" });
+    }
+    let out = hb::instance_getfield(&[V::BoxRef(recv), name_v]);
+    i64_from_vmvalue(out)
+}
+
+// nyash.host.instance.setField(recv, name, value)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_host_instance_setfield(recv_h: u64, name_i: i64, val_i: i64) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    let recv = match crate::jit::rt::handles::get(recv_h) { Some(a) => a, None => return 0 };
+    let name_v = vmvalue_from_jit_arg_i64(name_i);
+    let val_v = vmvalue_from_jit_arg_i64(val_i);
+    let out = hb::instance_setfield(&[V::BoxRef(recv), name_v, val_v]);
+    i64_from_vmvalue(out)
+}
+
+// nyash.host.string.len(recv)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_host_string_len(recv_h: u64) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    if std::env::var("NYASH_JIT_TRACE_BRIDGE").ok().as_deref() == Some("1") { eprintln!("[HB|string.len] recv_h={}", recv_h); }
+    let recv = match crate::jit::rt::handles::get(recv_h) { Some(a) => a, None => { if std::env::var("NYASH_JIT_TRACE_BRIDGE").ok().as_deref()==Some("1") { eprintln!("[HB|string.len] recv handle not found"); } return 0 } };
+    let out = hb::string_len(&[V::BoxRef(recv)]);
+    let ret = i64_from_vmvalue(out);
+    if std::env::var("NYASH_JIT_TRACE_BRIDGE").ok().as_deref() == Some("1") { eprintln!("[HB|string.len] ret_i64={}", ret); }
+    ret
+}
+
+// Build a StringBox handle from raw bytes pointer and length
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_string_from_ptr(ptr: u64, len: u64) -> i64 {
+    if ptr == 0 || len == 0 { return 0; }
+    unsafe {
+        let slice = std::slice::from_raw_parts(ptr as *const u8, len as usize);
+        let s = match std::str::from_utf8(slice) { Ok(t) => t.to_string(), Err(_) => String::from_utf8_lossy(slice).to_string() };
+        let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(crate::box_trait::StringBox::new(s));
+        return crate::jit::rt::handles::to_handle(arc) as i64;
+    }
+}
+
+// Build a StringBox handle from two u64 chunks (little-endian) and length (<=16)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_string_from_u64x2(lo: u64, hi: u64, len: i64) -> i64 {
+    let n = if len <= 0 { 0usize } else { core::cmp::min(len as usize, 16usize) };
+    let mut buf = [0u8; 16];
+    for i in 0..core::cmp::min(8, n) { buf[i] = ((lo >> (8 * i)) & 0xFF) as u8; }
+    if n > 8 { for i in 0..(n - 8) { buf[8 + i] = ((hi >> (8 * i)) & 0xFF) as u8; } }
+    let s = match std::str::from_utf8(&buf[..n]) { Ok(t) => t.to_string(), Err(_) => String::from_utf8_lossy(&buf[..n]).to_string() };
+    let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(crate::box_trait::StringBox::new(s));
+    crate::jit::rt::handles::to_handle(arc) as i64
 }

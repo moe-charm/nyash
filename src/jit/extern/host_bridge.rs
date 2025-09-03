@@ -13,7 +13,29 @@ fn tlv_encode_values(args: &[VMValue]) -> Vec<u8> {
             VMValue::Float(f) => enc::f64(&mut buf, *f),
             VMValue::Bool(b) => enc::bool(&mut buf, *b),
             VMValue::String(s) => enc::string(&mut buf, s),
-            VMValue::BoxRef(_) | VMValue::Future(_) | VMValue::Void => enc::string(&mut buf, ""),
+            VMValue::BoxRef(arc) => {
+                // Try to downcast common primitives for stable TLV
+                if let Some(sb) = arc.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                    enc::string(&mut buf, &sb.value);
+                } else if let Some(ib) = arc.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                    enc::i64(&mut buf, ib.value);
+                } else if let Some(bb) = arc.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                    enc::bool(&mut buf, bb.value);
+                } else if let Some(fb) = arc.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                    enc::f64(&mut buf, fb.value);
+                } else {
+                    // Fallback: send HostHandle so host can operate on it if needed
+                    let h = crate::runtime::host_handles::to_handle_arc(arc.clone());
+                    enc::host_handle(&mut buf, h);
+                }
+            }
+            VMValue::Future(fu) => {
+                let bx: Box<dyn crate::box_trait::NyashBox> = Box::new(fu.clone());
+                let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(bx);
+                let h = crate::runtime::host_handles::to_handle_arc(arc);
+                enc::host_handle(&mut buf, h);
+            }
+            VMValue::Void => enc::string(&mut buf, "void"),
         }
     }
     buf
@@ -27,7 +49,12 @@ fn call_slot(handle: u64, slot: u64, argv: &[VMValue]) -> VMValue {
     if code != 0 { return VMValue::Void; }
     if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
         match tag {
-            6|7 => VMValue::String(crate::runtime::plugin_ffi_common::decode::string(payload)),
+            6|7 => {
+                let s = crate::runtime::plugin_ffi_common::decode::string(payload);
+                let sb = crate::box_trait::StringBox::new(&s);
+                let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(sb);
+                VMValue::BoxRef(arc)
+            }
             1 => crate::runtime::plugin_ffi_common::decode::bool(payload).map(VMValue::Bool).unwrap_or(VMValue::Void),
             2 => crate::runtime::plugin_ffi_common::decode::i32(payload).map(|v| VMValue::Integer(v as i64)).unwrap_or(VMValue::Void),
             3 => crate::runtime::plugin_ffi_common::decode::u64(payload).map(|v| VMValue::Integer(v as i64)).unwrap_or(VMValue::Void),
@@ -61,6 +88,9 @@ pub const SYM_HOST_MAP_HAS: &str = "nyash.host.map.has";   // (MapBox, key)
 pub const SYM_HOST_CONSOLE_LOG: &str = "nyash.host.console.log";   // (value)
 pub const SYM_HOST_CONSOLE_WARN: &str = "nyash.host.console.warn"; // (value)
 pub const SYM_HOST_CONSOLE_ERROR: &str = "nyash.host.console.error"; // (value)
+pub const SYM_HOST_INSTANCE_GETFIELD: &str = "nyash.host.instance.getField"; // (InstanceBox, name)
+pub const SYM_HOST_INSTANCE_SETFIELD: &str = "nyash.host.instance.setField"; // (InstanceBox, name, value)
+pub const SYM_HOST_STRING_LEN: &str = "nyash.host.string.len"; // (StringBox)
 
 pub fn array_get(args: &[VMValue]) -> VMValue {
     if let Some(h) = to_handle(args.get(0).unwrap_or(&VMValue::Void)) { call_slot(h, 100, &args[1..]) } else { VMValue::Void }
@@ -100,4 +130,15 @@ pub fn console_warn(args: &[VMValue]) -> VMValue {
 pub fn console_error(args: &[VMValue]) -> VMValue {
     if let Some(a0) = args.get(0) { eprintln!("[error] {}", a0.to_string()); }
     VMValue::Void
+}
+
+pub fn instance_getfield(args: &[VMValue]) -> VMValue {
+    if let Some(h) = to_handle(args.get(0).unwrap_or(&VMValue::Void)) { call_slot(h, 1, &args[1..]) } else { VMValue::Void }
+}
+pub fn instance_setfield(args: &[VMValue]) -> VMValue {
+    if let Some(h) = to_handle(args.get(0).unwrap_or(&VMValue::Void)) { call_slot(h, 2, &args[1..]) } else { VMValue::Void }
+}
+
+pub fn string_len(args: &[VMValue]) -> VMValue {
+    if let Some(h) = to_handle(args.get(0).unwrap_or(&VMValue::Void)) { call_slot(h, 300, &[]) } else { VMValue::Integer(0) }
 }

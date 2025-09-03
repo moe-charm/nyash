@@ -63,12 +63,17 @@ impl LowerCore {
         args: &Vec<ValueId>,
         _func: &MirFunction,
     ) -> Result<(), String> {
-        // env.console.log/println → ConsoleBox に委譲（host-bridge有効時は直接ログ）
-        if iface_name == "env.console" && (method_name == "log" || method_name == "println") {
+        // env.console.log/warn/error/println → ConsoleBox に委譲（host-bridge有効時は直接ログ）
+        if iface_name == "env.console" && (method_name == "log" || method_name == "println" || method_name == "warn" || method_name == "error") {
             if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
                 // a0: 先頭引数を最小限で積む
                 if let Some(arg0) = args.get(0) { self.push_value_if_known_or_param(b, arg0); } else { b.emit_const_i64(0); }
-                b.emit_host_call(crate::jit::r#extern::host_bridge::SYM_HOST_CONSOLE_LOG, 1, false);
+                let sym = match method_name {
+                    "warn" => crate::jit::r#extern::host_bridge::SYM_HOST_CONSOLE_WARN,
+                    "error" => crate::jit::r#extern::host_bridge::SYM_HOST_CONSOLE_ERROR,
+                    _ => crate::jit::r#extern::host_bridge::SYM_HOST_CONSOLE_LOG,
+                };
+                b.emit_host_call(sym, 1, false);
                 return Ok(());
             }
             // Ensure we have a Console handle (hostcall birth shim)
@@ -154,10 +159,7 @@ impl LowerCore {
         args: &Vec<ValueId>,
         dst: Option<ValueId>,
     ) -> Result<bool, String> {
-        // Delegate to existing helpers first
-        if super::super::core_hostcall::lower_boxcall_simple_reads(b, &self.param_index, &self.known_i64, array, method, args, dst.clone()) {
-            return Ok(true);
-        }
+        // Note: simple_reads は後段の分岐のフォールバックとして扱う（String/Instance優先）
         if matches!(method, "sin" | "cos" | "abs" | "min" | "max") {
             super::super::core_hostcall::lower_math_call(
                 func,
@@ -200,6 +202,69 @@ impl LowerCore {
         }
         // Array/Map minimal handling
         match method {
+            // Instance field ops via host-bridge
+            "getField" | "setField" => {
+                if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
+                    // receiver: allow param/local/phi/known
+                    if let Some(v) = args.get(0) { let _ = v; } // keep args in scope
+                    self.push_value_if_known_or_param(b, array);
+                    // name: if const string, build a StringBox handle from literal; else best-effort push
+                    if let Some(name_id) = args.get(0) {
+                        // Scan MIR for string constant defining this ValueId
+                        let mut found_str: Option<String> = None;
+                        for (_bbid, bb) in func.blocks.iter() {
+                            for ins in bb.instructions.iter() {
+                                if let crate::mir::MirInstruction::Const { dst, value } = ins {
+                                    if dst == name_id {
+                                        if let crate::mir::ConstValue::String(s) = value { found_str = Some(s.clone()); }
+                                        break;
+                                    }
+                                }
+                            }
+                            if found_str.is_some() { break; }
+                        }
+                        if let Some(s) = found_str { b.emit_string_handle_from_literal(&s); }
+                        else { self.push_value_if_known_or_param(b, name_id); }
+                    } else { b.emit_const_i64(0); }
+                    // value for setField
+                    let argc = if method == "setField" {
+                        if let Some(val_id) = args.get(1) {
+                            // If value is const string, materialize handle
+                            let mut found_val_str: Option<String> = None;
+                            for (_bbid, bb) in func.blocks.iter() {
+                                for ins in bb.instructions.iter() {
+                                    if let crate::mir::MirInstruction::Const { dst, value } = ins {
+                                        if dst == val_id {
+                                            if let crate::mir::ConstValue::String(s) = value { found_val_str = Some(s.clone()); }
+                                            break;
+                                        }
+                                    }
+                                }
+                                if found_val_str.is_some() { break; }
+                            }
+                            if let Some(s) = found_val_str { b.emit_string_handle_from_literal(&s); }
+                            else { self.push_value_if_known_or_param(b, val_id); }
+                        } else { b.emit_const_i64(0); }
+                        3
+                    } else { 2 };
+                    let sym = if method == "setField" { crate::jit::r#extern::host_bridge::SYM_HOST_INSTANCE_SETFIELD } else { crate::jit::r#extern::host_bridge::SYM_HOST_INSTANCE_GETFIELD };
+                    b.emit_host_call(sym, argc, dst.is_some());
+                    return Ok(true);
+                }
+            }
+            // String.len via host-bridge when receiver is StringBox
+            "len" => {
+                if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
+                    if let Some(bt) = self.box_type_map.get(array) {
+                        if bt == "StringBox" {
+                            if std::env::var("NYASH_JIT_TRACE_BRIDGE").ok().as_deref() == Some("1") { eprintln!("[LOWER]string.len via host-bridge"); }
+                            self.push_value_if_known_or_param(b, array);
+                            b.emit_host_call(crate::jit::r#extern::host_bridge::SYM_HOST_STRING_LEN, 1, dst.is_some());
+                            return Ok(true);
+                        }
+                    }
+                }
+            }
             // Array length variants (length/len)
             "len" | "length" => {
                 if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {

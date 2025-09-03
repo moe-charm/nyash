@@ -1,0 +1,41 @@
+name: VM-JIT Identical Execution
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        strict: ["0", "1"]
+        vt: ["0", "1"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+            profile: minimal
+            override: true
+      - name: Cargo test (subset, with JIT feature)
+        env:
+          RUSTFLAGS: "-C debuginfo=0"
+          NYASH_ABI_STRICT: ${{ matrix.strict }}
+          NYASH_ABI_VTABLE: ${{ matrix.vt }}
+          NYASH_JIT_HOST_BRIDGE: "1"
+          NYASH_EXTERN_ROUTE_SLOTS: "1"
+          NYASH_VM_PIC_THRESHOLD: "8"
+        run: |
+          cargo test --features cranelift-jit \
+            src/tests/identical_exec.rs \
+            src/tests/identical_exec_collections.rs \
+            src/tests/identical_exec_string.rs \
+            src/tests/identical_exec_instance.rs \
+            src/tests/vtable_array_string.rs \
+            src/tests/vtable_strict.rs \
+            src/tests/host_reverse_slot.rs \
+            -- --nocapture

@@ -27,8 +27,8 @@ impl IRBuilder for NoopBuilder {
     fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], has_ret: bool, _ret_is_f64: bool) { if has_ret { self.consts += 1; } }
     fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
     fn emit_plugin_invoke_by_name(&mut self, _method: &str, _argc: usize, has_ret: bool) { if has_ret { self.consts += 1; } }
+    fn emit_string_handle_from_literal(&mut self, _s: &str) { self.consts += 1; }
     fn ensure_local_i64(&mut self, _index: usize) { }
     fn store_local_i64(&mut self, _index: usize) { self.consts += 1; }
     fn load_local_i64(&mut self, _index: usize) { self.consts += 1; }
 }
-

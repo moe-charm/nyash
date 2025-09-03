@@ -28,7 +28,7 @@ pub fn lower_array_get(
     }
 }
 
-pub fn lower_map_size(
+pub fn lower_map_size_simple(
     b: &mut dyn IRBuilder,
     param_index: &HashMap<ValueId, usize>,
     recv: &ValueId,
@@ -42,7 +42,7 @@ pub fn lower_map_size(
     }
 }
 
-pub fn lower_map_get(
+pub fn lower_map_get_simple(
     b: &mut dyn IRBuilder,
     param_index: &HashMap<ValueId, usize>,
     known_i64: &HashMap<ValueId, i64>,
@@ -59,7 +59,7 @@ pub fn lower_map_get(
     }
 }
 
-pub fn lower_map_has(
+pub fn lower_map_has_simple(
     b: &mut dyn IRBuilder,
     param_index: &HashMap<ValueId, usize>,
     known_i64: &HashMap<ValueId, i64>,
@@ -76,7 +76,7 @@ pub fn lower_map_has(
     }
 }
 
-pub fn lower_map_set(
+pub fn lower_map_set_simple(
     b: &mut dyn IRBuilder,
     param_index: &HashMap<ValueId, usize>,
     known_i64: &HashMap<ValueId, i64>,
@@ -257,10 +257,10 @@ pub fn lower_box_call(
                         }
                     }
                     // Map
-                    "size" => { lower_map_size(b, param_index, recv, dst.is_some()); }
-                    "get" => { if let Some(k) = args.get(0) { lower_map_get(b, param_index, known_i64, recv, k, dst.is_some()); } }
-                    "has" => { if let Some(k) = args.get(0) { lower_map_has(b, param_index, known_i64, recv, k, dst.is_some()); } }
-                    "set" => { if args.len() >= 2 { lower_map_set(b, param_index, known_i64, recv, &args[0], &args[1]); } }
+                    "size" => { lower_map_size_simple(b, param_index, recv, dst.is_some()); }
+                    "get" => { if let Some(k) = args.get(0) { lower_map_get_simple(b, param_index, known_i64, recv, k, dst.is_some()); } }
+                    "has" => { if let Some(k) = args.get(0) { lower_map_has_simple(b, param_index, known_i64, recv, k, dst.is_some()); } }
+                    "set" => { if args.len() >= 2 { lower_map_set_simple(b, param_index, known_i64, recv, &args[0], &args[1]); } }
                     "has" => {
                         // Decide on key kind via registry and known values
                         use crate::jit::hostcall_registry::{check_signature, ArgKind};

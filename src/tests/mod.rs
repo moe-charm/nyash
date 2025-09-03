@@ -1,2 +1,9 @@
 pub mod box_tests;
 pub mod mir_vm_poc;
+pub mod identical_exec;
+pub mod identical_exec_collections;
+pub mod identical_exec_string;
+pub mod identical_exec_instance;
+pub mod vtable_array_string;
+pub mod vtable_strict;
+pub mod host_reverse_slot;

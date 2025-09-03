@@ -126,3 +126,12 @@ pub fn abi_strict() -> bool { std::env::var("NYASH_ABI_STRICT").ok().as_deref() 
 // ---- ExternCall strict diagnostics ----
 pub fn extern_strict() -> bool { std::env::var("NYASH_EXTERN_STRICT").ok().as_deref() == Some("1") }
 pub fn extern_trace() -> bool { std::env::var("NYASH_EXTERN_TRACE").ok().as_deref() == Some("1") }
+
+// ---- Phase 12: thresholds and routing policies ----
+/// PIC hotness threshold before promoting to mono cache.
+pub fn vm_pic_threshold() -> u32 {
+    std::env::var("NYASH_VM_PIC_THRESHOLD").ok().and_then(|s| s.parse().ok()).unwrap_or(8)
+}
+
+/// Route VM ExternCall via name→slot handlers when available
+pub fn extern_route_slots() -> bool { std::env::var("NYASH_EXTERN_ROUTE_SLOTS").ok().as_deref() == Some("1") }

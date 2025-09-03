@@ -81,7 +81,7 @@ fn encode_out(out_ptr: *mut u8, out_len: *mut usize, buf: &[u8]) -> i32 {
     }
 }
 
-#[no_mangle]
+#[cfg_attr(all(not(test), feature = "c-abi-export"), no_mangle)]
 pub extern "C" fn nyrt_host_call_name(handle: u64, method_ptr: *const u8, method_len: usize,
                                        args_ptr: *const u8, args_len: usize,
                                        out_ptr: *mut u8, out_len: *mut usize) -> i32 {
@@ -194,6 +194,8 @@ fn plugin_box_from_handle(_type_id: u32, _instance_id: u32) -> Option<std::sync:
 // Minimal slot mapping (subject to consolidation with TypeRegistry):
 // 1: InstanceBox.getField(name: string) -> any
 // 2: InstanceBox.setField(name: string, value: any-primitive) -> bool
+// 3: InstanceBox.has(name: string) -> bool
+// 4: InstanceBox.size() -> i64
 // 100: ArrayBox.get(index: i64) -> any
 // 101: ArrayBox.set(index: i64, value: any) -> any
 // 102: ArrayBox.len() -> i64
@@ -203,7 +205,7 @@ fn plugin_box_from_handle(_type_id: u32, _instance_id: u32) -> Option<std::sync:
 // 203: MapBox.get(key:any) -> any
 // 204: MapBox.set(key:any, value:any) -> any
 // 300: StringBox.len() -> i64
-#[no_mangle]
+#[cfg_attr(all(not(test), feature = "c-abi-export"), no_mangle)]
 pub extern "C" fn nyrt_host_call_slot(handle: u64, selector_id: u64,
                                        args_ptr: *const u8, args_len: usize,
                                        out_ptr: *mut u8, out_len: *mut usize) -> i32 {
@@ -223,7 +225,7 @@ pub extern "C" fn nyrt_host_call_slot(handle: u64, selector_id: u64,
     }
 
     match selector_id {
-        1 | 2 => {
+        1 | 2 | 3 | 4 => {
             if let Some(inst) = recv_arc.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                 if selector_id == 1 {
                     // getField(name)
@@ -243,7 +245,7 @@ pub extern "C" fn nyrt_host_call_slot(handle: u64, selector_id: u64,
                         let buf = tlv_encode_one(&out);
                         return encode_out(out_ptr, out_len, &buf);
                     }
-                } else {
+                } else if selector_id == 2 {
                     // setField(name, value)
                     if argv.len() >= 2 {
                         let field = match &argv[0] { crate::backend::vm::VMValue::String(s) => s.clone(), v => v.to_string() };
@@ -260,6 +262,19 @@ pub extern "C" fn nyrt_host_call_slot(handle: u64, selector_id: u64,
                         let buf = tlv_encode_one(&crate::backend::vm::VMValue::Bool(true));
                         return encode_out(out_ptr, out_len, &buf);
                     }
+                } else if selector_id == 3 {
+                    // has(name)
+                    if argv.len() >= 1 {
+                        let field = match &argv[0] { crate::backend::vm::VMValue::String(s) => s.clone(), v => v.to_string() };
+                        let has = inst.get_field_unified(&field).is_some();
+                        let buf = tlv_encode_one(&crate::backend::vm::VMValue::Bool(has));
+                        return encode_out(out_ptr, out_len, &buf);
+                    }
+                } else if selector_id == 4 {
+                    // size()
+                    let sz = inst.fields_ng.lock().map(|m| m.len() as i64).unwrap_or(0);
+                    let buf = tlv_encode_one(&crate::backend::vm::VMValue::Integer(sz));
+                    return encode_out(out_ptr, out_len, &buf);
                 }
             }
         }
