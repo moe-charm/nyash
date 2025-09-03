@@ -13,11 +13,12 @@ NyashCompiler (Nyashで実装)
 ├── Middle-end
 │   ├── Type Checker
 │   ├── Name Resolver
-│   ├── MIR Lowerer
+│   ├── MIR Lowerer (→13命令)
 │   └── Optimizer
-└── Backend
+└── Backend（複数選択可能）
     ├── CraneliftBox (JITラッパー)
-    ├── Code Generator
+    ├── X86EmitterBox (直接エミッタ)
+    ├── TemplateStitcherBox (超小型)
     └── Runtime Linker
 ```
 
@@ -204,7 +205,7 @@ box MIRLowerer {
 }
 ```
 
-## 4. Cranelift統合
+## 4. バックエンド実装
 
 ### 4.1 CraneliftBox実装
 
@@ -240,6 +241,107 @@ box CraneliftBox {
         
         // JITコンパイル
         return ExternCall("cranelift_finalize_function", me.func_ctx)
+    }
+}
+```
+
+### 4.2 X86EmitterBox実装（直接x86生成）
+
+```nyash
+box X86EmitterBox {
+    init { code_buffer, label_map }
+    
+    constructor() {
+        me.code_buffer = new ArrayBox()
+        me.label_map = new MapBox()
+    }
+    
+    compile(mir) {
+        // MIR 13命令を直接x86-64に変換！
+        for func in mir.functions {
+            me.emitFunction(func)
+        }
+        
+        return me.code_buffer
+    }
+    
+    emitInstruction(inst) {
+        // MIR命令をx86テンプレートに変換
+        if inst.type == "Const" {
+            // mov rax, imm64
+            me.emit_mov_imm(inst.dst, inst.value)
+        }
+        
+        if inst.type == "BinOp" {
+            if inst.op == "Add" {
+                // add rax, rbx
+                me.emit_add(inst.dst, inst.left, inst.right)
+            }
+        }
+        
+        if inst.type == "BoxCall" {
+            // mov rdi, receiver
+            // mov rax, [rdi]     ; vtable
+            // call [rax+slot*8]  ; method call
+            me.emit_boxcall(inst.recv, inst.slot)
+        }
+        
+        // ... 残り10命令のテンプレート
+    }
+    
+    emit_mov_imm(reg, value) {
+        // REX.W + mov r64, imm64
+        me.code_buffer.push(0x48)  // REX.W
+        me.code_buffer.push(0xB8 + reg)  // mov opcode
+        
+        // 64ビット即値をリトルエンディアンで
+        for i in range(0, 8) {
+            me.code_buffer.push((value >> (i * 8)) & 0xFF)
+        }
+    }
+}
+```
+
+### 4.3 テンプレート・スティッチャ実装（超小型バイナリ）
+
+```nyash
+box TemplateStitcherBox {
+    init { stub_addresses, jump_table }
+    
+    constructor() {
+        // 各MIR命令の共通スタブアドレス
+        me.stub_addresses = new MapBox()
+        me.stub_addresses.set("Const", 0x1000)
+        me.stub_addresses.set("UnaryOp", 0x1100)
+        me.stub_addresses.set("BinOp", 0x1200)
+        me.stub_addresses.set("Compare", 0x1300)
+        me.stub_addresses.set("TypeOp", 0x1400)
+        me.stub_addresses.set("Load", 0x1500)
+        me.stub_addresses.set("Store", 0x1600)
+        me.stub_addresses.set("Branch", 0x1700)
+        me.stub_addresses.set("Jump", 0x1800)
+        me.stub_addresses.set("Return", 0x1900)
+        me.stub_addresses.set("Phi", 0x1A00)
+        me.stub_addresses.set("BoxCall", 0x1B00)
+        me.stub_addresses.set("ExternCall", 0x1C00)
+    }
+    
+    compile(mir) {
+        me.jump_table = new ArrayBox()
+        
+        // プログラムはスタブへのジャンプ列として表現
+        for inst in mir.instructions {
+            local stub_addr = me.stub_addresses.get(inst.type)
+            
+            // jmp rel32
+            me.jump_table.push(0xE9)  // jmp opcode
+            me.jump_table.push_rel32(stub_addr)
+            
+            // 命令固有のパラメータをデータセクションに配置
+            me.encodeParameters(inst)
+        }
+        
+        return me.jump_table
     }
 }
 ```

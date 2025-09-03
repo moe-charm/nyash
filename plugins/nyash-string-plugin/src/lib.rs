@@ -4,6 +4,8 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
+use std::os::raw::c_char;
+use std::ffi::CStr;
 
 const OK: i32 = 0;
 const E_SHORT: i32 = -1;
@@ -114,6 +116,71 @@ pub extern "C" fn nyash_plugin_invoke(
         }
     }
 }
+
+// ===== TypeBox FFI (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const c_char, // C string
+    pub resolve: Option<extern "C" fn(*const c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+extern "C" fn string_resolve(name: *const c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "len" | "length" => M_LENGTH,
+        "toUtf8" => M_TO_UTF8,
+        "concat" => M_CONCAT,
+        _ => 0,
+    }
+}
+
+extern "C" fn string_invoke_id(instance_id: u32, method_id: u32, args: *const u8, args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
+    unsafe {
+        match method_id {
+            M_LENGTH => {
+                if let Ok(m) = INST.lock() { if let Some(inst) = m.get(&instance_id) { return write_tlv_i64(inst.s.len() as i64, result, result_len); } else { return E_HANDLE; } } else { return E_PLUGIN; }
+            }
+            M_TO_UTF8 => {
+                if let Ok(m) = INST.lock() { if let Some(inst) = m.get(&instance_id) { return write_tlv_string(&inst.s, result, result_len); } else { return E_HANDLE; } } else { return E_PLUGIN; }
+            }
+            M_CONCAT => {
+                // support String/Bytes or StringBox handle
+                let (ok, rhs) = if let Some((t, inst)) = read_arg_handle(args, args_len, 0) {
+                    if t != TYPE_ID_STRING { return E_TYPE; }
+                    if let Ok(m) = INST.lock() { if let Some(s2) = m.get(&inst) { (true, s2.s.clone()) } else { (false, String::new()) } } else { return E_PLUGIN; }
+                } else if let Some(s) = read_arg_string(args, args_len, 0) { (true, s) } else { (false, String::new()) };
+                if !ok { return E_ARGS; }
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        let mut new_s = inst.s.clone(); new_s.push_str(&rhs); drop(m);
+                        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+                        if let Ok(mut mm) = INST.lock() { mm.insert(id, StrInstance { s: new_s }); }
+                        return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
+            _ => E_METHOD,
+        }
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_StringBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258, // 'TYBX'
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"StringBox\0".as_ptr() as *const c_char,
+    resolve: Some(string_resolve),
+    invoke_id: Some(string_invoke_id),
+    capabilities: 0,
+};
 
 fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
     unsafe { if result_len.is_null() { return false; } if result.is_null() || *result_len < needed { *result_len = needed; return true; } }

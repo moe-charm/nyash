@@ -1,16 +1,19 @@
 # Phase 12 Task Board (v2 - セルフホスティング対応)
 
+Status: Tier-0 完了（vtable雛形 + レジストリ + VM優先経路）。次は Tier-1 の最小Nyash ABIサンプル実装へ。
+
 目的: C ABI を壊さず、TypeBox + 統一ディスパッチで Nyash ABI を段階導入。MIR→VM→JIT を「綺麗な箱」で統一。**最終的にRust依存を排除し、セルフホスティングを実現。**
 
 ## Tier-0（直近・安全に積める）
 - [x] MapBoxの実用拡張（stringキー/便利API）
-- [x] `keys()/values()` ランタイムシム（現状は改行区切りString返却）
-- [ ] TypeBoxレジストリ（雛形）
-  - Box名/FQN、type_id、メソッド表、returns_result を登録
-  - 既存 `nyash.toml` → TypeBoxInfo への変換層
-- [ ] 統一ディスパッチ層（VM）
-  - Nyash ABI vtable優先 → 無ければ C ABI（TLV）へフォールバック
-  - 所有権・セーフポイントのガード（MAY_BLOCKのみ初期対応）
+- [x] `keys()/values()` 実装（ArrayBox返却に更新）
+- [x] TypeBoxレジストリ（雛形）
+  - Box名/FQN、type_id、メソッド表（静的スロット）を登録（`src/runtime/type_registry.rs`）
+  - 既存 `nyash.toml` → TypeBoxInfo 変換層は別途（未着手）
+- [x] 統一ディスパッチ層（VM・雛形）
+  - `NYASH_ABI_VTABLE=1` で vtable優先のVM経路を有効化（fallbackはC ABI/TLV）。
+  - Array/Map/String/Instance の主要メソッドを最小カバレッジで処理（`try_boxcall_vtable_stub`）。
+  - 所有権・セーフポイントのガードは既存Barrier呼び出しで一部対応（MAY_BLOCK等は今後拡張）。
   - [x] プラグインテスター更新（v2ローダに対応）: `src/bin/test_plugin_loader_v2.rs`
 
 ## Tier-1（実証）
@@ -24,9 +27,8 @@
 - [ ] NyashValueインライン（i64/bool）の高速化
 - [ ] 例外/エラーの完全変換（panic→nyrt_err）
 - [ ] 所有権契約の遵守（TRANSFER/BORROW/CLONE）
-- [ ] `keys()/values()` の正式実装（ArrayBox返却）
-  - 選択肢A: ランタイムで ArrayBox を構築
-  - 選択肢B: Mapプラグインに KeysArrayBox を同梱（要設定追加）
+- [x] `keys()/values()` の正式実装（ArrayBox返却）
+  - 採用: ランタイムで ArrayBox を構築（`src/boxes/map_box.rs`）
 
 ## Tier-3（セルフホスティング）🔥新規
 - [ ] Nyash ABI C実装の開始

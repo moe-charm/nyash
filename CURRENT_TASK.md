@@ -1,14 +1,53 @@
-# CURRENT TASK (Phase 11.7 kick-off: JIT Complete / Semantics Layer)
+# CURRENT TASK (Phase 12 — TypeBox ABI / VTable 統合)
 
-- Phase 12 準備（下準備・計画確定）
-- 目的: ユーザー箱/プラグイン箱/内蔵箱の境界撤廃（TypeBox+Instance統一）＋ Nyash ABI(vtable)導入の段階計画を確定。最終ゴールは「Nyashコード（言語）→ VM → JIT の同一実行（意味・結果・副作用が一致）」。
-- 参照: docs/development/roadmap/phases/phase-12/PLAN.md
-- 参考: docs/reference/abi/NYASH_ABI_MIN_CORE.md（最小ABIと進化戦略）
-- TODO（Tier‑0）
-  - [ ] type_box_abi雛形（`src/runtime/type_box_abi.rs`）の設計固め（NyrtValue/TypeBox/関数ポインタ）
-  - [ ] type_registry雛形（`src/runtime/type_registry.rs`）の役割定義（TypeId→TypeBox）
-  - [ ] VM `execute_boxcall` に vtable優先stubを入れる設計（`NYASH_ABI_VTABLE=1`で有効）
-  - [ ] 管理棟: `NYASH_ABI_VTABLE`/`NYASH_ABI_STRICT` トグルの仕様確定（実装は次フェーズ）
+このファイルは Phase 12 の実装要点を短く保つために再編しました。詳細ログは docs 配下に移管します。
+
+- ドキュメント: `docs/development/roadmap/phases/phase-12/{README.md, PLAN.md, TASKS.md}`
+- ABI 最小コア: `docs/reference/abi/NYASH_ABI_MIN_CORE.md`
+
+## 概要（Executive Summary）
+- 目的: ユーザー/プラグイン/内蔵を TypeBox+VTable で統一し、VM/JIT/WASM の同一実行を実現。
+- 現状: Tier‑0/Tier‑1 相当の配線完了。VM vtable→Plugin 経路も接続済み。WASM v2の最小ディスパッチ実装も導入。
+
+## 完了（Done）
+- TypeBox ABI 雛形: `src/runtime/type_box_abi.rs`
+- TypeRegistry 雛形: `src/runtime/type_registry.rs`
+  - Array: get(100)/set(101)/len,length(102)
+  - Map: size(200)/len(201)/has(202)/get(203)/set(204)
+  - String: len(300)
+  - Console: log(400)/warn(401)/error(402)/clear(403)
+- VM vtable 優先スタブ: `execute_boxcall` → `try_boxcall_vtable_stub`（`NYASH_ABI_VTABLE=1`）
+  - Instance: getField/setField/has/size
+  - Array/Map/String: 代表メソッドを直接/host経由で処理
+  - PluginBoxV2 受信時でも Array/Map/String を vtable→host.invoke で実行（set は GC バリア）
+- MapBox 文字列キー互換: get/has の第1引数が String なら getS/hasS を常時使用（plugin_loader_v2/VM）
+- Console.readLine フォールバック（VM/Plugin 両経路）: stdin 読み込み/EOF=Null 返却で無限ループ防止
+- WASM v2 統一ディスパッチ（最小）: console/array/map のスロット対応
+
+## 残タスク（To‑Do）
+1) アプリ3モード実行（Script/VM/JIT）の整合確認（ny-echo/ny-array-bench/ny-mem-bench）
+   - ログ抑制（`NYASH_CLI_VERBOSE=0`）で確認
+   - `StatsBox` 未定義は別件として扱う
+2) Docs 最終化（slot表・vtable優先方針・トレース変数）
+3) Phase 12 クローズ準備（チェックリスト/次フェーズへの接続）
+
+## 実行コマンド（サマリ）
+- ビルド: `cargo build --release --features cranelift-jit`
+- ny-echo（Script/VM/JIT）
+  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash apps/ny-echo/main.nyash`
+  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash --backend vm apps/ny-echo/main.nyash`
+  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash --backend vm --jit-exec --jit-hostcall apps/ny-echo/main.nyash`
+- ベンチ（参考）
+  - `NYASH_CLI_VERBOSE=0 ./target/release/nyash [--backend vm|--jit-exec --jit-hostcall] apps/ny-array-bench/main.nyash`
+  - `NYASH_CLI_VERBOSE=0 ./target/release/nyash [--backend vm|--jit-exec --jit-hostcall] apps/ny-mem-bench/main.nyash`
+
+## トレース/環境変数（抜粋）
+- ABI: `NYASH_ABI_VTABLE=1`, `NYASH_ABI_STRICT=1`
+- VM: `NYASH_VM_PIC_STATS`, `NYASH_VM_PIC_TRACE`, `NYASH_VM_VT_TRACE`
+- JIT: `NYASH_JIT_DUMP`, `NYASH_JIT_TRACE_BLOCKS`, `NYASH_JIT_TRACE_BR`, `NYASH_JIT_TRACE_SEL`, `NYASH_JIT_TRACE_RET`
+
+---
+詳細な履歴や議事録は docs 配下の Phase 12 セクションを参照してください。
 
 Docs（Phase 12 直近）
 - [x] Minimal Core ABI方針の文書化（NYASH_ABI_MIN_CORE.md）

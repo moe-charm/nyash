@@ -150,3 +150,54 @@ pub extern "C" fn nyash_plugin_invoke(
         }
     }
 }
+
+// ===== TypeBox FFI (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const c_char, // C string
+    pub resolve: Option<extern "C" fn(*const c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+extern "C" fn console_resolve(name: *const c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "log" => METHOD_LOG,
+        "println" => METHOD_PRINTLN,
+        _ => 0,
+    }
+}
+
+extern "C" fn console_invoke_id(instance_id: u32, method_id: u32, args: *const u8, args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
+    unsafe {
+        match method_id {
+            METHOD_LOG | METHOD_PRINTLN => {
+                let slice = std::slice::from_raw_parts(args, args_len);
+                let s = match parse_first_string(slice) {
+                    Ok(s) => s,
+                    Err(_) => format_first_any(slice).unwrap_or_else(|| "".to_string()),
+                };
+                if method_id == METHOD_LOG { print!("{}", s); } else { println!("{}", s); }
+                return write_tlv_void(result, result_len);
+            }
+            _ => NYB_E_INVALID_METHOD,
+        }
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_ConsoleBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258, // 'TYBX'
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"ConsoleBox\0".as_ptr() as *const c_char,
+    resolve: Some(console_resolve),
+    invoke_id: Some(console_invoke_id),
+    capabilities: 0,
+};

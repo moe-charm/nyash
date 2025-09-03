@@ -26,6 +26,9 @@ Purpose: Claude×Copilot×ChatGPT×Gemini×Codex協調開発の総合ロード�
 | 11.8 | 📅予定 | MIR整理（Core-15→Core-13） | [phase-11.8_mir_cleanup/](phase-11.8_mir_cleanup/) |
 | 12 | 🔄進行中 | TypeBox統合ABI・セルフホスティング準備 | [phase-12/](phase-12/) |
 | 12.5 | 📅予定 | MIR15最適化戦略 | [phase-12.5/](phase-12.5/) |
+| 12.7 | 📅予定 | AI-Nyash Compact Notation Protocol (ANCP) | [phase-12.7/](phase-12.7/) |
+| 13 | 📅予定 | Nyashブラウザー革命 | [phase-13/](phase-13/) |
+| 14 | 📅予定 | パッケージング・CI改善 | [phase-14/](phase-14/) |
 | 15 | 🌟実現可能 | セルフホスティング（C実装ABI経由） | [phase-15/](phase-15/) |
 
 ---

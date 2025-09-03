@@ -1,0 +1,242 @@
+//! Nyash EguiBox Plugin (TypeBox ABI skeleton)
+//! - Provides a minimal window/UI placeholder via Nyash ABI
+//! - Windows GUI integration (egui/eframe) can be enabled later via `with-egui` feature
+
+use once_cell::sync::Lazy;
+use std::{collections::HashMap, sync::{Mutex, atomic::{AtomicU32, Ordering}}};
+
+// ===== Error/Status codes (BID-FFI v1 aligned) =====
+const OK: i32 = 0;
+const E_SHORT: i32 = -1;
+const E_TYPE: i32 = -2;
+const E_METHOD: i32 = -3;
+const E_ARGS: i32 = -4;
+const E_FAIL: i32 = -5;
+
+// ===== IDs =====
+const TID_EGUI: u32 = 70; // match nyash.toml [box_types]
+
+// methods
+const M_BIRTH: u32 = 0;
+const M_OPEN: u32 = 1;       // open(width:int, height:int, title:str)
+const M_UI_LABEL: u32 = 2;   // uiLabel(text:str)
+const M_UI_BUTTON: u32 = 3;  // uiButton(text:str) -> future: events
+const M_POLL_EVENT: u32 = 4; // pollEvent() -> Result.Ok(text) / Result.Err("none")
+const M_RUN: u32 = 5;        // run() -> enters loop or no-op
+const M_CLOSE: u32 = 6;      // close()
+const M_FINI: u32 = u32::MAX;
+
+#[derive(Default)]
+struct EguiInstance {
+    width: i32,
+    height: i32,
+    title: String,
+    labels: Vec<String>,
+}
+
+static INST: Lazy<Mutex<HashMap<u32, EguiInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static NEXT_ID: AtomicU32 = AtomicU32::new(1);
+
+// ===== TypeBox ABI (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,
+    pub version: u16,
+    pub struct_size: u16,
+    pub name: *const std::os::raw::c_char,
+    pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+
+// This simple POD struct contains raw pointers; mark as Sync for static export
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+const ABI_TAG: u32 = 0x58594254; // 'T''Y''B''X' little-endian (TYBX)
+
+extern "C" fn tb_resolve(name: *const std::os::raw::c_char) -> u32 {
+    unsafe {
+        if name.is_null() { return 0; }
+        let s = std::ffi::CStr::from_ptr(name).to_string_lossy();
+        match s.as_ref() {
+            "birth" => M_BIRTH,
+            "open" => M_OPEN,
+            "uiLabel" => M_UI_LABEL,
+            "uiButton" => M_UI_BUTTON,
+            "pollEvent" => M_POLL_EVENT,
+            "run" => M_RUN,
+            "close" => M_CLOSE,
+            "fini" => M_FINI,
+            _ => 0,
+        }
+    }
+}
+
+extern "C" fn tb_invoke_id(_method_id: u32, instance_id: u32, args: *const u8, args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
+    nyash_plugin_invoke(TID_EGUI, _method_id, instance_id, args, args_len, result, result_len)
+}
+
+static TYPE_NAME: &[u8] = b"EguiBox\0";
+#[no_mangle]
+pub static nyash_typebox_EguiBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: ABI_TAG,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: TYPE_NAME.as_ptr() as *const _,
+    resolve: Some(tb_resolve),
+    invoke_id: Some(tb_invoke_id),
+    capabilities: 0,
+};
+
+// ===== Plugin entry points =====
+#[no_mangle]
+pub extern "C" fn nyash_plugin_abi() -> u32 { 1 }
+
+#[no_mangle]
+pub extern "C" fn nyash_plugin_init() -> i32 { OK }
+
+#[no_mangle]
+pub extern "C" fn nyash_plugin_invoke(
+    type_id: u32,
+    method_id: u32,
+    instance_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    if type_id != TID_EGUI { return E_TYPE; }
+    unsafe {
+        match method_id {
+            M_BIRTH => {
+                let need = 4; // instance_id (u32 LE)
+                if result_len.is_null() { return E_ARGS; }
+                if result.is_null() || *result_len < need { *result_len = need; return E_SHORT; }
+                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut m) = INST.lock() { m.insert(id, EguiInstance::default()); } else { return E_FAIL; }
+                let b = id.to_le_bytes(); std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4); *result_len = 4; OK
+            }
+            M_FINI => { if let Ok(mut m) = INST.lock() { m.remove(&instance_id); OK } else { E_FAIL } }
+            M_OPEN => {
+                let (w, h, title) = match tlv_read_open_args(args, args_len) { Some(v) => v, None => return E_ARGS };
+                if let Ok(mut m) = INST.lock() { if let Some(inst) = m.get_mut(&instance_id) { inst.width=w; inst.height=h; inst.title=title; } else { return E_FAIL; } } else { return E_FAIL; }
+                write_tlv_void(result, result_len)
+            }
+            M_UI_LABEL => {
+                let text = match tlv_read_string(args, args_len, 0) { Some(s) => s, None => return E_ARGS };
+                if let Ok(mut m) = INST.lock() { if let Some(inst) = m.get_mut(&instance_id) { inst.labels.push(text); } else { return E_FAIL; } } else { return E_FAIL; }
+                write_tlv_void(result, result_len)
+            }
+            M_UI_BUTTON => {
+                // For now: stub, accept and return Void
+                if tlv_read_string(args, args_len, 0).is_none() { return E_ARGS; }
+                write_tlv_void(result, result_len)
+            }
+            M_POLL_EVENT => {
+                // Stub: no events yet → return empty string "" (Ok)
+                write_tlv_string("", result, result_len)
+            }
+            M_RUN => {
+                // Windows + with-egui: 実ウィンドウを表示
+                #[cfg(all(windows, feature = "with-egui"))]
+                {
+                    if let Ok(m) = INST.lock() {
+                        if let Some(inst) = m.get(&instance_id) {
+                            winrun::run_window(inst.width, inst.height, &inst.title, inst.labels.clone());
+                        }
+                    }
+                }
+                // それ以外はスタブ
+                write_tlv_void(result, result_len)
+            }
+            M_CLOSE => {
+                // Stub: no-op close
+                write_tlv_void(result, result_len)
+            }
+            _ => E_METHOD,
+        }
+    }
+}
+
+// ===== TLV helpers (version=1) =====
+fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
+    if result_len.is_null() { return E_ARGS; }
+    let mut buf: Vec<u8> = Vec::with_capacity(4 + payloads.iter().map(|(_,p)| 4 + p.len()).sum::<usize>());
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes());
+    for (tag, payload) in payloads {
+        buf.push(*tag); buf.push(0); buf.extend_from_slice(&(payload.len() as u16).to_le_bytes()); buf.extend_from_slice(payload);
+    }
+    unsafe {
+        let need = buf.len();
+        if result.is_null() || *result_len < need { *result_len = need; return E_SHORT; }
+        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, need);
+        *result_len = need;
+    }
+    OK
+}
+fn write_tlv_void(result: *mut u8, result_len: *mut usize) -> i32 { write_tlv_result(&[(9u8, &[])], result, result_len) }
+fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 { write_tlv_result(&[(6u8, s.as_bytes())], result, result_len) }
+
+unsafe fn tlv_parse_header(data: *const u8, len: usize) -> Option<(u16,u16,usize)> {
+    if data.is_null() || len < 4 { return None; }
+    let b = std::slice::from_raw_parts(data, len);
+    let ver = u16::from_le_bytes([b[0], b[1]]);
+    let argc = u16::from_le_bytes([b[2], b[3]]);
+    if ver != 1 { return None; }
+    Some((ver, argc, 4))
+}
+unsafe fn tlv_read_entry_at(data: *const u8, len: usize, mut pos: usize) -> Option<(u8, usize, usize)> {
+    let b = std::slice::from_raw_parts(data, len);
+    if pos + 4 > len { return None; }
+    let tag = b[pos]; let _ = b[pos+1]; let size = u16::from_le_bytes([b[pos+2], b[pos+3]]) as usize; pos += 4;
+    if pos + size > len { return None; }
+    Some((tag, size, pos))
+}
+unsafe fn tlv_read_i64(data: *const u8, len: usize, index: usize) -> Option<i64> {
+    let (_, argc, mut pos) = tlv_parse_header(data, len)?; if argc < (index as u16 + 1) { return None; }
+    for i in 0..=index { let (tag, size, p) = tlv_read_entry_at(data, len, pos)?; if tag == 3 && size == 8 { if i == index { let b = std::slice::from_raw_parts(data.add(p), 8); let mut t=[0u8;8]; t.copy_from_slice(b); return Some(i64::from_le_bytes(t)); } } pos = p + size; }
+    None
+}
+unsafe fn tlv_read_string(data: *const u8, len: usize, index: usize) -> Option<String> {
+    let (_, argc, mut pos) = tlv_parse_header(data, len)?; if argc < (index as u16 + 1) { return None; }
+    for i in 0..=index { let (tag, size, p) = tlv_read_entry_at(data, len, pos)?; if tag == 6 || tag == 7 { if i == index { let s = std::slice::from_raw_parts(data.add(p), size); return Some(String::from_utf8_lossy(s).to_string()); } } pos = p + size; }
+    None
+}
+unsafe fn tlv_read_open_args(args: *const u8, len: usize) -> Option<(i32,i32,String)> {
+    let w = tlv_read_i64(args, len, 0)? as i32;
+    let h = tlv_read_i64(args, len, 1)? as i32;
+    let t = tlv_read_string(args, len, 2)?;
+    Some((w,h,t))
+}
+
+// ===== Windows 実行（with-egui） =====
+#[cfg(all(windows, feature = "with-egui"))]
+mod winrun {
+    use super::*;
+    use eframe::egui;
+
+    pub fn run_window(w: i32, h: i32, title: &str, labels: Vec<String>) {
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_inner_size([w.max(100) as f32, h.max(100) as f32])
+                .with_title(title.to_string()),
+            ..Default::default()
+        };
+
+        struct App { labels: Vec<String> }
+        impl eframe::App for App {
+            fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    for s in &self.labels { ui.label(s); }
+                });
+            }
+        }
+
+        let _ = eframe::run_native(
+            title,
+            options,
+            Box::new(|_cc| Box::new(App { labels })),
+        );
+    }
+}

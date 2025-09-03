@@ -259,7 +259,6 @@ impl LowerCore {
                     // name → u64x2 パックで渡す
                     let name = box_type.clone();
                     {
-                        use cranelift_codegen::ir::{AbiParam, Signature, types};
                         let name_bytes = name.as_bytes();
                         let mut lo: u64 = 0; let mut hi: u64 = 0;
                         let take = core::cmp::min(16, name_bytes.len());

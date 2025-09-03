@@ -1,4 +1,67 @@
-# 🎯 CURRENT TASK - 2025-09-01 Snapshot（Async Task System / Phase 11.7 + Plugin-First）
+# 🎯 CURRENT TASK - 2025-09-03 Snapshot（Phase 12.05: 旧C ABI→新C ABI(TypeBox) 変換 + 差分テスト拡充）
+
+目的: 既存C ABIプラグインを「統一TypeBox C ABI」に段階移行。LoaderのTypeBoxプローブ + `invoke_id` 優先経路を活用し、コアBox（Array/Map/String/Integer/Console）から順に resolve/invoke_id を実装していく。
+
+## 進捗（現状）
+- Loader: TypeBoxシンボル自動プローブ + `invoke_id` 優先 組込み済み。
+- MapBox: `getS/hasS` を TypeBoxで提供（`nyash_typebox_MapBox`）。
+- Nyash ABI基礎テスト: スロット解決と Array返却検証を追加（`src/tests/nyash_abi_basic.rs`）。
+
+## スコープ（段階移行 + 差分テスト）
+1) 変換済み（TypeBox対応済み）
+   - MapBox: size/len/get/has/set（string/intキー対応）
+   - ArrayBox: len/length/get/set/push
+   - StringBox: length/concat/toUtf8
+   - IntegerBox: get/set
+   - ConsoleBox: println/log
+2) 差分テストの拡充（TLV vs TypeBox 同値性）
+   - 追加対象（純粋/副作用少なめを優先）
+     - MathBox: sqrt/sin/cos/round
+     - EncodingBox: base64/hex encode/decode
+     - RegexBox: isMatch/find（Result/Bool/文字列）
+     - PathBox: join/dirname/basename/isAbs/normalize
+     - TOMLBox: parse/get/toJson（Result.Ok/Err）
+     - TimeBox: now（許容差内で比較／厳密比較回避）
+     - CounterBox: singletonの基本挙動
+   - FileBox: read/write/close（tmpdir使用で副作用隔離）
+3) Python/Net/Socket 系の差分テストは対象外（開発中のため今回スキップ）
+
+## DoD（Definition of Done）
+1) 上記コアBox（Map/Array/String/Integer/Console）に加え、Math/Encoding/Regex/Path/TOML/Time/Counter/File の差分テストが全てGreen（VM）。
+2) `NYASH_DISABLE_TYPEBOX=1` によるTLV経路との同値性が確認できる（代表メソッド各1-2本ずつ）。
+3) FileBox差分テストは一時ディレクトリで副作用隔離（クリーンアップ含む）。
+4) フォールバック互換（未実装メソッドはTLV経路で動作）を維持。
+
+## タスク（小粒）
+- [x] ArrayBox TypeBox: `nyash_typebox_ArrayBox`（resolve/get,len,set,push → invoke_id）
+- [x] StringBox TypeBox: `nyash_typebox_StringBox`（resolve/length,concat,toUtf8）
+- [x] IntegerBox TypeBox: `nyash_typebox_IntegerBox`（resolve/get,set）
+- [x] ConsoleBox TypeBox: `nyash_typebox_ConsoleBox`（resolve/log,println）
+- [x] MapBox TypeBox 拡張: size/len/get/has/set 追加（getS/hasSを含む）
+- [x] 差分テスト: Map/Array/String/Integer/Console（VM）
+ - [x] 差分テスト: MathBox（sqrt/sin/cos/round）
+ - [x] 差分テスト: EncodingBox（base64/hex encode/decode）
+ - [x] 差分テスト: RegexBox（isMatch/find）
+ - [x] 差分テスト: PathBox（join/dirname/basename/isAbs/normalize）
+ - [x] 差分テスト: TOMLBox（parse/get/toJson）
+ - [x] 差分テスト: TimeBox（now: 許容差内）
+ - [x] 差分テスト: CounterBox（singleton挙動）
+ - [x] 差分テスト: FileBox（tmpdirで read/write/close）
+
+## 実行メモ
+```bash
+cargo build --release --features cranelift-jit
+# 各プラグインのビルド
+cargo build -p nyash-array-plugin -p nyash-string-plugin -p nyash-integer-plugin -p nyash-console-plugin -p nyash-map-plugin --release
+
+# 差分テスト（狙い撃ち）
+cargo test --lib typebox_tlv_diff -- --nocapture
+# TLV 経路のみで確認したい場合は環境変数で切替
+NYASH_DISABLE_TYPEBOX=1 cargo test --lib typebox_tlv_diff -- --nocapture
+```
+
+## 次のマイルストーン（参照）
+- Phase 12 Final: Nyash ABI(TypeBox) で egui をサポート（Windows GUI表示）。本タスク完了後に着手（Python/Netは除外）。
 
 このスナップショットは Phase 11.7 の Async Task System 進捗を反映しました。詳細仕様/計画は下記を参照。
 - SPEC: docs/development/roadmap/phases/phase-11.7_jit_complete/async_task_system/SPEC.md

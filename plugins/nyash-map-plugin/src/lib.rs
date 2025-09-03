@@ -5,6 +5,8 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
+use std::os::raw::c_char;
+use std::ffi::CStr;
 
 // Error codes
 const NYB_SUCCESS: i32 = 0;
@@ -250,6 +252,143 @@ pub extern "C" fn nyash_plugin_invoke(
         }
     }
 }
+
+// ---- Nyash TypeBox (FFI minimal PoC) ----
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const c_char, // C string
+    pub resolve: Option<extern "C" fn(*const c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+extern "C" fn mapbox_resolve(name: *const c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "size" | "len" => METHOD_SIZE,
+        "get" => METHOD_GET,
+        "has" => METHOD_HAS,
+        "set" => METHOD_SET,
+        "getS" => METHOD_GET_STR,
+        "hasS" => METHOD_HAS_STR,
+        _ => 0,
+    }
+}
+
+extern "C" fn mapbox_invoke_id(instance_id: u32, method_id: u32, args: *const u8, args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
+    match method_id {
+        METHOD_SIZE => {
+            if let Ok(map) = INSTANCES.lock() {
+                if let Some(inst) = map.get(&instance_id) {
+                    let sz = inst.data_i64.len() + inst.data_str.len();
+                    return write_tlv_i64(sz as i64, result, result_len);
+                } else { NYB_E_INVALID_HANDLE }
+            } else { NYB_E_PLUGIN_ERROR }
+        }
+        METHOD_GET => {
+            if let Some(ik) = read_arg_i64(args, args_len, 0) {
+                if let Ok(map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get(&instance_id) {
+                        match inst.data_i64.get(&ik).copied() { Some(v) => write_tlv_i64(v, result, result_len), None => NYB_E_INVALID_ARGS }
+                    } else { NYB_E_INVALID_HANDLE }
+                } else { NYB_E_PLUGIN_ERROR }
+            } else if let Some(sk) = read_arg_string(args, args_len, 0) {
+                if let Ok(map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get(&instance_id) {
+                        match inst.data_str.get(&sk).copied() { Some(v) => write_tlv_i64(v, result, result_len), None => NYB_E_INVALID_ARGS }
+                    } else { NYB_E_INVALID_HANDLE }
+                } else { NYB_E_PLUGIN_ERROR }
+            } else { NYB_E_INVALID_ARGS }
+        }
+        METHOD_HAS => {
+            if let Some(ik) = read_arg_i64(args, args_len, 0) {
+                if let Ok(map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get(&instance_id) { write_tlv_bool(inst.data_i64.contains_key(&ik), result, result_len) } else { NYB_E_INVALID_HANDLE }
+                } else { NYB_E_PLUGIN_ERROR }
+            } else if let Some(sk) = read_arg_string(args, args_len, 0) {
+                if let Ok(map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get(&instance_id) { write_tlv_bool(inst.data_str.contains_key(&sk), result, result_len) } else { NYB_E_INVALID_HANDLE }
+                } else { NYB_E_PLUGIN_ERROR }
+            } else { NYB_E_INVALID_ARGS }
+        }
+        METHOD_SET => {
+            // key: i64 or string, value: i64
+            if let Some(val) = read_arg_i64(args, args_len, 1) {
+                if let Some(ik) = read_arg_i64(args, args_len, 0) {
+                    if let Ok(mut map) = INSTANCES.lock() {
+                        if let Some(inst) = map.get_mut(&instance_id) {
+                            inst.data_i64.insert(ik, val);
+                            let sz = inst.data_i64.len() + inst.data_str.len();
+                            return write_tlv_i64(sz as i64, result, result_len);
+                        } else { NYB_E_INVALID_HANDLE }
+                    } else { NYB_E_PLUGIN_ERROR }
+                } else if let Some(sk) = read_arg_string(args, args_len, 0) {
+                    if let Ok(mut map) = INSTANCES.lock() {
+                        if let Some(inst) = map.get_mut(&instance_id) {
+                            inst.data_str.insert(sk, val);
+                            let sz = inst.data_i64.len() + inst.data_str.len();
+                            return write_tlv_i64(sz as i64, result, result_len);
+                        } else { NYB_E_INVALID_HANDLE }
+                    } else { NYB_E_PLUGIN_ERROR }
+                } else { NYB_E_INVALID_ARGS }
+            } else { NYB_E_INVALID_ARGS }
+        }
+        METHOD_GET_STR => {
+            let key = match read_arg_string(args, args_len, 0) { Some(s) => s, None => return NYB_E_INVALID_ARGS };
+            if let Ok(map) = INSTANCES.lock() {
+                if let Some(inst) = map.get(&instance_id) {
+                    match inst.data_str.get(&key).copied() { Some(v) => write_tlv_i64(v, result, result_len), None => NYB_E_INVALID_ARGS }
+                } else { NYB_E_INVALID_HANDLE }
+            } else { NYB_E_PLUGIN_ERROR }
+        }
+        METHOD_HAS_STR => {
+            let key = match read_arg_string(args, args_len, 0) { Some(s) => s, None => return NYB_E_INVALID_ARGS };
+            if let Ok(map) = INSTANCES.lock() {
+                if let Some(inst) = map.get(&instance_id) { write_tlv_bool(inst.data_str.contains_key(&key), result, result_len) } else { NYB_E_INVALID_HANDLE }
+            } else { NYB_E_PLUGIN_ERROR }
+        }
+        METHOD_KEYS_S => {
+            if let Ok(map) = INSTANCES.lock() {
+                if let Some(inst) = map.get(&instance_id) {
+                    let mut keys: Vec<String> = Vec::with_capacity(inst.data_i64.len() + inst.data_str.len());
+                    for k in inst.data_i64.keys() { keys.push(k.to_string()); }
+                    for k in inst.data_str.keys() { keys.push(k.clone()); }
+                    keys.sort();
+                    let out = keys.join("\n");
+                    return write_tlv_string(&out, result, result_len);
+                } else { NYB_E_INVALID_HANDLE }
+            } else { NYB_E_PLUGIN_ERROR }
+        }
+        METHOD_VALUES_S => {
+            if let Ok(map) = INSTANCES.lock() {
+                if let Some(inst) = map.get(&instance_id) {
+                    let mut vals: Vec<String> = Vec::with_capacity(inst.data_i64.len() + inst.data_str.len());
+                    for v in inst.data_i64.values() { vals.push(v.to_string()); }
+                    for v in inst.data_str.values() { vals.push(v.to_string()); }
+                    let out = vals.join("\n");
+                    return write_tlv_string(&out, result, result_len);
+                } else { NYB_E_INVALID_HANDLE }
+            } else { NYB_E_PLUGIN_ERROR }
+        }
+        _ => NYB_E_INVALID_METHOD,
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_MapBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258, // 'TYBX'
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"MapBox\0".as_ptr() as *const c_char,
+    resolve: Some(mapbox_resolve),
+    invoke_id: Some(mapbox_invoke_id),
+    capabilities: 0,
+};
 
 fn escape_json(s: &str) -> String {
     let mut out = String::with_capacity(s.len()+8);

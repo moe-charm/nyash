@@ -1,0 +1,22 @@
+[package]
+name = "nyash-egui-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+once_cell = "1.21"
+crossbeam-channel = "0.5"
+cfg-if = "1.0"
+
+# Optional: real GUI on Windows behind a feature in follow-ups
+[features]
+default = []
+with-egui = ["eframe", "egui"]
+
+[target.'cfg(windows)'.dependencies]
+eframe = { version = "0.27", optional = true }
+egui = { version = "0.27", optional = true }
+

@@ -772,6 +772,45 @@ impl VM {
         
         // Debug logging if enabled
         let debug_boxcall = std::env::var("NYASH_VM_DEBUG_BOXCALL").is_ok();
+
+        // Fast-path: ConsoleBox.readLine — provide safe stdin fallback with EOF→Void
+        if let VMValue::BoxRef(arc_box) = &recv {
+            if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                if p.box_type == "ConsoleBox" && method == "readLine" {
+                    use std::io::Read;
+                    let mut s = String::new();
+                    let mut stdin = std::io::stdin();
+                    // Read bytes until '\n' or EOF
+                    let mut buf = [0u8; 1];
+                    loop {
+                        match stdin.read(&mut buf) {
+                            Ok(0) => { // EOF → return NullBox
+                                if let Some(dst_id) = dst {
+                                    let nb = crate::boxes::null_box::NullBox::new();
+                                    self.set_value(dst_id, VMValue::from_nyash_box(Box::new(nb)));
+                                }
+                                return Ok(ControlFlow::Continue);
+                            }
+                            Ok(_) => {
+                                let ch = buf[0] as char;
+                                if ch == '\n' { break; }
+                                s.push(ch);
+                                if s.len() > 1_000_000 { break; }
+                            }
+                            Err(_) => { // On error, return NullBox
+                                if let Some(dst_id) = dst {
+                                    let nb = crate::boxes::null_box::NullBox::new();
+                                    self.set_value(dst_id, VMValue::from_nyash_box(Box::new(nb)));
+                                }
+                                return Ok(ControlFlow::Continue);
+                            }
+                        }
+                    }
+                    if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::String(s)); }
+                    return Ok(ControlFlow::Continue);
+                }
+            }
+        }
         
         // Phase 12 Tier-0: vtable優先経路（雛形）
         if crate::config::env::abi_vtable() {
@@ -1236,13 +1275,101 @@ impl VM {
     /// Phase 12 Tier-0: vtable優先経路の雛形（常に未処理）。
     /// 目的: 将来のTypeBox ABI配線ポイントを先置きしても既存挙動を変えないこと。
     fn try_boxcall_vtable_stub(&mut self, _dst: Option<ValueId>, _recv: &VMValue, _method: &str, _method_id: Option<u16>, _args: &[ValueId]) -> Option<Result<ControlFlow, VMError>> {
+        if crate::config::env::vm_vt_trace() {
+            match _recv {
+                VMValue::BoxRef(b) => eprintln!("[VT] probe recv_ty={} method={} argc={}", b.type_name(), _method, _args.len()),
+                other => eprintln!("[VT] probe recv_prim={:?} method={} argc={}", other, _method, _args.len()),
+            }
+        }
         // Tier-1 PoC: Array/Map/String の get/set/len/size/has を vtable 経路で処理（read-onlyまたは明示barrier不要）
         if let VMValue::BoxRef(b) = _recv {
             // 型解決（雛形レジストリ使用）
             let ty_name = b.type_name();
-            if let Some(_tb) = crate::runtime::type_registry::resolve_typebox_by_name(ty_name) {
+            // PluginBoxV2 は実型名でレジストリ解決する
+            let ty_name_for_reg: std::borrow::Cow<'_, str> = if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                std::borrow::Cow::Owned(p.box_type.clone())
+            } else {
+                std::borrow::Cow::Borrowed(ty_name)
+            };
+            if let Some(_tb) = crate::runtime::type_registry::resolve_typebox_by_name(&ty_name_for_reg) {
                 // name+arity→slot 解決
-                let slot = crate::runtime::type_registry::resolve_slot_by_name(ty_name, _method, _args.len());
+                let slot = crate::runtime::type_registry::resolve_slot_by_name(&ty_name_for_reg, _method, _args.len());
+                // PluginBoxV2: vtable経由で host.invoke_instance_method を使用（内蔵廃止と整合）
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    if crate::config::env::vm_vt_trace() { eprintln!("[VT] plugin recv ty={} method={} arity={}", ty_name, _method, _args.len()); }
+                    // 事前に引数を NyashBox に変換
+                    let mut nyash_args: Vec<Box<dyn NyashBox>> = Vec::with_capacity(_args.len());
+                    for aid in _args.iter() {
+                        if let Ok(v) = self.get_value(*aid) { nyash_args.push(v.to_nyash_box()); } else { nyash_args.push(Box::new(crate::box_trait::VoidBox::new())); }
+                    }
+                    // Instance/Map/Array/String などに対して型名とスロットで分岐（最小セット）
+                    match ty_name {
+                        "MapBox" => {
+                            match slot {
+                                Some(200) | Some(201) => { // size/len
+                                    let host = crate::runtime::get_global_plugin_host();
+                                    let ro = host.read().unwrap();
+                                    if let Ok(val_opt) = ro.invoke_instance_method("MapBox", _method, p.inner.instance_id, &[]) {
+                                        if let Some(out) = val_opt { if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); } }
+                                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                        return Some(Ok(ControlFlow::Continue));
+                                    }
+                                }
+                                Some(202) | Some(203) | Some(204) => { // has/get/set
+                                    if matches!(slot, Some(204)) {
+                                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Plugin.Map.set");
+                                    }
+                                    let host = crate::runtime::get_global_plugin_host();
+                                    let ro = host.read().unwrap();
+                                    // Route string-key variants to getS/hasS when applicable
+                                    let mut method_eff = _method;
+                                    if (matches!(slot, Some(202)) && _args.len() >= 1) || (matches!(slot, Some(203)) && _args.len() >= 1) {
+                                        if let Ok(a0v) = self.get_value(_args[0]) {
+                                            if matches!(a0v, VMValue::String(_)) { method_eff = if matches!(slot, Some(203)) { "getS" } else { "hasS" }; }
+                                        }
+                                    }
+                                    if let Ok(val_opt) = ro.invoke_instance_method("MapBox", method_eff, p.inner.instance_id, &nyash_args) {
+                                        if let Some(out) = val_opt { if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); } }
+                                        else if _dst.is_some() { if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::Void); } }
+                                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                        return Some(Ok(ControlFlow::Continue));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        "ArrayBox" => {
+                            match slot {
+                                Some(100) | Some(101) | Some(102) => {
+                                    if matches!(slot, Some(101)) {
+                                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Plugin.Array.set");
+                                    }
+                                    let host = crate::runtime::get_global_plugin_host();
+                                    let ro = host.read().unwrap();
+                                    if let Ok(val_opt) = ro.invoke_instance_method("ArrayBox", _method, p.inner.instance_id, &nyash_args) {
+                                        if let Some(out) = val_opt { if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); } }
+                                        else if _dst.is_some() { if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::Void); } }
+                                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                        return Some(Ok(ControlFlow::Continue));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        "StringBox" => {
+                            if matches!(slot, Some(300)) {
+                                let host = crate::runtime::get_global_plugin_host();
+                                let ro = host.read().unwrap();
+                                if let Ok(val_opt) = ro.invoke_instance_method("StringBox", _method, p.inner.instance_id, &[]) {
+                                    if let Some(out) = val_opt { if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); } }
+                                    self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                    return Some(Ok(ControlFlow::Continue));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 // InstanceBox: getField/setField/has/size
                 if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                     match slot {

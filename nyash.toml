@@ -151,6 +151,7 @@ RegexBox    = 52
 EncodingBox = 53
 TOMLBox     = 54
 PathBox     = 55
+EguiBox     = 70
 PyRuntimeBox= 40
 PyObjectBox = 41
 PythonParserBox = 60
@@ -174,6 +175,7 @@ PythonCompilerBox = 61
 "libnyash_encoding_plugin" = "./plugins/nyash-encoding-plugin"
 "libnyash_toml_plugin"     = "./plugins/nyash-toml-plugin"
 "libnyash_path_plugin"     = "./plugins/nyash-path-plugin"
+"libnyash_egui_plugin"     = "./plugins/nyash-egui-plugin"
 [libraries."libnyash_array_plugin"]
 boxes = ["ArrayBox"]
 path = "./plugins/nyash-array-plugin/target/release/libnyash_array_plugin"
@@ -370,6 +372,23 @@ basename  = { method_id = 3, args = ["path"], returns_result = true }
 extname   = { method_id = 4, args = ["path"], returns_result = true }
 isAbs     = { method_id = 5, args = ["path"], returns_result = true }
 normalize = { method_id = 6, args = ["path"], returns_result = true }
+fini      = { method_id = 4294967295 }
+
+[libraries."libnyash_egui_plugin"]
+boxes = ["EguiBox"]
+path = "./plugins/nyash-egui-plugin/target/release/libnyash_egui_plugin"
+
+[libraries."libnyash_egui_plugin".EguiBox]
+type_id = 70
+
+[libraries."libnyash_egui_plugin".EguiBox.methods]
+birth     = { method_id = 0 }
+open      = { method_id = 1, args = ["width", "height", "title"] }
+uiLabel   = { method_id = 2, args = ["text"] }
+uiButton  = { method_id = 3, args = ["text"], returns_result = false }
+pollEvent = { method_id = 4, returns_result = true }
+run       = { method_id = 5 }
+close     = { method_id = 6 }
 fini      = { method_id = 4294967295 }
 
 [env]

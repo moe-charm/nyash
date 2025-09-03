@@ -1,0 +1,9 @@
+// Minimal Egui demo via Nyash ABI (TypeBox)
+// WindowsでEGUI（将来: with-egui機能で実ウィンドウ）
+
+app = new EguiBox()
+app.open(400, 300, "Hello Egui from Nyash")
+app.uiLabel("こんにちは、Nyash + egui！")
+app.run()
+app.close()
+

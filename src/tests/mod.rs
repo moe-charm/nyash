@@ -7,3 +7,5 @@ pub mod identical_exec_instance;
 pub mod vtable_array_string;
 pub mod vtable_strict;
 pub mod host_reverse_slot;
+pub mod nyash_abi_basic;
+pub mod typebox_tlv_diff;

@@ -19,12 +19,14 @@ mod enabled {
 
 /// Loaded plugin information
     pub struct LoadedPluginV2 {
-    /// Library handle
-    _lib: Arc<libloading::Library>,
-    
-    /// Box types provided by this plugin
-    #[allow(dead_code)]
-    box_types: Vec<String>,
+        /// Library handle
+        _lib: Arc<libloading::Library>,
+        
+        /// Box types provided by this plugin
+        #[allow(dead_code)]
+        box_types: Vec<String>,
+        /// Optional per-box TypeBox ABI addresses (nyash_typebox_<BoxName>); raw usize for Send/Sync
+        typeboxes: std::collections::HashMap<String, usize>,
     
     /// Optional init function
     #[allow(dead_code)]
@@ -108,6 +110,20 @@ mod enabled {
     /// Helper to construct a PluginBoxV2 from raw ids and invoke pointer safely
     pub fn make_plugin_box_v2_inner(box_type: String, type_id: u32, instance_id: u32, invoke_fn: unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize) -> i32) -> PluginBoxV2 {
         PluginBoxV2 { box_type, inner: std::sync::Arc::new(PluginHandleInner { type_id, invoke_fn, instance_id, fini_method_id: None, finalized: std::sync::atomic::AtomicBool::new(false) }) }
+    }
+
+    // Nyash TypeBox (FFI minimal for PoC)
+    use std::os::raw::c_char;
+    #[repr(C)]
+    pub struct NyashTypeBoxFfi {
+        pub abi_tag: u32,        // 'TYBX'
+        pub version: u16,        // 1
+        pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+        pub name: *const c_char, // C string
+        // Minimal methods
+        pub resolve: Option<extern "C" fn(*const c_char) -> u32>,
+        pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+        pub capabilities: u64,
     }
 
 #[derive(Debug, Clone)]
@@ -686,8 +702,38 @@ impl PluginLoaderV2 {
             instance_id: u32,
             args: &[Box<dyn NyashBox>],
         ) -> BidResult<Option<Box<dyn NyashBox>>> {
+            // ConsoleBox.readLine: プラグイン未実装時のホスト側フォールバック
+            if box_type == "ConsoleBox" && method_name == "readLine" {
+                use std::io::Read;
+                let mut s = String::new();
+                let mut stdin = std::io::stdin();
+                let mut buf = [0u8; 1];
+                loop {
+                    match stdin.read(&mut buf) {
+                        Ok(0) => { return Ok(None); } // EOF → None（Nyashのnull相当）
+                        Ok(_) => {
+                            let ch = buf[0] as char;
+                            if ch == '\n' { break; }
+                            s.push(ch);
+                            if s.len() > 1_000_000 { break; }
+                        }
+                        Err(_) => { return Ok(None); }
+                    }
+                }
+                return Ok(Some(Box::new(crate::box_trait::StringBox::new(s)) as Box<dyn NyashBox>));
+            }
             // v2.1: 引数ありのメソッドを許可（BoxRef/基本型/文字列化フォールバック）
-            let method_id = self.resolve_method_id_from_file(box_type, method_name)?;
+            // MapBox convenience: route string-key get/has to getS/hasS if available
+            let effective_method = if box_type == "MapBox" {
+                if method_name == "get" {
+                    if let Some(a0) = args.get(0) { if a0.as_any().downcast_ref::<crate::box_trait::StringBox>().is_some() { "getS" } else { method_name } }
+                    else { method_name }
+                } else if method_name == "has" {
+                    if let Some(a0) = args.get(0) { if a0.as_any().downcast_ref::<crate::box_trait::StringBox>().is_some() { "hasS" } else { method_name } }
+                    else { method_name }
+                } else { method_name }
+            } else { method_name };
+            let method_id = self.resolve_method_id_from_file(box_type, effective_method)?;
             // Find plugin and type_id
             let config = self.config.as_ref().ok_or(BidError::PluginError)?;
             let lib_name = self.find_lib_name_for_box(box_type).ok_or(BidError::InvalidType)?;
@@ -716,7 +762,7 @@ impl PluginLoaderV2 {
                 let rr = box_conf.methods.get(method_name).map(|m| m.returns_result).unwrap_or(false);
                 (box_conf.type_id, rr)
             };
-            eprintln!("[PluginLoaderV2] Invoke {}.{}: resolving and encoding args (argc={})", box_type, method_name, args.len());
+            eprintln!("[PluginLoaderV2] Invoke {}.{}: resolving and encoding args (argc={})", box_type, effective_method, args.len());
             // TLV args: encode using BID-1 style (u16 ver, u16 argc, then entries)
             let tlv_args = {
                 let mut buf = crate::runtime::plugin_ffi_common::encode_tlv_header(args.len() as u16);
@@ -726,7 +772,7 @@ impl PluginLoaderV2 {
                 } else {
                     config
                         .get_box_config(&lib_name, box_type, &toml_value)
-                        .and_then(|bc| bc.methods.get(method_name).and_then(|m| m.args.clone()))
+                        .and_then(|bc| bc.methods.get(effective_method).and_then(|m| m.args.clone()))
                 };
                 if let Some(exp) = expected_args.as_ref() {
                     if exp.len() != args.len() {
@@ -891,20 +937,115 @@ impl PluginLoaderV2 {
             }
             let mut out = vec![0u8; 1024];
             let mut out_len: usize = out.len();
+            // Prefer TypeBox.invoke_id if available for this box_type
             let rc = unsafe {
-                (plugin.invoke_fn)(
-                    type_id,
-                    method_id,
-                    instance_id,
-                    tlv_args.as_ptr(),
-                    tlv_args.len(),
-                    out.as_mut_ptr(),
-                    &mut out_len,
-                )
+                let disable_typebox = std::env::var("NYASH_DISABLE_TYPEBOX").ok().as_deref() == Some("1");
+                if !disable_typebox {
+                    if let Some(tbaddr) = plugin.typeboxes.get(box_type) {
+                        let tb = *tbaddr as *const NyashTypeBoxFfi;
+                        if !tb.is_null() {
+                            let tbr: &NyashTypeBoxFfi = &*tb;
+                            if let Some(inv) = tbr.invoke_id {
+                                inv(
+                                    instance_id,
+                                    method_id,
+                                    tlv_args.as_ptr(),
+                                    tlv_args.len(),
+                                    out.as_mut_ptr(),
+                                    &mut out_len,
+                                )
+                            } else {
+                                (plugin.invoke_fn)(
+                                    type_id,
+                                    method_id,
+                                    instance_id,
+                                    tlv_args.as_ptr(),
+                                    tlv_args.len(),
+                                    out.as_mut_ptr(),
+                                    &mut out_len,
+                                )
+                            }
+                        } else {
+                            (plugin.invoke_fn)(
+                                type_id,
+                                method_id,
+                                instance_id,
+                                tlv_args.as_ptr(),
+                                tlv_args.len(),
+                                out.as_mut_ptr(),
+                                &mut out_len,
+                            )
+                        }
+                    } else {
+                        (plugin.invoke_fn)(
+                            type_id,
+                            method_id,
+                            instance_id,
+                            tlv_args.as_ptr(),
+                            tlv_args.len(),
+                            out.as_mut_ptr(),
+                            &mut out_len,
+                        )
+                    }
+                } else {
+                    (plugin.invoke_fn)(
+                        type_id,
+                        method_id,
+                        instance_id,
+                        tlv_args.as_ptr(),
+                        tlv_args.len(),
+                        out.as_mut_ptr(),
+                        &mut out_len,
+                    )
+                }
             };
             if rc != 0 {
                 let be = BidError::from_raw(rc);
+                // Fallback: MapBox.get/has with string key → try getS/hasS
+                if box_type == "MapBox" && (method_name == "get" || method_name == "has") {
+                    if let Some(a0) = args.get(0) {
+                        if a0.as_any().downcast_ref::<crate::box_trait::StringBox>().is_some() {
+                            let alt = if method_name == "get" { "getS" } else { "hasS" };
+                            if let Ok(alt_id) = self.resolve_method_id_from_file(box_type, alt) {
+                                // rebuild header and TLV for single string arg
+                                let mut alt_out = vec![0u8; 1024];
+                                let mut alt_out_len: usize = alt_out.len();
+                                let mut alt_tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(1);
+                                crate::runtime::plugin_ffi_common::encode::string(&mut alt_tlv, &a0.to_string_box().value);
+                                let rc2 = unsafe {
+                                    (plugin.invoke_fn)(
+                                        type_id,
+                                        alt_id,
+                                        instance_id,
+                                        alt_tlv.as_ptr(),
+                                        alt_tlv.len(),
+                                        alt_out.as_mut_ptr(),
+                                        &mut alt_out_len,
+                                    )
+                                };
+                                if rc2 == 0 {
+                                    // Decode single entry
+                                    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&alt_out[..alt_out_len]) {
+                                        let v = match tag {
+                                            1 => crate::runtime::plugin_ffi_common::decode::bool(payload).map(|b| Box::new(crate::box_trait::BoolBox::new(b)) as Box<dyn NyashBox>),
+                                            2 => crate::runtime::plugin_ffi_common::decode::i32(payload).map(|i| Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn NyashBox>),
+                                            5 => crate::runtime::plugin_ffi_common::decode::f64(payload).map(|f| Box::new(crate::boxes::math_box::FloatBox::new(f)) as Box<dyn NyashBox>),
+                                            6 => Some(Box::new(crate::box_trait::StringBox::new(crate::runtime::plugin_ffi_common::decode::string(payload))) as Box<dyn NyashBox>),
+                                            _ => None,
+                                        };
+                                        if let Some(val) = v { return Ok(Some(val)); }
+                                    }
+                                    return Ok(None);
+                                }
+                            }
+                        }
+                    }
+                }
                 if dbg_on() { eprintln!("[PluginLoaderV2] invoke rc={} ({}) for {}.{}", rc, be.message(), box_type, method_name); }
+                // Graceful degradation for MapBox.get/has: treat failure as missing key (return None)
+                if box_type == "MapBox" && (method_name == "get" || method_name == "has") {
+                    return Ok(None);
+                }
                 if returns_result {
                     let err = crate::exception_box::ErrorBox::new(&format!("{} (code: {})", be.message(), rc));
                     return Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_err(Box::new(err)))));
@@ -1095,10 +1236,20 @@ impl PluginLoaderV2 {
         }
         
         // Store plugin with Arc-wrapped library
+        // Probe per-box TypeBox symbols before moving the library into Arc
+        let mut tb_map: HashMap<String, usize> = HashMap::new();
+        for bt in &lib_def.boxes {
+            let sym = format!("nyash_typebox_{}", bt);
+            if let Ok(s) = unsafe { lib.get::<*const NyashTypeBoxFfi>(sym.as_bytes()) } {
+                tb_map.insert(bt.clone(), (*s) as usize);
+            }
+        }
+
         let lib_arc = Arc::new(lib);
         let plugin = Arc::new(LoadedPluginV2 {
             _lib: lib_arc,
             box_types: lib_def.boxes.clone(),
+            typeboxes: tb_map,
             init_fn,
             invoke_fn,
         });
@@ -1145,7 +1296,34 @@ impl PluginLoaderV2 {
                 if let Some(stripped) = stem.strip_prefix("lib") {
                     let name = format!("{}.{}", stripped, cur_ext);
                     if let Some(path) = cfg.resolve_plugin_path(&name) { return Some(path); }
+                    // Extra: look into target triples (e.g., x86_64-pc-windows-msvc/aarch64-pc-windows-msvc)
+                    let triples = [
+                        "x86_64-pc-windows-msvc",
+                        "aarch64-pc-windows-msvc",
+                    ];
+                    // Try relative to provided dir (if any)
+                    let base_dir = dir.clone();
+                    for t in &triples {
+                        let cand = base_dir.join("target").join(t).join("release").join(&name);
+                        if cand.exists() { return Some(cand.to_string_lossy().to_string()); }
+                        let cand_dbg = base_dir.join("target").join(t).join("debug").join(&name);
+                        if cand_dbg.exists() { return Some(cand_dbg.to_string_lossy().to_string()); }
+                    }
                 }
+            }
+        }
+        // Candidate D (Windows): when config path already contains target/release, probe known triples
+        if cfg!(target_os = "windows") {
+            let file_name = Path::new(&file).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or(file.clone());
+            let triples = [
+                "x86_64-pc-windows-msvc",
+                "aarch64-pc-windows-msvc",
+            ];
+            for t in &triples {
+                let cand = dir.clone().join("..").join(t).join("release").join(&file_name);
+                if cand.exists() { return Some(cand.to_string_lossy().to_string()); }
+                let cand_dbg = dir.clone().join("..").join(t).join("debug").join(&file_name);
+                if cand_dbg.exists() { return Some(cand_dbg.to_string_lossy().to_string()); }
             }
         }
         None
