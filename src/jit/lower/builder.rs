@@ -28,6 +28,7 @@ pub trait IRBuilder {
     fn emit_select_i64(&mut self) { }
     fn emit_host_call(&mut self, _symbol: &str, _argc: usize, _has_ret: bool) { }
     fn emit_host_call_typed(&mut self, _symbol: &str, _params: &[ParamKind], _has_ret: bool, _ret_is_f64: bool) { }
+    fn emit_host_call_fixed3(&mut self, _symbol: &str, _has_ret: bool) { }
     fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, _argc: usize, _has_ret: bool) { }
     fn emit_plugin_invoke_by_name(&mut self, _method: &str, _argc: usize, _has_ret: bool) { }
     // Create a StringBox handle from a string literal and push its handle (i64) onto the stack.

@@ -14,6 +14,8 @@ pub struct LowerCore {
     pub(super) known_i64: std::collections::HashMap<ValueId, i64>,
     /// Minimal constant propagation for f64 (math.* signature checks)
     pub(super) known_f64: std::collections::HashMap<ValueId, f64>,
+    /// Minimal constant propagation for String literals
+    pub(super) known_str: std::collections::HashMap<ValueId, String>,
     /// Parameter index mapping for ValueId
     pub(super) param_index: std::collections::HashMap<ValueId, usize>,
     /// Track values produced by Phi (for minimal PHI path)
@@ -40,7 +42,7 @@ pub struct LowerCore {
 }
 
 impl LowerCore {
-    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), known_f64: std::collections::HashMap::new(), param_index: std::collections::HashMap::new(), phi_values: std::collections::HashSet::new(), phi_param_index: std::collections::HashMap::new(), bool_values: std::collections::HashSet::new(), bool_phi_values: std::collections::HashSet::new(), float_box_values: std::collections::HashSet::new(), handle_values: std::collections::HashSet::new(), last_phi_total: 0, last_phi_b1: 0, last_ret_bool_hint_used: false, local_index: std::collections::HashMap::new(), next_local: 0, box_type_map: std::collections::HashMap::new() } }
+    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), known_f64: std::collections::HashMap::new(), known_str: std::collections::HashMap::new(), param_index: std::collections::HashMap::new(), phi_values: std::collections::HashSet::new(), phi_param_index: std::collections::HashMap::new(), bool_values: std::collections::HashSet::new(), bool_phi_values: std::collections::HashSet::new(), float_box_values: std::collections::HashSet::new(), handle_values: std::collections::HashSet::new(), last_phi_total: 0, last_phi_b1: 0, last_ret_bool_hint_used: false, local_index: std::collections::HashMap::new(), next_local: 0, box_type_map: std::collections::HashMap::new() } }
 
     /// Get statistics for the last lowered function
     pub fn last_stats(&self) -> (u64, u64, bool) { (self.last_phi_total, self.last_phi_b1, self.last_ret_bool_hint_used) }
@@ -253,15 +255,26 @@ impl LowerCore {
                 // - 引数なし: 汎用 birth_h（type_idのみ）でハンドル生成
                 // - 引数あり: 既存のチェーン（直後の plugin_invoke birth で初期化）を維持（段階的導入）
                 if args.is_empty() {
-                    let decision = crate::jit::policy::invoke::decide_box_method(box_type, "birth", 0, true);
-                    if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, .. } = decision {
-                        b.emit_const_i64(type_id as i64);
-                        b.emit_host_call(crate::jit::r#extern::birth::SYM_BOX_BIRTH_H, 1, true);
+                    // 文字列の型名からインスタンスを生成（グローバルUnifiedRegistry経由）
+                    // name → u64x2 パックで渡す
+                    let name = box_type.clone();
+                    {
+                        use cranelift_codegen::ir::{AbiParam, Signature, types};
+                        let name_bytes = name.as_bytes();
+                        let mut lo: u64 = 0; let mut hi: u64 = 0;
+                        let take = core::cmp::min(16, name_bytes.len());
+                        for i in 0..take.min(8) { lo |= (name_bytes[i] as u64) << (8 * i as u32); }
+                        for i in 8..take { hi |= (name_bytes[i] as u64) << (8 * (i - 8) as u32); }
+                        // Push immediates
+                        b.emit_const_i64(lo as i64);
+                        b.emit_const_i64(hi as i64);
+                        b.emit_const_i64(name_bytes.len() as i64);
+                        // Call import (lo, hi, len) -> handle
+                        // Use typed hostcall (I64,I64,I64)->I64
+                        b.emit_host_call_typed("nyash.instance.birth_name_u64x2", &[crate::jit::lower::builder::ParamKind::I64, crate::jit::lower::builder::ParamKind::I64, crate::jit::lower::builder::ParamKind::I64], true, false);
                         self.handle_values.insert(*dst);
                         let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
                         b.store_local_i64(slot);
-                    } else {
-                        self.unsupported += 1;
                     }
                 } else {
                     // 引数あり: 安全なパターンから段階的に birth_i64 に切替
@@ -378,13 +391,13 @@ impl LowerCore {
                     // Mark this value as boolean producer
                     self.bool_values.insert(*dst);
                 }
-                ConstValue::String(_) | ConstValue::Null | ConstValue::Void => {
-                    // leave unsupported for now
-                }
+                ConstValue::String(sv) => { self.known_str.insert(*dst, sv.clone()); }
+                ConstValue::Null | ConstValue::Void => { }
             },
             I::Copy { dst, src } => { 
                 if let Some(v) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, v); }
                 if let Some(v) = self.known_f64.get(src).copied() { self.known_f64.insert(*dst, v); }
+                if let Some(v) = self.known_str.get(src).cloned() { self.known_str.insert(*dst, v); }
                 // If source is a parameter, materialize it on the stack for downstream ops
                 if let Some(pidx) = self.param_index.get(src).copied() {
                     b.emit_param_i64(pidx);

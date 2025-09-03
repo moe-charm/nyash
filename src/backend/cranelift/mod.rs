@@ -33,30 +33,30 @@ pub fn compile_and_execute(mir_module: &MirModule, _temp_name: &str) -> Result<B
         eprintln!("[CLIF-LOWER] covered={} unsupported={}", lower.covered, lower.unsupported);
     }
 
-    // If Cranelift feature enabled, try real JIT compile/execute for minimal path
+    // まずは新JITエンジン経路を試す（LowerCore -> CraneliftBuilder -> 実行）
     #[cfg(feature = "cranelift-jit")]
     {
-        match crate::backend::cranelift::jit::compile_and_execute_minimal(main) {
-            Ok(i) => {
-                return Ok(Box::new(IntegerBox::new(i)));
-            }
-            Err(e) => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    eprintln!("[CLIF] minimal JIT fallback failed: {} — falling back to skeleton eval", e);
-                }
+        let mut engine = crate::jit::engine::JitEngine::new();
+        if let Some(h) = engine.compile_function(&main.signature.name, main) {
+            // 実行（引数なし）。戻り値は MIR の型に合わせて変換
+            let out = engine.execute_handle(h, &[]);
+            if let Some(jv) = out {
+                let vmv = crate::jit::boundary::CallBoundaryBox::to_vm(&main.signature.return_type, jv);
+                let boxed: Box<dyn NyashBox> = match vmv {
+                    crate::backend::vm::VMValue::Integer(i) => Box::new(IntegerBox::new(i)),
+                    crate::backend::vm::VMValue::Float(f) => Box::new(crate::boxes::FloatBox::new(f)),
+                    crate::backend::vm::VMValue::Bool(b) => Box::new(BoolBox::new(b)),
+                    crate::backend::vm::VMValue::String(s) => Box::new(StringBox::new(&s)),
+                    crate::backend::vm::VMValue::BoxRef(b) => b.share_box(),
+                    crate::backend::vm::VMValue::Future(fu) => Box::new(fu),
+                    crate::backend::vm::VMValue::Void => Box::new(VoidBox::new()),
+                };
+                return Ok(boxed);
             }
         }
-        // Optional: LowerCore→ClifBuilder 実IR経路（Const/Add/Return）。環境指定で実行
-        if std::env::var("NYASH_JIT_LOWERCORE").ok().as_deref() == Some("1") {
-            let mut clif_builder = crate::backend::cranelift::builder::ClifBuilder::new();
-            let mut lower = LowerCore::new();
-            lower.lower_function(main, &mut clif_builder).map_err(|e| format!("lowercore: {}", e))?;
-            let i = clif_builder.finish_and_execute().map_err(|e| format!("clifbuilder: {}", e))?;
+        // 失敗した場合はミニマルJITへフォールバック
+        if let Ok(i) = crate::backend::cranelift::jit::compile_and_execute_minimal(main) {
             return Ok(Box::new(IntegerBox::new(i)));
-        } else {
-            let mut clif_builder = crate::backend::cranelift::builder::ClifBuilder::new();
-            let mut lower = LowerCore::new();
-            let _ = lower.lower_function(main, &mut clif_builder);
         }
     }
     let mut regs: HashMap<ValueId, crate::backend::vm::VMValue> = HashMap::new();

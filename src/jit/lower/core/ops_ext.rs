@@ -210,50 +210,44 @@ impl LowerCore {
                     self.push_value_if_known_or_param(b, array);
                     // name: if const string, build a StringBox handle from literal; else best-effort push
                     if let Some(name_id) = args.get(0) {
-                        // Scan MIR for string constant defining this ValueId
-                        let mut found_str: Option<String> = None;
-                        for (_bbid, bb) in func.blocks.iter() {
-                            for ins in bb.instructions.iter() {
-                                if let crate::mir::MirInstruction::Const { dst, value } = ins {
-                                    if dst == name_id {
-                                        if let crate::mir::ConstValue::String(s) = value { found_str = Some(s.clone()); }
-                                        break;
-                                    }
-                                }
-                            }
-                            if found_str.is_some() { break; }
-                        }
-                        if let Some(s) = found_str { b.emit_string_handle_from_literal(&s); }
-                        else { self.push_value_if_known_or_param(b, name_id); }
+                        if let Some(s) = self.known_str.get(name_id).cloned() { b.emit_string_handle_from_literal(&s); }
+                        else { b.emit_const_i64(0); }
                     } else { b.emit_const_i64(0); }
                     // value for setField
                     let argc = if method == "setField" {
                         if let Some(val_id) = args.get(1) {
-                            // If value is const string, materialize handle
-                            let mut found_val_str: Option<String> = None;
-                            for (_bbid, bb) in func.blocks.iter() {
-                                for ins in bb.instructions.iter() {
-                                    if let crate::mir::MirInstruction::Const { dst, value } = ins {
-                                        if dst == val_id {
-                                            if let crate::mir::ConstValue::String(s) = value { found_val_str = Some(s.clone()); }
-                                            break;
-                                        }
-                                    }
-                                }
-                                if found_val_str.is_some() { break; }
-                            }
-                            if let Some(s) = found_val_str { b.emit_string_handle_from_literal(&s); }
+                            if let Some(s) = self.known_str.get(val_id).cloned() { b.emit_string_handle_from_literal(&s); }
                             else { self.push_value_if_known_or_param(b, val_id); }
                         } else { b.emit_const_i64(0); }
                         3
                     } else { 2 };
-                    let sym = if method == "setField" { crate::jit::r#extern::host_bridge::SYM_HOST_INSTANCE_SETFIELD } else { crate::jit::r#extern::host_bridge::SYM_HOST_INSTANCE_GETFIELD };
-                    b.emit_host_call(sym, argc, dst.is_some());
+                    // Unified 3-arity call: getField uses val=-1 sentinel
+                    let sym = crate::jit::r#extern::host_bridge::SYM_HOST_INSTANCE_FIELD3;
+                    if method == "getField" { b.emit_const_i64(-1); }
+                    b.emit_host_call_fixed3(sym, dst.is_some());
                     return Ok(true);
                 }
             }
-            // String.len via host-bridge when receiver is StringBox
+            // String.len: (1) const string → 定数埋め込み、(2) StringBox → host-bridge
             "len" => {
+                // (1) const string literal case
+                let mut lit_len: Option<i64> = None;
+                for (_bbid, bb) in func.blocks.iter() {
+                    for ins in bb.instructions.iter() {
+                        if let crate::mir::MirInstruction::Const { dst, value } = ins {
+                            if dst == array {
+                                if let crate::mir::ConstValue::String(s) = value { lit_len = Some(s.len() as i64); }
+                                break;
+                            }
+                        }
+                    }
+                    if lit_len.is_some() { break; }
+                }
+                if let Some(n) = lit_len {
+                    b.emit_const_i64(n);
+                    return Ok(true);
+                }
+                // (2) StringBox via host-bridge
                 if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
                     if let Some(bt) = self.box_type_map.get(array) {
                         if bt == "StringBox" {

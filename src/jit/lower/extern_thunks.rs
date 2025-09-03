@@ -721,6 +721,22 @@ pub(super) extern "C" fn nyash_host_instance_setfield(recv_h: u64, name_i: i64, 
     i64_from_vmvalue(out)
 }
 
+// Unified instance field op: (recv, name, val_or_sentinel) → getField if val == -1, else setField
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_host_instance_field3(recv_h: u64, name_i: i64, val_i: i64) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    let recv = match crate::jit::rt::handles::get(recv_h) { Some(a) => a, None => return 0 };
+    let name_v = vmvalue_from_jit_arg_i64(name_i);
+    if val_i == -1 { // getField
+        let out = hb::instance_getfield(&[V::BoxRef(recv), name_v]);
+        return i64_from_vmvalue(out);
+    }
+    // setField
+    let val_v = vmvalue_from_jit_arg_i64(val_i);
+    let _ = hb::instance_setfield(&[V::BoxRef(recv), name_v, val_v]);
+    0
+}
+
 // nyash.host.string.len(recv)
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_host_string_len(recv_h: u64) -> i64 {
@@ -755,4 +771,25 @@ pub(super) extern "C" fn nyash_string_from_u64x2(lo: u64, hi: u64, len: i64) -> 
     let s = match std::str::from_utf8(&buf[..n]) { Ok(t) => t.to_string(), Err(_) => String::from_utf8_lossy(&buf[..n]).to_string() };
     let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(crate::box_trait::StringBox::new(s));
     crate::jit::rt::handles::to_handle(arc) as i64
+}
+
+// Create an instance by type name via global unified registry: birth(name) -> handle
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_instance_birth_name_u64x2(lo: u64, hi: u64, len: i64) -> i64 {
+    let n = if len <= 0 { 0usize } else { core::cmp::min(len as usize, 32usize) };
+    let mut buf = [0u8; 32];
+    for i in 0..core::cmp::min(8, n) { buf[i] = ((lo >> (8 * i)) & 0xFF) as u8; }
+    if n > 8 { for i in 0..core::cmp::min(8, n - 8) { buf[8 + i] = ((hi >> (8 * i)) & 0xFF) as u8; } }
+    let name = match std::str::from_utf8(&buf[..n]) { Ok(t) => t.to_string(), Err(_) => String::from_utf8_lossy(&buf[..n]).to_string() };
+    let registry = crate::runtime::get_global_unified_registry();
+    if let Ok(reg) = registry.lock() {
+        match reg.create_box(&name, &[]) {
+            Ok(b) => {
+                let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(b);
+                return crate::jit::rt::handles::to_handle(arc) as i64;
+            }
+            Err(_) => return 0,
+        }
+    }
+    0
 }

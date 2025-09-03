@@ -90,6 +90,10 @@ pub const SYM_HOST_CONSOLE_WARN: &str = "nyash.host.console.warn"; // (value)
 pub const SYM_HOST_CONSOLE_ERROR: &str = "nyash.host.console.error"; // (value)
 pub const SYM_HOST_INSTANCE_GETFIELD: &str = "nyash.host.instance.getField"; // (InstanceBox, name)
 pub const SYM_HOST_INSTANCE_SETFIELD: &str = "nyash.host.instance.setField"; // (InstanceBox, name, value)
+// Arity-stable variants for Cranelift imports (avoid signature conflicts)
+pub const SYM_HOST_INSTANCE_GETFIELD2: &str = "nyash.host.instance.getField2"; // (InstanceBox, name)
+pub const SYM_HOST_INSTANCE_SETFIELD3: &str = "nyash.host.instance.setField3"; // (InstanceBox, name, value)
+pub const SYM_HOST_INSTANCE_FIELD3: &str = "nyash.host.instance.field3"; // (recv,name,val or sentinel)
 pub const SYM_HOST_STRING_LEN: &str = "nyash.host.string.len"; // (StringBox)
 
 pub fn array_get(args: &[VMValue]) -> VMValue {

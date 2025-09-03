@@ -456,6 +456,26 @@ impl IRBuilder for CraneliftBuilder {
         let func_id = self.module.declare_function(symbol, cranelift_module::Linkage::Import, &sig).expect("declare typed import failed");
         if let Some(v) = tls_call_import_ret(&mut self.module, func_id, &args, has_ret) { self.value_stack.push(v); }
     }
+    fn emit_host_call_fixed3(&mut self, symbol: &str, has_ret: bool) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        // Pop up to 3 values; pad with zeros to reach exactly 3
+        let take_n = core::cmp::min(3, self.value_stack.len());
+        for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
+        args.reverse();
+        Self::with_fb(|fb| {
+            while args.len() < 3 { args.push(fb.ins().iconst(types::I64, 0)); }
+        });
+        let call_conv = self.module.isa().default_call_conv();
+        let mut sig = Signature::new(call_conv);
+        for _ in 0..3 { sig.params.push(AbiParam::new(types::I64)); }
+        // Always declare with I64 return to keep signature stable across call sites
+        sig.returns.push(AbiParam::new(types::I64));
+        let func_id = self.module.declare_function(symbol, cranelift_module::Linkage::Import, &sig).expect("declare import fixed3 failed");
+        if let Some(v) = tls_call_import_ret(&mut self.module, func_id, &args, true) {
+            if has_ret { self.value_stack.push(v); }
+        }
+    }
     fn emit_plugin_invoke(&mut self, type_id: u32, method_id: u32, argc: usize, has_ret: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
         // Pop argc values (right-to-left): receiver + up to 2 args
@@ -742,6 +762,7 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_STRING_LT_HH, nyash_string_lt_hh as *const u8);
             builder.symbol(b::SYM_BOX_BIRTH_H, nyash_box_birth_h as *const u8);
             builder.symbol("nyash.box.birth_i64", nyash_box_birth_i64 as *const u8);
+            builder.symbol("nyash.instance.birth_name_u64x2", super::super::extern_thunks::nyash_instance_birth_name_u64x2 as *const u8);
             builder.symbol(h::SYM_HANDLE_OF, nyash_handle_of as *const u8);
             builder.symbol(r::SYM_RT_CHECKPOINT, nyash_rt_checkpoint as *const u8);
             builder.symbol(r::SYM_GC_BARRIER_WRITE, nyash_gc_barrier_write as *const u8);
@@ -757,8 +778,8 @@ impl CraneliftBuilder {
         if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
             use crate::jit::r#extern::host_bridge as hb;
             // Instance.getField/setField (recv_h, name_i[, val_i])
-            builder.symbol(hb::SYM_HOST_INSTANCE_GETFIELD, super::super::extern_thunks::nyash_host_instance_getfield as *const u8);
-            builder.symbol(hb::SYM_HOST_INSTANCE_SETFIELD, super::super::extern_thunks::nyash_host_instance_setfield as *const u8);
+            // Use arity-stable import symbols to avoid signature collisions
+            builder.symbol(hb::SYM_HOST_INSTANCE_FIELD3, super::super::extern_thunks::nyash_host_instance_field3 as *const u8);
             // String.len (recv_h)
             builder.symbol(hb::SYM_HOST_STRING_LEN, super::super::extern_thunks::nyash_host_string_len as *const u8);
         }

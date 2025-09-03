@@ -64,6 +64,9 @@ mod tests {
         rt_builder = rt_builder.with_factory(Arc::new(PersonFactory));
         let runtime = rt_builder.build();
 
+        // Also register factory globally for JIT path (host-bridge creates via global registry)
+        crate::runtime::register_user_defined_factory(Arc::new(PersonFactory));
+
         // Build module
         let module = build_person_module();
 
@@ -82,4 +85,3 @@ mod tests {
         assert_eq!(vm_s, "Alice");
     }
 }
-
