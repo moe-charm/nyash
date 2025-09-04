@@ -29,10 +29,10 @@ LOG_FILE="$LOG_DIR/codex-${WORK_ID}.log"
 mkdir -p "$LOG_DIR"
 
 # === オプショナル並列制御 ===
-# - CODEX_MAX_CONCURRENT: 許容最大同時実行数（0または未設定で無制限）
+# - CODEX_MAX_CONCURRENT: 許容最大同時実行数（デフォルト2）
 # - CODEX_CONCURRENCY_MODE: "block"(既定) or "drop"（上限超過時に起動を諦める）
 # - CODEX_DEDUP: 1 で同一 TASK が実行中なら重複起動を避ける
-MAX_CONCURRENT=${CODEX_MAX_CONCURRENT:-0}
+MAX_CONCURRENT=${CODEX_MAX_CONCURRENT:-2}
 CONC_MODE=${CODEX_CONCURRENCY_MODE:-block}
 DEDUP=${CODEX_DEDUP:-0}
 # 検出パターン（上書き可）。例: export CODEX_PROC_PATTERN='codex .* exec'
