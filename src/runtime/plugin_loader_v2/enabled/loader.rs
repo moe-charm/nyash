@@ -232,18 +232,8 @@ impl PluginLoaderV2 {
         // Get plugin handle
         let plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
         let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
-        // Encode TLV args (best-effort: i64 for integers, string otherwise)
-        let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(args.len() as u16);
-        for a in args {
-            if let Some(i) = crate::runtime::semantics::coerce_to_i64(a.as_ref()) {
-                crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, i);
-            } else if let Some(s) = crate::runtime::semantics::coerce_to_string(a.as_ref()) {
-                crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &s);
-            } else {
-                // Fallback to toString
-                crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &a.to_string_box().value);
-            }
-        }
+        // Encode TLV args via shared helper (numeric→string→toString)
+        let tlv = crate::runtime::plugin_ffi_common::encode_args(args);
         let (_code, out_len, out) = super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, method.method_id, instance_id, &tlv);
         // Minimal decoding by method name
         match method_name {
