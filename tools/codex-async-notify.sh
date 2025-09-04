@@ -22,11 +22,12 @@ NOTIFY_WINDOW_NAME="${CODEX_NOTIFY_WINDOW:-codex-notify}"
 # 設定
 WORK_DIR="$HOME/.codex-async-work"
 LOG_DIR="$WORK_DIR/logs"
+RUN_DIR="$WORK_DIR/running"
 WORK_ID=$(date +%s%N)
 LOG_FILE="$LOG_DIR/codex-${WORK_ID}.log"
 
 # 作業ディレクトリ準備
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$RUN_DIR"
 
 # === オプショナル並列制御 ===
 # - CODEX_MAX_CONCURRENT: 許容最大同時実行数（デフォルト2）
@@ -40,6 +41,8 @@ CODEX_PROC_PATTERN=${CODEX_PROC_PATTERN:-'codex .* exec'}
 FLOCK_WAIT=${CODEX_FLOCK_WAIT:-5}
 LOG_RETENTION_DAYS=${CODEX_LOG_RETENTION_DAYS:-0}
 LOG_MAX_BYTES=${CODEX_LOG_MAX_BYTES:-0}
+# 実行中カウント方式: proc(プロセス数) / pgid(プロセスグループ数) / sentinel(将来のための拡張)
+CODEX_COUNT_MODE=${CODEX_COUNT_MODE:-sentinel}
 
 list_running_codex() {
   # 実ジョブのみを検出: "codex ... exec ..." を含むコマンドライン
@@ -53,9 +56,63 @@ list_running_codex() {
 }
 
 count_running_codex() {
-  local n
-  n=$(list_running_codex | wc -l | tr -d ' ')
-  echo "${n:-0}"
+  case "$CODEX_COUNT_MODE" in
+    sentinel)
+      # Count sentinel files for tasks we launched; clean up stale ones
+      local cnt=0
+      if [ -d "$RUN_DIR" ]; then
+        for f in "$RUN_DIR"/codex-*.run; do
+          [ -e "$f" ] || continue
+          # Optional liveness check by stored pid
+          pid=$(awk -F': ' '/^pid:/{print $2; exit}' "$f" 2>/dev/null || true)
+          if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$f" 2>/dev/null || true
+            continue
+          fi
+          cnt=$((cnt+1))
+        done
+      fi
+      # Fallback: if 0 (older jobs without sentinel), attempt pgid-based count
+      if [ "${cnt:-0}" -eq 0 ]; then
+        if command -v pgrep >/dev/null 2>&1; then
+          pgc=$(pgrep -f -- "$CODEX_PROC_PATTERN" \
+            | xargs -r -I {} sh -c 'ps -o pgid= -p "$1" 2>/dev/null' _ {} \
+            | awk '{print $1}' | grep -E '^[0-9]+$' | sort -u | wc -l | tr -d ' ' || echo 0)
+          echo "${pgc:-0}"
+        else
+          list_running_codex | wc -l | tr -d ' ' || echo 0
+        fi
+      else
+        echo "$cnt"
+      fi
+      ;;
+    pgid)
+      # pgrepで対象PIDsを取得 → 各PIDのPGIDを集計（自分自身のawk/ps行は拾わない）
+      if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f -- "$CODEX_PROC_PATTERN" \
+          | xargs -r -I {} sh -c 'ps -o pgid= -p "$1" 2>/dev/null' _ {} \
+          | awk '{print $1}' | grep -E '^[0-9]+$' | sort -u | wc -l | tr -d ' ' || echo 0
+      else
+        # フォールバック: プロセス数
+        list_running_codex | wc -l | tr -d ' ' || echo 0
+      fi
+      ;;
+    proc|*)
+      list_running_codex | wc -l | tr -d ' ' || echo 0
+      ;;
+  esac
+}
+
+# Display-oriented counter: count real 'codex exec' processes by comm+args
+count_running_codex_display() {
+  if ps -eo comm=,args= >/dev/null 2>&1; then
+    ps -eo comm=,args= \
+      | awk '($1 ~ /^codex$/) && ($0 ~ / exec[ ]/) {print $0}' \
+      | wc -l | tr -d ' ' || echo 0
+  else
+    # Fallback to pattern match
+    list_running_codex | wc -l | tr -d ' ' || echo 0
+  fi
 }
 
 is_same_task_running() {
@@ -113,14 +170,25 @@ maybe_wait_for_slot
 # 非同期実行関数
 run_codex_async() {
     {
+        # Create sentinel to track running task (removed on exit)
+        SEN_FILE="$RUN_DIR/codex-${WORK_ID}.run"
+        {
+          echo "work_id: $WORK_ID"
+          echo "task: $TASK"
+          echo "started: $(date -Is)"
+          echo "pid: $$"
+        } > "$SEN_FILE" 2>/dev/null || true
+        # Ensure sentinel (and dedup file if any) are always cleaned up on exit
+        trap 'rm -f "$SEN_FILE" "${CODEX_DEDUP_FILE:-}" >/dev/null 2>&1 || true' EXIT
         # Dedupロック: 子プロセス側で握る（同一TASKの多重起動回避）
         if [ "${CODEX_DEDUP_FILE:-}" != "" ]; then
             exec 8>"${CODEX_DEDUP_FILE}"
             if ! flock -n 8; then
                 echo "⚠️  Duplicate task detected (dedup lock busy). Skipping: $TASK" | tee -a "$LOG_FILE"
+                rm -f "$SEN_FILE" >/dev/null 2>&1 || true
                 exit 0
             fi
-            trap 'rm -f "${CODEX_DEDUP_FILE}" >/dev/null 2>&1 || true' EXIT
+            # (cleanup handled by global EXIT trap above)
         fi
         # Detach: silence this background subshell's stdout/stderr while still tee-ing to log
         if [ "${CODEX_ASYNC_DETACH:-0}" = "1" ]; then
@@ -186,8 +254,9 @@ run_codex_async() {
             STATUS_MARK=$([ $EXIT_CODE -eq 0 ] && echo '✅ Success' || echo '❌ Failed')
             CHAT_FILE="$WORK_DIR/chat-${WORK_ID}.tmp"
             TASK_ONELINE=$(echo "$TASK" | tr '\n' ' ' | sed 's/  */ /g')
-            # 現在の実行中プロセス数をカウント
-            CURRENT_RUNNING=$(count_running_codex)
+            # 表示用: 実プロセス（comm=codex かつ args に exec を含む）の数を採用
+            CURRENT_RUNNING=$(count_running_codex_display)
+            case "$CURRENT_RUNNING" in (*[!0-9]*) CURRENT_RUNNING=0;; esac
             {
               echo "# 🤖 Codex: Done [$(date +%H:%M:%S)] (実行中: $CURRENT_RUNNING)"
               echo "# Work ID: $WORK_ID"

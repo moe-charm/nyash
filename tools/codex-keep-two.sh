@@ -21,6 +21,9 @@ if [ ${#TASKS[@]} -eq 0 ]; then
 fi
 
 CODEX_PROC_PATTERN=${CODEX_PROC_PATTERN:-'codex .* exec'}
+CODEX_COUNT_MODE=${CODEX_COUNT_MODE:-sentinel}
+WORK_DIR="$HOME/.codex-async-work"
+RUN_DIR="$WORK_DIR/running"
 
 list_running() {
   if command -v pgrep >/dev/null 2>&1; then
@@ -31,8 +34,45 @@ list_running() {
 }
 
 count_running() {
-  list_running | wc -l | tr -d ' '\
-  || echo 0
+  case "$CODEX_COUNT_MODE" in
+    sentinel)
+      local cnt=0
+      if [ -d "$RUN_DIR" ]; then
+        for f in "$RUN_DIR"/codex-*.run; do
+          [ -e "$f" ] || continue
+          pid=$(awk -F': ' '/^pid:/{print $2; exit}' "$f" 2>/dev/null || true)
+          if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$f" 2>/dev/null || true
+            continue
+          fi
+          cnt=$((cnt+1))
+        done
+      fi
+      if [ "${cnt:-0}" -eq 0 ]; then
+        if command -v pgrep >/dev/null 2>&1; then
+          pgrep -f -- "$CODEX_PROC_PATTERN" \
+            | xargs -r -I {} sh -c 'ps -o pgid= -p "$1" 2>/dev/null' _ {} \
+            | awk '{print $1}' | grep -E '^[0-9]+$' | sort -u | wc -l | tr -d ' ' || echo 0
+        else
+          list_running | wc -l | tr -d ' ' || echo 0
+        fi
+      else
+        echo "$cnt"
+      fi
+      ;;
+    pgid)
+      if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f -- "$CODEX_PROC_PATTERN" \
+          | xargs -r -I {} sh -c 'ps -o pgid= -p "$1" 2>/dev/null' _ {} \
+          | awk '{print $1}' | grep -E '^[0-9]+$' | sort -u | wc -l | tr -d ' ' || echo 0
+      else
+        list_running | wc -l | tr -d ' ' || echo 0
+      fi
+      ;;
+    proc|*)
+      list_running | wc -l | tr -d ' ' || echo 0
+      ;;
+  esac
 }
 
 RUNNING=$(count_running)
