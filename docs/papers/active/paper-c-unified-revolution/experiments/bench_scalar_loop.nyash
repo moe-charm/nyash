@@ -1,0 +1,76 @@
+// Benchmark 1: スカラ変数ループ性能測定
+// 目的: BoxCall最適化でLoad/Store相当の性能を達成することを実証
+
+static box ScalarBench {
+    console: ConsoleBox
+    
+    main() {
+        me.console = new ConsoleBox()
+        
+        // ウォームアップ
+        me.warmup()
+        
+        // 本測定
+        me.runBenchmark()
+        
+        // 比較用: 配列経由の間接アクセス
+        me.runIndirectBenchmark()
+    }
+    
+    warmup() {
+        me.console.log("=== Warming up ===")
+        local x = 0
+        loop(x < 1000000) {
+            x = x + 1
+        }
+    }
+    
+    runBenchmark() {
+        me.console.log("\n=== Direct Scalar Loop ===")
+        local x = 0
+        local iterations = 100000000
+        
+        local start = new TimeBox()
+        local startMs = start.now()
+        
+        // メインループ: BoxCall("get") + BinOp + BoxCall("set")として表現される
+        loop(x < iterations) {
+            x = x + 1  // 最適化でレジスタ化されるべき
+        }
+        
+        local end = new TimeBox()
+        local elapsed = end.now() - startMs
+        
+        me.console.log("Iterations: " + iterations)
+        me.console.log("Time: " + elapsed + "ms")
+        me.console.log("ops/sec: " + (iterations / (elapsed / 1000)))
+        me.console.log("ns/op: " + (elapsed * 1000000 / iterations))
+    }
+    
+    runIndirectBenchmark() {
+        me.console.log("\n=== Indirect Access (Array[0]) ===")
+        local arr = new ArrayBox()
+        arr.push(0)  // arr[0] = 0
+        local iterations = 100000000
+        
+        local start = new TimeBox()
+        local startMs = start.now()
+        
+        // 配列経由の間接アクセス（最適化が難しい）
+        loop(arr.get(0) < iterations) {
+            arr.set(0, arr.get(0) + 1)
+        }
+        
+        local end = new TimeBox()
+        local elapsed = end.now() - startMs
+        
+        me.console.log("Iterations: " + iterations)
+        me.console.log("Time: " + elapsed + "ms")
+        me.console.log("ops/sec: " + (iterations / (elapsed / 1000)))
+        me.console.log("ns/op: " + (elapsed * 1000000 / iterations))
+        
+        // 速度比を計算して最適化の効果を示す
+        me.console.log("\n=== Analysis ===")
+        me.console.log("Direct access should be >10x faster than indirect")
+    }
+}

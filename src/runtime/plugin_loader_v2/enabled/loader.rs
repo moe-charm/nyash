@@ -4,6 +4,9 @@ use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox};
 use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::path::{Path, PathBuf};
+
+use libloading::{Library, Symbol};
 
 fn dbg_on() -> bool { std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" }
 
@@ -55,8 +58,51 @@ impl PluginLoaderV2 {
         Ok(())
     }
 
-    fn load_plugin(&self, _lib_name: &str, _lib_def: &LibraryDefinition) -> BidResult<()> {
-        // Keep behavior: real loading logic remains in unified loader; v2 stores minimal entries
+    fn load_plugin(&self, lib_name: &str, lib_def: &LibraryDefinition) -> BidResult<()> {
+        // Resolve platform-specific filename from configured base path
+        let base = Path::new(&lib_def.path);
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        if cfg!(target_os = "windows") {
+            // Try exact + .dll, and without leading 'lib'
+            candidates.push(base.with_extension("dll"));
+            if let Some(file) = base.file_name().and_then(|s| s.to_str()) {
+                if file.starts_with("lib") {
+                    let mut alt = base.to_path_buf();
+                    let alt_file = file.trim_start_matches("lib");
+                    alt.set_file_name(alt_file);
+                    candidates.push(alt.with_extension("dll"));
+                }
+            }
+        } else if cfg!(target_os = "macos") {
+            candidates.push(base.with_extension("dylib"));
+        } else {
+            candidates.push(base.with_extension("so"));
+        }
+
+        let lib_path = candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| base.to_path_buf());
+        let lib = unsafe { Library::new(&lib_path) }.map_err(|_| BidError::PluginError)?;
+        let lib_arc = Arc::new(lib);
+
+        // Resolve required invoke symbol (TypeBox v2: nyash_plugin_invoke)
+        unsafe {
+            let invoke_sym: Symbol<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize) -> i32> =
+                lib_arc.get(b"nyash_plugin_invoke\0").map_err(|_| BidError::PluginError)?;
+
+            // Optional init (best-effort)
+            if let Ok(init_sym) = lib_arc.get::<Symbol<unsafe extern "C" fn() -> i32>>(b"nyash_plugin_init\0") {
+                let _ = init_sym();
+            }
+
+            let loaded = LoadedPluginV2 {
+                _lib: lib_arc.clone(),
+                box_types: lib_def.boxes.clone(),
+                typeboxes: HashMap::new(),
+                init_fn: None,
+                invoke_fn: *invoke_sym,
+            };
+            self.plugins.write().map_err(|_| BidError::PluginError)?.insert(lib_name.to_string(), Arc::new(loaded));
+        }
+
         Ok(())
     }
 
@@ -186,9 +232,18 @@ impl PluginLoaderV2 {
         // Get plugin handle
         let plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
         let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
-        // Encode minimal TLV args (support only 0-arity inline)
-        if !args.is_empty() { return Err(BidError::PluginError); }
-        let tlv: [u8; 0] = [];
+        // Encode TLV args (best-effort: i64 for integers, string otherwise)
+        let mut tlv = crate::runtime::plugin_ffi_common::encode_tlv_header(args.len() as u16);
+        for a in args {
+            if let Some(i) = crate::runtime::semantics::coerce_to_i64(a.as_ref()) {
+                crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, i);
+            } else if let Some(s) = crate::runtime::semantics::coerce_to_string(a.as_ref()) {
+                crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &s);
+            } else {
+                // Fallback to toString
+                crate::runtime::plugin_ffi_common::encode::string(&mut tlv, &a.to_string_box().value);
+            }
+        }
         let (_code, out_len, out) = super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, method.method_id, instance_id, &tlv);
         // Minimal decoding by method name
         match method_name {
@@ -213,10 +268,39 @@ impl PluginLoaderV2 {
     }
 
     pub fn create_box(&self, box_type: &str, _args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {
-        // Delegate creation to unified host; preserves current behavior
-        let host = crate::runtime::get_global_plugin_host();
-        let host = host.read().map_err(|_| BidError::PluginError)?;
-        host.create_box(box_type, &[])
+        // Non-recursive: directly call plugin 'birth' and construct PluginBoxV2
+        let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
+        let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+        let toml_value: toml::Value = toml::from_str(&std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?).map_err(|_| BidError::PluginError)?;
+        let (lib_name, _) = cfg.find_library_for_box(box_type).ok_or(BidError::InvalidType)?;
+
+        // Resolve type_id and method ids
+        let box_conf = cfg.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+        let type_id = box_conf.type_id;
+        let birth_id = box_conf.methods.get("birth").map(|m| m.method_id).ok_or(BidError::InvalidMethod)?;
+        let fini_id = box_conf.methods.get("fini").map(|m| m.method_id);
+
+        // Get loaded plugin invoke
+        let plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
+        let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+
+        // Call birth (no args TLV) and read returned instance id (little-endian u32 in bytes 0..4)
+        let tlv = crate::runtime::plugin_ffi_common::encode_empty_args();
+        let (code, out_len, out_buf) = super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, birth_id, 0, &tlv);
+        if code != 0 || out_len < 4 { return Err(BidError::PluginError); }
+        let instance_id = u32::from_le_bytes([out_buf[0], out_buf[1], out_buf[2], out_buf[3]]);
+
+        let bx = PluginBoxV2 {
+            box_type: box_type.to_string(),
+            inner: Arc::new(PluginHandleInner {
+                type_id,
+                invoke_fn: plugin.invoke_fn,
+                instance_id,
+                fini_method_id: fini_id,
+                finalized: std::sync::atomic::AtomicBool::new(false),
+            }),
+        };
+        Ok(Box::new(bx))
     }
 
     /// Shutdown singletons: finalize and clear all singleton handles
