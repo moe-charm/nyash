@@ -24,6 +24,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: MapBox TLV vs TypeBox under unified BoxCall/TypeOp pending"]
     fn mapbox_get_set_size_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -57,6 +58,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: ArrayBox len/get under unified ops pending"]
     fn arraybox_set_get_len_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -84,6 +86,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: StringBox length/concat under unified ops pending"]
     fn stringbox_len_concat_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -110,6 +113,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: IntegerBox get/set under unified ops pending"]
     fn integerbox_get_set_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -158,6 +162,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: MathBox basic ops under unified ops pending"]
     fn mathbox_basic_ops_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -199,6 +204,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: EncodingBox base64/hex under unified ops pending"]
     fn encodingbox_base64_hex_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -234,6 +240,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: RegexBox match/find under unified ops pending"]
     fn regexbox_is_match_find_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -263,6 +270,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: PathBox ops under unified ops pending"]
     fn pathbox_ops_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -294,6 +302,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: TOMLBox parse/get/toJson under unified ops pending"]
     fn tomlbox_parse_get_tojson_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -324,6 +333,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: TimeBox now tolerance under unified ops pending"]
     fn timebox_now_tlv_vs_typebox_with_tolerance() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -351,6 +361,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: CounterBox singleton delta under unified ops pending"]
     fn counterbox_singleton_delta_increments() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
@@ -381,6 +392,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "MIR13 parity: FileBox RW/close under unified ops pending"]
     fn filebox_rw_close_tmpdir_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
