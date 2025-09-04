@@ -37,3 +37,35 @@
 - Do not commit secrets. Plug‑in paths and native libs are configured via `nyash.toml`.
 - LLVM builds require system LLVM 18; install via apt.llvm.org in CI.
 - Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
+
+## Codex Async Workflow (Background Jobs)
+- Purpose: run Codex tasks in the background and notify a tmux session on completion.
+- Script: `tools/codex-async-notify.sh`
+- Defaults: posts to tmux session `claude`; logs to `~/.codex-async-work/logs/`.
+
+Usage
+- Quick run (sync output on terminal):
+  - `./tools/codex-async-notify.sh "Your task here" [tmux_session]`
+- Detached run (returns immediately):
+  - `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Your task" codex`
+- Tail lines in tmux notification (default 60):
+  - `CODEX_NOTIFY_TAIL=100 ./tools/codex-async-notify.sh "…" codex`
+
+Concurrency Control
+- Cap concurrent workers: set `CODEX_MAX_CONCURRENT=<N>` (0 or unset = unlimited).
+- Mode when cap reached: `CODEX_CONCURRENCY_MODE=block|drop` (default `block`).
+- De‑duplicate same task string: `CODEX_DEDUP=1` to skip if identical task is running.
+- Example (max 2, dedup, detached):
+  - `CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Refactor MIR 13" codex`
+
+Keep Two Running
+- Detect running Codex exec jobs precisely:
+  - Default counts by PGID to treat a task with multiple processes (node/codex) as one: `CODEX_COUNT_MODE=pgid`
+  - Raw process listing (debug): `pgrep -af 'codex.*exec'`
+- Top up to 2 jobs example:
+  - `COUNT=$(pgrep -af 'codex.*exec' | wc -l || true); NEEDED=$((2-${COUNT:-0})); for i in $(seq 1 $NEEDED); do CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "<task $i>" codex; done`
+
+Notes
+- tmux notification uses `paste-buffer` to avoid broken lines; increase tail with `CODEX_NOTIFY_TAIL` if you need more context.
+- Avoid running concurrent tasks that edit the same file; partition by area to prevent conflicts.
+ - If wrappers spawn multiple processes per task (node/codex), set `CODEX_COUNT_MODE=pgid` (default) to count unique process groups rather than raw processes.
