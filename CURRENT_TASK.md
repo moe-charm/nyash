@@ -1,5 +1,19 @@
 # CURRENT TASK (Phase 12 — TypeBox ABI / VTable 統合)
 
+## New: Phase 12.7-B 基本糖衣構文（basic）着手メモ（2025‑09‑04）
+- 目的: セルフホス前に `|>`, `?.`, `??`, `+=` 系, `..` を“正規AST”へ正規化する最小導入（可逆・段階導入）。
+- スコープ（Week 1）:
+  - tokenizer: `??`, `?.`, `|>`, `+=`, `-=`, `*=`, `/=`, `..` を2文字優先で追加
+  - parser/sugar.rs: `apply_sugar(ast, &SugarConfig)` 実装（上記の正規化）
+  - config: `nyash.toml [syntax] sugar_level=none|basic|full` を読込み、basicのみON
+  - tests: `sugar_basic_test.rs` 追加、`tools/smoke_vm_jit.sh` に `NYASH_SYNTAX_SUGAR_LEVEL=basic`
+  - docs: phase-12.7/README に basic 実装済みの注記
+- 注意:
+  - 高階演算子（`/:`, `\:`, `//`）は衝突のため初期見送り（関数名糖衣等で代替検討）。
+  - `//` はコメントと衝突。採用しない。
+  - パイプラインの規約（関数/メソッド解決）はREADMEに明記。
+
+
 このファイルは Phase 12 の実装要点を短く保つために再編しました。詳細ログは docs 配下に移管します。
 
 - ドキュメント: `docs/development/roadmap/phases/phase-12/{README.md, PLAN.md, TASKS.md}`
