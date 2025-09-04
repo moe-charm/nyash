@@ -1,123 +1,105 @@
-# CURRENT TASK (Phase 12 — TypeBox ABI / VTable 統合)
+# CURRENT TASK (Compact) — Phase 12 closeout / 12.7 完了整理（≤ 1000行）
 
-## New: Phase 12.7-B 基本糖衣構文（basic）着手メモ（2025‑09‑04）
-- 目的: セルフホス前に `|>`, `?.`, `??`, `+=` 系, `..` を“正規AST”へ正規化する最小導入（可逆・段階導入）。
-- スコープ（Week 1）:
-  - tokenizer: `??`, `?.`, `|>`, `+=`, `-=`, `*=`, `/=`, `..` を2文字優先で追加
-  - parser/sugar.rs: `apply_sugar(ast, &SugarConfig)` 実装（上記の正規化）
-  - config: `nyash.toml [syntax] sugar_level=none|basic|full` を読込み、basicのみON
-  - tests: `sugar_basic_test.rs` 追加、`tools/smoke_vm_jit.sh` に `NYASH_SYNTAX_SUGAR_LEVEL=basic`
-  - docs: phase-12.7/README に basic 実装済みの注記
-- 注意:
-  - 高階演算子（`/:`, `\:`, `//`）は衝突のため初期見送り（関数名糖衣等で代替検討）。
-  - `//` はコメントと衝突。採用しない。
-  - パイプラインの規約（関数/メソッド解決）はREADMEに明記。
+このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細な経緯・議事は git 履歴と `docs/` を参照してください。
 
+— 最終更新: 2025‑09‑05
 
-このファイルは Phase 12 の実装要点を短く保つために再編しました。詳細ログは docs 配下に移管します。
+■ 進捗サマリ
+- Phase 12.7-A: 完了（peek/continue/?/lambda/型アノテ）。
+- Phase 12.7-B: 基本（P0）完了。以下の糖衣をゲート付きで実装済み。
+  - `|>` パイプライン、`?.` セーフアクセス、`??` デフォルト、`+=/-=/*=/=` 複合代入、`a .. b` 範囲（`Range(a,b)` に正規化）。
+  - ゲート: `NYASH_SYNTAX_SUGAR_LEVEL=basic|full`（既定 off）。
+- 追加拡張（P1 設計済み・段階適用方針）
+  - デストラクチャリング（`{x,y}` / `[a,b,...]`）、高階演算子記法（`/:`/`\:`/`//`）、ラベル付き引数（`key: value`）。
+- VM/Interpreter: FunctionBox 呼び出し経路の統一を実施。MIR からの Call 正規化を VM 側に受け入れ可能。
 
-- ドキュメント: `docs/development/roadmap/phases/phase-12/{README.md, PLAN.md, TASKS.md}`
-- ABI 最小コア: `docs/reference/abi/NYASH_ABI_MIN_CORE.md`
+■ 現在のフォーカス（優先順）
+1) ドキュメント最終同期（12.7‑B 基本完了の明記、Quickstart のゲート例、12.7 README の完了表記）。
+2) MIR step‑50 準備（Core‑13 flip 後の最終参照同期：README/CHANGELOG/INSTRUCTION_SET）。
+3) P2PBox まわりの赤テスト監視（on_once/ping）と軽い回帰チェック（現状は緑化済み想定）。
+4) 12.7‑C 準備（ANCP v1 プレビューと nyfmt PoC 骨格）。
 
-## 概要（Executive Summary / 圧縮版）
-- 目的: ユーザー/プラグイン/内蔵を TypeBox+VTable で統一し、VM/JIT/WASM の同一実行を実現。
-- 現状: Phase 12 完了（JIT/VM FunctionBox 呼び出し統一、Lambda→FunctionBox 値化、最小Builtin方針）。WASM v2 最小ディスパッチ導入。
+■ 直後に回すタスク（2本運用）
+- T1) MIR step‑50: Core‑13 flip 後のドキュメント最終同期（README/CHANGELOG/INSTRUCTION_SET、リンク点検）。
+- T2) nyfmt PoC smoke: apps の例で往復性のメッセージを出す軽スモーク（tools/nyfmt_smoke.sh の拡張）。
 
-次フェーズ: MIR統一 + リファクタリング（Phase 11.8/13）
-- 目標: 1ファイル1000行以内を目安に分割・整理。他AI/将来タスクが読みやすい構造へ。
-- 制約: 挙動不変・公開API維持・段階的分割＋逐次ビルド/テスト。
+■ 直近で完了したこと（主要抜粋）
+- 12.7‑B 基本糖衣（ゲート）
+  - パーサでの可逆正規化（peek/関数・メソッド呼出へ落とす）。
+  - テスト追加：パイプライン/セーフアクセス/デフォルト/複合代入/範囲。
+- 設定・使い方
+  - `NYASH_SYNTAX_SUGAR_LEVEL=basic|full` で有効化。テストでは `NYASH_FORCE_SUGAR=1` で明示強制も可能。
+- VM/Interpreter 呼出統一
+  - FunctionBox 呼び出しの統一経路を整備（引数束縛・キャプチャ注入・return 伝播）。
 
-Compact Snapshot（2025‑09‑03/Finalize）
-- Builtin（最小/条件付き）: 既定は plugins-only。wasm32 と cargo test では自動でBuiltin登録。任意で `--features builtin-core` で明示ON。
-- P2P 安定化: `sys.pong` 返信3ms遅延・`ping()`既定300ms。`on_once` 自己送信は deliver直後のflag無効化＋flag配列クリア＋`debug_active_handler_count` の最短確定で安定化。
-- FunctionBox 呼び出しの MIR/VM 統一:
-  - C1: `ASTNode::Call` 正規化（Lambda以外は `MirInstruction::Call(func,args)`）。
-  - C2: VM `execute_call` が 文字列（関数名）/ `FunctionBox`（BoxRef）両対応。`FunctionBox` 実行は interpreter ヘルパで return を正しく伝播。
-  - テスト: `src/tests/functionbox_call_tests.rs`（インタープリタ）、`src/tests/vm_functionbox_call.rs`（MIR→VM）。
+■ 開発者向けクイックメモ
+- ビルド
+  - VM/JIT: `cargo build --release --features cranelift-jit`
+  - LLVM: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- テスト
+  - 全体: `cargo test`
+  - 糖衣（並列env干渉を避けるとき）: `RUST_TEST_THREADS=1 cargo test --lib -- --nocapture`
+- 実行例（ゲート）
+  - `NYASH_SYNTAX_SUGAR_LEVEL=basic ./target/release/nyash --backend vm apps/APP/main.nyash`
+- 参照
+  - 言語リファレンス: `docs/reference/language/LANGUAGE_REFERENCE_2025.md`
+  - 12.7 README: `docs/development/roadmap/phases/phase-12.7/README.md`
+  - 変更履歴: `CHANGELOG.md`
 
-- Lambda→FunctionBox 値化（最小）: `MirInstruction::FunctionNew` を導入。簡易キャプチャ/`me`を MIR で値として保持。
-- JIT: `Call`→`nyash_fn_call0..8` シムで FunctionBox 実行をブリッジ（最大8引数）。
-- LLVM: 本実装は低優先のため保留中（モック実行経路で FunctionNew/Call をサポート）。
+■ 12.7‑B 仕様の要点（P0 実装済み）
+- パイプライン `|>`
+  - `x |> f(a,b)` → `f(x,a,b)`、`x |> obj.m(a)` → `obj.m(x,a)`。
+- セーフアクセス `?.`
+  - `user?.profile` / `user?.m(1)` → `peek user { null => null, else => ... }`。
+- デフォルト `??`
+  - `a ?? b` → `peek a { null => b, else => a }`。
+- 複合代入 `+=/-=/*=/=`
+  - `a += b` → `a = a + b`（左辺は変数/フィールドに限定）。
+- 範囲 `a .. b`
+  - `Range(a,b)` 呼び出しへ正規化。
 
-次タスク（新フェーズ: リファクタリング / 圧縮）
-- A1) `backend/vm_instructions.rs` を機能別へ分割（目安: <1000行）
-- A2) `runtime/plugin_loader_v2.rs` を役割別へ分割（ffi_tlv/registry/host_bridge/loader）
-  - 完了: `src/runtime/plugin_loader_v2/` へ分割（enabled/{types,loader,globals}.rs + stub.rs）。公開APIは据え置き（`PluginLoaderV2`/`PluginBoxV2`/`make_plugin_box_v2`/`get_global_loader_v2` 等）
-  - A3) `backend/vm.rs` の状態/実行/GC/診断を分離
-    - 進捗: `ControlFlow` を `src/backend/vm_control_flow.rs` に抽出し、`vm.rs` から再エクスポートで互換維持（次は実行ループの段階切り出し）
-- B1) `mir/builder.rs` の `build_expression` 群を `builder/exprs.rs` へ抽出
-- B2) `interpreter/plugin_loader.rs` 分割（scan/link/abi/util）
-- C) 命名/コメント整備・公開APIのre-export最適化・軽微な util 抽出
+■ 12.7‑B 拡張（P1、段階適用）
+- デストラクチャリング：`let {x,y} = pt` / `let [h, t, ...rest] = arr`（正規化はフィールド/インデックスアクセス）。
+- 高階演算子記法：`/:` map、`\:` filter、`//` reduce（構文衝突に注意しつつ段階導入）。
+- ラベル付き引数：`f(x: a, y: b)`（内部は Map/順序維持の呼出に正規化する方針）。
 
-実行メモ（抜粋）
-- ユニット: `cargo test`（test時はBuiltin自動ON）
-- E2E: `cargo test --features e2e -- --nocapture`（普段は無効）
-- FunctionBoxテスト: 
-  - `cargo test --lib functionbox_call_tests -- --nocapture`
-  - `cargo test --lib vm_functionbox_call -- --nocapture`
+■ 12.7‑C 準備（ANCP／可逆フォーマット）
+- 目的: AI‑Nyash Compact Notation Protocol (ANCP) v1 の最小プレビュー（可逆）を示し、nyfmt PoC で往復検証を容易にする。
+- 範囲（P0）
+  - ANCP Token Spec v1 同期（docs/phase‑12.7/ancp-specs/* の整頓とサンプル追補）。
+  - 可逆マッピング表（sugar subset ⇄ ANCP）のドラフト作成（例: pipeline/?. / ??/range）。
+  - nyfmt PoC 骨格（ドキュメント主体・最小CLI枠/サンプル。実装は別リポ前提）。
+- 成果物
+  - docs: ANCP v1 概説＋マッピング一覧＋小サンプル（before/after/round‑trip）。
+  - apps/nyfmt‑poc: 例の追補（round‑trip 期待値コメント付き）。
+  - tools: smoke ガイダンスの更新（`tools/nyfmt_smoke.sh`）。
 
-運用フラグ
-- 既定: `plugins-only`（Builtin未登録）
-- 自動ON: `wasm32` / `test` では Builtin 有効
-- 手動ON: `--features builtin-core`（Builtin最小コアを有効化）
+■ MIR / VM 方針（抜粋）
+- Core‑13 への最終フリップは step‑50 でドキュメント同期（テストが安定したタイミングで切替）。
+- BoxCall fast‑path と vtable は維持。未実装メソッドはフォールバック（TLV 経路）で互換性確保。
 
+■ 判定基準（12.7 完了）
+- 糖衣（P0）がゲート付きで安定（ユニット緑）。
+- ドキュメント反映済み（リファレンス/README/Quickstart/Changelog）。
+- 次フェーズ（step‑50）への依存が明確（Core‑13 flip 後の参照同期）。
 
-## 次タスク（優先順）
-- フェーズM（MIR Core‑13 統一・挙動不変）
-  - M1) Core‑13 を既定ON（nyash.toml [env] 推奨: NYASH_MIR_CORE13=1, NYASH_OPT_DIAG_FORBID_LEGACY=1）
-  - M2) BuilderをCore‑13準拠に調整（ArrayGet/Set・RefGet/Set・PluginInvokeをemitしない。BoxCallへ正規化）
-  - M3) OptimizerでUnary→BinOpを常時変換、Load/StoreのSSA置換（最終MIRから旧命令を排除）
-  - M4) Core‑13検証を追加（最終MIRに旧命令が存在したらエラー）
-  - M5) VM/JIT/AOTのBoxCall fast‑path/vtable維持（setはBarrier必須）
-- フェーズA（安全分割・挙動不変）
-  - A1) vm_instructions を 10前後のモジュールへ分割（consts/arith/compare/flow/call/boxcall/array/refs/future/newbox/print_debug）
-    - 現状: `src/backend/vm_instructions/{core,call,newbox,function_new,extern_call,boxcall,plugin_invoke}.rs` に分割済み
-  - A2) plugin_loader_v2 を 4〜5ファイルへ分割（ffi_tlv/registry/host_bridge/loader/errors）
-  - A3) vm を 3〜4ファイルへ分割（state/exec/gc/format）
-- フェーズB（読みやすさ整形）
-  - B1) mir/builder の expr系切り出し
- - B2) interpreter/plugin_loader の役割分離
-- フェーズC（軽整理）
-  - 命名/コメント整備、公開API re-export、1000行未満へ微調整
+■ よく使うスクリプト（Codex 非同期）
+- 1本起動（tmux 通知／ログ保存）
+  - `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "<task>" codex`
+- 2本維持（必要時だけ補充）
+  - `CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 ./tools/codex-keep-two.sh codex "<Task A>" "<Task B>"`
+- 通知の安定化
+  - 既定はチャンク送信（5行）。`CODEX_NOTIFY_CHUNK=5` などで調整可。
 
-## 次のゴール（Phase W — Windows JIT(EXE) × Egui 起動）
-目的: Windows 上で Cranelift JIT（必要に応じ EXE ラッパ）で Egui ウィンドウを起動する最小スモークを確立。成功の再現性を高め、論文化に向けて手順を固定。
+■ 既知の注意点
+- テスト並列時の環境変数レースに注意（糖衣ゲート）。必要に応じて `RUST_TEST_THREADS=1`。
+- `//` はコメントと衝突のため糖衣に使用しない。
 
-推奨タスク（開いたら一発で着手できる指示）
-- W1) 準備（Windows）
-  - `cargo build --release --features cranelift-jit`
-  - Egui プラグイン DLL をビルド（`plugins/nyash-egui-plugin`）し、`nyash.toml` の `[plugins]/[libraries]` と検索パスが DLL 配置と一致しているか確認。
-  - 必要なら PATH 追加または `nyash.toml [plugin_paths]` に DLL ディレクトリを追記。
-- W2) 最小アプリ（例: apps/ny-egui-hello/main.nyash）
-  - `open(width,height,title)` → `uiLabel("Hello, Nyash Egui")` → `run()` の極小シナリオを用意。
-  - 実行: `.
-    target\release\nyash --backend jit apps\ny-egui-hello\main.nyash`
-- W3) HostBridge 推奨トグル（任意）
-  - `NYASH_JIT_HOST_BRIDGE=1`（JIT から HostBridge を優先利用。BoxCall→HostCall/Bridge を強制）
-  - `NYASH_USE_PLUGIN_BUILTINS=0`（HostCall 優先の確認時に推奨）
-- W4) スモークスクリプト化（PowerShell）
-  - `tools/egui_win_smoke.ps1` を追加: ビルド→PATH 調整→実行までを一括化（再現性向上）。
-- W5) 追加JITスモーク（Core‑13 準拠）
-  - Instance: `getField/setField` の往復（HostBridge 経由）
-  - Extern: `console.log` の起動（ログ確認）
+■ 完了（主要）
+- TypeBox ABI 雛形（`src/runtime/type_box_abi.rs`）、TypeRegistry 雛形（`src/runtime/type_registry.rs`）。
+- 12.7‑A 全項目、12.7‑B 基本（P0）項目。
 
-判定条件（Done）
-- Windows で Egui ウィンドウが起動（タイトル/ラベル表示確認）
-- PowerShell スクリプトでワンコマンド起動が再現（DLL 探索含め手戻りゼロ）
-- Core‑13 JIT スモーク（Array/Map/Instance/Extern）の最小セットが緑
-
-参考メモ（現状の統一状況）
-- Core‑13 は Builder→Optimizer→Compiler の三段ガードで旧命令ゼロを強制（最終MIR厳格チェックも導入済み）。
-- JIT の BoxCall fast‑path は HostCall 優先に整理（PluginInvoke は保険/フォールバック）。
-- vtable スタブは Map/String/Array/Console をヘルパ化済み（挙動不変・Barrier維持）。
-
-## 完了（Done）
-- TypeBox ABI 雛形: `src/runtime/type_box_abi.rs`
-- TypeRegistry 雛形: `src/runtime/type_registry.rs`
-  - Array: get(100)/set(101)/len,length(102)
-  - Map: size(200)/len(201)/has(202)/get(203)/set(204)
-  - String: len(300)
-  - Console: log(400)/warn(401)/error(402)/clear(403)
+— 以上。詳細は各モジュールの README / docs を参照。
 - VM vtable 優先スタブ: `execute_boxcall` → `try_boxcall_vtable_stub`（`NYASH_ABI_VTABLE=1`）
   - Instance: getField/setField/has/size
   - Array/Map/String: 代表メソッドを直接/host経由で処理

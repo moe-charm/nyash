@@ -13,10 +13,98 @@ use super::common::ParserUtils;
 // Debug macros are now imported from the parent module via #[macro_export]
 use crate::must_advance;
 
+#[inline]
+fn is_sugar_enabled() -> bool { crate::parser::sugar_gate::is_enabled() }
+
 impl NyashParser {
     /// 式をパース (演算子優先順位あり)
     pub(super) fn parse_expression(&mut self) -> Result<ASTNode, ParseError> {
-        self.parse_or()
+        self.parse_pipeline()
+    }
+
+    /// パイプライン演算子: lhs |> f(a,b) / lhs |> obj.m(a)
+    /// 基本方針: 右辺が関数呼び出しなら先頭に lhs を挿入。メソッド呼び出しなら引数の先頭に lhs を挿入。
+    fn parse_pipeline(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_coalesce()?;
+
+        while self.match_token(&TokenType::PIPE_FORWARD) {
+            if !is_sugar_enabled() {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full for '|>'".to_string(),
+                    line,
+                });
+            }
+            // consume '|>'
+            self.advance();
+
+            // 右辺は「呼び出し系」の式を期待
+            let rhs = self.parse_call()?;
+
+            // 変換: rhs の形に応じて lhs を先頭引数として追加
+            expr = match rhs {
+                ASTNode::FunctionCall { name, mut arguments, span } => {
+                    let mut new_args = Vec::with_capacity(arguments.len() + 1);
+                    new_args.push(expr);
+                    new_args.append(&mut arguments);
+                    ASTNode::FunctionCall { name, arguments: new_args, span }
+                }
+                ASTNode::MethodCall { object, method, mut arguments, span } => {
+                    let mut new_args = Vec::with_capacity(arguments.len() + 1);
+                    new_args.push(expr);
+                    new_args.append(&mut arguments);
+                    ASTNode::MethodCall { object, method, arguments: new_args, span }
+                }
+                ASTNode::Variable { name, .. } => {
+                    ASTNode::FunctionCall { name, arguments: vec![expr], span: Span::unknown() }
+                }
+                ASTNode::FieldAccess { object, field, .. } => {
+                    ASTNode::MethodCall { object, method: field, arguments: vec![expr], span: Span::unknown() }
+                }
+                ASTNode::Call { callee, mut arguments, span } => {
+                    let mut new_args = Vec::with_capacity(arguments.len() + 1);
+                    new_args.push(expr);
+                    new_args.append(&mut arguments);
+                    ASTNode::Call { callee, arguments: new_args, span }
+                }
+                other => {
+                    // 許容外: 関数/メソッド/変数/フィールド以外には適用不可
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: format!("callable after '|>' (got {})", other.info()),
+                        line: self.current_token().line,
+                    });
+                }
+            };
+        }
+
+        Ok(expr)
+    }
+
+    /// デフォルト値（??）: x ?? y => peek x { null => y, else => x }
+    fn parse_coalesce(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_or()?;
+        while self.match_token(&TokenType::QMARK_QMARK) {
+            if !is_sugar_enabled() {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full for '??'".to_string(),
+                    line,
+                });
+            }
+            self.advance(); // consume '??'
+            let rhs = self.parse_or()?;
+            let scr = expr;
+            expr = ASTNode::PeekExpr {
+                scrutinee: Box::new(scr.clone()),
+                arms: vec![(crate::ast::LiteralValue::Null, rhs)],
+                else_expr: Box::new(scr),
+                span: Span::unknown(),
+            };
+        }
+        Ok(expr)
     }
     
     /// OR演算子をパース: ||
@@ -96,7 +184,7 @@ impl NyashParser {
     
     /// 比較演算子をパース: < <= > >=
     fn parse_comparison(&mut self) -> Result<ASTNode, ParseError> {
-        let mut expr = self.parse_term()?;
+        let mut expr = self.parse_range()?;
         
         while self.match_token(&TokenType::LESS) || 
               self.match_token(&TokenType::LessEquals) ||
@@ -110,7 +198,7 @@ impl NyashParser {
                 _ => unreachable!(),
             };
             self.advance();
-            let right = self.parse_term()?;
+            let right = self.parse_range()?;
             expr = ASTNode::BinaryOp {
                 operator,
                 left: Box::new(expr),
@@ -119,6 +207,25 @@ impl NyashParser {
             };
         }
         
+        Ok(expr)
+    }
+
+    /// 範囲演算子: a .. b => Range(a,b)
+    fn parse_range(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_term()?;
+        while self.match_token(&TokenType::RANGE) {
+            if !is_sugar_enabled() {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full for '..'".to_string(),
+                    line,
+                });
+            }
+            self.advance(); // consume '..'
+            let rhs = self.parse_term()?;
+            expr = ASTNode::FunctionCall { name: "Range".to_string(), arguments: vec![expr, rhs], span: Span::unknown() };
+        }
         Ok(expr)
     }
     
@@ -379,6 +486,48 @@ impl NyashParser {
                         line,
                     });
                 }
+            } else if self.match_token(&TokenType::QMARK_DOT) {
+                if !is_sugar_enabled() {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full for '?.'".to_string(),
+                        line,
+                    });
+                }
+                self.advance(); // consume '?.'
+                // ident then optional call
+                let name = match &self.current_token().token_type {
+                    TokenType::IDENTIFIER(s) => { let v = s.clone(); self.advance(); v }
+                    _ => {
+                        let line = self.current_token().line;
+                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "identifier after '?.'".to_string(), line });
+                    }
+                };
+                let access = if self.match_token(&TokenType::LPAREN) {
+                    // method call
+                    self.advance();
+                    let mut arguments = Vec::new();
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        must_advance!(self, _unused, "safe method call arg parsing");
+                        arguments.push(self.parse_expression()?);
+                        if self.match_token(&TokenType::COMMA) { self.advance(); }
+                    }
+                    self.consume(TokenType::RPAREN)?;
+                    ASTNode::MethodCall { object: Box::new(expr.clone()), method: name, arguments, span: Span::unknown() }
+                } else {
+                    // field access
+                    ASTNode::FieldAccess { object: Box::new(expr.clone()), field: name, span: Span::unknown() }
+                };
+
+                // Wrap with peek: peek expr { null => null, else => access(expr) }
+                expr = ASTNode::PeekExpr {
+                    scrutinee: Box::new(expr.clone()),
+                    arms: vec![(crate::ast::LiteralValue::Null, ASTNode::Literal { value: crate::ast::LiteralValue::Null, span: Span::unknown() })],
+                    else_expr: Box::new(access),
+                    span: Span::unknown(),
+                };
+
             } else if self.match_token(&TokenType::LPAREN) {
                 // 関数呼び出し: function(args) または 一般式呼び出し: (callee)(args)
                 self.advance(); // consume '('

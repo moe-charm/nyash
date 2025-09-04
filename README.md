@@ -13,6 +13,8 @@
 
 ---
 
+Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
+
 ## 🎮 **Try Nyash in Your Browser Right Now!**
 
 👉 **[Launch Browser Playground](projects/nyash-wasm/nyash_playground.html)** 👈

@@ -1,0 +1,11 @@
+# Round-trip triad: Compound Assign
+
+# Before (sugar)
+i += 1
+
+# Canonical
+# i = i + 1
+
+# Round-Trip (expected)
+# i += 1
+

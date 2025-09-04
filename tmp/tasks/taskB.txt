@@ -1,0 +1,35 @@
+Phase12.7-B: parser/apply_sugar + tests + smoke (basic sugar)
+
+Goal: Implement parser-side basic desugaring gated by SugarConfig.level=basic, with unit tests. Do not change runtime semantics unless applied.
+
+Scope:
+1) New module: src/parser/sugar.rs
+   - pub enum SugarLevel { None, Basic, Full }
+   - pub struct SugarConfig { level: SugarLevel }
+   - pub fn apply_sugar(ast: ASTNode, cfg: &SugarConfig) -> ASTNode
+   - Implement transformations when cfg.level is Basic:
+     a) Pipeline x |> f(a,b) => f(x,a,b); x |> obj.m(a) => obj.m(x,a)
+     b) Safe access a?.b => (tmp=a; tmp==nil ? nil : tmp.b)
+     c) Default x ?? y => (x is nil ? y : x)
+     d) Compound assign a += b => a = a + b (and -=,*=,/=)
+     e) Range a .. b => Range(a,b) call (temporary function form)
+   - Keep transformations local and reversible; do not touch name resolution/type.
+
+2) Wire-in (non-invasive):
+   - Add a helper entry fn parse_with_sugar_level(code: &str, level: SugarLevel) that does parse → apply_sugar.
+   - Do not alter existing NyashParser::parse_from_string callers yet.
+
+3) Tests: src/tests/sugar_basic_test.rs
+   - Parse code snippets and assert desugared AST via a simple pretty-printer or pattern-matching key nodes.
+   - Cases: pipeline, safe access chain, default-null, compound-assign, range.
+
+4) Tools: tools/smoke_vm_jit.sh
+   - If NYASH_SYNTAX_SUGAR_LEVEL is set, echo it before runs for visibility (no behavior change required).
+
+Constraints:
+- Avoid editing src/tokenizer.rs or nyash.toml parsing to prevent conflicts with Job A.
+- Keep build green with cargo test (unit tests only).
+
+Acceptance:
+- cargo test passes for sugar_basic_test.
+- parse_with_sugar_level applies transformations only at Basic level; None leaves AST unchanged.

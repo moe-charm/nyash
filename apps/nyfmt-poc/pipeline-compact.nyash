@@ -1,0 +1,8 @@
+# PoC example: pipeline style vs canonical nesting
+
+# Target sugar (not yet parsed by runtime):
+# result = data |> normalize |> transform |> process
+
+# Canonical form (current Nyash):
+local result = process(transform(normalize(data)))
+

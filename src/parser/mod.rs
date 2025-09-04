@@ -22,6 +22,9 @@ mod expressions;
 mod statements;
 mod declarations;
 mod items;
+pub mod sugar; // Phase 12.7-B: desugar pass (basic)
+pub mod entry_sugar; // helper to parse with sugar level
+pub mod sugar_gate; // thread-local gate for sugar parsing (tests/docs)
 // mod errors;
 
 use common::ParserUtils;
@@ -29,6 +32,9 @@ use common::ParserUtils;
 use crate::tokenizer::{Token, TokenType, TokenizeError};
 use crate::ast::{ASTNode, Span};
 use thiserror::Error;
+
+#[inline]
+fn is_sugar_enabled() -> bool { crate::parser::sugar_gate::is_enabled() }
 
 // ===== 🔥 Debug Macros =====
 
@@ -197,7 +203,7 @@ impl NyashParser {
         // まず左辺を式としてパース
         let expr = self.parse_expression()?;
         
-        // 次のトークンが = なら代入文
+        // 次のトークンが = または 複合代入演算子 なら代入文
         if self.match_token(&TokenType::ASSIGN) {
             self.advance(); // consume '='
             let value = Box::new(self.parse_expression()?);
@@ -211,6 +217,40 @@ impl NyashParser {
                         value,
                         span: Span::unknown(),
                     })
+                }
+                _ => {
+                    let line = self.current_token().line;
+                    Err(ParseError::InvalidStatement { line })
+                }
+            }
+        } else if self.match_token(&TokenType::PLUS_ASSIGN) ||
+                  self.match_token(&TokenType::MINUS_ASSIGN) ||
+                  self.match_token(&TokenType::MUL_ASSIGN) ||
+                  self.match_token(&TokenType::DIV_ASSIGN) {
+            if !is_sugar_enabled() {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full for '+=' and friends".to_string(),
+                    line,
+                });
+            }
+            // determine operator
+            let op = match &self.current_token().token_type {
+                TokenType::PLUS_ASSIGN => crate::ast::BinaryOperator::Add,
+                TokenType::MINUS_ASSIGN => crate::ast::BinaryOperator::Subtract,
+                TokenType::MUL_ASSIGN => crate::ast::BinaryOperator::Multiply,
+                TokenType::DIV_ASSIGN => crate::ast::BinaryOperator::Divide,
+                _ => unreachable!(),
+            };
+            self.advance(); // consume 'op='
+            let rhs = self.parse_expression()?;
+            // 左辺が代入可能な形式かチェック
+            match &expr {
+                ASTNode::Variable { .. } | ASTNode::FieldAccess { .. } => {
+                    let left_clone = expr.clone();
+                    let value = ASTNode::BinaryOp { operator: op, left: Box::new(left_clone), right: Box::new(rhs), span: Span::unknown() };
+                    Ok(ASTNode::Assignment { target: Box::new(expr), value: Box::new(value), span: Span::unknown() })
                 }
                 _ => {
                     let line = self.current_token().line;

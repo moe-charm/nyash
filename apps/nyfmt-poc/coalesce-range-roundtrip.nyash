@@ -1,0 +1,14 @@
+# Round-trip triad: Default (??) + Range (a..b)
+
+# Before (sugar)
+user_name = user?.profile?.name ?? "guest"
+nums = 1 .. 5
+
+# Canonical
+# user_name = peek user { null => null, else => peek user.profile { null => null, else => user.profile.name } }
+# nums = Range(1, 5)
+
+# Round-Trip (expected)
+# user_name = user?.profile?.name ?? "guest"
+# nums = 1 .. 5
+

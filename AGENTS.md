@@ -41,7 +41,7 @@
 ## Codex Async Workflow (Background Jobs)
 - Purpose: run Codex tasks in the background and notify a tmux session on completion.
 - Script: `tools/codex-async-notify.sh`
-- Defaults: posts to tmux session `claude`; logs to `~/.codex-async-work/logs/`.
+- Defaults: posts to tmux session `codex` (override with env `CODEX_DEFAULT_SESSION` or 2nd arg); logs to `~/.codex-async-work/logs/`.
 
 Usage
 - Quick run (sync output on terminal):

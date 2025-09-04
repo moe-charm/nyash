@@ -75,7 +75,12 @@ count_running() {
   esac
 }
 
-RUNNING=$(count_running)
+RUNNING_RAW=$(count_running)
+# Sanitize: take first line, strip spaces, ensure numeric
+RUNNING=$(printf "%s" "$RUNNING_RAW" | head -n1 | tr -d '[:space:]')
+case "$RUNNING" in
+  ''|*[!0-9]*) RUNNING=0 ;;
+esac
 echo "[keep-two] 実際のcodexプロセス数: ${RUNNING}"
 NEED=$((2 - RUNNING))
 if [ $NEED -le 0 ]; then

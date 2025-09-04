@@ -1,0 +1,10 @@
+// Minimal Nyash smoke: print and exit
+static box Main {
+    init { console }
+    main(args) {
+        me.console = new ConsoleBox()
+        me.console.log("smoke-ok")
+        return 0
+    }
+}
+

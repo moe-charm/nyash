@@ -629,40 +629,27 @@ me.field                   # self参照はmeのみ
 
 ---
 
-## 📌 **8. 今後実装予定の糖衣構文（Phase 12.7-B）**
+## 📌 **8. 糖衣構文（Phase 12.7-B）**
 
-### **パイプライン演算子（|>）**
+### 実装済み（ゲート: `NYASH_SYNTAX_SUGAR_LEVEL=basic|full`）
 ```nyash
-# 予定構文
-result = data |> normalize |> transform |> process
+# パイプライン
+result = data |> normalize() |> transform() |> process
 
-# 現在の書き方
-result = process(transform(normalize(data)))
-```
-
-### **セーフアクセス演算子（?.）とデフォルト値（??）**
-```nyash
-# 予定構文
+# セーフアクセス + デフォルト
 name = user?.profile?.name ?? "guest"
 
-# 現在の書き方
-local name
-if user != null and user.profile != null {
-    name = user.profile.name
-} else {
-    name = "guest"
-}
+# 複合代入
+x += 1; y *= 2
+
+# 範囲（内部的には Range(a,b)）
+loop(i in 1 .. 5) { /* ... */ }
 ```
 
-### **デストラクチャリング**
+### 拡張（段階適用予定・設計済み）
 ```nyash
-# 予定構文
 let {x, y} = point
 let [first, second, ...rest] = array
-
-# 現在の書き方
-local x = point.x
-local y = point.y
 ```
 
 ---

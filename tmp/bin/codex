@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Dummy codex shim: supports `codex exec <task...>` and simulates work.
+if [[ "$1" != "exec" ]]; then
+  echo "codex: unknown command: $1" >&2
+  exit 2
+fi
+shift
+TASK="$*"
+echo "[codex dummy] starting exec: $TASK"
+for i in {1..5}; do
+  echo "[codex dummy] ($$) tick $i: $TASK"
+  sleep 1
+done
+echo "[codex dummy] done: $TASK"
+exit 0

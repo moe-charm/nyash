@@ -13,6 +13,10 @@
 
 ---
 
+開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
+
+変更履歴（要点）: `CHANGELOG.md`
+
 ## 🎮 **今すぐブラウザでNyashを試そう！**
 
 👉 **[ブラウザプレイグラウンドを起動](projects/nyash-wasm/nyash_playground.html)** 👈

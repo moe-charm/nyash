@@ -1,0 +1,43 @@
+Phase 12.7-B 基本糖衣構文・最小導入 予定
+
+目的
+- セルフホスティング前に、安全な最小糖衣（basic）を段階導入。
+- 挙動は正規ASTへ正規化してから既存パイプラインに渡す（可逆前提）。
+
+範囲（basic 初期スコープ）
+- 追加トークン: `|>`, `?.`, `??`, `+=`, `-=`, `*=`, `/=`, `..`
+- 正規化ルール:
+  - `x |> f` → `f(x)`
+  - `x?.y` → `tmp=x; tmp!=null ? tmp.y : null`
+  - `x ?? y` → `x!=null ? x : y`
+  - `a += b` 等 → `a = a + b` 等
+  - `a..b` → Range（ArrayBox生成）に正規化（最小仕様）
+- 高階演算子（`/:`, `\:`, `//`）は衝突回避のため当面見送り
+
+実装タスク（Week 1）
+1) tokenizer: 2文字演算子を長い順優先で追加（`??`, `?.`, `|>`, `+=`, …, `..`）
+2) parser/sugar.rs: `apply_sugar(ast, &SugarConfig)` の骨組み＋上記4種の正規化
+3) config: `nyash.toml [syntax] sugar_level=none|basic|full` 読み込み→`SugarConfig`
+4) パーサ統合: `NyashParser` → 生成後に `apply_sugar` を呼ぶ（basicのみON）
+5) テスト: `tests/sugar_basic_test.rs` と `tools/smoke_vm_jit.sh` に `NYASH_SYNTAX_SUGAR_LEVEL=basic`
+6) ドキュメント: phase-12.7 README に basic 実装済みの注記
+
+実装タスク（Week 2）
+7) 分割代入（最小）: Map/Array への展開のみ、正規ASTへ分解
+8) ラベル付き引数: ひとまず MapBox 経由へ正規化（将来のキーワード引数に備える）
+9) ANCP トランスコーダ（別ツール）雛形: encode/decode、文字列/コメント保護、位置マッピング
+
+安全策
+- 既定: `sugar_level=none`（明示のみ）。開発では `basic` を個別ON。
+- 可逆性: `SpanMapping` を保持（エラー位置を元コードへ戻す）
+- E2E 影響なし: 正規ASTに落としてから既存実装へ渡す
+
+完了条件（basic）
+- `|>`, `?.`, `??`, 複合代入、`..` の正規化が安定
+- ON/OFF で `tools/smoke_vm_jit.sh` が通過
+- sugar 基本テストが通る（正規実行結果が一致）
+
+注意
+- `//` はコメントと衝突するため、初期スコープでは採用しない
+- パイプラインのメソッド呼出し規約（`data |> me.f` など）はドキュメントで明示
+

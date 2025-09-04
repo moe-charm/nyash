@@ -62,6 +62,7 @@ pub mod runner_plugin_init;
 pub mod debug;
 // Unified Grammar (Phase 11.9 scaffolding)
 pub mod grammar;
+pub mod syntax; // Phase 12.7: syntax sugar config and helpers
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;

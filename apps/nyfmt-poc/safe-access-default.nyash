@@ -1,0 +1,13 @@
+# PoC example: safe access and default value
+
+# Target sugar (not yet parsed by runtime):
+# name = user?.profile?.name ?? "guest"
+
+# Canonical form (current Nyash):
+local name
+if user != null and user.profile != null {
+    name = user.profile.name
+} else {
+    name = "guest"
+}
+

@@ -58,6 +58,7 @@ pub mod config;
 pub mod runtime;
 pub mod debug;
 pub mod grammar; // Phase 11.9 unified grammar scaffolding
+pub mod syntax;  // Phase 12.7: syntax sugar config and helpers (mirror lib layout)
 
 use nyash_rust::cli::CliConfig;
 use nyash_rust::config::env as env_config;

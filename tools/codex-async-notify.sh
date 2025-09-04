@@ -9,13 +9,14 @@ if [ $# -eq 0 ]; then
     echo "  $0 'Write paper introduction' gemini-session"
     echo "  $0 'Review code quality' chatgpt"
     echo ""
-    echo "Default tmux session: claude"
+    echo "Default tmux session: codex (override with CODEX_DEFAULT_SESSION env or 2nd arg)"
     exit 1
 fi
 
 # 引数解析
 TASK="$1"
-TARGET_SESSION="${2:-claude}"  # デフォルトは "claude"
+# 既定tmuxセッション: 引数 > 環境変数 > 既定値(codex)
+TARGET_SESSION="${2:-${CODEX_DEFAULT_SESSION:-codex}}"
 # 通知用ウィンドウ名（既定: codex-notify）。存在しなければ作成する
 NOTIFY_WINDOW_NAME="${CODEX_NOTIFY_WINDOW:-codex-notify}"
 
@@ -223,6 +224,14 @@ run_codex_async() {
 
         # 通知内容を一時ファイルに組み立て（空行も保持）
         TASK_ONELINE=$(echo "$TASK" | tr '\n' ' ' | sed 's/  */ /g')
+        # オプション: タスク表示の抑制/トリム
+        INCLUDE_TASK=${CODEX_NOTIFY_INCLUDE_TASK:-1}
+        TASK_MAXLEN=${CODEX_TASK_MAXLEN:-200}
+        if [ "$TASK_MAXLEN" -gt 0 ] 2>/dev/null; then
+          if [ "${#TASK_ONELINE}" -gt "$TASK_MAXLEN" ]; then
+            TASK_ONELINE="${TASK_ONELINE:0:$TASK_MAXLEN}…"
+          fi
+        fi
         NOTIFY_FILE="$WORK_DIR/notify-${WORK_ID}.tmp"
         if [ "$MINIMAL" = "1" ]; then
             {
@@ -231,6 +240,9 @@ run_codex_async() {
                 echo "# Work ID: $WORK_ID"
                 echo "# Status: $([ $EXIT_CODE -eq 0 ] && echo '✅ Success' || echo '❌ Failed')"
                 echo "# Log: $LOG_FILE"
+                if [ "$INCLUDE_TASK" = "1" ]; then
+                  echo "# Task: $TASK_ONELINE"
+                fi
                 echo ""
             } > "$NOTIFY_FILE"
         else
@@ -238,13 +250,17 @@ run_codex_async() {
                 echo ""
                 echo "# 🤖 Codex作業完了通知 [$(date +%H:%M:%S)]"
                 echo "# Work ID: $WORK_ID"
-                echo "# Task: $TASK_ONELINE"
+                if [ "$INCLUDE_TASK" = "1" ]; then
+                  echo "# Task: $TASK_ONELINE"
+                fi
                 echo "# Status: $([ $EXIT_CODE -eq 0 ] && echo '✅ Success' || echo '❌ Failed')"
                 echo "# Duration: ${DURATION}秒"
                 echo "# Log: $LOG_FILE"
-                echo "# === 最後の出力 (tail -n ${TAIL_N}) ==="
-                tail -n "$TAIL_N" "$LOG_FILE" | sed -e 's/^/# > /'
-                echo "# =================="
+                if [ "${TAIL_N:-0}" -gt 0 ] 2>/dev/null; then
+                  echo "# === 最後の出力 (tail -n ${TAIL_N}) ==="
+                  tail -n "$TAIL_N" "$LOG_FILE" | sed -e 's/^/# > /'
+                  echo "# =================="
+                fi
                 echo ""
             } > "$NOTIFY_FILE"
         fi
@@ -262,21 +278,64 @@ run_codex_async() {
               echo "# Work ID: $WORK_ID"
               echo "# Status: $STATUS_MARK"
               echo "# Log: $LOG_FILE"
-              echo "# Task: $TASK_ONELINE — まだタスクがあれば次のタスクお願いします"
+              echo "# Task: $TASK_ONELINE — まだタスクがあれば次のタスクお願いします。下の箱を積み過ぎないように先に進んでください。フェーズが終わったと判断したら止まってください。"
               echo ""
             } > "$CHAT_FILE"
             # アクティブペインを取得
             TARGET_PANE=$(tmux list-panes -t "$TARGET_SESSION" -F '#{pane_id} #{pane_active}' 2>/dev/null | awk '$2=="1"{print $1; exit}')
             [ -z "$TARGET_PANE" ] && TARGET_PANE="$TARGET_SESSION"
             BUF_NAME="codex-chat-$WORK_ID"
-            tmux load-buffer -b "$BUF_NAME" "$CHAT_FILE" 2>/dev/null || true
-            tmux paste-buffer -b "$BUF_NAME" -t "$TARGET_PANE" 2>/dev/null || true
-            tmux delete-buffer -b "$BUF_NAME" 2>/dev/null || true
-            # Small delay to ensure paste completes before sending Enter
-            sleep 0.2
-            tmux send-keys -t "$TARGET_PANE" C-m 2>/dev/null || true
-            sleep 0.05
-            tmux send-keys -t "$TARGET_PANE" C-m 2>/dev/null || true
+            # Default to chunk mode (約5行ずつ貼り付け) to avoid long-paste Enter glitches
+            SEND_MODE=${CODEX_NOTIFY_MODE:-chunk}    # buffer | line | chunk
+            SEND_ENTER=${CODEX_NOTIFY_SEND_ENTER:-1} # 1: send Enter, 0: don't
+            if [ "$SEND_MODE" = "line" ]; then
+              # 行モード: 1行ずつ送る（長文での貼り付け崩れを回避）
+              while IFS= read -r line || [ -n "$line" ]; do
+                tmux send-keys -t "$TARGET_PANE" -l "$line" 2>/dev/null || true
+                tmux send-keys -t "$TARGET_PANE" C-m 2>/dev/null || true
+              done < "$CHAT_FILE"
+              if [ "$SEND_ENTER" != "1" ]; then
+                : # すでに各行でEnter送信済みだが、不要なら将来的に調整可
+              fi
+            elif [ "$SEND_MODE" = "chunk" ]; then
+              # チャンクモード: N行ずつまとめて貼ってEnter（既定5行）
+              CHUNK_N=${CODEX_NOTIFY_CHUNK:-5}
+              [ "${CHUNK_N:-0}" -gt 0 ] 2>/dev/null || CHUNK_N=5
+              CHUNK_FILE="$WORK_DIR/notify-chunk-${WORK_ID}.tmp"
+              : > "$CHUNK_FILE"
+              count=0
+              while IFS= read -r line || [ -n "$line" ]; do
+                printf '%s\n' "$line" >> "$CHUNK_FILE"
+                count=$((count+1))
+                if [ "$count" -ge "$CHUNK_N" ]; then
+                  tmux load-buffer -b "$BUF_NAME" "$CHUNK_FILE" 2>/dev/null || true
+                  tmux paste-buffer -b "$BUF_NAME" -t "$TARGET_PANE" 2>/dev/null || true
+                  : > "$CHUNK_FILE"; count=0
+                  if [ "$SEND_ENTER" = "1" ]; then
+                    tmux send-keys -t "$TARGET_PANE" C-m 2>/dev/null || true
+                  fi
+                fi
+              done < "$CHAT_FILE"
+              # 余りを送る
+              if [ -s "$CHUNK_FILE" ]; then
+                tmux load-buffer -b "$BUF_NAME" "$CHUNK_FILE" 2>/dev/null || true
+                tmux paste-buffer -b "$BUF_NAME" -t "$TARGET_PANE" 2>/dev/null || true
+                if [ "$SEND_ENTER" = "1" ]; then
+                  tmux send-keys -t "$TARGET_PANE" C-m 2>/dev/null || true
+                fi
+              fi
+              rm -f "$CHUNK_FILE" 2>/dev/null || true
+            else
+              # 既定: バッファ貼り付け
+              tmux load-buffer -b "$BUF_NAME" "$CHAT_FILE" 2>/dev/null || true
+              tmux paste-buffer -b "$BUF_NAME" -t "$TARGET_PANE" 2>/dev/null || true
+              tmux delete-buffer -b "$BUF_NAME" 2>/dev/null || true
+              # Small delay to ensure paste completes before sending Enter
+              if [ "$SEND_ENTER" = "1" ]; then
+                sleep 0.15
+                tmux send-keys -t "$TARGET_PANE" C-m 2>/dev/null || true
+              fi
+            fi
             rm -f "$NOTIFY_FILE" "$CHAT_FILE" 2>/dev/null || true
         else
             echo "⚠️  Target tmux session '$TARGET_SESSION' not found"

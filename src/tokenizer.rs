@@ -66,6 +66,15 @@ pub enum TokenType {
     GreaterEquals,   // >=
     AND,             // && または and
     OR,              // || または or
+    // Phase 12.7-B 基本糖衣: 2文字演算子（最長一致優先）
+    PIPE_FORWARD,    // |>
+    QMARK_DOT,       // ?.
+    QMARK_QMARK,     // ??
+    PLUS_ASSIGN,     // +=
+    MINUS_ASSIGN,    // -=
+    MUL_ASSIGN,      // *=
+    DIV_ASSIGN,      // /=
+    RANGE,           // ..
     LESS,            // <
     GREATER,         // >
     ASSIGN,          // =
@@ -172,6 +181,47 @@ impl NyashTokenizer {
         let start_column = self.column;
         
         match self.current_char() {
+            // 2文字（またはそれ以上）の演算子は最長一致で先に判定
+            Some('|') if self.peek_char() == Some('>') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::PIPE_FORWARD, start_line, start_column));
+            }
+            Some('?') if self.peek_char() == Some('.') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::QMARK_DOT, start_line, start_column));
+            }
+            Some('?') if self.peek_char() == Some('?') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::QMARK_QMARK, start_line, start_column));
+            }
+            Some('+') if self.peek_char() == Some('=') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::PLUS_ASSIGN, start_line, start_column));
+            }
+            Some('-') if self.peek_char() == Some('=') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::MINUS_ASSIGN, start_line, start_column));
+            }
+            Some('*') if self.peek_char() == Some('=') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::MUL_ASSIGN, start_line, start_column));
+            }
+            Some('/') if self.peek_char() == Some('=') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::DIV_ASSIGN, start_line, start_column));
+            }
+            Some('.') if self.peek_char() == Some('.') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::RANGE, start_line, start_column));
+            }
             Some('"') => {
                 let string_value = self.read_string()?;
                 Ok(Token::new(TokenType::STRING(string_value), start_line, start_column))
@@ -680,5 +730,35 @@ value"#;
             }
             _ => panic!("Expected UnexpectedCharacter error"),
         }
+    }
+
+    #[test]
+    fn test_basic_sugar_tokens() {
+        let mut t = NyashTokenizer::new("a|>f ? . ?.? a ?? b += -= *= /= ..");
+        // 注意: 空白や不正な並びを含むため、演算子の連続出現を個別で確認
+        // 分かりやすく固めたケース
+        let mut t2 = NyashTokenizer::new("|> ?.? ?? += -= *= /= ..");
+        let toks = t2.tokenize().unwrap();
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::PIPE_FORWARD)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::QMARK_DOT)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::QMARK_QMARK)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::PLUS_ASSIGN)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::MINUS_ASSIGN)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::MUL_ASSIGN)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::DIV_ASSIGN)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::RANGE)));
+    }
+
+    #[test]
+    fn test_longest_match_sequences() {
+        // '??' は '?' より優先、'?.' は '.' より優先、'..' は '.' より優先
+        let mut t = NyashTokenizer::new("?? ? ?. .. .");
+        let toks = t.tokenize().unwrap();
+        let kinds: Vec<&TokenType> = toks.iter().map(|k| &k.token_type).collect();
+        assert!(matches!(kinds[0], TokenType::QMARK_QMARK));
+        assert!(matches!(kinds[1], TokenType::QUESTION));
+        assert!(matches!(kinds[2], TokenType::QMARK_DOT));
+        assert!(matches!(kinds[3], TokenType::RANGE));
+        assert!(matches!(kinds[4], TokenType::DOT));
     }
 }
