@@ -5,6 +5,7 @@
 
 use std::sync::{Arc, RwLock};
 use once_cell::sync::Lazy;
+use std::cell::Cell;
 
 use crate::bid::{BidError, BidResult};
 use crate::config::nyash_toml_v2::NyashConfigV2;
@@ -102,8 +103,22 @@ impl PluginHost {
         instance_id: u32,
         args: &[Box<dyn crate::box_trait::NyashBox>],
     ) -> BidResult<Option<Box<dyn crate::box_trait::NyashBox>>> {
-        let l = self.loader.read().unwrap();
-        l.invoke_instance_method(box_type, method_name, instance_id, args)
+        thread_local! { static HOST_REENTRANT: Cell<bool> = Cell::new(false); }
+        let recursed = HOST_REENTRANT.with(|f| f.get());
+        if recursed {
+            // Break potential host<->loader recursion: return None (void) to keep VM running
+            return Ok(None);
+        }
+        let out = HOST_REENTRANT.with(|f| {
+            f.set(true);
+            let res = {
+                let l = self.loader.read().unwrap();
+                l.invoke_instance_method(box_type, method_name, instance_id, args)
+            };
+            f.set(false);
+            res
+        });
+        out
     }
 
     /// Check if a method returns Result (Ok/Err) per plugin spec or central config.

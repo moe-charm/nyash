@@ -2,7 +2,6 @@ use super::types::{PluginBoxV2, PluginHandleInner, NyashTypeBoxFfi, LoadedPlugin
 use crate::bid::{BidResult, BidError};
 use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox};
 use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -66,8 +65,8 @@ impl PluginLoaderV2 {
     fn prebirth_singletons(&self) -> BidResult<()> {
         let config = self.config.as_ref().ok_or(BidError::PluginError)?;
         let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
-        let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
-        let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
+        let toml_content = super::errors::from_fs(std::fs::read_to_string(cfg_path))?;
+        let toml_value: toml::Value = super::errors::from_toml(toml::from_str(&toml_content))?;
         for (lib_name, lib_def) in &config.libraries {
             for box_name in &lib_def.boxes {
                 if let Some(bc) = config.get_box_config(lib_name, box_name, &toml_value) { if bc.singleton { let _ = self.ensure_singleton_handle(lib_name, box_name); } }
@@ -88,7 +87,8 @@ impl PluginLoaderV2 {
     pub fn construct_existing_instance(&self, type_id: u32, instance_id: u32) -> Option<Box<dyn NyashBox>> {
         let config = self.config.as_ref()?;
         let cfg_path = self.config_path.as_ref()?;
-        let toml_value: toml::Value = toml::from_str(&std::fs::read_to_string(cfg_path).ok()?).ok()?;
+        let toml_str = std::fs::read_to_string(cfg_path).ok()?;
+        let toml_value: toml::Value = toml::from_str(&toml_str).ok()?;
         let (lib_name, box_type) = self.find_box_by_type_id(config, &toml_value, type_id)?;
         let plugins = self.plugins.read().ok()?;
         let plugin = plugins.get(lib_name)?.clone();
@@ -114,7 +114,8 @@ impl PluginLoaderV2 {
         let mut out = vec![0u8; 1024];
         let mut out_len = out.len();
         let tlv_args = crate::runtime::plugin_ffi_common::encode_empty_args();
-        let birth_result = unsafe { (plugin.invoke_fn)(type_id, 0, 0, tlv_args.as_ptr(), tlv_args.len(), out.as_mut_ptr(), &mut out_len) };
+        let (birth_result, _len, out_vec) = super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, 0, 0, &tlv_args);
+        let out = out_vec;
         if birth_result != 0 || out_len < 4 { return Err(BidError::PluginError); }
         let instance_id = u32::from_le_bytes([out[0], out[1], out[2], out[3]]);
         let fini_id = if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.to_string(), box_type.to_string())) { spec.fini_method_id } else { let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?; box_conf.methods.get("fini").map(|m| m.method_id) };
@@ -141,7 +142,7 @@ impl PluginLoaderV2 {
     fn resolve_method_id_from_file(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
         let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
         let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
-        let toml_value: toml::Value = toml::from_str(&std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?).map_err(|_| BidError::PluginError)?;
+        let toml_value: toml::Value = super::errors::from_toml(toml::from_str(&std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?))?;
         if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
             if let Some(bc) = cfg.get_box_config(&lib_name, box_type, &toml_value) { if let Some(m) = bc.methods.get(method_name) { return Ok(m.method_id); } }
         }
@@ -161,11 +162,54 @@ impl PluginLoaderV2 {
         false
     }
 
+    /// Resolve (type_id, method_id, returns_result) for a box_type.method
+    pub fn resolve_method_handle(&self, box_type: &str, method_name: &str) -> BidResult<(u32, u32, bool)> {
+        let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
+        let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+        let toml_value: toml::Value = toml::from_str(&std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?).map_err(|_| BidError::PluginError)?;
+        let (lib_name, _) = cfg.find_library_for_box(box_type).ok_or(BidError::InvalidType)?;
+        let bc = cfg.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+        let m = bc.methods.get(method_name).ok_or(BidError::InvalidMethod)?;
+        Ok((bc.type_id, m.method_id, m.returns_result))
+    }
+
     pub fn invoke_instance_method(&self, box_type: &str, method_name: &str, instance_id: u32, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
-        // Delegates to plugin_loader_unified in practice; keep minimal compatibility bridge for v2
-        let host = crate::runtime::get_global_plugin_host();
-        let host = host.read().map_err(|_| BidError::PluginError)?;
-        host.invoke_instance_method(box_type, method_name, instance_id, args)
+        // Non-recursive direct bridge for minimal methods used by semantics and basic VM paths
+        // Resolve library/type/method ids from cached config
+        let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
+        let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+        let toml_value: toml::Value = toml::from_str(&std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?).map_err(|_| BidError::PluginError)?;
+        let (lib_name, _lib_def) = cfg.find_library_for_box(box_type).ok_or(BidError::InvalidType)?;
+        let box_conf = cfg.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
+        let type_id = box_conf.type_id;
+        let method = box_conf.methods.get(method_name).ok_or(BidError::InvalidMethod)?;
+        // Get plugin handle
+        let plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
+        let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+        // Encode minimal TLV args (support only 0-arity inline)
+        if !args.is_empty() { return Err(BidError::PluginError); }
+        let tlv: [u8; 0] = [];
+        let (_code, out_len, out) = super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, method.method_id, instance_id, &tlv);
+        // Minimal decoding by method name
+        match method_name {
+            // Expect UTF-8 string result in bytes → StringBox
+            "toUtf8" | "toString" => {
+                let s = String::from_utf8_lossy(&out[0..out_len]).to_string();
+                return Ok(Some(Box::new(crate::box_trait::StringBox::new(s))));
+            }
+            // Expect IntegerBox via little-endian i64 in first 8 bytes
+            "get" => {
+                if out_len >= 8 { let mut buf=[0u8;8]; buf.copy_from_slice(&out[0..8]); let n=i64::from_le_bytes(buf); return Ok(Some(Box::new(crate::box_trait::IntegerBox::new(n)))) }
+                return Ok(Some(Box::new(crate::box_trait::IntegerBox::new(0))));
+            }
+            // Float path (approx): read 8 bytes as f64 and Box as FloatBox
+            "toDouble" => {
+                if out_len >= 8 { let mut buf=[0u8;8]; buf.copy_from_slice(&out[0..8]); let x=f64::from_le_bytes(buf); return Ok(Some(Box::new(crate::boxes::FloatBox::new(x)))) }
+                return Ok(Some(Box::new(crate::boxes::FloatBox::new(0.0))));
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 
     pub fn create_box(&self, box_type: &str, _args: &[Box<dyn NyashBox>]) -> BidResult<Box<dyn NyashBox>> {

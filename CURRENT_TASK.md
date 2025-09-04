@@ -9,7 +9,7 @@
 - 目的: ユーザー/プラグイン/内蔵を TypeBox+VTable で統一し、VM/JIT/WASM の同一実行を実現。
 - 現状: Phase 12 完了（JIT/VM FunctionBox 呼び出し統一、Lambda→FunctionBox 値化、最小Builtin方針）。WASM v2 最小ディスパッチ導入。
 
-次フェーズ: リファクタリング（Phase 13）開始
+次フェーズ: MIR統一 + リファクタリング（Phase 11.8/13）
 - 目標: 1ファイル1000行以内を目安に分割・整理。他AI/将来タスクが読みやすい構造へ。
 - 制約: 挙動不変・公開API維持・段階的分割＋逐次ビルド/テスト。
 
@@ -49,15 +49,53 @@ Compact Snapshot（2025‑09‑03/Finalize）
 
 
 ## 次タスク（優先順）
+- フェーズM（MIR Core‑13 統一・挙動不変）
+  - M1) Core‑13 を既定ON（nyash.toml [env] 推奨: NYASH_MIR_CORE13=1, NYASH_OPT_DIAG_FORBID_LEGACY=1）
+  - M2) BuilderをCore‑13準拠に調整（ArrayGet/Set・RefGet/Set・PluginInvokeをemitしない。BoxCallへ正規化）
+  - M3) OptimizerでUnary→BinOpを常時変換、Load/StoreのSSA置換（最終MIRから旧命令を排除）
+  - M4) Core‑13検証を追加（最終MIRに旧命令が存在したらエラー）
+  - M5) VM/JIT/AOTのBoxCall fast‑path/vtable維持（setはBarrier必須）
 - フェーズA（安全分割・挙動不変）
   - A1) vm_instructions を 10前後のモジュールへ分割（consts/arith/compare/flow/call/boxcall/array/refs/future/newbox/print_debug）
+    - 現状: `src/backend/vm_instructions/{core,call,newbox,function_new,extern_call,boxcall,plugin_invoke}.rs` に分割済み
   - A2) plugin_loader_v2 を 4〜5ファイルへ分割（ffi_tlv/registry/host_bridge/loader/errors）
   - A3) vm を 3〜4ファイルへ分割（state/exec/gc/format）
 - フェーズB（読みやすさ整形）
   - B1) mir/builder の expr系切り出し
-  - B2) interpreter/plugin_loader の役割分離
+ - B2) interpreter/plugin_loader の役割分離
 - フェーズC（軽整理）
   - 命名/コメント整備、公開API re-export、1000行未満へ微調整
+
+## 次のゴール（Phase W — Windows JIT(EXE) × Egui 起動）
+目的: Windows 上で Cranelift JIT（必要に応じ EXE ラッパ）で Egui ウィンドウを起動する最小スモークを確立。成功の再現性を高め、論文化に向けて手順を固定。
+
+推奨タスク（開いたら一発で着手できる指示）
+- W1) 準備（Windows）
+  - `cargo build --release --features cranelift-jit`
+  - Egui プラグイン DLL をビルド（`plugins/nyash-egui-plugin`）し、`nyash.toml` の `[plugins]/[libraries]` と検索パスが DLL 配置と一致しているか確認。
+  - 必要なら PATH 追加または `nyash.toml [plugin_paths]` に DLL ディレクトリを追記。
+- W2) 最小アプリ（例: apps/ny-egui-hello/main.nyash）
+  - `open(width,height,title)` → `uiLabel("Hello, Nyash Egui")` → `run()` の極小シナリオを用意。
+  - 実行: `.
+    target\release\nyash --backend jit apps\ny-egui-hello\main.nyash`
+- W3) HostBridge 推奨トグル（任意）
+  - `NYASH_JIT_HOST_BRIDGE=1`（JIT から HostBridge を優先利用。BoxCall→HostCall/Bridge を強制）
+  - `NYASH_USE_PLUGIN_BUILTINS=0`（HostCall 優先の確認時に推奨）
+- W4) スモークスクリプト化（PowerShell）
+  - `tools/egui_win_smoke.ps1` を追加: ビルド→PATH 調整→実行までを一括化（再現性向上）。
+- W5) 追加JITスモーク（Core‑13 準拠）
+  - Instance: `getField/setField` の往復（HostBridge 経由）
+  - Extern: `console.log` の起動（ログ確認）
+
+判定条件（Done）
+- Windows で Egui ウィンドウが起動（タイトル/ラベル表示確認）
+- PowerShell スクリプトでワンコマンド起動が再現（DLL 探索含め手戻りゼロ）
+- Core‑13 JIT スモーク（Array/Map/Instance/Extern）の最小セットが緑
+
+参考メモ（現状の統一状況）
+- Core‑13 は Builder→Optimizer→Compiler の三段ガードで旧命令ゼロを強制（最終MIR厳格チェックも導入済み）。
+- JIT の BoxCall fast‑path は HostCall 優先に整理（PluginInvoke は保険/フォールバック）。
+- vtable スタブは Map/String/Array/Console をヘルパ化済み（挙動不変・Barrier維持）。
 
 ## 完了（Done）
 - TypeBox ABI 雛形: `src/runtime/type_box_abi.rs`
@@ -132,9 +170,10 @@ Compact Snapshot（2025‑09‑03/Finalize）
 注記: 公開APIは維持。各段階ごとに `cargo build` と限定ユニットで確認して進める。
 
 ## 残タスク（To‑Do）
-1) リファクタフェーズA/B/C 実施（段階コミット＋スモーク）
-2) ドキュメント更新（開発者向け構成図・分割指針・API安定ポリシー）
-3) LLVM（本実装）は低優先：Call シム import/Lower の設計だけ先に下書き
+1) MIR Core‑13 統一（M1〜M5）＋ スモーク修正
+2) リファクタフェーズA/B/C 実施（段階コミット＋スモーク）
+3) ドキュメント更新（Phase 11.8 の README/PLAN/TECHNICAL_SPEC と CIポリシー）
+4) LLVM（本実装）は低優先：BoxCall シムのinlining設計だけ先行
 
 ## 実行コマンド（サマリ）
 - ビルド: `cargo build --release --features cranelift-jit`
@@ -189,6 +228,12 @@ Phase 12 ゴール（検証観点）
       - `src/interpreter/plugin_loader/types.rs`（PLUGIN_CACHE／LoadedPlugin／PluginInfo／各Handle）
       - `src/interpreter/plugin_loader/proxies.rs`（File/Math/Random/Time/DateTime 各 Proxy）
       - `src/interpreter/plugin_loader/loader.rs`（PluginLoader: load_*/create_* エントリ）
+  - B1(builder) 続行: `build_static_main_box` / `build_box_declaration` を `src/mir/builder/decls.rs` に抽出。
+    - `src/mir/builder.rs` は `mod decls;` を追加し、委譲。ビルド（`cargo test --no-run`）成功。
+  - A2(plugin_loader_v2) 進捗: `enabled/{errors.rs, host_bridge.rs}` を新設し、`loader.rs` からエラー変換と invoke ブリッジを抽出。
+    - `errors.rs`: `from_fs`/`from_toml`/`or_plugin_err` ヘルパ
+    - `host_bridge.rs`: `invoke_alloc`（TLV 呼び出しの小ラッパ）
+    - `enabled/mod.rs` に `mod errors; mod host_bridge;` を追加し、ビルド確認済み。
 
 - 再開手順（最短ルート）
   1) `src/interpreter/plugin_loader/mod.rs` を分割モードに切替

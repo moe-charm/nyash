@@ -28,19 +28,7 @@ impl Drop for PluginHandleInner {
         if let Some(fini_id) = self.fini_method_id {
             if !self.finalized.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 let tlv_args: [u8; 4] = [1, 0, 0, 0];
-                let mut out: [u8; 4] = [0; 4];
-                let mut out_len: usize = out.len();
-                unsafe {
-                    (self.invoke_fn)(
-                        self.type_id,
-                        fini_id,
-                        self.instance_id,
-                        tlv_args.as_ptr(),
-                        tlv_args.len(),
-                        out.as_mut_ptr(),
-                        &mut out_len,
-                    );
-                }
+                let _ = super::host_bridge::invoke_alloc(self.invoke_fn, self.type_id, fini_id, self.instance_id, &tlv_args);
             }
         }
     }
@@ -52,19 +40,7 @@ impl PluginHandleInner {
             if !self.finalized.swap(true, std::sync::atomic::Ordering::SeqCst) {
                 crate::runtime::leak_tracker::finalize_plugin("PluginBox", self.instance_id);
                 let tlv_args: [u8; 4] = [1, 0, 0, 0];
-                let mut out: [u8; 4] = [0; 4];
-                let mut out_len: usize = out.len();
-                unsafe {
-                    (self.invoke_fn)(
-                        self.type_id,
-                        fini_id,
-                        self.instance_id,
-                        tlv_args.as_ptr(),
-                        tlv_args.len(),
-                        out.as_mut_ptr(),
-                        &mut out_len,
-                    );
-                }
+                let _ = super::host_bridge::invoke_alloc(self.invoke_fn, self.type_id, fini_id, self.instance_id, &tlv_args);
             }
         }
     }
@@ -104,22 +80,10 @@ impl NyashBox for PluginBoxV2 {
     }
     fn clone_box(&self) -> Box<dyn NyashBox> {
         if dbg_on() { eprintln!("[PluginBoxV2] clone_box {}({})", self.box_type, self.inner.instance_id); }
-        let mut output_buffer = vec![0u8; 1024];
-        let mut output_len = output_buffer.len();
         let tlv_args = [1u8, 0, 0, 0];
-        let result = unsafe {
-            (self.inner.invoke_fn)(
-                self.inner.type_id,
-                0,
-                0,
-                tlv_args.as_ptr(),
-                tlv_args.len(),
-                output_buffer.as_mut_ptr(),
-                &mut output_len,
-            )
-        };
-        if result == 0 && output_len >= 4 {
-            let new_instance_id = u32::from_le_bytes([output_buffer[0], output_buffer[1], output_buffer[2], output_buffer[3]]);
+        let (result, out_len, out_buf) = super::host_bridge::invoke_alloc(self.inner.invoke_fn, self.inner.type_id, 0, 0, &tlv_args);
+        if result == 0 && out_len >= 4 {
+            let new_instance_id = u32::from_le_bytes([out_buf[0], out_buf[1], out_buf[2], out_buf[3]]);
             Box::new(PluginBoxV2 {
                 box_type: self.box_type.clone(),
                 inner: Arc::new(PluginHandleInner { type_id: self.inner.type_id, invoke_fn: self.inner.invoke_fn, instance_id: new_instance_id, fini_method_id: self.inner.fini_method_id, finalized: std::sync::atomic::AtomicBool::new(false) }),
@@ -154,4 +118,3 @@ pub fn construct_plugin_box(
 ) -> PluginBoxV2 {
     PluginBoxV2 { box_type, inner: Arc::new(PluginHandleInner { type_id, invoke_fn, instance_id, fini_method_id, finalized: std::sync::atomic::AtomicBool::new(false) }) }
 }
-

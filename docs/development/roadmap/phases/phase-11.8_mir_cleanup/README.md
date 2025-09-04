@@ -1,9 +1,13 @@
-# Phase 11.8: MIR命令セット究極整理 - Core-13への道
+# Phase 11.8: MIR命令セット究極整理 - Core‑13 で統一する
 
 ## 🎯 概要
 
 ChatGPT5さんの深い洞察「**MIRは接着剤、Boxが世界**」を実現する究極のMIR整理。
-現在の26命令 → Core-15 → Core-14（Phase 12）→ **Core-13（最終目標）**への段階的削減。
+現在の26（拡張版）→ Core‑15 → Core‑14（Phase 12）→ **Core‑13（最終決定・固定）**。
+
+決定（2025‑09‑04）
+- 目標を「Core‑13」に固定し、移行フラグを既定ONにする。
+- 以降の最適化/検証/CIは Core‑13 を前提とする（旧命令は禁制）。
 
 ### 基本哲学
 
@@ -13,7 +17,7 @@ ChatGPT5さんの深い洞察「**MIRは接着剤、Boxが世界**」を実現�
 
 ## 📊 現状分析
 
-### 現在のCore-15（Phase 11.7）
+### 現行（移行前の参考）Core‑15（Phase 11.7）
 
 ```
 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
@@ -24,7 +28,7 @@ Box(3): NewBox, BoxCall, PluginInvoke
 外部(1): ExternCall
 ```
 
-### Core-14（Phase 12予定）
+### Core‑14（Phase 12の中間目標）
 
 ```
 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
@@ -35,9 +39,9 @@ Box(2): NewBox, BoxCall  ← PluginInvoke統合
 外部(1): ExternCall
 ```
 
-## 🚀 Core-13への道筋
+## 🚀 Core‑13（最終形）への道筋（実行計画）
 
-### Step 1: 配列操作のBoxCall統合（Core-14 → Core-12）
+### Step 1: 配列操作のBoxCall統合（Core‑14 → Core‑12）
 
 ```mir
 // 現在
@@ -49,12 +53,12 @@ ArraySet %arr, %idx, %val
 BoxCall %arr, "set", [%idx, %val]
 ```
 
-**実装方針**:
+実装方針:
 - Optimizer: ArrayGet/ArraySet → BoxCall 変換
 - VM: 高頻度パスは内部最適化維持
 - JIT: 既知型の場合はインライン展開
 
-### Step 2: Load/Store の再考（Core-12 → Core-11）
+### Step 2: Load/Store の再考（Core‑12 → Core‑11）
 
 **SSAの威力を活かす**:
 - ローカル変数のLoad/Store → SSA変数で代替
@@ -70,7 +74,7 @@ Store %slot, %value
 %val = %value  // 直接参照（Copyも実質不要）
 ```
 
-### Step 3: 定数統合とUnaryOp簡素化（Core-11 → Core-13）
+### Step 3: 定数統合とUnaryOp簡素化（Core‑11 → Core‑13）
 
 **Const統合案**:
 ```mir
@@ -90,7 +94,7 @@ Const { type: Type, value: u64 }  // 全て64bitに収める
 - Not → BinOp(Xor, x, 1)
 - BitNot → BinOp(Xor, x, -1)
 
-## 🎯 最終形：Core-13
+## 🎯 最終形：Core‑13（固定セット・CI基準）
 
 ```yaml
 定数(1):
@@ -118,6 +122,24 @@ Const { type: Type, value: u64 }  // 全て64bitに収める
 
 合計: 13命令
 ```
+
+移行スイッチ（既定ON）と検証
+- 環境変数（デフォルトON）
+  - NYASH_MIR_CORE13=1（Core‑13一括）
+  - 診断: NYASH_OPT_DIAG_FORBID_LEGACY=1（旧命令が最終MIRに残ったらエラー）
+- ビルダー/最適化の方針
+  - Builder: ArrayGet/ArraySet・RefGet/RefSet を emit せず最初から BoxCall を出す
+  - Optimizer: 既存の Array/Ref→BoxCall 正規化パスを保持（保険）
+  - UnaryOp→BinOp 正規化は常時ON（簡易変換）
+  - Load/Store はSSA利用で極力抑止（最終MIRから排除が目標）
+- VM/JIT
+  - BoxCall fast‑path/vtable を維持し、get/set は型特化とWriteBarrierを維持
+  - PluginInvoke はMIRから排除（必要経路は BoxCall→VM側ABI判定）
+
+CI/テスト
+- Core‑13固定の数・名前検査を `instruction_introspection.rs` に追加（Core‑15検査は保持しつつ非推奨）
+- 旧命令（ArrayGet/ArraySet/RefGet/RefSet/Load/Store/UnaryOp）が最終MIRに残らないことをゲート
+- 代表スモーク（配列/参照/extern/await）は VM/JIT で同値性を確認
 
 ## 💡 なぜCore-13で十分なのか
 
@@ -150,18 +172,23 @@ weak.get()       → BoxCall(weak, "get", [])
 - 配列要素 → BoxCall
 - 真のメモリアクセスはBoxの中に隠蔽
 
-## 📋 実装ロードマップ
+## 📋 実装ロードマップ（確定版）
 
 ### ステータス（進捗メモ）
 - 実装済み（トグルONで有効化）
   - Optimizer: ArrayGet/Set・RefGet/Set → BoxCall 変換（`NYASH_MIR_ARRAY_BOXCALL`, `NYASH_MIR_REF_BOXCALL`, `NYASH_MIR_CORE13`）
   - VM: BoxCall(setField)のWriteBarrier、Array/Instanceの軽量fast-path（by-name/slot併用）
   - 管理棟: 主要なMIR/GC/Optimizerフラグを `config::env` に集約
+- 決定/実行（今回）
+  - Core‑13を既定ON（nyash.toml [env] 推奨値）
+  - 旧命令禁止の診断を既定ON
+  - BuilderのArray/Ref出力をBoxCallに変更（emit抑止）
+  - Unary→BinOpを常時変換
 - 未了/次段
-  - JIT: BoxCall fast-path の inlining（bounds/Barrier含む）
-  - ベンチ追加とCIゲート（array/field/arithmetic_loop）
-  - フィールドfast-pathのslot化（name→slot化の検討）
-  - 直env参照の残りの段階移行（ログ用途は後段）
+  - JIT: BoxCall fast‑path の inlining（bounds/Barrier含む）
+  - ベンチとCIゲート（array/field/arithmetic_loop）
+  - InstanceのgetField/setFieldのslot化（name→slotの検討）
+  - 直env参照の段階移行（ログ用途は後段）
 
 ### Phase 11.8.1: 準備と分析（1週間）
 

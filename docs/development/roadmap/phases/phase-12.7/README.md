@@ -4,16 +4,32 @@
 
 ## 📋 統合概要
 
-Phase 12.7は2つの革命的な改革の融合です：
+Phase 12.7は3つの革命的な改革の段階的実装です：
 
-### 1. 文法改革（Language Reform）
-- 予約語15個への削減（peek, birth統一）
+### Phase 12.7-A: 基礎文法改革（✅ 実装済み）
+- 予約語15個への削減（peek, birth, continue統一）
 - peek構文による分岐革命
-- フィールド宣言の明示化
-- 極限糖衣構文（|>, ?., /:）
+- continue文の追加
+- ?演算子（Result伝播）
+- Lambda式（fn文法）
+- フィールド型アノテーション（field: TypeBox）
 
-### 2. 圧縮記法（Compression Notation）
-- ANCP（48%削減）
+### Phase 12.7-B: ChatGPT5糖衣構文（🔄 実装中）
+- パイプライン演算子（|>）
+- セーフアクセス（?.）とデフォルト値（??）
+- デストラクチャリング（{x,y}, [a,b,...]）
+- 増分代入（+=, -=, *=, /=）
+- 範囲演算子（0..n）
+- 高階関数演算子（/:map, \:filter, //:reduce）
+- ラベル付き引数（key:value）
+
+**🎯 重要な設計方針：**
+- **使いたい人が使いたい糖衣構文を選択可能**
+- **すべての糖衣構文は元のNyashコードに可逆変換可能**
+- **明示性と超圧縮の両立** - 用途に応じて使い分け
+
+### Phase 12.7-C: ANCP圧縮記法（📅 計画中）
+- ANCP v1.0（48%削減）
 - 極限糖衣構文（75%削減）
 - 融合記法（90%削減）
 - 可逆フォーマッター完備
@@ -34,9 +50,70 @@ Phase 12.7は2つの革命的な改革の融合です：
 
 ## 🌟 革命的インパクト
 
-### 数値で見る効果
+### Phase 12.7-A: 実装済み機能（2025-09-04）
 ```nyash
-// 通常のNyash（約80文字）
+# Peek式 - パターンマッチング風分岐
+local result = peek status {
+    "success" => 200,
+    "error" => 500,
+    "pending" => 102,
+    else => 404
+}
+
+# Continue文 - ループ制御
+loop(i < 100) {
+    if i % 2 == 0 {
+        continue  # 偶数スキップ
+    }
+    process(i)
+}
+
+# ?演算子 - Result伝播
+local config = readFile("app.json")?  # エラーなら早期return
+local version = parseJSON(config)?.get("version")?
+
+# Lambda式
+local double = fn(x) { x * 2 }
+array.map(fn(x) { x * x })
+```
+
+### Phase 12.7-B: ChatGPT5糖衣構文（実装予定）
+```nyash
+# パイプライン演算子（|>）
+local result = data
+    |> normalize()
+    |> transform()
+    |> validate()?
+    |> finalize()
+
+# セーフアクセス（?.）とデフォルト値（??）
+local name = user?.profile?.name ?? "Guest"
+
+# デストラクチャリング
+let {x, y} = point
+let [first, second, ...rest] = array
+
+# 増分代入
+count += 1
+total *= 1.1
+
+# 高階関数演算子（記号による簡潔表現）
+evens = nums \: {$_%2==0}     # filter: 偶数のみ
+squares = nums /: {$_*$_}      # map: 二乗
+sum = nums // {$1+$2}          # reduce: 合計
+
+# ラベル付き引数
+Http.request(
+    url: "/api/data",
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: payload
+)
+```
+
+### Phase 12.7-C: ANCP記法（計画中）
+```nyash
+// 通常のNyash（約100文字）
 box NyashCompiler {
     compile(source) {
         local ast = me.parse(source)
@@ -45,13 +122,21 @@ box NyashCompiler {
     }
 }
 
-// ANCP記法（約40文字） - 50%削減！
-$NyashCompiler{compile(src){l ast=m.parse(src)l mir=m.lower(ast)r m.codegen(mir)}}
+// ChatGPT5糖衣構文適用（約60文字） - 40%削減！
+box NyashCompiler {
+    compile(source) {
+        return source |> me.parse |> me.lower |> me.codegen
+    }
+}
+
+// ANCP記法（約30文字） - 70%削減！
+$NyashCompiler{compile(s){r s|>m.parse|>m.lower|>m.codegen}}
 
 // 夢の組み合わせ：
 // Phase 15: 80k行 → 20k行（75%削減）
-// + ANCP: 20k行 → 10k行相当（さらに50%削減）
-// = 最終的に87.5%削減！世界一小さい実用コンパイラ！
+// + 糖衣構文: 20k行 → 12k行（40%削減）
+// + ANCP: 12k行 → 6k行相当（50%削減）
+// = 最終的に92.5%削減！世界一小さい実用コンパイラ！
 ```
 
 ### AIコンテキスト革命
@@ -88,19 +173,30 @@ $NyashCompiler{compile(src){l ast=m.parse(src)l mir=m.lower(ast)r m.codegen(mir)
 
 ## 📊 主要成果物
 
-### 文法改革
+### Phase 12.7-A: 基礎文法改革（✅ 完了）
 - ✅ 予約語15個確定（peek, birth, continue追加）
-- ✅ peek構文設計完了
-- ✅ フィールド宣言構文確定
-- 🔄 パーサー実装（Phase 12.7-A）
+- ✅ peek構文実装完了
+- ✅ continue文実装完了
+- ✅ ?演算子（Result伝播）実装完了
+- ✅ Lambda式（fn構文）実装完了
+- ✅ フィールド型アノテーション実装完了
 
-### AI統合最適化
-- ✅ ANCP v1.0完成（48%圧縮）
+### Phase 12.7-B: ChatGPT5糖衣構文（🔄 実装中）
+- 📅 パイプライン演算子（|>）
+- 📅 セーフアクセス（?.）とデフォルト値（??）
+- 📅 デストラクチャリング（パターン束縛）
+- 📅 増分代入演算子（+=, -=, *=, /=）
+- 📅 範囲演算子（..）
+- 📅 高階関数演算子（/:, \:, //）
+- 📅 ラベル付き引数
+
+### Phase 12.7-C: ANCP圧縮記法（📅 計画中）
+- ✅ ANCP v1.0仕様完成（48%圧縮）
 - ✅ 極限糖衣構文設計（75%圧縮）
 - ✅ 融合記法考案（90%圧縮）
 - ✅ 可逆フォーマッター仕様完成
-- 🔄 統合ツール実装中
-- 📅 VSCode拡張（計画中）
+- 📅 統合ツール実装
+- 📅 VSCode拡張
 
 ## 🔧 技術的アプローチ
 
@@ -126,32 +222,73 @@ loop     → L   # ループ
 override → O   # オーバーライド
 ```
 
+### 🔄 可逆変換保証
+
+**すべての糖衣構文は双方向変換可能：**
+```bash
+# フォーマッターによる自由な変換
+nyash format --style=explicit code.nyash   # 明示的記法へ
+nyash format --style=sugar code.nyash      # 糖衣構文へ
+nyash format --style=ancp code.nyash       # 極限圧縮へ
+```
+
+**同じコードの3つの表現：**
+```nyash
+# 明示的（学習・デバッグ用）
+result = users.filter(function(u) { return u.active }).map(function(u) { return u.name })
+
+# 糖衣構文（通常開発用）
+result = users \: {$_.active} /: {$_.name}
+
+# ANCP圧縮（AI協働用）
+r=u\:_.a/:_.n
+```
+
 ### 実装優先順位
 
-#### Phase 1: 最小実装（1週間）
+#### Phase 12.7-B: ChatGPT5糖衣構文（実装中）
+
+**優先度1: 即効性の高い演算子（1週間）**
 ```rust
-// 20語の固定辞書で開始
+// tokenizer.rs に追加
+PIPE,           // |> パイプライン
+SAFE_ACCESS,    // ?. セーフアクセス
+NULL_COALESCE,  // ?? デフォルト値
+PLUS_ASSIGN,    // += 増分代入
+MINUS_ASSIGN,   // -= 減分代入
+// etc...
+```
+
+**優先度2: パイプラインとセーフアクセス（2週間）**
+```nyash
+// パイプライン: x |> f → f(x)
+// セーフアクセス: x?.y → x != null ? x.y : null
+// デフォルト値: x ?? y → x != null ? x : y
+```
+
+**優先度3: デストラクチャリング（3週間）**
+```nyash
+// オブジェクト: let {x, y} = point
+// 配列: let [a, b, ...rest] = array
+// MIR変換: 複数のLoad命令に展開
+```
+
+#### Phase 12.7-C: ANCP圧縮記法（計画中）
+
+**Phase 1: 基本トランスコーダー（1週間）**
+```rust
 pub struct AncpTranscoder {
     mappings: HashMap<&'static str, &'static str>,
-}
-
-impl AncpTranscoder {
-    pub fn encode(&self, nyash: &str) -> String {
-        // シンプルな置換から開始
-    }
-    
-    pub fn decode(&self, ancp: &str) -> String {
-        // 逆変換
-    }
+    sugar_enabled: bool,  // 糖衣構文も含めて圧縮
 }
 ```
 
-#### Phase 2: スマート変換（2週間）
+**Phase 2: スマート変換（2週間）**
 - コンテキスト認識（文字列内は変換しない）
 - 空白・コメント保持
 - エラー位置マッピング
 
-#### Phase 3: ツール統合（2週間）
+**Phase 3: ツール統合（2週間）**
 - VSCode拡張（ホバーで元のコード表示）
 - CLIツール（--format=ancp オプション）
 - スモークテスト自動ANCP化
@@ -165,48 +302,137 @@ impl AncpTranscoder {
 
 ## 📅 実施スケジュール
 
-### 即座に開始可能な理由
-1. **独立性**: 他のフェーズの完了を待つ必要なし
-2. **低リスク**: 既存コードに影響しない追加機能
-3. **高効果**: すぐにAI開発効率が向上
+### Phase 12.7-A（✅ 完了）
+- ✅ peek式、continue文、?演算子、Lambda式
+- ✅ フィールド型アノテーション
+- ✅ birth統一、予約語15個確定
 
-### マイルストーン
+### Phase 12.7-B（🔄 実装中）
+#### Week 1-2: 基本演算子
+- パイプライン演算子（|>）
+- セーフアクセス（?.）とデフォルト値（??）
+- 増分代入演算子（+=, -=等）
+
+#### Week 3-4: 高度な構文
+- デストラクチャリング（{}, []）
+- 範囲演算子（..）
+- 高階関数演算子（/:, \:, //）
+
+#### Week 5: 統合・最適化
+- ラベル付き引数
+- MIR変換最適化
+- テストスイート完成
+
+### Phase 12.7-C（📅 計画中）
 - **Week 1**: 基本トランスコーダー実装
 - **Week 2**: パーサー統合・往復テスト
 - **Week 3**: ツール実装（CLI/VSCode）
 - **Week 4**: AI連携・最適化
 
+## 🎨 糖衣構文の使い分けガイド
+
+### 用途別推奨レベル
+| 用途 | 推奨記法 | 理由 |
+|------|----------|------|
+| 学習・チュートリアル | 明示的 | 動作が明確 |
+| 通常の開発 | 基本糖衣 | バランスが良い |
+| コードレビュー | 明示的〜基本糖衣 | 可読性重視 |
+| AI協働開発 | 全糖衣〜ANCP | コンテキスト最大化 |
+| セルフホスティング | ANCP | 極限圧縮必須 |
+
+### プロジェクト設定例
+```toml
+# nyash.toml
+[syntax]
+# none: 糖衣構文なし（明示的のみ）
+# basic: 基本的な糖衣構文（+=, ?., ??）
+# full: すべての糖衣構文（高階関数演算子含む）
+# ancp: ANCP記法も許可
+sugar_level = "full"
+
+# 高階関数演算子の有効化
+high_order_operators = true
+
+# 可逆変換の検証（保存時に自動チェック）
+verify_reversible = true
+```
+
 ## 💡 期待される成果
 
 ### 定量的
-- トークン削減率: 50-70%（目標）
-- AI開発効率: 2-3倍向上
-- コンテキスト容量: 2倍に拡大
+- **Phase 12.7-B（糖衣構文）**: コード削減率 40-50%
+- **Phase 12.7-C（ANCP）**: さらに50-60%削減
+- **総合効果**: 最大92.5%のコード削減
+- **AI開発効率**: 3-5倍向上
+- **コンテキスト容量**: 10倍に拡大
+
+### 定性的（追加）
+- **選択の自由**: 開発者が好きな記法を選べる
+- **可逆性保証**: いつでも別の形式に変換可能
+- **段階的導入**: プロジェクトごとに糖衣レベルを調整
 
 ### 定性的
-- AIがNyash全体を「理解」できる
-- 人間も慣れれば読み書き可能
-- 自動整形の副次効果
+- **可読性向上**: パイプライン演算子で処理フローが明確に
+- **安全性向上**: セーフアクセスでnullエラー激減
+- **表現力向上**: 高階関数演算子で関数型プログラミングが簡潔に
+- **AIとの親和性**: より多くのコードをAIが一度に理解可能
+- **学習曲線**: 他言語経験者にとって馴染みやすい構文
 
 ## 🌟 夢の実現
 
 ### Phase 15との究極コンボ
 ```nyash
-// セルフホスティングコンパイラ（ANCP記法）
-// たった5行で完全なコンパイラ！
-$Compiler{
-    c(s){
-        r m.gen(m.low(m.parse(s)))
+// 通常のセルフホスティングコンパイラ
+box Compiler {
+    compile(source) {
+        local ast = me.parser.parse(source)
+        local mir = me.lowerer.transform(ast)
+        local code = me.backend.generate(mir)
+        return code
     }
 }
+
+// ChatGPT5糖衣構文適用版
+box Compiler {
+    compile(source) {
+        return source 
+            |> me.parser.parse
+            |> me.lowerer.transform
+            |> me.backend.generate
+    }
+}
+
+// ANCP記法（究極形態）
+$Compiler{compile(s){r s|>m.parser.parse|>m.lowerer.transform|>m.backend.generate}}
 ```
 
 これが「世界一美しい箱」の究極形態にゃ！
 
-### 将来の拡張
-- **ANCP v2**: 文脈依存の高度な圧縮
-- **AI専用方言**: モデル特化の最適化
-- **バイナリANCP**: さらなる圧縮
+### ChatGPT5糖衣構文によるコード例の変革
+```nyash
+# Before: ネストした関数呼び出し（読みづらい）
+result = finalize(validate(transform(normalize(data))))
+
+# After: パイプライン（処理の流れが明確）
+result = data |> normalize |> transform |> validate |> finalize
+
+# Before: null安全でない（実行時エラーの危険）
+name = user.profile.name
+
+# After: セーフアクセス（null安全）
+name = user?.profile?.name ?? "Guest"
+
+# Before: 冗長な配列処理
+evens = []
+for x in numbers {
+    if x % 2 == 0 {
+        evens.push(x * x)
+    }
+}
+
+# After: 高階関数演算子（簡潔で宣言的）
+evens = numbers \: {$_%2==0} /: {$_*$_}
+```
 
 ## 🚀 なぜ今すぐ始めるべきか
 

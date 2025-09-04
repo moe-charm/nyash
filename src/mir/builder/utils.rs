@@ -1,4 +1,5 @@
 use std::fs;
+use super::{BasicBlock, BasicBlockId};
 
 // Resolve include path using nyash.toml include.roots if present
 pub(super) fn resolve_include_path_builder(filename: &str) -> String {
@@ -63,3 +64,29 @@ pub(super) fn infer_type_from_phi(
     None
 }
 
+// Lightweight helpers moved from builder.rs to reduce file size
+impl super::MirBuilder {
+    /// Ensure a basic block exists in the current function
+    pub(crate) fn ensure_block_exists(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut function) = self.current_function {
+            if !function.blocks.contains_key(&block_id) {
+                let block = BasicBlock::new(block_id);
+                function.add_block(block);
+            }
+            Ok(())
+        } else {
+            Err("No current function".to_string())
+        }
+    }
+
+    /// Start a new basic block and set as current
+    pub(crate) fn start_new_block(&mut self, block_id: BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut function) = self.current_function {
+            function.add_block(BasicBlock::new(block_id));
+            self.current_block = Some(block_id);
+            Ok(())
+        } else {
+            Err("No current function".to_string())
+        }
+    }
+}

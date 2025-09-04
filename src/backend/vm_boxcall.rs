@@ -223,6 +223,21 @@ impl VM {
             match method {
                 "length" | "len" => { return Ok(Box::new(IntegerBox::new(string_box.value.len() as i64))); }
                 "toString" => { return Ok(Box::new(StringBox::new(string_box.value.clone()))); }
+                "substring" => {
+                    if _args.len() >= 2 {
+                        let s = match _args[0].to_string_box().value.parse::<i64>() { Ok(v) => v.max(0) as usize, Err(_) => 0 };
+                        let e = match _args[1].to_string_box().value.parse::<i64>() { Ok(v) => v.max(0) as usize, Err(_) => string_box.value.chars().count() };
+                        return Ok(string_box.substring(s, e));
+                    }
+                    return Ok(Box::new(VoidBox::new()));
+                }
+                "concat" => {
+                    if let Some(arg0) = _args.get(0) {
+                        let out = format!("{}{}", string_box.value, arg0.to_string_box().value);
+                        return Ok(Box::new(StringBox::new(out)));
+                    }
+                    return Ok(Box::new(VoidBox::new()));
+                }
                 _ => return Ok(Box::new(VoidBox::new())),
             }
         }

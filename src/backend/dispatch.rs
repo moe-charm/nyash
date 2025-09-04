@@ -55,7 +55,12 @@ pub(super) fn execute_instruction(vm: &mut VM, instruction: &MirInstruction, deb
         MirInstruction::TypeOp { dst, op, value, ty } => vm.execute_typeop(*dst, op, *value, ty),
 
         // Control flow
-        MirInstruction::Return { value } => vm.execute_return(*value),
+        MirInstruction::Return { value } => {
+            if crate::config::env::vm_vt_trace() {
+                if let Some(v) = value { eprintln!("[VT] Dispatch Return val_id={}", v.to_usize()); } else { eprintln!("[VT] Dispatch Return void"); }
+            }
+            vm.execute_return(*value)
+        },
         MirInstruction::Jump { target } => vm.execute_jump(*target),
         MirInstruction::Branch { condition, then_bb, else_bb } => vm.execute_branch(*condition, *then_bb, *else_bb),
         MirInstruction::Phi { dst, inputs } => vm.execute_phi(*dst, inputs),

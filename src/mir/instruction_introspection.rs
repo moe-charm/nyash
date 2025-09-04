@@ -63,6 +63,30 @@ pub fn core15_instruction_names() -> &'static [&'static str] {
     ]
 }
 
+/// Returns the Core-13 instruction names (final minimal kernel).
+/// This is the fixed target set used for MIR unification.
+pub fn core13_instruction_names() -> &'static [&'static str] {
+    &[
+        // 値/計算
+        "Const",
+        "BinOp",
+        "Compare",
+        // 制御
+        "Jump",
+        "Branch",
+        "Return",
+        "Phi",
+        // 呼び出し
+        "Call",
+        "BoxCall",
+        "ExternCall",
+        // メタ
+        "TypeOp",
+        "Safepoint",
+        "Barrier",
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,5 +102,15 @@ mod tests {
         // basic sanity: includes a few key ops
         let set: BTreeSet<_> = impl_names.iter().copied().collect();
         for must in ["Const", "BinOp", "Return", "ExternCall"] { assert!(set.contains(must), "missing '{}'", must); }
+    }
+
+    #[test]
+    fn core13_instruction_count_is_13() {
+        let impl_names = core13_instruction_names();
+        assert_eq!(impl_names.len(), 13, "Core-13 must contain exactly 13 instructions");
+        let set: BTreeSet<_> = impl_names.iter().copied().collect();
+        for must in ["Const", "BinOp", "Return", "BoxCall", "ExternCall", "TypeOp"] {
+            assert!(set.contains(must), "missing '{}'", must);
+        }
     }
 }

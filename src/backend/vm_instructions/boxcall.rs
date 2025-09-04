@@ -4,6 +4,48 @@ use crate::backend::vm::ControlFlow;
 use crate::backend::{VM, VMError, VMValue};
 
 impl VM {
+    /// Small helpers to reduce duplication in vtable stub paths.
+    #[inline]
+    fn vmvalue_to_box(val: &VMValue) -> Box<dyn crate::box_trait::NyashBox> {
+        use crate::box_trait::{NyashBox, StringBox as SBox, IntegerBox as IBox, BoolBox as BBox};
+        match val {
+            VMValue::Integer(i) => Box::new(IBox::new(*i)),
+            VMValue::String(s) => Box::new(SBox::new(s)),
+            VMValue::Bool(b) => Box::new(BBox::new(*b)),
+            VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(*f)),
+            VMValue::BoxRef(bx) => bx.share_box(),
+            VMValue::Future(fut) => Box::new(fut.clone()),
+            VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
+        }
+    }
+
+    #[inline]
+    fn arg_as_box(&mut self, id: crate::mir::ValueId) -> Result<Box<dyn crate::box_trait::NyashBox>, VMError> {
+        let v = self.get_value(id)?;
+        Ok(Self::vmvalue_to_box(&v))
+    }
+
+    #[inline]
+    fn two_args_as_box(&mut self, a0: crate::mir::ValueId, a1: crate::mir::ValueId) -> Result<(Box<dyn crate::box_trait::NyashBox>, Box<dyn crate::box_trait::NyashBox>), VMError> {
+        Ok((self.arg_as_box(a0)?, self.arg_as_box(a1)?))
+    }
+
+    #[inline]
+    fn arg_to_string(&mut self, id: crate::mir::ValueId) -> Result<String, VMError> {
+        let v = self.get_value(id)?;
+        Ok(v.to_string())
+    }
+
+    #[inline]
+    fn arg_to_usize_or(&mut self, id: crate::mir::ValueId, default: usize) -> Result<usize, VMError> {
+        let v = self.get_value(id)?;
+        match v {
+            VMValue::Integer(i) => Ok((i.max(0)) as usize),
+            VMValue::String(ref s) => Ok(s.trim().parse::<i64>().map(|iv| iv.max(0) as usize).unwrap_or(default)),
+            _ => Ok(v.to_string().trim().parse::<i64>().map(|iv| iv.max(0) as usize).unwrap_or(default)),
+        }
+    }
+
     /// Execute BoxCall instruction
     pub(crate) fn execute_boxcall(&mut self, dst: Option<ValueId>, box_val: ValueId, method: &str, method_id: Option<u16>, args: &[ValueId]) -> Result<ControlFlow, VMError> {
         let recv = self.get_value(box_val)?;
@@ -358,6 +400,66 @@ impl VM {
         if crate::config::env::vm_vt_trace() {
             match _recv { VMValue::BoxRef(b) => eprintln!("[VT] probe recv_ty={} method={} argc={}", b.type_name(), _method, _args.len()), other => eprintln!("[VT] probe recv_prim={:?} method={} argc={}", other, _method, _args.len()), }
         }
+        // Primitive String fast-path using StringBox slots
+        if let VMValue::String(sv) = _recv {
+            if crate::runtime::type_registry::resolve_typebox_by_name("StringBox").is_some() {
+                let slot = crate::runtime::type_registry::resolve_slot_by_name("StringBox", _method, _args.len());
+                match slot {
+                    Some(300) => { // len
+                        let out = VMValue::Integer(sv.len() as i64);
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, out); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    Some(301) => { // substring
+                        if _args.len() >= 2 {
+                            if let (Ok(a0), Ok(a1)) = (self.get_value(_args[0]), self.get_value(_args[1])) {
+                                let chars: Vec<char> = sv.chars().collect();
+                                let start = match a0 { VMValue::Integer(i) => i.max(0) as usize, _ => 0 };
+                                let end = match a1 { VMValue::Integer(i) => i.max(0) as usize, _ => chars.len() };
+                                let ss: String = chars[start.min(end)..end.min(chars.len())].iter().collect();
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::String(ss)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    Some(302) => { // concat
+                        if let Some(a0) = _args.get(0) { if let Ok(v) = self.get_value(*a0) {
+                            let out = format!("{}{}", sv, v.to_string());
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::String(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }}
+                    }
+                    Some(303) => { // indexOf
+                        if let Some(a0) = _args.get(0) { if let Ok(v) = self.get_value(*a0) {
+                            let needle = v.to_string();
+                            let pos = sv.find(&needle).map(|p| p as i64).unwrap_or(-1);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::Integer(pos)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }}
+                    }
+                    Some(304) => { // replace
+                        if _args.len() >= 2 { if let (Ok(a0), Ok(a1)) = (self.get_value(_args[0]), self.get_value(_args[1])) {
+                            let out = sv.replace(&a0.to_string(), &a1.to_string());
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::String(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }}
+                    }
+                    Some(305) => { // trim
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::String(sv.trim().to_string())); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    Some(306) => { // toUpper
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::String(sv.to_uppercase())); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    Some(307) => { // toLower
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::String(sv.to_lowercase())); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    _ => {}
+                }
+            }
+        }
         if let VMValue::BoxRef(b) = _recv {
             let ty_name = b.type_name();
             let ty_name_for_reg: std::borrow::Cow<'_, str> = if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { std::borrow::Cow::Owned(p.box_type.clone()) } else { std::borrow::Cow::Borrowed(ty_name) };
@@ -425,62 +527,34 @@ impl VM {
                         return Some(Ok(ControlFlow::Continue));
                     }
                     if matches!(slot, Some(202)) {
-                        if let Ok(arg_v) = self.get_value(_args[0]) {
-                            let key_box: Box<dyn NyashBox> = match arg_v {
-                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
-                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)),
-                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
-                                VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
-                                VMValue::BoxRef(ref bx) => bx.share_box(),
-                                VMValue::Future(ref fut) => Box::new(fut.clone()),
-                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
-                            };
+                        if let Some(a0) = _args.get(0) { if let Ok(key_box) = self.arg_as_box(*a0) {
                             self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
                             if crate::config::env::vm_vt_trace() { eprintln!("[VT] MapBox.has"); }
                             let out = map.has(key_box);
                             if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                             return Some(Ok(ControlFlow::Continue));
-                        }
+                        }}
                     }
                     if matches!(slot, Some(203)) {
-                        if let Ok(arg_v) = self.get_value(_args[0]) {
-                            let key_box: Box<dyn NyashBox> = match arg_v {
-                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
-                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)),
-                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
-                                VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
-                                VMValue::BoxRef(ref bx) => bx.share_box(),
-                                VMValue::Future(ref fut) => Box::new(fut.clone()),
-                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
-                            };
+                        if let Some(a0) = _args.get(0) { if let Ok(key_box) = self.arg_as_box(*a0) {
                             self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
                             if crate::config::env::vm_vt_trace() { eprintln!("[VT] MapBox.get"); }
                             let out = map.get(key_box);
                             if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                             return Some(Ok(ControlFlow::Continue));
-                        }
+                        }}
                     }
                     if matches!(slot, Some(204)) {
-                        if let (Ok(a0), Ok(a1)) = (self.get_value(_args[0]), self.get_value(_args[1])) {
-                            if let VMValue::String(ref s) = a0 { let vb: Box<dyn NyashBox> = match a1 { VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)), VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)), VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)), VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)), VMValue::BoxRef(ref bx) => bx.share_box(), VMValue::Future(ref fut) => Box::new(fut.clone()), VMValue::Void => Box::new(crate::box_trait::VoidBox::new()), }; let out = map.set(Box::new(crate::box_trait::StringBox::new(s)), vb); if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); } return Some(Ok(ControlFlow::Continue)); }
-                            let key_box: Box<dyn NyashBox> = match a0 {
-                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
-                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)),
-                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
-                                VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
-                                VMValue::BoxRef(ref bx) => bx.share_box(),
-                                VMValue::Future(ref fut) => Box::new(fut.clone()),
-                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
-                            };
-                            let val_box: Box<dyn NyashBox> = match a1 {
-                                VMValue::Integer(i) => Box::new(crate::box_trait::IntegerBox::new(i)),
-                                VMValue::String(ref s) => Box::new(crate::box_trait::StringBox::new(s)),
-                                VMValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(b)),
-                                VMValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(f)),
-                                VMValue::BoxRef(ref bx) => bx.share_box(),
-                                VMValue::Future(ref fut) => Box::new(fut.clone()),
-                                VMValue::Void => Box::new(crate::box_trait::VoidBox::new()),
-                            };
+                        if _args.len() >= 2 {
+                            if let (Ok(a0), Ok(a1)) = (self.get_value(_args[0]), self.get_value(_args[1])) {
+                                if let VMValue::String(ref s) = a0 {
+                                    let vb = Self::vmvalue_to_box(&a1);
+                                    let out = map.set(Box::new(crate::box_trait::StringBox::new(s)), vb);
+                                    if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                    return Some(Ok(ControlFlow::Continue));
+                                }
+                                let key_box = Self::vmvalue_to_box(&a0);
+                                let val_box = Self::vmvalue_to_box(&a1);
                             // Barrier: mutation
                             crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Map.set");
                             self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
@@ -488,7 +562,33 @@ impl VM {
                             let out = map.set(key_box, val_box);
                             if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
                             return Some(Ok(ControlFlow::Continue));
+                            }
                         }
+                    }
+                    if matches!(slot, Some(205)) { // delete/remove
+                        if let Some(a0) = _args.get(0) { if let Ok(arg_v) = self.get_value(*a0) {
+                            crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Map.delete");
+                            let key_box = Self::vmvalue_to_box(&arg_v);
+                            let out = map.delete(key_box);
+                            if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                            return Some(Ok(ControlFlow::Continue));
+                        }}
+                    }
+                    if matches!(slot, Some(206)) { // keys
+                        let out = map.keys();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    if matches!(slot, Some(207)) { // values
+                        let out = map.values();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    if matches!(slot, Some(208)) { // clear
+                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Map.clear");
+                        let out = map.clear();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
                     }
                 }
                 // StringBox: len
@@ -499,6 +599,228 @@ impl VM {
                         let out = crate::box_trait::IntegerBox::new(sb.value.len() as i64);
                         if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(Box::new(out))); }
                         return Some(Ok(ControlFlow::Continue));
+                    }
+                    // substring(start, end)
+                    if matches!(slot, Some(301)) {
+                        if _args.len() >= 2 {
+                            let full = sb.value.chars().count();
+                            if let (Ok(start), Ok(end)) = (self.arg_to_usize_or(_args[0], 0), self.arg_to_usize_or(_args[1], full)) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] StringBox.substring({}, {})", start, end); }
+                                let out = sb.substring(start, end);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // concat(other)
+                    if matches!(slot, Some(302)) {
+                        if let Some(a0_id) = _args.get(0) {
+                            if let Ok(a0) = self.get_value(*a0_id) {
+                                let other = a0.to_string();
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] StringBox.concat"); }
+                                let out = crate::box_trait::StringBox::new(format!("{}{}", sb.value, other));
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(Box::new(out))); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // indexOf(search)
+                    if matches!(slot, Some(303)) {
+                        if let Some(a0_id) = _args.get(0) {
+                            if let Ok(needle) = self.arg_to_string(*a0_id) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                let out = sb.find(&needle);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // replace(old, new)
+                    if matches!(slot, Some(304)) {
+                        if _args.len() >= 2 {
+                            if let (Ok(old), Ok(newv)) = (self.arg_to_string(_args[0]), self.arg_to_string(_args[1])) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                let out = sb.replace(&old, &newv);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // trim()
+                    if matches!(slot, Some(305)) {
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        let out = sb.trim();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    // toUpper()
+                    if matches!(slot, Some(306)) {
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        let out = sb.to_upper();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    // toLower()
+                    if matches!(slot, Some(307)) {
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        let out = sb.to_lower();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                }
+                // ConsoleBox: log/warn/error/clear (400-series)
+                if let Some(console) = b.as_any().downcast_ref::<crate::boxes::console_box::ConsoleBox>() {
+                    match slot {
+                        Some(400) => { // log
+                            if let Some(a0) = _args.get(0) { if let Ok(msg) = self.arg_to_string(*a0) { console.log(&msg); if let Some(dst) = _dst { self.set_value(dst, VMValue::Void); } return Some(Ok(ControlFlow::Continue)); } }
+                        }
+                        Some(401) => { // warn
+                            if let Some(a0) = _args.get(0) { if let Ok(msg) = self.arg_to_string(*a0) { console.warn(&msg); if let Some(dst) = _dst { self.set_value(dst, VMValue::Void); } return Some(Ok(ControlFlow::Continue)); } }
+                        }
+                        Some(402) => { // error
+                            if let Some(a0) = _args.get(0) { if let Ok(msg) = self.arg_to_string(*a0) { console.error(&msg); if let Some(dst) = _dst { self.set_value(dst, VMValue::Void); } return Some(Ok(ControlFlow::Continue)); } }
+                        }
+                        Some(403) => { // clear
+                            console.clear(); if let Some(dst) = _dst { self.set_value(dst, VMValue::Void); } return Some(Ok(ControlFlow::Continue));
+                        }
+                        _ => {}
+                    }
+                }
+                // ArrayBox: len/get/set (builtin fast path via vtable slots 102/100/101)
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    // len/length
+                    if matches!(slot, Some(102)) {
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.len"); }
+                        let out = arr.length();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); } else if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.len without dst"); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    // get(index)
+                    if matches!(slot, Some(100)) {
+                        if let Some(a0_id) = _args.get(0) {
+                            if let Ok(idx_box) = self.arg_as_box(*a0_id) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.get"); }
+                                let out = arr.get(idx_box);
+                                let vm_out = VMValue::from_nyash_box(out);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.get -> {}", vm_out.to_string()); }
+                                if let Some(dst_id) = _dst { if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.get set dst={}", dst_id.to_usize()); } self.set_value(dst_id, vm_out); } else if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.get without dst"); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // set(index, value)
+                    if matches!(slot, Some(101)) {
+                        if _args.len() >= 2 {
+                            if let (Ok(idx_box), Ok(val_box)) = (self.arg_as_box(_args[0]), self.arg_as_box(_args[1])) {
+                                // Mutation barrier
+                                crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Array.set");
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.set"); }
+                                let out = arr.set(idx_box, val_box);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); } else if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.set without dst"); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // push(value)
+                    if matches!(slot, Some(103)) {
+                        if let Some(a0_id) = _args.get(0) {
+                            if let Ok(val_box) = self.arg_as_box(*a0_id) {
+                                crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Array.push");
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.push"); }
+                                let out = arr.push(val_box);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // pop()
+                    if matches!(slot, Some(104)) {
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.pop"); }
+                        let out = arr.pop();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    // clear()
+                    if matches!(slot, Some(105)) {
+                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Array.clear");
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.clear"); }
+                        let out = arr.clear();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    // contains(value)
+                    if matches!(slot, Some(106)) {
+                        if let Some(a0_id) = _args.get(0) {
+                            if let Ok(val_box) = self.arg_as_box(*a0_id) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.contains"); }
+                                let out = arr.contains(val_box);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // indexOf(value)
+                    if matches!(slot, Some(107)) {
+                        if let Some(a0_id) = _args.get(0) {
+                            if let Ok(val_box) = self.arg_as_box(*a0_id) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.indexOf"); }
+                                let out = arr.indexOf(val_box);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // join(sep)
+                    if matches!(slot, Some(108)) {
+                        if let Some(a0_id) = _args.get(0) {
+                            if let Ok(sep_box) = self.arg_as_box(*a0_id) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.join"); }
+                                let out = arr.join(sep_box);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
+                    }
+                    // sort()
+                    if matches!(slot, Some(109)) {
+                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Array.sort");
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.sort"); }
+                        let out = arr.sort();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    // reverse()
+                    if matches!(slot, Some(110)) {
+                        crate::backend::gc_helpers::gc_write_barrier_site(&self.runtime, "VTable.Array.reverse");
+                        self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                        if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.reverse"); }
+                        let out = arr.reverse();
+                        if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Some(Ok(ControlFlow::Continue));
+                    }
+                    // slice(start, end)
+                    if matches!(slot, Some(111)) {
+                        if _args.len() >= 2 {
+                            if let (Ok(start_box), Ok(end_box)) = (self.arg_as_box(_args[0]), self.arg_as_box(_args[1])) {
+                                self.boxcall_hits_vtable = self.boxcall_hits_vtable.saturating_add(1);
+                                if crate::config::env::vm_vt_trace() { eprintln!("[VT] ArrayBox.slice"); }
+                                let out = arr.slice(start_box, end_box);
+                                if let Some(dst_id) = _dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                                return Some(Ok(ControlFlow::Continue));
+                            }
+                        }
                     }
                 }
                 if crate::config::env::abi_strict() {

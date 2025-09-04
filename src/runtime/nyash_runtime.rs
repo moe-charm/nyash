@@ -81,12 +81,8 @@ impl NyashRuntimeBuilder {
 
 fn create_default_registry() -> Arc<Mutex<UnifiedBoxRegistry>> {
     let mut registry = UnifiedBoxRegistry::new();
-    // Simple rule:
-    // - Default: plugins-only (no builtins)
-    // - wasm32: enable builtins
-    // - tests: enable builtins
-    // - feature "builtin-core": enable builtins manually
-    #[cfg(any(test, target_arch = "wasm32", feature = "builtin-core"))]
+    // Default: enable builtins unless explicitly building with feature "plugins-only"
+    #[cfg(not(feature = "plugins-only"))]
     {
         registry.register(Arc::new(BuiltinBoxFactory::new()));
     }

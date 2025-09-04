@@ -1,4 +1,15 @@
-# Phase 11.8 技術仕様書：Core-13 MIR命令セット
+# Phase 11.8 技術仕様書：Core‑13 MIR命令セット（既定ON）
+
+## 0. 変換スイッチとルーティング（Core‑13 既定ON）
+
+推奨既定（nyash.toml の [env]）
+
+- NYASH_MIR_CORE13=1 … Core‑13 一括ON（Array/Ref→BoxCall 等を内包）
+- NYASH_OPT_DIAG_FORBID_LEGACY=1 … 旧命令が最終MIRに残ったらエラー
+
+Builder/MIR 生成
+- Builder は ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke を emit せず、最初から BoxCall/Call/ExternCall に正規化する。
+- Optimizer は保険として既存の正規化パスを維持（二重化で確実性を上げる）。
 
 ## 1. ArrayGet/ArraySet → BoxCall 統合仕様
 
@@ -83,7 +94,7 @@ fn lower_boxcall(builder: &mut IRBuilder, ...) {
 }
 ```
 
-## 2. Load/Store 削減仕様
+## 2. Load/Store 削減仕様（SSA最優先）
 
 ### 2.1 SSA変数活用の最大化
 
@@ -131,7 +142,7 @@ BoxCall %obj, "setField", ["field", %new_val]
 - **C FFI境界**: 外部関数とのやり取り
 - **最適化中間状態**: Phi導入前の一時的使用
 
-## 3. Const統合仕様
+## 3. Const統合仕様（設計）
 
 ### 3.1 統一表現
 
@@ -187,7 +198,7 @@ impl MirConst {
 }
 ```
 
-## 4. パフォーマンス保証
+## 4. パフォーマンス保証（CI基準）
 
 ### 4.1 ベンチマーク項目
 
@@ -218,25 +229,13 @@ const REQUIRED_OPTIMIZATIONS: &[&str] = &[
 ];
 ```
 
-## 5. 移行戦略
+## 5. 移行戦略（段階→固定）
 
 ### 5.1 段階的有効化
 
 ```rust
 // 環境変数による制御
-pub struct MirConfig {
-    // Phase 11.8.1
-    pub array_to_boxcall: bool,     // NYASH_MIR_ARRAY_BOXCALL=1
-    
-    // Phase 11.8.2
-    pub eliminate_load_store: bool,  // NYASH_MIR_NO_LOAD_STORE=1
-    
-    // Phase 11.8.3
-    pub unified_const: bool,         // NYASH_MIR_UNIFIED_CONST=1
-    
-    // Phase 11.8.4
-    pub core_13_strict: bool,        // NYASH_MIR_CORE13=1
-}
+// 実装上は env トグルを残しつつ、CI/既定は CORE13=1 / FORBID_LEGACY=1 とする。
 ```
 
 ### 5.2 互換性レイヤー

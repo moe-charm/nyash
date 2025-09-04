@@ -278,6 +278,16 @@ impl VM {
                         }
                     }
                 }
+                // Execute terminator if present and we haven't decided control flow yet
+                if should_return.is_none() && next_block.is_none() {
+                    if let Some(term) = &block.terminator {
+                        match self.execute_instruction(term)? {
+                            ControlFlow::Continue => {},
+                            ControlFlow::Jump(target) => { next_block = Some(target); },
+                            ControlFlow::Return(value) => { should_return = Some(value); },
+                        }
+                    }
+                }
             } else {
                 return Err(VMError::InvalidBasicBlock(format!(
                     "Basic block {:?} not found",

@@ -20,6 +20,13 @@ mod stmts;
 mod ops;
 mod utils;
 mod exprs; // expression lowering split
+mod decls; // declarations lowering split
+mod fields; // field access/assignment lowering split
+mod exprs_call;    // call(expr)
+mod exprs_qmark;   // ?-propagate
+mod exprs_peek;    // peek expression
+mod exprs_lambda;  // lambda lowering
+mod exprs_include; // include lowering
 
 // moved helpers to builder/utils.rs
 
@@ -72,7 +79,7 @@ pub struct MirBuilder {
 }
 
 impl MirBuilder {
-    /// Emit a Box method call (PluginInvoke unified)
+    /// Emit a Box method call (unified: BoxCall)
     fn emit_box_or_plugin_call(
         &mut self,
         dst: Option<ValueId>,
@@ -82,8 +89,7 @@ impl MirBuilder {
         args: Vec<ValueId>,
         effects: EffectMask,
     ) -> Result<(), String> {
-        let _ = method_id; // slot is no longer used in unified plugin invoke path
-        self.emit_instruction(MirInstruction::PluginInvoke { dst, box_val, method, args, effects })
+        self.emit_instruction(MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects })
     }
     /// Create a new MIR builder
     pub fn new() -> Self {
@@ -336,7 +342,7 @@ impl MirBuilder {
                 // Lower: ok = expr.isOk(); br ok then else; else => return expr; then => expr.getValue()
                 let res_val = self.build_expression(*expression.clone())?;
                 let ok_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::PluginInvoke { dst: Some(ok_id), box_val: res_val, method: "isOk".to_string(), args: vec![], effects: EffectMask::PURE })?;
+                self.emit_instruction(MirInstruction::BoxCall { dst: Some(ok_id), box_val: res_val, method: "isOk".to_string(), method_id: None, args: vec![], effects: EffectMask::PURE })?;
                 let then_block = self.block_gen.next();
                 let else_block = self.block_gen.next();
                 self.emit_instruction(MirInstruction::Branch { condition: ok_id, then_bb: then_block, else_bb: else_block })?;
@@ -348,7 +354,7 @@ impl MirBuilder {
                 self.current_block = Some(then_block);
                 self.ensure_block_exists(then_block)?;
                 let val_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::PluginInvoke { dst: Some(val_id), box_val: res_val, method: "getValue".to_string(), args: vec![], effects: EffectMask::PURE })?;
+                self.emit_instruction(MirInstruction::BoxCall { dst: Some(val_id), box_val: res_val, method: "getValue".to_string(), method_id: None, args: vec![], effects: EffectMask::PURE })?;
                 self.value_types.insert(val_id, super::MirType::Unknown);
                 Ok(val_id)
             },
@@ -720,18 +726,7 @@ impl MirBuilder {
         }
     }
     
-    /// Ensure a basic block exists in the current function
-    pub(super) fn ensure_block_exists(&mut self, block_id: BasicBlockId) -> Result<(), String> {
-        if let Some(ref mut function) = self.current_function {
-            if !function.blocks.contains_key(&block_id) {
-                let block = BasicBlock::new(block_id);
-                function.add_block(block);
-            }
-            Ok(())
-        } else {
-            Err("No current function".to_string())
-        }
-    }
+    // moved to builder/utils.rs: ensure_block_exists
     
     // build_loop_statement_legacy moved to builder/stmts.rs
     
@@ -743,109 +738,9 @@ impl MirBuilder {
     
     // build_return_statement_legacy moved to builder/stmts.rs
     
-    /// Build static box (e.g., Main) - extracts main() method body and converts to Program
-    /// Also lowers other static methods into standalone MIR functions: BoxName.method/N
-    pub(super) fn build_static_main_box(&mut self, box_name: String, methods: std::collections::HashMap<String, ASTNode>) -> Result<ValueId, String> {
-        // Lower other static methods (except main) to standalone MIR functions so JIT can see them
-        for (mname, mast) in methods.iter() {
-            if mname == "main" { continue; }
-            if let ASTNode::FunctionDeclaration { params, body, .. } = mast {
-                let func_name = format!("{}.{}{}", box_name, mname, format!("/{}", params.len()));
-                self.lower_static_method_as_function(func_name, params.clone(), body.clone())?;
-            }
-        }
-        // Within this lowering, treat `me` receiver as this static box
-        let saved_static = self.current_static_box.clone();
-        self.current_static_box = Some(box_name.clone());
-        // Look for the main() method
-        let out = if let Some(main_method) = methods.get("main") {
-            if let ASTNode::FunctionDeclaration { params, body, .. } = main_method {
-                // Convert the method body to a Program AST node and lower it
-                let program_ast = ASTNode::Program {
-                    statements: body.clone(),
-                    span: crate::ast::Span::unknown(),
-                };
-                
-                // Bind default parameters if present (e.g., args=[])
-                // Save current var map; inject defaults; restore after lowering
-                let saved_var_map = std::mem::take(&mut self.variable_map);
-                // Prepare defaults for known patterns
-                for p in params.iter() {
-                    let pid = self.value_gen.next();
-                    // Heuristic: for parameter named "args", create new ArrayBox(); else use Void
-                    if p == "args" {
-                        // new ArrayBox() -> pid
-                        // Emit NewBox for ArrayBox with no args
-                        self.emit_instruction(MirInstruction::NewBox { dst: pid, box_type: "ArrayBox".to_string(), args: vec![] })?;
-                    } else {
-                        self.emit_instruction(MirInstruction::Const { dst: pid, value: ConstValue::Void })?;
-                    }
-                    self.variable_map.insert(p.clone(), pid);
-                }
-                // Use existing Program lowering logic
-                let lowered = self.build_expression(program_ast);
-                // Restore variable map
-                self.variable_map = saved_var_map;
-                lowered
-            } else {
-                Err("main method in static box is not a FunctionDeclaration".to_string())
-            }
-        } else {
-            Err("static box must contain a main() method".to_string())
-        };
-        // Restore static box context
-        self.current_static_box = saved_static;
-        out
-    }
+    // moved to builder/decls.rs: build_static_main_box
     
-    /// Build field access: object.field
-    pub(super) fn build_field_access(&mut self, object: ASTNode, field: String) -> Result<ValueId, String> {
-        // Clone the object before building expression if we need to check it later
-        let object_clone = object.clone();
-        
-        // First, build the object expression to get its ValueId
-        let object_value = self.build_expression(object)?;
-
-        // Get the field from the object using RefGet
-        let field_val = self.value_gen.next();
-        self.emit_instruction(MirInstruction::RefGet {
-            dst: field_val,
-            reference: object_value,
-            field: field.clone(),
-        })?;
-
-        // If we recorded origin class for this field on this base object, propagate it to this value id
-        if let Some(class_name) = self.field_origin_class.get(&(object_value, field.clone())).cloned() {
-            self.value_origin_newbox.insert(field_val, class_name);
-        }
-
-        // If we can infer the box type and the field is weak, emit WeakLoad (+ optional barrier)
-        let mut inferred_class: Option<String> = self.value_origin_newbox.get(&object_value).cloned();
-        // Fallback: if the object is a nested field access like (X.Y).Z, consult recorded field origins for X.Y
-        if inferred_class.is_none() {
-            if let ASTNode::FieldAccess { object: inner_obj, field: ref parent_field, .. } = object_clone {
-                // Build inner base to get a stable id and consult mapping
-                if let Ok(base_id) = self.build_expression(*inner_obj.clone()) {
-                    if let Some(cls) = self.field_origin_class.get(&(base_id, parent_field.clone())) {
-                        inferred_class = Some(cls.clone());
-                    }
-                }
-            }
-        }
-        if let Some(class_name) = inferred_class {
-            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) {
-                    // Barrier (read) PoC
-                    let _ = self.emit_barrier_read(field_val);
-                    // WeakLoad
-                    let loaded = self.emit_weak_load(field_val)?;
-                    return Ok(loaded);
-                }
-            }
-        }
-
-        Ok(field_val)
-    }
+    // moved to builder/fields.rs: build_field_access
     
     /// Build new expression: new ClassName(arguments)
     pub(super) fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
@@ -906,56 +801,9 @@ impl MirBuilder {
         Ok(dst)
     }
     
-    /// Build field assignment: object.field = value
-    pub(super) fn build_field_assignment(&mut self, object: ASTNode, field: String, value: ASTNode) -> Result<ValueId, String> {
-        // Build the object and value expressions
-        let object_value = self.build_expression(object)?;
-        let mut value_result = self.build_expression(value)?;
-
-        // If we can infer the box type and the field is weak, create WeakRef before store
-        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
-            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) {
-                    value_result = self.emit_weak_new(value_result)?;
-                }
-            }
-        }
-
-        // Set the field using RefSet
-        self.emit_instruction(MirInstruction::RefSet {
-            reference: object_value,
-            field: field.clone(),
-            value: value_result,
-        })?;
-
-        // Emit a write barrier for weak fields (PoC)
-        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
-            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) {
-                    let _ = self.emit_barrier_write(value_result);
-                }
-            }
-        }
-
-        // Record origin class for this field (if the value originates from NewBox of a known class)
-        if let Some(class_name) = self.value_origin_newbox.get(&value_result).cloned() {
-            self.field_origin_class.insert((object_value, field.clone()), class_name);
-        }
-
-        // Return the assigned value
-        Ok(value_result)
-    }
+    // moved to builder/fields.rs: build_field_assignment
     
-    /// Start a new basic block
-    pub(super) fn start_new_block(&mut self, block_id: BasicBlockId) -> Result<(), String> {
-        if let Some(ref mut function) = self.current_function {
-            function.add_block(BasicBlock::new(block_id));
-            self.current_block = Some(block_id);
-            Ok(())
-        } else {
-            Err("No current function".to_string())
-        }
-    }
+    // moved to builder/utils.rs: start_new_block
     
     /// Check if the current basic block is terminated
     fn is_current_block_terminated(&self) -> bool {
@@ -984,62 +832,7 @@ impl MirBuilder {
 
     // lower_static_method_as_function_legacy removed (use builder_calls::lower_static_method_as_function)
     
-    /// Build box declaration: box Name { fields... methods... }
-    pub(super) fn build_box_declaration(&mut self, name: String, methods: std::collections::HashMap<String, ASTNode>, fields: Vec<String>, weak_fields: Vec<String>) -> Result<(), String> {
-        // For Phase 8.4, we'll emit metadata instructions to register the box type
-        // In a full implementation, this would register type information for later use
-        
-        // Create a type registration constant
-        let type_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: type_id,
-            value: ConstValue::String(format!("__box_type_{}", name)),
-        })?;
-        
-        // For each field, emit metadata about the field
-        for field in fields {
-            let field_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: field_id,
-                value: ConstValue::String(format!("__field_{}_{}", name, field)),
-            })?;
-        }
-
-        // Record weak fields for this box
-        if !weak_fields.is_empty() {
-            let set: HashSet<String> = weak_fields.into_iter().collect();
-            self.weak_fields_by_box.insert(name.clone(), set);
-        }
-        
-        // Reserve method slots for user-defined instance methods (deterministic, starts at 4)
-        let mut instance_methods: Vec<String> = Vec::new();
-        for (mname, mast) in &methods {
-            if let ASTNode::FunctionDeclaration { is_static, .. } = mast {
-                if !*is_static { instance_methods.push(mname.clone()); }
-            }
-        }
-        instance_methods.sort();
-        if !instance_methods.is_empty() {
-            let tyid = get_or_assign_type_id(&name);
-            for (i, m) in instance_methods.iter().enumerate() {
-                let slot = 4u16.saturating_add(i as u16);
-                reserve_method_slot(tyid, m, slot);
-            }
-        }
-        
-        // Process methods - now methods is a HashMap
-        for (method_name, method_ast) in methods {
-            if let ASTNode::FunctionDeclaration { .. } = method_ast {
-                let method_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const {
-                    dst: method_id,
-                    value: ConstValue::String(format!("__method_{}_{}", name, method_name)),
-                })?;
-            }
-        }
-        
-        Ok(())
-    }
+    // moved to builder/decls.rs: build_box_declaration
 }
 
 // BinaryOpType moved to builder/ops.rs

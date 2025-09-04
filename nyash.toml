@@ -395,6 +395,9 @@ fini      = { method_id = 4294967295 }
 RUST_BACKTRACE = "1"
 # 任意。verboseログ
 NYASH_CLI_VERBOSE = "1"
+## Core‑13 MIR を既定ON（論文化基準と整合）
+NYASH_MIR_CORE13 = "1"
+NYASH_OPT_DIAG_FORBID_LEGACY = "1"
 
 [tasks]
 # LLVMビルド（nyash本体）

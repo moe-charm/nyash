@@ -4,6 +4,19 @@
  * 目的:
  * - TypeId → TypeBox 参照の最小インターフェースを用意（現時点では未実装・常に未登録）。
  * - VM/JIT 実装が存在を前提に呼び出しても no-op/fallback できる状態にする。
+ *
+ * スロット番号の方針（注釈）
+ * - ここで定義する `slot` は「VTable 用の仮想メソッドID」です。VM/JIT の内部ディスパッチ最適化
+ *   と、Builtin Box の高速経路（fast path）に使われます。
+ * - HostAPI（プラグインのネイティブ関数呼び出し）で用いるメソッド番号空間とは独立です。
+ *   HostAPI 側は TLV で型付き引数を渡し、プラグイン実装側の関数テーブルにマップされます。
+ *   そのため重複しても問題ありません（互いに衝突しない設計）。
+ * - 慣例として以下の帯域を利用します（将来の整理用の目安）：
+ *   - 0..=3: ユニバーサルスロット（toString/type/equal/copy 相当）
+ *   - 100..: Array 系（get/set/len ほか拡張）
+ *   - 200..: Map 系（size/len/has/get/set/delete ほか拡張）
+ *   - 300..: String 系（len/substring/concat/indexOf/replace/trim/toUpper/toLower）
+ *   - 400..: Console 系（log/warn/error/clear）
  */
 
 use super::type_box_abi::{TypeBox, MethodEntry};
@@ -15,6 +28,18 @@ const ARRAY_METHODS: &[MethodEntry] = &[
     MethodEntry { name: "set", arity: 2, slot: 101 },
     MethodEntry { name: "len", arity: 0, slot: 102 },
     MethodEntry { name: "length", arity: 0, slot: 102 },
+    // P0: vtable coverage extension
+    MethodEntry { name: "push", arity: 1, slot: 103 },
+    MethodEntry { name: "pop", arity: 0, slot: 104 },
+    MethodEntry { name: "clear", arity: 0, slot: 105 },
+    // P1: contains/indexOf/join
+    MethodEntry { name: "contains", arity: 1, slot: 106 },
+    MethodEntry { name: "indexOf", arity: 1, slot: 107 },
+    MethodEntry { name: "join", arity: 1, slot: 108 },
+    // P2: sort/reverse/slice
+    MethodEntry { name: "sort", arity: 0, slot: 109 },
+    MethodEntry { name: "reverse", arity: 0, slot: 110 },
+    MethodEntry { name: "slice", arity: 2, slot: 111 },
 ];
 static ARRAYBOX_TB: TypeBox = TypeBox::new_with("ArrayBox", ARRAY_METHODS);
 
@@ -25,12 +50,26 @@ const MAP_METHODS: &[MethodEntry] = &[
     MethodEntry { name: "has", arity: 1, slot: 202 },
     MethodEntry { name: "get", arity: 1, slot: 203 },
     MethodEntry { name: "set", arity: 2, slot: 204 },
+    // Extended
+    MethodEntry { name: "delete", arity: 1, slot: 205 }, // alias: remove (同一スロット)
+    MethodEntry { name: "remove", arity: 1, slot: 205 },
+    MethodEntry { name: "keys", arity: 0, slot: 206 },
+    MethodEntry { name: "values", arity: 0, slot: 207 },
+    MethodEntry { name: "clear", arity: 0, slot: 208 },
 ];
 static MAPBOX_TB: TypeBox = TypeBox::new_with("MapBox", MAP_METHODS);
 
 // --- StringBox ---
 const STRING_METHODS: &[MethodEntry] = &[
     MethodEntry { name: "len", arity: 0, slot: 300 },
+    // P1: extend String vtable
+    MethodEntry { name: "substring", arity: 2, slot: 301 },
+    MethodEntry { name: "concat", arity: 1, slot: 302 },
+    MethodEntry { name: "indexOf", arity: 1, slot: 303 },
+    MethodEntry { name: "replace", arity: 2, slot: 304 },
+    MethodEntry { name: "trim", arity: 0, slot: 305 },
+    MethodEntry { name: "toUpper", arity: 0, slot: 306 },
+    MethodEntry { name: "toLower", arity: 0, slot: 307 },
 ];
 static STRINGBOX_TB: TypeBox = TypeBox::new_with("StringBox", STRING_METHODS);
 

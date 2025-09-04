@@ -6,6 +6,7 @@ pub mod vm;
 pub mod vm_phi;
 pub mod vm_instructions;
 pub mod vm_values;
+pub mod vm_types;
 pub mod vm_boxcall;
 pub mod vm_stats;
 // Phase 9.78h: VM split scaffolding (control_flow/dispatch/frame)

@@ -1,6 +1,6 @@
 # 🚀 Nyash Language Reference 2025
 
-**最終更新: 2025年8月27日 - フィールド可視性導入！`public`/`private`ブロック構文決定！**
+**最終更新: 2025年9月4日 - Phase 12.7実装済み機能の正確な反映**
 
 ## 📖 概要
 
@@ -11,62 +11,54 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 
 ## 🔤 **1. 予約語・キーワード完全リスト**
 
-### **コア言語**
+### **Phase 12.7で確定した15個の予約語**
 | 予約語 | 用途 | 例 |
 |-------|------|---|
 | `box` | クラス定義 | `box MyClass { }` |
-| `static` | 静的Box・関数定義 | `static box Main { }` |
-| `interface` | インターフェース定義 | `interface Comparable { }` |
-| `from` | デリゲーション指定 | `box Child from Parent { }` |
 | `new` | オブジェクト生成 | `new ConsoleBox()` |
-| `me`/`this` | 自己参照 | `me.field = value` |
-
-### **変数・スコープ**
-| 予約語 | 用途 | 例 |
-|-------|------|---|
+| `me` | 自己参照（thisの代わり） | `me.field = value` |
 | `local` | ローカル変数宣言 | `local x, y = 10` |
-| `outbox` | 所有権移転変数 | `outbox result = compute()` |
-| `global` | グローバル変数 | `global CONFIG = "dev"` |
-| `public` | 公開フィールド修飾子 | `public field: TypeBox` |
-| `private` | 非公開フィールド修飾子 | `private field: TypeBox` |
-
-### **制御構文**
-| 予約語 | 用途 | 例 |
-|-------|------|---|
+| `return` | 関数リターン | `return value` |
+| `from` | デリゲーション・親メソッド呼び出し | `box Child from Parent` / `from Parent.method()` |
+| `birth` | コンストラクタ（統一名） | `birth(param) { }` |
+| `static` | 静的Box・関数定義 | `static box Main { }` |
 | `if` | 条件分岐 | `if condition { }` |
 | `else` | else節 | `else { }` |
 | `loop` | ループ（唯一の形式） | `loop(condition) { }` |
-| `break` | ループ脱出 | `break` |
-| `return` | 関数リターン | `return value` |
+| `continue` | ループ継続 | `continue` |
+| `peek` | パターンマッチング風分岐 | `peek value { "A" => 1, else => 0 }` |
+| `try` | 例外捕獲開始 | `try { }` |
+| `interface` | インターフェース定義 | `interface Comparable { }` |
 
-### **論理・演算**
-| 予約語 | 用途 | 例 |
+### **その他の重要キーワード（予約語ではない）**
+| キーワード | 用途 | 例 |
+|-------|------|---|
+| `override` | 明示的オーバーライド | `override speak() { }` |
+| `break` | ループ脱出 | `break` |
+| `catch` | 例外処理 | `catch (e) { }` |
+| `finally` | 最終処理 | `finally { }` |
+| `throw` | 例外発生 | `throw error` |
+| `nowait` | 非同期実行 | `nowait future = task()` |
+| `await` | 待機・結果取得 | `result = await future` |
+| `include` | ファイル取り込み | `include "math.nyash"` |
+| `print` | 出力（デバッグ用） | `print("Hello")` |
+| `function`/`fn` | 関数定義 | `fn add(a,b) { }` |
+| `init` | 初期化ブロック | `init { field1, field2 }` |
+| `pack` | 旧コンストラクタ（互換性） | `pack(param) { }` |
+| `outbox` | 所有権移転変数 | `outbox result = compute()` |
+| `global` | グローバル変数 | `global CONFIG = "dev"` |
+| `weak` | 弱参照修飾子 | `weak reference` |
+| `using` | 名前空間インポート | `using namespace` |
+
+### **演算子・論理**
+| 演算子/キーワード | 用途 | 例 |
 |-------|------|---|
 | `not` | 論理否定 | `not condition` |
 | `and` | 論理積 | `a and b` |
 | `or` | 論理和 | `a or b` |
 | `true`/`false` | 真偽値 | `flag = true` |
+| `null` | null値 | `value = null` |
 
-### **非同期・並行**
-| 予約語 | 用途 | 例 |
-|-------|------|---|
-| `nowait` | 非同期実行 | `nowait future = task()` |
-| `await` | 待機・結果取得 | `result = await future` |
-
-### **例外処理**
-| 予約語 | 用途 | 例 |
-|-------|------|---|
-| `try` | 例外捕獲開始 | `try { }` |
-| `catch` | 例外処理 | `catch (e) { }` |
-| `finally` | 最終処理 | `finally { }` |
-| `throw` | 例外発生 | `throw error` |
-
-### **その他**
-| 予約語 | 用途 | 例 |
-|-------|------|---|
-| `function` | 関数定義 | `function add(a,b) { }` |
-| `print` | 出力 | `print("Hello")` |
-| `include` | ファイル取り込み | `include "math.nyash"` |
 
 ---
 
@@ -78,9 +70,9 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 ```nyash
 box ClassName {
     # フィールド宣言（Phase 12.7形式）
-    public field1: TypeBox       # 公開フィールド
-    public field2: TypeBox
-    field3: TypeBox              # デフォルト非公開
+    field1: TypeBox              # フィールド型アノテーション（P0では無視）
+    field2: TypeBox
+    field3                       # 型なしも可
     
     # コンストラクタ
     birth(param1, param2) {      # birth構文に統一
@@ -94,7 +86,7 @@ box ClassName {
         return me.field1 + arg1
     }
     
-    # デストラクタ
+    # デストラクタ（fini）
     fini() {
         print("Cleanup: " + me.field1)
     }
@@ -104,15 +96,15 @@ box ClassName {
 #### **デリゲーションBox**
 ```nyash
 box Child from Parent interface Comparable {
-    private childField: TypeBox    # プライベートフィールド
+    childField: TypeBox          # 追加フィールド
     
     birth(parentParam, childParam) {  # birth構文に統一
         from Parent.birth(parentParam)  # 親コンストラクタ明示呼び出し
         me.childField = childParam
     }
     
-    # メソッド定義
-    process(data) {  # overrideキーワードは廃止
+    # メソッドオーバーライド
+    override process(data) {     # overrideキーワード必須
         local result = from Parent.process(data)  # 親メソッド呼び出し
         return result + " (Child processed)"
     }
@@ -127,28 +119,13 @@ box Child from Parent interface Comparable {
 #### **Static Box（推奨エントリーポイント）**
 ```nyash
 static box Main {
-    public console: ConsoleBox
-    public result: IntegerBox
+    console: ConsoleBox
+    result: IntegerBox
     
     main() {
         me.console = new ConsoleBox()
         me.console.log("🎉 Everything is Box!")
         return "Success"
-    }
-}
-```
-
-#### **ジェネリックBox**
-```nyash
-box Container<T> {
-    public value: T
-    
-    birth(item) {
-        me.value = item
-    }
-    
-    getValue() {
-        return me.value
     }
 }
 ```
@@ -204,11 +181,39 @@ loop(condition) {
     if exitCondition {
         break
     }
+    if skipCondition {
+        continue  # Phase 12.7で追加
+    }
 }
 
 # ❌ 削除済み - 使用不可
 while condition { }  # パーサーエラー
 loop() { }          # パーサーエラー
+```
+
+#### **Peek式（Phase 12.7で追加）**
+```nyash
+# パターンマッチング風の分岐
+local result = peek value {
+    "A" => 100,
+    "B" => 200,
+    "C" => 300,
+    else => 0  # else必須
+}
+
+# 文の形式も可
+peek status {
+    "error" => {
+        print("Error occurred")
+        return null
+    },
+    "success" => {
+        print("All good")
+    },
+    else => {
+        print("Unknown status")
+    }
+}
 ```
 
 ### **2.4 演算子・式**
@@ -237,6 +242,19 @@ isValid = not (isEmpty or hasError)
 
 # シンボル版（互換）
 result = condition && other || fallback  # 利用可能だが非推奨
+```
+
+#### **特殊演算子（Phase 12.7実装済み）**
+```nyash
+# ? 演算子 - Result伝播
+local data = readFile(path)?  # エラーなら早期return
+
+# ラムダ式
+local add = fn(x, y) { return x + y }
+local double = fn(x) { x * 2 }  # 単一式なら省略可
+
+# await式  
+local result = await asyncTask()
 ```
 
 ---
@@ -308,7 +326,7 @@ box Animal {
 
 # デリゲーション
 box Dog from Animal {
-    public breed: StringBox  # 追加フィールド
+    breed: StringBox  # 追加フィールド
     
     birth(dogName, dogBreed) {
         from Animal.birth(dogName, "Canine")  # 親コンストラクタ呼び出し
@@ -331,19 +349,21 @@ box Cat from Animal interface Playful {
 #### **名前空間・ユーティリティ**
 ```nyash
 static box MathUtils {
-    public PI: FloatBox
-    public E: FloatBox
+    PI: FloatBox
+    E: FloatBox
     
-    static {
-        me.PI = 3.14159265
-        me.E = 2.71828182
-    }
+    # 注意: static初期化ブロックは未実装
+    # 初期化はメソッド内で行う
     
     add(a, b) {
         return a + b
     }
     
     circleArea(radius) {
+        # 初回アクセスで初期化パターン
+        if me.PI == null {
+            me.PI = 3.14159265
+        }
         return me.PI * radius * radius
     }
 }
@@ -351,15 +371,14 @@ static box MathUtils {
 # 使用法
 area = MathUtils.circleArea(5)
 sum = MathUtils.add(10, 20)
-pi = MathUtils.PI
 ```
 
 #### **アプリケーションエントリーポイント**
 ```nyash
 # 🎯 推奨: Static Box Main パターン
 static box Main {
-    public console: ConsoleBox
-    public result: IntegerBox
+    console: ConsoleBox
+    result: IntegerBox
     
     main() {
         me.console = new ConsoleBox()
@@ -429,13 +448,82 @@ static box Calculator {
 
 ---
 
+## 🚀 **4.4 Phase 12.7実装済み機能**
+
+### **Peek式 - パターンマッチング風分岐**
+```nyash
+# 式として使用（値を返す）
+local grade = peek score {
+    100 => "Perfect",
+    90 => "Excellent", 
+    80 => "Good",
+    else => "Needs improvement"
+}
+
+# 文として使用（アクション実行）
+peek command {
+    "save" => {
+        saveFile()
+        print("Saved!")
+    },
+    "quit" => {
+        cleanup()
+        return
+    },
+    else => print("Unknown command")
+}
+```
+
+### **Continue文**
+```nyash
+loop(i < 100) {
+    if i % 2 == 0 {
+        continue  # 偶数をスキップ
+    }
+    process(i)
+}
+```
+
+### **フィールド型アノテーション**
+```nyash
+box Person {
+    name: StringBox      # 型情報を明記（P0では無視）
+    age: IntegerBox
+    email               # 型なしも可
+}
+```
+
+### **?演算子（Result伝播）**
+```nyash
+# ResultBoxのエラーを自動的に早期return
+local data = readFile("config.json")?
+local parsed = parseJSON(data)?
+return parsed.get("version")
+```
+
+### **Lambda式**
+```nyash
+# 基本形
+local add = fn(x, y) { return x + y }
+
+# 単一式の場合（returnは省略可）
+local double = fn(x) { x * 2 }
+
+# 高階関数での使用
+array.map(fn(x) { x * x })
+```
+
+---
+
 ## ⚡ **5. 実装済みBox型ライブラリ**
 
 ### **5.1 基本型**
 - `StringBox` - 文字列（split, find, replace, trim等）
 - `IntegerBox` - 64bit整数
+- `FloatBox` - 64bit浮動小数点数
 - `BoolBox` - 真偽値
-- `VoidBox` - null/void値
+- `NullBox` - null値
+- `VoidBox` - void値
 
 ### **5.2 コレクション**
 - `ArrayBox` - 動的配列（push, pop, get, set, join等）
@@ -444,7 +532,7 @@ static box Calculator {
 ### **5.3 システム・I/O**
 - `ConsoleBox` - コンソール入出力
 - `DebugBox` - デバッグ支援・メモリ追跡
-- `FileBox` - ファイルシステム操作
+- `FileBox` - ファイルシステム操作（プラグイン）
 
 ### **5.4 数学・時間**
 - `MathBox` - 数学関数（sin, cos, log, sqrt等）
@@ -458,14 +546,21 @@ static box Calculator {
 - `StreamBox` - ストリーム処理
 
 ### **5.6 ネットワーク・Web**
-- `HttpClientBox` - HTTP通信
+- `HttpClientBox` - HTTP通信（プラグイン）
 - `WebDisplayBox` - HTML表示（WASM）
 - `WebConsoleBox` - ブラウザコンソール（WASM）
 - `WebCanvasBox` - Canvas描画（WASM）
 
 ### **5.7 GUI・マルチメディア**
-- `EguiBox` - デスクトップGUI（Windows/Linux）
+- `EguiBox` - デスクトップGUI（Windows/Linux、プラグイン）
 - `SoundBox` - 音声再生
+
+### **5.8 特殊用途**
+- `FutureBox` - 非同期処理結果
+- `ResultBox` - エラー処理（Ok/Err）
+- `TokenBox` - キャンセルトークン
+- `FunctionBox` - 第一級関数
+- `P2PBox` - P2P通信（プラグイン）
 
 ---
 
@@ -519,19 +614,59 @@ static box Main {
 ### **7.3 よくある間違いと対策**
 ```nyash
 # ❌ よくある間違い
-public { field1 field2 }    # 旧構文 → Phase 12.7で廃止
+public { field1 field2 }    # 旧構文 → 使用不可
 x = 42                      # 変数未宣言 → ランタイムエラー
 while condition { }         # 非対応構文 → パーサーエラー
+this.field                  # thisは使用不可 → me.fieldを使用
 
 # ✅ 正しい書き方（Phase 12.7後）
-public field1: TypeBox      # 公開フィールド
-private field2: TypeBox     # 非公開フィールド
-local x = 42               # 事前宣言
+field1: TypeBox             # フィールド宣言（型は省略可）
+field2                      # 型なしフィールド
+local x = 42               # 事前宣言必須
 loop(condition) { }        # 統一ループ構文
+me.field                   # self参照はmeのみ
+```
+
+---
+
+## 📌 **8. 今後実装予定の糖衣構文（Phase 12.7-B）**
+
+### **パイプライン演算子（|>）**
+```nyash
+# 予定構文
+result = data |> normalize |> transform |> process
+
+# 現在の書き方
+result = process(transform(normalize(data)))
+```
+
+### **セーフアクセス演算子（?.）とデフォルト値（??）**
+```nyash
+# 予定構文
+name = user?.profile?.name ?? "guest"
+
+# 現在の書き方
+local name
+if user != null and user.profile != null {
+    name = user.profile.name
+} else {
+    name = "guest"
+}
+```
+
+### **デストラクチャリング**
+```nyash
+# 予定構文
+let {x, y} = point
+let [first, second, ...rest] = array
+
+# 現在の書き方
+local x = point.x
+local y = point.y
 ```
 
 ---
 
 **🎉 Nyash 2025は、AI協働設計による最先端言語システムとして、シンプルさと強力さを完全に両立しました。**
 
-*最終更新: 2025年8月27日 - フィールド可視性導入 + public/private明示化*
+*最終更新: 2025年9月4日 - Phase 12.7実装済み機能の正確な反映*

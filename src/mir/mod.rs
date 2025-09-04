@@ -82,6 +82,48 @@ impl MirCompiler {
                 return Err(format!("Diagnostic failure: {} issues detected (unlowered/legacy)", stats.diagnostics_reported));
             }
         }
+
+        // Core-13 strict: forbid legacy ops in final MIR when enabled
+        if crate::config::env::mir_core13() || crate::config::env::opt_diag_forbid_legacy() {
+            let mut legacy_count = 0usize;
+            for (_fname, function) in &module.functions {
+                for (_bb, block) in &function.blocks {
+                    for inst in &block.instructions {
+                        if matches!(inst,
+                            MirInstruction::TypeCheck { .. }
+                            | MirInstruction::Cast { .. }
+                            | MirInstruction::WeakNew { .. }
+                            | MirInstruction::WeakLoad { .. }
+                            | MirInstruction::BarrierRead { .. }
+                            | MirInstruction::BarrierWrite { .. }
+                            | MirInstruction::ArrayGet { .. }
+                            | MirInstruction::ArraySet { .. }
+                            | MirInstruction::RefGet { .. }
+                            | MirInstruction::RefSet { .. }
+                            | MirInstruction::PluginInvoke { .. }
+                        ) { legacy_count += 1; }
+                    }
+                    if let Some(term) = &block.terminator {
+                        if matches!(term,
+                            MirInstruction::TypeCheck { .. }
+                            | MirInstruction::Cast { .. }
+                            | MirInstruction::WeakNew { .. }
+                            | MirInstruction::WeakLoad { .. }
+                            | MirInstruction::BarrierRead { .. }
+                            | MirInstruction::BarrierWrite { .. }
+                            | MirInstruction::ArrayGet { .. }
+                            | MirInstruction::ArraySet { .. }
+                            | MirInstruction::RefGet { .. }
+                            | MirInstruction::RefSet { .. }
+                            | MirInstruction::PluginInvoke { .. }
+                        ) { legacy_count += 1; }
+                    }
+                }
+            }
+            if legacy_count > 0 {
+                return Err(format!("Core-13 strict: final MIR contains {} legacy ops", legacy_count));
+            }
+        }
         
         // Verify the generated MIR
         let verification_result = self.verifier.verify_module(&module);

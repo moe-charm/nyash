@@ -5,6 +5,16 @@ use crate::ast::{ASTNode, LiteralValue};
 impl super::MirBuilder {
     // Main expression dispatcher
     pub(super) fn build_expression_impl(&mut self, ast: ASTNode) -> Result<ValueId, String> {
+        if matches!(ast,
+            ASTNode::Program { .. }
+            | ASTNode::Print { .. }
+            | ASTNode::If { .. }
+            | ASTNode::Loop { .. }
+            | ASTNode::TryCatch { .. }
+            | ASTNode::Throw { .. }
+        ) {
+            return self.build_expression_impl_legacy(ast);
+        }
         match ast {
             ASTNode::Literal { value, .. } => self.build_literal(value),
 
@@ -53,116 +63,17 @@ impl super::MirBuilder {
             ASTNode::FunctionCall { name, arguments, .. } =>
                 self.build_function_call(name.clone(), arguments.clone()),
 
-            ASTNode::Call { callee, arguments, .. } => {
-                let mut arg_ids: Vec<ValueId> = Vec::new();
-                let callee_id = self.build_expression_impl(*callee.clone())?;
-                for a in arguments { arg_ids.push(self.build_expression_impl(a)?); }
-                let dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Call { dst: Some(dst), func: callee_id, args: arg_ids, effects: crate::mir::EffectMask::PURE })?;
-                Ok(dst)
-            }
+            ASTNode::Call { callee, arguments, .. } =>
+                self.build_indirect_call_expression(*callee.clone(), arguments.clone()),
 
-            ASTNode::QMarkPropagate { expression, .. } => {
-                let res_val = self.build_expression_impl(*expression.clone())?;
-                let ok_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::PluginInvoke { dst: Some(ok_id), box_val: res_val, method: "isOk".to_string(), args: vec![], effects: crate::mir::EffectMask::PURE })?;
-                let then_block = self.block_gen.next();
-                let else_block = self.block_gen.next();
-                self.emit_instruction(MirInstruction::Branch { condition: ok_id, then_bb: then_block, else_bb: else_block })?;
-                self.start_new_block(then_block)?;
-                self.emit_instruction(MirInstruction::Return { value: Some(res_val) })?;
-                self.start_new_block(else_block)?;
-                let val_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::PluginInvoke { dst: Some(val_id), box_val: res_val, method: "getValue".to_string(), args: vec![], effects: crate::mir::EffectMask::PURE })?;
-                Ok(val_id)
-            }
+            ASTNode::QMarkPropagate { expression, .. } =>
+                self.build_qmark_propagate_expression(*expression.clone()),
 
-            ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => {
-                let scr_val = self.build_expression_impl(*scrutinee.clone())?;
-                let merge_block: BasicBlockId = self.block_gen.next();
-                let result_val = self.value_gen.next();
-                let mut phi_inputs: Vec<(BasicBlockId, ValueId)> = Vec::new();
-                let mut next_block = self.block_gen.next();
-                self.start_new_block(next_block)?;
-                for (i, (label, arm_expr)) in arms.iter().enumerate() {
-                    let then_block = self.block_gen.next();
-                    if let LiteralValue::String(ref s) = label {
-                        let lit_id = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::Const { dst: lit_id, value: ConstValue::String(s.clone()) })?;
-                        let cond_id = self.value_gen.next();
-                        self.emit_instruction(crate::mir::MirInstruction::Compare { dst: cond_id, op: crate::mir::CompareOp::Eq, lhs: scr_val, rhs: lit_id })?;
-                        self.emit_instruction(crate::mir::MirInstruction::Branch { condition: cond_id, then_bb: then_block, else_bb: next_block })?;
-                        self.start_new_block(then_block)?;
-                        let then_val = self.build_expression_impl(arm_expr.clone())?;
-                        phi_inputs.push((then_block, then_val));
-                        self.emit_instruction(crate::mir::MirInstruction::Jump { target: merge_block })?;
-                        if i < arms.len() - 1 { let b = self.block_gen.next(); self.start_new_block(b)?; next_block = b; }
-                    }
-                }
-                let else_block_id = next_block; self.start_new_block(else_block_id)?;
-                let else_val = self.build_expression_impl(*else_expr.clone())?;
-                phi_inputs.push((else_block_id, else_val));
-                self.emit_instruction(crate::mir::MirInstruction::Jump { target: merge_block })?;
-                self.start_new_block(merge_block)?;
-                self.emit_instruction(crate::mir::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
-                Ok(result_val)
-            }
+            ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } =>
+                self.build_peek_expression(*scrutinee.clone(), arms.clone(), *else_expr.clone()),
 
-            ASTNode::Lambda { params, body, .. } => {
-                use std::collections::HashSet;
-                let mut used: HashSet<String> = HashSet::new();
-                let mut locals: HashSet<String> = HashSet::new(); for p in &params { locals.insert(p.clone()); }
-                fn collect_vars(ast: &ASTNode, used: &mut std::collections::HashSet<String>, locals: &mut std::collections::HashSet<String>) {
-                    match ast {
-                        ASTNode::Variable { name, .. } => { if !locals.contains(name) { used.insert(name.clone()); } }
-                        ASTNode::Assignment { target, value, .. } => { collect_vars(target, used, locals); collect_vars(value, used, locals); }
-                        ASTNode::BinaryOp { left, right, .. } => { collect_vars(left, used, locals); collect_vars(right, used, locals); }
-                        ASTNode::UnaryOp { operand, .. } => { collect_vars(operand, used, locals); }
-                        ASTNode::MethodCall { object, arguments, .. } => { collect_vars(object, used, locals); for a in arguments { collect_vars(a, used, locals); } }
-                        ASTNode::FunctionCall { arguments, .. } => { for a in arguments { collect_vars(a, used, locals); } }
-                        ASTNode::Call { callee, arguments, .. } => { collect_vars(callee, used, locals); for a in arguments { collect_vars(a, used, locals); } }
-                        ASTNode::FieldAccess { object, .. } => { collect_vars(object, used, locals); }
-                        ASTNode::New { arguments, .. } => { for a in arguments { collect_vars(a, used, locals); } }
-                        ASTNode::If { condition, then_body, else_body, .. } => {
-                            collect_vars(condition, used, locals);
-                            for st in then_body { collect_vars(st, used, locals); }
-                            if let Some(eb) = else_body { for st in eb { collect_vars(st, used, locals); } }
-                        }
-                        ASTNode::Loop { condition, body, .. } => { collect_vars(condition, used, locals); for st in body { collect_vars(st, used, locals); } }
-                        ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => {
-                            for st in try_body { collect_vars(st, used, locals); }
-                            for c in catch_clauses { for st in &c.body { collect_vars(st, used, locals); } }
-                            if let Some(fb) = finally_body { for st in fb { collect_vars(st, used, locals); } }
-                        }
-                        ASTNode::Throw { expression, .. } => { collect_vars(expression, used, locals); }
-                        ASTNode::Print { expression, .. } => { collect_vars(expression, used, locals); }
-                        ASTNode::Return { value, .. } => { if let Some(v) = value { collect_vars(v, used, locals); } }
-                        ASTNode::AwaitExpression { expression, .. } => { collect_vars(expression, used, locals); }
-                        ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => {
-                            collect_vars(scrutinee, used, locals);
-                            for (_, e) in arms { collect_vars(e, used, locals); }
-                            collect_vars(else_expr, used, locals);
-                        }
-                        ASTNode::Program { statements, .. } => { for st in statements { collect_vars(st, used, locals); } }
-                        ASTNode::FunctionDeclaration { params, body, .. } => {
-                            let mut inner = locals.clone();
-                            for p in params { inner.insert(p.clone()); }
-                            for st in body { collect_vars(st, used, &mut inner); }
-                        }
-                        _ => {}
-                    }
-                }
-                for st in body.iter() { collect_vars(st, &mut used, &mut locals); }
-                let mut captures: Vec<(String, ValueId)> = Vec::new();
-                for name in used.into_iter() {
-                    if let Some(&vid) = self.variable_map.get(&name) { captures.push((name, vid)); }
-                }
-                let me = self.variable_map.get("me").copied();
-                let dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::FunctionNew { dst, params: params.clone(), body: body.clone(), captures, me })?;
-                self.value_types.insert(dst, crate::mir::MirType::Box("FunctionBox".to_string()));
-                Ok(dst)
-            }
+            ASTNode::Lambda { params, body, .. } =>
+                self.build_lambda_expression(params.clone(), body.clone()),
 
             ASTNode::Return { value, .. } => self.build_return_statement(value.clone()),
 
@@ -207,36 +118,34 @@ impl super::MirBuilder {
             ASTNode::AwaitExpression { expression, .. } =>
                 self.build_await_expression(*expression.clone()),
 
-            ASTNode::Include { filename, .. } => {
-                let mut path = super::utils::resolve_include_path_builder(&filename);
-                if std::path::Path::new(&path).is_dir() {
-                    path = format!("{}/index.nyash", path.trim_end_matches('/'));
-                } else if std::path::Path::new(&path).extension().is_none() {
-                    path.push_str(".nyash");
-                }
-                if self.include_loading.contains(&path) {
-                    return Err(format!("Circular include detected: {}", path));
-                }
-                if let Some(name) = self.include_box_map.get(&path).cloned() {
-                    return self.build_new_expression(name, vec![]);
-                }
-                self.include_loading.insert(path.clone());
-                let content = std::fs::read_to_string(&path)
-                    .map_err(|e| format!("Include read error '{}': {}", filename, e))?;
-                let included_ast = crate::parser::NyashParser::parse_from_string(&content)
-                    .map_err(|e| format!("Include parse error '{}': {:?}", filename, e))?;
-                let mut box_name: Option<String> = None;
-                if let ASTNode::Program { statements, .. } = &included_ast {
-                    for st in statements {
-                        if let ASTNode::BoxDeclaration { name, is_static, .. } = st { if *is_static { box_name = Some(name.clone()); break; } }
-                    }
-                }
-                let bname = box_name.ok_or_else(|| format!("Include target '{}' has no static box", filename))?;
-                let _ = self.build_expression_impl(included_ast)?;
-                self.include_loading.remove(&path);
-                self.include_box_map.insert(path.clone(), bname.clone());
-                self.build_new_expression(bname, vec![])
+            ASTNode::Include { filename, .. } =>
+                self.build_include_expression(filename.clone()),
+
+            ASTNode::Program { statements, .. } =>
+                self.build_block(statements.clone()),
+
+            ASTNode::Print { expression, .. } =>
+                self.build_print_statement(*expression.clone()),
+
+            ASTNode::If { condition, then_body, else_body, .. } => {
+                let else_ast = if let Some(else_statements) = else_body {
+                    Some(ASTNode::Program { statements: else_statements.clone(), span: crate::ast::Span::unknown() })
+                } else { None };
+                self.build_if_statement(
+                    *condition.clone(),
+                    ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() },
+                    else_ast,
+                )
             }
+
+            ASTNode::Loop { condition, body, .. } =>
+                self.build_loop_statement(*condition.clone(), body.clone()),
+
+            ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } =>
+                self.build_try_catch_statement(try_body.clone(), catch_clauses.clone(), finally_body.clone()),
+
+            ASTNode::Throw { expression, .. } =>
+                self.build_throw_statement(*expression.clone()),
 
             _ => Err(format!("Unsupported AST node type: {:?}", ast)),
         }

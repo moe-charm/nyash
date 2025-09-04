@@ -731,8 +731,8 @@ impl MirOptimizer {
         stats
     }
 
-    /// Diagnostic: detect legacy instructions that should be unified into the canonical 26
-    /// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite
+    /// Diagnostic: detect legacy instructions that should be unified
+    /// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite/ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke
     /// When NYASH_OPT_DIAG or NYASH_OPT_DIAG_FORBID_LEGACY is set, prints diagnostics.
     fn diagnose_legacy_instructions(&mut self, module: &MirModule) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
@@ -749,7 +749,12 @@ impl MirOptimizer {
                         | MirInstruction::WeakNew { .. }
                         | MirInstruction::WeakLoad { .. }
                         | MirInstruction::BarrierRead { .. }
-                        | MirInstruction::BarrierWrite { .. } => { count += 1; }
+                        | MirInstruction::BarrierWrite { .. }
+                        | MirInstruction::ArrayGet { .. }
+                        | MirInstruction::ArraySet { .. }
+                        | MirInstruction::RefGet { .. }
+                        | MirInstruction::RefSet { .. }
+                        | MirInstruction::PluginInvoke { .. } => { count += 1; }
                         _ => {}
                     }
                 }
@@ -760,7 +765,12 @@ impl MirOptimizer {
                         | MirInstruction::WeakNew { .. }
                         | MirInstruction::WeakLoad { .. }
                         | MirInstruction::BarrierRead { .. }
-                        | MirInstruction::BarrierWrite { .. } => { count += 1; }
+                        | MirInstruction::BarrierWrite { .. }
+                        | MirInstruction::ArrayGet { .. }
+                        | MirInstruction::ArraySet { .. }
+                        | MirInstruction::RefGet { .. }
+                        | MirInstruction::RefSet { .. }
+                        | MirInstruction::PluginInvoke { .. } => { count += 1; }
                         _ => {}
                     }
                 }
@@ -769,9 +779,12 @@ impl MirOptimizer {
                 stats.diagnostics_reported += count;
                 if diag_on {
                     eprintln!(
-                        "[OPT][DIAG] Function '{}' has {} legacy MIR ops (TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite): unify to TypeOp/WeakRef/Barrier",
+                        "[OPT][DIAG] Function '{}' has {} legacy MIR ops: unify to Core‑13 (TypeOp/WeakRef/Barrier/BoxCall)",
                         fname, count
                     );
+                    if crate::config::env::opt_diag_forbid_legacy() {
+                        panic!("NYASH_OPT_DIAG_FORBID_LEGACY=1: legacy MIR ops detected in '{}': {}", fname, count);
+                    }
                 }
             }
         }

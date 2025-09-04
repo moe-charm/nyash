@@ -1,4 +1,25 @@
-# 🎯 CURRENT TASK - 2025-09-03 Snapshot（Phase 12.05: 旧C ABI→新C ABI(TypeBox) 変換 + 差分テスト拡充）
+# 🎯 CURRENT TASK - 2025-09-04 Update（Phase 12.7-B: ChatGPT5糖衣構文実装）
+
+## 🔄 現在のフェーズ: Phase 12.7-B
+
+### Phase 12.7-A（✅ 完了）
+- peek式、continue文、?演算子、Lambda式実装完了
+- フィールド型アノテーション（field: TypeBox）実装完了
+- birth統一、予約語15個確定
+
+### Phase 12.7-B（🔄 実装中）- ChatGPT5糖衣構文
+実装優先順位：
+1. **パイプライン演算子（|>）** - 処理フローの明確化
+2. **セーフアクセス（?.）とデフォルト値（??）** - null安全性向上
+3. **増分代入演算子（+=, -=等）** - 簡潔な記述
+4. **デストラクチャリング** - パターン束縛
+5. **範囲演算子（..）** - ループ・スライス用
+6. **高階関数演算子（/:, \:, //）** - 関数型プログラミング
+7. **ラベル付き引数** - API呼び出しの可読性
+
+---
+
+## 📋 Phase 12.05 完了事項（2025-09-03 Snapshot）
 
 目的: 既存C ABIプラグインを「統一TypeBox C ABI」に段階移行。LoaderのTypeBoxプローブ + `invoke_id` 優先経路を活用し、コアBox（Array/Map/String/Integer/Console）から順に resolve/invoke_id を実装していく。
 
@@ -75,9 +96,9 @@ NYASH_DISABLE_TYPEBOX=1 cargo test --lib typebox_tlv_diff -- --nocapture
   - 症状: ArrayBox/MapBox の生成で Unknown Box type（plugins-onlyレジストリでBuiltin未登録）。
   - 影響: `tests::vtable_*`、`backend::vm::tests::test_vm_user_box_*`、MIR周辺（BoxCall method_id）
   - 方針:
-    - A1) 既定を Builtin + Plugins に戻す（ランタイム初期化時にBuiltinを常に登録）。
+    - A1) 既定を Builtin + Plugins に戻す（ランタイム初期化時にBuiltinを常に登録）。→ 実装済（2025‑09‑04）
     - A2) テスト側で `NyashRuntimeBuilder` に「builtin有効」フラグを追加し明示登録。
-    - A3) 当面は feature `plugins-only` を導入し、デフォルトは builtin 有効に戻す。
+    - A3) 当面は feature `plugins-only` を導入し、デフォルトは builtin 有効に戻す。→ 実装済（2025‑09‑04、`plugins-only` 有効時のみBuiltin無効）
 
 - P2PBox テスト赤（on_once/ping 系）
   - 症状: 期待値とズレ（once後のカウント、ping応答の記録）。
@@ -202,6 +223,45 @@ NYASH_DISABLE_TYPEBOX=1 cargo test --lib typebox_tlv_diff -- --nocapture
 2) Phase 3: JIT側のErr統一（Timeout以外: Cancelled/Panicの表出整理、0/None撤去の完了）
 3) Verifier: await前後のcheckpoint検証ルール追加（実装済・--verifyで有効）
 4) CI/Smokes: async系3本を最小マトリクスでtimeoutガード
+
+### 追加メモ（2025-09-04 quick fixes / vtable）
+- VM: BasicBlock terminator（Return）が実行されず常にvoid返却になるバグを修正。
+  - 影響: vtable 経由で値を設定しても関数戻りが void になるケースを解消。
+  - 実装: `backend/vm_exec.rs` で terminator を命令列後に必ず実行。
+- vtable（ArrayBox）: len/get/set を vtable-first で直処理（ビルトイン）
+  - ルーティング: `type_registry` のスロット 100(get)/101(set)/102(len)
+  - 実装: `backend/vm_instructions/boxcall.rs::try_boxcall_vtable_stub`
+  - テスト: `src/tests/vtable_array_string.rs` のケースを緑化（`NYASH_ABI_VTABLE=1`）
+
+### Phase 12 Core Stabilization（2025-09-04, new）
+目的: コア型（Array / String / Console）を vtable 直行で安定化し、STRICT でも穴が出ない最低限を担保。Plugin 系は TypeBox 経路で据え置き、後続で統一を検討。
+
+完了（実装済み）
+- Array vtable 直行: len/get/set + P0: push/pop/clear + P1: contains/indexOf/join + P2: sort/reverse/slice
+- String vtable 直行: len + 追加: substring/concat（汎用経路にも反映）
+- Console vtable 直行: log/warn/error/clear
+- ターゲットテスト: `vtable_array_ext.rs`, `vtable_array_p1.rs`, `vtable_array_p2.rs`, `vtable_string.rs`, `vtable_console.rs` 追加し緑
+- トグル方針: 開発検査は `NYASH_ABI_VTABLE=1 NYASH_ABI_STRICT=1`、通常実行は `NYASH_ABI_VTABLE=1`
+
+据え置き（次期以降）
+- Plugin 系（Math/Encoding/Regex/Path/TOML/Time/Counter/File）への全面 vtable 直行化は保留。TypeBox/差分テストで安定運用を維持し、合意後に by‑slot PluginInvoke ブリッジで統一を検討。
+
+次タスク（小粒・コア内）
+1) Map vtable の厚み（keys/values/delete/remove/clear）を STRICT 前提で整備（slots: 205..208 目安）
+2) String 追加メソッド（indexOf/replace/trim/toUpper/toLower）の vtable 化＋テスト
+3) vtable/slot 表の整理（`type_registry` に注釈し HostAPI 番号空間の役割を明記）
+4) JIT 最適化の種まき（新規 slots に対する by‑id パスの追加）
+
+運用ノート
+- STRICT 有効時は未 slot 化メソッドを即検知。急がず穴埋めしながら進める。
+- Plugin 系は現状 TypeBox 経路を信頼し、vtable 直行は時期を見て段階導入（互換/回帰の監視を優先）。
+
+
+### vtable カバレッジ拡張（提案・P0→P2）
+- P0（今回追加予定）: ArrayBox push/pop/clear を vtable 直処理
+  - slots 103(push)/104(pop)/105(clear) を `type_registry` に追加し、VM vtable スタブに実装
+- P1: contains/indexOf/join
+- P2: sort/reverse/slice（副作用・比較の仕様差に注意）
 
 ---
 
@@ -1000,3 +1060,27 @@ JIT分割 進捗（継続観点）
 - 現行 `cargo test` は既存の vm_e2e.rs（別件API）で失敗あり。本変更とは独立。`cargo build` は成功。
 - MIR: 直書き Lambda 即時呼び出しのみ Lower 済み。変数に入れた FunctionBox 呼び出しは Interpreter 経由で安定。
 - 将来: ClosureEnv の by-ref 完全対応（Upvalue セル化の一般化）や me Weak の利用箇所拡大は引き続き検討。
+# 🧭 TL;DR Update (2025-09-04)
+
+目的と順序（コンテキスト節約版）
+- 1) コア安定化（vtable直行）: Array / Map / String / Console を STRICTでも穴なしに。
+- 2) リファクタリング: vtableスタブ共通化・slot表注釈整備。
+- 3) JITはEXE（AOT）到達後に段階適用（by-id最適化を追加）。
+- Plugin系はTypeBox経路を維持（将来 by-slot で統一検討）。
+
+現状ステータス（実装済み）
+- Array: len/get/set + push/pop/clear + contains/indexOf/join + sort/reverse/slice（テスト緑）。
+- String: len + substring/concat + indexOf/replace/trim/toUpper/toLower（テスト緑）。
+- Console: log/warn/error/clear（スモーク緑）。
+- Map: size/len/has/get/set + keys/values/delete/remove/clear（テスト緑）。
+- VM: Return未実行バグ修正済（terminator実行）。
+
+次タスク（最小）
+- STRICT狙い撃ちの追加境界テスト（空/不存在/Unicode/重複）でコアを固める。
+- vtableスタブの重複削減（変換/バリアを小ヘルパへ）。
+- slot表（type_registry）の役割注釈とHostAPI番号空間の明記。
+- AOTスモークに新slotを反映し、EXE経路の最小ケースをGreenに。
+
+運用
+- 検査: `NYASH_ABI_VTABLE=1 NYASH_ABI_STRICT=1`
+- 通常: `NYASH_ABI_VTABLE=1`

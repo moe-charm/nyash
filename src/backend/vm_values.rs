@@ -8,11 +8,16 @@
  */
 
 use crate::mir::{BinaryOp, CompareOp, UnaryOp};
-use super::vm::{VM, VMError, VMValue};
+use super::vm::VM;
+use super::vm_types::{VMError, VMValue};
 
 impl VM {
     /// Try to view a BoxRef as a UTF-8 string using unified semantics
     fn try_boxref_to_string(&self, b: &dyn crate::box_trait::NyashBox) -> Option<String> {
+        // Avoid recursion via PluginHost<->Loader for PluginBoxV2 during VM add/string ops
+        if b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+            return None;
+        }
         crate::runtime::semantics::coerce_to_string(b)
     }
     /// Execute binary operation

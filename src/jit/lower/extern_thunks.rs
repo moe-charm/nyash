@@ -762,10 +762,6 @@ pub(super) extern "C" fn nyash_string_from_ptr(ptr: u64, len: u64) -> i64 {
 }
 
 // ===== FunctionBox call shims (by arity, up to 4) =====
-#[cfg(feature = "cranelift-jit")]
-fn vmvalue_from_jit_arg_i64(v: i64) -> crate::backend::vm::VMValue { super::vmvalue_from_jit_arg_i64(v) }
-#[cfg(feature = "cranelift-jit")]
-fn i64_from_vmvalue(v: crate::backend::vm::VMValue) -> i64 { super::i64_from_vmvalue(v) }
 
 #[cfg(feature = "cranelift-jit")]
 fn fn_call_impl(func_h: u64, args: &[i64]) -> i64 {

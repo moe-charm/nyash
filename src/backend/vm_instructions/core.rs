@@ -156,7 +156,14 @@ impl VM {
         Ok(ControlFlow::Jump(if should_branch { then_bb } else { else_bb }))
     }
     pub(crate) fn execute_return(&self, value: Option<ValueId>) -> Result<ControlFlow, VMError> {
-        if let Some(val_id) = value { let return_val = self.get_value(val_id)?; Ok(ControlFlow::Return(return_val)) } else { Ok(ControlFlow::Return(VMValue::Void)) }
+        if let Some(val_id) = value {
+            let return_val = self.get_value(val_id)?;
+            if crate::config::env::vm_vt_trace() { eprintln!("[VT] Return id={} val={}", val_id.to_usize(), return_val.to_string()); }
+            Ok(ControlFlow::Return(return_val))
+        } else {
+            if crate::config::env::vm_vt_trace() { eprintln!("[VT] Return void"); }
+            Ok(ControlFlow::Return(VMValue::Void))
+        }
     }
     pub(crate) fn execute_typeop(&mut self, dst: ValueId, op: &TypeOpKind, value: ValueId, ty: &MirType) -> Result<ControlFlow, VMError> {
         let val = self.get_value(value)?;
