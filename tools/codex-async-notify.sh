@@ -186,8 +186,10 @@ run_codex_async() {
             STATUS_MARK=$([ $EXIT_CODE -eq 0 ] && echo '✅ Success' || echo '❌ Failed')
             CHAT_FILE="$WORK_DIR/chat-${WORK_ID}.tmp"
             TASK_ONELINE=$(echo "$TASK" | tr '\n' ' ' | sed 's/  */ /g')
+            # 現在の実行中プロセス数をカウント
+            CURRENT_RUNNING=$(count_running_codex)
             {
-              echo "# 🤖 Codex: Done [$(date +%H:%M:%S)]"
+              echo "# 🤖 Codex: Done [$(date +%H:%M:%S)] (実行中: $CURRENT_RUNNING)"
               echo "# Work ID: $WORK_ID"
               echo "# Status: $STATUS_MARK"
               echo "# Log: $LOG_FILE"
