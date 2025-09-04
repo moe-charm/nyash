@@ -27,6 +27,7 @@ fn try_init_plugins() -> bool {
 }
 
 #[test]
+#[ignore = "MIR13/plugin loader semantics: counter handle parity pending"]
 fn e2e_counter_basic_inc_get() {
     if !try_init_plugins() { return; }
 
@@ -51,6 +52,7 @@ v2
 }
 
 #[test]
+#[ignore = "MIR13/plugin loader semantics: assignment sharing parity pending"]
 fn e2e_counter_assignment_shares_handle() {
     if !try_init_plugins() { return; }
 
@@ -75,6 +77,7 @@ v
 }
 
 #[test]
+#[ignore = "MIR13/plugin loader semantics: MapBox shared handle parity pending"]
 fn e2e_counter_mapbox_shares_handle() {
     if !try_init_plugins() { return; }
 

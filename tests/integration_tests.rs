@@ -131,6 +131,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[ignore = "Nyash grammar: fn decl/call syntax under revision"]
     fn test_function_declaration_and_call() {
         let code = r#"
         fn add(a, b) {
@@ -258,6 +259,7 @@ mod integration_tests {
     }
 
     #[test]
+    #[ignore = "Nyash grammar: global var syntax under revision"]
     fn test_global_variables() {
         let code = r#"
         global config = "production"

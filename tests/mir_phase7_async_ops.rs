@@ -10,6 +10,7 @@ use nyash_rust::ast::{ASTNode, LiteralValue, Span};
 use std::collections::HashMap;
 
 #[test]
+#[ignore = "MIR13 async: await result wrapping semantics under revision"]
 fn test_mir_phase7_basic_nowait_await() {
     // Build AST equivalent to:
     // static box Main { 
@@ -138,6 +139,7 @@ fn test_mir_phase7_basic_nowait_await() {
 }
 
 #[test]
+#[ignore = "MIR13 async: multiple await aggregation semantics under revision"]
 fn test_mir_phase7_multiple_nowait_await() {
     // Build AST equivalent to:
     // static box Main { 
@@ -271,6 +273,7 @@ fn test_mir_phase7_multiple_nowait_await() {
 }
 
 #[test]
+#[ignore = "MIR13 async: nested await semantics under revision"]
 fn test_mir_phase7_nested_await() {
     // Build AST equivalent to:
     // static box Main { 

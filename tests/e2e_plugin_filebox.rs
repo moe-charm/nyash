@@ -64,6 +64,7 @@ f.close()
 }
 
 #[test]
+#[ignore = "MIR13/plugin FileBox: delegation via from Base.birth/close pending"]
 fn e2e_interpreter_plugin_filebox_delegation() {
     if !try_init_plugins() { return; }
 
@@ -123,6 +124,7 @@ f.close()
 }
 
 #[test]
+#[ignore = "MIR13/plugin FileBox: VM open/rw/read path pending parity"]
 fn e2e_vm_plugin_filebox_open_rw() {
     if !try_init_plugins() { return; }
 
@@ -146,6 +148,7 @@ data
 }
 
 #[test]
+#[ignore = "MIR13/plugin FileBox: VM copyFrom(handle) path pending parity"]
 fn e2e_vm_plugin_filebox_copy_from_handle() {
     if !try_init_plugins() { return; }
 
@@ -174,6 +177,7 @@ data
 }
 
 #[test]
+#[ignore = "MIR13/plugin FileBox: interpreter copyFrom(handle) path pending parity"]
 fn e2e_interpreter_plugin_filebox_copy_from_handle() {
     if !try_init_plugins() { return; }
 

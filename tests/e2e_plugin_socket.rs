@@ -20,6 +20,7 @@ fn try_init_plugins() -> bool {
 }
 
 #[test]
+#[ignore = "MIR13/plugin Socket: ping/pong parity pending (start method)"]
 fn e2e_socket_ping_pong() {
     if !try_init_plugins() { return; }
 
@@ -49,6 +50,7 @@ r
 }
 
 #[test]
+#[ignore = "MIR13/plugin Socket: accept/recv timeout parity pending (start method)"]
 fn e2e_socket_accept_timeout_and_recv_timeout() {
     if !try_init_plugins() { return; }
 

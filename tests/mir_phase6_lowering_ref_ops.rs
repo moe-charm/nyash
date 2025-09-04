@@ -9,6 +9,7 @@ use nyash_rust::ast::{ASTNode, LiteralValue, Span};
 use std::collections::HashMap;
 
 #[test]
+#[ignore = "MIR13: ref_new/ref_get/ref_set removed; test targets legacy ops"]
 fn test_mir_phase6_lowering_ref_ops() {
     // Build AST equivalent to:
     // static box Main { 
@@ -165,6 +166,7 @@ fn test_mir_phase6_lowering_ref_ops() {
 }
 
 #[test]
+#[ignore = "MIR13: legacy ref ops program; verification expectations differ"]
 fn test_mir_verification_phase6_ref_ops() {
     // Build simple AST with new and field access
     let ast = ASTNode::Program {

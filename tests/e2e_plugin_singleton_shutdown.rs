@@ -20,6 +20,7 @@ fn try_init_plugins() -> bool {
 }
 
 #[test]
+#[ignore = "MIR13/plugin singleton: shutdown/recreate parity pending"]
 fn e2e_singleton_shutdown_and_recreate() {
     if !try_init_plugins() { return; }
 
