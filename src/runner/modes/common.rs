@@ -1,10 +1,31 @@
 use super::super::NyashRunner;
+use crate::runner::json_v0_bridge;
 use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter};
+// Use the library crate's plugin init module rather than the bin crate root
+use nyash_rust::runner_plugin_init;
 use std::{fs, process};
 
 impl NyashRunner {
     /// File-mode dispatcher (thin wrapper around backend/mode selection)
     pub(crate) fn run_file(&self, filename: &str) {
+        // Direct v0 bridge when requested via CLI/env
+        let use_ny_parser = self.config.parser_ny || std::env::var("NYASH_USE_NY_PARSER").ok().as_deref() == Some("1");
+        if use_ny_parser {
+            let code = match fs::read_to_string(filename) {
+                Ok(content) => content,
+                Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+            };
+            match json_v0_bridge::parse_source_v0_to_module(&code) {
+                Ok(module) => {
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        println!("🚀 Nyash MIR Interpreter - (parser=ny) Executing file: {} 🚀", filename);
+                    }
+                    self.execute_mir_module(&module);
+                    return;
+                }
+                Err(e) => { eprintln!("❌ Direct bridge parse error: {}", e); process::exit(1); }
+            }
+        }
         // AST dump mode
         if self.config.dump_ast {
             println!("🧠 Nyash AST Dump - Processing file: {}", filename);
@@ -94,6 +115,11 @@ impl NyashRunner {
 
     /// Execute Nyash file with interpreter (common helper)
     pub(crate) fn execute_nyash_file(&self, filename: &str) {
+        // Ensure plugin host and provider mappings are initialized (idempotent)
+        if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
+            // Call via lib crate to avoid referring to the bin crate root
+            runner_plugin_init::init_bid_plugins();
+        }
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,

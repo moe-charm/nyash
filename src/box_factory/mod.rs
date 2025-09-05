@@ -163,7 +163,16 @@ impl UnifiedBoxRegistry {
                 Err(_) => continue, // Try next factory
             }
         }
-        
+        // Final fallback: if v2 plugin registry has a provider for this name, try it once
+        {
+            let v2 = crate::runtime::get_global_registry();
+            if let Some(_prov) = v2.get_provider(name) {
+                if let Ok(b) = v2.create_box(name, args) {
+                    return Ok(b);
+                }
+            }
+        }
+
         Err(RuntimeError::InvalidOperation {
             message: format!("Unknown Box type: {}", name),
         })

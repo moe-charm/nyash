@@ -1,0 +1,29 @@
+// Entry: read stdin, parse with ParserV0, print JSON IR or error JSON
+
+include("./apps/ny-parser-nyash/parser_minimal.nyash")
+
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    // Read all stdin
+    local buf = ""
+    loop(true) {
+      local line = console.readLine()
+      if line == null { break }
+      buf = buf + line + "\n"
+    }
+    if buf == "" { buf = "return 0\n" }
+    local ir = ParserV0.parse_program(buf)
+    // If already an Error envelope, print as-is
+    local s = ir.as_any().toString()
+    if s.indexOf("\"kind\":\"Error\"") >= 0 {
+      console.log(s)
+      return 1
+    }
+    // Expect MapBox with Program; toJson available on MapBox
+    local json = ir.toJson()
+    console.log(json)
+    return 0
+  }
+}
+

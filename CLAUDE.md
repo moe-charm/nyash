@@ -3,7 +3,7 @@
 このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
 ## Start Here (必ずここから)
-- 現在のタスク: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+- 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)
 - ドキュメントハブ: [README.md](README.md)
 - 🚀 **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
  - 📊 **JIT統計JSONスキーマ(v1)**: [jit_stats_json_v1.md](docs/reference/jit/jit_stats_json_v1.md)
@@ -28,7 +28,7 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 ### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
 **すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-**現在のフェーズ：Phase 11 (MIR Core-15確定 → LLVM準備)**
+**現在のフェーズ：Phase 15 (Nyashセルフホスティング - 80k→20k行への革命的圧縮)**
 
 ## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
 
@@ -108,12 +108,13 @@ cargo build --release --features llvm
 ./target/release/nyash --aot program.nyash -o program.exe
 ```
 
-## 📝 Update (2025-08-31)
-- MIR Core-15への統合（37命令→15命令）
-- LLVM導入開始（Phase 11）
-- 各種Rewriteトグル追加
-- JIT/AOT 予約シンボル登録
-- 詳細: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+## 📝 Update (2025-09-05)
+- 🎉 Phase 15到達！セルフホスティング実装中
+- v0 Nyパーサー完成（Ny→JSON IR v0）
+- 直接ブリッジ設計とAOT P2スタブ実装
+- MIR 13命令への最終最適化完了
+- 80k→20k行（75%削減）の革命的圧縮を目指す
+- 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
 
 ## ⚡ 重要な設計原則
 
@@ -253,7 +254,8 @@ box MyBox {
 ## 📚 ドキュメント構造
 
 ### 🎯 最重要ドキュメント（開発者向け）
-- **[copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt)** - Phase順開発計画
+- **[Phase 15 セルフホスティング計画](docs/development/roadmap/phases/phase-15/self-hosting-plan.txt)** - 80k→20k行革命
+- **[Phase 15 ROADMAP](docs/development/roadmap/phases/phase-15/ROADMAP.md)** - 現在の進捗チェックリスト
 - **[CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)** - 現在進行状況詳細
 - **[native-plan/README.md](docs/development/roadmap/native-plan/README.md)** - ネイティブビルド計画
 
@@ -413,3 +415,4 @@ Notes:
 - ここから先の導線は README.md に集約
 - 詳細情報は各docsファイルへのリンクから辿る
 - このファイルは500行以内を維持する（現在約490行）
+- Phase 15セルフホスティング実装中！詳細は[Phase 15](docs/development/roadmap/phases/phase-15/)へ
