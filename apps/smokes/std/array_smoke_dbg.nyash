@@ -1,0 +1,43 @@
+static box Main {
+  main() {
+    local A
+    A = include "apps/std/array.nyash"
+    local fails
+    fails = 0
+
+    local a
+    a = new ArrayBox()
+    print("len0=" + A.array_len(a))
+
+    // push
+    print("push1->" + A.array_push(a, 10))
+    print("push2->" + A.array_push(a, 20))
+    print("len2=" + A.array_len(a))
+
+    // pop
+    local v
+    v = A.array_pop(a)
+    print("pop1=" + v)
+    print("len1=" + A.array_len(a))
+    // pop remaining and one extra -> null
+    v = A.array_pop(a)
+    print("pop2=" + v)
+    v = A.array_pop(a)
+    print("pop3=" + v)
+
+    // slice
+    A.array_push(a, 1)
+    A.array_push(a, 2)
+    A.array_push(a, 3)
+    local s
+    s = A.array_slice(a, 0, 2)
+    print("slice_len1=" + s.length())
+    print("s[0]=" + s.get(0))
+    print("s[1]=" + s.get(1))
+    // clamp
+    s = A.array_slice(a, -5, 99)
+    print("slice_len2=" + s.length())
+    return 0
+  }
+}
+

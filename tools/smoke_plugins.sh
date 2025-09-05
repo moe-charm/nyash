@@ -25,6 +25,11 @@ build_plugin plugins/nyash-math-plugin
 
 export NYASH_CLI_VERBOSE=1
 # Default: keep strict diagnostics off for plugin smoke unless explicitly enabled
+if [[ "${NYASH_PLUGINS_STRICT:-0}" == "1" ]]; then
+  echo "[Plugins] Strict: ON" >&2
+else
+  echo "[Plugins] Strict: OFF" >&2
+fi
 if [[ "${NYASH_PLUGINS_STRICT:-0}" != "1" ]]; then
   # Override strict legacy MIR diagnostics for plugin smoke by default
   export NYASH_OPT_DIAG_FORBID_LEGACY=0

@@ -20,6 +20,7 @@ Quick JIT self‑host flow (Phase 15):
 ```
 cargo build --release --features cranelift-jit
 NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh                 # Core JIT + examples (plugins disabled)
+NYASH_LOAD_NY_PLUGINS=1 ./tools/jit_smoke.sh             # Std Ny smokes (optional)
 ./tools/ny_roundtrip_smoke.sh                            # Roundtrip A/B
 NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh          # Plugins smoke (optional)
 ./tools/using_e2e_smoke.sh                               # using/nyash.link E2E (optional)
@@ -404,6 +405,7 @@ MIT License - Use freely in your projects!
 - **August 29**: Native EXE compilation achieved!
 - **September 1**: TypeBox ABI unification - C ABI + Nyash ABI seamless integration
 - **September 2**: 🔥 Self-hosting path clear - Nyash ABI in C (no Rust dependency!)
+- **September 4**: 🪟 Windows GUI displayed via JIT/native EXE (OS-native window)
 
 *24 days from zero to self-hosting capability - a new record in language development!*
 

@@ -1,0 +1,10 @@
+// JIT AOT smoke: StringBox.length() should be 3
+static box Main {
+  main() {
+    local s
+    s = new StringBox("abc")
+    print("Result: " + s.length())
+    return 0
+  }
+}
+

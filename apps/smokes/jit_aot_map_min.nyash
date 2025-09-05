@@ -1,0 +1,11 @@
+// JIT AOT smoke: MapBox minimal (set/get/size)
+static box Main {
+  main() {
+    local m, s
+    m = new MapBox()
+    m.set(1, 42)
+    s = m.size()
+    return s  // expect 1
+  }
+}
+

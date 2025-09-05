@@ -24,6 +24,7 @@ fn ensure_default() {
     // Read-only defaults
     for s in [
         "nyash.array.len_h",
+        "nyash.string.len_h",
         "nyash.any.length_h",
         "nyash.any.is_empty_h",
         "nyash.map.size_h",
@@ -54,6 +55,7 @@ fn ensure_default() {
     r.sig.entry("nyash.array.get_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::Handle });
     r.sig.entry("nyash.array.len_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
     // String helpers
+    r.sig.entry("nyash.string.len_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle], ret: ArgKind::I64 });
     r.sig.entry("nyash.string.charCodeAt_h".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::I64], ret: ArgKind::I64 });
     r.sig.entry("nyash.string.concat_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::Handle });
     r.sig.entry("nyash.semantics.add_hh".to_string()).or_default().push(Signature { args: vec![ArgKind::Handle, ArgKind::Handle], ret: ArgKind::Handle });

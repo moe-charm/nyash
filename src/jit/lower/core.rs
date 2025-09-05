@@ -182,7 +182,87 @@ impl LowerCore {
         Ok(())
     }
 
+    /// Emit robust length retrieval with fallback for String/Any:
+    /// 1) Prefer `nyash.string.len_h(recv)`
+    /// 2) If that yields 0 at runtime, select `nyash.any.length_h(recv)`
+    /// Returns: pushes selected length (i64) onto builder stack.
+    fn emit_len_with_fallback_param(&mut self, b: &mut dyn IRBuilder, pidx: usize) {
+        use super::builder::CmpKind;
+        // Temp locals
+        let t_string = self.next_local; self.next_local += 1;
+        let t_any = self.next_local; self.next_local += 1;
+        let t_cond = self.next_local; self.next_local += 1;
+        // String.len_h
+        b.emit_param_i64(pidx);
+        b.emit_host_call("nyash.string.len_h", 1, true);
+        b.store_local_i64(t_string);
+        // Any.length_h
+        b.emit_param_i64(pidx);
+        b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+        b.store_local_i64(t_any);
+        // cond = (string_len == 0)
+        b.load_local_i64(t_string);
+        b.emit_const_i64(0);
+        b.emit_compare(CmpKind::Eq);
+        b.store_local_i64(t_cond);
+        // select(cond ? any_len : string_len)
+        b.load_local_i64(t_cond);   // cond (bottom)
+        b.load_local_i64(t_any);    // then
+        b.load_local_i64(t_string); // else
+        b.emit_select_i64();
+    }
 
+    fn emit_len_with_fallback_local_handle(&mut self, b: &mut dyn IRBuilder, slot: usize) {
+        use super::builder::CmpKind;
+        let t_string = self.next_local; self.next_local += 1;
+        let t_any = self.next_local; self.next_local += 1;
+        let t_cond = self.next_local; self.next_local += 1;
+        // String.len_h
+        b.load_local_i64(slot);
+        b.emit_host_call("nyash.string.len_h", 1, true);
+        b.store_local_i64(t_string);
+        // Any.length_h
+        b.load_local_i64(slot);
+        b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+        b.store_local_i64(t_any);
+        // cond = (string_len == 0)
+        b.load_local_i64(t_string);
+        b.emit_const_i64(0);
+        b.emit_compare(CmpKind::Eq);
+        b.store_local_i64(t_cond);
+        // select(cond ? any_len : string_len)
+        b.load_local_i64(t_cond);
+        b.load_local_i64(t_any);
+        b.load_local_i64(t_string);
+        b.emit_select_i64();
+    }
+
+    fn emit_len_with_fallback_literal(&mut self, b: &mut dyn IRBuilder, s: &str) {
+        use super::builder::CmpKind;
+        let t_string = self.next_local; self.next_local += 1;
+        let t_any = self.next_local; self.next_local += 1;
+        let t_cond = self.next_local; self.next_local += 1;
+        // String.len_h on literal handle
+        b.emit_string_handle_from_literal(s);
+        b.emit_host_call("nyash.string.len_h", 1, true);
+        b.store_local_i64(t_string);
+        // Any.length_h on literal handle (recreate handle; safe in v0)
+        b.emit_string_handle_from_literal(s);
+        b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+        b.store_local_i64(t_any);
+        // cond = (string_len == 0)
+        b.load_local_i64(t_string);
+        b.emit_const_i64(0);
+        b.emit_compare(CmpKind::Eq);
+        b.store_local_i64(t_cond);
+        // select(cond ? any_len : string_len)
+        b.load_local_i64(t_cond);
+        b.load_local_i64(t_any);
+        b.load_local_i64(t_string);
+        b.emit_select_i64();
+    }
+
+    
     fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId, func: &crate::mir::MirFunction) -> Result<(), String> {
         use crate::mir::MirInstruction as I;
         match instr {
@@ -425,13 +505,21 @@ impl LowerCore {
                 if let Some(v) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, v); }
                 if let Some(v) = self.known_f64.get(src).copied() { self.known_f64.insert(*dst, v); }
                 if let Some(v) = self.known_str.get(src).cloned() { self.known_str.insert(*dst, v); }
-                // If source is a parameter, materialize it on the stack for downstream ops
-                if let Some(pidx) = self.param_index.get(src).copied() {
-                    b.emit_param_i64(pidx);
-                }
                 // Propagate boolean classification through Copy
                 if self.bool_values.contains(src) { self.bool_values.insert(*dst); }
-                // Otherwise no-op for codegen (stack-machine handles sources directly later)
+                // If source is a parameter, materialize it on the stack for downstream ops and persist into dst slot
+                if let Some(pidx) = self.param_index.get(src).copied() {
+                    b.emit_param_i64(pidx);
+                    let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    b.ensure_local_i64(slot);
+                    b.store_local_i64(slot);
+                } else if let Some(src_slot) = self.local_index.get(src).copied() {
+                    // If source already has a local slot (e.g., a handle), copy into dst's slot
+                    b.load_local_i64(src_slot);
+                    let dst_slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    b.ensure_local_i64(dst_slot);
+                    b.store_local_i64(dst_slot);
+                }
             }
             I::BinOp { dst, op, lhs, rhs } => { self.lower_binop(b, op, lhs, rhs, dst, func); }
             I::Compare { op, lhs, rhs, dst } => { self.lower_compare(b, op, lhs, rhs, dst, func); }
@@ -470,11 +558,15 @@ impl LowerCore {
                 b.ensure_local_i64(slot);
                 b.store_local_i64(slot);
             }
-            I::Load { dst: _, ptr } => {
-                // Minimal lowering: load from local slot keyed by ptr, default 0 if unset
-                let slot = *self.local_index.entry(*ptr).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
-                b.ensure_local_i64(slot);
-                b.load_local_i64(slot);
+            I::Load { dst, ptr } => {
+                // Minimal lowering: load from local slot keyed by ptr, then materialize into dst's own slot
+                let src_slot = *self.local_index.entry(*ptr).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                b.ensure_local_i64(src_slot);
+                b.load_local_i64(src_slot);
+                // Persist into dst's slot to make subsequent uses find it via local_index
+                let dst_slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                b.ensure_local_i64(dst_slot);
+                b.store_local_i64(dst_slot);
             }
             I::Phi { dst, .. } => {
                 // PHI をローカルに materialize して後続の Return で安定参照
@@ -525,9 +617,10 @@ impl LowerCore {
                 }
             }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
-                // Clean path: delegate to ops_ext and return
-                let _ = self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())?;
-                return Ok(());
+                // Prefer ops_ext; if not handled, fall back to legacy path below
+                if self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())? {
+                    return Ok(());
+                }
             }
                     /* legacy BoxCall branch removed (now handled in ops_ext)
                     // handled in helper (read-only simple methods)
@@ -663,21 +756,80 @@ impl LowerCore {
                 } else if crate::jit::config::current().hostcall {
                     match method.as_str() {
                         "len" | "length" => {
+                            // Constant fold: if receiver is NewBox(StringBox, Const String), return its length directly
+                            if let Some(did) = dst.as_ref() {
+                                let mut lit_len: Option<i64> = None;
+                                for (_bid, bb) in func.blocks.iter() {
+                                    for ins in bb.instructions.iter() {
+                                        if let crate::mir::MirInstruction::NewBox { dst: ndst, box_type, args } = ins {
+                                            if ndst == array && box_type == "StringBox" && args.len() == 1 {
+                                                let src = args[0];
+                                                if let Some(s) = self.known_str.get(&src) { lit_len = Some(s.len() as i64); break; }
+                                                // scan Const directly
+                                                for (_b2, bb2) in func.blocks.iter() {
+                                                    for ins2 in bb2.instructions.iter() {
+                                                        if let crate::mir::MirInstruction::Const { dst: cdst, value } = ins2 { if *cdst == src { if let crate::mir::ConstValue::String(sv) = value { lit_len = Some(sv.len() as i64); break; } } }
+                                                    }
+                                                    if lit_len.is_some() { break; }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if lit_len.is_some() { break; }
+                                }
+                                if let Some(n) = lit_len {
+                                    b.emit_const_i64(n);
+                                    self.known_i64.insert(*did, n);
+                                    return Ok(());
+                                }
+                            }
                             if let Some(pidx) = self.param_index.get(array).copied() {
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"allow", "reason":"sig_ok", "argc":1, "arg_types":["Handle"]}),
-                                    "hostcall","<jit>"
-                                );
-                                b.emit_param_i64(pidx);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, dst.is_some());
+                                // Param 経路: string.len_h → 0 の場合 any.length_h へフォールバック
+                                self.emit_len_with_fallback_param(b, pidx);
                             } else {
                                 crate::jit::events::emit_lower(
                                     serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"fallback", "reason":"receiver_not_param", "argc":1, "arg_types":["Handle"]}),
                                     "hostcall","<jit>"
                                 );
-                                let arr_idx = -1;
-                                b.emit_const_i64(arr_idx);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                // Try local handle (AOT/JIT-AOT) before legacy index fallback
+                                if let Some(slot) = self.local_index.get(array).copied() {
+                                    // ローカルハンドル: string.len_h → any.length_h フォールバック
+                                    self.emit_len_with_fallback_local_handle(b, slot);
+                                } else if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
+                                    // Attempt reconstruction for StringBox literal: scan NewBox(StringBox, Const String)
+                                    let mut lit: Option<String> = None;
+                                    for (_bid, bb) in func.blocks.iter() {
+                                        for ins in bb.instructions.iter() {
+                                            if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins {
+                                                if dst == array && box_type == "StringBox" && args.len() == 1 {
+                                                    if let Some(src) = args.get(0) {
+                                                        if let Some(s) = self.known_str.get(src).cloned() { lit = Some(s); break; }
+                                                        // Also scan Const directly
+                                                        for (_bid2, bb2) in func.blocks.iter() {
+                                                            for ins2 in bb2.instructions.iter() {
+                                                                if let crate::mir::MirInstruction::Const { dst: cdst, value } = ins2 { if cdst == src { if let crate::mir::ConstValue::String(sv) = value { lit = Some(sv.clone()); break; } } }
+                                                            }
+                                                            if lit.is_some() { break; }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if lit.is_some() { break; }
+                                    }
+                                    if let Some(s) = lit {
+                                        // リテラル復元: string.len_h → any.length_h フォールバック
+                                        self.emit_len_with_fallback_literal(b, &s);
+                                    } else {
+                                        let arr_idx = -1;
+                                        b.emit_const_i64(arr_idx);
+                                        b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                    }
+                                } else {
+                                    let arr_idx = -1;
+                                    b.emit_const_i64(arr_idx);
+                                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                }
                             }
                         }
                         // math.* minimal boundary: use registry signature to decide allow/fallback (no actual hostcall yet)

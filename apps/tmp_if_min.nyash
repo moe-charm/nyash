@@ -1,0 +1,12 @@
+static box Main {
+  main() {
+    local x
+    x = 3
+    if x == 3 {
+      print("ok3")
+      return 0
+    }
+    print("bad")
+    return 1
+  }
+}

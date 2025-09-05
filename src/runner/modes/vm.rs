@@ -55,6 +55,12 @@ impl NyashRunner {
             }
         }
 
+        // Optional: dump MIR for diagnostics
+        if std::env::var("NYASH_VM_DUMP_MIR").ok().as_deref() == Some("1") {
+            let mut p = nyash_rust::mir::MirPrinter::new();
+            eprintln!("{}", p.print_module(&compile_result.module));
+        }
+
         // Optional: VM-only escape analysis to elide barriers before execution
         let mut module_vm = compile_result.module.clone();
         if std::env::var("NYASH_VM_ESCAPE_ANALYSIS").ok().as_deref() == Some("1") {

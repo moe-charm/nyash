@@ -1,0 +1,38 @@
+// std.string smoke: length/concat/slice/index_of/equals
+static box Main {
+  main() {
+    local S
+    S = include "apps/std/string.nyash"
+    local fails
+    fails = 0
+
+    // length
+    if S.string_length("abc") != 3 { fails = fails + 1 }
+    if S.string_length("") != 0 { fails = fails + 1 }
+
+    // concat
+    if S.string_concat("a", "b") != "ab" { fails = fails + 1 }
+    if S.string_concat("", "x") != "x" { fails = fails + 1 }
+
+    // slice (clamp + basic)
+    if S.string_slice("hello", 1, 4) != "ell" { fails = fails + 1 }
+    if S.string_slice("hi", -5, 5) != "hi" { fails = fails + 1 }
+    if S.string_slice("x", 0, 0) != "" { fails = fails + 1 }
+
+    // index_of
+    if S.string_index_of("banana", "na") != 2 { fails = fails + 1 }
+    if S.string_index_of("banana", "zz") != -1 { fails = fails + 1 }
+    if S.string_index_of("abc", "") != 0 { fails = fails + 1 }
+
+    // equals
+    if S.string_equals("a", "a") != 1 { fails = fails + 1 }
+    if S.string_equals("a", "b") != 0 { fails = fails + 1 }
+
+    if fails == 0 {
+      print("OK: string")
+      return 0
+    }
+    print("FAIL: string (" + fails.toString() + ")")
+    return 1
+  }
+}

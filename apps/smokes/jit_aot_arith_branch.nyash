@@ -1,0 +1,13 @@
+// JIT AOT smoke: arithmetic + compare + branch + return
+static box Main {
+  main() {
+    local x, y
+    x = 1 + 2 * 3    // 7
+    y = x - 4        // 3
+    if y > 2 {
+      return y + 10  // 13
+    }
+    return y
+  }
+}
+

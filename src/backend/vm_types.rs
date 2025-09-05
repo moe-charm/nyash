@@ -120,7 +120,10 @@ impl VMValue {
 
     /// Convert from NyashBox to VMValue
     pub fn from_nyash_box(nyash_box: Box<dyn crate::box_trait::NyashBox>) -> VMValue {
-        if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
+        if nyash_box.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+            // Treat NullBox as Void in VMValue to align with `null` literal semantics
+            VMValue::Void
+        } else if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
             VMValue::Integer(int_box.value)
         } else if let Some(bool_box) = nyash_box.as_any().downcast_ref::<BoolBox>() {
             VMValue::Bool(bool_box.value)

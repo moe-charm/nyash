@@ -1,0 +1,10 @@
+static box Main {
+  main() {
+    local S
+    S = include "apps/std/string.nyash"
+    local x
+    x = S.string_length("abc")
+    print("len=" + x.toString())
+    return 0
+  }
+}

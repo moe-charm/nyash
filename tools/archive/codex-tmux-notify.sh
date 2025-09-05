@@ -1,7 +1,8 @@
 #!/bin/bash
 # Simple Codex to Claude notification via tmux
 
-CLAUDE_SESSION="claude"  # tmuxセッション名
+# 既定セッション名: codex（必要なら環境変数 CLAUDE_SESSION で上書き可）
+CLAUDE_SESSION="${CLAUDE_SESSION:-codex}"
 LOG_FILE="$HOME/.codex-work.log"
 
 # Codex実行を記録
@@ -24,3 +25,4 @@ else
 fi
 
 exit $EXIT_CODE
+

@@ -404,7 +404,9 @@ NYASH_OPT_DIAG_FORBID_LEGACY = "1"
 ny_plugins = [
   "apps/std/string_std.nyash",
   "apps/std/array_std.nyash",
-  "apps/std/map_std.nyash"
+  "apps/std/map_std.nyash",
+  "apps/std/string.nyash",
+  "apps/std/array.nyash"
 ]
 
 [tasks]

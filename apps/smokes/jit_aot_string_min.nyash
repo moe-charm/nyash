@@ -1,0 +1,13 @@
+// JIT AOT smoke: StringBox literal birth + add + compare
+static box Main {
+  main() {
+    local a, b, c, d
+    a = new StringBox("ab")
+    b = new StringBox("c")
+    c = a + b
+    d = new StringBox("abc")
+    if c == d { return 1 }
+    return 0
+  }
+}
+

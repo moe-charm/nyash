@@ -9,13 +9,14 @@ if [ $# -eq 0 ]; then
     echo "  $0 'Write paper introduction' gemini-session"
     echo "  $0 'Review code quality' chatgpt"
     echo ""
-    echo "Default tmux session: claude"
+    echo "Default tmux session: codex (override with CODEX_DEFAULT_SESSION env or 2nd arg)"
     exit 1
 fi
 
 # 引数解析
 TASK="$1"
-TARGET_SESSION="${2:-claude}"  # デフォルトは "claude"
+# デフォルトは env `CODEX_DEFAULT_SESSION`、なければ "codex"
+TARGET_SESSION="${2:-${CODEX_DEFAULT_SESSION:-codex}}"
 
 # 設定
 WORK_DIR="$HOME/.codex-async-work"

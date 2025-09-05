@@ -79,7 +79,23 @@ impl PluginLoaderV2 {
             candidates.push(base.with_extension("so"));
         }
 
-        let lib_path = candidates.into_iter().find(|p| p.exists()).unwrap_or_else(|| base.to_path_buf());
+        // Prefer existing path; otherwise try to resolve via plugin_paths.search_paths
+        let mut lib_path = candidates.iter().find(|p| p.exists()).cloned();
+        if lib_path.is_none() {
+            if let Some(cfg) = &self.config {
+                // Try each candidate filename against search paths
+                for c in &candidates {
+                    if let Some(fname) = c.file_name().and_then(|s| s.to_str()) {
+                        if let Some(resolved) = cfg.resolve_plugin_path(fname) {
+                            let pb = PathBuf::from(resolved);
+                            if pb.exists() { lib_path = Some(pb); break; }
+                        }
+                    }
+                }
+            }
+        }
+        let lib_path = lib_path.unwrap_or_else(|| base.to_path_buf());
+        if dbg_on() { eprintln!("[PluginLoaderV2] load_plugin: lib='{}' path='{}'", lib_name, lib_path.display()); }
         let lib = unsafe { Library::new(&lib_path) }.map_err(|_| BidError::PluginError)?;
         let lib_arc = Arc::new(lib);
 
@@ -275,8 +291,15 @@ impl PluginLoaderV2 {
         let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
 
         // Call birth (no args TLV) and read returned instance id (little-endian u32 in bytes 0..4)
+        if dbg_on() {
+            eprintln!("[PluginLoaderV2] invoking birth: box_type={} type_id={} birth_id={}", box_type, type_id, birth_id);
+        }
         let tlv = crate::runtime::plugin_ffi_common::encode_empty_args();
         let (code, out_len, out_buf) = super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, birth_id, 0, &tlv);
+        if dbg_on() {
+            eprintln!("[PluginLoaderV2] create_box: box_type={} type_id={} birth_id={} code={} out_len={}", box_type, type_id, birth_id, code, out_len);
+            if out_len > 0 { eprintln!("[PluginLoaderV2] create_box: out[0..min(8)]={:02x?}", &out_buf[..out_len.min(8)]); }
+        }
         if code != 0 || out_len < 4 { return Err(BidError::PluginError); }
         let instance_id = u32::from_le_bytes([out_buf[0], out_buf[1], out_buf[2], out_buf[3]]);
 

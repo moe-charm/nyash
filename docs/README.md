@@ -1,7 +1,7 @@
 # 📚 Nyash Documentation
 
 ## 🚀 はじめに
-- **現在のタスク**: [development/current/CURRENT_TASK.md](development/current/CURRENT_TASK.md)
+- **現在のタスク**: [../CURRENT_TASK.md](../CURRENT_TASK.md)
 - **コア概念の速習**: [reference/architecture/nyash_core_concepts.md](reference/architecture/nyash_core_concepts.md)
 
 ---
@@ -56,7 +56,7 @@
  - [CLIオプション早見表](tools/cli-options.md)
 
 ### 開発状況
-- [現在のタスク](development/current/CURRENT_TASK.md)
+- [現在のタスク](../CURRENT_TASK.md)
 - [開発ロードマップ](development/roadmap/)
 - [Phase別計画](development/roadmap/phases/)
   - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)** - プラグイン革命！

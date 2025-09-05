@@ -427,6 +427,8 @@ mod tests {
             run_task: None,
             load_ny_plugins: false,
             parser_ny: false,
+            ny_parser_pipe: false,
+            json_file: None,
         };
         
         assert_eq!(config.backend, "interpreter");

@@ -118,11 +118,11 @@ impl UnifiedBoxRegistry {
         // Prefer plugin-builtins when enabled and provider is available in v2 registry
         if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
             use crate::runtime::{get_global_registry, BoxProvider};
-            // Allowlist types for override: env NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox" (default: ArrayBox,MapBox)
+            // Allowlist types for override: env NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox" (default: none)
             let allow: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
                 list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
             } else {
-                vec!["ArrayBox".into(), "MapBox".into()]
+                vec![]
             };
             if allow.iter().any(|t| t == name) {
                 let v2 = get_global_registry();

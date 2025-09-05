@@ -199,6 +199,7 @@ impl NyashInterpreter {
         // Local method on instance
         if let Some(method_ast) = instance.get_method(method) {
             if let ASTNode::FunctionDeclaration { params, body, .. } = method_ast.clone() {
+                eprintln!("[dbg] enter instance method {}.{}", instance.class_name, method);
                 // Evaluate args in current context
                 let mut arg_values = Vec::new();
                 for a in arguments {
@@ -231,6 +232,7 @@ impl NyashInterpreter {
                     }
                 }
                 self.restore_local_vars(saved);
+                eprintln!("[dbg] exit instance method {}.{}", instance.class_name, method);
                 return Some(Ok(result));
             } else {
                 return Some(Err(RuntimeError::InvalidOperation { message: format!("Method '{}' is not a valid function declaration", method) }));

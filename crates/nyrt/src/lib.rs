@@ -952,8 +952,8 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(
         if let Some(obj) = nyash_rust::jit::rt::handles::get(a1 as u64) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 if p.box_type == "StringBox" {
-                    let host = nyash_rust::runtime::get_global_plugin_host();
-                    if let Ok(hg) = host.read() {
+                    // Limit the lifetime of the read guard to this inner block by avoiding an outer binding
+                    if let Ok(hg) = nyash_rust::runtime::get_global_plugin_host().read() {
                         if let Ok(Some(sb)) = hg.invoke_instance_method("StringBox", "toUtf8", p.instance_id(), &[]) {
                             if let Some(s) = sb.as_any().downcast_ref::<StringBox>() { method_name = Some(s.value.clone()); }
                         }
@@ -1507,6 +1507,240 @@ pub extern "C" fn nyash_array_length_h(handle: i64) -> i64 {
         }
     }
     0
+}
+
+// --- AOT ObjectModule dotted-name aliases (Array) ---
+// Provide dotted symbol names expected by ObjectBuilder lowering, forwarding to existing underscored exports.
+#[export_name = "nyash.array.get_h"]
+pub extern "C" fn nyash_array_get_h_alias(handle: i64, idx: i64) -> i64 { nyash_array_get_h(handle, idx) }
+
+#[export_name = "nyash.array.set_h"]
+pub extern "C" fn nyash_array_set_h_alias(handle: i64, idx: i64, val: i64) -> i64 { nyash_array_set_h(handle, idx, val) }
+
+#[export_name = "nyash.array.push_h"]
+pub extern "C" fn nyash_array_push_h_alias(handle: i64, val: i64) -> i64 { nyash_array_push_h(handle, val) }
+
+#[export_name = "nyash.array.len_h"]
+pub extern "C" fn nyash_array_len_h_alias(handle: i64) -> i64 { nyash_array_length_h(handle) }
+
+// --- AOT ObjectModule dotted-name exports (Map) ---
+// Provide dotted symbol names expected by ObjectBuilder lowering for MapBox operations.
+// size: (handle) -> i64
+#[export_name = "nyash.map.size_h"]
+pub extern "C" fn nyash_map_size_h(handle: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    if handle <= 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(map) = obj.as_any().downcast_ref::<nyash_rust::boxes::map_box::MapBox>() {
+            if let Some(ib) = map.size().as_any().downcast_ref::<nyash_rust::box_trait::IntegerBox>() {
+                return ib.value;
+            }
+        }
+    }
+    0
+}
+
+// get_h: (map_handle, key_i64) -> value_handle
+#[export_name = "nyash.map.get_h"]
+pub extern "C" fn nyash_map_get_h(handle: i64, key: i64) -> i64 {
+    use nyash_rust::{jit::rt::handles, box_trait::{NyashBox, IntegerBox}};
+    if handle <= 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(map) = obj.as_any().downcast_ref::<nyash_rust::boxes::map_box::MapBox>() {
+            let kbox: Box<dyn NyashBox> = Box::new(IntegerBox::new(key));
+            let v = map.get(kbox);
+            let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::from(v);
+            let h = handles::to_handle(arc);
+            return h as i64;
+        }
+    }
+    0
+}
+
+// get_hh: (map_handle, key_handle) -> value_handle
+#[export_name = "nyash.map.get_hh"]
+pub extern "C" fn nyash_map_get_hh(handle: i64, key_h: i64) -> i64 {
+    use nyash_rust::{jit::rt::handles, box_trait::NyashBox};
+    if handle <= 0 || key_h <= 0 { return 0; }
+    if let (Some(obj), Some(key)) = (handles::get(handle as u64), handles::get(key_h as u64)) {
+        if let Some(map) = obj.as_any().downcast_ref::<nyash_rust::boxes::map_box::MapBox>() {
+            let v = map.get(key.clone_box());
+            let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::from(v);
+            let h = handles::to_handle(arc);
+            return h as i64;
+        }
+    }
+    0
+}
+
+// set_h: (map_handle, key_i64, val) -> i64 (ignored/0)
+#[export_name = "nyash.map.set_h"]
+pub extern "C" fn nyash_map_set_h(handle: i64, key: i64, val: i64) -> i64 {
+    use nyash_rust::{jit::rt::handles, box_trait::{NyashBox, IntegerBox}};
+    if handle <= 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(map) = obj.as_any().downcast_ref::<nyash_rust::boxes::map_box::MapBox>() {
+            let kbox: Box<dyn NyashBox> = Box::new(IntegerBox::new(key));
+            let vbox: Box<dyn NyashBox> = if val > 0 {
+                if let Some(o) = handles::get(val as u64) { o.clone_box() } else { Box::new(IntegerBox::new(val)) }
+            } else { Box::new(IntegerBox::new(val)) };
+            let _ = map.set(kbox, vbox);
+            return 0;
+        }
+    }
+    0
+}
+
+// has_h: (map_handle, key_i64) -> i64 (0/1)
+#[export_name = "nyash.map.has_h"]
+pub extern "C" fn nyash_map_has_h(handle: i64, key: i64) -> i64 {
+    use nyash_rust::{jit::rt::handles, box_trait::IntegerBox};
+    if handle <= 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(map) = obj.as_any().downcast_ref::<nyash_rust::boxes::map_box::MapBox>() {
+            let kbox = Box::new(IntegerBox::new(key));
+            let v = map.get(kbox);
+            // Consider present if not VoidBox
+            let present = !v.as_any().is::<nyash_rust::box_trait::VoidBox>();
+            return if present { 1 } else { 0 };
+        }
+    }
+    0
+}
+
+// --- AOT ObjectModule dotted-name exports (String/Any helpers) ---
+// String.len_h(handle) -> i64
+#[export_name = "nyash.string.len_h"]
+pub extern "C" fn nyash_string_len_h(handle: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    if handle <= 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(sb) = obj.as_any().downcast_ref::<nyash_rust::box_trait::StringBox>() {
+            return sb.value.len() as i64;
+        }
+    }
+    0
+}
+
+// String.charCodeAt_h(handle, idx) -> i64 (byte-based; -1 if OOB)
+#[export_name = "nyash.string.charCodeAt_h"]
+pub extern "C" fn nyash_string_charcode_at_h_export(handle: i64, idx: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    if idx < 0 { return -1; }
+    if handle <= 0 { return -1; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(sb) = obj.as_any().downcast_ref::<nyash_rust::box_trait::StringBox>() {
+            let s = &sb.value;
+            let i = idx as usize;
+            if i < s.len() { return s.as_bytes()[i] as i64; }
+            return -1;
+        }
+    }
+    -1
+}
+
+// String.concat_hh(lhs_h, rhs_h) -> handle
+#[export_name = "nyash.string.concat_hh"]
+pub extern "C" fn nyash_string_concat_hh_export(a_h: i64, b_h: i64) -> i64 {
+    use nyash_rust::{jit::rt::handles, box_trait::{NyashBox, StringBox}};
+    let to_s = |h: i64| -> String {
+        if h > 0 { if let Some(o) = handles::get(h as u64) { return o.to_string_box().value; } }
+        String::new()
+    };
+    let s = format!("{}{}", to_s(a_h), to_s(b_h));
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
+    handles::to_handle(arc) as i64
+}
+
+// String.eq_hh(lhs_h, rhs_h) -> i64 (0/1)
+#[export_name = "nyash.string.eq_hh"]
+pub extern "C" fn nyash_string_eq_hh_export(a_h: i64, b_h: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    let to_s = |h: i64| -> String { if h > 0 { if let Some(o) = handles::get(h as u64) { return o.to_string_box().value; } } String::new() };
+    if to_s(a_h) == to_s(b_h) { 1 } else { 0 }
+}
+
+// String.lt_hh(lhs_h, rhs_h) -> i64 (0/1)
+#[export_name = "nyash.string.lt_hh"]
+pub extern "C" fn nyash_string_lt_hh_export(a_h: i64, b_h: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    let to_s = |h: i64| -> String { if h > 0 { if let Some(o) = handles::get(h as u64) { return o.to_string_box().value; } } String::new() };
+    if to_s(a_h) < to_s(b_h) { 1 } else { 0 }
+}
+
+// Any.length_h(handle) -> i64 (Array/String/Map)
+#[export_name = "nyash.any.length_h"]
+pub extern "C" fn nyash_any_length_h_export(handle: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    if handle <= 0 { return 0; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(arr) = obj.as_any().downcast_ref::<nyash_rust::boxes::array::ArrayBox>() {
+            if let Some(ib) = arr.length().as_any().downcast_ref::<nyash_rust::box_trait::IntegerBox>() { return ib.value; }
+        }
+        if let Some(sb) = obj.as_any().downcast_ref::<nyash_rust::box_trait::StringBox>() {
+            return sb.value.len() as i64;
+        }
+        if let Some(map) = obj.as_any().downcast_ref::<nyash_rust::boxes::map_box::MapBox>() {
+            if let Some(ib) = map.size().as_any().downcast_ref::<nyash_rust::box_trait::IntegerBox>() { return ib.value; }
+        }
+    }
+    0
+}
+
+// Any.is_empty_h(handle) -> i64 (0/1)
+#[export_name = "nyash.any.is_empty_h"]
+pub extern "C" fn nyash_any_is_empty_h_export(handle: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    if handle <= 0 { return 1; }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(arr) = obj.as_any().downcast_ref::<nyash_rust::boxes::array::ArrayBox>() {
+            if let Ok(items) = arr.items.read() { return if items.is_empty() { 1 } else { 0 }; }
+        }
+        if let Some(sb) = obj.as_any().downcast_ref::<nyash_rust::box_trait::StringBox>() {
+            return if sb.value.is_empty() { 1 } else { 0 };
+        }
+        if let Some(map) = obj.as_any().downcast_ref::<nyash_rust::boxes::map_box::MapBox>() {
+            if let Some(ib) = map.size().as_any().downcast_ref::<nyash_rust::box_trait::IntegerBox>() { return if ib.value == 0 { 1 } else { 0 }; }
+        }
+    }
+    1
+}
+
+// Instance birth by name (packed u64x2 + len) -> handle
+// export: nyash.instance.birth_name_u64x2(lo, hi, len) -> i64
+#[export_name = "nyash.instance.birth_name_u64x2"]
+pub extern "C" fn nyash_instance_birth_name_u64x2_export(lo: i64, hi: i64, len: i64) -> i64 {
+    use nyash_rust::runtime::get_global_plugin_host;
+    let mut bytes = Vec::with_capacity(len.max(0) as usize);
+    let lo_u = lo as u64; let hi_u = hi as u64; let l = len.max(0) as usize; let take = core::cmp::min(16, l);
+    for i in 0..take.min(8) { bytes.push(((lo_u >> (8 * i)) & 0xff) as u8); }
+    for i in 0..take.saturating_sub(8) { bytes.push(((hi_u >> (8 * i)) & 0xff) as u8); }
+    // If len > 16, remaining bytes are not represented in (lo,hi); assume names <=16 bytes for now.
+    if bytes.len() != l { bytes.resize(l, 0); }
+    let name = String::from_utf8_lossy(&bytes).to_string();
+    if let Ok(host_g) = get_global_plugin_host().read() {
+        if let Ok(b) = host_g.create_box(&name, &[]) {
+            let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::from(b);
+            let h = nyash_rust::jit::rt::handles::to_handle(arc);
+            return h as i64;
+        }
+    }
+    0
+}
+
+// Construct StringBox from two u64 words (little-endian) + length (<=16) and return handle
+// export: nyash.string.from_u64x2(lo, hi, len) -> i64
+#[export_name = "nyash.string.from_u64x2"]
+pub extern "C" fn nyash_string_from_u64x2_export(lo: i64, hi: i64, len: i64) -> i64 {
+    use nyash_rust::{box_trait::{NyashBox, StringBox}, jit::rt::handles};
+    let l = if len < 0 { 0 } else { core::cmp::min(len as usize, 16) };
+    let mut bytes: Vec<u8> = Vec::with_capacity(l);
+    let lo_u = lo as u64; let hi_u = hi as u64;
+    for i in 0..l.min(8) { bytes.push(((lo_u >> (8 * i)) & 0xff) as u8); }
+    for i in 0..l.saturating_sub(8) { bytes.push(((hi_u >> (8 * i)) & 0xff) as u8); }
+    let s = String::from_utf8_lossy(&bytes).to_string();
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
+    handles::to_handle(arc) as i64
 }
 
 // Convert a VM argument (param index or existing handle) into a runtime handle

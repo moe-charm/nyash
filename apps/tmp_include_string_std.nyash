@@ -1,0 +1,8 @@
+static box Main {
+  main() {
+    local M
+    M = include "apps/std/string_std.nyash"
+    print("ok")
+    return 0
+  }
+}

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# mock codex that accepts: codex exec "TASK"
+if [ "$1" = "exec" ]; then
+  shift
+  echo "[mock-codex] starting task: $*"
+  # Simulate a tiny bit of work
+  for i in 1 2 3; do echo "[mock-codex] step $i"; sleep 0.2; done
+  echo "[mock-codex] done"
+  exit 0
+else
+  echo "mock codex: usage: codex exec \"TASK\"" >&2
+  exit 2
+fi

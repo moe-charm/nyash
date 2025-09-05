@@ -1,0 +1,49 @@
+// std.array smoke: len/push/pop/slice
+static box Main {
+  main() {
+    local A
+    A = include "apps/std/array.nyash"
+    local fails
+    fails = 0
+
+    local a
+    a = new ArrayBox()
+    if A.array_len(a) != 0 { fails = fails + 1 }
+
+    // push
+    if A.array_push(a, 10) != 1 { fails = fails + 1 }
+    if A.array_push(a, 20) != 2 { fails = fails + 1 }
+    if A.array_len(a) != 2 { fails = fails + 1 }
+
+    // pop
+    local v
+    v = A.array_pop(a)
+    if v != 20 { fails = fails + 1 }
+    if A.array_len(a) != 1 { fails = fails + 1 }
+    // pop remaining and one extra -> null
+    v = A.array_pop(a)
+    if v != 10 { fails = fails + 1 }
+    v = A.array_pop(a)
+    if v != null { fails = fails + 1 }
+
+    // slice
+    A.array_push(a, 1)
+    A.array_push(a, 2)
+    A.array_push(a, 3)
+    local s
+    s = A.array_slice(a, 0, 2)
+    if s.length() != 2 { fails = fails + 1 }
+    if s.get(0) != 1 { fails = fails + 1 }
+    if s.get(1) != 2 { fails = fails + 1 }
+    // clamp
+    s = A.array_slice(a, -5, 99)
+    if s.length() != 3 { fails = fails + 1 }
+
+    if fails == 0 {
+      print("OK: array")
+      return 0
+    }
+    print("FAIL: array (" + fails.toString() + ")")
+    return 1
+  }
+}

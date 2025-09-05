@@ -1,0 +1,12 @@
+// Minimal reproduction for ArrayBox.length() fast-path
+static box Main {
+  main() {
+    local a
+    a = new ArrayBox()
+    // Expect: print 0, return 0
+    print(a.length())
+    if a.length() != 0 { return 1 }
+    return 0
+  }
+}
+

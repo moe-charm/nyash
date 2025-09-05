@@ -1,0 +1,14 @@
+static box Main {
+  main() {
+    local S
+    S = include "apps/std/string.nyash"
+    local x
+    x = S.string_length("abc")
+    if x == 3 {
+      print("ok3")
+      return 0
+    }
+    print("bad")
+    return 1
+  }
+}
