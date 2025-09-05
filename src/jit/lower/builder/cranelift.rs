@@ -426,6 +426,22 @@ impl IRBuilder for CraneliftBuilder {
     }
     fn emit_host_call(&mut self, symbol: &str, _argc: usize, has_ret: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
+        // Structured lower event for import call
+        {
+            let mut arg_types: Vec<&'static str> = Vec::new();
+            for _ in 0.._argc { arg_types.push("I64"); }
+            crate::jit::events::emit_lower(
+                serde_json::json!({
+                    "id": symbol,
+                    "decision": "allow",
+                    "reason": "import_call",
+                    "argc": _argc,
+                    "arg_types": arg_types,
+                    "ret": if has_ret { "I64" } else { "Void" }
+                }),
+                "hostcall","<jit>"
+            );
+        }
         let call_conv = self.module.isa().default_call_conv();
         let mut sig = Signature::new(call_conv);
         // Collect up to _argc i64 values from stack (right-to-left)
@@ -440,6 +456,22 @@ impl IRBuilder for CraneliftBuilder {
     }
     fn emit_host_call_typed(&mut self, symbol: &str, params: &[ParamKind], has_ret: bool, ret_is_f64: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
+        // Structured lower event for typed import call
+        {
+            let mut arg_types: Vec<&'static str> = Vec::new();
+            for k in params { arg_types.push(match k { ParamKind::I64 | ParamKind::B1 => "I64", ParamKind::F64 => "F64" }); }
+            crate::jit::events::emit_lower(
+                serde_json::json!({
+                    "id": symbol,
+                    "decision": "allow",
+                    "reason": "import_call_typed",
+                    "argc": params.len(),
+                    "arg_types": arg_types,
+                    "ret": if has_ret { if ret_is_f64 { "F64" } else { "I64" } } else { "Void" }
+                }),
+                "hostcall","<jit>"
+            );
+        }
         let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
         let take_n = params.len().min(self.value_stack.len());
         for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { args.push(v); } }

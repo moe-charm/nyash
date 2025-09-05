@@ -2,7 +2,7 @@
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-— 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化)
+— 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
 
 【ハンドオフ（2025‑09‑06 2nd）— AOT/JIT‑AOT String.length 修正進捗と引き継ぎ】
 
@@ -50,7 +50,7 @@
     - `BoxCall ... method=length handled=true box_type=Some("StringBox") dst?=true`
     - ローカル slot の流れ: `idx=0` recv(handle) → `idx=1` string_len → `idx=2` any_len → `idx=3` cond → select → `idx=4` dst 保存 → Return で `load idx=4`
     - つまり lowering/Return/ローカル材化は正しく配線されている。
-  - しかし `NYASH_JIT_TRACE_LEN=1` の thunk ログが出ず、`nyash.string.len_h` が実行されていない/0 を返している可能性が高い。
+- しかし `NYASH_JIT_TRACE_LEN=1` の thunk ログが出ず、`nyash.string.len_h` が実行されていない/0 を返している可能性が高い。
     - 仮説: Cranelift import のシンボル解決が `extern_thunks::nyash_string_len_h` ではなく別実装（0返却）に解決されている／あるいは呼出し自体が落ちて 0 初期値になっている。
     - 参考: CraneliftBuilder では `builder.symbol(c::SYM_STRING_LEN_H, nyash_string_len_h as *const u8)` を設定済み。
 
@@ -74,6 +74,60 @@
 実行コマンド（デバッグ用）
 - `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_TRACE_RET=1 NYASH_JIT_TRACE_LOCAL=1 NYASH_AOT_OBJECT_OUT=target/aot_objects/test_len_any.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash`
 - 追加で thunk 到達確認: `NYASH_JIT_TRACE_LEN=1 ...`（現状は無出力＝未到達の可能性）
+
+Phase A 進捗（実施済）
+- A‑1: Hostcall シンボルの定数化（直書き排除）完了
+  - `nyash.handle.of` / `nyash.string.len_h` / `nyash.console.birth_h` を `SYM_*` に統一
+- A‑2: string_len ヘルパ抽出（共通化）完了
+  - `src/jit/lower/core/string_len.rs` 新設、`emit_len_with_fallback_*` を移設
+  - 呼び出し元はそのまま（挙動は不変）
+- A‑3: 観測の統一（第一弾）
+  - string_len 内で `observe::lower_hostcall` を発火（len_h/any.length_h）
+  - Cranelift/ObjectBuilder の `emit_host_call[_typed]` に `NYASH_JIT_TRACE_IMPORT=1` によるインポート解決ログを追加
+
+観測結果（A‑3 導入後）
+- `NYASH_JIT_TRACE_IMPORT=1` で `nyash.string.len_h` / `nyash.any.length_h` の import 呼び出しを確認（JIT/AOT 両方）
+- それでも `NYASH_JIT_TRACE_LEN=1` の thunk 到達ログは出ず → 依然解決先に差異がある疑い（要継続調査）
+
+■ 緑への道筋（短期着地プラン）
+P0: フェイルセーフ（テストを緑にする最短経路）
+- 追加フラグ: `NYASH_LEN_FORCE_BRIDGE=1` で StringBox.len/length を暫定的に host‑bridge (`nyash.host.string.len`) に強制（JIT でも常に正しい長さを返す）。
+  - 実装: ops_ext の StringBox.len/length で当該フラグを見て bridge 経路へ分岐。
+  - 影響範囲限定（読み取り系のみ）。スモーク/CI を先に緑化。
+
+P1: ひも付けの可視化と是正（根因切り分け）
+- CraneliftBuilder::new の `builder.symbol(...)` 登録を JSON で列挙（id→アドレスの疑似ダンプ）。
+- import 発行側（emit_host_call/_typed）と登録側の id を突き合わせ、`nyash.string.len_h` の実アドレスが `extern_thunks::nyash_string_len_h` に一致することを確認。相違なら登録漏れ/重複名を是正。
+
+P2: リテラル最優先の安定化
+- NewBox(StringBox, Const String) → length は必ず即値化（const fold）。
+  - 実装補強: `box_type_map` に加えて「NewBox(StringBox) の引数→Const String」の逆引きテーブルを構築して判定を O(1) に。param/local 経路より前に評価。
+
+P3: Return 材化の後方走査（再発防止）
+- `I::Return { value }` で、未材化値に対し現BBを後方走査（BoxCall/Call/Select/Const）。
+  - 見つけた生成値をローカルslotに保存→Return直前に load。
+  - 既存の len/length 結果保存と併用し、0化の再発を根治。
+
+P4: 仕上げ（重複/直書きの整理）
+- ops_ext の重複分岐（len/length の多重ガード）を削除し、`core/string_len.rs` に集約。
+- 残る直書きシンボルを `SYM_*` に統一（検索: `nyash.` 直書き）。
+
+■ 検証チェックリスト
+- JIT 直実行（強制 bridge 無効）: `./target/release/nyash --jit-direct apps/smokes/jit_aot_string_min.nyash` → Result:1
+- JIT 直実行（len 強制 bridge 有効）: `NYASH_LEN_FORCE_BRIDGE=1 ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash` → Result:3（緑化）
+- import/登録の一致: `NYASH_JIT_EVENTS=1 NYASH_JIT_TRACE_IMPORT=1 ...` で `id=nyash.string.len_h` の import と登録ダンプを突合（id一致を確認）
+
+
+— Phase A（無振る舞い変更）リファクタ方針（着手予定）
+- A‑1: Hostcall シンボルを定数に統一（直書き排除）
+  - `"nyash.handle.of"` → `jit::extern::handles::SYM_HANDLE_OF`
+  - `"nyash.string.len_h"` → `jit::extern::collections::SYM_STRING_LEN_H`
+  - `"nyash.console.birth_h"` → 既存の定数へ（なければ `extern::...` に追加して使用）
+- A‑2: 長さ取得の共通化
+  - 新規: `src/jit/lower/core/string_len.rs`
+  - 既存の `emit_len_with_fallback_{param,local,literal}` をこのモジュールへ抽出し、`core.rs`/`ops_ext.rs` から呼び出すだけにする（挙動は据え置き）。
+  - 目的: 重複と分岐のばらけを解消し、シンボル差し替えや観測フックを一点で行えるようにする。
+※ Phase A は「振る舞いを変えない」ことを厳守する。
 
 2) 診断イベントの追加（軽量）
    - `emit_len_with_fallback_*` と `lower_box_call(len/length)` に `observe::lower_hostcall` を追加し、

@@ -4,6 +4,7 @@ use super::builder::{IRBuilder, BinOpKind, CmpKind};
 mod analysis;
 mod cfg;
 mod ops_ext;
+mod string_len;
 
 /// Lower(Core-1): Minimal lowering skeleton for Const/Move/BinOp/Cmp/Branch/Ret
 /// This does not emit real CLIF yet; it only walks MIR and validates coverage.
@@ -182,90 +183,7 @@ impl LowerCore {
         Ok(())
     }
 
-    /// Emit robust length retrieval with fallback for String/Any:
-    /// 1) Prefer `nyash.string.len_h(recv)`
-    /// 2) If that yields 0 at runtime, select `nyash.any.length_h(recv)`
-    /// Returns: pushes selected length (i64) onto builder stack.
-    fn emit_len_with_fallback_param(&mut self, b: &mut dyn IRBuilder, pidx: usize) {
-        use super::builder::CmpKind;
-        // Temp locals
-        let hslot = self.next_local; self.next_local += 1; // receiver handle slot
-        let t_string = self.next_local; self.next_local += 1;
-        let t_any = self.next_local; self.next_local += 1;
-        let t_cond = self.next_local; self.next_local += 1;
-        // Materialize receiver handle from param index
-        b.emit_param_i64(pidx);
-        b.emit_host_call("nyash.handle.of", 1, true);
-        b.store_local_i64(hslot);
-        // String.len_h
-        b.load_local_i64(hslot);
-        b.emit_host_call("nyash.string.len_h", 1, true);
-        b.store_local_i64(t_string);
-        // Any.length_h
-        b.load_local_i64(hslot);
-        b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
-        b.store_local_i64(t_any);
-        // cond = (string_len == 0)
-        b.load_local_i64(t_string);
-        b.emit_const_i64(0);
-        b.emit_compare(CmpKind::Eq);
-        b.store_local_i64(t_cond);
-        // select(cond ? any_len : string_len)
-        b.load_local_i64(t_cond);   // cond (bottom)
-        b.load_local_i64(t_any);    // then
-        b.load_local_i64(t_string); // else
-        b.emit_select_i64();
-    }
-
-    fn emit_len_with_fallback_local_handle(&mut self, b: &mut dyn IRBuilder, slot: usize) {
-        use super::builder::CmpKind;
-        let t_string = self.next_local; self.next_local += 1;
-        let t_any = self.next_local; self.next_local += 1;
-        let t_cond = self.next_local; self.next_local += 1;
-        // String.len_h
-        b.load_local_i64(slot);
-        b.emit_host_call("nyash.string.len_h", 1, true);
-        b.store_local_i64(t_string);
-        // Any.length_h
-        b.load_local_i64(slot);
-        b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
-        b.store_local_i64(t_any);
-        // cond = (string_len == 0)
-        b.load_local_i64(t_string);
-        b.emit_const_i64(0);
-        b.emit_compare(CmpKind::Eq);
-        b.store_local_i64(t_cond);
-        // select(cond ? any_len : string_len)
-        b.load_local_i64(t_cond);
-        b.load_local_i64(t_any);
-        b.load_local_i64(t_string);
-        b.emit_select_i64();
-    }
-
-    fn emit_len_with_fallback_literal(&mut self, b: &mut dyn IRBuilder, s: &str) {
-        use super::builder::CmpKind;
-        let t_string = self.next_local; self.next_local += 1;
-        let t_any = self.next_local; self.next_local += 1;
-        let t_cond = self.next_local; self.next_local += 1;
-        // String.len_h on literal handle
-        b.emit_string_handle_from_literal(s);
-        b.emit_host_call("nyash.string.len_h", 1, true);
-        b.store_local_i64(t_string);
-        // Any.length_h on literal handle (recreate handle; safe in v0)
-        b.emit_string_handle_from_literal(s);
-        b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
-        b.store_local_i64(t_any);
-        // cond = (string_len == 0)
-        b.load_local_i64(t_string);
-        b.emit_const_i64(0);
-        b.emit_compare(CmpKind::Eq);
-        b.store_local_i64(t_cond);
-        // select(cond ? any_len : string_len)
-        b.load_local_i64(t_cond);
-        b.load_local_i64(t_any);
-        b.load_local_i64(t_string);
-        b.emit_select_i64();
-    }
+    // string_len helper moved to core/string_len.rs (no behavior change)
 
     
     fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId, func: &crate::mir::MirFunction) -> Result<(), String> {
@@ -340,7 +258,7 @@ impl LowerCore {
                 if field == "console" {
                     // Emit hostcall to create/get ConsoleBox handle
                     // Symbol exported by nyrt: nyash.console.birth_h
-                    b.emit_host_call("nyash.console.birth_h", 0, true);
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_CONSOLE_BIRTH_H, 0, true);
                 } else {
                     // Unknown RefGet: treat as no-op const 0 to avoid strict fail for now
                     b.emit_const_i64(0);

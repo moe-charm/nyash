@@ -285,6 +285,22 @@ impl IRBuilder for ObjectBuilder {
     fn emit_host_call(&mut self, symbol: &str, argc: usize, has_ret: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
         use cranelift_frontend::FunctionBuilder;
+        // Structured lower event for import call (AOT builder)
+        {
+            let mut arg_types: Vec<&'static str> = Vec::new();
+            for _ in 0..argc { arg_types.push("I64"); }
+            crate::jit::events::emit_lower(
+                serde_json::json!({
+                    "id": symbol,
+                    "decision": "allow",
+                    "reason": "import_call",
+                    "argc": argc,
+                    "arg_types": arg_types,
+                    "ret": if has_ret { "I64" } else { "Void" }
+                }),
+                "hostcall","<aot>"
+            );
+        }
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
@@ -304,6 +320,22 @@ impl IRBuilder for ObjectBuilder {
     fn emit_host_call_typed(&mut self, symbol: &str, params: &[super::ParamKind], has_ret: bool, ret_is_f64: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
         use cranelift_frontend::FunctionBuilder;
+        // Structured lower event for typed import call (AOT builder)
+        {
+            let mut arg_types: Vec<&'static str> = Vec::new();
+            for k in params { arg_types.push(match k { super::ParamKind::I64 | super::ParamKind::B1 => "I64", super::ParamKind::F64 => "F64" }); }
+            crate::jit::events::emit_lower(
+                serde_json::json!({
+                    "id": symbol,
+                    "decision": "allow",
+                    "reason": "import_call_typed",
+                    "argc": params.len(),
+                    "arg_types": arg_types,
+                    "ret": if has_ret { if ret_is_f64 { "F64" } else { "I64" } } else { "Void" }
+                }),
+                "hostcall","<aot>"
+            );
+        }
         let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }

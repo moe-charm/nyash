@@ -77,7 +77,7 @@ impl LowerCore {
                 return Ok(());
             }
             // Ensure we have a Console handle (hostcall birth shim)
-            b.emit_host_call("nyash.console.birth_h", 0, true);
+            b.emit_host_call(crate::jit::r#extern::collections::SYM_CONSOLE_BIRTH_H, 0, true);
             // a1: first argument best-effort
             if let Some(arg0) = args.get(0) { self.push_value_if_known_or_param(b, arg0); }
             // Resolve plugin invoke for ConsoleBox.method
@@ -203,15 +203,15 @@ impl LowerCore {
                         return Ok(true);
                     }
                     // last resort: handle.of + any.length_h
-                    self.push_value_if_known_or_param(b, array); b.emit_host_call("nyash.handle.of", 1, true); b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+                    self.push_value_if_known_or_param(b, array); b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true); b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
                     if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); }
                     return Ok(true);
                 }
                 // is_empty / charCodeAt: keep mapped hostcall path
                 // Ensure receiver is a valid runtime handle (param or materialized via handle.of)
-                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); b.emit_host_call("nyash.handle.of", 1, true); }
+                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true); }
                 else if let Some(slot) = self.local_index.get(array).copied() { b.load_local_i64(slot); }
-                else { self.push_value_if_known_or_param(b, array); b.emit_host_call("nyash.handle.of", 1, true); }
+                else { self.push_value_if_known_or_param(b, array); b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true); }
                 let mut argc = 1usize;
                 if method == "charCodeAt" { if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); } argc = 2; }
                 if method == "is_empty" { b.hint_ret_bool(true); }
@@ -338,7 +338,7 @@ impl LowerCore {
                     // As a last resort, convert receiver to handle via nyash.handle.of and apply fallback on temp slot
                     if trace { eprintln!("[LOWER] StringBox.len last-resort handle.of + fallback (dst?={})", dst.is_some()); }
                     self.push_value_if_known_or_param(b, array);
-                    b.emit_host_call("nyash.handle.of", 1, true);
+                    b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true);
                     let t_recv = { let id = self.next_local; self.next_local += 1; id };
                     b.store_local_i64(t_recv);
                     self.emit_len_with_fallback_local_handle(b, t_recv);
@@ -365,7 +365,7 @@ impl LowerCore {
                     // As a conservative fallback, try direct any.length_h on handle.of
                     if trace { eprintln!("[LOWER] StringBox.length fallback any.length_h on handle.of (dst?={})", dst.is_some()); }
                     self.push_value_if_known_or_param(b, array);
-                    b.emit_host_call("nyash.handle.of", 1, true);
+                    b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true);
                     b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, dst.is_some());
                     if let Some(d) = dst {
                         let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
