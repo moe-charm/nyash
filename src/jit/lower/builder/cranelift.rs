@@ -685,6 +685,9 @@ impl IRBuilder for CraneliftBuilder {
                     else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); }
                 }
                 if let Some(slot) = slot { fb.ins().stack_store(v, slot, 0); }
+                if std::env::var("NYASH_JIT_TRACE_LOCAL").ok().as_deref() == Some("1") {
+                    eprintln!("[JIT-LOCAL] store idx={} (tracked_slots={})", index, self.local_slots.len());
+                }
             });
         }
     }
@@ -693,6 +696,9 @@ impl IRBuilder for CraneliftBuilder {
         if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); }
         if let Some(&slot) = self.local_slots.get(&index) {
             let v = Self::with_fb(|fb| fb.ins().stack_load(types::I64, slot, 0));
+            if std::env::var("NYASH_JIT_TRACE_LOCAL").ok().as_deref() == Some("1") {
+                eprintln!("[JIT-LOCAL] load idx={} (tracked_slots={})", index, self.local_slots.len());
+            }
             self.value_stack.push(v); self.stats.0 += 1;
         }
     }

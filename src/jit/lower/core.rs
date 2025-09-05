@@ -532,6 +532,15 @@ impl LowerCore {
             I::Branch { .. } => self.lower_branch(b),
             I::Return { value } => {
                 if let Some(v) = value {
+                    if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") {
+                        eprintln!(
+                            "[LOWER] Return value={:?} known_i64?={} param?={} local?={}",
+                            v,
+                            self.known_i64.contains_key(v),
+                            self.param_index.contains_key(v),
+                            self.local_index.contains_key(v)
+                        );
+                    }
                     // Prefer known/param/materialized path
                     if self.known_i64.get(v).is_some() || self.param_index.get(v).is_some() || self.local_index.get(v).is_some() {
                         self.push_value_if_known_or_param(b, v);
@@ -623,7 +632,10 @@ impl LowerCore {
             }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
                 // Prefer ops_ext; if not handled, fall back to legacy path below
-                if self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())? {
+                let trace = std::env::var("NYASH_JIT_TRACE_LOWER").ok().as_deref() == Some("1");
+                let handled = self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())?;
+                if trace { eprintln!("[LOWER] BoxCall recv={:?} method={} handled={} box_type={:?} dst?={}", array, method, handled, self.box_type_map.get(&array), dst.is_some()); }
+                if handled {
                     return Ok(());
                 }
             }
@@ -791,6 +803,10 @@ impl LowerCore {
                             if let Some(pidx) = self.param_index.get(array).copied() {
                                 // Param 経路: string.len_h → 0 の場合 any.length_h へフォールバック
                                 self.emit_len_with_fallback_param(b, pidx);
+                                if let Some(d) = dst.as_ref() {
+                                    let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                    b.store_local_i64(slot);
+                                }
                             } else {
                                 crate::jit::events::emit_lower(
                                     serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"fallback", "reason":"receiver_not_param", "argc":1, "arg_types":["Handle"]}),
@@ -800,6 +816,10 @@ impl LowerCore {
                                 if let Some(slot) = self.local_index.get(array).copied() {
                                     // ローカルハンドル: string.len_h → any.length_h フォールバック
                                     self.emit_len_with_fallback_local_handle(b, slot);
+                                    if let Some(d) = dst.as_ref() {
+                                        let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                        b.store_local_i64(slotd);
+                                    }
                                 } else if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
                                     // Attempt reconstruction for StringBox literal: scan NewBox(StringBox, Const String)
                                     let mut lit: Option<String> = None;
@@ -825,15 +845,27 @@ impl LowerCore {
                                     if let Some(s) = lit {
                                         // リテラル復元: string.len_h → any.length_h フォールバック
                                         self.emit_len_with_fallback_literal(b, &s);
+                                        if let Some(d) = dst.as_ref() {
+                                            let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                            b.store_local_i64(slotd);
+                                        }
                                     } else {
                                         let arr_idx = -1;
                                         b.emit_const_i64(arr_idx);
                                         b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                        if let Some(d) = dst.as_ref() {
+                                            let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                            b.store_local_i64(slotd);
+                                        }
                                     }
                                 } else {
                                     let arr_idx = -1;
                                     b.emit_const_i64(arr_idx);
                                     b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                    if let Some(d) = dst.as_ref() {
+                                        let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                        b.store_local_i64(slotd);
+                                    }
                                 }
                             }
                         }

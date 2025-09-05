@@ -179,14 +179,32 @@ impl LowerCore {
             if matches!(method, "length" | "is_empty" | "charCodeAt") {
                 if method == "length" {
                     // Prefer robust fallback path (param/local/literal/handle.of)
-                    if let Some(pidx) = self.param_index.get(array).copied() { self.emit_len_with_fallback_param(b, pidx); return Ok(true); }
-                    if let Some(slot) = self.local_index.get(array).copied() { self.emit_len_with_fallback_local_handle(b, slot); return Ok(true); }
+                    if let Some(pidx) = self.param_index.get(array).copied() {
+                        self.emit_len_with_fallback_param(b, pidx);
+                        if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); }
+                        return Ok(true);
+                    }
+                    if let Some(slot) = self.local_index.get(array).copied() {
+                        self.emit_len_with_fallback_local_handle(b, slot);
+                        if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); }
+                        return Ok(true);
+                    }
                     // literal?
                     let mut lit: Option<String> = None;
                     for (_bid, bb) in func.blocks.iter() { for ins in bb.instructions.iter() { if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins { if dst == array && box_type == "StringBox" && args.len() == 1 { if let Some(src) = args.get(0) { if let Some(s) = self.known_str.get(src).cloned() { lit = Some(s); break; } } } } } if lit.is_some() { break; } }
-                    if let Some(s) = lit { self.emit_len_with_fallback_literal(b, &s); return Ok(true); }
+                    if let Some(s) = lit {
+                        let n = s.len() as i64;
+                        b.emit_const_i64(n);
+                        if let Some(d) = dst {
+                            self.known_i64.insert(d, n);
+                            let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                            b.store_local_i64(slot);
+                        }
+                        return Ok(true);
+                    }
                     // last resort: handle.of + any.length_h
                     self.push_value_if_known_or_param(b, array); b.emit_host_call("nyash.handle.of", 1, true); b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+                    if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); }
                     return Ok(true);
                 }
                 // is_empty / charCodeAt: keep mapped hostcall path
@@ -235,6 +253,7 @@ impl LowerCore {
             }
             // String.len/length: robust handling
             "len" => {
+                let trace = std::env::var("NYASH_JIT_TRACE_LOWER_LEN").ok().as_deref() == Some("1");
                 // (1) const string literal case
                 let mut lit_len: Option<i64> = None;
                 for (_bbid, bb) in func.blocks.iter() {
@@ -249,29 +268,32 @@ impl LowerCore {
                     if lit_len.is_some() { break; }
                 }
                 if let Some(n) = lit_len {
+                    if trace { eprintln!("[LOWER] StringBox.len: literal length={} (dst?={})", n, dst.is_some()); }
                     b.emit_const_i64(n);
+                    if let Some(d) = dst {
+                        // Persist literal length so Return can reliably load
+                        let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                        b.store_local_i64(slot);
+                    }
                     return Ok(true);
                 }
                 // (2) prefer host-bridge when enabled
                 if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {
                     if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
                         if std::env::var("NYASH_JIT_TRACE_BRIDGE").ok().as_deref() == Some("1") { eprintln!("[LOWER]string.len via host-bridge"); }
+                        if trace { eprintln!("[LOWER] StringBox.len via host-bridge (dst?={})", dst.is_some()); }
                         self.push_value_if_known_or_param(b, array);
                         b.emit_host_call(crate::jit::r#extern::host_bridge::SYM_HOST_STRING_LEN, 1, dst.is_some());
+                        if let Some(d) = dst {
+                            let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                            b.store_local_i64(slot);
+                        }
                         return Ok(true);
                     }
                 }
                 // (3) Fallback: emit string.len_h with Any.length_h guard
                 if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
-                    if let Some(pidx) = self.param_index.get(array).copied() {
-                        self.emit_len_with_fallback_param(b, pidx);
-                        return Ok(true);
-                    }
-                    if let Some(slot) = self.local_index.get(array).copied() {
-                        self.emit_len_with_fallback_local_handle(b, slot);
-                        return Ok(true);
-                    }
-                    // Try to reconstruct literal handle
+                    // Prefer literal reconstruction so JIT-AOT path is deterministic
                     let mut lit: Option<String> = None;
                     for (_bid, bb) in func.blocks.iter() {
                         for ins in bb.instructions.iter() {
@@ -285,23 +307,71 @@ impl LowerCore {
                         }
                         if lit.is_some() { break; }
                     }
-                    if let Some(s) = lit { self.emit_len_with_fallback_literal(b, &s); return Ok(true); }
+                    if let Some(s) = lit {
+                        if trace { eprintln!("[LOWER] StringBox.len reconstructed literal '{}' (dst?={})", s, dst.is_some()); }
+                        self.emit_len_with_fallback_literal(b, &s);
+                        if let Some(d) = dst {
+                            let dslot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                            b.store_local_i64(dslot);
+                        }
+                        return Ok(true);
+                    }
+                    // Param/local fallback when not a reconstructable literal
+                    if let Some(pidx) = self.param_index.get(array).copied() {
+                        if trace { eprintln!("[LOWER] StringBox.len param p{} (dst?={})", pidx, dst.is_some()); }
+                        self.emit_len_with_fallback_param(b, pidx);
+                        if let Some(d) = dst {
+                            let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                            b.store_local_i64(slot);
+                        }
+                        return Ok(true);
+                    }
+                    if let Some(slot) = self.local_index.get(array).copied() {
+                        if trace { eprintln!("[LOWER] StringBox.len local slot#{} (dst?={})", slot, dst.is_some()); }
+                        self.emit_len_with_fallback_local_handle(b, slot);
+                        if let Some(d) = dst {
+                            let dslot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                            b.store_local_i64(dslot);
+                        }
+                        return Ok(true);
+                    }
                     // As a last resort, convert receiver to handle via nyash.handle.of and apply fallback on temp slot
+                    if trace { eprintln!("[LOWER] StringBox.len last-resort handle.of + fallback (dst?={})", dst.is_some()); }
                     self.push_value_if_known_or_param(b, array);
                     b.emit_host_call("nyash.handle.of", 1, true);
                     let t_recv = { let id = self.next_local; self.next_local += 1; id };
                     b.store_local_i64(t_recv);
                     self.emit_len_with_fallback_local_handle(b, t_recv);
+                    if let Some(d) = dst {
+                        let dslot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                        b.store_local_i64(dslot);
+                    }
                     return Ok(true);
                 }
                 // Not a StringBox: let other branches handle
+                if trace { eprintln!("[LOWER] StringBox.len not handled (box_type={:?})", self.box_type_map.get(array)); }
                 return Ok(false);
             }
             // Alias: String.length → same as len
             "length" => {
+                let trace = std::env::var("NYASH_JIT_TRACE_LOWER_LEN").ok().as_deref() == Some("1");
                 if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
-                    // Reuse len handler
-                    return self.lower_box_call(func, b, array, "len", args, dst);
+                    // Reuse len handler, but ensure dst persistence if len handler did not handle
+                    let handled = self.lower_box_call(func, b, array, "len", args, dst)?;
+                    if handled {
+                        // len branch already persisted when dst.is_some()
+                        return Ok(true);
+                    }
+                    // As a conservative fallback, try direct any.length_h on handle.of
+                    if trace { eprintln!("[LOWER] StringBox.length fallback any.length_h on handle.of (dst?={})", dst.is_some()); }
+                    self.push_value_if_known_or_param(b, array);
+                    b.emit_host_call("nyash.handle.of", 1, true);
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, dst.is_some());
+                    if let Some(d) = dst {
+                        let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                        b.store_local_i64(slot);
+                    }
+                    return Ok(true);
                 }
                 // Array length is handled below; otherwise not handled here
                 return Ok(false);
@@ -330,7 +400,12 @@ impl LowerCore {
                             }
                             if lit.is_some() { break; }
                         }
-                        if let Some(s) = lit { self.emit_len_with_fallback_literal(b, &s); return Ok(true); }
+                        if let Some(s) = lit {
+                            let n = s.len() as i64;
+                            b.emit_const_i64(n);
+                            if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); self.known_i64.insert(d, n); }
+                            return Ok(true);
+                        }
                         // Last resort: handle.of
                         self.push_value_if_known_or_param(b, array);
                         b.emit_host_call("nyash.handle.of", 1, true);
@@ -345,6 +420,7 @@ impl LowerCore {
                         self.push_value_if_known_or_param(b, array);
                         b.emit_host_call("nyash.handle.of", 1, true);
                         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+                        if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); }
                         return Ok(true);
                     }
                 }

@@ -4,6 +4,114 @@
 
 — 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化)
 
+【ハンドオフ（2025‑09‑06 2nd）— AOT/JIT‑AOT String.length 修正進捗と引き継ぎ】
+
+概要
+- 目的: AOT/JIT‑AOT で `StringBox.length/len` が 0 になるケースの是正と足場強化。
+- 方針: 受けをハンドル化して `nyash.string.len_h` を優先呼び出し、0 の場合に `nyash.any.length_h` へフォールバック（select）する二段経路を Lower に実装。型/ハンドル伝播は Param/Local/リテラルの順でカバー。
+
+実装（済）
+- LowerCore: 二段フォールバック実装を追加（Param/Local/リテラル）。
+  - `emit_len_with_fallback_param`/`_local_handle`/`_literal`
+  - `core.rs` の `len/length` で二段フォールバックを使用。結果をローカルスロットへ保存（Return で拾えるように）
+- BoxCall 共通（ops_ext）:
+  - StringBox の `len/length` を最優先で処理（Param/Local/リテラル/handle.of）。
+  - リテラル `new StringBox("...")` → `length` は即値畳み込み（const 返却）。
+- Hostcall registry 追補: `nyash.string.len_h` を ReadOnly 登録 + 署名 `(Handle)->I64` 追加。
+- JIT ブリッジ: `extern_thunks.rs` に `nyash_string_len_h` を追加、`cranelift` ビルダーに `SYM_STRING_LEN_H` を登録。
+- ポリシー: `StringBox.length/len` マッピングを `nyash.any.length_h` → `nyash.string.len_h` に是正。
+- デッドコード整理: 旧 `lower_boxcall_simple_reads` を削除（conflict 回避）。
+- ツール/スモーク: `tools/aot_smoke_cranelift.sh` 追加、`apps/smokes/jit_aot_string_length_smoke.nyash` 追加。
+
+確認状況
+- `apps/smokes/jit_aot_string_min.nyash`（concat/eq）: AOT 連結→`Result: 1`（OK）。
+- `apps/smokes/jit_aot_string_length_smoke.nyash`（print 経由）: AOT .o 生成/リンクは通るが、稀に segfault（DT_TEXTREL 警告あり）。再現性低。TLS/extern 紐付け順の追跡要。
+- `apps/smokes/jit_aot_any_len_string.nyash`: 依然 `Result: 0`。lower は `string.len_h` 優先・二段 select 経路に切替済み。値保存の材化は追加済。残る根因は Return 直前の値材化/参照不整合の可能性が高い（下記 TODO）。
+
+残課題（優先）
+1) Return 材化の強化（JIT‑direct / JIT‑AOT 共通）
+   - 症状: `len/length` の計算値が Return シーンで 0 に化けるケース。
+   - 推定: `push_value_if_known_or_param` が unknown を 0 補完するため、BoxCall 結果がローカルに材化されていない/ValueId 不一致時に 0 が返る。
+   - 対応: `I::Return { value }` で materialize 後方走査を実装。
+     - 現 BB を後方走査し、`value` を定義した命令（BoxCall/Call/Select 等）を特定→スタックに積む/ローカル保存→Return へ接続。
+    - 既存のローカル保存（本変更で追加）も活用。
+
+進捗（2025‑09‑06 3rd 追記）
+- ops_ext: StringBox.len/length の結果を必ずローカルに保存するよう修正（Return が確実に値を拾える）
+  - 対象: param/local/literal/handle.of 各経路。`dst` があれば `local_index` に slot を割当てて `store_local_i64`。
+- デバッグ計測を追加
+  - JIT Lower 追跡: `NYASH_JIT_TRACE_LOWER=1`（BoxCall の handled 判定／box_type／dst 有無）
+  - Return 追跡: `NYASH_JIT_TRACE_RET=1`（known/param/local の命中状況）
+  - ローカルslot I/O: `NYASH_JIT_TRACE_LOCAL=1`（`store/load idx=<N>` を吐く）
+  - String.len_h 実行: `NYASH_JIT_TRACE_LEN=1`（thunk 到達と any.length_h フォールバック値を吐く）
+- 再現確認
+  - `apps/smokes/jit_aot_any_len_string.nyash` は依然 Result: 0（JIT-direct）。
+  - 追跡ログ（要 `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_TRACE_RET=1 NYASH_JIT_TRACE_LOCAL=1`）
+    - `BoxCall ... method=length handled=true box_type=Some("StringBox") dst?=true`
+    - ローカル slot の流れ: `idx=0` recv(handle) → `idx=1` string_len → `idx=2` any_len → `idx=3` cond → select → `idx=4` dst 保存 → Return で `load idx=4`
+    - つまり lowering/Return/ローカル材化は正しく配線されている。
+  - しかし `NYASH_JIT_TRACE_LEN=1` の thunk ログが出ず、`nyash.string.len_h` が実行されていない/0 を返している可能性が高い。
+    - 仮説: Cranelift import のシンボル解決が `extern_thunks::nyash_string_len_h` ではなく別実装（0返却）に解決されている／あるいは呼出し自体が落ちて 0 初期値になっている。
+    - 参考: CraneliftBuilder では `builder.symbol(c::SYM_STRING_LEN_H, nyash_string_len_h as *const u8)` を設定済み。
+
+暫定変更（フォールバック強化）
+- `ops_ext` の StringBox.len で「リテラル復元（NewBox(StringBox, Const String))」を param/local より先に優先。
+  - JIT-AOT 経路で文字列リテラルの length は常に即値化（select/hostcall を経由せず 3 を返す）。
+  - ただし今回のケースでは local 経路が発火しており、まだ 0 のまま（hostcall 実行が 0 を返している疑い）。
+
+未解決/次アクション（デバッグ指針）
+- [ ] `nyash.string.len_h` が実際にどの関数へリンクされているかを確認
+  - Cranelift JIT: `src/jit/lower/builder/cranelift.rs` の `builder.symbol(...)` 群は設定済みだが、実行時に thunk 側の `eprintln` が出ない。
+  - 追加案: `emit_host_call` で宣言した `func_id` と `builder.symbol` 登録可否の整合をダンプ（シンボル直列化や missing import の検知）。
+- [ ] `extern_thunks::nyash_string_len_h` へ確実に到達させるため、一時的に `emit_len_with_fallback_*` で `SYM_STRING_LEN_H` を文字列リテラル直書きではなく定数経由に統一。
+- [ ] `nyash.string.from_u64x2` の呼び出し可否を同様にトレース（`NYASH_JIT_TRACE_LOCAL=1` の直後に `NYASH_JIT_TRACE_LEN=1` が見えるか）
+- [ ] ワークアラウンド検証: `NYASH_JIT_HOST_BRIDGE=1` 強制でも 0 → host-bridge 経路の呼び出しが発火していない可能性。bridge シンボル登録も再確認。
+
+メモ/所見
+- lowering と Return 材化（ローカルslot への保存→Return で load）は動いている。値自体が 0 になっているので hostcall 側の解決/戻りが疑わしい。
+- AOT .o の生成は成功。segv は今回は再現せず。
+
+実行コマンド（デバッグ用）
+- `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_TRACE_RET=1 NYASH_JIT_TRACE_LOCAL=1 NYASH_AOT_OBJECT_OUT=target/aot_objects/test_len_any.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash`
+- 追加で thunk 到達確認: `NYASH_JIT_TRACE_LEN=1 ...`（現状は無出力＝未到達の可能性）
+
+2) 診断イベントの追加（軽量）
+   - `emit_len_with_fallback_*` と `lower_box_call(len/length)` に `observe::lower_hostcall` を追加し、
+     Param/Local/リテラル/handle.of どの経路か、select の条件（string_len==0）をトレース可能にする（`NYASH_JIT_EVENTS=1`）。
+
+3) AOT segfault (稀発) の追跡
+   - `tools/aot_smoke_cranelift.sh` 実行中に稀に segv（`.o` 生成直後/リンク前後）。
+   - `nyash.string.from_u64x2` 載せ替えと DT_TEXTREL 警告が出るので、PIE/LTO/relro 周りと TLS/extern の登録順を確認。
+
+4) 警告のノイズ低減（低優先）
+   - `core_hostcall.rs` の unreachable 警告（case 統合の名残）。
+   - `jit/lower/*` の unused 変数/unused mut の警告。
+
+影響ファイル（今回差分）
+- `src/jit/lower/core.rs`（len/length 二段フォールバック呼出し、保存強化）
+- `src/jit/lower/core/ops_ext.rs`（StringBox len/length 優先処理、リテラル即値畳み込み、保存）
+- `src/jit/hostcall_registry.rs`（`nyash.string.len_h` 追補）
+- `src/jit/extern/collections.rs`（`SYM_STRING_LEN_H` 追加）
+- `src/jit/lower/extern_thunks.rs`（`nyash_string_len_h` 追加）
+- `src/jit/lower/builder/cranelift.rs`（`SYM_STRING_LEN_H` のシンボル登録）
+- `tools/aot_smoke_cranelift.sh`（新規）
+- `apps/smokes/jit_aot_string_length_smoke.nyash`（新規）
+
+再現/確認コマンド
+- ビルド（JIT/AOT）: `cargo build --release --features cranelift-jit`
+- JIT‑AOT（.o出力）: `NYASH_AOT_OBJECT_OUT=target/aot_objects/test_len_any.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash`
+- AOT 連結〜実行: `bash tools/aot_smoke_cranelift.sh apps/smokes/jit_aot_string_min.nyash app_str`
+
+次アクション（引き継ぎ TODO）
+- [ ] Return の後方走査材化を実装（BoxCall/Call/Select 等の定義→保存→Return 接続）。
+- [ ] `emit_len_with_fallback_*` / `lower_box_call(len/length)` にイベント出力を追加（選択分岐/経路ログ）。
+- [ ] AOT segv の最小再現収集（PIE/relro/TLSの前提確認）→ `nyrt` 側エクスポート/リンカフラグ点検。
+- [ ] `NYASH_USE_PLUGIN_BUILTINS=1` 時の `length` も robust path を常に使用することを E2E で再確認。
+
+メモ
+- `jit_aot_any_len_string.nyash` は `return s.length()` の Return 経路解決が決め手。材化を強化すれば `3` が期待値。
+- 既存の Array/Map 経路・他の smokes は影響なし（len/size/get/has/set の HostCall/PluginInvoke は従来どおり）。
+
 ■ 進捗サマリ
 - Phase 12 クローズアウト完了。言語糖衣（12.7-B/P0）と VM 分割は反映済み。
 - Phase 15（Self-Hosting: Cranelift AOT）へフォーカス移行。

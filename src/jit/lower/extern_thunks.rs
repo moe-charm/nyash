@@ -543,12 +543,15 @@ pub(super) extern "C" fn nyash_string_charcode_at_h(handle: u64, idx: i64) -> i6
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_string_len_h(handle: u64) -> i64 {
     events::emit_runtime(serde_json::json!({"id": c::SYM_STRING_LEN_H, "decision":"allow", "argc":1, "arg_types":["Handle"]}), "hostcall", "<jit>");
+    if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") { eprintln!("[JIT-LEN_H] handle={}", handle); }
     if handle > 0 {
         if let Some(obj) = crate::jit::rt::handles::get(handle) {
             if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() { return sb.value.len() as i64; }
         }
         // Fallback to any.length_h for non-string handles
-        return nyash_any_length_h(handle);
+        let v = nyash_any_length_h(handle);
+        if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") { eprintln!("[JIT-LEN_H] any.length_h(handle={}) -> {}", handle, v); }
+        return v;
     }
     // Legacy param index fallback (0..16): read from VM args
     if handle <= 16 {
