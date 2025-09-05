@@ -189,15 +189,20 @@ impl LowerCore {
     fn emit_len_with_fallback_param(&mut self, b: &mut dyn IRBuilder, pidx: usize) {
         use super::builder::CmpKind;
         // Temp locals
+        let hslot = self.next_local; self.next_local += 1; // receiver handle slot
         let t_string = self.next_local; self.next_local += 1;
         let t_any = self.next_local; self.next_local += 1;
         let t_cond = self.next_local; self.next_local += 1;
-        // String.len_h
+        // Materialize receiver handle from param index
         b.emit_param_i64(pidx);
+        b.emit_host_call("nyash.handle.of", 1, true);
+        b.store_local_i64(hslot);
+        // String.len_h
+        b.load_local_i64(hslot);
         b.emit_host_call("nyash.string.len_h", 1, true);
         b.store_local_i64(t_string);
         // Any.length_h
-        b.emit_param_i64(pidx);
+        b.load_local_i64(hslot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
         b.store_local_i64(t_any);
         // cond = (string_len == 0)

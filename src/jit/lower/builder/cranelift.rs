@@ -24,7 +24,7 @@ use super::super::extern_thunks::{
     nyash_array_len_h, nyash_array_get_h, nyash_array_set_h, nyash_array_push_h, nyash_array_last_h,
     nyash_map_size_h, nyash_map_get_h, nyash_map_get_hh, nyash_map_set_h, nyash_map_has_h,
     nyash_any_length_h, nyash_any_is_empty_h,
-    nyash_string_charcode_at_h, nyash_string_birth_h, nyash_integer_birth_h,
+    nyash_string_charcode_at_h, nyash_string_len_h, nyash_string_birth_h, nyash_integer_birth_h,
     nyash_string_concat_hh, nyash_string_eq_hh, nyash_string_lt_hh,
     nyash_box_birth_h, nyash_box_birth_i64,
     nyash_handle_of,
@@ -752,6 +752,7 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_MAP_SET_H, nyash_map_set_h as *const u8);
             builder.symbol(c::SYM_MAP_HAS_H, nyash_map_has_h as *const u8);
             builder.symbol(c::SYM_ANY_LEN_H, nyash_any_length_h as *const u8);
+            builder.symbol(c::SYM_STRING_LEN_H, nyash_string_len_h as *const u8);
             builder.symbol(c::SYM_ANY_IS_EMPTY_H, nyash_any_is_empty_h as *const u8);
             builder.symbol(c::SYM_STRING_CHARCODE_AT_H, nyash_string_charcode_at_h as *const u8);
             builder.symbol(c::SYM_STRING_BIRTH_H, nyash_string_birth_h as *const u8);

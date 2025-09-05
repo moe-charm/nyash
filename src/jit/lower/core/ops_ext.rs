@@ -177,25 +177,30 @@ impl LowerCore {
         if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
             // StringBox (length/is_empty/charCodeAt)
             if matches!(method, "length" | "is_empty" | "charCodeAt") {
-                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
-                let mut argc = 1usize;
-                if method == "charCodeAt" {
-                    if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); }
-                    argc = 2;
+                if method == "length" {
+                    // Prefer robust fallback path (param/local/literal/handle.of)
+                    if let Some(pidx) = self.param_index.get(array).copied() { self.emit_len_with_fallback_param(b, pidx); return Ok(true); }
+                    if let Some(slot) = self.local_index.get(array).copied() { self.emit_len_with_fallback_local_handle(b, slot); return Ok(true); }
+                    // literal?
+                    let mut lit: Option<String> = None;
+                    for (_bid, bb) in func.blocks.iter() { for ins in bb.instructions.iter() { if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins { if dst == array && box_type == "StringBox" && args.len() == 1 { if let Some(src) = args.get(0) { if let Some(s) = self.known_str.get(src).cloned() { lit = Some(s); break; } } } } } if lit.is_some() { break; } }
+                    if let Some(s) = lit { self.emit_len_with_fallback_literal(b, &s); return Ok(true); }
+                    // last resort: handle.of + any.length_h
+                    self.push_value_if_known_or_param(b, array); b.emit_host_call("nyash.handle.of", 1, true); b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+                    return Ok(true);
                 }
+                // is_empty / charCodeAt: keep mapped hostcall path
+                // Ensure receiver is a valid runtime handle (param or materialized via handle.of)
+                if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); b.emit_host_call("nyash.handle.of", 1, true); }
+                else if let Some(slot) = self.local_index.get(array).copied() { b.load_local_i64(slot); }
+                else { self.push_value_if_known_or_param(b, array); b.emit_host_call("nyash.handle.of", 1, true); }
+                let mut argc = 1usize;
+                if method == "charCodeAt" { if let Some(v) = args.get(0) { self.push_value_if_known_or_param(b, v); } else { b.emit_const_i64(0); } argc = 2; }
                 if method == "is_empty" { b.hint_ret_bool(true); }
                 let decision = crate::jit::policy::invoke::decide_box_method("StringBox", method, argc, dst.is_some());
                 match decision {
-                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
-                        b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some());
-                        crate::jit::observe::lower_plugin_invoke(&box_type, method, type_id, method_id, argc);
-                        return Ok(true);
-                    }
-                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
-                        crate::jit::observe::lower_hostcall(&symbol, argc, &if argc==1 { ["Handle"][..].to_vec() } else { ["Handle","I64"][..].to_vec() }, "allow", "mapped_symbol");
-                        b.emit_host_call(&symbol, argc, dst.is_some());
-                        return Ok(true);
-                    }
+                    crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => { crate::jit::observe::lower_hostcall(&symbol, argc, &if argc==1 { ["Handle"][..].to_vec() } else { ["Handle","I64"][..].to_vec() }, "allow", "mapped_symbol"); b.emit_host_call(&symbol, argc, dst.is_some()); return Ok(true); }
+                    crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => { b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some()); crate::jit::observe::lower_plugin_invoke(&box_type, method, type_id, method_id, argc); return Ok(true); }
                     _ => {}
                 }
             }
@@ -335,7 +340,13 @@ impl LowerCore {
                         return Ok(true);
                     }
                     Some("ArrayBox") => {},
-                    _ => { return Ok(false); }
+                    _ => {
+                        // Unknown receiver type: generic Any.length_h on a handle
+                        self.push_value_if_known_or_param(b, array);
+                        b.emit_host_call("nyash.handle.of", 1, true);
+                        b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
+                        return Ok(true);
+                    }
                 }
                 if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
                     if let Ok(h) = ph.resolve_method("ArrayBox", "length") {

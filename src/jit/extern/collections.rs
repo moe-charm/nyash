@@ -28,6 +28,7 @@ pub const SYM_MAP_HAS_H: &str = "nyash.map.has_h";
 pub const SYM_ANY_LEN_H: &str = "nyash.any.length_h";
 pub const SYM_ANY_IS_EMPTY_H: &str = "nyash.any.is_empty_h";
 pub const SYM_STRING_CHARCODE_AT_H: &str = "nyash.string.charCodeAt_h";
+pub const SYM_STRING_LEN_H: &str = "nyash.string.len_h";
 pub const SYM_STRING_BIRTH_H: &str = "nyash.string.birth_h";
 pub const SYM_INTEGER_BIRTH_H: &str = "nyash.integer.birth_h";
 // String-like operations (handle, handle)

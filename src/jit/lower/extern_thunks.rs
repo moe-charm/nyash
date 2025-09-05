@@ -539,6 +539,34 @@ pub(super) extern "C" fn nyash_string_charcode_at_h(handle: u64, idx: i64) -> i6
     -1
 }
 
+// String.len_h(handle) -> i64 with param-index fallback (JIT bridge)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_string_len_h(handle: u64) -> i64 {
+    events::emit_runtime(serde_json::json!({"id": c::SYM_STRING_LEN_H, "decision":"allow", "argc":1, "arg_types":["Handle"]}), "hostcall", "<jit>");
+    if handle > 0 {
+        if let Some(obj) = crate::jit::rt::handles::get(handle) {
+            if let Some(sb) = obj.as_any().downcast_ref::<crate::box_trait::StringBox>() { return sb.value.len() as i64; }
+        }
+        // Fallback to any.length_h for non-string handles
+        return nyash_any_length_h(handle);
+    }
+    // Legacy param index fallback (0..16): read from VM args
+    if handle <= 16 {
+        let idx = handle as usize;
+        let val = crate::jit::rt::with_legacy_vm_args(|args| args.get(idx).cloned());
+        if let Some(v) = val {
+            match v {
+                crate::backend::vm::VMValue::BoxRef(b) => {
+                    if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() { return sb.value.len() as i64; }
+                }
+                crate::backend::vm::VMValue::String(s) => { return s.len() as i64; }
+                _ => {}
+            }
+        }
+    }
+    0
+}
+
 // ---- Birth (handle) ----
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_string_birth_h() -> i64 {
