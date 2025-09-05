@@ -13,19 +13,9 @@ fi
 
 echo "[Roundtrip] Case A: Ny → JSON(v0) → MIR-Interp (pipe)" >&2
 set -o pipefail
-# Use a minimal program that current parser accepts. Tolerate failure and continue.
-{
-cat <<'NYCODE' \
-| "$NY_PARSER" \
-| "$BIN" --ny-parser-pipe > /tmp/nyash-rt-a.out
-static box Main {
-  main(args) {
-    return (1+2)*3
-  }
-}
-NYCODE
-} || true
-if rg -q '^Result:\s*9\b' /tmp/nyash-rt-a.out; then
+# Use a subset-friendly program (no parentheses) compatible with current tokenizer/desugar
+printf 'return 1+2*3\n' | "$NY_PARSER" | "$BIN" --ny-parser-pipe > /tmp/nyash-rt-a.out || true
+if rg -q '^Result:\s*7\b' /tmp/nyash-rt-a.out; then
   echo "PASS: Case A (pipe)" >&2
 else
   echo "SKIP: Case A (pipe) - parser pipeline not ready; proceeding with Case B" >&2

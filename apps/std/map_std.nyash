@@ -1,0 +1,12 @@
+// nyashstd.map – P0 scaffold (JIT-only)
+// Minimal placeholder to define file layout and ny_plugins mapping.
+
+static box StdMap {
+  init { }
+
+  len(m) { return 0 }
+  get(m, k) { return 0 }
+  set(m, k, v) { return 0 }
+  keys(m) { return 0 }
+}
+

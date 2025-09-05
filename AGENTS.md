@@ -16,6 +16,22 @@
 - Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.nyash -o app`
 - Smokes: `./tools/llvm_smoke.sh release` (use env toggles like `NYASH_LLVM_VINVOKE_RET_SMOKE=1`)
 
+## JIT Self‑Host Quickstart (Phase 15)
+- Core build (JIT): `cargo build --release --features cranelift-jit`
+- Core smokes (plugins disabled): `NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh`
+- Roundtrip (parser pipe + json): `./tools/ny_roundtrip_smoke.sh`
+- Plugins smoke (optional gate): `NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh`
+- Using/Resolver E2E sample (optional): `./tools/using_e2e_smoke.sh` (requires `--enable-using`)
+- Bootstrap c0→c1→c1' (optional gate): `./tools/bootstrap_selfhost_smoke.sh`
+
+Flags
+- `NYASH_DISABLE_PLUGINS=1`: Core経路安定化（CI常時/デフォルト）
+- `NYASH_LOAD_NY_PLUGINS=1`: `nyash.toml` の `ny_plugins` を読み込む（std Ny実装を有効化）
+- `--enable-using` or `NYASH_ENABLE_USING=1`: using/namespace を有効化
+- `NYASH_SKIP_TOML_ENV=1`: nyash.toml の [env] 反映を抑止（任意ジョブの分離に）
+- `NYASH_PLUGINS_STRICT=1`: プラグインsmokeでCore‑13厳格をONにする
+- `NYASH_USE_NY_COMPILER=1`: NyコンパイラMVP経路を有効化（Rust parserがフォールバック）
+
 ## Coding Style & Naming Conventions
 - Rust style (rustfmt defaults): 4‑space indent, `snake_case` for functions/vars, `CamelCase` for types.
 - Keep patches focused; align with existing modules and file layout.

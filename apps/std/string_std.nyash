@@ -1,0 +1,30 @@
+// nyashstd.string – P0 scaffold (JIT-only)
+// NOTE: This is a minimal placeholder to establish file layout and ny_plugins mapping.
+// Methods are intentionally simple to avoid relying on NyRT intrinsics.
+
+static box StdString {
+  init { }
+
+  // Return length estimate for ASCII (placeholder: returns input length via naive loop)
+  length(s) {
+    // naive count; parser subset-safe
+    let i = 0
+    // TODO: real iteration when string iteration is available
+    return 0
+  }
+
+  // concat placeholder: return second argument as a stub
+  concat(a, b) { return b }
+
+  // slice placeholder: return input as-is
+  slice(s, begin, end) { return s }
+
+  // equals placeholder: always false for now
+  equals(a, b) { return 0 }
+
+  // indexOf placeholder: not found
+  indexOf(haystack, needle) { return -1 }
+
+  toString(s) { return s }
+}
+

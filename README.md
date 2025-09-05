@@ -15,6 +15,17 @@
 
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
 
+Quick JIT self‑host flow (Phase 15):
+
+```
+cargo build --release --features cranelift-jit
+NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh                 # Core JIT + examples (plugins disabled)
+./tools/ny_roundtrip_smoke.sh                            # Roundtrip A/B
+NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh          # Plugins smoke (optional)
+./tools/using_e2e_smoke.sh                               # using/nyash.link E2E (optional)
+./tools/bootstrap_selfhost_smoke.sh                      # c0→c1→c1' (optional)
+```
+
 ## 🎮 **Try Nyash in Your Browser Right Now!**
 
 👉 **[Launch Browser Playground](projects/nyash-wasm/nyash_playground.html)** 👈
