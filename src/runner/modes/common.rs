@@ -5,6 +5,34 @@ use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter};
 use nyash_rust::runner_plugin_init;
 use std::{fs, process};
 
+// limited directory walk: add matching files ending with .nyash and given leaf name
+fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
+    use std::fs;
+    fn walk(dir: &std::path::Path, leaf: &str, out: &mut Vec<String>, depth: usize) {
+        if depth == 0 || out.len() >= 5 { return; }
+        if let Ok(entries) = fs::read_dir(dir) {
+            for e in entries.flatten() {
+                let path = e.path();
+                if path.is_dir() {
+                    walk(&path, leaf, out, depth - 1);
+                    if out.len() >= 5 { return; }
+                } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    if ext == "nyash" {
+                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                            if stem == leaf {
+                                out.push(path.to_string_lossy().to_string());
+                                if out.len() >= 5 { return; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let p = std::path::Path::new(base);
+    walk(p, leaf, out, 4);
+}
+
 impl NyashRunner {
     /// File-mode dispatcher (thin wrapper around backend/mode selection)
     pub(crate) fn run_file(&self, filename: &str) {
@@ -115,6 +143,7 @@ impl NyashRunner {
 
     /// Execute Nyash file with interpreter (common helper)
     pub(crate) fn execute_nyash_file(&self, filename: &str) {
+        let quiet_pipe = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1");
         // Ensure plugin host and provider mappings are initialized (idempotent)
         if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
             // Call via lib crate to avoid referring to the bin crate root
@@ -125,25 +154,112 @@ impl NyashRunner {
             Ok(content) => content,
             Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
         };
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") && !quiet_pipe {
+            println!("📝 File contents:\n{}", code);
+            println!("\n🚀 Parsing and executing...\n");
+        }
 
-        println!("📝 File contents:\n{}", code);
-        println!("\n🚀 Parsing and executing...\n");
+        // Optional Phase-15: strip `using` lines (gate) for minimal acceptance
+        let mut code_ref: &str = &code;
+        let enable_using = std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1");
+        let cleaned_code_owned;
+        if enable_using {
+            let mut out = String::with_capacity(code.len());
+            let mut used_names: Vec<(String, Option<String>)> = Vec::new();
+            for line in code.lines() {
+                let t = line.trim_start();
+                if t.starts_with("using ") {
+                    // Skip `using ns` or `using ns as alias` lines (MVP)
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[using] stripped line: {}", line);
+                    }
+                    // Parse namespace or path and optional alias
+                    let rest0 = t.strip_prefix("using ").unwrap().trim();
+                    // allow trailing semicolon
+                    let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
+                    // Split alias
+                    let (target, alias) = if let Some(pos) = rest0.find(" as ") {
+                        (rest0[..pos].trim().to_string(), Some(rest0[pos+4..].trim().to_string()))
+                    } else { (rest0.to_string(), None) };
+                    // If quoted or looks like relative/absolute path, treat as path; else as namespace
+                    let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+                    if is_path {
+                        let mut path = target.trim_matches('"').to_string();
+                        // existence check and strict handling
+                        let missing = !std::path::Path::new(&path).exists();
+                        if missing {
+                            if std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1") {
+                                eprintln!("❌ using: path not found: {}", path);
+                                std::process::exit(1);
+                            } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                eprintln!("[using] path not found (continuing): {}", path);
+                            }
+                        }
+                        // choose alias or derive from filename stem
+                        let name = alias.clone().unwrap_or_else(|| {
+                            std::path::Path::new(&path)
+                                .file_stem().and_then(|s| s.to_str()).unwrap_or("module").to_string()
+                        });
+                        // register alias only (path-backed)
+                        used_names.push((name, Some(path)));
+                    } else {
+                        used_names.push((target, alias));
+                    }
+                    continue;
+                }
+                out.push_str(line);
+                out.push('\n');
+            }
+            cleaned_code_owned = out;
+            code_ref = &cleaned_code_owned;
+
+            // Register modules into minimal registry with best-effort path resolution
+            for (ns_or_alias, alias_or_path) in used_names {
+                // alias_or_path Some(path) means this entry was a direct path using
+                if let Some(path) = alias_or_path {
+                    let sb = crate::box_trait::StringBox::new(path);
+                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
+                } else {
+                    let rel = format!("apps/{}.nyash", ns_or_alias.replace('.', "/"));
+                    let exists = std::path::Path::new(&rel).exists();
+                    if !exists && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[using] unresolved namespace '{}'; tried '{}'. Hint: add @module {}={} or --module {}={}", ns_or_alias, rel, ns_or_alias, rel, ns_or_alias, rel);
+                        // naive candidates by suffix within common bases
+                        let leaf = ns_or_alias.split('.').last().unwrap_or(&ns_or_alias);
+                        let mut cands: Vec<String> = Vec::new();
+                        suggest_in_base("apps", leaf, &mut cands);
+                        if cands.len() < 5 { suggest_in_base("lib", leaf, &mut cands); }
+                        if cands.len() < 5 { suggest_in_base(".", leaf, &mut cands); }
+                        if !cands.is_empty() {
+                            eprintln!("[using] candidates: {}", cands.join(", "));
+                        }
+                    }
+                    let path_or_ns = if exists { rel } else { ns_or_alias.clone() };
+                    let sb = crate::box_trait::StringBox::new(path_or_ns);
+                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
+                }
+            }
+        }
 
         // Parse the code with debug fuel limit
         eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", self.config.debug_fuel);
-        let ast = match NyashParser::parse_from_string_with_fuel(&code, self.config.debug_fuel) {
+        let ast = match NyashParser::parse_from_string_with_fuel(code_ref, self.config.debug_fuel) {
             Ok(ast) => { eprintln!("🔍 DEBUG: Parse completed, AST created"); ast },
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };
 
-        println!("✅ Parse successful!");
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") && !quiet_pipe {
+            println!("✅ Parse successful!");
+        }
 
         // Execute the AST
         let mut interpreter = NyashInterpreter::new();
         eprintln!("🔍 DEBUG: Starting execution...");
         match interpreter.execute(ast) {
             Ok(result) => {
-                println!("✅ Execution completed successfully!");
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") && !quiet_pipe {
+                    println!("✅ Execution completed successfully!");
+                }
                 // Normalize display via semantics: prefer numeric, then string, then fallback
                 let disp = {
                     // Special-case: plugin IntegerBox → call .get to fetch numeric value
@@ -182,7 +298,7 @@ impl NyashRunner {
                             .unwrap_or_else(|| result.to_string_box().value)
                     }
                 };
-                println!("Result: {}", disp);
+                if !quiet_pipe { println!("Result: {}", disp); }
             },
             Err(e) => {
                 eprintln!("❌ Runtime error:\n{}", e.detailed_message(Some(&code)));

@@ -34,6 +34,9 @@ static EXTERNS: Lazy<Vec<ExternSpec>> = Lazy::new(|| vec![
     ExternSpec { iface: "env.future", method: "birth", min_arity: 1, max_arity: 1, slot: Some(20) },
     ExternSpec { iface: "env.future", method: "set", min_arity: 2, max_arity: 2, slot: Some(21) },
     ExternSpec { iface: "env.future", method: "await", min_arity: 1, max_arity: 1, slot: Some(22) },
+    // modules (minimal registry)
+    ExternSpec { iface: "env.modules", method: "set", min_arity: 2, max_arity: 2, slot: None },
+    ExternSpec { iface: "env.modules", method: "get", min_arity: 1, max_arity: 1, slot: None },
 ]);
 
 pub fn resolve(iface: &str, method: &str) -> Option<ExternSpec> {

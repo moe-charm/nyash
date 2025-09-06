@@ -1,6 +1,6 @@
 // Entry: read stdin, parse with ParserV0, print JSON IR or error JSON
 
-include("./apps/ny-parser-nyash/parser_minimal.nyash")
+include "./apps/ny-parser-nyash/parser_minimal.nyash"
 
 static box Main {
   main(args) {
@@ -26,4 +26,3 @@ static box Main {
     return 0
   }
 }
-

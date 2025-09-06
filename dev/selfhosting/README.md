@@ -17,6 +17,10 @@ Quickstart
 - Bootstrap c0→c1→c1' (optional):
   - `./tools/bootstrap_selfhost_smoke.sh`
 
+Docs
+
+- One‑page guide: `docs/self-hosting.md`
+
 Flags
 
 - `NYASH_DISABLE_PLUGINS=1`: stabilize core path
@@ -28,4 +32,3 @@ Tips
 
 - For debug, set `NYASH_CLI_VERBOSE=1`.
 - Keep temp artifacts under this folder (`dev/selfhosting/_tmp/`) to avoid polluting repo root.
-

@@ -404,7 +404,7 @@ impl IRBuilder for ObjectBuilder {
         sig.params.push(AbiParam::new(types::I64));
         sig.params.push(AbiParam::new(types::I64));
         sig.returns.push(AbiParam::new(types::I64));
-        let func_id = self.module.declare_function("nyash.string.from_u64x2", cranelift_module::Linkage::Import, &sig).expect("declare string.from_u64x2");
+        let func_id = self.module.declare_function(crate::jit::r#extern::collections::SYM_STRING_FROM_U64X2, cranelift_module::Linkage::Import, &sig).expect("declare string.from_u64x2");
         let lo_v = fb.ins().iconst(types::I64, lo as i64);
         let hi_v = fb.ins().iconst(types::I64, hi as i64);
         let len_v = fb.ins().iconst(types::I64, bytes.len() as i64);

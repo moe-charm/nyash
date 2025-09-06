@@ -238,7 +238,7 @@ impl LowerCore {
                     b.emit_const_i64(lo as i64);
                     b.emit_const_i64(hi as i64);
                     b.emit_const_i64(bytes.len() as i64);
-                    b.emit_host_call("nyash.instance.birth_name_u64x2", 3, true);
+                    b.emit_host_call(crate::jit::r#extern::birth::SYM_INSTANCE_BIRTH_NAME_U64X2, 3, true);
                     // Store handle to local slot
                     let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
                     b.store_local_i64(slot);
@@ -367,7 +367,7 @@ impl LowerCore {
                         b.emit_const_i64(name_bytes.len() as i64);
                         // Call import (lo, hi, len) -> handle
                         // Use typed hostcall (I64,I64,I64)->I64
-                        b.emit_host_call_typed("nyash.instance.birth_name_u64x2", &[crate::jit::lower::builder::ParamKind::I64, crate::jit::lower::builder::ParamKind::I64, crate::jit::lower::builder::ParamKind::I64], true, false);
+                    b.emit_host_call_typed(crate::jit::r#extern::birth::SYM_INSTANCE_BIRTH_NAME_U64X2, &[crate::jit::lower::builder::ParamKind::I64, crate::jit::lower::builder::ParamKind::I64, crate::jit::lower::builder::ParamKind::I64], true, false);
                         self.handle_values.insert(*dst);
                         let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
                         b.store_local_i64(slot);

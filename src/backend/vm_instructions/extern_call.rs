@@ -74,6 +74,60 @@ impl VM {
                     _ => { /* fallthrough to host */ }
                 }
             }
+            // Name-route minimal registry without slot
+            // env.modules.set(key:any->string, value:any) ; env.modules.get(key) -> any
+            match (iface_name, method_name) {
+                ("env.modules", "set") => {
+                    // Expect two args
+                    let vm_args: Vec<VMValue> = args.iter().filter_map(|a| self.get_value(*a).ok()).collect();
+                    if vm_args.len() >= 2 {
+                        let key = vm_args[0].to_string();
+                        let val_box = vm_args[1].to_nyash_box();
+                        crate::runtime::modules_registry::set(key, val_box);
+                    }
+                    if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                    return Ok(ControlFlow::Continue);
+                }
+                ("env.modules", "get") => {
+                    let vm_args: Vec<VMValue> = args.iter().filter_map(|a| self.get_value(*a).ok()).collect();
+                    if let Some(k) = vm_args.get(0) {
+                        let key = k.to_string();
+                        if let Some(v) = crate::runtime::modules_registry::get(&key) {
+                            if let Some(d) = dst { self.set_value(d, VMValue::from_nyash_box(v)); }
+                            else { /* no dst */ }
+                        } else if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                    } else if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                    return Ok(ControlFlow::Continue);
+                }
+                _ => {}
+            }
+        }
+
+        // Name-route minimal registry even when slot routing is disabled
+        if iface_name == "env.modules" {
+            // Decode args as VMValue for convenience
+            let vm_args: Vec<VMValue> = args.iter().filter_map(|a| self.get_value(*a).ok()).collect();
+            match method_name {
+                "set" => {
+                    if vm_args.len() >= 2 {
+                        let key = vm_args[0].to_string();
+                        let val_box = vm_args[1].to_nyash_box();
+                        crate::runtime::modules_registry::set(key, val_box);
+                    }
+                    if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                    return Ok(ControlFlow::Continue);
+                }
+                "get" => {
+                    if let Some(k) = vm_args.get(0) {
+                        let key = k.to_string();
+                        if let Some(v) = crate::runtime::modules_registry::get(&key) {
+                            if let Some(d) = dst { self.set_value(d, VMValue::from_nyash_box(v)); }
+                        } else if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                    } else if let Some(d) = dst { self.set_value(d, VMValue::Void); }
+                    return Ok(ControlFlow::Continue);
+                }
+                _ => {}
+            }
         }
 
         // Evaluate arguments as NyashBox for loader

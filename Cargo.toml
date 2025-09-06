@@ -38,6 +38,7 @@ cranelift-jit = [
   "dep:cranelift-object",
   "dep:cranelift-native"
 ]
+aot-plan-import = []
 
 [lib]
 name = "nyash_rust"

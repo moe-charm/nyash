@@ -491,7 +491,7 @@ impl LowerCore {
                         }
                         // Last resort: handle.of
                         self.push_value_if_known_or_param(b, array);
-                        b.emit_host_call("nyash.handle.of", 1, true);
+                        b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true);
                         let slot = { let id = self.next_local; self.next_local += 1; id };
                         b.store_local_i64(slot);
                         self.emit_len_with_fallback_local_handle(b, slot);
@@ -513,7 +513,7 @@ impl LowerCore {
                     _ => {
                         // Unknown receiver type: generic Any.length_h on a handle
                         self.push_value_if_known_or_param(b, array);
-                        b.emit_host_call("nyash.handle.of", 1, true);
+                        b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true);
                         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
                         if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); }
                         return Ok(true);

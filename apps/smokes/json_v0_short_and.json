@@ -1,0 +1,21 @@
+{
+  "version": 0,
+  "kind": "Program",
+  "body": [
+    {
+      "type": "Return",
+      "expr": {
+        "type": "Logical",
+        "op": "&&",
+        "lhs": { "type": "Bool", "value": false },
+        "rhs": {
+          "type": "Compare",
+          "op": "==",
+          "lhs": { "type": "Binary", "op": "/", "lhs": { "type": "Int", "value": 1 }, "rhs": { "type": "Int", "value": 0 } },
+          "rhs": { "type": "Int", "value": 1 }
+        }
+      }
+    }
+  ]
+}
+

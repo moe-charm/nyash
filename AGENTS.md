@@ -65,6 +65,18 @@ Flags
 - `NYASH_PLUGINS_STRICT=1`: プラグインsmokeでCore‑13厳格をONにする
 - `NYASH_USE_NY_COMPILER=1`: NyコンパイラMVP経路を有効化（Rust parserがフォールバック）
 
+## Phase 15 Policy（Self‑Hosting 集中ガイド）
+- フォーカス: Ny→MIR→VM/JIT（JITはcompiler‑only/独立実行）での自己ホスト実用化。
+- スコープ外（Do‑Not‑Do）: AOT/リンク最適化、GUI/egui拡張、過剰な機能追加、広域リファクタ、最適化の深追い、新規依存追加。
+- ガードレール:
+  - 小刻み: 作業は半日粒度。詰まったら撤退→Issue化→次タスクにスイッチ。
+  - 検証: 代表スモーク（Roundtrip/using/modules/JIT直/collections）を常時維持。VMとJIT(--jit-direct)の一致が受け入れ基準。
+  - 観測: hostcall イベントは 1 呼び出し=1 件、短絡は分岐採用の記録のみ。ノイズ増は回避。
+- 3日スタートプラン:
+  1) JSON v0 短絡 &&/|| を JSON→MIR→VM→JIT の順で最小実装。短絡副作用なしを smoke で確認。
+  2) collections 最小 hostcall（len/get/set/push/size/has）と policy ガードの整合性チェック。
+  3) 観測イベント（observe::lower_hostcall / lower_shortcircuit）を整備し、代表ケースで一貫した出力を確認。
+
 ## Coding Style & Naming Conventions
 - Rust style (rustfmt defaults): 4‑space indent, `snake_case` for functions/vars, `CamelCase` for types.
 - Keep patches focused; align with existing modules and file layout.

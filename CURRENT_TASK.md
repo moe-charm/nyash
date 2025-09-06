@@ -1,8 +1,90 @@
 # CURRENT TASK (Compact) — Phase 15 / Self-Hosting（Ny→MIR→MIR-Interp→VM 先行）
 
+［ブランチ方針の注記 — 2025‑09‑06 selfhosting‑dev 整理］
+- このブランチは VM/JIT を中心とした自己ホスト開発に専念します。
+- Cranelift AOT/JIT‑AOT 系の詳細課題は `docs/phase-15/cranelift/CRANELIFT_TASKS.md` へ分離しました（このファイルへの追記は最小限に）。
+- 旧コンテンツは `docs/archives/CURRENT_TASK-2025-09-06.md`（要旨）および Git 履歴（完全版）を参照してください。
+
+— Quick Update (2025‑09‑06 PM)
+- Merge: `origin/main` の Cranelift 修正を取り込み、全スモーク緑を確認。
+- P0 達成（追加）:
+  - Ny→MIR 直結ブリッジ（Case A）実装（`json_v0_bridge.rs`）。`tools/ny_roundtrip_smoke.sh` PASS。
+  - env.modules 最小レジストリ追加＋VM ExternCall name-route 対応（plugins不要）。`tools/modules_smoke.sh` PASS。
+  - using MVP（軽量導線）: スクリプト using 行（ns/直パス）・指示コメント（@using/@module/@using-path）・環境/CLIフラグ（`--using/--module/--using-path`）を前処理で受理→env.modules登録。
+    - 未解決時は verbose で探索ヒントと候補提示（apps/lib/. を浅く走査）。
+    - 直パス missing は `NYASH_USING_STRICT=1` でエラー終了・デフォは警告継続。
+    - スモーク: `tools/using_e2e_smoke.sh`（MVP）, `tools/using_resolve_smoke.sh`, `tools/using_unresolved_smoke.sh`, `tools/using_strict_path_fail_smoke.sh` 追加・PASS。
+  - JSON v0 拡張: `Bool`, `Compare(op)` を追加（検査・判定系の表現力UP）。
+
+次アクション（短期）
+- using 解決品質の向上: 候補スコアリング/断片一致・パス優先度整理（search_paths順）。
+- VM 経路の using 前処理の適用範囲見直し（必要時）。
+- JSON v0 の最小セット拡張（短絡評価/論理 and/or 等）。
+- ドキュメント最小追記（README の Self‑Hosting セクションから one‑pager へ誘導済み）。
+
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
 — 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
+
+— Handoff (2025‑09‑06 EOD) — Phase 15 進捗と次アクション
+
+Done（本セッションで完了）
+- JSON v0: 短絡 `&&/||`（`and/or` 互換）を追加し、MIR で `Branch+Phi` 降ろし。
+  - 実装: `src/runner/json_v0_bridge.rs`（Logical追加、逐次BBで短絡組立）
+  - MIRインタプリタ: `Phi` はエントリで解決、非Phiのみ実行（`backend/mir_interpreter.rs`）。
+  - スモーク: `apps/smokes/json_v0_short_or.json`, `..._and.json`（ゼロ除算を短絡で回避）。VM/Interpreter一致。
+- Collections（VM側）: プラグイン無効で最小op動作を確認。
+  - `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/std/array_smoke.nyash` → OK
+  - `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/jit_aot_map_min.nyash` → OK
+- JIT安定化（小修正）: `tls_call_import_ret` に空引数ガードを追加（Cranelift 検証器エラー「引数数不一致」を抑止）。
+  - 影響: 引数不在でも import 呼を無理に発行しない。戻り値が必要な場合は `iconst 0` を合成。
+
+Next（このまま継続してOK）
+- M2 継続: Collections 最小 hostcall（len/get/set/push/size/has）＋ policy 認可の再確認（JIT直も）。
+  - 追加スモーク: `--jit-direct` + `NYASH_JIT_READ_ONLY=1` で mut（push/set）拒否を確認（ビルダー安定化後に実行）。
+  - ops_ext の handle.of → *_H 経路の整合性を軽く棚卸し（定数 `SYM_*` の統一を優先）。
+- M3 着手: plugin invoke by-id/by-name の最小衛生化（成功/失敗時のフォールバック方針明記）、2件スモーク追加。
+- Telemetry（軽量）: `observe::lower_hostcall` と `lower_shortcircuit` を代表ポイントに追加（イベント 1 呼=1 件）。
+
+Constraints（再掲）
+- AOT/リンク最適化・GUI拡張の深追いはしない（main側）。Phase A リファクタは挙動不変で小刻みに。
+
+Quick Verify（代表）
+- 短絡: `./target/release/nyash --json-file apps/smokes/json_v0_short_or.json` → true / `..._and.json` → false（VM も一致）
+- Collections（VM）: `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/std/array_smoke.nyash` → `Result: 0`
+- Map（VM）: `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/jit_aot_map_min.nyash` → `Result: 1`
+
+— Phase 15 実行計画（2週間 / VM先行・JITはcompiler-only）
+
+方針とガードレール
+- フォーカス: Ny→MIR→VM/JIT 経路の自己ホスト実用化。JITは「独立実行/コンパイラ用途」に限定。
+- スコープ外: AOT/リンカ/GUI/大規模リファクタ（main側で継続）。本ブランチは最小実装＋観測整備に集中。
+- 常にスモーク先行で小刻みに前進。半日詰まりは撤退→Issue化。
+
+マイルストーン
+1) M1（1–2日）: JSON v0 短絡 &&/|| 追加
+   - 受け入れ: VM/JIT一致（--jit-direct）。短絡で副作用が実行されないことをsmokeで確認。
+2) M2（2–3日）: コレクション最小 hostcall（len/get/set/push/size/has）整備＋policyガード再確認
+   - 受け入れ: 変異系は既定deny（policy）。許可時のみ allow がログに残る。smoke 6件緑。
+3) M3（1–2日）: プラグイン橋の衛生（by-id/by-name最小）
+   - 受け入れ: 2種invokeのsmoke、ログで呼び分け確認。
+4) M4（1日）: using/module の最終調整（候補提示“ほどほど”）
+   - 受け入れ: 既存smokeの文言/挙動が期待どおり。
+5) M5（1日）: 可観測性の整理（observe::lower_hostcall 等）
+   - 受け入れ: 代表ケースでイベントが一貫（op/collection_type/mutates/has_policy）。
+6) M6（1日）: 安定化と1ページメモ更新（入口誘導）
+
+3日スタートプラン（詳細）
+- Day1: JSON→MIR で LogicalAnd/LogicalOr を追加。JumpIfFalse/True で短絡表現。
+- Day2: MIR→VM で分岐網羅＋collections最小 hostcall 経路の確認。
+- Day3: VM→JIT で短絡のLowerとイベント（lower_shortcircuit）。VM/JIT一致（--jit-direct）。
+
+Do-Not-Do（本期はやらない）
+- AOT/リンクの最適化・調査の深追い、GUI/egui拡張、機能の広げ過ぎ、最適化、新規依存追加。
+
+進捗メトリクス/撤退基準
+- 毎日: 新規/更新smokeの件数と緑率、VM/JIT一致率、イベントログ件数（hostcall 1回=1件上限）。
+- 撤退: 半日詰まり→いったん落とす・Issue化・次のマイルストーンへ。
 
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 

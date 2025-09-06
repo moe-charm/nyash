@@ -4,7 +4,8 @@
 
 *[🇯🇵 日本語版はこちら / Japanese Version](README.ja.md)*
 
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](#)
+[![Selfhost Minimal](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml/badge.svg?branch=selfhosting-dev)](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml)
+[![Core Smoke](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml/badge.svg)](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20Faster-ff6b6b.svg)](#performance)
 [![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20Powered%20(runtime%20disabled)-orange.svg)](#execution-modes)
@@ -14,6 +15,18 @@
 ---
 
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
+Self‑hosting one‑pager: `docs/self-hosting.md`.
+
+## Table of Contents
+- [Self‑Hosting (Dev Focus)](#self-hosting)
+- [Try in Browser](#-try-nyash-in-your-browser-right-now)
+
+<a id="self-hosting"></a>
+## 🧪 Self‑Hosting (Dev Focus)
+- Guide: `docs/self-hosting.md`
+- Minimal E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+- Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
+- Makefile: `make run-minimal`, `make smoke-selfhost`
 
 Note: JIT runtime execution is currently disabled to reduce debugging overhead. Use Interpreter/VM for running and AOT (Cranelift/LLVM) for distribution.
 

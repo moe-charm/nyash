@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "name": "mini_project",
+  "functions": [
+    { "name": "main", "return_type": "integer", "body": { "kind": "const_return", "value": 42 } }
+  ]
+}
+

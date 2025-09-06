@@ -4,7 +4,8 @@
 
 *[🇺🇸 English Version / 英語版はこちら](README.md)*
 
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](#)
+[![Selfhost Minimal](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml/badge.svg?branch=selfhosting-dev)](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml)
+[![Core Smoke](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml/badge.svg)](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20高速化-ff6b6b.svg)](#performance)
 [![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20搭載%20(実行封印)-orange.svg)](#execution-modes)
@@ -14,6 +15,18 @@
 ---
 
 開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
+セルフホスト1枚ガイド: `docs/self-hosting.md`
+
+## 目次
+- [Self-Hosting（自己ホスト開発）](#self-hosting)
+- [今すぐ試す（ブラウザ）](#-今すぐブラウザでnyashを試そう)
+
+<a id="self-hosting"></a>
+## 🧪 Self-Hosting（自己ホスト開発）
+- ガイド: `docs/self-hosting.md`
+- 最小E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+- スモーク: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
+- Makefile: `make run-minimal`, `make smoke-selfhost`
 
 変更履歴（要点）: `CHANGELOG.md`
 
