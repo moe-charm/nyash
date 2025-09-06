@@ -786,6 +786,33 @@ pub(super) extern "C" fn nyash_host_string_len(recv_h: u64) -> i64 {
     ret
 }
 
+// nyash.host.console.log(value)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_host_console_log_i64(val_i: i64) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    let v = vmvalue_from_jit_arg_i64(val_i);
+    let _ = crate::jit::r#extern::host_bridge::console_log(&[v]);
+    0
+}
+
+// nyash.host.console.warn(value)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_host_console_warn_i64(val_i: i64) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    let v = vmvalue_from_jit_arg_i64(val_i);
+    let _ = crate::jit::r#extern::host_bridge::console_warn(&[v]);
+    0
+}
+
+// nyash.host.console.error(value)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_host_console_error_i64(val_i: i64) -> i64 {
+    use crate::backend::vm::VMValue as V;
+    let v = vmvalue_from_jit_arg_i64(val_i);
+    let _ = crate::jit::r#extern::host_bridge::console_error(&[v]);
+    0
+}
+
 // Build a StringBox handle from raw bytes pointer and length
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_string_from_ptr(ptr: u64, len: u64) -> i64 {

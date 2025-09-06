@@ -106,6 +106,9 @@ impl LowerCore {
             self.last_ret_bool_hint_used = true;
         }
         let has_ret = !matches!(func.signature.return_type, crate::mir::MirType::Void);
+        if std::env::var("NYASH_JIT_TRACE_SIG").ok().as_deref() == Some("1") {
+            eprintln!("[SIG-CORE] ret_type={:?} has_ret={} use_typed={} ret_is_f64={}", func.signature.return_type, has_ret, use_typed, ret_is_f64);
+        }
         if use_typed || ret_is_f64 {
             builder.prepare_signature_typed(&kinds, ret_is_f64 && has_ret);
         } else {
@@ -503,7 +506,25 @@ impl LowerCore {
                         );
                     }
                     // 1) Prefer known constants first to avoid stale locals overshadowing folded values
-                    if let Some(k) = self.known_i64.get(v).copied() { b.emit_const_i64(k); }
+                    if let Some(k) = self.known_i64.get(v).copied() {
+                        if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") {
+                            eprintln!("[LOWER] Return known_i64 value for {:?} = {}", v, k);
+                        }
+                        // Emit the constant and also persist to a stable local slot for this value id,
+                        // then reload to ensure a value remains on the stack for emit_return.
+                        b.emit_const_i64(k);
+                        let rslot = *self
+                            .local_index
+                            .entry(*v)
+                            .or_insert_with(|| {
+                                let id = self.next_local;
+                                self.next_local += 1;
+                                id
+                            });
+                        b.ensure_local_i64(rslot);
+                        b.store_local_i64(rslot);
+                        b.load_local_i64(rslot);
+                    }
                     // 2) Prefer existing locals/params
                     else if self.local_index.get(v).is_some() || self.param_index.get(v).is_some() {
                         self.push_value_if_known_or_param(b, v);

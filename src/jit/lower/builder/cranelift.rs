@@ -120,10 +120,12 @@ impl IRBuilder for CraneliftBuilder {
     fn emit_param_i64(&mut self, index: usize) {
         if let Some(v) = self.entry_param(index) { self.value_stack.push(v); }
     }
-    fn prepare_signature_i64(&mut self, argc: usize, has_ret: bool) {
+    fn prepare_signature_i64(&mut self, argc: usize, _has_ret: bool) {
         self.desired_argc = argc;
-        self.desired_has_ret = has_ret;
-        self.desired_ret_is_f64 = crate::jit::config::current().native_f64;
+        // JIT-direct stability: always materialize an i64 return slot (VMValue Integer/Bool/Float can be coerced)
+        self.desired_has_ret = true;
+        // i64-only signature: return type must be i64 regardless of host f64 capability
+        self.desired_ret_is_f64 = false;
     }
     fn begin_function(&mut self, name: &str) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
@@ -133,6 +135,9 @@ impl IRBuilder for CraneliftBuilder {
             let mut tls = clif_tls::TlsCtx::new();
             let call_conv = self.module.isa().default_call_conv();
             let mut sig = Signature::new(call_conv);
+            if std::env::var("NYASH_JIT_TRACE_SIG").ok().as_deref() == Some("1") {
+                eprintln!("[SIG] begin desired: argc={} has_ret={} ret_is_f64={} typed_prepared={}", self.desired_argc, self.desired_has_ret, self.desired_ret_is_f64, self.typed_sig_prepared);
+            }
             if !self.typed_sig_prepared {
                 for _ in 0..self.desired_argc { sig.params.push(AbiParam::new(types::I64)); }
                 if self.desired_has_ret {
@@ -249,6 +254,12 @@ impl IRBuilder for CraneliftBuilder {
         if let Some(mut ctx) = ctx_opt.take() {
             let func_name = self.current_name.as_deref().unwrap_or("jit_func");
             let func_id = self.module.declare_function(func_name, Linkage::Local, &ctx.func.signature).expect("declare function");
+            if std::env::var("NYASH_JIT_TRACE_SIG").ok().as_deref() == Some("1") {
+                eprintln!("[SIG] end returns={} params={}", ctx.func.signature.returns.len(), ctx.func.signature.params.len());
+            }
+            if std::env::var("NYASH_JIT_DUMP_CLIF").ok().as_deref() == Some("1") {
+                eprintln!("[CLIF] {}\n{}", func_name, ctx.func.display());
+            }
             self.module.define_function(func_id, &mut ctx).expect("define function");
             self.module.clear_context(&mut ctx);
             let _ = self.module.finalize_definitions();
@@ -291,7 +302,13 @@ impl IRBuilder for CraneliftBuilder {
                             5 => { let f: extern "C" fn(i64,i64,i64,i64,i64) -> f64 = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3],a[4]) }
                             _ => { let f: extern "C" fn(i64,i64,i64,i64,i64,i64) -> f64 = std::mem::transmute(code_usize); f(a[0],a[1],a[2],a[3],a[4],a[5]) }
                         };
+                        if std::env::var("NYASH_JIT_TRACE_CALL").ok().as_deref() == Some("1") {
+                            eprintln!("[JIT-CALL] ret_f64={}", ret_f64);
+                        }
                         return crate::jit::abi::JitValue::F64(ret_f64);
+                    }
+                    if std::env::var("NYASH_JIT_TRACE_CALL").ok().as_deref() == Some("1") {
+                        eprintln!("[JIT-CALL] ret_i64={}", ret_i64);
                     }
                     crate::jit::abi::JitValue::I64(ret_i64)
                 });
@@ -894,6 +911,10 @@ impl CraneliftBuilder {
             builder.symbol(hb::SYM_HOST_INSTANCE_FIELD3, super::super::extern_thunks::nyash_host_instance_field3 as *const u8);
             // String.len (recv_h)
             builder.symbol(hb::SYM_HOST_STRING_LEN, super::super::extern_thunks::nyash_host_string_len as *const u8);
+            // Console.* (value)
+            builder.symbol(hb::SYM_HOST_CONSOLE_LOG, super::super::extern_thunks::nyash_host_console_log_i64 as *const u8);
+            builder.symbol(hb::SYM_HOST_CONSOLE_WARN, super::super::extern_thunks::nyash_host_console_warn_i64 as *const u8);
+            builder.symbol(hb::SYM_HOST_CONSOLE_ERROR, super::super::extern_thunks::nyash_host_console_error_i64 as *const u8);
         }
 
         let module = cranelift_jit::JITModule::new(builder);
