@@ -16,6 +16,9 @@ e2e = []
 cli = []
 plugins-only = []
 builtin-core = []
+## JIT-direct only mode: disable legacy VM-arg fallback and plugin-builtins branches
+## (keeps code compiling; VM-integrated JIT paths remain but are inert)
+jit-direct-only = []
 gui = ["dep:egui", "dep:eframe", "dep:egui_extras", "dep:image"]
 gui-examples = ["gui"]
 all-examples = ["gui-examples"]
