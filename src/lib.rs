@@ -38,6 +38,10 @@ pub mod transport;
 
 // 🚀 MIR (Mid-level Intermediate Representation) Infrastructure (NEW!)
 pub mod mir;
+#[cfg(feature = "aot-plan-import")]
+pub mod mir_aot_plan_import {
+    pub use crate::mir::aot_plan_import::*;
+}
 
 // 🚀 Backend Infrastructure (NEW!)
 pub mod backend;

@@ -55,6 +55,18 @@ pub(crate) fn tls_call_import_ret(
         let mut opt = cell.borrow_mut();
         let tls = opt.as_mut().expect("FunctionBuilder TLS not initialized");
         tls.with(|fb| {
+            // Guard: avoid emitting a verifier-invalid call when args are unexpectedly empty.
+            // Some early shims (e.g., instrumentation) may have declared a 1-arity import;
+            // if lowering produced no arguments, synthesize a zero literal when a return is expected,
+            // and skip the call entirely to keep the IR valid.
+            if args.is_empty() {
+                if has_ret {
+                    use cranelift_codegen::ir::types;
+                    return Some(fb.ins().iconst(types::I64, 0));
+                } else {
+                    return None;
+                }
+            }
             let fref = module.declare_func_in_func(func_id, fb.func);
             let call_inst = fb.ins().call(fref, args);
             if has_ret { fb.inst_results(call_inst).get(0).copied() } else { None }

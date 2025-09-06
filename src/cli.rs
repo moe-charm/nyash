@@ -505,6 +505,15 @@ mod tests {
             parser_ny: false,
             ny_parser_pipe: false,
             json_file: None,
+            using: None,
+            using_path: None,
+            modules: None,
+            build_path: None,
+            build_app: None,
+            build_out: None,
+            build_aot: None,
+            build_profile: None,
+            build_target: None,
         };
         
         assert_eq!(config.backend, "interpreter");

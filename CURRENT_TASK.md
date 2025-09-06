@@ -26,6 +26,66 @@
 
 — 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
 
+— Handoff (2025‑09‑06 EOD) — Phase 15 進捗と次アクション
+
+Done（本セッションで完了）
+- JSON v0: 短絡 `&&/||`（`and/or` 互換）を追加し、MIR で `Branch+Phi` 降ろし。
+  - 実装: `src/runner/json_v0_bridge.rs`（Logical追加、逐次BBで短絡組立）
+  - MIRインタプリタ: `Phi` はエントリで解決、非Phiのみ実行（`backend/mir_interpreter.rs`）。
+  - スモーク: `apps/smokes/json_v0_short_or.json`, `..._and.json`（ゼロ除算を短絡で回避）。VM/Interpreter一致。
+- Collections（VM側）: プラグイン無効で最小op動作を確認。
+  - `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/std/array_smoke.nyash` → OK
+  - `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/jit_aot_map_min.nyash` → OK
+- JIT安定化（小修正）: `tls_call_import_ret` に空引数ガードを追加（Cranelift 検証器エラー「引数数不一致」を抑止）。
+  - 影響: 引数不在でも import 呼を無理に発行しない。戻り値が必要な場合は `iconst 0` を合成。
+
+Next（このまま継続してOK）
+- M2 継続: Collections 最小 hostcall（len/get/set/push/size/has）＋ policy 認可の再確認（JIT直も）。
+  - 追加スモーク: `--jit-direct` + `NYASH_JIT_READ_ONLY=1` で mut（push/set）拒否を確認（ビルダー安定化後に実行）。
+  - ops_ext の handle.of → *_H 経路の整合性を軽く棚卸し（定数 `SYM_*` の統一を優先）。
+- M3 着手: plugin invoke by-id/by-name の最小衛生化（成功/失敗時のフォールバック方針明記）、2件スモーク追加。
+- Telemetry（軽量）: `observe::lower_hostcall` と `lower_shortcircuit` を代表ポイントに追加（イベント 1 呼=1 件）。
+
+Constraints（再掲）
+- AOT/リンク最適化・GUI拡張の深追いはしない（main側）。Phase A リファクタは挙動不変で小刻みに。
+
+Quick Verify（代表）
+- 短絡: `./target/release/nyash --json-file apps/smokes/json_v0_short_or.json` → true / `..._and.json` → false（VM も一致）
+- Collections（VM）: `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/std/array_smoke.nyash` → `Result: 0`
+- Map（VM）: `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/jit_aot_map_min.nyash` → `Result: 1`
+
+— Phase 15 実行計画（2週間 / VM先行・JITはcompiler-only）
+
+方針とガードレール
+- フォーカス: Ny→MIR→VM/JIT 経路の自己ホスト実用化。JITは「独立実行/コンパイラ用途」に限定。
+- スコープ外: AOT/リンカ/GUI/大規模リファクタ（main側で継続）。本ブランチは最小実装＋観測整備に集中。
+- 常にスモーク先行で小刻みに前進。半日詰まりは撤退→Issue化。
+
+マイルストーン
+1) M1（1–2日）: JSON v0 短絡 &&/|| 追加
+   - 受け入れ: VM/JIT一致（--jit-direct）。短絡で副作用が実行されないことをsmokeで確認。
+2) M2（2–3日）: コレクション最小 hostcall（len/get/set/push/size/has）整備＋policyガード再確認
+   - 受け入れ: 変異系は既定deny（policy）。許可時のみ allow がログに残る。smoke 6件緑。
+3) M3（1–2日）: プラグイン橋の衛生（by-id/by-name最小）
+   - 受け入れ: 2種invokeのsmoke、ログで呼び分け確認。
+4) M4（1日）: using/module の最終調整（候補提示“ほどほど”）
+   - 受け入れ: 既存smokeの文言/挙動が期待どおり。
+5) M5（1日）: 可観測性の整理（observe::lower_hostcall 等）
+   - 受け入れ: 代表ケースでイベントが一貫（op/collection_type/mutates/has_policy）。
+6) M6（1日）: 安定化と1ページメモ更新（入口誘導）
+
+3日スタートプラン（詳細）
+- Day1: JSON→MIR で LogicalAnd/LogicalOr を追加。JumpIfFalse/True で短絡表現。
+- Day2: MIR→VM で分岐網羅＋collections最小 hostcall 経路の確認。
+- Day3: VM→JIT で短絡のLowerとイベント（lower_shortcircuit）。VM/JIT一致（--jit-direct）。
+
+Do-Not-Do（本期はやらない）
+- AOT/リンクの最適化・調査の深追い、GUI/egui拡張、機能の広げ過ぎ、最適化、新規依存追加。
+
+進捗メトリクス/撤退基準
+- 毎日: 新規/更新smokeの件数と緑率、VM/JIT一致率、イベントログ件数（hostcall 1回=1件上限）。
+- 撤退: 半日詰まり→いったん落とす・Issue化・次のマイルストーンへ。
+
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 
 概要

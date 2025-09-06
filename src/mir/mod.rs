@@ -20,6 +20,8 @@ pub mod value_id;
 pub mod effect;
 pub mod optimizer;
 pub mod slot_registry; // Phase 9.79b.1: method slot resolution (IDs)
+#[cfg(feature = "aot-plan-import")]
+pub mod aot_plan_import;
 pub mod passes; // Optimization subpasses (e.g., type_hints)
 
 // Re-export main types for easy access

@@ -27,6 +27,7 @@ enum ExprV0 {
     Binary { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> },
     Extern { iface: String, method: String, args: Vec<ExprV0> },
     Compare { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> },
+    Logical { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> }, // short-circuit: &&, || (or: "and"/"or")
 }
 
 pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
@@ -43,26 +44,30 @@ pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
     if prog.body.is_empty() { return Err("empty body".into()); }
 
     // Lower all statements; capture last expression for return when the last is Return
-    let mut last_ret: Option<crate::mir::ValueId> = None;
+    let mut last_ret: Option<(crate::mir::ValueId, BasicBlockId)> = None;
     for (i, stmt) in prog.body.iter().enumerate() {
         match stmt {
             StmtV0::Extern { iface, method, args } => {
                 // void extern call
-                let arg_ids = lower_args(&mut f, args)?;
+                let entry_bb = f.entry_block;
+                let (arg_ids, _cur) = lower_args(&mut f, entry_bb, args)?;
                 if let Some(bb) = f.get_block_mut(entry) {
                     bb.add_instruction(MirInstruction::ExternCall { dst: None, iface_name: iface.clone(), method_name: method.clone(), args: arg_ids, effects: EffectMask::IO });
                 }
                 if i == prog.body.len()-1 { last_ret = None; }
             }
             StmtV0::Return { expr } => {
-                last_ret = Some(lower_expr(&mut f, expr)?);
+                let entry_bb = f.entry_block;
+                last_ret = Some(lower_expr(&mut f, entry_bb, expr)?);
             }
         }
     }
     // Return last value (or 0)
-    if let Some(rv) = last_ret {
-        if let Some(bb) = f.get_block_mut(entry) {
+    if let Some((rv, cur)) = last_ret {
+        if let Some(bb) = f.get_block_mut(cur) {
             bb.set_terminator(MirInstruction::Return { value: Some(rv) });
+        } else {
+            return Err("invalid block when setting return".into());
         }
     } else {
         let dst_id = f.next_value_id();
@@ -77,7 +82,13 @@ pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
     Ok(module)
 }
 
-fn lower_expr(f: &mut MirFunction, e: &ExprV0) -> Result<crate::mir::ValueId, String> {
+fn next_block_id(f: &MirFunction) -> BasicBlockId {
+    let mut mx = 0u32;
+    for k in f.blocks.keys() { if k.0 >= mx { mx = k.0 + 1; } }
+    BasicBlockId::new(mx)
+}
+
+fn lower_expr(f: &mut MirFunction, cur_bb: BasicBlockId, e: &ExprV0) -> Result<(crate::mir::ValueId, BasicBlockId), String> {
     match e {
         ExprV0::Int { value } => {
             // Accept number or stringified digits
@@ -87,46 +98,46 @@ fn lower_expr(f: &mut MirFunction, e: &ExprV0) -> Result<crate::mir::ValueId, St
                 return Err("invalid int literal".into());
             };
             let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(f.entry_block) {
+            if let Some(bb) = f.get_block_mut(cur_bb) {
                 bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::Integer(ival) });
             }
-            Ok(dst)
+            Ok((dst, cur_bb))
         }
         ExprV0::Str { value } => {
             let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(f.entry_block) {
+            if let Some(bb) = f.get_block_mut(cur_bb) {
                 bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::String(value.clone()) });
             }
-            Ok(dst)
+            Ok((dst, cur_bb))
         }
         ExprV0::Bool { value } => {
             let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(f.entry_block) {
+            if let Some(bb) = f.get_block_mut(cur_bb) {
                 bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::Bool(*value) });
             }
-            Ok(dst)
+            Ok((dst, cur_bb))
         }
         ExprV0::Binary { op, lhs, rhs } => {
-            let l = lower_expr(f, lhs)?;
-            let r = lower_expr(f, rhs)?;
+            let (l, cur_after_l) = lower_expr(f, cur_bb, lhs)?;
+            let (r, cur_after_r) = lower_expr(f, cur_after_l, rhs)?;
             let bop = match op.as_str() { "+" => BinaryOp::Add, "-" => BinaryOp::Sub, "*" => BinaryOp::Mul, "/" => BinaryOp::Div, _ => return Err("unsupported op".into()) };
             let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(f.entry_block) {
+            if let Some(bb) = f.get_block_mut(cur_after_r) {
                 bb.add_instruction(MirInstruction::BinOp { dst, op: bop, lhs: l, rhs: r });
             }
-            Ok(dst)
+            Ok((dst, cur_after_r))
         }
         ExprV0::Extern { iface, method, args } => {
-            let arg_ids = lower_args(f, args)?;
+            let (arg_ids, cur2) = lower_args(f, cur_bb, args)?;
             let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(f.entry_block) {
+            if let Some(bb) = f.get_block_mut(cur2) {
                 bb.add_instruction(MirInstruction::ExternCall { dst: Some(dst), iface_name: iface.clone(), method_name: method.clone(), args: arg_ids, effects: EffectMask::IO });
             }
-            Ok(dst)
+            Ok((dst, cur2))
         }
         ExprV0::Compare { op, lhs, rhs } => {
-            let l = lower_expr(f, lhs)?;
-            let r = lower_expr(f, rhs)?;
+            let (l, cur_after_l) = lower_expr(f, cur_bb, lhs)?;
+            let (r, cur_after_r) = lower_expr(f, cur_after_l, rhs)?;
             let cop = match op.as_str() {
                 "==" => crate::mir::CompareOp::Eq,
                 "!=" => crate::mir::CompareOp::Ne,
@@ -137,18 +148,71 @@ fn lower_expr(f: &mut MirFunction, e: &ExprV0) -> Result<crate::mir::ValueId, St
                 _ => return Err("unsupported compare op".into()),
             };
             let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(f.entry_block) {
+            if let Some(bb) = f.get_block_mut(cur_after_r) {
                 bb.add_instruction(MirInstruction::Compare { dst, op: cop, lhs: l, rhs: r });
             }
-            Ok(dst)
+            Ok((dst, cur_after_r))
+        }
+        ExprV0::Logical { op, lhs, rhs } => {
+            // Short-circuit boolean logic with branches + phi
+            let (l, cur_after_l) = lower_expr(f, cur_bb, lhs)?;
+            let rhs_bb = next_block_id(f);
+            let fall_bb = BasicBlockId::new(rhs_bb.0 + 1);
+            let merge_bb = BasicBlockId::new(rhs_bb.0 + 2);
+            f.add_block(crate::mir::BasicBlock::new(rhs_bb));
+            f.add_block(crate::mir::BasicBlock::new(fall_bb));
+            f.add_block(crate::mir::BasicBlock::new(merge_bb));
+            // Branch depending on op
+            let is_and = matches!(op.as_str(), "&&" | "and");
+            if let Some(bb) = f.get_block_mut(cur_after_l) {
+                if is_and {
+                    bb.set_terminator(MirInstruction::Branch { condition: l, then_bb: rhs_bb, else_bb: fall_bb });
+                } else {
+                    // OR: if lhs true, go to fall_bb (true path), else evaluate rhs
+                    bb.set_terminator(MirInstruction::Branch { condition: l, then_bb: fall_bb, else_bb: rhs_bb });
+                }
+            }
+            // Telemetry: note short-circuit lowering
+            crate::jit::events::emit_lower(
+                serde_json::json!({
+                    "id": "shortcircuit",
+                    "op": if is_and { "and" } else { "or" },
+                    "rhs_bb": rhs_bb.0,
+                    "fall_bb": fall_bb.0,
+                    "merge_bb": merge_bb.0
+                }),
+                "shortcircuit",
+                "<json_v0>"
+            );
+            // false/true constant in fall_bb depending on op
+            let cdst = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(fall_bb) {
+                let cval = if is_and { ConstValue::Bool(false) } else { ConstValue::Bool(true) };
+                bb.add_instruction(MirInstruction::Const { dst: cdst, value: cval });
+                bb.set_terminator(MirInstruction::Jump { target: merge_bb });
+            }
+            // evaluate rhs in rhs_bb
+            let (rval, _rhs_end) = lower_expr(f, rhs_bb, rhs)?;
+            if let Some(bb) = f.get_block_mut(rhs_bb) {
+                if !bb.is_terminated() { bb.set_terminator(MirInstruction::Jump { target: merge_bb }); }
+            }
+            // merge with phi
+            let out = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(merge_bb) {
+                bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs: vec![(rhs_bb, rval), (fall_bb, cdst)] });
+            }
+            Ok((out, merge_bb))
         }
     }
 }
 
-fn lower_args(f: &mut MirFunction, args: &[ExprV0]) -> Result<Vec<crate::mir::ValueId>, String> {
+fn lower_args(f: &mut MirFunction, cur_bb: BasicBlockId, args: &[ExprV0]) -> Result<(Vec<crate::mir::ValueId>, BasicBlockId), String> {
     let mut out = Vec::with_capacity(args.len());
-    for a in args { out.push(lower_expr(f, a)?); }
-    Ok(out)
+    let mut cur = cur_bb;
+    for a in args {
+        let (v, c) = lower_expr(f, cur, a)?; out.push(v); cur = c;
+    }
+    Ok((out, cur))
 }
 
 pub fn maybe_dump_mir(module: &MirModule) {

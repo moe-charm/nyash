@@ -22,3 +22,7 @@ pub mod sugar_comp_assign_test;
 pub mod sugar_coalesce_test;
 pub mod sugar_safe_access_test;
 pub mod sugar_range_test;
+pub mod policy_mutdeny;
+pub mod plugin_hygiene;
+#[cfg(feature = "aot-plan-import")]
+pub mod aot_plan_import;

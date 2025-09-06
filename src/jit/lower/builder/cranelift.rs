@@ -683,7 +683,7 @@ impl IRBuilder for CraneliftBuilder {
         sig.params.push(AbiParam::new(types::I64)); // hi
         sig.params.push(AbiParam::new(types::I64)); // len
         sig.returns.push(AbiParam::new(types::I64));
-        let func_id = self.module.declare_function("nyash.string.from_u64x2", cranelift_module::Linkage::Import, &sig).expect("declare string.from_u64x2");
+        let func_id = self.module.declare_function(crate::jit::r#extern::collections::SYM_STRING_FROM_U64X2, cranelift_module::Linkage::Import, &sig).expect("declare string.from_u64x2");
         let v = Self::with_fb(|fb| {
             let lo_v = fb.ins().iconst(types::I64, lo as i64);
             let hi_v = fb.ins().iconst(types::I64, hi as i64);
@@ -891,7 +891,7 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_STRING_LT_HH, nyash_string_lt_hh as *const u8);
             builder.symbol(b::SYM_BOX_BIRTH_H, nyash_box_birth_h as *const u8);
             builder.symbol("nyash.box.birth_i64", nyash_box_birth_i64 as *const u8);
-            builder.symbol("nyash.instance.birth_name_u64x2", super::super::extern_thunks::nyash_instance_birth_name_u64x2 as *const u8);
+            builder.symbol(crate::jit::r#extern::birth::SYM_INSTANCE_BIRTH_NAME_U64X2, super::super::extern_thunks::nyash_instance_birth_name_u64x2 as *const u8);
             builder.symbol(h::SYM_HANDLE_OF, nyash_handle_of as *const u8);
             builder.symbol(r::SYM_RT_CHECKPOINT, nyash_rt_checkpoint as *const u8);
             builder.symbol(r::SYM_GC_BARRIER_WRITE, nyash_gc_barrier_write as *const u8);
@@ -901,7 +901,7 @@ impl CraneliftBuilder {
         builder.symbol("nyash_plugin_invoke3_f64", nyash_plugin_invoke3_f64 as *const u8);
         builder.symbol("nyash_plugin_invoke_name_getattr_i64", nyash_plugin_invoke_name_getattr_i64 as *const u8);
         builder.symbol("nyash_plugin_invoke_name_call_i64", nyash_plugin_invoke_name_call_i64 as *const u8);
-        builder.symbol("nyash.string.from_u64x2", super::super::extern_thunks::nyash_string_from_u64x2 as *const u8);
+        builder.symbol(crate::jit::r#extern::collections::SYM_STRING_FROM_U64X2, super::super::extern_thunks::nyash_string_from_u64x2 as *const u8);
 
         // Host-bridge (by-slot) imports (opt-in)
         if std::env::var("NYASH_JIT_HOST_BRIDGE").ok().as_deref() == Some("1") {

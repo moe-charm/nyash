@@ -1064,9 +1064,23 @@ impl NyashRunner {
         }
         #[cfg(not(windows))]
         {
+            // Ensure NyRT static library exists
+            let nyrt_root = cwd.join("target").join("release").join("libnyrt.a");
+            let nyrt_crate = cwd.join("crates").join("nyrt").join("target").join("release").join("libnyrt.a");
+            if !nyrt_root.exists() && !nyrt_crate.exists() {
+                // Try to build crates/nyrt
+                let mut cmd = std::process::Command::new("cargo");
+                cmd.arg("build");
+                cmd.arg("--release");
+                cmd.current_dir(cwd.join("crates").join("nyrt"));
+                println!("[link] building NyRT (libnyrt.a) ...");
+                let st = cmd.status().map_err(|e| format!("spawn cargo (nyrt): {}", e))?;
+                if !st.success() { return Err("failed to build NyRT (libnyrt.a)".into()); }
+            }
             let status = std::process::Command::new("cc")
                 .arg(&obj_path)
                 .args(["-L", &cwd.join("target").join("release").display().to_string()])
+                .args(["-L", &cwd.join("crates").join("nyrt").join("target").join("release").display().to_string()])
                 .args(["-Wl,--whole-archive", "-lnyrt", "-Wl,--no-whole-archive", "-lpthread", "-ldl", "-lm"])
                 .args(["-o", &out_path.display().to_string()])
                 .status().map_err(|e| format!("spawn cc: {}", e))?;

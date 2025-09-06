@@ -54,8 +54,8 @@ impl MirInterpreter {
                     }
                 }
             }
-            // Execute non-terminator instructions
-            for inst in &block.instructions {
+            // Execute non-phi, non-terminator instructions
+            for inst in block.non_phi_instructions() {
                 match inst {
                     MirInstruction::Const { dst, value } => {
                         let v = match value {

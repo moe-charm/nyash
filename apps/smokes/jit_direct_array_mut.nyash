@@ -1,0 +1,6 @@
+// Expect: JIT-direct read_only policy denies mutating hostcalls (push)
+return (fn(){
+    local a = new ArrayBox()
+    a.push(1)
+    return a.length()
+})()
