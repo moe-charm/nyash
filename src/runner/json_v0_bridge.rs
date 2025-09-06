@@ -15,13 +15,18 @@ struct ProgramV0 {
 #[serde(tag = "type")]
 enum StmtV0 {
     Return { expr: ExprV0 },
+    Extern { iface: String, method: String, args: Vec<ExprV0> },
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type")]
 enum ExprV0 {
     Int { value: serde_json::Value },
+    Str { value: String },
+    Bool { value: bool },
     Binary { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> },
+    Extern { iface: String, method: String, args: Vec<ExprV0> },
+    Compare { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> },
 }
 
 pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
@@ -29,23 +34,45 @@ pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
     if prog.version != 0 || prog.kind != "Program" {
         return Err("unsupported IR: expected {version:0, kind:\"Program\"}".into());
     }
-    let stmt = prog.body.get(0).ok_or("empty body")?;
-
     // Create module and main function
     let mut module = MirModule::new("ny_json_v0".into());
     let sig = FunctionSignature { name: "main".into(), params: vec![], return_type: MirType::Integer, effects: EffectMask::PURE };
     let entry = BasicBlockId::new(0);
     let mut f = MirFunction::new(sig, entry);
-    // Build expression
-    let ret_val = match stmt {
-        StmtV0::Return { expr } => lower_expr(&mut f, expr)?,
-    };
-    // Return
-    if let Some(bb) = f.get_block_mut(entry) {
-        bb.set_terminator(MirInstruction::Return { value: Some(ret_val) });
+    
+    if prog.body.is_empty() { return Err("empty body".into()); }
+
+    // Lower all statements; capture last expression for return when the last is Return
+    let mut last_ret: Option<crate::mir::ValueId> = None;
+    for (i, stmt) in prog.body.iter().enumerate() {
+        match stmt {
+            StmtV0::Extern { iface, method, args } => {
+                // void extern call
+                let arg_ids = lower_args(&mut f, args)?;
+                if let Some(bb) = f.get_block_mut(entry) {
+                    bb.add_instruction(MirInstruction::ExternCall { dst: None, iface_name: iface.clone(), method_name: method.clone(), args: arg_ids, effects: EffectMask::IO });
+                }
+                if i == prog.body.len()-1 { last_ret = None; }
+            }
+            StmtV0::Return { expr } => {
+                last_ret = Some(lower_expr(&mut f, expr)?);
+            }
+        }
     }
-    // Infer return type (integer only for v0)
-    f.signature.return_type = MirType::Integer;
+    // Return last value (or 0)
+    if let Some(rv) = last_ret {
+        if let Some(bb) = f.get_block_mut(entry) {
+            bb.set_terminator(MirInstruction::Return { value: Some(rv) });
+        }
+    } else {
+        let dst_id = f.next_value_id();
+        if let Some(bb) = f.get_block_mut(entry) {
+            bb.add_instruction(MirInstruction::Const { dst: dst_id, value: ConstValue::Integer(0) });
+            bb.set_terminator(MirInstruction::Return { value: Some(dst_id) });
+        }
+    }
+    // Keep return type unknown to allow dynamic display (VM/Interpreter)
+    f.signature.return_type = MirType::Unknown;
     module.add_function(f);
     Ok(module)
 }
@@ -65,6 +92,20 @@ fn lower_expr(f: &mut MirFunction, e: &ExprV0) -> Result<crate::mir::ValueId, St
             }
             Ok(dst)
         }
+        ExprV0::Str { value } => {
+            let dst = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(f.entry_block) {
+                bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::String(value.clone()) });
+            }
+            Ok(dst)
+        }
+        ExprV0::Bool { value } => {
+            let dst = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(f.entry_block) {
+                bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::Bool(*value) });
+            }
+            Ok(dst)
+        }
         ExprV0::Binary { op, lhs, rhs } => {
             let l = lower_expr(f, lhs)?;
             let r = lower_expr(f, rhs)?;
@@ -75,7 +116,39 @@ fn lower_expr(f: &mut MirFunction, e: &ExprV0) -> Result<crate::mir::ValueId, St
             }
             Ok(dst)
         }
+        ExprV0::Extern { iface, method, args } => {
+            let arg_ids = lower_args(f, args)?;
+            let dst = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(f.entry_block) {
+                bb.add_instruction(MirInstruction::ExternCall { dst: Some(dst), iface_name: iface.clone(), method_name: method.clone(), args: arg_ids, effects: EffectMask::IO });
+            }
+            Ok(dst)
+        }
+        ExprV0::Compare { op, lhs, rhs } => {
+            let l = lower_expr(f, lhs)?;
+            let r = lower_expr(f, rhs)?;
+            let cop = match op.as_str() {
+                "==" => crate::mir::CompareOp::Eq,
+                "!=" => crate::mir::CompareOp::Ne,
+                "<"  => crate::mir::CompareOp::Lt,
+                "<=" => crate::mir::CompareOp::Le,
+                ">"  => crate::mir::CompareOp::Gt,
+                ">=" => crate::mir::CompareOp::Ge,
+                _ => return Err("unsupported compare op".into()),
+            };
+            let dst = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(f.entry_block) {
+                bb.add_instruction(MirInstruction::Compare { dst, op: cop, lhs: l, rhs: r });
+            }
+            Ok(dst)
+        }
     }
+}
+
+fn lower_args(f: &mut MirFunction, args: &[ExprV0]) -> Result<Vec<crate::mir::ValueId>, String> {
+    let mut out = Vec::with_capacity(args.len());
+    for a in args { out.push(lower_expr(f, a)?); }
+    Ok(out)
 }
 
 pub fn maybe_dump_mir(module: &MirModule) {

@@ -75,6 +75,58 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // CLI using/module overrides (MVP): apply early so JSON pipeline can observe them
+        if self.config.using.is_some() || self.config.using_path.is_some() || self.config.modules.is_some()
+            || std::env::var("NYASH_USING_PATH").is_ok() || std::env::var("NYASH_MODULES").is_ok() {
+            let mut using_paths: Vec<String> = Vec::new();
+            if let Some(p) = self.config.using_path.clone() { for s in p.split(':') { let s=s.trim(); if !s.is_empty() { using_paths.push(s.to_string()); } } }
+            if let Ok(p) = std::env::var("NYASH_USING_PATH") { for s in p.split(':') { let s=s.trim(); if !s.is_empty() { using_paths.push(s.to_string()); } } }
+            if using_paths.is_empty() { using_paths.extend(["apps","lib","."].into_iter().map(|s| s.to_string())); }
+
+            // modules mapping
+            let mut modules: Vec<(String,String)> = Vec::new();
+            if let Some(m) = self.config.modules.clone() { for ent in m.split(',') { if let Some((k,v)) = ent.split_once('=') { let k=k.trim(); let v=v.trim(); if !k.is_empty() && !v.is_empty() { modules.push((k.to_string(), v.to_string())); } } } }
+            if let Ok(ms) = std::env::var("NYASH_MODULES") { for ent in ms.split(',') { if let Some((k,v)) = ent.split_once('=') { let k=k.trim(); let v=v.trim(); if !k.is_empty() && !v.is_empty() { modules.push((k.to_string(), v.to_string())); } } } }
+            for (ns, path) in &modules { let sb = crate::box_trait::StringBox::new(path.clone()); crate::runtime::modules_registry::set(ns.clone(), Box::new(sb)); }
+
+            // using specs
+            let mut pending_using: Vec<(String, Option<String>, bool)> = Vec::new(); // (target, alias, is_path)
+            if let Some(u) = self.config.using.clone() {
+                for ent in u.split(',') {
+                    let s = ent.trim().trim_end_matches(';').trim(); if s.is_empty() { continue; }
+                    let (tgt, alias) = if let Some(pos) = s.find(" as ") { (s[..pos].trim().to_string(), Some(s[pos+4..].trim().to_string())) } else { (s.to_string(), None) };
+                    let is_path = tgt.starts_with('"') || tgt.starts_with("./") || tgt.starts_with('/') || tgt.ends_with(".nyash");
+                    pending_using.push((tgt.trim_matches('"').to_string(), alias, is_path));
+                }
+            }
+            // Resolve using
+            for (tgt, alias, is_path) in pending_using.into_iter() {
+                if is_path {
+                    let missing = !std::path::Path::new(&tgt).exists();
+                    if missing {
+                        if std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1") {
+                            eprintln!("❌ using: path not found: {}", tgt);
+                            std::process::exit(1);
+                        } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                            eprintln!("[using] path not found (continuing): {}", tgt);
+                        }
+                    }
+                }
+                let value = if is_path { tgt.clone() } else if let Some((_n,p)) = modules.iter().find(|(n,_)| n==&tgt) { p.clone() } else {
+                    let rel = tgt.replace('.', "/") + ".nyash";
+                    let mut found: Option<String> = None;
+                    for base in &using_paths { let cand = std::path::Path::new(base).join(&rel); if cand.exists() { found = Some(cand.to_string_lossy().to_string()); break; } }
+                    if found.is_none() && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[using] unresolved '{}'; tried {}", tgt, using_paths.join(":"));
+                    }
+                    found.unwrap_or(tgt.clone())
+                };
+                let sb = crate::box_trait::StringBox::new(value.clone());
+                crate::runtime::modules_registry::set(tgt.clone(), Box::new(sb));
+                if let Some(a) = alias { let sb2 = crate::box_trait::StringBox::new(value); crate::runtime::modules_registry::set(a, Box::new(sb2)); }
+            }
+        }
+
         // Phase-15: JSON IR v0 bridge (stdin/file)
         if self.config.ny_parser_pipe || self.config.json_file.is_some() {
             let json = if let Some(path) = &self.config.json_file {
@@ -94,8 +146,12 @@ impl NyashRunner {
                 Ok(module) => {
                     // Optional dump via env verbose
                     json_v0_bridge::maybe_dump_mir(&module);
-                    // Execute via MIR interpreter
-                    self.execute_mir_module(&module);
+                    // Execute via selected backend (vm or interpreter)
+                    if self.config.backend == "vm" {
+                        self.execute_vm_module(&module);
+                    } else {
+                        self.execute_mir_module(&module);
+                    }
                     return;
                 }
                 Err(e) => {
@@ -122,6 +178,9 @@ impl NyashRunner {
         if let Some(ref filename) = self.config.file {
             if let Ok(code) = fs::read_to_string(filename) {
                 // Scan first 128 lines for directives
+                let mut pending_using: Vec<(String, Option<String>)> = Vec::new();
+                let mut pending_modules: Vec<(String, String)> = Vec::new();
+                let mut using_paths: Vec<String> = Vec::new();
                 for (i, line) in code.lines().take(128).enumerate() {
                     let l = line.trim();
                     if !(l.starts_with("//") || l.starts_with("#!") || l.is_empty()) {
@@ -135,6 +194,24 @@ impl NyashRunner {
                                 let key = k.trim(); let val = v.trim();
                                 if !key.is_empty() { std::env::set_var(key, val); }
                             }
+                        } else if let Some(dir) = rest.strip_prefix("@using ") {
+                            // @using ns[ as Alias]
+                            let s = dir.trim().trim_end_matches(';').trim();
+                            let (ns, alias) = if let Some(pos) = s.find(" as ") {
+                                (s[..pos].trim().to_string(), Some(s[pos+4..].trim().to_string()))
+                            } else { (s.to_string(), None) };
+                            pending_using.push((ns, alias));
+                        } else if let Some(dir) = rest.strip_prefix("@module ") {
+                            // @module ns=path
+                            if let Some((ns, path)) = dir.split_once('=') {
+                                let ns = ns.trim().to_string();
+                                let path = path.trim().trim_matches('"').to_string();
+                                pending_modules.push((ns, path));
+                            }
+                        } else if let Some(dir) = rest.strip_prefix("@using-path ") {
+                            // @using-path apps:lib:.  (':' separated)
+                            let s = dir.trim();
+                            for p in s.split(':') { let p = p.trim(); if !p.is_empty() { using_paths.push(p.to_string()); } }
                         } else if rest == "@jit-debug" {
                             std::env::set_var("NYASH_JIT_EXEC", "1");
                             std::env::set_var("NYASH_JIT_THRESHOLD", "1");
@@ -150,6 +227,50 @@ impl NyashRunner {
                             // In strict mode, default to JIT-only (no VM fallback)
                             if std::env::var("NYASH_JIT_ONLY").ok().is_none() { std::env::set_var("NYASH_JIT_ONLY", "1"); }
                         }
+                    }
+                }
+
+                // Env overrides for using rules
+                if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
+                    for p in paths.split(':') { let p = p.trim(); if !p.is_empty() { using_paths.push(p.to_string()); } }
+                }
+                if let Ok(mods) = std::env::var("NYASH_MODULES") {
+                    for ent in mods.split(',') {
+                        if let Some((k,v)) = ent.split_once('=') {
+                            let k = k.trim(); let v = v.trim();
+                            if !k.is_empty() && !v.is_empty() { pending_modules.push((k.to_string(), v.to_string())); }
+                        }
+                    }
+                }
+
+                // Apply pending modules to registry as StringBox (path or ns token)
+                for (ns, path) in pending_modules.iter() {
+                    let sb = nyash_rust::box_trait::StringBox::new(path.clone());
+                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+                }
+                // Resolve pending using via modules map or using_paths (best-effort)
+                for (ns, alias) in pending_using.iter() {
+                    // direct mapping first
+                    let value = if let Some((_n, p)) = pending_modules.iter().find(|(n, _)| n == ns) {
+                        p.clone()
+                    } else {
+                        // try search paths: <path>/<ns as a/b/c>.nyash
+                        let rel = ns.replace('.', "/") + ".nyash";
+                        let mut found = None;
+                        if let Some(dir) = std::path::Path::new(filename).parent() {
+                            let cand = dir.join(&rel);
+                            if cand.exists() { found = Some(cand.to_string_lossy().to_string()); }
+                        }
+                        if found.is_none() {
+                            for base in &using_paths { let cand = std::path::Path::new(base).join(&rel); if cand.exists() { found = Some(cand.to_string_lossy().to_string()); break; } }
+                        }
+                        found.unwrap_or_else(|| ns.clone())
+                    };
+                    let sb = nyash_rust::box_trait::StringBox::new(value.clone());
+                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+                    if let Some(a) = alias {
+                        let sb2 = nyash_rust::box_trait::StringBox::new(value);
+                        nyash_rust::runtime::modules_registry::set(a.clone(), Box::new(sb2));
                     }
                 }
             }
@@ -811,6 +932,55 @@ impl NyashRunner {
 }
 
 impl NyashRunner {
+    /// Execute a prepared MIR module via the VM
+    fn execute_vm_module(&self, module: &crate::mir::MirModule) {
+        use crate::backend::VM;
+        use crate::mir::MirType;
+        use crate::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
+        use crate::boxes::FloatBox;
+        let mut vm = VM::new();
+        match vm.execute_module(module) {
+            Ok(result) => {
+                if let Some(func) = module.functions.get("main") {
+                    let (ety, sval) = match &func.signature.return_type {
+                        MirType::Float => {
+                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
+                                ("Float", format!("{}", fb.value))
+                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Float", format!("{}", ib.value as f64))
+                            } else { ("Float", result.to_string_box().value) }
+                        }
+                        MirType::Integer => {
+                            if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Integer", ib.value.to_string())
+                            } else { ("Integer", result.to_string_box().value) }
+                        }
+                        MirType::Bool => {
+                            if let Some(bb) = result.as_any().downcast_ref::<BoolBox>() {
+                                ("Bool", bb.value.to_string())
+                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Bool", (ib.value != 0).to_string())
+                            } else { ("Bool", result.to_string_box().value) }
+                        }
+                        MirType::String => {
+                            if let Some(sb) = result.as_any().downcast_ref::<StringBox>() {
+                                ("String", sb.value.clone())
+                            } else { ("String", result.to_string_box().value) }
+                        }
+                        _ => { (result.type_name(), result.to_string_box().value) }
+                    };
+                    println!("ResultType(VM): {}", ety);
+                    println!("Result: {}", sval);
+                } else {
+                    println!("Result: {:?}", result);
+                }
+            }
+            Err(e) => {
+                eprintln!("❌ VM execution error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
     /// Run a file through independent JIT engine (no VM execute loop)
     fn run_file_jit_direct(&self, filename: &str) {
         use std::fs;

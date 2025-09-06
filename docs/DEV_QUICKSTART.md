@@ -2,6 +2,9 @@
 
 This quickstart summarizes the most common build/run/test flows when working on Nyash.
 
+See also
+- Self‑hosting one‑pager: `docs/self-hosting.md`
+
 ## Build
 - VM/JIT (Cranelift): `cargo build --release --features cranelift-jit`
 - LLVM AOT: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
@@ -30,4 +33,3 @@ This quickstart summarizes the most common build/run/test flows when working on 
 ## Testing
 - Rust unit tests: `cargo test`
 - Targeted: e.g., tokenizer/sugar config `cargo test --lib sugar_basic_test -- --nocapture`
-

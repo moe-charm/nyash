@@ -190,6 +190,21 @@ impl PluginLoaderV2 {
     pub fn extern_call(&self, iface_name: &str, method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
         match (iface_name, method_name) {
             ("env.console", "log") => { for a in args { println!("{}", a.to_string_box().value); } Ok(None) }
+            ("env.modules", "set") => {
+                if args.len() >= 2 {
+                    let key = args[0].to_string_box().value;
+                    let val = args[1].clone_box();
+                    crate::runtime::modules_registry::set(key, val);
+                }
+                Ok(None)
+            }
+            ("env.modules", "get") => {
+                if let Some(k) = args.get(0) {
+                    let key = k.to_string_box().value;
+                    if let Some(v) = crate::runtime::modules_registry::get(&key) { return Ok(Some(v)); }
+                }
+                Ok(Some(Box::new(crate::box_trait::VoidBox::new())))
+            }
             ("env.task", "cancelCurrent") => { let tok = crate::runtime::global_hooks::current_group_token(); tok.cancel(); Ok(None) }
             ("env.task", "currentToken") => { let tok = crate::runtime::global_hooks::current_group_token(); let tb = crate::boxes::token_box::TokenBox::from_token(tok); Ok(Some(Box::new(tb))) }
             ("env.debug", "trace") => { if std::env::var("NYASH_DEBUG_TRACE").ok().as_deref() == Some("1") { for a in args { eprintln!("[debug.trace] {}", a.to_string_box().value); } } Ok(None) }

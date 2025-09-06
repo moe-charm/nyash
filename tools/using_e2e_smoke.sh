@@ -15,12 +15,13 @@ if [ ! -f "$APP" ]; then
   echo "[using-e2e] scaffolding sample..." >&2
   mkdir -p "$ROOT_DIR/apps/using-e2e"
   cat > "$APP" <<'NYCODE'
-// using/nyash.link E2E sample (placeholder)
+// using/nyash.link E2E sample (MVP)
+using acme.util
+
 static box Main {
   init { }
   main(args) {
-    // When using/nyash.link is active, modules can be resolved here.
-    // Placeholder just returns 0 for now.
+    // using line should be accepted when NYASH_ENABLE_USING=1
     return 0
   }
 }

@@ -11,15 +11,16 @@ if [ ! -x "$BIN" ]; then
   cargo build --release --features cranelift-jit >/dev/null
 fi
 
-echo "[Roundtrip] Case A: Ny → JSON(v0) → MIR-Interp (pipe)" >&2
-set -o pipefail
-# Use a subset-friendly program (no parentheses) compatible with current tokenizer/desugar
-printf 'return 1+2*3\n' | "$NY_PARSER" | "$BIN" --ny-parser-pipe > /tmp/nyash-rt-a.out || true
+echo "[Roundtrip] Case A: Ny (source v0) → MIR-Interp (direct bridge)" >&2
+TMPNY=$(mktemp)
+printf 'return 1+2*3\n' > "$TMPNY"
+NYASH_DISABLE_PLUGINS=1 "$BIN" --parser ny --backend vm "$TMPNY" > /tmp/nyash-rt-a.out || true
 if rg -q '^Result:\s*7\b' /tmp/nyash-rt-a.out; then
-  echo "PASS: Case A (pipe)" >&2
+  echo "PASS: Case A (direct bridge)" >&2
 else
-  echo "SKIP: Case A (pipe) - parser pipeline not ready; proceeding with Case B" >&2
+  echo "FAIL: Case A (direct bridge)" >&2
   cat /tmp/nyash-rt-a.out >&2 || true
+  exit 1
 fi
 
 echo "[Roundtrip] Case B: JSON(v0) file → MIR-Interp" >&2

@@ -1,5 +1,9 @@
 Phase 15 — Self-Hosting (Cranelift AOT) 準備メモ
 
+関連ドキュメント（selfhosting-dev 運用）
+- VM/JIT 自己ホストガイド: `docs/self-hosting.md`
+- Cranelift/AOT タスク集約: `docs/phase-15/cranelift/CRANELIFT_TASKS.md`
+
 注意: Phase 15 の正本ドキュメントは `docs/development/roadmap/phases/phase-15/` 配下です。全体の入口は `INDEX.md` を参照してください。
 → docs/development/roadmap/phases/phase-15/INDEX.md
 

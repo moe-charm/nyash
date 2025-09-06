@@ -1,5 +1,27 @@
 # CURRENT TASK (Compact) — Phase 15 / Self-Hosting（Ny→MIR→MIR-Interp→VM 先行）
 
+［ブランチ方針の注記 — 2025‑09‑06 selfhosting‑dev 整理］
+- このブランチは VM/JIT を中心とした自己ホスト開発に専念します。
+- Cranelift AOT/JIT‑AOT 系の詳細課題は `docs/phase-15/cranelift/CRANELIFT_TASKS.md` へ分離しました（このファイルへの追記は最小限に）。
+- 旧コンテンツは `docs/archives/CURRENT_TASK-2025-09-06.md`（要旨）および Git 履歴（完全版）を参照してください。
+
+— Quick Update (2025‑09‑06 PM)
+- Merge: `origin/main` の Cranelift 修正を取り込み、全スモーク緑を確認。
+- P0 達成（追加）:
+  - Ny→MIR 直結ブリッジ（Case A）実装（`json_v0_bridge.rs`）。`tools/ny_roundtrip_smoke.sh` PASS。
+  - env.modules 最小レジストリ追加＋VM ExternCall name-route 対応（plugins不要）。`tools/modules_smoke.sh` PASS。
+  - using MVP（軽量導線）: スクリプト using 行（ns/直パス）・指示コメント（@using/@module/@using-path）・環境/CLIフラグ（`--using/--module/--using-path`）を前処理で受理→env.modules登録。
+    - 未解決時は verbose で探索ヒントと候補提示（apps/lib/. を浅く走査）。
+    - 直パス missing は `NYASH_USING_STRICT=1` でエラー終了・デフォは警告継続。
+    - スモーク: `tools/using_e2e_smoke.sh`（MVP）, `tools/using_resolve_smoke.sh`, `tools/using_unresolved_smoke.sh`, `tools/using_strict_path_fail_smoke.sh` 追加・PASS。
+  - JSON v0 拡張: `Bool`, `Compare(op)` を追加（検査・判定系の表現力UP）。
+
+次アクション（短期）
+- using 解決品質の向上: 候補スコアリング/断片一致・パス優先度整理（search_paths順）。
+- VM 経路の using 前処理の適用範囲見直し（必要時）。
+- JSON v0 の最小セット拡張（短絡評価/論理 and/or 等）。
+- ドキュメント最小追記（README の Self‑Hosting セクションから one‑pager へ誘導済み）。
+
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
 — 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
