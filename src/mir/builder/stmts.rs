@@ -299,12 +299,23 @@ impl super::MirBuilder {
         Ok(future_id)
     }
 
-    // Await: insert Safepoint before/after and emit Await
+    // Await: insert Safepoint before/after. In pure mode (or rewrite flag),
+    // lower to ExternCall(env.future.await) instead of Await instruction.
     pub(super) fn build_await_expression(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         let future_value = self.build_expression(expression)?;
         self.emit_instruction(MirInstruction::Safepoint)?;
         let result_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Await { dst: result_id, future: future_value })?;
+        if crate::config::env::mir_core13_pure() || crate::config::env::rewrite_future() {
+            self.emit_instruction(MirInstruction::ExternCall {
+                dst: Some(result_id),
+                iface_name: "env.future".to_string(),
+                method_name: "await".to_string(),
+                args: vec![future_value],
+                effects: EffectMask::PURE.add(Effect::Io),
+            })?;
+        } else {
+            self.emit_instruction(MirInstruction::Await { dst: result_id, future: future_value })?;
+        }
         self.emit_instruction(MirInstruction::Safepoint)?;
         Ok(result_id)
     }

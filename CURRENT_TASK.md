@@ -2,7 +2,38 @@
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-— 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
+— 最終更新: 2025‑09‑07 (Phase 15.18 追記, Core‑13 純化の確定化/await 純化・次フェーズ準備)
+
+【Phase 15.18 追記 — Core‑13 純化の確定化 / await 純化 / try 計画】
+状態まとめ（Core‑13 純化 vs 厳格）
+- 純化ON（`NYASH_MIR_CORE13_PURE=1`）: 最終MIRは13命令のみ許可。1つでも逸脱があれば即エラー（fail‑fast）。
+  - Builder純化: `new`→`extern_call env.box.new`、Unary(−/!/~)は `Const+BinOp/Compare` に展開、WeakRefは回避
+  - 正規化: locals は `env.local.get/set` 経路へ、最終検証で13命令以外が残存すればエラー
+  - 実行: VM/LLVM shim（`env.local.*`/`env.box.new`）が稼働。CI（通常/LLVM）で検証
+- 純化OFF: レガシー命令（Array/Ref/Weak/Barrier/TypeCheck/Cast/PluginInvoke）は最終MIRで禁止（検証エラー）。
+  - ただし「13命令のみ」までは強制しない（移行/診断フェーズ用）。論文ベンチは純化ON推奨。
+
+await 対応（純化ONでの挙動）
+- Builder: `await <expr>` を純化ON（または `NYASH_REWRITE_FUTURE=1`）で
+  - `Safepoint` → `ExternCall(env.future.await, [future])` → `Safepoint` に正規化（13命令準拠）
+  - Verifier: チェックポイント（Safepoint）を前後で要求する検証は継続。テストはグリーン
+
+try/catch 対応方針（次フェーズ直前のTODO）
+- P1（最小・純化可）: 値フロー（Result風）に降下
+  - try 本体 E を「失敗も値で返す」形に寄せ、`isOk` で `Compare/Branch` → ok: unwrap, else: catch 本体
+  - `throw` は当面 `ExternCall(env.runtime.throw)` 相当を ErrorBox に畳み値伝播（例外→値）
+  - すべて Core‑13 の範囲（Const/BoxCall/ExternCall/Compare/Branch/Phi）で表現
+- P2: 複数効果点への挿入/`finally` 合流（Phi + Safepoint）
+- P3: 可能ならランタイム try‑scope（`env.runtime.try_begin/end`）検討（後段・優先度低）
+
+運用ポリシー（ベンチ/再現性）
+- 論文/ベンチは `NYASH_MIR_CORE13_PURE=1` を前提（fail‑fast＋MIR13固定）。
+- `await/try` を含む系は、await は純化ONでOK。try/catch は P1 実装後に解禁予定。
+
+更新TODO（短期）
+- [ ] Try/Catch P1: 値フロー降下（純化ONでも13命令のみ）＋最小E2Eテスト（成功/失敗）
+- [ ] LLVM parity: Compare/Branch を parity 実行パスに追加（`compile_and_execute` 拡張）
+- [ ] E2E スモーク: `apps/smokes_pure13/` に VM vs LLVM(EXE) 比較を追加（加算/分岐/String.length）
 
 【ハンドオフ（2025‑09‑06 2nd）— AOT/JIT‑AOT String.length 修正進捗と引き継ぎ】
 

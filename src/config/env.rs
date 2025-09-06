@@ -91,6 +91,9 @@ pub fn mir_ref_boxcall() -> bool { std::env::var("NYASH_MIR_REF_BOXCALL").ok().a
 pub fn mir_array_boxcall() -> bool { std::env::var("NYASH_MIR_ARRAY_BOXCALL").ok().as_deref() == Some("1") || mir_core13() }
 pub fn mir_plugin_invoke() -> bool { std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1") }
 pub fn plugin_only() -> bool { std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1") }
+/// Core-13 "pure" mode: enforce 13 instructions only after normalization.
+/// Used by builder/optimizer to prefer env-based forms (e.g., future.await via ExternCall).
+pub fn mir_core13_pure() -> bool { std::env::var("NYASH_MIR_CORE13_PURE").ok().as_deref() == Some("1") }
 
 // ---- Optimizer diagnostics ----
 pub fn opt_debug() -> bool { std::env::var("NYASH_OPT_DEBUG").is_ok() }
