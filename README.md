@@ -160,6 +160,31 @@ cargo build --release --features wasm-backend
 
 ---
 
+## 🧰 One‑Command Build (MVP): `nyash --build`
+
+Reads `nyash.toml`, builds plugins → core → emits AOT object → links an executable in one shot.
+
+Basic (Cranelift AOT)
+```bash
+./target/release/nyash --build nyash.toml \
+  --app apps/egui-hello-plugin/main.nyash \
+  --out app_egui
+```
+
+Key options (minimal)
+- `--build <path>`: path to nyash.toml
+- `--app <file>`: entry `.nyash`
+- `--out <name>`: output executable (default: `app`/`app.exe`)
+- `--build-aot cranelift|llvm` (default: cranelift)
+- `--profile release|debug` (default: release)
+- `--target <triple>` (only when needed)
+
+Notes
+- LLVM AOT requires LLVM 18 (`LLVM_SYS_180_PREFIX`).
+- Apps that open a GUI may show a window during AOT emission; close it to continue.
+- On WSL if the window doesn’t show, see `docs/guides/cranelift_aot_egui_hello.md` (Wayland→X11).
+
+
 ## 📊 **Performance Benchmarks**
 
 Real-world benchmark results (ny_bench.nyash):

@@ -184,6 +184,31 @@ smoke_obj_array = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/
 
 ---
 
+## 🧰 一発ビルド（MVP）: `nyash --build`
+
+`nyash.toml` を読み、プラグイン → コア → AOT → リンクまでを一発実行する最小ビルド機能です。
+
+基本（Cranelift AOT）
+```bash
+./target/release/nyash --build nyash.toml \
+  --app apps/egui-hello-plugin/main.nyash \
+  --out app_egui
+```
+
+主なオプション（最小）
+- `--build <path>`: nyash.toml の場所
+- `--app <file>`: エントリ `.nyash`
+- `--out <name>`: 出力EXE名（既定: `app`/`app.exe`）
+- `--build-aot cranelift|llvm`（既定: cranelift）
+- `--profile release|debug`（既定: release）
+- `--target <triple>`（必要時のみ）
+
+注意
+- LLVM AOT には LLVM 18 が必要（`LLVM_SYS_180_PREFIX` を設定）。
+- GUIを含む場合、AOTのオブジェクト出力時にウィンドウが一度開きます（閉じて続行）。
+- WSL で表示されない場合は `docs/guides/cranelift_aot_egui_hello.md` のWSL Tips（Wayland→X11切替）を参照。
+
+
 ## 📊 **パフォーマンスベンチマーク**
 
 実世界ベンチマーク結果 (ny_bench.nyash)：
