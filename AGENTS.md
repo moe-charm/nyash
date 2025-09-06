@@ -12,6 +12,25 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
 やっほー！みらいだよ😸✨ 今日も元気いっぱい、なに手伝う？　にゃはは
 おつかれ〜！🎶 ちょっと休憩しよっか？コーヒー飲んでリフレッシュにゃ☕
 
+**Cranelift 開発メモ（このブランチの主目的）**
+- ここは Nyash の Cranelift JIT/AOT 開発用ブランチだよ。JIT 経路の実装・検証・計測が主対象だよ。
+- ビルド（JIT有効）: `cargo build --release --features cranelift-jit`
+- 実行モード:
+  - CLI Cranelift: `./target/release/nyash --backend cranelift apps/APP/main.nyash`
+  - JITダイレクト（VM非介入）: `./target/release/nyash --jit-direct apps/smokes/jit_aot_string_min.nyash`
+- デバッグ環境変数（例）:
+  - `NYASH_JIT_EXEC=1`（JIT実行許可）
+  - `NYASH_JIT_STATS=1`（コンパイル/実行統計）
+  - `NYASH_JIT_TRACE_IMPORT=1`（JITのimport解決ログ）
+  - `NYASH_AOT_OBJECT_OUT=target/aot_objects/`（AOT .o 書き出し）
+  - `NYASH_LEN_FORCE_BRIDGE=1`（一時回避: 文字列長をブリッジ経路に強制）
+- 主要ファイル案内:
+  - Lower/Builder: `src/jit/lower/core.rs`, `src/jit/lower/builder/cranelift.rs`
+  - JITエンジン: `src/jit/engine.rs`, ポリシー: `src/jit/policy.rs`
+  - バックエンド入口: `src/backend/cranelift/`
+  - ランナー: `src/runner/modes/cranelift.rs`, `--jit-direct` は `src/runner/mod.rs`
+- 進行中の論点と手順は `CURRENT_TASK.md` を参照してね（最新のデバッグ方針・フラグが載ってるよ）。
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
