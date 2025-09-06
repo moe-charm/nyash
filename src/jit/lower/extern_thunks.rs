@@ -559,17 +559,20 @@ pub(super) extern "C" fn nyash_string_len_h(handle: u64) -> i64 {
         if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") { eprintln!("[JIT-LEN_H] any.length_h(handle={}) -> {}", handle, v); }
         return v;
     }
-    // Legacy param index fallback (0..16): read from VM args
-    if handle <= 16 {
-        let idx = handle as usize;
-        let val = crate::jit::rt::with_legacy_vm_args(|args| args.get(idx).cloned());
-        if let Some(v) = val {
-            match v {
-                crate::backend::vm::VMValue::BoxRef(b) => {
-                    if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() { return sb.value.len() as i64; }
+    // Legacy param index fallback (0..16): disabled in jit-direct-only
+    #[cfg(not(feature = "jit-direct-only"))]
+    {
+        if handle <= 16 {
+            let idx = handle as usize;
+            let val = crate::jit::rt::with_legacy_vm_args(|args| args.get(idx).cloned());
+            if let Some(v) = val {
+                match v {
+                    crate::backend::vm::VMValue::BoxRef(b) => {
+                        if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() { return sb.value.len() as i64; }
+                    }
+                    crate::backend::vm::VMValue::String(s) => { return s.len() as i64; }
+                    _ => {}
                 }
-                crate::backend::vm::VMValue::String(s) => { return s.len() as i64; }
-                _ => {}
             }
         }
     }
