@@ -89,7 +89,33 @@ impl MirBuilder {
         args: Vec<ValueId>,
         effects: EffectMask,
     ) -> Result<(), String> {
-        self.emit_instruction(MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects })
+        // Emit instruction first
+        self.emit_instruction(MirInstruction::BoxCall { dst, box_val, method: method.clone(), method_id, args, effects })?;
+        // Heuristic return type inference for common builtin box methods
+        if let Some(d) = dst {
+            // Try to infer receiver box type from NewBox origin; fallback to current value_types
+            let mut recv_box: Option<String> = self.value_origin_newbox.get(&box_val).cloned();
+            if recv_box.is_none() {
+                if let Some(t) = self.value_types.get(&box_val) {
+                    match t {
+                        super::MirType::String => recv_box = Some("StringBox".to_string()),
+                        super::MirType::Box(name) => recv_box = Some(name.clone()),
+                        _ => {}
+                    }
+                }
+            }
+            if let Some(bt) = recv_box {
+                let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
+                    ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
+                    ("StringBox", "is_empty") => Some(super::MirType::Bool),
+                    ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
+                    ("ArrayBox",  "length") => Some(super::MirType::Integer),
+                    _ => None,
+                };
+                if let Some(mt) = inferred { self.value_types.insert(d, mt); }
+            }
+        }
+        Ok(())
     }
     /// Create a new MIR builder
     pub fn new() -> Self {
