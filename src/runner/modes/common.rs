@@ -5,6 +5,34 @@ use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter};
 use nyash_rust::runner_plugin_init;
 use std::{fs, process};
 
+// limited directory walk: add matching files ending with .nyash and given leaf name
+fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
+    use std::fs;
+    fn walk(dir: &std::path::Path, leaf: &str, out: &mut Vec<String>, depth: usize) {
+        if depth == 0 || out.len() >= 5 { return; }
+        if let Ok(entries) = fs::read_dir(dir) {
+            for e in entries.flatten() {
+                let path = e.path();
+                if path.is_dir() {
+                    walk(&path, leaf, out, depth - 1);
+                    if out.len() >= 5 { return; }
+                } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    if ext == "nyash" {
+                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                            if stem == leaf {
+                                out.push(path.to_string_lossy().to_string());
+                                if out.len() >= 5 { return; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let p = std::path::Path::new(base);
+    walk(p, leaf, out, 4);
+}
+
 impl NyashRunner {
     /// File-mode dispatcher (thin wrapper around backend/mode selection)
     pub(crate) fn run_file(&self, filename: &str) {
@@ -39,35 +67,7 @@ impl NyashRunner {
             };
             println!("{:#?}", ast);
             return;
-}
-
-// limited directory walk: add matching files ending with .nyash and given leaf name
-fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
-    use std::fs;
-    fn walk(dir: &std::path::Path, leaf: &str, out: &mut Vec<String>, depth: usize) {
-        if depth == 0 || out.len() >= 5 { return; }
-        if let Ok(entries) = fs::read_dir(dir) {
-            for e in entries.flatten() {
-                let path = e.path();
-                if path.is_dir() {
-                    walk(&path, leaf, out, depth - 1);
-                    if out.len() >= 5 { return; }
-                } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    if ext == "nyash" {
-                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                            if stem == leaf {
-                                out.push(path.to_string_lossy().to_string());
-                                if out.len() >= 5 { return; }
-                            }
-                        }
-                    }
-                }
-            }
         }
-    }
-    let p = std::path::Path::new(base);
-    walk(p, leaf, out, 4);
-}
 
         // MIR dump/verify
         if self.config.dump_mir || self.config.verify_mir {
