@@ -2,13 +2,32 @@
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-— 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
+— 最終更新: 2025‑09‑06 (Phase 15.17 反映, Core‑13 純化モード/LLVM AOT shim 拡張)
 
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 
 概要
 - 目的: AOT/JIT‑AOT で発生していた `StringBox.length/len` が 0 になる不具合の是正（Lower の二段フォールバック：`nyash.string.len_h` → `nyash.any.length_h`）。
 - 結果: 当該不具合は修正・確認完了（AOT/VM で期待値）。JIT 直実行の継続調査は打ち切り、実行モードは「インタープリター／VM／Cranelift(EXE)／LLVM(EXE)」の4体制へ移行。
+
+【Phase 15.17 追記 — Core‑13 純化モード 実装/稼働・AOT shim 拡張】
+概要
+- Core‑13 純化モード（厳格）を導入: `NYASH_MIR_CORE13_PURE=1`
+  - Builder 段: `new`→`ExternCall(env.box.new, [type, …args])` を直接生成（`NewBox/birth` 非生成）
+  - Unary(−/!/~): 直接展開（`Const+BinOp/Compare`）
+  - WeakRef(weak_new/load): 純化ONでは生成回避（パススルー）
+  - Optimizer 安全網: Load/Store→`env.local.get/set` 変換、最終MIRで13命令以外はエラー
+- 実行系:
+  - VM: `env.local.get/set` と `env.box.new` を実装（BoxFactoryRegistry 連動）
+  - LLVM AOT: `env.local.get/set` の Lowering と `env.box.new` shim を追加
+    - NyRT 追加: `nyash.env.box.new` / `nyash.env.box.new_i64x` (最大4引数)
+    - NyRT 追加: `nyash.box.from_i8_string`（i8*→StringBox）、`nyash.box.from_f64`（f64→FloatBox）
+    - Lowering: 引数を i64 ハンドルに正規化（int/ptr→i64、i8*→from_i8_string、f64→from_f64）
+  - Cranelift （スケルトン）: `env.local.get/set` / `env.box.new` を実行ループに最小実装（将来のAOT出力の布石）
+
+検証
+- `cargo test`: 206 passed / 0 failed / 24 ignored（通常）
+- 純化ON（選択的 skip あり）: グリーン。`src/tests/mir_pure_envbox.rs` 追加で `env.box.new` 生成を検証
 
 実装（済）
 - LowerCore: 二段フォールバック実装を追加（Param/Local/リテラル）。
@@ -22,6 +41,21 @@
 - ポリシー: `StringBox.length/len` マッピングを `nyash.any.length_h` → `nyash.string.len_h` に是正。
 - デッドコード整理: 旧 `lower_boxcall_simple_reads` を削除（conflict 回避）。
 - ツール/スモーク: `tools/aot_smoke_cranelift.sh` 追加、`apps/smokes/jit_aot_string_length_smoke.nyash` 追加。
+
+— 15.17 追加 実装（済）
+- Core‑13 純化モード: `NYASH_MIR_CORE13_PURE=1`（Builder/Optimizer/Verifier 連携）
+- VM: `env.local.get/set`, `env.box.new` を実装
+- LLVM AOT: `env.box.new` shim（new/new_i64x）+ 引数 i8*/f64 のハンドル化 helper 追加
+- Cranelift: ExternCall の最小実装（get/set/new）を追加（スケルトン）
+- テスト: `src/tests/mir_pure_envbox.rs` 追加（純化 new→env.box.new の生成確認）
+- テスト: `src/tests/mir_pure_e2e_vm.rs` 追加（純化ONで VM 実行: new StringBox + length の e2e）
+- テスト: `src/tests/mir_pure_locals_normalized.rs` 追加（locals が env.local.get/set に正規化されることを確認）
+- テスト: `src/tests/mir_pure_llvm_build.rs` 追加（feature=llvm 時に純化ONで .o を正常生成できることを確認。実行の同値性はAOT実装拡張後に別途追加予定）
+- テスト: `src/tests/mir_pure_e2e_arith.rs` 追加（純化×VMで加算の e2e）
+- テスト: `src/tests/mir_pure_e2e_branch.rs` 追加（純化×VMで条件分岐の e2e）
+- テスト: `src/tests/mir_pure_only_core13.rs` 追加（最終MIRが13命令のみで構成されることを静的検査）
+- CI: Core‑13 純化(LLVM) ワークフロー追加（`.github/workflows/core13-pure-llvm.yml`）。LLVM 18 をセットアップし、`--features llvm` で純化ONテストを実行。
+- CI: Core‑13 純化モード専用ワークフローを追加（`.github/workflows/core13-pure.yml`）。`NYASH_MIR_CORE13_PURE=1 cargo test --all-targets` を実行。
 
 確認状況（最終）
 - `apps/smokes/jit_aot_string_min.nyash`（concat/eq）: AOT で `Result: 1`（OK）。
@@ -38,6 +72,13 @@ P1: AOT 安定化（低頻度 segfault の追跡：低優先）
 
 P2: リファクタ（Phase A）継続（振る舞い不変）
 - Hostcall シンボル `SYM_*` 統一、`core/string_len.rs` への集約、観測フックの整理は継続。JIT 実行依存の観測は停め、VM/AOT 観測を優先。
+
+P3: Core‑13 純化 仕上げ（今回の続き）
+- Cranelift AOT: 実オブジェクト出力で `env.local/env.box` のシンボル連携（現状は実行スケルトンのみ）
+- LLVM AOT: `env.box.new_i64x` の引数拡張（>4, TLV支援）と型復元の精度UP（文字列/浮動/配列 等）
+- Builder 純化の徹底: Load/Store/WeakRef を完全非生成（全経路点検）
+- E2E 純化スモーク: `apps/smokes_pure13/` を追加（VM/LLVM EXE の結果一致）
+- CI: 純化ON ジョブを常時実行（最終MIR 13命令チェック含む）
 
 進捗（2025‑09‑06 終了報告）
 - ops_ext: StringBox.len/length の結果を必ずローカルに保存するよう修正（Return が確実に値を拾える）
@@ -198,6 +239,10 @@ Phase A 進捗（実施済）
 - [ ] `emit_len_with_fallback_*` / `lower_box_call(len/length)` にイベント出力を追加（選択分岐/経路ログ）。
 - [ ] AOT segv の最小再現収集（PIE/relro/TLSの前提確認）→ `nyrt` 側エクスポート/リンカフラグ点検。
 - [ ] `NYASH_USE_PLUGIN_BUILTINS=1` 時の `length` も robust path を常に使用することを E2E で再確認。
+- [ ] Cranelift AOT: `env.local/env.box` を実オブジェクト出力に反映（link/name 解決の道付け）
+- [ ] LLVM AOT: `nyash.env.box.new_i64x` の引数≥5およびTLV化の検討、引数型の復元精度UP
+- [ ] Builder 純化の網羅化（Load/Store/WeakRef 非生成の全経路テスト追加）
+- [ ] 純化ON E2E スモーク（VM/LLVM）と CI 常時ジョブの追加
 
 メモ
 - `jit_aot_any_len_string.nyash` は `return s.length()` の Return 経路解決が決め手。材化を強化すれば `3` が期待値。

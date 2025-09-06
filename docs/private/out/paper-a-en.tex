@@ -1,0 +1,125 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+\hypertarget{minimal-yet-universal-the-mir-13-instruction-set-and-everything-is-box-philosophy}{%
+\section{Minimal Yet Universal: The MIR-13 Instruction Set and
+Everything-is-Box
+Philosophy}\label{minimal-yet-universal-the-mir-13-instruction-set-and-everything-is-box-philosophy}}
+
+\hypertarget{authors}{%
+\subsection{Authors}\label{authors}}
+
+TBD
+
+\hypertarget{abstract}{%
+\subsection{Abstract}\label{abstract}}
+
+{[}See abstract.md{]}
+
+\hypertarget{introduction}{%
+\subsection{1. Introduction}\label{introduction}}
+
+{[}See chapters/01-introduction.md{]}
+
+\hypertarget{the-evolution-of-mir-from-26-to-13}{%
+\subsection{2. The Evolution of MIR: From 26 to
+13}\label{the-evolution-of-mir-from-26-to-13}}
+
+{[}TODO: Detail the systematic reduction process{]}
+
+\hypertarget{boxcall-unification-architecture}{%
+\subsection{3. BoxCall Unification
+Architecture}\label{boxcall-unification-architecture}}
+
+{[}TODO: Explain how BoxCall absorbs array/field operations{]}
+
+\hypertarget{optimization-strategies}{%
+\subsection{4. Optimization Strategies}\label{optimization-strategies}}
+
+{[}TODO: IC, AOT, TypedArray optimizations{]}
+
+\hypertarget{implementation}{%
+\subsection{5. Implementation}\label{implementation}}
+
+{[}TODO: Compiler architecture and implementation details{]}
+
+\hypertarget{evaluation}{%
+\subsection{6. Evaluation}\label{evaluation}}
+
+{[}TODO: Performance benchmarks and analysis{]}
+
+\hypertarget{related-work}{%
+\subsection{7. Related Work}\label{related-work}}
+
+{[}TODO: Comparison with other minimal IRs{]}
+
+\hypertarget{conclusion}{%
+\subsection{8. Conclusion}\label{conclusion}}
+
+{[}TODO: Summary and future directions{]}
+
+\hypertarget{references}{%
+\subsection{References}\label{references}}
+
+{[}TODO: Add bibliography{]}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\emph{Note: This is the main paper structure. Detailed content is in
+individual chapter files.}
+
+\end{document}

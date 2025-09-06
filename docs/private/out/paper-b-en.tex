@@ -1,0 +1,146 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+\hypertarget{nyash-a-box-first-programming-language-with-symmetric-memory-management-and-p2p-intent-model}{%
+\section{Nyash: A Box-First Programming Language with Symmetric Memory
+Management and P2P Intent
+Model}\label{nyash-a-box-first-programming-language-with-symmetric-memory-management-and-p2p-intent-model}}
+
+\hypertarget{authors}{%
+\subsection{Authors}\label{authors}}
+
+TBD
+
+\hypertarget{abstract}{%
+\subsection{Abstract}\label{abstract}}
+
+{[}See abstract.md{]}
+
+\hypertarget{introduction}{%
+\subsection{1. Introduction}\label{introduction}}
+
+{[}See chapters/01-introduction.md{]}
+
+\hypertarget{the-box-model-everything-is-box}{%
+\subsection{2. The Box Model: Everything is
+Box}\label{the-box-model-everything-is-box}}
+
+{[}TODO: Explain the unified Box abstraction{]}
+
+\hypertarget{symmetric-memory-management}{%
+\subsection{3. Symmetric Memory
+Management}\label{symmetric-memory-management}}
+
+{[}TODO: Detail init/fini lifecycle design{]}
+
+\hypertarget{p2p-intent-model}{%
+\subsection{4. P2P Intent Model}\label{p2p-intent-model}}
+
+{[}TODO: Explain intent-based communication{]}
+
+\hypertarget{multi-tier-execution-architecture}{%
+\subsection{5. Multi-Tier Execution
+Architecture}\label{multi-tier-execution-architecture}}
+
+{[}TODO: Interpreter → VM → JIT → AOT → WASM{]}
+
+\hypertarget{case-studies}{%
+\subsection{6. Case Studies}\label{case-studies}}
+
+\hypertarget{nyashcoin-p2p-cryptocurrency}{%
+\subsubsection{6.1 NyashCoin: P2P
+Cryptocurrency}\label{nyashcoin-p2p-cryptocurrency}}
+
+{[}TODO: Implementation and evaluation{]}
+
+\hypertarget{plugin-marketplace}{%
+\subsubsection{6.2 Plugin Marketplace}\label{plugin-marketplace}}
+
+{[}TODO: Dynamic loading and security{]}
+
+\hypertarget{cross-platform-gui-applications}{%
+\subsubsection{6.3 Cross-Platform GUI
+Applications}\label{cross-platform-gui-applications}}
+
+{[}TODO: EguiBox and platform abstraction{]}
+
+\hypertarget{evaluation}{%
+\subsection{7. Evaluation}\label{evaluation}}
+
+{[}TODO: Performance, usability, and expressiveness{]}
+
+\hypertarget{related-work}{%
+\subsection{8. Related Work}\label{related-work}}
+
+{[}TODO: Comparison with other languages{]}
+
+\hypertarget{conclusion}{%
+\subsection{9. Conclusion}\label{conclusion}}
+
+{[}TODO: Summary and future vision{]}
+
+\hypertarget{references}{%
+\subsection{References}\label{references}}
+
+{[}TODO: Add bibliography{]}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\emph{Note: This is the main paper structure. Detailed content is in
+individual chapter files.}
+
+\end{document}

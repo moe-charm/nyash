@@ -54,3 +54,4 @@ NYASH_DISABLE_PLUGINS = "1"
 - NYASH_MIR_ARRAY_BOXCALL: ArrayGet/Set → BoxCall 変換を有効化
 - NYASH_MIR_REF_BOXCALL: RefGet/Set → BoxCall 変換を有効化
 - NYASH_MIR_CORE13: Core‑13 セットの一括有効（将来拡張）
+- NYASH_MIR_CORE13_PURE: Core‑13 純化モード（"1" で有効）。最終MIRは13命令のみ許可され、Load/Store などは `env.local.get/set`、`new` は `env.box.new` 経由へ強制正規化。禁制命令が残存するとコンパイルエラーで早期失敗。

@@ -157,6 +157,10 @@ impl MirBuilder {
     /// Emit a weak reference creation (Unified: WeakRef(New))
     #[allow(dead_code)]
     pub(super) fn emit_weak_new(&mut self, box_val: ValueId) -> Result<ValueId, String> {
+        if crate::config::env::mir_core13_pure() {
+            // Pure mode: avoid WeakRef emission; pass-through
+            return Ok(box_val);
+        }
         let dst = self.value_gen.next();
         self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::New, value: box_val })?;
         Ok(dst)
@@ -165,6 +169,10 @@ impl MirBuilder {
     /// Emit a weak reference load (Unified: WeakRef(Load))
     #[allow(dead_code)]
     pub(super) fn emit_weak_load(&mut self, weak_ref: ValueId) -> Result<ValueId, String> {
+        if crate::config::env::mir_core13_pure() {
+            // Pure mode: avoid WeakRef emission; pass-through
+            return Ok(weak_ref);
+        }
         let dst = self.value_gen.next();
         self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::Load, value: weak_ref })?;
         Ok(dst)
@@ -771,6 +779,27 @@ impl MirBuilder {
     /// Build new expression: new ClassName(arguments)
     pub(super) fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
         // Phase 9.78a: Unified Box creation using NewBox instruction
+        // Core-13 pure mode: emit ExternCall(env.box.new) with type name const only
+        if crate::config::env::mir_core13_pure() {
+            // Emit Const String for type name
+            let ty_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: ty_id, value: ConstValue::String(class.clone()) })?;
+            // Evaluate arguments (pass through to env.box.new shim)
+            let mut arg_vals: Vec<ValueId> = Vec::with_capacity(arguments.len());
+            for a in arguments { arg_vals.push(self.build_expression(a)?); }
+            // Build arg list: [type, a1, a2, ...]
+            let mut args: Vec<ValueId> = Vec::with_capacity(1 + arg_vals.len());
+            args.push(ty_id);
+            args.extend(arg_vals);
+            // Call env.box.new
+            let dst = self.value_gen.next();
+            self.emit_instruction(MirInstruction::ExternCall {
+                dst: Some(dst), iface_name: "env.box".to_string(), method_name: "new".to_string(), args, effects: EffectMask::PURE,
+            })?;
+            // 型注釈（最小）
+            self.value_types.insert(dst, super::MirType::Box(class.clone()));
+            return Ok(dst);
+        }
         
         // Optimization: Primitive wrappers → emit Const directly when possible
         if class == "IntegerBox" && arguments.len() == 1 {

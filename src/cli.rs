@@ -415,31 +415,9 @@ impl CliConfig {
     }
 }
 
-/// Parse debug fuel value ("unlimited" or numeric)
-fn parse_debug_fuel(value: &str) -> Option<usize> {
-    if value == "unlimited" {
-        None  // No limit
-    } else {
-        value.parse::<usize>().ok()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_debug_fuel() {
-        assert_eq!(parse_debug_fuel("unlimited"), None);
-        assert_eq!(parse_debug_fuel("1000"), Some(1000));
-        assert_eq!(parse_debug_fuel("invalid"), None);
-    }
-
-    #[test]
-    fn test_default_config() {
-        // This test would require mocking clap's behavior
-        // For now, we just ensure the structure is valid
-        let config = CliConfig {
+impl Default for CliConfig {
+    fn default() -> Self {
+        Self {
             file: None,
             debug_fuel: Some(100000),
             dump_ast: false,
@@ -479,7 +457,39 @@ mod tests {
             parser_ny: false,
             ny_parser_pipe: false,
             json_file: None,
-        };
+            build_path: None,
+            build_app: None,
+            build_out: None,
+            build_aot: None,
+            build_profile: None,
+            build_target: None,
+        }
+    }
+}
+
+/// Parse debug fuel value ("unlimited" or numeric)
+fn parse_debug_fuel(value: &str) -> Option<usize> {
+    if value == "unlimited" {
+        None  // No limit
+    } else {
+        value.parse::<usize>().ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_debug_fuel() {
+        assert_eq!(parse_debug_fuel("unlimited"), None);
+        assert_eq!(parse_debug_fuel("1000"), Some(1000));
+        assert_eq!(parse_debug_fuel("invalid"), None);
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = CliConfig::default();
         
         assert_eq!(config.backend, "interpreter");
         assert_eq!(config.iterations, 10);
