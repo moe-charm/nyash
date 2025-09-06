@@ -21,7 +21,12 @@ pub struct ObjectBuilder {
     pub(crate) block_param_counts: std::collections::HashMap<usize, usize>,
     pub stats: (u64,u64,u64,u64,u64),
     pub object_bytes: Option<Vec<u8>>,
+    // Track rough kinds of values on the stack for bridging (e.g., plugin tagged invoke)
+    value_tags: Vec<ValueTag>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ValueTag { I64, F64, Handle, Unknown }
 
 impl ObjectBuilder {
     pub fn new() -> Self {
@@ -29,7 +34,7 @@ impl ObjectBuilder {
         let isa = cranelift_native::builder().expect("host ISA").finish(settings::Flags::new(settings::builder())).expect("finish ISA");
         let obj_builder = cranelift_object::ObjectBuilder::new(isa, "nyash_aot".to_string(), cranelift_module::default_libcall_names()).expect("ObjectBuilder");
         let module = cranelift_object::ObjectModule::new(obj_builder);
-        Self { module, ctx: cranelift_codegen::Context::new(), fbc: cranelift_frontend::FunctionBuilderContext::new(), current_name: None, entry_block: None, blocks: Vec::new(), current_block_index: None, value_stack: Vec::new(), typed_sig_prepared: false, desired_argc: 0, desired_has_ret: true, desired_ret_is_f64: false, ret_hint_is_b1: false, local_slots: std::collections::HashMap::new(), block_param_counts: std::collections::HashMap::new(), stats: (0,0,0,0,0), object_bytes: None }
+        Self { module, ctx: cranelift_codegen::Context::new(), fbc: cranelift_frontend::FunctionBuilderContext::new(), current_name: None, entry_block: None, blocks: Vec::new(), current_block_index: None, value_stack: Vec::new(), typed_sig_prepared: false, desired_argc: 0, desired_has_ret: true, desired_ret_is_f64: false, ret_hint_is_b1: false, local_slots: std::collections::HashMap::new(), block_param_counts: std::collections::HashMap::new(), stats: (0,0,0,0,0), object_bytes: None, value_tags: Vec::new() }
     }
 
     fn fresh_module() -> cranelift_object::ObjectModule {
@@ -59,6 +64,7 @@ impl IRBuilder for ObjectBuilder {
         use cranelift_frontend::FunctionBuilder;
         self.current_name = Some(name.to_string());
         self.value_stack.clear();
+        self.value_tags.clear();
         if !self.typed_sig_prepared {
             let call_conv = self.module.isa().default_call_conv();
             let mut sig = Signature::new(call_conv);
@@ -90,7 +96,7 @@ impl IRBuilder for ObjectBuilder {
     }
     fn prepare_signature_i64(&mut self, argc: usize, has_ret: bool) { self.desired_argc = argc; self.desired_has_ret = has_ret; }
     fn prepare_signature_typed(&mut self, _params: &[ParamKind], _ret_is_f64: bool) { self.typed_sig_prepared = true; }
-    fn emit_param_i64(&mut self, index: usize) { if let Some(v) = self.entry_param(index) { self.value_stack.push(v); } }
+    fn emit_param_i64(&mut self, index: usize) { if let Some(v) = self.entry_param(index) { self.value_stack.push(v); self.value_tags.push(ValueTag::Unknown); } }
     fn emit_const_i64(&mut self, val: i64) {
         use cranelift_codegen::ir::types;
         use cranelift_frontend::FunctionBuilder;
@@ -99,6 +105,7 @@ impl IRBuilder for ObjectBuilder {
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let v = fb.ins().iconst(types::I64, val);
         self.value_stack.push(v);
+        self.value_tags.push(ValueTag::I64);
         self.stats.0 += 1;
     }
     fn emit_const_f64(&mut self, val: f64) {
@@ -109,6 +116,7 @@ impl IRBuilder for ObjectBuilder {
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let v = fb.ins().f64const(val);
         self.value_stack.push(v);
+        self.value_tags.push(ValueTag::F64);
     }
     fn emit_binop(&mut self, op: super::BinOpKind) {
         use cranelift_frontend::FunctionBuilder;
@@ -130,6 +138,7 @@ impl IRBuilder for ObjectBuilder {
             super::BinOpKind::Mod => fb.ins().srem(lhs, rhs),
         };
         self.value_stack.push(res);
+        self.value_tags.push(ValueTag::I64);
         self.stats.1 += 1;
     }
     fn emit_compare(&mut self, op: super::CmpKind) {
@@ -157,6 +166,7 @@ impl IRBuilder for ObjectBuilder {
         let zero = fb.ins().iconst(types::I64, 0);
         let sel = fb.ins().select(b1, one, zero);
         self.value_stack.push(sel);
+        self.value_tags.push(ValueTag::I64);
         self.stats.2 += 1;
     }
     fn emit_jump(&mut self) { self.stats.3 += 1; }
@@ -195,11 +205,12 @@ impl IRBuilder for ObjectBuilder {
     fn store_local_i64(&mut self, index: usize) {
         use cranelift_frontend::FunctionBuilder;
         use cranelift_codegen::ir::{types, condcodes::IntCC};
-        if let Some(mut v) = self.value_stack.pop() {
-            if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); }
-            let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
-            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+            if let Some(mut v) = self.value_stack.pop() {
+            let _ = self.value_tags.pop();
+                if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); }
+                let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+                if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+                else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
             // Coerce to i64 if needed
             let ty = fb.func.dfg.value_type(v);
             if ty != types::I64 {
@@ -219,6 +230,7 @@ impl IRBuilder for ObjectBuilder {
         if let Some(&slot) = self.local_slots.get(&index) {
             let v = fb.ins().stack_load(types::I64, slot, 0);
             self.value_stack.push(v);
+            self.value_tags.push(ValueTag::Unknown);
         }
     }
     fn prepare_blocks(&mut self, count: usize) { use cranelift_frontend::FunctionBuilder; if count == 0 { return; } let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc); if self.blocks.len() < count { for _ in 0..(count - self.blocks.len()) { self.blocks.push(fb.create_block()); } } }
@@ -398,7 +410,7 @@ impl IRBuilder for ObjectBuilder {
         let len_v = fb.ins().iconst(types::I64, bytes.len() as i64);
         let fref = self.module.declare_func_in_func(func_id, fb.func);
         let call_inst = fb.ins().call(fref, &[lo_v, hi_v, len_v]);
-        if let Some(v) = fb.inst_results(call_inst).get(0).copied() { self.value_stack.push(v); }
+        if let Some(v) = fb.inst_results(call_inst).get(0).copied() { self.value_stack.push(v); self.value_tags.push(ValueTag::Handle); }
     }
     fn br_if_with_args(&mut self, then_index: usize, else_index: usize, then_n: usize, else_n: usize) {
         use cranelift_frontend::FunctionBuilder;
@@ -409,10 +421,10 @@ impl IRBuilder for ObjectBuilder {
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         // Pop else args, then then args (stack topに近い方から)
         let mut else_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
-        for _ in 0..else_n { if let Some(v) = self.value_stack.pop() { else_args.push(v); } else { else_args.push(fb.ins().iconst(types::I64, 0)); } }
+        for _ in 0..else_n { if let Some(v) = self.value_stack.pop() { else_args.push(v); let _ = self.value_tags.pop(); } else { else_args.push(fb.ins().iconst(types::I64, 0)); } }
         else_args.reverse();
         let mut then_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
-        for _ in 0..then_n { if let Some(v) = self.value_stack.pop() { then_args.push(v); } else { then_args.push(fb.ins().iconst(types::I64, 0)); } }
+        for _ in 0..then_n { if let Some(v) = self.value_stack.pop() { then_args.push(v); let _ = self.value_tags.pop(); } else { then_args.push(fb.ins().iconst(types::I64, 0)); } }
         then_args.reverse();
         // Cond
         let cond_val = if let Some(v) = self.value_stack.pop() { v } else { fb.ins().iconst(types::I64, 0) };
@@ -431,10 +443,108 @@ impl IRBuilder for ObjectBuilder {
         if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
         else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
         let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
-        for _ in 0..n { if let Some(v) = self.value_stack.pop() { args.push(v); } else { args.push(fb.ins().iconst(types::I64, 0)); } }
+        for _ in 0..n { if let Some(v) = self.value_stack.pop() { args.push(v); let _ = self.value_tags.pop(); } else { args.push(fb.ins().iconst(types::I64, 0)); } }
         args.reverse();
         for a in args.iter_mut() { if fb.func.dfg.value_type(*a) != types::I64 { *a = fb.ins().fcvt_to_sint(types::I64, *a); } }
         fb.ins().jump(self.blocks[target_index], &args);
         self.stats.3 += 1;
+    }
+
+    fn emit_plugin_invoke(&mut self, _type_id: u32, _method_id: u32, argc: usize, has_ret: bool) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        use cranelift_frontend::FunctionBuilder;
+        // We import NyRT tagged invoke entry (by-id). Signature:
+        // nyash_plugin_invoke3_tagged_i64(type_id, method_id, argc, a0, a1, tag1, a2, tag2, a3, tag3, a4, tag4) -> i64
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+
+        // Pop args in reverse: last pushed is top. Collect up to 4 (excluding recv)
+        let mut arg_vals: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        let mut arg_tags: Vec<ValueTag> = Vec::new();
+        for _ in 0..argc.saturating_sub(1) { // exclude receiver (first param)
+            if let Some(v) = self.value_stack.pop() {
+                arg_vals.push(v);
+                arg_tags.push(self.value_tags.pop().unwrap_or(ValueTag::Unknown));
+            }
+        }
+        // Receiver
+        let recv = if let Some(v) = self.value_stack.pop() { let _ = self.value_tags.pop(); v } else { fb.ins().iconst(types::I64, 0) };
+        arg_vals.reverse();
+        arg_tags.reverse();
+        let mut tag_i64 = |t: ValueTag| -> i64 { match t { ValueTag::Handle => 8, ValueTag::F64 => 5, ValueTag::I64 => 3, ValueTag::Unknown => 3 } };
+
+        // Build signature and declare import
+        let mut sig = Signature::new(self.module.isa().default_call_conv());
+        for _ in 0..12 { sig.params.push(AbiParam::new(types::I64)); }
+        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+        let func_id = self.module.declare_function("nyash_plugin_invoke3_tagged_i64", cranelift_module::Linkage::Import, &sig).expect("declare plugin invoke tagged");
+        let fref = self.module.declare_func_in_func(func_id, fb.func);
+
+        // Prepare args array
+        let mut args: Vec<cranelift_codegen::ir::Value> = Vec::with_capacity(12);
+        let to_i64 = |fb: &mut FunctionBuilder, v: cranelift_codegen::ir::Value| {
+            if fb.func.dfg.value_type(v) != types::I64 { fb.ins().fcvt_to_sint(types::I64, v) } else { v }
+        };
+
+        let t_i64 = |_fb: &mut FunctionBuilder, x: i64| -> cranelift_codegen::ir::Value { _fb.ins().iconst(types::I64, x) };
+
+        // Pass through type_id/method_id from lowering (method_id must match plugin vtable)
+        args.push(t_i64(&mut fb, _type_id as i64)); // type_id (runtime may override with real_type_id)
+        args.push(t_i64(&mut fb, _method_id as i64)); // method_id
+        args.push(t_i64(&mut fb, argc as i64 - 1)); // argc excluding recv
+        args.push(to_i64(&mut fb, recv)); // a0 (recv)
+
+        // a1/tag1, a2/tag2, a3/tag3, a4/tag4
+        for i in 0..4 {
+            if let Some(v) = arg_vals.get(i).copied() {
+                args.push(to_i64(&mut fb, v));
+                let tg = tag_i64(*arg_tags.get(i).unwrap_or(&ValueTag::Unknown));
+                args.push(t_i64(&mut fb, tg));
+            } else {
+                args.push(t_i64(&mut fb, 0));
+                args.push(t_i64(&mut fb, 3));
+            }
+        }
+
+        let call_inst = fb.ins().call(fref, &args);
+        if has_ret {
+            if let Some(v) = fb.inst_results(call_inst).get(0).copied() { self.value_stack.push(v); self.value_tags.push(ValueTag::I64); }
+        }
+    }
+
+    fn emit_plugin_invoke_by_name(&mut self, _method: &str, argc: usize, has_ret: bool) {
+        use cranelift_codegen::ir::{AbiParam, Signature, types};
+        use cranelift_frontend::FunctionBuilder;
+        // Use nyash.plugin.invoke_by_name_i64(recv_h, method_cstr, argc, a1, a2)
+        // Limit: supports up to 2 args beyond receiver.
+        let mut fb = FunctionBuilder::new(&mut self.ctx.func, &mut self.fbc);
+        if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
+        else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
+
+        // Pop args and recv
+        let mut arg_vals: Vec<cranelift_codegen::ir::Value> = Vec::new();
+        for _ in 0..argc.saturating_sub(1) { if let Some(v) = self.value_stack.pop() { arg_vals.push(v); let _ = self.value_tags.pop(); } }
+        let recv = if let Some(v) = self.value_stack.pop() { let _ = self.value_tags.pop(); v } else { fb.ins().iconst(types::I64, 0) };
+        arg_vals.reverse();
+
+        let mut sig = Signature::new(self.module.isa().default_call_conv());
+        for _ in 0..5 { sig.params.push(AbiParam::new(types::I64)); }
+        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+        let func_id = self.module.declare_function("nyash.plugin.invoke_by_name_i64", cranelift_module::Linkage::Import, &sig).expect("declare plugin invoke by-name");
+        let fref = self.module.declare_func_in_func(func_id, fb.func);
+
+        let to_i64 = |fb: &mut FunctionBuilder, v: cranelift_codegen::ir::Value| { if fb.func.dfg.value_type(v) != types::I64 { fb.ins().fcvt_to_sint(types::I64, v) } else { v } };
+        let zero = fb.ins().iconst(types::I64, 0);
+        let mut args: Vec<cranelift_codegen::ir::Value> = Vec::with_capacity(5);
+        args.push(to_i64(&mut fb, recv));
+        // method ptr not supported in object builder (no easy CStr symbol payload); pass 0 to let runtime reject if mistakenly used.
+        args.push(zero);
+        args.push(fb.ins().iconst(types::I64, (argc as i64).saturating_sub(1)));
+        args.push(arg_vals.get(0).copied().map(|v| to_i64(&mut fb, v)).unwrap_or(zero));
+        args.push(arg_vals.get(1).copied().map(|v| to_i64(&mut fb, v)).unwrap_or(zero));
+
+        let call_inst = fb.ins().call(fref, &args);
+        if has_ret { if let Some(v) = fb.inst_results(call_inst).get(0).copied() { self.value_stack.push(v); self.value_tags.push(ValueTag::I64); } }
     }
 }

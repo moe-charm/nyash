@@ -53,7 +53,7 @@ echo "HELLO" | nyash apps/ny-echo/main.nyash --lower
 **特徴**:
 - ConsoleBoxによるI/O処理
 - StringBoxの変換メソッド活用
-- VM/JIT/AOTすべてで同一動作
+- VM/AOTで同一動作（JIT実行は現在封印）
 
 ### 2. ny-array-bench - 性能ベンチマーク
 ArrayBoxの各種操作をベンチマークし、VM/JIT/AOTの性能比較を行うツール。
@@ -67,7 +67,7 @@ nyash apps/ny-array-bench/main.nyash
   "create_1000": 1.23,
   "map_1000": 2.45,
   "reduce_1000": 0.98,
-  "relative_performance": {"vm": 1.0, "jit": 5.2}
+  "relative_performance": {"vm": 1.0, "aot": 5.0}
 }
 ```
 
@@ -95,8 +95,8 @@ nyash apps/APP_NAME/main.nyash
 # VM実行（高速）
 nyash --backend vm apps/APP_NAME/main.nyash
 
-# JIT実行（最速）
-nyash --backend jit apps/APP_NAME/main.nyash
+# JIT実行（封印中）
+# 現在は無効です。Interpreter/VM か AOT(EXE) を使用してください。
 ```
 
 ### テスト実行

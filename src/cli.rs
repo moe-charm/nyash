@@ -61,6 +61,13 @@ pub struct CliConfig {
     pub using: Option<String>,
     pub using_path: Option<String>,
     pub modules: Option<String>,
+    // Build system (MVP)
+    pub build_path: Option<String>,
+    pub build_app: Option<String>,
+    pub build_out: Option<String>,
+    pub build_aot: Option<String>,
+    pub build_profile: Option<String>,
+    pub build_target: Option<String>,
 }
 
 impl CliConfig {
@@ -339,6 +346,43 @@ impl CliConfig {
                     .help("Opt-in: read [ny_plugins] from nyash.toml and load scripts in order")
                     .action(clap::ArgAction::SetTrue)
             )
+            // Build system (MVP)
+            .arg(
+                Arg::new("build")
+                    .long("build")
+                    .value_name("PATH")
+                    .help("Build AOT executable using nyash.toml at PATH (MVP)")
+            )
+            .arg(
+                Arg::new("build-app")
+                    .long("app")
+                    .value_name("FILE")
+                    .help("Entry Nyash script for --build (e.g., apps/hello/main.nyash)")
+            )
+            .arg(
+                Arg::new("build-out")
+                    .long("out")
+                    .value_name("FILE")
+                    .help("Output executable name for --build (default: app/app.exe)")
+            )
+            .arg(
+                Arg::new("build-aot")
+                    .long("build-aot")
+                    .value_name("{cranelift|llvm}")
+                    .help("AOT backend for --build (default: cranelift)")
+            )
+            .arg(
+                Arg::new("build-profile")
+                    .long("profile")
+                    .value_name("{release|debug}")
+                    .help("Cargo profile for --build (default: release)")
+            )
+            .arg(
+                Arg::new("build-target")
+                    .long("target")
+                    .value_name("TRIPLE")
+                    .help("Target triple for --build (e.g., x86_64-pc-windows-msvc)")
+            )
     }
 
     /// Convert ArgMatches to CliConfig
@@ -386,6 +430,13 @@ impl CliConfig {
             using: matches.get_one::<String>("using").cloned(),
             using_path: matches.get_one::<String>("using-path").cloned(),
             modules: matches.get_one::<String>("module").cloned(),
+            // Build system (MVP)
+            build_path: matches.get_one::<String>("build").cloned(),
+            build_app: matches.get_one::<String>("build-app").cloned(),
+            build_out: matches.get_one::<String>("build-out").cloned(),
+            build_aot: matches.get_one::<String>("build-aot").cloned(),
+            build_profile: matches.get_one::<String>("build-profile").cloned(),
+            build_target: matches.get_one::<String>("build-target").cloned(),
         }
     }
 }

@@ -118,31 +118,36 @@ pub extern "C" fn nyash_plugin_invoke(
             }
             M_FINI => { if let Ok(mut m) = INST.lock() { m.remove(&instance_id); OK } else { E_FAIL } }
             M_OPEN => {
+                eprintln!("[EGUI] M_OPEN invoked");
                 let (w, h, title) = match tlv_read_open_args(args, args_len) { Some(v) => v, None => return E_ARGS };
                 if let Ok(mut m) = INST.lock() { if let Some(inst) = m.get_mut(&instance_id) { inst.width=w; inst.height=h; inst.title=title; } else { return E_FAIL; } } else { return E_FAIL; }
                 write_tlv_void(result, result_len)
             }
             M_UI_LABEL => {
+                eprintln!("[EGUI] M_UI_LABEL invoked");
                 let text = match tlv_read_string(args, args_len, 0) { Some(s) => s, None => return E_ARGS };
                 if let Ok(mut m) = INST.lock() { if let Some(inst) = m.get_mut(&instance_id) { inst.labels.push(text); } else { return E_FAIL; } } else { return E_FAIL; }
                 write_tlv_void(result, result_len)
             }
             M_UI_BUTTON => {
+                eprintln!("[EGUI] M_UI_BUTTON invoked");
                 // For now: stub, accept and return Void
                 if tlv_read_string(args, args_len, 0).is_none() { return E_ARGS; }
                 write_tlv_void(result, result_len)
             }
             M_POLL_EVENT => {
+                eprintln!("[EGUI] M_POLL_EVENT invoked");
                 // Stub: no events yet → return empty string "" (Ok)
                 write_tlv_string("", result, result_len)
             }
             M_RUN => {
-                // Windows + with-egui: 実ウィンドウを表示
-                #[cfg(all(windows, feature = "with-egui"))]
+                eprintln!("[EGUI] M_RUN invoked");
+                // with-egui: 実ウィンドウを表示（クロスプラットフォーム）
+                #[cfg(feature = "with-egui")]
                 {
                     if let Ok(m) = INST.lock() {
                         if let Some(inst) = m.get(&instance_id) {
-                            winrun::run_window(inst.width, inst.height, &inst.title, inst.labels.clone());
+                            guirun::run_window(inst.width, inst.height, &inst.title, inst.labels.clone());
                         }
                     }
                 }
@@ -210,13 +215,14 @@ unsafe fn tlv_read_open_args(args: *const u8, len: usize) -> Option<(i32,i32,Str
     Some((w,h,t))
 }
 
-// ===== Windows 実行（with-egui） =====
-#[cfg(all(windows, feature = "with-egui"))]
-mod winrun {
+// ===== GUI 実行（with-egui, クロスプラットフォーム） =====
+#[cfg(feature = "with-egui")]
+mod guirun {
     use super::*;
     use eframe::egui;
 
     pub fn run_window(w: i32, h: i32, title: &str, labels: Vec<String>) {
+        eprintln!("[EGUI] run_window: w={} h={} title='{}'", w, h, title);
         let options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([w.max(100) as f32, h.max(100) as f32])
@@ -233,10 +239,11 @@ mod winrun {
             }
         }
 
-        let _ = eframe::run_native(
+        let res = eframe::run_native(
             title,
             options,
             Box::new(|_cc| Box::new(App { labels })),
         );
+        eprintln!("[EGUI] run_native returned: {:?}", res);
     }
 }

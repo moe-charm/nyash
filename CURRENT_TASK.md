@@ -26,11 +26,11 @@
 
 — 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
 
-【ハンドオフ（2025‑09‑06 2nd）— AOT/JIT‑AOT String.length 修正進捗と引き継ぎ】
+【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 
 概要
-- 目的: AOT/JIT‑AOT で `StringBox.length/len` が 0 になるケースの是正と足場強化。
-- 方針: 受けをハンドル化して `nyash.string.len_h` を優先呼び出し、0 の場合に `nyash.any.length_h` へフォールバック（select）する二段経路を Lower に実装。型/ハンドル伝播は Param/Local/リテラルの順でカバー。
+- 目的: AOT/JIT‑AOT で発生していた `StringBox.length/len` が 0 になる不具合の是正（Lower の二段フォールバック：`nyash.string.len_h` → `nyash.any.length_h`）。
+- 結果: 当該不具合は修正・確認完了（AOT/VM で期待値）。JIT 直実行の継続調査は打ち切り、実行モードは「インタープリター／VM／Cranelift(EXE)／LLVM(EXE)」の4体制へ移行。
 
 実装（済）
 - LowerCore: 二段フォールバック実装を追加（Param/Local/リテラル）。
@@ -45,20 +45,23 @@
 - デッドコード整理: 旧 `lower_boxcall_simple_reads` を削除（conflict 回避）。
 - ツール/スモーク: `tools/aot_smoke_cranelift.sh` 追加、`apps/smokes/jit_aot_string_length_smoke.nyash` 追加。
 
-確認状況
-- `apps/smokes/jit_aot_string_min.nyash`（concat/eq）: AOT 連結→`Result: 1`（OK）。
-- `apps/smokes/jit_aot_string_length_smoke.nyash`（print 経由）: AOT .o 生成/リンクは通るが、稀に segfault（DT_TEXTREL 警告あり）。再現性低。TLS/extern 紐付け順の追跡要。
-- `apps/smokes/jit_aot_any_len_string.nyash`: 依然 `Result: 0`。lower は `string.len_h` 優先・二段 select 経路に切替済み。値保存の材化は追加済。残る根因は Return 直前の値材化/参照不整合の可能性が高い（下記 TODO）。
+確認状況（最終）
+- `apps/smokes/jit_aot_string_min.nyash`（concat/eq）: AOT で `Result: 1`（OK）。
+- `apps/smokes/jit_aot_string_length_smoke.nyash`: AOT .o 生成/リンク・実行とも良好（稀発の segfault 調査は「低優先」に移行）。
+- `apps/smokes/jit_aot_any_len_string.nyash`: AOT で `Result` が期待値（0 問題は解消）。
+- 備考: JIT 直実行の既知の不安定性は、JIT 実行封印に伴い調査終了とする（アーカイブ扱い）。
 
-残課題（優先）
-1) Return 材化の強化（JIT‑direct / JIT‑AOT 共通）
-   - 症状: `len/length` の計算値が Return シーンで 0 に化けるケース。
-   - 推定: `push_value_if_known_or_param` が unknown を 0 補完するため、BoxCall 結果がローカルに材化されていない/ValueId 不一致時に 0 が返る。
-   - 対応: `I::Return { value }` で materialize 後方走査を実装。
-     - 現 BB を後方走査し、`value` を定義した命令（BoxCall/Call/Select 等）を特定→スタックに積む/ローカル保存→Return へ接続。
-    - 既存のローカル保存（本変更で追加）も活用。
+残課題（方針更新後）
+P0: 実行モード整理（JIT 実行封印）
+- ランタイム実行は「Interpreter／VM」に限定。ネイティブ配布は「Cranelift AOT(EXE)／LLVM AOT(EXE)」。JIT 関連のランタイムフラグ説明は docs で封印明記。
 
-進捗（2025‑09‑06 3rd 追記）
+P1: AOT 安定化（低頻度 segfault の追跡：低優先）
+- 稀な DT_TEXTREL 警告・segfault は PIE/LTO/relro/TLS/extern 登録順の再確認を残課題として維持（優先度は下げる）。
+
+P2: リファクタ（Phase A）継続（振る舞い不変）
+- Hostcall シンボル `SYM_*` 統一、`core/string_len.rs` への集約、観測フックの整理は継続。JIT 実行依存の観測は停め、VM/AOT 観測を優先。
+
+進捗（2025‑09‑06 終了報告）
 - ops_ext: StringBox.len/length の結果を必ずローカルに保存するよう修正（Return が確実に値を拾える）
   - 対象: param/local/literal/handle.of 各経路。`dst` があれば `local_index` に slot を割当てて `store_local_i64`。
 - デバッグ計測を追加
@@ -72,9 +75,7 @@
     - `BoxCall ... method=length handled=true box_type=Some("StringBox") dst?=true`
     - ローカル slot の流れ: `idx=0` recv(handle) → `idx=1` string_len → `idx=2` any_len → `idx=3` cond → select → `idx=4` dst 保存 → Return で `load idx=4`
     - つまり lowering/Return/ローカル材化は正しく配線されている。
-- しかし `NYASH_JIT_TRACE_LEN=1` の thunk ログが出ず、`nyash.string.len_h` が実行されていない/0 を返している可能性が高い。
-    - 仮説: Cranelift import のシンボル解決が `extern_thunks::nyash_string_len_h` ではなく別実装（0返却）に解決されている／あるいは呼出し自体が落ちて 0 初期値になっている。
-    - 参考: CraneliftBuilder では `builder.symbol(c::SYM_STRING_LEN_H, nyash_string_len_h as *const u8)` を設定済み。
+JIT 直実行に関する未解決点（import 解決先の差異疑い 等）は封印に伴いアーカイブ化。必要時に `docs/development/current/` へ復元して再開する。
 
 暫定変更（フォールバック強化）
 - `ops_ext` の StringBox.len で「リテラル復元（NewBox(StringBox, Const String))」を param/local より先に優先。
@@ -99,6 +100,59 @@
 
 Phase A 進捗（実施済）
 - A‑1: Hostcall シンボルの定数化（直書き排除）完了
+
+【ハンドオフ（2025‑09‑06 4th）— GUI/egui 表示テスト計画（Cranelift/LLVM × Windows/WSL）】
+
+目的
+- 以前は Windows exe で egui ウィンドウ表示を確認できていたが、現状で再現が不安定な報告あり。Cranelift/LLVM と OS 組み合わせ別に手順と期待結果を明文化し、再現性を担保する。
+
+前提・重要ポイント
+- プラグイン版 EguiBox は Windows 専用で実ウィンドウ分岐（`#[cfg(all(windows, feature = "with-egui"))]`）。Linux/WSL では `run()` はスタブ（void）でウィンドウは出ない（X 転送の有無に関係なく）。
+- Windows でウィンドウ表示を行うには、`nyash-egui-plugin` を `--features with-egui` でビルドし、`nyash.toml` の `plugin_paths`（または `NYASH_PLUGIN_PATHS`）に DLL のパスが解決できること。
+- Linux でウィンドウ表示を確認したい場合は「Rust 例（gui_simple_notepad）」または「ビルトイン EguiBox（nyash 本体を `--features gui` でビルドし、専用 Nyash スクリプトを使用）」を利用する。
+
+テストマトリクス（手順と期待結果）
+1) Windows × Cranelift（JIT-direct/EXE 相当）
+   - 準備: `cargo build --release --features cranelift-jit`
+   - プラグイン: `cargo build -p nyash-egui-plugin --release --features with-egui`
+   - 実行（JIT-direct 経路）: `powershell -ExecutionPolicy Bypass -File tools\egui_win_smoke.ps1`
+   - 期待: Egui ウィンドウが表示される（アプリ終了までブロッキング）。
+
+2) Windows × LLVM（EXE/直実行）
+   - LLVM 準備: `tools\windows\ensure-llvm18.ps1 -SetPermanent`
+   - プラグイン: `cargo build -p nyash-egui-plugin --release --features with-egui`
+   - Nyash 本体: `cargo build --release --features llvm`
+   - 直実行: ` .\target\release\nyash.exe --backend llvm apps\egui-hello\main.nyash`
+   - AOT EXE: `tools\build_llvm.ps1 apps\egui-hello\main.nyash -Out egui_hello.exe` → ` .\egui_hello.exe`
+   - 期待: どちらの経路でも Egui ウィンドウが表示される（DLL が `plugin_paths` に解決可能であること）。
+
+3) WSL × Cranelift（JIT-direct/EXE 相当）
+   - 準備: `cargo build --release --features cranelift-jit`
+   - 実行: `./target/release/nyash --jit-direct apps/egui-hello/main.nyash`
+   - 期待: 実ウィンドウは出ない（プラグインの `run()` はスタブ）。エラーなく終了（void）。
+   - 備考: GUI 表示が必要な場合は Rust 例（`cargo run --features gui-examples --example gui_simple_notepad --release`）を利用。
+
+4) WSL × LLVM（EXE/直実行）
+   - 準備: `./tools/llvm_check_env.sh` → `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+   - 実行: `./target/release/nyash --backend llvm apps/egui-hello/main.nyash`
+   - 期待: 実ウィンドウは出ない（スタブ）。
+   - 備考: GUI 表示が必要な場合は Rust 例、もしくは nyash 本体を `--features gui` でビルドし、ビルトイン EguiBox 用の Nyash スクリプトを別途用意（要サンプル整備）。
+
+診断スイッチ（共通）
+- `NYASH_DEBUG_PLUGIN=1`: プラグインのロードパス/解決状況を表示
+- `NYASH_CLI_VERBOSE=1`: プラグインホスト初期化やランタイムの詳細ログ
+- Windows/プラグインの DLL 解決が怪しい場合は `NYASH_PLUGIN_PATHS` で DLL ディレクトリを明示（`;` 区切り）
+
+既知の制約 / TODO
+- Linux/WSL でプラグイン版 EguiBox の `run()` は現在スタブ（実ウィンドウなし）。将来的に `#[cfg(target_os = "linux")]` 分岐で eframe 実装を追加し、X11/Wayland でも表示可能にする。
+- ビルトイン EguiBox（`src/boxes/egui_box.rs`）は `--features gui` でビルド時に有効。Nyash スクリプト側の API はプラグイン版と異なる（`setTitle/setSize/addText/run`）。Linux GUI 確認用にビルトイン用サンプル（apps/egui-builtin/）を追加して整備する。
+- Windows AOT リンクは MSVC `link.exe` を既定（fall back: clang）。lld へのスイッチ（速度優先）を将来オプション化検討。
+
+次アクション（引き継ぎ TODO）
+- [ ] Windows: 4通りの実行（Cranelift 直/JIT、LLVM 直、AOT EXE）で `apps/egui-hello/main.nyash` のウィンドウ表示を再確認（`NYASH_DEBUG_PLUGIN=1` でログ採取）。
+- [ ] WSL: Cranelift/LLVM の直実行は「スタブ終了」が期待値であることを README/ガイドに明記。GUI が必要なら Rust 例 or ビルトイン EguiBox 経路を案内。
+- [ ] Linux 向けプラグイン `with-egui` 実装の導入可否を検討（`plugins/nyash-egui-plugin/src/lib.rs` の `winrun` と類似の `linrun` を追加）。
+- [ ] ビルトイン EguiBox 用の Nyash サンプルを `apps/egui-builtin/` として追加し、`--features gui` での手順を `dev/selfhosting/` または `docs/` に追記。
   - `nyash.handle.of` / `nyash.string.len_h` / `nyash.console.birth_h` を `SYM_*` に統一
 - A‑2: string_len ヘルパ抽出（共通化）完了
   - `src/jit/lower/core/string_len.rs` 新設、`emit_len_with_fallback_*` を移設
@@ -111,36 +165,18 @@ Phase A 進捗（実施済）
 - `NYASH_JIT_TRACE_IMPORT=1` で `nyash.string.len_h` / `nyash.any.length_h` の import 呼び出しを確認（JIT/AOT 両方）
 - それでも `NYASH_JIT_TRACE_LEN=1` の thunk 到達ログは出ず → 依然解決先に差異がある疑い（要継続調査）
 
-■ 緑への道筋（短期着地プラン）
-P0: フェイルセーフ（テストを緑にする最短経路）
-- 追加フラグ: `NYASH_LEN_FORCE_BRIDGE=1` で StringBox.len/length を暫定的に host‑bridge (`nyash.host.string.len`) に強制（JIT でも常に正しい長さを返す）。
-  - 実装: ops_ext の StringBox.len/length で当該フラグを見て bridge 経路へ分岐。
-  - 影響範囲限定（読み取り系のみ）。スモーク/CI を先に緑化。
+■ 実行系の最終方針（Phase 15 着地）
+- ランタイム: Interpreter / VM
+- 配布: Cranelift AOT (EXE) / LLVM AOT (EXE)
+- JIT 直実行: 封印（ドキュメント上も「実験的/無効」へ集約）
 
-P1: ひも付けの可視化と是正（根因切り分け）
-- CraneliftBuilder::new の `builder.symbol(...)` 登録を JSON で列挙（id→アドレスの疑似ダンプ）。
-- import 発行側（emit_host_call/_typed）と登録側の id を突き合わせ、`nyash.string.len_h` の実アドレスが `extern_thunks::nyash_string_len_h` に一致することを確認。相違なら登録漏れ/重複名を是正。
-
-P2: リテラル最優先の安定化
-- NewBox(StringBox, Const String) → length は必ず即値化（const fold）。
-  - 実装補強: `box_type_map` に加えて「NewBox(StringBox) の引数→Const String」の逆引きテーブルを構築して判定を O(1) に。param/local 経路より前に評価。
-
-P3: Return 材化の後方走査（再発防止）
-- `I::Return { value }` で、未材化値に対し現BBを後方走査（BoxCall/Call/Select/Const）。
-  - 見つけた生成値をローカルslotに保存→Return直前に load。
-  - 既存の len/length 結果保存と併用し、0化の再発を根治。
-
-P4: 仕上げ（重複/直書きの整理）
-- ops_ext の重複分岐（len/length の多重ガード）を削除し、`core/string_len.rs` に集約。
-- 残る直書きシンボルを `SYM_*` に統一（検索: `nyash.` 直書き）。
-
-■ 検証チェックリスト
-- JIT 直実行（強制 bridge 無効）: `./target/release/nyash --jit-direct apps/smokes/jit_aot_string_min.nyash` → Result:1
-- JIT 直実行（len 強制 bridge 有効）: `NYASH_LEN_FORCE_BRIDGE=1 ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash` → Result:3（緑化）
-- import/登録の一致: `NYASH_JIT_EVENTS=1 NYASH_JIT_TRACE_IMPORT=1 ...` で `id=nyash.string.len_h` の import と登録ダンプを突合（id一致を確認）
+■ 検証チェックリスト（更新）
+- VM: `./target/release/nyash --backend vm apps/smokes/jit_aot_string_min.nyash` → Result:1
+- AOT(Cranelift): `./tools/build_aot.sh apps/smokes/jit_aot_string_length_smoke.nyash -o app` → `./app` 実行 → 期待結果
+- AOT(Windows one‑shot): `pwsh -File tools/windows/build_egui_aot.ps1 -Input apps/egui-hello-plugin/main.nyash -Out app_egui` → 画面表示
 
 
-— Phase A（無振る舞い変更）リファクタ方針（着手予定）
+— Phase A（無振る舞い変更）リファクタ方針（継続）
 - A‑1: Hostcall シンボルを定数に統一（直書き排除）
   - `"nyash.handle.of"` → `jit::extern::handles::SYM_HANDLE_OF`
   - `"nyash.string.len_h"` → `jit::extern::collections::SYM_STRING_LEN_H`
@@ -155,7 +191,7 @@ P4: 仕上げ（重複/直書きの整理）
    - `emit_len_with_fallback_*` と `lower_box_call(len/length)` に `observe::lower_hostcall` を追加し、
      Param/Local/リテラル/handle.of どの経路か、select の条件（string_len==0）をトレース可能にする（`NYASH_JIT_EVENTS=1`）。
 
-3) AOT segfault (稀発) の追跡
+3) AOT segfault (稀発) の追跡（低優先）
    - `tools/aot_smoke_cranelift.sh` 実行中に稀に segv（`.o` 生成直後/リンク前後）。
    - `nyash.string.from_u64x2` 載せ替えと DT_TEXTREL 警告が出るので、PIE/LTO/relro 周りと TLS/extern の登録順を確認。
 
@@ -167,6 +203,7 @@ P4: 仕上げ（重複/直書きの整理）
 - `src/jit/lower/core.rs`（len/length 二段フォールバック呼出し、保存強化）
 - `src/jit/lower/core/ops_ext.rs`（StringBox len/length 優先処理、リテラル即値畳み込み、保存）
 - `src/jit/hostcall_registry.rs`（`nyash.string.len_h` 追補）
+- ドキュメント: README(ja/en) の実行モード更新、ガイド（egui AOT）に one‑shot スクリプト反映
 - `src/jit/extern/collections.rs`（`SYM_STRING_LEN_H` 追加）
 - `src/jit/lower/extern_thunks.rs`（`nyash_string_len_h` 追加）
 - `src/jit/lower/builder/cranelift.rs`（`SYM_STRING_LEN_H` のシンボル登録）
