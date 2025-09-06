@@ -17,6 +17,7 @@ pub const SYM_MAP_SIZE: &str = "nyash.map.size";
 pub const SYM_ARRAY_LEN_H: &str = "nyash.array.len_h";
 pub const SYM_ARRAY_GET_H: &str = "nyash.array.get_h";
 pub const SYM_ARRAY_SET_H: &str = "nyash.array.set_h";
+pub const SYM_ARRAY_SET_HH: &str = "nyash.array.set_hh";
 pub const SYM_ARRAY_PUSH_H: &str = "nyash.array.push_h";
 pub const SYM_ARRAY_LAST_H: &str = "nyash.array.last_h";
 pub const SYM_MAP_SIZE_H: &str = "nyash.map.size_h";
