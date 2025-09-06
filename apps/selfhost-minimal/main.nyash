@@ -1,0 +1,9 @@
+// selfhost-minimal — minimal VM/JIT path E2E sample
+static box Main {
+  init { }
+  main(args) {
+    // Minimal: return 0 to assert plumbing works
+    return 0
+  }
+}
+

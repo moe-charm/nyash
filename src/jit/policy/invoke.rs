@@ -18,7 +18,8 @@ fn use_plugin_builtins() -> bool {
 pub fn decide_box_method(box_type: &str, method: &str, argc: usize, has_ret: bool) -> InvokeDecision {
     // HostCall mapping for common collections/strings/instance ops
     let symbol = match (box_type, method) {
-        ("ArrayBox", "length") | ("StringBox", "length") | ("StringBox", "len") => crate::jit::r#extern::collections::SYM_ANY_LEN_H,
+        ("ArrayBox", "length") => crate::jit::r#extern::collections::SYM_ANY_LEN_H,
+        ("StringBox", "length") | ("StringBox", "len") => "nyash.string.len_h",
         ("ArrayBox", "get") => crate::jit::r#extern::collections::SYM_ARRAY_GET_H,
         ("ArrayBox", "set") => crate::jit::r#extern::collections::SYM_ARRAY_SET_H,
         ("ArrayBox", "push") => crate::jit::r#extern::collections::SYM_ARRAY_PUSH_H,

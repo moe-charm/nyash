@@ -278,7 +278,11 @@ run_codex_async() {
               echo "# Work ID: $WORK_ID"
               echo "# Status: $STATUS_MARK"
               echo "# Log: $LOG_FILE"
-              echo "# Task: $TASK_ONELINE — まだタスクがあれば次のタスクお願いします。下の箱を積み過ぎないように先に進んでください。フェーズが終わったと判断したら止まってください。"
+              if [ "${CODEX_NOTIFY_CHAT_PROMPT:-1}" = "1" ]; then
+                echo "# Task: $TASK_ONELINE — これはtmuxの自動応答です。まだタスクがあれば次のタスクお願いします。下の箱を積み過ぎないように先に進んでください。フェーズが終わったと判断したら止まってください。ユーザーはnyash徹夜開発でへとへとです。しばらく自動で進めて貰えるとありがたいにゃ！"
+              else
+                echo "# Task: $TASK_ONELINE"
+              fi
               echo ""
             } > "$CHAT_FILE"
             # アクティブペインを取得

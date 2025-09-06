@@ -10,6 +10,7 @@ use clap::{Arg, Command, ArgMatches};
 /// Command-line configuration structure
 #[derive(Debug, Clone)]
 pub struct CliConfig {
+    // File input (Nyash source)
     pub file: Option<String>,
     pub debug_fuel: Option<usize>,
     pub dump_ast: bool,
@@ -49,6 +50,13 @@ pub struct CliConfig {
     pub cli_verbose: bool,
     // Tasks
     pub run_task: Option<String>,
+    // Ny script plugins enumeration (opt-in)
+    pub load_ny_plugins: bool,
+    // Parser choice: 'ny' (direct v0 bridge) when true, otherwise default rust
+    pub parser_ny: bool,
+    // Phase-15: JSON IR v0 bridge
+    pub ny_parser_pipe: bool,
+    pub json_file: Option<String>,
 }
 
 impl CliConfig {
@@ -69,6 +77,24 @@ impl CliConfig {
                     .help("Nyash file to execute")
                     .value_name("FILE")
                     .index(1)
+            )
+            .arg(
+                Arg::new("parser")
+                    .long("parser")
+                    .value_name("{rust|ny}")
+                    .help("Choose parser: 'rust' (default) or 'ny' (direct v0 bridge)")
+            )
+            .arg(
+                Arg::new("ny-parser-pipe")
+                    .long("ny-parser-pipe")
+                    .help("Read Ny JSON IR v0 from stdin and execute via MIR Interpreter")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("json-file")
+                    .long("json-file")
+                    .value_name("FILE")
+                    .help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter")
             )
             .arg(
                 Arg::new("debug-fuel")
@@ -285,6 +311,12 @@ impl CliConfig {
                     .value_name("NAME")
                     .help("Run a named task defined in nyash.toml [tasks]")
             )
+            .arg(
+                Arg::new("load-ny-plugins")
+                    .long("load-ny-plugins")
+                    .help("Opt-in: read [ny_plugins] from nyash.toml and load scripts in order")
+                    .action(clap::ArgAction::SetTrue)
+            )
     }
 
     /// Convert ArgMatches to CliConfig
@@ -325,6 +357,10 @@ impl CliConfig {
             jit_direct: matches.get_flag("jit-direct"),
             cli_verbose: matches.get_flag("verbose"),
             run_task: matches.get_one::<String>("run-task").cloned(),
+            load_ny_plugins: matches.get_flag("load-ny-plugins"),
+            parser_ny: matches.get_one::<String>("parser").map(|s| s == "ny").unwrap_or(false),
+            ny_parser_pipe: matches.get_flag("ny-parser-pipe"),
+            json_file: matches.get_one::<String>("json-file").cloned(),
         }
     }
 }
@@ -389,6 +425,10 @@ mod tests {
             jit_direct: false,
             cli_verbose: false,
             run_task: None,
+            load_ny_plugins: false,
+            parser_ny: false,
+            ny_parser_pipe: false,
+            json_file: None,
         };
         
         assert_eq!(config.backend, "interpreter");

@@ -1,5 +1,8 @@
 Phase 15 — Self-Hosting (Cranelift AOT) 準備メモ
 
+注意: Phase 15 の正本ドキュメントは `docs/development/roadmap/phases/phase-15/` 配下です。全体の入口は `INDEX.md` を参照してください。
+→ docs/development/roadmap/phases/phase-15/INDEX.md
+
 目的
 - Nyash → MIR → Cranelift AOT（C ABI）→ オブジェクト → リンク → EXE の最小パイプライン確立。
 - 本ブランチでは「影響小・再現性高い」準備（設計/仕様/スモーク雛形）に限定し、実装は別ブランチで行う。

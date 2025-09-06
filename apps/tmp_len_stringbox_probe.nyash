@@ -1,0 +1,12 @@
+// Probe: StringBox.length() value path under JIT-direct
+static box Main {
+  main() {
+    local s
+    s = new StringBox("abc")
+    local n
+    n = s.length()
+    print("len=" + n.toString())
+    return n
+  }
+}
+

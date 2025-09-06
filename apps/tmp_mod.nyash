@@ -1,0 +1,3 @@
+static box TmpMod {
+  foo() { return 1 }
+}

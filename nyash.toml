@@ -399,6 +399,16 @@ NYASH_CLI_VERBOSE = "1"
 NYASH_MIR_CORE13 = "1"
 NYASH_OPT_DIAG_FORBID_LEGACY = "1"
 
+# --- Ny script plugins (optional, JIT-only path) ---
+# Enable to load Nyash std scripts implemented in apps/std/*.nyash
+ny_plugins = [
+  "apps/std/string_std.nyash",
+  "apps/std/array_std.nyash",
+  "apps/std/map_std.nyash",
+  "apps/std/string.nyash",
+  "apps/std/array.nyash"
+]
+
 [tasks]
 # LLVMビルド（nyash本体）
 build_llvm = "LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm"

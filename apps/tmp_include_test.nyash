@@ -1,0 +1,10 @@
+static box Main {
+  main() {
+    local M
+    M = include "apps/tmp_mod.nyash"
+    local r
+    r = M.foo()
+    print("r=" + r.toString())
+    return 0
+  }
+}

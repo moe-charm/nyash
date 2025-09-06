@@ -1,0 +1,42 @@
+// std.array (Ny) - Phase15 MVP
+// Usage:
+//   include "apps/std/array.nyash"
+//   local a = new ArrayBox(); StdArrayNy.array_push(a, 1); StdArrayNy.array_len(a)
+// Notes:
+//   - In-place ops where natural (push/pop)
+//   - slice clamps [start,end); returns new array
+//   - array_pop returns popped element or null
+
+static box StdArrayNy {
+  array_len(a) {
+    if a == null { return 0 }
+    return a.length()
+  }
+
+  array_push(a, x) {
+    if a == null { return 0 }
+    a.push(x)
+    return a.length()
+  }
+
+  array_pop(a) {
+    if a == null { return null }
+    // VM/Interpreter provides pop(); returns element or null when empty
+    return a.pop()
+  }
+
+  array_slice(a, start, end) {
+    if a == null { return new ArrayBox() }
+    local n, b, e
+    n = a.length()
+    b = start
+    e = end
+    if b < 0 { b = 0 }
+    if e < 0 { e = 0 }
+    if b > n { b = n }
+    if e > n { e = n }
+    if e < b { e = b }
+    // Prefer native slice if available
+    return a.slice(b, e)
+  }
+}

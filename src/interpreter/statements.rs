@@ -234,19 +234,23 @@ impl NyashInterpreter {
         let is_true = self.is_truthy(&condition_value);
         
         if is_true {
+            eprintln!("[dbg] if-then enter");
             for statement in then_body {
                 self.execute_statement(statement)?;
                 if !matches!(self.control_flow, super::ControlFlow::None) {
                     break;
                 }
             }
+            eprintln!("[dbg] if-then exit");
         } else if let Some(else_statements) = else_body {
+            eprintln!("[dbg] if-else enter");
             for statement in else_statements {
                 self.execute_statement(statement)?;
                 if !matches!(self.control_flow, super::ControlFlow::None) {
                     break;
                 }
             }
+            eprintln!("[dbg] if-else exit");
         }
         
         Ok(Box::new(VoidBox::new()))

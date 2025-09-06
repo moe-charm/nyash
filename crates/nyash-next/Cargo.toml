@@ -1,0 +1,20 @@
+[package]
+name = "nyash-next"
+version = "0.1.0"
+edition = "2021"
+description = "Next-generation Nyash development crate (separate from legacy src)"
+license = "MIT"
+
+[lib]
+name = "nyash_next"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nyash-next"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+

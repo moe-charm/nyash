@@ -51,6 +51,10 @@ pub fn set_current(cfg: NyashEnv) {
 /// NYASH_JIT_THRESHOLD = "1"
 /// NYASH_CLI_VERBOSE = "1"
 pub fn bootstrap_from_toml_env() {
+    // Allow disabling nyash.toml env bootstrapping for isolated smokes/CI
+    if std::env::var("NYASH_SKIP_TOML_ENV").ok().as_deref() == Some("1") {
+        return;
+    }
     let path = "nyash.toml";
     let content = match std::fs::read_to_string(path) { Ok(s) => s, Err(_) => return };
     let Ok(value) = toml::from_str::<toml::Value>(&content) else { return };

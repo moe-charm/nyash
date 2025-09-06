@@ -24,7 +24,7 @@ use super::super::extern_thunks::{
     nyash_array_len_h, nyash_array_get_h, nyash_array_set_h, nyash_array_push_h, nyash_array_last_h,
     nyash_map_size_h, nyash_map_get_h, nyash_map_get_hh, nyash_map_set_h, nyash_map_has_h,
     nyash_any_length_h, nyash_any_is_empty_h,
-    nyash_string_charcode_at_h, nyash_string_birth_h, nyash_integer_birth_h,
+    nyash_string_charcode_at_h, nyash_string_len_h, nyash_string_birth_h, nyash_integer_birth_h,
     nyash_string_concat_hh, nyash_string_eq_hh, nyash_string_lt_hh,
     nyash_box_birth_h, nyash_box_birth_i64,
     nyash_handle_of,
@@ -172,6 +172,21 @@ impl IRBuilder for CraneliftBuilder {
                 self.entry_block = Some(entry);
                 self.current_block_index = Some(0);
                 self.cur_needs_term = true;
+                // Force a dbg call at function entry to verify import linking works at runtime
+                {
+                    use cranelift_codegen::ir::{AbiParam, Signature};
+                    let mut sig = Signature::new(self.module.isa().default_call_conv());
+                    sig.params.push(AbiParam::new(types::I64));
+                    sig.params.push(AbiParam::new(types::I64));
+                    sig.returns.push(AbiParam::new(types::I64));
+                    let fid = self.module
+                        .declare_function("nyash.jit.dbg_i64", cranelift_module::Linkage::Import, &sig)
+                        .expect("declare dbg_i64 at entry");
+                    let fref = self.module.declare_func_in_func(fid, fb.func);
+                    let ttag = fb.ins().iconst(types::I64, 900);
+                    let tval = fb.ins().iconst(types::I64, 123);
+                    let _ = fb.ins().call(fref, &[ttag, tval]);
+                }
                 let rb = fb.create_block();
                 self.ret_block = Some(rb);
                 fb.append_block_param(rb, types::I64);
@@ -200,9 +215,15 @@ impl IRBuilder for CraneliftBuilder {
                         if fb.func.signature.returns.is_empty() {
                             fb.ins().return_(&[]);
                         } else {
-                            let params = fb.func.dfg.block_params(rb).to_vec();
-                            let mut v = params.get(0).copied().unwrap_or_else(|| fb.ins().iconst(types::I64, 0));
-                            if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") {
+                            // Prefer the persisted return slot if available; fallback to block param 0
+                            let mut v = if let Some(ss) = self.ret_slot {
+                                fb.ins().stack_load(types::I64, ss, 0)
+                            } else {
+                                let params = fb.func.dfg.block_params(rb).to_vec();
+                                params.get(0).copied().unwrap_or_else(|| fb.ins().iconst(types::I64, 0))
+                            };
+                            // Unconditional runtime debug call to observe return value just before final return (feed result back)
+                            {
                                 use cranelift_codegen::ir::{AbiParam, Signature};
                                 let mut sig = Signature::new(self.module.isa().default_call_conv());
                                 sig.params.push(AbiParam::new(types::I64));
@@ -210,8 +231,9 @@ impl IRBuilder for CraneliftBuilder {
                                 sig.returns.push(AbiParam::new(types::I64));
                                 let fid = self.module.declare_function("nyash.jit.dbg_i64", Linkage::Import, &sig).expect("declare dbg_i64");
                                 let fref = self.module.declare_func_in_func(fid, fb.func);
-                                let tag = fb.ins().iconst(types::I64, 200);
-                                let _ = fb.ins().call(fref, &[tag, v]);
+                                let tag = fb.ins().iconst(types::I64, 210);
+                                let call_inst = fb.ins().call(fref, &[tag, v]);
+                                if let Some(rv) = fb.inst_results(call_inst).get(0).copied() { v = rv; }
                             }
                             let ret_ty = fb.func.signature.returns.get(0).map(|p| p.value_type).unwrap_or(types::I64);
                             if ret_ty == types::F64 { v = fb.ins().fcvt_from_sint(types::F64, v); }
@@ -409,7 +431,7 @@ impl IRBuilder for CraneliftBuilder {
             let mut v = if let Some(x) = self.value_stack.pop() { x } else { fb.ins().iconst(types::I64, 0) };
             let v_ty = fb.func.dfg.value_type(v);
             if v_ty != types::I64 { v = if v_ty == types::F64 { fb.ins().fcvt_to_sint(types::I64, v) } else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); fb.ins().select(v, one, zero) } }
-            if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") {
+            if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") || std::env::var("NYASH_JIT_FORCE_RET_DBG").ok().as_deref() == Some("1") {
                 use cranelift_codegen::ir::{AbiParam, Signature};
                 let mut sig = Signature::new(self.module.isa().default_call_conv());
                 sig.params.push(AbiParam::new(types::I64));
@@ -420,26 +442,81 @@ impl IRBuilder for CraneliftBuilder {
                 let tag = fb.ins().iconst(types::I64, 201);
                 let _ = fb.ins().call(fref, &[tag, v]);
             }
+            // Persist return value in a dedicated stack slot to avoid SSA arg mishaps on ret block
+            if self.ret_slot.is_none() {
+                use cranelift_codegen::ir::StackSlotData;
+                let ss = fb.create_sized_stack_slot(StackSlotData::new(cranelift_codegen::ir::StackSlotKind::ExplicitSlot, 8));
+                self.ret_slot = Some(ss);
+            }
+            if let Some(ss) = self.ret_slot { fb.ins().stack_store(v, ss, 0); }
+            // Unconditional debug of return value just before ret block jump (feed result back to v)
+            {
+                use cranelift_codegen::ir::{AbiParam, Signature};
+                let mut sig = Signature::new(self.module.isa().default_call_conv());
+                sig.params.push(AbiParam::new(types::I64));
+                sig.params.push(AbiParam::new(types::I64));
+                sig.returns.push(AbiParam::new(types::I64));
+                let fid = self.module.declare_function("nyash.jit.dbg_i64", cranelift_module::Linkage::Import, &sig).expect("declare dbg_i64");
+                let fref = self.module.declare_func_in_func(fid, fb.func);
+                let tag = fb.ins().iconst(types::I64, 211);
+                let call_inst = fb.ins().call(fref, &[tag, v]);
+                if let Some(rv) = fb.inst_results(call_inst).get(0).copied() { v = rv; }
+            }
             if let Some(rb) = self.ret_block { fb.ins().jump(rb, &[v]); }
         });
         self.cur_needs_term = false;
     }
     fn emit_host_call(&mut self, symbol: &str, _argc: usize, has_ret: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
+        // Structured lower event for import call
+        {
+            let mut arg_types: Vec<&'static str> = Vec::new();
+            for _ in 0.._argc { arg_types.push("I64"); }
+            crate::jit::events::emit_lower(
+                serde_json::json!({
+                    "id": symbol,
+                    "decision": "allow",
+                    "reason": "import_call",
+                    "argc": _argc,
+                    "arg_types": arg_types,
+                    "ret": if has_ret { "I64" } else { "Void" }
+                }),
+                "hostcall","<jit>"
+            );
+        }
         let call_conv = self.module.isa().default_call_conv();
         let mut sig = Signature::new(call_conv);
-        // Collect up to _argc i64 values from stack (right-to-left)
+        // Collect up to _argc i64 values from stack (right-to-left) and pad with zeros to match arity
         let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
         let take_n = _argc.min(self.value_stack.len());
         for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
         args.reverse();
-        for _ in 0..args.len() { sig.params.push(AbiParam::new(types::I64)); }
+        Self::with_fb(|fb| {
+            while args.len() < _argc { args.push(fb.ins().iconst(types::I64, 0)); }
+        });
+        for _ in 0.._argc { sig.params.push(AbiParam::new(types::I64)); }
         if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
         let func_id = self.module.declare_function(symbol, cranelift_module::Linkage::Import, &sig).expect("declare import failed");
         if let Some(v) = tls_call_import_ret(&mut self.module, func_id, &args, has_ret) { self.value_stack.push(v); }
     }
     fn emit_host_call_typed(&mut self, symbol: &str, params: &[ParamKind], has_ret: bool, ret_is_f64: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
+        // Structured lower event for typed import call
+        {
+            let mut arg_types: Vec<&'static str> = Vec::new();
+            for k in params { arg_types.push(match k { ParamKind::I64 | ParamKind::B1 => "I64", ParamKind::F64 => "F64" }); }
+            crate::jit::events::emit_lower(
+                serde_json::json!({
+                    "id": symbol,
+                    "decision": "allow",
+                    "reason": "import_call_typed",
+                    "argc": params.len(),
+                    "arg_types": arg_types,
+                    "ret": if has_ret { if ret_is_f64 { "F64" } else { "I64" } } else { "Void" }
+                }),
+                "hostcall","<jit>"
+            );
+        }
         let mut args: Vec<cranelift_codegen::ir::Value> = Vec::new();
         let take_n = params.len().min(self.value_stack.len());
         for _ in 0..take_n { if let Some(v) = self.value_stack.pop() { args.push(v); } }
@@ -455,6 +532,18 @@ impl IRBuilder for CraneliftBuilder {
         if has_ret { if ret_is_f64 { sig.returns.push(AbiParam::new(types::F64)); } else { sig.returns.push(AbiParam::new(types::I64)); } }
         let func_id = self.module.declare_function(symbol, cranelift_module::Linkage::Import, &sig).expect("declare typed import failed");
         if let Some(v) = tls_call_import_ret(&mut self.module, func_id, &args, has_ret) { self.value_stack.push(v); }
+    }
+    fn emit_debug_i64_local(&mut self, tag: i64, slot: usize) {
+        if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() != Some("1") { return; }
+        use cranelift_codegen::ir::types;
+        // Push tag and value
+        let t = Self::with_fb(|fb| fb.ins().iconst(types::I64, tag));
+        self.value_stack.push(t);
+        self.load_local_i64(slot);
+        // Use existing typed hostcall helper to pass two I64 args
+        self.emit_host_call_typed("nyash.jit.dbg_i64", &[ParamKind::I64, ParamKind::I64], true, false);
+        // Drop the returned value to keep stack balanced
+        let _ = self.value_stack.pop();
     }
     fn emit_host_call_fixed3(&mut self, symbol: &str, has_ret: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
@@ -685,7 +774,18 @@ impl IRBuilder for CraneliftBuilder {
                     else { let one = fb.ins().iconst(types::I64, 1); let zero = fb.ins().iconst(types::I64, 0); let b1 = fb.ins().icmp_imm(IntCC::NotEqual, v, 0); v = fb.ins().select(b1, one, zero); }
                 }
                 if let Some(slot) = slot { fb.ins().stack_store(v, slot, 0); }
+                if std::env::var("NYASH_JIT_TRACE_LOCAL").ok().as_deref() == Some("1") {
+                    eprintln!("[JIT-LOCAL] store idx={} (tracked_slots={})", index, self.local_slots.len());
+                }
             });
+            if std::env::var("NYASH_JIT_TRACE_LOCAL").ok().as_deref() == Some("1") {
+                // Also emit value via dbg hook: tag = 1000 + index
+                let tag = Self::with_fb(|fb| fb.ins().iconst(types::I64, (1000 + index as i64)));
+                self.value_stack.push(tag);
+                self.value_stack.push(v);
+                self.emit_host_call_typed("nyash.jit.dbg_i64", &[ParamKind::I64, ParamKind::I64], true, false);
+                let _ = self.value_stack.pop();
+            }
         }
     }
     fn load_local_i64(&mut self, index: usize) {
@@ -693,7 +793,18 @@ impl IRBuilder for CraneliftBuilder {
         if !self.local_slots.contains_key(&index) { self.ensure_local_i64(index); }
         if let Some(&slot) = self.local_slots.get(&index) {
             let v = Self::with_fb(|fb| fb.ins().stack_load(types::I64, slot, 0));
+            if std::env::var("NYASH_JIT_TRACE_LOCAL").ok().as_deref() == Some("1") {
+                eprintln!("[JIT-LOCAL] load idx={} (tracked_slots={})", index, self.local_slots.len());
+            }
             self.value_stack.push(v); self.stats.0 += 1;
+            if std::env::var("NYASH_JIT_TRACE_LOCAL").ok().as_deref() == Some("1") {
+                // tag = 2000 + index
+                let tag = Self::with_fb(|fb| fb.ins().iconst(types::I64, (2000 + index as i64)));
+                self.value_stack.push(tag);
+                self.value_stack.push(v);
+                self.emit_host_call_typed("nyash.jit.dbg_i64", &[ParamKind::I64, ParamKind::I64], true, false);
+                let _ = self.value_stack.pop();
+            }
         }
     }
 }
@@ -752,6 +863,7 @@ impl CraneliftBuilder {
             builder.symbol(c::SYM_MAP_SET_H, nyash_map_set_h as *const u8);
             builder.symbol(c::SYM_MAP_HAS_H, nyash_map_has_h as *const u8);
             builder.symbol(c::SYM_ANY_LEN_H, nyash_any_length_h as *const u8);
+            builder.symbol(c::SYM_STRING_LEN_H, nyash_string_len_h as *const u8);
             builder.symbol(c::SYM_ANY_IS_EMPTY_H, nyash_any_is_empty_h as *const u8);
             builder.symbol(c::SYM_STRING_CHARCODE_AT_H, nyash_string_charcode_at_h as *const u8);
             builder.symbol(c::SYM_STRING_BIRTH_H, nyash_string_birth_h as *const u8);

@@ -1,0 +1,55 @@
+// Minimal tokenizer for Ny v0 (ints, + - * /, ( ), return)
+
+static box Tokenizer {
+    tokenize(input) {
+        local tokens = new ArrayBox()
+        local i = 0
+        local n = input.length()
+        // helper: skip whitespace
+        fn skip_ws() {
+            loop(i < n) {
+                local ch = input.substring(i, i+1)
+                if ch == " " || ch == "\t" || ch == "\r" || ch == "\n" { i = i + 1 } else { return }
+            }
+        }
+        // main loop
+        loop(i < n) {
+            skip_ws()
+            if i >= n { break }
+            local ch = input.substring(i, i+1)
+            if ch == "+" || ch == "-" || ch == "*" || ch == "/" || ch == "(" || ch == ")" {
+                local tok = new MapBox(); tok.set("type", ch)
+                tokens.push(tok); i = i + 1; continue
+            }
+            // keyword: return
+            if i + 6 <= n {
+                local kw = input.substring(i, i+6)
+                if kw == "return" {
+                    local t = new MapBox(); t.set("type", "RETURN")
+                    tokens.push(t); i = i + 6; continue
+                }
+            }
+            // integer literal
+            if ch >= "0" && ch <= "9" {
+                local j = i
+                loop(j < n) {
+                    local cj = input.substring(j, j+1)
+                    if cj >= "0" && cj <= "9" { j = j + 1 } else { break }
+                }
+                local num_str = input.substring(i, j)
+                local tnum = new MapBox(); tnum.set("type", "INT"); tnum.set("value", num_str)
+                tokens.push(tnum); i = j; continue
+            }
+            // unknown
+            local err = new MapBox(); err.set("version", 0); err.set("kind", "Error")
+            local e = new MapBox(); e.set("message", "Unknown token");
+            local sp = new MapBox(); sp.set("start", i); sp.set("end", i+1)
+            e.set("span", sp); err.set("error", e)
+            return err
+        }
+        // EOF
+        local eof = new MapBox(); eof.set("type", "EOF"); tokens.push(eof)
+        return tokens
+    }
+}
+

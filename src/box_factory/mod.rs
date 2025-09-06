@@ -118,11 +118,11 @@ impl UnifiedBoxRegistry {
         // Prefer plugin-builtins when enabled and provider is available in v2 registry
         if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
             use crate::runtime::{get_global_registry, BoxProvider};
-            // Allowlist types for override: env NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox" (default: ArrayBox,MapBox)
+            // Allowlist types for override: env NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox" (default: none)
             let allow: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
                 list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
             } else {
-                vec!["ArrayBox".into(), "MapBox".into()]
+                vec![]
             };
             if allow.iter().any(|t| t == name) {
                 let v2 = get_global_registry();
@@ -163,7 +163,16 @@ impl UnifiedBoxRegistry {
                 Err(_) => continue, // Try next factory
             }
         }
-        
+        // Final fallback: if v2 plugin registry has a provider for this name, try it once
+        {
+            let v2 = crate::runtime::get_global_registry();
+            if let Some(_prov) = v2.get_provider(name) {
+                if let Ok(b) = v2.create_box(name, args) {
+                    return Ok(b);
+                }
+            }
+        }
+
         Err(RuntimeError::InvalidOperation {
             message: format!("Unknown Box type: {}", name),
         })

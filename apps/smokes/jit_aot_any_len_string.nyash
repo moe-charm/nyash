@@ -1,0 +1,9 @@
+// JIT AOT smoke: Any.length() on StringBox
+static box Main {
+  main() {
+    local s
+    s = new StringBox("abc")
+    return s.length()
+  }
+}
+

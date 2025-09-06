@@ -29,6 +29,7 @@ use nyash_rust::backend::{llvm_compile_and_execute};
 use std::{fs, process};
 mod modes;
 mod demos;
+mod json_v0_bridge;
 
 // v2 plugin system imports
 use nyash_rust::runtime;
@@ -74,6 +75,35 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // Phase-15: JSON IR v0 bridge (stdin/file)
+        if self.config.ny_parser_pipe || self.config.json_file.is_some() {
+            let json = if let Some(path) = &self.config.json_file {
+                match std::fs::read_to_string(path) {
+                    Ok(s) => s,
+                    Err(e) => { eprintln!("❌ json-file read error: {}", e); std::process::exit(1); }
+                }
+            } else {
+                use std::io::Read;
+                let mut buf = String::new();
+                if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
+                    eprintln!("❌ stdin read error: {}", e); std::process::exit(1);
+                }
+                buf
+            };
+            match json_v0_bridge::parse_json_v0_to_module(&json) {
+                Ok(module) => {
+                    // Optional dump via env verbose
+                    json_v0_bridge::maybe_dump_mir(&module);
+                    // Execute via MIR interpreter
+                    self.execute_mir_module(&module);
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("❌ JSON v0 bridge error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
         // Run named task from nyash.toml (MVP)
         if let Some(task) = self.config.run_task.clone() {
             if let Err(e) = run_named_task(&task) {
@@ -143,6 +173,70 @@ impl NyashRunner {
         // Allow disabling during snapshot/CI via NYASH_DISABLE_PLUGINS=1
         if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
             runner_plugin_init::init_bid_plugins();
+        }
+        // Allow interpreter to create plugin-backed boxes via unified registry
+        // Opt-in by default for FileBox/TOMLBox which are required by ny-config and similar tools.
+        if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().is_none() {
+            std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
+        }
+        // Merge FileBox,TOMLBox with defaults if present
+        let mut override_types: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
+            list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+        } else {
+            vec!["ArrayBox".into(), "MapBox".into()]
+        };
+        for t in ["FileBox", "TOMLBox"] { if !override_types.iter().any(|x| x==t) { override_types.push(t.into()); } }
+        std::env::set_var("NYASH_PLUGIN_OVERRIDE_TYPES", override_types.join(","));
+
+        // Opt-in: load Ny script plugins listed in nyash.toml [ny_plugins]
+        if self.config.load_ny_plugins || std::env::var("NYASH_LOAD_NY_PLUGINS").ok().as_deref() == Some("1") {
+            if let Ok(text) = std::fs::read_to_string("nyash.toml") {
+                if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                    if let Some(np) = doc.get("ny_plugins") {
+                        let mut list: Vec<String> = Vec::new();
+                        if let Some(arr) = np.as_array() {
+                            for v in arr { if let Some(s) = v.as_str() { list.push(s.to_string()); } }
+                        } else if let Some(tbl) = np.as_table() {
+                            for (_k, v) in tbl { if let Some(s) = v.as_str() { list.push(s.to_string()); }
+                                else if let Some(arr) = v.as_array() { for e in arr { if let Some(s) = e.as_str() { list.push(s.to_string()); } } }
+                            }
+                        }
+                        if !list.is_empty() {
+                            let list_only = std::env::var("NYASH_NY_PLUGINS_LIST_ONLY").ok().as_deref() == Some("1");
+                            println!("🧩 Ny script plugins ({}):", list.len());
+                            for p in list {
+                                if list_only {
+                                    println!("  • {}", p);
+                                    continue;
+                                }
+                                // Execute each script best-effort via interpreter
+                                match std::fs::read_to_string(&p) {
+                                    Ok(code) => {
+                                        match nyash_rust::parser::NyashParser::parse_from_string(&code) {
+                                            Ok(ast) => {
+                                                let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
+                                                match interpreter.execute(ast) {
+                                                    Ok(_) => println!("[ny_plugins] {}: OK", p),
+                                                    Err(e) => {
+                                                        println!("[ny_plugins] {}: FAIL ({})", p, e);
+                                                        // continue to next
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                println!("[ny_plugins] {}: FAIL (parse: {})", p, e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        println!("[ny_plugins] {}: FAIL (read: {})", p, e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Optional: enable VM stats via CLI flags
@@ -661,6 +755,58 @@ impl NyashRunner {
         println!("  VM is {:.2}x {} than Interpreter", 
             if speedup > 1.0 { speedup } else { 1.0 / speedup },
             if speedup > 1.0 { "faster" } else { "slower" });
+    }
+
+    /// Execute a prepared MIR module via the interpreter (Phase-15 path)
+    fn execute_mir_module(&self, module: &crate::mir::MirModule) {
+        use crate::backend::MirInterpreter;
+        use crate::mir::MirType;
+        use crate::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
+        use crate::boxes::FloatBox;
+
+        let mut interp = MirInterpreter::new();
+        match interp.execute_module(module) {
+            Ok(result) => {
+                println!("✅ MIR interpreter execution completed!");
+                if let Some(func) = module.functions.get("main") {
+                    let (ety, sval) = match &func.signature.return_type {
+                        MirType::Float => {
+                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
+                                ("Float", format!("{}", fb.value))
+                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Float", format!("{}", ib.value as f64))
+                            } else { ("Float", result.to_string_box().value) }
+                        }
+                        MirType::Integer => {
+                            if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Integer", ib.value.to_string())
+                            } else { ("Integer", result.to_string_box().value) }
+                        }
+                        MirType::Bool => {
+                            if let Some(bb) = result.as_any().downcast_ref::<BoolBox>() {
+                                ("Bool", bb.value.to_string())
+                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                ("Bool", (ib.value != 0).to_string())
+                            } else { ("Bool", result.to_string_box().value) }
+                        }
+                        MirType::String => {
+                            if let Some(sb) = result.as_any().downcast_ref::<StringBox>() {
+                                ("String", sb.value.clone())
+                            } else { ("String", result.to_string_box().value) }
+                        }
+                        _ => { (result.type_name(), result.to_string_box().value) }
+                    };
+                    println!("ResultType(MIR): {}", ety);
+                    println!("Result: {}", sval);
+                } else {
+                    println!("Result: {:?}", result);
+                }
+            }
+            Err(e) => {
+                eprintln!("❌ MIR interpreter error: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
 }
 

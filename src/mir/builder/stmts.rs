@@ -76,7 +76,14 @@ impl super::MirBuilder {
     // Block: sequentially build statements and return last value or Void
     pub(super) fn build_block(&mut self, statements: Vec<ASTNode>) -> Result<ValueId, String> {
         let mut last_value = None;
-        for statement in statements { last_value = Some(self.build_expression(statement)?); }
+        for statement in statements {
+            last_value = Some(self.build_expression(statement)?);
+            // If the current block was terminated by this statement (e.g., return/throw),
+            // do not emit any further instructions for this block.
+            if self.is_current_block_terminated() {
+                break;
+            }
+        }
         Ok(last_value.unwrap_or_else(|| {
             let void_val = self.value_gen.next();
             self.emit_instruction(MirInstruction::Const { dst: void_val, value: ConstValue::Void }).unwrap();
@@ -97,6 +104,12 @@ impl super::MirBuilder {
         let merge_block = self.block_gen.next();
         self.emit_instruction(MirInstruction::Branch { condition: condition_val, then_bb: then_block, else_bb: else_block })?;
 
+        // Pre-analysis: detect then-branch assigned var and capture its pre-if value
+        let assigned_then_pre = extract_assigned_var(&then_branch);
+        let pre_then_var_value: Option<ValueId> = assigned_then_pre
+            .as_ref()
+            .and_then(|name| self.variable_map.get(name).copied());
+
         // then
         self.current_block = Some(then_block);
         self.ensure_block_exists(then_block)?;
@@ -107,7 +120,7 @@ impl super::MirBuilder {
         // else
         self.current_block = Some(else_block);
         self.ensure_block_exists(else_block)?;
-        let (else_value, else_ast_for_analysis) = if let Some(else_ast) = else_branch {
+        let (mut else_value, else_ast_for_analysis) = if let Some(else_ast) = else_branch {
             let val = self.build_expression(else_ast.clone())?;
             (val, Some(else_ast))
         } else {
@@ -120,13 +133,31 @@ impl super::MirBuilder {
         // merge + phi
         self.current_block = Some(merge_block);
         self.ensure_block_exists(merge_block)?;
-        let result_val = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value), (else_block, else_value)] })?;
-
-        // heuristic: bind same var name to phi result
+        // If only the then-branch assigns a variable (e.g., `if c { x = ... }`) and the else
+        // does not assign the same variable, bind that variable to a Phi of (then_value, pre_if_value).
         let assigned_var_then = extract_assigned_var(&then_ast_for_analysis);
         let assigned_var_else = else_ast_for_analysis.as_ref().and_then(|a| extract_assigned_var(a));
-        if let (Some(a), Some(b)) = (assigned_var_then, assigned_var_else) { if a == b { self.variable_map.insert(a, result_val); } }
+        let mut result_val = self.value_gen.next();
+        if let Some(var_name) = assigned_var_then.clone() {
+            let else_assigns_same = assigned_var_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
+            if !else_assigns_same {
+                if let Some(pre) = pre_then_var_value {
+                    // Use pre-if value for else input so SSA is well-formed
+                    else_value = pre;
+                }
+                // After merge, the variable should refer to the Phi result
+                self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value), (else_block, else_value)] })?;
+                self.variable_map.insert(var_name, result_val);
+            } else {
+                // Both sides assign same variable – emit Phi normally and bind
+                self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value), (else_block, else_value)] })?;
+                self.variable_map.insert(var_name, result_val);
+            }
+        } else {
+            // No variable assignment pattern detected – just emit Phi for expression result
+            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value), (else_block, else_value)] })?;
+        }
+
         Ok(result_val)
     }
 

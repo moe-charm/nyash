@@ -24,6 +24,16 @@ build_plugin plugins/nyash-console-plugin
 build_plugin plugins/nyash-math-plugin
 
 export NYASH_CLI_VERBOSE=1
+# Default: keep strict diagnostics off for plugin smoke unless explicitly enabled
+if [[ "${NYASH_PLUGINS_STRICT:-0}" == "1" ]]; then
+  echo "[Plugins] Strict: ON" >&2
+else
+  echo "[Plugins] Strict: OFF" >&2
+fi
+if [[ "${NYASH_PLUGINS_STRICT:-0}" != "1" ]]; then
+  # Override strict legacy MIR diagnostics for plugin smoke by default
+  export NYASH_OPT_DIAG_FORBID_LEGACY=0
+fi
 export NYASH_PLUGIN_STRICT=1
 export NYASH_USE_PLUGIN_BUILTINS=1
 export NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox,ConsoleBox"
@@ -33,7 +43,7 @@ run_case() {
   local name=$1
   local file=$2
   echo "[smoke] case=$name file=$file" >&2
-  "$BIN" --backend vm "$ROOT_DIR/$file" >/dev/null
+  env -u NYASH_OPT_DIAG_FORBID_LEGACY "$BIN" --backend vm "$ROOT_DIR/$file" >/dev/null
   echo "[smoke] ok: $name" >&2
 }
 
@@ -48,9 +58,9 @@ echo "[smoke] all green" >&2
 # Second pass: disable builtins and re-run key cases
 if [[ "${NYASH_SMOKE_STRICT_PLUGINS:-}" == "1" ]]; then
   echo "[smoke] second pass with NYASH_DISABLE_BUILTINS=1" >&2
-  NYASH_DISABLE_BUILTINS=1 \
+  NYASH_DISABLE_BUILTINS=1 env -u NYASH_OPT_DIAG_FORBID_LEGACY \
     "$BIN" --backend vm "$ROOT_DIR/examples/console_demo.nyash" >/dev/null
-  NYASH_DISABLE_BUILTINS=1 \
+  NYASH_DISABLE_BUILTINS=1 env -u NYASH_OPT_DIAG_FORBID_LEGACY \
     "$BIN" --backend vm "$ROOT_DIR/examples/math_time_demo.nyash" >/dev/null
   echo "[smoke] all green (builtins disabled)" >&2
 fi

@@ -4,6 +4,7 @@ use super::builder::{IRBuilder, BinOpKind, CmpKind};
 mod analysis;
 mod cfg;
 mod ops_ext;
+mod string_len;
 
 /// Lower(Core-1): Minimal lowering skeleton for Const/Move/BinOp/Cmp/Branch/Ret
 /// This does not emit real CLIF yet; it only walks MIR and validates coverage.
@@ -39,10 +40,12 @@ pub struct LowerCore {
     pub(super) next_local: usize,
     /// Track NewBox origins: ValueId -> box type name (e.g., "PyRuntimeBox")
     pub(super) box_type_map: std::collections::HashMap<ValueId, String>,
+    /// Track StringBox literals: ValueId (NewBox result) -> literal string
+    pub(super) string_box_literal: std::collections::HashMap<ValueId, String>,
 }
 
 impl LowerCore {
-    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), known_f64: std::collections::HashMap::new(), known_str: std::collections::HashMap::new(), param_index: std::collections::HashMap::new(), phi_values: std::collections::HashSet::new(), phi_param_index: std::collections::HashMap::new(), bool_values: std::collections::HashSet::new(), bool_phi_values: std::collections::HashSet::new(), float_box_values: std::collections::HashSet::new(), handle_values: std::collections::HashSet::new(), last_phi_total: 0, last_phi_b1: 0, last_ret_bool_hint_used: false, local_index: std::collections::HashMap::new(), next_local: 0, box_type_map: std::collections::HashMap::new() } }
+    pub fn new() -> Self { Self { unsupported: 0, covered: 0, known_i64: std::collections::HashMap::new(), known_f64: std::collections::HashMap::new(), known_str: std::collections::HashMap::new(), param_index: std::collections::HashMap::new(), phi_values: std::collections::HashSet::new(), phi_param_index: std::collections::HashMap::new(), bool_values: std::collections::HashSet::new(), bool_phi_values: std::collections::HashSet::new(), float_box_values: std::collections::HashSet::new(), handle_values: std::collections::HashSet::new(), last_phi_total: 0, last_phi_b1: 0, last_ret_bool_hint_used: false, local_index: std::collections::HashMap::new(), next_local: 0, box_type_map: std::collections::HashMap::new(), string_box_literal: std::collections::HashMap::new() } }
 
     /// Get statistics for the last lowered function
     pub fn last_stats(&self) -> (u64, u64, bool) { (self.last_phi_total, self.last_phi_b1, self.last_ret_bool_hint_used) }
@@ -62,6 +65,17 @@ impl LowerCore {
         let mut bb_ids: Vec<_> = func.blocks.keys().copied().collect();
         bb_ids.sort_by_key(|b| b.0);
         builder.prepare_blocks(bb_ids.len());
+        // Pre-seed known_str by scanning all Const(String) ahead of lowering so literal folds work regardless of order
+        self.known_str.clear();
+        for bb in bb_ids.iter() {
+            if let Some(block) = func.blocks.get(bb) {
+                for ins in block.instructions.iter() {
+                    if let crate::mir::MirInstruction::Const { dst, value } = ins {
+                        if let crate::mir::ConstValue::String(s) = value { self.known_str.insert(*dst, s.clone()); }
+                    }
+                }
+            }
+        }
         self.analyze(func, &bb_ids);
         // Optional: collect PHI targets and ordering per successor for minimal/multi PHI path
         let cfg_now = crate::jit::config::current();
@@ -110,14 +124,22 @@ impl LowerCore {
 
         // Pre-scan to map NewBox origins: ValueId -> box type name; propagate via Copy
         self.box_type_map.clear();
+        self.string_box_literal.clear();
         for bb in bb_ids.iter() {
             if let Some(block) = func.blocks.get(bb) {
                 for ins in block.instructions.iter() {
                     if let crate::mir::MirInstruction::NewBox { dst, box_type, .. } = ins {
                         self.box_type_map.insert(*dst, box_type.clone());
                     }
+                    if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins {
+                        if box_type == "StringBox" && args.len() == 1 {
+                            let src = args[0];
+                            if let Some(s) = self.known_str.get(&src).cloned() { self.string_box_literal.insert(*dst, s); }
+                        }
+                    }
                     if let crate::mir::MirInstruction::Copy { dst, src } = ins {
                         if let Some(name) = self.box_type_map.get(src).cloned() { self.box_type_map.insert(*dst, name); }
+                        if let Some(s) = self.string_box_literal.get(src).cloned() { self.string_box_literal.insert(*dst, s); }
                     }
                 }
             }
@@ -182,10 +204,26 @@ impl LowerCore {
         Ok(())
     }
 
+    // string_len helper moved to core/string_len.rs (no behavior change)
 
+    
     fn try_emit(&mut self, b: &mut dyn IRBuilder, instr: &MirInstruction, cur_bb: crate::mir::BasicBlockId, func: &crate::mir::MirFunction) -> Result<(), String> {
         use crate::mir::MirInstruction as I;
         match instr {
+            I::NewBox { dst, box_type, args } => {
+                // Materialize StringBox handle at lowering time when literal is known.
+                // This enables subsequent BoxCall(len/length) to use a valid runtime handle.
+                if box_type == "StringBox" && args.len() == 1 {
+                    let src = args[0];
+                    // Try from pre-seeded known_str (scanned at function entry)
+                    if let Some(s) = self.known_str.get(&src).cloned() {
+                        b.emit_string_handle_from_literal(&s);
+                        let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                        b.store_local_i64(slot);
+                        self.handle_values.insert(*dst);
+                    }
+                }
+            }
             I::Call { dst, func, args, .. } => {
                 // FunctionBox call shim: emit hostcall nyash_fn_callN(func_h, args...)
                 // Push function operand (param or known)
@@ -211,8 +249,16 @@ impl LowerCore {
                 params.push(crate::jit::lower::builder::ParamKind::I64);
                 for _ in 0..core::cmp::min(argc, 8) { params.push(crate::jit::lower::builder::ParamKind::I64); }
                 b.emit_host_call_typed(sym, &params, true, false);
-                // Mark destination as handle-like
-                if let Some(d) = dst { self.handle_values.insert(*d); }
+                // Persist or discard the return to keep the stack balanced
+                if let Some(d) = dst {
+                    self.handle_values.insert(*d);
+                    let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    b.store_local_i64(slot);
+                } else {
+                    // No destination: spill to scratch local to consume the value
+                    let scratch = { let id = self.next_local; self.next_local += 1; id };
+                    b.store_local_i64(scratch);
+                }
             }
             I::Await { dst, future } => {
                 // Push future param index when known; otherwise -1 to trigger legacy search in shim
@@ -255,7 +301,7 @@ impl LowerCore {
                 if field == "console" {
                     // Emit hostcall to create/get ConsoleBox handle
                     // Symbol exported by nyrt: nyash.console.birth_h
-                    b.emit_host_call("nyash.console.birth_h", 0, true);
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_CONSOLE_BIRTH_H, 0, true);
                 } else {
                     // Unknown RefGet: treat as no-op const 0 to avoid strict fail for now
                     b.emit_const_i64(0);
@@ -425,13 +471,21 @@ impl LowerCore {
                 if let Some(v) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, v); }
                 if let Some(v) = self.known_f64.get(src).copied() { self.known_f64.insert(*dst, v); }
                 if let Some(v) = self.known_str.get(src).cloned() { self.known_str.insert(*dst, v); }
-                // If source is a parameter, materialize it on the stack for downstream ops
-                if let Some(pidx) = self.param_index.get(src).copied() {
-                    b.emit_param_i64(pidx);
-                }
                 // Propagate boolean classification through Copy
                 if self.bool_values.contains(src) { self.bool_values.insert(*dst); }
-                // Otherwise no-op for codegen (stack-machine handles sources directly later)
+                // If source is a parameter, materialize it on the stack for downstream ops and persist into dst slot
+                if let Some(pidx) = self.param_index.get(src).copied() {
+                    b.emit_param_i64(pidx);
+                    let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    b.ensure_local_i64(slot);
+                    b.store_local_i64(slot);
+                } else if let Some(src_slot) = self.local_index.get(src).copied() {
+                    // If source already has a local slot (e.g., a handle), copy into dst's slot
+                    b.load_local_i64(src_slot);
+                    let dst_slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    b.ensure_local_i64(dst_slot);
+                    b.store_local_i64(dst_slot);
+                }
             }
             I::BinOp { dst, op, lhs, rhs } => { self.lower_binop(b, op, lhs, rhs, dst, func); }
             I::Compare { op, lhs, rhs, dst } => { self.lower_compare(b, op, lhs, rhs, dst, func); }
@@ -439,24 +493,85 @@ impl LowerCore {
             I::Branch { .. } => self.lower_branch(b),
             I::Return { value } => {
                 if let Some(v) = value {
-                    // Prefer known/param/materialized path
-                    if self.known_i64.get(v).is_some() || self.param_index.get(v).is_some() || self.local_index.get(v).is_some() {
+                    if std::env::var("NYASH_JIT_TRACE_RET").ok().as_deref() == Some("1") {
+                        eprintln!(
+                            "[LOWER] Return value={:?} known_i64?={} param?={} local?={}",
+                            v,
+                            self.known_i64.contains_key(v),
+                            self.param_index.contains_key(v),
+                            self.local_index.contains_key(v)
+                        );
+                    }
+                    // 1) Prefer known constants first to avoid stale locals overshadowing folded values
+                    if let Some(k) = self.known_i64.get(v).copied() { b.emit_const_i64(k); }
+                    // 2) Prefer existing locals/params
+                    else if self.local_index.get(v).is_some() || self.param_index.get(v).is_some() {
                         self.push_value_if_known_or_param(b, v);
                     } else {
-                        // Fallback: search a Const definition for this value in the current block and emit directly
+                        // 3) Backward scan and minimal reconstruction for common producers
                         if let Some(bb) = func.blocks.get(&cur_bb) {
-                            for ins in bb.instructions.iter() {
-                                if let crate::mir::MirInstruction::Const { dst, value: cval } = ins {
-                                    if dst == v {
+                            // Follow Copy chains backwards to original producer where possible
+                            let mut want = *v;
+                            let mut produced = false;
+                            for ins in bb.instructions.iter().rev() {
+                                match ins {
+                                    crate::mir::MirInstruction::Copy { dst, src } if dst == &want => {
+                                        want = *src;
+                                        // Try early exit if known/local/param emerges
+                                        if self.known_i64.get(&want).is_some() {
+                                            b.emit_const_i64(*self.known_i64.get(&want).unwrap());
+                                            produced = true; break;
+                                        }
+                                        if self.local_index.get(&want).is_some() || self.param_index.get(&want).is_some() {
+                                            self.push_value_if_known_or_param(b, &want);
+                                            produced = true; break;
+                                        }
+                                    }
+                                    // StringBox.len/length: re-materialize robustly if not saved
+                                    crate::mir::MirInstruction::BoxCall { dst: Some(did), box_val, method, args, .. } if did == &want => {
+                                        let m = method.as_str();
+                                        if m == "len" || m == "length" {
+                                            // Prefer param/local handle, else reconstruct literal
+                                            if let Some(pidx) = self.param_index.get(box_val).copied() {
+                                                self.emit_len_with_fallback_param(b, pidx);
+                                                produced = true; break;
+                                            } else if let Some(slot) = self.local_index.get(box_val).copied() {
+                                                self.emit_len_with_fallback_local_handle(b, slot);
+                                                produced = true; break;
+                                            } else {
+                                                // Try literal reconstruction via known_str map
+                                                let mut lit: Option<String> = None;
+                                                for (_bid2, bb2) in func.blocks.iter() {
+                                                    for ins2 in bb2.instructions.iter() {
+                                                        if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins2 {
+                                                            if dst == box_val && box_type == "StringBox" && args.len() == 1 {
+                                                                let src = args[0];
+                                                                if let Some(s) = self.known_str.get(&src).cloned() { lit = Some(s); break; }
+                                                            }
+                                                        }
+                                                    }
+                                                    if lit.is_some() { break; }
+                                                }
+                                                if let Some(s) = lit { self.emit_len_with_fallback_literal(b, &s); produced = true; break; }
+                                            }
+                                        }
+                                    }
+                                    // Const producer as last resort
+                                    crate::mir::MirInstruction::Const { dst, value: cval } if dst == &want => {
                                         match cval {
                                             crate::mir::ConstValue::Integer(i) => { b.emit_const_i64(*i); }
                                             crate::mir::ConstValue::Bool(bv) => { b.emit_const_i64(if *bv {1} else {0}); }
                                             crate::mir::ConstValue::Float(f) => { b.emit_const_f64(*f); }
                                             _ => {}
                                         }
-                                        break;
+                                        produced = true; break;
                                     }
+                                    _ => {}
                                 }
+                            }
+                            if !produced {
+                                // 4) Final fallback: try pushing as param/local again (no-op if not found)
+                                self.push_value_if_known_or_param(b, &want);
                             }
                         }
                     }
@@ -470,11 +585,15 @@ impl LowerCore {
                 b.ensure_local_i64(slot);
                 b.store_local_i64(slot);
             }
-            I::Load { dst: _, ptr } => {
-                // Minimal lowering: load from local slot keyed by ptr, default 0 if unset
-                let slot = *self.local_index.entry(*ptr).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
-                b.ensure_local_i64(slot);
-                b.load_local_i64(slot);
+            I::Load { dst, ptr } => {
+                // Minimal lowering: load from local slot keyed by ptr, then materialize into dst's own slot
+                let src_slot = *self.local_index.entry(*ptr).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                b.ensure_local_i64(src_slot);
+                b.load_local_i64(src_slot);
+                // Persist into dst's slot to make subsequent uses find it via local_index
+                let dst_slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                b.ensure_local_i64(dst_slot);
+                b.store_local_i64(dst_slot);
             }
             I::Phi { dst, .. } => {
                 // PHI をローカルに materialize して後続の Return で安定参照
@@ -485,7 +604,7 @@ impl LowerCore {
                 b.ensure_local_i64(slot);
                 b.store_local_i64(slot);
             }
-            I::ArrayGet { array, index, .. } => {
+            I::ArrayGet { dst, array, index } => {
                 // Prepare receiver + index on stack
                 let argc = 2usize;
                 if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); } else { b.emit_const_i64(-1); }
@@ -496,12 +615,21 @@ impl LowerCore {
                     crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } => {
                         b.emit_plugin_invoke(type_id, method_id, argc, true);
                         crate::jit::observe::lower_plugin_invoke(&box_type, "get", type_id, method_id, argc);
+                        // Persist into dst's slot
+                        let dslot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                        b.store_local_i64(dslot);
                     }
                     crate::jit::policy::invoke::InvokeDecision::HostCall { symbol, .. } => {
                         crate::jit::observe::lower_hostcall(&symbol, argc, &["Handle","I64"], "allow", "mapped_symbol");
                         b.emit_host_call(&symbol, argc, true);
+                        let dslot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                        b.store_local_i64(dslot);
                     }
-                    _ => super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index),
+                    _ => {
+                        super::core_hostcall::lower_array_get(b, &self.param_index, &self.known_i64, array, index);
+                        let dslot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                        b.store_local_i64(dslot);
+                    },
                 }
             }
             I::ArraySet { array, index, value } => {
@@ -525,9 +653,29 @@ impl LowerCore {
                 }
             }
             I::BoxCall { box_val: array, method, args, dst, .. } => {
-                // Clean path: delegate to ops_ext and return
-                let _ = self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())?;
-                return Ok(());
+                // Prefer ops_ext; if not handled, fall back to legacy path below
+                let trace = std::env::var("NYASH_JIT_TRACE_LOWER").ok().as_deref() == Some("1");
+                // Early constant fold: StringBox literal length/len (allow disabling via NYASH_JIT_DISABLE_LEN_CONST=1)
+                if std::env::var("NYASH_JIT_DISABLE_LEN_CONST").ok().as_deref() != Some("1")
+                    && (method == "len" || method == "length")
+                    && self.box_type_map.get(&array).map(|s| s=="StringBox").unwrap_or(false) {
+                    if let Some(s) = self.string_box_literal.get(&array).cloned() {
+                        let n = s.len() as i64;
+                        b.emit_const_i64(n);
+                        if let Some(d) = dst {
+                            let slot = *self.local_index.entry(*d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
+                            b.store_local_i64(slot);
+                            self.known_i64.insert(*d, n);
+                        }
+                        if trace { eprintln!("[LOWER] early const-fold StringBox.{} = {}", method, n); }
+                        return Ok(());
+                    }
+                }
+                let handled = self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())?;
+                if trace { eprintln!("[LOWER] BoxCall recv={:?} method={} handled={} box_type={:?} dst?={}", array, method, handled, self.box_type_map.get(&array), dst.is_some()); }
+                if handled {
+                    return Ok(());
+                }
             }
                     /* legacy BoxCall branch removed (now handled in ops_ext)
                     // handled in helper (read-only simple methods)
@@ -663,21 +811,100 @@ impl LowerCore {
                 } else if crate::jit::config::current().hostcall {
                     match method.as_str() {
                         "len" | "length" => {
+                            // Constant fold: if receiver is NewBox(StringBox, Const String), return its length directly
+                            if let Some(did) = dst.as_ref() {
+                                let mut lit_len: Option<i64> = None;
+                                for (_bid, bb) in func.blocks.iter() {
+                                    for ins in bb.instructions.iter() {
+                                        if let crate::mir::MirInstruction::NewBox { dst: ndst, box_type, args } = ins {
+                                            if ndst == array && box_type == "StringBox" && args.len() == 1 {
+                                                let src = args[0];
+                                                if let Some(s) = self.known_str.get(&src) { lit_len = Some(s.len() as i64); break; }
+                                                // scan Const directly
+                                                for (_b2, bb2) in func.blocks.iter() {
+                                                    for ins2 in bb2.instructions.iter() {
+                                                        if let crate::mir::MirInstruction::Const { dst: cdst, value } = ins2 { if *cdst == src { if let crate::mir::ConstValue::String(sv) = value { lit_len = Some(sv.len() as i64); break; } } }
+                                                    }
+                                                    if lit_len.is_some() { break; }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if lit_len.is_some() { break; }
+                                }
+                                if let Some(n) = lit_len {
+                                    b.emit_const_i64(n);
+                                    self.known_i64.insert(*did, n);
+                                    return Ok(());
+                                }
+                            }
                             if let Some(pidx) = self.param_index.get(array).copied() {
-                                crate::jit::events::emit_lower(
-                                    serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"allow", "reason":"sig_ok", "argc":1, "arg_types":["Handle"]}),
-                                    "hostcall","<jit>"
-                                );
-                                b.emit_param_i64(pidx);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, dst.is_some());
+                                // Param 経路: string.len_h → 0 の場合 any.length_h へフォールバック
+                                self.emit_len_with_fallback_param(b, pidx);
+                                if let Some(d) = dst.as_ref() {
+                                    let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                    b.store_local_i64(slot);
+                                }
                             } else {
                                 crate::jit::events::emit_lower(
                                     serde_json::json!({"id": crate::jit::r#extern::collections::SYM_ANY_LEN_H, "decision":"fallback", "reason":"receiver_not_param", "argc":1, "arg_types":["Handle"]}),
                                     "hostcall","<jit>"
                                 );
-                                let arr_idx = -1;
-                                b.emit_const_i64(arr_idx);
-                                b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                // Try local handle (AOT/JIT-AOT) before legacy index fallback
+                                if let Some(slot) = self.local_index.get(array).copied() {
+                                    // ローカルハンドル: string.len_h → any.length_h フォールバック
+                                    self.emit_len_with_fallback_local_handle(b, slot);
+                                    if let Some(d) = dst.as_ref() {
+                                        let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                        b.store_local_i64(slotd);
+                                    }
+                                } else if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
+                                    // Attempt reconstruction for StringBox literal: scan NewBox(StringBox, Const String)
+                                    let mut lit: Option<String> = None;
+                                    for (_bid, bb) in func.blocks.iter() {
+                                        for ins in bb.instructions.iter() {
+                                            if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins {
+                                                if dst == array && box_type == "StringBox" && args.len() == 1 {
+                                                    if let Some(src) = args.get(0) {
+                                                        if let Some(s) = self.known_str.get(src).cloned() { lit = Some(s); break; }
+                                                        // Also scan Const directly
+                                                        for (_bid2, bb2) in func.blocks.iter() {
+                                                            for ins2 in bb2.instructions.iter() {
+                                                                if let crate::mir::MirInstruction::Const { dst: cdst, value } = ins2 { if cdst == src { if let crate::mir::ConstValue::String(sv) = value { lit = Some(sv.clone()); break; } } }
+                                                            }
+                                                            if lit.is_some() { break; }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if lit.is_some() { break; }
+                                    }
+                                    if let Some(s) = lit {
+                                        // リテラル復元: string.len_h → any.length_h フォールバック
+                                        self.emit_len_with_fallback_literal(b, &s);
+                                        if let Some(d) = dst.as_ref() {
+                                            let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                            b.store_local_i64(slotd);
+                                        }
+                                    } else {
+                                        let arr_idx = -1;
+                                        b.emit_const_i64(arr_idx);
+                                        b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                        if let Some(d) = dst.as_ref() {
+                                            let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                            b.store_local_i64(slotd);
+                                        }
+                                    }
+                                } else {
+                                    let arr_idx = -1;
+                                    b.emit_const_i64(arr_idx);
+                                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_LEN, 1, dst.is_some());
+                                    if let Some(d) = dst.as_ref() {
+                                        let slotd = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                        b.store_local_i64(slotd);
+                                    }
+                                }
                             }
                         }
                         // math.* minimal boundary: use registry signature to decide allow/fallback (no actual hostcall yet)

@@ -264,6 +264,10 @@ impl VM {
         let mut next_block: Option<BasicBlockId> = None;
 
         loop {
+            // Reset per-block control-flow decisions to avoid carrying over stale state
+            // from a previous block (which could cause infinite loops on if/return).
+            should_return = None;
+            next_block = None;
             if let Some(block) = function.blocks.get(&current_block) {
                 for instruction in &block.instructions {
                     match self.execute_instruction(instruction)? {

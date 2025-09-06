@@ -3,7 +3,7 @@
 このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
 ## Start Here (必ずここから)
-- 現在のタスク: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+- 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)
 - ドキュメントハブ: [README.md](README.md)
 - 🚀 **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
  - 📊 **JIT統計JSONスキーマ(v1)**: [jit_stats_json_v1.md](docs/reference/jit/jit_stats_json_v1.md)
@@ -28,7 +28,7 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 ### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
 **すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-**現在のフェーズ：Phase 11 (MIR Core-15確定 → LLVM準備)**
+**現在のフェーズ：Phase 15 (Nyashセルフホスティング - 80k→20k行への革命的圧縮)**
 
 ## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
 
@@ -51,10 +51,25 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
   - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較
 - **[ビルド方法完全ガイド](docs/guides/build/)** - プラットフォーム別ビルド手順
 
+### 🚀 JIT セルフホスト クイックスタート (Phase 15)
+```bash
+# コアビルド (JIT)
+cargo build --release --features cranelift-jit
+
+# コアスモーク (プラグイン無効)
+NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh
+
+# ラウンドトリップ (パーサーパイプ + JSON)
+./tools/ny_roundtrip_smoke.sh
+
+# Nyコンパイラ MVP経路 (実験的)
+NYASH_USE_NY_COMPILER=1 ./target/release/nyash program.nyash
+```
+
 ### 🐧 Linux/WSL版
 ```bash
-# ビルドと実行（32スレッド並列ビルド）
-cargo build --release -j32
+# ビルドと実行
+cargo build --release --features cranelift-jit
 ./target/release/nyash program.nyash
 
 # 高速VM実行
@@ -62,9 +77,6 @@ cargo build --release -j32
 
 # WASM生成
 ./target/release/nyash --compile-wasm program.nyash
-
-# ⚡ ベンチマーク実行（性能比較）
-./target/release/nyash --benchmark --iterations 100
 ```
 
 ### 🪟 Windows版
@@ -108,12 +120,13 @@ cargo build --release --features llvm
 ./target/release/nyash --aot program.nyash -o program.exe
 ```
 
-## 📝 Update (2025-08-31)
-- MIR Core-15への統合（37命令→15命令）
-- LLVM導入開始（Phase 11）
-- 各種Rewriteトグル追加
-- JIT/AOT 予約シンボル登録
-- 詳細: [CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)
+## 📝 Update (2025-09-05)
+- 🎉 Phase 15到達！セルフホスティング実装中
+- v0 Nyパーサー完成（Ny→JSON IR v0）
+- 直接ブリッジ設計とAOT P2スタブ実装
+- MIR 13命令への最終最適化完了
+- 80k→20k行（75%削減）の革命的圧縮を目指す
+- 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
 
 ## ⚡ 重要な設計原則
 
@@ -253,8 +266,10 @@ box MyBox {
 ## 📚 ドキュメント構造
 
 ### 🎯 最重要ドキュメント（開発者向け）
-- **[copilot_issues.txt](docs/development/roadmap/native-plan/copilot_issues.txt)** - Phase順開発計画
-- **[CURRENT_TASK.md](docs/development/current/CURRENT_TASK.md)** - 現在進行状況詳細
+- **[Phase 15 セルフホスティング計画](docs/development/roadmap/phases/phase-15/self-hosting-plan.txt)** - 80k→20k行革命
+- **[Phase 15 ROADMAP](docs/development/roadmap/phases/phase-15/ROADMAP.md)** - 現在の進捗チェックリスト
+- **[Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md)** - 入口の統合
+- **[CURRENT_TASK.md](CURRENT_TASK.md)** - 現在進行状況詳細
 - **[native-plan/README.md](docs/development/roadmap/native-plan/README.md)** - ネイティブビルド計画
 
 ### 📖 利用者向けドキュメント
@@ -318,6 +333,26 @@ Read docs/reference/  # まずドキュメント（API/言語仕様の入口）
 
 ## 🔧 開発サポート
 
+### 🎛️ 重要フラグ一覧（Phase 15）
+```bash
+# プラグイン制御
+NYASH_DISABLE_PLUGINS=1     # Core経路安定化（CI常時）
+NYASH_LOAD_NY_PLUGINS=1     # nyash.tomlのny_pluginsを読み込む
+
+# 言語機能
+--enable-using              # using/namespace有効化
+NYASH_ENABLE_USING=1        # 環境変数版
+
+# パーサー選択
+--parser ny                 # Nyパーサーを使用
+NYASH_USE_NY_PARSER=1       # 環境変数版
+NYASH_USE_NY_COMPILER=1     # NyコンパイラMVP経路
+
+# デバッグ
+NYASH_CLI_VERBOSE=1         # 詳細診断
+NYASH_DUMP_JSON_IR=1        # JSON IR出力
+```
+
 ### 🤖 AI相談
 ```bash
 # Gemini CLIで相談
@@ -325,6 +360,22 @@ gemini -p "Nyashの実装で困っています..."
 
 # Codex実行
 codex exec "質問内容"
+```
+
+### 🔄 Codex非同期ワークフロー（並列作業）
+```bash
+# 基本実行（同期）
+./tools/codex-async-notify.sh "タスク内容" codex
+
+# デタッチ実行（即座に戻る）
+CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "タスク" codex
+
+# 並列制御（最大2つ、重複排除）
+CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 CODEX_ASYNC_DETACH=1 \
+  ./tools/codex-async-notify.sh "Phase 15タスク" codex
+
+# 実行中のタスク確認
+pgrep -af 'codex.*exec'
 ```
 
 ### 💡 アイデア管理（docs/ideas/フォルダ）
@@ -342,6 +393,21 @@ docs/ideas/
 
 **詳細**: [テスト実行ガイド](docs/guides/testing-guide.md)
 
+#### Phase 15 推奨スモークテスト
+```bash
+# コアスモーク（プラグイン無効）
+./tools/jit_smoke.sh
+
+# ラウンドトリップテスト
+./tools/ny_roundtrip_smoke.sh
+
+# プラグインスモーク（オプション）
+NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
+
+# using/namespace E2E（要--enable-using）
+./tools/using_e2e_smoke.sh
+```
+
 ⚠️ **ルートディレクトリの汚染防止ルール** ⚠️
 ```bash
 # ❌ 絶対ダメ：ルートで実行
@@ -352,9 +418,10 @@ docs/ideas/
 ```
 
 ### ⚠️ ビルド時間に関する重要な注意
-**wasmtime依存関係により、フルビルドは2-3分かかります。**
-- タイムアウトエラーを避けるため、ビルドコマンドには十分な時間を設定
-- 例: `cargo build --release -j32` （3分以上待つ）
+**JITビルドは比較的高速、LLVMビルドは時間がかかります。**
+- JIT（推奨）: `cargo build --release --features cranelift-jit`（1-2分）
+- LLVM: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`（3-5分）
+- タイムアウトエラーを避けるため、十分な時間を設定
 
 ### 🐛 デバッグ
 
@@ -413,3 +480,4 @@ Notes:
 - ここから先の導線は README.md に集約
 - 詳細情報は各docsファイルへのリンクから辿る
 - このファイルは500行以内を維持する（現在約490行）
+- Phase 15セルフホスティング実装中！詳細は[Phase 15](docs/development/roadmap/phases/phase-15/)へ

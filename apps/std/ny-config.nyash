@@ -1,0 +1,63 @@
+// ny-config.nyash - Load nyash.toml and expose minimal helpers
+
+static box NyConfig {
+  // Read nyash.toml (or given path) and return JSON string via TOMLBox.toJson()
+  load_toml(path) {
+    local p = path
+    if p == null || p == "" { p = "nyash.toml" }
+    local f = new FileBox()
+    // Open read-only if supported; fallback to default if mode not required
+    // Many plugins accept open(path, mode). Use "r" here.
+    f.open(p, "r")
+    local content = f.read()
+    f.close()
+    local t = new TOMLBox()
+    // parse(content) returns Result.Ok(bool) in some variants; call and ignore return here
+    t.parse(content)
+    local json = t.toJson()
+    return json
+  }
+
+  // Return counts for env/tasks/box_types/plugins (approx by '=' occurrences per table)
+  counts() {
+    // Parse nyash.toml
+    local f2 = new FileBox()
+    f2.open("nyash.toml", "r")
+    local content2 = f2.read()
+    f2.close()
+    local t = new TOMLBox()
+    t.parse(content2)
+    local out = new MapBox()
+    out.setS("env", me.count_keys_in_string(t.get("env")))
+    out.setS("tasks", me.count_keys_in_string(t.get("tasks")))
+    out.setS("box_types", me.count_keys_in_string(t.get("box_types")))
+    out.setS("plugins", me.count_keys_in_string(t.get("plugins")))
+    return out
+  }
+
+  // helper: count '=' in a string
+  count_keys_in_string(s) {
+    local i = 0
+    local n = s.length()
+    local c = 0
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "=" { c = c + 1 }
+      i = i + 1
+    }
+    return c
+  }
+
+  // Convert JSON back to TOML-like display if needed (placeholder: returns empty to force parse to no-op)
+  json_to_toml_hint(js) { return "" }
+}
+
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local json = NyConfig.load_toml(null)
+    local c = NyConfig.counts(json)
+    console.println("ny-config: env=" + c.getS("env").toString() + ", tasks=" + c.getS("tasks").toString() + ", plugins=" + c.getS("plugins").toString() + ", box_types=" + c.getS("box_types").toString())
+    return 0
+  }
+}

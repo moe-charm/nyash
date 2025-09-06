@@ -138,6 +138,8 @@ impl LowerCore {
 impl LowerCore {
     // Push a value if known or param/local/phi
     pub(super) fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
+        // Prefer compile-time known constants to avoid stale local slots overshadowing folded values
+        if let Some(v) = self.known_i64.get(id).copied() { b.emit_const_i64(v); return; }
         if let Some(slot) = self.local_index.get(id).copied() { b.load_local_i64(slot); return; }
         if self.phi_values.contains(id) {
             let pos = self.phi_param_index.iter().find_map(|((_, vid), idx)| if vid == id { Some(*idx) } else { None }).unwrap_or(0);
@@ -149,7 +151,6 @@ impl LowerCore {
             return;
         }
         if let Some(pidx) = self.param_index.get(id).copied() { b.emit_param_i64(pidx); return; }
-        if let Some(v) = self.known_i64.get(id).copied() { b.emit_const_i64(v); return; }
     }
 
     // Coverage helper: increments covered/unsupported counts

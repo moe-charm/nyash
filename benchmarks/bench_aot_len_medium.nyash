@@ -1,0 +1,15 @@
+// AOT-safe microbench: call String.length() many times (medium)
+static box Main {
+  len1(s) { return s.length() }
+  main() {
+    local s = new StringBox("nyash")
+    local i = 0
+    local total = 0
+    // ~40k iterations（中）
+    loop(i < 40000) {
+      total = total + me.len1(s)
+      i = i + 1
+    }
+    return total
+  }
+}

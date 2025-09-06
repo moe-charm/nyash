@@ -15,6 +15,8 @@ pub fn init_bid_plugins() {
     if let Ok(()) = init_global_plugin_host("nyash.toml") {
         if plugin_debug || cli_verbose {
             println!("🔌 plugin host initialized from nyash.toml");
+            // Show which plugin loader backend compiled in (enabled/stub)
+            println!("[plugin-loader] backend={}", crate::runtime::plugin_loader_v2::backend_kind());
         }
         let host = get_global_plugin_host();
         let host = host.read().unwrap();

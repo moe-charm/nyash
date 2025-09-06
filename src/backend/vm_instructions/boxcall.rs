@@ -52,6 +52,19 @@ impl VM {
         // Debug logging if enabled
         let debug_boxcall = std::env::var("NYASH_VM_DEBUG_BOXCALL").is_ok();
 
+        // Super-early fast-path: ArrayBox len/length (avoid competing branches)
+        if let VMValue::BoxRef(arc_box) = &recv {
+            if arc_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
+                if method == "len" || method == "length" || (method_id.is_some() && method_id == crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "len")) {
+                    if let Some(arr) = arc_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        let out = arr.length();
+                        if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                        return Ok(ControlFlow::Continue);
+                    }
+                }
+            }
+        }
+
         // Fast-path: ConsoleBox.readLine — provide safe stdin fallback with EOF→Void
         if let VMValue::BoxRef(arc_box) = &recv {
             if let Some(p) = arc_box.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
@@ -95,12 +108,20 @@ impl VM {
 
         // Explicit fast-paths
         if let VMValue::BoxRef(arc_box) = &recv {
-            // ArrayBox get/set
+            // ArrayBox get/set/length
             if arc_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
                 let get_slot = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "get");
                 let set_slot = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "set");
+                let len_slot = crate::mir::slot_registry::resolve_slot_by_type_name("ArrayBox", "len");
                 let is_get = (method_id.is_some() && method_id == get_slot) || method == "get";
                 let is_set = (method_id.is_some() && method_id == set_slot) || method == "set";
+                let is_len = (method_id.is_some() && method_id == len_slot) || method == "len" || method == "length";
+                if is_len {
+                    let arr = arc_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().unwrap();
+                    let out = arr.length();
+                    if let Some(dst_id) = dst { self.set_value(dst_id, VMValue::from_nyash_box(out)); }
+                    return Ok(ControlFlow::Continue);
+                }
                 if is_get && args.len() >= 1 {
                     let idx_val = self.get_value(args[0])?;
                     let idx_box = idx_val.to_nyash_box();

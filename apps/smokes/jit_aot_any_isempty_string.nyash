@@ -1,0 +1,10 @@
+// JIT AOT smoke: Any.isEmpty() on StringBox
+static box Main {
+  main() {
+    local s
+    s = new StringBox("")
+    if s.isEmpty() { return 1 }
+    return 0
+  }
+}
+

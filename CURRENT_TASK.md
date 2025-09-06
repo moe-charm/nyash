@@ -1,1493 +1,638 @@
-# CURRENT TASK (Compact) — Phase 12 closeout / 12.7 完了整理（≤ 1000行）
-
-このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細な経緯・議事は git 履歴と `docs/` を参照してください。
-
-— 最終更新: 2025‑09‑05
-
-■ 進捗サマリ
-- Phase 12.7-A: 完了（peek/continue/?/lambda/型アノテ）。
-- Phase 12.7-B: 基本（P0）完了。以下の糖衣をゲート付きで実装済み。
-  - `|>` パイプライン、`?.` セーフアクセス、`??` デフォルト、`+=/-=/*=/=` 複合代入、`a .. b` 範囲（`Range(a,b)` に正規化）。
-  - ゲート: `NYASH_SYNTAX_SUGAR_LEVEL=basic|full`（既定 off）。
-- 追加拡張（P1 設計済み・段階適用方針）
-  - デストラクチャリング（`{x,y}` / `[a,b,...]`）、高階演算子記法（`/:`/`\:`/`//`）、ラベル付き引数（`key: value`）。
-- VM/Interpreter: FunctionBox 呼び出し経路の統一を実施。MIR からの Call 正規化を VM 側に受け入れ可能。
-
-■ 現在のフォーカス（優先順）
-1) ドキュメント最終同期（12.7‑B 基本完了の明記、Quickstart のゲート例、12.7 README の完了表記）。
-2) MIR step‑50 準備（Core‑13 flip 後の最終参照同期：README/CHANGELOG/INSTRUCTION_SET）。
-3) P2PBox まわりの赤テスト監視（on_once/ping）と軽い回帰チェック（現状は緑化済み想定）。
-4) 12.7‑C 準備（ANCP v1 プレビューと nyfmt PoC 骨格）。
-
-■ 直後に回すタスク（2本運用）
-- T1) MIR step‑50: Core‑13 flip 後のドキュメント最終同期（README/CHANGELOG/INSTRUCTION_SET、リンク点検）。
-- T2) nyfmt PoC smoke: apps の例で往復性のメッセージを出す軽スモーク（tools/nyfmt_smoke.sh の拡張）。
-
-■ 直近で完了したこと（主要抜粋）
-- 12.7‑B 基本糖衣（ゲート）
-  - パーサでの可逆正規化（peek/関数・メソッド呼出へ落とす）。
-  - テスト追加：パイプライン/セーフアクセス/デフォルト/複合代入/範囲。
-- 設定・使い方
-  - `NYASH_SYNTAX_SUGAR_LEVEL=basic|full` で有効化。テストでは `NYASH_FORCE_SUGAR=1` で明示強制も可能。
-- VM/Interpreter 呼出統一
-  - FunctionBox 呼び出しの統一経路を整備（引数束縛・キャプチャ注入・return 伝播）。
-
-■ 開発者向けクイックメモ
-- ビルド
-  - VM/JIT: `cargo build --release --features cranelift-jit`
-  - LLVM: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
-- テスト
-  - 全体: `cargo test`
-  - 糖衣（並列env干渉を避けるとき）: `RUST_TEST_THREADS=1 cargo test --lib -- --nocapture`
-- 実行例（ゲート）
-  - `NYASH_SYNTAX_SUGAR_LEVEL=basic ./target/release/nyash --backend vm apps/APP/main.nyash`
-- 参照
-  - 言語リファレンス: `docs/reference/language/LANGUAGE_REFERENCE_2025.md`
-  - 12.7 README: `docs/development/roadmap/phases/phase-12.7/README.md`
-  - 変更履歴: `CHANGELOG.md`
-
-■ 12.7‑B 仕様の要点（P0 実装済み）
-- パイプライン `|>`
-  - `x |> f(a,b)` → `f(x,a,b)`、`x |> obj.m(a)` → `obj.m(x,a)`。
-- セーフアクセス `?.`
-  - `user?.profile` / `user?.m(1)` → `peek user { null => null, else => ... }`。
-- デフォルト `??`
-  - `a ?? b` → `peek a { null => b, else => a }`。
-- 複合代入 `+=/-=/*=/=`
-  - `a += b` → `a = a + b`（左辺は変数/フィールドに限定）。
-- 範囲 `a .. b`
-  - `Range(a,b)` 呼び出しへ正規化。
-
-■ 12.7‑B 拡張（P1、段階適用）
-- デストラクチャリング：`let {x,y} = pt` / `let [h, t, ...rest] = arr`（正規化はフィールド/インデックスアクセス）。
-- 高階演算子記法：`/:` map、`\:` filter、`//` reduce（構文衝突に注意しつつ段階導入）。
-- ラベル付き引数：`f(x: a, y: b)`（内部は Map/順序維持の呼出に正規化する方針）。
-
-■ 12.7‑C 準備（ANCP／可逆フォーマット）
-- 目的: AI‑Nyash Compact Notation Protocol (ANCP) v1 の最小プレビュー（可逆）を示し、nyfmt PoC で往復検証を容易にする。
-- 範囲（P0）
-  - ANCP Token Spec v1 同期（docs/phase‑12.7/ancp-specs/* の整頓とサンプル追補）。
-  - 可逆マッピング表（sugar subset ⇄ ANCP）のドラフト作成（例: pipeline/?. / ??/range）。
-  - nyfmt PoC 骨格（ドキュメント主体・最小CLI枠/サンプル。実装は別リポ前提）。
-- 成果物
-  - docs: ANCP v1 概説＋マッピング一覧＋小サンプル（before/after/round‑trip）。
-  - apps/nyfmt‑poc: 例の追補（round‑trip 期待値コメント付き）。
-  - tools: smoke ガイダンスの更新（`tools/nyfmt_smoke.sh`）。
-
-■ MIR / VM 方針（抜粋）
-- Core‑13 への最終フリップは step‑50 でドキュメント同期（テストが安定したタイミングで切替）。
-- BoxCall fast‑path と vtable は維持。未実装メソッドはフォールバック（TLV 経路）で互換性確保。
-
-■ 判定基準（12.7 完了）
-- 糖衣（P0）がゲート付きで安定（ユニット緑）。
-- ドキュメント反映済み（リファレンス/README/Quickstart/Changelog）。
-- 次フェーズ（step‑50）への依存が明確（Core‑13 flip 後の参照同期）。
-
-■ よく使うスクリプト（Codex 非同期）
-- 1本起動（tmux 通知／ログ保存）
-  - `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "<task>" codex`
-- 2本維持（必要時だけ補充）
-  - `CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 ./tools/codex-keep-two.sh codex "<Task A>" "<Task B>"`
-- 通知の安定化
-  - 既定はチャンク送信（5行）。`CODEX_NOTIFY_CHUNK=5` などで調整可。
-
-■ 既知の注意点
-- テスト並列時の環境変数レースに注意（糖衣ゲート）。必要に応じて `RUST_TEST_THREADS=1`。
-- `//` はコメントと衝突のため糖衣に使用しない。
-
-■ 完了（主要）
-- TypeBox ABI 雛形（`src/runtime/type_box_abi.rs`）、TypeRegistry 雛形（`src/runtime/type_registry.rs`）。
-- 12.7‑A 全項目、12.7‑B 基本（P0）項目。
-
-— 以上。詳細は各モジュールの README / docs を参照。
-- VM vtable 優先スタブ: `execute_boxcall` → `try_boxcall_vtable_stub`（`NYASH_ABI_VTABLE=1`）
-  - Instance: getField/setField/has/size
-  - Array/Map/String: 代表メソッドを直接/host経由で処理
-  - PluginBoxV2 受信時でも Array/Map/String を vtable→host.invoke で実行（set は GC バリア）
-- MapBox 文字列キー互換: get/has の第1引数が String なら getS/hasS を常時使用（plugin_loader_v2/VM）
-- Console.readLine フォールバック（VM/Plugin 両経路）: stdin 読み込み/EOF=Null 返却で無限ループ防止
-- WASM v2 統一ディスパッチ（最小）: console/array/map のスロット対応
-
-進捗アップデート（Phase 13 / 2025-09-03）
-- A1 完了: `src/backend/vm_instructions.rs` をモジュール分割
-  - 新構成: `src/backend/vm_instructions/{mod.rs, core.rs, call.rs, newbox.rs, function_new.rs, extern_call.rs, boxcall.rs, plugin_invoke.rs}`
-  - 役割:
-    - `core.rs`: const/binop/unary/compare/print/ctrl/type/phi/mem/array/refs/weak/barriers/exn/await
-    - `call.rs`: 関数呼び出し（FunctionBox対応）
-    - `newbox.rs`: NewBox
-    - `function_new.rs`: Lambda→FunctionBox 値化
-    - `extern_call.rs`: ExternCall（env./registry経路）
-    - `boxcall.rs`: BoxCall + VTableスタブ + 汎用フォールバック
-    - `plugin_invoke.rs`: PluginInvoke（強制プラグイン経路）
-  - 可視性: `pub(crate)`/`pub(super)` 調整、`dispatch.rs` 経由の呼び出し互換維持
-  - ビルド: `cargo build` 緑（警告のみ／挙動不変）
-
-- A2 完了: `runtime/plugin_loader_v2.rs` をサブモジュール化
-  - 新構成: `src/runtime/plugin_loader_v2/`
-    - `mod.rs`（cfg切替）
-    - `enabled/{types.rs, loader.rs, globals.rs}`
-      - `types.rs`: `PluginBoxV2`/`PluginHandleInner`/`NyashTypeBoxFfi`、`make_plugin_box_v2`/`construct_plugin_box`
-      - `loader.rs`: `PluginLoaderV2`（extern_call/invoke_instance_method/create_box 等のAPIを維持）
-      - `globals.rs`: `get_global_loader_v2`/`init_global_loader_v2`/`shutdown_plugins_v2`
-    - `stub.rs`: plugins無効/wasm 用スタブ（同名API維持）
-  - 公開API/パス互換: 既存の `crate::runtime::plugin_loader_v2::*` 参照はそのまま
-  - ビルド: `cargo build` 緑（警告のみ）
-
-- A3 進行中: `backend/vm.rs` の段階分割（最新: 2025-09-04）
-  - 第1段: `ControlFlow` を `src/backend/vm_control_flow.rs` に抽出し、`vm.rs` から再エクスポート（完了）
-  - 第2段: 実行ループを `src/backend/vm_exec.rs` へ抽出（完了）
-    - 移動対象: `VM::execute_module`、`VM::execute_function`、`VM::call_function_by_name`、`VM::execute_instruction`、`VM::print_cache_stats_summary`
-    - 可視性調整: `VM` の内部状態（`values/current_function/frame/previous_block/loop_executor/module/instr_counter/exec_start/scope_tracker` 等）を `pub(super)` に変更し、`vm_exec.rs` から安全に参照できるようにした。GCダイアグ用メソッド（`gc_print_roots_breakdown`/`gc_print_reachability_depth2`）も `pub(super)` 化。
-    - `ControlFlow` を `pub(crate)` に変更し、`vm_instructions` サブモジュールの `pub(crate)` API と可視性を整合。
-    - ビルド: 成功（警告あり）。`private_interfaces`/`unused_*`/`unexpected_cfg` などの警告は機能的影響なし。
-  - 第3段: GC ルート管理と診断を `src/backend/vm_gc.rs` へ抽出（完了）
-    - 移動対象: `enter_root_region`、`pin_roots`、`leave_root_region`、`gc_site_info`、`gc_print_roots_breakdown`、`gc_print_reachability_depth2`
-    - 既存呼び出しは変更なし（同名メソッドとして移設）。旧定義は一時的に `*_old` 名へ退避し、後続で削除予定。
-    - 注記: `vm.rs` 内の旧メソッドは一時的に `*_old` 名へリネームし残置（安全移行用）。後続ステップで完全削除予定。
-  - 第4段: VM 基本状態を `src/backend/vm_state.rs` へ抽出（完了）
-    - 生成・状態・値アクセス・統計・phi 補助
-  - 第5段: Box メソッドディスパッチのラッパを `src/backend/vm_methods.rs` へ抽出（完了）
-    - `VM::call_box_method` / `call_unified_method` は委譲に変更（実装は `vm_boxcall.rs`）
-  - 旧プレースホルダ削除（完了）
-    - `execute_module_old_moved` / `*_old` 系を撤去
-  - 現在の行数スナップショット: `src/backend/vm.rs` ≈ 973 行（< 1000 行達成）
-
-## 次タスク（2025-09-04 更新）
-- フェーズA/B 優先順（影響大→小）
-  1) interpreter/plugin_loader.rs を役割別へ分割（B2）
-     - ステップ1: ディレクトリ化（plugin_loader/mod.rs へ移行）済
-     - 構成案: `interpreter/plugin_loader/{scan.rs,link.rs,abi.rs,registry.rs,errors.rs,util.rs}`
-     - 互換: `interpreter/plugin_loader/mod.rs` で再エクスポート、既存API維持
-  2) backend/llvm/compiler.rs の機能別分割
-     - `llvm/{init.rs,types.rs, instr_*.rs}`（算術/比較/制御/メモリ/呼出/Box/配列/Map/文字列/Ref/Weak/Future/Phi/Cast/Type）
-     - `mod.rs` で `Compiler` の `impl` を分散読み込み
-  3) mir/builder.rs の `builder/{exprs.rs,stmts.rs,decls.rs,utils.rs}` への抽出
-
-注記: 公開APIは維持。各段階ごとに `cargo build` と限定ユニットで確認して進める。
-
-## 残タスク（To‑Do）
-1) MIR Core‑13 統一（M1〜M5）＋ スモーク修正
-2) リファクタフェーズA/B/C 実施（段階コミット＋スモーク）
-3) ドキュメント更新（Phase 11.8 の README/PLAN/TECHNICAL_SPEC と CIポリシー）
-4) LLVM（本実装）は低優先：BoxCall シムのinlining設計だけ先行
-
-## 実行コマンド（サマリ）
-- ビルド: `cargo build --release --features cranelift-jit`
-- ny-echo（Script/VM/JIT）
-  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash apps/ny-echo/main.nyash`
-  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash --backend vm apps/ny-echo/main.nyash`
-  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash --backend vm --jit-exec --jit-hostcall apps/ny-echo/main.nyash`
-- ベンチ（参考）
-  - `NYASH_CLI_VERBOSE=0 ./target/release/nyash [--backend vm|--jit-exec --jit-hostcall] apps/ny-array-bench/main.nyash`
-  - `NYASH_CLI_VERBOSE=0 ./target/release/nyash [--backend vm|--jit-exec --jit-hostcall] apps/ny-mem-bench/main.nyash`
-
-## トレース/環境変数（抜粋）
-- ABI: `NYASH_ABI_VTABLE=1`, `NYASH_ABI_STRICT=1`
-- VM: `NYASH_VM_PIC_STATS`, `NYASH_VM_PIC_TRACE`, `NYASH_VM_VT_TRACE`
-- JIT: `NYASH_JIT_DUMP`, `NYASH_JIT_TRACE_BLOCKS`, `NYASH_JIT_TRACE_BR`, `NYASH_JIT_TRACE_SEL`, `NYASH_JIT_TRACE_RET`
-
----
-詳細な履歴や議事録は docs 配下の Phase 12 セクションを参照してください。
-
-## フェーズ13（リファクタ）方針・成功条件
-- 方針: 公開APIを維持しつつ内部構造を機能別に分割。1ファイル1000行以内を目安に段階導入。
-- 手順: 1モジュールずつ分割→ビルド→限定ユニット/スモーク→次へ。
-- 成功条件:
-  - 大規模ファイル（>1000行）が解消（vm_instructions / plugin_loader_v2 / vm / builder）
-  - ビルド/主要ユニットが従来通り通る（挙動不変）
-  - 他AI/将来タスクが読みやすいレイアウト（役割ごとに参照しやすい）
-
-Docs（Phase 12 直近）
-- [x] Minimal Core ABI方針の文書化（NYASH_ABI_MIN_CORE.md）
-- [ ] TECHNICAL_DECISIONSの最小ABI/API交渉・互換・安全の章を精緻化（進行中）
-- [ ] PLAN/READMEへのリンク整備と“同一実行テスト”の詳細化
-
-Phase 12 ゴール（検証観点）
-- Cross-backend 同値性: 同一プログラム（Nyashコード）が VM と JIT で同一の最終結果・ログ・副作用（Box状態）を生む。
-- ゴールデン/スモーク: 共通テストハーネスで VM/JIT を同条件で走らせ比較（差分があれば落とす）。
-
-## 残件・課題と対応方針（2025-09-03）
-
-- VMユニット赤の原因と対応（plugins-onlyでBuiltin未登録）
-  - 症状: Array/Map などの生成で Unknown Box type（プラグインのみのレジストリ）。
-  - 対応: 既定を Builtin 登録に戻し、plugins-only は feature 化。
-    - 実装: BuiltinBoxFactory を追加し、NyashRuntime/UnifiedRegistry 初期化時に登録（plugins-only 時はスキップ）。
-
-## 引継ぎメモ（再起動用 / 2025-09-04）
-
-- 進捗サマリ
-  - A3(vm) 分割 S1/S2 完了: `vm_exec.rs`/`vm_gc.rs`/`vm_state.rs`/`vm_methods.rs` 抽出、`*_old` 削除。
-    - 現在: `src/backend/vm.rs` ≈ 973 行（<1000行）。ビルド成功（警告のみ）。
-  - B2(interpreter/plugin_loader) 着手: ディレクトリ化＋下位ファイル用意。
-    - 変更: `src/interpreter/plugin_loader.rs` → `src/interpreter/plugin_loader/mod.rs` へ移動（API互換維持）。
-    - 追加: 下位モジュール（現時点では未読み込みのため重複は未発生）
-      - `src/interpreter/plugin_loader/types.rs`（PLUGIN_CACHE／LoadedPlugin／PluginInfo／各Handle）
-      - `src/interpreter/plugin_loader/proxies.rs`（File/Math/Random/Time/DateTime 各 Proxy）
-      - `src/interpreter/plugin_loader/loader.rs`（PluginLoader: load_*/create_* エントリ）
-  - B1(builder) 続行: `build_static_main_box` / `build_box_declaration` を `src/mir/builder/decls.rs` に抽出。
-    - `src/mir/builder.rs` は `mod decls;` を追加し、委譲。ビルド（`cargo test --no-run`）成功。
-  - A2(plugin_loader_v2) 進捗: `enabled/{errors.rs, host_bridge.rs}` を新設し、`loader.rs` からエラー変換と invoke ブリッジを抽出。
-    - `errors.rs`: `from_fs`/`from_toml`/`or_plugin_err` ヘルパ
-    - `host_bridge.rs`: `invoke_alloc`（TLV 呼び出しの小ラッパ）
-    - `enabled/mod.rs` に `mod errors; mod host_bridge;` を追加し、ビルド確認済み。
-
-- 再開手順（最短ルート）
-  1) `src/interpreter/plugin_loader/mod.rs` を分割モードに切替
-     - 先頭に `mod types; mod proxies; mod loader;` を追加
-     - 末尾付近で `pub use` を追加（互換維持）:
-       - `pub use types::{PLUGIN_CACHE, LoadedPlugin, PluginInfo, FileBoxHandle, MathBoxHandle, RandomBoxHandle, TimeBoxHandle, DateTimeBoxHandle};`
-       - `pub use loader::PluginLoader;`
-       - `pub use proxies::{FileBoxProxy, MathBoxProxy, RandomBoxProxy, TimeBoxProxy, DateTimeBoxProxy};`
-  2) `mod.rs` 内の重複定義を削除
-     - `lazy_static!` PLUGIN_CACHE／構造体（LoadedPlugin/PluginInfo/各Handle）／各Proxy実装／PluginLoader 実装を、types/proxies/loader に移った分だけ除去。
-     - 目標: `mod.rs` にはドキュメント＋`mod`/`pub use` のみ残す。
-  3) ビルド確認（feature注意）
-     - `cargo build`（通常）
-     - 動的ロード経路は `--features dynamic-file` が必要な箇所あり。
-  4) 呼び出し側の互換確認
-     - 例: `src/interpreter/methods/math_methods.rs` は `crate::interpreter::plugin_loader::{MathBoxProxy, RandomBoxProxy, TimeBoxProxy, DateTimeBoxProxy}` を参照 → `pub use` により互換のはず。
-
-- 注意点
-  - 分割ファイル（types/proxies/loader）は現在 `mod.rs` から未参照（意図的）。上記(1)の `mod` 追加で参照されコンパイル対象になります。
-  - `#[cfg(feature = "dynamic-file")]` の条件分岐により libloading/FFI シンボルが有効化されます。ビルド時の feature セットに留意。
-  - 公開API互換を維持すること（`crate::interpreter::plugin_loader::*` の既存呼び出しが動作するよう `pub use` を整備）。
-
-- 次の大物（plugin_loader 完了後）
-  - llvm/compiler.rs: `llvm/{init.rs,types.rs,instr_*.rs}` へ段階分割
-  - mir/builder.rs: `builder/{exprs.rs,stmts.rs,decls.rs,utils.rs}` へ抽出
-
-（この引継ぎに沿って再開すれば、直ちに plugin_loader の分割完了→ビルド確認まで進められます）
-    - 追加: Cargo.toml に `plugins-only` feature を定義。
-
-- P2PBox の once/ping 安定化方針
-  - once: deliver 後にフラグ無効化（現行仕様維持、分岐独立を再確認）。
-  - ping: `sys.pong` 返信スレッドの遅延を 3ms に調整、`ping()` 既定タイムアウトは 300ms に。
-  - 目的: 記録タイミング（last_from/last_intent）競合の低減とCI安定化。
-
-- FunctionBox 呼び出しの MIR/VM 統一（段階計画）
-  - C1) MIR 正規化: `ASTNode::Call` は Lambda 以外を `MirInstruction::Call(func, args)` に正規化（完了）。
-  - C2) VM 実行: `func` が 文字列なら名前呼び出し、`FunctionBox` ならインタープリタヘルパで本体実行（完了）。
-  - C3) LLVM/JIT: C2 のシムを後続で移植（VMで安定化→JITへ）。Lambda→FunctionBox 値化は小PRで導入予定（MIRのみで関数値を生成できるように）。
-
-- テスト整理
-  - E2E は feature で切替済み（`--features e2e`）。
-  - ユニットは初期化ヘルパ（Builtin登録）で安定化。plugins-only 依存は `#[cfg(feature="plugins-only")]` で保護。
-
-- ドキュメント/デモ更新
-  - FunctionBox ハンドラのデモを追加（`apps/p2p-function-handler-demo`）。
-  - function values / captures / `this→me` / `Parent::` / `?` / `peek` のガイドを `docs/development/current/function_values_and_captures.md` に追記済み。
-
-
-> Quick Resume (Phase 12 bridge)
-
-- Where to look next:
-  - Phase 12 overview: docs/development/roadmap/phases/phase-12/README.md
-  - Task board: docs/development/roadmap/phases/phase-12/TASKS.md
-  - ABI digest: docs/development/roadmap/phases/phase-12/NYASH-ABI-DESIGN.md
-  - Refactoring plan: docs/development/roadmap/phases/phase-12/REFACTORING_PLAN.md
-- Build/run (VM/JIT):
-  - VM: `cargo build --release --features cranelift-jit && ./target/release/nyash --backend vm apps/tests/ny-echo-lite/main.nyash`
-  - JIT: `./target/release/nyash --backend jit apps/tests/ny-echo-lite/main.nyash`
-- MapBox extensions (VM/JIT): remove/clear/getOr/keys/values/JSON are available; keys/values currently return newline-joined String (shim).
-- First refactor candidate: split `src/runner.rs` into `runner/mod.rs` + `runner/modes/*` (see REFACTORING_PLAN.md).
-
-
-Phase 11.7 へ仕切り直し（会議合意）
-
-- 単一意味論層: MIR→Semantics→{VM/Cranelift/LLVM/WASM} の設計に切替。VMは参照実装、実行/生成はCodegen側で一本化。
-- フォールバック廃止: VM→JITの実行時フォールバックは行わない。JITは“コンパイル専用/AOT補助”に限定。
-- 共通ABI: handle/i64/ptr 変換、to_bool/compare、タグ分類、invoke（固定/可変）、NyRTシム呼び出しを共通化。
-- Cranelift: 軽量JIT/AOTパスを追加し、最小実装からMIR-15を段階的に緑化。LLVM AOT は併存。
-
-Docs: docs/development/roadmap/phases/phase-11.7_jit_complete/{README.md, PLAN.md, CURRENT_TASK.md, MEETING_NOTES.md}
-
-以降は下記の旧計画（LLVM準備）をアーカイブ参照。スモークやツールは必要箇所を段階で引継ぎ。
-
-開発哲学（Box-First）
-- 「箱を作って下に積む」原則で進める。境界を先に置き、no-op足場→小さく通す→観測→厳密化の順で段階導入。
-- 詳細: docs/development/philosophy/box-first-manifesto.md
-
-次の候補（再開時）
-- spawn を本当の非同期化（TLV化＋Scheduler投入）
-- JIT/EXE用 nyash.future.spawn_method_h C-ABI 追加
-
-Async Task System (Structured Concurrency)
-- Spec/Plan: docs/development/roadmap/phases/phase-11.7_jit_complete/async_task_system/{SPEC.md, PLAN.md}
-- 目的: Nyash→MIR→VM→JIT/EXE まで一貫した構造化並行を実現（TaskGroup/Future を Box化）
-- 進捗（P1）: FutureBox を Mutex+Condvar 化、await は safepoint+timeout（NYASH_AWAIT_MAX_MS）で無限待ち防止済み。
-
-Update (2025-09-01 late / Async P2 skeleton + P3 await.Result unify)
-- P2（雛形）
-  - CancellationToken 型（cancel/is_cancelled）を追加: src/runtime/scheduler.rs
-  - Scheduler::spawn_with_token / global_hooks::spawn_task_with_token（現状はspawnへ委譲）
-  - TaskGroupBox 雛形: src/boxes/task_group_box.rs（API: new/cancel_all/is_cancelled）
-- P3（awaitのResult化・第一弾）
-  - VM Await: Futureの値を NyashResultBox::Ok で返す（src/backend/vm_instructions.rs）
-  - env.future.await（VM/Unified）: Ok(value)／Err("Timeout") を返す（timeoutは NYASH_AWAIT_MAX_MS 既定5秒）
-  - JIT Await: await_h は常にハンドル返却→ nyash.result.ok_h で Ok(handle) にラップ
-    - 追加: src/jit/extern/result.rs（SYM_RESULT_OK_H）／lowerで await 後に ok_h を差し込み
-- Smokes/安全ガード
-  - tools/smoke_async_spawn.sh（timeout 10s + NYASH_AWAIT_MAX_MS=5000）。apps/tests/async-spawn-instance は nowait/awaitの安全版
-  - ハングした場合もOS timeoutで残存プロセスを避ける
-
-次の実装順（合意があれば即着手）
-1) Phase 2: VM 経路への最小配線（暗黙 TaskGroup）
-   - nowait の着地点を TaskGroup.current().spawn(...) に切替（内部は現行 spawn_instance を踏む）
-   - scope 終了時の cancelAll→joinAll（LIFO）は雛形から段階導入（まずは no-op フック）
-2) Phase 3: JIT 側の Err 統一
-   - nyash.result.err_h(handle_or_msg) をNyRT/JITに追加し、timeout/キャンセル時に Err 化（await ラッパで分岐）
-   - 0/None フォールバックを撤去（VM/Externは実装済み／JITを揃える）
-3) Verifier: await 前後の checkpoint 検証
-   - Lowerer/パスで ExternCall(env.runtime.checkpoint) の前後挿入・検証ルールを追加
-4) CI/Smokes 最終化
-   - async-await-min, async-spawn-instance（VM/JIT）、timeout系（await_timeout）の3本を最小温存
-   - {vm,jit} × {default,strict} で timeout(10s) ガード
-
-Update (2025-09-01 PM / Semantics unify + Async Phase-2 prep)
-
-- Semantics layer in place and adopted by Interpreter/VM/JIT
-  - New: `src/runtime/semantics.rs` with `coerce_to_string` / `coerce_to_i64` and unified `+` ordering
-  - Interpreter/VM now delegate to semantics (string concat matches VM path; plugin String toUtf8→toString→fallback)
-  - JIT: added hostcall `nyash.semantics.add_hh` (handle,handle) for dynamic add; wired in builder/core
-- Cross-backend smokes (Script/VM/JIT via VM+jit-exec)
-  - `apps/tests/mir-branch-ret` → 1 (all three)
-  - `apps/tests/semantics-unified` → 0 (concat/numeric semantics aligned across backends)
-  - Tool: `tools/apps_tri_backend_smoke.sh` (summarizes Result lines for 3 modes)
-- Async Phase‑2 (front): minimal spawn API and await path
-  - Exposed `env.future.spawn_instance(recv, method_name, args...) -> FutureBox`
-    - For now resolves synchronously (safe baseline). Hooked to `PluginHost::invoke_instance_method`
-  - `env.runtime.checkpoint` now calls `global_hooks::safepoint_and_poll()` for future scheduler integration
-  - `env.future.await(value)` pass‑through unless value is FutureBox (then wait_and_get)
-  - `apps/tests/async-await-min`: uses `nowait fut = 42; await fut;` → VM/JIT return 42; Interpreter runs (CLI does not print standardized Result line)
-
-Delta to code
-- Added: `src/runtime/semantics.rs`
-- Updated: `src/interpreter/expressions/operators.rs`, `src/backend/vm_values.rs` → use semantics layer
-- JIT: `src/jit/lower/{builder.rs, core_ops.rs, extern_thunks.rs}`, `src/jit/extern/collections.rs`
-- NyRT C‑ABI: `crates/nyrt/src/lib.rs` exported `nyash.semantics.add_hh`
-- Runtime externs: `src/runtime/plugin_loader_v2.rs` added `env.future.spawn_instance`, improved `env.runtime.checkpoint`
-- Hooks/Scheduler: `src/runtime/global_hooks.rs` (safepoint+poll, spawn_task stub), `src/runtime/scheduler.rs` (single‑thread scheduler API scaffold present)
-- Smokes/tools: `apps/tests/semantics-unified`, `apps/tests/gc-sync-stress`, `tools/apps_tri_backend_smoke.sh`
-
-Open items / Next steps (proposed)
-1) True async spawn (Phase‑2 complete)
-   - Change `spawn_instance` to queue a task (Scheduler) instead of inline: capture `recv(type_id/instance_id)`, `method_name`, and TLV‑encoded args
-   - On run: decode TLV and `invoke_instance_method`, set Future result; ensure safepoint via `checkpoint`
-   - Add NyRT C‑ABI `nyash.future.spawn_method_h` for JIT/EXE and wire lowering
-2) Interpreter CLI result normalization (optional)
-   - Align “Result:” line for static box Main return to make Script mode consistent with VM/JIT in smokes
-3) Keep smokes minimal (avoid bloat); current trio is sufficient for gating
-
-—
-Update (2025-09-01 AM / JIT handoff follow-up)
-
-- Cranelift 最小JITの下地は進捗良好（LowerCore→CraneliftBuilder 経路）
-  - Compare/Branch/Jump、最小Phi（block params）、StackSlotベースの Load/Store は実装済み（builder.rs/core.rs）。
-  - ExternCall(env.console.log/println) の最小橋渡し（ConsoleBox.birth_h→by-id invoke）を追加済み。
-- 追加スモーク（jit-direct 用／I/Oなし）
-  - apps/tests/mir-store-load: x=1; y=2; x=x+y; return x → 3
-  - apps/tests/mir-phi-min: if(1<2){x=10}else{x=20}; return x → 10
-  - apps/tests/mir-branch-multi: 入れ子条件分岐 → 1
-  - 実行例: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-store-load/main.nyash`
-  - jit-direct 分岐/PHI 根治: 単一出口＋BlockParam 合流で安定（fast-path は常時有効）。
-
-変更点（犯人切り分けと根治のための構造改革＋ログ）
-- CraneliftBuilder（jit-direct 経路）
-  - 単一出口＋明示合流（SSA）へ切替（途中段階→完了段階へ移行中）
-    - ret 合流ブロックを導入し、BlockParam(i64) で戻り値を受け渡し。
-    - すべての `emit_return` を「i64 正規化 → `jump(ret, [val])`」に統一（return 命令は合流側だけ）。
-    - end_function 側で ret 合流ブロックに切替し、BlockParam を f64 変換（必要時）のうえ return。
-  - Compare/Branch/Select まわり
-    - Compare 結果をローカルスロットへ保存→Branch/Select 時に確実にロード（スタック取りこぼし排除）。
-    - `br_if` 直前に cond を b1 正規化（i64→b1）。
-  - デバッグ用 extern を登録（必要時のみ）
-    - `nyash.jit.dbg_i64(tag: i64, val: i64) -> i64`（値観測用）
-    - `nyash.jit.block_enter(idx: i64) -> void`（ブロック入場ログ）
-- LowerCore（return 値の堅牢化）
-  - Return 値が known/param/slot 経路に乗らない場合、同一ブロックの Const 定義をスキャンして materialize。
-  - Fast-path（読みやすさ＆単純化）: then/else が定数 return の場合、`select(cond, K_then, K_else)`→`emit_return` に縮約（常時有効）。
-
-診断ログ（必要時のみ ON）
-- `NYASH_JIT_TRACE_BLOCKS=1` … ブロック入場ログ（`[JIT-BLOCK] enter=<idx>`）
-- `NYASH_JIT_TRACE_BR=1` …… br_if の cond 有無（`[JIT-CLIF] br_if cond_present=...`）
-- `NYASH_JIT_TRACE_SEL=1` … select の cond/then/else 値（tag=100/101/102）
-- `NYASH_JIT_TRACE_RET=1` … return の値: emit_return 直前（tag=201）、ret 合流（tag=200）
-
-再現・実行コマンド（jit-direct）
-- 分岐の最小: `apps/tests/mir-branch-ret/main.nyash`
-  - `NYASH_JIT_THRESHOLD=1 NYASH_JIT_DUMP=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-  - 診断ON: `NYASH_JIT_THRESHOLD=1 NYASH_JIT_DUMP=1 NYASH_JIT_TRACE_RET=1 NYASH_JIT_TRACE_BLOCKS=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-- PHI最小: `apps/tests/mir-phi-min/main.nyash`
-- 複合分岐: `apps/tests/mir-branch-multi/main.nyash`
-
-期待と現状（2025-09-01 PM 時点）
-- 統合JIT（`--backend cranelift`）: OK（`mir-branch-ret`→1）。
-- jit-direct: 単一出口＋BlockParam 合流の配線で安定化を確認（cond/then/else も正常）。tag=201/200 は一致。
-
-検証結果（jit-direct / 2025-09-01 実行）
-- `apps/tests/mir-branch-ret`: Result=1, [JIT-DBG] 201=1 / 200=1
-- `apps/tests/mir-phi-min`: Result=10, [JIT-DBG] 201=10 / 200=10
-- `apps/tests/mir-branch-multi`: Result=1, [JIT-DBG] 201=1 / 200=1
-- `apps/tests/mir-nested-branch`: Result=1, [JIT-DBG] 201=1 / 200=1
-- `apps/tests/mir-phi-two`: Result=50
-
-次のタスク（仕上げ）
-1) LowerCore fast‑path/select のガード整理（`NYASH_JIT_FASTPATH_SELECT` の簡素化）。
-2) b1 返り値 ABI を有効化する場合の経路確認（feature `jit-b1-abi`）。
-3) ドキュメント整備（CraneliftBuilder 単一出口方針と TRACE 変数の最終化）。
-
-Update (2025-09-02 / JIT seal・PHI安定化 + builder分割 進捗)
-
-- 完了（JIT / jit-direct 最小3本グリーン）
-  - seal 管理の一本化（途中seal撤廃、end_functionで最終seal）。
-  - PHI(min) 合流: 事前スキャン→ensure_block_params、br/jump時のargs/append秩序確立。
-  - Return の安定化（known/param/slot優先、フォールバック const materialize）。
-  - 診断ログ整備（NYASH_JIT_DUMP/TRACE_*）。
-- スモーク（debug/release）: mir-branch-ret=1, mir-phi-min=10, mir-branch-multi=1。
-
-- 追加（2025-09-02 PM / fast-path 簡素化）
-  - Branch fast-path を常時有効化（両後続が i64 定数 return の場合に限り `select+return` で縮約）。
-  - 環境変数 `NYASH_JIT_FASTPATH_SELECT` は不要になりました（存在しても無視）。
-  - jit-direct の3本スモーク（debug/release）で回帰なしを確認。
-
-- リファクタリング（builder 1,000行目安に向けて段階実施）
-  - 分離済み:
-    - `src/jit/lower/builder/noop.rs`（NoopBuilder）
-    - `src/jit/lower/builder/object.rs`（AOT .o 用 ObjectBuilder、finish対応）
-    - `src/jit/lower/builder/rt_shims.rs`（nyash_jit_dbg_i64 等の小シム群）
-    - `src/jit/lower/builder/tls.rs`（clif_tls と TLS 呼び出しヘルパ）
-  - 動作維持: pub use で既存パス互換。jit-direct スモーク通過。
-
-  - 追加（2025-09-02 PM / MIR builder 分割の第一段）
-    - Calls 抽出: `src/mir/builder/builder_calls.rs` 新設。
-      - 移動: `build_function_call` / `build_method_call` / `build_from_expression` / `lower_method_as_function` / `lower_static_method_as_function` + 補助 `parse_type_name_to_mir` / `extract_string_literal`。
-      - 依存を明示（`use crate::mir::{TypeOpKind, slot_registry};`）。
-    - Stmts ラッパ導入: `src/mir/builder/stmts.rs` 新設。
-      - 現状は `build_*` 系をラッパで委譲（`*_legacy`）し、動作回帰チェックを優先。
-    - ビルド/スモーク: release + jit-direct 3本（branch-ret/phi-min/branch-multi）緑維持。
-
-  - 次のステップ（builder 分割 続き）
-    - [x] 1) Stmts 本体移設: `builder/stmts.rs` に移動し、`builder.rs` から削除。
-    - [x] 2) Ops 抽出: `builder/ops.rs` に移動。
-    - [x] 3) Utils 抽出: `builder/utils.rs` に移動。
-    - [x] 4) 残存 `*_legacy` の削除と最終ビルド＋jit-direct 3本スモークで回帰確認。
-    - [x] 5) 目標: `src/mir/builder.rs` を < 1,000 行に縮小（現状: 967 行）。
-    - Docs: 新モジュール構成のメモを `docs/development/mir/MIR_BUILDER_MODULES.md` に追加（参照）。
-
-- 残タスク（次手）
-  - [ ] CraneliftBuilder 本体を `builder/cranelift.rs` に分離（大枠）。
-  - [ ] `builder.rs` を薄い “ハブ” 化（trait/enum/API公開 + pub use）。
-  - [ ] 分離ごとに jit-direct 3本（debug/release）スモーク再確認。
-  - [ ] LowerCore の段階分割（`analysis.rs` / `cfg.rs` / `ops.rs`）検討（別PRでも可）。
-
-- 実行メモ（JIT）
-  - Build: `cargo build --release --features cranelift-jit`
-  - jit-direct: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-  - 診断: `NYASH_JIT_DUMP=1 NYASH_JIT_TRACE_BLOCKS=1 NYASH_JIT_TRACE_RET=1` 併用可。
-  - 単一出口方針: jit-direct は関数終端で単一の ret ブロックに合流し、PHI(min) は BlockParam で表現。
-  - TRACE 変数一覧（JIT）: `NYASH_JIT_DUMP`, `NYASH_JIT_TRACE_BLOCKS`, `NYASH_JIT_TRACE_BR`, `NYASH_JIT_TRACE_SEL`, `NYASH_JIT_TRACE_RET`
-
-Update (2025-09-01 PM2 / Interpreter parity blockers)
-
-- 目的: Semantics 層での VM/JIT/Interpreter パリティ検証に向け、Interpreter 側の既知不具合を記録・引き継ぎ。
-
-- 再現ファイル（ユーザー提供）
-  - examples/semantics_test_branch.nyash
-    - 期待: 100
-    - 実際(Interpreter): IntegerBox(4)（変数IDが返る挙動）
-    - 実際(VM): 100
-  - examples/simple_test.nyash
-    - 事象: PluginBoxV2 同士の加算でエラー（IntegerBoxダウンキャストのみを試行して失敗）
-  - /tmp/test_string_concat.nyash
-    - 事象: 文字列連結でエラー（PluginBox と String の連結が不可）
-
-- 現状の暫定対応（実装済み）
-  - Await(JIT): I::Await を nyash.future.await_h に降下（同期get）
-  - Safepoint(JIT): I::Safepoint を nyash.rt.checkpoint に降下（global_hooks 経由で GC/scheduler 連携）
-  - Barrier(JIT): Array.set/Map.set で nyash.gc.barrier_write emit
-  - Interpreter: FutureBox を登録（new FutureBox(42) 可）
-  - Interpreter: 加算まわりのフォールバック強化
-    - 文字列likeの優先連結（toUtf8/Result.Ok含む）
-    - 数値文字列→整数にパースできる場合は加算
-
-- 未解決（最優先）
-  1) 返り値が変数IDになる（examples/semantics_test_branch.nyash）
-     - 現状: 再現せず（CLI実行で Result: 100 を確認）。
-     - 対応: Return 直前と関数エピローグに限定トレース追加（`NYASH_INT_RET_TRACE=1`）。再発時に型/値を即観測可。
-  2) PluginBox 同士の演算の包括対応
-     - 暫定は toString→数値/文字列へ正規化で回避。恒久対応は Semantics/VM と同じ規約（handle-first + 文字列like/数値like）に寄せる。
-  3) 文字列連結の広範囲対応
-     - toString()/toUtf8/Result.Ok の内包を最優先で文字列正規化（現状の強化で多くは通る。追加ケースが出れば順次取り込み）。
-
-- 次アクション（Interpreter fix plan）
-  - [ ] semantics_test_branch 再現→Return 値の実体化ルート修正
-  - [ ] simple_test の演算パスを toString 正規化で網羅（必要なら算術 toNumber も）
-  - [ ] test_string_concat の失敗パターン収集→ try_box_to_string の対象拡張
-  - [ ] SemanticsVM/ClifAdapter パリティ小スモーク追加（分岐/配列/extern/await）
-
-
-Update (2025-09-02 late / jit-direct TLS単一FBリファクタ step-2 部分反映)
-
-- Runner 小リファクタ（計画どおりの分割）
-  - `src/runner.rs` → `src/runner/mod.rs` に移動。
-  - `NyashRunner::run()` の `run_task` 重複分岐を削除（無害な重複除去）。
-
-- jit-direct（CraneliftBuilder）: 単一FunctionBuilder（TLS）化の前進
-  - ローカル（store/load）をTLS単一FB経由に統一。
-  - `switch_to_block`: 未終端のまま別ブロックへ切替時に `jump` 注入→`cur_needs_term=false` に更新。
-  - `br_if_with_args`: TLS単一FBで発行し、分岐を明示的に終端扱い（`cur_needs_term=false`）。
-  - エントリを `seal_block(entry)` 済みに変更（入口でのPHI完了を前提）。
-  - ブロックパラメータ（PHI）: その場のappendはやめて「必要数を記録」→`switch_to_block` 前に不足分をappendする方式に変更（命令追加後のparam禁止アサート回避）。
-  - `end_function`: 未sealedブロックを最終sealするフェーズを追加（内部追跡セットで二重seal回避）。
-
-- 現状の挙動
-  - `cargo build --features cranelift-jit` は通過（警告あり）。
-  - `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-    - 以前の「未終端での切替」アサートは抑止済み。
-    - なお finalize 時に「未sealed blockN」が残るケースを観測（例: block4）。seal の最終整合に取りこぼしがある。
-
-- 追加で必要な作業（次の小ステップ）
-  1) LowerCore 側の `seal_block` 呼び出し順序の確認・補強（分岐/合流直後に seal されるよう統一）。
-  2) 生成ブロックが `self.blocks` に全て含まれることの確認（ret_block を含む）。不足時は `begin_function` で `pending_blocks` を尊重して作成。
-  3) 最小スモークの緑化: `mir-branch-ret` → 1, 続いて `mir-phi-min` → 10, `mir-branch-multi` → 1。
-  4) 上記が通ったら、終端注入・最終sealの実装を整理（不要な箇所の削減、ログスイッチ固定）。
-
-- 実行/検証メモ（再掲）
-  - ビルド: `cargo build --features cranelift-jit`
-  - 実行: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-  - 追跡: `NYASH_JIT_TRACE_BLOCKS=1`（ブロック切替）/`NYASH_JIT_TRACE_RET=1`（返り値）
-
-
-開発メモ / 注意点
-- 分岐の取り違えは「ブロックまたぎの共有スタック」が原因になりがち。根治策として BlockParam 経由の合流・単一出口 return を徹底。
-- デバッグログは “必要時のみ ON” の方針で仕込む。収束後に不要箇所は落とす（本番は静かに）。
-
-チェックリスト（収束条件）
-- [ ] jit-direct: `mir-branch-ret` → 1（tag=201/200 とも 1）
-- [ ] jit-direct: `mir-phi-min` → 10（合流経路で BlockParam 値が正しい）
-- [ ] jit-direct: `mir-branch-multi` → 1（ネスト分岐でも合流が正しい）
-- [ ] 統合JIT（--backend cranelift）と一致
-- [ ] ログ・一時コードの整理（必要なものだけ残す）
-- 既知の注意（jit-direct 経路のみ）
-  - 条件分岐系（Branch/Jump）で戻り値が 0 になる事象を確認。`--backend cranelift`（統合経路）では期待値どおり（例: mir-branch-ret → 1）。
-  - 影響範囲: jit-direct 実験フラグのみ。LowerCore/CraneliftBuilder の IR 自体は生成されており、統合経路では正しく実行される。
-
----
-
-最終確認（apps フォルダ tri‑backend 実行計画 / 実行ログ用）
-
-対象: C:\git\nyash-project\nyash\apps 下の各アプリ（インタープリター／VM／JIT(exe)）
-
-前提
-- ビルド: `cargo build --release --features cranelift-jit`
-- 実行パス（Linux/Mac）: `./target/release/nyash`
-- 実行パス（Windows PowerShell）: `target\release\nyash.exe`
-- 3モードの呼び分け:
-  - Script(インタープリター): `nyash apps/APP/main.nyash`
-  - VM: `nyash --backend vm apps/APP/main.nyash`
-  - JIT(exe): `nyash --backend vm --jit-exec --jit-hostcall apps/APP/main.nyash`
-
-補足/既知
-- 一部アプリは CLI 入力/標準入力/環境定数に依存（例: ny-echo の標準入力、NYASH_VERSION の参照）。必要に応じて簡易入力をパイプで与えるか、定数をスクリプト先頭に仮定義して実行確認する。
-- PluginOnly 強制は apps では無効化する（toString 経路が PluginInvoke 固定になると出力整形に影響）。
-
-進め方（手順テンプレート）
-1) 共通ビルド
-   - [ ] `cargo build --release --features cranelift-jit`
-2) アプリごとに 3 モード実行（下記テンプレートをコピーして使用）
-
-テンプレート（各アプリ用）
-- アプリ名: <app-name>
-  - Script: `nyash apps/<app-name>/main.nyash`
-    - [ ] 実行OK / 出力: <貼付>
-  - VM: `nyash --backend vm apps/<app-name>/main.nyash`
-    - [ ] 実行OK / 出力: <貼付>
-  - JIT(exe): `nyash --backend vm --jit-exec --jit-hostcall apps/<app-name>/main.nyash`
-    - [ ] 実行OK / 出力: <貼付>
-  - 備考: 例）標準入力が必要 → `echo "Hello" | ...`、定数 `NYASH_VERSION` を仮定義 等
-
-対象アプリ（初期リスト）
-- ny-echo
-  - 入力例（Script）: `echo "Hello" | nyash apps/ny-echo/main.nyash`
-  - 入力例（VM）:     `echo "Hello" | nyash --backend vm apps/ny-echo/main.nyash`
-  - 入力例（JIT）:    `echo "Hello" | nyash --backend vm --jit-exec --jit-hostcall apps/ny-echo/main.nyash`
-  - 既知: `NYASH_VERSION` を参照するため、未定義時はエラー。必要ならスクリプト先頭で仮定義（例: `version = "dev"`）して確認。
-
-- ny-array-bench
-  - Script/VM/JIT で 3 モード実行し、処理完了を確認（所要時間・出力サマリを記録）。
-
-- ny-mem-bench
-  - Script/VM/JIT で 3 モード実行し、処理完了を確認（所要時間・出力サマリを記録）。
-
-クロスチェック（簡易スクリプト）
-- 補助: `tools/apps_tri_backend_smoke.sh apps/ny-echo/main.nyash apps/ny-array-bench/main.nyash apps/ny-mem-bench/main.nyash`
-  - 3 モードの Result ライン要約を出力（インタラクティブ入出力が必要なものは手動実行を推奨）。
-
-ゴール/合格基準
-- 各アプリで Script/VM/JIT(exe) の 3 モードがクラッシュ無しで完走し、期待する出力/挙動が観測できること。
-- 不一致/未定義エラーが出た場合は「備考」に記録し、必要に応じて最小限の仮定義（標準入力や定数）での再実行結果も併記する。
-  - 次回対応: brif 直後のブロック制御/シール順の見直し（entry/sealing）、条件値スタック消費タイミングの再点検。
-
-
-Update (2025-09-01 night / JIT-direct branch/PHI fix)
-
-- Summary
-  - Fixed jit-direct returning 0 for branches by unifying returns to a single-exit ret block and improving MIR return type inference (including PHI-based inference).
-  - Stabilized PHI joins by materializing PHI results into locals and preferring local loads for Return.
-  - Corrected stack order for `br_if_with_args` (pop else args → then args → cond), matching LowerCore push order; added minimal fallback when predecessor mapping is unavailable.
-  - Added debug symbols and logs (gated by env) for ret path and CFG wiring.
-
-- Code touched
-  - MIR: `src/mir/builder.rs` (return type inference incl. PHI inputs)
-  - Lowering core: `src/jit/lower/core.rs` (PHI materialize to local; arg wiring fallback; small traces)
-  - Builder (Cranelift): `src/jit/lower/builder.rs` (single-exit return; br_if/jump args order; debug symbol registrations)
-
-- New smokes
-  - `apps/tests/mir-phi-two` … merge two locals (x,y) then add
-  - `apps/tests/mir-nested-branch` … nested branches returning constants
-
-- Status (jit-direct)
-  - mir-branch-ret → 1
-  - mir-phi-min → 10
-  - mir-phi-two → OK（合流＋加算）
-  - mir-nested-branch → 1
-  - LLVM AOT snips (prebuilt binaries) still OK for VInvoke samples.
-
-- How to run
-  - `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-  - `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-phi-min/main.nyash`
-  - `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-phi-two/main.nyash`
-  - `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-nested-branch/main.nyash`
-  - Optional logs: `NYASH_JIT_DUMP=1` and/or `NYASH_JIT_TRACE_RET=1`
-
-- Next (small boxes; avoid saturation)
-  1) Fast-path(select) 1-hop extension only:
-     - If then/else each jump to a block that immediately returns a Const Integer, lower to `select(cond, K_then, K_else) → return`.
-     - Keep scope narrow to avoid regressions.
-  2) Multi-PHI (limited):
-     - Add one smoke with two PHI slots; confirm arg counts/ordering under `phi_min`.
-  3) Logging remains env-gated; no default noise. No broad refactors until the above are green.
-
-
-Update (2025-09-02 / jit-direct FB lifecycle refactor)
-
-いま動くもの
-- Interpreter/VM/MIR の基本スモーク: OK
-- await の Result.Ok/Err 統一: Interpreter/VM/JIT で整合
-- Cranelift 実行（`--backend cranelift`）: OK（例: `mir-branch-ret` → 1）
-
-いま詰まっている点（要修正）
-
-Update (2025-09-03 / Phase 11.8 MIR cleanup 準備・判断固め)
-
-- 方針（箱言語原則 × 軽快最適化）
-  - ArrayGet/Set と RefGet/Set を BoxCall に集約（Core‑13 化）。
-  - 算術/比較（BinOp/Compare）は現状維持（MIR に残す）。定数畳み込みや分岐簡約の主戦場として維持し、型不明ケースは Lower/セマンティクス側でBoxCall/Hostcallにフォールバック。
-  - EffectMask 正確化（READ/WRITE/MAY_GC/IO）と WriteBarrier の確実化。
-  - 最適化は VM の execute_boxcall / JIT の lower_boxcall に集約（脱仮想化・境界消去・Barrier）。
-
-- 準備タスク（Phase 11.8 Kickoff）
-  1) Docs: 仕様と着手順を `docs/development/roadmap/phases/phase-11.8_mir_cleanup/PLAN.md` に確定（このコミットで追加）。
-  2) Env 設計: 段階導入トグルを定義（NYASH_MIR_ARRAY_BOXCALL / NYASH_MIR_REF_BOXCALL / NYASH_MIR_CORE13 など）。管理棟（config::env）での一括適用方針。
-  3) Optimizer: Array/Field→BoxCall 変換パスのスケルトン追加（デフォルトOFF）。
-  4) VM: execute_boxcall に予約IDの fast‑path フック（Array get/set・Field get/set）雛形。
-  5) JIT: lower_boxcall の fast‑path 雛形（Bounds/Barrier含む、失敗時 plugin_invoke）。
-  6) Smokes/Bench: array/field/arithmetic_loop の最小3種を用意・回帰基準±5%/±10%を導入。
-  7) Cleanup sweep: 残存のレガシー/未使用コード・コメントの一括整理（claude code指摘の残骸候補を含む）。
-
-- 参照: docs/development/roadmap/phases/phase-11.8_mir_cleanup/TECHNICAL_SPEC.md / PLAN.md
-- jit-direct で Cranelift FunctionBuilder が「block0 not sealed」でパニック
-  - begin/end のたびに短命の FunctionBuilder を作って finalize している設計が、最新の Cranelift の前提（全ブロック seal 済みで finalize）と合っていない
-  - 単一出口（ret_block）方針は Cranelift 側に途中まで入っているが、ObjectBuilder と二重実装があり、Cranelift 側の finalize 前にブロックを seal しきれていない箇所が残っている
-
-直近の変更（対策の第一歩）
-- CraneliftBuilder
-  - return は ret_block へ jump（エピローグで最終 return）に変更（単一出口に合わせて安全化）
-  - entry block の seal を begin_function で実施
-  - end_function 最後に blocks/entry/ret の seal を実施
-- ObjectBuilder
-  - emit_return は従来通りダイレクト return（ret_block を持たないため）
-
-現状の評価
-- 上記を入れても FunctionBuilder finalize のアサーションは残存。
-- jit-direct の builder ライフサイクル（複数回 finalize する設計）そのものを見直す必要あり。
-
-次の実装（推奨順）
-1) CraneliftBuilder のビルドモデルを単一 FunctionBuilder 方式へ
-   - 関数スコープで1つの FunctionBuilder を保持し、lower 中は finalize しない
-   - switch/jump/phi/hostcall も同一 FB で emit（現状の都度 new/finalize を撤廃）
-   - seal は then/else/target を LowerCore 側からタイミング良く呼ぶ＋end_function で最終チェック
-2) jit-direct での AOT emit パス（ObjectBuilder）は現状通りだが、strict 判定を整理
-   - `mir-branch-ret` のような最小ケースは unsupported=0 を確実に維持
-   - まずはこの1本で .o 生成→リンク→EXE 実行を通す
-3) ツールチェイン側（`tools/build_aot.sh`）の strict モードヒントを活かしつつ、上記の最小成功ケースを CI スモークに追加
-
-全側で続けてこのリファクタに着手。まずは FunctionBuilder のライフサイクル一本化から進め、`mir-branch-ret` の AOT（EXE）生成・実行まで通し切る。
-
-
-# （以下、旧タスク: Phase 10.8 記録）
-
-Contributor note: 開発手順・レイアウト・PR要件はリポジトリルートの `AGENTS.md`（Repository Guidelines）参照。ビルド/テストやCIスモークの環境変数も簡潔にまとまっています。
-
-## Handoff (Phase 11 next): 実行確認プラン（tests/ は対象外）
-
-目的: apps 配下の「簡単なアプリ」から順に、VM → AOT(LLVM) の順で確実に動作させる。tests/ フォルダは除外。
-
-前提/共通
-- LLVM: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix)` を付与してビルド
-- AOTリンク: `tools/build_llvm.sh <app.nyash> -o app` を使用（`target/aot_objects/*.o` 固定）
-- Verbose: トラブル時は `NYASH_CLI_VERBOSE=1`
-- プラグインテスター: `tools/plugin-tester` を利用可（`cargo run --release -- check --config ../../nyash.toml --library <lib>`）
-
-推奨テスト順（簡単→段階的）
-1) apps/ny-array-llvm-ret/main.nyash（Array push/get 戻り値）
-   - 期待: `Result: 3`
-   - VM: `./target/release/nyash --backend vm apps/ny-array-llvm-ret/main.nyash`
-   - AOT: `tools/build_llvm.sh apps/ny-array-llvm-ret/main.nyash -o app && ./app`
-
-2) apps/ny-vinvoke-llvm-ret-size/main.nyash（by-id size）
-   - 期待: `Result: 1`
-   - VM/AOT 同上
-
-3) apps/ny-vinvoke-llvm-ret/main.nyash（by-id get 可変長経路）
-   - 期待: `Result: 42`
-   - VM/AOT 同上
-
-4) apps/ny-echo-lite/main.nyash（readLine → print 最小エコー）
-   - 期待: 出力に `Result:` 行が含まれる（llvm_smoke の基準）
-   - 実行例: `echo hello | ./target/release/nyash --backend vm apps/ny-echo-lite/main.nyash`
-   - AOT: `tools/build_llvm.sh apps/ny-echo-lite/main.nyash -o app_echo && echo hello | ./app_echo`
-
-5) apps/ny-llvm-smoke/main.nyash（Array get/set/print）
-   - 期待: `Result: 3`
-   - 備考: 文字列連結は NyRT concat シムへフォールバック済み。emit 検知が不安定な場合は再試行。問題が残る場合はこの項を後回し可。
-
-6) apps/ny-echo/main.nyash（オプション付きエコー）
-   - 期待: VM/JIT/AOT の出力一致（upper/lower/そのまま）
-
-7) apps/ny-map-llvm-smoke/main.nyash（Map by-id 経路）
-   - 期待: 行に `Map: v=42` と `size=1`
-   - 備考: 連結シム適用済み。必要なら `NYASH_LLVM_ALLOW_BY_NAME=1` で一時回避。
-
-トラブルシュート要点
-- AOT emit: `NYASH_LLVM_OBJ_OUT=$PWD/target/aot_objects/<name>.o ./target/release/nyash --backend llvm ...`
-- リンク: `NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT=... tools/build_llvm.sh ...`
-- プラグイン: `nyash.toml` のパス解決（拡張子はOSで異なる）。tester は拡張子補完に対応。
-
-Update (2025-08-31 AM / Phase 11.1 quick pass)
-
-Update (2025-08-31 PM / Phase 11.2 partial)
-
-- 方式A（LLVM専用 NyRT 静的ライブラリ）で前進。by-id を本線、by-name はデバッグ用ラッパ方針。
-- Lowering 更新
-  - NewBox（引数あり 1～2個）→ `nyash.box.birth_i64(type_id, argc, a1, a2)`（int/handle ptr の最小対応）。0引数は `birth_h`
-  - BoxCall（by-id, method_idあり）→ `nyash_plugin_invoke3_i64(type_id, method_id, argc, a0, a1, a2)` 接続（a0=receiver handle）
-    - 戻り: dstが整数/真偽ならi64のまま、Box/String/Array等は i64(handle)→i8*(ptr)
-    - ArrayBox.get/set は既存の `nyash_array_get_h/set_h` 安全パスを存続
-  - 生成関数名: `ny_main` に変更（NyRTの起動ルーチンから呼び出し）
-- NyRT(libnyrt.a) 追加シンボル
-  - `nyash_string_new(i8*, i32)->i8*`（Const String用）
-  - `nyash_array_get_h(i64,i64)->i64`, `nyash_array_set_h(i64,i64,i64)->i64`
-  - 既存の `nyash.box.birth_h/i64`, `nyash.rt.checkpoint`, `nyash.gc.barrier_write` などは維持
-- ツール
-  - `tools/build_llvm.sh` 追加（.o → libnyrt.a リンク → EXE）
-  - `tools/llvm_smoke.sh`（.o生成のスモーク）
-- スモーク
-  - `examples/llvm11_core_smoke.nyash` で EXE 実行し `Result: 3` を確認
-
-Update (2025-08-31 PM2 / Phase 11.2 lightweight LLVM)
-
-- 方針（拡張性優先 / コア最小化: Tier‑0）
-  - ExternCall: 環境/I/Oのみ（env.console/debug/runtime など）。print は ExternCall(env.console.log) 本線。
-  - BoxCall: データ構造/Box 操作（Array/Map/String/Instance 等）。AOT/LLVM は最小の安全シムのみ直結。
-  - コアに残す安全シム（NyRT）: Array(get/set/push/length), Instance(getField/setField)。Map はコアに足さない（後述）。
-  - Map/JSON/Math 等は当面コア外（必要時はプラグイン by‑id + 汎用シムでAOTを通す）。
-
-- 実装・反映
-  - MIR パス: `passes/method_id_inject` 追加（NewBox/Copy 由来の型から BoxCall に method_id 注入。PluginInvoke は可能なら BoxCall(by‑id)へ書換）。
-  - LLVM Lowering:
-    - ExternCall: `env.console.log` → `nyash.console.log`（NyRT）, `env.debug.trace` → `nyash.debug.trace`。
-    - ExternCall: `env.console.readLine` 追加 → `nyash.console.readline`（stdin 1行, CR/LF 除去, C文字列返却）。
-    - ArrayBox: `get/set/push/length` を NyRT 安全シム（`nyash_array_get_h/set_h/push_h/length_h`）に直結。
-    - Instance: `getField/setField` を NyRT 安全シム（`nyash.instance.get_field_h/set_field_h`）に直結（既存）。
-    - プラグイン by‑id: f64 戻りの選択（`nyash_plugin_invoke3_f64`）/ i64 戻り（`..._i64`）。先頭2引数はタグ付け（int/float/handle）対応（`..._tagged_i64`）。
-    - by‑name 薄フォールバック（デバッグ用）: `NYASH_LLVM_ALLOW_BY_NAME=1` 下で `nyash.plugin.invoke_by_name_i64` を使用。
-  - NyRT(libnyrt.a): 上記 API を追加（console.log/debug.trace/readline, array push/length, instance get/set_field, by‑name, tagged_i64）。
-  - オブジェクト出力: `NYASH_LLVM_OBJ_OUT=<path>` で .o を明示出力（`runner/modes/llvm.rs` 経由）。
-  - ツール更新: `tools/build_llvm.sh` / `tools/llvm_smoke.sh` が `NYASH_LLVM_OBJ_OUT` を使用して .o を取得後、NyRT とリンク。
-  - サンプル: `apps/ny-llvm-smoke/main.nyash`（Array get/set/print）、`apps/ny-echo-lite/main.nyash`（readLine→print）。
-
-- しないこと / 後回し
-  - Map のコア安全シム追加（`nyash_map_*_h`）は見送り。必要ならプラグイン by‑id + 汎用シムでAOT実行。
-  - ConsoleBox の高度機能は ExternCall 側で段階導入（出力は既存 log、入力は readline のみ）。
-  - 汎用可変長引数（>2）は後段（タグ付けの拡張で対応予定）。
-
-- 次にやること（短期）
-  - ny-echo を縮小AOT対応（console.readLine + print のみで OK 版）。
-  - Map（プラグイン最小版）で string-key の get/set/size を by‑id 汎用シム経由でAOT実行（コアは増やさない）。
-  - CI/スモーク: `.o→EXE→実行` を `apps/ny-llvm-smoke` / `apps/ny-echo-lite` で追加。
-  - ガードレール: コア安全シムを Tier‑0 以外に増やさない簡易チェック（grep ベース）導入検討。
-
-- How to Build / Run（AOT/LLVM）
-  - ビルド: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
-  - .o→EXE: `tools/build_llvm.sh <file.nyash> -o app_llvm` → `./app_llvm`
-  - .o のみ: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm <file.nyash>`
-  - 推奨 @env（main.nyash 冒頭コメント）:
-    - `// @env NYASH_CLI_VERBOSE=1`（詳細ログ）
-    - デバッグ時のみ `// @env NYASH_LLVM_ALLOW_BY_NAME=1`
-
-Update (2025-08-31 PM3 / LLVM VInvoke triage)
-
-- 直近のテスト結果（要約）
-  - VM backend（正常）
-    - MapBox.size(): Result: 1 ✅
-    - MapBox.get(1): Result: 42 ✅
-    - 可変長（VInvoke: get(1,9,8,7,6)）: 期待どおりにTLV I64(tag=3)でエンコードされ、出力確認済 ✅
-  - LLVM backend（要修正）
-    - MapBox birth は成功（instance_id=1）
-    - set()/get() 呼び出し経路で戻り値が Result: 0（期待は 42）❌
-    - LLVM 実行時に VM 相当の PluginLoaderV2 Invoke 詳細ログが出ず、by-id/可変長の値流しに不整合がある可能性
-
-- 実装・修正状況
-  - ランタイム（NyRT）
-    - by-id 固定長/可変長の argc を「レシーバ除外の実引数個数」に統一済み
-    - invoke 時の type_id を「レシーバ実体（PluginBoxV2）から取得した実 type_id」に変更（呼び出し先揺れを排除）
-  - LLVM Lowering
-    - <=4 引数: nyash_plugin_invoke3_tagged_i64（f64→i64ビット化＋タグ付与）
-    - >=5 引数: nyash.plugin.invoke_tagged_v_i64（vals/tags の vector 経路）
-  - スモーク
-    - apps/ny-vinvoke-llvm-ret: 戻り値で 42 を検証する LLVM 用スモークを追加（print/concatに依存しない）
-    - tools/llvm_smoke.sh に VInvoke（戻り値）スモークをオプション追加（NYASH_LLVM_VINVOKE_RET_SMOKE=1）
-
-- いま見えている課題（LLVM）
-  - by-id vector 経路（vals/tags/argc）のどこかで齟齬 → get が 0 を返す（キーが TLV 化されていない／タグずれなど）
-  - 固定長（<=4）経路は未切り分け → まず size()/get(1) を LLVM 戻り値で確定（size→1, get(1)→42）
-  - .o 出力の一部環境不安定は Runner/Lowering にフォールバックを追加済（write_to_memory_buffer）
-
-- 次アクション
-  1) LLVM 戻り値テストを段階確認
-     - MapBox.size() → Result: 1
-     - MapBox.get(1) → Result: 42
-     - これで固定長 by-id の健全性を確定後、可変長（>=5）vector 経路へ絞り込み
-  2) NyRT デバッグ（NYASH_CLI_VERBOSE=1 時のみ）を最小追加
-     - nyash.plugin.invoke_tagged_v_i64: argc/method_id、vals[0..2], tags[0..2] を stderr に出力
-     - 実際のTLV化の前に観測し、ズレ箇所を確定
-  3) LLVM Lowering（vector 経路）の配列構築を点検
-     - alloca([N x i64]) → inbounds GEP → store → i64* へ pointer_cast → 呼び出し
-     - GEP index（[0,i]）/型一致/メモリ幅を再確認
-  4) 必要なら一時的に「<=4 でも vector 経路を選択」する実験分岐を作り、経路差異を切り分け
-  5) tools/llvm_smoke.sh: target/aot_objects 固定・事前 emit → link のフローをデフォルト強化（CI安定化）
-
-- ゴール（本フェーズ収束条件）
-  - LLVM backend で MapBox: size()/get(1)/get(1,9,8,7,6) が戻り値ベースで一致
-  - VInvoke（可変長）経路が by-id で安定
-  - print/concat のLoweringは後続（必要最小）に回す
-
-- タスク実行（MVP）
-  - `nyash.toml` に `[env]` / `[tasks]` を記述し、CLIから `--run-task <name>` で実行可能。
-  - 例:
-    - `[tasks] build_llvm = "LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm"`
-    - 実行: `./target/release/nyash --run-task build_llvm`
-  - 備考: `{root}` 変数展開対応。OS別/依存/並列は未対応（将来拡張）。
-
-
-残作業（合意順）
-
-1) method_id 埋め込みと by-id 本線化
-   - ロード時に 名前→id を確定・キャッシュ（PluginLoaderV2）し、MIR へ `method_id` 注入（実行時は常に by-id）
-2) BoxCall 汎用拡張
-   - 引数3個以上/戻り型の拡張（i64/handle/f64 等）。Field 系（getField/setField）を BoxCall として安全パス接続
-3) by-name ラッパ（デバッグ/テスト用）
-   - Lowering フォールバックとして薄く導入（env/flag 下でのみ使用）、本番は by-id 固定
-4) ExternCall 網羅
-   - `env.console/debug/runtime/future` 等を puts 暫定から RT関数に置換、署名整備
-5) スモーク/CI 拡張
-   - by-id の代表例（CounterBox等）、console/array/field/extern を .o→EXE→起動まで
-
-- LLVM Lowering: Phi/Load/Store の最小実装を追加（inkwell 0.5 / LLVM 18）
-  - Phi: 事前に各BB先頭でPhiノード生成→Branch/Jump時にincomingを配線
-  - Load/Store: entryでのalloca管理（型は注釈/値から推定）。i1/i64の簡易変換、ポインタはpointer_cast対応
-  - 型なしポインタ（opaque）対応のため、`alloca`の要素型を別マップで追跡
-  - ビルド検証: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --features llvm` 成功
-  - 既存のConst/Unary/BinOp/Compare/Branch/Jump/Return と併せ、Phase 11.1の目標範囲は到達
-
----
-
-一時メモ（MIRインタプリタ 80/20 方針）
-
-- ConsoleBox.readLine ローカルフォールバック（標準入力1行読み）を一時実装（`--backend mir` の echo-lite 用）。
-  - 後で必ず削除し、プラグイン側メソッド/Extern 経由に置換すること。
-  - 追跡タスク: 「ConsoleBox メソッド群の正式実装（PluginInvoke/ExternCall）とローカルフォールバックの撤去」。
-  - 影響箇所: `src/backend/mir_interpreter.rs`（BoxCall: ConsoleBox.readLine 分岐）、`apps/tests/ny-echo-lite` スモーク。
-
-次アクション（この項に紐づく）
-- ClifSem 最小Lowering（Const/Return/Add）を実装し、JITスケルトンの0終了スモークを追加。
-- ConsoleBox フォールバックは温存のまま（echo-liteのみのため）。Console 正式化のタイミングで除去。
-
----
-
-# Handoff (Phase 11.7) — MIR Interpreter + Cranelift Minimal JIT
-
-目的: LLVMが重くなったため仕切り直し。新しいMIR解釈層と軽量Cranelift JITの最小機能を整備し、段階拡張しやすい骨格を確立。
-
-実装済み（要点）
-- 共通ABI/ユーティリティ:
-  - `src/backend/abi_util.rs`（to_bool/eq/tag/handle）
-- MIRインタプリタ（--backend mir）:
-  - 対応: Const/Unary/BinOp(＋String結合)/Compare/Load/Store/Copy/Branch/Jump/Return/Print/Debug/Barrier/Safepoint(no-op)
-  - NewBox/PluginInvoke/BoxCall/ExternCallの最小対応（PluginBoxV2はプラグインホスト経由）
-  - ConsoleBox.readLine: 一時フォールバックで標準入力1行読み（CURRENT_TASKに削除タスク記載済）
-- Cranelift最小JIT（--backend cranelift）:
-  - 実JIT（jit.rs）: Const(i64/f64/bool->0/void->0)/Add/Sub/Mul/Div/Mod、Compare(Eq/Ne/Lt/Le/Gt/Ge)、Load/Store（StackSlot）、Copy、Return/Jump/Branch
-  - 箱化: `src/backend/cranelift/context.rs` に ClifContext/BlockMap/ValueEnv を用意（JIT構築をカプセル化）
-  - LowerCore→ClifBuilder（IRBuilder実体）: 録画→実IR生成（Const/Add/Return）を暫定実装
-    - 起動切替: `NYASH_JIT_LOWERCORE=1` で LowerCore→ClifBuilder 実IR経路を実行
-- スモーク:
-  - `apps/tests/mir-const-add/main.nyash`（0終了）
-  - `apps/tests/mir-branch-ret/main.nyash`（条件分岐で1）
-  - どちらも --backend cranelift / --backend mir で確認済
-
-使い方（コマンド）
-- Cranelift有効ビルド: `cargo build --features cranelift-jit`
-- MIRインタプリタ: `./target/debug/nyash --backend mir apps/tests/mir-const-add/main.nyash`
-- Cranelift最小JIT: `./target/debug/nyash --backend cranelift apps/tests/mir-branch-ret/main.nyash`
-- LowerCore→ClifBuilder 実IR: `NYASH_JIT_LOWERCORE=1 ./target/debug/nyash --backend cranelift apps/tests/mir-const-add/main.nyash`
-
-次のタスク（推奨順）
-1) ClifBuilder 実IR生成の拡張（LowerCore連携）
-   - Compare/Branch/Jump の実IR
-   - 最小Phi（Block Params）
-   - StackSlotベースのLoad/Store（ValueEnvから完全移行）
-2) ExternCall（env.console.log）最小対応（JIT経路でもprintln相当へ）
-3) スモーク追加: Load/Store、Phi最小ケース、Compare/Branch複合ケース
-4) Console/Extern 正式化完了後に ConsoleBox.readLine フォールバック削除（本ファイルにタスク済）
-5) 警告/CFG整理: 使っていないfeature cfgやunusedを段階的に整理
-
-既知の注意/制限（80/20の割り切り）
-- BoolはI64の0/1として扱っており、B1専用ABIは未導入（将来拡張）。
-
----
-
-Update (2025-09-02 night / jit-direct TLS単一FBリファクタ 進捗・引き継ぎ)
-
-- 目的: jit-direct の Cranelift FunctionBuilder ライフサイクルを「関数ごとに1つ」に統一し、finalizeは end_function の一度のみとする（Craneliftの前提に整合）。
-
-- 実装済み（最小スコープ）
-  - TLSに Context/FBC/FunctionBuilder を保持（begin_functionで生成→end_functionでfinalize）。
-  - per-op finalize の撤去。主要経路（const/binop/compare/select/branch/jump/return/hostcall 等）を TLS 単一FB に切替中。
-  - 単一出口（ret_block + i64 block param）維持。emit_return は ret_block へ jump、end_function で epilogue return を生成。
-  - prepare_blocks は begin_function 前はTLSに触れず pending_blocks に貯め、begin_function で create_block。
-  - host/import 呼び出しは tls_call_import_ret/tls_call_import_with_iconsts ヘルパへ分離（module.declare_func_in_func + call を安全化）。
-  - 未終端ブロック切替の安全弁: IRBuilder::switch_to_block に「未終端なら jump 注入」（cur_needs_term）を導入。
-
-- 現状ステータス
-  - cargo build --features cranelift-jit: OK
-  - jit-direct 実行: まだ1箇所「you have to fill your block before switching」（未終端での block 切替）アサートが残存。
-    - 再現: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-    - 多くの switch_to_block は closure から排除済みだが、特定条件下で未終端のまま切替が残っている模様。
-
-- 次の小ステップ（箱を下に積む順）
-  1) IRBuilder::switch_to_block の重複抑止（同一 index への再切替は no-op）。
-  2) cur_needs_term の更新確認（emit_return/br_if/jump 後は必ず false）。主要箇所は反映済みだが再点検。
-  3) emit_* 内の残存 switch_to_block を整理（挿入点は LowerCore 側の switch_to_block に一本化）。
-  4) トレースで最終合流（ret_block）直前の切替を観測：
-     - 環境: `NYASH_JIT_TRACE_BLOCKS=1 NYASH_JIT_TRACE_BR=1`
-  5) スモーク（jit-direct）を順に通す:
-     - `mir-branch-ret` → 1
-     - `mir-phi-min` → 10
-     - `mir-branch-multi` → 1
-  6) hostcall_typed / plugin_by_name の TLS 呼び出し統一（未対応部分があれば最小限で補完）。
-
-- 実行/検証メモ
-  - ビルド: `cargo build --features cranelift-jit`
-  - 実行: `NYASH_JIT_THRESHOLD=1 ./target/debug/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
-  - 追跡ログ: `NYASH_JIT_TRACE_BR=1`（brif出力）、`NYASH_JIT_TRACE_BLOCKS=1`（block切替通知）
-
-- 影響範囲
-  - jit-direct（CraneliftBuilder）限定。ObjectBuilder（AOT .o生成）は従来通り。
-  - docs/development/roadmap/phases/phase-11.7_jit_complete 配下のフェーズ文書・計画は維持（削除・変更なし）。
-
-備考
-- まずは TLS 方式で単一FBモデルを安定化（動かすことを最優先）。その後、余力があれば IRBuilder/LowerCore に FB を明示渡しするクリーン版へ段階移行を検討。
-- String/Null/Void のConstは暫定的に0へ丸め（必要箇所から段階的に正規化）。
-- `jit-b1-abi` 等のunexpected cfg警告は今後整理対象。
-
-関連ファイル
-- 追加: `src/backend/abi_util.rs`, `src/backend/mir_interpreter.rs`, `src/runner/modes/mir_interpreter.rs`
-- 追加: `apps/tests/mir-const-add/main.nyash`, `apps/tests/mir-branch-ret/main.nyash`
-- Cranelift: `src/backend/cranelift/jit.rs`, `src/backend/cranelift/context.rs`, `src/backend/cranelift/builder.rs`
-- Semantics: `src/jit/semantics/{mod.rs,clif.rs}`（スケルトン）
-
-メモ/トグル
-- LowerCore→ClifBuilder 実IR: `NYASH_JIT_LOWERCORE=1`
-- カバレッジログ: `NYASH_JIT_DUMP=1`
-
-
-
-Handoff Snapshot (2025-08-31 / Phase 11 kick-off)
-
-- Core-15 凍結（第三案 / Box-SSA）
-  - セット: { Const, UnaryOp, BinOp, Compare, TypeOp, Load, Store, Jump, Branch, Return, Phi, Call, NewBox, BoxCall, ExternCall }
-  - Optimizer: ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke → BoxCall に正規化（get/set/getField/setField）
-  - Verifier: 上記レガシー命令を UnsupportedLegacyInstruction としてエラー化（環境で一時解除可: NYASH_VERIFY_ALLOW_LEGACY=1）
-- VM: BoxCall("getField"/"setField") を InstanceBox に配線（fieldsへ委譲）。Arrayの get/set は既存BoxCall経路で動作
-- 命令数固定テスト: Core‑15（第三案）へ切替済（tests/mir_instruction_set_sync.rs）
-- LLVM 導入（Phase 11 開始）
-  - 依存: LLVM 18 + inkwell 0.5.0（features=["llvm18-0"]）。feature `llvm` で有効化
-  - ビルド要件: LLVM_SYS_180_PREFIX（例: /usr/lib/llvm-18）, 追加依存: polly, zstd（libzstd-dev 等）
-  - 現状のLowering（11.1の最小スケルトン → 11.2 反映）:
-    - 対応: Const(Integer/Float/Bool/String/Null), Unary(Neg/Not/BitNot), BinOp（整数/浮動の主要演算）, Compare, Branch/Jump, Return
-    - 追加: Phi/Load/Store（最小実装）
-    - 追加: NewBox（引数なし→nyash.box.birth_hへ; nyash.tomlの[box_types]からtype_id解決）
-    - 追加: BoxCall（ArrayBox.get/set→nyash_array_get_h/set_h 経由の安全パス）
-    - 追加: ExternCall（env.console.log/env.debug.trace→libc putsで暫定出力）
-    - 未対応（次タスク）: NewBox（引数あり）, 一般BoxCall（by-name/slot 汎用化）, その他ExternCall
-  - エントリ: Main.main のみ対象に .o 出力（backend::llvm::compile_to_object）
-- ドキュメント更新（phase‑11）
-  - README.md: 進行中に更新 / 4週スプリント計画（11.1→11.4）
-  - MIR_TO_LLVM_CONVERSION_PLAN.md: PluginInvoke→BoxCall統一、配列はBoxCallとして安全パス→型特化の二段階Lowering
-  - MIR_ANNOTATION_SYSTEM.md: setField/getField（BoxCall）前提に更新
-  - INSTRUCTION_SET.md: PluginInvokeはDeprecated（BoxCallに統一）
-
-How to Build/Run (recap)
-
-- 通常/JIT: `cargo build --release --features cranelift-jit`
-- LLVM（AOTスケルトン）: 
-  - 事前: LLVM 18 / inkwell 0.5.0, polly, zstd を導入
-  - 例: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
-- スモーク: `tools/mir15_smoke.sh release`
-
-Next Steps (Phase 11)
-
-1) 11.1 仕上げ（本タスク）
-   - Phi のLowering（BB事前作成→incoming追加）
-   - Load/Store（alloca/ローカル表現の最小規約、整数/浮動/ポインタ）
-2) 11.2 安全パス（Box/Extern）
-   - [実装] NewBox(引数なし)→ `nyash.box.birth_h(type_id:i64)->i64` を呼び、i8*にinttoptr（type_idはnyash.tomlから解決）
-   - [実装] Arrayの BoxCall("get"/"set") → `nyash_array_get_h/set_h`（ハンドルi64渡し）
-   - [実装] ExternCall: `env.console.log`/`env.debug.trace` は暫定で `puts` に接続（AOTデバッグ用）
-   - [残] BoxCall 汎用（by-name/slot）, Field系（getField/setField）, ExternCallの網羅
-3) 11.3 最適化導線
-   - 注釈（inline/purity/gc/alias）→ LLVM属性/メタデータ
-   - 型特化: Array/Field の inline GEP + write barrier
-4) 11.4 高度化
-   - 脱箱化、TBAA、PGO/ThinLTO
+# CURRENT TASK (Compact) — Phase 15 / Self-Hosting（Ny→MIR→MIR-Interp→VM 先行）
+
+このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
+
+— 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
+
+【ハンドオフ（2025‑09‑06 2nd）— AOT/JIT‑AOT String.length 修正進捗と引き継ぎ】
+
+概要
+- 目的: AOT/JIT‑AOT で `StringBox.length/len` が 0 になるケースの是正と足場強化。
+- 方針: 受けをハンドル化して `nyash.string.len_h` を優先呼び出し、0 の場合に `nyash.any.length_h` へフォールバック（select）する二段経路を Lower に実装。型/ハンドル伝播は Param/Local/リテラルの順でカバー。
+
+実装（済）
+- LowerCore: 二段フォールバック実装を追加（Param/Local/リテラル）。
+  - `emit_len_with_fallback_param`/`_local_handle`/`_literal`
+  - `core.rs` の `len/length` で二段フォールバックを使用。結果をローカルスロットへ保存（Return で拾えるように）
+- BoxCall 共通（ops_ext）:
+  - StringBox の `len/length` を最優先で処理（Param/Local/リテラル/handle.of）。
+  - リテラル `new StringBox("...")` → `length` は即値畳み込み（const 返却）。
+- Hostcall registry 追補: `nyash.string.len_h` を ReadOnly 登録 + 署名 `(Handle)->I64` 追加。
+- JIT ブリッジ: `extern_thunks.rs` に `nyash_string_len_h` を追加、`cranelift` ビルダーに `SYM_STRING_LEN_H` を登録。
+- ポリシー: `StringBox.length/len` マッピングを `nyash.any.length_h` → `nyash.string.len_h` に是正。
+- デッドコード整理: 旧 `lower_boxcall_simple_reads` を削除（conflict 回避）。
+- ツール/スモーク: `tools/aot_smoke_cranelift.sh` 追加、`apps/smokes/jit_aot_string_length_smoke.nyash` 追加。
+
+確認状況
+- `apps/smokes/jit_aot_string_min.nyash`（concat/eq）: AOT 連結→`Result: 1`（OK）。
+- `apps/smokes/jit_aot_string_length_smoke.nyash`（print 経由）: AOT .o 生成/リンクは通るが、稀に segfault（DT_TEXTREL 警告あり）。再現性低。TLS/extern 紐付け順の追跡要。
+- `apps/smokes/jit_aot_any_len_string.nyash`: 依然 `Result: 0`。lower は `string.len_h` 優先・二段 select 経路に切替済み。値保存の材化は追加済。残る根因は Return 直前の値材化/参照不整合の可能性が高い（下記 TODO）。
+
+残課題（優先）
+1) Return 材化の強化（JIT‑direct / JIT‑AOT 共通）
+   - 症状: `len/length` の計算値が Return シーンで 0 に化けるケース。
+   - 推定: `push_value_if_known_or_param` が unknown を 0 補完するため、BoxCall 結果がローカルに材化されていない/ValueId 不一致時に 0 が返る。
+   - 対応: `I::Return { value }` で materialize 後方走査を実装。
+     - 現 BB を後方走査し、`value` を定義した命令（BoxCall/Call/Select 等）を特定→スタックに積む/ローカル保存→Return へ接続。
+    - 既存のローカル保存（本変更で追加）も活用。
+
+進捗（2025‑09‑06 3rd 追記）
+- ops_ext: StringBox.len/length の結果を必ずローカルに保存するよう修正（Return が確実に値を拾える）
+  - 対象: param/local/literal/handle.of 各経路。`dst` があれば `local_index` に slot を割当てて `store_local_i64`。
+- デバッグ計測を追加
+  - JIT Lower 追跡: `NYASH_JIT_TRACE_LOWER=1`（BoxCall の handled 判定／box_type／dst 有無）
+  - Return 追跡: `NYASH_JIT_TRACE_RET=1`（known/param/local の命中状況）
+  - ローカルslot I/O: `NYASH_JIT_TRACE_LOCAL=1`（`store/load idx=<N>` を吐く）
+  - String.len_h 実行: `NYASH_JIT_TRACE_LEN=1`（thunk 到達と any.length_h フォールバック値を吐く）
+- 再現確認
+  - `apps/smokes/jit_aot_any_len_string.nyash` は依然 Result: 0（JIT-direct）。
+  - 追跡ログ（要 `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_TRACE_RET=1 NYASH_JIT_TRACE_LOCAL=1`）
+    - `BoxCall ... method=length handled=true box_type=Some("StringBox") dst?=true`
+    - ローカル slot の流れ: `idx=0` recv(handle) → `idx=1` string_len → `idx=2` any_len → `idx=3` cond → select → `idx=4` dst 保存 → Return で `load idx=4`
+    - つまり lowering/Return/ローカル材化は正しく配線されている。
+- しかし `NYASH_JIT_TRACE_LEN=1` の thunk ログが出ず、`nyash.string.len_h` が実行されていない/0 を返している可能性が高い。
+    - 仮説: Cranelift import のシンボル解決が `extern_thunks::nyash_string_len_h` ではなく別実装（0返却）に解決されている／あるいは呼出し自体が落ちて 0 初期値になっている。
+    - 参考: CraneliftBuilder では `builder.symbol(c::SYM_STRING_LEN_H, nyash_string_len_h as *const u8)` を設定済み。
+
+暫定変更（フォールバック強化）
+- `ops_ext` の StringBox.len で「リテラル復元（NewBox(StringBox, Const String))」を param/local より先に優先。
+  - JIT-AOT 経路で文字列リテラルの length は常に即値化（select/hostcall を経由せず 3 を返す）。
+  - ただし今回のケースでは local 経路が発火しており、まだ 0 のまま（hostcall 実行が 0 を返している疑い）。
+
+未解決/次アクション（デバッグ指針）
+- [ ] `nyash.string.len_h` が実際にどの関数へリンクされているかを確認
+  - Cranelift JIT: `src/jit/lower/builder/cranelift.rs` の `builder.symbol(...)` 群は設定済みだが、実行時に thunk 側の `eprintln` が出ない。
+  - 追加案: `emit_host_call` で宣言した `func_id` と `builder.symbol` 登録可否の整合をダンプ（シンボル直列化や missing import の検知）。
+- [ ] `extern_thunks::nyash_string_len_h` へ確実に到達させるため、一時的に `emit_len_with_fallback_*` で `SYM_STRING_LEN_H` を文字列リテラル直書きではなく定数経由に統一。
+- [ ] `nyash.string.from_u64x2` の呼び出し可否を同様にトレース（`NYASH_JIT_TRACE_LOCAL=1` の直後に `NYASH_JIT_TRACE_LEN=1` が見えるか）
+- [ ] ワークアラウンド検証: `NYASH_JIT_HOST_BRIDGE=1` 強制でも 0 → host-bridge 経路の呼び出しが発火していない可能性。bridge シンボル登録も再確認。
+
+メモ/所見
+- lowering と Return 材化（ローカルslot への保存→Return で load）は動いている。値自体が 0 になっているので hostcall 側の解決/戻りが疑わしい。
+- AOT .o の生成は成功。segv は今回は再現せず。
+
+実行コマンド（デバッグ用）
+- `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_TRACE_RET=1 NYASH_JIT_TRACE_LOCAL=1 NYASH_AOT_OBJECT_OUT=target/aot_objects/test_len_any.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash`
+- 追加で thunk 到達確認: `NYASH_JIT_TRACE_LEN=1 ...`（現状は無出力＝未到達の可能性）
+
+Phase A 進捗（実施済）
+- A‑1: Hostcall シンボルの定数化（直書き排除）完了
+  - `nyash.handle.of` / `nyash.string.len_h` / `nyash.console.birth_h` を `SYM_*` に統一
+- A‑2: string_len ヘルパ抽出（共通化）完了
+  - `src/jit/lower/core/string_len.rs` 新設、`emit_len_with_fallback_*` を移設
+  - 呼び出し元はそのまま（挙動は不変）
+- A‑3: 観測の統一（第一弾）
+  - string_len 内で `observe::lower_hostcall` を発火（len_h/any.length_h）
+  - Cranelift/ObjectBuilder の `emit_host_call[_typed]` に `NYASH_JIT_TRACE_IMPORT=1` によるインポート解決ログを追加
+
+観測結果（A‑3 導入後）
+- `NYASH_JIT_TRACE_IMPORT=1` で `nyash.string.len_h` / `nyash.any.length_h` の import 呼び出しを確認（JIT/AOT 両方）
+- それでも `NYASH_JIT_TRACE_LEN=1` の thunk 到達ログは出ず → 依然解決先に差異がある疑い（要継続調査）
+
+■ 緑への道筋（短期着地プラン）
+P0: フェイルセーフ（テストを緑にする最短経路）
+- 追加フラグ: `NYASH_LEN_FORCE_BRIDGE=1` で StringBox.len/length を暫定的に host‑bridge (`nyash.host.string.len`) に強制（JIT でも常に正しい長さを返す）。
+  - 実装: ops_ext の StringBox.len/length で当該フラグを見て bridge 経路へ分岐。
+  - 影響範囲限定（読み取り系のみ）。スモーク/CI を先に緑化。
+
+P1: ひも付けの可視化と是正（根因切り分け）
+- CraneliftBuilder::new の `builder.symbol(...)` 登録を JSON で列挙（id→アドレスの疑似ダンプ）。
+- import 発行側（emit_host_call/_typed）と登録側の id を突き合わせ、`nyash.string.len_h` の実アドレスが `extern_thunks::nyash_string_len_h` に一致することを確認。相違なら登録漏れ/重複名を是正。
+
+P2: リテラル最優先の安定化
+- NewBox(StringBox, Const String) → length は必ず即値化（const fold）。
+  - 実装補強: `box_type_map` に加えて「NewBox(StringBox) の引数→Const String」の逆引きテーブルを構築して判定を O(1) に。param/local 経路より前に評価。
+
+P3: Return 材化の後方走査（再発防止）
+- `I::Return { value }` で、未材化値に対し現BBを後方走査（BoxCall/Call/Select/Const）。
+  - 見つけた生成値をローカルslotに保存→Return直前に load。
+  - 既存の len/length 結果保存と併用し、0化の再発を根治。
+
+P4: 仕上げ（重複/直書きの整理）
+- ops_ext の重複分岐（len/length の多重ガード）を削除し、`core/string_len.rs` に集約。
+- 残る直書きシンボルを `SYM_*` に統一（検索: `nyash.` 直書き）。
+
+■ 検証チェックリスト
+- JIT 直実行（強制 bridge 無効）: `./target/release/nyash --jit-direct apps/smokes/jit_aot_string_min.nyash` → Result:1
+- JIT 直実行（len 強制 bridge 有効）: `NYASH_LEN_FORCE_BRIDGE=1 ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash` → Result:3（緑化）
+- import/登録の一致: `NYASH_JIT_EVENTS=1 NYASH_JIT_TRACE_IMPORT=1 ...` で `id=nyash.string.len_h` の import と登録ダンプを突合（id一致を確認）
+
+
+— Phase A（無振る舞い変更）リファクタ方針（着手予定）
+- A‑1: Hostcall シンボルを定数に統一（直書き排除）
+  - `"nyash.handle.of"` → `jit::extern::handles::SYM_HANDLE_OF`
+  - `"nyash.string.len_h"` → `jit::extern::collections::SYM_STRING_LEN_H`
+  - `"nyash.console.birth_h"` → 既存の定数へ（なければ `extern::...` に追加して使用）
+- A‑2: 長さ取得の共通化
+  - 新規: `src/jit/lower/core/string_len.rs`
+  - 既存の `emit_len_with_fallback_{param,local,literal}` をこのモジュールへ抽出し、`core.rs`/`ops_ext.rs` から呼び出すだけにする（挙動は据え置き）。
+  - 目的: 重複と分岐のばらけを解消し、シンボル差し替えや観測フックを一点で行えるようにする。
+※ Phase A は「振る舞いを変えない」ことを厳守する。
+
+2) 診断イベントの追加（軽量）
+   - `emit_len_with_fallback_*` と `lower_box_call(len/length)` に `observe::lower_hostcall` を追加し、
+     Param/Local/リテラル/handle.of どの経路か、select の条件（string_len==0）をトレース可能にする（`NYASH_JIT_EVENTS=1`）。
+
+3) AOT segfault (稀発) の追跡
+   - `tools/aot_smoke_cranelift.sh` 実行中に稀に segv（`.o` 生成直後/リンク前後）。
+   - `nyash.string.from_u64x2` 載せ替えと DT_TEXTREL 警告が出るので、PIE/LTO/relro 周りと TLS/extern の登録順を確認。
+
+4) 警告のノイズ低減（低優先）
+   - `core_hostcall.rs` の unreachable 警告（case 統合の名残）。
+   - `jit/lower/*` の unused 変数/unused mut の警告。
+
+影響ファイル（今回差分）
+- `src/jit/lower/core.rs`（len/length 二段フォールバック呼出し、保存強化）
+- `src/jit/lower/core/ops_ext.rs`（StringBox len/length 優先処理、リテラル即値畳み込み、保存）
+- `src/jit/hostcall_registry.rs`（`nyash.string.len_h` 追補）
+- `src/jit/extern/collections.rs`（`SYM_STRING_LEN_H` 追加）
+- `src/jit/lower/extern_thunks.rs`（`nyash_string_len_h` 追加）
+- `src/jit/lower/builder/cranelift.rs`（`SYM_STRING_LEN_H` のシンボル登録）
+- `tools/aot_smoke_cranelift.sh`（新規）
+- `apps/smokes/jit_aot_string_length_smoke.nyash`（新規）
+
+再現/確認コマンド
+- ビルド（JIT/AOT）: `cargo build --release --features cranelift-jit`
+- JIT‑AOT（.o出力）: `NYASH_AOT_OBJECT_OUT=target/aot_objects/test_len_any.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash`
+- AOT 連結〜実行: `bash tools/aot_smoke_cranelift.sh apps/smokes/jit_aot_string_min.nyash app_str`
+
+次アクション（引き継ぎ TODO）
+- [ ] Return の後方走査材化を実装（BoxCall/Call/Select 等の定義→保存→Return 接続）。
+- [ ] `emit_len_with_fallback_*` / `lower_box_call(len/length)` にイベント出力を追加（選択分岐/経路ログ）。
+- [ ] AOT segv の最小再現収集（PIE/relro/TLSの前提確認）→ `nyrt` 側エクスポート/リンカフラグ点検。
+- [ ] `NYASH_USE_PLUGIN_BUILTINS=1` 時の `length` も robust path を常に使用することを E2E で再確認。
 
 メモ
-
-- Verifier の緩和スイッチ: `NYASH_VERIFY_ALLOW_LEGACY=1`（移行用）。通常はOFFで運用。
-- Optimizer のRewrite はLLVM前提のBoxCall統一規約と整合済み。
-
-最優先: MIR命令セットをCore-15に統一し、VM/JIT/AOTを整えてからLLVM(inkwell)へ移行する。
-
-目的: MIR→VM→JIT→AOT の汎用化・単純化を一気に進める。命令の重複・メタ・実装露出を撤去/統合し、Builderが実際に発行するコア命令を最小化する。
-
-現状観測（2025-08-31）
-
-- 実装定義: 37命令（src/mir/instruction.rs）
-- Docs: Canonical 26（移行注記・Core-15ターゲット追記済）
-- Builder使用: 24命令（自動集計）
-  - 上位頻度: Const(19), TypeOp(13), Jump(6), ExternCall(5), Return(3), Call(3)
-  - 中頻度: NewBox(2), WeakRef(2), Barrier(2), BoxCall(1), Branch(1), Phi(1), PluginInvoke(1), Await(1)
-- JITサポート: 約20命令（ホストコール分は外部委譲で簡素）
-
-統合方針（Core-15）
-
-- 重複統合
-  - TypeCheck, Cast → TypeOp に完全統合（Builder 既に主に TypeOp を発行）
-  - WeakNew, WeakLoad → WeakRef に統合
-  - BarrierRead, BarrierWrite → Barrier に統合
-- Box哲学へ移譲
-  - Print → env.console.log (ExternCall)（Builder更新済）
-  - Debug → DebugBox.trace()/env.debug.trace（ExternCall/BoxCall）
-  - Throw, Catch → ExceptionBox（throw/catch相当のBox APIへ移譲; 移行期はRewrite）
-  - Safepoint → RuntimeBox.checkpoint（ExternCall）
-- 未使用/メタ
-  - FutureSet → 一旦廃止（Builder未使用）
-  - Copy, Nop → メタ命令（Optim/降格専用; Coreからは除外）
-
-最終ターゲット: Core-15 命令
-
-- 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
-- メモリ(2): Load, Store
-- 制御(4): Branch, Jump, Return, Phi
-- Box(3): NewBox, BoxCall, PluginInvoke
-- 配列(2): ArrayGet, ArraySet
-- 外部(1): ExternCall（暫定; 将来はBox化でも可）
-
-進め方（Core-15確定 → LLVM）
-
-1) Builder発行の一元化（非破壊）
-   - 既に Print→ExternCall 置換済み
-   - Builderが TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite を発行しないよう整理（既存箇所の差し替え）
-   - 既存テスト（builder/optimizer）を ExternCall/TypeOp/WeakRef/Barrier に合わせて更新
-2) 互換Rewriteパスの追加（MIR最適化フェーズ）
-   - 古いMIR（手書き/スナップショット/ツール）が生成した命令をコア命令に機械的変換
-     - TypeCheck/Cast → TypeOp
-     - WeakNew/WeakLoad → WeakRef
-     - BarrierRead/Write → Barrier
-     - Print → ExternCall(env.console.log)
-     - Debug → ExternCall(env.debug.trace)
-     - Throw/Catch → ExternCall(env.exception.*) もしくは BoxCall(ExceptionBox)
-     - Safepoint → ExternCall(env.runtime.checkpoint)
-3) VM/JITの段階撤去と整理
-   - VM/JIT: コア命令に集中（ホストコール/Box経由のI/Oや例外）
-4) Docs/CI
-   - INSTRUCTION_SET をCore-15へ更新（26→15マッピング表）
-   - 命令数固定テストを「15」に切替
-
-タスク分解（本フェーズ）
-
-- [x] Builderからのレガシー発行のデフォルト停止（WeakNew/WeakLoad/BarrierRead/Writeを統一命令に切替、トグルで復活可）
-- [x] MIR Rewriteパス追加（一部完了: Print/Type/Weak/Barrier、Debug/Safepointはトグル）
-- [ ] Optimizer/Verifier/Printerの非互換の見直し（Verifierでレガシー命令をエラー化）
-- [ ] VM: レガシー命令のコードパスに警告ログ（将来削除フラグ）
-- [ ] JIT: コア命令に合わせたテーブル整理（未使用ホストコールの棚卸し）
-- [ ] Docs更新（命令セット、移行ガイド、Box哲学との整合）
-- [ ] 回帰テスト更新（builder_modularizedを含む一式）
-
-追加の即応ステップ（10.8a）
-
-- [x] Rewrite: Print → ExternCall(env.console.log)
-- [x] Rewrite: TypeCheck/Cast → TypeOp、WeakNew/WeakLoad → WeakRef、BarrierRead/Write → Barrier
-- [x] Rewrite(トグル): Debug → ExternCall(env.debug.trace)（NYASH_REWRITE_DEBUG=1）
-- [x] Rewrite(トグル): Safepoint → ExternCall(env.runtime.checkpoint)（NYASH_REWRITE_SAFEPOINT=1）
-- [x] Builder: Try/Catch/Throw/Safepoint の直接発行を抑止（トグル導入・モジュール化系にも適用）
-- [x] Runtime: extern_call スタブ追加（env.runtime.checkpoint, env.debug.trace）
-- [x] Rewrite(トグル・スキャフォールド): FutureNew/FutureSet/Await → ExternCall(env.future.*) 変換（NYASH_REWRITE_FUTURE=1）
-
-引き継ぎ（2025-08-31 深夜）
-
-サマリ
-
-- JIT予約シンボル: `nyash.rt.checkpoint`, `nyash.gc.barrier_write` を確保（AOT/JITの双方で登録）
-- Future/Await Rewrite: `NYASH_REWRITE_FUTURE=1` で ExternCall(env.future.*) に段階導入（runtime最小実装あり）
-- Builderレガシー停止: Weak/Barrier 系の直接発行を既定で無効化（統一命令に集約、必要時トグル）
-- JIT-direct安定化: entry seal/戻り値制御/シム登録/コード寿命を調整し落ち着かせ済み
-- 次の着手順: MIR15のVM/JITカバレッジ拡張 → LLVM(inkwell) 移行
-
-- 完了/修正
-  - JIT/AOT 予約シンボルの登録完了（`nyash.rt.checkpoint`, `nyash.gc.barrier_write`）
-  - JITスタブ実装（no-op＋トレース）とAOT(nyrt)エクスポートを追加
-  - Future/Await Rewriteのスキャフォールド（`NYASH_REWRITE_FUTURE=1`）＋ runtime側`env.future.*`最小実装
-  - Builderレガシー停止を既定化（WeakNew/WeakLoad/BarrierRead/Write→統一命令）。必要時はトグルで復活
-    - `NYASH_BUILDER_LEGACY_WEAK=1`, `NYASH_BUILDER_LEGACY_BARRIER=1`
-  - JIT directの安定化（segfault修正）
-    - エントリblockのseal遅延（PHI/引数受け用）
-    - MIRシグネチャに基づく戻り値有無（Void関数はret無し/void呼び出し）
-    - `nyash.console.birth_h` のJIT内シム追加＋JITBuilder登録
-    - finalize済みコードの寿命延長（JITModuleをリークして新モジュールに差し替え）
-
-- カバレッジ確認（MIR15→VM/JIT）
-  - 追加ドキュメント: docs/reference/mir/MIR15_COVERAGE_CHECKLIST.md
-  - スモークスクリプト: tools/mir15_smoke.sh（実行例: `cargo build --release --features cranelift-jit` → `tools/mir15_smoke.sh release`）
-  - 現状OK（JIT-direct）: BinOp, Compare(真偽戻り), Load/Store(ローカル), Branch/Jump/PHI最小, ExternCall(console.log)
-  - まだoptional（フォールバックで許容）: 配列/Mapのhostcall系（len/isEmpty/get/push 等）
-
-実行メモ
-
-- ビルド: `cargo build --release --features cranelift-jit`
-- スモーク: `tools/mir15_smoke.sh release`
-- AOT(.o)簡易出力: `NYASH_AOT_OBJECT_OUT=target/aot_objects ./target/release/nyash --jit-direct examples/aot_min_return_42.nyash`
-  - 生成: `target/aot_objects/main.o`
-  - 備考: `tools/build_aot.sh` は jit-direct で .o を生成するよう更新済（要検証）
-
-LLVM足場（VM側 先行）
-
-- Escape Analysis（VMのみ）: `NYASH_VM_ESCAPE_ANALYSIS=1`
-  - 非エスケープなBoxの `Barrier(Read/Write)` を保守的に `Nop` 化
-  - 実装: `src/mir/passes/escape.rs`（NewBox起点のローカル追跡＋Return/Call/Store使用でescape検出）
-  - 適用: VM実行前にMIRへ適用（`src/runner/modes/vm.rs`）
-  - 目的: LLVM(inkwell)への最適化ヒント連携を見据えた足固め（まずVMで効果検証）
-
-- 次の着手（この順で）
-  1) MIR15のVM/JITカバレッジをもう一段拡張（配列/Map hostcallのJIT対応 or optionalのまま明確化）
-  2) スモークに代表サンプルを追加し、CI/ローカルでワンコマンド確認
-  3) LLVMフェーズ（inkwell）へ移行（Const/Return→BinOp/Compare→CF/PHIの順）
-
-次フェーズ提案
-
-- まずMIR15のVM/JITを固める（hostcallはoptional許容 or 段階実装）
-- その後、LLVM（inkwell）へ移行開始
-
-MIRセット（移行メモ）
-
-- 現行の参照ドキュメントは「26命令（Canonical）」を維持（`docs/reference/mir/INSTRUCTION_SET.md`）。
-- 実装はCore-15へ段階移行中（TypeOp/WeakRef/Barrier 統合、Print Deprecated）で、MIR15のカバレッジは `MIR15_COVERAGE_CHECKLIST.md` で運用。
-- Core-15が安定した時点で参照ドキュメント側を「15命令」に更新し、命令数固定テストも切替える。
-
-- [x] JIT/AOT: 将来のGCバリア/セーフポイント用のシンボル予約（nyash.gc.barrier_write, nyash.rt.checkpoint）
-
-環境変数（段階移行トグル）
-
-- NYASH_BUILDER_SAFEPOINT_ENTRY=1: 関数エントリにSafepointを発行
-- NYASH_BUILDER_SAFEPOINT_LOOP=1: ループ各回でSafepointを発行
-- NYASH_BUILDER_LEGACY_WEAK=1: 旧WeakNew/WeakLoad発行を有効化（既定: 無効、WeakRefに統一）
-- NYASH_BUILDER_LEGACY_BARRIER=1: 旧BarrierRead/Write発行を有効化（既定: 無効、Barrierに統一）
-- NYASH_BUILDER_DISABLE_TRYCATCH=1: try/catch/finallyを無効化（try本体のみ）
-- NYASH_BUILDER_DISABLE_THROW=1: throwをenv.debug.traceへフォールバック
-- NYASH_REWRITE_DEBUG=1: Debug命令をExternCall(env.debug.trace)に書き換え
-- NYASH_REWRITE_SAFEPOINT=1: Safepoint命令をExternCall(env.runtime.checkpoint)に書き換え
-- NYASH_REWRITE_FUTURE=1: FutureNew/Set/Await を ExternCall(env.future.*) に書き換え（スキャフォールド）
-- NYASH_DEBUG_TRACE=1: env.debug.traceのログをstderrに出力
-- NYASH_RUNTIME_CHECKPOINT_TRACE=1: env.runtime.checkpointのログをstderrに出力
-
-直近実装（完了）
-
-- AOT/JIT: string-like hostcalls 実装（concat_hh/eq_hh/lt_hh）とLowerer経路、シンボル登録
-- Print命令の非推奨化: BuilderでExternCall(console.log)へ統一、Rewriteでも変換
-- Builder（legacy抑止のトグル）: Safepoint/Try-Catch/Throwをトグル化、loop safepointも任意化
-- Runtime extern_call: env.debug.trace / env.runtime.checkpoint を追加
-
-次の着手（順序）
-
-1. JIT/AOT: GCバリア/セーフポイントのシンボル予約と下準備（nyash.gc.barrier_write, nyash.rt.checkpoint）
-2. Docs: 上記トグル/Extern API/命令マッピングの追記（INSTRUCTION_SET, runtime extern, migration）
-3. Future/AwaitのRewriteスキャフォールド（NYASH_REWRITE_FUTURE=1）と最小実装方針の明文化（完了）
-4. Builderのlegacy API（emit_weak_new/load, barrier_read/write）の非推奨化と使用箇所の削減
-5. JIT directのBlock-Sealパニック修正（block seal順序・entry sealの見直し）
-
-期待効果
-
-- 命令 37→15（目安）で読みやすさ/実装コスト/検証コストを大幅削減
-- JIT/AOT の対応面積が小さくなり、今回の string-like hostcall のような追加の導入が容易に
-- 「Everything is Box」に合致（I/O, 例外, ランタイム機能をBox/Externに集約）
-
-優先度/スケジュール
-
-- 優先度: 最優先（10.5c/10.7に割り込み）
-- 目安: 1〜2日でBuilder/Rewrite/Docs、続いてVM/JITの掃除を段階投入
-
-
-直近スナップショット（2025-08-30 更新）
-
-Current State
-
-- Plugin-First/Handle-First/TLVはAOT/VMで安定（10.5e完了状態を継続）
-- 10.6計画（Thread-Safety/Scheduler）と10.7計画（トランスパイルAll-or-Nothing）を確定
-- Nyash-onlyパイプライン（tools/pyc）を開始（Parser/CompilerはNyashで実装方針）
-- include式の最小実装を追加（式でBoxを返す／1ファイル=1static box）
-  - インタプリタ: include式は実行時評価
-  - VM/AOT: MIRビルダーが取り込み先を同一MIRに連結（MIR命令は増やさない）
-  - nyash.tomlの[include.roots]でルート解決（拡張子省略、index.nyash対応）
-- tools/pycをモジュール分割
-  - tools/pyc/pyc.nyash（エントリ: includeでPyIR/PythonParserNy/PyCompilerを取り込み）
-  - tools/pyc/PyIR.nyash, PythonParserNy.nyash, PyCompiler.nyash（Nyash-only実装）
-
-How To Run（Nyash-only）
-
-- VM: `NYASH_PY_CODE=$'def main():\n  return 42' ./target/release/nyash --backend vm tools/pyc/pyc.nyash`
-  - 出力: Parser JSON → IR（return 42）→ 生成Nyashソース（現状は骨組み）
-- include動作サンプル: `./target/release/nyash --backend vm examples/include_main.nyash`（Math.add(1,2)=3）
-
-進捗（2025-08-30 夜）
-
-- include: 循環検出を追加（インタプリタ/VM収集器ともにロード中スタックで経路出力）。examples/cycle_a/b で検証
-- tools/pyc: 最小IR（return定数）→Nyash生成を通し、出力をprintまで接続
-- 文字列基盤: VMにString統一ブリッジを着手（内部StringBoxとプラグインStringBoxの比較互換、内部Stringメソッドのフォールバック）
-- 追加プラグイン（小粒・基底）
-  - RegexBox（compile/isMatch/find/replaceAll/split）: examples/regex_min.nyash
-  - EncodingBox（utf8/base64/hex）: examples/encoding_min.nyash
-  - TOMLBox（parse/get/toJson）: examples/toml_min.nyash
-  - PathBox（join/dirname/basename/extname/isAbs/normalize）: examples/path_min.nyash
-
-Next Steps（優先順・更新）
-
-1. String統一ブリッジ（実装済・一次完了）
-   - VM: 比較/加算/代表メソッドのフォールバック（length/isEmpty/charCodeAt/concat/+）をstring-like正規化で実装
-   - Interpreter: 比較/加算はstring-like正規化を適用（メソッドは後続で最小追補があれば対応）
-   - 例: encoding_min/regex_min/toml_min/path_min で回帰確認
-2. AOT/JITへのブリッジ降ろし（MIR→VM→JIT→exeの汎用性維持・ハードコーディング禁止）
-   - 文字列演算のhostcall化（read-only）: nyash.string.concat_hh / eq_hh / lt_hh
-   - Lowerer: BinOp(Add) / Compare(Eq/Lt) を「string-like」判定時にhostcallへフォールバック
-   - 代表メソッド: length/isEmpty/charCodeAtは既存hostcall経由で維持、concat(メソッド)も追加検討
-   - Registry: 署名/権限（ReadOnly）登録、シンボル解決とJITビルダー登録
-   - 目標: examples/string_bridge_min.nyash をAOTでも成功
-3. tools/pyc: IR→Nyashの反映強化（return/If/Assignを安定化、Strictスイッチ連動）
-4. Strictスイッチ: tools/pyc（unsupported_nodes非空でErr、envでON/OFF）
-5. CLI隠しフラグ `--pyc`/`--pyc-native`（Parser→Compiler→AOTの一本化導線）
-6. 最小回帰（VM/AOTの差分記録）とdocs追補（include/exportとpyc、Regex/Encoding/TOML/PathのAPI概要）
-
-Env Keys（pyc）
-
-- NYASH_PY_CODE: Pythonソース文字列（Nyash-onlyパイプライン/Parser用）
-- NYASH_PY_IR: IR(JSON)直接注入（Rust雛形Compilerの確認用・オプション）
-
-目的: Handle-First + by-name を軸に、Python統合（PyRuntimeBox/PyObjectBox）を汎用・安全に実装する。最適化は後段。さらに10.7のNyash-onlyトランスパイルC2（pyc）を最小構成で立ち上げる。
-
-ステータス（2025-08-30 更新）
-
-- フェーズ: 10.5c 汎用Handle/TLV実装の拡張（Python統合開始）
-- 方針: 「綺麗に作って動かす」= ハードコーディング排除・Handle/TLV統一・最適化は後回し
-
-10.5b 完了項目（橋渡し済み）
-
-- by-name シム（getattr/call）を実装（JIT/AOT）し、Lowerer から a0 を `nyash.handle.of` で確実にハンドル化して呼び出し
-- 引数 a1/a2 はハンドル優先／なければレガシー参照から TLV 構築（String/Integer はプリミティブ化）
-- 汎用 birth シムを追加
-  - `nyash.box.birth_h(type_id:i64)->i64`（JIT/AOT）
-  - `nyash.box.birth_i64(type_id:i64, argc:i64, a1:i64, a2:i64)->i64`（JIT/AOT）
-  - Lowerer: NewBox（引数無し）は birth_h に統一。引数ありは安全なケース（Integer const／引数が既にハンドル）だけ birth_i64 に段階導入
-- AOT: examples/aot_py_math_sqrt_min.nyash で Strict でも .o 生成を確認（target/aot_objects/main.o）
-- ログ
-  - AOT: NYASH_CLI_VERBOSE=1 で birth_h の可視化
-  - JIT: events で by-name/birth の観測（必要十分の最小限）
-
-10.5c 着手項目（進行中）
-- Lowerer: PluginInvoke（type_id/method_id & by-name）の Handle-First 配線を統一（a0を常にnyash.handle.of）
-- JIT/AOT: birth（_h/_i64）と by-name シムでTLV生成を汎用化（String/Integerはプリミティブ化、他はHandle）
-- Strict時のJIT実行停止（コンパイル専用）でVM=仕様の原則を徹底
-
-非対応（後回し・最適化）
-
-- StringBox 専用の known_string/再利用最適化
-- 汎用的な定数プール／birth の可変長 TLV 一括最適化
-
-次の作業（10.5c 続き）
-
-1) FFI仕様の短文化（a0/a1/a2=Handle優先→TLV、レガシー抑止フラグ、戻りTLVのdecodeポリシー）
-2) birth引数の一般化メモ（可変長TLV、例外時ハンドリング）
-3) Python統合の最小チェーン（import→getattr→call）のAOT/VM双方での実装確認サンプル追加
-4) ドキュメント更新（10.5c README/INDEX、FFIガイド）
-
-合意済みルール
-
-- まず汎用・安全に動かす（最適化は内部に隠し、後段）
-- StringBox 等の個別特化は入れない。Handle/TLV で統一し、Box 追加を阻害しない
-- Strict/Fail‑Fast を維持（fallback で隠さない）
-Update (2025-09-02 AM / Async unify + VM await fix + JIT AOT builder plan)
-
-- What’s implemented (since last update)
-  - Interpreter/VM/JIT await semantics unified to Result.Ok/Err.
-    - Interpreter: await now returns Ok(value) or Err("Timeout") with cooperative polling and NYASH_AWAIT_MAX_MS guard.
-    - VM: execute_await() changed to safepoint + scheduler.poll loop with timeout → Err("Timeout") on expiry, Ok(value) on success.
-    - JIT: await_h produces handle (0 on timeout), then ok_h/err_h wrap into Result.Ok/Err (already wired).
-  - TaskGroup scaffolding connected to Interpreter
-    - nowait registers Future into implicit TaskGroup; function/static/parent calls push/pop task scopes to enable join on scope exit.
-  - TokenBox added as a first-class Box
-    - New Box: TokenBox (wraps CancellationToken). Externs: env.task.currentToken() → TokenBox, env.task.cancelCurrent() → cancel current scope token.
-  - Delay future (scheduler-backed)
-    - Extern: env.future.delay(ms) → FutureBox that resolves to void after ms (uses SingleThreadScheduler.spawn_after or thread fallback).
-  - CLI result normalization (interpreter path)
-    - When printing results, prefer semantics::coerce_to_i64/coerce_to_string and special-case plugin IntegerBox.get() so “IntegerBox(id)” prints as numeric value.
-
-- New samples (smoke-friendly)
-  - apps/tests/mir-safe-min: minimal MIR (plugins disabled)
-    - Run: `NYASH_DISABLE_PLUGINS=1 ./target/debug/nyash --backend mir apps/tests/mir-safe-min/main.nyash` → Result: 3
-  - apps/tests/async-nowait-basic: Interpreter nowait/await using threads
-    - Run: `NYASH_DISABLE_PLUGINS=1 ./target/debug/nyash apps/tests/async-nowait-basic/main.nyash` → Result: 33
-  - apps/tests/async-scope-token: VM token + delay demo (plugins on)
-    - Run: `./target/debug/nyash --backend vm apps/tests/async-scope-token/main.nyash`
-    - Output: token: …; after delay; token after cancel: …; Result: 0
-  - apps/tests/async-await-timeout: VM await timeout demo
-    - Run: `./target/debug/nyash --backend vm apps/tests/async-await-timeout/main.nyash`
-    - Output: `Err(Timeout)` then Result: 0
-
-- JIT (execute) status
-  - `--backend cranelift` (skeleton) runs: `apps/tests/mir-branch-ret` → Result: 1
-  - JIT-direct path compiles/executes for simple cases (single-exit return strategy in place, PHI materialization to locals, etc.).
-
-- JIT (AOT/EXE) current blocker and plan
-  - Symptom: jit-direct path panics in Cranelift FunctionBuilder finalize: “FunctionBuilder finalized, but block block0 is not sealed”.
-  - Root cause: Current CraneliftBuilder repeatedly creates short‑lived FunctionBuilder instances and finalizes them per emission step; sealing discipline diverges from expected pattern (single FunctionBuilder per function, seal blocks after predecessors known). Entry sealing/ret-epilogue sealing were added, but per‑step finalize still violates constraints.
-  - Plan (box-first, clean layering)
-    1) Refactor CraneliftBuilder to hold a single FunctionBuilder per function lifetime.
-       - Maintain current block, value stack, and IR emission without re‑creating/finalizing FB on every op.
-       - Emit jump/branch/hostcall/phi consistently in the same FB.
-       - Seal blocks when predecessors are determined (via LowerCore callbacks), and perform a final seal sweep before define_function.
-    2) Keep ObjectBuilder (AOT .o path) returning directly (no ret_block), unchanged aside from any minimal alignment with single‑FB pattern (it already returns directly and finishes module per function).
-    3) Target sample: apps/tests/mir-branch-ret for first green AOT object emission.
-       - Success criteria: tools/build_aot.sh invoked via `--compile-native -o app` produces an executable that prints Result: 1.
-    4) After branch/ret green, extend to minimal PHI case (mir-phi-min) ensuring paramized block args are declared prior to seals.
-
-- Interim guidance
-  - For JIT testing use `--backend cranelift` (skeleton exec) or VM path with `NYASH_JIT_EXEC=0` unless running jit-direct read‑only smokes.
-  - For AOT/EXE, wait for the single‑FB refactor merge; current tools/build_aot.sh in strict mode forbids fallback and will fail on the sealing assertion.
-
-- Env toggles / helpers
-  - Await timeout: `NYASH_AWAIT_MAX_MS` (default 5000)
-  - Scheduler trace/budget: `NYASH_SCHED_TRACE=1`, `NYASH_SCHED_POLL_BUDGET=N`
-  - JIT lower dump/trace: `NYASH_JIT_DUMP=1`, `NYASH_JIT_TRACE_RET=1`, `NYASH_JIT_TRACE_BLOCKS=1`
-  - JIT policy (read-only in jit-direct): `NYASH_JIT_STRICT=1` and policy.read_only enforced
-
-- Next actions (execution order)
-  1) CraneliftBuilder: single FunctionBuilder per function（finalize at end_functionのみ）。
-     - Remove per‑op new/finalize; switch emit_* to use the persistent FB.
-     - Seal entry immediately; seal successors when wiring is complete; final global seal sweep before define_function.
-  2) Verify jit-direct with `apps/tests/mir-branch-ret` (NYASH_JIT_THRESHOLD=1).
-  3) Enable AOT object emission for the sample and link via tools/build_aot.sh; run resulting EXE (expect Result: 1).
-  4) Extend to `mir-phi-min` (ensure ensure_block_params + sealing order correct).
-  5) Wire tri-backend/async/timeout smokes in tools/ (minimal, concise outputs) and add to CI.
-## Phase 12 — Handoff (VM/JIT 統一経路・Nyash ABI vtable/by-slot)
-
-Updated: 2025-09-03 — Quick Handoff Summary（長文は下に残し、ここを最新ソースに）
+- `jit_aot_any_len_string.nyash` は `return s.length()` の Return 経路解決が決め手。材化を強化すれば `3` が期待値。
+- 既存の Array/Map 経路・他の smokes は影響なし（len/size/get/has/set の HostCall/PluginInvoke は従来どおり）。
+
+■ 進捗サマリ
+- Phase 12 クローズアウト完了。言語糖衣（12.7-B/P0）と VM 分割は反映済み。
+- Phase 15（Self-Hosting: Cranelift AOT）へフォーカス移行。
+  - 設計/仕様ドキュメントとスモーク雛形を追加済み。
+    - 設計: `docs/backend-cranelift-aot-design.md`
+    - API案: `docs/interfaces/cranelift-aot-box.md`
+    - LinkerBox: `docs/interfaces/linker-box.md`
+    - スモーク仕様: `docs/tests/aot_smoke_cranelift.md`
+    - 雛形スクリプト: `tools/aot_smoke_cranelift.sh`, `tools/aot_smoke_cranelift.ps1`
+- README にセルフホスト到達の道筋を明記（C ABI を Box 化）。
+
+【ハンドオフ（2025‑09‑06 3rd）— String.length: const‑fold→Return 材化の不一致 調査ログとTODO】
+
+概要（現象）
+- 目標: JIT/JIT‑AOT で `StringBox.length/len` が 3 を返すべき箇所で 0 になるケースを解消。
+- 現状: Lower 中の早期 const‑fold で `length = 3` を確実に計算（[LOWER] early const‑fold ... = 3 が出力）。Return 時点でも `ValueId(3)` が `known_i64=3` と認識される（[LOWER] Return known_i64?=true）。にもかかわらず最終結果（実行結果）は 0。
+
+重要な観測（再現とログ）
+- MIR ダンプ（プリンタ仕様上、BoxCall は `call %box.method()` として表示）
+  0: `%1 = const "abc"`
+  1: `%2 = new StringBox(%1)`
+  2: `call %2.birth(%1)`  // birth は通常 call（dst なし）
+  3: `%3 = call %2.length()` // これも通常 call 表記（内部は BoxCall）
+  4: `ret %3`
+- Lower ログ:
+  - `[LOWER] early const-fold StringBox.length = 3` が出る（const‑fold 成功）
+  - `[LOWER] Return value=ValueId(3) known_i64?=true param?=false local?=true`
+  - それでも実行結果は `Result: 0`
+- `nyash.jit.dbg_i64`（[JIT‑DBG]）の出力が実行時に出ていない（import は宣言されるが call が観測されず）。
+
+今回入れた変更（実装済・該当ファイル）
+- Return/材化の強化（known を最優先）
+  - `src/jit/lower/core_ops.rs`: `push_value_if_known_or_param` を「known_i64 最優先」に変更。
+  - `src/jit/lower/core.rs` の `I::Return` でも `known_i64` を最優先で積むように変更。
+- Call/ArrayGet の戻り値の保存
+  - `src/jit/lower/core.rs`: `I::Call` 戻り値を dst が無い場合もスクラッチローカルへ保存（栈不整合の防止）。`I::ArrayGet` 戻り値も dst スロットへ保存。
+- String.length/len の早期 const‑fold を二段に強化
+  - `src/jit/lower/core.rs`: BoxCall 入り口で `StringBox.literal` の length/len を即値化（最優先）。
+  - `src/jit/lower/core/ops_ext.rs`: 同様の const‑fold を堅牢化（NewBox(StringBox, Const) から復元）。
+  - `src/jit/lower/core.rs`: lowering 前に `known_str` を事前シード、`string_box_literal` マップ（NewBox → リテラル文字列）を構築し、Copy 伝播も対応。
+- トレース導線
+  - `src/jit/lower/core/string_len.rs`: 二段フォールバック（param/local/literal）にデバッグフック（タグ 110x/120x/130x 系）追加。
+  - `src/jit/lower/builder/cranelift.rs`: ローカル slot の store/load トレース（`NYASH_JIT_TRACE_LOCAL=1`）。
+  - `crates/nyrt/src/lib.rs`: AOT 側の `nyash.string.len_h` / `nyash.any.length_h` に `[AOT-LEN_H]` を追加。
+  - `src/jit/lower/extern_thunks.rs`: `nyash_string_from_u64x2` に `[JIT-STR_H]` を追加（JIT のハンドル生成観測）。`nyash_handle_of` に `[JIT-HANDLE_OF]` を追加。
+
+仮説（根本原因）
+- const‑fold で 3 を積めているにも関わらず、Return 時の実返却が 0。優先順位の修正により `known_i64` から 3 を積むよう修正済みだが、compiled JIT 関数内での Return 材化導線（ret_block への引数配線/最後の return）が値 0 に擦り替わる経路が残っている可能性。
+  - ret_block/ジャンプ引数の材化不整合
+  - 後続命令でスタックが上書きされる経路
+  - birth の dst なし call で残留値が生じていた可能性（Call 戻り値スクラッチ保存で対策済）
+
+次アクション（TODO）
+1) Return の後方走査材化（優先・CURRENT_TASK 既存 TODO の実装）
+   - BoxCall/Call/Select/Const/Copy/Load に遡って、Return が値を確実に拾う材化パスを補強する。
+   - 既に known_i64 最優先化は実施済み。残りは ret_block 引数配線の最終確認（CraneliftBuilder の ret 経路）。
+
+2) 実行時の値トレース強化（短期）
+   - `emit_return`（CraneliftBuilder）で、ret_block へ jump 直前の引数 `v` を `nyash.jit.dbg_i64(299,v)` で確実に呼ぶ（env でON）。
+   - ret_block 入口パラメータの `return_` 直前でも `dbg_i64(300,param0)` 呼び出しを足し、どこで 0 になるかを確定する。
+
+3) BoxCall(length/len) の早期 fold 命中率最終確認
+   - `NYASH_JIT_TRACE_LOWER=1` で `[LOWER] early const-fold ... = 3` が必ず出ることを確認。
+   - 既に出ているが、Return までの導線で 3 が 0 に化ける起点を 2) で特定する。
+
+4) AOT/JIT‑AOT 観測の整備（参考）
+   - `[AOT-LEN_H]` で AOT 側 len_h/any.length_h の handle 解決有無をログ化。JIT‑AOT smoke での差異を収集。
+
+再現/確認コマンド（更新）
+- 早期 fold と Return 導線ログ:
+  - `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_TRACE_RET=1 NYASH_AOT_OBJECT_OUT=target/aot_objects/test_len_any.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash`
+- ローカル slot 観測:
+  - `NYASH_JIT_TRACE_LOCAL=1 NYASH_AOT_OBJECT_OUT=... --jit-direct ...`
+- AOT 側の handle 解決ログ:
+  - `NYASH_JIT_TRACE_LEN=1 bash tools/aot_smoke_cranelift.sh apps/smokes/jit_aot_string_min.nyash app_str`
+
+補足メモ
+- MirPrinter は BoxCall を `call %box.method()` と出力する仕様（今回は BoxCall 経路で const‑fold が呼ばれていることは [LOWER] ログで確認済み）。
+- `call %2.birth(%1)` の戻り値残留に備え、I::Call の dst なし呼び出しでもスクラッチ保存して栈を消費するよう修正済み（回帰に注意）。
+
+担当者への引き継ぎポイント
+- まず 2) の dbg を CraneliftBuilder の ret 経路（jump to ret_block と return_）に追加し、`v`/`param0` が 0 になる箇所を特定してください。
+- 次に 1) の Return 後方走査材化を入れて、BoxCall/Select/Copy 等いずれの経路でも Return が安定して値を拾えるようにしてください。
+- その後、smoke `apps/smokes/jit_aot_any_len_string.nyash` が `Result: 3` で通ることを確認し、const‑fold のログと一致することをもってクローズ。
+
+【将来計画（バグ修正後）— JIT を exec 専用にし、VM 連携を段階的に廃止】
 
 目的
-- VM/JIT を vtable/by-slot で統一し、Extern と BoxCall の経路分離（BoxCall→vtable/PIC/汎用、Extern→name/slot）を確立。
-- 逆呼び（plugins→host）をTLV＋スロットで安定化。JIT/VM の安全な境界（TLS/GCバリア）を担保。
+- JIT は「コンパイル＋実行（exec）」に一本化し、VM 依存のレガシー経路（param-index/TLS参照）を撤去する。
+- 値の材化・ハンドル管理・hostcall を JIT 側で一貫させ、境界の不整合を根本から減らす。
 
-今回の到達点（実装済み）
-- JIT host-bridge 完配線（Cranelift thunk＋シンボル登録）
-  - Instance.getField/setField: 統一3引数シンボル（field3: (recv,name,val/-1)）で by-slot 呼び出し
-  - String.len: 受け手 StringBox は host-bridge 経路へ
-  - 文字列リテラル→StringBox ハンドル化: `nyash.string.from_u64x2`＋builder API
-  - NewBox(Instance, 引数なし): `nyash.instance.birth_name_u64x2` でグローバルUnifiedRegistry経由生誕
-- Lowering 強化
-  - Instance.getField/setField と String.len を最優先ルートに（simple_reads より前）
-  - Const(String) の伝搬（known_str）を追加 → name/val を確実にハンドル化
-- 一致テスト（ローカル）
-  - OK: `identical_exec_string`（"hello".len → 5）
-  - OK: `identical_exec_instance`（Person.setField/getField → "Alice"）
+ロードマップ（段階移行）
+1) 実行モードの明確化（設定）
+   - 環境変数 `NYASH_JIT_MODE=exec|compile|off` を導入。
+   - 既存の `NYASH_JIT_STRICT` は非推奨化し、`MODE=compile` に集約。
 
-How to Run（再現手順）
-- 前提: `--features cranelift-jit`
-- 文字列/インスタンス一致
-  - `NYASH_ABI_VTABLE=1 NYASH_JIT_HOST_BRIDGE=1 cargo test --features cranelift-jit --lib tests::identical_exec_string::identical_vm_and_jit_string_len -- --nocapture`
-  - `NYASH_ABI_VTABLE=1 NYASH_JIT_HOST_BRIDGE=1 cargo test --features cranelift-jit --lib tests::identical_exec_instance::identical_vm_and_jit_person_get_set_slots -- --nocapture`
+2) JIT ABI の一本化
+   - `src/jit/lower/extern_thunks.rs` などから `with_legacy_vm_args` を撤去。
+   - `nyash_handle_of` を含む extern は「JIT引数/ハンドルのみ」を受け付ける設計に変更。
+   - ランタイム境界で `VMValue -> JitValue(Handle)` へのアダプタを用意。
 
-主要フラグ
-- `NYASH_ABI_VTABLE=1`（VM vtable）
-- `NYASH_JIT_HOST_BRIDGE=1`（JIT host-bridge 経路）
-- 任意: `NYASH_JIT_TRACE_BRIDGE=1`（ブリッジ経路の最小ログ）
+3) レガシー撤去（JIT/AOT側）
+   - `crates/nyrt/src/lib.rs` の `nyash.string.len_h`/`nyash.any.length_h` から param-index フォールバックを削除。
+   - lowering の `-1` センチネルや VM 依存の fallback を廃止し、`handle.of` または既存ローカルハンドルに統一。
 
-主な変更点（ファイル）
-- Host-bridge/Thunk: `src/jit/extern/host_bridge.rs`, `src/jit/lower/extern_thunks.rs`
-- Lowering: `src/jit/lower/core/ops_ext.rs`, `src/jit/lower/core.rs`, `src/jit/lower/builder/{cranelift.rs,builder.rs,noop.rs}`
-- JITエンジン経路: `src/backend/cranelift/mod.rs`, `src/jit/engine.rs`
-- Runtime/Registry: `src/runtime/{nyash_runtime.rs,unified_registry.rs}`（既存）
-- テスト: `src/tests/{identical_exec_string.rs,identical_exec_instance.rs}`（Factory注入を追加）
+4) フォールバック方針（移行期間）
+   - 関数単位で `unsupported>0` の場合のみ VM にフォールバック。
+   - オプション `NYASH_JIT_TRAP_ON_FALLBACK=1` を追加し、移行時の漏れを検出可能に。
 
-未了/次の一手（小さく）
-- Collections/Reverse-call サブセットをVM/JITで再確認（Map/Array by-slot の最小一致）
-- vtable_* ユニットの NewBox 失敗時はテスト内で Factory 注入（必要箇所のみ）
-- CI: 一致系サブセット（string/instance/host_reverse）を first-wave に追加
+5) Return 導線の強化（本タスクの延長）
+   - Cranelift 生成の ret 経路に dbg を常設（envでON）。
+   - Return の後方走査材化を標準化し、const-fold/BoxCall/Select いずれでも Return が値を確実に拾うように。
 
-メモ/注意
-- host-bridge シンボルは固定アリティ・固定戻り（i64）で宣言し、call-site側で戻り値の使用有無を制御
-- NewBox(Instance) はJIT側で UnifiedRegistry を直接叩くため、グローバルに必要Factoryを登録しておく（テスト内で注入済み）
+6) ドキュメント/テスト更新
+   - README/CURRENT_TASK にモード説明と運用方針を追記。
+   - CI の smoke は `MODE=exec` を常態化し、compile-only はAOT出力/ベンチのみで使用。
 
-（以下、旧詳細ログは履歴のため残置）
-  - 第4段: VM 基本状態を `src/backend/vm_state.rs` へ抽出（完了）
-    - 移動: `new/with_runtime`、`get_value/set_value`、`record_instruction`、`jit_threshold_from_env`、`loop_execute_phi`（各 `impl VM`）
-    - `mod.rs` に `mod vm_state;` を追加。各呼び出し元のシンボルは従来どおり `VM::...` で参照可。
-    - ビルド: 成功。
+影響範囲（主な修正ポイント）
+- `src/jit/manager.rs`（モード/実行ポリシー）
+- `src/jit/lower/extern_thunks.rs`（レガシーVM依存排除、JIT ABI専用化）
+- `src/jit/lower/core.rs` / `src/jit/lower/core_ops.rs`（-1センチネル削除・ハンドル材化徹底）
+- `crates/nyrt/src/lib.rs`（dotted名hostcallのレガシー経路削除）
+- ドキュメント（README/CURRENT_TASK）
 
-現状のレイアウト（A3 途中）
-- `backend/vm.rs`: VM 本体（構造体・値型・最小グルー）。現在 ~1295 行（旧メソッド退避を除き圧縮済み）
-- `backend/vm_exec.rs`: 実行エントリ/ループ/1命令実行
-- `backend/vm_gc.rs`: ルート領域 API と GC 診断出力
-- `backend/vm_state.rs`: 生成・状態・値アクセス・統計・phi 補助
-- `backend/vm_values.rs`: 算術/論理/比較の内部演算
-- `backend/vm_instructions/`: 命令ハンドラ群
-- `backend/vm_boxcall.rs`: VTable/PIC スタブと BoxCall 補助
-- `backend/dispatch.rs`: MIR 命令 → 実行関数 振り分け
+ロールアウト/リスク
+- フラグ駆動で段階的に切替（デフォルト `exec`）。
+- リスク: plugin経路/hostcall registry/ハンドルリーク。
+  - 緩和: `handles::begin_scope/end_scope_clear` によりハンドル回収を徹底、registryの検証を追加。
 
-次の分割（提案 / おすすめ）
-- S1) `vm_methods.rs` 抽出（Box メソッドディスパッチ）
-  - 対象: `VM::call_box_method`（大ブロック）＋`call_unified_method` ラッパ
-  - 期待効果: `vm.rs` を < 1000 行へ。呼び出しは現行どおり `VM::call_box_method`。
-- S2) `vm.rs` 旧プレースホルダ（`*_old`, `execute_module_old_moved` など）を段階削除
-  - 互換検証後に削除してノイズ低減。
-- S3) `vm_types.rs`（任意）
-  - `VMError`/`VMValue` 定義を分離し参照しやすく。
-  - ただし変更範囲が大きいため最後に予定。
+【本日更新】
+- VM if/return 無限実行バグを修正（基本ブロック突入時に `should_return`/`next_block` をリセット）。include 経路のハングも解消。
+- ArrayBox プラグイン生成失敗に対し、v2 ローダへパス解決フォールバック（`plugin_paths.search_paths`）を追加し安定化。
+- std/string の P0 関数を Ny 実装で追加（length/concat/slice/index_of/equals）。index_of は substring ループで代替。
+- 残課題: string_smoke で `fails` 累積の else 側に φ が入らず未定義値参照（MIR Builder 側の SSA/φ 振る舞い）。別タスク化。
+
+【ハンドオフ（2025‑09‑06）— AOT/JIT‑AOT 足場と箱下寄せリファクタ】
+- 変更サマリ
+  - nyrt: AOT 連携の dotted 名を追加（Map/String/Any/birth）
+    - `nyash.map.{size_h,get_h,get_hh,set_h,has_h}`
+    - `nyash.string.{len_h,charCodeAt_h,concat_hh,eq_hh,lt_hh}` / `nyash.any.{length_h,is_empty_h}`
+    - NewBox/文字列: `nyash.instance.birth_name_u64x2`, `nyash.string.from_u64x2`
+  - JIT‑AOT(ObjectBuilder):
+    - 文字列リテラル→ハンドル生成（u64x2 パック → `nyash.string.from_u64x2`）
+    - 出力関数を `ny_main` としてエクスポート
+    - 最小 Store/Load（i64）を StackSlot で実装
+  - Lower（箱を下に寄せる最小整理）:
+    - Map: param 不在でもローカルハンドルがあれば `_H` シンボルで直呼び
+    - Any.length: StringBox は `nyash.string.len_h` を優先。ローカル/再構築/旧 index の順にフォールバック
+    - Copy/Load でローカルハンドルを dst 側 slot に伝播
+    - Array.length は ArrayBox 受けに限定（ops_ext ガード）
+
+- 追加スモーク（JIT‑AOT）
+  - `apps/smokes/jit_aot_string_min.nyash`（concat+eq）→ PASS
+  - `apps/smokes/jit_aot_any_isempty_string.nyash` → PASS
+  - `apps/smokes/jit_aot_any_len_string.nyash` → 現状 Result: 0（後述の未解決）
+  - `apps/smokes/jit_aot_map_min.nyash` → 環境により MapBox 生成が必要
+
+- 実行例
+  - 文字列ミニ（AOT）:
+    - `NYASH_AOT_OBJECT_OUT=target/aot_objects/test_str.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_string_min.nyash`
+    - `cc target/aot_objects/test_str.o -L target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o app_str && ./app_str` → `Result: 1`
+  - isEmpty（AOT）:
+    - 同様に `app_empty` → `Result: 1`
+  - Map 最小（AOT）:
+    - `.o` 生成/リンクは通る。`new MapBox()` はプラグイン/設定に依存（`nyash.toml` と `.so` の配置を確認）
+
+- 未解決 / 既知の課題（優先度高）
+  1) String.length の AOT 実行が 0 になるケース
+     - 症状: `s = new StringBox("abc"); return s.length()` → `Result: 0`
+     - 現状の対処: Any.length を String.len_h 優先にし、ローカル/再構築/旧 index の順でフォールバック。Const fold も追加済み。
+     - 追加方針: 受け型伝播（Copy/Load→dst へ型共有）をより堅牢化。最終手段として、ローカルハンドル時に `string.len_h`→`any.length_h` の二段呼び分け（0 返りのときだけ後者）で保険を張る。
+  2) MapBox 生成（AOT 実行バイナリ）
+     - 環境によりプラグイン解決が必要。`nyash.toml` のあるディレクトリで実行し、必要なら各プラグインを `target/release` に配置。
+
+- 次アクション（引き継ぎ TODO）
+  - [ ] Any.length の 0 問題を完全解消
+    - [ ] 受けの型/ハンドル伝播（Copy/Load/Store）を統一ヘルパ化し、length/len/charCodeAt で確実にハンドルを積む
+    - [ ] StringBox(Const) は定数畳み込みを最優先（len を即値化）
+    - [ ] 保険: `string.len_h`→0→`any.length_h` の順にフォールバック（ローカルハンドル時）
+  - [ ] メソッド→シンボル/引数規約の集中表を作成（Array/Map/String/Any）
+    - [ ] ops_ext/core の分岐重複を縮減（箱の責務を「下」に寄せる）
+  - [ ] AOT スモーク拡充
+    - [ ] String/Array の length/len を追加、select/分岐のミニ例も用意
+    - [ ] Map.get/has/set（プラグインあり環境用）
+
+- 影響ファイル（主要）
+  - 追加/更新: `crates/nyrt/src/lib.rs`（dotted エクスポート多数）、
+    `src/jit/lower/builder/{object.rs,cranelift.rs}`、
+    `src/jit/lower/{core.rs,core/ops_ext.rs,core_hostcall.rs}`、
+    スモーク: `apps/smokes/jit_aot_*.nyash`
+
+■ ハンドオフ（JIT AOT / LLVM の現状と次アクション）
+- 現状サマリ
+  - Array fast‑path: VM 側 len/length を最前段に早期化（Void→0 も確認）。
+  - Null 互換: NullBox→VMValue::Void へ統一（比較の整合確保）。
+  - std/array smoke: `NYASH_DISABLE_PLUGINS=1` で PASS（len/push/pop/slice）。
+  - LLVM AOT: 復活（nyrt の read lock 寿命修正、build_llvm.sh のリンクパス `-L target/release` 追加）。
+  - JIT AOT(ObjectBuilder): P0 安定化＋P1 実装済（const/return、i64 binop、compare、select、branch/jump、hostcall 基本、PHI最小化ブロック引数）。
+    - jit-direct で .o 生成確認: `apps/smokes/jit_aot_arith_branch.nyash` → Result 13、.o 出力 OK。
+    - build_aot.sh は既定で STRICT=0、出力 `target/aot_objects/main.o` に固定。
+  - nyrt: AOT 連携用 dotted 名 alias を Array に追加（`nyash.array.{len_h,get_h,set_h,push_h}`）。
+
+- 優先TODO（次にやること）
+  1) JIT AOT P2: hostcall 拡張（規約ベースの最小集合）
+     - Map: `nyash.map.{size_h,get_h,has_h,set_h}` の dotted 名を nyrt に追加（既存実装へ forward）
+     - String: 代表メソッド（len/concat/substring/indexOf 等）で必要なシンボルを dotted 名として追加
+     - ObjectBuilder から `emit_host_call_typed` で呼び出し（Lower の対応表に従う）
+  2) LowerCore: slot/name→hostcall マッピング（by‑slot を優先、by‑name は互換フォールバック）
+     - Array/Map/String の最小セット（len/get/set/push、size/get/has/set、len/concat など）
+  3) 後続（必要時）: JIT AOT スモークを追加（分岐あり最小、Array/Map の各1本）
+
+- 実行コマンド（確認用）
+  - JIT AOT（jit-direct + .o）:
+    - `NYASH_DISABLE_PLUGINS=1 NYASH_JIT_EVENTS=1 NYASH_AOT_OBJECT_OUT=target/aot_objects/jit_aot_arith.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_arith_branch.nyash`
+  - LLVM AOT（emit+link）:
+    - `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) tools/build_llvm.sh apps/tests/ny-llvm-smoke/main.nyash -o app`
+
+■ 現在のフォーカス（JITオンリー／一旦の着地）
+1) Core 緑維持（完了）
+   - `tools/jit_smoke.sh` / Roundtrip(A/B) / Bootstrap(c0→c1→c1') / Using E2E = PASS
+2) CI 分離（完了）
+   - Core（常時）: `tools/jit_smoke.sh` + Roundtrip
+   - Plugins（任意）: `NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh`（strict既定OFF、`NYASH_PLUGINS_STRICT=1`でON）
+3) Self‑host E2E（完了）
+   - ny_plugins 有効 + `NYASH_USE_NY_COMPILER=1` の自己ホストE2Eをオプションゲートで運用
+4) クリーンアップ（完了）
+   - 未使用import/変数の整理、runner責務分割、tools出力体裁の統一
+
+■ ブランチ/構成（Phase 15）
+- 実装ブランチ: `phase-15/self-host-ny-mir`
+- 既存 Workspace は維持（`crates/*`）。
+- 方針: crates 側は変更せず「Nyash スクリプト + nyash.exe」だけで実装・運用（Windows優先）。
+  - 例: `C:\git\nyash-project\nyash_self\nyash` 直下で `target\release\nyash` 実行。
+- Nyash 製パーサは `apps/ny-parser-nyash/`（Nyashコード）として配置（最初は最小サブセット）。
+- MIR 解釈層は既存 `backend/mir_interpreter.rs` と `runner/modes/mir_interpreter.rs` を拡充。
+- AOT 関連の雛形は `src/backend/cranelift/` に維持（feature gate: `cranelift-aot`）。
+
+■ 再開TODO（優先順）
+1) std Ny実装の実体化（P0/P1）
+   - string: length/concat/slice/indexOf/equals → P0 完了（string_smoke PASS）
+   - array: len/push/pop/slice を内蔵経路で先行（次着手）
+   - map: get/set/len/keys (+values/entries/forEach)
+   - jit_smoke に機能検証を常時化（Coreは `NYASH_DISABLE_PLUGINS=1`）
+2) NyコンパイラMVPのsubset拡張
+   - let/call/return に続き if/ブロック/関数引数まで拡張し、`NYASH_USE_NY_COMPILER=1` スモークを充実
+3) Self‑host E2E ゲートの昇格
+   - 連続N回グリーン後にCI optional→requiredへ昇格（trace/hash基準）
+4) Plugins厳格ONの段階移行
+   - Core‑13準拠サンプルへ置換し、`NYASH_PLUGINS_STRICT=1` ゲートで順次ONに復帰
+
+【優先追加 — JIT AOT（ObjectBuilder）安定化・拡張】
+- P0: 安定化（完了）
+  - switch_to_block なしでの命令発行panic対策（emit_const系）
+  - 終端命令なしVerifierエラー対策（emit_return 実装）
+  - build_aot.sh の STRICT 緩和（デフォルト0）＋ obj 直指定
+- P1: 最小命令カバレッジ（今すぐ実装）
+  - i64 binop: add/sub/mul/div/mod を実コード生成
+  - compare: eq/ne/lt/le/gt/ge → b1→i64(0/1) へ正規化してpush
+  - 分岐/ジャンプ: br_if_top_is_true/jump_to 実装（ブロック遷移とCFG整合）
+  - select: emit_select_i64 実装（cond, then, else の順）
+- P2: hostcall 系の型付き発行（必要最小限）
+  - array/map/string/integer の代表 extern を ObjectBuilder に実装
+  - ny-llvm-smoke 等に相当する JIT AOT smoke 追加
+- P3: CI スモーク
+  - `tools/jit_smoke.sh` に AOT(JIT)最小タスクを追加（STRICT=0 で .o 生成確認）
+
+## ブロッカー/暫定対応（2025‑09‑05 更新）
+- 影響範囲（Backend差）
+  - JIT(cranelift) → 影響なし。
+  - VM(backends=vm) → if/return 無限ループは修正済み（基本ブロック突入時に CF リセット）。
+  - 結論: include ハングの根因は VM の制御フロー残存フラグ。修正により解消。
+
+- 事象A: include ハング → 解消
+  - `apps/tmp_len_min.nyash`/`apps/tmp_len_test.nyash` 正常完走を確認。
+
+- 事象B: ArrayBox プラグイン生成エラー → 解消
+  - v2 ローダにフォールバック探索（`plugin_paths.search_paths`）を追加し、workspace の `./target/release/*.so` を自動解決。
+  - DEBUG 時に birth 戻り `code/out_len` をロギング。
+
+- 事象C: std/string_smoke の最終段で未定義値参照 → 解消
+  - MIR Builder の if 降ろしで φ を必ず生成（then のみ代入・else 未代入時は pre 値と then 値で合流）。
+  - string_smoke PASS を確認。
+
+## 次アクション（デバッグ計画）
+- A1: includeハング最小化再現を固定（VM経路優先で調査）
+  - `apps/tmp_len_test.nyash` 固定、`NYASH_DEBUG=1` で `execute_include_expr` → `ensure_static_box_initialized` までの経路にログを追加。
+  - `included_files`／`include_stack` の push/pop と RwLock/RwLock の取り回しを確認。ポップ忘れ/二重ロックがないか検査。
+  - `apps/std/string.nyash` 内のメソッドを段階的に無効化して最小原因を特定（現状 length のみでも再現）。
+
+- A2: VM if/return 無限実行（VM限定）を優先修正
+  - 症状: JITは1回then→Return→終了。VMはthenのprintが際限なく繰り返される。
+  - 再現最小: `apps/tmp_if_min.nyash`
+    ```nyash
+    static box Main {
+      main() {
+        local x
+        x = 3
+        if x == 3 {
+          print("ok3")
+          return 0
+        }
+        print("bad")
+        return 1
+      }
+    }
+    ```
+    - JIT: `./target/release/nyash apps/tmp_if_min.nyash` → 1回だけ ok3, Result:0
+    - VM: `timeout 4s ./target/release/nyash --backend vm apps/tmp_if_min.nyash` → ok3 が無限に出続け TIMEOUT
+  - MIRダンプ（`NYASH_VM_DUMP_MIR=1`）では if 降下は正しく、then/else 各ブロックは `ret` を含む。
+    - 例: bb1 に `extern_call log("ok3")` の後 `ret 0`。bb2 に `ret 1`。
+  - 観測ログ（`NYASH_VM_DEBUG_EXEC=1`）では Print/Const が繰り返し実行。Return の終端処理が機能していない疑い。
+  - 仮説: VM 実行ループの制御フロー（`execute_function`）で `ControlFlow::Return` を受け取った後の関数脱出が何らかの理由で無効化/上書き/再入している。
+  - 着手案:
+    - `execute_function` に短期ログ: 現在ブロックID/terminator種別/`should_return` セット→関数戻りの分岐をeprintln（NYASH_VM_DEBUG_EXEC=1時）
+    - `execute_instruction` で `Return` ディスパッチ時に明示ログ（val_id/値）を出す（現状VTトレースも可）。
+    - `previous_block`/`loop_executor`/`record_transition` で自己遷移が起きていないか確認。
+    - `BasicBlock::add_instruction` にて terminator設定/Successorsの更新は正常（コード・MIR上はOK）。処理後の `next_block` 決定ロジックを再点検。
+
+## ハンドオフ（変更点・補助情報）
+- 追加ファイル（std MVP + smokes）
+  - `apps/std/string.nyash`, `apps/std/array.nyash`
+  - `apps/smokes/std/string_smoke.nyash`, `apps/smokes/std/array_smoke.nyash`
+- スクリプト/設定の更新
+  - `tools/jit_smoke.sh`: Std smokes に `timeout 15s`、ArrayBox未提供時は `SKIP` を出力
+  - `tools/smoke_plugins.sh`: `NYASH_PLUGINS_STRICT=1` のON/OFF表示
+  - `nyash.toml`: `ny_plugins` に std 2件を追加
+  - `src/runner/modes/vm.rs`: `NYASH_VM_DUMP_MIR=1` でVM実行前にMIRをダンプ
+  - `src/mir/builder/stmts.rs`: 末尾 `return/throw` 後に同ブロックへ更に命令を積まないための早期breakを追加（安全強化）
+- 再現とログ
+  - VM再現: `timeout 4s ./target/release/nyash --backend vm apps/tmp_if_min.nyash`
+  - JIT対照: `./target/release/nyash apps/tmp_if_min.nyash`
+  - MIRダンプ: `NYASH_VM_DUMP_MIR=1 --backend vm ...`
+  - 命令トレース: `NYASH_VM_DEBUG_EXEC=1 --backend vm ...`
+- プラグイン/ArrayBox注意
+  - 既定でプラグイン経由に迂回するため、未ビルドだと ArrayBox 生成に失敗。
+  - 回避: `NYASH_USE_PLUGIN_BUILTINS=0` または `NYASH_PLUGIN_OVERRIDE_TYPES` から `ArrayBox,MapBox`を除外。もしくはプラグインをビルド。
+
+## すぐ着手できるTODO（VM側）
+- [ ] `execute_function` にブロック遷移/Return検出ログ（NYASH_VM_DEBUG_EXEC=1時のみ）
+- [ ] Return発生時に確実に `Ok(return_value)` で関数を抜けることを確認（`should_return`/`next_block` の上書き防止）
+- [ ] `record_transition`/`loop_executor` の副作用で自己遷移が起きていないか確認
+- [ ] 修正後、`apps/tmp_if_min.nyash` が VM/JIT 両方で一発終了することを確認（MIRダンプ上は既に正しい）
+- B1: ArrayBox 経路の選択を明示
+  - 手元では `NYASH_USE_PLUGIN_BUILTINS=0` で内蔵にフォールバックするか、プラグインを `cargo build -p nyash-array-plugin --release` で用意。
+  - CIは当面 `SKIP` 維持。
+
+## 実行メモ（暫定）
+- Std smokes（手元で回す）
+  - `NYASH_LOAD_NY_PLUGINS=1 NYASH_USE_PLUGIN_BUILTINS=0 ./tools/jit_smoke.sh`
+  - またはプラグインをビルドしてから `NYASH_LOAD_NY_PLUGINS=1 ./tools/jit_smoke.sh`
+
+■ 予定（R5 拡張: Ny Plugins → Namespace）
+- Phase A（最小）: 共有レジストリ `NyModules` を追加し、`env.modules.set/get` で exports を登録/取得。
+  - `[ny_plugins]` は戻り値（Map/StaticBox）を「ファイルパス→名前空間」に変換して登録。
+  - 名前空間導出: ルート相対・区切りは `.`、拡張子除去・無効文字は `_`。予約 `nyashstd.*` 等は拒否。
+- Phase B（範囲）: 共有Interpreterオプション（`NYASH_NY_PLUGINS_SHARED=1`）で静的定義を共有。ログに REGISTERED を出力。
+- Phase C（言語結線）: `using <ns>` を `NyModules` 参照→未解決時にファイル/パッケージ解決（nyash.link）へフォールバック。
+
+■ 直近で完了したこと（主要抜粋／JIT）
+- R1: JSON v0 ブリッジ（`--ny-parser-pipe`/`--json-file`）、変換器 `src/runner/json_v0_bridge.rs`、スモーク追加
+- R2: ラウンドトリップ E2E（`tools/ny_roundtrip_smoke.{sh,ps1}`）
+- R3: 直結ブリッジ v0（`--parser ny`/`NYASH_USE_NY_PARSER=1`、`NYASH_DUMP_JSON_IR=1`）→ `return (1+2)*3` で 9
+- R5: Ny スクリプトプラグイン（[ny_plugins]）列挙＋実行（OK/FAIL 出力・列挙のみガード付き）
+  - NyModules登録/名前空間導出/Windows正規化の仕様確定・回帰スモーク
+  - using/namespace（ゲート）・nyash.link最小・resolverキャッシュ・実行時フック（提案付き診断）
+- AOT P2(step‑1): RUN スモーク配線（最小オブジェクト生成＋実行ログ）
+
+- ■ 直近で完了したこと（主要抜粋）
+- T0: MIRインタープリタ強化（分岐/比較/PHI/extern/Box最小）＋ Runner 観測ログ
+- T1: Nyash製ミニパーサ（整数/四則/括弧/return）→ JSON IR v0 出力
+- T2: JSON IR v0 → MIRModule 受け口（`--ny-parser-pipe`）
+- T3: CLI 切替/ヘルプ（`--ny-parser-pipe`/`--json-file`、mirヘルプ追補）
+- T4: Docs/Samples/Runner scripts（apps/ny-mir-samples, tools/*, README 追補）
+- Phase 15 起点準備
+  - CLIに `--backend cranelift-aot` と `--poc-const` を追加（プレースホルダ動作）。
+  - `src/backend/cranelift/{mod.rs,aot_box.rs,linker_box.rs}` の雛形追加（feature gate）。
+  - MIR解釈層スケルトン（`semantics/eval.rs` と `backend/mir_interpreter.rs`）の確認
+
+■ 再開用クイックメモ（JITのみ）
+- ビルド
+  - VM/JIT: `cargo build --release --features cranelift-jit`
+  - LLVM（必要時）: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+  - AOT（導入後）: `cargo build --release --features cranelift-aot`
+- スモーク（JIT/VM）
+  - Core: `NYASH_DISABLE_PLUGINS=1 NYASH_CLI_VERBOSE=1 ./tools/smoke_vm_jit.sh`
+  - Parser Bridge: `./tools/ny_parser_bridge_smoke.sh`
+  - Roundtrip: `./tools/ny_roundtrip_smoke.sh`（A/B）
+  - Plugins: `NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh`（厳格は `NYASH_PLUGINS_STRICT=1` 時のみON）
+  - Bootstrap: `./tools/bootstrap_selfhost_smoke.sh`
+  - Using/Resolver: `./tools/using_e2e_smoke.sh`
+
+■ 状態
+- JIT自己ホストMVP: 到達（E2E/ブートストラップ/ドキュメント/CI分離まで完了）
+- リファクタ: Step1/2/3 完了（未使用掃除・runner分割・tools体裁統一）
+- 次回は「std実装の実体化」と「Nyコンパイラsubset拡張」から再開
+- 参照
+  - Phase 15 概要/ロードマップ: `docs/development/roadmap/phases/phase-15/README.md`, `docs/development/roadmap/phases/phase-15/ROADMAP.md`
+  - ハンドオフ: `docs/handoff/phase-15-handoff.md`
+  - 設計/API: `docs/backend-cranelift-aot-design.md`, `docs/interfaces/*`
+
+■ 合否基準（P0: Ny→MIR→MIR-Interp→VM 最小成立）
+- 自作Nyashパーサ（最小サブセット）が Nyash で動作し、テスト入力から中間形式(JSON暫定)を生成できる。
+- Runner が中間形式を MIRModule に変換し、MIR 解釈層で実行して既知の結果（例: `Result: 42`）を出力する。
+- 代表ケース（整数四則演算/括弧/return）で往復が安定。
+
+■ JSON IR v0（暫定スキーマ）
+- version: 整数（例: 0）
+- kind: 固定 "Program"
+- body: 配列（Stmt[]）
+- Stmt（最小）
+  - { "type": "Return", "expr": Expr }
+- Expr（最小）
+  - { "type": "Int", "value": 123 }
+  - { "type": "Binary", "op": "+"|"-"|"*"|"/", "lhs": Expr, "rhs": Expr }
+- error（失敗時）
+  - { "version":0, "kind":"Error", "error": { "message": "...", "span": {"start":N, "end":M} } }
+- 例
+  - `return 1+2*3` → {"version":0,"kind":"Program","body":[{"type":"Return","expr":{"type":"Binary","op":"+","lhs":{"type":"Int","value":1},"rhs":{"type":"Binary","op":"*","lhs":{"type":"Int","value":2},"rhs":{"type":"Int","value":3}}}}]}
+  - `return (1+2)*3` → `Binary('*', Binary('+',1,2), 3)` の形で生成
+
+■ 補足（優先/範囲）
+- 先行するのは Ny→MIR→MIR-Interp→VM の自己ホスト経路（AOTはP2以降）。
+- OS 優先: Windows →（後続で Linux/macOS）。
+- メモリ/GC: P0は整数演算/定数返し中心でNyRT拡張不要。
+- Codex 非同期運用: `tools/codex-async-notify.sh`／`tools/codex-keep-two.sh` 継続利用。
+
+## 実行コマンド（サマリ）
+- VM/JIT 実行例
+  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash apps/ny-echo/main.nyash`
+  - `printf "Hello\n" | NYASH_CLI_VERBOSE=0 ./target/release/nyash --backend vm apps/ny-echo/main.nyash`
+- AOT/LLVM 系は後段（当面OFF）
+
+- JSON v0 ブリッジ（R1 Quick Start）
+  - パイプ実行（Unix/WSL）: `printf '{"version":0,"kind":"Program","body":[{"type":"Return","expr":{"type":"Binary","op":"+","lhs":{"type":"Int","value":1},"rhs":{"type":"Binary","op":"*","lhs":{"type":"Int","value":2},"rhs":{"type":"Int","value":3}}}}]}' | ./target/release/nyash --ny-parser-pipe`
+  - ファイル指定（Unix/WSL）: `./target/release/nyash --json-file sample.json`
+  - スモーク（Unix/Windows）: `./tools/ny_parser_bridge_smoke.sh` / `pwsh -File tools/ny_parser_bridge_smoke.ps1`
+
+- E2E ラウンドトリップ（R2）
+  - Unix/WSL: `./tools/ny_roundtrip_smoke.sh`
+  - Windows: `pwsh -File tools/ny_roundtrip_smoke.ps1`
+  - tmux通知で並列実行（例）:
+    - `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "./tools/ny_roundtrip_smoke.sh" codex`
+    - `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "pwsh -File tools/ny_roundtrip_smoke.ps1" codex`
+
+- Ny プラグイン列挙（R5）
+  - 有効化: `--load-ny-plugins` または `NYASH_LOAD_NY_PLUGINS=1`
+  - `nyash.toml` 例:
+    ```toml
+    ny_plugins = [
+      "apps/std/ny-config.nyash",
+      "apps/plugins/my-helper.nyash"
+    ]
+    ```
+  - 実行: 列挙に加え、Interpreterで順次実行（ベストエフォート）。
+  - ガード: `NYASH_NY_PLUGINS_LIST_ONLY=1` で列挙のみ（実行しない）
+  - 注意: プラグインスクリプトは副作用の少ない初期化/登録処理に限定推奨。
+  - Std Ny スモーク実行（任意）: `NYASH_LOAD_NY_PLUGINS=1 ./tools/jit_smoke.sh`
+
+## トレース/環境変数（抜粋）
+- AOT/Link: `NYASH_LINKER`, `NYASH_LINK_FLAGS`, `NYASH_LINK_VERBOSE`
+- ABI: `NYASH_ABI_VTABLE=1`, `NYASH_ABI_STRICT=1`
+- VM/JIT: `NYASH_VM_PIC_STATS`, `NYASH_JIT_DUMP` など従来通り
+
+---
+詳細な履歴や議事録は docs 配下の Phase 15 セクションを参照してください。
+ - ny-config（R4）
+  - `./target/release/nyash apps/std/ny-config.nyash`
+  - 現状: Interpreter 経路のプラグイン初期化順序により FileBox/TOMLBox を使うには Runner 側の微調整が必要（VM 経路への移行 or プラグイン登録の早期化）。スクリプト本体は追加済み。
+- 直結ブリッジ v0（R3 Quick Start）
+  - `printf 'return (1+2)*3\n' > t.ny && NYASH_USE_NY_PARSER=1 NYASH_DUMP_JSON_IR=1 ./target/release/nyash t.ny`

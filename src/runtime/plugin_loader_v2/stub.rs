@@ -33,3 +33,4 @@ pub fn get_global_loader_v2() -> Arc<RwLock<PluginLoaderV2>> { GLOBAL_LOADER_V2.
 pub fn init_global_loader_v2(_config_path: &str) -> BidResult<()> { Ok(()) }
 pub fn shutdown_plugins_v2() -> BidResult<()> { Ok(()) }
 
+pub fn backend_kind() -> &'static str { "stub" }

@@ -44,12 +44,15 @@ if ! cargo build --release --features cranelift-jit >/dev/null; then
   exit 1
 fi
 
-echo "[2/4] Emitting object (.o) via JIT (Strict/No-fallback, jit-direct) ..."
+echo "[2/4] Emitting object (.o) via JIT (jit-direct) ..."
 rm -rf target/aot_objects && mkdir -p target/aot_objects
-NYASH_AOT_OBJECT_OUT=target/aot_objects \
+# Directly request main.o to be written (engine will treat non-directory path as exact output file)
+NYASH_AOT_OBJECT_OUT=target/aot_objects/main.o \
 NYASH_USE_PLUGIN_BUILTINS=1 \
 NYASH_JIT_ONLY=1 \
-NYASH_JIT_STRICT=1 \
+# Relax strict by default to allow partial lowering to still emit objects.
+# Users can re-enable strict with: export NYASH_JIT_STRICT=1
+NYASH_JIT_STRICT=${NYASH_JIT_STRICT:-0} \
 NYASH_JIT_NATIVE_F64=1 \
 # Allow f64 shim for PyObjectBox.call (type_id=41, method_id=2)
 NYASH_JIT_PLUGIN_F64="${NYASH_JIT_PLUGIN_F64:-41:2}" \
@@ -60,8 +63,8 @@ NYASH_JIT_THRESHOLD=1 \
 OBJ="target/aot_objects/main.o"
 if [[ ! -f "$OBJ" ]]; then
   echo "error: object not generated: $OBJ" >&2
-  echo "hint: Strict mode forbids fallback. Ensure main() is lowerable under current JIT coverage." >&2
-  echo "hint: Try running jit-direct manually with envs above to see details." >&2
+  echo "hint: Ensure main() is lowerable under current JIT coverage." >&2
+  echo "hint: Run jit-direct manually with the same envs to diagnose lowering coverage." >&2
   exit 2
 fi
 

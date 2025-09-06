@@ -80,6 +80,9 @@ impl BoxFactoryRegistry {
         use crate::runtime::get_global_plugin_host;
         let host = get_global_plugin_host();
         let host = host.read().unwrap();
+        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+            eprintln!("[BoxFactoryRegistry] create_plugin_box: plugin={} box_type={}", plugin_name, box_name);
+        }
         host.create_box(box_name, args)
             .map_err(|e| format!("Failed to create {} from plugin {}: {:?}", box_name, plugin_name, e))
     }

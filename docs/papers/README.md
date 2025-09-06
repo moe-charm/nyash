@@ -6,10 +6,14 @@
 
 ```
 papers/
-├── README.md                          # このファイル
+├── README.md                          # このファイル（全候補への索引）
 ├── active/                            # 現在執筆中の論文
 │   ├── paper-a-mir13-ir-design/      # 論文A: MIR13命令とIR設計
-│   └── paper-b-nyash-execution-model/ # 論文B: Nyash言語と実行モデル
+│   ├── paper-b-nyash-execution-model/ # 論文B: Nyash言語と実行モデル
+│   ├── paper-c-ancp-compression/     # 論文C: ANCP 90%圧縮技法（世界記録）
+│   ├── paper-d-jit-to-exe/          # 論文D: JIT→EXE統合パイプライン
+│   ├── three-papers-strategy.md      # 3論文戦略の統合計画
+│   └── WHICH_PAPER_FIRST.md         # 論文優先順位の検討（15個候補）
 ├── archive/                           # 過去の検討・下書き
 │   ├── initial-proposals/             # 初期提案資料
 │   ├── mir15-implementation/          # 旧MIR15論文
@@ -20,7 +24,7 @@ papers/
     └── templates/                     # 論文テンプレート
 ```
 
-## 📊 現在の論文プロジェクト（2本立て戦略）
+## 📊 現在の論文プロジェクト（主要2本 + 追加候補多数）
 
 ### 論文A: MIR13命令とIR設計 🎯
 **主題**: 中間表現（MIR）の統合設計  
@@ -60,6 +64,25 @@ papers/
 
 ## 🔗 関連ドキュメント
 
+### 📝 論文候補への索引（15個以上！）
+- **[15個の論文候補一覧](active/WHICH_PAPER_FIRST.md)** - すべての候補リスト
+- **[3論文戦略](active/three-papers-strategy.md)** - 段階的発表計画
+- **[Paper A: MIR13](active/paper-a-mir13-ir-design/)** - 13命令IR設計
+- **[Paper B: Nyash](active/paper-b-nyash-execution-model/)** - 言語実行モデル
+- **[Paper C: ANCP](active/paper-c-ancp-compression/)** - 90%圧縮技法
+- **[Paper D: JIT-EXE](active/paper-d-jit-to-exe/)** - 統合パイプライン
+
+### 🎯 他の論文アイデア所在地
+- **[研究フォルダ](../research/)** - Box理論JIT、1ヶ月実装記録など5個以上
+- **[アイデアフォルダ](../ideas/)** - 新規提案候補
+- **[AI相談記録](../../sessions/)** - WebBox革命、AI協働方法論など
+
+### 📊 執筆支援ドキュメント
+- [論文執筆戦略](active/PAPER_WRITING_STRATEGY.md)
+- [論文分割戦略](active/PAPER_DIVISION_STRATEGY.md)
+- [ベンチマークアプリ推奨](active/BENCHMARK_APP_RECOMMENDATIONS.md)
+
+### 🔧 開発関連
 - [開発ロードマップ](../development/roadmap/)
 - [技術仕様](../reference/)
-- [現在のタスク](../development/current/CURRENT_TASK.md)
+- [現在のタスク](../../CURRENT_TASK.md)

@@ -72,6 +72,7 @@ fi
 
 echo "[4/4] Linking $OUT ..."
 cc "$OBJ" \
+  -L target/release \
   -L crates/nyrt/target/release \
   -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive \
   -lpthread -ldl -lm -o "$OUT"
