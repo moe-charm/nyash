@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(all(test, not(feature = "jit-direct-only")))]
 mod tests {
     use std::env;
     use crate::box_trait::{NyashBox, StringBox, IntegerBox};

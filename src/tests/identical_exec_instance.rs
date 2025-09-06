@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(all(test, not(feature = "jit-direct-only")))]
 mod tests {
     use std::sync::{Arc, RwLock};
     use std::collections::HashMap;
