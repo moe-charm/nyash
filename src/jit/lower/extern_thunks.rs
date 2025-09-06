@@ -115,6 +115,9 @@ pub(super) extern "C" fn nyash_box_birth_i64(type_id: i64, argc: i64, a1: i64, a
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_handle_of(v: i64) -> i64 {
     // If already a positive handle, pass through
+    if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") {
+        eprintln!("[JIT-HANDLE_OF] in v={}", v);
+    }
     if v > 0 { return v; }
     // Otherwise interpret as legacy param index and convert BoxRef -> handle
     if v >= 0 {
@@ -126,6 +129,9 @@ pub(super) extern "C" fn nyash_handle_of(v: i64) -> i64 {
                 out = crate::jit::rt::handles::to_handle(arc) as i64;
             }
         });
+        if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") {
+            eprintln!("[JIT-HANDLE_OF] param_idx={} out_handle={}", idx, out);
+        }
         return out;
     }
     0
@@ -844,7 +850,12 @@ pub(super) extern "C" fn nyash_string_from_u64x2(lo: u64, hi: u64, len: i64) -> 
     if n > 8 { for i in 0..(n - 8) { buf[8 + i] = ((hi >> (8 * i)) & 0xFF) as u8; } }
     let s = match std::str::from_utf8(&buf[..n]) { Ok(t) => t.to_string(), Err(_) => String::from_utf8_lossy(&buf[..n]).to_string() };
     let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(crate::box_trait::StringBox::new(s));
-    crate::jit::rt::handles::to_handle(arc) as i64
+    let h = crate::jit::rt::handles::to_handle(arc.clone()) as i64;
+    if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") {
+        if let Some(sb) = arc.as_any().downcast_ref::<crate::box_trait::StringBox>() { eprintln!("[JIT-STR_H] new handle={} val='{}' len={}", h, sb.value, sb.value.len()); }
+        else { eprintln!("[JIT-STR_H] new handle={} (non-StringBox)", h); }
+    }
+    h
 }
 
 // Create an instance by type name via global unified registry: birth(name) -> handle

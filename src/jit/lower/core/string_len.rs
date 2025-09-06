@@ -28,6 +28,8 @@ impl LowerCore {
         b.load_local_i64(hslot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_LEN_H, 1, true);
         b.store_local_i64(t_string);
+        // debug: observe string len
+        b.emit_debug_i64_local(1100, t_string);
         // Any.length_h
         crate::jit::observe::lower_hostcall(
             crate::jit::r#extern::collections::SYM_ANY_LEN_H,
@@ -39,11 +41,15 @@ impl LowerCore {
         b.load_local_i64(hslot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
         b.store_local_i64(t_any);
+        // debug: observe any len
+        b.emit_debug_i64_local(1101, t_any);
         // cond = (string_len == 0)
         b.load_local_i64(t_string);
         b.emit_const_i64(0);
         b.emit_compare(CmpKind::Eq);
         b.store_local_i64(t_cond);
+        // debug: observe condition
+        b.emit_debug_i64_local(1102, t_cond);
         // select(cond ? any_len : string_len)
         b.load_local_i64(t_cond);   // cond (bottom)
         b.load_local_i64(t_any);    // then
@@ -67,6 +73,7 @@ impl LowerCore {
         b.load_local_i64(slot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_LEN_H, 1, true);
         b.store_local_i64(t_string);
+        b.emit_debug_i64_local(1200, t_string);
         // Any.length_h
         crate::jit::observe::lower_hostcall(
             crate::jit::r#extern::collections::SYM_ANY_LEN_H,
@@ -78,11 +85,13 @@ impl LowerCore {
         b.load_local_i64(slot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
         b.store_local_i64(t_any);
+        b.emit_debug_i64_local(1201, t_any);
         // cond = (string_len == 0)
         b.load_local_i64(t_string);
         b.emit_const_i64(0);
         b.emit_compare(CmpKind::Eq);
         b.store_local_i64(t_cond);
+        b.emit_debug_i64_local(1202, t_cond);
         // select(cond ? any_len : string_len)
         b.load_local_i64(t_cond);
         b.load_local_i64(t_any);
@@ -106,6 +115,7 @@ impl LowerCore {
         b.emit_string_handle_from_literal(s);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_LEN_H, 1, true);
         b.store_local_i64(t_string);
+        b.emit_debug_i64_local(1300, t_string);
         // Any.length_h on literal handle (recreate handle; safe in v0)
         crate::jit::observe::lower_hostcall(
             crate::jit::r#extern::collections::SYM_ANY_LEN_H,
@@ -117,11 +127,13 @@ impl LowerCore {
         b.emit_string_handle_from_literal(s);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
         b.store_local_i64(t_any);
+        b.emit_debug_i64_local(1301, t_any);
         // cond = (string_len == 0)
         b.load_local_i64(t_string);
         b.emit_const_i64(0);
         b.emit_compare(CmpKind::Eq);
         b.store_local_i64(t_cond);
+        b.emit_debug_i64_local(1302, t_cond);
         // select(cond ? any_len : string_len)
         b.load_local_i64(t_cond);
         b.load_local_i64(t_any);

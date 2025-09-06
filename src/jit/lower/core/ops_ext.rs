@@ -293,6 +293,13 @@ impl LowerCore {
                 }
                 // (3) Fallback: emit string.len_h with Any.length_h guard
                 if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
+                    // Strong constant fold when literal mapping is known
+                    if let Some(s) = self.string_box_literal.get(array).cloned() {
+                        let n = s.len() as i64;
+                        b.emit_const_i64(n);
+                        if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); self.known_i64.insert(d, n); }
+                        return Ok(true);
+                    }
                     // Prefer literal reconstruction so JIT-AOT path is deterministic
                     let mut lit: Option<String> = None;
                     for (_bid, bb) in func.blocks.iter() {
@@ -309,10 +316,13 @@ impl LowerCore {
                     }
                     if let Some(s) = lit {
                         if trace { eprintln!("[LOWER] StringBox.len reconstructed literal '{}' (dst?={})", s, dst.is_some()); }
-                        self.emit_len_with_fallback_literal(b, &s);
+                        // Const fold: use literal length directly to avoid hostcall dependence
+                        let n = s.len() as i64;
+                        b.emit_const_i64(n);
                         if let Some(d) = dst {
                             let dslot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id });
                             b.store_local_i64(dslot);
+                            self.known_i64.insert(d, n);
                         }
                         return Ok(true);
                     }
@@ -356,6 +366,35 @@ impl LowerCore {
             "length" => {
                 let trace = std::env::var("NYASH_JIT_TRACE_LOWER_LEN").ok().as_deref() == Some("1");
                 if self.box_type_map.get(array).map(|s| s == "StringBox").unwrap_or(false) {
+                    // Try literal constant fold first for stability
+                    let mut lit: Option<String> = None;
+                    for (_bid, bb) in func.blocks.iter() {
+                        for ins in bb.instructions.iter() {
+                            if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins {
+                                if dst == array && box_type == "StringBox" && args.len() == 1 {
+                                    if let Some(src) = args.get(0) {
+                                        if let Some(s) = self.known_str.get(src).cloned() { lit = Some(s); break; }
+                                        // Fallback: scan Const directly
+                                        for (_b2, bb2) in func.blocks.iter() {
+                                            for ins2 in bb2.instructions.iter() {
+                                                if let crate::mir::MirInstruction::Const { dst: cdst, value } = ins2 {
+                                                    if cdst == src { if let crate::mir::ConstValue::String(sv) = value { lit = Some(sv.clone()); break; } }
+                                                }
+                                            }
+                                            if lit.is_some() { break; }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if lit.is_some() { break; }
+                    }
+                    if let Some(s) = lit {
+                        let n = s.len() as i64;
+                        b.emit_const_i64(n);
+                        if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); self.known_i64.insert(d, n); }
+                        return Ok(true);
+                    }
                     // Reuse len handler, but ensure dst persistence if len handler did not handle
                     let handled = self.lower_box_call(func, b, array, "len", args, dst)?;
                     if handled {
@@ -380,21 +419,65 @@ impl LowerCore {
             "len" | "length" => {
                 match self.box_type_map.get(array).map(|s| s.as_str()) {
                     Some("StringBox") => {
+                        // Strong constant fold when literal mapping is known (allow disabling via NYASH_JIT_DISABLE_LEN_CONST=1)
+                        if std::env::var("NYASH_JIT_DISABLE_LEN_CONST").ok().as_deref() != Some("1")
+                            && self.string_box_literal.get(array).is_some() {
+                            let s = self.string_box_literal.get(array).cloned().unwrap();
+                            let n = s.len() as i64;
+                            b.emit_const_i64(n);
+                            if let Some(d) = dst { let slot = *self.local_index.entry(d).or_insert_with(|| { let id=self.next_local; self.next_local+=1; id }); b.store_local_i64(slot); self.known_i64.insert(d, n); }
+                            return Ok(true);
+                        }
                         if let Some(pidx) = self.param_index.get(array).copied() {
                             self.emit_len_with_fallback_param(b, pidx);
+                            // Persist into dst local so Return can reliably pick it up
+                            if let Some(d) = dst {
+                                let slot = *self
+                                    .local_index
+                                    .entry(d)
+                                    .or_insert_with(|| {
+                                        let id = self.next_local;
+                                        self.next_local += 1;
+                                        id
+                                    });
+                                b.store_local_i64(slot);
+                            }
                             return Ok(true);
                         }
                         if let Some(slot) = self.local_index.get(array).copied() {
                             self.emit_len_with_fallback_local_handle(b, slot);
+                            // Persist into dst local so Return can reliably pick it up
+                            if let Some(d) = dst {
+                                let slot = *self
+                                    .local_index
+                                    .entry(d)
+                                    .or_insert_with(|| {
+                                        let id = self.next_local;
+                                        self.next_local += 1;
+                                        id
+                                    });
+                                b.store_local_i64(slot);
+                            }
                             return Ok(true);
                         }
-                        // Try literal reconstruction
+                        // Try literal reconstruction (skipped if disabled by env)
                         let mut lit: Option<String> = None;
                         for (_bid, bb) in func.blocks.iter() {
                             for ins in bb.instructions.iter() {
                                 if let crate::mir::MirInstruction::NewBox { dst, box_type, args } = ins {
                                     if dst == array && box_type == "StringBox" && args.len() == 1 {
-                                        if let Some(src) = args.get(0) { if let Some(s) = self.known_str.get(src).cloned() { lit = Some(s); break; } }
+                                        if let Some(src) = args.get(0) {
+                                            if let Some(s) = self.known_str.get(src).cloned() { lit = Some(s); break; }
+                                            // Fallback: scan Const directly
+                                            for (_b2, bb2) in func.blocks.iter() {
+                                                for ins2 in bb2.instructions.iter() {
+                                                    if let crate::mir::MirInstruction::Const { dst: cdst, value } = ins2 {
+                                                        if cdst == src { if let crate::mir::ConstValue::String(sv) = value { lit = Some(sv.clone()); break; } }
+                                                    }
+                                                }
+                                                if lit.is_some() { break; }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -412,6 +495,18 @@ impl LowerCore {
                         let slot = { let id = self.next_local; self.next_local += 1; id };
                         b.store_local_i64(slot);
                         self.emit_len_with_fallback_local_handle(b, slot);
+                        // Persist into dst local so Return can reliably pick it up
+                        if let Some(d) = dst {
+                            let dslot = *self
+                                .local_index
+                                .entry(d)
+                                .or_insert_with(|| {
+                                    let id = self.next_local;
+                                    self.next_local += 1;
+                                    id
+                                });
+                            b.store_local_i64(dslot);
+                        }
                         return Ok(true);
                     }
                     Some("ArrayBox") => {},

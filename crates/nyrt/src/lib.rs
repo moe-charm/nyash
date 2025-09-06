@@ -1613,6 +1613,10 @@ pub extern "C" fn nyash_map_has_h(handle: i64, key: i64) -> i64 {
 #[export_name = "nyash.string.len_h"]
 pub extern "C" fn nyash_string_len_h(handle: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
+    if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") {
+        let present = if handle > 0 { handles::get(handle as u64).is_some() } else { false };
+        eprintln!("[AOT-LEN_H] string.len_h handle={} present={}", handle, present);
+    }
     if handle <= 0 { return 0; }
     if let Some(obj) = handles::get(handle as u64) {
         if let Some(sb) = obj.as_any().downcast_ref::<nyash_rust::box_trait::StringBox>() {
@@ -1672,6 +1676,10 @@ pub extern "C" fn nyash_string_lt_hh_export(a_h: i64, b_h: i64) -> i64 {
 #[export_name = "nyash.any.length_h"]
 pub extern "C" fn nyash_any_length_h_export(handle: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
+    if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") {
+        let present = if handle > 0 { handles::get(handle as u64).is_some() } else { false };
+        eprintln!("[AOT-LEN_H] any.length_h handle={} present={}", handle, present);
+    }
     if handle <= 0 { return 0; }
     if let Some(obj) = handles::get(handle as u64) {
         if let Some(arr) = obj.as_any().downcast_ref::<nyash_rust::boxes::array::ArrayBox>() {

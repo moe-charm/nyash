@@ -177,6 +177,124 @@ P4: 仕上げ（重複/直書きの整理）
     - 雛形スクリプト: `tools/aot_smoke_cranelift.sh`, `tools/aot_smoke_cranelift.ps1`
 - README にセルフホスト到達の道筋を明記（C ABI を Box 化）。
 
+【ハンドオフ（2025‑09‑06 3rd）— String.length: const‑fold→Return 材化の不一致 調査ログとTODO】
+
+概要（現象）
+- 目標: JIT/JIT‑AOT で `StringBox.length/len` が 3 を返すべき箇所で 0 になるケースを解消。
+- 現状: Lower 中の早期 const‑fold で `length = 3` を確実に計算（[LOWER] early const‑fold ... = 3 が出力）。Return 時点でも `ValueId(3)` が `known_i64=3` と認識される（[LOWER] Return known_i64?=true）。にもかかわらず最終結果（実行結果）は 0。
+
+重要な観測（再現とログ）
+- MIR ダンプ（プリンタ仕様上、BoxCall は `call %box.method()` として表示）
+  0: `%1 = const "abc"`
+  1: `%2 = new StringBox(%1)`
+  2: `call %2.birth(%1)`  // birth は通常 call（dst なし）
+  3: `%3 = call %2.length()` // これも通常 call 表記（内部は BoxCall）
+  4: `ret %3`
+- Lower ログ:
+  - `[LOWER] early const-fold StringBox.length = 3` が出る（const‑fold 成功）
+  - `[LOWER] Return value=ValueId(3) known_i64?=true param?=false local?=true`
+  - それでも実行結果は `Result: 0`
+- `nyash.jit.dbg_i64`（[JIT‑DBG]）の出力が実行時に出ていない（import は宣言されるが call が観測されず）。
+
+今回入れた変更（実装済・該当ファイル）
+- Return/材化の強化（known を最優先）
+  - `src/jit/lower/core_ops.rs`: `push_value_if_known_or_param` を「known_i64 最優先」に変更。
+  - `src/jit/lower/core.rs` の `I::Return` でも `known_i64` を最優先で積むように変更。
+- Call/ArrayGet の戻り値の保存
+  - `src/jit/lower/core.rs`: `I::Call` 戻り値を dst が無い場合もスクラッチローカルへ保存（栈不整合の防止）。`I::ArrayGet` 戻り値も dst スロットへ保存。
+- String.length/len の早期 const‑fold を二段に強化
+  - `src/jit/lower/core.rs`: BoxCall 入り口で `StringBox.literal` の length/len を即値化（最優先）。
+  - `src/jit/lower/core/ops_ext.rs`: 同様の const‑fold を堅牢化（NewBox(StringBox, Const) から復元）。
+  - `src/jit/lower/core.rs`: lowering 前に `known_str` を事前シード、`string_box_literal` マップ（NewBox → リテラル文字列）を構築し、Copy 伝播も対応。
+- トレース導線
+  - `src/jit/lower/core/string_len.rs`: 二段フォールバック（param/local/literal）にデバッグフック（タグ 110x/120x/130x 系）追加。
+  - `src/jit/lower/builder/cranelift.rs`: ローカル slot の store/load トレース（`NYASH_JIT_TRACE_LOCAL=1`）。
+  - `crates/nyrt/src/lib.rs`: AOT 側の `nyash.string.len_h` / `nyash.any.length_h` に `[AOT-LEN_H]` を追加。
+  - `src/jit/lower/extern_thunks.rs`: `nyash_string_from_u64x2` に `[JIT-STR_H]` を追加（JIT のハンドル生成観測）。`nyash_handle_of` に `[JIT-HANDLE_OF]` を追加。
+
+仮説（根本原因）
+- const‑fold で 3 を積めているにも関わらず、Return 時の実返却が 0。優先順位の修正により `known_i64` から 3 を積むよう修正済みだが、compiled JIT 関数内での Return 材化導線（ret_block への引数配線/最後の return）が値 0 に擦り替わる経路が残っている可能性。
+  - ret_block/ジャンプ引数の材化不整合
+  - 後続命令でスタックが上書きされる経路
+  - birth の dst なし call で残留値が生じていた可能性（Call 戻り値スクラッチ保存で対策済）
+
+次アクション（TODO）
+1) Return の後方走査材化（優先・CURRENT_TASK 既存 TODO の実装）
+   - BoxCall/Call/Select/Const/Copy/Load に遡って、Return が値を確実に拾う材化パスを補強する。
+   - 既に known_i64 最優先化は実施済み。残りは ret_block 引数配線の最終確認（CraneliftBuilder の ret 経路）。
+
+2) 実行時の値トレース強化（短期）
+   - `emit_return`（CraneliftBuilder）で、ret_block へ jump 直前の引数 `v` を `nyash.jit.dbg_i64(299,v)` で確実に呼ぶ（env でON）。
+   - ret_block 入口パラメータの `return_` 直前でも `dbg_i64(300,param0)` 呼び出しを足し、どこで 0 になるかを確定する。
+
+3) BoxCall(length/len) の早期 fold 命中率最終確認
+   - `NYASH_JIT_TRACE_LOWER=1` で `[LOWER] early const-fold ... = 3` が必ず出ることを確認。
+   - 既に出ているが、Return までの導線で 3 が 0 に化ける起点を 2) で特定する。
+
+4) AOT/JIT‑AOT 観測の整備（参考）
+   - `[AOT-LEN_H]` で AOT 側 len_h/any.length_h の handle 解決有無をログ化。JIT‑AOT smoke での差異を収集。
+
+再現/確認コマンド（更新）
+- 早期 fold と Return 導線ログ:
+  - `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_TRACE_RET=1 NYASH_AOT_OBJECT_OUT=target/aot_objects/test_len_any.o ./target/release/nyash --jit-direct apps/smokes/jit_aot_any_len_string.nyash`
+- ローカル slot 観測:
+  - `NYASH_JIT_TRACE_LOCAL=1 NYASH_AOT_OBJECT_OUT=... --jit-direct ...`
+- AOT 側の handle 解決ログ:
+  - `NYASH_JIT_TRACE_LEN=1 bash tools/aot_smoke_cranelift.sh apps/smokes/jit_aot_string_min.nyash app_str`
+
+補足メモ
+- MirPrinter は BoxCall を `call %box.method()` と出力する仕様（今回は BoxCall 経路で const‑fold が呼ばれていることは [LOWER] ログで確認済み）。
+- `call %2.birth(%1)` の戻り値残留に備え、I::Call の dst なし呼び出しでもスクラッチ保存して栈を消費するよう修正済み（回帰に注意）。
+
+担当者への引き継ぎポイント
+- まず 2) の dbg を CraneliftBuilder の ret 経路（jump to ret_block と return_）に追加し、`v`/`param0` が 0 になる箇所を特定してください。
+- 次に 1) の Return 後方走査材化を入れて、BoxCall/Select/Copy 等いずれの経路でも Return が安定して値を拾えるようにしてください。
+- その後、smoke `apps/smokes/jit_aot_any_len_string.nyash` が `Result: 3` で通ることを確認し、const‑fold のログと一致することをもってクローズ。
+
+【将来計画（バグ修正後）— JIT を exec 専用にし、VM 連携を段階的に廃止】
+
+目的
+- JIT は「コンパイル＋実行（exec）」に一本化し、VM 依存のレガシー経路（param-index/TLS参照）を撤去する。
+- 値の材化・ハンドル管理・hostcall を JIT 側で一貫させ、境界の不整合を根本から減らす。
+
+ロードマップ（段階移行）
+1) 実行モードの明確化（設定）
+   - 環境変数 `NYASH_JIT_MODE=exec|compile|off` を導入。
+   - 既存の `NYASH_JIT_STRICT` は非推奨化し、`MODE=compile` に集約。
+
+2) JIT ABI の一本化
+   - `src/jit/lower/extern_thunks.rs` などから `with_legacy_vm_args` を撤去。
+   - `nyash_handle_of` を含む extern は「JIT引数/ハンドルのみ」を受け付ける設計に変更。
+   - ランタイム境界で `VMValue -> JitValue(Handle)` へのアダプタを用意。
+
+3) レガシー撤去（JIT/AOT側）
+   - `crates/nyrt/src/lib.rs` の `nyash.string.len_h`/`nyash.any.length_h` から param-index フォールバックを削除。
+   - lowering の `-1` センチネルや VM 依存の fallback を廃止し、`handle.of` または既存ローカルハンドルに統一。
+
+4) フォールバック方針（移行期間）
+   - 関数単位で `unsupported>0` の場合のみ VM にフォールバック。
+   - オプション `NYASH_JIT_TRAP_ON_FALLBACK=1` を追加し、移行時の漏れを検出可能に。
+
+5) Return 導線の強化（本タスクの延長）
+   - Cranelift 生成の ret 経路に dbg を常設（envでON）。
+   - Return の後方走査材化を標準化し、const-fold/BoxCall/Select いずれでも Return が値を確実に拾うように。
+
+6) ドキュメント/テスト更新
+   - README/CURRENT_TASK にモード説明と運用方針を追記。
+   - CI の smoke は `MODE=exec` を常態化し、compile-only はAOT出力/ベンチのみで使用。
+
+影響範囲（主な修正ポイント）
+- `src/jit/manager.rs`（モード/実行ポリシー）
+- `src/jit/lower/extern_thunks.rs`（レガシーVM依存排除、JIT ABI専用化）
+- `src/jit/lower/core.rs` / `src/jit/lower/core_ops.rs`（-1センチネル削除・ハンドル材化徹底）
+- `crates/nyrt/src/lib.rs`（dotted名hostcallのレガシー経路削除）
+- ドキュメント（README/CURRENT_TASK）
+
+ロールアウト/リスク
+- フラグ駆動で段階的に切替（デフォルト `exec`）。
+- リスク: plugin経路/hostcall registry/ハンドルリーク。
+  - 緩和: `handles::begin_scope/end_scope_clear` によりハンドル回収を徹底、registryの検証を追加。
+
 【本日更新】
 - VM if/return 無限実行バグを修正（基本ブロック突入時に `should_return`/`next_block` をリセット）。include 経路のハングも解消。
 - ArrayBox プラグイン生成失敗に対し、v2 ローダへパス解決フォールバック（`plugin_paths.search_paths`）を追加し安定化。

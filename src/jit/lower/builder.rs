@@ -50,6 +50,8 @@ pub trait IRBuilder {
     fn ensure_local_i64(&mut self, _index: usize) { }
     fn store_local_i64(&mut self, _index: usize) { }
     fn load_local_i64(&mut self, _index: usize) { }
+    // Optional debug hook: print a local i64 value with a tag (Cranelift JIT only)
+    fn emit_debug_i64_local(&mut self, _tag: i64, _slot: usize) { }
 }
 
 mod noop;
