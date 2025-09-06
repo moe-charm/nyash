@@ -225,6 +225,26 @@ impl LowerCore {
                         b.store_local_i64(slot);
                         self.handle_values.insert(*dst);
                     }
+                } else {
+                    // Generic plugin box birth by name via runtime shim: nyash.instance.birth_name_u64x2(lo, hi, len) -> handle
+                    // Encode up to 16 bytes of the box type name into two u64 words (little-endian)
+                    let name = box_type.as_str();
+                    let bytes = name.as_bytes();
+                    let take = core::cmp::min(16, bytes.len());
+                    let mut lo: u64 = 0; let mut hi: u64 = 0;
+                    for i in 0..take.min(8) { lo |= (bytes[i] as u64) << (8 * i as u32); }
+                    for i in 8..take { hi |= (bytes[i] as u64) << (8 * (i - 8) as u32); }
+                    // Push args and call import
+                    b.emit_const_i64(lo as i64);
+                    b.emit_const_i64(hi as i64);
+                    b.emit_const_i64(bytes.len() as i64);
+                    b.emit_host_call("nyash.instance.birth_name_u64x2", 3, true);
+                    // Store handle to local slot
+                    let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    b.store_local_i64(slot);
+                    self.handle_values.insert(*dst);
+                    // Track type for downstream boxcall routing
+                    self.box_type_map.insert(*dst, box_type.clone());
                 }
             }
             I::Call { dst, func, args, .. } => {

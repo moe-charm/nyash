@@ -7,7 +7,7 @@
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](#)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20高速化-ff6b6b.svg)](#performance)
-[![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20搭載-orange.svg)](#execution-modes)
+[![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20搭載%20(実行封印)-orange.svg)](#execution-modes)
 [![ブラウザで試す](https://img.shields.io/badge/今すぐ試す-ブラウザプレイグラウンド-ff6b6b.svg)](projects/nyash-wasm/nyash_playground.html)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
@@ -91,6 +91,8 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 
 ## 🏗️ **複数の実行モード**
 
+重要: 現在、JIT ランタイム実行はデバッグ容易性のため封印しています。実行は「インタープリター／VM」、配布は「Cranelift AOT(EXE)／LLVM AOT(EXE)」の4体制です。
+
 ### 1. **インタープリターモード** （開発用）
 ```bash
 ./target/release/nyash program.nyash
@@ -107,15 +109,7 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 - 最適化されたバイトコード実行
 - 本番環境対応のパフォーマンス
 
-### 3. **JITモード** （高性能）
-```bash
-NYASH_JIT_EXEC=1 ./target/release/nyash --backend vm program.nyash
-```
-- Cranelift搭載JITコンパイル
-- ほぼネイティブ性能
-- ホット関数最適化
-
-### 4. **ネイティブバイナリ** （配布用）
+### 3. **ネイティブバイナリ（Cranelift AOT）** （配布用）
 ```bash
 # 事前ビルド（Cranelift）
 cargo build --release --features cranelift-jit
@@ -126,6 +120,17 @@ cargo build --release --features cranelift-jit
 - 依存関係ゼロ
 - 最高性能
 - 簡単配布
+
+### 4. **ネイティブバイナリ（LLVM AOT）**
+```bash
+LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) \
+  cargo build --release --features llvm
+NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o \
+  ./target/release/nyash --backend llvm program.nyash
+# リンクして実行
+cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o myapp
+./myapp
+```
 
 簡易スモークテスト（VM と EXE の出力一致確認）:
 ```bash
@@ -188,8 +193,8 @@ smoke_obj_array = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/
 ----------------|-----------|---------------
 インタープリター | 110.10ms  | 1.0x (基準)
 VM              | 8.14ms    | 13.5倍高速
-VM + JIT        | 5.8ms     | 19.0倍高速
-ネイティブ      | ~4ms      | ~27倍高速
+Cranelift AOT   | ~4–6ms    | ~20–27倍高速
+ネイティブ(LLVM)| ~4ms      | ~27倍高速
 ```
 
 ---

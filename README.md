@@ -7,7 +7,7 @@
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](#)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20Faster-ff6b6b.svg)](#performance)
-[![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20Powered-orange.svg)](#execution-modes)
+[![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20Powered%20(runtime%20disabled)-orange.svg)](#execution-modes)
 [![Try in Browser](https://img.shields.io/badge/Try%20Now-Browser%20Playground-ff6b6b.svg)](projects/nyash-wasm/nyash_playground.html)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
@@ -15,17 +15,7 @@
 
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
 
-Quick JIT self‑host flow (Phase 15):
-
-```
-cargo build --release --features cranelift-jit
-NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh                 # Core JIT + examples (plugins disabled)
-NYASH_LOAD_NY_PLUGINS=1 ./tools/jit_smoke.sh             # Std Ny smokes (optional)
-./tools/ny_roundtrip_smoke.sh                            # Roundtrip A/B
-NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh          # Plugins smoke (optional)
-./tools/using_e2e_smoke.sh                               # using/nyash.link E2E (optional)
-./tools/bootstrap_selfhost_smoke.sh                      # c0→c1→c1' (optional)
-```
+Note: JIT runtime execution is currently disabled to reduce debugging overhead. Use Interpreter/VM for running and AOT (Cranelift/LLVM) for distribution.
 
 ## 🎮 **Try Nyash in Your Browser Right Now!**
 
@@ -105,6 +95,8 @@ local py = new PyRuntimeBox()       // Python plugin
 
 ## 🏗️ **Multiple Execution Modes**
 
+Important: JIT runtime execution is sealed for now. Use Interpreter/VM for running, and Cranelift AOT/LLVM AOT for native executables.
+
 ### 1. **Interpreter Mode** (Development)
 ```bash
 ./target/release/nyash program.nyash
@@ -121,15 +113,7 @@ local py = new PyRuntimeBox()       // Python plugin
 - Optimized bytecode execution
 - Production-ready performance
 
-### 3. **JIT Mode** (High Performance)
-```bash
-NYASH_JIT_EXEC=1 ./target/release/nyash --backend vm program.nyash
-```
-- Cranelift-powered JIT compilation
-- Near-native performance
-- Hot function optimization
-
-### 4. **Native Binary** (Distribution)
+### 3. **Native Binary (Cranelift AOT)** (Distribution)
 ```bash
 # Build once (Cranelift)
 cargo build --release --features cranelift-jit
@@ -140,6 +124,17 @@ cargo build --release --features cranelift-jit
 - Zero dependencies
 - Maximum performance
 - Easy distribution
+
+### 4. **Native Binary (LLVM AOT)**
+```bash
+LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) \
+  cargo build --release --features llvm
+NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o \
+  ./target/release/nyash --backend llvm program.nyash
+# Link and run
+cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o myapp
+./myapp
+```
 
 Quick smoke test (VM vs EXE):
 ```bash
@@ -174,8 +169,8 @@ Mode           | Time      | Relative Speed
 ---------------|-----------|---------------
 Interpreter    | 110.10ms  | 1.0x (baseline)
 VM             | 8.14ms    | 13.5x faster
-VM + JIT       | 5.8ms     | 19.0x faster  
-Native Binary  | ~4ms      | ~27x faster
+Cranelift AOT  | ~4–6ms    | ~20–27x faster  
+Native (LLVM)  | ~4ms      | ~27x faster
 ```
 
 ---
