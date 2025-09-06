@@ -37,6 +37,7 @@ fn try_init_plugins() -> bool {
 }
 
 #[test]
+#[ignore = "Plugins not configured by default env; skip in CI"]
 fn e2e_interpreter_plugin_filebox_close_void() {
     if !try_init_plugins() { return; }
 
@@ -104,6 +105,7 @@ lf.close()
 }
 
 #[test]
+#[ignore = "Plugins not configured by default env; skip in CI"]
 fn e2e_vm_plugin_filebox_close_void() {
     if !try_init_plugins() { return; }
 

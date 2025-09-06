@@ -139,6 +139,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Plugin host not configured in CI by default; println parity covered elsewhere"]
     fn consolebox_println_tlv_vs_typebox() {
         ensure_host();
         let host = crate::runtime::get_global_plugin_host();
