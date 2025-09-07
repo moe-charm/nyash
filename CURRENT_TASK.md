@@ -1,5 +1,64 @@
 # CURRENT TASK (Compact) — Phase 15 / Self-Hosting（Ny→MIR→MIR-Interp→VM 先行）
 
+【Quick Update — 2025‑09‑07 Egui AOT/JIT 状況と次アクション】
+- 事象: Windows EXE（AOT, jit-direct emit）で Egui ウィンドウは開くが、`open/uiLabel` が反映されず `M_RUN` のみ実行。ログは `run_window: w=320 h=240 title='Nyash GUI'`（プラグイン側フォールバック）。
+- 原因推定: jit-direct 発行の Lower で汎用 PluginInvoke（EguiBox.open/uiLabel）が落ちていない。`box_type_map/handle_values` の伝播（Copy 等）不足、汎用フォールバックの判定漏れが影響。
+- 暫定対応（main 反映済み）:
+  - tools/windows/build_egui_aot.ps1 を安定化（既定Input=apps/egui-hello/main.nyash、jit-direct発行時に hostcall/bridge 有効、strict=0、args-only無効）。
+  - tools/ny_plugin.ps1 に nyrt.lib のフォールバックリンクを追加。
+  - tools/windows/egui_smoke.ps1 を追加（exe/vm/jit を秒指定で起動→生存判定）。
+  - プラグイン（with-egui）側にフェイルセーフ（run 時に未設定なら 320x240 + title='Nyash GUI' + 中央『hello nyash』）を実装。
+- 確認結果:
+  - VM 経路は `M_OPEN/M_UI_LABEL/M_RUN` が順に実行され、スクリプト文言が表示。
+  - AOT EXE は現状フォールバック表示（中央『hello nyash』）。`M_OPEN/M_UI_LABEL` が JIT Lower 上で未反映。
+- 次アクション（Cranelift 専用ブランチで実施）:
+  1) LowerCore で `MirInstruction::Copy` における型・ハンドル伝播を追加（`box_type_map`/`handle_values`）。
+  2) `lower_box_call` に EguiBox 明示分岐（open/uiLabel/run）を追加し、名前ベースの `emit_plugin_invoke` で確実に落とす（暫定）。
+  3) `NYASH_JIT_TRACE_LOWER=1` 時に汎用フォールバック失敗の理由（box_type, method, param/local/known 判定）を1行で診断出力。
+  4) スモーク: `tools/windows/egui_smoke.ps1 -Mode exe -Seconds 4 -Dbg` と VM/JIT で `M_OPEN/M_UI_LABEL` が見えることを確認。
+- 運用メモ:
+  - 開発は VM で速回し→DLL 差し替えで EXE 反映→最後に AOT リンクが最短ループ。
+  - DLLだけ再ビルド: `cargo build -p nyash-egui-plugin --release --features with-egui` → `target/release/nyash_egui_plugin.dll` を上書き。
+
+［Quick Update — 2025‑09‑07 Core‑13 Pure P1］
+- Try/Catch P1（純モード Core‑13）をビルダーで実装。Throw/Catch 命令を使用せず `Jump/Branch/Phi` で catch へ合流。
+  - `NYASH_MIR_CORE13_PURE=1` 時に有効。`build_throw_statement` が try 文脈内では catch ブロックへ Jump するように変更。
+  - catch 変数（例: `catch (T e)`）はエントリの `Phi` で合流した例外値を束縛。
+- テスト追加（統合）:
+  - `tests/mir_pure_trycatch_builder.rs`: 生成 MIR が Core‑13 許可集合のみで構成されることを検証。
+  - `tests/vm_e2e.rs` に純モード E2E 2件を追記（throw→catch 経路／成功時に catch をスキップ）。
+— 次: finally 分岐の網羅テスト、LLVM パリティ側の to‑bool/分岐の補強。
+
+— WSL Egui 表示（開発効率のための恒常化）
+
+目的
+- WSL 環境で egui の実ウィンドウを安定表示し、毎回の手間取りを解消（Windows 側nyash.exe 実行に頼らず、その場で可視化）。
+
+チェックリスト（毎回同じ手順で安定化）
+- プラグインを GUI 有効で上書きビルド
+  - `cargo clean -p nyash-egui-plugin`
+  - `cargo build -p nyash-egui-plugin --release --features with-egui`
+- 実行時にこのDLLを確実に掴ませる（競合回避）
+  - `export NYASH_PLUGIN_PATHS=/mnt/c/git/nyash-project/nyash_main/plugins/nyash-egui-plugin/target/release`
+- WSLg（Wayland）で試す → ダメなら X11 に切替
+  - Wayland: `export WAYLAND_DISPLAY=wayland-0; export XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir; unset DISPLAY`
+  - X11: `export DISPLAY=:0; export WINIT_UNIX_BACKEND=x11`
+- 実行
+  - `./target/release/nyash --backend vm apps/egui-hello/main.nyash`
+- 成功判定
+  - ログに `run_window: w=... h=... title='...'` が出る＋ウィンドウが表示される
+  - 参照: タイムスタンプ `ls -la plugins/nyash-egui-plugin/target/release/libnyash_egui_plugin*`
+  - 詳細ログ: `NYASH_CLI_VERBOSE=1` で loader の解決パスを確認
+
+補足
+- Windows 側での実行（`./target/release/nyash.exe` / `app_egui.exe`）は表示が確実。WSL 側の開発を優先するため、上記手順を最初に通す。
+- AOT 直後に feature 無しで上書きされると窓が消えるため、表示が出ない時は「(1)上書きビルド → (2)NYASH_PLUGIN_PATHS指定 → (3)Wayland/X11」の順で再試行。
+
+ビルド並列（既定ポリシー）
+- 開発機は 32 論理スレッド。Cargo の並列ビルドは基本 24 並列を既定とする（温度と安定性のバランス）。
+  - 例: `cargo build --release -j 24 --features cranelift-jit`
+  - PowerShell スクリプトは可能な限り `-Jobs` で上書き可能にする（`tools/build_egui_aot_manual.ps1 -Jobs 24`）。
+
 ［ブランチ方針の注記 — 2025‑09‑06 selfhosting‑dev 整理］
 - このブランチは VM/JIT を中心とした自己ホスト開発に専念します。
 - Cranelift AOT/JIT‑AOT 系の詳細課題は `docs/phase-15/cranelift/CRANELIFT_TASKS.md` へ分離しました（このファイルへの追記は最小限に）。
@@ -23,6 +82,22 @@
 - ドキュメント最小追記（README の Self‑Hosting セクションから one‑pager へ誘導済み）。
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
+
+【Cranelift AOT（EXE）検証とEgui方針 — 2025‑09‑07】
+- CounterBox AOT（Cranelift .o emit→nyrtリンク→EXE）
+  - 手順（確認済み）:
+    1) `cargo build --release --features cranelift-jit`
+    2) `cargo build -p nyash-counter-plugin --release`
+    3) `NYASH_AOT_OBJECT_OUT=target/aot_objects/counter_min.o ./target/release/nyash --jit-direct apps/tests/plugins/counter_min.nyash`
+    4) `cc target/aot_objects/counter_min.o -L target/release -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o app_counter_cranelift`
+    5) `NYASH_PLUGIN_PATHS=... ./app_counter_cranelift` → Result: 0（戻り値正規化あり）
+  - 備考: jit-direct 実行時に稀に segfault が出るが、.o は生成されリンク・実行に支障なし（要フォローアップ）。
+
+- Egui 方針（汎用経路に統一）:
+  - Lowering への Egui 専用分岐は撤去済み。Egui はプラグインボックス呼び（一般経路）で扱う。
+  - 過去に追加した Egui 専用の WSL スモークスクリプトは削除（忘れ残し防止／将来の悪影響回避）。
+    - 削除: `tools/egui_wsl_smoke.sh`, `tools/egui_cranelift_aot_wsl.sh`
+  - 次: `apps/egui-hello/main.nyash` を AOT（Cranelift .o emit→リンク→EXE）で表示確認（`NYASH_PLUGIN_PATHS` で DLL 解決）。
 
 — 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
 
@@ -167,9 +242,10 @@ Phase A 進捗（実施済）
 - 以前は Windows exe で egui ウィンドウ表示を確認できていたが、現状で再現が不安定な報告あり。Cranelift/LLVM と OS 組み合わせ別に手順と期待結果を明文化し、再現性を担保する。
 
 前提・重要ポイント
-- プラグイン版 EguiBox は Windows 専用で実ウィンドウ分岐（`#[cfg(all(windows, feature = "with-egui"))]`）。Linux/WSL では `run()` はスタブ（void）でウィンドウは出ない（X 転送の有無に関係なく）。
+- プラグイン版 EguiBox は `with-egui` 有効時にクロスプラットフォーム（eframe 使用）。Windows では実ウィンドウ表示、WSL/Linux でも WSLg/Wayland 環境なら表示可能。開発機の描画バックエンドに依存する点に注意。
 - Windows でウィンドウ表示を行うには、`nyash-egui-plugin` を `--features with-egui` でビルドし、`nyash.toml` の `plugin_paths`（または `NYASH_PLUGIN_PATHS`）に DLL のパスが解決できること。
-- Linux でウィンドウ表示を確認したい場合は「Rust 例（gui_simple_notepad）」または「ビルトイン EguiBox（nyash 本体を `--features gui` でビルドし、専用 Nyash スクリプトを使用）」を利用する。
+- Linux でウィンドウ表示を確認したい場合は「Rust 例（gui_simple_notepad）」または「ビルトイン EguiBox（nyash 本体を `--features gui` でビルドし、専用 Nyash スクリプトを使用）」も利用可。
+- Linux/WSL で `--features gui` を使う場合、システムの GL/X11/Wayland 開発ライブラリが必要（例: Ubuntu `sudo apt install pkg-config libx11-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev`）。
 
 テストマトリクス（手順と期待結果）
 1) Windows × Cranelift（JIT-direct/EXE 相当）
@@ -189,8 +265,8 @@ Phase A 進捗（実施済）
 3) WSL × Cranelift（JIT-direct/EXE 相当）
    - 準備: `cargo build --release --features cranelift-jit`
    - 実行: `./target/release/nyash --jit-direct apps/egui-hello/main.nyash`
-   - 期待: 実ウィンドウは出ない（プラグインの `run()` はスタブ）。エラーなく終了（void）。
-   - 備考: GUI 表示が必要な場合は Rust 例（`cargo run --features gui-examples --example gui_simple_notepad --release`）を利用。
+   - 期待: 実ウィンドウ表示（WSLg/Wayland 環境で成功することを想定）。描画不可環境ではエラーなく終了（void）にフォールバック。
+   - 備考: 表示が出ない場合は X11/Wayland 変数の切替（`WINIT_UNIX_BACKEND=x11` / `WAYLAND_DISPLAY`）や必要パッケージの導入を確認。Rust 例（`cargo run --features gui-examples --example gui_simple_notepad --release`）で先に動作確認するのが無難。
 
 4) WSL × LLVM（EXE/直実行）
    - 準備: `./tools/llvm_check_env.sh` → `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
@@ -204,12 +280,24 @@ Phase A 進捗（実施済）
 - Windows/プラグインの DLL 解決が怪しい場合は `NYASH_PLUGIN_PATHS` で DLL ディレクトリを明示（`;` 区切り）
 
 既知の制約 / TODO
-- Linux/WSL でプラグイン版 EguiBox の `run()` は現在スタブ（実ウィンドウなし）。将来的に `#[cfg(target_os = "linux")]` 分岐で eframe 実装を追加し、X11/Wayland でも表示可能にする。
+- Linux/WSL での表示は WSLg/GL 依存。描画バックエンドが無い環境ではヘッドレス（実ウィンドウ無し）となる。必要パッケージとバックエンド環境を整備してから再試行。
 - ビルトイン EguiBox（`src/boxes/egui_box.rs`）は `--features gui` でビルド時に有効。Nyash スクリプト側の API はプラグイン版と異なる（`setTitle/setSize/addText/run`）。Linux GUI 確認用にビルトイン用サンプル（apps/egui-builtin/）を追加して整備する。
 - Windows AOT リンクは MSVC `link.exe` を既定（fall back: clang）。lld へのスイッチ（速度優先）を将来オプション化検討。
 
 次アクション（引き継ぎ TODO）
-- [ ] Windows: 4通りの実行（Cranelift 直/JIT、LLVM 直、AOT EXE）で `apps/egui-hello/main.nyash` のウィンドウ表示を再確認（`NYASH_DEBUG_PLUGIN=1` でログ採取）。
+- [ ] Windows: 4通りの実行（Cranelift 直/JIT、LLVM 直、AOT EXE）で `apps/egui-hello/main.nyash` のウィンドウ表示を再確認（`NYASH_DEBUG_PLUGIN=1` でログ採取）。`tools/build_egui_aot_manual.ps1` のリンク手順を更新（lld/system libs 明示）。
+
+— Tools 整理（2025-09-07）
+- 統一エントリを追加: `tools/ny_plugin.ps1`（Windows）, `tools/ny_plugin.sh`（WSL/Linux）
+  - 使い方: `-Mode vm|jit|aot -Script <nyash file> -Jobs 24 [-PluginPaths <dirs>] [-Debug]`
+  - 例: `pwsh -File tools\ny_plugin.ps1 -Mode vm -Script apps\tests\plugins\counter_min.nyash -Jobs 24 -Debug`
+- 既存 egui 系スクリプトは非推奨化: `tools/egui_quick.ps1/.sh`, `tools/build_egui_aot_manual.ps1`, `tools/egui_run.bat`（ヘッダに Deprecated を明記）。
+- 一時的に残す: `tools/egui_aot.bat`（成功実績あり、当面案内は `ny_plugin.ps1` を優先）。
+
+— BoxCall 降ろし（設計メモ）
+- 目的: VM/JIT/AOT のいずれでも同一MIR（BoxCall）が機能。TypeBox v2 の invoke を汎用ブリッジで実行。
+- 方針: (box_type, method)→(type_id, method_id) を nyash.toml から解決し、TLV(i32/bool/f64/string/handle最小) を nyrt invoke に渡す。
+- 検証: `apps/tests/plugins/counter_min.nyash` を VM/JIT/AOT で一致（inc→get 発火、Result>=1）。
 - [ ] WSL: Cranelift/LLVM の直実行は「スタブ終了」が期待値であることを README/ガイドに明記。GUI が必要なら Rust 例 or ビルトイン EguiBox 経路を案内。
 - [ ] Linux 向けプラグイン `with-egui` 実装の導入可否を検討（`plugins/nyash-egui-plugin/src/lib.rs` の `winrun` と類似の `linrun` を追加）。
 - [ ] ビルトイン EguiBox 用の Nyash サンプルを `apps/egui-builtin/` として追加し、`--features gui` での手順を `dev/selfhosting/` または `docs/` に追記。
