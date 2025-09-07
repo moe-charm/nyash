@@ -32,3 +32,16 @@ Tips
 
 - For debug, set `NYASH_CLI_VERBOSE=1`.
 - Keep temp artifacts under this folder (`dev/selfhosting/_tmp/`) to avoid polluting repo root.
+
+
+Dev Loop (Ny-only)
+
+- One-off run (VM): `./tools/dev_selfhost_loop.sh apps/selfhost-minimal/main.nyash`
+- Watch + std libs: `./tools/dev_selfhost_loop.sh --watch --std apps/selfhost/ny-parser-nyash/main.nyash`
+- Make targets:
+  - `make dev` (VM, std on, verbose)
+  - `make dev-watch` (watch mode)
+
+Notes
+- Rebuild Rust only when core changes; Ny scripts reload on each run.
+- Flags: `--backend mir|vm`, `-v` for verbose, `--std` to load `[ny_plugins]`.

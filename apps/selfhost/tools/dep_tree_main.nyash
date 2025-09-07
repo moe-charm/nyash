@@ -1,0 +1,18 @@
+// dep_tree_main.nyash — entry script to print JSON tree
+
+include "./apps/selfhost/tools/dep_tree.nyash"
+
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local path = null
+    if args != null && args.length() >= 1 { path = args.get(0) }
+    if path == null || path == "" {
+      // default sample
+      path = "apps/selfhost/ny-parser-nyash/main.nyash"
+    }
+    local tree = DepTree.build(path)
+    console.println(tree.toJson())
+    return 0
+  }
+}

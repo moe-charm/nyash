@@ -630,7 +630,7 @@ Phase A 進捗（実施済）
 - 既存 Workspace は維持（`crates/*`）。
 - 方針: crates 側は変更せず「Nyash スクリプト + nyash.exe」だけで実装・運用（Windows優先）。
   - 例: `C:\git\nyash-project\nyash_self\nyash` 直下で `target\release\nyash` 実行。
-- Nyash 製パーサは `apps/ny-parser-nyash/`（Nyashコード）として配置（最初は最小サブセット）。
+- Nyash 製パーサは `apps/selfhost/ny-parser-nyash/`（Nyashコード）として配置（最初は最小サブセット）。
 - MIR 解釈層は既存 `backend/mir_interpreter.rs` と `runner/modes/mir_interpreter.rs` を拡充。
 - AOT 関連の雛形は `src/backend/cranelift/` に維持（feature gate: `cranelift-aot`）。
 

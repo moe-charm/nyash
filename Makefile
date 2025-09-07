@@ -33,3 +33,11 @@ fmt:
 
 lint:
 	cargo clippy --all-targets --all-features -- -D warnings || true
+
+# --- Self-hosting dev helpers (Ny-only inner loop) ---
+dev:
+	./tools/dev_selfhost_loop.sh --std -v -- --using-path apps/selfhost:apps apps/selfhost-minimal/main.nyash
+
+dev-watch:
+	./tools/dev_selfhost_loop.sh --watch --std -v -- --using-path apps/selfhost:apps apps/selfhost-minimal/main.nyash
+
