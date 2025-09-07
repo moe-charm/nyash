@@ -333,6 +333,7 @@ pub enum BinaryOperator {
     Multiply,
     Divide,
     Modulo,
+    Shl,      // << shift-left (Phase 1)
     Equal,
     NotEqual,
     Less,
@@ -361,6 +362,7 @@ impl fmt::Display for BinaryOperator {
             BinaryOperator::Multiply => "*",
             BinaryOperator::Divide => "/",
             BinaryOperator::Modulo => "%",
+            BinaryOperator::Shl => "<<",
             BinaryOperator::Equal => "==",
             BinaryOperator::NotEqual => "!=",
             BinaryOperator::Less => "<",

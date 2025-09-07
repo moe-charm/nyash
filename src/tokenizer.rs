@@ -59,6 +59,7 @@ pub enum TokenType {
     
     // 演算子 (長いものから先に定義)
     ARROW,           // >> (legacy arrow)
+    SHIFT_LEFT,      // << (bitwise shift-left)
     FAT_ARROW,       // => (peek arms)
     EQUALS,          // ==
     NotEquals,       // !=
@@ -268,6 +269,12 @@ impl NyashTokenizer {
                 self.advance();
                 self.advance();
                 Ok(Token::new(TokenType::NotEquals, start_line, start_column))
+            }
+            // Shift-left must be detected before <= and <
+            Some('<') if self.peek_char() == Some('<') => {
+                self.advance();
+                self.advance();
+                Ok(Token::new(TokenType::SHIFT_LEFT, start_line, start_column))
             }
             Some('<') if self.peek_char() == Some('=') => {
                 self.advance();

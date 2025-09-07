@@ -114,6 +114,7 @@ impl super::MirBuilder {
             BinaryOperator::Multiply => Ok(BinaryOpType::Arithmetic(BinaryOp::Mul)),
             BinaryOperator::Divide => Ok(BinaryOpType::Arithmetic(BinaryOp::Div)),
             BinaryOperator::Modulo => Ok(BinaryOpType::Arithmetic(BinaryOp::Mod)),
+            BinaryOperator::Shl => Ok(BinaryOpType::Arithmetic(BinaryOp::Shl)),
             BinaryOperator::Equal => Ok(BinaryOpType::Comparison(CompareOp::Eq)),
             BinaryOperator::NotEqual => Ok(BinaryOpType::Comparison(CompareOp::Ne)),
             BinaryOperator::Less => Ok(BinaryOpType::Comparison(CompareOp::Lt)),

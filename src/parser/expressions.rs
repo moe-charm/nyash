@@ -231,13 +231,13 @@ impl NyashParser {
     
     /// 項をパース: + - >>
     fn parse_term(&mut self) -> Result<ASTNode, ParseError> {
-        let mut expr = self.parse_factor()?;
+        let mut expr = self.parse_shift()?;
         
         while self.match_token(&TokenType::PLUS) || self.match_token(&TokenType::MINUS) || self.match_token(&TokenType::ARROW) {
             if self.match_token(&TokenType::ARROW) {
                 // >> Arrow演算子
                 self.advance();
-                let right = self.parse_factor()?;
+                let right = self.parse_shift()?;
                 expr = ASTNode::Arrow {
                     sender: Box::new(expr),
                     receiver: Box::new(right),
@@ -250,7 +250,7 @@ impl NyashParser {
                     _ => unreachable!(),
                 };
                 self.advance();
-                let right = self.parse_factor()?;
+                let right = self.parse_shift()?;
                 if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
                     let name = match operator { BinaryOperator::Add=>"add", BinaryOperator::Subtract=>"sub", _=>"term" };
                     let ok = crate::grammar::engine::get().syntax_is_allowed_binop(name);
@@ -265,6 +265,22 @@ impl NyashParser {
             }
         }
         
+        Ok(expr)
+    }
+    
+    /// シフトをパース: << のみ（Phase 1）
+    fn parse_shift(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_factor()?;
+        while self.match_token(&TokenType::SHIFT_LEFT) {
+            self.advance(); // consume '<<'
+            let rhs = self.parse_factor()?;
+            expr = ASTNode::BinaryOp {
+                operator: BinaryOperator::Shl,
+                left: Box::new(expr),
+                right: Box::new(rhs),
+                span: Span::unknown(),
+            };
+        }
         Ok(expr)
     }
     

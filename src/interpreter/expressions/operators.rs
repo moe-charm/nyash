@@ -323,6 +323,19 @@ impl NyashInterpreter {
                 }
             }
             
+            BinaryOperator::Shl => {
+                // Integer-only left shift
+                if let (Some(li), Some(ri)) = (
+                    crate::runtime::semantics::coerce_to_i64(left_val.as_ref()),
+                    crate::runtime::semantics::coerce_to_i64(right_val.as_ref()),
+                ) {
+                    return Ok(Box::new(IntegerBox::new(li.wrapping_shl(ri as u32))));
+                }
+                Err(RuntimeError::TypeError { 
+                    message: format!("Shift-left '<<' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) 
+                })
+            }
+            
             BinaryOperator::Less => {
                 let result = CompareBox::less(left_val.as_ref(), right_val.as_ref());
                 Ok(Box::new(result))
