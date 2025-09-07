@@ -1,3 +1,29 @@
+# Restart Notes — Ny Syntax Alignment (2025‑09‑07)
+
+目的
+- Self‑Hosting 方針（Nyのみで工具を回す前段）に合わせて、Ny 構文とコーディング規約を明示化し、最小版ツールの完走性を優先。
+
+Ny 構文（実装時の基準）
+- 1行1文／セミコロン非使用。
+- break / continue を使わない（関数早期 return、番兵条件、if 包みで置換）。
+- else は直前の閉じ波括弧と同一行（`} else {`}）。
+- 文字列の `"` と `\` は確実にエスケープ。
+- 反復は `loop(条件) { …; インクリメント }` を基本とし、必要に応じて「関数早期 return」型で早期脱出。
+
+短期タスク（Syntax 合意前提で最小ゴール）
+1) include のみ依存木（Nyのみ・配列/マップ未使用）を完走化
+   - `apps/selfhost/tools/dep_tree_min_string.nyash`
+   - FileBox/PathBox + 文字走査のみで JSON 構築（配列/マップに頼らない）
+   - `make dep-tree` で `tmp/deps.json` を出力
+2) using/module 対応は次段（構文・優先順位をユーザーと再すり合わせ後）
+   - 優先: `module > 相対 > using-path`、曖昧=エラー、STRICT ゲート（要相談）
+3) ブリッジ Stage 1 は保留
+   - `NYASH_DEPS_JSON=<path>` 読み込み（ログ出力のみ）を最小パッチで用意（MIR/JIT/AOT は不変）
+
+備考
+- Cranelift 側の作業は別ブランチで継続。Self‑Hosting ブランチは Ny 工具の安定化に集中。
+- 構文の最終合意後、using/module 版（配列/マップ最小 API）へ拡張。
+
 # Quick Plan — Self‑Host (Restart Safe)
 
 - Goals: Ny-only dependency tree (include → later using/module), JSON out; simple file-bridge to existing MIR→VM→AOT without tight coupling.
