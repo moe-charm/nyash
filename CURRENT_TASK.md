@@ -2,7 +2,41 @@
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-— 最終更新: 2025‑09‑06 (Phase 15.17 反映, Core‑13 純化モード/LLVM AOT shim 拡張)
+— 最終更新: 2025‑09‑08 (LLVM Core‑13 安定化 P0 ほぼ完了 + BitOps統合着手)
+
+【Quick Update — LLVM Core‑13 P0（最新版）】
+現状
+- LLVM 18 環境でビルド実行。opaque pointer 由来の型照会（get_element_type）を除去し、`env.box.new` は NyRT shim（`nyash.env.box.new`, `nyash.env.box.new_i64x`）へ統一。
+- `IntegerBox.value()` → `IntegerBox.value` に是正（フィールド参照）。
+- BinOp（モック経路）を網羅実装（加算/減算/乗算/除算/剰余/AND/OR/XOR/SHL/SHR/論理And/Or）。
+- 残りは BinaryOp の非網羅パターン検出が 1 箇所（同ファイル内の別 match）。ここに `_ =>` を追加してビルド通過予定。
+
+直近タスク（P0完了）
+1) `src/backend/llvm/compiler.rs` の BinaryOp match を総確認し、未網羅箇所に `_ =>` か軽実装を付与。
+2) 再ビルド通過を確認。
+3) 代表スモーク（VM一致）を1本通す。
+
+【BitOps/Shift 取り込み（Phase 1）】
+背景
+- main 側でビット演算（& | ^）とシフト（<< >>）の構文と VM 実装を着地。Arrow(>>) は廃止、パイプラインは `|>` を利用。
+- nyash_llvm 側の LLVM 降ろしは既に BitAnd/BitOr/BitXor/Shl/Shr を実装済みのため、構文経路が繋がれば AOT も動作。
+
+やること（P1）
+1) apps/tests/ny-llvm-bitops/main.nyash を構文経路で有効化（必要なら追加/修正）。
+2) tools/llvm_smoke.sh に `NYASH_LLVM_BITOPS_SMOKE=1` での E2E を既定ジョブに追加（または README に手順追記）。
+3) `tools/build_llvm.sh apps/tests/ny-llvm-bitops/main.nyash -o app_bit && ./app_bit` が `Result: 48` を出すことを確認。
+
+注意
+- 右シフト(>>) は Arrow ではなく ShiftRight として解釈される（パイプラインは `|>`）。
+- 右シフトは現状論理シフト相当の実装（将来算術/論理の切替が必要なら追補）。
+
+代表スモーク
+- ビルド: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- 実行: `tools/build_llvm.sh apps/tests/mir-compare-multi/main.nyash -o app && ./app`
+- 受け入れ: VM と同一の戻り値（Core‑13 正規化 ON。既定ON）
+
+ブランチ/作業場所
+- worktree: `/mnt/c/git/nyash-project/nyash_llvm`（branch: `llvm-dev` → origin/llvm-dev セット）
 
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 
