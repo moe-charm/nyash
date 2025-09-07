@@ -24,6 +24,100 @@ Ny 構文（実装時の基準）
 - Cranelift 側の作業は別ブランチで継続。Self‑Hosting ブランチは Ny 工具の安定化に集中。
 - 構文の最終合意後、using/module 版（配列/マップ最小 API）へ拡張。
 
+
+## Grammar Sync — Phase 12.7 合わせ（現状と方針）
+
+参照ドキュメント（一次ソース）
+- Phase 12.7 統合: `docs/development/roadmap/phases/phase-12.7/README.md`
+- Grammar 最終決定: `docs/development/roadmap/phases/phase-12.7/grammar-specs/grammar-reform-final-decision.txt`
+- Grammar 技術仕様: `docs/development/roadmap/phases/phase-12.7/grammar-specs/grammar-technical-spec.txt`
+- 実装チェックリスト: `docs/development/roadmap/phases/phase-12.7/implementation/implementation-final-checklist.txt`
+- ANCP Token Spec (参照): `docs/development/roadmap/phases/phase-12.7/ancp-specs/ANCP-Token-Specification-v1.md`
+
+実装状況（Phase 12.7 との整合）
+- OK: `peek`（else必須・ブロック可）、`continue`、`birth` 統一、`fn{}` ラムダ（P0）、糖衣 basic（`|>`, `?.`, `??`, `+=/-=/*=/=`, `..`）ゲート済。
+- OK: `Parent::method` 用 `::` トークン＋ `Parent::method(args)` 解析（P1相当の先行）。
+- OK: フィールド宣言 `name: Type` を受理（P0: 型はパースのみ、意味付けは今後）。
+- 差分（非致命）:
+  - import 未実装（現状は `using` のみ Phase0: `nyashstd` 制限）。
+  - `public name: Type` の単行は未対応（`public { ... }` ブロックは対応）。
+  - レガシー `>>`（ARROW）トークンとASTが残存（12.7 では不要）。
+  - Tokenizer に `fn` の重複割り当て（`FN`/`FUNCTION`）が存在（動作は壊していないが整理対象）。
+
+合意に向けた軽微タスク（Self‑Hosting 主線を維持したまま）
+- T1: `public name: Type` 単行を Box 内で受理（`public { ... }` は後方互換維持）。
+- T2: `import` を追加（現状 `using` と並行運用、Phase0は読み取りのみ／将来の解決器に接続）。
+- T3: 12.7 厳格モードゲート（例: `NYASH_STRICT_12_7=1`）
+  - `>>` を無効化（パーサ拒否 or トークナイズ抑止）。
+  - 追加キーワード群（legacy拡張）の一部を“識別子扱い”へフォールバック（実験用）。
+- T4: Tokenizer の `fn` 重複を解消（`FN` を正とし `FUNCTION` 二重割り当てを削除）。
+
+受け入れ基準（Grammar Sync）
+- sugar_level=none/basic の双方でスモークが通る。
+- `peek` else 未指定時に適切なエラー（現状維持）。
+- `public name: Type` が Box 内でフィールドとして扱われる（最小P0）。
+- 厳格モードで `>>` が受理されない／互換モードでは現状維持。
+
+検証コマンド（例）
+- `NYASH_SYNTAX_SUGAR_LEVEL=none cargo test -p nyash_self_main -- tests::sugar_basic_test -- --nocapture`（none でも tokenizer/parseは通ること）
+- `NYASH_SYNTAX_SUGAR_LEVEL=basic cargo test -p nyash_self_main -- tests::sugar_pipeline_test -- --nocapture`
+- `NYASH_STRICT_12_7=1 ./target/release/nyash --backend vm apps/smokes/grammar/peek_basic.nyash`（`>>` を含むコードが拒否される）
+
+## Bitwise/Shift — main 取り込みと現状
+
+- origin/main でビット演算（&, |, ^, <<, >>）が Grammar/Tokenizer/AST/MIR に統合済み。レガシー `>>` ARROW は撤退。
+- 追加テスト（main）：
+  - `src/tests/parser_bitops_test.rs`（代表式 `1 + 2 << 3 & 7` の構文）
+  - `src/tests/vm_bitops_test.rs`（`(5&3)+(5|2)+(5^1)+(1<<5)+(32>>3) == 48`、`1<<100` マスク確認）
+- 確認結果（ローカル）：
+  - MIR バックエンドは 48 で合格（OK）。
+  - VM バックエンドは現状 `Unsupported integer operation: BitAnd`（VM 側の実装が未導入のため）
+
+取り込み計画（selfhosting-dev に main を統合）
+1) ローカル変更を一時退避（stash）し、`origin/main` をマージ。
+2) コンフリクト解消：`src/jit/lower/builder/cranelift.rs` は main 側の更新（ARROW撤退/SHR採用）を優先。
+3) 検証：MIR 経路で bitops スモーク（期待 48）。
+4) 次段：VM の bitops（i64限定、シフトは `rhs&63` マスク）を実装→テスト有効化。
+5) LLVM/E2E：grammar 解禁後に `apps/tests/ny-llvm-bitops/` を有効化（MIR直構築は現状担保）。
+
+実行メモ（代表）
+- MIR スモーク: `printf "return (5 & 3) + (5 | 2) + (5 ^ 1) + (1 << 5) + (32 >> 3)\n" > tmp/bitops_smoke.nyash && ./target/debug/nyash --backend mir tmp/bitops_smoke.nyash` → `Result: 48`
+- VM は現状未対応（実装後に同式で確認）。
+
+TODO（bitops）
+- [ ] origin/main を selfhosting-dev にマージ（conflict 解消）。
+- [ ] MIR 経路のスモーク確認（48）。
+- [ ] VM: i64 の `& | ^ << >>` 実装（`rhs&63` マスク）。
+- [ ] tests: `vm_bitops_test.rs` を有効化（VM で合格）。
+- [ ] docs: ARROW(>>) 撤退と `|>` への一本化を明記。
+
+## Self‑Host — Include‑only Dependency Tree（Phase 0）
+
+スコープ（Phase 0 最小）
+- Nyのみ（Array/Map不使用）で include 依存木を構築し、純JSONを出力。
+- using/module/import は次段。Runner は `NYASH_DEPS_JSON` をログ読み込みのみ。
+
+現状
+- ツール: `apps/selfhost/tools/dep_tree_min_string.nyash`（include専用、再帰・文字列走査）。
+- 出力: `make dep-tree` → `tmp/deps.json`（純JSON化、先頭ログの除去は `[tasks].dep_tree` で吸収）。
+- 走査: コメント（`//`, `#`）・文字列内の `include` を無視する状態機械を導入（誤検出抑制）。
+- サンプル: `apps/selfhost/smokes/dep_smoke_root.nyash`（子: `dep_smoke_child.nyash`）。
+
+出力仕様・受け入れ基準: docs/selfhost/dep_tree_min_string.md に移設（CURRENT_TASKは要点のみ表記）。
+
+残タスク（Phase 0 必須）
+- P0-2: スモーク（循環あり/なし）と合わせて確認（追加済み）。
+- P0-3: docs への移設（完了）。
+
+任意（Phase 0.5）
+- stderr固定の徹底（将来Runner側の冗長出力をenvゲート化）。
+- ルートパスの正規化（`.`,`..` の整理）と最大深さ/件数の安全弁（オプション）。
+
+検証（代表）
+- `echo apps/selfhost/smokes/dep_smoke_root.nyash | ./target/release/nyash --backend vm apps/selfhost/tools/dep_tree_min_string.nyash`
+- `echo apps/selfhost/smokes/dep_smoke_cycle_a.nyash | ./target/release/nyash --backend vm apps/selfhost/tools/dep_tree_min_string.nyash`
+- `make dep-tree`（ENTRYは標準入力1行 or 既定パスにフォールバック）
+
 # Quick Plan — Self‑Host (Restart Safe)
 
 - Goals: Ny-only dependency tree (include → later using/module), JSON out; simple file-bridge to existing MIR→VM→AOT without tight coupling.

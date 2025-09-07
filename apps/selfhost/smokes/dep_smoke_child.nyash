@@ -1,0 +1,7 @@
+// child file
+box Child {
+  hello() {
+    return 1
+  }
+}
+

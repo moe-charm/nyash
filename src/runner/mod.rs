@@ -36,6 +36,38 @@ use nyash_rust::runtime;
 use nyash_rust::runner_plugin_init;
 use std::path::PathBuf;
 
+/// Resolve a using target according to priority: modules > relative > using-paths
+/// Returns Ok(resolved_path_or_token). On strict mode, ambiguous matches cause error.
+fn resolve_using_target(
+    tgt: &str,
+    is_path: bool,
+    modules: &[(String, String)],
+    using_paths: &[String],
+    context_dir: Option<&std::path::Path>,
+    strict: bool,
+    verbose: bool,
+) -> Result<String, String> {
+    if is_path { return Ok(tgt.to_string()); }
+    // 1) modules mapping
+    if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) { return Ok(p.clone()); }
+    // 2) build candidate list: relative then using-paths
+    let rel = tgt.replace('.', "/") + ".nyash";
+    let mut cand: Vec<String> = Vec::new();
+    if let Some(dir) = context_dir { let c = dir.join(&rel); if c.exists() { cand.push(c.to_string_lossy().to_string()); } }
+    for base in using_paths {
+        let c = std::path::Path::new(base).join(&rel);
+        if c.exists() { cand.push(c.to_string_lossy().to_string()); }
+    }
+    if cand.is_empty() {
+        if verbose { eprintln!("[using] unresolved '{}' (searched: rel+paths)", tgt); }
+        return Ok(tgt.to_string());
+    }
+    if cand.len() > 1 && strict {
+        return Err(format!("ambiguous using '{}': {}", tgt, cand.join(", ")));
+    }
+    Ok(cand.remove(0))
+}
+
 /// Main execution coordinator
 pub struct NyashRunner {
     config: CliConfig,
@@ -83,6 +115,66 @@ impl NyashRunner {
             }
             return;
         }
+        // CLI using/module overrides (MVP): apply early so JSON pipeline can observe them
+        if self.config.using.is_some() || self.config.using_path.is_some() || self.config.modules.is_some()
+            || std::env::var("NYASH_USING_PATH").is_ok() || std::env::var("NYASH_MODULES").is_ok() {
+            let mut using_paths: Vec<String> = Vec::new();
+            if let Some(p) = self.config.using_path.clone() { for s in p.split(':') { let s=s.trim(); if !s.is_empty() { using_paths.push(s.to_string()); } } }
+            if let Ok(p) = std::env::var("NYASH_USING_PATH") { for s in p.split(':') { let s=s.trim(); if !s.is_empty() { using_paths.push(s.to_string()); } } }
+            if using_paths.is_empty() { using_paths.extend(["apps","lib","."].into_iter().map(|s| s.to_string())); }
+
+            // modules mapping
+            let mut modules: Vec<(String,String)> = Vec::new();
+            if let Some(m) = self.config.modules.clone() { for ent in m.split(',') { if let Some((k,v)) = ent.split_once('=') { let k=k.trim(); let v=v.trim(); if !k.is_empty() && !v.is_empty() { modules.push((k.to_string(), v.to_string())); } } } }
+            if let Ok(ms) = std::env::var("NYASH_MODULES") { for ent in ms.split(',') { if let Some((k,v)) = ent.split_once('=') { let k=k.trim(); let v=v.trim(); if !k.is_empty() && !v.is_empty() { modules.push((k.to_string(), v.to_string())); } } } }
+            for (ns, path) in &modules { let sb = crate::box_trait::StringBox::new(path.clone()); crate::runtime::modules_registry::set(ns.clone(), Box::new(sb)); }
+
+            // using specs
+            let mut pending_using: Vec<(String, Option<String>, bool)> = Vec::new(); // (target, alias, is_path)
+            if let Some(u) = self.config.using.clone() {
+                for ent in u.split(',') {
+                    let s = ent.trim().trim_end_matches(';').trim(); if s.is_empty() { continue; }
+                    let (tgt, alias) = if let Some(pos) = s.find(" as ") { (s[..pos].trim().to_string(), Some(s[pos+4..].trim().to_string())) } else { (s.to_string(), None) };
+                    let is_path = tgt.starts_with('"') || tgt.starts_with("./") || tgt.starts_with('/') || tgt.ends_with(".nyash");
+                    pending_using.push((tgt.trim_matches('"').to_string(), alias, is_path));
+                }
+            }
+            // Resolve using (priority: modules > relative(file) > using-paths; ambiguous=error if strict)
+            let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+            let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+            let ctx = self.config.file.as_deref().and_then(|f| std::path::Path::new(f).parent());
+            for (tgt, alias, is_path) in pending_using.into_iter() {
+                if is_path && !std::path::Path::new(&tgt).exists() {
+                    if strict { eprintln!("❌ using: path not found: {}", tgt); std::process::exit(1); }
+                    if verbose { eprintln!("[using] path not found (continuing): {}", tgt); }
+                }
+                let value = match resolve_using_target(&tgt, is_path, &modules, &using_paths, ctx, strict, verbose) {
+                    Ok(v) => v,
+                    Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
+                };
+                let sb = crate::box_trait::StringBox::new(value.clone());
+                crate::runtime::modules_registry::set(tgt.clone(), Box::new(sb));
+                if let Some(a) = alias { let sb2 = crate::box_trait::StringBox::new(value); crate::runtime::modules_registry::set(a, Box::new(sb2)); }
+            }
+        }
+        // Stage-1: Optional dependency tree bridge (log-only)
+        if let Ok(dep_path) = std::env::var("NYASH_DEPS_JSON") {
+            match std::fs::read_to_string(&dep_path) {
+                Ok(s) => {
+                    let bytes = s.as_bytes().len();
+                    // Try to extract quick hints without failing
+                    let mut root_info = String::new();
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
+                        if let Some(r) = v.get("root_path").and_then(|x| x.as_str()) { root_info = format!(" root='{}'", r); }
+                    }
+                    eprintln!("[deps] loaded {} bytes from{} {}", bytes, if root_info.is_empty(){""} else {":"}, root_info);
+                }
+                Err(e) => {
+                    eprintln!("[deps] read error: {}", e);
+                }
+            }
+        }
+
         // Phase-15: JSON IR v0 bridge (stdin/file)
         if self.config.ny_parser_pipe || self.config.json_file.is_some() {
             let json = if let Some(path) = &self.config.json_file {
@@ -158,6 +250,41 @@ impl NyashRunner {
                             // In strict mode, default to JIT-only (no VM fallback)
                             if std::env::var("NYASH_JIT_ONLY").ok().is_none() { std::env::set_var("NYASH_JIT_ONLY", "1"); }
                         }
+                    }
+                }
+
+                // Env overrides for using rules
+                if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
+                    for p in paths.split(':') { let p = p.trim(); if !p.is_empty() { using_paths.push(p.to_string()); } }
+                }
+                if let Ok(mods) = std::env::var("NYASH_MODULES") {
+                    for ent in mods.split(',') {
+                        if let Some((k,v)) = ent.split_once('=') {
+                            let k = k.trim(); let v = v.trim();
+                            if !k.is_empty() && !v.is_empty() { pending_modules.push((k.to_string(), v.to_string())); }
+                        }
+                    }
+                }
+
+                // Apply pending modules to registry as StringBox (path or ns token)
+                for (ns, path) in pending_modules.iter() {
+                    let sb = nyash_rust::box_trait::StringBox::new(path.clone());
+                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+                }
+                // Resolve pending using with clear precedence and ambiguity handling
+                let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+                let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+                let ctx = std::path::Path::new(filename).parent();
+                for (ns, alias) in pending_using.iter() {
+                    let value = match resolve_using_target(ns, false, &pending_modules, &using_paths, ctx, strict, verbose) {
+                        Ok(v) => v,
+                        Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
+                    };
+                    let sb = nyash_rust::box_trait::StringBox::new(value.clone());
+                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+                    if let Some(a) = alias {
+                        let sb2 = nyash_rust::box_trait::StringBox::new(value);
+                        nyash_rust::runtime::modules_registry::set(a.clone(), Box::new(sb2));
                     }
                 }
             }

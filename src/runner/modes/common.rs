@@ -248,6 +248,39 @@ impl NyashRunner {
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };
 
+        // Stage-0: import loader (top-level only) — resolve path and register in modules registry
+        if let nyash_rust::ast::ASTNode::Program { statements, .. } = &ast {
+            for st in statements {
+                if let nyash_rust::ast::ASTNode::ImportStatement { path, alias, .. } = st {
+                    // resolve path relative to current file if not absolute
+                    let mut p = std::path::PathBuf::from(path);
+                    if p.is_relative() {
+                        if let Some(dir) = std::path::Path::new(filename).parent() {
+                            p = dir.join(&p);
+                        }
+                    }
+                    let exists = p.exists();
+                    if !exists {
+                        if std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1") {
+                            eprintln!("❌ import: path not found: {} (from {})", p.display(), filename);
+                            process::exit(1);
+                        } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") || std::env::var("NYASH_IMPORT_TRACE").ok().as_deref() == Some("1") {
+                            eprintln!("[import] path not found (continuing): {}", p.display());
+                        }
+                    }
+                    let key = if let Some(a) = alias { a.clone() } else {
+                        std::path::Path::new(path)
+                            .file_stem().and_then(|s| s.to_str())
+                            .unwrap_or(path)
+                            .to_string()
+                    };
+                    let value = if exists { p.to_string_lossy().to_string() } else { path.clone() };
+                    let sb = nyash_rust::box_trait::StringBox::new(value);
+                    nyash_rust::runtime::modules_registry::set(key, Box::new(sb));
+                }
+            }
+        }
+
         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") && !quiet_pipe {
             println!("✅ Parse successful!");
         }
