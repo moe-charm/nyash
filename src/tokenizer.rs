@@ -677,7 +677,7 @@ mod tests {
         let mut tokenizer = NyashTokenizer::new(">> == != <= >= < >");
         let tokens = tokenizer.tokenize().unwrap();
         
-        assert_eq!(tokens[0].token_type, TokenType::ARROW);
+        assert_eq!(tokens[0].token_type, TokenType::SHIFT_RIGHT);
         assert_eq!(tokens[1].token_type, TokenType::EQUALS);
         assert_eq!(tokens[2].token_type, TokenType::NotEquals);
         assert_eq!(tokens[3].token_type, TokenType::LessEquals);
