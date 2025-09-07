@@ -118,6 +118,35 @@ impl NyashInterpreter {
         // Register MethodBox invoker once (idempotent)
         self::register_methodbox_invoker();
 
+        // Best-effort: initialize plugin host/config when running interpreter standalone
+        // This mirrors runner initialization so that `new FileBox()` etc. work without the CLI path.
+        // Policy: enable plugin-builtins for FileBox/TOMLBox by default; Array/Map remain builtin unless explicitly overridden.
+        if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
+            if std::path::Path::new("nyash.toml").exists() {
+                let needs_init = {
+                    let host = crate::runtime::get_global_plugin_host();
+                    host.read().map(|h| h.config_ref().is_none()).unwrap_or(true)
+                };
+                if needs_init {
+                    let _ = crate::runtime::init_global_plugin_host("nyash.toml");
+                    // Apply config to BoxFactoryRegistry so UnifiedBoxRegistry can resolve plugin boxes
+                    crate::runner_plugin_init::init_bid_plugins();
+                }
+                // Prefer plugin implementations for specific types when available
+                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().is_none() {
+                    std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
+                }
+                // Merge override list with FileBox/TOMLBox only (safe defaults for interpreter flows)
+                let mut override_types: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
+                    list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+                } else { vec![] };
+                for t in ["FileBox", "TOMLBox"] {
+                    if !override_types.iter().any(|x| x == t) { override_types.push(t.to_string()); }
+                }
+                std::env::set_var("NYASH_PLUGIN_OVERRIDE_TYPES", override_types.join(","));
+            }
+        }
+
         this
     }
 

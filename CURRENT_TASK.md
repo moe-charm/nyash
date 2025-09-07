@@ -1,5 +1,139 @@
 # CURRENT TASK (Compact) — Phase 15 / Self-Hosting（Ny→MIR→MIR-Interp→VM 先行）
 
+【Quick Update — 2025‑09‑07 PM VM=Plugin‑First 固定 + JIT/AOT スモーク整備】
+- 方針確定: このブランチでは VM はプラグインボックスを一貫利用（plugin‑first）。JIT/AOT は最小 compare/select と name‑invoke を安定化。
+- VM 側の固定（実装）
+  - src/runner/modes/vm.rs: 起動時にプラグインホスト初期化＋BoxFactoryRegistry適用（idempotent）。
+  - 既定で `NYASH_USE_PLUGIN_BUILTINS=1`。`NYASH_PLUGIN_OVERRIDE_TYPES` を File/String/Integer/Console/Array/Map/Math/Time で安定設定。
+  - 厳格モード: `NYASH_VM_PLUGIN_STRICT=1` でプロバイダー未配置なら即エラー。
+- Interpreter 揺れ緩和（補助）
+  - src/interpreter/core.rs: 単体起動でも nyash.toml を検出したら一度だけプラグイン初期化＋適用。
+  - 互換重視: 既定は FileBox/TOMLBox のみプラグイン優先（Array/Mapは維持）。
+- スモーク追加（実行確認）
+  - VM: `apps/tests/vm-plugin-smoke-counter/main.nyash`（CounterBox inc/get=1）
+    - `tools/vm_plugin_smoke.sh`
+  - VM: `apps/tests/vm-plugin-smoke-filebox/main.nyash`（FileBox open/read/close → length=2）
+    - `tools/vm_filebox_smoke.sh`
+  - JIT: `apps/tests/mir-compare-multi/main.nyash`（<,==,!= 合成で101）
+    - `tools/jit_compare_smoke.sh`（branch-ret も併走）
+  - AOT: 一気通しスクリプト `tools/build_aot.sh`（.o→EXE→実行）
+    - CounterBox 版: `tools/aot_counter_smoke.sh`
+- Cranelift name‑invoke 観測拡充
+  - 非コアBoxの `emit_plugin_invoke_by_name` に `emit_lower` を追加（id=plugin_name:<box>.<method>, argc）。
+  - 既存の PluginInvoke（型ID解決）箇所では type_id/method_id を observe に記録（Console/PyRuntime/Array/Map 等）。
+
+次アクション（短期・このブランチ）
+1) name‑invoke の引数 3 個超対応（現状 2 まで）。不足時の診断を強化。
+2) AOT FileBox スモーク（read/exists 型）を追加し `.o→EXE` まで通す。
+3) jit‑direct のエラー観測を JSONL で整備（resolve失敗/hostcallフォールバック等）。
+4) docs: README/CURRENT_TASK に VM=plugin‑first の運用を明記、実行スクリプトの一覧を追記。
+
+実行コマンド（要点）
+- VM（厳格）: `NYASH_VM_PLUGIN_STRICT=1 ./target/release/nyash --backend vm <app>`
+- JIT直: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct <app>`
+- AOT: `bash tools/build_aot.sh <app> <out>`
+
+【Handoff (Very Compact) 2025‑09‑07】
+- ブランチ/場所: nyash_project/nyash_cranelift（Cranelift 専用ツリー）
+- 実行モード: plugins‑only（必ず `NYASH_PLUGIN_ONLY=1`）
+- プラグイン: Console/String/Array/Map/File/Integer を `cargo build --release` 済み前提
+- JIT 直: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash` → PASS（最小3本もOK）
+- AOT .o: `NYASH_AOT_OBJECT_OUT=target/aot_objects ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash` → `target/aot_objects/main.o` 生成
+
+Next 24h（最優先）
+1) FileBox スモークを read/exists 型に調整（plugins‑only で PASS 化）
+2) `tools/build_aot.sh` 安定化（`NYASH_PLUGIN_ONLY=1` 明示、ログ抑制解除、`.o` 厳密チェック、`.o→EXE` 実行）
+3) AOT スモーク追加（link/実行まで）: `cc target/aot_objects/main.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o app_aot`
+4) jit-direct 追加最小: select/compare 系（plugins に依存しない）
+
+参考コマンド（定番）
+- ビルド: `cargo build --release --features cranelift-jit`
+- プラグイン一括: `tools/smoke_plugins.sh`（無い場合は各 `plugins/*` で `cargo build --release`）
+- JIT 直: `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct <app>`
+- AOT .o: `NYASH_AOT_OBJECT_OUT=target/aot_objects ./target/release/nyash --jit-direct <app>`
+
+
+【Quick Update — 2025‑09‑07 plugins‑only 方針 + jit-direct/AOT 最小経路の確定（cranelift ツリー）】
+- ポリシー: 当面 WASM/builtin は使わず「plugins‑only」を既定とする（本ツリーでの実行・検証前提）
+  - 実行時は `NYASH_PLUGIN_ONLY=1` を付与（既存のツール類は概ね付与済み）
+- 必須プラグイン（Console/String/Array/Map/File/Integer）は `cargo build --release` 済みを前提
+  - まとめ: `tools/smoke_plugins.sh` で一括ビルド可
+- jit-direct 最小テスト（plugins‑only）
+  - `NYASH_JIT_THRESHOLD=1 ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash` → PASS（unsupported=0）
+  - ほか `mir-store-load / mir-phi-min / mir-branch-multi` も PASS（単一出口＋PHI(min) 合流で安定）
+- AOT （ObjectBuilder）
+  - `NYASH_AOT_OBJECT_OUT=target/aot_objects ./target/release/nyash --jit-direct apps/tests/mir-branch-ret/main.nyash`
+  - `target/aot_objects/main.o` 生成を確認できる（環境によっては ツールの stdout 抑制で見えづらい → 手動確認推奨）
+- 次の着手（本ツリー）
+  1) FileBox の最小スモークを read/exists 型に調整し、plugins‑only で PASS に統一（write は後続で仕様照合）
+  2) `tools/build_aot.sh` 安定化（ログ抑制解除/診断、`NYASH_PLUGIN_ONLY=1` 明示、`.o` 検知の厳密化）
+  3) `.o → EXE` まで一気通しの AOT スモーク追加（nyrt リンク実行）
+  4) jit-direct の追加最小（select/compare 等）を plugins 依存なしで拡充
+
+
+【Quick Update — 2025‑09‑07 Cranelift Lower 追跡と非コアBox共通化（引き継ぎメモ）】
+- 目的: Egui を含む「非コア Box（String/Array/Map/PyRuntime 以外）」を環境変数に依存せず確実に Lower。Lower 追跡ログを一行診断で強化。
+- 対応（main 反映済み）:
+  - 非コア共通経路: `src/jit/lower/core/ops_ext.rs`
+    - `StringBox/ArrayBox/MapBox/PyRuntimeBox` を除く Box 呼び出しは「名前ベース plugin_invoke」にフォールバックする通常分岐を追加（恒久化）。
+    - 受け手は param/local/unknown を `handle.of` でハンドル化。引数は最大2個まで積む。Lower ログ: `[LOWER] <Type>.<method> via name-invoke (argc=N)`
+    - これに伴い、旧 `NYASH_JIT_EGUI_FORCE`（Egui のみの暫定ゲート）は撤去。
+  - Copy 伝播: `src/jit/lower/core.rs` の `I::Copy` で `handle_values` と `box_type_map` を伝播（BoxCall の型判断が Copy で消えないように）。
+  - 追跡一行診断（未処理時）: BoxCall が未ハンドルの場合に、受け手の `param/local/handle`、先頭3引数の分類（i:known_i64 / s:known_str / p:param / l:local / h:handle / -:unknown）、policy 推定（HostCall/PluginInvoke/Fallback 理由）を1行で出力。
+    - 例: `[LOWER] fallback(reason=unhandled) box_type='EguiBox' method='birth' recv[param?false local?true handle?true] args=[] policy=plugin_invoke`
+  - JIT ビルダー安定化:
+    - `emit_plugin_invoke_by_name`: 冗長な `switch_to_block` を撤去。import シグネチャを「常に I64 返し」に固定（呼び出し側が不要なら破棄）。
+    - `switch_to_block`: 同一ブロックの二度切替を回避。未終端ブロックからの切替時には自動ジャンプを注入し CFG を健全化。
+  - AOT/Object ビルダー（進行中）:
+    - 名前ベース／tagged invoke の import シグネチャを「常に I64 返し」に固定。
+    - begin/end 間で Context を再利用する際のリセットを強化（ctx/fbc/blocks をクリア）。
+
+- 現状の確認（JIT 直）:
+  - コマンド（Debug）: `NYASH_JIT_TRACE_LOWER=1 ./target/debug/nyash --jit-direct apps/egui-hello/main.nyash`
+  - 代表ログ:
+    - `[LOWER] EguiBox.birth via name-invoke (argc=1)`
+    - `[LOWER] EguiBox.open via name-invoke (argc=3)`
+    - `[LOWER] EguiBox.uiLabel via name-invoke (argc=2)`
+    - `[LOWER] EguiBox.run via name-invoke (argc=1)`
+    - `[LOWER] EguiBox.close via name-invoke (argc=1)`
+
+- AOT（.o）出力と EXE 連携（進行中）:
+  - 目的: `NYASH_AOT_OBJECT_OUT=target/aot_objects ./target/debug/nyash --jit-direct <app>` で .o を生成し、`nyrt` とリンク → EXE 実行。
+  - 既知課題: Object ビルダーで `cranelift_frontend::FunctionBuilder` を複数箇所で都度生成しており、`func_ctx.is_empty()` アサート（fbc 再利用の順序問題）が発生するケースあり。
+  - 改善方針（TODO 下記 1）: Object ビルダー側を「1 関数につき 1 つの FunctionBuilder を生成→保持→全 emit/switch を委譲→finalize で破棄」に整理し再発を防止。
+  - 参考: name-invoke/ tagged invoke の import はすでに「常に I64 返し」に統一済み。
+
+- 再現・検証コマンド（代表）:
+  1) ビルド（Debug/Release, Cranelift-JIT）
+     - `cargo build --features cranelift-jit`
+     - `cargo build --release --features cranelift-jit`
+  2) JIT 直（Egui サンプル）
+     - `NYASH_JIT_TRACE_LOWER=1 ./target/debug/nyash --jit-direct apps/egui-hello/main.nyash`
+     - 期待: 上記の via name-invoke ログが順に出る（特別な env ゲート不要）
+  3) AOT .o 出力（進行中; 現在は Object ビルダーの FB 利用で改善中）
+     - `rm -rf target/aot_objects; mkdir -p target/aot_objects`
+     - `NYASH_AOT_OBJECT_OUT=target/aot_objects ./target/debug/nyash --jit-direct apps/egui-hello/main.nyash`
+     - 期待: `target/aot_objects/<func>.o` が生成（現状: `func_ctx.is_empty()` アサートに遭遇することがある → TODO 1 で是正）
+  4) EXE リンク（.o が得られた後）（例: Linux/GNU）
+     - `cc target/aot_objects/main.o -L target/debug -L crates/nyrt/target/debug -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o app_egui`
+     - 実行: `NYASH_PLUGIN_PATHS=./plugins/nyash-egui-plugin/target/debug ./app_egui`
+
+- 次アクション（TODO）:
+  1) Object ビルダーの FunctionBuilder 利用を一元化
+     - begin_function で FB を生成・保持し、全ての emit/switch/ensure が同インスタンスを通るように変更。
+     - end_function で finalize→ctx/module 定義→state クリア。`func_ctx.is_empty()` アサートの再発を防ぐ。
+  2) スモーク（非コア Box 複数）
+     - ConsoleBox.log / FileBox.open/close などの最小呼び出しを name-invoke 経由で Lower → 実行ログ確認。
+  3) 診断の統一
+     - Extern（env.*）など未処理分岐の一行診断も現行フォーマット（recv/args/policy）に揃える。
+  4) テスト
+     - `cargo test --features cranelift-jit` のうち、JIT 依存の最小テストを選抜して実行（時間がかかるため段階的に）。
+  5) AOT/EXE 路線の仕上げ
+     - `.o` の安定化→リンク→実行（`Result:` ログの採取）。Windows/MSVC 向けは別途 power shell スクリプト（既存 docs/tools）参照。
+
+— 最終更新: 2025‑09‑07（非コア Box の共通 Lower 化／追跡強化／AOT ビルダーの安定化対応 途中）
+
+
 【Quick Update — 2025‑09‑07 Egui AOT/JIT 状況と次アクション】
 - 事象: Windows EXE（AOT, jit-direct emit）で Egui ウィンドウは開くが、`open/uiLabel` が反映されず `M_RUN` のみ実行。ログは `run_window: w=320 h=240 title='Nyash GUI'`（プラグイン側フォールバック）。
 - 原因推定: jit-direct 発行の Lower で汎用 PluginInvoke（EguiBox.open/uiLabel）が落ちていない。`box_type_map/handle_values` の伝播（Copy 等）不足、汎用フォールバックの判定漏れが影響。

@@ -1,0 +1,12 @@
+// vm-plugin-smoke-filebox
+// Purpose: Verify VM uses FileBox plugin to open/read a file.
+// Script expects the test file to be created by the runner script.
+
+local path = "tmp/vm_filebox_smoke.txt"
+local f = new FileBox()
+f.open(path, "r")
+local s = f.read()
+f.close()
+// Return the length of read content to avoid printing large buffers
+return s.length()
+

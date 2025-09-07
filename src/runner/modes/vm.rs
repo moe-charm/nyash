@@ -6,6 +6,54 @@ use std::sync::Arc;
 impl NyashRunner {
     /// Execute VM mode (split)
     pub(crate) fn execute_vm_mode(&self, filename: &str) {
+        // Enforce plugin-first policy for VM on this branch (deterministic):
+        // - Initialize plugin host if not yet loaded
+        // - Prefer plugin implementations for core boxes
+        // - Optionally fail fast when plugins are missing (NYASH_VM_PLUGIN_STRICT=1)
+        {
+            // Initialize unified registry globals (idempotent)
+            nyash_rust::runtime::init_global_unified_registry();
+            // Init plugin host from nyash.toml if not yet loaded
+            let need_init = {
+                let host = nyash_rust::runtime::get_global_plugin_host();
+                host.read().map(|h| h.config_ref().is_none()).unwrap_or(true)
+            };
+            if need_init {
+                let _ = nyash_rust::runtime::init_global_plugin_host("nyash.toml");
+                crate::runner_plugin_init::init_bid_plugins();
+            }
+            // Prefer plugin-builtins for core types unless explicitly disabled
+            if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().is_none() {
+                std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
+            }
+            // Build stable override list
+            let mut override_types: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
+                list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+            } else { vec![] };
+            for t in [
+                "FileBox", "TOMLBox", // IO/config
+                "ConsoleBox", "StringBox", "IntegerBox", // core value-ish
+                "ArrayBox", "MapBox", // collections
+                "MathBox", "TimeBox" // math/time helpers
+            ] {
+                if !override_types.iter().any(|x| x == t) { override_types.push(t.to_string()); }
+            }
+            std::env::set_var("NYASH_PLUGIN_OVERRIDE_TYPES", override_types.join(","));
+
+            // Strict mode: verify providers exist for override types
+            if std::env::var("NYASH_VM_PLUGIN_STRICT").ok().as_deref() == Some("1") {
+                let v2 = nyash_rust::runtime::get_global_registry();
+                let mut missing: Vec<String> = Vec::new();
+                for t in ["FileBox","ConsoleBox","ArrayBox","MapBox","StringBox","IntegerBox"] {
+                    if v2.get_provider(t).is_none() { missing.push(t.to_string()); }
+                }
+                if !missing.is_empty() {
+                    eprintln!("❌ VM plugin-first strict: missing providers for: {:?}", missing);
+                    std::process::exit(1);
+                }
+            }
+        }
+
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,
@@ -78,43 +126,68 @@ impl NyashRunner {
         match vm.execute_module(&module_vm) {
             Ok(result) => {
                 println!("✅ VM execution completed successfully!");
-                // Pretty-print using MIR return type when available to avoid Void-looking floats/bools
-                if let Some(func) = compile_result.module.functions.get("main") {
+                // Pretty-print with coercions for plugin-backed values
+                // Prefer MIR signature when available, but fall back to runtime coercions to keep VM/JIT consistent.
+                let (ety, sval) = if let Some(func) = compile_result.module.functions.get("main") {
                     use nyash_rust::mir::MirType;
                     use nyash_rust::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
                     use nyash_rust::boxes::FloatBox;
-                    let (ety, sval) = match &func.signature.return_type {
+                    match &func.signature.return_type {
                         MirType::Float => {
                             if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
                                 ("Float", format!("{}", fb.value))
                             } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
                                 ("Float", format!("{}", ib.value as f64))
-                            } else { ("Float", result.to_string_box().value) }
+                            } else if let Some(s) = nyash_rust::runtime::semantics::coerce_to_string(result.as_ref()) {
+                                ("String", s)
+                            } else {
+                                (result.type_name(), result.to_string_box().value)
+                            }
                         }
                         MirType::Integer => {
                             if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
                                 ("Integer", ib.value.to_string())
-                            } else { ("Integer", result.to_string_box().value) }
+                            } else if let Some(i) = nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref()) {
+                                ("Integer", i.to_string())
+                            } else {
+                                (result.type_name(), result.to_string_box().value)
+                            }
                         }
                         MirType::Bool => {
                             if let Some(bb) = result.as_any().downcast_ref::<BoolBox>() {
                                 ("Bool", bb.value.to_string())
                             } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
                                 ("Bool", (ib.value != 0).to_string())
-                            } else { ("Bool", result.to_string_box().value) }
+                            } else {
+                                (result.type_name(), result.to_string_box().value)
+                            }
                         }
                         MirType::String => {
                             if let Some(sb) = result.as_any().downcast_ref::<StringBox>() {
                                 ("String", sb.value.clone())
-                            } else { ("String", result.to_string_box().value) }
+                            } else if let Some(s) = nyash_rust::runtime::semantics::coerce_to_string(result.as_ref()) {
+                                ("String", s)
+                            } else {
+                                (result.type_name(), result.to_string_box().value)
+                            }
                         }
-                        _ => { (result.type_name(), result.to_string_box().value) }
-                    };
-                    println!("ResultType(MIR): {}", ety);
-                    println!("Result: {}", sval);
+                        _ => {
+                            if let Some(i) = nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref()) {
+                                ("Integer", i.to_string())
+                            } else if let Some(s) = nyash_rust::runtime::semantics::coerce_to_string(result.as_ref()) {
+                                ("String", s)
+                            } else { (result.type_name(), result.to_string_box().value) }
+                        }
+                    }
                 } else {
-                    println!("Result: {:?}", result);
-                }
+                    if let Some(i) = nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref()) {
+                        ("Integer", i.to_string())
+                    } else if let Some(s) = nyash_rust::runtime::semantics::coerce_to_string(result.as_ref()) {
+                        ("String", s)
+                    } else { (result.type_name(), result.to_string_box().value) }
+                };
+                println!("ResultType(MIR): {}", ety);
+                println!("Result: {}", sval);
             },
             Err(e) => { eprintln!("❌ VM execution error: {}", e); process::exit(1); }
         }

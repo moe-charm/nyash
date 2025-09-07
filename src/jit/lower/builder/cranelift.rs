@@ -512,7 +512,7 @@ impl IRBuilder for CraneliftBuilder {
             while args.len() < _argc { args.push(fb.ins().iconst(types::I64, 0)); }
         });
         for _ in 0.._argc { sig.params.push(AbiParam::new(types::I64)); }
-        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+        
         let func_id = self.module.declare_function(symbol, cranelift_module::Linkage::Import, &sig).expect("declare import failed");
         if let Some(v) = tls_call_import_ret(&mut self.module, func_id, &args, has_ret) { self.value_stack.push(v); }
     }
@@ -639,11 +639,7 @@ impl IRBuilder for CraneliftBuilder {
     }
     fn emit_plugin_invoke_by_name(&mut self, method: &str, argc: usize, has_ret: bool) {
         use cranelift_codegen::ir::{AbiParam, Signature, types};
-        Self::with_fb(|fb| {
-            if let Some(idx) = self.current_block_index { fb.switch_to_block(self.blocks[idx]); }
-            else if let Some(b) = self.entry_block { fb.switch_to_block(b); }
-        });
-        // Collect call args
+                // Collect call args
         let mut arg_vals: Vec<cranelift_codegen::ir::Value> = {
             let take_n = argc.min(self.value_stack.len());
             let mut tmp = Vec::new();
@@ -656,7 +652,8 @@ impl IRBuilder for CraneliftBuilder {
         sig.params.push(AbiParam::new(types::I64));
         sig.params.push(AbiParam::new(types::I64));
         sig.params.push(AbiParam::new(types::I64));
-        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+        sig.returns.push(AbiParam::new(types::I64));
+        
         let sym = match method { "getattr" => "nyash_plugin_invoke_name_getattr_i64", _ => "nyash_plugin_invoke_name_call_i64" };
         let func_id = self.module.declare_function(sym, cranelift_module::Linkage::Import, &sig).expect("declare name shim failed");
         let ret_val = Self::with_fb(|fb| {
@@ -710,13 +707,20 @@ impl IRBuilder for CraneliftBuilder {
     }
     fn switch_to_block(&mut self, index: usize) {
         if index >= self.blocks.len() { return; }
+        // Avoid redundant switch_to_block calls that can trip FunctionBuilder state
+        if self.current_block_index == Some(index) { return; }
         Self::with_fb(|fb| {
             // If switching away from a non-terminated block, inject jump to keep CFG sane
             if let Some(cur) = self.current_block_index {
-                if self.cur_needs_term && cur != index { fb.ins().jump(self.blocks[index], &[]); self.cur_needs_term = false; }
+                if self.cur_needs_term && cur != index {
+                    fb.ins().jump(self.blocks[index], &[]);
+                    self.cur_needs_term = false;
+                }
             }
             fb.switch_to_block(self.blocks[index]);
             self.current_block_index = Some(index);
+            // New current block now requires a terminator before any further switch
+            self.cur_needs_term = true;
         });
     }
     fn seal_block(&mut self, _index: usize) { /* final sealing handled in end_function */ }

@@ -494,6 +494,9 @@ impl LowerCore {
                 if let Some(v) = self.known_i64.get(src).copied() { self.known_i64.insert(*dst, v); }
                 if let Some(v) = self.known_f64.get(src).copied() { self.known_f64.insert(*dst, v); }
                 if let Some(v) = self.known_str.get(src).cloned() { self.known_str.insert(*dst, v); }
+                // Propagate handle/type knowledge to keep BoxCall routing stable across copies
+                if self.handle_values.contains(src) { self.handle_values.insert(*dst); }
+                if let Some(bt) = self.box_type_map.get(src).cloned() { self.box_type_map.insert(*dst, bt); }
                 // Propagate boolean classification through Copy
                 if self.bool_values.contains(src) { self.bool_values.insert(*dst); }
                 // If source is a parameter, materialize it on the stack for downstream ops and persist into dst slot
@@ -713,7 +716,40 @@ impl LowerCore {
                     }
                 }
                 let handled = self.lower_box_call(func, b, &array, method.as_str(), args, dst.clone())?;
-                if trace { eprintln!("[LOWER] BoxCall recv={:?} method={} handled={} box_type={:?} dst?={}", array, method, handled, self.box_type_map.get(&array), dst.is_some()); }
+                if trace {
+                    eprintln!(
+                        "[LOWER] BoxCall recv={:?} method={} handled={} box_type={:?} dst?={}",
+                        array, method, handled, self.box_type_map.get(&array), dst.is_some()
+                    );
+                    if !handled {
+                        let bt = self.box_type_map.get(&array).cloned().unwrap_or_default();
+                        let is_param = self.param_index.contains_key(&array);
+                        let has_local = self.local_index.contains_key(&array);
+                        let is_handle = self.handle_values.contains(&array);
+                        // Classify up to first 3 args: i(known_i64) s(known_str) p(param) l(local) h(handle) -(unknown)
+                        let mut arg_kinds: Vec<&'static str> = Vec::new();
+                        for a in args.iter().take(3) {
+                            let k = if self.known_i64.contains_key(a) { "i" }
+                                    else if self.known_str.contains_key(a) { "s" }
+                                    else if self.param_index.contains_key(a) { "p" }
+                                    else if self.local_index.contains_key(a) { "l" }
+                                    else if self.handle_values.contains(a) { "h" }
+                                    else { "-" };
+                            arg_kinds.push(k);
+                        }
+                        // Policy hint: whether a mapped HostCall exists for (box_type, method)
+                        let policy = crate::jit::policy::invoke::decide_box_method(&bt, method.as_str(), 1 + args.len(), dst.is_some());
+                        let policy_str = match policy {
+                            crate::jit::policy::invoke::InvokeDecision::HostCall { ref symbol, .. } => format!("hostcall:{}", symbol),
+                            crate::jit::policy::invoke::InvokeDecision::PluginInvoke { .. } => "plugin_invoke".to_string(),
+                            crate::jit::policy::invoke::InvokeDecision::Fallback { ref reason } => format!("fallback:{}", reason),
+                        };
+                        eprintln!(
+                            "[LOWER] fallback(reason=unhandled) box_type='{}' method='{}' recv[param?{} local?{} handle?{}] args={:?} policy={}",
+                            bt, method, is_param, has_local, is_handle, arg_kinds, policy_str
+                        );
+                    }
+                }
                 if handled {
                     return Ok(());
                 }
