@@ -87,7 +87,10 @@ impl VM {
             boxcall_poly_pic: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
+            #[cfg(not(feature = "jit-direct-only"))]
             jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
+            #[cfg(feature = "jit-direct-only")]
+            jit_manager: None,
         }
     }
 
@@ -116,7 +119,10 @@ impl VM {
             boxcall_poly_pic: std::collections::HashMap::new(),
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
+            #[cfg(not(feature = "jit-direct-only"))]
             jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
+            #[cfg(feature = "jit-direct-only")]
+            jit_manager: None,
         }
     }
 
@@ -190,4 +196,3 @@ impl VM {
         *self.instr_counter.entry(key).or_insert(0) += 1;
     }
 }
-

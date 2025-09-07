@@ -4,27 +4,21 @@ use crate::backend::vm::VMValue;
 use crate::jit::abi::JitValue;
 
 // Legacy TLS for hostcalls that still expect VMValue — keep for compatibility
-thread_local! {
-    static LEGACY_VM_ARGS: RefCell<Vec<VMValue>> = RefCell::new(Vec::new());
-}
+// Legacy VM args TLS — disabled in jit-direct-only (no-op/empty)
+#[cfg(not(feature = "jit-direct-only"))]
+thread_local! { static LEGACY_VM_ARGS: RefCell<Vec<VMValue>> = RefCell::new(Vec::new()); }
 
-pub fn set_legacy_vm_args(args: &[VMValue]) {
-    LEGACY_VM_ARGS.with(|cell| {
-        let mut v = cell.borrow_mut();
-        v.clear();
-        v.extend_from_slice(args);
-    });
-}
+#[cfg(not(feature = "jit-direct-only"))]
+pub fn set_legacy_vm_args(args: &[VMValue]) { LEGACY_VM_ARGS.with(|cell| { let mut v = cell.borrow_mut(); v.clear(); v.extend_from_slice(args); }); }
 
-pub fn with_legacy_vm_args<F, R>(f: F) -> R
-where
-    F: FnOnce(&[VMValue]) -> R,
-{
-    LEGACY_VM_ARGS.with(|cell| {
-        let v = cell.borrow();
-        f(&v)
-    })
-}
+#[cfg(feature = "jit-direct-only")]
+pub fn set_legacy_vm_args(_args: &[VMValue]) { /* no-op in jit-direct-only */ }
+
+#[cfg(not(feature = "jit-direct-only"))]
+pub fn with_legacy_vm_args<F, R>(f: F) -> R where F: FnOnce(&[VMValue]) -> R { LEGACY_VM_ARGS.with(|cell| { let v = cell.borrow(); f(&v) }) }
+
+#[cfg(feature = "jit-direct-only")]
+pub fn with_legacy_vm_args<F, R>(f: F) -> R where F: FnOnce(&[VMValue]) -> R { f(&[]) }
 
 // New TLS for independent JIT ABI values
 thread_local! {

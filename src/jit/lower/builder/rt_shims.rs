@@ -36,20 +36,23 @@ pub(crate) extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, 
         }
     }
     let mut native_array_len: Option<i64> = None;
-    if a0 >= 0 && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
-        crate::jit::rt::with_legacy_vm_args(|args| {
-            let idx = a0 as usize;
-            if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
-                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
-                    instance_id = p.instance_id();
-                    invoke = Some(p.inner.invoke_fn);
-                } else if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                    if method_id as u32 == 1 {
-                        if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { native_array_len = Some(ib.value); }
+    #[cfg(not(feature = "jit-direct-only"))]
+    {
+        if a0 >= 0 && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
+            crate::jit::rt::with_legacy_vm_args(|args| {
+                let idx = a0 as usize;
+                if let Some(crate::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
+                    if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
+                        instance_id = p.instance_id();
+                        invoke = Some(p.inner.invoke_fn);
+                    } else if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                        if method_id as u32 == 1 {
+                            if let Some(ib) = arr.length().as_any().downcast_ref::<crate::box_trait::IntegerBox>() { native_array_len = Some(ib.value); }
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     }
     if invoke.is_none() {
         if let Some(v) = native_array_len {
@@ -61,6 +64,7 @@ pub(crate) extern "C" fn nyash_plugin_invoke3_i64(type_id: i64, method_id: i64, 
             return v;
         }
     }
+    #[cfg(not(feature = "jit-direct-only"))]
     if invoke.is_none() {
         crate::jit::rt::with_legacy_vm_args(|args| {
             for v in args.iter() {

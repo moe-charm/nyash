@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(all(test, not(feature = "jit-direct-only")))]
 mod tests {
     use crate::backend::VM;
     use crate::mir::{MirModule, MirFunction, FunctionSignature, BasicBlockId, MirInstruction, ConstValue, EffectMask, MirType};
@@ -37,4 +37,3 @@ mod tests {
         assert_eq!(vm_s, jit_s, "VM and JIT results should match for String.len");
     }
 }
-

@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(all(test, not(feature = "jit-direct-only")))]
 mod tests {
     use crate::mir::{MirModule, MirFunction, FunctionSignature};
     use crate::mir::{BasicBlockId, MirInstruction, ConstValue, EffectMask, MirType, BinaryOp};
