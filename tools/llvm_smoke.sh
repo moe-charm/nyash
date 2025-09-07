@@ -17,6 +17,25 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
   exit 2
 fi
 
+# --- AOT smoke: apps/ny-llvm-bitops (bitwise & shift operations) ---
+if [[ "${NYASH_LLVM_BITOPS_SMOKE:-0}" == "1" ]]; then
+  echo "[llvm-smoke] building + linking apps/ny-llvm-bitops ..." >&2
+  OBJ_BIT="$PWD/target/aot_objects/bitops_smoke.o"
+  rm -f "$OBJ_BIT"
+  NYASH_LLVM_ALLOW_BY_NAME=1 NYASH_LLVM_OBJ_OUT="$OBJ_BIT" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-llvm-bitops/main.nyash >/dev/null || true
+  NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_BIT" ./tools/build_llvm.sh apps/tests/ny-llvm-bitops/main.nyash -o app_bitops_llvm >/dev/null || true
+  echo "[llvm-smoke] running app_bitops_llvm ..." >&2
+  out_bit=$(./app_bitops_llvm || true)
+  echo "[llvm-smoke] output: $out_bit" >&2
+  if ! echo "$out_bit" | grep -q "Result: 48"; then
+    echo "error: ny-llvm-bitops unexpected output: $out_bit" >&2
+    exit 1
+  fi
+  echo "[llvm-smoke] OK: bitwise/shift smoke passed" >&2
+else
+  echo "[llvm-smoke] skipping ny-llvm-bitops (set NYASH_LLVM_BITOPS_SMOKE=1 to enable)" >&2
+fi
+
 echo "[llvm-smoke] building nyash (${MODE}, feature=llvm)..." >&2
 # Support both llvm-sys 180/181 by exporting both prefixes to the same value
 _LLVMPREFIX=$(llvm-config-18 --prefix)

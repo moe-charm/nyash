@@ -2,7 +2,57 @@
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-— 最終更新: 2025‑09‑06 (Phase 15.17 反映, Core‑13 純化モード/LLVM AOT shim 拡張)
+— 最終更新: 2025‑09‑08 (LLVM Core‑13 安定化 P0 進捗更新)
+
+【Quick Update — LLVM Core‑13 P0】
+現状
+- ビルド環境は LLVM 18 検出済み（`LLVM_SYS_180_PREFIX=/usr/lib/llvm-18`）。
+- 代表的なビルドエラーは次の3点に収束。
+  1) Opaque Pointer 由来: `PointerType::get_element_type()` 不在 → i8* 判別経路をヒューリスティックに簡素化。
+  2) IntegerBox API: `.value()` 誤用 → `.value` に修正（フィールド参照）。
+  3) BinaryOp 網羅: BitAnd/BitOr/BitXor/Shl/Shr 未対応 → いったん `_ => todo!()` で回避。
+
+対応済み
+- `src/backend/llvm/compiler.rs`
+  - `env.box.new` の opaque 対応（i8* は `nyash.box.from_i8_string` を呼ぶ単純化）。
+  - `.value()`→`.value` を修正（BinOpパス）。
+  - 末尾 mock BinOp に `_ => todo!()` を追加。
+
+残タスク（P0完了条件）
+- `env.box.new`（new_i64x 側）の引数 i64 化クロージャを完全インライン化（lifetime エラー解消）。
+- BinOp 未網羅の match 箇所をもう1か所整理（`_ => todo!()` か軽実装）。
+- 再ビルド通過後、代表スモークの一致確認。
+
+代表スモーク
+- ビルド: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- 実行: `tools/build_llvm.sh apps/tests/mir-compare-multi/main.nyash -o app && ./app`
+- 受け入れ: VM と同一の戻り値（Core‑13 正規化パスに依存：`NYASH_MIR_CORE13=1` 既定ON）
+
+メモ
+- 作業ディレクトリ: `/mnt/c/git/nyash-project/nyash_llvm`（branch: `llvm-dev`）
+- 次の commit で P0 を締め、P1（ビット演算/Shift 実装）に移行する。
+
+【Phase 17.1 — LLVM Core‑13 安定化（専用worktree/branch）】
+目的
+- Core‑13 正規化後の MIR を LLVM AOT に下ろし、VM と同値の代表ケースを安定動作させる。
+
+作業環境
+- worktree: /mnt/c/git/nyash-project/nyash_llvm （branch: llvm-dev, origin/llvm-dev 追従）
+- LLVM 18 前提: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix)`
+
+短期タスク（P0）
+- Opaque Pointer 対応: Inkwell 0.6 + LLVM 18 に合わせ、`get_element_type()` 等を使用しない降ろしに修正。
+  - `env.box.new` の引数ハンドリングをヒューリスティックに単純化（i8* は `nyash.box.from_i8_string`）
+- IntegerBox API 整合: `.value()` → `.value` に是正（フィールド参照）。
+- BinaryOp の網羅性: `BitAnd/BitOr/BitXor/Shl/Shr` 未対応を `_ => todo!()` で一旦回避（代表スモーク優先）。
+
+検証（P0）
+- ビルド: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- 代表スモーク: `tools/build_llvm.sh apps/tests/mir-compare-multi/main.nyash -o app && ./app`（VM一致）
+
+後続（P1）
+- ビット演算/シフトの実装と検証（LLVM 降ろし/IR 生成/実行互換）。
+- AOT 実行の戻り値と型変換経路の整理（i64/handle→Box materialize）。
 
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 
@@ -468,6 +518,21 @@ Phase A 進捗（実施済）
 ■ 現在のフォーカス（JITオンリー／一旦の着地）
 1) Core 緑維持（完了）
    - `tools/jit_smoke.sh` / Roundtrip(A/B) / Bootstrap(c0→c1→c1') / Using E2E = PASS
+
+【P1 進捗 — LLVM Core-13: ビット演算/シフト】
+実装
+- LLVM 降ろしで `BinaryOp::{BitAnd,BitOr,BitXor,Shl,Shr}` を i64 経路に実装済み（既存）。
+- `compile_and_execute` の MIR インタプリタにも同演算を実装し、パリティを確保。
+
+検証
+- 単体テスト追加: `src/tests/llvm_bitops_test.rs`
+  - MIR を直接構築して `1=(5&3),7=(5|2),4=(5^1),32=(1<<5),4=(32>>3)` の合計 48 を検証。
+  - VM 実行で 48、LLVM `compile_to_object` がエラーなく emit、`compile_and_execute` でも 48 を確認（フォールバック実行）。
+- AOT スモーク（任意）: `tools/llvm_smoke.sh` に `NYASH_LLVM_BITOPS_SMOKE=1` で有効化する項目を追加（入力は Nyash ソース制約のため現状 skip 既定）。
+
+注意
+- Nyash ソースパーサが `&|^<<>>` を未サポートのため、ビット演算の E2E は当面 MIR 直構築テストで担保。
+  将来 `grammar/` の演算子追加後に `apps/tests/ny-llvm-bitops/` を有効化予定。
 2) CI 分離（完了）
    - Core（常時）: `tools/jit_smoke.sh` + Roundtrip
    - Plugins（任意）: `NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh`（strict既定OFF、`NYASH_PLUGINS_STRICT=1`でON）

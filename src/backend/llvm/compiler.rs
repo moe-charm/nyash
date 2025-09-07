@@ -127,16 +127,19 @@ impl LLVMCompiler {
                         if let (Some(l), Some(r)) = (left.as_any().downcast_ref::<IntegerBox>(), 
                                                       right.as_any().downcast_ref::<IntegerBox>()) {
                             let result = match op {
-                                BinaryOp::Add => l.value() + r.value(),
-                                BinaryOp::Sub => l.value() - r.value(),
-                                BinaryOp::Mul => l.value() * r.value(),
+                                BinaryOp::Add => l.value + r.value,
+                                BinaryOp::Sub => l.value - r.value,
+                                BinaryOp::Mul => l.value * r.value,
                                 BinaryOp::Div => {
-                                    if r.value() == 0 {
+                                    if r.value == 0 {
                                         return Err("Division by zero".to_string());
                                     }
-                                    l.value() / r.value()
+                                    l.value / r.value
                                 }
-                                BinaryOp::Mod => l.value() % r.value(),
+                                BinaryOp::Mod => l.value % r.value,
+                                _ => {
+                                    return Err("Binary operation not supported in mock".to_string());
+                                }
                             };
                             self.values.insert(*dst, Box::new(IntegerBox::new(result)));
                             println!("   📊 %{} = %{} {:?} %{} = {}", dst.0, lhs.0, op, rhs.0, result);
@@ -220,6 +223,8 @@ impl LLVMCompiler {
 use inkwell::context::Context;
 #[cfg(feature = "llvm")]
 use inkwell::{values::{BasicValueEnum, FloatValue, IntValue, PhiValue, FunctionValue, PointerValue}, types::{BasicTypeEnum, IntType, FloatType, PointerType}, AddressSpace};
+#[cfg(feature = "llvm")]
+use inkwell::types::BasicType; // for as_basic_type_enum()
 #[cfg(feature = "llvm")]
 use std::collections::HashMap as StdHashMap;
 
@@ -900,68 +905,115 @@ impl LLVMCompiler {
                             let tyv = *vmap.get(&args[0]).ok_or("type name arg missing")?;
                             let ty_ptr = match tyv { BasicValueEnum::PointerValue(p) => p, _ => return Err("env.box.new type must be i8* string".to_string()) };
                             let i64t = codegen.context.i64_type();
-                            let ret_to_ptr = |rv: BasicValueEnum| -> Result<BasicValueEnum, String> {
-                                let i64v = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("env.box.new ret expected i64".to_string()); };
-                                let pty = i8p;
-                                let ptr = codegen.builder.build_int_to_ptr(i64v, pty, "box_handle_to_ptr").map_err(|e| e.to_string())?;
-                                Ok(ptr.into())
-                            };
-                            // Helper: coerce arbitrary BasicValueEnum to i64; for i8* assume string and convert to box-handle via nyash.box.from_i8_string
-                            let to_i64 = |v: BasicValueEnum| -> Result<inkwell::values::IntValue, String> {
-                                match v {
-                                    BasicValueEnum::IntValue(iv) => Ok(iv),
-                                    BasicValueEnum::FloatValue(fv) => {
-                                        // Route via NyRT: i64 @nyash.box.from_f64(double)
-                                        let i64t = codegen.context.i64_type();
-                                        let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
-                                        let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
-                                        let call = codegen.builder.build_call(callee, &[fv.into()], "arg_f64_to_box").map_err(|e| e.to_string())?;
-                                        let rv = call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?;
-                                        if let BasicValueEnum::IntValue(h) = rv { Ok(h) } else { Err("from_f64 ret expected i64".to_string()) }
-                                    }
-                                    BasicValueEnum::PointerValue(pv) => {
-                                        // If pointer is i8*, call nyash.box.from_i8_string to obtain a handle (i64)
-                                        let ty = pv.get_type();
-                                        let elem = ty.get_element_type();
-                                        if elem == codegen.context.i8_type().as_basic_type_enum() {
-                                            let i64t = codegen.context.i64_type();
-                                            let fnty = i64t.fn_type(&[i8p.into()], false);
-                                            let callee = codegen.module.get_function("nyash.box.from_i8_string").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
-                                            let call = codegen.builder.build_call(callee, &[pv.into()], "arg_i8_to_box").map_err(|e| e.to_string())?;
-                                            let rv = call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?;
-                                            if let BasicValueEnum::IntValue(h) = rv { Ok(h) } else { Err("from_i8_string ret expected i64".to_string()) }
-                                        } else {
-                                            Ok(codegen.builder.build_ptr_to_int(pv, codegen.context.i64_type(), "p2i").map_err(|e| e.to_string())?)
-                                        }
-                                    }
-                                    _ => Err("unsupported arg value for env.box.new".to_string()),
-                                }
-                            };
-                            let out_val = if args.len() == 1 {
+                            // 1) new(type)
+                            let out_ptr: PointerValue = if args.len() == 1 {
                                 let fnty = i64t.fn_type(&[i8p.into()], false);
                                 let callee = codegen.module.get_function("nyash.env.box.new").unwrap_or_else(|| codegen.module.add_function("nyash.env.box.new", fnty, None));
                                 let call = codegen.builder.build_call(callee, &[ty_ptr.into()], "env_box_new").map_err(|e| e.to_string())?;
-                                call.try_as_basic_value().left().ok_or("env.box.new returned void".to_string())?
+                                let rv = call.try_as_basic_value().left().ok_or("env.box.new returned void".to_string())?;
+                                let i64v = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("env.box.new ret expected i64".to_string()); };
+                                codegen.builder.build_int_to_ptr(i64v, i8p, "box_handle_to_ptr").map_err(|e| e.to_string())?
                             } else {
-                                // Support up to 4 args for now
+                                // 2) new_i64x(type, argc, a1..a4)
                                 if args.len() - 1 > 4 { return Err("env.box.new supports up to 4 args in AOT shim".to_string()); }
                                 let fnty = i64t.fn_type(&[i8p.into(), i64t.into(), i64t.into(), i64t.into(), i64t.into(), i64t.into()], false);
                                 let callee = codegen.module.get_function("nyash.env.box.new_i64x").unwrap_or_else(|| codegen.module.add_function("nyash.env.box.new_i64x", fnty, None));
                                 let argc_val = i64t.const_int((args.len() - 1) as u64, false);
-                                // helper to coerce to i64
-                                let get_i64 = |vid: ValueId| -> Result<inkwell::values::IntValue, String> { to_i64(*vmap.get(&vid).ok_or("arg missing")?) };
+                                // Inline-coerce up to 4 args to i64 handles (int pass-through, f64→box, i8*→box)
                                 let mut a1 = i64t.const_zero();
+                                if args.len() >= 2 {
+                                    let bv = *vmap.get(&args[1]).ok_or("arg missing")?;
+                                    a1 = match bv {
+                                        BasicValueEnum::IntValue(iv) => iv,
+                                        BasicValueEnum::FloatValue(fv) => {
+                                            let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[fv.into()], "arg1_f64_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                                        }
+                                        BasicValueEnum::PointerValue(pv) => {
+                                            let fnty = i64t.fn_type(&[i8p.into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_i8_string").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[pv.into()], "arg1_i8_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_i8_string ret expected i64".to_string()); }
+                                        }
+                                        _ => { return Err("unsupported arg value for env.box.new".to_string()); }
+                                    };
+                                }
                                 let mut a2 = i64t.const_zero();
-                                if args.len() >= 2 { a1 = get_i64(args[1])?; }
-                                if args.len() >= 3 { a2 = get_i64(args[2])?; }
+                                if args.len() >= 3 {
+                                    let bv = *vmap.get(&args[2]).ok_or("arg missing")?;
+                                    a2 = match bv {
+                                        BasicValueEnum::IntValue(iv) => iv,
+                                        BasicValueEnum::FloatValue(fv) => {
+                                            let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[fv.into()], "arg2_f64_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                                        }
+                                        BasicValueEnum::PointerValue(pv) => {
+                                            let fnty = i64t.fn_type(&[i8p.into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_i8_string").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[pv.into()], "arg2_i8_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_i8_string ret expected i64".to_string()); }
+                                        }
+                                        _ => { return Err("unsupported arg value for env.box.new".to_string()); }
+                                    };
+                                }
                                 let mut a3 = i64t.const_zero();
+                                if args.len() >= 4 {
+                                    let bv = *vmap.get(&args[3]).ok_or("arg missing")?;
+                                    a3 = match bv {
+                                        BasicValueEnum::IntValue(iv) => iv,
+                                        BasicValueEnum::FloatValue(fv) => {
+                                            let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[fv.into()], "arg3_f64_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                                        }
+                                        BasicValueEnum::PointerValue(pv) => {
+                                            let fnty = i64t.fn_type(&[i8p.into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_i8_string").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[pv.into()], "arg3_i8_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_i8_string ret expected i64".to_string()); }
+                                        }
+                                        _ => { return Err("unsupported arg value for env.box.new".to_string()); }
+                                    };
+                                }
                                 let mut a4 = i64t.const_zero();
-                                if args.len() >= 4 { a3 = get_i64(args[3])?; }
-                                if args.len() >= 5 { a4 = get_i64(args[4])?; }
+                                if args.len() >= 5 {
+                                    let bv = *vmap.get(&args[4]).ok_or("arg missing")?;
+                                    a4 = match bv {
+                                        BasicValueEnum::IntValue(iv) => iv,
+                                        BasicValueEnum::FloatValue(fv) => {
+                                            let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[fv.into()], "arg4_f64_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                                        }
+                                        BasicValueEnum::PointerValue(pv) => {
+                                            let fnty = i64t.fn_type(&[i8p.into()], false);
+                                            let callee = codegen.module.get_function("nyash.box.from_i8_string").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                                            let call = codegen.builder.build_call(callee, &[pv.into()], "arg4_i8_to_box").map_err(|e| e.to_string())?;
+                                            let rv = call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?;
+                                            if let BasicValueEnum::IntValue(h) = rv { h } else { return Err("from_i8_string ret expected i64".to_string()); }
+                                        }
+                                        _ => { return Err("unsupported arg value for env.box.new".to_string()); }
+                                    };
+                                }
                                 let call = codegen.builder.build_call(callee, &[ty_ptr.into(), argc_val.into(), a1.into(), a2.into(), a3.into(), a4.into()], "env_box_new_i64x").map_err(|e| e.to_string())?;
-                                call.try_as_basic_value().left().ok_or("env.box.new_i64 returned void".to_string())?
+                                let rv = call.try_as_basic_value().left().ok_or("env.box.new_i64 returned void".to_string())?;
+                                let i64v = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("env.box.new_i64 ret expected i64".to_string()); };
+                                codegen.builder.build_int_to_ptr(i64v, i8p, "box_handle_to_ptr").map_err(|e| e.to_string())?
                             };
-                            if let Some(d) = dst { vmap.insert(*d, ret_to_ptr(out_val)?); }
+                            if let Some(d) = dst { vmap.insert(*d, out_ptr.into()); }
                         } else {
                             return Err(format!("ExternCall lowering unsupported: {}.{} (enable NYASH_LLVM_ALLOW_BY_NAME=1 to try by-name, or add a NyRT shim)", iface_name, method_name));
                         }
@@ -969,7 +1021,7 @@ impl LLVMCompiler {
                     MirInstruction::UnaryOp { dst, op, operand } => {
                         let v = *vmap.get(operand).ok_or("operand missing")?;
                         let out = match op {
-                            UnaryOp::Neg => {
+                        UnaryOp::Neg => {
                                 if let Some(iv) = as_int(v) { codegen.builder.build_int_neg(iv, "ineg").map_err(|e| e.to_string())?.into() }
                                 else if let Some(fv) = as_float(v) { codegen.builder.build_float_neg(fv, "fneg").map_err(|e| e.to_string())?.into() }
                                 else { return Err("neg on non-number".to_string()) }
@@ -1374,16 +1426,23 @@ impl LLVMCompiler {
                         .get(rhs)
                         .and_then(|b| b.as_any().downcast_ref::<IntegerBox>())
                         .ok_or_else(|| format!("binop rhs %{} not integer", rhs.0))?;
-                    let res = match op {
-                        BinaryOp::Add => l.value() + r.value(),
-                        BinaryOp::Sub => l.value() - r.value(),
-                        BinaryOp::Mul => l.value() * r.value(),
-                        BinaryOp::Div => {
-                            if r.value() == 0 { return Err("division by zero".into()); }
-                            l.value() / r.value()
-                        }
-                        BinaryOp::Mod => l.value() % r.value(),
-                    };
+                        let res = match op {
+                            BinaryOp::Add => l.value + r.value,
+                            BinaryOp::Sub => l.value - r.value,
+                            BinaryOp::Mul => l.value * r.value,
+                            BinaryOp::Div => {
+                                if r.value == 0 { return Err("division by zero".into()); }
+                                l.value / r.value
+                            }
+                            BinaryOp::Mod => l.value % r.value,
+                            BinaryOp::BitAnd => l.value & r.value,
+                            BinaryOp::BitOr  => l.value | r.value,
+                            BinaryOp::BitXor => l.value ^ r.value,
+                            BinaryOp::Shl    => l.value << r.value,
+                            BinaryOp::Shr    => l.value >> r.value,
+                            BinaryOp::And    => { if (l.value != 0) && (r.value != 0) { 1 } else { 0 } },
+                            BinaryOp::Or     => { if (l.value != 0) || (r.value != 0) { 1 } else { 0 } },
+                        };
                     self.values.insert(*dst, Box::new(IntegerBox::new(res)));
                 }
                 I::Return { value } => {
