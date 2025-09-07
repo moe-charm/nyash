@@ -99,6 +99,30 @@
     - 削除: `tools/egui_wsl_smoke.sh`, `tools/egui_cranelift_aot_wsl.sh`
   - 次: `apps/egui-hello/main.nyash` を AOT（Cranelift .o emit→リンク→EXE）で表示確認（`NYASH_PLUGIN_PATHS` で DLL 解決）。
 
+【Handoff — 再起動/並行ブランチ運用計画（2025‑09‑07 深夜）】
+- 目的: Rustフルビルド負荷を避けつつ、Cranelift lower 修正を安全に前進。main はドキュメント/ツール整備に限定。
+- 推奨運用（git worktree）:
+  - 準備: `git fetch --all --prune`
+  - main 用: `git worktree add ../nyash_main_main main`
+  - 開発用（例）: `git worktree add ../nyash_main_cranelift cranelift-dev`（無ければブランチ作成）
+  - 以後、各フォルダで独立ビルド/実行。
+- 役割分担:
+  - main: CURRENT_TASK/docs、ビルド/スモーク用スクリプトの安定化のみ。
+  - cranelift-dev: Lower 修正（EguiBox.open/uiLabel を確実に Lower）。
+- 直近TODO（cranelift-dev）:
+  1) Copy 伝播強化: `MirInstruction::Copy` で `box_type_map` と `handle_values` を src→dst にコピー。
+  2) 診断拡充: `NYASH_JIT_TRACE_LOWER=1` 時、汎用 PluginInvoke フォールバック失敗の理由（box_type/method/param/local/known）を1行で出力。
+  3) EguiBox 暫定フォールバック（envゲート）: `NYASH_JIT_EGUI_FORCE=1` 時のみ、`open/uiLabel/run` を名前で `emit_plugin_invoke` して確実に Lower（恒久化は原因修正後に再検討）。
+  4) 受け入れ基準: jit-direct と AOT(EXE) の双方で `[EGUI] M_OPEN/M_UI_LABEL/M_RUN` が順に出力され、タイトル/ラベルがスクリプト値で表示。
+- 実行/確認コマンド:
+  - VM 速回し: `tools/ny_plugin.ps1 -Mode vm -Script apps/egui-hello/main.nyash -Debug`
+  - JIT 直: `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_EVENTS=1 tools/ny_plugin.ps1 -Mode jit -Script apps/egui-hello/main.nyash -Debug`
+  - AOT(EXE): `tools/windows/build_egui_aot.ps1 -Input apps/egui-hello/main.nyash -Out app_egui.exe -Verbose` → `run_egui_debug.bat`
+  - 簡易スモーク: `tools/windows/egui_smoke.ps1 -Mode exe|vm|jit -Seconds 4 -Dbg`
+- 環境メモ:
+  - プラグイン差し替えで高速反映: `cargo build -p nyash-egui-plugin --release --features with-egui` → `target/release/nyash_egui_plugin.dll` を上書き。
+  - `NYASH_PLUGIN_PATHS` は各 worktree の `plugins/*/target/release;target/release` を指す（取り違い防止）。
+
 — 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
 
 — Handoff (2025‑09‑06 EOD) — Phase 15 進捗と次アクション
