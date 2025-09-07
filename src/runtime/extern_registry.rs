@@ -34,9 +34,17 @@ static EXTERNS: Lazy<Vec<ExternSpec>> = Lazy::new(|| vec![
     ExternSpec { iface: "env.future", method: "birth", min_arity: 1, max_arity: 1, slot: Some(20) },
     ExternSpec { iface: "env.future", method: "set", min_arity: 2, max_arity: 2, slot: Some(21) },
     ExternSpec { iface: "env.future", method: "await", min_arity: 1, max_arity: 1, slot: Some(22) },
-    // modules (minimal registry)
-    ExternSpec { iface: "env.modules", method: "set", min_arity: 2, max_arity: 2, slot: None },
-    ExternSpec { iface: "env.modules", method: "get", min_arity: 1, max_arity: 1, slot: None },
+<<<<<<< HEAD
+    // core-13 pure support shims
+    ExternSpec { iface: "env.local", method: "get", min_arity: 1, max_arity: 1, slot: Some(40) },
+    ExternSpec { iface: "env.local", method: "set", min_arity: 2, max_arity: 2, slot: Some(41) },
+    ExternSpec { iface: "env.box", method: "new", min_arity: 1, max_arity: 255, slot: Some(50) },
+=======
+    // core-13 pure support shims
+    ExternSpec { iface: "env.local", method: "get", min_arity: 1, max_arity: 1, slot: Some(40) },
+    ExternSpec { iface: "env.local", method: "set", min_arity: 2, max_arity: 2, slot: Some(41) },
+    ExternSpec { iface: "env.box", method: "new", min_arity: 1, max_arity: 255, slot: Some(50) },
+>>>>>>> cranelift-dev
 ]);
 
 pub fn resolve(iface: &str, method: &str) -> Option<ExternSpec> {

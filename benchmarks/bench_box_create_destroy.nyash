@@ -1,0 +1,17 @@
+// Interpreter-level microbench: Box create + drop inside loop
+static box Main {
+  main() {
+    local i = 0
+    local total = 0
+    loop(i < 1000000) { // 1e6 iterations
+      {
+        // tmp goes out of scope each iteration
+        local tmp = new StringBox("x")
+        total = total + tmp.length()
+      }
+      i = i + 1
+    }
+    return total
+  }
+}
+

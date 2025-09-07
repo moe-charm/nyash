@@ -126,6 +126,37 @@ impl MirCompiler {
                 return Err(format!("Core-13 strict: final MIR contains {} legacy ops", legacy_count));
             }
         }
+
+        // Core-13 pure: allow only the 13 canonical ops; reject all others
+        if crate::config::env::mir_core13_pure() {
+            let mut bad = 0usize;
+            let is_allowed = |i: &MirInstruction| -> bool {
+                matches!(i,
+                    MirInstruction::Const { .. }
+                    | MirInstruction::BinOp { .. }
+                    | MirInstruction::Compare { .. }
+                    | MirInstruction::Jump { .. }
+                    | MirInstruction::Branch { .. }
+                    | MirInstruction::Return { .. }
+                    | MirInstruction::Phi { .. }
+                    | MirInstruction::Call { .. }
+                    | MirInstruction::BoxCall { .. }
+                    | MirInstruction::ExternCall { .. }
+                    | MirInstruction::TypeOp { .. }
+                    | MirInstruction::Safepoint
+                    | MirInstruction::Barrier { .. }
+                )
+            };
+            for (_fname, function) in &module.functions {
+                for (_bb, block) in &function.blocks {
+                    for inst in &block.instructions { if !is_allowed(inst) { bad += 1; } }
+                    if let Some(term) = &block.terminator { if !is_allowed(term) { bad += 1; } }
+                }
+            }
+            if bad > 0 {
+                return Err(format!("Core-13 pure strict: final MIR contains {} non-Core-13 ops", bad));
+            }
+        }
         
         // Verify the generated MIR
         let verification_result = self.verifier.verify_module(&module);
@@ -292,6 +323,7 @@ mod tests {
 
     #[test]
     fn test_lowering_await_expression() {
+        if crate::config::env::mir_core13_pure() { eprintln!("[TEST] skip await under Core-13 pure mode"); return; }
         // Build AST: await 1  (semantic is nonsensical but should emit Await)
         let ast = ASTNode::AwaitExpression { expression: Box::new(ASTNode::Literal { value: LiteralValue::Integer(1), span: crate::ast::Span::unknown() }), span: crate::ast::Span::unknown() };
         let mut compiler = MirCompiler::new();
@@ -302,6 +334,7 @@ mod tests {
 
     #[test]
     fn test_await_has_checkpoints() {
+        if crate::config::env::mir_core13_pure() { eprintln!("[TEST] skip await under Core-13 pure mode"); return; }
         use crate::ast::{LiteralValue, Span};
         // Build: await 1
         let ast = ASTNode::AwaitExpression { expression: Box::new(ASTNode::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }), span: Span::unknown() };
@@ -317,6 +350,7 @@ mod tests {
 
     #[test]
     fn test_rewritten_await_still_checkpoints() {
+        if crate::config::env::mir_core13_pure() { eprintln!("[TEST] skip await under Core-13 pure mode"); return; }
         use crate::ast::{LiteralValue, Span};
         // Enable rewrite so Await → ExternCall(env.future.await)
         std::env::set_var("NYASH_REWRITE_FUTURE", "1");
@@ -388,6 +422,11 @@ mod tests {
     
     #[test] 
     fn test_try_catch_compilation() {
+        // Core-13 pure モードでは Try/Catch 命令は許容集合外のためスキップ
+        if crate::config::env::mir_core13_pure() {
+            eprintln!("[TEST] skip try/catch under Core-13 pure mode");
+            return;
+        }
         let mut compiler = MirCompiler::new();
         
         let try_catch_ast = ASTNode::TryCatch {

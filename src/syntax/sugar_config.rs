@@ -68,6 +68,8 @@ mod tests {
 
     #[test]
     fn default_none_on_missing_or_invalid() {
+        // Ensure env override is not present for this test
+        env::remove_var("NYASH_SYNTAX_SUGAR_LEVEL");
         let dir = tempdir().unwrap();
         let file = dir.path().join("nyash.toml");
         fs::write(&file, "[syntax]\nsugar_level='unknown'\n").unwrap();
@@ -77,4 +79,3 @@ mod tests {
         assert_eq!(cfg2.level, SugarLevel::None);
     }
 }
-

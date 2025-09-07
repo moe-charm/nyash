@@ -95,8 +95,38 @@ pub fn compile_and_execute(mir_module: &MirModule, _temp_name: &str) -> Result<B
                 MirInstruction::Copy { dst, src } => {
                     if let Some(v) = regs.get(src).cloned() { regs.insert(*dst, v); }
                 }
-                MirInstruction::Debug { .. } | MirInstruction::Print { .. } | MirInstruction::Barrier { .. } | MirInstruction::BarrierRead { .. } | MirInstruction::BarrierWrite { .. } | MirInstruction::Safepoint | MirInstruction::Load { .. } | MirInstruction::Store { .. } | MirInstruction::TypeOp { .. } | MirInstruction::Compare { .. } | MirInstruction::NewBox { .. } | MirInstruction::PluginInvoke { .. } | MirInstruction::BoxCall { .. } | MirInstruction::ExternCall { .. } | MirInstruction::RefGet { .. } | MirInstruction::RefSet { .. } | MirInstruction::WeakRef { .. } | MirInstruction::FutureNew { .. } | MirInstruction::FutureSet { .. } | MirInstruction::Await { .. } | MirInstruction::Throw { .. } | MirInstruction::Catch { .. } => {
+                MirInstruction::Debug { .. } | MirInstruction::Print { .. } | MirInstruction::Barrier { .. } | MirInstruction::BarrierRead { .. } | MirInstruction::BarrierWrite { .. } | MirInstruction::Safepoint | MirInstruction::Load { .. } | MirInstruction::Store { .. } | MirInstruction::TypeOp { .. } | MirInstruction::Compare { .. } | MirInstruction::NewBox { .. } | MirInstruction::PluginInvoke { .. } | MirInstruction::BoxCall { .. } | MirInstruction::RefGet { .. } | MirInstruction::RefSet { .. } | MirInstruction::WeakRef { .. } | MirInstruction::FutureNew { .. } | MirInstruction::FutureSet { .. } | MirInstruction::Await { .. } | MirInstruction::Throw { .. } | MirInstruction::Catch { .. } => {
                     // ignore for minimal path
+                }
+                MirInstruction::ExternCall { dst, iface_name, method_name, args, .. } => {
+                    use crate::backend::vm::VMValue as V;
+                    match (iface_name.as_str(), method_name.as_str()) {
+                        ("env.local", "get") => {
+                            if let Some(d) = dst { if let Some(a0) = args.get(0) { if let Some(v) = regs.get(a0).cloned() { regs.insert(*d, v); } } }
+                        }
+                        ("env.local", "set") => {
+                            if args.len() >= 2 { if let Some(v) = regs.get(&args[1]).cloned() { regs.insert(args[0], v); } }
+                            // dst ignored
+                        }
+                        ("env.box", "new") => {
+                            if let Some(d) = dst {
+                                if let Some(a0) = args.get(0) {
+                                    if let Some(V::String(ty)) = regs.get(a0).cloned() {
+                                        let reg = crate::runtime::box_registry::get_global_registry();
+                                        // Collect args as NyashBox
+                                        let mut ny_args: Vec<Box<dyn crate::box_trait::NyashBox>> = Vec::new();
+                                        for vid in args.iter().skip(1) {
+                                            if let Some(v) = regs.get(vid).cloned() { ny_args.push(v.to_nyash_box()); }
+                                        }
+                                        if let Ok(b) = reg.create_box(&ty, &ny_args) {
+                                            regs.insert(*d, V::from_nyash_box(b));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        _ => { /* ignore other externs in skeleton */ }
+                    }
                 }
                 MirInstruction::Phi { .. } => { /* handled above */ }
                 _ => {}

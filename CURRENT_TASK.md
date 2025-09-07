@@ -1,195 +1,33 @@
 # CURRENT TASK (Compact) — Phase 15 / Self-Hosting（Ny→MIR→MIR-Interp→VM 先行）
 
-【Quick Update — 2025‑09‑07 Egui AOT/JIT 状況と次アクション】
-- 事象: Windows EXE（AOT, jit-direct emit）で Egui ウィンドウは開くが、`open/uiLabel` が反映されず `M_RUN` のみ実行。ログは `run_window: w=320 h=240 title='Nyash GUI'`（プラグイン側フォールバック）。
-- 原因推定: jit-direct 発行の Lower で汎用 PluginInvoke（EguiBox.open/uiLabel）が落ちていない。`box_type_map/handle_values` の伝播（Copy 等）不足、汎用フォールバックの判定漏れが影響。
-- 暫定対応（main 反映済み）:
-  - tools/windows/build_egui_aot.ps1 を安定化（既定Input=apps/egui-hello/main.nyash、jit-direct発行時に hostcall/bridge 有効、strict=0、args-only無効）。
-  - tools/ny_plugin.ps1 に nyrt.lib のフォールバックリンクを追加。
-  - tools/windows/egui_smoke.ps1 を追加（exe/vm/jit を秒指定で起動→生存判定）。
-  - プラグイン（with-egui）側にフェイルセーフ（run 時に未設定なら 320x240 + title='Nyash GUI' + 中央『hello nyash』）を実装。
-- 確認結果:
-  - VM 経路は `M_OPEN/M_UI_LABEL/M_RUN` が順に実行され、スクリプト文言が表示。
-  - AOT EXE は現状フォールバック表示（中央『hello nyash』）。`M_OPEN/M_UI_LABEL` が JIT Lower 上で未反映。
-- 次アクション（Cranelift 専用ブランチで実施）:
-  1) LowerCore で `MirInstruction::Copy` における型・ハンドル伝播を追加（`box_type_map`/`handle_values`）。
-  2) `lower_box_call` に EguiBox 明示分岐（open/uiLabel/run）を追加し、名前ベースの `emit_plugin_invoke` で確実に落とす（暫定）。
-  3) `NYASH_JIT_TRACE_LOWER=1` 時に汎用フォールバック失敗の理由（box_type, method, param/local/known 判定）を1行で診断出力。
-  4) スモーク: `tools/windows/egui_smoke.ps1 -Mode exe -Seconds 4 -Dbg` と VM/JIT で `M_OPEN/M_UI_LABEL` が見えることを確認。
-- 運用メモ:
-  - 開発は VM で速回し→DLL 差し替えで EXE 反映→最後に AOT リンクが最短ループ。
-  - DLLだけ再ビルド: `cargo build -p nyash-egui-plugin --release --features with-egui` → `target/release/nyash_egui_plugin.dll` を上書き。
-
-［Quick Update — 2025‑09‑07 Core‑13 Pure P1］
-- Try/Catch P1（純モード Core‑13）をビルダーで実装。Throw/Catch 命令を使用せず `Jump/Branch/Phi` で catch へ合流。
-  - `NYASH_MIR_CORE13_PURE=1` 時に有効。`build_throw_statement` が try 文脈内では catch ブロックへ Jump するように変更。
-  - catch 変数（例: `catch (T e)`）はエントリの `Phi` で合流した例外値を束縛。
-- テスト追加（統合）:
-  - `tests/mir_pure_trycatch_builder.rs`: 生成 MIR が Core‑13 許可集合のみで構成されることを検証。
-  - `tests/vm_e2e.rs` に純モード E2E 2件を追記（throw→catch 経路／成功時に catch をスキップ）。
-— 次: finally 分岐の網羅テスト、LLVM パリティ側の to‑bool/分岐の補強。
-
-— WSL Egui 表示（開発効率のための恒常化）
-
-目的
-- WSL 環境で egui の実ウィンドウを安定表示し、毎回の手間取りを解消（Windows 側nyash.exe 実行に頼らず、その場で可視化）。
-
-チェックリスト（毎回同じ手順で安定化）
-- プラグインを GUI 有効で上書きビルド
-  - `cargo clean -p nyash-egui-plugin`
-  - `cargo build -p nyash-egui-plugin --release --features with-egui`
-- 実行時にこのDLLを確実に掴ませる（競合回避）
-  - `export NYASH_PLUGIN_PATHS=/mnt/c/git/nyash-project/nyash_main/plugins/nyash-egui-plugin/target/release`
-- WSLg（Wayland）で試す → ダメなら X11 に切替
-  - Wayland: `export WAYLAND_DISPLAY=wayland-0; export XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir; unset DISPLAY`
-  - X11: `export DISPLAY=:0; export WINIT_UNIX_BACKEND=x11`
-- 実行
-  - `./target/release/nyash --backend vm apps/egui-hello/main.nyash`
-- 成功判定
-  - ログに `run_window: w=... h=... title='...'` が出る＋ウィンドウが表示される
-  - 参照: タイムスタンプ `ls -la plugins/nyash-egui-plugin/target/release/libnyash_egui_plugin*`
-  - 詳細ログ: `NYASH_CLI_VERBOSE=1` で loader の解決パスを確認
-
-補足
-- Windows 側での実行（`./target/release/nyash.exe` / `app_egui.exe`）は表示が確実。WSL 側の開発を優先するため、上記手順を最初に通す。
-- AOT 直後に feature 無しで上書きされると窓が消えるため、表示が出ない時は「(1)上書きビルド → (2)NYASH_PLUGIN_PATHS指定 → (3)Wayland/X11」の順で再試行。
-
-ビルド並列（既定ポリシー）
-- 開発機は 32 論理スレッド。Cargo の並列ビルドは基本 24 並列を既定とする（温度と安定性のバランス）。
-  - 例: `cargo build --release -j 24 --features cranelift-jit`
-  - PowerShell スクリプトは可能な限り `-Jobs` で上書き可能にする（`tools/build_egui_aot_manual.ps1 -Jobs 24`）。
-
-［ブランチ方針の注記 — 2025‑09‑06 selfhosting‑dev 整理］
-- このブランチは VM/JIT を中心とした自己ホスト開発に専念します。
-- Cranelift AOT/JIT‑AOT 系の詳細課題は `docs/phase-15/cranelift/CRANELIFT_TASKS.md` へ分離しました（このファイルへの追記は最小限に）。
-- 旧コンテンツは `docs/archives/CURRENT_TASK-2025-09-06.md`（要旨）および Git 履歴（完全版）を参照してください。
-
-— Quick Update (2025‑09‑06 PM)
-- Merge: `origin/main` の Cranelift 修正を取り込み、全スモーク緑を確認。
-- P0 達成（追加）:
-  - Ny→MIR 直結ブリッジ（Case A）実装（`json_v0_bridge.rs`）。`tools/ny_roundtrip_smoke.sh` PASS。
-  - env.modules 最小レジストリ追加＋VM ExternCall name-route 対応（plugins不要）。`tools/modules_smoke.sh` PASS。
-  - using MVP（軽量導線）: スクリプト using 行（ns/直パス）・指示コメント（@using/@module/@using-path）・環境/CLIフラグ（`--using/--module/--using-path`）を前処理で受理→env.modules登録。
-    - 未解決時は verbose で探索ヒントと候補提示（apps/lib/. を浅く走査）。
-    - 直パス missing は `NYASH_USING_STRICT=1` でエラー終了・デフォは警告継続。
-    - スモーク: `tools/using_e2e_smoke.sh`（MVP）, `tools/using_resolve_smoke.sh`, `tools/using_unresolved_smoke.sh`, `tools/using_strict_path_fail_smoke.sh` 追加・PASS。
-  - JSON v0 拡張: `Bool`, `Compare(op)` を追加（検査・判定系の表現力UP）。
-
-次アクション（短期）
-- using 解決品質の向上: 候補スコアリング/断片一致・パス優先度整理（search_paths順）。
-- VM 経路の using 前処理の適用範囲見直し（必要時）。
-- JSON v0 の最小セット拡張（短絡評価/論理 and/or 等）。
-- ドキュメント最小追記（README の Self‑Hosting セクションから one‑pager へ誘導済み）。
-
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-【Cranelift AOT（EXE）検証とEgui方針 — 2025‑09‑07】
-- CounterBox AOT（Cranelift .o emit→nyrtリンク→EXE）
-  - 手順（確認済み）:
-    1) `cargo build --release --features cranelift-jit`
-    2) `cargo build -p nyash-counter-plugin --release`
-    3) `NYASH_AOT_OBJECT_OUT=target/aot_objects/counter_min.o ./target/release/nyash --jit-direct apps/tests/plugins/counter_min.nyash`
-    4) `cc target/aot_objects/counter_min.o -L target/release -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o app_counter_cranelift`
-    5) `NYASH_PLUGIN_PATHS=... ./app_counter_cranelift` → Result: 0（戻り値正規化あり）
-  - 備考: jit-direct 実行時に稀に segfault が出るが、.o は生成されリンク・実行に支障なし（要フォローアップ）。
-
-- Egui 方針（汎用経路に統一）:
-  - Lowering への Egui 専用分岐は撤去済み。Egui はプラグインボックス呼び（一般経路）で扱う。
-  - 過去に追加した Egui 専用の WSL スモークスクリプトは削除（忘れ残し防止／将来の悪影響回避）。
-    - 削除: `tools/egui_wsl_smoke.sh`, `tools/egui_cranelift_aot_wsl.sh`
-  - 次: `apps/egui-hello/main.nyash` を AOT（Cranelift .o emit→リンク→EXE）で表示確認（`NYASH_PLUGIN_PATHS` で DLL 解決）。
-
-【Handoff — 再起動/並行ブランチ運用計画（2025‑09‑07 深夜）】
-- 目的: Rustフルビルド負荷を避けつつ、Cranelift lower 修正を安全に前進。main はドキュメント/ツール整備に限定。
-- 推奨運用（git worktree）:
-  - 準備: `git fetch --all --prune`
-  - main 用: `git worktree add ../nyash_main_main main`
-  - 開発用（例）: `git worktree add ../nyash_main_cranelift cranelift-dev`（無ければブランチ作成）
-  - 以後、各フォルダで独立ビルド/実行。
-- 役割分担:
-  - main: CURRENT_TASK/docs、ビルド/スモーク用スクリプトの安定化のみ。
-  - cranelift-dev: Lower 修正（EguiBox.open/uiLabel を確実に Lower）。
-- 直近TODO（cranelift-dev）:
-  1) Copy 伝播強化: `MirInstruction::Copy` で `box_type_map` と `handle_values` を src→dst にコピー。
-  2) 診断拡充: `NYASH_JIT_TRACE_LOWER=1` 時、汎用 PluginInvoke フォールバック失敗の理由（box_type/method/param/local/known）を1行で出力。
-  3) EguiBox 暫定フォールバック（envゲート）: `NYASH_JIT_EGUI_FORCE=1` 時のみ、`open/uiLabel/run` を名前で `emit_plugin_invoke` して確実に Lower（恒久化は原因修正後に再検討）。
-  4) 受け入れ基準: jit-direct と AOT(EXE) の双方で `[EGUI] M_OPEN/M_UI_LABEL/M_RUN` が順に出力され、タイトル/ラベルがスクリプト値で表示。
-- 実行/確認コマンド:
-  - VM 速回し: `tools/ny_plugin.ps1 -Mode vm -Script apps/egui-hello/main.nyash -Debug`
-  - JIT 直: `NYASH_JIT_TRACE_LOWER=1 NYASH_JIT_EVENTS=1 tools/ny_plugin.ps1 -Mode jit -Script apps/egui-hello/main.nyash -Debug`
-  - AOT(EXE): `tools/windows/build_egui_aot.ps1 -Input apps/egui-hello/main.nyash -Out app_egui.exe -Verbose` → `run_egui_debug.bat`
-  - 簡易スモーク: `tools/windows/egui_smoke.ps1 -Mode exe|vm|jit -Seconds 4 -Dbg`
-- 環境メモ:
-  - プラグイン差し替えで高速反映: `cargo build -p nyash-egui-plugin --release --features with-egui` → `target/release/nyash_egui_plugin.dll` を上書き。
-  - `NYASH_PLUGIN_PATHS` は各 worktree の `plugins/*/target/release;target/release` を指す（取り違い防止）。
-
-— 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
-
-— Handoff (2025‑09‑06 EOD) — Phase 15 進捗と次アクション
-
-Done（本セッションで完了）
-- JSON v0: 短絡 `&&/||`（`and/or` 互換）を追加し、MIR で `Branch+Phi` 降ろし。
-  - 実装: `src/runner/json_v0_bridge.rs`（Logical追加、逐次BBで短絡組立）
-  - MIRインタプリタ: `Phi` はエントリで解決、非Phiのみ実行（`backend/mir_interpreter.rs`）。
-  - スモーク: `apps/smokes/json_v0_short_or.json`, `..._and.json`（ゼロ除算を短絡で回避）。VM/Interpreter一致。
-- Collections（VM側）: プラグイン無効で最小op動作を確認。
-  - `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/std/array_smoke.nyash` → OK
-  - `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/jit_aot_map_min.nyash` → OK
-- JIT安定化（小修正）: `tls_call_import_ret` に空引数ガードを追加（Cranelift 検証器エラー「引数数不一致」を抑止）。
-  - 影響: 引数不在でも import 呼を無理に発行しない。戻り値が必要な場合は `iconst 0` を合成。
-
-Next（このまま継続してOK）
-- M2 継続: Collections 最小 hostcall（len/get/set/push/size/has）＋ policy 認可の再確認（JIT直も）。
-  - 追加スモーク: `--jit-direct` + `NYASH_JIT_READ_ONLY=1` で mut（push/set）拒否を確認（ビルダー安定化後に実行）。
-  - ops_ext の handle.of → *_H 経路の整合性を軽く棚卸し（定数 `SYM_*` の統一を優先）。
-- M3 着手: plugin invoke by-id/by-name の最小衛生化（成功/失敗時のフォールバック方針明記）、2件スモーク追加。
-- Telemetry（軽量）: `observe::lower_hostcall` と `lower_shortcircuit` を代表ポイントに追加（イベント 1 呼=1 件）。
-
-Constraints（再掲）
-- AOT/リンク最適化・GUI拡張の深追いはしない（main側）。Phase A リファクタは挙動不変で小刻みに。
-
-Quick Verify（代表）
-- 短絡: `./target/release/nyash --json-file apps/smokes/json_v0_short_or.json` → true / `..._and.json` → false（VM も一致）
-- Collections（VM）: `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/std/array_smoke.nyash` → `Result: 0`
-- Map（VM）: `NYASH_DISABLE_PLUGINS=1 --backend vm apps/smokes/jit_aot_map_min.nyash` → `Result: 1`
-
-— Phase 15 実行計画（2週間 / VM先行・JITはcompiler-only）
-
-方針とガードレール
-- フォーカス: Ny→MIR→VM/JIT 経路の自己ホスト実用化。JITは「独立実行/コンパイラ用途」に限定。
-- スコープ外: AOT/リンカ/GUI/大規模リファクタ（main側で継続）。本ブランチは最小実装＋観測整備に集中。
-- 常にスモーク先行で小刻みに前進。半日詰まりは撤退→Issue化。
-
-マイルストーン
-1) M1（1–2日）: JSON v0 短絡 &&/|| 追加
-   - 受け入れ: VM/JIT一致（--jit-direct）。短絡で副作用が実行されないことをsmokeで確認。
-2) M2（2–3日）: コレクション最小 hostcall（len/get/set/push/size/has）整備＋policyガード再確認
-   - 受け入れ: 変異系は既定deny（policy）。許可時のみ allow がログに残る。smoke 6件緑。
-3) M3（1–2日）: プラグイン橋の衛生（by-id/by-name最小）
-   - 受け入れ: 2種invokeのsmoke、ログで呼び分け確認。
-4) M4（1日）: using/module の最終調整（候補提示“ほどほど”）
-   - 受け入れ: 既存smokeの文言/挙動が期待どおり。
-5) M5（1日）: 可観測性の整理（observe::lower_hostcall 等）
-   - 受け入れ: 代表ケースでイベントが一貫（op/collection_type/mutates/has_policy）。
-6) M6（1日）: 安定化と1ページメモ更新（入口誘導）
-
-3日スタートプラン（詳細）
-- Day1: JSON→MIR で LogicalAnd/LogicalOr を追加。JumpIfFalse/True で短絡表現。
-- Day2: MIR→VM で分岐網羅＋collections最小 hostcall 経路の確認。
-- Day3: VM→JIT で短絡のLowerとイベント（lower_shortcircuit）。VM/JIT一致（--jit-direct）。
-
-Do-Not-Do（本期はやらない）
-- AOT/リンクの最適化・調査の深追い、GUI/egui拡張、機能の広げ過ぎ、最適化、新規依存追加。
-
-進捗メトリクス/撤退基準
-- 毎日: 新規/更新smokeの件数と緑率、VM/JIT一致率、イベントログ件数（hostcall 1回=1件上限）。
-- 撤退: 半日詰まり→いったん落とす・Issue化・次のマイルストーンへ。
+— 最終更新: 2025‑09‑06 (Phase 15.17 反映, Core‑13 純化モード/LLVM AOT shim 拡張)
 
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 
 概要
 - 目的: AOT/JIT‑AOT で発生していた `StringBox.length/len` が 0 になる不具合の是正（Lower の二段フォールバック：`nyash.string.len_h` → `nyash.any.length_h`）。
 - 結果: 当該不具合は修正・確認完了（AOT/VM で期待値）。JIT 直実行の継続調査は打ち切り、実行モードは「インタープリター／VM／Cranelift(EXE)／LLVM(EXE)」の4体制へ移行。
+
+【Phase 15.17 追記 — Core‑13 純化モード 実装/稼働・AOT shim 拡張】
+概要
+- Core‑13 純化モード（厳格）を導入: `NYASH_MIR_CORE13_PURE=1`
+  - Builder 段: `new`→`ExternCall(env.box.new, [type, …args])` を直接生成（`NewBox/birth` 非生成）
+  - Unary(−/!/~): 直接展開（`Const+BinOp/Compare`）
+  - WeakRef(weak_new/load): 純化ONでは生成回避（パススルー）
+  - Optimizer 安全網: Load/Store→`env.local.get/set` 変換、最終MIRで13命令以外はエラー
+- 実行系:
+  - VM: `env.local.get/set` と `env.box.new` を実装（BoxFactoryRegistry 連動）
+  - LLVM AOT: `env.local.get/set` の Lowering と `env.box.new` shim を追加
+    - NyRT 追加: `nyash.env.box.new` / `nyash.env.box.new_i64x` (最大4引数)
+    - NyRT 追加: `nyash.box.from_i8_string`（i8*→StringBox）、`nyash.box.from_f64`（f64→FloatBox）
+    - Lowering: 引数を i64 ハンドルに正規化（int/ptr→i64、i8*→from_i8_string、f64→from_f64）
+  - Cranelift （スケルトン）: `env.local.get/set` / `env.box.new` を実行ループに最小実装（将来のAOT出力の布石）
+
+検証
+- `cargo test`: 206 passed / 0 failed / 24 ignored（通常）
+- 純化ON（選択的 skip あり）: グリーン。`src/tests/mir_pure_envbox.rs` 追加で `env.box.new` 生成を検証
 
 実装（済）
 - LowerCore: 二段フォールバック実装を追加（Param/Local/リテラル）。
@@ -203,6 +41,21 @@ Do-Not-Do（本期はやらない）
 - ポリシー: `StringBox.length/len` マッピングを `nyash.any.length_h` → `nyash.string.len_h` に是正。
 - デッドコード整理: 旧 `lower_boxcall_simple_reads` を削除（conflict 回避）。
 - ツール/スモーク: `tools/aot_smoke_cranelift.sh` 追加、`apps/smokes/jit_aot_string_length_smoke.nyash` 追加。
+
+— 15.17 追加 実装（済）
+- Core‑13 純化モード: `NYASH_MIR_CORE13_PURE=1`（Builder/Optimizer/Verifier 連携）
+- VM: `env.local.get/set`, `env.box.new` を実装
+- LLVM AOT: `env.box.new` shim（new/new_i64x）+ 引数 i8*/f64 のハンドル化 helper 追加
+- Cranelift: ExternCall の最小実装（get/set/new）を追加（スケルトン）
+- テスト: `src/tests/mir_pure_envbox.rs` 追加（純化 new→env.box.new の生成確認）
+- テスト: `src/tests/mir_pure_e2e_vm.rs` 追加（純化ONで VM 実行: new StringBox + length の e2e）
+- テスト: `src/tests/mir_pure_locals_normalized.rs` 追加（locals が env.local.get/set に正規化されることを確認）
+- テスト: `src/tests/mir_pure_llvm_build.rs` 追加（feature=llvm 時に純化ONで .o を正常生成できることを確認。実行の同値性はAOT実装拡張後に別途追加予定）
+- テスト: `src/tests/mir_pure_e2e_arith.rs` 追加（純化×VMで加算の e2e）
+- テスト: `src/tests/mir_pure_e2e_branch.rs` 追加（純化×VMで条件分岐の e2e）
+- テスト: `src/tests/mir_pure_only_core13.rs` 追加（最終MIRが13命令のみで構成されることを静的検査）
+- CI: Core‑13 純化(LLVM) ワークフロー追加（`.github/workflows/core13-pure-llvm.yml`）。LLVM 18 をセットアップし、`--features llvm` で純化ONテストを実行。
+- CI: Core‑13 純化モード専用ワークフローを追加（`.github/workflows/core13-pure.yml`）。`NYASH_MIR_CORE13_PURE=1 cargo test --all-targets` を実行。
 
 確認状況（最終）
 - `apps/smokes/jit_aot_string_min.nyash`（concat/eq）: AOT で `Result: 1`（OK）。
@@ -219,6 +72,13 @@ P1: AOT 安定化（低頻度 segfault の追跡：低優先）
 
 P2: リファクタ（Phase A）継続（振る舞い不変）
 - Hostcall シンボル `SYM_*` 統一、`core/string_len.rs` への集約、観測フックの整理は継続。JIT 実行依存の観測は停め、VM/AOT 観測を優先。
+
+P3: Core‑13 純化 仕上げ（今回の続き）
+- Cranelift AOT: 実オブジェクト出力で `env.local/env.box` のシンボル連携（現状は実行スケルトンのみ）
+- LLVM AOT: `env.box.new_i64x` の引数拡張（>4, TLV支援）と型復元の精度UP（文字列/浮動/配列 等）
+- Builder 純化の徹底: Load/Store/WeakRef を完全非生成（全経路点検）
+- E2E 純化スモーク: `apps/smokes_pure13/` を追加（VM/LLVM EXE の結果一致）
+- CI: 純化ON ジョブを常時実行（最終MIR 13命令チェック含む）
 
 進捗（2025‑09‑06 終了報告）
 - ops_ext: StringBox.len/length の結果を必ずローカルに保存するよう修正（Return が確実に値を拾える）
@@ -266,10 +126,9 @@ Phase A 進捗（実施済）
 - 以前は Windows exe で egui ウィンドウ表示を確認できていたが、現状で再現が不安定な報告あり。Cranelift/LLVM と OS 組み合わせ別に手順と期待結果を明文化し、再現性を担保する。
 
 前提・重要ポイント
-- プラグイン版 EguiBox は `with-egui` 有効時にクロスプラットフォーム（eframe 使用）。Windows では実ウィンドウ表示、WSL/Linux でも WSLg/Wayland 環境なら表示可能。開発機の描画バックエンドに依存する点に注意。
+- プラグイン版 EguiBox は Windows 専用で実ウィンドウ分岐（`#[cfg(all(windows, feature = "with-egui"))]`）。Linux/WSL では `run()` はスタブ（void）でウィンドウは出ない（X 転送の有無に関係なく）。
 - Windows でウィンドウ表示を行うには、`nyash-egui-plugin` を `--features with-egui` でビルドし、`nyash.toml` の `plugin_paths`（または `NYASH_PLUGIN_PATHS`）に DLL のパスが解決できること。
-- Linux でウィンドウ表示を確認したい場合は「Rust 例（gui_simple_notepad）」または「ビルトイン EguiBox（nyash 本体を `--features gui` でビルドし、専用 Nyash スクリプトを使用）」も利用可。
-- Linux/WSL で `--features gui` を使う場合、システムの GL/X11/Wayland 開発ライブラリが必要（例: Ubuntu `sudo apt install pkg-config libx11-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev`）。
+- Linux でウィンドウ表示を確認したい場合は「Rust 例（gui_simple_notepad）」または「ビルトイン EguiBox（nyash 本体を `--features gui` でビルドし、専用 Nyash スクリプトを使用）」を利用する。
 
 テストマトリクス（手順と期待結果）
 1) Windows × Cranelift（JIT-direct/EXE 相当）
@@ -289,8 +148,8 @@ Phase A 進捗（実施済）
 3) WSL × Cranelift（JIT-direct/EXE 相当）
    - 準備: `cargo build --release --features cranelift-jit`
    - 実行: `./target/release/nyash --jit-direct apps/egui-hello/main.nyash`
-   - 期待: 実ウィンドウ表示（WSLg/Wayland 環境で成功することを想定）。描画不可環境ではエラーなく終了（void）にフォールバック。
-   - 備考: 表示が出ない場合は X11/Wayland 変数の切替（`WINIT_UNIX_BACKEND=x11` / `WAYLAND_DISPLAY`）や必要パッケージの導入を確認。Rust 例（`cargo run --features gui-examples --example gui_simple_notepad --release`）で先に動作確認するのが無難。
+   - 期待: 実ウィンドウは出ない（プラグインの `run()` はスタブ）。エラーなく終了（void）。
+   - 備考: GUI 表示が必要な場合は Rust 例（`cargo run --features gui-examples --example gui_simple_notepad --release`）を利用。
 
 4) WSL × LLVM（EXE/直実行）
    - 準備: `./tools/llvm_check_env.sh` → `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
@@ -304,24 +163,12 @@ Phase A 進捗（実施済）
 - Windows/プラグインの DLL 解決が怪しい場合は `NYASH_PLUGIN_PATHS` で DLL ディレクトリを明示（`;` 区切り）
 
 既知の制約 / TODO
-- Linux/WSL での表示は WSLg/GL 依存。描画バックエンドが無い環境ではヘッドレス（実ウィンドウ無し）となる。必要パッケージとバックエンド環境を整備してから再試行。
+- Linux/WSL でプラグイン版 EguiBox の `run()` は現在スタブ（実ウィンドウなし）。将来的に `#[cfg(target_os = "linux")]` 分岐で eframe 実装を追加し、X11/Wayland でも表示可能にする。
 - ビルトイン EguiBox（`src/boxes/egui_box.rs`）は `--features gui` でビルド時に有効。Nyash スクリプト側の API はプラグイン版と異なる（`setTitle/setSize/addText/run`）。Linux GUI 確認用にビルトイン用サンプル（apps/egui-builtin/）を追加して整備する。
 - Windows AOT リンクは MSVC `link.exe` を既定（fall back: clang）。lld へのスイッチ（速度優先）を将来オプション化検討。
 
 次アクション（引き継ぎ TODO）
-- [ ] Windows: 4通りの実行（Cranelift 直/JIT、LLVM 直、AOT EXE）で `apps/egui-hello/main.nyash` のウィンドウ表示を再確認（`NYASH_DEBUG_PLUGIN=1` でログ採取）。`tools/build_egui_aot_manual.ps1` のリンク手順を更新（lld/system libs 明示）。
-
-— Tools 整理（2025-09-07）
-- 統一エントリを追加: `tools/ny_plugin.ps1`（Windows）, `tools/ny_plugin.sh`（WSL/Linux）
-  - 使い方: `-Mode vm|jit|aot -Script <nyash file> -Jobs 24 [-PluginPaths <dirs>] [-Debug]`
-  - 例: `pwsh -File tools\ny_plugin.ps1 -Mode vm -Script apps\tests\plugins\counter_min.nyash -Jobs 24 -Debug`
-- 既存 egui 系スクリプトは非推奨化: `tools/egui_quick.ps1/.sh`, `tools/build_egui_aot_manual.ps1`, `tools/egui_run.bat`（ヘッダに Deprecated を明記）。
-- 一時的に残す: `tools/egui_aot.bat`（成功実績あり、当面案内は `ny_plugin.ps1` を優先）。
-
-— BoxCall 降ろし（設計メモ）
-- 目的: VM/JIT/AOT のいずれでも同一MIR（BoxCall）が機能。TypeBox v2 の invoke を汎用ブリッジで実行。
-- 方針: (box_type, method)→(type_id, method_id) を nyash.toml から解決し、TLV(i32/bool/f64/string/handle最小) を nyrt invoke に渡す。
-- 検証: `apps/tests/plugins/counter_min.nyash` を VM/JIT/AOT で一致（inc→get 発火、Result>=1）。
+- [ ] Windows: 4通りの実行（Cranelift 直/JIT、LLVM 直、AOT EXE）で `apps/egui-hello/main.nyash` のウィンドウ表示を再確認（`NYASH_DEBUG_PLUGIN=1` でログ採取）。
 - [ ] WSL: Cranelift/LLVM の直実行は「スタブ終了」が期待値であることを README/ガイドに明記。GUI が必要なら Rust 例 or ビルトイン EguiBox 経路を案内。
 - [ ] Linux 向けプラグイン `with-egui` 実装の導入可否を検討（`plugins/nyash-egui-plugin/src/lib.rs` の `winrun` と類似の `linrun` を追加）。
 - [ ] ビルトイン EguiBox 用の Nyash サンプルを `apps/egui-builtin/` として追加し、`--features gui` での手順を `dev/selfhosting/` または `docs/` に追記。
@@ -392,6 +239,10 @@ Phase A 進捗（実施済）
 - [ ] `emit_len_with_fallback_*` / `lower_box_call(len/length)` にイベント出力を追加（選択分岐/経路ログ）。
 - [ ] AOT segv の最小再現収集（PIE/relro/TLSの前提確認）→ `nyrt` 側エクスポート/リンカフラグ点検。
 - [ ] `NYASH_USE_PLUGIN_BUILTINS=1` 時の `length` も robust path を常に使用することを E2E で再確認。
+- [ ] Cranelift AOT: `env.local/env.box` を実オブジェクト出力に反映（link/name 解決の道付け）
+- [ ] LLVM AOT: `nyash.env.box.new_i64x` の引数≥5およびTLV化の検討、引数型の復元精度UP
+- [ ] Builder 純化の網羅化（Load/Store/WeakRef 非生成の全経路テスト追加）
+- [ ] 純化ON E2E スモーク（VM/LLVM）と CI 常時ジョブの追加
 
 メモ
 - `jit_aot_any_len_string.nyash` は `return s.length()` の Return 経路解決が決め手。材化を強化すれば `3` が期待値。

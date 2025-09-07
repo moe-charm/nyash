@@ -28,6 +28,10 @@ Self‑hosting one‑pager: `docs/self-hosting.md`.
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
 
+MIR note: Core‑13 minimal kernel is enforced by default (NYASH_MIR_CORE13=1). Legacy ops are normalized (Array/Ref→BoxCall; TypeCheck/Cast/Barrier/WeakRef unified).
+
+Pure mode: set `NYASH_MIR_CORE13_PURE=1` to enable strict Core‑13. The optimizer rewrites a few ops (Load/Store/NewBox/Unary) to Core‑13 forms, and the compiler rejects any remaining non‑Core‑13 ops. This may break execution temporarily by design to surface MIR violations early.
+
 Note: JIT runtime execution is currently disabled to reduce debugging overhead. Use Interpreter/VM for running and AOT (Cranelift/LLVM) for distribution.
 
 ## 🎮 **Try Nyash in Your Browser Right Now!**

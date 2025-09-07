@@ -1,0 +1,31 @@
+[box]
+name = "<Your Plugin Name>"
+version = "0.1.0"
+description = "<Short description>"
+author = "<Your Name>"
+
+[provides]
+boxes = ["<BoxTypeA>", "<BoxTypeB>"]
+
+[<BoxTypeA>]
+type_id = <u32>
+
+[<BoxTypeA>.lifecycle]
+birth = { id = 0 }
+fini  = { id = 4294967295 }  # optional
+
+[<BoxTypeA>.methods.<methodName>]
+id = <u32>
+args = [ { name = "<arg>", type = "<string|i64|box|varargs|dict>" } ]  # optional
+returns = { type = "<void|string|i64|box>", error = "string" }        # optional
+returns_result = <true|false>  # optional: Ok/Err(ResultBox)に正規化
+
+[implementation]
+ffi_version = 1
+thread_safe = <true|false>
+
+[artifacts]
+windows = "target/x86_64-pc-windows-msvc/release/<your>.dll"
+linux   = "target/release/lib<your>.so"
+macos   = "target/release/lib<your>.dylib"
+
