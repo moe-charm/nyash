@@ -1,0 +1,12 @@
+// vm-plugin-smoke-counter
+// Purpose: Verify VM uses plugin boxes deterministically (CounterBox)
+// Expected: returns 1 after a single inc()
+
+// Note: VM runner in this branch initializes plugin host and prefers
+// plugin implementations for core boxes. CounterBox is provided by
+// libnyash_counter_plugin per nyash.toml.
+
+local c = new CounterBox()
+c.inc()
+return c.get()
+
