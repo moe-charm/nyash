@@ -65,6 +65,12 @@ impl IRBuilder for ObjectBuilder {
         self.current_name = Some(name.to_string());
         self.value_stack.clear();
         self.value_tags.clear();
+        // Reset contexts to satisfy Cranelift requirements when reusing the builder
+        self.ctx = cranelift_codegen::Context::new();
+        self.fbc = cranelift_frontend::FunctionBuilderContext::new();
+        self.blocks.clear();
+        self.entry_block = None;
+        self.current_block_index = None;
         if !self.typed_sig_prepared {
             let call_conv = self.module.isa().default_call_conv();
             let mut sig = Signature::new(call_conv);
@@ -93,6 +99,10 @@ impl IRBuilder for ObjectBuilder {
             let finished = std::mem::replace(&mut self.module, Self::fresh_module());
             let product = finished.finish();
             self.object_bytes = Some(product.emit().expect("emit object"));
+        // Clear per-function state to allow reuse
+        self.blocks.clear();
+        self.entry_block = None;
+        self.current_block_index = None;
     }
     fn prepare_signature_i64(&mut self, argc: usize, has_ret: bool) { self.desired_argc = argc; self.desired_has_ret = has_ret; }
     fn prepare_signature_typed(&mut self, _params: &[ParamKind], _ret_is_f64: bool) { self.typed_sig_prepared = true; }
@@ -477,7 +487,7 @@ impl IRBuilder for ObjectBuilder {
         // Build signature and declare import
         let mut sig = Signature::new(self.module.isa().default_call_conv());
         for _ in 0..12 { sig.params.push(AbiParam::new(types::I64)); }
-        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+        sig.returns.push(AbiParam::new(types::I64));
         let func_id = self.module.declare_function("nyash_plugin_invoke3_tagged_i64", cranelift_module::Linkage::Import, &sig).expect("declare plugin invoke tagged");
         let fref = self.module.declare_func_in_func(func_id, fb.func);
 
@@ -530,7 +540,7 @@ impl IRBuilder for ObjectBuilder {
 
         let mut sig = Signature::new(self.module.isa().default_call_conv());
         for _ in 0..5 { sig.params.push(AbiParam::new(types::I64)); }
-        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+        sig.returns.push(AbiParam::new(types::I64));
         let func_id = self.module.declare_function("nyash.plugin.invoke_by_name_i64", cranelift_module::Linkage::Import, &sig).expect("declare plugin invoke by-name");
         let fref = self.module.declare_func_in_func(func_id, fb.func);
 

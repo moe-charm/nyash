@@ -1,0 +1,34 @@
+目的: LoopSignal IR（LoopBox+Signalの統一）ドラフトの技術レビューと実装計画を作ってください。参照ファイルを読み込み、MIR/Lower/最適化/移行の観点で具体化して出力してほしいです。日本語でお願いします。
+
+読んでほしいファイル
+- docs/private/papers/paper-e-loop-signal-ir/main-paper-jp.md
+- docs/private/papers/paper-a-mir13-ir-design/main-paper-jp.md
+- src/mir/ および src/mir/builder_modularized/ 配下（現行MIR命令・SSA/PHI生成の実装把握）
+- src/runner/modes/llvm.rs（オブジェクト出力の現行流れ把握）
+
+出力してほしいもの（Tech Review + Impl Plan v1）
+1) 仕様の確定案
+- LoopSignal 型の正格仕様（タグ値、ペイロード、ABI/LLVM表現例）とゼロコスト表現の可否
+- MIR命令: loop.begin/iter/branch/end の厳密な意味論（定義域・未定義動作・例外扱い）
+- SSA/PHI配置の規則（合流点の標準形とインバリアント）
+2) Lowering規則（構文→MIR）
+- block/scope, if/else, while, for-in, function/return, generator(yield), async(await) の具体写像を擬似MIRで
+- ReturnをSignalに入れる/分離するの設計比較（長所短所と採用推奨）
+3) 最適化パス
+- Loop1完全インライン化、Yieldなし状態省略、分岐合流点正規化、DCE/LICM/Inlineの到達条件
+- 既存パスに与える影響と安全条件
+4) フォールバック/互換
+- LoopForm→従来MIRへの逆Lowering（フラグでON/OFF）設計
+5) リスクと回避
+- デバッグ（DWARF/位置情報）、小反復の関数境界コスト、例外/効果の扱い
+6) 段階導入ロードマップ
+- P1: while(true){break}のLoop1化→計測
+- P2: for-inステートマシン→VM/AOT一致検証
+- P3: 最小ジェネレータ（yield）→再開健全性テスト
+7) テスト計画とメトリクス
+- 命令数/分岐数/PHI数/コンパイル時間/実行時間の収集方法と閾値
+8) 小タスクのTODO一覧（ファイルパス・影響範囲つき）
+
+注意
+- 既存コードの具体参照はファイルパスで示してください（必要なら該当関数/型名も）。
+- 出力は見出し付きの箇条書きで、合計2〜3ページ相当の濃度で。

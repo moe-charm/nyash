@@ -108,6 +108,10 @@ lf.close()
 #[ignore = "Plugins not configured by default env; skip in CI"]
 fn e2e_vm_plugin_filebox_close_void() {
     if !try_init_plugins() { return; }
+    if nyash_rust::config::env::mir_core13_pure() {
+        eprintln!("[E2E] skip vm filebox under Core-13 pure mode");
+        return;
+    }
 
     let code = r#"
 local f

@@ -57,10 +57,6 @@ pub struct CliConfig {
     // Phase-15: JSON IR v0 bridge
     pub ny_parser_pipe: bool,
     pub json_file: Option<String>,
-    // Using/module resolution helpers (MVP)
-    pub using: Option<String>,
-    pub using_path: Option<String>,
-    pub modules: Option<String>,
     // Build system (MVP)
     pub build_path: Option<String>,
     pub build_app: Option<String>,
@@ -107,24 +103,7 @@ impl CliConfig {
                     .value_name("FILE")
                     .help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter")
             )
-            .arg(
-                Arg::new("using")
-                    .long("using")
-                    .value_name("LIST")
-                    .help("Declare namespaces or aliases (comma-separated). Ex: 'acme.util, acme.math as M' or '\"apps/x.nyash\" as X'")
-            )
-            .arg(
-                Arg::new("using-path")
-                    .long("using-path")
-                    .value_name("PATHS")
-                    .help("Search paths for using (':' separated). Ex: 'apps:lib:.'")
-            )
-            .arg(
-                Arg::new("module")
-                    .long("module")
-                    .value_name("MAP")
-                    .help("Namespace to path mapping (comma-separated). Ex: 'acme.util=apps/acme/util.nyash'")
-            )
+            
             .arg(
                 Arg::new("debug-fuel")
                     .long("debug-fuel")
@@ -427,9 +406,6 @@ impl CliConfig {
             parser_ny: matches.get_one::<String>("parser").map(|s| s == "ny").unwrap_or(false),
             ny_parser_pipe: matches.get_flag("ny-parser-pipe"),
             json_file: matches.get_one::<String>("json-file").cloned(),
-            using: matches.get_one::<String>("using").cloned(),
-            using_path: matches.get_one::<String>("using-path").cloned(),
-            modules: matches.get_one::<String>("module").cloned(),
             // Build system (MVP)
             build_path: matches.get_one::<String>("build").cloned(),
             build_app: matches.get_one::<String>("build-app").cloned(),
@@ -441,31 +417,9 @@ impl CliConfig {
     }
 }
 
-/// Parse debug fuel value ("unlimited" or numeric)
-fn parse_debug_fuel(value: &str) -> Option<usize> {
-    if value == "unlimited" {
-        None  // No limit
-    } else {
-        value.parse::<usize>().ok()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_debug_fuel() {
-        assert_eq!(parse_debug_fuel("unlimited"), None);
-        assert_eq!(parse_debug_fuel("1000"), Some(1000));
-        assert_eq!(parse_debug_fuel("invalid"), None);
-    }
-
-    #[test]
-    fn test_default_config() {
-        // This test would require mocking clap's behavior
-        // For now, we just ensure the structure is valid
-        let config = CliConfig {
+impl Default for CliConfig {
+    fn default() -> Self {
+        Self {
             file: None,
             debug_fuel: Some(100000),
             dump_ast: false,
@@ -505,17 +459,39 @@ mod tests {
             parser_ny: false,
             ny_parser_pipe: false,
             json_file: None,
-            using: None,
-            using_path: None,
-            modules: None,
             build_path: None,
             build_app: None,
             build_out: None,
             build_aot: None,
             build_profile: None,
             build_target: None,
-        };
-        
+        }
+    }
+}
+
+/// Parse debug fuel value ("unlimited" or numeric)
+fn parse_debug_fuel(value: &str) -> Option<usize> {
+    if value == "unlimited" {
+        None  // No limit
+    } else {
+        value.parse::<usize>().ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_debug_fuel() {
+        assert_eq!(parse_debug_fuel("unlimited"), None);
+        assert_eq!(parse_debug_fuel("1000"), Some(1000));
+        assert_eq!(parse_debug_fuel("invalid"), None);
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = CliConfig::default();
         assert_eq!(config.backend, "interpreter");
         assert_eq!(config.iterations, 10);
     }

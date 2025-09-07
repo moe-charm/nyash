@@ -223,6 +223,8 @@ mod guirun {
 
     pub fn run_window(w: i32, h: i32, title: &str, labels: Vec<String>) {
         eprintln!("[EGUI] run_window: w={} h={} title='{}'", w, h, title);
+        let diag = std::env::var("NYASH_EGUI_DIAG").ok().as_deref() == Some("1");
+        let scale_override = std::env::var("NYASH_EGUI_SCALE").ok().and_then(|s| s.parse::<f32>().ok());
         let options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([w.max(100) as f32, h.max(100) as f32])
@@ -230,9 +232,31 @@ mod guirun {
             ..Default::default()
         };
 
-        struct App { labels: Vec<String> }
+        struct App { labels: Vec<String>, diag: bool, printed: bool, init_w: i32, init_h: i32, scale: Option<f32> }
         impl eframe::App for App {
             fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+                if self.diag && !self.printed {
+                    let ppp = ctx.pixels_per_point();
+                    let rect = ctx.screen_rect();
+                    let (lw, lh) = (rect.width(), rect.height());
+                    let (pw, ph) = ((lw * ppp).round() as i32, (lh * ppp).round() as i32);
+                    eprintln!("[EGUI][diag] ppp={:.3} logical={:.1}x{:.1} physical={}x{} init={}x{} scale_override={}",
+                        ppp, lw, lh, pw, ph, self.init_w, self.init_h,
+                        self.scale.map(|v| format!("{:.3}", v)).unwrap_or_else(|| "<none>".into())
+                    );
+                    self.printed = true;
+                }
+                egui::TopBottomPanel::top("diag_bar").show(ctx, |ui| {
+                    if self.diag {
+                        let ppp = ctx.pixels_per_point();
+                        let rect = ctx.screen_rect();
+                        ui.small(format!(
+                            "DPI: ppp={:.3} logical={:.1}x{:.1} init={}x{} scale={}",
+                            ppp, rect.width(), rect.height(), self.init_w, self.init_h,
+                            self.scale.map(|v| format!("{:.2}", v)).unwrap_or_else(|| "auto".into())
+                        ));
+                    }
+                });
                 egui::CentralPanel::default().show(ctx, |ui| {
                     for s in &self.labels { ui.label(s); }
                 });
@@ -242,7 +266,20 @@ mod guirun {
         let res = eframe::run_native(
             title,
             options,
-            Box::new(|_cc| Box::new(App { labels })),
+            Box::new({
+                let labels = labels;
+                let diag = diag;
+                let init_w = w;
+                let init_h = h;
+                let scale_override = scale_override;
+                move |cc| {
+                    if let Some(ppp) = scale_override {
+                        cc.egui_ctx.set_pixels_per_point(ppp);
+                        eprintln!("[EGUI][diag] override pixels_per_point to {:.3}", ppp);
+                    }
+                    Box::new(App { labels, diag, printed: false, init_w, init_h, scale: scale_override })
+                }
+            }),
         );
         eprintln!("[EGUI] run_native returned: {:?}", res);
     }

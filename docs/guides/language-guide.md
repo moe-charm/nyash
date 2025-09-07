@@ -53,6 +53,10 @@ a == b, a != b, a < b, a > b, a <= b, a >= b
 // 論理演算子
 not condition, a and b, a or b
 
+// ビット演算子（整数限定）
+a & b, a | b, a ^ b
+a << n, a >> n  # 注意: 旧来の >>（ARROW）は廃止。パイプラインは |>
+
 // Cross-type演算 (Phase 1で完全実装)
 10 + 3.14              // → 13.14 (型変換)
 "Value: " + 42         // → "Value: 42" (文字列連結)

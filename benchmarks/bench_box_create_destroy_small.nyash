@@ -1,0 +1,16 @@
+// Interpreter-level microbench: Box create + drop (small loops for time-boxed runs)
+static box Main {
+  main() {
+    local i = 0
+    local total = 0
+    loop(i < 10000) { // 1e4 iterations
+      {
+        local tmp = new StringBox("x")
+        total = total + tmp.length()
+      }
+      i = i + 1
+    }
+    return total
+  }
+}
+

@@ -87,9 +87,16 @@ impl VM {
                 let mut out_len: usize = out.len();
                 unsafe { (p.inner.invoke_fn)(p.inner.type_id, mh.method_id as u32, p.inner.instance_id, tlv.as_ptr(), tlv.len(), out.as_mut_ptr(), &mut out_len) };
                 let vm_out_raw: VMValue = if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[VM←Plugin] tag={} size={} bytes={}", tag, _sz, payload.len());
+                    }
                     match tag {
                         1 => crate::runtime::plugin_ffi_common::decode::bool(payload).map(VMValue::Bool).unwrap_or(VMValue::Void),
-                        2 => crate::runtime::plugin_ffi_common::decode::i32(payload).map(|v| VMValue::Integer(v as i64)).unwrap_or(VMValue::Void),
+                        2 => {
+                            let v = crate::runtime::plugin_ffi_common::decode::i32(payload).unwrap_or_default();
+                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") { eprintln!("[VM←Plugin] decode i32={}", v); }
+                            VMValue::Integer(v as i64)
+                        },
                         5 => crate::runtime::plugin_ffi_common::decode::f64(payload).map(VMValue::Float).unwrap_or(VMValue::Void),
                         6 | 7 => VMValue::String(crate::runtime::plugin_ffi_common::decode::string(payload)),
                         8 => {

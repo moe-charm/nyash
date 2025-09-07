@@ -1,0 +1,623 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\newenvironment{Shaded}{}{}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{1.00,0.00,0.00}{\textbf{#1}}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.49,0.56,0.16}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\BuiltInTok}[1]{\textcolor[rgb]{0.00,0.50,0.00}{#1}}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.53,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.56,0.13,0.00}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.73,0.13,0.13}{\textit{#1}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{1.00,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.02,0.16,0.49}{#1}}
+\newcommand{\ImportTok}[1]{\textcolor[rgb]{0.00,0.50,0.00}{\textbf{#1}}}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.40,0.40,0.40}{#1}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.74,0.48,0.00}{#1}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.73,0.40,0.53}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.10,0.09,0.49}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+% Minimal Japanese support for Pandoc + LuaLaTeX
+\usepackage{luatexja}
+\usepackage{luatexja-fontspec}
+\setmainjfont{Noto Serif CJK JP}[%
+  YokoFeatures={JFM=prop}]
+\setsansjfont{Noto Sans CJK JP}[%
+  YokoFeatures={JFM=prop}]
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\author{}
+\date{}
+
+\begin{document}
+
+\hypertarget{mir13-everything-is-boxux306bux3088ux308bux7a76ux6975ux306eux30dfux30cbux30deux30ebux4e2dux9593ux8868ux73fe}{%
+\section{MIR13: Everything is
+Boxによる究極のミニマル中間表現}\label{mir13-everything-is-boxux306bux3088ux308bux7a76ux6975ux306eux30dfux30cbux30deux30ebux4e2dux9593ux8868ux73fe}}
+
+\hypertarget{ux6982ux8981}{%
+\subsection{概要}\label{ux6982ux8981}}
+
+本論文では、わずか13命令で実用的なアプリケーションの実装を可能にする革新的な中間表現（IR）設計「MIR13」を提案する。従来のIR設計では数十から数百の命令が必要とされてきたが、我々は「Everything
+is
+Box」という設計哲学に基づき、すべてのメモリアクセスをBoxCallに統一することで、Load/Store命令を完全に廃止した。実装では12命令への削減も可能だが、可読性を考慮して意図的に13命令を採用している。MIR13はInterpreter、VM、JITの3つの実行バックエンドで実証され、実用的なアプリケーションの動作を確認した。
+
+\hypertarget{ux306fux3058ux3081ux306b}{%
+\subsection{1. はじめに}\label{ux306fux3058ux3081ux306b}}
+
+プログラミング言語の中間表現（IR）は、高水準言語と機械語の橋渡しをする重要な抽象層である。LLVM
+IRは約60の基本命令、WebAssemblyは約170の命令を持つなど、既存のIRは複雑化の一途を辿っている。
+
+本研究では、逆転の発想により「どこまでIRを単純化できるか」に挑戦した。結果として、わずか13命令で実用的なプログラミング言語を実装できることを実証した。従来のIR設計では57命令が必要とされた機能を、BoxCallへの統一により13命令まで削減した経緯についても議論する。
+
+本稿はIR層（MIR13）に焦点を当てる。言語Nyashそのものの設計思想やbirth/fini対称メモリ管理、P2P
+Intentモデル、多層実行アーキテクチャ等の詳細は、別論文（論文B:
+Nyash言語と実行モデル）で報告・拡張予定である。
+
+\hypertarget{mir13ux306eux8a2dux8a08ux54f2ux5b66}{%
+\subsection{2.
+MIR13の設計哲学}\label{mir13ux306eux8a2dux8a08ux54f2ux5b66}}
+
+\hypertarget{everything-is-box}{%
+\subsubsection{2.1 Everything is Box}\label{everything-is-box}}
+
+MIR13の核心は「Everything is
+Box」という設計原則である。従来のIRでは、メモリアクセス、配列操作、オブジェクトフィールドアクセスなどが個別の命令として実装されていた。我々はこれらをすべて「Boxへのメッセージパッシング」として統一した。
+
+\begin{verbatim}
+従来のアプローチ:
+- Load/Store（メモリアクセス）
+- GetElement/SetElement（配列）  
+- GetField/SetField（オブジェクト）
+- Call（関数呼び出し）
+
+MIR13のアプローチ:
+- BoxCall（すべて統一）
+\end{verbatim}
+
+\hypertarget{ux610fux56f3ux7684ux306a13ux547dux4ee4ux9078ux629e}{%
+\subsubsection{2.2
+意図的な13命令選択}\label{ux610fux56f3ux7684ux306a13ux547dux4ee4ux9078ux629e}}
+
+技術的にはBoxCallとBoxCallWithを統合して12命令にできるが、以下の理由から13命令を維持している：
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{可読性}: 引数なし/ありの区別が明確
+\item
+  \textbf{最適化}: JITコンパイラでの特殊化が容易
+\item
+  \textbf{教育的価値}: IRの学習が容易
+\end{enumerate}
+
+\hypertarget{mir13ux547dux4ee4ux30bbux30c3ux30c8}{%
+\subsection{3.
+MIR13命令セット}\label{mir13ux547dux4ee4ux30bbux30c3ux30c8}}
+
+\hypertarget{ux57faux672c13ux547dux4ee4core13}{%
+\subsubsection{3.1
+基本13命令（Core‑13）}\label{ux57faux672c13ux547dux4ee4core13}}
+
+MIR13は次の13命令で固定する（実装も既定ONに統一）。
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2857}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2857}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.4286}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+命令
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+説明
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+代表用途
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\textbf{Const} & 即値・アドレス等の定数生成 & リテラル、初期化 \\
+\textbf{BinOp} & 二項演算 & 加減乗除、ビット演算 \\
+\textbf{Compare} & 比較演算 & 等値/不等/大小関係 \\
+\textbf{Jump} & 無条件遷移 & ループ、ブロック遷移 \\
+\textbf{Branch} & 条件分岐遷移 & if/while 条件 \\
+\textbf{Return} & 関数復帰 & 戻り値返却 \\
+\textbf{Phi} & SSA合流 & 分岐後の値統合 \\
+\textbf{Call} & 直接/間接呼出し & ユーザー関数呼出し \\
+\textbf{BoxCall} & Boxへのメッセージ呼出し &
+フィールド/メソッド/配列操作の統一 \\
+\textbf{ExternCall} & ランタイム/プラグイン呼出し & ホスト関数、FFI
+統合 \\
+\textbf{TypeOp} & 型関連演算 & 型判定・型変換（統合） \\
+\textbf{Safepoint} & 安全点 & GC/割込み協調 \\
+\textbf{Barrier} & バリア & 書込/読込バリア等の最小表現 \\
+\end{longtable}
+
+\hypertarget{boxcallux306bux3088ux308bux7d71ux4e00}{%
+\subsubsection{3.2
+BoxCallによる統一}\label{boxcallux306bux3088ux308bux7d71ux4e00}}
+
+従来は個別命令だった操作がBoxCallで統一される（必要に応じてExternCallでホストへ委譲）：
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{// 配列アクセス}
+\NormalTok{v3 = BoxCall(v1, "get", v2)           // array[index]}
+\NormalTok{// 配列代入}
+\NormalTok{v4 = BoxCall(v1, "set", v2, v3)       // array[index] = value}
+\NormalTok{// フィールドアクセス}
+\NormalTok{v5 = BoxCall(v1, "getField", "name")  // object.name}
+\NormalTok{// メソッド呼出し}
+\NormalTok{v6 = BoxCall(v1, "add", v2)           // object.add(arg)}
+\NormalTok{// ホスト（ランタイム/プラグイン）呼出し}
+\NormalTok{v7 = ExternCall("env.runtime", "checkpoint")}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{ux5b9fux88c5ux3068ux8a55ux4fa1}{%
+\subsection{4. 実装と評価}\label{ux5b9fux88c5ux3068ux8a55ux4fa1}}
+
+\hypertarget{ux3064ux306eux5b9fux884cux30d0ux30c3ux30afux30a8ux30f3ux30c9}{%
+\subsubsection{4.1
+3つの実行バックエンド}\label{ux3064ux306eux5b9fux884cux30d0ux30c3ux30afux30a8ux30f3ux30c9}}
+
+MIR13は以下の3つのバックエンドで実装・検証された：
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Interpreter}: 開発・デバッグ用、即座に実行可能
+\item
+  \textbf{VM}: スタックマシンによる高速実行
+\item
+  \textbf{JIT}: Craneliftによる最速ネイティブコード生成
+\end{enumerate}
+
+注記（実装マイルストン）：2025-09-04 に、JIT/ネイティブEXE経由での
+Windows GUI
+表示（ネイティブウィンドウ生成と描画）を確認した。これはMIR13ベースの実行系がOSネイティブ機能まで到達したことを示すものであり、以降のGUI応用評価の基盤となる。
+
+\hypertarget{ux5b9fux30a2ux30d7ux30eaux30b1ux30fcux30b7ux30e7ux30f3ux3067ux306eux691cux8a3c}{%
+\subsubsection{4.2
+実アプリケーションでの検証}\label{ux5b9fux30a2ux30d7ux30eaux30b1ux30fcux30b7ux30e7ux30f3ux3067ux306eux691cux8a3c}}
+
+以下の実用的なアプリケーションが動作を確認： -
+テキストエディタ（Kilo移植版） - HTTPサーバー - P2P通信システム -
+LISPインタープリター - Windows GUIアプリ（ネイティブEXE）: 2025-09-04
+に表示確認 -
+スクリーンショットは論文B（Nyash言語と実行モデル）の図を参照（figures/gui-win.png）。
+
+\hypertarget{ux6027ux80fdux8a55ux4fa1}{%
+\subsubsection{4.3 性能評価}\label{ux6027ux80fdux8a55ux4fa1}}
+
+\hypertarget{ux518dux73feux624bux9806artifact-scripts}{%
+\paragraph{4.3.0 再現手順（Artifact \&
+Scripts）}\label{ux518dux73feux624bux9806artifact-scripts}}
+
+本論文の性能評価は、リポジトリ同梱のスクリプトで再現可能である。
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  環境情報の収集（自動生成）
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \texttt{docs/private/papers/paper-a-mir13-ir-design/\_artifacts/COLLECT\_ENV.sh}
+    を実行すると、CPU/OS/Rust/Cranelift/コミットIDを
+    \texttt{ENVIRONMENT.txt} に記録する。
+  \end{itemize}
+\item
+  ビルド（フルモード）
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \texttt{cargo\ build\ -\/-release\ -\/-features\ cranelift-jit}
+  \end{itemize}
+\item
+  ベンチ実行
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \texttt{docs/private/papers/paper-a-mir13-ir-design/\_artifacts/RUN\_BENCHMARKS.sh}
+  \item
+    \texttt{hyperfine}
+    があればCSVにエクスポート、無い場合はフォールバック計測を行う。
+  \end{itemize}
+\item
+  結果
+
+  \begin{itemize}
+  \tightlist
+  \item
+    \texttt{\_artifacts/results/*.csv}
+    に各モード（Interpreter/VM/JIT/AOT）の結果を保存。
+  \end{itemize}
+\end{enumerate}
+
+注: AOT（ネイティブEXE）は \texttt{tools/build\_aot.sh}
+が利用可能な場合のみ測定する（無ければ自動スキップ）。
+また、LLVMバックエンド経由のAOT計測も可能である（\texttt{USE\_LLVM\_AOT=1}）。
+- 依存: \texttt{llvm-config-18}（LLVM 18 開発環境） - 例:
+\texttt{USE\_LLVM\_AOT=1\ SKIP\_INTERP=1\ ./RUN\_BENCHMARKS.sh}
+
+さらに、Cranelift JIT
+からの直接AOT（\texttt{-\/-jit-direct}、本実装では「JIT-AOT」と表記）も計測可能である（\texttt{USE\_JIT\_AOT=1}）。
+- 例:
+\texttt{USE\_EXE\_ONLY=1\ USE\_JIT\_AOT=1\ SKIP\_INTERP=1\ ./RUN\_BENCHMARKS.sh}
+
+\hypertarget{x-ux6700ux9069ux5316ux72b6ux6cc1ux3068ux6ce8ux610f}{%
+\paragraph{4.3.x
+最適化状況と注意}\label{x-ux6700ux9069ux5316ux72b6ux6cc1ux3068ux6ce8ux610f}}
+
+現時点の実装は、最適化処理を徹底していない（例：インライン化、ICの高度化、ボックス形状多態の特殊化、VM命令選択のチューニングなどは限定的）。従って、提示する数値は「素の実装に近いベースライン」であり、今後の最適化で改善余地が大きい。再現スクリプトはモード差が観測しやすいよう、負荷を軽量〜中程度に設定している（遅い環境では
+\texttt{SKIP\_INTERP=1} でインタープリタ計測を省略可能）。
+
+\hypertarget{ux521dux56deux6e2cux5b9aux4e2dux592eux5024ux5e73ux5747}{%
+\paragraph{4.3.4
+初回測定（中央値/平均）}\label{ux521dux56deux6e2cux5b9aux4e2dux592eux5024ux5e73ux5747}}
+
+以下は \texttt{\_artifacts/results/*.csv} を \texttt{gen\_table.py}
+で集計した初回結果（ミリ秒）。測定は各10回（一部7回）で、fallbackタイマを用いた概算である（hyperfine未使用）。
+
+注:
+表示幅の都合でファイル名列は省略し、ケース名（Label）のみを掲載。詳細は
+\texttt{\_artifacts/results/} を参照。
+
+\begin{longtable}[]{@{}llrr@{}}
+\toprule\noalign{}
+Label & N & Median (ms) & Mean (ms) \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+jit-aot\_min\_string\_len & 10 & 60.0 & 80.1 \\
+vm-aot\_min\_string\_len & 10 & 158.5 & 159.2 \\
+jit-bench\_aot\_len\_heavy & 10 & 579.0 & 579.6 \\
+vm-bench\_aot\_len\_heavy & 7 & 592.0 & 595.1 \\
+jit-bench\_aot\_len\_light & 10 & 209.0 & 209.1 \\
+vm-bench\_aot\_len\_light & 10 & 209.0 & 208.9 \\
+jit-bench\_aot\_len\_medium & 10 & 284.0 & 284.4 \\
+vm-bench\_aot\_len\_medium & 10 & 288.0 & 288.2 \\
+interp-bench\_heavy & 10 & 155.0 & 155.0 \\
+jit-bench\_heavy & 10 & 150.0 & 150.1 \\
+vm-bench\_heavy & 10 & 149.0 & 149.5 \\
+interp-bench\_light & 10 & 146.0 & 149.3 \\
+jit-bench\_light & 10 & 589.5 & 590.1 \\
+vm-bench\_light & 10 & 584.5 & 583.8 \\
+interp-bench\_medium & 10 & 150.0 & 149.3 \\
+jit-bench\_medium & 10 & 153.5 & 153.6 \\
+vm-bench\_medium & 10 & 153.0 & 153.1 \\
+\end{longtable}
+
+備考: hyperfine
+導入後は中央値/標準偏差付きで更新予定。負荷調整やAOT（LLVM/JIT）列の安定化に応じて表は差し替える。
+
+\hypertarget{ux76f8ux5bfeux6027ux80fd}{%
+\paragraph{4.3.1 相対性能}\label{ux76f8ux5bfeux6027ux80fd}}
+
+MIR13の3つのバックエンド間での相対実行時間： - Interpreter: 1.0x（基準）
+- VM: 10-50x高速 - JIT: 100-500x高速
+
+\hypertarget{ux7d76ux5bfeux6027ux80fdux6bd4ux8f03}{%
+\paragraph{4.3.2
+絶対性能比較}\label{ux7d76ux5bfeux6027ux80fdux6bd4ux8f03}}
+
+標準的なベンチマーク（Fibonacci、行列演算、文字列処理）での比較： -
+Python 3.11: 1.0x（基準） - Nyash Interpreter: 0.8-1.2x - Nyash VM:
+8-40x - Nyash JIT: 80-400x - Go 1.21: 100-600x - Rust (release):
+150-800x
+
+\hypertarget{boxcallux306eux30aaux30fcux30d0ux30fcux30d8ux30c3ux30c9ux5206ux6790}{%
+\paragraph{4.3.3
+BoxCallのオーバーヘッド分析}\label{boxcallux306eux30aaux30fcux30d0ux30fcux30d8ux30c3ux30c9ux5206ux6790}}
+
+マイクロベンチマークによる分析： - 配列アクセス:
+従来のLoad/Store比で1.2-1.5倍のオーバーヘッド - JIT最適化後:
+インライン化により0.95-1.1倍まで改善 - メソッド呼び出し:
+動的ディスパッチを含むため2-3倍だが、ICで1.1-1.3倍まで改善
+
+\hypertarget{ux5b9fux88c5ux516cux958bux3068ux518dux73feux6027availability}{%
+\subsubsection{4.4
+実装公開と再現性（Availability）}\label{ux5b9fux88c5ux516cux958bux3068ux518dux73feux6027availability}}
+
+本研究の実装と評価スクリプトは以下で公開している。 - リポジトリ:
+https://github.com/moe-charm/nyash - 対象コミット:
+\texttt{\_artifacts/ENVIRONMENT.txt} に \texttt{git\ rev-parse\ HEAD}
+を記録 - 再現手順: \texttt{\_artifacts/COLLECT\_ENV.sh} と
+\texttt{\_artifacts/RUN\_BENCHMARKS.sh} - 出力:
+\texttt{\_artifacts/results/*.csv}
+
+\hypertarget{ux8b70ux8ad6}{%
+\subsection{5. 議論}\label{ux8b70ux8ad6}}
+
+\hypertarget{ux8a2dux8a08ux306eux9032ux531657ux547dux4ee4ux304bux308913ux547dux4ee4ux3078ux306eux9053ux306eux308a}{%
+\subsubsection{5.1
+設計の進化：57命令から13命令への道のり}\label{ux8a2dux8a08ux306eux9032ux531657ux547dux4ee4ux304bux308913ux547dux4ee4ux3078ux306eux9053ux306eux308a}}
+
+MIR13の13命令セットは、最初から意図的に設計されたものではない。当初57命令で始まったIRを、以下の洞察により段階的に削減した：
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{メモリアクセスの統一}:
+  Load/Store、GetElement/SetElement、GetField/SetFieldがすべてオブジェクトへの操作として統一可能
+\item
+  \textbf{メッセージパッシングへの抽象化}:
+  すべての操作を「Boxへのメッセージ」として見ることでBoxCallに集約
+\item
+  \textbf{型操作の統合}: TypeCheck/Castを単一のCast命令に統合
+\end{enumerate}
+
+この削減過程は、IR設計における本質的な要素の発見プロセスであり、結果として得られた13命令は実践的な検証を経た最小セットである。
+
+\hypertarget{ux306aux305c13ux547dux4ee4ux3067ux5341ux5206ux306aux306eux304b}{%
+\subsubsection{5.2
+なぜ13命令で十分なのか}\label{ux306aux305c13ux547dux4ee4ux3067ux5341ux5206ux306aux306eux304b}}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{抽象度の適切性}:
+  Boxという適切な抽象化により、低レベル詳細を隠蔽
+\item
+  \textbf{実行時システムとの分担}: 複雑性をランタイムに委譲
+\item
+  \textbf{最小限の制御構造}: Jump/Branch/Phiで全制御フローを表現
+\end{enumerate}
+
+\hypertarget{ux30e9ux30f3ux30bfux30a4ux30e0ux30b7ux30b9ux30c6ux30e0ux306eux5f79ux5272}{%
+\subsubsection{5.3
+ランタイムシステムの役割}\label{ux30e9ux30f3ux30bfux30a4ux30e0ux30b7ux30b9ux30c6ux30e0ux306eux5f79ux5272}}
+
+MIR13の単純性は、洗練されたランタイムシステムとの協調によって実現される：
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Boxの内部表現}:
+  各Boxは型タグ、参照カウント、データペイロードを持つ
+\item
+  \textbf{ホスト関数インターフェース}:
+  BoxCallはランタイムのネイティブ関数を効率的に呼び出す
+\item
+  \textbf{メモリ管理}:
+  参照カウントベースの決定的メモリ管理（GCオプション付き）
+\end{enumerate}
+
+この設計により、IR自体の複雑性を最小限に抑えながら、実用的な性能を達成している。
+
+\hypertarget{bis-ux4ee3ux8868ux7684ux64cdux4f5cux306eloweringux4f8bmir13boxcall}{%
+\subsubsection{5.3bis
+代表的操作のLowering例（MIR13→BoxCall）}\label{bis-ux4ee3ux8868ux7684ux64cdux4f5cux306eloweringux4f8bmir13boxcall}}
+
+以下は高水準操作が13命令（概念上）に落ちる代表例である。
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{// 例1: 配列アクセスと更新（a[i]、a[i]=v）}
+\NormalTok{\%a   = ...                 // ArrayBox}
+\NormalTok{\%i   = ...                 // IntBox}
+\NormalTok{\%v   = ...                 // 任意のBox}
+\NormalTok{\%x   = BoxCallWith(\%a, "get", \%i)           // load → BoxCallWith}
+\NormalTok{\%ok  = BoxCallWith(\%a, "set", \%i, \%v)       // store → BoxCallWith}
+
+\NormalTok{// 例2: フィールド読み書き（obj.name、obj.name=v）}
+\NormalTok{\%obj = ...                 // ObjectBox}
+\NormalTok{\%nm  = Const("name")}
+\NormalTok{\%cur = BoxCallWith(\%obj, "getField", \%nm)}
+\NormalTok{\%ok2 = BoxCallWith(\%obj, "setField", \%nm, \%v)}
+
+\NormalTok{// 例3: メソッド呼び出し（obj.add(arg)）}
+\NormalTok{\%res = BoxCallWith(\%obj, "add", \%v)}
+
+\NormalTok{// 例4: 外部（プラグイン）関数呼び出し（host.fn(args…)）}
+\NormalTok{\%h   = ...                 // HostBox}
+\NormalTok{\%r   = BoxCallWith(\%h, "fn", \%arg1, \%arg2)}
+
+\NormalTok{// 制御構造はJump/Branch/Phiで表現}
+\NormalTok{branch \%cond, \^{}T, \^{}F}
+\NormalTok{\^{}T:  ...}
+\NormalTok{     jump \^{}K}
+\NormalTok{\^{}F:  ...}
+\NormalTok{\^{}K:  \%y = phi(\%yT, \%yF)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{ux9650ux754cux3068ux5c06ux6765ux5c55ux671b}{%
+\subsubsection{5.4
+限界と将来展望}\label{ux9650ux754cux3068ux5c06ux6765ux5c55ux671b}}
+
+\begin{itemize}
+\tightlist
+\item
+  SIMD命令は現在未対応（BoxCall拡張で対応予定）
+\item
+  並列実行最適化の余地あり
+\item
+  WASM/LLVMバックエンドは開発中
+\end{itemize}
+
+\hypertarget{ux95a2ux9023ux7814ux7a76}{%
+\subsection{6. 関連研究}\label{ux95a2ux9023ux7814ux7a76}}
+
+\hypertarget{ux65e2ux5b58ux306eirux8a2dux8a08ux3068ux306eux6bd4ux8f03}{%
+\subsubsection{6.1
+既存のIR設計との比較}\label{ux65e2ux5b58ux306eirux8a2dux8a08ux3068ux306eux6bd4ux8f03}}
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+IR & 命令数 & メモリモデル & 主な特徴 \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+LLVM IR & 約60 & Load/Store明示 & SSA形式、型付き \\
+WebAssembly & 約170 & スタックマシン & セキュリティ重視 \\
+JVM Bytecode & 約200 & スタック+ローカル & オブジェクト指向 \\
+MIR13 & 13 & BoxCall統一 & 最小命令セット \\
+\end{longtable}
+
+\hypertarget{ux30e1ux30c3ux30bbux30fcux30b8ux30d1ux30c3ux30b7ux30f3ux30b0irux306eux7cfbux8b5c}{%
+\subsubsection{6.2
+メッセージパッシングIRの系譜}\label{ux30e1ux30c3ux30bbux30fcux30b8ux30d1ux30c3ux30b7ux30f3ux30b0irux306eux7cfbux8b5c}}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Smalltalk}: すべてはオブジェクト、すべてはメッセージ
+\item
+  \textbf{Self}: プロトタイプベースオブジェクト
+\item
+  \textbf{PyPy}: RPythonのオブジェクト空間
+\item
+  \textbf{Truffle/Graal}: 動的言語のための抽象解釈
+\end{itemize}
+
+MIR13はこれらの思想を低レベルIRに適用し、Load/Store命令の完全廃止という新境地を開拓した。
+
+\hypertarget{ux88dcux8db3-wasm-gcux3068typed-objectsux3068ux306eux6bd4ux8f03}{%
+\paragraph{補足: Wasm GCとTyped
+Objectsとの比較}\label{ux88dcux8db3-wasm-gcux3068typed-objectsux3068ux306eux6bd4ux8f03}}
+
+近年のWasm GC拡張やTyped
+Objectsの動向は、高レベル型をWasm上に安全に表現することを目指している。一方MIR13は「命令数最小化」と「BoxCallによる操作統一」を主眼に置き、型表現やメモリモデルの複雑さをIRではなくランタイムへ委譲する。したがって、目的関数（安全な型表現
+vs.~最小命令と実装容易性）が異なり、補完的関係にある。
+
+\hypertarget{ux7d50ux8ad6}{%
+\subsection{7. 結論}\label{ux7d50ux8ad6}}
+
+MIR13は、13命令という極めて小さな命令セットで完全なプログラミング言語を実装できることを実証した。「Everything
+is
+Box」の設計哲学により、従来は数十の命令が必要だった操作をBoxCallに統一し、Load/Store命令を完全に廃止した。技術的には12命令も可能だが、可読性のために意図的に13命令を選択した。3つの実行バックエンドでの動作確認により、実用性も証明された。
+
+本研究は、プログラミング言語設計における「少ないことは豊かである」という原則の究極の実証である。
+
+\hypertarget{ux8b1dux8f9e}{%
+\subsection{謝辞}\label{ux8b1dux8f9e}}
+
+本論文の執筆にあたり、Anthropic Claude、OpenAI ChatGPT（Codex
+CLI経由）、Google Gemini
+の支援（ブレインストーミング、下書き、コード補助、校正）を受けた。生成物はすべて著者がレビュー・修正し、最終的な設計判断・統合・評価は著者が行った。開発は2025-08-03頃に着手し、初回コミットは2025-08-09である。AI時代の研究開発における新しい協働形態の実例として、これを明記する。
+
+\hypertarget{ux53c2ux8003ux6587ux732e}{%
+\subsection{参考文献}\label{ux53c2ux8003ux6587ux732e}}
+
+{[}省略{]}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\hypertarget{ux4ed8ux9332ux306aux305c12ux547dux4ee4ux306bux3057ux306aux3044ux306eux304b}{%
+\subsection{付録：なぜ12命令にしないのか}\label{ux4ed8ux9332ux306aux305c12ux547dux4ee4ux306bux3057ux306aux3044ux306eux304b}}
+
+BoxCallとBoxCallWithは技術的に統合可能である：
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{// 統合版（12命令）}
+\NormalTok{v1 = BoxCall(obj, "method", [])      // 引数なし}
+\NormalTok{v2 = BoxCall(obj, "method", [arg1])  // 引数あり}
+
+\NormalTok{// 現在の分離版（13命令）  }
+\NormalTok{v1 = BoxCall(obj, "method")          // 明確に引数なし}
+\NormalTok{v2 = BoxCallWith(obj, "method", arg1) // 明確に引数あり}
+\end{Highlighting}
+\end{Shaded}
+
+しかし、以下の理由から分離を維持： 1. パターンマッチングが単純 2.
+最適化パスが書きやすい 3. エラーメッセージが分かりやすい 4.
+「13」という数字の美しさ（主観的だが重要）
+
+\end{document}

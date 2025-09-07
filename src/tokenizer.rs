@@ -58,7 +58,11 @@ pub enum TokenType {
     USING,           // using (名前空間インポート)
     
     // 演算子 (長いものから先に定義)
-    ARROW,           // >> (legacy arrow)
+    SHIFT_LEFT,      // << (bitwise shift-left)
+    SHIFT_RIGHT,     // >> (bitwise shift-right)
+    BIT_AND,         // & (bitwise and)
+    BIT_OR,          // | (bitwise or)
+    BIT_XOR,         // ^ (bitwise xor)
     FAT_ARROW,       // => (peek arms)
     EQUALS,          // ==
     NotEquals,       // !=
@@ -247,7 +251,7 @@ impl NyashTokenizer {
             Some('>') if self.peek_char() == Some('>') => {
                 self.advance();
                 self.advance();
-                Ok(Token::new(TokenType::ARROW, start_line, start_column))
+                Ok(Token::new(TokenType::SHIFT_RIGHT, start_line, start_column))
             }
             Some(':') if self.peek_char() == Some(':') => {
                 self.advance();
@@ -269,6 +273,12 @@ impl NyashTokenizer {
                 self.advance();
                 Ok(Token::new(TokenType::NotEquals, start_line, start_column))
             }
+            // Shift-left must be detected before <= and <
+            Some('<') if self.peek_char() == Some('<') => {
+                self.advance();
+                self.advance();
+                Ok(Token::new(TokenType::SHIFT_LEFT, start_line, start_column))
+            }
             Some('<') if self.peek_char() == Some('=') => {
                 self.advance();
                 self.advance();
@@ -289,6 +299,11 @@ impl NyashTokenizer {
                 self.advance();
                 Ok(Token::new(TokenType::OR, start_line, start_column))
             }
+            Some('|') if self.peek_char() == Some('>') => {
+                self.advance();
+                self.advance();
+                return Ok(Token::new(TokenType::PIPE_FORWARD, start_line, start_column));
+            }
             Some('<') => {
                 self.advance();
                 Ok(Token::new(TokenType::LESS, start_line, start_column))
@@ -296,6 +311,18 @@ impl NyashTokenizer {
             Some('>') => {
                 self.advance();
                 Ok(Token::new(TokenType::GREATER, start_line, start_column))
+            }
+            Some('&') => {
+                self.advance();
+                Ok(Token::new(TokenType::BIT_AND, start_line, start_column))
+            }
+            Some('|') => {
+                self.advance();
+                Ok(Token::new(TokenType::BIT_OR, start_line, start_column))
+            }
+            Some('^') => {
+                self.advance();
+                Ok(Token::new(TokenType::BIT_XOR, start_line, start_column))
             }
             Some('=') => {
                 self.advance();
@@ -650,7 +677,7 @@ mod tests {
         let mut tokenizer = NyashTokenizer::new(">> == != <= >= < >");
         let tokens = tokenizer.tokenize().unwrap();
         
-        assert_eq!(tokens[0].token_type, TokenType::ARROW);
+        assert_eq!(tokens[0].token_type, TokenType::SHIFT_RIGHT);
         assert_eq!(tokens[1].token_type, TokenType::EQUALS);
         assert_eq!(tokens[2].token_type, TokenType::NotEquals);
         assert_eq!(tokens[3].token_type, TokenType::LessEquals);

@@ -1664,6 +1664,79 @@ pub extern "C" fn nyash_string_eq_hh_export(a_h: i64, b_h: i64) -> i64 {
     if to_s(a_h) == to_s(b_h) { 1 } else { 0 }
 }
 
+// box.from_i8_string(ptr) -> handle
+// Helper: build a StringBox from i8* and return a handle for AOT marshalling
+#[export_name = "nyash.box.from_i8_string"]
+pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
+    use std::ffi::CStr;
+    use nyash_rust::{box_trait::{NyashBox, StringBox}, jit::rt::handles};
+    if ptr.is_null() { return 0; }
+    let c = unsafe { CStr::from_ptr(ptr) };
+    let s = match c.to_str() { Ok(v) => v.to_string(), Err(_) => return 0 };
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
+    handles::to_handle(arc) as i64
+}
+
+// box.from_f64(val) -> handle
+// Helper: build a FloatBox and return a handle
+#[export_name = "nyash.box.from_f64"]
+pub extern "C" fn nyash_box_from_f64(val: f64) -> i64 {
+    use nyash_rust::{boxes::FloatBox, box_trait::NyashBox, jit::rt::handles};
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(FloatBox::new(val));
+    handles::to_handle(arc) as i64
+}
+
+// env.box.new(type_name: *const i8) -> handle (i64)
+// Minimal shim for Core-13 pure AOT: constructs Box via registry by name (no args)
+#[export_name = "nyash.env.box.new"]
+pub extern "C" fn nyash_env_box_new(type_name: *const i8) -> i64 {
+    use std::ffi::CStr;
+    use nyash_rust::{runtime::box_registry::get_global_registry, jit::rt::handles, box_trait::NyashBox};
+    if type_name.is_null() { return 0; }
+    let cstr = unsafe { CStr::from_ptr(type_name) };
+    let ty = match cstr.to_str() { Ok(s) => s, Err(_) => return 0 };
+    let reg = get_global_registry();
+    match reg.create_box(ty, &[]) {
+        Ok(b) => {
+            let arc: std::sync::Arc<dyn NyashBox> = b.into();
+            handles::to_handle(arc) as i64
+        }
+        Err(_) => 0,
+    }
+}
+
+// env.box.new_i64x(type_name: *const i8, argc: i64, a1: i64, a2: i64, a3: i64, a4: i64) -> handle (i64)
+// Minimal shim: construct args from handles or wrap i64 as IntegerBox
+#[export_name = "nyash.env.box.new_i64x"]
+pub extern "C" fn nyash_env_box_new_i64x(type_name: *const i8, argc: i64, a1: i64, a2: i64, a3: i64, a4: i64) -> i64 {
+    use std::ffi::CStr;
+    use nyash_rust::{runtime::box_registry::get_global_registry, jit::rt::handles, box_trait::{NyashBox, IntegerBox}};
+    if type_name.is_null() { return 0; }
+    let cstr = unsafe { CStr::from_ptr(type_name) };
+    let ty = match cstr.to_str() { Ok(s) => s, Err(_) => return 0 };
+    // Build args vec from provided i64 words
+    let mut argv: Vec<Box<dyn NyashBox>> = Vec::new();
+    let push_val = |dst: &mut Vec<Box<dyn NyashBox>>, v: i64| {
+        if v > 0 {
+            if let Some(obj) = handles::get(v as u64) { dst.push(obj.share_box()); return; }
+        }
+        dst.push(Box::new(IntegerBox::new(v)));
+    };
+    if argc >= 1 { push_val(&mut argv, a1); }
+    if argc >= 2 { push_val(&mut argv, a2); }
+    if argc >= 3 { push_val(&mut argv, a3); }
+    if argc >= 4 { push_val(&mut argv, a4); }
+
+    let reg = get_global_registry();
+    match reg.create_box(ty, &argv) {
+        Ok(b) => {
+            let arc: std::sync::Arc<dyn NyashBox> = b.into();
+            handles::to_handle(arc) as i64
+        }
+        Err(_) => 0,
+    }
+}
+
 // String.lt_hh(lhs_h, rhs_h) -> i64 (0/1)
 #[export_name = "nyash.string.lt_hh"]
 pub extern "C" fn nyash_string_lt_hh_export(a_h: i64, b_h: i64) -> i64 {

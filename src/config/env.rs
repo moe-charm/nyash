@@ -86,11 +86,26 @@ pub fn await_max_ms() -> u64 {
 }
 
 // ---- Phase 11.8 MIR cleanup toggles ----
-pub fn mir_core13() -> bool { std::env::var("NYASH_MIR_CORE13").ok().as_deref() == Some("1") }
+/// Core-13 minimal MIR mode toggle
+/// Default: ON (unless explicitly disabled with NYASH_MIR_CORE13=0)
+pub fn mir_core13() -> bool {
+    match std::env::var("NYASH_MIR_CORE13").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => true,
+    }
+}
 pub fn mir_ref_boxcall() -> bool { std::env::var("NYASH_MIR_REF_BOXCALL").ok().as_deref() == Some("1") || mir_core13() }
 pub fn mir_array_boxcall() -> bool { std::env::var("NYASH_MIR_ARRAY_BOXCALL").ok().as_deref() == Some("1") || mir_core13() }
 pub fn mir_plugin_invoke() -> bool { std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1") }
 pub fn plugin_only() -> bool { std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1") }
+
+/// Core-13 "pure" mode: after normalization, only the 13 canonical ops are allowed.
+/// If enabled, the optimizer will try lightweight rewrites for Load/Store/NewBox/Unary,
+/// and the final verifier will reject any remaining non-Core-13 ops.
+pub fn mir_core13_pure() -> bool { std::env::var("NYASH_MIR_CORE13_PURE").ok().as_deref() == Some("1") }
 
 // ---- Optimizer diagnostics ----
 pub fn opt_debug() -> bool { std::env::var("NYASH_OPT_DEBUG").is_ok() }
