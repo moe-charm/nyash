@@ -867,3 +867,36 @@ Phase A 進捗（実施済）
   - 現状: Interpreter 経路のプラグイン初期化順序により FileBox/TOMLBox を使うには Runner 側の微調整が必要（VM 経路への移行 or プラグイン登録の早期化）。スクリプト本体は追加済み。
 - 直結ブリッジ v0（R3 Quick Start）
   - `printf 'return (1+2)*3\n' > t.ny && NYASH_USE_NY_PARSER=1 NYASH_DUMP_JSON_IR=1 ./target/release/nyash t.ny`
+
+
+---
+
+New Plan — Self‑Host Dependency Tree (Ny‑only) and Bridge（2025‑09‑07）
+
+目的
+- Ny スクリプトのみで依存木（include + using/module）を再帰解析して JSON を出力。Rust ビルド無しで回せる内側ループを整備。
+- 既存の MIR→VM→AOT 系とは疎結合を維持しつつ、最小の橋渡し（JSONファイル経由）を用意。
+
+実装項目（最小）
+- ツール: `apps/selfhost/tools/dep_tree_simple.nyash`
+  - 1ファイル・静的boxで実装。1行1文／break無し／elseは同一行。
+  - 解析: `include "..."`、`using ns`／`using ns as Alias`、`using "./path" as Name`、`// @module ns=path`。
+  - 解決順: `module > 相対 > using-path`（using-path 既定: `apps/selfhost:apps:lib:.`）。
+  - JSON: `{ version, root_path, tree{ path, includes[], uses[], modules[], children[] } }`（uses は unresolved/hint/alias/resolved を含む）。
+
+- タスク/Make:
+  - `nyash.toml [tasks].dep_tree` を追加し、1コマンドで JSON を `tmp/deps.json` に出力。
+  - `make dep-tree`: `cargo build --release && ./target/release/nyash --run-task dep_tree`。
+
+- 受け入れ基準:
+  - `make dep-tree` が `tmp/deps.json` を出力。曖昧（複数ヒット）は注記／STRICT で停止。
+  - VM/Interpreter いずれでも実行可（File/Path/Array/Map 最小APIで実装）。
+
+橋渡し（Stage 1: 疎結合）
+- `NYASH_DEPS_JSON=<path>` を Runner で読取り（ログ出力等の診断用途）。MIR/JIT/AOT の挙動は不変。
+- 後続（Stage 2以降）は JSON IR `extensions.deps` や lock ファイルの導入を検討（別期）。
+
+進め方（短期）
+1) `dep_tree_simple.nyash` の完走化（VM実行での File/Path 最小APIのみ使用）。
+2) `nyash.toml` へ `dep_tree` 追加＋ `make dep-tree` 整備。
+3) Runner へ `NYASH_DEPS_JSON` の最小読込み（ログ出力）を追加（影響ゼロの範囲）。

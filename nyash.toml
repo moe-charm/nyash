@@ -410,6 +410,9 @@ ny_plugins = [
 ]
 
 [tasks]
+
+# self-host: dependency tree (Ny-only)
+dep_tree = "NYASH_USE_PLUGIN_BUILTINS=1 NYASH_DISABLE_PLUGINS=0 {root}/target/release/nyash --backend vm {root}/apps/selfhost/tools/dep_tree_simple.nyash -- {root}/apps/selfhost/ny-parser-nyash/main.nyash > {root}/tmp/deps.json"
 # LLVMビルド（nyash本体）
 build_llvm = "LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm"
 

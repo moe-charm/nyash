@@ -1,6 +1,6 @@
 # Nyash selfhosting-dev quick targets
 
-.PHONY: build build-release run-minimal smoke-core smoke-selfhost bootstrap roundtrip clean quick fmt lint
+.PHONY: build build-release run-minimal smoke-core smoke-selfhost bootstrap roundtrip clean quick fmt lint dep-tree
 
 build:
 	cargo build --features cranelift-jit
@@ -41,3 +41,8 @@ dev:
 dev-watch:
 	./tools/dev_selfhost_loop.sh --watch --std -v -- --using-path apps/selfhost:apps apps/selfhost-minimal/main.nyash
 
+
+# --- Self-host dependency tree (Ny-only) ---
+dep-tree:
+	cargo build --release
+	./target/release/nyash --run-task dep_tree
