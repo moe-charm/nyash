@@ -1,3 +1,20 @@
+# Quick Plan — Self‑Host (Restart Safe)
+
+- Goals: Ny-only dependency tree (include → later using/module), JSON out; simple file-bridge to existing MIR→VM→AOT without tight coupling.
+- Deliverables:
+  - Minimal tool: `apps/selfhost/tools/dep_tree_min_string.nyash` (include-only, recursion via FileBox/PathBox, no Array/Map)
+  - Full tool: `apps/selfhost/tools/dep_tree_simple.nyash` (include + using/module, strict/explicit resolution)
+  - Task/Make: `nyash.toml [tasks].dep_tree` and `make dep-tree` (outputs `tmp/deps.json`)
+  - Bridge Stage 1: Runner reads `NYASH_DEPS_JSON=<path>` and logs (no behavior change)
+- Order:
+  1) Finish include-only tool to completion (Ny-only, strict 1‑statement lines)
+  2) Harden full tool (using/module, module > relative > using-path, ambiguous=error, STRICT gate)
+  3) Add Runner hook for `NYASH_DEPS_JSON` (log only)
+- Quick run:
+  - `make dep-tree` → writes `tmp/deps.json`
+  - `./target/release/nyash --run-task dep_tree`
+
+
 # CURRENT TASK (Compact) — Phase 15 / Self-Hosting（Ny→MIR→MIR-Interp→VM 先行）
 
 【Quick Update — 2025‑09‑07 Egui AOT/JIT 状況と次アクション】
