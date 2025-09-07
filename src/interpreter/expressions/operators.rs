@@ -329,11 +329,45 @@ impl NyashInterpreter {
                     crate::runtime::semantics::coerce_to_i64(left_val.as_ref()),
                     crate::runtime::semantics::coerce_to_i64(right_val.as_ref()),
                 ) {
-                    return Ok(Box::new(IntegerBox::new(li.wrapping_shl(ri as u32))));
+                    let sh = (ri as u32) & 63;
+                    return Ok(Box::new(IntegerBox::new(li.wrapping_shl(sh))));
                 }
                 Err(RuntimeError::TypeError { 
                     message: format!("Shift-left '<<' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) 
                 })
+            }
+            BinaryOperator::Shr => {
+                if let (Some(li), Some(ri)) = (
+                    crate::runtime::semantics::coerce_to_i64(left_val.as_ref()),
+                    crate::runtime::semantics::coerce_to_i64(right_val.as_ref()),
+                ) {
+                    let sh = (ri as u32) & 63;
+                    return Ok(Box::new(IntegerBox::new(((li as u64) >> sh) as i64)));
+                }
+                Err(RuntimeError::TypeError { 
+                    message: format!("Shift-right '>>' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) 
+                })
+            }
+            BinaryOperator::BitAnd => {
+                if let (Some(li), Some(ri)) = (
+                    crate::runtime::semantics::coerce_to_i64(left_val.as_ref()),
+                    crate::runtime::semantics::coerce_to_i64(right_val.as_ref()),
+                ) { return Ok(Box::new(IntegerBox::new(li & ri))); }
+                Err(RuntimeError::TypeError { message: format!("Bitwise '&' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) })
+            }
+            BinaryOperator::BitOr => {
+                if let (Some(li), Some(ri)) = (
+                    crate::runtime::semantics::coerce_to_i64(left_val.as_ref()),
+                    crate::runtime::semantics::coerce_to_i64(right_val.as_ref()),
+                ) { return Ok(Box::new(IntegerBox::new(li | ri))); }
+                Err(RuntimeError::TypeError { message: format!("Bitwise '|' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) })
+            }
+            BinaryOperator::BitXor => {
+                if let (Some(li), Some(ri)) = (
+                    crate::runtime::semantics::coerce_to_i64(left_val.as_ref()),
+                    crate::runtime::semantics::coerce_to_i64(right_val.as_ref()),
+                ) { return Ok(Box::new(IntegerBox::new(li ^ ri))); }
+                Err(RuntimeError::TypeError { message: format!("Bitwise '^' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) })
             }
             
             BinaryOperator::Less => {

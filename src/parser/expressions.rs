@@ -133,7 +133,7 @@ impl NyashParser {
     
     /// AND演算子をパース: &&
     fn parse_and(&mut self) -> Result<ASTNode, ParseError> {
-        let mut expr = self.parse_equality()?;
+        let mut expr = self.parse_bit_or()?;
         
         while self.match_token(&TokenType::AND) {
             let operator = BinaryOperator::And;
@@ -151,6 +151,42 @@ impl NyashParser {
             };
         }
         
+        Ok(expr)
+    }
+
+    /// ビットOR: |
+    fn parse_bit_or(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_bit_xor()?;
+        while self.match_token(&TokenType::BIT_OR) {
+            let operator = BinaryOperator::BitOr;
+            self.advance();
+            let right = self.parse_bit_xor()?;
+            expr = ASTNode::BinaryOp { operator, left: Box::new(expr), right: Box::new(right), span: Span::unknown() };
+        }
+        Ok(expr)
+    }
+
+    /// ビットXOR: ^
+    fn parse_bit_xor(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_bit_and()?;
+        while self.match_token(&TokenType::BIT_XOR) {
+            let operator = BinaryOperator::BitXor;
+            self.advance();
+            let right = self.parse_bit_and()?;
+            expr = ASTNode::BinaryOp { operator, left: Box::new(expr), right: Box::new(right), span: Span::unknown() };
+        }
+        Ok(expr)
+    }
+
+    /// ビットAND: &
+    fn parse_bit_and(&mut self) -> Result<ASTNode, ParseError> {
+        let mut expr = self.parse_equality()?;
+        while self.match_token(&TokenType::BIT_AND) {
+            let operator = BinaryOperator::BitAnd;
+            self.advance();
+            let right = self.parse_equality()?;
+            expr = ASTNode::BinaryOp { operator, left: Box::new(expr), right: Box::new(right), span: Span::unknown() };
+        }
         Ok(expr)
     }
     
@@ -229,57 +265,51 @@ impl NyashParser {
         Ok(expr)
     }
     
-    /// 項をパース: + - >>
+    /// 項をパース: + -
     fn parse_term(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_shift()?;
         
-        while self.match_token(&TokenType::PLUS) || self.match_token(&TokenType::MINUS) || self.match_token(&TokenType::ARROW) {
-            if self.match_token(&TokenType::ARROW) {
-                // >> Arrow演算子
-                self.advance();
-                let right = self.parse_shift()?;
-                expr = ASTNode::Arrow {
-                    sender: Box::new(expr),
-                    receiver: Box::new(right),
-                    span: Span::unknown(),
-                };
-            } else {
-                let operator = match &self.current_token().token_type {
-                    TokenType::PLUS => BinaryOperator::Add,
-                    TokenType::MINUS => BinaryOperator::Subtract,
-                    _ => unreachable!(),
-                };
-                self.advance();
-                let right = self.parse_shift()?;
-                if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
-                    let name = match operator { BinaryOperator::Add=>"add", BinaryOperator::Subtract=>"sub", _=>"term" };
-                    let ok = crate::grammar::engine::get().syntax_is_allowed_binop(name);
-                    if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop '{}' not allowed by syntax rules", name); }
-                }
-                expr = ASTNode::BinaryOp {
-                    operator,
-                    left: Box::new(expr),
-                    right: Box::new(right),
-                    span: Span::unknown(),
-                };
+        while self.match_token(&TokenType::PLUS) || self.match_token(&TokenType::MINUS) {
+            let operator = match &self.current_token().token_type {
+                TokenType::PLUS => BinaryOperator::Add,
+                TokenType::MINUS => BinaryOperator::Subtract,
+                _ => unreachable!(),
+            };
+            self.advance();
+            let right = self.parse_shift()?;
+            if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
+                let name = match operator { BinaryOperator::Add=>"add", BinaryOperator::Subtract=>"sub", _=>"term" };
+                let ok = crate::grammar::engine::get().syntax_is_allowed_binop(name);
+                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop '{}' not allowed by syntax rules", name); }
             }
+            expr = ASTNode::BinaryOp {
+                operator,
+                left: Box::new(expr),
+                right: Box::new(right),
+                span: Span::unknown(),
+            };
         }
         
         Ok(expr)
     }
     
-    /// シフトをパース: << のみ（Phase 1）
+    /// シフトをパース: << >>
     fn parse_shift(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_factor()?;
-        while self.match_token(&TokenType::SHIFT_LEFT) {
-            self.advance(); // consume '<<'
-            let rhs = self.parse_factor()?;
-            expr = ASTNode::BinaryOp {
-                operator: BinaryOperator::Shl,
-                left: Box::new(expr),
-                right: Box::new(rhs),
-                span: Span::unknown(),
-            };
+        loop {
+            if self.match_token(&TokenType::SHIFT_LEFT) {
+                self.advance();
+                let rhs = self.parse_factor()?;
+                expr = ASTNode::BinaryOp { operator: BinaryOperator::Shl, left: Box::new(expr), right: Box::new(rhs), span: Span::unknown() };
+                continue;
+            }
+            if self.match_token(&TokenType::SHIFT_RIGHT) {
+                self.advance();
+                let rhs = self.parse_factor()?;
+                expr = ASTNode::BinaryOp { operator: BinaryOperator::Shr, left: Box::new(expr), right: Box::new(rhs), span: Span::unknown() };
+                continue;
+            }
+            break;
         }
         Ok(expr)
     }

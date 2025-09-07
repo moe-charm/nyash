@@ -256,16 +256,43 @@ impl NyashInterpreter {
                     Ok(Box::new(BoolBox::new(self.is_truthy(right_val))))
                 }
             },
-            
             BinaryOperator::Shl => {
                 if let (Some(li), Some(ri)) = (
                     left_val.as_any().downcast_ref::<IntegerBox>(),
                     right_val.as_any().downcast_ref::<IntegerBox>(),
                 ) {
-                    Ok(Box::new(IntegerBox::new(li.value.wrapping_shl(ri.value as u32))))
+                    Ok(Box::new(IntegerBox::new(li.value.wrapping_shl((ri.value as u32) & 63))))
                 } else {
                     Err(RuntimeError::InvalidOperation { message: format!("Shift-left '<<' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) })
                 }
+            },
+            BinaryOperator::Shr => {
+                if let (Some(li), Some(ri)) = (
+                    left_val.as_any().downcast_ref::<IntegerBox>(),
+                    right_val.as_any().downcast_ref::<IntegerBox>(),
+                ) {
+                    Ok(Box::new(IntegerBox::new(((li.value as u64) >> ((ri.value as u32) & 63)) as i64)))
+                } else {
+                    Err(RuntimeError::InvalidOperation { message: format!("Shift-right '>>' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) })
+                }
+            },
+            BinaryOperator::BitAnd => {
+                if let (Some(li), Some(ri)) = (
+                    left_val.as_any().downcast_ref::<IntegerBox>(),
+                    right_val.as_any().downcast_ref::<IntegerBox>(),
+                ) { Ok(Box::new(IntegerBox::new(li.value & ri.value))) } else { Err(RuntimeError::InvalidOperation { message: format!("Bitwise '&' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) }) }
+            },
+            BinaryOperator::BitOr => {
+                if let (Some(li), Some(ri)) = (
+                    left_val.as_any().downcast_ref::<IntegerBox>(),
+                    right_val.as_any().downcast_ref::<IntegerBox>(),
+                ) { Ok(Box::new(IntegerBox::new(li.value | ri.value))) } else { Err(RuntimeError::InvalidOperation { message: format!("Bitwise '|' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) }) }
+            },
+            BinaryOperator::BitXor => {
+                if let (Some(li), Some(ri)) = (
+                    left_val.as_any().downcast_ref::<IntegerBox>(),
+                    right_val.as_any().downcast_ref::<IntegerBox>(),
+                ) { Ok(Box::new(IntegerBox::new(li.value ^ ri.value))) } else { Err(RuntimeError::InvalidOperation { message: format!("Bitwise '^' requires integers (got {} and {})", left_val.type_name(), right_val.type_name()) }) }
             },
         }
     }
