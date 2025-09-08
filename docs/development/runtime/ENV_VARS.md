@@ -43,6 +43,7 @@ NYASH_DISABLE_PLUGINS = "1"
 ## LLVM/AOT
 - LLVM_SYS_180_PREFIX: LLVM 18 のパス指定
 - NYASH_LLVM_VINVOKE_RET_SMOKE, NYASH_LLVM_ARRAY_RET_SMOKE: CI 用スモークトグル
+- NYASH_LLVM_VINVOKE_TRACE: 変長invoke（NyRT）の限定ログを有効化（type_id/method_id/argc/tags/rc/ret_tag）
 
 ## 管理方針（提案）
 - コード側: `src/config/env.rs` を単一の集約窓口に（JIT は `jit::config` に委譲）。
