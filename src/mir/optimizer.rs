@@ -62,6 +62,11 @@ impl MirOptimizer {
         // Normalize Python helper form: py.getattr(obj, name) → obj.getattr(name)
         stats.merge(self.normalize_python_helper_calls(module));
 
+        // Inject method_id for BoxCall/PluginInvoke when可能（PluginHost/slot registry）
+        // 目的: by-id 経路を安定させ、AOT/JIT 双方の降ろしで確実に method_id を利用できるようにする
+        let injected = crate::mir::passes::method_id_inject::inject_method_ids(module);
+        if injected > 0 { stats.intrinsic_optimizations += injected; }
+
         // Pass 1: Dead code elimination
         stats.merge(self.eliminate_dead_code(module));
         

@@ -165,6 +165,22 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
   - Emits calls to `nyash.plugin.invoke_by_name_i64` for development.
   - Do not enable in production.
 
+#### LLVM Smokes (quick checks)
+- Build once (LLVM 18 required):
+  - `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- Bitwise/Shift smoke (expects "Result: 48"):
+  - `NYASH_LLVM_BITOPS_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Arrays (get/set/print):
+  - `NYASH_LLVM_ARRAY_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Echo (readLine → print):
+  - `NYASH_LLVM_ECHO_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Map (by-id plugin path):
+  - `NYASH_LLVM_MAP_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Notes:
+  - Right shift uses logical shift on i64 today.
+  - Logical And/Or are lowered as boolean ops; short-circuiting is handled in MIR.
+  - Some plugin VInvoke variants are experimental; use by-name fallback only for debugging (`NYASH_LLVM_ALLOW_BY_NAME=1`).
+
 
 ### 5. **WebAssembly** (Browser)
 ```bash

@@ -17,11 +17,19 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
   exit 2
 fi
 
+# Resolve LLVM prefix once and reuse for all invocations
+_LLVMPREFIX=$(llvm-config-18 --prefix)
+
+echo "[llvm-smoke] building nyash (${MODE}, feature=llvm)..." >&2
+# Support both llvm-sys 180/181 by exporting both prefixes to the same value
+LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" cargo build -q ${MODE:+--${MODE}} --features llvm
+
 # --- AOT smoke: apps/ny-llvm-bitops (bitwise & shift operations) ---
 if [[ "${NYASH_LLVM_BITOPS_SMOKE:-0}" == "1" ]]; then
   echo "[llvm-smoke] building + linking apps/ny-llvm-bitops ..." >&2
   OBJ_BIT="$PWD/target/aot_objects/bitops_smoke.o"
   rm -f "$OBJ_BIT"
+  # Emit object with freshly built nyash
   NYASH_LLVM_ALLOW_BY_NAME=1 NYASH_LLVM_OBJ_OUT="$OBJ_BIT" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-llvm-bitops/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_BIT" ./tools/build_llvm.sh apps/tests/ny-llvm-bitops/main.nyash -o app_bitops_llvm >/dev/null || true
   echo "[llvm-smoke] running app_bitops_llvm ..." >&2
@@ -35,11 +43,6 @@ if [[ "${NYASH_LLVM_BITOPS_SMOKE:-0}" == "1" ]]; then
 else
   echo "[llvm-smoke] skipping ny-llvm-bitops (set NYASH_LLVM_BITOPS_SMOKE=1 to enable)" >&2
 fi
-
-echo "[llvm-smoke] building nyash (${MODE}, feature=llvm)..." >&2
-# Support both llvm-sys 180/181 by exporting both prefixes to the same value
-_LLVMPREFIX=$(llvm-config-18 --prefix)
-LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" cargo build -q ${MODE:+--${MODE}} --features llvm
 
 echo "[llvm-smoke] running --backend llvm on examples/llvm11_core_smoke.nyash ..." >&2
 rm -f "$OBJ"

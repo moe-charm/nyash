@@ -266,13 +266,40 @@ impl LLVMCompiler {
             })
         }
 
-        // Load box type-id mapping from nyash.toml (for NewBox lowering)
+        // Load box type-id mapping and method arg counts from nyash.toml (for lowering)
         let mut box_type_ids: StdHashMap<String, i64> = StdHashMap::new();
+        let mut method_argc: StdHashMap<(String, u16), usize> = StdHashMap::new();
+        let mut method_argc_by_name: StdHashMap<(String, String), usize> = StdHashMap::new();
         if let Ok(cfg) = std::fs::read_to_string("nyash.toml") {
             if let Ok(doc) = toml::from_str::<toml::Value>(&cfg) {
                 if let Some(bt) = doc.get("box_types").and_then(|v| v.as_table()) {
                     for (k, v) in bt {
                         if let Some(id) = v.as_integer() { box_type_ids.insert(k.clone(), id as i64); }
+                    }
+                }
+                // Parse per-box methods for expected arg counts
+                if let Some(libs) = doc.get("libraries").and_then(|v| v.as_table()) {
+                    for (_libname, libtbl) in libs {
+                        if let Some(tbl) = libtbl.as_table() {
+                            for (k, v) in tbl {
+                                // Skip non-box keys
+                                if k == "boxes" || k == "path" { continue; }
+                                if let Some(box_tbl) = v.as_table() {
+                                    let box_name = k.clone();
+                                    if let Some(methods) = box_tbl.get("methods").and_then(|m| m.as_table()) {
+                                        for (mname, md) in methods {
+                                            if let Some(mtab) = md.as_table() {
+                                                if let Some(mid) = mtab.get("method_id").and_then(|x| x.as_integer()) {
+                                                    let argc = mtab.get("args").and_then(|x| x.as_array()).map(|a| a.len()).unwrap_or(0);
+                                                    method_argc.insert((box_name.clone(), mid as u16), argc);
+                                                    method_argc_by_name.insert((box_name.clone(), mname.clone()), argc);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -712,12 +739,17 @@ impl LLVMCompiler {
                                 }
                             } else {
                                 // Variable-length path: build arrays of values/tags and call vector shim
-                                let n = args.len() as u32;
+                                // If we know expected arg count for (box, method_id), limit to that many
+                                let expected_n: Option<usize> = if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
+                                    if let Some(mid) = method_id { method_argc.get(&(bname.clone(), *mid)).cloned() } else { None }
+                                } else { None };
+                                let take_n: usize = expected_n.unwrap_or(args.len()).min(args.len());
+                                let n = take_n as u32;
                                 // alloca [N x i64] for vals and tags
                                 let arr_ty = i64t.array_type(n);
                                 let vals_arr = entry_builder.build_alloca(arr_ty, "vals_arr").map_err(|e| e.to_string())?;
                                 let tags_arr = entry_builder.build_alloca(arr_ty, "tags_arr").map_err(|e| e.to_string())?;
-                                for (i, vid) in args.iter().enumerate() {
+                                for (i, vid) in args.iter().take(take_n).enumerate() {
                                     let idx = [codegen.context.i32_type().const_zero(), codegen.context.i32_type().const_int(i as u64, false)];
                                     let gep_v = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, vals_arr, &idx, &format!("v_gep_{}", i)).map_err(|e| e.to_string())? };
                                     let gep_t = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, tags_arr, &idx, &format!("t_gep_{}", i)).map_err(|e| e.to_string())? };
@@ -727,16 +759,35 @@ impl LLVMCompiler {
                                     codegen.builder.build_store(gep_v, vi).map_err(|e| e.to_string())?;
                                     codegen.builder.build_store(gep_t, tagv).map_err(|e| e.to_string())?;
                                 }
-                                // cast to i64* pointers
+                                // get element pointer to first element ([0,0]) then treat as i64*
+                                let i32t = codegen.context.i32_type();
+                                let zero = i32t.const_zero();
+                                let vals_gep = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, vals_arr, &[zero, zero], "vals_gep0").map_err(|e| e.to_string())? };
+                                let tags_gep = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, tags_arr, &[zero, zero], "tags_gep0").map_err(|e| e.to_string())? };
                                 let i64p = i64t.ptr_type(AddressSpace::from(0));
-                                let vals_ptr = codegen.builder.build_pointer_cast(vals_arr, i64p, "vals_ptr").map_err(|e| e.to_string())?;
-                                let tags_ptr = codegen.builder.build_pointer_cast(tags_arr, i64p, "tags_ptr").map_err(|e| e.to_string())?;
-                                // declare i64 @nyash.plugin.invoke_tagged_v_i64(i64,i64,i64,i64,i64*,i64*)
-                                let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into(), i64t.into(), i64p.into(), i64p.into()], false);
-                                let callee = codegen.module.get_function("nyash.plugin.invoke_tagged_v_i64").unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_tagged_v_i64", fnty, None));
-                                let tid = i64t.const_int(type_id as u64, true);
-                                let midv = i64t.const_int((*mid) as u64, false);
-                                let call = codegen.builder.build_call(callee, &[tid.into(), midv.into(), argc_val.into(), recv_h.into(), vals_ptr.into(), tags_ptr.into()], "pinvoke_tagged_v").map_err(|e| e.to_string())?;
+                                let vals_ptr = codegen.builder.build_pointer_cast(vals_gep, i64p, "vals_ptr").map_err(|e| e.to_string())?;
+                                let tags_ptr = codegen.builder.build_pointer_cast(tags_gep, i64p, "tags_ptr").map_err(|e| e.to_string())?;
+                                // Choose by-id or by-name vector shim (by-name allowed in debug)
+                                let use_byname = std::env::var("NYASH_LLVM_ALLOW_BY_NAME").ok().as_deref() == Some("1");
+                                let call = if use_byname {
+                                    // declare i64 @nyash.plugin.invoke_by_name_tagged_v_i64(i64 recv_h, i8* name, i64 argc, i64* vals, i64* tags)
+                                    let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                    let fnty = i64t.fn_type(&[i64t.into(), i8p.into(), i64t.into(), i64p.into(), i64p.into()], false);
+                                    let gsp = codegen.builder.build_global_string_ptr(method, "method_name").map_err(|e| e.to_string())?;
+                                    let mptr = gsp.as_pointer_value();
+                                    let argc_v = i64t.const_int(take_n as u64, false);
+                                    let callee = codegen.module.get_function("nyash.plugin.invoke_by_name_tagged_v_i64").unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_by_name_tagged_v_i64", fnty, None));
+                                    codegen.builder.build_call(callee, &[recv_h.into(), mptr.into(), argc_v.into(), vals_ptr.into(), tags_ptr.into()], "pinvoke_byname_v").map_err(|e| e.to_string())?
+                                } else {
+                                    // declare i64 @nyash.plugin.invoke_tagged_v_i64(i64,i64,i64,i64,i64*,i64*)
+                                    let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into(), i64t.into(), i64p.into(), i64p.into()], false);
+                                    let callee = codegen.module.get_function("nyash.plugin.invoke_tagged_v_i64").unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_tagged_v_i64", fnty, None));
+                                    let tid = i64t.const_int(type_id as u64, true);
+                                    let midv = i64t.const_int((*mid) as u64, false);
+                                    // In vector path, argc includes receiver (a0). Use (take_n + 1).
+                                    let argc_v = i64t.const_int((take_n as u64) + 1, false);
+                                    codegen.builder.build_call(callee, &[tid.into(), midv.into(), argc_v.into(), recv_h.into(), vals_ptr.into(), tags_ptr.into()], "pinvoke_tagged_v").map_err(|e| e.to_string())?
+                                };
                                 if let Some(d) = dst {
                                     let rv = call.try_as_basic_value().left().ok_or("invoke_v returned void".to_string())?;
                                     if let Some(mt) = func.metadata.value_types.get(d) {
@@ -762,46 +813,81 @@ impl LLVMCompiler {
                                 // Build global string for method name
                                 let gsp = codegen.builder.build_global_string_ptr(method, "method_name").map_err(|e| e.to_string())?;
                                 let mptr = gsp.as_pointer_value();
-                                let argc_val = i64t.const_int(args.len() as u64, false);
-                                let mut a1 = i64t.const_zero();
-                                let mut a2 = i64t.const_zero();
-                                let mut get_i64 = |vid: ValueId| -> Result<inkwell::values::IntValue, String> {
-                                    let v = *vmap.get(&vid).ok_or("arg missing")?;
-                                    Ok(match v {
-                                        BasicValueEnum::IntValue(iv) => iv,
-                                        BasicValueEnum::FloatValue(fv) => {
-                                            let slot = entry_builder.build_alloca(i64t, "f2i_slot").map_err(|e| e.to_string())?;
-                                            let fptr_ty = codegen.context.f64_type().ptr_type(AddressSpace::from(0));
-                                            let castp = codegen.builder.build_pointer_cast(slot, fptr_ty, "i64p_to_f64p").map_err(|e| e.to_string())?;
-                                            let _ = codegen.builder.build_store(castp, fv).map_err(|e| e.to_string())?;
-                                            codegen.builder.build_load(i64t, slot, "ld_f2i").map_err(|e| e.to_string())?.into_int_value()
-                                        },
-                                        BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "p2i").map_err(|e| e.to_string())?,
-                                        _ => return Err("unsupported arg value (expect int or handle ptr)".to_string()),
-                                    })
-                                };
-                                if args.len() >= 1 { a1 = get_i64(args[0])?; }
-                                if args.len() >= 2 { a2 = get_i64(args[1])?; }
-                                // declare i64 @nyash.plugin.invoke_by_name_i64(i64 recv_h, i8* name, i64 argc, i64 a1, i64 a2)
                                 let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
-                                let fnty = i64t.fn_type(&[i64t.into(), i8p.into(), i64t.into(), i64t.into(), i64t.into()], false);
-                                let callee = codegen.module.get_function("nyash.plugin.invoke_by_name_i64").unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_by_name_i64", fnty, None));
-                                let call = codegen.builder.build_call(callee, &[recv_h.into(), mptr.into(), argc_val.into(), a1.into(), a2.into()], "pinvoke_byname").map_err(|e| e.to_string())?;
-                                if let Some(d) = dst {
-                                    let rv = call.try_as_basic_value().left().ok_or("invoke_by_name returned void".to_string())?;
-                                    // Treat like i64 path
-                                    if let Some(mt) = func.metadata.value_types.get(d) {
-                                        match mt {
-                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
-                                            crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
-                                                let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
-                                                let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
-                                                let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
-                                                vmap.insert(*d, ptr.into());
+                                if args.len() > 2 {
+                                    // By-name, variable-length tagged path
+                                    // Limit to expected argc if known from nyash.toml
+                                    let expected_n: Option<usize> = if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
+                                        if let Some(mid) = method_id { method_argc.get(&(bname.clone(), *mid)).cloned() }
+                                        else { method_argc_by_name.get(&(bname.clone(), method.clone())).cloned() }
+                                    } else { None };
+                                    let take_n: usize = expected_n.unwrap_or(args.len()).min(args.len());
+                                    let arr_ty = i64t.array_type(take_n as u32);
+                                    let vals_arr = entry_builder.build_alloca(arr_ty, "bn_vals_arr").map_err(|e| e.to_string())?;
+                                    let tags_arr = entry_builder.build_alloca(arr_ty, "bn_tags_arr").map_err(|e| e.to_string())?;
+                                    let i32t = codegen.context.i32_type(); let zero = i32t.const_zero();
+                                    for (i, vid) in args.iter().take(take_n).enumerate() {
+                                        let idx = [zero, i32t.const_int(i as u64, false)];
+                                        let gep_v = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, vals_arr, &idx, &format!("bn_v_gep_{}", i)).map_err(|e| e.to_string())? };
+                                        let gep_t = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, tags_arr, &idx, &format!("bn_t_gep_{}", i)).map_err(|e| e.to_string())? };
+                                        let vi = to_i64_any(codegen.context, &codegen.builder, *vmap.get(vid).ok_or("arg missing")?)?;
+                                        let tag = classify_tag(*vmap.get(vid).ok_or("arg missing")?);
+                                        codegen.builder.build_store(gep_v, vi).map_err(|e| e.to_string())?;
+                                        codegen.builder.build_store(gep_t, i64t.const_int(tag as u64, false)).map_err(|e| e.to_string())?;
+                                    }
+                                    let i64p = i64t.ptr_type(AddressSpace::from(0));
+                                    let vals_gep = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, vals_arr, &[zero, zero], "bn_vals_gep0").map_err(|e| e.to_string())? };
+                                    let tags_gep = unsafe { codegen.builder.build_in_bounds_gep(arr_ty, tags_arr, &[zero, zero], "bn_tags_gep0").map_err(|e| e.to_string())? };
+                                    let vals_ptr = codegen.builder.build_pointer_cast(vals_gep, i64p, "bn_vals_ptr").map_err(|e| e.to_string())?;
+                                    let tags_ptr = codegen.builder.build_pointer_cast(tags_gep, i64p, "bn_tags_ptr").map_err(|e| e.to_string())?;
+                                    // declare i64 @nyash.plugin.invoke_by_name_tagged_v_i64(i64 recv_h, i8* name, i64 argc, i64* vals, i64* tags)
+                                    let fnty = i64t.fn_type(&[i64t.into(), i8p.into(), i64t.into(), i64p.into(), i64p.into()], false);
+                                    let argc_v = i64t.const_int(take_n as u64, false);
+                                    let callee = codegen.module.get_function("nyash.plugin.invoke_by_name_tagged_v_i64").unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_by_name_tagged_v_i64", fnty, None));
+                                    let call = codegen.builder.build_call(callee, &[recv_h.into(), mptr.into(), argc_v.into(), vals_ptr.into(), tags_ptr.into()], "pinvoke_byname_v").map_err(|e| e.to_string())?;
+                                    if let Some(d) = dst {
+                                        let rv = call.try_as_basic_value().left().ok_or("invoke_by_name_v returned void".to_string())?;
+                                        if let Some(mt) = func.metadata.value_types.get(d) {
+                                            match mt {
+                                                crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
+                                                crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
+                                                    let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
+                                                    let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                                    let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
+                                                    vmap.insert(*d, ptr.into());
+                                                }
+                                                _ => { vmap.insert(*d, rv); }
                                             }
-                                            _ => { vmap.insert(*d, rv); }
-                                        }
-                                    } else { vmap.insert(*d, rv); }
+                                        } else { vmap.insert(*d, rv); }
+                                    }
+                                } else {
+                                    // <=2 args: use by-name simple shim
+                                    let argc_val = i64t.const_int(args.len() as u64, false);
+                                    let mut a1 = i64t.const_zero();
+                                    let mut a2 = i64t.const_zero();
+                                    let mut get_i64 = |vid: ValueId| -> Result<inkwell::values::IntValue, String> {
+                                        let v = *vmap.get(&vid).ok_or("arg missing")?;
+                                        to_i64_any(codegen.context, &codegen.builder, v)
+                                    };
+                                    if args.len() >= 1 { a1 = get_i64(args[0])?; }
+                                    if args.len() >= 2 { a2 = get_i64(args[1])?; }
+                                    let fnty = i64t.fn_type(&[i64t.into(), i8p.into(), i64t.into(), i64t.into(), i64t.into()], false);
+                                    let callee = codegen.module.get_function("nyash.plugin.invoke_by_name_i64").unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_by_name_i64", fnty, None));
+                                    let call = codegen.builder.build_call(callee, &[recv_h.into(), mptr.into(), argc_val.into(), a1.into(), a2.into()], "pinvoke_byname").map_err(|e| e.to_string())?;
+                                    if let Some(d) = dst {
+                                        let rv = call.try_as_basic_value().left().ok_or("invoke_by_name returned void".to_string())?;
+                                        if let Some(mt) = func.metadata.value_types.get(d) {
+                                            match mt {
+                                                crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
+                                                _ => {
+                                                    let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
+                                                    let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                                    let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
+                                                    vmap.insert(*d, ptr.into());
+                                                }
+                                            }
+                                        } else { vmap.insert(*d, rv); }
+                                    }
                                 }
                             } else {
                                 return Err(format!("BoxCall requires method_id (by-id). Enable NYASH_LLVM_ALLOW_BY_NAME=1 to use by-name fallback for method '{}'", method));
@@ -1104,7 +1190,7 @@ impl LLVMCompiler {
                                     B::Sub => codegen.builder.build_float_sub(lf, rf, "fsub").map_err(|e| e.to_string())?.into(),
                                     B::Mul => codegen.builder.build_float_mul(lf, rf, "fmul").map_err(|e| e.to_string())?.into(),
                                     B::Div => codegen.builder.build_float_div(lf, rf, "fdiv").map_err(|e| e.to_string())?.into(),
-                                    B::Mod => return Err("fmod not supported yet".to_string()),
+                                    B::Mod => codegen.builder.build_float_rem(lf, rf, "frem").map_err(|e| e.to_string())?.into(),
                                     _ => return Err("bit/logic ops on float".to_string()),
                                 }
                             } else {

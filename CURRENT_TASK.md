@@ -2,21 +2,22 @@
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-— 最終更新: 2025‑09‑08 (LLVM Core‑13 安定化 P0 進捗更新)
+— 最終更新: 2025‑09‑08 (LLVM Core‑13 P0完了/BitOps/Array/Echo/Map OK、VInvoke調査中)
 
 【Quick Update — LLVM Core‑13 P0】
-現状
-- ビルド環境は LLVM 18 検出済み（`LLVM_SYS_180_PREFIX=/usr/lib/llvm-18`）。
-- 代表的なビルドエラーは次の3点に収束。
-  1) Opaque Pointer 由来: `PointerType::get_element_type()` 不在 → i8* 判別経路をヒューリスティックに簡素化。
-  2) IntegerBox API: `.value()` 誤用 → `.value` に修正（フィールド参照）。
-  3) BinaryOp 網羅: BitAnd/BitOr/BitXor/Shl/Shr 未対応 → いったん `_ => todo!()` で回避。
+達成
+- LLVM 18 環境でビルド安定。`env.box.new(_i64x)` 経路の統一と i64 正規化を実装。
+- IntegerBox `.value()` 整合修正。
+- BinOp（i64）を網羅（Add/Sub/Mul/Div/Mod/BitAnd/BitOr/BitXor/Shl/Shr/And/Or）。
+- fmod 対応: 浮動剰余を LLVM `frem` で実装。
+- MIR最適化に method_id 注入パス（`passes::method_id_inject`）を組み込み、BoxCall by‑id を安定化。
 
-対応済み
-- `src/backend/llvm/compiler.rs`
-  - `env.box.new` の opaque 対応（i8* は `nyash.box.from_i8_string` を呼ぶ単純化）。
-  - `.value()`→`.value` を修正（BinOpパス）。
-  - 末尾 mock BinOp に `_ => todo!()` を追加。
+スモーク状況（AOT/LLVM）
+- BitOps/Shift OK（Result: 48）: `NYASH_LLVM_BITOPS_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Arrays OK（Result: 3）: `NYASH_LLVM_ARRAY_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Echo OK: `NYASH_LLVM_ECHO_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Map(by‑id) OK（v=42/size=1）: `NYASH_LLVM_MAP_SMOKE=1 ./tools/llvm_smoke.sh release`
+- VInvoke（可変長）未達（戻り 0）: `NYASH_LLVM_VINVOKE_SMOKE=1` は調査継続
 
 残タスク（P0完了条件）
 - `env.box.new`（new_i64x 側）の引数 i64 化クロージャを完全インライン化（lifetime エラー解消）。
@@ -51,9 +52,10 @@
 - 右シフトは現状論理シフト相当の実装（将来算術/論理の切替が必要なら追補）。
 
 代表スモーク
+代表スモーク（例）
 - ビルド: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
 - 実行: `tools/build_llvm.sh apps/tests/mir-compare-multi/main.nyash -o app && ./app`
-- 受け入れ: VM と同一の戻り値（Core‑13 正規化パスに依存：`NYASH_MIR_CORE13=1` 既定ON）
+- 受け入れ: VM と同一の戻り値（Core‑13 正規化ON）
 
 メモ
 - 作業ディレクトリ: `/mnt/c/git/nyash-project/nyash_llvm`（branch: `llvm-dev`）
@@ -84,6 +86,12 @@
 
 ブランチ/作業場所
 - worktree: `/mnt/c/git/nyash-project/nyash_llvm`（branch: `llvm-dev` → origin/llvm-dev セット）
+短期タスク（P1/継続）
+1) VInvoke（可変長）調査と修正
+   - NyRT 変長invokeで type_id/method_id/argc/tags/rc をログ出力（限定的）
+   - LLVM 降ろし（vector/by‑name vector）の argc/配列ポインタ（GEP [0,0]）の妥当性確認
+   - PluginHost 側の戻りTLV(tag: 3=int/8=handle/5=float) との整合確認
+2) README 追記（BitOps/Array/Echo/Map の手順は追記済。VInvoke は解決後に追記）
 
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 

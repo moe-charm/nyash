@@ -160,6 +160,22 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
 - `NYASH_LLVM_ALLOW_BY_NAME=1`: デバッグ専用の by-name フォールバック（by-id が未提供の場合の暫定措置）。
   - 開発時のみ有効化してください（本番では無効）。
 
+#### LLVM スモークテスト（クイックチェック）
+- 事前ビルド（LLVM 18 必須）:
+  - `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- ビット演算/シフト（期待:「Result: 48」）:
+  - `NYASH_LLVM_BITOPS_SMOKE=1 ./tools/llvm_smoke.sh release`
+- 配列（get/set/print）:
+  - `NYASH_LLVM_ARRAY_SMOKE=1 ./tools/llvm_smoke.sh release`
+- echo（readLine → print）:
+  - `NYASH_LLVM_ECHO_SMOKE=1 ./tools/llvm_smoke.sh release`
+- Map（by-id プラグイン経路）:
+  - `NYASH_LLVM_MAP_SMOKE=1 ./tools/llvm_smoke.sh release`
+- 注意:
+  - 右シフトは現状 i64 の論理シフト。
+  - 論理 And/Or は i1 論理として降ろし、短絡は MIR 側で扱います。
+  - VInvoke 系の一部は実験段階です。by-name フォールバックはデバッグ用途のみ（`NYASH_LLVM_ALLOW_BY_NAME=1`）。
+
 
 ### 5. **WebAssembly** （ブラウザ用）
 ```bash

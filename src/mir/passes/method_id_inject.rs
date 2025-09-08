@@ -33,6 +33,9 @@ pub fn inject_method_ids(module: &mut MirModule) -> usize {
                     I::NewBox { dst, box_type, .. } => {
                         origin.insert(*dst, box_type.clone());
                     }
+                    // Note: when Core-13 pure normalized form (env.box.new) is active,
+                    // this pass currently relies on upstream passes to preserve NewBox
+                    // or on alternative origin hints; ExternCall mapping is a TODO.
                     I::Copy { dst, src } => {
                         if let Some(bt) = origin.get(src).cloned() {
                             origin.insert(*dst, bt);
@@ -91,4 +94,3 @@ pub fn inject_method_ids(module: &mut MirModule) -> usize {
 
     injected
 }
-
