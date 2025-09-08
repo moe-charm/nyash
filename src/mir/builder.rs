@@ -76,6 +76,18 @@ pub struct MirBuilder {
     include_loading: HashSet<String>,
     /// Include visited cache: canonical path -> box name
     include_box_map: HashMap<String, String>,
+
+    /// Loop context stack for lowering continue/break
+    /// Each context provides canonical loop blocks: {head, exit, latch}
+    pub(super) loop_ctx_stack: Vec<LoopContext>,
+}
+
+/// Loop context used during lowering of loops
+#[derive(Debug, Clone, Copy)]
+pub struct LoopContext {
+    pub head: super::BasicBlockId,
+    pub exit: super::BasicBlockId,
+    pub latch: super::BasicBlockId,
 }
 
 impl MirBuilder {
@@ -135,6 +147,7 @@ impl MirBuilder {
             current_static_box: None,
             include_loading: HashSet::new(),
             include_box_map: HashMap::new(),
+            loop_ctx_stack: Vec::new(),
         }
     }
 
@@ -758,6 +771,21 @@ impl MirBuilder {
         } else {
             Err("No current function".to_string())
         }
+    }
+
+    /// Push a loop context onto the stack
+    pub(crate) fn push_loop_ctx(&mut self, ctx: LoopContext) {
+        self.loop_ctx_stack.push(ctx);
+    }
+
+    /// Pop the current loop context
+    pub(crate) fn pop_loop_ctx(&mut self) {
+        let _ = self.loop_ctx_stack.pop();
+    }
+
+    /// Get the current loop context (if any)
+    pub(crate) fn current_loop_ctx(&self) -> Option<LoopContext> {
+        self.loop_ctx_stack.last().copied()
     }
     
     // moved to builder/utils.rs: ensure_block_exists

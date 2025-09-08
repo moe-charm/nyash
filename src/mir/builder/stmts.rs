@@ -271,6 +271,28 @@ impl super::MirBuilder {
         Ok(return_value)
     }
 
+    // Break: jump to loop exit (single exit), terminate current block
+    pub(super) fn build_break_statement(&mut self) -> Result<ValueId, String> {
+        let ctx = self.current_loop_ctx().ok_or_else(|| "'break' used outside of loop".to_string())?;
+        let cur = self.current_block.ok_or_else(|| "No current basic block".to_string())?;
+        self.emit_instruction(MirInstruction::Jump { target: ctx.exit })?;
+        // Record predecessor edge for verifier/CFG
+        let _ = self.add_predecessor(ctx.exit, cur);
+        // Return a dummy value id (unused); do not emit after terminator
+        Ok(self.value_gen.next())
+    }
+
+    // Continue: jump to loop latch (single backedge path), terminate current block
+    pub(super) fn build_continue_statement(&mut self) -> Result<ValueId, String> {
+        let ctx = self.current_loop_ctx().ok_or_else(|| "'continue' used outside of loop".to_string())?;
+        let cur = self.current_block.ok_or_else(|| "No current basic block".to_string())?;
+        self.emit_instruction(MirInstruction::Jump { target: ctx.latch })?;
+        // Record predecessor edge
+        let _ = self.add_predecessor(ctx.latch, cur);
+        // Return a dummy value id (unused)
+        Ok(self.value_gen.next())
+    }
+
     // Nowait: prefer env.future.spawn_instance if method call; else FutureNew
     pub(super) fn build_nowait_statement(&mut self, variable: String, expression: ASTNode) -> Result<ValueId, String> {
         if let ASTNode::MethodCall { object, method, arguments, .. } = expression.clone() {

@@ -76,6 +76,8 @@ impl super::MirBuilder {
                 self.build_lambda_expression(params.clone(), body.clone()),
 
             ASTNode::Return { value, .. } => self.build_return_statement(value.clone()),
+            ASTNode::Break { .. } => self.build_break_statement(),
+            ASTNode::Continue { .. } => self.build_continue_statement(),
 
             ASTNode::Local { variables, initial_values, .. } =>
                 self.build_local_statement(variables.clone(), initial_values.clone()),

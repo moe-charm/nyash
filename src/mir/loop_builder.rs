@@ -52,10 +52,11 @@ impl<'a> LoopBuilder<'a> {
         condition: ASTNode,
         body: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
-        // 1. ブロックの準備
+        // 1. ブロックの準備（canonical: preheader -> header -> body -> latch -> header, exit is single）
         let preheader_id = self.current_block()?;
         let header_id = self.new_block();
         let body_id = self.new_block();
+        let latch_id = self.new_block();
         let after_loop_id = self.new_block();
         
         // 2. Preheader -> Header へのジャンプ
@@ -87,15 +88,32 @@ impl<'a> LoopBuilder<'a> {
         }
 
         // ボディをビルド
+        // ループ文脈: continue/break 降ろしのための {head, exit, latch} を積む
+        let ctx = super::builder::LoopContext { head: header_id, exit: after_loop_id, latch: latch_id };
+        self.parent_builder.push_loop_ctx(ctx);
         for stmt in body {
             self.build_statement(stmt)?;
         }
+        // ループ文脈を外す
+        self.parent_builder.pop_loop_ctx();
         // latchブロックのスナップショットを保存（phi入力解決用）
         let latch_snapshot = self.get_current_variable_map();
-        self.block_var_maps.insert(body_id, latch_snapshot);
+        // latch は body の末尾状態を参照するため、latch_id で記録
+        self.block_var_maps.insert(latch_id, latch_snapshot);
         
         // 8. Latchブロック（ボディの最後）からHeaderへ戻る
-        let latch_id = self.current_block()?;
+        let body_end_id = self.current_block()?;
+        if let Some(ref mut function) = self.parent_builder.current_function {
+            // ボディ末尾が未終端なら latch へジャンプ
+            if let Some(block) = function.get_block(body_end_id) {
+                if !block.is_terminated() {
+                    self.emit_jump(latch_id)?;
+                    let _ = self.add_predecessor(latch_id, body_end_id);
+                }
+            }
+        }
+        // latch から header へ単一バックエッジ
+        self.set_current_block(latch_id)?;
         self.emit_jump(header_id)?;
         let _ = self.add_predecessor(header_id, latch_id);
         

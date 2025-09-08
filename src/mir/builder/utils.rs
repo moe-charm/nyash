@@ -89,4 +89,16 @@ impl super::MirBuilder {
             Err("No current function".to_string())
         }
     }
+
+    /// Record a predecessor edge (pred -> block)
+    pub(crate) fn add_predecessor(&mut self, block: BasicBlockId, pred: BasicBlockId) -> Result<(), String> {
+        if let Some(ref mut function) = self.current_function {
+            if let Some(b) = function.get_block_mut(block) {
+                b.add_predecessor(pred);
+                return Ok(());
+            }
+            return Err(format!("Block {} not found", block));
+        }
+        Err("No current function".to_string())
+    }
 }
