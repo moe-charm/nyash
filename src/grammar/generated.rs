@@ -50,7 +50,6 @@ pub static SYNTAX_ALLOWED_STATEMENTS: &[&str] = &[
     "print",
     "nowait",
     "include",
-    "import",
     "local",
     "outbox",
     "try",

@@ -438,7 +438,7 @@ impl NyashParser {
                         self.consume(TokenType::RBRACE)?;
                         self.skip_newlines();
                         continue;
-                    } else if self.match_token(&TokenType::IDENTIFIER) {
+                    } else if matches!(self.current_token().token_type, TokenType::IDENTIFIER(_)) {
                         // 単行形式: public name[: Type]
                         let fname = if let TokenType::IDENTIFIER(n) = &self.current_token().token_type { n.clone() } else { unreachable!() };
                         self.advance();
