@@ -9,7 +9,7 @@ pub const SYM_FUTURE_SPAWN_INSTANCE3_I64: &str = "nyash.future.spawn_instance3_i
 
 #[cfg(feature = "cranelift-jit")]
 pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
-    use crate::jit::rt::{handles, with_legacy_vm_args};
+    use crate::jit::rt::handles;
 
     // Resolve FutureBox from handle or legacy VM args
     let mut fut_opt: Option<crate::boxes::future::FutureBox> = None;
@@ -20,9 +20,9 @@ pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
             }
         }
     }
+    #[cfg(not(feature = "jit-direct-only"))]
     if fut_opt.is_none() {
-        with_legacy_vm_args(|args| {
-            // If arg0>=0 treat as positional index, else scan for first FutureBox
+        crate::jit::rt::with_legacy_vm_args(|args| {
             let pick = if arg0 >= 0 { (arg0 as usize)..(arg0 as usize + 1) } else { 0..args.len() };
             for i in pick {
                 if let Some(VMValue::BoxRef(b)) = args.get(i) {

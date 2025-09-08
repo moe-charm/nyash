@@ -100,6 +100,14 @@ impl NyashInterpreter {
                 self.execute_using_statement(namespace_name)
             }
             
+            ASTNode::ImportStatement { path, alias, .. } => {
+                // Stage-0 import: no-op (record/log only)
+                if std::env::var("NYASH_IMPORT_TRACE").ok().as_deref() == Some("1") {
+                    if let Some(a) = alias { eprintln!("[import] {} as {}", path, a); } else { eprintln!("[import] {}", path); }
+                }
+                Ok(Box::new(VoidBox::new()))
+            }
+            
             ASTNode::BoxDeclaration { name, fields, public_fields, private_fields, methods, constructors, init_fields, weak_fields, is_interface, extends, implements, type_parameters, is_static, static_init, .. } => {
                 if *is_static {
                     // 🔥 Static Box宣言の処理
@@ -613,19 +621,25 @@ impl NyashInterpreter {
     pub(super) fn execute_using_statement(&mut self, namespace_name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
         idebug!("🌟 DEBUG: execute_using_statement called with namespace: {}", namespace_name);
         
-        // Phase 0: nyashstdのみサポート
-        if namespace_name != "nyashstd" {
-            return Err(RuntimeError::InvalidOperation {
-                message: format!("Unsupported namespace '{}'. Only 'nyashstd' is supported in Phase 0.", namespace_name)
-            });
+        // First, handle the builtin stdlib namespace
+        if namespace_name == "nyashstd" {
+            idebug!("🌟 DEBUG: About to call ensure_stdlib_initialized");
+            self.ensure_stdlib_initialized()?;
+            idebug!("🌟 DEBUG: ensure_stdlib_initialized completed");
+            return Ok(Box::new(VoidBox::new()));
         }
-        
-        // 標準ライブラリを初期化（存在しない場合）
-        idebug!("🌟 DEBUG: About to call ensure_stdlib_initialized");
-        self.ensure_stdlib_initialized()?;
-        idebug!("🌟 DEBUG: ensure_stdlib_initialized completed");
-        
-        // using nyashstdの場合は特に何もしない（既に標準ライブラリが初期化されている）
+        // Otherwise, consult the modules registry (resolved by runner/CLI/header)
+        if crate::runtime::modules_registry::get(namespace_name).is_some() {
+            // Resolved via registry; no further action at runtime stage-0
+            return Ok(Box::new(VoidBox::new()));
+        }
+        let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+        if strict {
+            return Err(RuntimeError::InvalidOperation { message: format!("Unresolved namespace '{}' (strict)", namespace_name) });
+        }
+        if crate::interpreter::utils::debug_on() {
+            eprintln!("[using] unresolved '{}' (non-strict, continuing)", namespace_name);
+        }
         Ok(Box::new(VoidBox::new()))
     }
     

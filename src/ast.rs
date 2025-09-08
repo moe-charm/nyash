@@ -443,6 +443,12 @@ pub enum ASTNode {
         namespace_name: String,
         span: Span,
     },
+    /// import文: import "path" (as Alias)?
+    ImportStatement {
+        path: String,
+        alias: Option<String>,
+        span: Span,
+    },
     
     /// nowait文: nowait variable = expression
     Nowait {
@@ -673,6 +679,7 @@ impl ASTNode {
             ASTNode::Break { .. } => "Break",
             ASTNode::Continue { .. } => "Continue",
             ASTNode::UsingStatement { .. } => "UsingStatement",
+            ASTNode::ImportStatement { .. } => "ImportStatement",
             ASTNode::BoxDeclaration { .. } => "BoxDeclaration",
             ASTNode::FunctionDeclaration { .. } => "FunctionDeclaration",
             ASTNode::GlobalVar { .. } => "GlobalVar",
@@ -742,6 +749,7 @@ impl ASTNode {
             ASTNode::Break { .. } => ASTNodeType::Statement,
             ASTNode::Continue { .. } => ASTNodeType::Statement,
             ASTNode::UsingStatement { .. } => ASTNodeType::Statement,
+            ASTNode::ImportStatement { .. } => ASTNodeType::Statement,
             ASTNode::GlobalVar { .. } => ASTNodeType::Statement,
             ASTNode::Include { .. } => ASTNodeType::Statement,
             ASTNode::Local { .. } => ASTNodeType::Statement,
@@ -793,6 +801,9 @@ impl ASTNode {
             ASTNode::Continue { .. } => "Continue".to_string(),
             ASTNode::UsingStatement { namespace_name, .. } => {
                 format!("UsingStatement({})", namespace_name)
+            }
+            ASTNode::ImportStatement { path, alias, .. } => {
+                if let Some(a) = alias { format!("ImportStatement({}, as {})", path, a) } else { format!("ImportStatement({})", path) }
             }
             ASTNode::BoxDeclaration { name, fields, methods, constructors,  is_interface, extends, implements, .. } => {
                 let mut desc = if *is_interface {
@@ -907,6 +918,7 @@ impl ASTNode {
             ASTNode::Break { span, .. } => *span,
             ASTNode::Continue { span, .. } => *span,
             ASTNode::UsingStatement { span, .. } => *span,
+            ASTNode::ImportStatement { span, .. } => *span,
             ASTNode::Nowait { span, .. } => *span,
             ASTNode::Arrow { span, .. } => *span,
             ASTNode::TryCatch { span, .. } => *span,

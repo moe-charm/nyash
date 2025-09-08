@@ -1,0 +1,14 @@
+// root smoke for include-only tree
+include "dep_smoke_child.nyash"
+
+box Root {
+  main() {
+    // a string containing include "should_not_match.nyash"
+    local s = "text include \"dummy.nyash\" text"
+    // a comment with include "ignored.nyash"
+    // include "ignored.nyash"
+    # include "ignored2.nyash"
+    return 0
+  }
+}
+

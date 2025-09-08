@@ -241,6 +241,32 @@ pub(super) extern "C" fn nyash_array_set_h(handle: u64, idx: i64, val: i64) -> i
     0
 }
 
+// Array.set where value is a handle (StringBox, IntegerBox, etc.)
+#[cfg(feature = "cranelift-jit")]
+pub(super) extern "C" fn nyash_array_set_hh(handle: u64, idx: i64, val_h: u64) -> i64 {
+    use crate::jit::hostcall_registry::{classify, HostcallKind};
+    let sym = c::SYM_ARRAY_SET_HH;
+    let pol = crate::jit::policy::current();
+    let wh = pol.hostcall_whitelist;
+    if classify(sym) == HostcallKind::Mutating && pol.read_only && !wh.iter().any(|s| s == sym) {
+        events::emit_runtime(serde_json::json!({"id": sym, "decision":"fallback", "reason":"policy_denied_mutating"}), "hostcall", "<jit>");
+        return 0;
+    }
+    if let Some(obj) = crate::jit::rt::handles::get(handle) {
+        if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+            // Convert value handle to Box<dyn NyashBox>
+            if let Some(v_arc) = crate::jit::rt::handles::get(val_h) {
+                // Prefer share semantics for identity boxes
+                let val_box: Box<dyn crate::box_trait::NyashBox> = v_arc.as_ref().clone_or_share();
+                let _ = arr.set(Box::new(crate::box_trait::IntegerBox::new(idx)), val_box);
+                events::emit_runtime(serde_json::json!({"id": sym, "decision":"allow", "argc":3, "arg_types":["Handle","I64","Handle"]}), "hostcall", "<jit>");
+                return 0;
+            }
+        }
+    }
+    0
+}
+
 #[cfg(feature = "cranelift-jit")]
 pub(super) extern "C" fn nyash_array_push_h(handle: u64, val: i64) -> i64 {
     use crate::jit::hostcall_registry::{classify, HostcallKind};
@@ -559,17 +585,20 @@ pub(super) extern "C" fn nyash_string_len_h(handle: u64) -> i64 {
         if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") { eprintln!("[JIT-LEN_H] any.length_h(handle={}) -> {}", handle, v); }
         return v;
     }
-    // Legacy param index fallback (0..16): read from VM args
-    if handle <= 16 {
-        let idx = handle as usize;
-        let val = crate::jit::rt::with_legacy_vm_args(|args| args.get(idx).cloned());
-        if let Some(v) = val {
-            match v {
-                crate::backend::vm::VMValue::BoxRef(b) => {
-                    if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() { return sb.value.len() as i64; }
+    // Legacy param index fallback (0..16): disabled in jit-direct-only
+    #[cfg(not(feature = "jit-direct-only"))]
+    {
+        if handle <= 16 {
+            let idx = handle as usize;
+            let val = crate::jit::rt::with_legacy_vm_args(|args| args.get(idx).cloned());
+            if let Some(v) = val {
+                match v {
+                    crate::backend::vm::VMValue::BoxRef(b) => {
+                        if let Some(sb) = b.as_any().downcast_ref::<crate::box_trait::StringBox>() { return sb.value.len() as i64; }
+                    }
+                    crate::backend::vm::VMValue::String(s) => { return s.len() as i64; }
+                    _ => {}
                 }
-                crate::backend::vm::VMValue::String(s) => { return s.len() as i64; }
-                _ => {}
             }
         }
     }

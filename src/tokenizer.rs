@@ -56,6 +56,7 @@ pub enum TokenType {
     FROM,            // from (親メソッド呼び出し)
     WEAK,            // weak (弱参照修飾子)
     USING,           // using (名前空間インポート)
+    IMPORT,          // import (Phase 12.7)
     
     // 演算子 (長いものから先に定義)
     SHIFT_LEFT,      // << (bitwise shift-left)
@@ -145,6 +146,10 @@ pub struct NyashTokenizer {
 }
 
 impl NyashTokenizer {
+    #[inline]
+    fn strict_12_7() -> bool {
+        std::env::var("NYASH_STRICT_12_7").ok().as_deref() == Some("1")
+    }
     /// 新しいトークナイザーを作成
     pub fn new(input: impl Into<String>) -> Self {
         let input_string = input.into();
@@ -248,7 +253,7 @@ impl NyashTokenizer {
                 self.skip_whitespace(); // コメント後の空白もスキップ  
                 return self.tokenize_next();
             }
-            Some('>') if self.peek_char() == Some('>') => {
+            Some('>') if self.peek_char() == Some('>') && !Self::strict_12_7() => {
                 self.advance();
                 self.advance();
                 Ok(Token::new(TokenType::SHIFT_RIGHT, start_line, start_column))
@@ -483,7 +488,7 @@ impl NyashTokenizer {
         }
         
     // キーワードチェック
-        let tok = match identifier.as_str() {
+        let mut tok = match identifier.as_str() {
             "box" => TokenType::BOX,
             "global" => TokenType::GLOBAL,
             "singleton" => TokenType::SINGLETON,
@@ -497,8 +502,6 @@ impl NyashTokenizer {
             "return" => TokenType::RETURN,
             "function" => TokenType::FUNCTION,
             "fn" => TokenType::FN,
-            // Alias support: `fn` as shorthand for function
-            "fn" => TokenType::FUNCTION,
             "print" => TokenType::PRINT,
             "this" => TokenType::THIS,
             "me" => TokenType::ME,
@@ -509,6 +512,7 @@ impl NyashTokenizer {
             "await" => TokenType::AWAIT,
             "interface" => TokenType::INTERFACE,
             "include" => TokenType::INCLUDE,
+            "import" => TokenType::IMPORT,
             "try" => TokenType::TRY,
             "catch" => TokenType::CATCH,
             "finally" => TokenType::FINALLY,
@@ -528,6 +532,23 @@ impl NyashTokenizer {
             "null" => TokenType::NULL,
             _ => TokenType::IDENTIFIER(identifier.clone()),
         };
+
+        // 12.7 Strict mode: fallback extended keywords to IDENTIFIER
+        if Self::strict_12_7() {
+            let is_extended = matches!(tok,
+                TokenType::INTERFACE
+                | TokenType::USING
+                | TokenType::INCLUDE
+                | TokenType::OUTBOX
+                | TokenType::NOWAIT
+                | TokenType::OVERRIDE
+                | TokenType::WEAK
+                | TokenType::PACK
+            );
+            if is_extended {
+                tok = TokenType::IDENTIFIER(identifier.clone());
+            }
+        }
 
         // 統一文法エンジンとの差分チェック（動作は変更しない）
         if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {

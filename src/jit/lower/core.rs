@@ -699,6 +699,39 @@ impl LowerCore {
             I::BoxCall { box_val: array, method, args, dst, .. } => {
                 // Prefer ops_ext; if not handled, fall back to legacy path below
                 let trace = std::env::var("NYASH_JIT_TRACE_LOWER").ok().as_deref() == Some("1");
+                // Handle ArrayBox.set with handle-valued value for literal strings
+                if method == "set" && self.box_type_map.get(&array).map(|s| s=="ArrayBox").unwrap_or(false) {
+                    // Expect args: [index, value]
+                    let argc = 3usize;
+                    // Receiver handle: prefer param or local slot; else -1 sentinel
+                    if let Some(pidx) = self.param_index.get(array).copied() { b.emit_param_i64(pidx); }
+                    else if let Some(slot) = self.local_index.get(&array).copied() { b.load_local_i64(slot); }
+                    else { b.emit_const_i64(-1); }
+                    // Index as i64
+                    if let Some(idx_v) = args.get(0) {
+                        if let Some(iv) = self.known_i64.get(idx_v).copied() { b.emit_const_i64(iv); }
+                        else { self.push_value_if_known_or_param(b, idx_v); }
+                    } else { b.emit_const_i64(0); }
+                    // Value as handle: for String literal, synthesize a handle; else prefer param/local handle
+                    if let Some(val_v) = args.get(1) {
+                        let mut emitted_val_handle = false;
+                        if let Some(s) = self.known_str.get(val_v).cloned() {
+                            b.emit_string_handle_from_literal(&s);
+                            emitted_val_handle = true;
+                        } else if let Some(slot) = self.local_index.get(val_v).copied() {
+                            b.load_local_i64(slot);
+                            emitted_val_handle = true;
+                        } else if let Some(pidx) = self.param_index.get(val_v).copied() {
+                            b.emit_param_i64(pidx);
+                            emitted_val_handle = true;
+                        }
+                        if !emitted_val_handle { b.emit_const_i64(0); }
+                    } else { b.emit_const_i64(0); }
+                    // Emit handle-handle variant hostcall
+                    b.emit_host_call(crate::jit::r#extern::collections::SYM_ARRAY_SET_HH, argc, false);
+                    if trace { eprintln!("[LOWER] BoxCall(ArrayBox.set) → ARRAY_SET_HH"); }
+                    return Ok(());
+                }
                 // Early constant fold: StringBox literal length/len (allow disabling via NYASH_JIT_DISABLE_LEN_CONST=1)
                 if std::env::var("NYASH_JIT_DISABLE_LEN_CONST").ok().as_deref() != Some("1")
                     && (method == "len" || method == "length")

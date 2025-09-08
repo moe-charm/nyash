@@ -11,7 +11,10 @@ pub enum InvokeDecision {
 }
 
 fn use_plugin_builtins() -> bool {
-    std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1")
+    #[cfg(feature = "jit-direct-only")]
+    { return false; }
+    #[cfg(not(feature = "jit-direct-only"))]
+    { return std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1"); }
 }
 
 /// Decide invocation policy for a known Box method.

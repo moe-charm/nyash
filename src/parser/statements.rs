@@ -19,6 +19,9 @@ impl NyashParser {
             TokenType::BOX => {
                 self.parse_box_declaration()
             },
+            TokenType::IMPORT => {
+                self.parse_import()
+            },
             TokenType::INTERFACE => {
                 self.parse_interface_box_declaration()
             },
@@ -116,6 +119,32 @@ impl NyashParser {
             }
         }
         result
+    }
+
+    /// import文をパース: import "path" (as Alias)?
+    pub(super) fn parse_import(&mut self) -> Result<ASTNode, ParseError> {
+        self.advance(); // consume 'import'
+        let path = if let TokenType::STRING(s) = &self.current_token().token_type {
+            let v = s.clone();
+            self.advance();
+            v
+        } else {
+            return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "string literal".to_string(), line: self.current_token().line });
+        };
+        // Optional: 'as' Alias (treat 'as' as identifier literal)
+        let mut alias: Option<String> = None;
+        if let TokenType::IDENTIFIER(w) = &self.current_token().token_type {
+            if w == "as" {
+                self.advance();
+                if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+                    alias = Some(name.clone());
+                    self.advance();
+                } else {
+                    return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "alias name".to_string(), line: self.current_token().line });
+                }
+            }
+        }
+        Ok(ASTNode::ImportStatement { path, alias, span: Span::unknown() })
     }
     
     /// if文をパース: if (condition) { body } else if ... else { body }

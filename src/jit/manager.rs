@@ -1,9 +1,37 @@
+#[cfg(feature = "jit-direct-only")]
+pub struct JitManager;
+
+#[cfg(feature = "jit-direct-only")]
+impl JitManager {
+    pub fn new(_threshold: u32) -> Self { Self }
+    pub fn set_threshold(&mut self, _t: u32) {}
+    pub fn record_entry(&mut self, _func: &str) {}
+    pub fn should_jit(&self, _func: &str) -> bool { false }
+    pub fn mark_compiled(&mut self, _func: &str, _handle: u64) {}
+    pub fn maybe_compile(&mut self, _func: &str, _mir: &crate::mir::MirFunction) -> bool { false }
+    pub fn is_compiled(&self, _func: &str) -> bool { false }
+    pub fn handle_of(&self, _func: &str) -> Option<u64> { None }
+    pub fn sites(&self) -> usize { 0 }
+    pub fn compiled_count(&self) -> usize { 0 }
+    pub fn total_hits(&self) -> u64 { 0 }
+    pub fn exec_ok_count(&self) -> u64 { 0 }
+    pub fn exec_trap_count(&self) -> u64 { 0 }
+    pub fn record_lower_stats(&mut self, _func: &str, _phi_total: u64, _phi_b1: u64, _ret_bool_hint: bool) {}
+    pub fn per_function_stats(&self) -> Vec<(String, u64, u64, u64, u32, bool, u64)> { Vec::new() }
+    pub fn top_hits(&self, _n: usize) -> Vec<(String, u32, bool, u64)> { Vec::new() }
+    pub fn print_summary(&self) {}
+    pub fn maybe_dispatch(&mut self, _func: &str, _argc: usize) -> bool { false }
+    pub fn execute_compiled(&mut self, _func: &str, _ret_ty: &crate::mir::MirType, _args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> { None }
+}
+
+#[cfg(not(feature = "jit-direct-only"))]
 use std::collections::HashMap;
 
 /// Minimal JIT manager skeleton for Phase 10_a
 /// - Tracks per-function entry counts
 /// - Decides when a function should be JIT-compiled (threshold)
 /// - Records compiled functions for stats
+#[cfg(not(feature = "jit-direct-only"))]
 pub struct JitManager {
     threshold: u32,
     hits: HashMap<String, u32>,
@@ -17,6 +45,7 @@ pub struct JitManager {
     func_ret_bool_hint: HashMap<String, u64>,
 }
 
+#[cfg(not(feature = "jit-direct-only"))]
 impl JitManager {
     pub fn new(threshold: u32) -> Self {
         Self { threshold, hits: HashMap::new(), compiled: HashMap::new(), engine: crate::jit::engine::JitEngine::new(), exec_ok: 0, exec_trap: 0, func_phi_total: HashMap::new(), func_phi_b1: HashMap::new(), func_ret_bool_hint: HashMap::new() }

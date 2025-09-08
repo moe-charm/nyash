@@ -407,33 +407,58 @@ impl NyashParser {
                 let field_or_method = field_or_method.clone();
                 self.advance();
 
-                // 可視性ブロック: public { ... } / private { ... }
+                // 可視性: 
+                // - public { ... } / private { ... } ブロック
+                // - public name: Type 単行（P0: 型はパースのみ、意味付けは後段）
                 if field_or_method == "public" || field_or_method == "private" {
-                    self.consume(TokenType::LBRACE)?;
-                    self.skip_newlines();
-                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                        if let TokenType::IDENTIFIER(fname) = &self.current_token().token_type {
-                            let fname = fname.clone();
-                            // ブロックに追加
-                            if field_or_method == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
-                            // 互換性のため、全体fieldsにも追加
-                            fields.push(fname);
-                            self.advance();
-                            // カンマ/改行をスキップ
-                            if self.match_token(&TokenType::COMMA) { self.advance(); }
-                            self.skip_newlines();
-                            continue;
+                    if self.match_token(&TokenType::LBRACE) {
+                        // ブロック形式
+                        self.advance(); // consume '{'
+                        self.skip_newlines();
+                        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                            if let TokenType::IDENTIFIER(fname) = &self.current_token().token_type {
+                                let fname = fname.clone();
+                                // ブロックに追加
+                                if field_or_method == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
+                                // 互換性のため、全体fieldsにも追加
+                                fields.push(fname);
+                                self.advance();
+                                // カンマ/改行をスキップ
+                                if self.match_token(&TokenType::COMMA) { self.advance(); }
+                                self.skip_newlines();
+                                continue;
+                            }
+                            // 予期しないトークン
+                            return Err(ParseError::UnexpectedToken {
+                                expected: "identifier in visibility block".to_string(),
+                                found: self.current_token().token_type.clone(),
+                                line: self.current_token().line,
+                            });
                         }
-                        // 予期しないトークン
-                        return Err(ParseError::UnexpectedToken {
-                            expected: "identifier in visibility block".to_string(),
-                            found: self.current_token().token_type.clone(),
-                            line: self.current_token().line,
-                        });
+                        self.consume(TokenType::RBRACE)?;
+                        self.skip_newlines();
+                        continue;
+                    } else if self.match_token(&TokenType::IDENTIFIER) {
+                        // 単行形式: public name[: Type]
+                        let fname = if let TokenType::IDENTIFIER(n) = &self.current_token().token_type { n.clone() } else { unreachable!() };
+                        self.advance();
+                        if self.match_token(&TokenType::COLON) {
+                            self.advance(); // consume ':'
+                            // 型名（識別子）を受理して破棄（P0）
+                            if let TokenType::IDENTIFIER(_ty) = &self.current_token().token_type {
+                                self.advance();
+                            } else {
+                                return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "type name".to_string(), line: self.current_token().line });
+                            }
+                        }
+                        if field_or_method == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
+                        fields.push(fname);
+                        self.skip_newlines();
+                        continue;
+                    } else {
+                        // public/private の後に '{' でも識別子でもない
+                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "'{' or field name".to_string(), line: self.current_token().line });
                     }
-                    self.consume(TokenType::RBRACE)?;
-                    self.skip_newlines();
-                    continue;
                 }
                 
                 // メソッドかフィールドかを判定
