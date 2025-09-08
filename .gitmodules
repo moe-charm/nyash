@@ -1,3 +1,11 @@
 [submodule "docs/private"]
 	path = docs/private
 	url = https://github.com/moe-charm/nyash-private-docs
+
+[submodule "nyash-lang-papers"]
+	path = nyash-lang-papers
+	url = https://github.com/nyash-lang/papers
+
+[submodule ".github"]
+	path = nyash-lang-github
+	url = https://github.com/nyash-lang/.github
