@@ -86,7 +86,10 @@ nyash-rust/
 test_*.ny
 output_*.ny
 temp_*.ny
+# current_task: ignore by default, but allow docs/current_task to be tracked
 current_task
+!docs/current_task/
+!docs/current_task/**
 
 # Logs
 *.log
