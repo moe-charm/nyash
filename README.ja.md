@@ -171,10 +171,15 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
   - `NYASH_LLVM_ECHO_SMOKE=1 ./tools/llvm_smoke.sh release`
 - Map（by-id プラグイン経路）:
   - `NYASH_LLVM_MAP_SMOKE=1 ./tools/llvm_smoke.sh release`
+- VInvoke（可変長 by-id 経路）:
+  - `NYASH_LLVM_VINVOKE_SMOKE=1 ./tools/llvm_smoke.sh release`（期待: `VInvokeRc: 42`）
+  - `NYASH_LLVM_VINVOKE_RET_SMOKE=1 ./tools/llvm_smoke.sh release`（期待: `Result: 42` と `Result: 1`（size()））
 - 注意:
   - 右シフトは現状 i64 の論理シフト。
   - 論理 And/Or は i1 論理として降ろし、短絡は MIR 側で扱います。
-  - VInvoke 系の一部は実験段階です。by-name フォールバックはデバッグ用途のみ（`NYASH_LLVM_ALLOW_BY_NAME=1`）。
+  - 可変長 by-id 経路はスモーク緑です。by-name フォールバックはデバッグ用途のみ（`NYASH_LLVM_ALLOW_BY_NAME=1`）。
+  - 変長invokeの限定ログは `NYASH_LLVM_VINVOKE_TRACE=1` で有効化できます。
+  - トラブルシューティング（デバッグ用）: 返り値が i64/ハンドルで曖昧に扱われる場合は、`NYASH_LLVM_VINVOKE_PREFER_I64=1`（Unknown返りを整数優先）または `NYASH_LLVM_VINVOKE_BYNAME_WRAP_I64=1`（by-nameの i64 を IntegerBox 化）を試してください。通常のスモークでは不要です。
 
 
 ### 5. **WebAssembly** （ブラウザ用）

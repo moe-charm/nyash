@@ -176,10 +176,15 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
   - `NYASH_LLVM_ECHO_SMOKE=1 ./tools/llvm_smoke.sh release`
 - Map (by-id plugin path):
   - `NYASH_LLVM_MAP_SMOKE=1 ./tools/llvm_smoke.sh release`
+- VInvoke (variable-length by-id):
+  - `NYASH_LLVM_VINVOKE_SMOKE=1 ./tools/llvm_smoke.sh release` (expects `VInvokeRc: 42`)
+  - `NYASH_LLVM_VINVOKE_RET_SMOKE=1 ./tools/llvm_smoke.sh release` (expects `Result: 42` and `Result: 1` for size())
 - Notes:
   - Right shift uses logical shift on i64 today.
   - Logical And/Or are lowered as boolean ops; short-circuiting is handled in MIR.
-  - Some plugin VInvoke variants are experimental; use by-name fallback only for debugging (`NYASH_LLVM_ALLOW_BY_NAME=1`).
+  - Variable-length by-id invoke path passes smokes. By-name fallback is for debugging only (`NYASH_LLVM_ALLOW_BY_NAME=1`).
+  - Enable limited runtime logs for variable-length invoke with `NYASH_LLVM_VINVOKE_TRACE=1`.
+  - Troubleshooting (debug-only): if a return is mapped ambiguously as handle vs i64 in custom builds, try `NYASH_LLVM_VINVOKE_PREFER_I64=1` (prefer integer for Unknown return) or `NYASH_LLVM_VINVOKE_BYNAME_WRAP_I64=1` (wrap by-name i64 as IntegerBox). These are diagnostic toggles and not needed for normal smokes.
 
 
 ### 5. **WebAssembly** (Browser)
