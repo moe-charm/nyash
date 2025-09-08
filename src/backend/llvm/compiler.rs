@@ -558,6 +558,27 @@ impl LLVMCompiler {
                         let i64t = codegen.context.i64_type();
                         // Receiver handle (i64)
                         let recv_v = *vmap.get(box_val).ok_or("box receiver missing")?;
+                        // Fast path: toString() on primitive/string receivers
+                        if method == "toString" && args.is_empty() {
+                            if let Some(d) = dst {
+                                let out = match recv_v {
+                                    // Integer -> build string via concat_is(value, "")
+                                    BasicValueEnum::IntValue(iv) => {
+                                        let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                        let empty = codegen.builder.build_global_string_ptr("", "empty_str").map_err(|e| e.to_string())?;
+                                        let fnty = i8p.fn_type(&[i64t.into(), i8p.into()], false);
+                                        let callee = codegen.module.get_function("nyash.string.concat_is").unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_is", fnty, None));
+                                        let call = codegen.builder.build_call(callee, &[iv.into(), empty.as_pointer_value().into()], "tostr_i64").map_err(|e| e.to_string())?;
+                                        call.try_as_basic_value().left().ok_or("toString(i64) returned void".to_string())?
+                                    }
+                                    // If already a pointer (string-like), return as-is
+                                    BasicValueEnum::PointerValue(pv) => pv.into(),
+                                    _ => recv_v, // fallback: pass-through
+                                };
+                                vmap.insert(*d, out);
+                                continue;
+                            }
+                        }
                         // Accept either an opaque pointer (i8*) or an i64 handle for the receiver
                         let recv_p = match recv_v {
                             BasicValueEnum::PointerValue(pv) => pv,
@@ -790,9 +811,12 @@ impl LLVMCompiler {
                                 };
                                 if let Some(d) = dst {
                                     let rv = call.try_as_basic_value().left().ok_or("invoke_v returned void".to_string())?;
+                                    // Prefer i64 for vinvoke returns when type is unknown (debug toggle)
+                                    let prefer_i64 = std::env::var("NYASH_LLVM_VINVOKE_PREFER_I64").ok().as_deref() == Some("1");
                                     if let Some(mt) = func.metadata.value_types.get(d) {
                                         match mt {
                                             crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
+                                            crate::mir::MirType::Unknown if prefer_i64 => { vmap.insert(*d, rv); }
                                             crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
                                                 let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
                                                 let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
@@ -847,9 +871,11 @@ impl LLVMCompiler {
                                     let call = codegen.builder.build_call(callee, &[recv_h.into(), mptr.into(), argc_v.into(), vals_ptr.into(), tags_ptr.into()], "pinvoke_byname_v").map_err(|e| e.to_string())?;
                                     if let Some(d) = dst {
                                         let rv = call.try_as_basic_value().left().ok_or("invoke_by_name_v returned void".to_string())?;
+                                        let prefer_i64 = std::env::var("NYASH_LLVM_VINVOKE_PREFER_I64").ok().as_deref() == Some("1");
                                         if let Some(mt) = func.metadata.value_types.get(d) {
                                             match mt {
                                                 crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
+                                                crate::mir::MirType::Unknown if prefer_i64 => { vmap.insert(*d, rv); }
                                                 crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
                                                     let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
                                                     let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));

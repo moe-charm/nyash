@@ -674,6 +674,7 @@ pub extern "C" fn nyash_plugin_invoke_by_name_tagged_v_i64(
     vals: *const i64,
     tags: *const i64,
 ) -> i64 {
+    let wrap_i64 = std::env::var("NYASH_LLVM_VINVOKE_BYNAME_WRAP_I64").ok().as_deref() == Some("1");
     let trace = std::env::var("NYASH_LLVM_VINVOKE_TRACE").ok().as_deref() == Some("1");
     if method.is_null() { return 0; }
     let mname = unsafe { std::ffi::CStr::from_ptr(method) };
@@ -753,7 +754,20 @@ pub extern "C" fn nyash_plugin_invoke_by_name_tagged_v_i64(
     if let Some((tag, _sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
         if trace { eprintln!("nyrt: vinvoke.by_name: ret_tag={}", tag); }
         match tag {
-            3 => { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b); } }
+            3 => {
+                if wrap_i64 {
+                    // Wrap integer into IntegerBox handle for by-name path (helps string ops like toString/concat)
+                    if payload.len()==8 {
+                        use nyash_rust::box_trait::IntegerBox;
+                        let mut b=[0u8;8]; b.copy_from_slice(payload); let n=i64::from_le_bytes(b);
+                        let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::new(IntegerBox::new(n));
+                        let h = nyash_rust::jit::rt::handles::to_handle(arc);
+                        return h as i64;
+                    }
+                } else if payload.len()==8 {
+                    let mut b=[0u8;8]; b.copy_from_slice(payload); return i64::from_le_bytes(b);
+                }
+            }
             1 => { return if nyash_rust::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false) { 1 } else { 0 }; }
             8 => { if payload.len()==8 { let mut t=[0u8;4]; t.copy_from_slice(&payload[0..4]); let mut i=[0u8;4]; i.copy_from_slice(&payload[4..8]); let r_type=u32::from_le_bytes(t); let r_inst=u32::from_le_bytes(i); let pb=nyash_rust::runtime::plugin_loader_v2::make_plugin_box_v2(box_type.clone(), r_type, r_inst, invoke.unwrap()); let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox>=std::sync::Arc::new(pb); let h=nyash_rust::jit::rt::handles::to_handle(arc); return h as i64; } }
             5 => { if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref()==Some("1") { if payload.len()==8 { let mut b=[0u8;8]; b.copy_from_slice(payload); let f=f64::from_le_bytes(b); return f as i64; } } }
