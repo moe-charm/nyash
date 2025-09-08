@@ -41,18 +41,14 @@ try {
   Fail "nyash build failed"
 }
 
-# 3) AOT: emit native exe - MERGED FROM build_aot.ps1
-Info "Emitting object (.o) via JIT (Strict/No-fallback)..."
-$host.ui.WriteLine("[build] Heads-up: Running Nyash to emit main.o will open the Egui window. Close the window to continue linking.")
+# 3) AOT: emit object (.o) via JIT-direct (not VM)
+Info "Emitting object (.o) via JIT-direct..."
+$host.ui.WriteLine("[build] Heads-up: Running Nyash (jit-direct) to emit main.o will open the Egui window. Close it to continue.")
 $env:NYASH_AOT_OBJECT_OUT = if ([string]::IsNullOrWhiteSpace($env:NYASH_AOT_OBJECT_OUT)) { "target/aot_objects" } else { $env:NYASH_AOT_OBJECT_OUT }
-$env:NYASH_USE_PLUGIN_BUILTINS = "1"
-$env:NYASH_JIT_EXEC = "1"
-$env:NYASH_JIT_ONLY = "1"
-$env:NYASH_JIT_STRICT = "1"
-$env:NYASH_JIT_ARGS_HANDLE_ONLY = "1"
-$env:NYASH_JIT_THRESHOLD = "1"
 if (-not (Test-Path $env:NYASH_AOT_OBJECT_OUT)) { [void][System.IO.Directory]::CreateDirectory($env:NYASH_AOT_OBJECT_OUT) }
-& .\target\release\nyash --backend vm $InputPath | Out-Null
+$env:NYASH_PLUGIN_ONLY = "1"
+$env:NYASH_JIT_EXEC = "1"
+& .\target\release\nyash --jit-direct $InputPath | Out-Host
 
 $OBJ = Join-Path $env:NYASH_AOT_OBJECT_OUT "main.o"
 if (-not (Test-Path $OBJ)) {
@@ -66,24 +62,27 @@ Pop-Location
 
 Info "Linking $OutputExe ..."
 
-# Try native clang first (LLVM for Windows). On Windows, we avoid -lpthread/-ldl/-lm.
 $clang = Get-Command clang -ErrorAction SilentlyContinue
 if ($clang) {
-  $libDir = "crates/nyrt/target/release"
-  $libName = ""
-  if (Test-Path (Join-Path $libDir "nyrt.lib")) { $libName = "nyrt.lib" }
-  elseif (Test-Path (Join-Path $libDir "libnyrt.a")) { $libName = "libnyrt.a" }
-  if ($libName -ne "") {
-    $libPath = Join-Path $libDir $libName
-    $args = @($OBJ, $libPath, "-o", $OutputExe)
-    & clang @args | Out-Null
+  # Search for nyrt static lib in both workspace root and crate-local targets
+  $candidateDirs = @("target/release", "crates/nyrt/target/release")
+  $libPath = $null
+  foreach ($d in $candidateDirs) {
+    $p1 = Join-Path $d "nyrt.lib"
+    $p2 = Join-Path $d "libnyrt.a"
+    if (Test-Path $p1) { $libPath = $p1; break }
+    if (Test-Path $p2) { $libPath = $p2; break }
   }
-}
-
-if (-not (Test-Path $OutputExe)) {
-  $bash = Get-Command bash -ErrorAction SilentlyContinue
-  if ($bash) {
-    & bash -lc "cc target/aot_objects/main.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o $OutputExe" | Out-Null
+  if ($null -ne $libPath) {
+    # On Windows, avoid -lpthread/-ldl/-lm; add common Win32 libs
+    $args = @(
+      $OBJ, $libPath,
+      "-lUser32", "-lGdi32", "-lShell32", "-lOle32", "-lAdvapi32", "-lWs2_32", "-lNtdll",
+      "-o", $OutputExe
+    )
+    & clang @args | Out-Null
+  } else {
+    Write-Host "[build] nyrt library not found in: $($candidateDirs -join ', ')" -ForegroundColor Yellow
   }
 }
 

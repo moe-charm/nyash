@@ -474,6 +474,35 @@ pub extern "C" fn nyash_plugin_invoke_name_call_i64(argc: i64, a0: i64, a1: i64,
     nyash_plugin_invoke_name_common_i64("call", argc, a0, a1, a2)
 }
 
+// Extended by-name shim: allow passing third argument directly (avoid legacy TLS)
+#[no_mangle]
+pub extern "C" fn nyash_plugin_invoke_name_call3_i64(argc: i64, a0: i64, a1: i64, a2: i64, a3: i64) -> i64 {
+    if argc <= 3 { return nyash_plugin_invoke_name_common_i64("call", argc, a0, a1, a2); }
+    use nyash_rust::runtime::plugin_loader_v2::PluginBoxV2;
+    let mut instance_id: u32 = 0; let mut type_id: u32 = 0; let mut box_type: Option<String> = None; let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
+    if a0 > 0 { if let Some(obj) = nyash_rust::jit::rt::handles::get(a0 as u64) { if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() { instance_id = p.instance_id(); type_id = p.inner.type_id; box_type = Some(p.box_type.clone()); invoke = Some(p.inner.invoke_fn); } } }
+    if invoke.is_none() { return 0; }
+    let box_type = box_type.unwrap_or_default();
+    let mh = if let Ok(host) = nyash_rust::runtime::plugin_loader_unified::get_global_plugin_host().read() { host.resolve_method(&box_type, "call") } else { return 0 };
+    let method_id = match mh { Ok(h) => h.method_id, Err(_) => return 0 } as u32;
+    let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header((argc.saturating_sub(1).max(0) as u16));
+    nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, a1);
+    nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, a2);
+    nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, a3);
+    let mut out: Vec<u8> = vec![0u8; 512];
+    let mut out_len: usize = out.len();
+    let rc = unsafe { invoke.unwrap()(type_id, method_id, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
+    if rc != 0 { return 0; }
+    let slice = &out[..out_len];
+    if let Some((t,_s,p)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(slice) {
+        if t == 3 {
+            if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(p) { return v as i64; }
+            if p.len() == 8 { let mut b=[0u8;8]; b.copy_from_slice(p); return i64::from_le_bytes(b); }
+        } else if t == 1 { return if nyash_rust::runtime::plugin_ffi_common::decode::bool(p).unwrap_or(false) { 1 } else { 0 }; }
+    }
+    0
+}
+
 fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64, a2: i64) -> i64 {
     use nyash_rust::runtime::plugin_loader_v2::PluginBoxV2;
     // Resolve receiver
