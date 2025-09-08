@@ -57,6 +57,50 @@
 - 実行: `tools/build_llvm.sh apps/tests/mir-compare-multi/main.nyash -o app && ./app`
 - 受け入れ: VM と同一の戻り値（Core‑13 正規化ON）
 
+【VInvoke（by-name/by-id vector）— 戻り値マッピング問題／修正方針】
+
+再現手順
+- `NYASH_LLVM_VINVOKE_TRACE=1 NYASH_LLVM_VINVOKE_SMOKE=1 ./tools/llvm_smoke.sh release`
+
+取得ログ（要点）
+- nyrt: vinvoke.by_name: recv_h=1 argc=1 vals_ptr=0x... tags_ptr=0x...
+- nyrt: vinvoke.by_name: type_id=11 method_id=2 nargs=1 tags[..1]=[3]
+- nyrt: vinvoke.by_name: rc=0 out_len=16
+- nyrt: vinvoke.by_name: ret_tag=3
+- 標準出力: VInvokeRc: 0 / Result: 0
+
+確認事項
+- 受け側（NyRT）には正しく届いている：
+  - recv_h=1（MapBox インスタンス）
+  - type_id=11（MapBox）, method_id=2（get）
+  - argc=1, tags=[3]（整数引数）
+  - 呼び出し rc=0（成功）
+  - 戻り TLV ret_tag=3（i64）
+- にも関わらずアプリ側出力は 0 → NyRT→プラグインはOK。戻り値の扱いで欠落。
+
+原因の見立て（LLVM 側の戻り値マッピング）
+- 変長 vector 経路の戻りは常に i64：
+  - tag=3 はそのまま数値、tag=8 はハンドルIDを i64 として返却。
+- LLVM codegen（by-name/by-id vector）で dst の型が MirType::Unknown 等の場合、返り値 i64 を「ハンドル（i8*）として扱う」ために int_to_ptr でポインタ化して格納している箇所がある。
+- 今回は「純粋な整数（42想定）」なので、i64=42 をポインタ 0x2a 扱い→無効ハンドルと見做され最終的に 0 になる可能性が高い。
+
+短期対処（最小差分）
+1) LLVM vector 経路の戻り格納時、dst が Unknown/Box/String 等でも「既知の原則プリミティブ返りメソッド」は整数として保持する特例を入れる。
+   - 例：by-name では box_type + method_name、by-id では type_id + method_id で判定（MapBox.get 等）。
+2) by-id vector（`nyash.plugin.invoke_tagged_v_i64`）も同様に統一。
+
+正道（中期）
+- 返り値の種別（primitive or handle）を codegen 側で判別可能にする。
+  - 方式A：nyash.toml にメソッド戻り型ヒント（primitive/handle/f64/bool）を追加し、レジストリ→codegen へ供給。
+  - 方式B：NyRT シムに「期待戻り形式（ハンドル期待か値期待か）」のフラグ引数を追加し、codegen から渡す（dst 型が Unknown なら handle期待=1 など）。NyRT は ret_tag=3 でも handle 期待なら IntegerBox を生成してハンドルで返す。
+
+受け入れ基準
+- `NYASH_LLVM_VINVOKE_SMOKE=1`（by-name）で `VInvokeRc: 42` を出力。
+- `NYASH_LLVM_VINVOKE_RET_SMOKE=1`（by-id, return）で `Result: 42` を出力。
+
+備考
+- argc/ポインタ整合性（vals/tags の GEP([0,0])→i64* キャスト）は現状問題なし。
+
 メモ
 - 作業ディレクトリ: `/mnt/c/git/nyash-project/nyash_llvm`（branch: `llvm-dev`）
 - 次の commit で P0 を締め、P1（ビット演算/Shift 実装）に移行する。
