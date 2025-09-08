@@ -612,7 +612,8 @@ impl IRBuilder for CraneliftBuilder {
         let call_conv = self.module.isa().default_call_conv();
         let mut sig = Signature::new(call_conv);
         for _ in 0..6 { sig.params.push(AbiParam::new(types::I64)); }
-        if has_ret { sig.returns.push(AbiParam::new(if use_f64 { types::F64 } else { types::I64 })); }
+        // Always declare with I64 return to keep signature stable across call sites
+        sig.returns.push(AbiParam::new(types::I64));
         let symbol = if use_f64 { "nyash_plugin_invoke3_f64" } else { "nyash_plugin_invoke3_i64" };
         let func_id = self.module.declare_function(symbol, cranelift_module::Linkage::Import, &sig).expect("declare plugin shim failed");
         // Ensure we are in a valid block context using the builder's safe switch

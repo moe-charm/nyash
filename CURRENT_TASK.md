@@ -2,7 +2,7 @@
 
 このドキュメントは「いま何をすれば良いか」を最小で共有するためのコンパクト版です。詳細は git 履歴と `docs/`（phase-15）を参照してください。
 
-— 最終更新: 2025‑09‑06 (Phase 15.16 反映, AOT/JIT-AOT 足場強化 + Phase A リファクタ着手準備)
+— 最終更新: 2025‑09‑08 (Windows Egui AOT 実行まで到達 / 文字列・フォント対応の残課題を引き継ぎ)
 
 【ハンドオフ（2025‑09‑06 final）— String.length 修正 完了／JIT 実行を封印し四体制へ】
 
@@ -198,6 +198,56 @@ Phase A 進捗（実施済）
 - [ ] `emit_len_with_fallback_*` / `lower_box_call(len/length)` にイベント出力を追加（選択分岐/経路ログ）。
 - [ ] AOT segv の最小再現収集（PIE/relro/TLSの前提確認）→ `nyrt` 側エクスポート/リンカフラグ点検。
 - [ ] `NYASH_USE_PLUGIN_BUILTINS=1` 時の `length` も robust path を常に使用することを E2E で再確認。
+
+— 2025‑09‑08 Handoff（Egui AOT/Windows）
+
+達成
+- JIT（ホストブリッジ）: `tools/egui_win_smoke.ps1` で Egui ウィンドウ表示（ExitCode=0）。
+- AOT exe: `tools/windows/build_app_egui_manual.ps1 -Input apps/egui-hello/main.nyash -Out app_egui.exe` で生成・実行。
+  - 実行ログにて `M_OPEN/M_UI_LABEL/M_RUN` と `run_native returned: Ok(())` を確認。終了コード 0。
+
+実装変更（今回）
+- AOT ビルダー（ObjectBuilder）: プラグイン BoxCall のフォールバック導入
+  - `src/jit/lower/core.rs`: Array/Map/String 非対象の BoxCall で、`NYASH_USE_PLUGIN_BUILTINS=1` のとき PluginInvoke を試行（EguiBox.open/uiLabel/run/close が AOT で到達）。
+- プラグイン呼び出しシグネチャの安定化
+  - `src/jit/lower/builder/cranelift.rs` / `src/jit/lower/builder/object.rs`:
+    - `nyash_plugin_invoke3_*`/`emit_host_call_fixed3` の import を「常に i64 返し」で宣言し直し（呼び出しサイト差異による再宣言衝突を回避）。
+- AOT 専用出力（JIT 非依存）
+  - `src/jit/engine.rs`: `NYASH_AOT_OBJECT_OUT` 設定時は JIT ビルダーを経由せず ObjectBuilder だけで `.o` を出力（署名差異によるクラッシュを回避）。
+- Windows スクリプト整備
+  - `tools/egui_win_smoke.ps1`: PS5 互換、ワークスペース target を探索。
+  - `tools/windows/build_egui_aot.ps1`: `nyash.exe` 明示、古い `main.o` を削除、`NYASH_SKIP_TOML_ENV=1` で env 上書きを抑止。
+  - `tools/windows/build_app_egui_manual.ps1`: lib 検索を workspace/crate 両対応、Win32 系ライブラリを付加してリンク固定。
+
+現状の制約 / 既知の問題
+1) AOT の文字列引き渡しが 16 バイトに制限
+   - StringBox リテラルのハンドル化を `nyash.string.from_u64x2(lo,hi,len)`（最大 16B）で実装しているため、
+     `app.open(width,height,title)` の title が 16B で切り詰められる。
+     例: `"Hello Egui from Nyash"` → `"Hello Egui from "` で停止。
+   - 対応案（優先度: 中）
+     - A: nyrt に可変長 by-name invoke（vals/tags 配列版）を追加し、ObjectBuilder から `invoke_tagged_v_i64` 経由で長文を渡す。
+     - B: `nyash.string.from_u64x2` を拡張（32/64B）し、ObjectBuilder 側で分割連結（簡易だが冗長）。
+     - C: ランタイム側に `nyash.string.from_utf8(ptr,len)` のようなヘルパを追加（データセクション参照が必要）。
+
+2) 日本語フォントの欠落による豆腐（□）表示
+   - JIT/AOT ともにデフォルトフォントでは日本語が描けず、中央の日本語ラベルが □□□… に化ける。
+   - 対応案（優先度: 低〜中）
+     - Egui プラグイン（with-egui）にフォント組込（例: assets/NotoSansJP-VariableFont_wght.ttf を include_bytes! で読込み）
+       → `egui::FontDefinitions` で `TextStyle::Body` 等へ割当。
+     - 暫定: 英字のみのラベルにする（本件の AOT 検証では可）。
+
+検証コマンド（Windows, PowerShell）
+- JIT（ホストブリッジ）: `pwsh -File tools/egui_win_smoke.ps1`
+- AOT exe 生成: `pwsh -File tools/windows/build_app_egui_manual.ps1 -Input apps/egui-hello/main.nyash -Out app_egui.exe -Verbose`
+- 実行＋ログ: `pwsh -File tools/windows/run_app_egui.ps1 -Exe .\app_egui.exe -Verbose`
+
+次アクション（引き継ぎ TODO）
+- [ ] AOT 文字列引き渡しの拡張（上記 1) の A 案推し）
+  - nyrt: `nyash.plugin.invoke_by_name_v_i64(recv, argc, vals*, tags*)` を追加（復路 decode は既存 TLV）。
+  - ObjectBuilder: by-name 経路を使い、title/label を長さ制限なく渡す。
+- [ ] Egui フォントの組込（NotoSansJP など）。
+- [ ] AOT one‑shot スクリプト（tools/windows/build_egui_aot.ps1）の jit-direct 呼び出しを最終調整（UNAVAILABLE 表示の整理）。
+
 
 メモ
 - `jit_aot_any_len_string.nyash` は `return s.length()` の Return 経路解決が決め手。材化を強化すれば `3` が期待値。

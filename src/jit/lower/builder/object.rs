@@ -477,7 +477,8 @@ impl IRBuilder for ObjectBuilder {
         // Build signature and declare import
         let mut sig = Signature::new(self.module.isa().default_call_conv());
         for _ in 0..12 { sig.params.push(AbiParam::new(types::I64)); }
-        if has_ret { sig.returns.push(AbiParam::new(types::I64)); }
+        // Always declare with I64 return to keep signature stable across call sites
+        sig.returns.push(AbiParam::new(types::I64));
         let func_id = self.module.declare_function("nyash_plugin_invoke3_tagged_i64", cranelift_module::Linkage::Import, &sig).expect("declare plugin invoke tagged");
         let fref = self.module.declare_func_in_func(func_id, fb.func);
 
@@ -508,9 +509,7 @@ impl IRBuilder for ObjectBuilder {
         }
 
         let call_inst = fb.ins().call(fref, &args);
-        if has_ret {
-            if let Some(v) = fb.inst_results(call_inst).get(0).copied() { self.value_stack.push(v); self.value_tags.push(ValueTag::I64); }
-        }
+        if has_ret { if let Some(v) = fb.inst_results(call_inst).get(0).copied() { self.value_stack.push(v); self.value_tags.push(ValueTag::I64); } }
     }
 
     fn emit_plugin_invoke_by_name(&mut self, _method: &str, argc: usize, has_ret: bool) {

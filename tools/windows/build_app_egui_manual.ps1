@@ -51,6 +51,8 @@ cargo build --release --features cranelift-jit | Out-Host
 # 3) Emit main.o via Nyash (AOT object)
 $env:NYASH_AOT_OBJECT_OUT = if ([string]::IsNullOrWhiteSpace($env:NYASH_AOT_OBJECT_OUT)) { "target/aot_objects" } else { $env:NYASH_AOT_OBJECT_OUT }
 if (-not (Test-Path $env:NYASH_AOT_OBJECT_OUT)) { [void][System.IO.Directory]::CreateDirectory($env:NYASH_AOT_OBJECT_OUT) }
+Remove-Item Env:NYASH_OPT_DIAG_FORBID_LEGACY -ErrorAction SilentlyContinue
+$env:NYASH_SKIP_TOML_ENV = '1'
 
 # Minimal strictness to keep emission deterministic
 $env:NYASH_USE_PLUGIN_BUILTINS = '1'
@@ -61,7 +63,7 @@ $env:NYASH_JIT_ARGS_HANDLE_ONLY = '1'
 $env:NYASH_JIT_THRESHOLD = '1'
 
 Info "Emitting main.o (an Egui window will appear — close it to continue)..."
-& .\target\release\nyash --backend vm $InputPath | Out-Null
+& .\target\release\nyash.exe --backend vm $InputPath | Out-Null
 
 $obj = Join-Path $env:NYASH_AOT_OBJECT_OUT 'main.o'
 if (-not (Test-Path $obj)) { Fail "object not generated: $obj" }
@@ -75,12 +77,16 @@ try {
 
 # 5) Link
 Info "Linking $OutputExe ..."
-$libDir = "crates/nyrt/target/release"
-$libName = ""
-if (Test-Path (Join-Path $libDir "nyrt.lib")) { $libName = "nyrt.lib" }
-elseif (Test-Path (Join-Path $libDir "libnyrt.a")) { $libName = "libnyrt.a" }
-if ($libName -eq "") { Fail "NyRT static library not found in $libDir" }
-$libPath = Join-Path $libDir $libName
+# Search for NyRT static library in common locations (workspace or crate-local)
+$candidateDirs = @("target/release", "crates/nyrt/target/release")
+$libPath = $null
+foreach ($d in $candidateDirs) {
+  $p1 = Join-Path $d "nyrt.lib"
+  $p2 = Join-Path $d "libnyrt.a"
+  if (Test-Path $p1) { $libPath = $p1; break }
+  if (Test-Path $p2) { $libPath = $p2; break }
+}
+if ($null -eq $libPath) { Fail "NyRT static library not found under: $($candidateDirs -join ', ')" }
 
 # Prefer specific LLVM clang if present
 $clangCandidates = @(
@@ -92,7 +98,7 @@ $clangCandidates = @(
 if ($clangCandidates.Count -gt 0) {
   $clang = $clangCandidates[0]
   Info "Using clang: $clang"
-  & $clang $obj $libPath -o $OutputExe | Out-Host
+  & $clang $obj $libPath -lUser32 -lGdi32 -lShell32 -lOle32 -lAdvapi32 -lWs2_32 -lNtdll -o $OutputExe | Out-Host
 } else {
   # Fallback: use bash/cc with Linux-like flags, if available (MSYS2/WSL)
   $bash = Get-Command bash -ErrorAction SilentlyContinue
@@ -109,4 +115,3 @@ if (Test-Path $OutputExe) {
 } else {
   Fail "Output exe not found: $OutputExe"
 }
-

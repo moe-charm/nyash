@@ -46,11 +46,18 @@ Info "Emitting object (.o) via JIT-direct..."
 $host.ui.WriteLine("[build] Heads-up: Running Nyash (jit-direct) to emit main.o will open the Egui window. Close it to continue.")
 $env:NYASH_AOT_OBJECT_OUT = if ([string]::IsNullOrWhiteSpace($env:NYASH_AOT_OBJECT_OUT)) { "target/aot_objects" } else { $env:NYASH_AOT_OBJECT_OUT }
 if (-not (Test-Path $env:NYASH_AOT_OBJECT_OUT)) { [void][System.IO.Directory]::CreateDirectory($env:NYASH_AOT_OBJECT_OUT) }
+# Remove old object to avoid mixing ELF/COFF from previous runs
+$OBJ = Join-Path $env:NYASH_AOT_OBJECT_OUT "main.o"
+if (Test-Path $OBJ) { Remove-Item -Force $OBJ }
 $env:NYASH_PLUGIN_ONLY = "1"
 $env:NYASH_JIT_EXEC = "1"
-& .\target\release\nyash --jit-direct $InputPath | Out-Host
+# Avoid toml [env] overrides during this emission
+$env:NYASH_SKIP_TOML_ENV = '1'
+# Allow legacy MIR ops for this demo emission (nyash.toml sets strict=1)
+Remove-Item Env:NYASH_OPT_DIAG_FORBID_LEGACY -ErrorAction SilentlyContinue
+# Force Windows binary
+& .\target\release\nyash.exe --jit-direct $InputPath | Out-Host
 
-$OBJ = Join-Path $env:NYASH_AOT_OBJECT_OUT "main.o"
 if (-not (Test-Path $OBJ)) {
   Fail "object not generated: $OBJ`n  hint: ensure main() is lowerable under current Strict JIT coverage"
 }

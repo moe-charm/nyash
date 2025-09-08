@@ -750,6 +750,32 @@ impl LowerCore {
                 if handled {
                     return Ok(());
                 }
+                // Fallback: when plugin builtins are enabled, try generic plugin invoke for known box types
+                if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
+                    if let Some(bt) = self.box_type_map.get(&array).cloned() {
+                        let argc = 1 + args.len();
+                        let decision = crate::jit::policy::invoke::decide_box_method(&bt, method.as_str(), argc, dst.is_some());
+                        if let crate::jit::policy::invoke::InvokeDecision::PluginInvoke { type_id, method_id, box_type, .. } = decision {
+                            // Push receiver handle: prefer param, else local slot, else best-effort known/param
+                            if let Some(pidx) = self.param_index.get(&array).copied() { b.emit_param_i64(pidx); }
+                            else if let Some(slot) = self.local_index.get(&array).copied() { b.load_local_i64(slot); }
+                            else { self.push_value_if_known_or_param(b, &array); }
+                            // Push arguments: materialize String literals as handles when known
+                            for a in args.iter() {
+                                if let Some(s) = self.known_str.get(a).cloned() { b.emit_string_handle_from_literal(&s); }
+                                else { self.push_value_if_known_or_param(b, a); }
+                            }
+                            b.emit_plugin_invoke(type_id, method_id, argc, dst.is_some());
+                            crate::jit::observe::lower_plugin_invoke(&box_type, method.as_str(), type_id, method_id, argc);
+                            if let Some(d) = dst {
+                                self.handle_values.insert(*d);
+                                let slot = *self.local_index.entry(*d).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                                b.store_local_i64(slot);
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
             }
                     /* legacy BoxCall branch removed (now handled in ops_ext)
                     // handled in helper (read-only simple methods)

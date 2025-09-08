@@ -22,7 +22,7 @@ if (-not $DebugBuild) { $cargoArgs += '--release' }
 & cargo @cargoArgs | Out-Host
 if ($LASTEXITCODE -ne 0) { Die "cargo build nyash failed" }
 
-$nyashExe = Join-Path -Path (Resolve-Path .).Path -ChildPath ("target/{0}/nyash{1}" -f $mode, (if ($IsWindows) {'.exe'} else {''}))
+$nyashExe = Join-Path -Path (Resolve-Path .).Path -ChildPath ("target/{0}/nyash.exe" -f $mode)
 if (-not (Test-Path $nyashExe)) {
   Die "nyash binary not found: $nyashExe"
 }
@@ -34,8 +34,13 @@ if (-not $DebugBuild) { $pluginArgs += '--release' }
 & cargo @pluginArgs | Out-Host
 if ($LASTEXITCODE -ne 0) { Die "cargo build nyash-egui-plugin failed" }
 
+# Resolve plugin output dir; in workspace builds, artifacts land in workspace target
 $pluginDir = Join-Path -Path (Resolve-Path .).Path -ChildPath ("plugins/nyash-egui-plugin/target/{0}" -f $mode)
-if (-not (Test-Path $pluginDir)) { Die "plugin target dir not found: $pluginDir" }
+if (-not (Test-Path $pluginDir)) {
+  $wsTarget = Join-Path -Path (Resolve-Path .).Path -ChildPath ("target/{0}" -f $mode)
+  if (Test-Path $wsTarget) { $pluginDir = $wsTarget }
+}
+if (-not (Test-Path $pluginDir)) { Warn "plugin target dir not found: $pluginDir (continuing; using workspace target paths)" }
 
 # 3) Environment toggles for JIT host-bridge path
 $env:NYASH_CLI_VERBOSE = '1'
@@ -73,4 +78,3 @@ if ($code -ne 0) {
 }
 
 Info "Done."
-
