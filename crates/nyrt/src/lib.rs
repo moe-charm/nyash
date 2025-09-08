@@ -1,5 +1,7 @@
 // Minimal NyRT static shim library (libnyrt.a)
 mod string_concat;
+mod plugin_invoke;
+mod runtime_future;
 // Exposes C ABI entry points used by AOT/JIT-emitted objects.
 
 // Internal helpers to avoid nested mutable borrows across closures
@@ -665,8 +667,8 @@ pub extern "C" fn nyash_plugin_invoke_by_name_i64(
     0
 }
 
-// Variable-length by-name invoke with tagged args
-// Export name: nyash.plugin.invoke_by_name_tagged_v_i64
+// moved to plugin_invoke::nyash_plugin_invoke_by_name_tagged_v_i64
+/*
 #[export_name = "nyash.plugin.invoke_by_name_tagged_v_i64"]
 pub extern "C" fn nyash_plugin_invoke_by_name_tagged_v_i64(
     recv_handle: i64,
@@ -777,9 +779,11 @@ pub extern "C" fn nyash_plugin_invoke_by_name_tagged_v_i64(
     }
     0
 }
+*/
 
 // Tagged by-id invoke (supports f64/int/handle for first two args)
 // tag: 3=I64, 5=F64(bits), 8=Handle
+/* moved to plugin_invoke::nyash_plugin_invoke3_tagged_i64
 #[export_name = "nyash_plugin_invoke3_tagged_i64"]
 pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
     type_id: i64,
@@ -854,9 +858,11 @@ pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
     }
     0
 }
+*/
 
 // Variable-length tagged invoke by-id
 // Exported as: nyash.plugin.invoke_tagged_v_i64(i64 type_id, i64 method_id, i64 argc, i64 recv_h, i64* vals, i64* tags) -> i64
+/* moved to plugin_invoke::nyash_plugin_invoke_tagged_v_i64
 #[export_name = "nyash.plugin.invoke_tagged_v_i64"]
 pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
     type_id: i64,
@@ -937,9 +943,11 @@ pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
     }
     0
 }
+*/
 
 // Spawn a plugin instance method asynchronously and return a Future handle (i64)
 // Exported as: nyash.future.spawn_method_h(type_id, method_id, argc, recv_h, vals*, tags*) -> i64 (FutureBox handle)
+/* moved to runtime_future::nyash_future_spawn_method_h
 #[export_name = "nyash.future.spawn_method_h"]
 pub extern "C" fn nyash_future_spawn_method_h(
     type_id: i64,
@@ -1093,11 +1101,13 @@ pub extern "C" fn nyash_future_spawn_method_h(
     }));
     handle as i64
 }
+*/
 
 // Simpler spawn shim for JIT: pass argc(total explicit args incl. method_name),
 // receiver handle (a0), method name (a1), and first payload (a2). Extra args
 // are read from legacy VM args, same as plugin_invoke3_*.
 // Returns a handle (i64) to FutureBox.
+/* moved to runtime_future::nyash_future_spawn_instance3_i64
 #[export_name = "nyash.future.spawn_instance3_i64"]
 pub extern "C" fn nyash_future_spawn_instance3_i64(
     a0: i64,
@@ -1263,6 +1273,7 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(
     }));
     handle as i64
 }
+*/
 
 // ---- Handle-based birth shims for AOT/JIT object linkage ----
 // These resolve symbols like "nyash.string.birth_h" referenced by ObjectModule.
