@@ -696,6 +696,45 @@ impl LowerCore {
             I::BoxCall { box_val: array, method, args, dst, .. } => {
                 // Prefer ops_ext; if not handled, fall back to legacy path below
                 let trace = std::env::var("NYASH_JIT_TRACE_LOWER").ok().as_deref() == Some("1");
+                // Generic birth handling (no hard-coded box types):
+                // When method == "birth", emit a generic birth via NyRT shim using type_id from config.
+                // This produces a runtime handle to be used by subsequent instance methods (inc/get/...)
+                if method.as_str() == "birth" {
+                    // Resolve type_id from config_resolver when available
+                    let mut handled_birth = false;
+                    if let Some(bt) = self.box_type_map.get(&array).cloned() {
+                        if let Some(mi) = crate::jit::policy::config_resolver::resolve_method_from_config(&bt, "birth") {
+                            // nyash.box.birth_h(type_id) -> handle
+                            // Push type_id as I64 and call birth shim (AOT/JIT 共通)
+                            b.emit_const_i64(mi.type_id as i64);
+                            b.emit_host_call_typed(
+                                "nyash.box.birth_h",
+                                &[crate::jit::lower::builder::ParamKind::I64],
+                                true,
+                                false,
+                            );
+                            // Persist the produced handle for downstream calls.
+                            // Prefer explicit destination if present; otherwise update the receiver (constructor style).
+                            let target = dst.as_ref().copied().unwrap_or(*array);
+                            let slot = *self
+                                .local_index
+                                .entry(target)
+                                .or_insert_with(|| {
+                                    let id = self.next_local;
+                                    self.next_local += 1;
+                                    id
+                                });
+                            self.handle_values.insert(target);
+                            b.store_local_i64(slot);
+                            handled_birth = true;
+                        }
+                    }
+                    if handled_birth {
+                        if trace { eprintln!("[LOWER] BoxCall birth handled via nyash.box.birth_h"); }
+                        return Ok(());
+                    }
+                    // If we couldn't resolve from config, fall through to generic path below.
+                }
                 // Handle ArrayBox.set with handle-valued value for literal strings
                 if method == "set" && self.box_type_map.get(&array).map(|s| s=="ArrayBox").unwrap_or(false) {
                     // Expect args: [index, value]

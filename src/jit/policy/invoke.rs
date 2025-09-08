@@ -19,6 +19,12 @@ fn use_plugin_builtins() -> bool {
 
 /// Decide invocation policy for a known Box method.
 pub fn decide_box_method(box_type: &str, method: &str, argc: usize, has_ret: bool) -> InvokeDecision {
+    // Config-based resolution first（AOT 下位化でも安定して使える純粋関数）
+    if use_plugin_builtins() {
+        if let Some(mi) = crate::jit::policy::config_resolver::resolve_method_from_config(box_type, method) {
+            return InvokeDecision::PluginInvoke { type_id: mi.type_id, method_id: mi.method_id, box_type: box_type.to_string(), method: method.to_string(), argc, has_ret };
+        }
+    }
     // HostCall mapping for common collections/strings/instance ops
     let symbol = match (box_type, method) {
         ("ArrayBox", "length") => crate::jit::r#extern::collections::SYM_ANY_LEN_H,
@@ -37,14 +43,6 @@ pub fn decide_box_method(box_type: &str, method: &str, argc: usize, has_ret: boo
     // Prefer HostCall when available
     if !symbol.is_empty() {
         InvokeDecision::HostCall { symbol: symbol.to_string(), argc, has_ret, reason: "mapped_symbol" }
-    } else if use_plugin_builtins() {
-        // Try plugin_invoke as a secondary path when enabled
-        if let Ok(ph) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
-            if let Ok(h) = ph.resolve_method(box_type, method) {
-                return InvokeDecision::PluginInvoke { type_id: h.type_id, method_id: h.method_id, box_type: h.box_type, method: method.to_string(), argc, has_ret };
-            }
-        }
-        InvokeDecision::Fallback { reason: "unknown_method" }
     } else {
         InvokeDecision::Fallback { reason: "unknown_method" }
     }
