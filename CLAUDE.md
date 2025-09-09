@@ -4,6 +4,9 @@
 
 ## Start Here (必ずここから)
 - 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)
+  - 📁 **Main**: [docs/current_task/main/](docs/current_task/main/)
+  - 📁 **LLVM**: [docs/current_task/llvm/](docs/current_task/llvm/)
+  - 📁 **Self**: [docs/current_task/self_current_task/](docs/current_task/self_current_task/)
 - ドキュメントハブ: [README.md](README.md)
 - 🚀 **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
  - 📊 **JIT統計JSONスキーマ(v1)**: [jit_stats_json_v1.md](docs/reference/jit/jit_stats_json_v1.md)
@@ -120,10 +123,11 @@ cargo build --release --features llvm
 ./target/release/nyash --aot program.nyash -o program.exe
 ```
 
-## 📝 Update (2025-09-05)
+## 📝 Update (2025-09-08)
 - 🎉 Phase 15到達！セルフホスティング実装中
 - v0 Nyパーサー完成（Ny→JSON IR v0）
-- 直接ブリッジ設計とAOT P2スタブ実装
+- 🔥 ループビルダーSSAバグ発見・調査完了（ブロッカー）
+- NyコンパイラMVP実装予定（Ny→MIR）
 - MIR 13命令への最終最適化完了
 - 80k→20k行（75%削減）の革命的圧縮を目指す
 - 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
@@ -138,8 +142,8 @@ cargo build --release --features llvm
 ```nyash
 // デリゲーション構文（すべてのBoxで統一的に使える！）
 box Child from Parent {  // from構文でデリゲーション
-    init(args) {  // コンストラクタは「init」に統一
-        from Parent.init(args)  // 親の初期化
+    birth(args) {  // コンストラクタは「birth」に統一
+        from Parent.birth(args)  // 親の初期化
     }
     
     override method() {  // 明示的オーバーライド必須

@@ -1,11 +1,11 @@
-# Restart Notes — Ny Syntax Alignment (2025‑09‑07)
+# Restart Notes — Ny Syntax Alignment (2025‑09‑08)
 
 目的
 - Self‑Hosting 方針（Nyのみで工具を回す前段）に合わせて、Ny 構文とコーディング規約を明示化し、最小版ツールの完走性を優先。
 
 Ny 構文（実装時の基準）
 - 1行1文／セミコロン非使用。
-- break / continue を使わない（関数早期 return、番兵条件、if 包みで置換）。
+- break / continue を使わない（関数早期 return、番兵条件、if 包みで置換）→ **注：Phase 13でcontinue/break実装済み**
 - else は直前の閉じ波括弧と同一行（`} else {`}）。
 - 文字列の `"` と `\` は確実にエスケープ。
 - 反復は `loop(条件) { …; インクリメント }` を基本とし、必要に応じて「関数早期 return」型で早期脱出。
@@ -15,6 +15,7 @@ Ny 構文（実装時の基準）
    - `apps/selfhost/tools/dep_tree_min_string.nyash`
    - FileBox/PathBox + 文字走査のみで JSON 構築（配列/マップに頼らない）
    - `make dep-tree` で `tmp/deps.json` を出力
+   - **🔥 ブロッカー: ループビルダーSSAバグ（詳細は docs/current_task/self_current_task/10-Now.md 参照）**
 2) using/module 対応は次段（構文・優先順位をユーザーと再すり合わせ後）
    - 優先: `module > 相対 > using-path`、曖昧=エラー、STRICT ゲート（要相談）
 3) ブリッジ Stage 1 は保留
