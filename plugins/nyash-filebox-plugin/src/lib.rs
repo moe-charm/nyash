@@ -42,6 +42,7 @@ const METHOD_OPEN: u32 = 1;
 const METHOD_READ: u32 = 2;
 const METHOD_WRITE: u32 = 3;
 const METHOD_CLOSE: u32 = 4;
+const METHOD_EXISTS: u32 = 5;
 const METHOD_COPY_FROM: u32 = 7; // New: copyFrom(other: Handle)
 const METHOD_CLONE_SELF: u32 = 8; // New: cloneSelf() -> Handle
 const METHOD_FINI: u32 = u32::MAX;  // Destructor
@@ -167,46 +168,68 @@ pub extern "C" fn nyash_plugin_invoke(
                 }
             }
             METHOD_READ => {
-                // args: None (Nyash spec: read() has no arguments)
-                // Read entire file content
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&_instance_id) {
-                        if let Some(file) = inst.file.as_mut() {
-                            // Read entire file from beginning
-                            let _ = file.seek(SeekFrom::Start(0));
-                            let mut buf = Vec::new();
-                            match file.read_to_end(&mut buf) {
-                                Ok(n) => {
-                                    log_info(&format!("READ {} bytes (entire file)", n));
-                                    // Preflight for Bytes TLV: header(4) + entry(4) + content
+                // args: optional String path
+                let args = std::slice::from_raw_parts(_args, _args_len);
+                if _args_len > 0 {
+                    match tlv_parse_string(args) {
+                        Ok(path) => {
+                            match open_file("r", &path) {
+                                Ok(mut file) => {
+                                    let mut buf = Vec::new();
+                                    if let Err(_) = file.read_to_end(&mut buf) { return NYB_E_PLUGIN_ERROR; }
                                     let need = 8usize.saturating_add(buf.len());
                                     if preflight(_result, _result_len, need) { return NYB_E_SHORT_BUFFER; }
                                     return write_tlv_bytes(&buf, _result, _result_len);
                                 }
                                 Err(_) => return NYB_E_PLUGIN_ERROR,
                             }
-                        } else { return NYB_E_INVALID_HANDLE; }
+                        }
+                        Err(_) => return NYB_E_INVALID_ARGS,
+                    }
+                } else {
+                    if let Ok(mut map) = INSTANCES.lock() {
+                        if let Some(inst) = map.get_mut(&_instance_id) {
+                            if let Some(file) = inst.file.as_mut() {
+                                let _ = file.seek(SeekFrom::Start(0));
+                                let mut buf = Vec::new();
+                                match file.read_to_end(&mut buf) {
+                                    Ok(n) => {
+                                        log_info(&format!("READ {} bytes (entire file)", n));
+                                        let need = 8usize.saturating_add(buf.len());
+                                        if preflight(_result, _result_len, need) { return NYB_E_SHORT_BUFFER; }
+                                        return write_tlv_bytes(&buf, _result, _result_len);
+                                    }
+                                    Err(_) => return NYB_E_PLUGIN_ERROR,
+                                }
+                            } else { return NYB_E_INVALID_HANDLE; }
+                        } else { return NYB_E_PLUGIN_ERROR; }
                     } else { return NYB_E_PLUGIN_ERROR; }
-                } else { return NYB_E_PLUGIN_ERROR; }
+                }
             }
             METHOD_WRITE => {
-                // args: TLV { Bytes data }
+                // args: TLV { [String path]? Bytes data }
                 let args = std::slice::from_raw_parts(_args, _args_len);
-                match tlv_parse_bytes(args) {
-                    Ok(data) => {
-                        // Preflight for I32 TLV: header(4) + entry(4) + 4
+                match tlv_parse_optional_string_and_bytes(args) {
+                    Ok((Some(path), data)) => {
+                        if preflight(_result, _result_len, 12) { return NYB_E_SHORT_BUFFER; }
+                        match open_file("w", &path) {
+                            Ok(mut file) => {
+                                if let Err(_) = file.write_all(&data) { return NYB_E_PLUGIN_ERROR; }
+                                if let Err(_) = file.flush() { return NYB_E_PLUGIN_ERROR; }
+                                return write_tlv_i32(data.len() as i32, _result, _result_len);
+                            }
+                            Err(_) => return NYB_E_PLUGIN_ERROR,
+                        }
+                    }
+                    Ok((None, data)) => {
                         if preflight(_result, _result_len, 12) { return NYB_E_SHORT_BUFFER; }
                         if let Ok(mut map) = INSTANCES.lock() {
                             if let Some(inst) = map.get_mut(&_instance_id) {
                                 if let Some(file) = inst.file.as_mut() {
                                     match file.write(&data) {
                                         Ok(n) => {
-                                            // ファイルバッファをフラッシュ（重要！）
-                                            if let Err(_) = file.flush() {
-                                                return NYB_E_PLUGIN_ERROR;
-                                            }
+                                            if let Err(_) = file.flush() { return NYB_E_PLUGIN_ERROR; }
                                             log_info(&format!("WRITE {} bytes", n));
-                                            // バッファも更新（copyFromなどのため）
                                             inst.buffer = Some(data.clone());
                                             return write_tlv_i32(n as i32, _result, _result_len);
                                         }
@@ -291,6 +314,18 @@ pub extern "C" fn nyash_plugin_invoke(
                 payload[4..8].copy_from_slice(&new_id.to_le_bytes());
                 return write_tlv_result(&[(8u8, &payload)], _result, _result_len);
             }
+            METHOD_EXISTS => {
+                // args: TLV { String path }
+                let args = std::slice::from_raw_parts(_args, _args_len);
+                match tlv_parse_string(args) {
+                    Ok(path) => {
+                        let exists = std::path::Path::new(&path).exists();
+                        if preflight(_result, _result_len, 9) { return NYB_E_SHORT_BUFFER; }
+                        return write_tlv_bool(exists, _result, _result_len);
+                    }
+                    Err(_) => NYB_E_INVALID_ARGS,
+                }
+            }
             _ => NYB_SUCCESS
         }
     }
@@ -342,6 +377,11 @@ fn write_tlv_bytes(data: &[u8], result: *mut u8, result_len: *mut usize) -> i32 
 
 fn write_tlv_i32(v: i32, result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(2u8, &v.to_le_bytes())], result, result_len)
+}
+
+fn write_tlv_bool(v: bool, result: *mut u8, result_len: *mut usize) -> i32 {
+    let b = [if v {1u8} else {0u8}];
+    write_tlv_result(&[(1u8, &b)], result, result_len)
 }
 
 fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
@@ -402,6 +442,33 @@ fn tlv_parse_bytes(data: &[u8]) -> Result<Vec<u8>, ()> {
     // StringタグもBytesタグも受け付ける（互換性のため）
     if (tag != 6 && tag != 7) || pos + size > data.len() { return Err(()); }
     Ok(data[pos..pos+size].to_vec())
+}
+
+fn tlv_parse_string(data: &[u8]) -> Result<String, ()> {
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    if argc < 1 { return Err(()); }
+    tlv_parse_string_at(data, &mut pos)
+}
+
+fn tlv_parse_optional_string_and_bytes(data: &[u8]) -> Result<(Option<String>, Vec<u8>), ()> {
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    if argc == 1 {
+        // only bytes
+        if pos + 4 > data.len() { return Err(()); }
+        let tag = data[pos]; let _res = data[pos+1];
+        let size = u16::from_le_bytes([data[pos+2], data[pos+3]]) as usize; pos += 4;
+        if (tag != 6 && tag != 7) || pos + size > data.len() { return Err(()); }
+        return Ok((None, data[pos..pos+size].to_vec()));
+    } else if argc >= 2 {
+        let s = tlv_parse_string_at(data, &mut pos)?;
+        if pos + 4 > data.len() { return Err(()); }
+        let tag = data[pos]; let _res = data[pos+1];
+        let size = u16::from_le_bytes([data[pos+2], data[pos+3]]) as usize; pos += 4;
+        if (tag != 6 && tag != 7) || pos + size > data.len() { return Err(()); }
+        Ok((Some(s), data[pos..pos+size].to_vec()))
+    } else {
+        Err(())
+    }
 }
 
 fn tlv_parse_handle(data: &[u8]) -> Result<(u32, u32), ()> {
