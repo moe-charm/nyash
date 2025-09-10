@@ -6,15 +6,13 @@
  */
 
 pub mod instruction;
-pub mod instruction_v2; // New 25-instruction specification
-pub mod instruction_introspection; // Introspection helpers for tests (core instruction names)
+pub mod instruction_introspection; // Introspection helpers for tests (instruction names)
 pub mod basic_block;
 pub mod function;
 pub mod builder;
 pub mod loop_builder; // SSA loop construction with phi nodes
 pub mod loop_api;     // Minimal LoopBuilder facade (adapter-ready)
 pub mod verification;
-pub mod ownership_verifier_simple; // Simple ownership forest verification for current MIR
 pub mod printer;
 pub mod value_id;
 pub mod effect;
@@ -26,12 +24,10 @@ pub mod passes; // Optimization subpasses (e.g., type_hints)
 
 // Re-export main types for easy access
 pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, MirType, TypeOpKind, WeakRefOp, BarrierOp};
-pub use instruction_v2::{MirInstructionV2, AtomicOrdering}; // New 25-instruction set
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use function::{MirFunction, MirModule, FunctionSignature};
 pub use builder::MirBuilder;
 pub use verification::{MirVerifier, VerificationError};
-pub use ownership_verifier_simple::{OwnershipVerifier, OwnershipError, OwnershipStats}; // Simple ownership forest verification
 pub use printer::MirPrinter;
 pub use value_id::{ValueId, LocalId, ValueIdGenerator};
 pub use effect::{EffectMask, Effect};
@@ -85,79 +81,6 @@ impl MirCompiler {
             }
         }
 
-        // Core-13 strict: forbid legacy ops in final MIR when enabled
-        if crate::config::env::mir_core13() || crate::config::env::opt_diag_forbid_legacy() {
-            let mut legacy_count = 0usize;
-            for (_fname, function) in &module.functions {
-                for (_bb, block) in &function.blocks {
-                    for inst in &block.instructions {
-                        if matches!(inst,
-                            MirInstruction::TypeCheck { .. }
-                            | MirInstruction::Cast { .. }
-                            | MirInstruction::WeakNew { .. }
-                            | MirInstruction::WeakLoad { .. }
-                            | MirInstruction::BarrierRead { .. }
-                            | MirInstruction::BarrierWrite { .. }
-                            | MirInstruction::ArrayGet { .. }
-                            | MirInstruction::ArraySet { .. }
-                            | MirInstruction::RefGet { .. }
-                            | MirInstruction::RefSet { .. }
-                            | MirInstruction::PluginInvoke { .. }
-                        ) { legacy_count += 1; }
-                    }
-                    if let Some(term) = &block.terminator {
-                        if matches!(term,
-                            MirInstruction::TypeCheck { .. }
-                            | MirInstruction::Cast { .. }
-                            | MirInstruction::WeakNew { .. }
-                            | MirInstruction::WeakLoad { .. }
-                            | MirInstruction::BarrierRead { .. }
-                            | MirInstruction::BarrierWrite { .. }
-                            | MirInstruction::ArrayGet { .. }
-                            | MirInstruction::ArraySet { .. }
-                            | MirInstruction::RefGet { .. }
-                            | MirInstruction::RefSet { .. }
-                            | MirInstruction::PluginInvoke { .. }
-                        ) { legacy_count += 1; }
-                    }
-                }
-            }
-            if legacy_count > 0 {
-                return Err(format!("Core-13 strict: final MIR contains {} legacy ops", legacy_count));
-            }
-        }
-
-        // Core-13 pure: allow only the 13 canonical ops; reject all others
-        if crate::config::env::mir_core13_pure() {
-            let mut bad = 0usize;
-            let is_allowed = |i: &MirInstruction| -> bool {
-                matches!(i,
-                    MirInstruction::Const { .. }
-                    | MirInstruction::BinOp { .. }
-                    | MirInstruction::Compare { .. }
-                    | MirInstruction::Jump { .. }
-                    | MirInstruction::Branch { .. }
-                    | MirInstruction::Return { .. }
-                    | MirInstruction::Phi { .. }
-                    | MirInstruction::Call { .. }
-                    | MirInstruction::BoxCall { .. }
-                    | MirInstruction::ExternCall { .. }
-                    | MirInstruction::TypeOp { .. }
-                    | MirInstruction::Safepoint
-                    | MirInstruction::Barrier { .. }
-                )
-            };
-            for (_fname, function) in &module.functions {
-                for (_bb, block) in &function.blocks {
-                    for inst in &block.instructions { if !is_allowed(inst) { bad += 1; } }
-                    if let Some(term) = &block.terminator { if !is_allowed(term) { bad += 1; } }
-                }
-            }
-            if bad > 0 {
-                return Err(format!("Core-13 pure strict: final MIR contains {} non-Core-13 ops", bad));
-            }
-        }
-        
         // Verify the generated MIR
         let verification_result = self.verifier.verify_module(&module);
         

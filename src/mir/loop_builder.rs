@@ -34,6 +34,12 @@ pub struct LoopBuilder<'a> {
     /// ブロックごとの変数マップ（スコープ管理）
     #[allow(dead_code)]
     block_var_maps: HashMap<BasicBlockId, HashMap<String, ValueId>>,
+
+    /// ループヘッダーID（continueで使用）
+    loop_header: Option<BasicBlockId>,
+
+    /// continue文からの変数スナップショット
+    continue_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
 }
 
 impl<'a> LoopBuilder<'a> {
@@ -43,6 +49,8 @@ impl<'a> LoopBuilder<'a> {
             parent_builder: parent,
             incomplete_phis: HashMap::new(),
             block_var_maps: HashMap::new(),
+            loop_header: None,
+            continue_snapshots: Vec::new(),
         }
     }
     
@@ -57,6 +65,8 @@ impl<'a> LoopBuilder<'a> {
         let header_id = self.new_block();
         let body_id = self.new_block();
         let after_loop_id = self.new_block();
+        self.loop_header = Some(header_id);
+        self.continue_snapshots.clear();
         
         // 2. Preheader -> Header へのジャンプ
         self.emit_jump(header_id)?;
@@ -156,16 +166,21 @@ impl<'a> LoopBuilder<'a> {
         // 不完全なPhi nodeを取得
         if let Some(incomplete_phis) = self.incomplete_phis.remove(&block_id) {
             for mut phi in incomplete_phis {
-                // Latchブロックでの変数の値を取得
-                let value_after = self.get_variable_at_block(&phi.var_name, latch_id)
-                    .ok_or_else(|| format!("Variable {} not found at latch block", phi.var_name))?;
-                
-                // Phi nodeの入力を完成させる
+                for (cid, snapshot) in &self.continue_snapshots {
+                    if let Some(v) = snapshot.get(&phi.var_name) {
+                        phi.known_inputs.push((*cid, *v));
+                    }
+                }
+
+                let value_after = self
+                    .get_variable_at_block(&phi.var_name, latch_id)
+                    .ok_or_else(|| {
+                        format!("Variable {} not found at latch block", phi.var_name)
+                    })?;
+
                 phi.known_inputs.push((latch_id, value_after));
-                
-                // 完成したPhi nodeを発行
+
                 self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
-                // 重要: ループ外から参照される変数はPhi結果に束縛し直す
                 self.update_variable(phi.var_name.clone(), phi.phi_id);
             }
         }
@@ -296,6 +311,26 @@ impl<'a> LoopBuilder<'a> {
     }
     
     fn build_statement(&mut self, stmt: ASTNode) -> Result<ValueId, String> {
-        self.parent_builder.build_expression(stmt)
+        match stmt {
+            ASTNode::Continue { .. } => {
+                let snapshot = self.get_current_variable_map();
+                let cur_block = self.current_block()?;
+                self.block_var_maps.insert(cur_block, snapshot.clone());
+                self.continue_snapshots.push((cur_block, snapshot));
+
+                if let Some(header) = self.loop_header {
+                    self.emit_jump(header)?;
+                    let _ = self.add_predecessor(header, cur_block);
+                }
+
+                let next_block = self.new_block();
+                self.set_current_block(next_block)?;
+
+                let void_id = self.new_value();
+                self.emit_const(void_id, ConstValue::Void)?;
+                Ok(void_id)
+            }
+            other => self.parent_builder.build_expression(other),
+        }
     }
 }
