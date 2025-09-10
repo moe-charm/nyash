@@ -775,21 +775,37 @@ impl LLVMCompiler {
                         // Route console.log/warn/error/readLine and debug.trace to NyRT shims
                         if (iface_name == "env.console" && (method_name == "log" || method_name == "warn" || method_name == "error"))
                             || (iface_name == "env.debug" && method_name == "trace") {
-                            if args.len() != 1 { return Err(format!("{}.{} expects 1 arg (string)", iface_name, method_name)); }
+                            if args.len() != 1 { return Err(format!("{}.{} expects 1 arg (handle)", iface_name, method_name)); }
                             let av = *vmap.get(&args[0]).ok_or("extern arg missing")?;
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
-                            let sp = match av {
-                                BasicValueEnum::PointerValue(pv) => pv,
-                                BasicValueEnum::IntValue(iv) => codegen.builder.build_int_to_ptr(iv, i8p, "arg_i2p").map_err(|e| e.to_string())?,
-                                _ => return Err("extern arg must be string pointer or i64 handle".to_string()),
+                            
+                            // Handle-based console functions (i64 → i64)
+                            let arg_val = match av {
+                                BasicValueEnum::IntValue(iv) => {
+                                    // Handle different integer types (i1, i32, i64)
+                                    if iv.get_type() == codegen.context.bool_type() {
+                                        // bool (i1) → i64 zero-extension
+                                        codegen.builder.build_int_z_extend(iv, codegen.context.i64_type(), "bool2i64").map_err(|e| e.to_string())?
+                                    } else if iv.get_type() == codegen.context.i64_type() {
+                                        iv // already i64
+                                    } else {
+                                        // other integer types → i64 sign-extension
+                                        codegen.builder.build_int_s_extend(iv, codegen.context.i64_type(), "int2i64").map_err(|e| e.to_string())?
+                                    }
+                                },
+                                BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, codegen.context.i64_type(), "p2i").map_err(|e| e.to_string())?,
+                                _ => return Err("console.log arg conversion failed".to_string()),
                             };
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
-                            let fnty = codegen.context.i64_type().fn_type(&[i8p.into()], false);
+                            
+                            let fnty = codegen.context.i64_type().fn_type(&[codegen.context.i64_type().into()], false);
                             let fname = if iface_name == "env.console" {
-                                match method_name.as_str() { "log" => "nyash.console.log", "warn" => "nyash.console.warn", _ => "nyash.console.error" }
-                            } else { "nyash.debug.trace" };
+                                match method_name.as_str() { 
+                                    "log" => "nyash.console.log_handle", 
+                                    "warn" => "nyash.console.warn_handle", 
+                                    _ => "nyash.console.error_handle" 
+                                }
+                            } else { "nyash.debug.trace_handle" };
                             let callee = codegen.module.get_function(fname).unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
-                            let _ = codegen.builder.build_call(callee, &[sp.into()], "extern_rt").map_err(|e| e.to_string())?;
+                            let _ = codegen.builder.build_call(callee, &[arg_val.into()], "console_log_h").map_err(|e| e.to_string())?;
                             if let Some(d) = dst { vmap.insert(*d, codegen.context.i64_type().const_zero().into()); }
                         } else if iface_name == "env.console" && method_name == "readLine" {
                             if !args.is_empty() { return Err("console.readLine expects 0 args".to_string()); }

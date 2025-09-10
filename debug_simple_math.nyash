@@ -1,0 +1,6 @@
+// Test with MathBox
+print("Testing MathBox:")
+local m = new MathBox()
+local result = m.sqrt(16)
+print("sqrt(16) =")
+print(result)

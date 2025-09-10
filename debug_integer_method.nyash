@@ -1,0 +1,9 @@
+// Test IntegerBox method calls
+print("Testing IntegerBox methods:")
+local i = new IntegerBox(42)
+print("Constructor result:")
+print(i)
+print("Calling get() method:")
+local result = i.get()
+print("Method result:")
+print(result)

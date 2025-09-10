@@ -2386,6 +2386,54 @@ pub extern "C" fn nyash_console_log_export(ptr: *const i8) -> i64 {
     0
 }
 
+// Exported as: nyash.console.log_handle(i64 handle) -> i64  
+#[export_name = "nyash.console.log_handle"]
+pub extern "C" fn nyash_console_log_handle(handle: i64) -> i64 {
+    if handle <= 0 { return 0; }
+    
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+        let s = obj.to_string_box().value; // 既存の統一文字列変換メソッド
+        println!("{}", s);
+    }
+    0
+}
+
+// Exported as: nyash.console.warn_handle(i64 handle) -> i64  
+#[export_name = "nyash.console.warn_handle"]
+pub extern "C" fn nyash_console_warn_handle(handle: i64) -> i64 {
+    if handle <= 0 { return 0; }
+    
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+        let s = obj.to_string_box().value;
+        eprintln!("WARN: {}", s);
+    }
+    0
+}
+
+// Exported as: nyash.console.error_handle(i64 handle) -> i64  
+#[export_name = "nyash.console.error_handle"]
+pub extern "C" fn nyash_console_error_handle(handle: i64) -> i64 {
+    if handle <= 0 { return 0; }
+    
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+        let s = obj.to_string_box().value;
+        eprintln!("ERROR: {}", s);
+    }
+    0
+}
+
+// Exported as: nyash.debug.trace_handle(i64 handle) -> i64  
+#[export_name = "nyash.debug.trace_handle"]
+pub extern "C" fn nyash_debug_trace_handle(handle: i64) -> i64 {
+    if handle <= 0 { return 0; }
+    
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+        let s = obj.to_string_box().value;
+        eprintln!("TRACE: {}", s);
+    }
+    0
+}
+
 // Exported as: nyash.console.warn(i8* cstr) -> i64
 #[export_name = "nyash.console.warn"]
 pub extern "C" fn nyash_console_warn_export(ptr: *const i8) -> i64 {

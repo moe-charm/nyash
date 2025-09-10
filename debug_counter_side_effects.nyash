@@ -1,0 +1,15 @@
+// Test if CounterBox side effects work
+print("Testing counter side effects:")
+local c = new CounterBox()
+print("Initial counter (should be 0):")
+local initial = c.get()
+print(initial)
+
+print("Incrementing...")
+c.inc()
+c.inc()
+c.inc()
+
+print("After 3 increments (should be 3):")
+local final = c.get()
+print(final)

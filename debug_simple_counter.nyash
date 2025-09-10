@@ -1,0 +1,6 @@
+// Very simple test
+print("Testing counter:")
+local c = new CounterBox()
+local result = c.get()
+print("Result:")
+print(result)

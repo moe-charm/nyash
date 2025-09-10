@@ -1,0 +1,5 @@
+// Test with IntegerBox constructor (should return Integer)
+print("Testing IntegerBox:")
+local i = new IntegerBox(42)
+print("Value:")
+print(i)

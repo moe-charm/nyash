@@ -1,0 +1,8 @@
+tree 440b283e63d74f8a975171098fa6cf65bd316011
+parent 8913cd87e692e4e09091654f8934a214c194575b
+author copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> 1755176865 +0000
+committer copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> 1755176865 +0000
+
+Identified clone state sharing issue - different Arc data pointers
+
+Co-authored-by: moe-charm <217100418+moe-charm@users.noreply.github.com>
