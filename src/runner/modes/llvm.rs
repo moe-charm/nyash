@@ -6,6 +6,9 @@ use std::{fs, process};
 impl NyashRunner {
     /// Execute LLVM mode (split)
     pub(crate) fn execute_llvm_mode(&self, filename: &str) {
+        // Initialize plugin host so method_id injection can resolve plugin calls
+        crate::runner_plugin_init::init_bid_plugins();
+
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,

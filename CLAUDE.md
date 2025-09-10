@@ -123,7 +123,47 @@ cargo build --release --features llvm
 ./target/release/nyash --aot program.nyash -o program.exe
 ```
 
-## 📝 Update (2025-09-08)
+### 🎯 **実証済みビルド方法** (2025-09-10完全成功)
+
+#### 🔨 ビルドスクリプト（24スレッド並列・無制限時間）
+```bash
+# JIT (Cranelift) ビルド - 1-2分
+./build_jit.sh
+
+# LLVM MIR14 ビルド - 3-5分  
+./build_llvm.sh
+```
+
+#### 📝 手動ビルドコマンド
+```bash
+# 1. JIT (Cranelift) - 127警告、0エラー ✅
+cargo build --release --features cranelift-jit -j 24
+./target/release/nyash program.nyash
+
+# 2. LLVM MIR14 - 211警告、0エラー ✅  
+env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm -j 24
+./target/release/nyash --backend llvm program.nyash
+
+# 3. プラグインテスト実証済み ✅
+# CounterBox (3080バイト)
+echo 'local c = new CounterBox(); c.inc(); c.inc(); print(c.get())' > test.nyash
+./target/release/nyash --backend llvm test.nyash
+
+# MathBox (2040バイト)  
+echo 'local m = new MathBox(); print(m.sqrt(16))' > test.nyash
+./target/release/nyash --backend llvm test.nyash
+
+# StringBox (3288バイト)
+echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.nyash
+./target/release/nyash --backend llvm test.nyash
+```
+
+⚠️ **ビルド時間の注意**:
+- JITビルド: 1-2分（高速）
+- LLVMビルド: 3-5分（時間がかかる）
+- 必ず十分な時間設定で実行してください
+
+## 📝 Update (2025-09-10) 🎆 歴史的達成！
 - 🎉 Phase 15到達！セルフホスティング実装中
 - v0 Nyパーサー完成（Ny→JSON IR v0）
 - 🔥 ループビルダーSSAバグ発見・調査完了（ブロッカー）

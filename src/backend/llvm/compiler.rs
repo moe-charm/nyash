@@ -71,6 +71,9 @@ impl LLVMCompiler {
     ) -> Result<Box<dyn NyashBox>, String> {
         // Mock implementation - interprets MIR instructions to simulate execution
         
+        eprintln!("⚠️⚠️⚠️ WARNING: Using MOCK LLVM Implementation! ⚠️⚠️⚠️");
+        eprintln!("⚠️ This is NOT real LLVM execution!");
+        eprintln!("⚠️ Build with --features llvm for real compilation!");
         println!("🚀 Mock LLVM Compile & Execute (MIR Interpreter Mode):");
         
         // 1. Mock object file generation
@@ -1444,6 +1447,20 @@ impl LLVMCompiler {
                             BinaryOp::Or     => { if (l.value != 0) || (r.value != 0) { 1 } else { 0 } },
                         };
                     self.values.insert(*dst, Box::new(IntegerBox::new(res)));
+                }
+                I::ExternCall { dst, iface_name, method_name, args, .. } => {
+                    if iface_name == "env.console" {
+                        if let Some(arg0) = args.get(0).and_then(|v| self.values.get(v)) {
+                            let msg = arg0.to_string_box().value;
+                            match method_name.as_str() {
+                                "log" => println!("{}", msg),
+                                "warn" => eprintln!("[warn] {}", msg),
+                                "error" => eprintln!("[error] {}", msg),
+                                _ => {}
+                            }
+                        }
+                        if let Some(d) = dst { self.values.insert(*d, Box::new(IntegerBox::new(0))); }
+                    }
                 }
                 I::Return { value } => {
                     if let Some(v) = value { return self.values.get(v).map(|b| b.clone_box()).ok_or_else(|| format!("return %{} missing", v.0)); }
