@@ -1354,6 +1354,21 @@ pub extern "C" fn nyash_console_error_export(ptr: *const i8) -> i64 {
     0
 }
 
+// Exported as: nyash.console.log_handle(i64 handle) -> i64
+#[export_name = "nyash.console.log_handle"]
+pub extern "C" fn nyash_console_log_handle_export(handle: i64) -> i64 {
+    use nyash_rust::jit::rt::handles;
+    eprintln!("DEBUG: handle={}", handle);
+    if let Some(obj) = handles::get(handle as u64) {
+        let s = obj.to_string_box().value;
+        println!("{}", s);
+    } else {
+        eprintln!("DEBUG: handle {} not found in registry", handle);
+        println!("{}", handle);
+    }
+    0
+}
+
 // Exported as: nyash.debug.trace(i8* cstr) -> i64
 #[export_name = "nyash.debug.trace"]
 pub extern "C" fn nyash_debug_trace_export(ptr: *const i8) -> i64 {
