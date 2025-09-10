@@ -269,13 +269,27 @@ impl LLVMCompiler {
             })
         }
 
-        // Load box type-id mapping from nyash.toml (for NewBox lowering)
+        // Load box type-id mapping from nyash_box.toml (central plugin registry)
         let mut box_type_ids: StdHashMap<String, i64> = StdHashMap::new();
+        if let Ok(cfg) = std::fs::read_to_string("nyash_box.toml") {
+            if let Ok(doc) = toml::from_str::<toml::Value>(&cfg) {
+                if let Some(table) = doc.as_table() {
+                    for (box_name, box_val) in table {
+                        if let Some(id) = box_val.get("type_id").and_then(|v| v.as_integer()) {
+                            box_type_ids.insert(box_name.clone(), id as i64);
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback: legacy box_types table in nyash.toml
         if let Ok(cfg) = std::fs::read_to_string("nyash.toml") {
             if let Ok(doc) = toml::from_str::<toml::Value>(&cfg) {
                 if let Some(bt) = doc.get("box_types").and_then(|v| v.as_table()) {
                     for (k, v) in bt {
-                        if let Some(id) = v.as_integer() { box_type_ids.insert(k.clone(), id as i64); }
+                        if let Some(id) = v.as_integer() {
+                            box_type_ids.entry(k.clone()).or_insert(id as i64);
+                        }
                     }
                 }
             }
@@ -545,7 +559,7 @@ impl LLVMCompiler {
                             _ => return Err("box receiver must be pointer or i64 handle".to_string()),
                         };
                         let recv_h = codegen.builder.build_ptr_to_int(recv_p, i64t, "recv_p2i").map_err(|e| e.to_string())?;
-                        // Resolve type_id from metadata (Box("Type")) via nyash.toml
+                        // Resolve type_id from metadata (Box("Type")) using box_type_ids
                         let type_id: i64 = if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
                             *box_type_ids.get(bname).unwrap_or(&0)
                         } else if let Some(crate::mir::MirType::String) = func.metadata.value_types.get(box_val) {
