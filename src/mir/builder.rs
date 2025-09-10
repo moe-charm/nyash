@@ -27,6 +27,7 @@ mod exprs_qmark;   // ?-propagate
 mod exprs_peek;    // peek expression
 mod exprs_lambda;  // lambda lowering
 mod exprs_include; // include lowering
+mod plugin_sigs; // plugin signature loader
 
 // moved helpers to builder/utils.rs
 
@@ -69,6 +70,9 @@ pub struct MirBuilder {
 
     /// Optional per-value type annotations (MIR-level): ValueId -> MirType
     pub(super) value_types: HashMap<ValueId, super::MirType>,
+
+    /// Plugin method return type signatures loaded from nyash_box.toml
+    plugin_method_sigs: HashMap<(String, String), super::MirType>,
     /// Current static box name when lowering a static box body (e.g., "Main")
     current_static_box: Option<String>,
 
@@ -105,22 +109,20 @@ impl MirBuilder {
                 }
             }
             if let Some(bt) = recv_box {
-                let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
-                    // Built-in box methods
-                    ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
-                    ("StringBox", "is_empty") => Some(super::MirType::Bool),
-                    ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
-                    ("ArrayBox",  "length") => Some(super::MirType::Integer),
-                    
-                    // Plugin box methods
-                    ("CounterBox", "get") => Some(super::MirType::Integer),
-                    ("MathBox", "sqrt") => Some(super::MirType::Float),
-                    ("FileBox", "read") => Some(super::MirType::String),
-                    ("FileBox", "exists") => Some(super::MirType::Bool),
-                    _ => None,
-                };
-                if let Some(mt) = inferred { 
-                    self.value_types.insert(d, mt); 
+                if let Some(mt) = self.plugin_method_sigs.get(&(bt.clone(), method.clone())) {
+                    self.value_types.insert(d, mt.clone());
+                } else {
+                    let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
+                        // Built-in box methods
+                        ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
+                        ("StringBox", "is_empty") => Some(super::MirType::Bool),
+                        ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
+                        ("ArrayBox", "length") => Some(super::MirType::Integer),
+                        _ => None,
+                    };
+                    if let Some(mt) = inferred {
+                        self.value_types.insert(d, mt);
+                    }
                 }
             }
         }
@@ -128,6 +130,7 @@ impl MirBuilder {
     }
     /// Create a new MIR builder
     pub fn new() -> Self {
+        let plugin_method_sigs = plugin_sigs::load_plugin_method_sigs();
         Self {
             current_module: None,
             current_function: None,
@@ -141,6 +144,7 @@ impl MirBuilder {
             weak_fields_by_box: HashMap::new(),
             field_origin_class: HashMap::new(),
             value_types: HashMap::new(),
+            plugin_method_sigs,
             current_static_box: None,
             include_loading: HashSet::new(),
             include_box_map: HashMap::new(),
