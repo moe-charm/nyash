@@ -157,8 +157,8 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
 ### LLVM バックエンドの補足
 - `NYASH_LLVM_OBJ_OUT`: `--backend llvm` 実行時に `.o` を出力するパス。
   - 例: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
-- `NYASH_LLVM_ALLOW_BY_NAME=1`: デバッグ専用の by-name フォールバック（by-id が未提供の場合の暫定措置）。
-  - 開発時のみ有効化してください（本番では無効）。
+- 削除された `NYASH_LLVM_ALLOW_BY_NAME=1`: すべてのプラグイン呼び出しがmethod_idベースに統一。
+  - LLVMバックエンドは性能と型安全性のため、method_idベースのプラグイン呼び出しのみ対応。
 
 
 ### 5. **WebAssembly** （ブラウザ用）

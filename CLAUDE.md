@@ -163,6 +163,60 @@ echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.nyash
 - LLVMビルド: 3-5分（時間がかかる）
 - 必ず十分な時間設定で実行してください
 
+## 🚀 よく使う実行コマンド（忘れやすい）
+
+### 🎯 基本実行方法
+```bash
+# VMバックエンド（デフォルト、高速）
+./target/release/nyash program.nyash
+./target/release/nyash --backend vm program.nyash
+
+# LLVMバックエンド（最適化済み）
+./target/release/nyash --backend llvm program.nyash
+
+# プラグインテスト（LLVM）
+./target/release/nyash --backend llvm program.nyash
+
+# プラグイン無効（デバッグ用）
+NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+```
+
+### 🔧 テスト・スモークテスト
+```bash
+# コアスモーク（プラグイン無効）
+./tools/jit_smoke.sh
+
+# LLVMスモーク
+./tools/llvm_smoke.sh
+
+# ラウンドトリップテスト
+./tools/ny_roundtrip_smoke.sh
+
+# プラグインスモーク（オプション）
+NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
+
+# using/namespace E2E（要--enable-using）
+./tools/using_e2e_smoke.sh
+```
+
+### 🐛 デバッグ用環境変数
+```bash
+# 詳細診断
+NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
+
+# JSON IR出力
+NYASH_DUMP_JSON_IR=1 ./target/release/nyash program.nyash
+
+# パーサー無限ループ対策
+./target/release/nyash --debug-fuel 1000 program.nyash
+
+# プラグインなし実行
+NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+
+# LLVMプラグイン実行（method_id使用）
+./target/release/nyash --backend llvm program.nyash
+```
+
 ## 📝 Update (2025-09-10) 🎆 歴史的達成！
 - 🎉 Phase 15到達！セルフホスティング実装中
 - v0 Nyパーサー完成（Ny→JSON IR v0）

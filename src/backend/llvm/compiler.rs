@@ -700,14 +700,18 @@ impl LLVMCompiler {
                                     // Decide return lowering by dst annotated type
                                     if let Some(mt) = func.metadata.value_types.get(d) {
                                         match mt {
-                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
+                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => { 
+                                                vmap.insert(*d, rv); 
+                                            }
                                             crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
                                                 let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
                                                 let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
                                                 let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
                                                 vmap.insert(*d, ptr.into());
                                             }
-                                            _ => { vmap.insert(*d, rv); }
+                                            _ => { 
+                                                vmap.insert(*d, rv); 
+                                            }
                                         }
                                     } else {
                                         vmap.insert(*d, rv);
@@ -744,14 +748,18 @@ impl LLVMCompiler {
                                     let rv = call.try_as_basic_value().left().ok_or("invoke_v returned void".to_string())?;
                                     if let Some(mt) = func.metadata.value_types.get(d) {
                                         match mt {
-                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
+                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => { 
+                                                vmap.insert(*d, rv); 
+                                            }
                                             crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
                                                 let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
                                                 let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
                                                 let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
                                                 vmap.insert(*d, ptr.into());
                                             }
-                                            _ => { vmap.insert(*d, rv); }
+                                            _ => { 
+                                                vmap.insert(*d, rv); 
+                                            }
                                         }
                                     } else {
                                         vmap.insert(*d, rv);
@@ -760,55 +768,7 @@ impl LLVMCompiler {
                             }
                             // handled above per-branch
                         } else {
-                            // Optional by-name fallback (debug): use NYASH_LLVM_ALLOW_BY_NAME=1
-                            if std::env::var("NYASH_LLVM_ALLOW_BY_NAME").ok().as_deref() == Some("1") {
-                                // Build global string for method name
-                                let gsp = codegen.builder.build_global_string_ptr(method, "method_name").map_err(|e| e.to_string())?;
-                                let mptr = gsp.as_pointer_value();
-                                let argc_val = i64t.const_int(args.len() as u64, false);
-                                let mut a1 = i64t.const_zero();
-                                let mut a2 = i64t.const_zero();
-                                let mut get_i64 = |vid: ValueId| -> Result<inkwell::values::IntValue, String> {
-                                    let v = *vmap.get(&vid).ok_or("arg missing")?;
-                                    Ok(match v {
-                                        BasicValueEnum::IntValue(iv) => iv,
-                                        BasicValueEnum::FloatValue(fv) => {
-                                            let slot = entry_builder.build_alloca(i64t, "f2i_slot").map_err(|e| e.to_string())?;
-                                            let fptr_ty = codegen.context.f64_type().ptr_type(AddressSpace::from(0));
-                                            let castp = codegen.builder.build_pointer_cast(slot, fptr_ty, "i64p_to_f64p").map_err(|e| e.to_string())?;
-                                            let _ = codegen.builder.build_store(castp, fv).map_err(|e| e.to_string())?;
-                                            codegen.builder.build_load(i64t, slot, "ld_f2i").map_err(|e| e.to_string())?.into_int_value()
-                                        },
-                                        BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "p2i").map_err(|e| e.to_string())?,
-                                        _ => return Err("unsupported arg value (expect int or handle ptr)".to_string()),
-                                    })
-                                };
-                                if args.len() >= 1 { a1 = get_i64(args[0])?; }
-                                if args.len() >= 2 { a2 = get_i64(args[1])?; }
-                                // declare i64 @nyash.plugin.invoke_by_name_i64(i64 recv_h, i8* name, i64 argc, i64 a1, i64 a2)
-                                let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
-                                let fnty = i64t.fn_type(&[i64t.into(), i8p.into(), i64t.into(), i64t.into(), i64t.into()], false);
-                                let callee = codegen.module.get_function("nyash.plugin.invoke_by_name_i64").unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_by_name_i64", fnty, None));
-                                let call = codegen.builder.build_call(callee, &[recv_h.into(), mptr.into(), argc_val.into(), a1.into(), a2.into()], "pinvoke_byname").map_err(|e| e.to_string())?;
-                                if let Some(d) = dst {
-                                    let rv = call.try_as_basic_value().left().ok_or("invoke_by_name returned void".to_string())?;
-                                    // Treat like i64 path
-                                    if let Some(mt) = func.metadata.value_types.get(d) {
-                                        match mt {
-                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
-                                            crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
-                                                let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
-                                                let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
-                                                let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
-                                                vmap.insert(*d, ptr.into());
-                                            }
-                                            _ => { vmap.insert(*d, rv); }
-                                        }
-                                    } else { vmap.insert(*d, rv); }
-                                }
-                            } else {
-                                return Err(format!("BoxCall requires method_id (by-id). Enable NYASH_LLVM_ALLOW_BY_NAME=1 to use by-name fallback for method '{}'", method));
-                            }
+                            return Err(format!("BoxCall requires method_id for method '{}'. The method_id should be automatically injected during MIR compilation.", method));
                         }
                     }
                     MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
@@ -1018,7 +978,7 @@ impl LLVMCompiler {
                             };
                             if let Some(d) = dst { vmap.insert(*d, out_ptr.into()); }
                         } else {
-                            return Err(format!("ExternCall lowering unsupported: {}.{} (enable NYASH_LLVM_ALLOW_BY_NAME=1 to try by-name, or add a NyRT shim)", iface_name, method_name));
+                            return Err(format!("ExternCall lowering unsupported: {}.{} (add a NyRT shim for this interface method)", iface_name, method_name));
                         }
                     }
                     MirInstruction::UnaryOp { dst, op, operand } => {

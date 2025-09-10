@@ -106,13 +106,22 @@ impl MirBuilder {
             }
             if let Some(bt) = recv_box {
                 let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
+                    // Built-in box methods
                     ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
                     ("StringBox", "is_empty") => Some(super::MirType::Bool),
                     ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
                     ("ArrayBox",  "length") => Some(super::MirType::Integer),
+                    
+                    // Plugin box methods
+                    ("CounterBox", "get") => Some(super::MirType::Integer),
+                    ("MathBox", "sqrt") => Some(super::MirType::Float),
+                    ("FileBox", "read") => Some(super::MirType::String),
+                    ("FileBox", "exists") => Some(super::MirType::Bool),
                     _ => None,
                 };
-                if let Some(mt) = inferred { self.value_types.insert(d, mt); }
+                if let Some(mt) = inferred { 
+                    self.value_types.insert(d, mt); 
+                }
             }
         }
         Ok(())

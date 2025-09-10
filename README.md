@@ -161,9 +161,8 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
 ### LLVM Backend Notes
 - `NYASH_LLVM_OBJ_OUT`: Path to emit `.o` when running `--backend llvm`.
   - Example: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
-- `NYASH_LLVM_ALLOW_BY_NAME=1`: Debug-only fallback for plugin calls by name when by-id isn’t available.
-  - Emits calls to `nyash.plugin.invoke_by_name_i64` for development.
-  - Do not enable in production.
+- Previously available `NYASH_LLVM_ALLOW_BY_NAME=1`: Removed - all plugin calls now use method_id by default.
+  - The LLVM backend only supports method_id-based plugin calls for better performance and type safety.
 
 
 ### 5. **WebAssembly** (Browser)
