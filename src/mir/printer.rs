@@ -4,7 +4,8 @@
  * Implements pretty-printing for MIR modules and functions
  */
 
-use super::{MirModule, MirFunction, BasicBlock, MirInstruction};
+use super::{MirModule, MirFunction, BasicBlock, MirInstruction, ValueId, MirType};
+use std::collections::HashMap;
 use std::fmt::Write;
 use crate::debug::log as dlog;
 
@@ -219,7 +220,7 @@ impl MirPrinter {
                 if i > 0 {
                     writeln!(output).unwrap();
                 }
-                output.push_str(&self.print_basic_block(block));
+                output.push_str(&self.print_basic_block(block, &function.metadata.value_types));
             }
         }
         
@@ -229,7 +230,7 @@ impl MirPrinter {
     }
     
     /// Print a basic block
-    pub fn print_basic_block(&self, block: &BasicBlock) -> String {
+    pub fn print_basic_block(&self, block: &BasicBlock, types: &HashMap<ValueId, MirType>) -> String {
         let mut output = String::new();
         
         // Block header
@@ -253,8 +254,8 @@ impl MirPrinter {
             } else {
                 write!(output, "    ").unwrap();
             }
-            
-            let mut line = self.format_instruction(instruction);
+
+            let mut line = self.format_instruction(instruction, types);
             if self.show_effects_inline {
                 let eff = instruction.effects();
                 let cat = if eff.is_pure() { "pure" } else if eff.is_read_only() { "readonly" } else { "side" };
@@ -272,29 +273,37 @@ impl MirPrinter {
         output
     }
     
+    fn format_dst(&self, dst: &ValueId, types: &HashMap<ValueId, MirType>) -> String {
+        if let Some(ty) = types.get(dst) {
+            format!("{}: {:?} =", dst, ty)
+        } else {
+            format!("{} =", dst)
+        }
+    }
+
     /// Format a single instruction
-    fn format_instruction(&self, instruction: &MirInstruction) -> String {
+    fn format_instruction(&self, instruction: &MirInstruction, types: &HashMap<ValueId, MirType>) -> String {
         match instruction {
             MirInstruction::Const { dst, value } => {
-                format!("{} = const {}", dst, value)
+                format!("{} const {}", self.format_dst(dst, types), value)
             },
-            
+
             MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                format!("{} = {} {:?} {}", dst, lhs, op, rhs)
+                format!("{} {} {:?} {}", self.format_dst(dst, types), lhs, op, rhs)
             },
-            
+
             MirInstruction::UnaryOp { dst, op, operand } => {
-                format!("{} = {:?} {}", dst, op, operand)
+                format!("{} {:?} {}", self.format_dst(dst, types), op, operand)
             },
-            
+
             MirInstruction::Compare { dst, op, lhs, rhs } => {
-                format!("{} = icmp {:?} {}, {}", dst, op, lhs, rhs)
+                format!("{} icmp {:?} {}, {}", self.format_dst(dst, types), op, lhs, rhs)
             },
-            
+
             MirInstruction::Load { dst, ptr } => {
-                format!("{} = load {}", dst, ptr)
+                format!("{} load {}", self.format_dst(dst, types), ptr)
             },
-            
+
             MirInstruction::Store { value, ptr } => {
                 format!("store {} -> {}", value, ptr)
             },
@@ -304,9 +313,9 @@ impl MirPrinter {
                     .map(|v| format!("{}", v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                
+
                 if let Some(dst) = dst {
-                    format!("{} = call {}({})", dst, func, args_str)
+                    format!("{} call {}({})", self.format_dst(dst, types), func, args_str)
                 } else {
                     format!("call {}({})", func, args_str)
                 }
@@ -316,9 +325,9 @@ impl MirPrinter {
                 let c = captures.iter().map(|(n, v)| format!("{}={}", n, v)).collect::<Vec<_>>().join(", ");
                 let me_s = me.map(|m| format!(" me={}", m)).unwrap_or_default();
                 let cap_s = if c.is_empty() { String::new() } else { format!(" [{}]", c) };
-                format!("{} = function_new ({}) {{...{}}}{}{}", dst, p, body.len(), cap_s, me_s)
+                format!("{} function_new ({}) {{...{}}}{}{}", self.format_dst(dst, types), p, body.len(), cap_s, me_s)
             },
-            
+
             MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects: _ } => {
                 let args_str = args.iter()
                     .map(|v| format!("{}", v))
@@ -326,7 +335,7 @@ impl MirPrinter {
                     .join(", ");
                 let id_suffix = method_id.map(|id| format!("[#{}]", id)).unwrap_or_default();
                 if let Some(dst) = dst {
-                    format!("{} = call {}.{}{}({})", dst, box_val, method, id_suffix, args_str)
+                    format!("{} call {}.{}{}({})", self.format_dst(dst, types), box_val, method, id_suffix, args_str)
                 } else {
                     format!("call {}.{}{}({})", box_val, method, id_suffix, args_str)
                 }
@@ -337,7 +346,7 @@ impl MirPrinter {
                     .collect::<Vec<_>>()
                     .join(", ");
                 if let Some(dst) = dst {
-                    format!("{} = plugin_invoke {}.{}({})", dst, box_val, method, args_str)
+                    format!("{} plugin_invoke {}.{}({})", self.format_dst(dst, types), box_val, method, args_str)
                 } else {
                     format!("plugin_invoke {}.{}({})", box_val, method, args_str)
                 }
@@ -364,61 +373,61 @@ impl MirPrinter {
                     .map(|(bb, val)| format!("[{}, {}]", val, bb))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{} = phi {}", dst, inputs_str)
+                format!("{} phi {}", self.format_dst(dst, types), inputs_str)
             },
-            
+
             MirInstruction::NewBox { dst, box_type, args } => {
                 let args_str = args.iter()
                     .map(|v| format!("{}", v))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{} = new {}({})", dst, box_type, args_str)
+                format!("{} new {}({})", self.format_dst(dst, types), box_type, args_str)
             },
-            
+
             // Legacy -> Unified print: TypeCheck as TypeOp(check)
             MirInstruction::TypeCheck { dst, value, expected_type } => {
                 // Print using unified TypeOp style to avoid naming divergence
-                format!("{} = typeop check {} {}", dst, value, expected_type)
+                format!("{} typeop check {} {}", self.format_dst(dst, types), value, expected_type)
             },
-            
+
             MirInstruction::Cast { dst, value, target_type } => {
-                format!("{} = cast {} to {:?}", dst, value, target_type)
+                format!("{} cast {} to {:?}", self.format_dst(dst, types), value, target_type)
             },
-            
+
             MirInstruction::TypeOp { dst, op, value, ty } => {
                 let op_str = match op { super::TypeOpKind::Check => "check", super::TypeOpKind::Cast => "cast" };
-                format!("{} = typeop {} {} {:?}", dst, op_str, value, ty)
+                format!("{} typeop {} {} {:?}", self.format_dst(dst, types), op_str, value, ty)
             },
-            
+
             MirInstruction::ArrayGet { dst, array, index } => {
-                format!("{} = {}[{}]", dst, array, index)
+                format!("{} {}[{}]", self.format_dst(dst, types), array, index)
             },
-            
+
             MirInstruction::ArraySet { array, index, value } => {
                 format!("{}[{}] = {}", array, index, value)
             },
-            
+
             MirInstruction::Copy { dst, src } => {
-                format!("{} = copy {}", dst, src)
+                format!("{} copy {}", self.format_dst(dst, types), src)
             },
-            
+
             MirInstruction::Debug { value, message } => {
                 format!("debug {} \"{}\"", value, message)
             },
-            
+
             MirInstruction::Print { value, effects: _ } => {
                 format!("print {}", value)
             },
-            
+
             MirInstruction::Nop => {
                 "nop".to_string()
             },
-            
+
             // Phase 5: Control flow & exception handling
             MirInstruction::Throw { exception, effects: _ } => {
                 format!("throw {}", exception)
             },
-            
+
             MirInstruction::Catch { exception_type, exception_value, handler_bb } => {
                 if let Some(ref exc_type) = exception_type {
                     format!("catch {} {} -> {}", exc_type, exception_value, handler_bb)
@@ -433,11 +442,11 @@ impl MirPrinter {
             
             // Phase 6: Box reference operations
             MirInstruction::RefNew { dst, box_val } => {
-                format!("{} = ref_new {}", dst, box_val)
+                format!("{} ref_new {}", self.format_dst(dst, types), box_val)
             },
-            
+
             MirInstruction::RefGet { dst, reference, field } => {
-                format!("{} = ref_get {}.{}", dst, reference, field)
+                format!("{} ref_get {}.{}", self.format_dst(dst, types), reference, field)
             },
             
             MirInstruction::RefSet { reference, field, value } => {
@@ -446,52 +455,52 @@ impl MirPrinter {
             
             // Legacy -> Unified print: WeakNew as weakref new
             MirInstruction::WeakNew { dst, box_val } => {
-                format!("{} = weakref new {}", dst, box_val)
+                format!("{} weakref new {}", self.format_dst(dst, types), box_val)
             },
-            
+
             // Legacy -> Unified print: WeakLoad as weakref load
             MirInstruction::WeakLoad { dst, weak_ref } => {
-                format!("{} = weakref load {}", dst, weak_ref)
+                format!("{} weakref load {}", self.format_dst(dst, types), weak_ref)
             },
-            
+
             // Legacy -> Unified print: BarrierRead as barrier read
             MirInstruction::BarrierRead { ptr } => {
                 format!("barrier read {}", ptr)
             },
-            
+
             // Legacy -> Unified print: BarrierWrite as barrier write
             MirInstruction::BarrierWrite { ptr } => {
                 format!("barrier write {}", ptr)
             },
-            
+
             MirInstruction::WeakRef { dst, op, value } => {
                 let op_str = match op { super::WeakRefOp::New => "new", super::WeakRefOp::Load => "load" };
-                format!("{} = weakref {} {}", dst, op_str, value)
+                format!("{} weakref {} {}", self.format_dst(dst, types), op_str, value)
             },
-            
+
             MirInstruction::Barrier { op, ptr } => {
                 let op_str = match op { super::BarrierOp::Read => "read", super::BarrierOp::Write => "write" };
                 format!("barrier {} {}", op_str, ptr)
             },
-            
+
             // Phase 7: Async/Future Operations
             MirInstruction::FutureNew { dst, value } => {
-                format!("{} = future_new {}", dst, value)
+                format!("{} future_new {}", self.format_dst(dst, types), value)
             },
-            
+
             MirInstruction::FutureSet { future, value } => {
                 format!("future_set {} = {}", future, value)
             },
-            
+
             MirInstruction::Await { dst, future } => {
-                format!("{} = await {}", dst, future)
+                format!("{} await {}", self.format_dst(dst, types), future)
             },
-            
+
             // Phase 9.7: External Function Calls
             MirInstruction::ExternCall { dst, iface_name, method_name, args, effects } => {
                 let args_str = args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", ");
                 if let Some(dst) = dst {
-                    format!("{} = extern_call {}.{}({}) [effects: {}]", dst, iface_name, method_name, args_str, effects)
+                    format!("{} extern_call {}.{}({}) [effects: {}]", self.format_dst(dst, types), iface_name, method_name, args_str, effects)
                 } else {
                     format!("extern_call {}.{}({}) [effects: {}]", iface_name, method_name, args_str, effects)
                 }
