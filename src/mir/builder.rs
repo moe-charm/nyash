@@ -27,6 +27,7 @@ mod exprs_qmark;   // ?-propagate
 mod exprs_peek;    // peek expression
 mod exprs_lambda;  // lambda lowering
 mod exprs_include; // include lowering
+mod plugin_sigs; // plugin signature loader
 
 // moved helpers to builder/utils.rs
 
@@ -129,37 +130,7 @@ impl MirBuilder {
     }
     /// Create a new MIR builder
     pub fn new() -> Self {
-        // Load plugin method signatures from nyash_box.toml if available
-        let mut plugin_method_sigs: HashMap<(String, String), super::MirType> = HashMap::new();
-        if let Ok(content) = fs::read_to_string("nyash_box.toml") {
-            if let Ok(root) = toml::from_str::<toml::Value>(&content) {
-                if let Some(table) = root.as_table() {
-                    for (box_name, box_val) in table {
-                        if let Some(methods) = box_val.get("methods").and_then(|v| v.as_table()) {
-                            for (mname, mval) in methods {
-                                if let Some(ret) = mval.get("returns") {
-                                    let ty_str = ret
-                                        .as_str()
-                                        .map(|s| s.to_string())
-                                        .or_else(|| ret.get("type").and_then(|t| t.as_str()).map(|s| s.to_string()));
-                                    if let Some(ts) = ty_str {
-                                        let mir_ty = match ts.to_lowercase().as_str() {
-                                            "i64" | "int" | "integer" => super::MirType::Integer,
-                                            "f64" | "float" => super::MirType::Float,
-                                            "bool" | "boolean" => super::MirType::Bool,
-                                            "string" => super::MirType::String,
-                                            "void" | "unit" => super::MirType::Void,
-                                            other => super::MirType::Box(other.to_string()),
-                                        };
-                                        plugin_method_sigs.insert((box_name.clone(), mname.clone()), mir_ty);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let plugin_method_sigs = plugin_sigs::load_plugin_method_sigs();
         Self {
             current_module: None,
             current_function: None,
