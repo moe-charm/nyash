@@ -2389,14 +2389,13 @@ pub extern "C" fn nyash_console_log_export(ptr: *const i8) -> i64 {
 // Exported as: nyash.console.log_handle(i64 handle) -> i64
 #[export_name = "nyash.console.log_handle"]
 pub extern "C" fn nyash_console_log_handle(handle: i64) -> i64 {
-    if handle <= 0 {
-        return 0;
-    }
-
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
-        let s = obj.to_string_box().value; // 既存の統一文字列変換メソッド
+    use nyash_rust::jit::rt::handles;
+    eprintln!("DEBUG: handle={}", handle);
+    if let Some(obj) = handles::get(handle as u64) {
+        let s = obj.to_string_box().value;
         println!("{}", s);
     } else {
+        eprintln!("DEBUG: handle {} not found in registry", handle);
         println!("{}", handle);
     }
     0

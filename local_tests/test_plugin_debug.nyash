@@ -1,1 +1,11 @@
-print("Hello from Nyash\!")
+local c = new CounterBox()
+c.inc()
+local val = c.get()
+print("Before print:")
+print(val)
+print("After print")
+
+// 比較用
+local x = 42
+print("Normal int:")
+print(x)
