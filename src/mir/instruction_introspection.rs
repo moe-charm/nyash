@@ -1,116 +1,40 @@
-//! Introspection helpers for MIR instruction set
-//!
-//! Migration note:
-//! - Historically we synced to a canonical 26-instruction doc list.
-//! - We are migrating to Core-15 for enforcement and tests. During migration,
-//!   docs may still list 26; tests should use `core15_instruction_names()`.
+//! Introspection helpers for the MIR14 instruction set
 
-/// Returns the legacy canonical list of core MIR instruction names (26 items).
-/// This list matched docs/reference/mir/INSTRUCTION_SET.md under "Core Instructions".
-pub fn core_instruction_names() -> &'static [&'static str] {
+/// Return the canonical list of MIR14 instruction names.
+pub fn mir14_instruction_names() -> &'static [&'static str] {
     &[
-        "Const",
-        "Copy",
-        "Load",
-        "Store",
-        "UnaryOp",
-        "BinOp",
-        "Compare",
-        "Jump",
-        "Branch",
-        "Phi",
-        "Return",
-        "Call",
-        "ExternCall",
-        "BoxCall",
-        "NewBox",
-        "ArrayGet",
-        "ArraySet",
-        "RefNew",
-        "RefGet",
-        "RefSet",
-        "Await",
-        "Print",
-        "TypeOp",
-        "WeakRef",
-        "Barrier",
-    ]
-}
-
-/// Returns the Core-15 instruction names used for the minimal kernel enforcement.
-/// This list is implementation-driven for migration stage; docs may differ temporarily.
-pub fn core15_instruction_names() -> &'static [&'static str] {
-    &[
-        // 値/計算
+        // values / arithmetic
         "Const",
         "UnaryOp",
         "BinOp",
         "Compare",
         "TypeOp",
-        // メモリ
+        // memory
         "Load",
         "Store",
-        // 制御
+        // control flow
         "Jump",
         "Branch",
         "Return",
         "Phi",
-        // 呼び出し/Box
-        "Call",
+        // boxes / external
         "NewBox",
         "BoxCall",
         "ExternCall",
-    ]
-}
-
-/// Returns the Core-13 instruction names (final minimal kernel).
-/// This is the fixed target set used for MIR unification.
-pub fn core13_instruction_names() -> &'static [&'static str] {
-    &[
-        // 値/計算
-        "Const",
-        "BinOp",
-        "Compare",
-        // 制御
-        "Jump",
-        "Branch",
-        "Return",
-        "Phi",
-        // 呼び出し
-        "Call",
-        "BoxCall",
-        "ExternCall",
-        // メタ
-        "TypeOp",
-        "Safepoint",
-        "Barrier",
     ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::path::Path;
     use std::collections::BTreeSet;
 
-    // Core-15 enforcement: only count check; names are implementation-defined during migration.
     #[test]
-    fn core15_instruction_count_is_15() {
-        let impl_names = core15_instruction_names();
-        assert_eq!(impl_names.len(), 15, "Core-15 must contain exactly 15 instructions");
-        // basic sanity: includes a few key ops
-        let set: BTreeSet<_> = impl_names.iter().copied().collect();
-        for must in ["Const", "BinOp", "Return", "ExternCall"] { assert!(set.contains(must), "missing '{}'", must); }
-    }
-
-    #[test]
-    fn core13_instruction_count_is_13() {
-        let impl_names = core13_instruction_names();
-        assert_eq!(impl_names.len(), 13, "Core-13 must contain exactly 13 instructions");
-        let set: BTreeSet<_> = impl_names.iter().copied().collect();
-        for must in ["Const", "BinOp", "Return", "BoxCall", "ExternCall", "TypeOp"] {
-            assert!(set.contains(must), "missing '{}'", must);
-        }
+    fn mir14_instruction_count_is_14() {
+        let names = mir14_instruction_names();
+        assert_eq!(names.len(), 14, "MIR14 must contain exactly 14 instructions");
+        let set: BTreeSet<_> = names.iter().copied().collect();
+        for must in ["Const", "UnaryOp", "BoxCall"] { assert!(set.contains(must), "missing '{}'", must); }
     }
 }
+
