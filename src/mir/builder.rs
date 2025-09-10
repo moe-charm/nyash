@@ -69,6 +69,9 @@ pub struct MirBuilder {
 
     /// Optional per-value type annotations (MIR-level): ValueId -> MirType
     pub(super) value_types: HashMap<ValueId, super::MirType>,
+
+    /// Plugin method return type signatures loaded from nyash_box.toml
+    plugin_method_sigs: HashMap<(String, String), super::MirType>,
     /// Current static box name when lowering a static box body (e.g., "Main")
     current_static_box: Option<String>,
 
@@ -105,22 +108,20 @@ impl MirBuilder {
                 }
             }
             if let Some(bt) = recv_box {
-                let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
-                    // Built-in box methods
-                    ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
-                    ("StringBox", "is_empty") => Some(super::MirType::Bool),
-                    ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
-                    ("ArrayBox",  "length") => Some(super::MirType::Integer),
-                    
-                    // Plugin box methods
-                    ("CounterBox", "get") => Some(super::MirType::Integer),
-                    ("MathBox", "sqrt") => Some(super::MirType::Float),
-                    ("FileBox", "read") => Some(super::MirType::String),
-                    ("FileBox", "exists") => Some(super::MirType::Bool),
-                    _ => None,
-                };
-                if let Some(mt) = inferred { 
-                    self.value_types.insert(d, mt); 
+                if let Some(mt) = self.plugin_method_sigs.get(&(bt.clone(), method.clone())) {
+                    self.value_types.insert(d, mt.clone());
+                } else {
+                    let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
+                        // Built-in box methods
+                        ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
+                        ("StringBox", "is_empty") => Some(super::MirType::Bool),
+                        ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
+                        ("ArrayBox", "length") => Some(super::MirType::Integer),
+                        _ => None,
+                    };
+                    if let Some(mt) = inferred {
+                        self.value_types.insert(d, mt);
+                    }
                 }
             }
         }
@@ -128,6 +129,37 @@ impl MirBuilder {
     }
     /// Create a new MIR builder
     pub fn new() -> Self {
+        // Load plugin method signatures from nyash_box.toml if available
+        let mut plugin_method_sigs: HashMap<(String, String), super::MirType> = HashMap::new();
+        if let Ok(content) = fs::read_to_string("nyash_box.toml") {
+            if let Ok(root) = toml::from_str::<toml::Value>(&content) {
+                if let Some(table) = root.as_table() {
+                    for (box_name, box_val) in table {
+                        if let Some(methods) = box_val.get("methods").and_then(|v| v.as_table()) {
+                            for (mname, mval) in methods {
+                                if let Some(ret) = mval.get("returns") {
+                                    let ty_str = ret
+                                        .as_str()
+                                        .map(|s| s.to_string())
+                                        .or_else(|| ret.get("type").and_then(|t| t.as_str()).map(|s| s.to_string()));
+                                    if let Some(ts) = ty_str {
+                                        let mir_ty = match ts.to_lowercase().as_str() {
+                                            "i64" | "int" | "integer" => super::MirType::Integer,
+                                            "f64" | "float" => super::MirType::Float,
+                                            "bool" | "boolean" => super::MirType::Bool,
+                                            "string" => super::MirType::String,
+                                            "void" | "unit" => super::MirType::Void,
+                                            other => super::MirType::Box(other.to_string()),
+                                        };
+                                        plugin_method_sigs.insert((box_name.clone(), mname.clone()), mir_ty);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         Self {
             current_module: None,
             current_function: None,
@@ -141,6 +173,7 @@ impl MirBuilder {
             weak_fields_by_box: HashMap::new(),
             field_origin_class: HashMap::new(),
             value_types: HashMap::new(),
+            plugin_method_sigs,
             current_static_box: None,
             include_loading: HashSet::new(),
             include_box_map: HashMap::new(),

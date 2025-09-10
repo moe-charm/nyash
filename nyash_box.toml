@@ -1,0 +1,34 @@
+# Central plugin type definitions
+
+[CounterBox]
+type_id = 7
+
+[CounterBox.methods.inc]
+returns = { type = "i64" }
+
+[CounterBox.methods.get]
+returns = { type = "i64" }
+
+[MathBox]
+type_id = 50
+
+[MathBox.methods.sqrt]
+returns = { type = "f64" }
+
+[MathBox.methods.sin]
+returns = { type = "f64" }
+
+[MathBox.methods.cos]
+returns = { type = "f64" }
+
+[MathBox.methods.round]
+returns = { type = "f64" }
+
+[FileBox]
+type_id = 6
+
+[FileBox.methods.read]
+returns = { type = "string" }
+
+[FileBox.methods.exists]
+returns = { type = "bool" }
