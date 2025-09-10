@@ -700,17 +700,42 @@ impl LLVMCompiler {
                                     // Decide return lowering by dst annotated type
                                     if let Some(mt) = func.metadata.value_types.get(d) {
                                         match mt {
-                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => { 
-                                                vmap.insert(*d, rv); 
+                                            crate::mir::MirType::Integer | crate::mir::MirType::Bool => {
+                                                if method_id.is_some() {
+                                                    let h = if let BasicValueEnum::IntValue(iv) = rv {
+                                                        iv
+                                                    } else {
+                                                        return Err("plugin ret expected i64".to_string());
+                                                    };
+                                                    let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                                    let ptr = codegen
+                                                        .builder
+                                                        .build_int_to_ptr(h, pty, "plugin_ret_handle_to_ptr")
+                                                        .map_err(|e| e.to_string())?;
+                                                    vmap.insert(*d, ptr.into());
+                                                } else {
+                                                    vmap.insert(*d, rv);
+                                                }
                                             }
-                                            crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
-                                                let h = if let BasicValueEnum::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
+                                            crate::mir::MirType::Box(_)
+                                            | crate::mir::MirType::String
+                                            | crate::mir::MirType::Array(_)
+                                            | crate::mir::MirType::Future(_)
+                                            | crate::mir::MirType::Unknown => {
+                                                let h = if let BasicValueEnum::IntValue(iv) = rv {
+                                                    iv
+                                                } else {
+                                                    return Err("invoke ret expected i64".to_string());
+                                                };
                                                 let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
-                                                let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
+                                                let ptr = codegen
+                                                    .builder
+                                                    .build_int_to_ptr(h, pty, "ret_handle_to_ptr")
+                                                    .map_err(|e| e.to_string())?;
                                                 vmap.insert(*d, ptr.into());
                                             }
-                                            _ => { 
-                                                vmap.insert(*d, rv); 
+                                            _ => {
+                                                vmap.insert(*d, rv);
                                             }
                                         }
                                     } else {
