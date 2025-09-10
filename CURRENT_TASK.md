@@ -47,9 +47,16 @@
 
 ### 🎯 **次期深堀り調査対象**：
 1. **プラグインランタイム戻り値パス詳細調査** - `crates/nyrt/src/lib.rs`
-2. **LLVM BoxCall戻り値処理詳細分析** - `src/backend/llvm/compiler.rs` 戻り値変換
+2. **LLVM BoxCall戻り値処理詳細分析** - `src/backend/llvm/compiler/real.rs` 戻り値変換
 3. **MIR変数代入メカニズム調査** - BoxCall→変数の代入処理  
 4. **print()関数とプラグイン値の相性調査** - 型認識処理
+
+### ✅ **リファクタリング完了（2025-09-11）**：
+**PR #136マージ済み** - LLVMコンパイラモジュール化：
+- `compiler.rs` → 4モジュールに分割（mod.rs, real.rs, mock.rs, mock_impl.in.rs）
+- プラグインシグネチャ読み込みを `plugin_sigs.rs` に移動
+- BoxタイプID読み込みを `box_types.rs` に移動
+- PR #134の型情報処理を完全保持
 
 ## 🎯 Restart Notes — Ny Syntax Alignment (2025‑09‑07)
 
