@@ -22,9 +22,10 @@ type_id = 6
 [libraries."libnyash_filebox_plugin".FileBox.methods]
 birth = { method_id = 0 }
 open = { method_id = 1, args = ["path", "mode"] }
-read = { method_id = 2 }
-write = { method_id = 3, args = ["data"] }
+read = { method_id = 2, args = ["path?"] }
+write = { method_id = 3, args = ["path?", "data"] }
 close = { method_id = 4 }
+exists = { method_id = 5, args = ["path"] }
 fini = { method_id = 4294967295 }
 copyFrom = { method_id = 7, args = [ { kind = "box", category = "plugin" } ] }
 cloneSelf = { method_id = 8 }

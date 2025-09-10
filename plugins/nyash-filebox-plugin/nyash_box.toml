@@ -21,8 +21,18 @@ returns = { type = "void", error = "string" }
 
 [FileBox.methods.read]
 id = 2
-args = []
+args = [ { name = "path", type = "string", optional = true } ]
 returns = { type = "string" }
+
+[FileBox.methods.write]
+id = 3
+args = [ { name = "path", type = "string", optional = true }, { name = "data", type = "bytes" } ]
+returns = { type = "i32" }
+
+[FileBox.methods.exists]
+id = 5
+args = [ { name = "path", type = "string" } ]
+returns = { type = "bool" }
 
 [implementation]
 ffi_version = 1
