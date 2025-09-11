@@ -35,6 +35,150 @@ pub(super) fn create_basic_blocks<'ctx>(
     (bb_map, entry_bb)
 }
 
+// Pre-create PHI nodes for all blocks; also inserts placeholder values into vmap.
+pub(super) fn precreate_phis<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    func: &MirFunction,
+    bb_map: &HashMap<BasicBlockId, BasicBlock<'ctx>>,
+    vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
+) -> Result<
+    HashMap<
+        BasicBlockId,
+        Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
+    >,
+    String,
+> {
+    use crate::mir::instruction::MirInstruction;
+    use super::types::map_mirtype_to_basic;
+    let mut phis_by_block: HashMap<
+        BasicBlockId,
+        Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
+    > = HashMap::new();
+    for bid in func.block_ids() {
+        let bb = *bb_map.get(&bid).ok_or("missing bb in map")?;
+        codegen.builder.position_at_end(bb);
+        let block = func.blocks.get(&bid).unwrap();
+        for inst in block
+            .instructions
+            .iter()
+            .take_while(|i| matches!(i, MirInstruction::Phi { .. }))
+        {
+            if let MirInstruction::Phi { dst, inputs } = inst {
+                let mut phi_ty: Option<inkwell::types::BasicTypeEnum> = None;
+                if let Some(mt) = func.metadata.value_types.get(dst) {
+                    phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
+                } else if let Some((_, iv)) = inputs.first() {
+                    if let Some(mt) = func.metadata.value_types.get(iv) {
+                        phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
+                    }
+                }
+                let phi_ty = phi_ty.unwrap_or_else(|| codegen.context.i64_type().into());
+                let phi = codegen
+                    .builder
+                    .build_phi(phi_ty, &format!("phi_{}", dst.as_u32()))
+                    .map_err(|e| e.to_string())?;
+                vmap.insert(*dst, phi.as_basic_value());
+                phis_by_block
+                    .entry(bid)
+                    .or_default()
+                    .push((*dst, phi, inputs.clone()));
+            }
+        }
+    }
+    Ok(phis_by_block)
+}
+
+// Lower Store: handle allocas with element type tracking and integer width adjust
+pub(super) fn lower_store<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
+    allocas: &mut HashMap<ValueId, inkwell::values::PointerValue<'ctx>>,
+    alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
+    value: &ValueId,
+    ptr: &ValueId,
+) -> Result<(), String> {
+    use inkwell::types::BasicTypeEnum;
+    let val = *vmap.get(value).ok_or("store value missing")?;
+    let elem_ty = match val {
+        BasicValueEnum::IntValue(iv) => BasicTypeEnum::IntType(iv.get_type()),
+        BasicValueEnum::FloatValue(fv) => BasicTypeEnum::FloatType(fv.get_type()),
+        BasicValueEnum::PointerValue(pv) => BasicTypeEnum::PointerType(pv.get_type()),
+        _ => return Err("unsupported store value type".to_string()),
+    };
+    if let Some(existing) = allocas.get(ptr).copied() {
+        let existing_elem = *alloca_elem_types.get(ptr).ok_or("alloca elem type missing")?;
+        if existing_elem != elem_ty {
+            match (val, existing_elem) {
+                (BasicValueEnum::IntValue(iv), BasicTypeEnum::IntType(t)) => {
+                    let bw_src = iv.get_type().get_bit_width();
+                    let bw_dst = t.get_bit_width();
+                    if bw_src < bw_dst {
+                        let adj = codegen.builder.build_int_z_extend(iv, t, "zext").map_err(|e| e.to_string())?;
+                        codegen.builder.build_store(existing, adj).map_err(|e| e.to_string())?;
+                    } else if bw_src > bw_dst {
+                        let adj = codegen.builder.build_int_truncate(iv, t, "trunc").map_err(|e| e.to_string())?;
+                        codegen.builder.build_store(existing, adj).map_err(|e| e.to_string())?;
+                    } else {
+                        codegen.builder.build_store(existing, iv).map_err(|e| e.to_string())?;
+                    }
+                }
+                (BasicValueEnum::PointerValue(pv), BasicTypeEnum::PointerType(pt)) => {
+                    let adj = codegen.builder.build_pointer_cast(pv, pt, "pcast").map_err(|e| e.to_string())?;
+                    codegen.builder.build_store(existing, adj).map_err(|e| e.to_string())?;
+                }
+                (BasicValueEnum::FloatValue(fv), BasicTypeEnum::FloatType(ft)) => {
+                    // Only f64 currently expected
+                    if fv.get_type() != ft { return Err("float width mismatch in store".to_string()); }
+                    codegen.builder.build_store(existing, fv).map_err(|e| e.to_string())?;
+                }
+                _ => return Err("store type mismatch".to_string()),
+            }
+        } else {
+            codegen.builder.build_store(existing, val).map_err(|e| e.to_string())?;
+        }
+    } else {
+        let slot = codegen
+            .builder
+            .build_alloca(elem_ty, &format!("slot_{}", ptr.as_u32()))
+            .map_err(|e| e.to_string())?;
+        codegen.builder.build_store(slot, val).map_err(|e| e.to_string())?;
+        allocas.insert(*ptr, slot);
+        alloca_elem_types.insert(*ptr, elem_ty);
+    }
+    Ok(())
+}
+
+pub(super) fn lower_load<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
+    allocas: &mut HashMap<ValueId, inkwell::values::PointerValue<'ctx>>,
+    alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
+    dst: &ValueId,
+    ptr: &ValueId,
+) -> Result<(), String> {
+    use inkwell::types::BasicTypeEnum;
+    let (slot, elem_ty) = if let Some(s) = allocas.get(ptr).copied() {
+        let et = *alloca_elem_types.get(ptr).ok_or("alloca elem type missing")?;
+        (s, et)
+    } else {
+        // Default new slot as i64 for uninitialized loads
+        let i64t = codegen.context.i64_type();
+        let slot = codegen
+            .builder
+            .build_alloca(i64t, &format!("slot_{}", ptr.as_u32()))
+            .map_err(|e| e.to_string())?;
+        allocas.insert(*ptr, slot);
+        alloca_elem_types.insert(*ptr, i64t.into());
+        (slot, i64t.into())
+    };
+    let lv = codegen
+        .builder
+        .build_load(elem_ty, slot, &format!("load_{}", dst.as_u32()))
+        .map_err(|e| e.to_string())?;
+    vmap.insert(*dst, lv);
+    Ok(())
+}
+
 // Const lowering: produce a BasicValue and store into vmap
 pub(super) fn lower_const<'ctx>(
     codegen: &CodegenContext<'ctx>,

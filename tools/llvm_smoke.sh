@@ -17,12 +17,17 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
   exit 2
 fi
 
+# Resolve LLVM 18 prefix once and export for both 180/181 variants used by llvm-sys
+_LLVMPREFIX=$(llvm-config-18 --prefix)
+export LLVM_SYS_181_PREFIX="${_LLVMPREFIX}"
+export LLVM_SYS_180_PREFIX="${_LLVMPREFIX}"
+
 # --- AOT smoke: apps/ny-llvm-bitops (bitwise & shift operations) ---
 if [[ "${NYASH_LLVM_BITOPS_SMOKE:-0}" == "1" ]]; then
   echo "[llvm-smoke] building + linking apps/ny-llvm-bitops ..." >&2
   OBJ_BIT="$PWD/target/aot_objects/bitops_smoke.o"
   rm -f "$OBJ_BIT"
-  NYASH_LLVM_OBJ_OUT="$OBJ_BIT" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-llvm-bitops/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_BIT" "$BIN" --backend llvm apps/tests/ny-llvm-bitops/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_BIT" ./tools/build_llvm.sh apps/tests/ny-llvm-bitops/main.nyash -o app_bitops_llvm >/dev/null || true
   echo "[llvm-smoke] running app_bitops_llvm ..." >&2
   out_bit=$(./app_bitops_llvm || true)
@@ -38,12 +43,11 @@ fi
 
 echo "[llvm-smoke] building nyash (${MODE}, feature=llvm)..." >&2
 # Support both llvm-sys 180/181 by exporting both prefixes to the same value
-_LLVMPREFIX=$(llvm-config-18 --prefix)
-LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" cargo build -q ${MODE:+--${MODE}} --features llvm
+cargo build -q ${MODE:+--${MODE}} --features llvm
 
 echo "[llvm-smoke] running --backend llvm on examples/llvm11_core_smoke.nyash ..." >&2
 rm -f "$OBJ"
-NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm examples/llvm11_core_smoke.nyash >/dev/null || true
+NYASH_LLVM_OBJ_OUT="$OBJ" "$BIN" --backend llvm examples/llvm11_core_smoke.nyash >/dev/null || true
 
 if [[ ! -f "$OBJ" ]]; then
   echo "error: expected object not found: $OBJ" >&2
@@ -62,7 +66,7 @@ if [[ "${NYASH_LLVM_ARRAY_SMOKE:-0}" == "1" ]]; then
   # Pre-emit object explicitly (more stable)
   OBJ_ARRAY="$PWD/target/aot_objects/array_smoke.o"
   rm -f "$OBJ_ARRAY"
-  NYASH_LLVM_OBJ_OUT="$OBJ_ARRAY" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-llvm-smoke/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_ARRAY" "$BIN" --backend llvm apps/tests/ny-llvm-smoke/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_ARRAY" ./tools/build_llvm.sh apps/tests/ny-llvm-smoke/main.nyash -o app_link >/dev/null
   echo "[llvm-smoke] running app_link ..." >&2
   out_smoke=$(./app_link || true)
@@ -84,7 +88,7 @@ if [[ "${NYASH_LLVM_ARRAY_RET_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUGIN
   fi
   OBJ_AR="$PWD/target/aot_objects/array_ret_smoke.o"
   rm -f "$OBJ_AR"
-  NYASH_LLVM_OBJ_OUT="$OBJ_AR" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-array-llvm-ret/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_AR" "$BIN" --backend llvm apps/tests/ny-array-llvm-ret/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_AR" ./tools/build_llvm.sh apps/tests/ny-array-llvm-ret/main.nyash -o app_array_ret_llvm >/dev/null || true
   echo "[llvm-smoke] running app_array_ret_llvm ..." >&2
   out_ar=$(./app_array_ret_llvm || true)
@@ -103,7 +107,7 @@ if [[ "${NYASH_LLVM_ECHO_SMOKE:-0}" == "1" ]]; then
   echo "[llvm-smoke] building + linking apps/ny-echo-lite ..." >&2
   OBJ_ECHO="$PWD/target/aot_objects/echo_smoke.o"
   rm -f "$OBJ_ECHO"
-  NYASH_LLVM_OBJ_OUT="$OBJ_ECHO" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-echo-lite/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_ECHO" "$BIN" --backend llvm apps/tests/ny-echo-lite/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_ECHO" ./tools/build_llvm.sh apps/tests/ny-echo-lite/main.nyash -o app_echo_llvm >/dev/null
   echo "[llvm-smoke] running app_echo_llvm with stdin ..." >&2
   echo "hello-llvm" | ./app_echo_llvm > /tmp/ny_echo_llvm.out || true
@@ -128,7 +132,7 @@ if [[ "${NYASH_LLVM_MAP_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUGINS:-0}"
   # Pre-emit object to avoid current lowering gaps, then link
   OBJ_MAP="$PWD/target/aot_objects/map_smoke.o"
   rm -f "$OBJ_MAP"
-  NYASH_LLVM_OBJ_OUT="$OBJ_MAP" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-map-llvm-smoke/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_MAP" "$BIN" --backend llvm apps/tests/ny-map-llvm-smoke/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_MAP" ./tools/build_llvm.sh apps/tests/ny-map-llvm-smoke/main.nyash -o app_map_llvm >/dev/null || true
   echo "[llvm-smoke] running app_map_llvm ..." >&2
   out_map=$(./app_map_llvm || true)
@@ -150,7 +154,7 @@ if [[ "${NYASH_LLVM_VINVOKE_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUGINS:
   fi
   OBJ_V="$PWD/target/aot_objects/vinvoke_smoke.o"
   rm -f "$OBJ_V"
-  NYASH_LLVM_OBJ_OUT="$OBJ_V" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-vinvoke-smoke/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_V" "$BIN" --backend llvm apps/tests/ny-vinvoke-smoke/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_V" ./tools/build_llvm.sh apps/tests/ny-vinvoke-smoke/main.nyash -o app_vinvoke_llvm >/dev/null || true
   echo "[llvm-smoke] running app_vinvoke_llvm ..." >&2
   out_v=$(./app_vinvoke_llvm || true)
@@ -172,7 +176,7 @@ if [[ "${NYASH_LLVM_VINVOKE_RET_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUG
   fi
   OBJ_VR="$PWD/target/aot_objects/vinvoke_ret_smoke.o"
   rm -f "$OBJ_VR"
-  NYASH_LLVM_OBJ_OUT="$OBJ_VR" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-vinvoke-llvm-ret/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_VR" "$BIN" --backend llvm apps/tests/ny-vinvoke-llvm-ret/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_VR" ./tools/build_llvm.sh apps/tests/ny-vinvoke-llvm-ret/main.nyash -o app_vinvoke_ret_llvm >/dev/null || true
   echo "[llvm-smoke] running app_vinvoke_ret_llvm ..." >&2
   out_vr=$(./app_vinvoke_ret_llvm || true)
@@ -194,7 +198,26 @@ if [[ "${NYASH_LLVM_VINVOKE_RET_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUG
   fi
   OBJ_SIZE="$PWD/target/aot_objects/vinvoke_size_smoke.o"
   rm -f "$OBJ_SIZE"
-  NYASH_LLVM_OBJ_OUT="$OBJ_SIZE" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" "$BIN" --backend llvm apps/tests/ny-vinvoke-llvm-ret-size/main.nyash >/dev/null || true
+  NYASH_LLVM_OBJ_OUT="$OBJ_SIZE" "$BIN" --backend llvm apps/tests/ny-vinvoke-llvm-ret-size/main.nyash >/dev/null || true
+
+# --- AOT smoke: plugin return values (CounterBox.get, StringBox.concat) ---
+if [[ "${NYASH_LLVM_PLUGIN_RET_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUGINS:-0}" != "1" ]]; then
+  echo "[llvm-smoke] building + linking apps/ny-plugin-ret-llvm-smoke ..." >&2
+  OBJ_RET="$PWD/target/aot_objects/plugin_ret_smoke.o"
+  rm -f "$OBJ_RET"
+  NYASH_LLVM_OBJ_OUT="$OBJ_RET" "$BIN" --backend llvm apps/tests/ny-plugin-ret-llvm-smoke/main.nyash >/dev/null || true
+  NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_RET" ./tools/build_llvm.sh apps/tests/ny-plugin-ret-llvm-smoke/main.nyash -o app_plugin_ret_llvm >/dev/null || true
+  echo "[llvm-smoke] running app_plugin_ret_llvm ..." >&2
+  out_ret=$(./app_plugin_ret_llvm || true)
+  echo "[llvm-smoke] output: $out_ret" >&2
+  if ! echo "$out_ret" | grep -q "S=abCD" || ! echo "$out_ret" | grep -q "Result: 1"; then
+    echo "error: plugin-ret-smoke unexpected output: $out_ret" >&2
+    exit 1
+  fi
+  echo "[llvm-smoke] OK: plugin return (int/string) smoke passed" >&2
+else
+  echo "[llvm-smoke] skipping plugin return smoke (set NYASH_LLVM_PLUGIN_RET_SMOKE=1 to enable; requires plugins)" >&2
+fi
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_SIZE" ./tools/build_llvm.sh apps/tests/ny-vinvoke-llvm-ret-size/main.nyash -o app_vinvoke_ret_size_llvm >/dev/null || true
   echo "[llvm-smoke] running app_vinvoke_ret_size_llvm ..." >&2
   out_size=$(./app_vinvoke_ret_size_llvm || true)
