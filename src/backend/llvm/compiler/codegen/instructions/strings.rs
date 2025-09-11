@@ -16,15 +16,13 @@ pub(super) fn try_handle_string_method<'ctx>(
     args: &[ValueId],
     recv_v: BVE<'ctx>,
 ) -> Result<bool, String> {
-    // Only act if receiver is annotated as String or StringBox
+    // Act if receiver is annotated as String/StringBox, or if the actual value is an i8* (string literal path)
     let is_string_recv = match func.metadata.value_types.get(box_val) {
         Some(crate::mir::MirType::String) => true,
         Some(crate::mir::MirType::Box(b)) if b == "StringBox" => true,
-        _ => false,
+        _ => matches!(recv_v, BVE::PointerValue(_)),
     };
-    if !is_string_recv {
-        return Ok(false);
-    }
+    // Do not early-return; allow method-specific checks below to validate types
 
     // concat fast-paths
     if method == "concat" {
@@ -153,9 +151,13 @@ pub(super) fn try_handle_string_method<'ctx>(
         }
         let i64t = codegen.context.i64_type();
         let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-        // receiver must be i8* for this fast path
+        // receiver preferably i8*; if it's a handle (i64), conservatively cast to i8*
         let recv_p = match recv_v {
             BVE::PointerValue(p) => p,
+            BVE::IntValue(iv) => codegen
+                .builder
+                .build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "str_h2p_sub")
+                .map_err(|e| e.to_string())?,
             _ => return Ok(false),
         };
         let a0 = *vmap.get(&args[0]).ok_or("substring start arg missing")?;

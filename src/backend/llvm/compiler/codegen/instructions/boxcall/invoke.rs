@@ -159,8 +159,22 @@ fn store_invoke_return<'ctx>(
 ) -> Result<(), String> {
     if let Some(mt) = func.metadata.value_types.get(&dst) {
         match mt {
-            crate::mir::MirType::Integer | crate::mir::MirType::Bool => {
+            crate::mir::MirType::Integer => {
                 vmap.insert(dst, rv);
+            }
+            crate::mir::MirType::Bool => {
+                // Normalize i64 bool (0/1) to i1
+                if let BVE::IntValue(iv) = rv {
+                    let i64t = codegen.context.i64_type();
+                    let zero = i64t.const_zero();
+                    let b1 = codegen
+                        .builder
+                        .build_int_compare(inkwell::IntPredicate::NE, iv, zero, "bool_i64_to_i1")
+                        .map_err(|e| e.to_string())?;
+                    vmap.insert(dst, b1.into());
+                } else {
+                    vmap.insert(dst, rv);
+                }
             }
             crate::mir::MirType::String => {
                 // keep as i64 handle
@@ -191,4 +205,3 @@ fn store_invoke_return<'ctx>(
     }
     Ok(())
 }
-

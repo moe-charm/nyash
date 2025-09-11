@@ -3,6 +3,7 @@ use inkwell::values::{BasicValueEnum, FunctionValue, PhiValue};
 use std::collections::HashMap;
 
 use crate::backend::llvm::context::CodegenContext;
+use super::super::types::map_mirtype_to_basic;
 use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 
 // Small, safe extraction: create LLVM basic blocks for a MIR function and
@@ -59,7 +60,19 @@ pub(in super::super) fn precreate_phis<'ctx>(
         {
             if let crate::mir::instruction::MirInstruction::Phi { dst, inputs } = inst {
                 let mut phi_ty: Option<inkwell::types::BasicTypeEnum> = None;
+                // Prefer pointer when any input (or dst) is String/Box/Array/Future/Unknown
+                let mut wants_ptr = false;
                 if let Some(mt) = func.metadata.value_types.get(dst) {
+                    wants_ptr |= matches!(mt, crate::mir::MirType::String | crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown);
+                }
+                for (_, iv) in inputs.iter() {
+                    if let Some(mt) = func.metadata.value_types.get(iv) {
+                        wants_ptr |= matches!(mt, crate::mir::MirType::String | crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown);
+                    }
+                }
+                if wants_ptr {
+                    phi_ty = Some(codegen.context.ptr_type(inkwell::AddressSpace::from(0)).into());
+                } else if let Some(mt) = func.metadata.value_types.get(dst) {
                     phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
                 } else if let Some((_, iv)) = inputs.first() {
                     if let Some(mt) = func.metadata.value_types.get(iv) {

@@ -17,7 +17,8 @@ pub(super) fn try_handle_array_method<'ctx>(
     recv_h: inkwell::values::IntValue<'ctx>,
 ) -> Result<bool, String> {
     // Only when receiver is ArrayBox
-    let is_array = matches!(func.metadata.value_types.get(box_val), Some(crate::mir::MirType::Box(b)) if b == "ArrayBox");
+    let is_array = matches!(func.metadata.value_types.get(box_val), Some(crate::mir::MirType::Box(b)) if b == "ArrayBox")
+        || matches!(method, "get" | "set" | "push" | "length");
     if !is_array {
         return Ok(false);
     }
@@ -127,4 +128,3 @@ pub(super) fn try_handle_array_method<'ctx>(
         _ => Ok(false),
     }
 }
-

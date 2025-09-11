@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 
-use super::super::types::to_bool;
+use super::super::types::{to_bool, map_mirtype_to_basic};
 
 pub(in super::super) fn emit_return<'ctx>(
     codegen: &CodegenContext<'ctx>,
@@ -20,9 +20,22 @@ pub(in super::super) fn emit_return<'ctx>(
         }
         (_t, Some(vid)) => {
             let v = *vmap.get(vid).ok_or("ret value missing")?;
+            // If function expects a pointer but we have an integer handle, convert i64 -> ptr
+            let expected = map_mirtype_to_basic(codegen.context, &func.signature.return_type);
+            use inkwell::types::BasicTypeEnum as BT;
+            let v_adj = match (expected, v) {
+                (BT::PointerType(pt), BasicValueEnum::IntValue(iv)) => {
+                    codegen
+                        .builder
+                        .build_int_to_ptr(iv, pt, "ret_i2p")
+                        .map_err(|e| e.to_string())?
+                        .into()
+                }
+                _ => v,
+            };
             codegen
                 .builder
-                .build_return(Some(&v))
+                .build_return(Some(&v_adj))
                 .map_err(|e| e.to_string())?;
             Ok(())
         }

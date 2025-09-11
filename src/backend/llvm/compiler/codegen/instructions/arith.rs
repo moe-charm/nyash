@@ -148,48 +148,44 @@ pub(in super::super) fn lower_compare<'ctx>(
         }
     } else if let (BasicValueEnum::PointerValue(lp), BasicValueEnum::IntValue(ri)) = (lv, rv) {
         use CompareOp as C;
-        match op {
-            C::Eq | C::Ne => {
-                let i64t = codegen.context.i64_type();
-                let li = codegen
-                    .builder
-                    .build_ptr_to_int(lp, i64t, "pi_l")
-                    .map_err(|e| e.to_string())?;
-                let pred = if matches!(op, C::Eq) {
-                    inkwell::IntPredicate::EQ
-                } else {
-                    inkwell::IntPredicate::NE
-                };
-                codegen
-                    .builder
-                    .build_int_compare(pred, li, ri, "pcmpi")
-                    .map_err(|e| e.to_string())?
-                    .into()
-            }
-            _ => return Err("unsupported pointer-int comparison (only Eq/Ne)".to_string()),
-        }
+        let i64t = codegen.context.i64_type();
+        let li = codegen
+            .builder
+            .build_ptr_to_int(lp, i64t, "pi_l")
+            .map_err(|e| e.to_string())?;
+        let pred = match op {
+            C::Eq => inkwell::IntPredicate::EQ,
+            C::Ne => inkwell::IntPredicate::NE,
+            C::Lt => inkwell::IntPredicate::SLT,
+            C::Le => inkwell::IntPredicate::SLE,
+            C::Gt => inkwell::IntPredicate::SGT,
+            C::Ge => inkwell::IntPredicate::SGE,
+        };
+        codegen
+            .builder
+            .build_int_compare(pred, li, ri, "pcmpi")
+            .map_err(|e| e.to_string())?
+            .into()
     } else if let (BasicValueEnum::IntValue(li), BasicValueEnum::PointerValue(rp)) = (lv, rv) {
         use CompareOp as C;
-        match op {
-            C::Eq | C::Ne => {
-                let i64t = codegen.context.i64_type();
-                let ri = codegen
-                    .builder
-                    .build_ptr_to_int(rp, i64t, "pi_r")
-                    .map_err(|e| e.to_string())?;
-                let pred = if matches!(op, C::Eq) {
-                    inkwell::IntPredicate::EQ
-                } else {
-                    inkwell::IntPredicate::NE
-                };
-                codegen
-                    .builder
-                    .build_int_compare(pred, li, ri, "pcmpi")
-                    .map_err(|e| e.to_string())?
-                    .into()
-            }
-            _ => return Err("unsupported int-pointer comparison (only Eq/Ne)".to_string()),
-        }
+        let i64t = codegen.context.i64_type();
+        let ri = codegen
+            .builder
+            .build_ptr_to_int(rp, i64t, "pi_r")
+            .map_err(|e| e.to_string())?;
+        let pred = match op {
+            C::Eq => inkwell::IntPredicate::EQ,
+            C::Ne => inkwell::IntPredicate::NE,
+            C::Lt => inkwell::IntPredicate::SLT,
+            C::Le => inkwell::IntPredicate::SLE,
+            C::Gt => inkwell::IntPredicate::SGT,
+            C::Ge => inkwell::IntPredicate::SGE,
+        };
+        codegen
+            .builder
+            .build_int_compare(pred, li, ri, "pcmpi")
+            .map_err(|e| e.to_string())?
+            .into()
     } else {
         return Err("compare type mismatch".to_string());
     };

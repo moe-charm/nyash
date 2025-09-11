@@ -319,14 +319,14 @@ impl LLVMCompiler {
                     instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                 }
             }
-            // Verify per-function
-            if !llvm_func.verify(true) {
-                return Err(format!("Function verification failed: {}", name));
-            }
         }
-        // Close the per-function lowering loop
+        // Verify the fully-lowered function once, after all blocks
+        if !llvm_func.verify(true) {
+            return Err(format!("Function verification failed: {}", name));
         }
-        
+
+        }
+        // End of per-function lowering loop
 
         // Build entry wrapper ny_main -> call entry function
         let i64t = codegen.context.i64_type();

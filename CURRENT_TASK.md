@@ -5,7 +5,50 @@ Summary
 - Keep fallbacks minimal; fix MIR annotations first.
 - ExternCall(console/debug) auto‑selects ptr/handle by IR type.
 - StringBox NewBox i8* fast path; print/log choose automatically.
- - Implement multi-function lowering and Call lowering for MIR14.
+- Implement multi-function lowering and Call lowering for MIR14.
+
+Update — 2025-09-12 (LLVM flow + BB naming)
+- codegen/mod.rs match arms cleanup:
+  - BinOp: unify to instructions::lower_binop(...)
+  - BoxCall: delegate solely to instructions::lower_boxcall(...); removed unreachable legacy code
+- BasicBlock naming made function‑scoped and unique: create_basic_blocks now prefixes with function label (e.g., Main_join_2_bb23)
+- Terminator fallback: when a MIR block lacks a terminator, emit a conservative jump to the next block (or entry if last)
+- Build: cargo build --features llvm passes
+- AOT emit status: improved (bb name collision resolved), but verifier still flags a missing terminator in Main.esc_json/1 (e.g., Main_esc_json_1_bb88)
+  - Likely cause: flow lowering edge case; MIR dump is correct, LLVM lowering missed a terminator
+  - Plan below addresses this with hardened flow lowering and instrumentation
+
+Hot Update — 2025-09-12 (quick)
+- Flow: moved function verify to post‑lower; added terminator fallback only when MIR lacks one
+- Compare: allow ptr↔int comparisons for all ops via ptr→i64 bridge
+- Strings: substring now accepts i64(handle) receiver (i2p); len/lastIndexOf stable
+- Arrays: method_id未注入でも get/set/push/length を NyRT 経由で処理
+- BoxCall: println→env.console.log フォールバック、同モジュール関数呼び出し/名前指定 invoke_by_name 経路を追加
+- PHI: 文字列/Box等を含む場合は i8* を選択する型推定に改善
+- 現在のブロッカー: esc_json/1 で「phi incoming value missing」
+  - 対応: emit_jump/emit_branch の incoming 配線をログ付きで点検し、値未定義箇所（by‑name/fast‑path戻り）を補完
+
+Plan — PHI/SSA Hardening (Sealed SSA)
+- Sealed SSA 入れ替え（安全に段階導入）
+  - Blockごとに `sealed: bool` と `incomplete_phis: Map<Var, Phi>` を保持
+  - 値取得APIを一本化: `value_at_end_of_block(var, bb)` で vmap を再帰解決＋仮PHI生成
+  - `seal(bb)` で pred 確定後に incomplete_phis を埋め、`fold_trivial_phi` で単純化
+- 配線の方向を整理
+  - emit_jump/emit_branch では直接 incoming を配線しない（to 側で必要時に解決）
+  - fast/slow 両レーンは同じ Var に書く（合流で拾えるように）
+- 型の前処理を一箇所へ
+  - Bool は i1 固定（必要なら zext は PHI 外側）
+  - ptr/int 混在禁止。必要箇所で ptrtoint/inttoptr を生成し、PHI では等型を保証
+- 計測と検証
+  - `seal(bb)` 時に incomplete_phis が残れば panic（場所特定）
+  - `[PHI] add incoming var=.. pred=.. ty=..` をデバッグ出力
+  - verify は関数降下完了後に 1 回
+- フォールバックのゲート
+  - by-name invoke は環境変数で明示ON（デフォルトOFF）にする方針に切替（ノイズ低減）
+
+Refactor Policy
+- 慌てず小さな箱（モジュール）を積む。必要なら随時リファクタリングOK。
+- 代替案（必要時のみ）: llvmlite の薄層で最低限の命令面を実装し、dep_tree_min_string を先に通す。
 
 Done (today)
 - BoxCall legacy block removed in LLVM codegen; delegation only.
@@ -41,6 +84,16 @@ Refactor — LLVM codegen instructions modularized (done)
 Next (short, focused)
 - Call Lowering の分離（完了）: `instructions/call.rs` に分割し、`mod.rs` から委譲。
 - 多関数 Lower 検証: selfhost minimal（dep_tree_min_string）を LLVM で通す（必要なら型注釈の微調整）。
+- Flow lowering hardening (in progress next):
+  - Ensure every lowered block has a terminator; use builder.get_insert_block().get_terminator() guard before fallback
+  - Instrument per‑block lowering (bid, has terminator?, emitted kind) to isolate misses
+  - Keep fallback minimal and only when MIR.block.terminator is None and LLVM has no terminator
+- MIR readable debug tools:
+  - Add --dump-mir-readable to print Nyash‑like pseudo code per function/block
+  - Optional DOT output (follow‑up)
+- Debug hints in MIR (debug builds only):
+  - Add #[cfg(debug_assertions)] fields like MirInstruction::debug_hint and MirMetadata::block_sources
+  - Gate emission by env (NYASH_MIR_DEBUG=1)
 - Map コア専用エントリ化（env.box.new 特例整理）と代表スモークの常時化（CI）
 - types.rs の将来分割（任意）:
   - `types/convert.rs`（i64<->ptr, f64→box）, `types/classify.rs`, `types/map_types.rs`
