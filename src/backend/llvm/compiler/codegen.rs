@@ -1,6 +1,7 @@
+use super::helpers::{as_float, as_int, map_type};
 use super::LLVMCompiler;
 use crate::backend::llvm::context::CodegenContext;
-use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
+use crate::box_trait::{BoolBox, IntegerBox, StringBox};
 use crate::boxes::{function_box::FunctionBox, math_box::FloatBox, null_box::NullBox};
 use crate::mir::function::MirModule;
 use crate::mir::instruction::{BinaryOp, CompareOp, ConstValue, MirInstruction, UnaryOp};
@@ -49,32 +50,7 @@ impl LLVMCompiler {
             return Err("Main.main function not found in module".to_string());
         };
 
-        // Map MIR types to LLVM types
-        fn map_type<'ctx>(
-            ctx: &'ctx Context,
-            ty: &crate::mir::MirType,
-        ) -> Result<BasicTypeEnum<'ctx>, String> {
-            Ok(match ty {
-                crate::mir::MirType::Integer => ctx.i64_type().into(),
-                crate::mir::MirType::Float => ctx.f64_type().into(),
-                crate::mir::MirType::Bool => ctx.bool_type().into(),
-                crate::mir::MirType::String => ctx
-                    .i8_type()
-                    .ptr_type(inkwell::AddressSpace::from(0))
-                    .into(),
-                crate::mir::MirType::Void => return Err("Void has no value type".to_string()),
-                crate::mir::MirType::Box(_) => ctx
-                    .i8_type()
-                    .ptr_type(inkwell::AddressSpace::from(0))
-                    .into(),
-                crate::mir::MirType::Array(_)
-                | crate::mir::MirType::Future(_)
-                | crate::mir::MirType::Unknown => ctx
-                    .i8_type()
-                    .ptr_type(inkwell::AddressSpace::from(0))
-                    .into(),
-            })
-        }
+        // Map MIR types to LLVM types via helpers
 
         // Load box type-id mapping from nyash_box.toml (central plugin registry)
         let box_type_ids = crate::backend::llvm::box_types::load_box_type_ids();
@@ -117,20 +93,6 @@ impl LLVMCompiler {
         let mut vmap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
 
         // Helper ops (centralized conversions and comparisons)
-        fn as_int<'ctx>(v: BasicValueEnum<'ctx>) -> Option<IntValue<'ctx>> {
-            if let BasicValueEnum::IntValue(iv) = v {
-                Some(iv)
-            } else {
-                None
-            }
-        }
-        fn as_float<'ctx>(v: BasicValueEnum<'ctx>) -> Option<FloatValue<'ctx>> {
-            if let BasicValueEnum::FloatValue(fv) = v {
-                Some(fv)
-            } else {
-                None
-            }
-        }
         fn to_i64_any<'ctx>(
             ctx: &'ctx Context,
             builder: &inkwell::builder::Builder<'ctx>,
@@ -2555,157 +2517,7 @@ impl LLVMCompiler {
             }
         }
     }
-
-    pub fn compile_and_execute(
-        &mut self,
-        mir_module: &MirModule,
-        temp_path: &str,
-    ) -> Result<Box<dyn NyashBox>, String> {
-        // 1) Emit object via real LLVM lowering to ensure IR generation remains healthy
-        let obj_path = format!("{}.o", temp_path);
-        self.compile_module(mir_module, &obj_path)?;
-
-        // 2) Execute via a minimal MIR interpreter for parity (until full AOT linkage is wired)
-        //    Supports: Const(Integer/Bool/String/Null), BinOp on Integer, Return(Some/None)
-        //    This mirrors the non-LLVM mock path just enough for simple parity tests.
-        self.values.clear();
-        let func = mir_module
-            .functions
-            .get("Main.main")
-            .or_else(|| mir_module.functions.get("main"))
-            .or_else(|| mir_module.functions.values().next())
-            .ok_or_else(|| "Main.main function not found".to_string())?;
-
-        use crate::mir::instruction::MirInstruction as I;
-        for inst in &func.get_block(func.entry_block).unwrap().instructions {
-            match inst {
-                I::Const { dst, value } => {
-                    let v: Box<dyn NyashBox> = match value {
-                        ConstValue::Integer(i) => Box::new(IntegerBox::new(*i)),
-                        ConstValue::Float(f) => Box::new(crate::boxes::math_box::FloatBox::new(*f)),
-                        ConstValue::String(s) => {
-                            Box::new(crate::box_trait::StringBox::new(s.clone()))
-                        }
-                        ConstValue::Bool(b) => Box::new(crate::box_trait::BoolBox::new(*b)),
-                        ConstValue::Null => Box::new(crate::boxes::null_box::NullBox::new()),
-                        ConstValue::Void => Box::new(IntegerBox::new(0)),
-                    };
-                    self.values.insert(*dst, v);
-                }
-                I::BinOp { dst, op, lhs, rhs } => {
-                    let l = self
-                        .values
-                        .get(lhs)
-                        .and_then(|b| b.as_any().downcast_ref::<IntegerBox>())
-                        .ok_or_else(|| format!("binop lhs %{} not integer", lhs.0))?;
-                    let r = self
-                        .values
-                        .get(rhs)
-                        .and_then(|b| b.as_any().downcast_ref::<IntegerBox>())
-                        .ok_or_else(|| format!("binop rhs %{} not integer", rhs.0))?;
-                    let res = match op {
-                        BinaryOp::Add => l.value + r.value,
-                        BinaryOp::Sub => l.value - r.value,
-                        BinaryOp::Mul => l.value * r.value,
-                        BinaryOp::Div => {
-                            if r.value == 0 {
-                                return Err("division by zero".into());
-                            }
-                            l.value / r.value
-                        }
-                        BinaryOp::Mod => l.value % r.value,
-                        BinaryOp::BitAnd => l.value & r.value,
-                        BinaryOp::BitOr => l.value | r.value,
-                        BinaryOp::BitXor => l.value ^ r.value,
-                        BinaryOp::Shl => l.value << r.value,
-                        BinaryOp::Shr => l.value >> r.value,
-                        BinaryOp::And => {
-                            if (l.value != 0) && (r.value != 0) {
-                                1
-                            } else {
-                                0
-                            }
-                        }
-                        BinaryOp::Or => {
-                            if (l.value != 0) || (r.value != 0) {
-                                1
-                            } else {
-                                0
-                            }
-                        }
-                    };
-                    self.values.insert(*dst, Box::new(IntegerBox::new(res)));
-                }
-                I::ExternCall {
-                    dst,
-                    iface_name,
-                    method_name,
-                    args,
-                    ..
-                } => {
-                    // Handle console methods via runtime handles (like AOT does)
-                    if iface_name == "env.console" {
-                        if let Some(arg0) = args.get(0) {
-                            // Convert argument to handle and get string representation
-                            use crate::jit::rt::handles;
-                            if let Some(boxed_val) = self.values.get(arg0) {
-                                // Convert NyashBox to handle
-                                let arc: std::sync::Arc<dyn NyashBox> = boxed_val.clone_box().into();
-                                let handle = handles::to_handle(arc) as i64;
-                                
-                                // Debug output
-                                eprintln!("DEBUG: handle={}", handle);
-                                
-                                // Get object from handle registry and print
-                                if let Some(obj) = handles::get(handle as u64) {
-                                    let s = obj.to_string_box().value;
-                                    match method_name.as_str() {
-                                        "log" => println!("{}", s),
-                                        "warn" => eprintln!("[warn] {}", s),
-                                        "error" => eprintln!("[error] {}", s),
-                                        _ => {}
-                                    }
-                                } else {
-                                    eprintln!("DEBUG: handle {} not found in registry", handle);
-                                    match method_name.as_str() {
-                                        "log" => println!("{}", handle),
-                                        "warn" => eprintln!("[warn] {}", handle),
-                                        "error" => eprintln!("[error] {}", handle),
-                                        _ => {}
-                                    }
-                                }
-                            } else {
-                                // Fallback: try direct string conversion
-                                match method_name.as_str() {
-                                    "log" => println!(""),
-                                    "warn" => eprintln!("[warn] "),
-                                    "error" => eprintln!("[error] "),
-                                    _ => {}
-                                }
-                            }
-                        }
-                        if let Some(d) = dst {
-                            self.values.insert(*d, Box::new(IntegerBox::new(0)));
-                        }
-                    }
-                }
-                I::Return { value } => {
-                    if let Some(v) = value {
-                        return self
-                            .values
-                            .get(v)
-                            .map(|b| b.clone_box())
-                            .ok_or_else(|| format!("return %{} missing", v.0));
-                    }
-                    return Ok(Box::new(IntegerBox::new(0)));
-                }
-                _ => { /* ignore for now */ }
-            }
-        }
-        Ok(Box::new(IntegerBox::new(0)))
-    }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
