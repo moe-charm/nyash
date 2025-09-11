@@ -309,3 +309,8 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 - 📦 **Phase 9.8 BIDレジストリ** (Phase 8.6完了後の次期重点)
 - 🔍 **Phase 10 Cranelift JIT** (主経路として確定)
 - 🌟 **統一ロードマップ化** (phasesフォルダに集約)
+## 🌈 Phase 22構想 - Nyash LLVM Compiler (将来)
+- LLVMコンパイラ自体をNyashで実装
+- C++薄ラッパー(20-30関数) + Nyash実装(100-200行)
+- ビルド時間: 5-7分 → 即時反映
+- 詳細: [Phase 22 README](phase-22/README.md)

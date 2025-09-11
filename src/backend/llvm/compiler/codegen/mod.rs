@@ -87,7 +87,7 @@ impl LLVMCompiler {
             let lf = codegen.module.add_function(&sym, ll_fn_ty, None);
             llvm_funcs.insert(name.clone(), lf);
         }
-
+        
         // Helper to build a map of ValueId -> const string for each function (to resolve call targets)
         let build_const_str_map = |f: &crate::mir::function::MirFunction| -> HashMap<ValueId, String> {
             let mut m = HashMap::new();
@@ -179,7 +179,7 @@ impl LLVMCompiler {
                     match inst {
                         MirInstruction::NewBox { dst, box_type, args } => {
                             instructions::lower_newbox(&codegen, &mut vmap, *dst, box_type, args, &box_type_ids)?;
-                        }
+                        },
                         MirInstruction::Const { dst, value } => {
                             let bval = match value {
                             ConstValue::Integer(i) => {
@@ -240,7 +240,7 @@ impl LLVMCompiler {
                             ConstValue::Void => return Err("Const Void unsupported".to_string()),
                         };
                             vmap.insert(*dst, bval);
-                        }
+                        },
                         MirInstruction::Call { dst, func: callee, args, .. } => {
                             instructions::lower_call(&codegen, func, &mut vmap, dst, callee, args, &const_strs, &llvm_funcs)?;
                         }
@@ -265,308 +265,30 @@ impl LLVMCompiler {
                             &box_type_ids,
                             &entry_builder,
                         )?;
-                        continue;
-                    }
+                        },
                     MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
                         instructions::lower_externcall(&codegen, func, &mut vmap, dst, iface_name, method_name, args)?;
-                    }
+                    },
                     MirInstruction::UnaryOp { dst, op, operand } => {
                         instructions::lower_unary(&codegen, &mut vmap, *dst, op, operand)?;
-                    }
+                    },
                     MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                        // Delegated to refactored lowering; keep legacy body for 0-diff but unreachable.
                         instructions::lower_binop(&codegen, func, &mut vmap, *dst, op, lhs, rhs)?;
-                        continue;
-                        let lv = *vmap.get(lhs).ok_or("lhs missing")?;
-                        let rv = *vmap.get(rhs).ok_or("rhs missing")?;
-                        let mut handled_concat = false;
-                        // String-like concat handling: if either side is a pointer (i8*),
-                        // and op is Add, route to NyRT concat helpers
-                        if let crate::mir::BinaryOp::Add = op {
-                            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-                            let is_stringish = |vid: &ValueId| -> bool {
-                                match func.metadata.value_types.get(vid) {
-                                    Some(crate::mir::MirType::String) => true,
-                                    Some(crate::mir::MirType::Box(_)) => true,
-                                    _ => false,
-                                }
-                            };
-                            match (lv, rv) {
-                                (
-                                    BasicValueEnum::PointerValue(lp),
-                                    BasicValueEnum::PointerValue(rp),
-                                ) => {
-                                    let fnty = i8p.fn_type(&[i8p.into(), i8p.into()], false);
-                                    let callee = codegen
-                                        .module
-                                        .get_function("nyash.string.concat_ss")
-                                        .unwrap_or_else(|| {
-                                            codegen.module.add_function(
-                                                "nyash.string.concat_ss",
-                                                fnty,
-                                                None,
-                                            )
-                                        });
-                                    let call = codegen
-                                        .builder
-                                        .build_call(callee, &[lp.into(), rp.into()], "concat_ss")
-                                        .map_err(|e| e.to_string())?;
-                                    let rv = call
-                                        .try_as_basic_value()
-                                        .left()
-                                        .ok_or("concat_ss returned void".to_string())?;
-                                    vmap.insert(*dst, rv);
-                                    handled_concat = true;
-                                }
-                                (
-                                    BasicValueEnum::PointerValue(lp),
-                                    BasicValueEnum::IntValue(ri),
-                                ) => {
-                                    // Minimal fallback: if both sides are annotated String/Box, convert ptr->handle and use concat_hh
-                                    if is_stringish(lhs) && is_stringish(rhs) {
-                                        let i64t = codegen.context.i64_type();
-                                        // from_i8_string: i64(i8*)
-                                        let fnty_conv = i64t.fn_type(&[i8p.into()], false);
-                                        let conv = codegen
-                                            .module
-                                            .get_function("nyash.box.from_i8_string")
-                                            .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
-                                        let call_c = codegen
-                                            .builder
-                                            .build_call(conv, &[lp.into()], "lhs_i8_to_handle")
-                                            .map_err(|e| e.to_string())?;
-                                        let lh = call_c
-                                            .try_as_basic_value()
-                                            .left()
-                                            .ok_or("from_i8_string returned void".to_string())?
-                                            .into_int_value();
-                                        // concat_hh: i64(i64,i64)
-                                        let fnty_hh = i64t.fn_type(&[i64t.into(), i64t.into()], false);
-                                        let callee = codegen
-                                            .module
-                                            .get_function("nyash.string.concat_hh")
-                                            .unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_hh", fnty_hh, None));
-                                        let call = codegen
-                                            .builder
-                                            .build_call(callee, &[lh.into(), ri.into()], "concat_hh")
-                                            .map_err(|e| e.to_string())?;
-                                        let rv = call
-                                            .try_as_basic_value()
-                                            .left()
-                                            .ok_or("concat_hh returned void".to_string())?;
-                                        vmap.insert(*dst, rv);
-                                        handled_concat = true;
-                                    } else {
-                                        let i64t = codegen.context.i64_type();
-                                        let fnty = i8p.fn_type(&[i8p.into(), i64t.into()], false);
-                                        let callee = codegen
-                                            .module
-                                            .get_function("nyash.string.concat_si")
-                                            .unwrap_or_else(|| {
-                                                codegen.module.add_function(
-                                                    "nyash.string.concat_si",
-                                                    fnty,
-                                                    None,
-                                                )
-                                            });
-                                        let call = codegen
-                                            .builder
-                                            .build_call(callee, &[lp.into(), ri.into()], "concat_si")
-                                            .map_err(|e| e.to_string())?;
-                                        let rv = call
-                                            .try_as_basic_value()
-                                            .left()
-                                            .ok_or("concat_si returned void".to_string())?;
-                                        vmap.insert(*dst, rv);
-                                        handled_concat = true;
-                                    }
-                                }
-                                (
-                                    BasicValueEnum::IntValue(li),
-                                    BasicValueEnum::PointerValue(rp),
-                                ) => {
-                                    // Minimal fallback: if both sides are annotated String/Box, convert ptr->handle and use concat_hh
-                                    if is_stringish(lhs) && is_stringish(rhs) {
-                                        let i64t = codegen.context.i64_type();
-                                        let fnty_conv = i64t.fn_type(&[i8p.into()], false);
-                                        let conv = codegen
-                                            .module
-                                            .get_function("nyash.box.from_i8_string")
-                                            .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
-                                        let call_c = codegen
-                                            .builder
-                                            .build_call(conv, &[rp.into()], "rhs_i8_to_handle")
-                                            .map_err(|e| e.to_string())?;
-                                        let rh = call_c
-                                            .try_as_basic_value()
-                                            .left()
-                                            .ok_or("from_i8_string returned void".to_string())?
-                                            .into_int_value();
-                                        let fnty_hh = i64t.fn_type(&[i64t.into(), i64t.into()], false);
-                                        let callee = codegen
-                                            .module
-                                            .get_function("nyash.string.concat_hh")
-                                            .unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_hh", fnty_hh, None));
-                                        let call = codegen
-                                            .builder
-                                            .build_call(callee, &[li.into(), rh.into()], "concat_hh")
-                                            .map_err(|e| e.to_string())?;
-                                        let rv = call
-                                            .try_as_basic_value()
-                                            .left()
-                                            .ok_or("concat_hh returned void".to_string())?;
-                                        vmap.insert(*dst, rv);
-                                        handled_concat = true;
-                                    } else {
-                                        let i64t = codegen.context.i64_type();
-                                        let fnty = i8p.fn_type(&[i64t.into(), i8p.into()], false);
-                                        let callee = codegen
-                                            .module
-                                            .get_function("nyash.string.concat_is")
-                                            .unwrap_or_else(|| {
-                                                codegen.module.add_function(
-                                                    "nyash.string.concat_is",
-                                                    fnty,
-                                                    None,
-                                                )
-                                            });
-                                        let call = codegen
-                                            .builder
-                                            .build_call(callee, &[li.into(), rp.into()], "concat_is")
-                                            .map_err(|e| e.to_string())?;
-                                        let rv = call
-                                            .try_as_basic_value()
-                                            .left()
-                                            .ok_or("concat_is returned void".to_string())?;
-                                        vmap.insert(*dst, rv);
-                                        handled_concat = true;
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        if handled_concat {
-                            // Concat already lowered and dst set
-                        } else {
-                            let out = if let (Some(li), Some(ri)) = (as_int(lv), as_int(rv)) {
-                                use crate::mir::BinaryOp as B;
-                                match op {
-                                    B::Add => codegen
-                                        .builder
-                                        .build_int_add(li, ri, "iadd")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Sub => codegen
-                                        .builder
-                                        .build_int_sub(li, ri, "isub")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Mul => codegen
-                                        .builder
-                                        .build_int_mul(li, ri, "imul")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Div => codegen
-                                        .builder
-                                        .build_int_signed_div(li, ri, "idiv")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Mod => codegen
-                                        .builder
-                                        .build_int_signed_rem(li, ri, "imod")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::BitAnd => codegen
-                                        .builder
-                                        .build_and(li, ri, "iand")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::BitOr => codegen
-                                        .builder
-                                        .build_or(li, ri, "ior")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::BitXor => codegen
-                                        .builder
-                                        .build_xor(li, ri, "ixor")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Shl => codegen
-                                        .builder
-                                        .build_left_shift(li, ri, "ishl")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Shr => codegen
-                                        .builder
-                                        .build_right_shift(li, ri, false, "ishr")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::And | B::Or => {
-                                        // Treat as logical on integers: convert to i1 and and/or
-                                        let lb =
-                                            to_bool(codegen.context, li.into(), &codegen.builder)?;
-                                        let rb =
-                                            to_bool(codegen.context, ri.into(), &codegen.builder)?;
-                                        match op {
-                                            B::And => codegen
-                                                .builder
-                                                .build_and(lb, rb, "land")
-                                                .map_err(|e| e.to_string())?
-                                                .into(),
-                                            _ => codegen
-                                                .builder
-                                                .build_or(lb, rb, "lor")
-                                                .map_err(|e| e.to_string())?
-                                                .into(),
-                                        }
-                                    }
-                                }
-                            } else if let (Some(lf), Some(rf)) = (as_float(lv), as_float(rv)) {
-                                use crate::mir::BinaryOp as B;
-                                match op {
-                                    B::Add => codegen
-                                        .builder
-                                        .build_float_add(lf, rf, "fadd")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Sub => codegen
-                                        .builder
-                                        .build_float_sub(lf, rf, "fsub")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Mul => codegen
-                                        .builder
-                                        .build_float_mul(lf, rf, "fmul")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Div => codegen
-                                        .builder
-                                        .build_float_div(lf, rf, "fdiv")
-                                        .map_err(|e| e.to_string())?
-                                        .into(),
-                                    B::Mod => return Err("fmod not supported yet".to_string()),
-                                    _ => return Err("bit/logic ops on float".to_string()),
-                                }
-                            } else {
-                                return Err("binop type mismatch".to_string());
-                            };
-                            vmap.insert(*dst, out);
-                        }
-                    }
+                    },
                     MirInstruction::Compare { dst, op, lhs, rhs } => {
                         let out = instructions::lower_compare(&codegen, func, &vmap, op, lhs, rhs)?;
                         vmap.insert(*dst, out);
-                    }
+                    },
                     MirInstruction::Store { value, ptr } => {
                         instructions::lower_store(&codegen, &vmap, &mut allocas, &mut alloca_elem_types, value, ptr)?;
-                    }
+                    },
                     MirInstruction::Load { dst, ptr } => {
                         instructions::lower_load(&codegen, &mut vmap, &mut allocas, &mut alloca_elem_types, dst, ptr)?;
-                    }
+                    },
                     MirInstruction::Phi { .. } => {
                         // Already created in pre-pass; nothing to do here.
                     }
-                    _ => { /* ignore other ops for 11.1 */ }
+                    _ => { /* ignore other ops for 11.1 */ },
                 }
             }
             if let Some(term) = &block.terminator {
@@ -588,6 +310,9 @@ impl LLVMCompiler {
                 return Err(format!("Function verification failed: {}", name));
             }
         }
+        // Close the per-function lowering loop
+        }
+        
 
         // Build entry wrapper ny_main -> call entry function
         let i64t = codegen.context.i64_type();
@@ -714,6 +439,7 @@ impl LLVMCompiler {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
