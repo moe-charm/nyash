@@ -334,6 +334,20 @@ impl LLVMCompiler {
                         args,
                         effects: _,
                     } => {
+                        // Delegate to refactored lowering and skip legacy body
+                        instructions::lower_boxcall(
+                            &codegen,
+                            func,
+                            &mut vmap,
+                            dst,
+                            box_val,
+                            method,
+                            method_id,
+                            args,
+                            &box_type_ids,
+                            &entry_builder,
+                        )?;
+                        continue;
                         let i64t = codegen.context.i64_type();
                         // Receiver handle (i64)
                         let recv_v = *vmap.get(box_val).ok_or("box receiver missing")?;
