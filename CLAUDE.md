@@ -361,6 +361,16 @@ box MyBox {
 }
 ```
 
+### 🏗️ アーキテクチャ決定事項（2025-09-11）
+**Box/ExternCall境界設計の最終決定**:
+- **基本Box**: nyrt内蔵（String/Integer/Array/Map/Bool）
+- **拡張Box**: プラグイン（File/Net/User定義）  
+- **ExternCall**: 最小5関数のみ（print/error/panic/exit/now）
+- **統一原則**: すべてのBoxはBoxCall経由（特別扱いなし）
+- **表現統一**: Box=ハンドル(i64)、i8*は橋渡しのみ
+
+詳細: [Box/ExternCall設計](docs/development/architecture/box-externcall-design.md)
+
 ## 📚 ドキュメント構造
 
 ### 🎯 最重要ドキュメント（開発者向け）
