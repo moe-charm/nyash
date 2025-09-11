@@ -7,17 +7,14 @@
 
 // Import all necessary dependencies
 use crate::ast::{ASTNode, CatchClause};
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, ErrorBox, BoxCore};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, ErrorBox, BoxCore};
 use crate::boxes::FutureBox;
 use crate::instance_v2::InstanceBox;
 use crate::channel_box::ChannelBox;
-use crate::boxes::math_box::{MathBox, RangeBox};
-use crate::boxes::time_box::{TimeBox, TimerBox};
-use crate::boxes::map_box::MapBox;
+use crate::boxes::math_box::MathBox;
+use crate::boxes::time_box::TimerBox;
 use crate::boxes::random_box::RandomBox;
-use crate::boxes::sound_box::SoundBox;
 use crate::boxes::debug_box::DebugBox;
-use crate::method_box::MethodBox;
 
 // WASM-specific Box types (conditionally included)
 #[cfg(target_arch = "wasm32")]

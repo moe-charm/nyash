@@ -59,12 +59,12 @@ pub enum TokenType {
     IMPORT,          // import (Phase 12.7)
     
     // 演算子 (長いものから先に定義)
-    SHIFT_LEFT,      // << (bitwise shift-left)
-    SHIFT_RIGHT,     // >> (bitwise shift-right)
-    BIT_AND,         // & (bitwise and)
-    BIT_OR,          // | (bitwise or)
-    BIT_XOR,         // ^ (bitwise xor)
-    FAT_ARROW,       // => (peek arms)
+    ShiftLeft,       // << (bitwise shift-left)
+    ShiftRight,      // >> (bitwise shift-right)
+    BitAnd,          // & (bitwise and)
+    BitOr,           // | (bitwise or)
+    BitXor,          // ^ (bitwise xor)
+    FatArrow,        // => (peek arms)
     EQUALS,          // ==
     NotEquals,       // !=
     LessEquals,      // <=
@@ -72,13 +72,13 @@ pub enum TokenType {
     AND,             // && または and
     OR,              // || または or
     // Phase 12.7-B 基本糖衣: 2文字演算子（最長一致優先）
-    PIPE_FORWARD,    // |>
-    QMARK_DOT,       // ?.
-    QMARK_QMARK,     // ??
-    PLUS_ASSIGN,     // +=
-    MINUS_ASSIGN,    // -=
-    MUL_ASSIGN,      // *=
-    DIV_ASSIGN,      // /=
+    PipeForward,     // |>
+    QmarkDot,        // ?.
+    QmarkQmark,      // ??
+    PlusAssign,      // +=
+    MinusAssign,     // -=
+    MulAssign,       // *=
+    DivAssign,       // /=
     RANGE,           // ..
     LESS,            // <
     GREATER,         // >
@@ -91,7 +91,7 @@ pub enum TokenType {
     
     // 記号
     DOT,             // .
-    DOUBLE_COLON,    // :: (Parent::method) - P1用（定義のみ）
+    DoubleColon,     // :: (Parent::method) - P1用（定義のみ）
     LPAREN,          // (
     RPAREN,          // )
     LBRACE,          // {
@@ -194,37 +194,37 @@ impl NyashTokenizer {
             Some('|') if self.peek_char() == Some('>') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::PIPE_FORWARD, start_line, start_column));
+                return Ok(Token::new(TokenType::PipeForward, start_line, start_column));
             }
             Some('?') if self.peek_char() == Some('.') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::QMARK_DOT, start_line, start_column));
+                return Ok(Token::new(TokenType::QmarkDot, start_line, start_column));
             }
             Some('?') if self.peek_char() == Some('?') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::QMARK_QMARK, start_line, start_column));
+                return Ok(Token::new(TokenType::QmarkQmark, start_line, start_column));
             }
             Some('+') if self.peek_char() == Some('=') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::PLUS_ASSIGN, start_line, start_column));
+                return Ok(Token::new(TokenType::PlusAssign, start_line, start_column));
             }
             Some('-') if self.peek_char() == Some('=') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::MINUS_ASSIGN, start_line, start_column));
+                return Ok(Token::new(TokenType::MinusAssign, start_line, start_column));
             }
             Some('*') if self.peek_char() == Some('=') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::MUL_ASSIGN, start_line, start_column));
+                return Ok(Token::new(TokenType::MulAssign, start_line, start_column));
             }
             Some('/') if self.peek_char() == Some('=') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::DIV_ASSIGN, start_line, start_column));
+                return Ok(Token::new(TokenType::DivAssign, start_line, start_column));
             }
             Some('.') if self.peek_char() == Some('.') => {
                 self.advance();
@@ -256,17 +256,17 @@ impl NyashTokenizer {
             Some('>') if self.peek_char() == Some('>') && !Self::strict_12_7() => {
                 self.advance();
                 self.advance();
-                Ok(Token::new(TokenType::SHIFT_RIGHT, start_line, start_column))
+                Ok(Token::new(TokenType::ShiftRight, start_line, start_column))
             }
             Some(':') if self.peek_char() == Some(':') => {
                 self.advance();
                 self.advance();
-                Ok(Token::new(TokenType::DOUBLE_COLON, start_line, start_column))
+                Ok(Token::new(TokenType::DoubleColon, start_line, start_column))
             }
             Some('=') if self.peek_char() == Some('>') => {
                 self.advance();
                 self.advance();
-                Ok(Token::new(TokenType::FAT_ARROW, start_line, start_column))
+                Ok(Token::new(TokenType::FatArrow, start_line, start_column))
             }
             Some('=') if self.peek_char() == Some('=') => {
                 self.advance();
@@ -282,7 +282,7 @@ impl NyashTokenizer {
             Some('<') if self.peek_char() == Some('<') => {
                 self.advance();
                 self.advance();
-                Ok(Token::new(TokenType::SHIFT_LEFT, start_line, start_column))
+                Ok(Token::new(TokenType::ShiftLeft, start_line, start_column))
             }
             Some('<') if self.peek_char() == Some('=') => {
                 self.advance();
@@ -307,7 +307,7 @@ impl NyashTokenizer {
             Some('|') if self.peek_char() == Some('>') => {
                 self.advance();
                 self.advance();
-                return Ok(Token::new(TokenType::PIPE_FORWARD, start_line, start_column));
+                return Ok(Token::new(TokenType::PipeForward, start_line, start_column));
             }
             Some('<') => {
                 self.advance();
@@ -319,15 +319,15 @@ impl NyashTokenizer {
             }
             Some('&') => {
                 self.advance();
-                Ok(Token::new(TokenType::BIT_AND, start_line, start_column))
+                Ok(Token::new(TokenType::BitAnd, start_line, start_column))
             }
             Some('|') => {
                 self.advance();
-                Ok(Token::new(TokenType::BIT_OR, start_line, start_column))
+                Ok(Token::new(TokenType::BitOr, start_line, start_column))
             }
             Some('^') => {
                 self.advance();
-                Ok(Token::new(TokenType::BIT_XOR, start_line, start_column))
+                Ok(Token::new(TokenType::BitXor, start_line, start_column))
             }
             Some('=') => {
                 self.advance();
@@ -698,7 +698,7 @@ mod tests {
         let mut tokenizer = NyashTokenizer::new(">> == != <= >= < >");
         let tokens = tokenizer.tokenize().unwrap();
         
-        assert_eq!(tokens[0].token_type, TokenType::SHIFT_RIGHT);
+        assert_eq!(tokens[0].token_type, TokenType::ShiftRight);
         assert_eq!(tokens[1].token_type, TokenType::EQUALS);
         assert_eq!(tokens[2].token_type, TokenType::NotEquals);
         assert_eq!(tokens[3].token_type, TokenType::LessEquals);
@@ -787,13 +787,13 @@ value"#;
         // 分かりやすく固めたケース
         let mut t2 = NyashTokenizer::new("|> ?.? ?? += -= *= /= ..");
         let toks = t2.tokenize().unwrap();
-        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::PIPE_FORWARD)));
-        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::QMARK_DOT)));
-        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::QMARK_QMARK)));
-        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::PLUS_ASSIGN)));
-        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::MINUS_ASSIGN)));
-        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::MUL_ASSIGN)));
-        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::DIV_ASSIGN)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::PipeForward)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::QmarkDot)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::QmarkQmark)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::PlusAssign)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::MinusAssign)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::MulAssign)));
+        assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::DivAssign)));
         assert!(toks.iter().any(|k| matches!(k.token_type, TokenType::RANGE)));
     }
 
@@ -803,9 +803,9 @@ value"#;
         let mut t = NyashTokenizer::new("?? ? ?. .. .");
         let toks = t.tokenize().unwrap();
         let kinds: Vec<&TokenType> = toks.iter().map(|k| &k.token_type).collect();
-        assert!(matches!(kinds[0], TokenType::QMARK_QMARK));
+        assert!(matches!(kinds[0], TokenType::QmarkQmark));
         assert!(matches!(kinds[1], TokenType::QUESTION));
-        assert!(matches!(kinds[2], TokenType::QMARK_DOT));
+        assert!(matches!(kinds[2], TokenType::QmarkDot));
         assert!(matches!(kinds[3], TokenType::RANGE));
         assert!(matches!(kinds[4], TokenType::DOT));
     }

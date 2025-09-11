@@ -8,13 +8,12 @@
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox, SharedNyashBox};
 use crate::instance_v2::InstanceBox;
-use crate::parser::ParseError;
 use super::BuiltinStdlib;
 use crate::runtime::{NyashRuntime, NyashRuntimeBuilder};
 use crate::box_factory::BoxFactory;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
-use super::{ControlFlow, BoxDeclaration, ConstructorContext, StaticBoxDefinition, StaticBoxState};
+use super::{ControlFlow, ConstructorContext, StaticBoxDefinition, StaticBoxState};
 use super::{RuntimeError, SharedState};
 use std::fs::OpenOptions;
 use std::io::Write;

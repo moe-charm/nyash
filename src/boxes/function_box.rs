@@ -1,7 +1,7 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::ast::ASTNode;
 use std::collections::HashMap;
-use std::sync::{Arc, Weak};
+use std::sync::Weak;
 use std::any::Any;
 
 #[derive(Debug)]

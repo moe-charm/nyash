@@ -1,13 +1,10 @@
 use super::helpers::{as_float, as_int, map_type};
 use super::LLVMCompiler;
 use crate::backend::llvm::context::CodegenContext;
-use crate::box_trait::{BoolBox, IntegerBox, StringBox};
-use crate::boxes::{function_box::FunctionBox, math_box::FloatBox, null_box::NullBox};
 use crate::mir::function::MirModule;
-use crate::mir::instruction::{BinaryOp, CompareOp, ConstValue, MirInstruction, UnaryOp};
+use crate::mir::instruction::{ConstValue, MirInstruction, UnaryOp};
 use crate::mir::ValueId;
 use inkwell::context::Context;
-use inkwell::types::BasicType; // for as_basic_type_enum()
 use inkwell::{
     types::{BasicTypeEnum, FloatType, IntType, PointerType},
     values::{BasicValueEnum, FloatValue, FunctionValue, IntValue, PhiValue, PointerValue},

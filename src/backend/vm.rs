@@ -7,18 +7,14 @@
  * Typical Callers: runner (VM backend), instruction handlers (vm_instructions)
  */
 
-use crate::mir::{ConstValue, ValueId, BasicBlockId, MirModule, MirFunction, MirInstruction};
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
+use crate::mir::{ValueId, BasicBlockId, MirModule};
 use std::collections::HashMap;
-use std::sync::Arc;
 use crate::runtime::NyashRuntime;
 use crate::scope_tracker::ScopeTracker;
 // MirModule is already imported via crate::mir at top
-use crate::instance_v2::InstanceBox;
 use super::vm_phi::LoopExecutor;
 use std::time::Instant;
 use super::frame::ExecutionFrame;
-use super::control_flow;
 
 // Phase 9.78a: Import necessary components for unified Box handling
 // TODO: Re-enable when interpreter refactoring is complete

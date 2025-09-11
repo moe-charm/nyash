@@ -18,13 +18,13 @@ fn tokenizer_has_basic_sugar_tokens() {
     let mut t = NyashTokenizer::new("|> ?.? ?? += -= *= /= ..");
     let toks = t.tokenize().unwrap();
     let has = |p: fn(&TokenType) -> bool| -> bool { toks.iter().any(|k| p(&k.token_type)) };
-    assert!(has(|k| matches!(k, TokenType::PIPE_FORWARD)));
-    assert!(has(|k| matches!(k, TokenType::QMARK_DOT)));
-    assert!(has(|k| matches!(k, TokenType::QMARK_QMARK)));
-    assert!(has(|k| matches!(k, TokenType::PLUS_ASSIGN)));
-    assert!(has(|k| matches!(k, TokenType::MINUS_ASSIGN)));
-    assert!(has(|k| matches!(k, TokenType::MUL_ASSIGN)));
-    assert!(has(|k| matches!(k, TokenType::DIV_ASSIGN)));
+    assert!(has(|k| matches!(k, TokenType::PipeForward)));
+    assert!(has(|k| matches!(k, TokenType::QmarkDot)));
+    assert!(has(|k| matches!(k, TokenType::QmarkQmark)));
+    assert!(has(|k| matches!(k, TokenType::PlusAssign)));
+    assert!(has(|k| matches!(k, TokenType::MinusAssign)));
+    assert!(has(|k| matches!(k, TokenType::MulAssign)));
+    assert!(has(|k| matches!(k, TokenType::DivAssign)));
     assert!(has(|k| matches!(k, TokenType::RANGE)));
 }
 

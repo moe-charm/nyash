@@ -27,7 +27,7 @@ impl NyashParser {
     fn parse_pipeline(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_coalesce()?;
 
-        while self.match_token(&TokenType::PIPE_FORWARD) {
+        while self.match_token(&TokenType::PipeForward) {
             if !is_sugar_enabled() {
                 let line = self.current_token().line;
                 return Err(ParseError::UnexpectedToken {
@@ -85,7 +85,7 @@ impl NyashParser {
     /// デフォルト値（??）: x ?? y => peek x { null => y, else => x }
     fn parse_coalesce(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_or()?;
-        while self.match_token(&TokenType::QMARK_QMARK) {
+        while self.match_token(&TokenType::QmarkQmark) {
             if !is_sugar_enabled() {
                 let line = self.current_token().line;
                 return Err(ParseError::UnexpectedToken {
@@ -157,7 +157,7 @@ impl NyashParser {
     /// ビットOR: |
     fn parse_bit_or(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_bit_xor()?;
-        while self.match_token(&TokenType::BIT_OR) {
+        while self.match_token(&TokenType::BitOr) {
             let operator = BinaryOperator::BitOr;
             self.advance();
             let right = self.parse_bit_xor()?;
@@ -169,7 +169,7 @@ impl NyashParser {
     /// ビットXOR: ^
     fn parse_bit_xor(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_bit_and()?;
-        while self.match_token(&TokenType::BIT_XOR) {
+        while self.match_token(&TokenType::BitXor) {
             let operator = BinaryOperator::BitXor;
             self.advance();
             let right = self.parse_bit_and()?;
@@ -181,7 +181,7 @@ impl NyashParser {
     /// ビットAND: &
     fn parse_bit_and(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_equality()?;
-        while self.match_token(&TokenType::BIT_AND) {
+        while self.match_token(&TokenType::BitAnd) {
             let operator = BinaryOperator::BitAnd;
             self.advance();
             let right = self.parse_equality()?;
@@ -297,13 +297,13 @@ impl NyashParser {
     fn parse_shift(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_factor()?;
         loop {
-            if self.match_token(&TokenType::SHIFT_LEFT) {
+            if self.match_token(&TokenType::ShiftLeft) {
                 self.advance();
                 let rhs = self.parse_factor()?;
                 expr = ASTNode::BinaryOp { operator: BinaryOperator::Shl, left: Box::new(expr), right: Box::new(rhs), span: Span::unknown() };
                 continue;
             }
-            if self.match_token(&TokenType::SHIFT_RIGHT) {
+            if self.match_token(&TokenType::ShiftRight) {
                 self.advance();
                 let rhs = self.parse_factor()?;
                 expr = ASTNode::BinaryOp { operator: BinaryOperator::Shr, left: Box::new(expr), right: Box::new(rhs), span: Span::unknown() };
@@ -403,7 +403,7 @@ impl NyashParser {
             let is_else = matches!(self.current_token().token_type, TokenType::ELSE);
             if is_else {
                 self.advance(); // consume 'else'
-                self.consume(TokenType::FAT_ARROW)?;
+                self.consume(TokenType::FatArrow)?;
                 // else アーム: ブロック or 式
                 let expr = if self.match_token(&TokenType::LBRACE) {
                     // ブロックを式として扱う（最後の文の値が返る）
@@ -424,7 +424,7 @@ impl NyashParser {
             } else {
                 // リテラルのみ許可（P0）
                 let lit = self.parse_literal_only()?;
-                self.consume(TokenType::FAT_ARROW)?;
+                self.consume(TokenType::FatArrow)?;
                 // アーム: ブロック or 式
                 let expr = if self.match_token(&TokenType::LBRACE) {
                     self.advance(); // consume '{'
@@ -532,7 +532,7 @@ impl NyashParser {
                         line,
                     });
                 }
-            } else if self.match_token(&TokenType::QMARK_DOT) {
+            } else if self.match_token(&TokenType::QmarkDot) {
                 if !is_sugar_enabled() {
                     let line = self.current_token().line;
                     return Err(ParseError::UnexpectedToken {
@@ -736,7 +736,7 @@ impl NyashParser {
             TokenType::IDENTIFIER(name) => {
                 let parent = name.clone();
                 self.advance();
-                if self.match_token(&TokenType::DOUBLE_COLON) {
+                if self.match_token(&TokenType::DoubleColon) {
                     // Parent::method(args)
                     self.advance(); // consume '::'
                     let method = match &self.current_token().token_type {

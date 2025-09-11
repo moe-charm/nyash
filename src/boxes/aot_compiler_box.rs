@@ -1,4 +1,4 @@
-use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, BoxCore, BoxBase};
+use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use std::any::Any;
 
 #[derive(Debug, Clone)]

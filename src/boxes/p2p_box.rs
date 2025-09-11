@@ -38,7 +38,7 @@
 use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
 use crate::boxes::IntentBox;
 use crate::method_box::MethodBox;
-use crate::boxes::result::{ResultBox, NyashResultBox};
+use crate::boxes::result::ResultBox;
 use crate::transport::{Transport, InProcessTransport};
 use std::any::Any;
 use std::sync::{RwLock, Arc};

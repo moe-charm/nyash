@@ -223,10 +223,10 @@ impl NyashParser {
                     Err(ParseError::InvalidStatement { line })
                 }
             }
-        } else if self.match_token(&TokenType::PLUS_ASSIGN) ||
-                  self.match_token(&TokenType::MINUS_ASSIGN) ||
-                  self.match_token(&TokenType::MUL_ASSIGN) ||
-                  self.match_token(&TokenType::DIV_ASSIGN) {
+        } else if self.match_token(&TokenType::PlusAssign) ||
+                  self.match_token(&TokenType::MinusAssign) ||
+                  self.match_token(&TokenType::MulAssign) ||
+                  self.match_token(&TokenType::DivAssign) {
             if !is_sugar_enabled() {
                 let line = self.current_token().line;
                 return Err(ParseError::UnexpectedToken {
@@ -237,10 +237,10 @@ impl NyashParser {
             }
             // determine operator
             let op = match &self.current_token().token_type {
-                TokenType::PLUS_ASSIGN => crate::ast::BinaryOperator::Add,
-                TokenType::MINUS_ASSIGN => crate::ast::BinaryOperator::Subtract,
-                TokenType::MUL_ASSIGN => crate::ast::BinaryOperator::Multiply,
-                TokenType::DIV_ASSIGN => crate::ast::BinaryOperator::Divide,
+                TokenType::PlusAssign => crate::ast::BinaryOperator::Add,
+                TokenType::MinusAssign => crate::ast::BinaryOperator::Subtract,
+                TokenType::MulAssign => crate::ast::BinaryOperator::Multiply,
+                TokenType::DivAssign => crate::ast::BinaryOperator::Divide,
                 _ => unreachable!(),
             };
             self.advance(); // consume 'op='
