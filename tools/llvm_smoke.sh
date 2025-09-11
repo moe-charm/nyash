@@ -200,6 +200,19 @@ if [[ "${NYASH_LLVM_VINVOKE_RET_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUG
   rm -f "$OBJ_SIZE"
   NYASH_LLVM_OBJ_OUT="$OBJ_SIZE" "$BIN" --backend llvm apps/tests/ny-vinvoke-llvm-ret-size/main.nyash >/dev/null || true
 
+  NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_SIZE" ./tools/build_llvm.sh apps/tests/ny-vinvoke-llvm-ret-size/main.nyash -o app_vinvoke_ret_size_llvm >/dev/null || true
+  echo "[llvm-smoke] running app_vinvoke_ret_size_llvm ..." >&2
+  out_size=$(./app_vinvoke_ret_size_llvm || true)
+  echo "[llvm-smoke] output: $out_size" >&2
+  if ! echo "$out_size" | grep -q "Result: 1"; then
+    echo "error: ny-vinvoke-llvm-ret-size unexpected output: $out_size" >&2
+    exit 1
+  fi
+  echo "[llvm-smoke] OK: fixed-length by-id invoke size() smoke passed" >&2
+else
+  echo "[llvm-smoke] skipping size() return smoke (included in NYASH_LLVM_VINVOKE_RET_SMOKE=1)" >&2
+fi
+
 # --- AOT smoke: plugin return values (CounterBox.get, StringBox.concat) ---
 if [[ "${NYASH_LLVM_PLUGIN_RET_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUGINS:-0}" != "1" ]]; then
   echo "[llvm-smoke] building + linking apps/ny-plugin-ret-llvm-smoke ..." >&2
@@ -217,16 +230,4 @@ if [[ "${NYASH_LLVM_PLUGIN_RET_SMOKE:-0}" == "1" ]] && [[ "${NYASH_DISABLE_PLUGI
   echo "[llvm-smoke] OK: plugin return (int/string) smoke passed" >&2
 else
   echo "[llvm-smoke] skipping plugin return smoke (set NYASH_LLVM_PLUGIN_RET_SMOKE=1 to enable; requires plugins)" >&2
-fi
-  NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_SIZE" ./tools/build_llvm.sh apps/tests/ny-vinvoke-llvm-ret-size/main.nyash -o app_vinvoke_ret_size_llvm >/dev/null || true
-  echo "[llvm-smoke] running app_vinvoke_ret_size_llvm ..." >&2
-  out_size=$(./app_vinvoke_ret_size_llvm || true)
-  echo "[llvm-smoke] output: $out_size" >&2
-  if ! echo "$out_size" | grep -q "Result: 1"; then
-    echo "error: ny-vinvoke-llvm-ret-size unexpected output: $out_size" >&2
-    exit 1
-  fi
-  echo "[llvm-smoke] OK: fixed-length by-id invoke size() smoke passed" >&2
-else
-  echo "[llvm-smoke] skipping size() return smoke (included in NYASH_LLVM_VINVOKE_RET_SMOKE=1)" >&2
 fi

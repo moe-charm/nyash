@@ -1172,19 +1172,7 @@ pub(super) fn lower_boxcall<'ctx>(
         if args.len() >= 3 { a3 = get_i64(args[2])?; }
         if args.len() >= 4 { a4 = get_i64(args[3])?; }
 
-        // f64 fast-path for concat
-        if method == "concat" && args.len() == 1 {
-            let fnty = codegen.context.f64_type().fn_type(&[i64t.into(), i64t.into(), i64t.into()], false);
-            let callee = codegen.module.get_function("nyash_plugin_invoke3_f64").unwrap_or_else(|| codegen.module.add_function("nyash_plugin_invoke3_f64", fnty, None));
-            let tid = i64t.const_int(type_id as u64, true);
-            let midv = i64t.const_int((*mid) as u64, false);
-            let call = codegen.builder.build_call(callee, &[tid.into(), midv.into(), argc_val.into(), recv_h.into(), a1.into(), a2.into()], "pinvoke_f64").map_err(|e| e.to_string())?;
-            if let Some(d) = dst {
-                let rv = call.try_as_basic_value().left().ok_or("invoke3_f64 returned void".to_string())?;
-                vmap.insert(*d, rv);
-            }
-            return Ok(());
-        }
+        // Note: String.concat should return a handle (i64) and be processed by the tagged path below.
         // tagged fixed-arity <=4
         let mut tag1 = i64t.const_int(3, false);
         let mut tag2 = i64t.const_int(3, false);
