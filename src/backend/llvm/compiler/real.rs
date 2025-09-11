@@ -2643,14 +2643,45 @@ impl LLVMCompiler {
                     args,
                     ..
                 } => {
+                    // Handle console methods via runtime handles (like AOT does)
                     if iface_name == "env.console" {
-                        if let Some(arg0) = args.get(0).and_then(|v| self.values.get(v)) {
-                            let msg = arg0.to_string_box().value;
-                            match method_name.as_str() {
-                                "log" => println!("{}", msg),
-                                "warn" => eprintln!("[warn] {}", msg),
-                                "error" => eprintln!("[error] {}", msg),
-                                _ => {}
+                        if let Some(arg0) = args.get(0) {
+                            // Convert argument to handle and get string representation
+                            use crate::jit::rt::handles;
+                            if let Some(boxed_val) = self.values.get(arg0) {
+                                // Convert NyashBox to handle
+                                let arc: std::sync::Arc<dyn NyashBox> = boxed_val.clone_box().into();
+                                let handle = handles::to_handle(arc) as i64;
+                                
+                                // Debug output
+                                eprintln!("DEBUG: handle={}", handle);
+                                
+                                // Get object from handle registry and print
+                                if let Some(obj) = handles::get(handle as u64) {
+                                    let s = obj.to_string_box().value;
+                                    match method_name.as_str() {
+                                        "log" => println!("{}", s),
+                                        "warn" => eprintln!("[warn] {}", s),
+                                        "error" => eprintln!("[error] {}", s),
+                                        _ => {}
+                                    }
+                                } else {
+                                    eprintln!("DEBUG: handle {} not found in registry", handle);
+                                    match method_name.as_str() {
+                                        "log" => println!("{}", handle),
+                                        "warn" => eprintln!("[warn] {}", handle),
+                                        "error" => eprintln!("[error] {}", handle),
+                                        _ => {}
+                                    }
+                                }
+                            } else {
+                                // Fallback: try direct string conversion
+                                match method_name.as_str() {
+                                    "log" => println!(""),
+                                    "warn" => eprintln!("[warn] "),
+                                    "error" => eprintln!("[error] "),
+                                    _ => {}
+                                }
                             }
                         }
                         if let Some(d) = dst {
