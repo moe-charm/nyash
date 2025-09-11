@@ -1,11 +1,47 @@
-# Current Task (2025-09-11)
+# Current Task (2025-09-11) — Phase 15 LLVM‑only
 
-> Phase 15 LLVM‑only notes (authoritative)
->
-> - LLVM AOT is the stable/authoritative path. VM/Cranelift JIT/AOT and the interpreter are not MIR14‑ready in this phase.
-> - Fallback logic must be minimal. Prefer fixing MIR type annotations over adding broad implicit conversions.
-> - ExternCall (console/debug) selects C‑string vs handle variants by the argument IR type.
-> - StringBox: NewBox keeps i8* fast path (no birth); print/log choose automatically based on IR type.
+Summary
+- LLVM is the authoritative path; VM/Cranelift/Interpreter are not MIR14‑ready.
+- Keep fallbacks minimal; fix MIR annotations first.
+- ExternCall(console/debug) auto‑selects ptr/handle by IR type.
+- StringBox NewBox i8* fast path; print/log choose automatically.
+
+Done (today)
+- BoxCall legacy block removed in LLVM codegen; delegation only.
+- BinOp concat safety: minimal fallback for i8*+i64/i64+i8* when both sides are annotated String/Box → from_i8_string + concat_hh; otherwise keep concat_ss/si/is.
+- String fast‑path: length/len lowered to nyash.string.len_h (handle), with ptr→handle bridge when needed.
+- Map core‑first: NewBox(MapBox) routes via nyash.env.box.new("MapBox") → NyRT特例でコアMapを生成。LLVM BoxCall(Map.size/get/set/has) は NyRT の nyash.map.* を呼ぶ。
+- Plugin強制スイッチ: NYASH_LLVM_FORCE_PLUGIN_MAP=1 で MapBox のプラグイン経路を明示切替（デフォルトはコア）。
+- Docs: ARCHITECTURE/LOWERING_LLVM/EXTERNCALL/PLUGIN_ABI を追加・整備。
+- Smokes: plugin‑ret green, map smoke green（core‑first）。
+
+Next — Refactor instructions.rs (no behavior change)
+- Goal: Make `src/backend/llvm/compiler/codegen/instructions.rs` maintainable (now >1400 lines).
+- Plan (split into focused submodules under `codegen/`):
+  - `instructions/externcall.rs` — env.console/debug, readline
+  - `instructions/boxcall.rs` — generic BoxCall lowering, by‑id/tagged paths glue
+  - `instructions/newbox.rs` — NewBox + birth/env.box.new bridge
+  - `instructions/strings.rs` — concat fast‑paths, length/len (later: substring/indexOf/replace/trim/toUpper/toLower)
+  - `instructions/arrays.rs` — get/set/push/length
+  - `instructions/maps.rs` — size/get/set/has (core NyRT shims)
+  - `instructions/arith.rs` — UnaryOp/BinOp/Compare (includes concat fallback)
+  - `instructions/flow.rs` — Return/Branch/Jump/PHI finalize
+  - Keep `types.rs` for helpers; keep `create_basic_blocks`/`precreate_phis` in a small `blocks.rs` if needed.
+- Constraints:
+  - 0‑diff behavior for existing smokes; no fallback拡大。
+  - No new deps; keep function signatures stable; pub(super) only.
+  - Update mod wiring in `codegen/mod.rs` accordingly.
+
+After refactor (follow‑ups)
+- Expand String AOT fast‑paths: substring/indexOf/replace/trim/toUpper/toLower.
+- Remove temporary env.box.new(MapBox) special‑case by moving MapBox生生成 into a dedicated NyRT entry.
+- Tighten MIR annotations for Map.get returns in common patterns.
+- Add targeted smokes after each implementation step（実装後にテスト）。
+
+Risks/Guards
+- Avoid broad implicit conversions; keep concat fallback gated by annotations only.
+- Ensure nyash.map.* との一致（core Map）; plugin経路は環境変数で明示切替。
+- Keep LLVM smokes green continuously; do not gate on VM/JIT.
 
 ## 🎉 LLVMプラグイン戻り値表示問題修正進行中（2025-09-10）
 

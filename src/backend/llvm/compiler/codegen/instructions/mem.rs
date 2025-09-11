@@ -1,0 +1,129 @@
+use std::collections::HashMap;
+
+use inkwell::values::BasicValueEnum;
+
+use crate::backend::llvm::context::CodegenContext;
+use crate::mir::ValueId;
+
+// Lower Store: handle allocas with element type tracking and integer width adjust
+pub(in super::super) fn lower_store<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
+    allocas: &mut HashMap<ValueId, inkwell::values::PointerValue<'ctx>>,
+    alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
+    value: &ValueId,
+    ptr: &ValueId,
+) -> Result<(), String> {
+    use inkwell::types::BasicTypeEnum;
+    let val = *vmap.get(value).ok_or("store value missing")?;
+    let elem_ty = match val {
+        BasicValueEnum::IntValue(iv) => BasicTypeEnum::IntType(iv.get_type()),
+        BasicValueEnum::FloatValue(fv) => BasicTypeEnum::FloatType(fv.get_type()),
+        BasicValueEnum::PointerValue(pv) => BasicTypeEnum::PointerType(pv.get_type()),
+        _ => return Err("unsupported store value type".to_string()),
+    };
+    if let Some(existing) = allocas.get(ptr).copied() {
+        let existing_elem = *alloca_elem_types.get(ptr).ok_or("alloca elem type missing")?;
+        if existing_elem != elem_ty {
+            match (val, existing_elem) {
+                (BasicValueEnum::IntValue(iv), BasicTypeEnum::IntType(t)) => {
+                    let bw_src = iv.get_type().get_bit_width();
+                    let bw_dst = t.get_bit_width();
+                    if bw_src < bw_dst {
+                        let adj = codegen
+                            .builder
+                            .build_int_z_extend(iv, t, "zext")
+                            .map_err(|e| e.to_string())?;
+                        codegen
+                            .builder
+                            .build_store(existing, adj)
+                            .map_err(|e| e.to_string())?;
+                    } else if bw_src > bw_dst {
+                        let adj = codegen
+                            .builder
+                            .build_int_truncate(iv, t, "trunc")
+                            .map_err(|e| e.to_string())?;
+                        codegen
+                            .builder
+                            .build_store(existing, adj)
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        codegen
+                            .builder
+                            .build_store(existing, iv)
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+                (BasicValueEnum::PointerValue(pv), BasicTypeEnum::PointerType(pt)) => {
+                    let adj = codegen
+                        .builder
+                        .build_pointer_cast(pv, pt, "pcast")
+                        .map_err(|e| e.to_string())?;
+                    codegen
+                        .builder
+                        .build_store(existing, adj)
+                        .map_err(|e| e.to_string())?;
+                }
+                (BasicValueEnum::FloatValue(fv), BasicTypeEnum::FloatType(ft)) => {
+                    // Only f64 currently expected
+                    if fv.get_type() != ft {
+                        return Err("float width mismatch in store".to_string());
+                    }
+                    codegen
+                        .builder
+                        .build_store(existing, fv)
+                        .map_err(|e| e.to_string())?;
+                }
+                _ => return Err("store type mismatch".to_string()),
+            }
+        } else {
+            codegen
+                .builder
+                .build_store(existing, val)
+                .map_err(|e| e.to_string())?;
+        }
+    } else {
+        let slot = codegen
+            .builder
+            .build_alloca(elem_ty, &format!("slot_{}", ptr.as_u32()))
+            .map_err(|e| e.to_string())?;
+        codegen
+            .builder
+            .build_store(slot, val)
+            .map_err(|e| e.to_string())?;
+        allocas.insert(*ptr, slot);
+        alloca_elem_types.insert(*ptr, elem_ty);
+    }
+    Ok(())
+}
+
+pub(in super::super) fn lower_load<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
+    allocas: &mut HashMap<ValueId, inkwell::values::PointerValue<'ctx>>,
+    alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
+    dst: &ValueId,
+    ptr: &ValueId,
+) -> Result<(), String> {
+    use inkwell::types::BasicTypeEnum;
+    let (slot, elem_ty) = if let Some(s) = allocas.get(ptr).copied() {
+        let et = *alloca_elem_types.get(ptr).ok_or("alloca elem type missing")?;
+        (s, et)
+    } else {
+        // Default new slot as i64 for uninitialized loads
+        let i64t = codegen.context.i64_type();
+        let slot = codegen
+            .builder
+            .build_alloca(i64t, &format!("slot_{}", ptr.as_u32()))
+            .map_err(|e| e.to_string())?;
+        allocas.insert(*ptr, slot);
+        alloca_elem_types.insert(*ptr, i64t.into());
+        (slot, i64t.into())
+    };
+    let lv = codegen
+        .builder
+        .build_load(elem_ty, slot, &format!("load_{}", dst.as_u32()))
+        .map_err(|e| e.to_string())?;
+    vmap.insert(*dst, lv);
+    Ok(())
+}
