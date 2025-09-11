@@ -11,18 +11,19 @@ pub(in super::super) fn create_basic_blocks<'ctx>(
     codegen: &CodegenContext<'ctx>,
     llvm_func: FunctionValue<'ctx>,
     func: &MirFunction,
+    fn_label: &str,
 ) -> (HashMap<BasicBlockId, BasicBlock<'ctx>>, BasicBlock<'ctx>) {
     let mut bb_map: HashMap<BasicBlockId, BasicBlock> = HashMap::new();
     let entry_first = func.entry_block;
     let entry_bb = codegen
         .context
-        .append_basic_block(llvm_func, &format!("bb{}", entry_first.as_u32()));
+        .append_basic_block(llvm_func, &format!("{}_bb{}", fn_label, entry_first.as_u32()));
     bb_map.insert(entry_first, entry_bb);
     for bid in func.block_ids() {
         if bid == entry_first {
             continue;
         }
-        let name = format!("bb{}", bid.as_u32());
+        let name = format!("{}_bb{}", fn_label, bid.as_u32());
         let bb = codegen.context.append_basic_block(llvm_func, &name);
         bb_map.insert(bid, bb);
     }

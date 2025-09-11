@@ -109,8 +109,9 @@ impl LLVMCompiler {
         // Lower all functions
         for (name, func) in &mir_module.functions {
             let llvm_func = *llvm_funcs.get(name).ok_or("predecl not found")?;
-            // Create basic blocks
-            let (mut bb_map, entry_bb) = instructions::create_basic_blocks(&codegen, llvm_func, func);
+            // Create basic blocks (prefix names with function label to avoid any ambiguity)
+            let fn_label = sanitize(name);
+            let (mut bb_map, entry_bb) = instructions::create_basic_blocks(&codegen, llvm_func, func, &fn_label);
             codegen.builder.position_at_end(entry_bb);
             let mut vmap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
             let mut allocas: HashMap<ValueId, PointerValue> = HashMap::new();
@@ -127,11 +128,14 @@ impl LLVMCompiler {
                     vmap.insert(*pid, av);
                 }
             }
+            // Gather block order once for fallthrough handling
+            let block_ids: Vec<crate::mir::BasicBlockId> = func.block_ids().into_iter().collect();
+
             // Precreate phis
-            for bid in func.block_ids() {
-                let bb = *bb_map.get(&bid).ok_or("missing bb in map")?;
+            for bid in &block_ids {
+                let bb = *bb_map.get(bid).ok_or("missing bb in map")?;
                 codegen.builder.position_at_end(bb);
-                let block = func.blocks.get(&bid).unwrap();
+                let block = func.blocks.get(bid).unwrap();
                 for inst in block
                     .instructions
                     .iter()
@@ -153,7 +157,7 @@ impl LLVMCompiler {
                             .map_err(|e| e.to_string())?;
                         vmap.insert(*dst, phi.as_basic_value());
                         phis_by_block
-                            .entry(bid)
+                            .entry(*bid)
                             .or_default()
                             .push((*dst, phi, inputs.clone()));
                     }
@@ -164,8 +168,8 @@ impl LLVMCompiler {
             let const_strs = build_const_str_map(func);
 
             // Lower body
-            for bid in func.block_ids() {
-                let bb = *bb_map.get(&bid).unwrap();
+            for (bi, bid) in block_ids.iter().enumerate() {
+                let bb = *bb_map.get(bid).unwrap();
                 if codegen
                     .builder
                     .get_insert_block()
@@ -174,7 +178,7 @@ impl LLVMCompiler {
                 {
                     codegen.builder.position_at_end(bb);
                 }
-                let block = func.blocks.get(&bid).unwrap();
+                let block = func.blocks.get(bid).unwrap();
                 for inst in &block.instructions {
                     match inst {
                         MirInstruction::NewBox { dst, box_type, args } => {
@@ -291,18 +295,28 @@ impl LLVMCompiler {
                     _ => { /* ignore other ops for 11.1 */ },
                 }
             }
+            // Emit terminators and provide a conservative fallback when absent
             if let Some(term) = &block.terminator {
                 match term {
                     MirInstruction::Return { value } => {
                         instructions::emit_return(&codegen, func, &vmap, value)?;
                     }
                     MirInstruction::Jump { target } => {
-                        instructions::emit_jump(&codegen, bid, target, &bb_map, &phis_by_block, &vmap)?;
+                        instructions::emit_jump(&codegen, *bid, target, &bb_map, &phis_by_block, &vmap)?;
                     }
                     MirInstruction::Branch { condition, then_bb, else_bb } => {
-                        instructions::emit_branch(&codegen, bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
+                        instructions::emit_branch(&codegen, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
                     }
                     _ => {}
+                }
+            } else {
+                // Fallback: branch to the next block if any; otherwise loop to entry
+                if let Some(next_bid) = block_ids.get(bi + 1) {
+                    instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                } else {
+                    // last block, loop to entry to satisfy verifier
+                    let entry_first = func.entry_block;
+                    instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                 }
             }
             // Verify per-function

@@ -71,6 +71,27 @@ pub(in super::super) fn lower_boxcall<'ctx>(
         return Ok(());
     }
 
+    // Minimal untyped fallback: Array.length with missing annotations
+    if method == "length" && args.is_empty() {
+        let fnty = i64t.fn_type(&[i64t.into()], false);
+        let callee = codegen
+            .module
+            .get_function("nyash_array_length_h")
+            .unwrap_or_else(|| codegen.module.add_function("nyash_array_length_h", fnty, None));
+        let call = codegen
+            .builder
+            .build_call(callee, &[recv_h.into()], "alen_fallback")
+            .map_err(|e| e.to_string())?;
+        if let Some(d) = dst {
+            let rv = call
+                .try_as_basic_value()
+                .left()
+                .ok_or("array_length_h returned void".to_string())?;
+            vmap.insert(*d, rv);
+        }
+        return Ok(());
+    }
+
     if let Some(mid) = method_id {
         invoke::try_handle_tagged_invoke(
             codegen,
