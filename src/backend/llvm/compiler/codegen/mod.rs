@@ -147,157 +147,8 @@ impl LLVMCompiler {
             let block = func.blocks.get(&bid).unwrap();
             for inst in &block.instructions {
                 match inst {
-                    MirInstruction::NewBox {
-                        dst,
-                        box_type,
-                        args,
-                    } => {
-                        match (box_type.as_str(), args.len()) {
-                            ("StringBox", 1) => {
-                                // Pass-through: if arg was built as Const String, its lowering produced i8* already
-                                let av = *vmap.get(&args[0]).ok_or("StringBox arg missing")?;
-                                vmap.insert(*dst, av);
-                            }
-                            ("IntegerBox", 1) => {
-                                // Pass-through integer payload as i64
-                                let av = *vmap.get(&args[0]).ok_or("IntegerBox arg missing")?;
-                                vmap.insert(*dst, av);
-                            }
-                            // Minimal birth_i64 path for 1-2 args (i64 or handle-as-i64)
-                            (_, n) if n == 1 || n == 2 => {
-                                let type_id = *box_type_ids.get(box_type).unwrap_or(&0);
-                                let i64t = codegen.context.i64_type();
-                                let fnty = i64t.fn_type(
-                                    &[i64t.into(), i64t.into(), i64t.into(), i64t.into()],
-                                    false,
-                                );
-                                let callee = codegen
-                                    .module
-                                    .get_function("nyash.box.birth_i64")
-                                    .unwrap_or_else(|| {
-                                        codegen.module.add_function(
-                                            "nyash.box.birth_i64",
-                                            fnty,
-                                            None,
-                                        )
-                                    });
-                                // argc
-                                let argc = i64t.const_int(args.len() as u64, false);
-                                // a1/a2 as i64
-                                let mut a1 = i64t.const_zero();
-                                let mut a2 = i64t.const_zero();
-                                if args.len() >= 1 {
-                                    let v = *vmap.get(&args[0]).ok_or("newbox arg[0] missing")?;
-                                    a1 = match v {
-                                        BasicValueEnum::IntValue(iv) => iv,
-                                        BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "arg0_p2i").map_err(|e| e.to_string())?,
-                                        _ => return Err("newbox arg[0]: unsupported type (expect int or handle ptr)".to_string()),
-                                    };
-                                }
-                                if args.len() >= 2 {
-                                    let v = *vmap.get(&args[1]).ok_or("newbox arg[1] missing")?;
-                                    a2 = match v {
-                                        BasicValueEnum::IntValue(iv) => iv,
-                                        BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "arg1_p2i").map_err(|e| e.to_string())?,
-                                        _ => return Err("newbox arg[1]: unsupported type (expect int or handle ptr)".to_string()),
-                                    };
-                                }
-                                let tid = i64t.const_int(type_id as u64, true);
-                                let call = codegen
-                                    .builder
-                                    .build_call(
-                                        callee,
-                                        &[tid.into(), argc.into(), a1.into(), a2.into()],
-                                        "birth_i64",
-                                    )
-                                    .map_err(|e| e.to_string())?;
-                                let h = call
-                                    .try_as_basic_value()
-                                    .left()
-                                    .ok_or("birth_i64 returned void".to_string())?
-                                    .into_int_value();
-                                let pty = codegen.context.ptr_type(AddressSpace::from(0));
-                                let ptr = codegen
-                                    .builder
-                                    .build_int_to_ptr(h, pty, "handle_to_ptr")
-                                    .map_err(|e| e.to_string())?;
-                                vmap.insert(*dst, ptr.into());
-                            }
-                            _ => {
-                                // No-arg birth via central type registry (preferred),
-                                // fallback to env.box.new(name) when type_id is unavailable.
-                                if !args.is_empty() {
-                                    return Err(
-                                        "NewBox with >2 args not yet supported in LLVM lowering"
-                                            .to_string(),
-                                    );
-                                }
-                                let type_id = *box_type_ids.get(box_type).unwrap_or(&0);
-                                // Temporary gate: allow forcing MapBox to plugin path explicitly
-                                let force_plugin_map = std::env::var("NYASH_LLVM_FORCE_PLUGIN_MAP")
-                                    .ok()
-                                    .as_deref()
-                                    == Some("1");
-                                let i64t = codegen.context.i64_type();
-                                if type_id != 0 && !(box_type == "MapBox" && !force_plugin_map) {
-                                    // declare i64 @nyash.box.birth_h(i64)
-                                    let fn_ty = i64t.fn_type(&[i64t.into()], false);
-                                    let callee = codegen
-                                        .module
-                                        .get_function("nyash.box.birth_h")
-                                        .unwrap_or_else(|| {
-                                            codegen.module.add_function(
-                                                "nyash.box.birth_h",
-                                                fn_ty,
-                                                None,
-                                            )
-                                        });
-                                    let tid = i64t.const_int(type_id as u64, true);
-                                    let call = codegen
-                                        .builder
-                                        .build_call(callee, &[tid.into()], "birth")
-                                        .map_err(|e| e.to_string())?;
-                                    let h_i64 = call
-                                        .try_as_basic_value()
-                                        .left()
-                                        .ok_or("birth_h returned void".to_string())?
-                                        .into_int_value();
-                                    let pty = codegen.context.ptr_type(AddressSpace::from(0));
-                                    let ptr = codegen
-                                        .builder
-                                        .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
-                                        .map_err(|e| e.to_string())?;
-                                    vmap.insert(*dst, ptr.into());
-                                } else {
-                                    // Fallback: call i64 @nyash.env.box.new(i8*) with type name
-                                    let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-                                    let fn_ty = i64t.fn_type(&[i8p.into()], false);
-                                    let callee = codegen
-                                        .module
-                                        .get_function("nyash.env.box.new")
-                                        .unwrap_or_else(|| codegen.module.add_function("nyash.env.box.new", fn_ty, None));
-                                    let tn = codegen
-                                        .builder
-                                        .build_global_string_ptr(box_type.as_str(), "box_type_name")
-                                        .map_err(|e| e.to_string())?;
-                                    let call = codegen
-                                        .builder
-                                        .build_call(callee, &[tn.as_pointer_value().into()], "env_box_new")
-                                        .map_err(|e| e.to_string())?;
-                                    let h_i64 = call
-                                        .try_as_basic_value()
-                                        .left()
-                                        .ok_or("env.box.new returned void".to_string())?
-                                        .into_int_value();
-                                    let pty = codegen.context.ptr_type(AddressSpace::from(0));
-                                    let ptr = codegen
-                                        .builder
-                                        .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
-                                        .map_err(|e| e.to_string())?;
-                                    vmap.insert(*dst, ptr.into());
-                                }
-                            }
-                        }
+                    MirInstruction::NewBox { dst, box_type, args } => {
+                        instructions::lower_newbox(&codegen, &mut vmap, *dst, box_type, args, &box_type_ids)?;
                     }
                     MirInstruction::Const { dst, value } => {
                         let bval = match value {
@@ -387,40 +238,12 @@ impl LLVMCompiler {
                         instructions::lower_externcall(&codegen, func, &mut vmap, dst, iface_name, method_name, args)?;
                     }
                     MirInstruction::UnaryOp { dst, op, operand } => {
-                        let v = *vmap.get(operand).ok_or("operand missing")?;
-                        let out = match op {
-                            UnaryOp::Neg => {
-                                if let Some(iv) = as_int(v) {
-                                    codegen
-                                        .builder
-                                        .build_int_neg(iv, "ineg")
-                                        .map_err(|e| e.to_string())?
-                                        .into()
-                                } else if let Some(fv) = as_float(v) {
-                                    codegen
-                                        .builder
-                                        .build_float_neg(fv, "fneg")
-                                        .map_err(|e| e.to_string())?
-                                        .into()
-                                } else {
-                                    return Err("neg on non-number".to_string());
-                                }
-                            }
-                            UnaryOp::Not | UnaryOp::BitNot => {
-                                if let Some(iv) = as_int(v) {
-                                    codegen
-                                        .builder
-                                        .build_not(iv, "inot")
-                                        .map_err(|e| e.to_string())?
-                                        .into()
-                                } else {
-                                    return Err("not on non-int".to_string());
-                                }
-                            }
-                        };
-                        vmap.insert(*dst, out);
+                        instructions::lower_unary(&codegen, &mut vmap, *dst, op, operand)?;
                     }
                     MirInstruction::BinOp { dst, op, lhs, rhs } => {
+                        // Delegated to refactored lowering; keep legacy body for 0-diff but unreachable.
+                        instructions::lower_binop(&codegen, func, &mut vmap, *dst, op, lhs, rhs)?;
+                        continue;
                         let lv = *vmap.get(lhs).ok_or("lhs missing")?;
                         let rv = *vmap.get(rhs).ok_or("rhs missing")?;
                         let mut handled_concat = false;

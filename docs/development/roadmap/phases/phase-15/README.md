@@ -168,17 +168,27 @@ ny_mir_jit_entry(mir_bin) -> exit_code
 ny_free_buf(buffer)
 ```
 
-詳細は[**自己ホスティングlld戦略**](self-hosting-lld-strategy.md)を参照。
+詳細は[**自己ホスティングlld戦略**](implementation/lld-strategy.md)を参照。
 
 ## 🔗 関連ドキュメント
 
-- [🚀 自己ホスティングlld戦略](self-hosting-lld-strategy.md) **← NEW!**
-- [🧱 箱積み上げ準備メモ](box-stacking-preparation.txt) **← NEW!**
-- [セルフホスティング詳細計画](self-hosting-plan.txt)
-- [技術的実装詳細](technical-details.md)
+### 📂 実装関連（implementationフォルダ）
+- [🚀 自己ホスティングlld戦略](implementation/lld-strategy.md)
+- [🧱 箱積み上げ準備メモ](implementation/box-stacking.md)
+- [🏗️ アーキテクチャ詳細](implementation/architecture.md)
+
+### 📅 計画関連（planningフォルダ）
+- [📋 推奨実装順序](planning/sequence.md)
+- [🔧 準備作業まとめ](planning/preparation.md)
+
+### 🔧 実行チェックリスト
+- [ROADMAP.md](ROADMAP.md) - 進捗管理用チェックリスト
+
+### 📚 関連フェーズ
 - [Phase 10: Cranelift JIT](../phase-10/)
 - [Phase 12.5: 最適化戦略](../phase-12.5/)
 - [Phase 12.7: ANCP圧縮](../phase-12.7/)
+- [Phase 15.1: AOT計画](phase-15.1/)
 
 ## 📅 実施時期
 

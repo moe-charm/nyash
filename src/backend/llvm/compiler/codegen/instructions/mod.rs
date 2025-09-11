@@ -6,6 +6,10 @@ mod boxcall;
 mod arith;
 mod mem;
 mod consts;
+mod strings;
+mod arrays;
+mod maps;
+mod arith_ops;
 
 pub(super) use blocks::{create_basic_blocks, precreate_phis};
 pub(super) use flow::{emit_branch, emit_jump, emit_return};
@@ -15,4 +19,4 @@ pub(super) use boxcall::lower_boxcall;
 pub(super) use arith::lower_compare;
 pub(super) use mem::{lower_load, lower_store};
 pub(super) use consts::lower_const;
-
+pub(super) use arith_ops::{lower_binop, lower_unary};
