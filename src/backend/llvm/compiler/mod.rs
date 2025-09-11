@@ -16,8 +16,6 @@ mod aot;
 #[cfg(feature = "llvm")]
 mod codegen;
 #[cfg(feature = "llvm")]
-mod helpers;
-#[cfg(feature = "llvm")]
 mod interpreter;
 #[cfg(feature = "llvm")]
 pub use aot::*;
