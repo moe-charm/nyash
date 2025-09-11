@@ -117,6 +117,13 @@ impl MirBuilder {
                         ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
                         ("StringBox", "is_empty") => Some(super::MirType::Bool),
                         ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
+                        // String-producing methods (important for LLVM ret handling)
+                        ("StringBox", "substring")
+                        | ("StringBox", "concat")
+                        | ("StringBox", "replace")
+                        | ("StringBox", "trim")
+                        | ("StringBox", "toUpper")
+                        | ("StringBox", "toLower") => Some(super::MirType::String),
                         ("ArrayBox", "length") => Some(super::MirType::Integer),
                         _ => None,
                     };
@@ -854,7 +861,8 @@ impl MirBuilder {
         self.value_origin_newbox.insert(dst, class.clone());
 
         // For plugin/builtin boxes, call birth(...). For user-defined boxes, skip (InstanceBox already constructed)
-        if !self.user_defined_boxes.contains(&class) {
+        // Special-case: StringBox is already fully constructed via from_i8_string in LLVM lowering; skip birth
+        if !self.user_defined_boxes.contains(&class) && class != "StringBox" {
             let birt_mid = resolve_slot_by_type_name(&class, "birth");
             self.emit_box_or_plugin_call(
                 None,

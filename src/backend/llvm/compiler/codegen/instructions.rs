@@ -508,56 +508,84 @@ pub(super) fn lower_externcall<'ctx>(
         || (iface_name == "env.debug" && method_name == "trace")
     {
         if args.len() != 1 {
-            return Err(format!("{}.{} expects 1 arg (handle)", iface_name, method_name));
+            return Err(format!("{}.{} expects 1 arg", iface_name, method_name));
         }
         let av = *vmap.get(&args[0]).ok_or("extern arg missing")?;
-        let arg_val = match av {
-            BVE::IntValue(iv) => {
-                if iv.get_type() == codegen.context.bool_type() {
-                    codegen
-                        .builder
-                        .build_int_z_extend(iv, codegen.context.i64_type(), "bool2i64")
-                        .map_err(|e| e.to_string())?
-                } else if iv.get_type() == codegen.context.i64_type() {
-                    iv
+        match av {
+            // If argument is i8* (string), call string variant
+            BVE::PointerValue(pv) => {
+                let i8p = codegen.context.ptr_type(AddressSpace::from(0));
+                let fnty = codegen.context.i64_type().fn_type(&[i8p.into()], false);
+                let fname = if iface_name == "env.console" {
+                    match method_name {
+                        "log" => "nyash.console.log",
+                        "warn" => "nyash.console.warn",
+                        _ => "nyash.console.error",
+                    }
                 } else {
-                    codegen
-                        .builder
-                        .build_int_s_extend(iv, codegen.context.i64_type(), "int2i64")
-                        .map_err(|e| e.to_string())?
+                    "nyash.debug.trace"
+                };
+                let callee = codegen
+                    .module
+                    .get_function(fname)
+                    .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
+                let _ = codegen
+                    .builder
+                    .build_call(callee, &[pv.into()], "console_log_p")
+                    .map_err(|e| e.to_string())?;
+                if let Some(d) = dst {
+                    vmap.insert(*d, codegen.context.i64_type().const_zero().into());
                 }
+                return Ok(());
             }
-            BVE::PointerValue(pv) => codegen
-                .builder
-                .build_ptr_to_int(pv, codegen.context.i64_type(), "p2i")
-                .map_err(|e| e.to_string())?,
-            _ => return Err("console.log arg conversion failed".to_string()),
-        };
-        let fnty = codegen
-            .context
-            .i64_type()
-            .fn_type(&[codegen.context.i64_type().into()], false);
-        let fname = if iface_name == "env.console" {
-            match method_name {
-                "log" => "nyash.console.log_handle",
-                "warn" => "nyash.console.warn_handle",
-                _ => "nyash.console.error_handle",
+            // Otherwise, convert to i64 and call handle variant
+            _ => {
+                let arg_val = match av {
+                    BVE::IntValue(iv) => {
+                        if iv.get_type() == codegen.context.bool_type() {
+                            codegen
+                                .builder
+                                .build_int_z_extend(iv, codegen.context.i64_type(), "bool2i64")
+                                .map_err(|e| e.to_string())?
+                        } else if iv.get_type() == codegen.context.i64_type() {
+                            iv
+                        } else {
+                            codegen
+                                .builder
+                                .build_int_s_extend(iv, codegen.context.i64_type(), "int2i64")
+                                .map_err(|e| e.to_string())?
+                        }
+                    }
+                    BVE::PointerValue(_) => unreachable!(),
+                    _ => return Err("console.log arg conversion failed".to_string()),
+                };
+                let fnty = codegen
+                    .context
+                    .i64_type()
+                    .fn_type(&[codegen.context.i64_type().into()], false);
+                let fname = if iface_name == "env.console" {
+                    match method_name {
+                        "log" => "nyash.console.log_handle",
+                        "warn" => "nyash.console.warn_handle",
+                        _ => "nyash.console.error_handle",
+                    }
+                } else {
+                    "nyash.debug.trace_handle"
+                };
+                let callee = codegen
+                    .module
+                    .get_function(fname)
+                    .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
+                let _ = codegen
+                    .builder
+                    .build_call(callee, &[arg_val.into()], "console_log_h")
+                    .map_err(|e| e.to_string())?;
+                if let Some(d) = dst {
+                    vmap.insert(*d, codegen.context.i64_type().const_zero().into());
+                }
+                return Ok(());
             }
-        } else {
-            "nyash.debug.trace_handle"
-        };
-        let callee = codegen
-            .module
-            .get_function(fname)
-            .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
-        let _ = codegen
-            .builder
-            .build_call(callee, &[arg_val.into()], "console_log_h")
-            .map_err(|e| e.to_string())?;
-        if let Some(d) = dst {
-            vmap.insert(*d, codegen.context.i64_type().const_zero().into());
         }
-        return Ok(());
     }
 
     if iface_name == "env.console" && method_name == "readLine" {
@@ -898,12 +926,8 @@ pub(super) fn lower_newbox<'ctx>(
     use inkwell::values::BasicValueEnum as BVE;
     match (box_type, args.len()) {
         ("StringBox", 1) => {
+            // Keep as i8* string pointer (AOT string fast-path)
             let av = *vmap.get(&args[0]).ok_or("StringBox arg missing")?;
-            vmap.insert(dst, av);
-            Ok(())
-        }
-        ("IntegerBox", 1) => {
-            let av = *vmap.get(&args[0]).ok_or("IntegerBox arg missing")?;
             vmap.insert(dst, av);
             Ok(())
         }
@@ -1042,6 +1066,51 @@ pub(super) fn lower_boxcall<'ctx>(
     } else {
         0
     };
+
+    // String concat fast-path (avoid plugin path for builtin StringBox)
+    if method == "concat" {
+        // Recognize receiver typed as String or StringBox
+        let is_string_recv = match func.metadata.value_types.get(box_val) {
+            Some(crate::mir::MirType::String) => true,
+            Some(crate::mir::MirType::Box(b)) if b == "StringBox" => true,
+            _ => false,
+        };
+        if is_string_recv {
+            if args.len() != 1 { return Err("String.concat expects 1 arg".to_string()); }
+            // Prefer pointer-based concat to keep AOT string fast-path
+            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
+            let rhs_v = *vmap.get(&args[0]).ok_or("concat arg missing")?;
+            match (recv_v, rhs_v) {
+                (BVE::PointerValue(lp), BVE::PointerValue(rp)) => {
+                    let fnty = i8p.fn_type(&[i8p.into(), i8p.into()], false);
+                    let callee = codegen.module.get_function("nyash.string.concat_ss").
+                        unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_ss", fnty, None));
+                    let call = codegen.builder.build_call(callee, &[lp.into(), rp.into()], "concat_ss_call").map_err(|e| e.to_string())?;
+                    if let Some(d) = dst { let rv = call.try_as_basic_value().left().ok_or("concat_ss returned void".to_string())?; vmap.insert(*d, rv); }
+                    return Ok(());
+                }
+                (BVE::PointerValue(lp), BVE::IntValue(ri)) => {
+                    let i64t = codegen.context.i64_type();
+                    let fnty = i8p.fn_type(&[i8p.into(), i64t.into()], false);
+                    let callee = codegen.module.get_function("nyash.string.concat_si").
+                        unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_si", fnty, None));
+                    let call = codegen.builder.build_call(callee, &[lp.into(), ri.into()], "concat_si_call").map_err(|e| e.to_string())?;
+                    if let Some(d) = dst { let rv = call.try_as_basic_value().left().ok_or("concat_si returned void".to_string())?; vmap.insert(*d, rv); }
+                    return Ok(());
+                }
+                (BVE::IntValue(li), BVE::PointerValue(rp)) => {
+                    let i64t = codegen.context.i64_type();
+                    let fnty = i8p.fn_type(&[i64t.into(), i8p.into()], false);
+                    let callee = codegen.module.get_function("nyash.string.concat_is").
+                        unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_is", fnty, None));
+                    let call = codegen.builder.build_call(callee, &[li.into(), rp.into()], "concat_is_call").map_err(|e| e.to_string())?;
+                    if let Some(d) = dst { let rv = call.try_as_basic_value().left().ok_or("concat_is returned void".to_string())?; vmap.insert(*d, rv); }
+                    return Ok(());
+                }
+                _ => { /* fall through to generic path below */ }
+            }
+        }
+    }
 
     // Array fast-paths
     if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
@@ -1194,7 +1263,10 @@ pub(super) fn lower_boxcall<'ctx>(
                 if let Some(mt) = func.metadata.value_types.get(d) {
                     match mt {
                         crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
-                        crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
+                        // String: keep as i64 handle (do not cast to i8*)
+                        crate::mir::MirType::String => { vmap.insert(*d, rv); }
+                        // Box/Array/Future/Unknown: cast handle to opaque pointer
+                        crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
                             let h = if let BVE::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
                             let pty = codegen.context.ptr_type(AddressSpace::from(0));
                             let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
@@ -1234,7 +1306,8 @@ pub(super) fn lower_boxcall<'ctx>(
             if let Some(mt) = func.metadata.value_types.get(d) {
                 match mt {
                     crate::mir::MirType::Integer | crate::mir::MirType::Bool => { vmap.insert(*d, rv); }
-                    crate::mir::MirType::Box(_) | crate::mir::MirType::String | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
+                    crate::mir::MirType::String => { vmap.insert(*d, rv); }
+                    crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
                         let h = if let BVE::IntValue(iv) = rv { iv } else { return Err("invoke ret expected i64".to_string()); };
                         let pty = codegen.context.ptr_type(AddressSpace::from(0));
                         let ptr = codegen.builder.build_int_to_ptr(h, pty, "ret_handle_to_ptr").map_err(|e| e.to_string())?;
