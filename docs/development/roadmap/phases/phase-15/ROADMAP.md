@@ -29,6 +29,12 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
    - Use existing trace/hash harness to compare parity; add optional CI gate
 4) Plugins CI split (継続)
    - Core always‑on (JIT, plugins disabled); Plugins as optional job (strict off by default)
+5) LLVM Native EXE Generation
+   - LLVM backend object → executable pipeline completion
+   - Separate `nyash-llvm-compiler` crate (reduce main build weight)
+   - Input: MIR (JSON/binary) → Output: native executable
+   - Link with nyrt runtime (static/dynamic options)
+   - Integration: `nyash --backend llvm --emit exe program.nyash -o program.exe`
 
 ## Later (incremental)
 

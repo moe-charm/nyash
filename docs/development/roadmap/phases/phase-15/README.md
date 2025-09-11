@@ -149,12 +149,26 @@ box TemplateStitcher {
 
 ## 🔗 EXEファイル生成・リンク戦略
 
-### 統合ツールチェーン（ChatGPT5協議済み）
+### 統合ツールチェーン
 ```bash
+# Cranelift版（一時停止中）
 nyash build main.ny --backend=cranelift --target=x86_64-pc-windows-msvc
+
+# LLVM版（ChatGPT5実装中）
+nyash build main.ny --backend=llvm --emit exe -o program.exe
 ```
 
 ### 実装戦略
+
+#### LLVM バックエンド（優先）
+1. **MIR→LLVM IR**: MIR13をLLVM IRに変換（実装済み）
+2. **LLVM IR→Object**: ネイティブオブジェクトファイル生成（実装済み）
+3. **Object→EXE**: リンカー統合でEXE作成（実装中）
+4. **独立コンパイラ**: `nyash-llvm-compiler` crateとして分離（計画中）
+
+詳細は[**LLVM EXE生成戦略**](implementation/llvm-exe-strategy.md)を参照。
+
+#### Cranelift バックエンド（保留）
 1. **MIR→Cranelift**: MIR13をCranelift IRに変換
 2. **Cranelift→Object**: ネイティブオブジェクトファイル生成（.o/.obj）
 3. **lld内蔵リンク**: lld-link（Win）/ld.lld（Linux）でEXE作成
@@ -173,7 +187,8 @@ ny_free_buf(buffer)
 ## 🔗 関連ドキュメント
 
 ### 📂 実装関連（implementationフォルダ）
-- [🚀 自己ホスティングlld戦略](implementation/lld-strategy.md)
+- [🚀 LLVM EXE生成戦略](implementation/llvm-exe-strategy.md)（NEW）
+- [🚀 自己ホスティングlld戦略](implementation/lld-strategy.md)（Cranelift版）
 - [🧱 箱積み上げ準備メモ](implementation/box-stacking.md)
 - [🏗️ アーキテクチャ詳細](implementation/architecture.md)
 
