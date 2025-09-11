@@ -16,16 +16,13 @@ pub(crate) fn map_type<'ctx>(
         MirType::Float => ctx.f64_type().into(),
         MirType::Bool => ctx.bool_type().into(),
         MirType::String => ctx
-            .i8_type()
             .ptr_type(inkwell::AddressSpace::from(0))
             .into(),
         MirType::Void => return Err("Void has no value type".to_string()),
         MirType::Box(_) => ctx
-            .i8_type()
             .ptr_type(inkwell::AddressSpace::from(0))
             .into(),
         MirType::Array(_) | MirType::Future(_) | MirType::Unknown => ctx
-            .i8_type()
             .ptr_type(inkwell::AddressSpace::from(0))
             .into(),
     })
@@ -82,11 +79,10 @@ pub(crate) fn to_i64_any<'ctx>(
                     eb
                 })
                 .unwrap_or_else(|| ctx.create_builder());
-            let i64p = i64t.ptr_type(AddressSpace::from(0));
             let tmp = slot
                 .build_alloca(i64t, "f2i_tmp")
                 .map_err(|e| e.to_string())?;
-            let fptr_ty = ctx.f64_type().ptr_type(AddressSpace::from(0));
+            let fptr_ty = ctx.ptr_type(AddressSpace::from(0));
             let castp = builder
                 .build_pointer_cast(tmp, fptr_ty, "i64p_to_f64p")
                 .map_err(|e| e.to_string())?;
@@ -105,7 +101,7 @@ pub(crate) fn i64_to_ptr<'ctx>(
     builder: &Builder<'ctx>,
     iv: IntValue<'ctx>,
 ) -> Result<PointerValue<'ctx>, String> {
-    let pty = ctx.i8_type().ptr_type(AddressSpace::from(0));
+    let pty = ctx.ptr_type(AddressSpace::from(0));
     builder
         .build_int_to_ptr(iv, pty, "i64_to_ptr")
         .map_err(|e| e.to_string())
@@ -209,9 +205,9 @@ pub(crate) fn map_mirtype_to_basic<'ctx>(ctx: &'ctx Context, ty: &MirType) -> Ba
         MirType::Integer => ctx.i64_type().into(),
         MirType::Float => ctx.f64_type().into(),
         MirType::Bool => ctx.bool_type().into(),
-        MirType::String => ctx.i8_type().ptr_type(AddressSpace::from(0)).into(),
+        MirType::String => ctx.ptr_type(AddressSpace::from(0)).into(),
         MirType::Box(_) | MirType::Array(_) | MirType::Future(_) | MirType::Unknown => {
-            ctx.i8_type().ptr_type(AddressSpace::from(0)).into()
+            ctx.ptr_type(AddressSpace::from(0)).into()
         }
         MirType::Void => ctx.i64_type().into(),
     }

@@ -125,11 +125,10 @@ impl LLVMCompiler {
                             eb
                         })
                         .unwrap_or_else(|| ctx.create_builder());
-                    let i64p = i64t.ptr_type(AddressSpace::from(0));
                     let tmp = slot
                         .build_alloca(i64t, "f2i_tmp")
                         .map_err(|e| e.to_string())?;
-                    let fptr_ty = ctx.f64_type().ptr_type(AddressSpace::from(0));
+                    let fptr_ty = ctx.ptr_type(AddressSpace::from(0));
                     let castp = builder
                         .build_pointer_cast(tmp, fptr_ty, "i64p_to_f64p")
                         .map_err(|e| e.to_string())?;
@@ -147,7 +146,7 @@ impl LLVMCompiler {
             builder: &inkwell::builder::Builder<'ctx>,
             iv: IntValue<'ctx>,
         ) -> Result<PointerValue<'ctx>, String> {
-            let pty = ctx.i8_type().ptr_type(AddressSpace::from(0));
+            let pty = ctx.ptr_type(AddressSpace::from(0));
             builder
                 .build_int_to_ptr(iv, pty, "i64_to_ptr")
                 .map_err(|e| e.to_string())
@@ -258,12 +257,12 @@ impl LLVMCompiler {
                 crate::mir::MirType::Integer => ctx.i64_type().into(),
                 crate::mir::MirType::Float => ctx.f64_type().into(),
                 crate::mir::MirType::Bool => ctx.bool_type().into(),
-                crate::mir::MirType::String => ctx.i8_type().ptr_type(AddressSpace::from(0)).into(),
+                crate::mir::MirType::String => ctx.ptr_type(AddressSpace::from(0)).into(),
                 crate::mir::MirType::Box(_)
                 | crate::mir::MirType::Array(_)
                 | crate::mir::MirType::Future(_)
                 | crate::mir::MirType::Unknown => {
-                    ctx.i8_type().ptr_type(AddressSpace::from(0)).into()
+                    ctx.ptr_type(AddressSpace::from(0)).into()
                 }
                 crate::mir::MirType::Void => ctx.i64_type().into(), // avoid void as a value type; default to i64
             }
@@ -394,7 +393,7 @@ impl LLVMCompiler {
                                     .left()
                                     .ok_or("birth_i64 returned void".to_string())?
                                     .into_int_value();
-                                let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                let pty = codegen.context.ptr_type(AddressSpace::from(0));
                                 let ptr = codegen
                                     .builder
                                     .build_int_to_ptr(h, pty, "handle_to_ptr")
@@ -434,7 +433,7 @@ impl LLVMCompiler {
                                     .left()
                                     .ok_or("birth_h returned void".to_string())?
                                     .into_int_value();
-                                let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                let pty = codegen.context.ptr_type(AddressSpace::from(0));
                                 let ptr = codegen
                                     .builder
                                     .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
@@ -466,13 +465,11 @@ impl LLVMCompiler {
                                 // declare i8* @nyash_string_new(i8*, i32)
                                 let rt = codegen
                                     .context
-                                    .i8_type()
                                     .ptr_type(inkwell::AddressSpace::from(0));
                                 let fn_ty = rt.fn_type(
                                     &[
                                         codegen
                                             .context
-                                            .i8_type()
                                             .ptr_type(inkwell::AddressSpace::from(0))
                                             .into(),
                                         codegen.context.i32_type().into(),
@@ -499,7 +496,6 @@ impl LLVMCompiler {
                             }
                             ConstValue::Null => codegen
                                 .context
-                                .i8_type()
                                 .ptr_type(inkwell::AddressSpace::from(0))
                                 .const_zero()
                                 .into(),
@@ -523,7 +519,7 @@ impl LLVMCompiler {
                             BasicValueEnum::PointerValue(pv) => pv,
                             BasicValueEnum::IntValue(iv) => {
                                 // Treat as Nyash handle and convert to opaque pointer
-                                let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                let pty = codegen.context.ptr_type(AddressSpace::from(0));
                                 codegen
                                     .builder
                                     .build_int_to_ptr(iv, pty, "recv_i2p")
@@ -721,7 +717,7 @@ impl LLVMCompiler {
                             } else {
                                 return Err("getField name must be pointer".to_string());
                             };
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
                             let fnty = i64t.fn_type(&[i64t.into(), i8p.into()], false);
                             let callee = codegen
                                 .module
@@ -748,7 +744,7 @@ impl LLVMCompiler {
                                 } else {
                                     return Err("get_field ret expected i64".to_string());
                                 };
-                                let pty = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                                let pty = codegen.context.ptr_type(AddressSpace::from(0));
                                 let ptr = codegen
                                     .builder
                                     .build_int_to_ptr(h, pty, "gf_handle_to_ptr")
@@ -780,7 +776,7 @@ impl LLVMCompiler {
                                     )
                                 }
                             };
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
                             let fnty = i64t.fn_type(&[i64t.into(), i8p.into(), i64t.into()], false);
                             let callee = codegen
                                 .module
@@ -988,7 +984,6 @@ impl LLVMCompiler {
                                                 };
                                                 let pty = codegen
                                                     .context
-                                                    .i8_type()
                                                     .ptr_type(AddressSpace::from(0));
                                                 let ptr = codegen
                                                     .builder
@@ -1055,7 +1050,7 @@ impl LLVMCompiler {
                                         .map_err(|e| e.to_string())?;
                                 }
                                 // cast to i64* pointers
-                                let i64p = i64t.ptr_type(AddressSpace::from(0));
+                                let i64p = codegen.context.ptr_type(AddressSpace::from(0));
                                 let vals_ptr = codegen
                                     .builder
                                     .build_pointer_cast(vals_arr, i64p, "vals_ptr")
@@ -1128,7 +1123,6 @@ impl LLVMCompiler {
                                                 };
                                                 let pty = codegen
                                                     .context
-                                                    .i8_type()
                                                     .ptr_type(AddressSpace::from(0));
                                                 let ptr = codegen
                                                     .builder
@@ -1235,7 +1229,7 @@ impl LLVMCompiler {
                             if !args.is_empty() {
                                 return Err("console.readLine expects 0 args".to_string());
                             }
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
                             let fnty = i8p.fn_type(&[], false);
                             let callee = codegen
                                 .module
@@ -1267,7 +1261,7 @@ impl LLVMCompiler {
                                 return Err("env.future.spawn_instance expects at least (recv, method_name)".to_string());
                             }
                             let i64t = codegen.context.i64_type();
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
                             // a0
                             let a0_v = *vmap.get(&args[0]).ok_or("recv missing")?;
                             let a0 = to_i64_any(codegen.context, &codegen.builder, a0_v)?;
@@ -1336,7 +1330,6 @@ impl LLVMCompiler {
                                             };
                                             let pty = codegen
                                                 .context
-                                                .i8_type()
                                                 .ptr_type(AddressSpace::from(0));
                                             let ptr = codegen
                                                 .builder
@@ -1370,7 +1363,7 @@ impl LLVMCompiler {
                                     "env.box.new expects at least 1 arg (type name)".to_string()
                                 );
                             }
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
                             let tyv = *vmap.get(&args[0]).ok_or("type name arg missing")?;
                             let ty_ptr = match tyv {
                                 BasicValueEnum::PointerValue(p) => p,
@@ -1782,7 +1775,7 @@ impl LLVMCompiler {
                         // String-like concat handling: if either side is a pointer (i8*),
                         // and op is Add, route to NyRT concat helpers
                         if let crate::mir::BinaryOp::Add = op {
-                            let i8p = codegen.context.i8_type().ptr_type(AddressSpace::from(0));
+                            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
                             match (lv, rv) {
                                 (
                                     BasicValueEnum::PointerValue(lp),
