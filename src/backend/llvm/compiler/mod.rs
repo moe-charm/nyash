@@ -12,9 +12,15 @@ mod mock;
 pub use mock::*;
 
 #[cfg(feature = "llvm")]
-mod real;
+mod aot;
 #[cfg(feature = "llvm")]
-pub use real::*;
+mod codegen;
+#[cfg(feature = "llvm")]
+mod helpers;
+#[cfg(feature = "llvm")]
+mod interpreter;
+#[cfg(feature = "llvm")]
+pub use aot::*;
 
 #[cfg(test)]
 mod tests {
