@@ -14,29 +14,34 @@ Done (today)
 - Plugin強制スイッチ: NYASH_LLVM_FORCE_PLUGIN_MAP=1 で MapBox のプラグイン経路を明示切替（デフォルトはコア）。
 - Docs: ARCHITECTURE/LOWERING_LLVM/EXTERNCALL/PLUGIN_ABI を追加・整備。
 - Smokes: plugin‑ret green, map smoke green（core‑first）。
+ - ExternCall micro‑split 完了: `externcall.rs` を `externcall/` ディレクトリ配下に分割し、
+   `console.rs`（console/debug）と `env.rs`（future/local/box）に切り出し。
+   ディスパッチは `externcall/mod.rs` に集約（挙動差分なし・0‑diff）。
 
-Next — Refactor instructions.rs (no behavior change)
-- Goal: Make `src/backend/llvm/compiler/codegen/instructions.rs` maintainable (now >1400 lines).
-- Plan (split into focused submodules under `codegen/`):
-  - `instructions/externcall.rs` — env.console/debug, readline
-  - `instructions/boxcall.rs` — generic BoxCall lowering, by‑id/tagged paths glue
-  - `instructions/newbox.rs` — NewBox + birth/env.box.new bridge
-  - `instructions/strings.rs` — concat fast‑paths, length/len (later: substring/indexOf/replace/trim/toUpper/toLower)
-  - `instructions/arrays.rs` — get/set/push/length
-  - `instructions/maps.rs` — size/get/set/has (core NyRT shims)
-  - `instructions/arith.rs` — UnaryOp/BinOp/Compare (includes concat fallback)
-  - `instructions/flow.rs` — Return/Branch/Jump/PHI finalize
-  - Keep `types.rs` for helpers; keep `create_basic_blocks`/`precreate_phis` in a small `blocks.rs` if needed.
-- Constraints:
-  - 0‑diff behavior for existing smokes; no fallback拡大。
-  - No new deps; keep function signatures stable; pub(super) only.
-  - Update mod wiring in `codegen/mod.rs` accordingly.
+Refactor — LLVM codegen instructions modularized (done)
+- Goal achieved: `instructions.rs` を段階分割し、責務ごとに再配置（0‑diff）。
+- New layout under `src/backend/llvm/compiler/codegen/instructions/`:
+  - Core: `blocks.rs`（BB生成/PHI事前作成）, `flow.rs`（Return/Jump/Branch）, `consts.rs`, `mem.rs`, `arith.rs`（Compare）
+  - BoxCall front: `boxcall.rs`（ディスパッチ本体）
+    - Strings/Arrays/Maps fast‑paths: `strings.rs`, `arrays.rs`, `maps.rs`
+    - Fields: `boxcall/fields.rs`（getField/setField）
+    - Tagged invoke: `boxcall/invoke.rs`（method_idありの固定長/可変長）
+    - Marshal: `boxcall/marshal.rs`（ptr→i64, f64→box→i64, tag分類）
+  - Arith ops: `arith_ops.rs`（Unary/Binary、文字列連結の特例含む）
+  - Extern: `externcall.rs`（console/debug/env.local/env.box.*）
+  - NewBox: `newbox.rs`（`codegen/mod.rs` から委譲に一本化）
+- Wiring: `instructions/mod.rs` が `pub(super) use ...` で再エクスポート。可視性は `pub(in super::super)`/`pub(super)` を維持。
+- Build: `cargo build --features llvm` グリーン、挙動差分なし。
 
-After refactor (follow‑ups)
-- Expand String AOT fast‑paths: substring/indexOf/replace/trim/toUpper/toLower.
-- Remove temporary env.box.new(MapBox) special‑case by moving MapBox生生成 into a dedicated NyRT entry.
-- Tighten MIR annotations for Map.get returns in common patterns.
-- Add targeted smokes after each implementation step（実装後にテスト）。
+Next (optional, small splits)
+- ExternCall micro‑split（完了）
+- types.rs の将来分割（任意）:
+  - `types/convert.rs`（i64<->ptr, f64→box）, `types/classify.rs`, `types/map_types.rs`
+- 機能拡張（任意・別タスク）:
+  - String AOT fast‑paths拡充（substring/indexOf/replace/trim/toUpper/toLower）
+  - MapBox 生成のNyRT専用エントリ化（env.box.new特例の解消）
+  - Map.get の戻り型注釈の厳密化
+  - 代表スモークの追加とCI常時チェック
 
 Risks/Guards
 - Avoid broad implicit conversions; keep concat fallback gated by annotations only.

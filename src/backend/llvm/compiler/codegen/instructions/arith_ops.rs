@@ -63,8 +63,12 @@ pub(in super::super) fn lower_binop<'ctx>(
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use inkwell::values::BasicValueEnum as BVE;
     use inkwell::IntPredicate;
-    let lv = *vmap.get(lhs).ok_or("lhs missing")?;
-    let rv = *vmap.get(rhs).ok_or("rhs missing")?;
+    let lv = *vmap
+        .get(lhs)
+        .ok_or_else(|| format!("lhs missing: {}", lhs.as_u32()))?;
+    let rv = *vmap
+        .get(rhs)
+        .ok_or_else(|| format!("rhs missing: {}", rhs.as_u32()))?;
     let mut handled_concat = false;
     if let BinaryOp::Add = op {
         let i8p = codegen.context.ptr_type(AddressSpace::from(0));

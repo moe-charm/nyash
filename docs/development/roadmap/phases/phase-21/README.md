@@ -391,3 +391,17 @@ box CodeDBWebUI {
 
 > 「コードはファイルに書くもの」という固定観念を打ち破る。
 > 21世紀の開発は、構造化データベースで行うべきだにゃ！
+
+## 📚 関連ドキュメント
+
+### Phase 21の進化過程
+- [技術的考慮事項](technical-considerations.md) - 詳細な技術検討
+- [可逆変換アプローチ](reversible-conversion.md) - Git互換性を保つ方法
+- [箱データベース構想v2](README_v2.md) - シンプル化された実装
+- [自己解析アプローチ](self-parsing-approach.md) - Nyashの自己パース能力活用
+
+### 学術的評価
+- **[AI評価フォルダ](ai-evaluation/)** - Gemini/Codexによる詳細な評価
+  - [Gemini評価](ai-evaluation/gemini-evaluation.md) - 完全な学術的分析
+  - [Codex評価（部分）](ai-evaluation/codex-evaluation-partial.md) - 深い思考過程
+  - [評価サマリー](ai-evaluation/evaluation-summary.md) - 統合的な分析

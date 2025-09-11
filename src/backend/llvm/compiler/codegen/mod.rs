@@ -36,122 +36,152 @@ impl LLVMCompiler {
         }
         let context = Context::create();
         let codegen = CodegenContext::new(&context, "nyash_module")?;
-        // Lower only Main.main for now
+        // Load box type-id mapping from nyash_box.toml (central plugin registry)
+        let box_type_ids = crate::backend::llvm::box_types::load_box_type_ids();
+
+        // Utility: sanitize MIR function name to a valid C symbol
+        let sanitize = |name: &str| -> String {
+            name.chars()
+                .map(|c| match c {
+                    '.' | '/' | '-' => '_',
+                    other => other,
+                })
+                .collect()
+        };
+
         // Find entry function
-        let func = if let Some((_n, f)) = mir_module
+        let (entry_name, _entry_func_ref) = if let Some((n, f)) = mir_module
             .functions
             .iter()
             .find(|(_n, f)| f.metadata.is_entry_point)
         {
-            f
+            (n.clone(), f)
         } else if let Some(f) = mir_module.functions.get("Main.main") {
-            f
+            ("Main.main".to_string(), f)
         } else if let Some(f) = mir_module.functions.get("main") {
-            f
-        } else if let Some((_n, f)) = mir_module.functions.iter().next() {
-            f
+            ("main".to_string(), f)
+        } else if let Some((n, f)) = mir_module.functions.iter().next() {
+            (n.clone(), f)
         } else {
             return Err("Main.main function not found in module".to_string());
         };
 
-        // Map MIR types to LLVM types via helpers
-
-        // Load box type-id mapping from nyash_box.toml (central plugin registry)
-        let box_type_ids = crate::backend::llvm::box_types::load_box_type_ids();
-
-        // Function type
-        let ret_type = match func.signature.return_type {
-            crate::mir::MirType::Void => None,
-            ref t => Some(map_type(codegen.context, t)?),
-        };
-        let fn_type = match ret_type {
-            Some(BasicTypeEnum::IntType(t)) => t.fn_type(&[], false),
-            Some(BasicTypeEnum::FloatType(t)) => t.fn_type(&[], false),
-            Some(BasicTypeEnum::PointerType(t)) => t.fn_type(&[], false),
-            Some(_) => return Err("Unsupported return basic type".to_string()),
-            None => codegen.context.void_type().fn_type(&[], false),
-        };
-        let llvm_func = codegen.module.add_function("ny_main", fn_type, None);
-
-        // Create LLVM basic blocks: ensure entry is created first to be function entry
-        let (mut bb_map, entry_bb) = instructions::create_basic_blocks(&codegen, llvm_func, func);
-
-        // Position at entry
-        codegen.builder.position_at_end(entry_bb);
-
-        // SSA value map
-        let mut vmap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
-
-        // Helper ops are now provided by codegen/types.rs
-
-        // Pre-create allocas for locals on demand (entry-only builder)
-        let mut allocas: HashMap<ValueId, PointerValue> = HashMap::new();
-        let entry_builder = codegen.context.create_builder();
-        entry_builder.position_at_end(entry_bb);
-
-        // Helper: map MirType to LLVM basic type (value type) is provided by types::map_mirtype_to_basic
-
-        // Helper: create (or get) an alloca for a given pointer-typed SSA value id
-        let mut alloca_elem_types: HashMap<ValueId, BasicTypeEnum> = HashMap::new();
-
-        // Pre-create PHI nodes for all blocks (so we can add incoming from predecessors)
-        let mut phis_by_block: HashMap<
-            crate::mir::BasicBlockId,
-            Vec<(ValueId, PhiValue, Vec<(crate::mir::BasicBlockId, ValueId)>)>,
-        > = HashMap::new();
-        for bid in func.block_ids() {
-            let bb = *bb_map.get(&bid).ok_or("missing bb in map")?;
-            // Position at start of the block (no instructions emitted yet)
-            codegen.builder.position_at_end(bb);
-            let block = func.blocks.get(&bid).unwrap();
-            for inst in block
-                .instructions
-                .iter()
-                .take_while(|i| matches!(i, MirInstruction::Phi { .. }))
-            {
-                if let MirInstruction::Phi { dst, inputs } = inst {
-                    // Decide PHI type: prefer annotated value type; fallback to first input's annotated type; finally i64
-                    let mut phi_ty: Option<BasicTypeEnum> = None;
-                    if let Some(mt) = func.metadata.value_types.get(dst) {
-                        phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
-                    } else if let Some((_, iv)) = inputs.first() {
-                        if let Some(mt) = func.metadata.value_types.get(iv) {
-                            phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
-                        }
-                    }
-                    let phi_ty = phi_ty.unwrap_or_else(|| codegen.context.i64_type().into());
-                    let phi = codegen
-                        .builder
-                        .build_phi(phi_ty, &format!("phi_{}", dst.as_u32()))
-                        .map_err(|e| e.to_string())?;
-                    vmap.insert(*dst, phi.as_basic_value());
-                    phis_by_block
-                        .entry(bid)
-                        .or_default()
-                        .push((*dst, phi, inputs.clone()));
-                }
+        // Predeclare all MIR functions as LLVM functions
+        let mut llvm_funcs: HashMap<String, FunctionValue> = HashMap::new();
+        for (name, f) in &mir_module.functions {
+            let ret_bt = match f.signature.return_type {
+                crate::mir::MirType::Void => codegen.context.i64_type().into(),
+                ref t => map_type(codegen.context, t)?,
+            };
+            let mut params_bt: Vec<BasicTypeEnum> = Vec::new();
+            for pt in &f.signature.params {
+                params_bt.push(map_type(codegen.context, pt)?);
             }
+            let ll_fn_ty = match ret_bt {
+                BasicTypeEnum::IntType(t) => t.fn_type(&params_bt.iter().map(|t| (*t).into()).collect::<Vec<_>>(), false),
+                BasicTypeEnum::FloatType(t) => t.fn_type(&params_bt.iter().map(|t| (*t).into()).collect::<Vec<_>>(), false),
+                BasicTypeEnum::PointerType(t) => t.fn_type(&params_bt.iter().map(|t| (*t).into()).collect::<Vec<_>>(), false),
+                _ => return Err("Unsupported return basic type".to_string()),
+            };
+            let sym = format!("ny_f_{}", sanitize(name));
+            let lf = codegen.module.add_function(&sym, ll_fn_ty, None);
+            llvm_funcs.insert(name.clone(), lf);
         }
 
-        // Lower in block order
-        for bid in func.block_ids() {
-            let bb = *bb_map.get(&bid).unwrap();
-            if codegen
-                .builder
-                .get_insert_block()
-                .map(|b| b != bb)
-                .unwrap_or(true)
-            {
-                codegen.builder.position_at_end(bb);
-            }
-            let block = func.blocks.get(&bid).unwrap();
-            for inst in &block.instructions {
-                match inst {
-                    MirInstruction::NewBox { dst, box_type, args } => {
-                        instructions::lower_newbox(&codegen, &mut vmap, *dst, box_type, args, &box_type_ids)?;
+        // Helper to build a map of ValueId -> const string for each function (to resolve call targets)
+        let build_const_str_map = |f: &crate::mir::function::MirFunction| -> HashMap<ValueId, String> {
+            let mut m = HashMap::new();
+            for bid in f.block_ids() {
+                if let Some(b) = f.blocks.get(&bid) {
+                    for inst in &b.instructions {
+                        if let MirInstruction::Const { dst, value: ConstValue::String(s) } = inst {
+                            m.insert(*dst, s.clone());
+                        }
                     }
-                    MirInstruction::Const { dst, value } => {
-                        let bval = match value {
+                    if let Some(MirInstruction::Const { dst, value: ConstValue::String(s) }) = &b.terminator {
+                        m.insert(*dst, s.clone());
+                    }
+                }
+            }
+            m
+        };
+
+        // Lower all functions
+        for (name, func) in &mir_module.functions {
+            let llvm_func = *llvm_funcs.get(name).ok_or("predecl not found")?;
+            // Create basic blocks
+            let (mut bb_map, entry_bb) = instructions::create_basic_blocks(&codegen, llvm_func, func);
+            codegen.builder.position_at_end(entry_bb);
+            let mut vmap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
+            let mut allocas: HashMap<ValueId, PointerValue> = HashMap::new();
+            let entry_builder = codegen.context.create_builder();
+            entry_builder.position_at_end(entry_bb);
+            let mut alloca_elem_types: HashMap<ValueId, BasicTypeEnum> = HashMap::new();
+            let mut phis_by_block: HashMap<
+                crate::mir::BasicBlockId,
+                Vec<(ValueId, PhiValue, Vec<(crate::mir::BasicBlockId, ValueId)>)>,
+            > = HashMap::new();
+            // Bind parameters
+            for (i, pid) in func.params.iter().enumerate() {
+                if let Some(av) = llvm_func.get_nth_param(i as u32) {
+                    vmap.insert(*pid, av);
+                }
+            }
+            // Precreate phis
+            for bid in func.block_ids() {
+                let bb = *bb_map.get(&bid).ok_or("missing bb in map")?;
+                codegen.builder.position_at_end(bb);
+                let block = func.blocks.get(&bid).unwrap();
+                for inst in block
+                    .instructions
+                    .iter()
+                    .take_while(|i| matches!(i, MirInstruction::Phi { .. }))
+                {
+                    if let MirInstruction::Phi { dst, inputs } = inst {
+                        let mut phi_ty: Option<BasicTypeEnum> = None;
+                        if let Some(mt) = func.metadata.value_types.get(dst) {
+                            phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
+                        } else if let Some((_, iv)) = inputs.first() {
+                            if let Some(mt) = func.metadata.value_types.get(iv) {
+                                phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
+                            }
+                        }
+                        let phi_ty = phi_ty.unwrap_or_else(|| codegen.context.i64_type().into());
+                        let phi = codegen
+                            .builder
+                            .build_phi(phi_ty, &format!("phi_{}", dst.as_u32()))
+                            .map_err(|e| e.to_string())?;
+                        vmap.insert(*dst, phi.as_basic_value());
+                        phis_by_block
+                            .entry(bid)
+                            .or_default()
+                            .push((*dst, phi, inputs.clone()));
+                    }
+                }
+            }
+
+            // Map of const strings for Call resolution
+            let const_strs = build_const_str_map(func);
+
+            // Lower body
+            for bid in func.block_ids() {
+                let bb = *bb_map.get(&bid).unwrap();
+                if codegen
+                    .builder
+                    .get_insert_block()
+                    .map(|b| b != bb)
+                    .unwrap_or(true)
+                {
+                    codegen.builder.position_at_end(bb);
+                }
+                let block = func.blocks.get(&bid).unwrap();
+                for inst in &block.instructions {
+                    match inst {
+                        MirInstruction::NewBox { dst, box_type, args } => {
+                            instructions::lower_newbox(&codegen, &mut vmap, *dst, box_type, args, &box_type_ids)?;
+                        }
+                        MirInstruction::Const { dst, value } => {
+                            let bval = match value {
                             ConstValue::Integer(i) => {
                                 codegen.context.i64_type().const_int(*i as u64, true).into()
                             }
@@ -209,16 +239,42 @@ impl LLVMCompiler {
                                 .into(),
                             ConstValue::Void => return Err("Const Void unsupported".to_string()),
                         };
-                        vmap.insert(*dst, bval);
-                    }
-                    MirInstruction::BoxCall {
-                        dst,
-                        box_val,
-                        method,
-                        method_id,
-                        args,
-                        effects: _,
-                    } => {
+                            vmap.insert(*dst, bval);
+                        }
+                        MirInstruction::Call { dst, func: callee, args, .. } => {
+                            // Resolve callee name from const string -> lookup predeclared function
+                            let name_s = const_strs.get(callee).ok_or_else(|| format!("call: callee value {} not a const string", callee.as_u32()))?;
+                            let sym = format!("ny_f_{}", sanitize(name_s));
+                            let target = codegen
+                                .module
+                                .get_function(&sym)
+                                .ok_or_else(|| format!("call: function symbol not found: {}", sym))?;
+                            // Collect args
+                            let mut avs: Vec<BasicValueEnum> = Vec::new();
+                            for a in args {
+                                let v = *vmap
+                                    .get(a)
+                                    .ok_or_else(|| format!("call arg missing: {}", a.as_u32()))?;
+                                avs.push(v);
+                            }
+                            let call = codegen
+                                .builder
+                                .build_call(target, &avs.iter().map(|v| (*v).into()).collect::<Vec<_>>(), "call")
+                                .map_err(|e| e.to_string())?;
+                            if let Some(d) = dst {
+                                if let Some(rv) = call.try_as_basic_value().left() {
+                                    vmap.insert(*d, rv);
+                                }
+                            }
+                        }
+                        MirInstruction::BoxCall {
+                            dst,
+                            box_val,
+                            method,
+                            method_id,
+                            args,
+                            effects: _,
+                        } => {
                         // Delegate to refactored lowering and skip legacy body
                         instructions::lower_boxcall(
                             &codegen,
@@ -521,7 +577,7 @@ impl LLVMCompiler {
                         }
                     }
                     MirInstruction::Compare { dst, op, lhs, rhs } => {
-                        let out = instructions::lower_compare(&codegen, &vmap, op, lhs, rhs)?;
+                        let out = instructions::lower_compare(&codegen, func, &vmap, op, lhs, rhs)?;
                         vmap.insert(*dst, out);
                     }
                     MirInstruction::Store { value, ptr } => {
@@ -550,11 +606,59 @@ impl LLVMCompiler {
                     _ => {}
                 }
             }
+            // Verify per-function
+            if !llvm_func.verify(true) {
+                return Err(format!("Function verification failed: {}", name));
+            }
         }
 
-        // Verify and emit
-        if !llvm_func.verify(true) {
-            return Err("Function verification failed".to_string());
+        // Build entry wrapper ny_main -> call entry function
+        let i64t = codegen.context.i64_type();
+        let ny_main_ty = i64t.fn_type(&[], false);
+        let ny_main = codegen.module.add_function("ny_main", ny_main_ty, None);
+        let entry_bb = codegen.context.append_basic_block(ny_main, "entry");
+        codegen.builder.position_at_end(entry_bb);
+        let entry_sym = format!("ny_f_{}", sanitize(&entry_name));
+        let entry_fn = codegen
+            .module
+            .get_function(&entry_sym)
+            .ok_or_else(|| format!("entry function symbol not found: {}", entry_sym))?;
+        let call = codegen
+            .builder
+            .build_call(entry_fn, &[], "call_main")
+            .map_err(|e| e.to_string())?;
+        let rv = call.try_as_basic_value().left();
+        // Normalize to i64 return
+        let ret_v = if let Some(v) = rv {
+            match v {
+                BasicValueEnum::IntValue(iv) => {
+                    if iv.get_type().get_bit_width() == 64 {
+                        iv
+                    } else {
+                        codegen
+                            .builder
+                            .build_int_z_extend(iv, i64t, "ret_zext")
+                            .map_err(|e| e.to_string())?
+                    }
+                }
+                BasicValueEnum::PointerValue(pv) => codegen
+                    .builder
+                    .build_ptr_to_int(pv, i64t, "ret_p2i")
+                    .map_err(|e| e.to_string())?,
+                BasicValueEnum::FloatValue(fv) => codegen
+                    .builder
+                    .build_float_to_signed_int(fv, i64t, "ret_f2i")
+                    .map_err(|e| e.to_string())?,
+                _ => i64t.const_zero(),
+            }
+        } else {
+            i64t.const_zero()
+        };
+        codegen.builder.build_return(Some(&ret_v)).map_err(|e| e.to_string())?;
+
+        // Verify and emit final object
+        if !ny_main.verify(true) {
+            return Err("ny_main verification failed".to_string());
         }
         // Try writing via file API first; if it succeeds but file is missing due to env/FS quirks,
         // also write via memory buffer as a fallback to ensure presence.

@@ -3,19 +3,92 @@ use std::collections::HashMap;
 use inkwell::values::BasicValueEnum;
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{CompareOp, ValueId};
+use crate::mir::{function::MirFunction, CompareOp, ValueId};
 
 /// Compare lowering: return the resulting BasicValueEnum (i1)
 pub(in super::super) fn lower_compare<'ctx>(
     codegen: &CodegenContext<'ctx>,
+    func: &MirFunction,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
     op: &CompareOp,
     lhs: &ValueId,
     rhs: &ValueId,
 ) -> Result<BasicValueEnum<'ctx>, String> {
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
-    let lv = *vmap.get(lhs).ok_or("lhs missing")?;
-    let rv = *vmap.get(rhs).ok_or("rhs missing")?;
+    let lv = *vmap
+        .get(lhs)
+        .ok_or_else(|| format!("lhs missing: {}", lhs.as_u32()))?;
+    let rv = *vmap
+        .get(rhs)
+        .ok_or_else(|| format!("rhs missing: {}", rhs.as_u32()))?;
+    // String equality/inequality by content when annotated as String/StringBox
+    if matches!(op, CompareOp::Eq | CompareOp::Ne) {
+        let l_is_str = match func.metadata.value_types.get(lhs) {
+            Some(crate::mir::MirType::String) => true,
+            Some(crate::mir::MirType::Box(b)) if b == "StringBox" => true,
+            _ => false,
+        };
+        let r_is_str = match func.metadata.value_types.get(rhs) {
+            Some(crate::mir::MirType::String) => true,
+            Some(crate::mir::MirType::Box(b)) if b == "StringBox" => true,
+            _ => false,
+        };
+        if l_is_str && r_is_str {
+            let i64t = codegen.context.i64_type();
+            // Convert both sides to handles if needed
+            let to_handle = |v: BasicValueEnum<'ctx>| -> Result<inkwell::values::IntValue<'ctx>, String> {
+                match v {
+                    BasicValueEnum::IntValue(iv) => {
+                        if iv.get_type() == i64t { Ok(iv) } else { codegen.builder.build_int_s_extend(iv, i64t, "i2i64").map_err(|e| e.to_string()) }
+                    }
+                    BasicValueEnum::PointerValue(pv) => {
+                        let fnty = i64t.fn_type(&[codegen.context.ptr_type(inkwell::AddressSpace::from(0)).into()], false);
+                        let callee = codegen
+                            .module
+                            .get_function("nyash.box.from_i8_string")
+                            .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                        let call = codegen
+                            .builder
+                            .build_call(callee, &[pv.into()], "str_ptr_to_handle_cmp")
+                            .map_err(|e| e.to_string())?;
+                        let rv = call
+                            .try_as_basic_value()
+                            .left()
+                            .ok_or("from_i8_string returned void".to_string())?;
+                        Ok(rv.into_int_value())
+                    }
+                    _ => Err("unsupported value for string compare".to_string()),
+                }
+            };
+            let lh = to_handle(lv)?;
+            let rh = to_handle(rv)?;
+            let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
+            let callee = codegen
+                .module
+                .get_function("nyash.string.eq_hh")
+                .unwrap_or_else(|| codegen.module.add_function("nyash.string.eq_hh", fnty, None));
+            let call = codegen
+                .builder
+                .build_call(callee, &[lh.into(), rh.into()], "str_eq_hh")
+                .map_err(|e| e.to_string())?;
+            let iv = call
+                .try_as_basic_value()
+                .left()
+                .ok_or("eq_hh returned void".to_string())?
+                .into_int_value();
+            let zero = i64t.const_zero();
+            let pred = if matches!(op, CompareOp::Eq) {
+                inkwell::IntPredicate::NE
+            } else {
+                inkwell::IntPredicate::EQ
+            };
+            let b = codegen
+                .builder
+                .build_int_compare(pred, iv, zero, "str_eq_to_bool")
+                .map_err(|e| e.to_string())?;
+            return Ok(b.into());
+        }
+    }
     let out = if let (Some(li), Some(ri)) = (as_int(lv), as_int(rv)) {
         use CompareOp as C;
         let pred = match op {

@@ -146,6 +146,82 @@ pub(super) fn try_handle_string_method<'ctx>(
         return Ok(true);
     }
 
+    // substring(start, end) -> i8*
+    if method == "substring" {
+        if args.len() != 2 {
+            return Err("String.substring expects 2 args (start, end)".to_string());
+        }
+        let i64t = codegen.context.i64_type();
+        let i8p = codegen.context.ptr_type(AddressSpace::from(0));
+        // receiver must be i8* for this fast path
+        let recv_p = match recv_v {
+            BVE::PointerValue(p) => p,
+            _ => return Ok(false),
+        };
+        let a0 = *vmap.get(&args[0]).ok_or("substring start arg missing")?;
+        let a1 = *vmap.get(&args[1]).ok_or("substring end arg missing")?;
+        let s = match a0 {
+            BVE::IntValue(iv) => iv,
+            _ => return Err("substring start must be integer".to_string()),
+        };
+        let e = match a1 {
+            BVE::IntValue(iv) => iv,
+            _ => return Err("substring end must be integer".to_string()),
+        };
+        let fnty = i8p.fn_type(&[i8p.into(), i64t.into(), i64t.into()], false);
+        let callee = codegen
+            .module
+            .get_function("nyash.string.substring_sii")
+            .unwrap_or_else(|| codegen.module.add_function("nyash.string.substring_sii", fnty, None));
+        let call = codegen
+            .builder
+            .build_call(callee, &[recv_p.into(), s.into(), e.into()], "substring_call")
+            .map_err(|e| e.to_string())?;
+        if let Some(d) = dst {
+            let rv = call
+                .try_as_basic_value()
+                .left()
+                .ok_or("substring returned void".to_string())?;
+            vmap.insert(*d, rv);
+        }
+        return Ok(true);
+    }
+
+    // lastIndexOf(needle) -> i64
+    if method == "lastIndexOf" {
+        if args.len() != 1 {
+            return Err("String.lastIndexOf expects 1 arg".to_string());
+        }
+        let i64t = codegen.context.i64_type();
+        let i8p = codegen.context.ptr_type(AddressSpace::from(0));
+        // receiver must be i8* for this fast path
+        let recv_p = match recv_v {
+            BVE::PointerValue(p) => p,
+            _ => return Ok(false),
+        };
+        let a0 = *vmap.get(&args[0]).ok_or("lastIndexOf arg missing")?;
+        let needle_p = match a0 {
+            BVE::PointerValue(p) => p,
+            _ => return Err("lastIndexOf arg must be i8*".to_string()),
+        };
+        let fnty = i64t.fn_type(&[i8p.into(), i8p.into()], false);
+        let callee = codegen
+            .module
+            .get_function("nyash.string.lastIndexOf_ss")
+            .unwrap_or_else(|| codegen.module.add_function("nyash.string.lastIndexOf_ss", fnty, None));
+        let call = codegen
+            .builder
+            .build_call(callee, &[recv_p.into(), needle_p.into()], "lastindexof_call")
+            .map_err(|e| e.to_string())?;
+        if let Some(d) = dst {
+            let rv = call
+                .try_as_basic_value()
+                .left()
+                .ok_or("lastIndexOf returned void".to_string())?;
+            vmap.insert(*d, rv);
+        }
+        return Ok(true);
+    }
+
     Ok(false)
 }
-
