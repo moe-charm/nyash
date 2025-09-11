@@ -5,6 +5,7 @@ Summary
 - Keep fallbacks minimal; fix MIR annotations first.
 - ExternCall(console/debug) auto‑selects ptr/handle by IR type.
 - StringBox NewBox i8* fast path; print/log choose automatically.
+ - Implement multi-function lowering and Call lowering for MIR14.
 
 Done (today)
 - BoxCall legacy block removed in LLVM codegen; delegation only.
@@ -14,9 +15,13 @@ Done (today)
 - Plugin強制スイッチ: NYASH_LLVM_FORCE_PLUGIN_MAP=1 で MapBox のプラグイン経路を明示切替（デフォルトはコア）。
 - Docs: ARCHITECTURE/LOWERING_LLVM/EXTERNCALL/PLUGIN_ABI を追加・整備。
 - Smokes: plugin‑ret green, map smoke green（core‑first）。
- - ExternCall micro‑split 完了: `externcall.rs` を `externcall/` ディレクトリ配下に分割し、
-   `console.rs`（console/debug）と `env.rs`（future/local/box）に切り出し。
-   ディスパッチは `externcall/mod.rs` に集約（挙動差分なし・0‑diff）。
+- ExternCall micro‑split 完了: `externcall.rs` を `externcall/` ディレクトリ配下に分割し、
+  `console.rs`（console/debug）と `env.rs`（future/local/box）に切り出し。
+  ディスパッチは `externcall/mod.rs` に集約（挙動差分なし・0‑diff）。
+ - String Fast‑Path 追加（LLVM/NYRT）: `substring(start,end)` と `lastIndexOf(needle)` を実装。
+ - Compare: String/StringBox 注釈のときは内容比較（`nyash.string.eq_hh`）にブリッジ。
+ - LLVM 多関数 Lower の骨格を実装: 全関数を事前宣言→順次Lower→`ny_main` ラッパで呼び出し正規化。
+ - Call Lowering 追加（MIR14の `MirInstruction::Call`）: callee 文字列定数を解決し、対応するLLVM関数を呼び出し（引数束縛・戻り値格納）。
 
 Refactor — LLVM codegen instructions modularized (done)
 - Goal achieved: `instructions.rs` を段階分割し、責務ごとに再配置（0‑diff）。
@@ -33,8 +38,10 @@ Refactor — LLVM codegen instructions modularized (done)
 - Wiring: `instructions/mod.rs` が `pub(super) use ...` で再エクスポート。可視性は `pub(in super::super)`/`pub(super)` を維持。
 - Build: `cargo build --features llvm` グリーン、挙動差分なし。
 
-Next (optional, small splits)
-- ExternCall micro‑split（完了）
+Next (short, focused)
+- Call Lowering の分離（完了）: `instructions/call.rs` に分割し、`mod.rs` から委譲。
+- 多関数 Lower 検証: selfhost minimal（dep_tree_min_string）を LLVM で通す（必要なら型注釈の微調整）。
+- Map コア専用エントリ化（env.box.new 特例整理）と代表スモークの常時化（CI）
 - types.rs の将来分割（任意）:
   - `types/convert.rs`（i64<->ptr, f64→box）, `types/classify.rs`, `types/map_types.rs`
 - 機能拡張（任意・別タスク）:

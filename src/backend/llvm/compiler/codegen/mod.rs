@@ -242,30 +242,7 @@ impl LLVMCompiler {
                             vmap.insert(*dst, bval);
                         }
                         MirInstruction::Call { dst, func: callee, args, .. } => {
-                            // Resolve callee name from const string -> lookup predeclared function
-                            let name_s = const_strs.get(callee).ok_or_else(|| format!("call: callee value {} not a const string", callee.as_u32()))?;
-                            let sym = format!("ny_f_{}", sanitize(name_s));
-                            let target = codegen
-                                .module
-                                .get_function(&sym)
-                                .ok_or_else(|| format!("call: function symbol not found: {}", sym))?;
-                            // Collect args
-                            let mut avs: Vec<BasicValueEnum> = Vec::new();
-                            for a in args {
-                                let v = *vmap
-                                    .get(a)
-                                    .ok_or_else(|| format!("call arg missing: {}", a.as_u32()))?;
-                                avs.push(v);
-                            }
-                            let call = codegen
-                                .builder
-                                .build_call(target, &avs.iter().map(|v| (*v).into()).collect::<Vec<_>>(), "call")
-                                .map_err(|e| e.to_string())?;
-                            if let Some(d) = dst {
-                                if let Some(rv) = call.try_as_basic_value().left() {
-                                    vmap.insert(*d, rv);
-                                }
-                            }
+                            instructions::lower_call(&codegen, func, &mut vmap, dst, callee, args, &const_strs, &llvm_funcs)?;
                         }
                         MirInstruction::BoxCall {
                             dst,
