@@ -147,6 +147,12 @@ pub extern "C" fn nyash_env_box_new(type_name: *const i8) -> i64 {
         Ok(s) => s,
         Err(_) => return 0,
     };
+    // Core-first special cases: construct built-in boxes directly
+    if ty == "MapBox" {
+        use nyash_rust::boxes::map_box::MapBox;
+        let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(MapBox::new());
+        return handles::to_handle(arc) as i64;
+    }
     let reg = get_global_registry();
     match reg.create_box(ty, &[]) {
         Ok(b) => {

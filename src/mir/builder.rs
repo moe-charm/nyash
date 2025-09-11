@@ -125,6 +125,10 @@ impl MirBuilder {
                         | ("StringBox", "toUpper")
                         | ("StringBox", "toLower") => Some(super::MirType::String),
                         ("ArrayBox", "length") => Some(super::MirType::Integer),
+                        // Core MapBox minimal inference (core-first)
+                        ("MapBox", "size") => Some(super::MirType::Integer),
+                        ("MapBox", "has") => Some(super::MirType::Bool),
+                        ("MapBox", "get") => Some(super::MirType::Box("Any".to_string())),
                         _ => None,
                     };
                     if let Some(mt) = inferred {

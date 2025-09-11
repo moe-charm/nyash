@@ -233,8 +233,13 @@ impl LLVMCompiler {
                                     );
                                 }
                                 let type_id = *box_type_ids.get(box_type).unwrap_or(&0);
+                                // Temporary gate: allow forcing MapBox to plugin path explicitly
+                                let force_plugin_map = std::env::var("NYASH_LLVM_FORCE_PLUGIN_MAP")
+                                    .ok()
+                                    .as_deref()
+                                    == Some("1");
                                 let i64t = codegen.context.i64_type();
-                                if type_id != 0 {
+                                if type_id != 0 && !(box_type == "MapBox" && !force_plugin_map) {
                                     // declare i64 @nyash.box.birth_h(i64)
                                     let fn_ty = i64t.fn_type(&[i64t.into()], false);
                                     let callee = codegen

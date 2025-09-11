@@ -32,15 +32,3 @@ returns = { type = "string" }
 
 [FileBox.methods.exists]
 returns = { type = "bool" }
-
-[ArrayBox]
-type_id = 3
-
-[ArrayBox.methods.length]
-returns = { type = "i64" }
-
-[MapBox]
-type_id = 11
-
-[MapBox.methods.size]
-returns = { type = "i64" }

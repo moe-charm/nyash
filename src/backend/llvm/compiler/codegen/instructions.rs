@@ -1221,7 +1221,7 @@ pub(super) fn lower_boxcall<'ctx>(
         }
     }
 
-    // Map fast-paths (minimal): get/set/has/size with i64 keys
+    // Map fast-paths (core-first): get/set/has/size using NyRT shims with handle receiver
     if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
         if bname == "MapBox" && (method == "get" || method == "set" || method == "has" || method == "size") {
             let i64t = codegen.context.i64_type();
@@ -1257,7 +1257,7 @@ pub(super) fn lower_boxcall<'ctx>(
                 "get" => {
                     if args.len() != 1 { return Err("MapBox.get expects 1 arg".to_string()); }
                     let key_v = *vmap.get(&args[0]).ok_or("map.get key missing")?;
-                    // prefer integer key path; if pointer, convert to handle and call get_hh
+                    // prefer integer key; if pointer, convert to handle and call get_hh
                     let call = match key_v {
                         BVE::IntValue(iv) => {
                             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
