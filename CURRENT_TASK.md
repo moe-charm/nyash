@@ -1,5 +1,12 @@
 # Current Task (2025-09-11)
 
+> Phase 15 LLVM‑only notes (authoritative)
+>
+> - LLVM AOT is the stable/authoritative path. VM/Cranelift JIT/AOT and the interpreter are not MIR14‑ready in this phase.
+> - Fallback logic must be minimal. Prefer fixing MIR type annotations over adding broad implicit conversions.
+> - ExternCall (console/debug) selects C‑string vs handle variants by the argument IR type.
+> - StringBox: NewBox keeps i8* fast path (no birth); print/log choose automatically based on IR type.
+
 ## 🎉 LLVMプラグイン戻り値表示問題修正進行中（2025-09-10）
 
 ### ✅ **完了した主要成果**：

@@ -224,7 +224,8 @@ impl LLVMCompiler {
                                 vmap.insert(*dst, ptr.into());
                             }
                             _ => {
-                                // No-arg birth via central type registry
+                                // No-arg birth via central type registry (preferred),
+                                // fallback to env.box.new(name) when type_id is unavailable.
                                 if !args.is_empty() {
                                     return Err(
                                         "NewBox with >2 args not yet supported in LLVM lowering"
@@ -233,35 +234,63 @@ impl LLVMCompiler {
                                 }
                                 let type_id = *box_type_ids.get(box_type).unwrap_or(&0);
                                 let i64t = codegen.context.i64_type();
-                                // declare i64 @nyash.box.birth_h(i64)
-                                let fn_ty = i64t.fn_type(&[i64t.into()], false);
-                                let callee = codegen
-                                    .module
-                                    .get_function("nyash.box.birth_h")
-                                    .unwrap_or_else(|| {
-                                        codegen.module.add_function(
-                                            "nyash.box.birth_h",
-                                            fn_ty,
-                                            None,
-                                        )
-                                    });
-                                let tid = i64t.const_int(type_id as u64, true);
-                                let call = codegen
-                                    .builder
-                                    .build_call(callee, &[tid.into()], "birth")
-                                    .map_err(|e| e.to_string())?;
-                                // Handle is i64; represent Box as opaque i8* via inttoptr
-                                let h_i64 = call
-                                    .try_as_basic_value()
-                                    .left()
-                                    .ok_or("birth_h returned void".to_string())?
-                                    .into_int_value();
-                                let pty = codegen.context.ptr_type(AddressSpace::from(0));
-                                let ptr = codegen
-                                    .builder
-                                    .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
-                                    .map_err(|e| e.to_string())?;
-                                vmap.insert(*dst, ptr.into());
+                                if type_id != 0 {
+                                    // declare i64 @nyash.box.birth_h(i64)
+                                    let fn_ty = i64t.fn_type(&[i64t.into()], false);
+                                    let callee = codegen
+                                        .module
+                                        .get_function("nyash.box.birth_h")
+                                        .unwrap_or_else(|| {
+                                            codegen.module.add_function(
+                                                "nyash.box.birth_h",
+                                                fn_ty,
+                                                None,
+                                            )
+                                        });
+                                    let tid = i64t.const_int(type_id as u64, true);
+                                    let call = codegen
+                                        .builder
+                                        .build_call(callee, &[tid.into()], "birth")
+                                        .map_err(|e| e.to_string())?;
+                                    let h_i64 = call
+                                        .try_as_basic_value()
+                                        .left()
+                                        .ok_or("birth_h returned void".to_string())?
+                                        .into_int_value();
+                                    let pty = codegen.context.ptr_type(AddressSpace::from(0));
+                                    let ptr = codegen
+                                        .builder
+                                        .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
+                                        .map_err(|e| e.to_string())?;
+                                    vmap.insert(*dst, ptr.into());
+                                } else {
+                                    // Fallback: call i64 @nyash.env.box.new(i8*) with type name
+                                    let i8p = codegen.context.ptr_type(AddressSpace::from(0));
+                                    let fn_ty = i64t.fn_type(&[i8p.into()], false);
+                                    let callee = codegen
+                                        .module
+                                        .get_function("nyash.env.box.new")
+                                        .unwrap_or_else(|| codegen.module.add_function("nyash.env.box.new", fn_ty, None));
+                                    let tn = codegen
+                                        .builder
+                                        .build_global_string_ptr(box_type.as_str(), "box_type_name")
+                                        .map_err(|e| e.to_string())?;
+                                    let call = codegen
+                                        .builder
+                                        .build_call(callee, &[tn.as_pointer_value().into()], "env_box_new")
+                                        .map_err(|e| e.to_string())?;
+                                    let h_i64 = call
+                                        .try_as_basic_value()
+                                        .left()
+                                        .ok_or("env.box.new returned void".to_string())?
+                                        .into_int_value();
+                                    let pty = codegen.context.ptr_type(AddressSpace::from(0));
+                                    let ptr = codegen
+                                        .builder
+                                        .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
+                                        .map_err(|e| e.to_string())?;
+                                    vmap.insert(*dst, ptr.into());
+                                }
                             }
                         }
                     }
@@ -394,6 +423,13 @@ impl LLVMCompiler {
                         // and op is Add, route to NyRT concat helpers
                         if let crate::mir::BinaryOp::Add = op {
                             let i8p = codegen.context.ptr_type(AddressSpace::from(0));
+                            let is_stringish = |vid: &ValueId| -> bool {
+                                match func.metadata.value_types.get(vid) {
+                                    Some(crate::mir::MirType::String) => true,
+                                    Some(crate::mir::MirType::Box(_)) => true,
+                                    _ => false,
+                                }
+                            };
                             match (lv, rv) {
                                 (
                                     BasicValueEnum::PointerValue(lp),
@@ -425,55 +461,125 @@ impl LLVMCompiler {
                                     BasicValueEnum::PointerValue(lp),
                                     BasicValueEnum::IntValue(ri),
                                 ) => {
-                                    let i64t = codegen.context.i64_type();
-                                    let fnty = i8p.fn_type(&[i8p.into(), i64t.into()], false);
-                                    let callee = codegen
-                                        .module
-                                        .get_function("nyash.string.concat_si")
-                                        .unwrap_or_else(|| {
-                                            codegen.module.add_function(
-                                                "nyash.string.concat_si",
-                                                fnty,
-                                                None,
-                                            )
-                                        });
-                                    let call = codegen
-                                        .builder
-                                        .build_call(callee, &[lp.into(), ri.into()], "concat_si")
-                                        .map_err(|e| e.to_string())?;
-                                    let rv = call
-                                        .try_as_basic_value()
-                                        .left()
-                                        .ok_or("concat_si returned void".to_string())?;
-                                    vmap.insert(*dst, rv);
-                                    handled_concat = true;
+                                    // Minimal fallback: if both sides are annotated String/Box, convert ptr->handle and use concat_hh
+                                    if is_stringish(lhs) && is_stringish(rhs) {
+                                        let i64t = codegen.context.i64_type();
+                                        // from_i8_string: i64(i8*)
+                                        let fnty_conv = i64t.fn_type(&[i8p.into()], false);
+                                        let conv = codegen
+                                            .module
+                                            .get_function("nyash.box.from_i8_string")
+                                            .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                                        let call_c = codegen
+                                            .builder
+                                            .build_call(conv, &[lp.into()], "lhs_i8_to_handle")
+                                            .map_err(|e| e.to_string())?;
+                                        let lh = call_c
+                                            .try_as_basic_value()
+                                            .left()
+                                            .ok_or("from_i8_string returned void".to_string())?
+                                            .into_int_value();
+                                        // concat_hh: i64(i64,i64)
+                                        let fnty_hh = i64t.fn_type(&[i64t.into(), i64t.into()], false);
+                                        let callee = codegen
+                                            .module
+                                            .get_function("nyash.string.concat_hh")
+                                            .unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_hh", fnty_hh, None));
+                                        let call = codegen
+                                            .builder
+                                            .build_call(callee, &[lh.into(), ri.into()], "concat_hh")
+                                            .map_err(|e| e.to_string())?;
+                                        let rv = call
+                                            .try_as_basic_value()
+                                            .left()
+                                            .ok_or("concat_hh returned void".to_string())?;
+                                        vmap.insert(*dst, rv);
+                                        handled_concat = true;
+                                    } else {
+                                        let i64t = codegen.context.i64_type();
+                                        let fnty = i8p.fn_type(&[i8p.into(), i64t.into()], false);
+                                        let callee = codegen
+                                            .module
+                                            .get_function("nyash.string.concat_si")
+                                            .unwrap_or_else(|| {
+                                                codegen.module.add_function(
+                                                    "nyash.string.concat_si",
+                                                    fnty,
+                                                    None,
+                                                )
+                                            });
+                                        let call = codegen
+                                            .builder
+                                            .build_call(callee, &[lp.into(), ri.into()], "concat_si")
+                                            .map_err(|e| e.to_string())?;
+                                        let rv = call
+                                            .try_as_basic_value()
+                                            .left()
+                                            .ok_or("concat_si returned void".to_string())?;
+                                        vmap.insert(*dst, rv);
+                                        handled_concat = true;
+                                    }
                                 }
                                 (
                                     BasicValueEnum::IntValue(li),
                                     BasicValueEnum::PointerValue(rp),
                                 ) => {
-                                    let i64t = codegen.context.i64_type();
-                                    let fnty = i8p.fn_type(&[i64t.into(), i8p.into()], false);
-                                    let callee = codegen
-                                        .module
-                                        .get_function("nyash.string.concat_is")
-                                        .unwrap_or_else(|| {
-                                            codegen.module.add_function(
-                                                "nyash.string.concat_is",
-                                                fnty,
-                                                None,
-                                            )
-                                        });
-                                    let call = codegen
-                                        .builder
-                                        .build_call(callee, &[li.into(), rp.into()], "concat_is")
-                                        .map_err(|e| e.to_string())?;
-                                    let rv = call
-                                        .try_as_basic_value()
-                                        .left()
-                                        .ok_or("concat_is returned void".to_string())?;
-                                    vmap.insert(*dst, rv);
-                                    handled_concat = true;
+                                    // Minimal fallback: if both sides are annotated String/Box, convert ptr->handle and use concat_hh
+                                    if is_stringish(lhs) && is_stringish(rhs) {
+                                        let i64t = codegen.context.i64_type();
+                                        let fnty_conv = i64t.fn_type(&[i8p.into()], false);
+                                        let conv = codegen
+                                            .module
+                                            .get_function("nyash.box.from_i8_string")
+                                            .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                                        let call_c = codegen
+                                            .builder
+                                            .build_call(conv, &[rp.into()], "rhs_i8_to_handle")
+                                            .map_err(|e| e.to_string())?;
+                                        let rh = call_c
+                                            .try_as_basic_value()
+                                            .left()
+                                            .ok_or("from_i8_string returned void".to_string())?
+                                            .into_int_value();
+                                        let fnty_hh = i64t.fn_type(&[i64t.into(), i64t.into()], false);
+                                        let callee = codegen
+                                            .module
+                                            .get_function("nyash.string.concat_hh")
+                                            .unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_hh", fnty_hh, None));
+                                        let call = codegen
+                                            .builder
+                                            .build_call(callee, &[li.into(), rh.into()], "concat_hh")
+                                            .map_err(|e| e.to_string())?;
+                                        let rv = call
+                                            .try_as_basic_value()
+                                            .left()
+                                            .ok_or("concat_hh returned void".to_string())?;
+                                        vmap.insert(*dst, rv);
+                                        handled_concat = true;
+                                    } else {
+                                        let i64t = codegen.context.i64_type();
+                                        let fnty = i8p.fn_type(&[i64t.into(), i8p.into()], false);
+                                        let callee = codegen
+                                            .module
+                                            .get_function("nyash.string.concat_is")
+                                            .unwrap_or_else(|| {
+                                                codegen.module.add_function(
+                                                    "nyash.string.concat_is",
+                                                    fnty,
+                                                    None,
+                                                )
+                                            });
+                                        let call = codegen
+                                            .builder
+                                            .build_call(callee, &[li.into(), rp.into()], "concat_is")
+                                            .map_err(|e| e.to_string())?;
+                                        let rv = call
+                                            .try_as_basic_value()
+                                            .left()
+                                            .ok_or("concat_is returned void".to_string())?;
+                                        vmap.insert(*dst, rv);
+                                        handled_concat = true;
+                                    }
                                 }
                                 _ => {}
                             }

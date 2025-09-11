@@ -1112,6 +1112,58 @@ pub(super) fn lower_boxcall<'ctx>(
         }
     }
 
+    // String length fast-path: length/len
+    if method == "length" || method == "len" {
+        // Only when receiver is String/StringBox by annotation
+        let is_string_recv = match func.metadata.value_types.get(box_val) {
+            Some(crate::mir::MirType::String) => true,
+            Some(crate::mir::MirType::Box(b)) if b == "StringBox" => true,
+            _ => false,
+        };
+        if is_string_recv {
+            let i64t = codegen.context.i64_type();
+            // Ensure we have a handle: convert i8* receiver to handle when needed
+            let recv_h = match recv_v {
+                BVE::IntValue(h) => h,
+                BVE::PointerValue(p) => {
+                    let fnty = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                    let callee = codegen
+                        .module
+                        .get_function("nyash.box.from_i8_string")
+                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                    let call = codegen
+                        .builder
+                        .build_call(callee, &[p.into()], "str_ptr_to_handle")
+                        .map_err(|e| e.to_string())?;
+                    let rv = call
+                        .try_as_basic_value()
+                        .left()
+                        .ok_or("from_i8_string returned void".to_string())?;
+                    if let BVE::IntValue(iv) = rv { iv } else { return Err("from_i8_string ret expected i64".to_string()); }
+                }
+                _ => return Err("String.length receiver type unsupported".to_string()),
+            };
+            // call i64 @nyash.string.len_h(i64)
+            let fnty = i64t.fn_type(&[i64t.into()], false);
+            let callee = codegen
+                .module
+                .get_function("nyash.string.len_h")
+                .unwrap_or_else(|| codegen.module.add_function("nyash.string.len_h", fnty, None));
+            let call = codegen
+                .builder
+                .build_call(callee, &[recv_h.into()], "strlen_h")
+                .map_err(|e| e.to_string())?;
+            if let Some(d) = dst {
+                let rv = call
+                    .try_as_basic_value()
+                    .left()
+                    .ok_or("len_h returned void".to_string())?;
+                vmap.insert(*d, rv);
+            }
+            return Ok(());
+        }
+    }
+
     // Array fast-paths
     if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
         if bname == "ArrayBox" && (method == "get" || method == "set" || method == "push" || method == "length") {
@@ -1162,6 +1214,91 @@ pub(super) fn lower_boxcall<'ctx>(
                         let rv = call.try_as_basic_value().left().ok_or("array_length_h returned void".to_string())?;
                         vmap.insert(*d, rv);
                     }
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Map fast-paths (minimal): get/set/has/size with i64 keys
+    if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
+        if bname == "MapBox" && (method == "get" || method == "set" || method == "has" || method == "size") {
+            let i64t = codegen.context.i64_type();
+            match method {
+                "size" => {
+                    if !args.is_empty() { return Err("MapBox.size expects 0 arg".to_string()); }
+                    let fnty = i64t.fn_type(&[i64t.into()], false);
+                    let callee = codegen.module.get_function("nyash.map.size_h").unwrap_or_else(|| codegen.module.add_function("nyash.map.size_h", fnty, None));
+                    let call = codegen.builder.build_call(callee, &[recv_h.into()], "msize").map_err(|e| e.to_string())?;
+                    if let Some(d) = dst {
+                        let rv = call.try_as_basic_value().left().ok_or("map.size_h returned void".to_string())?;
+                        vmap.insert(*d, rv);
+                    }
+                    return Ok(());
+                }
+                "has" => {
+                    if args.len() != 1 { return Err("MapBox.has expects 1 arg".to_string()); }
+                    let key_v = *vmap.get(&args[0]).ok_or("map.has key missing")?;
+                    let key_i = match key_v {
+                        BVE::IntValue(iv) => iv,
+                        BVE::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "key_p2i").map_err(|e| e.to_string())?,
+                        _ => return Err("map.has key must be int or handle ptr".to_string()),
+                    };
+                    let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
+                    let callee = codegen.module.get_function("nyash.map.has_h").unwrap_or_else(|| codegen.module.add_function("nyash.map.has_h", fnty, None));
+                    let call = codegen.builder.build_call(callee, &[recv_h.into(), key_i.into()], "mhas").map_err(|e| e.to_string())?;
+                    if let Some(d) = dst {
+                        let rv = call.try_as_basic_value().left().ok_or("map.has_h returned void".to_string())?;
+                        vmap.insert(*d, rv);
+                    }
+                    return Ok(());
+                }
+                "get" => {
+                    if args.len() != 1 { return Err("MapBox.get expects 1 arg".to_string()); }
+                    let key_v = *vmap.get(&args[0]).ok_or("map.get key missing")?;
+                    // prefer integer key path; if pointer, convert to handle and call get_hh
+                    let call = match key_v {
+                        BVE::IntValue(iv) => {
+                            let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
+                            let callee = codegen.module.get_function("nyash.map.get_h").unwrap_or_else(|| codegen.module.add_function("nyash.map.get_h", fnty, None));
+                            codegen.builder.build_call(callee, &[recv_h.into(), iv.into()], "mget").map_err(|e| e.to_string())?
+                        }
+                        BVE::PointerValue(pv) => {
+                            // key: i8* -> i64 handle via from_i8_string (string key)
+                            let fnty_conv = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                            let conv = codegen.module.get_function("nyash.box.from_i8_string").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                            let kcall = codegen.builder.build_call(conv, &[pv.into()], "key_i8_to_handle").map_err(|e| e.to_string())?;
+                            let kh = kcall.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value();
+                            let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
+                            let callee = codegen.module.get_function("nyash.map.get_hh").unwrap_or_else(|| codegen.module.add_function("nyash.map.get_hh", fnty, None));
+                            codegen.builder.build_call(callee, &[recv_h.into(), kh.into()], "mget_hh").map_err(|e| e.to_string())?
+                        }
+                        _ => return Err("map.get key must be int or pointer".to_string()),
+                    };
+                    if let Some(d) = dst {
+                        let rv = call.try_as_basic_value().left().ok_or("map.get returned void".to_string())?;
+                        vmap.insert(*d, rv);
+                    }
+                    return Ok(());
+                }
+                "set" => {
+                    if args.len() != 2 { return Err("MapBox.set expects 2 args (key, value)".to_string()); }
+                    let key_v = *vmap.get(&args[0]).ok_or("map.set key missing")?;
+                    let val_v = *vmap.get(&args[1]).ok_or("map.set value missing")?;
+                    let key_i = match key_v {
+                        BVE::IntValue(iv) => iv,
+                        BVE::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "key_p2i").map_err(|e| e.to_string())?,
+                        _ => return Err("map.set key must be int or handle ptr".to_string()),
+                    };
+                    let val_i = match val_v {
+                        BVE::IntValue(iv) => iv,
+                        BVE::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "val_p2i").map_err(|e| e.to_string())?,
+                        _ => return Err("map.set value must be int or handle ptr".to_string()),
+                    };
+                    let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into()], false);
+                    let callee = codegen.module.get_function("nyash.map.set_h").unwrap_or_else(|| codegen.module.add_function("nyash.map.set_h", fnty, None));
+                    let _ = codegen.builder.build_call(callee, &[recv_h.into(), key_i.into(), val_i.into()], "mset").map_err(|e| e.to_string())?;
                     return Ok(());
                 }
                 _ => {}

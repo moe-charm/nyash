@@ -20,3 +20,9 @@ This changelog tracks high‑level milestones while Core MIR and Phase 12 evolve
 Notes
 - Core‑13 is canonical minimal kernel. Historical Core‑15 notes remain under `docs/development/roadmap/` for reference.
 - Phase 12.7‑B desugaring is gated by `NYASH_SYNTAX_SUGAR_LEVEL`; tokenizer additions are non‑breaking.
+## 2025‑09‑11 (Phase 15)
+- llvm: BoxCall arm cleanup — unreachable legacy block removed; arm now delegates solely to `instructions::lower_boxcall`.
+- llvm/docs: Documented LLVM lowering rules (StringBox i8* fast path, ExternCall ptr/handle selection, minimal fallback policy for string concat).
+- docs: Added ARCHITECTURE.md, LOWERING_LLVM.md, EXTERNCALL.md, PLUGIN_ABI.md.
+- nyrt: resolved plugin module duplication; build green.
+- builder: suppressed StringBox birth (constructed in LLVM path).
