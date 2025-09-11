@@ -31,6 +31,13 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
   - ランナー: `src/runner/modes/cranelift.rs`, `--jit-direct` は `src/runner/mod.rs`
 - 進行中の論点と手順は `CURRENT_TASK.md` を参照してね（最新のデバッグ方針・フラグが載ってるよ）。
 
+⚠ 現状の安定度に関する重要メモ（Phase‑15 進行中）
+- VM と Cranelift(JIT) は MIR14 へ移行中のため、現在は実行経路として安定していないよ（検証・実装作業の都合で壊れている場合があるにゃ）。
+- 当面の実行・配布は LLVM ラインを最優先・全力で整備する方針だよ。開発・確認は `--features llvm` を有効にして進めてね。
+- 推奨チェック:
+  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm -j 24`
+  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo check --features llvm`
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
