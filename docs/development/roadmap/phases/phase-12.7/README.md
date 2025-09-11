@@ -255,11 +255,11 @@ r=u\:_.a/:_.n
 **優先度1: 即効性の高い演算子（1週間）**
 ```rust
 // tokenizer.rs に追加
-PIPE,           // |> パイプライン
-SAFE_ACCESS,    // ?. セーフアクセス
-NULL_COALESCE,  // ?? デフォルト値
-PLUS_ASSIGN,    // += 増分代入
-MINUS_ASSIGN,   // -= 減分代入
+PipeForward,    // |> パイプライン
+QmarkDot,       // ?. セーフアクセス
+QmarkQmark,     // ?? デフォルト値
+PlusAssign,     // += 増分代入
+MinusAssign,    // -= 減分代入
 // etc...
 ```
 

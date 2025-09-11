@@ -19,8 +19,8 @@ Phase 12.7 文法改革 - 実装前最終チェックリスト
 // ARROW => ">>"  // これは間違い！
 
 // 新規追加
-FAT_ARROW => "=>"      // peek構文用
-DOUBLE_COLON => "::"   // Parent::method用（P1だがトークンは今追加）
+FatArrow => "=>"      // peek構文用
+DoubleColon => "::"   // Parent::method用（P1だがトークンは今追加）
 ```
 
 【追加する予約語（P0）】
@@ -216,7 +216,7 @@ box Point {
 ================================================================================
 
 1. tokenizer.rs
-   - FAT_ARROW, DOUBLE_COLON追加
+   - FatArrow, DoubleColon追加
    - peek, continue, birth を予約語追加
 
 2. parser/expressions.rs

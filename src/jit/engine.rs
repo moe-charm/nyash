@@ -12,9 +12,15 @@ pub struct JitEngine {
     initialized: bool,
     next_handle: u64,
     /// Stub function table: handle -> callable closure
-    fntab: HashMap<u64, Arc<dyn Fn(&[crate::jit::abi::JitValue]) -> crate::jit::abi::JitValue + Send + Sync>>,
+    fntab: HashMap<
+        u64,
+        Arc<dyn Fn(&[crate::jit::abi::JitValue]) -> crate::jit::abi::JitValue + Send + Sync>,
+    >,
     /// Host externs by symbol name (Phase 10_d)
-    externs: HashMap<String, Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>>,
+    externs: HashMap<
+        String,
+        Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>,
+    >,
     #[cfg(feature = "cranelift-jit")]
     isa: Option<cranelift_codegen::isa::OwnedTargetIsa>,
     // Last lower stats (per function)
@@ -30,19 +36,26 @@ impl JitEngine {
             next_handle: 1,
             fntab: HashMap::new(),
             externs: HashMap::new(),
-            #[cfg(feature = "cranelift-jit")] isa: None,
+            #[cfg(feature = "cranelift-jit")]
+            isa: None,
             last_phi_total: 0,
             last_phi_b1: 0,
             last_ret_bool_hint: false,
         };
         #[cfg(feature = "cranelift-jit")]
-        { this.isa = None; }
+        {
+            this.isa = None;
+        }
         this.register_default_externs();
         this
     }
 
     /// Compile a function if supported; returns an opaque handle id
-    pub fn compile_function(&mut self, func_name: &str, mir: &crate::mir::MirFunction) -> Option<u64> {
+    pub fn compile_function(
+        &mut self,
+        func_name: &str,
+        mir: &crate::mir::MirFunction,
+    ) -> Option<u64> {
         let t0 = std::time::Instant::now();
         // Phase 10_b skeleton: walk MIR with LowerCore and report coverage
         // Reset compile-phase counters (e.g., fallback decisions) before lowering this function
@@ -59,17 +72,25 @@ impl JitEngine {
         // Strict: fail compile if any fallback decisions were taken during lowering
         let lower_fallbacks = crate::jit::events::lower_fallbacks_get();
         if lower_fallbacks > 0 && std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
-            eprintln!("[JIT][strict] lower produced fallback decisions for {}: {} — failing compile", func_name, lower_fallbacks);
+            eprintln!(
+                "[JIT][strict] lower produced fallback decisions for {}: {} — failing compile",
+                func_name, lower_fallbacks
+            );
             return None;
         }
         // Capture per-function lower stats for manager to query later
         let (phi_t, phi_b1, ret_b) = lower.last_stats();
-        self.last_phi_total = phi_t; self.last_phi_b1 = phi_b1; self.last_ret_bool_hint = ret_b;
+        self.last_phi_total = phi_t;
+        self.last_phi_b1 = phi_b1;
+        self.last_ret_bool_hint = ret_b;
         // Record per-function stats into manager via callback if available (handled by caller)
         let cfg_now = crate::jit::config::current();
         // Strict mode: any unsupported lowering must fail-fast
         if lower.unsupported > 0 && std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
-            eprintln!("[JIT][strict] unsupported lowering ops for {}: {} — failing compile", func_name, lower.unsupported);
+            eprintln!(
+                "[JIT][strict] unsupported lowering ops for {}: {} — failing compile",
+                func_name, lower.unsupported
+            );
             return None;
         }
         if cfg_now.dump {
@@ -104,13 +125,19 @@ impl JitEngine {
         }
         // If lowering left any unsupported instructions, do not register a closure.
         // This preserves VM semantics until coverage is complete for the function.
-        if lower.unsupported > 0 && std::env::var("NYASH_AOT_ALLOW_UNSUPPORTED").ok().as_deref() != Some("1") {
+        if lower.unsupported > 0
+            && std::env::var("NYASH_AOT_ALLOW_UNSUPPORTED").ok().as_deref() != Some("1")
+        {
             if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") || cfg_now.dump {
-                eprintln!("[JIT] skip compile for {}: unsupported={} (>0)", func_name, lower.unsupported);
+                eprintln!(
+                    "[JIT] skip compile for {}: unsupported={} (>0)",
+                    func_name, lower.unsupported
+                );
             }
             return None;
         }
         // If AOT object emission is requested, emit object directly without JIT builder to avoid signature/linkage differences.
+        #[cfg(feature = "cranelift-jit")]
         if let Ok(path) = std::env::var("NYASH_AOT_OBJECT_OUT") {
             if !path.is_empty() {
                 let mut lower2 = crate::jit::lower::core::LowerCore::new();
@@ -121,11 +148,21 @@ impl JitEngine {
                         if let Some(bytes) = objb.take_object_bytes() {
                             use std::path::Path;
                             let p = Path::new(&path);
-                            let out_path = if p.is_dir() || path.ends_with('/') { p.join(format!("{}.o", func_name)) } else { p.to_path_buf() };
-                            if let Some(parent) = out_path.parent() { let _ = std::fs::create_dir_all(parent); }
+                            let out_path = if p.is_dir() || path.ends_with('/') {
+                                p.join(format!("{}.o", func_name))
+                            } else {
+                                p.to_path_buf()
+                            };
+                            if let Some(parent) = out_path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
                             match std::fs::write(&out_path, bytes) {
                                 Ok(_) => eprintln!("[AOT] wrote object: {}", out_path.display()),
-                                Err(e) => eprintln!("[AOT] failed to write object {}: {}", out_path.display(), e),
+                                Err(e) => eprintln!(
+                                    "[AOT] failed to write object {}: {}",
+                                    out_path.display(),
+                                    e
+                                ),
                             }
                         } else {
                             eprintln!("[AOT] no object bytes available for {}", func_name);
@@ -156,13 +193,25 @@ impl JitEngine {
                         } else if let Some(bytes) = objb.take_object_bytes() {
                             use std::path::Path;
                             let p = Path::new(&path);
-                            let out_path = if p.is_dir() || path.ends_with('/') { p.join(format!("{}.o", func_name)) } else { p.to_path_buf() };
-                            if let Some(parent) = out_path.parent() { let _ = std::fs::create_dir_all(parent); }
+                            let out_path = if p.is_dir() || path.ends_with('/') {
+                                p.join(format!("{}.o", func_name))
+                            } else {
+                                p.to_path_buf()
+                            };
+                            if let Some(parent) = out_path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
                             match std::fs::write(&out_path, bytes) {
                                 Ok(_) => {
                                     eprintln!("[AOT] wrote object: {}", out_path.display());
                                 }
-                                Err(e) => { eprintln!("[AOT] failed to write object {}: {}", out_path.display(), e); }
+                                Err(e) => {
+                                    eprintln!(
+                                        "[AOT] failed to write object {}: {}",
+                                        out_path.display(),
+                                        e
+                                    );
+                                }
                             }
                         }
                     }
@@ -181,11 +230,23 @@ impl JitEngine {
                             if let Some(bytes) = objb.take_object_bytes() {
                                 use std::path::Path;
                                 let p = Path::new(&path);
-                                let out_path = if p.is_dir() || path.ends_with('/') { p.join(format!("{}.o", func_name)) } else { p.to_path_buf() };
-                                if let Some(parent) = out_path.parent() { let _ = std::fs::create_dir_all(parent); }
+                                let out_path = if p.is_dir() || path.ends_with('/') {
+                                    p.join(format!("{}.o", func_name))
+                                } else {
+                                    p.to_path_buf()
+                                };
+                                if let Some(parent) = out_path.parent() {
+                                    let _ = std::fs::create_dir_all(parent);
+                                }
                                 match std::fs::write(&out_path, bytes) {
-                                    Ok(_) => eprintln!("[AOT] wrote object: {}", out_path.display()),
-                                    Err(e) => eprintln!("[AOT] failed to write object {}: {}", out_path.display(), e),
+                                    Ok(_) => {
+                                        eprintln!("[AOT] wrote object: {}", out_path.display())
+                                    }
+                                    Err(e) => eprintln!(
+                                        "[AOT] failed to write object {}: {}",
+                                        out_path.display(),
+                                        e
+                                    ),
                                 }
                             } else {
                                 eprintln!("[AOT] no object bytes available for {}", func_name);
@@ -202,26 +263,47 @@ impl JitEngine {
             // Report as not compiled so VM path remains authoritative.
             if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") {
                 let dt = t0.elapsed();
-                eprintln!("[JIT] compile skipped (no cranelift) for {} after {}ms", func_name, dt.as_millis());
+                eprintln!(
+                    "[JIT] compile skipped (no cranelift) for {} after {}ms",
+                    func_name,
+                    dt.as_millis()
+                );
             }
             return None;
         }
     }
 
     /// Get statistics from the last lowered function
-    pub fn last_lower_stats(&self) -> (u64, u64, bool) { (self.last_phi_total, self.last_phi_b1, self.last_ret_bool_hint) }
+    pub fn last_lower_stats(&self) -> (u64, u64, bool) {
+        (
+            self.last_phi_total,
+            self.last_phi_b1,
+            self.last_ret_bool_hint,
+        )
+    }
 
     /// Execute compiled function by handle with trap fallback.
     /// Returns Some(VMValue) if executed successfully; None on missing handle or trap (panic).
-    pub fn execute_handle(&self, handle: u64, args: &[crate::jit::abi::JitValue]) -> Option<crate::jit::abi::JitValue> {
-        let f = match self.fntab.get(&handle) { Some(f) => f, None => return None };
+    pub fn execute_handle(
+        &self,
+        handle: u64,
+        args: &[crate::jit::abi::JitValue],
+    ) -> Option<crate::jit::abi::JitValue> {
+        let f = match self.fntab.get(&handle) {
+            Some(f) => f,
+            None => return None,
+        };
         let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (f)(args)));
         match res {
             Ok(v) => Some(v),
             Err(_) => {
-                if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1") ||
-                   std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1") {
-                    eprintln!("[JIT] trap: panic during handle={} execution — falling back to VM", handle);
+                if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1")
+                    || std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1")
+                {
+                    eprintln!(
+                        "[JIT] trap: panic during handle={} execution — falling back to VM",
+                        handle
+                    );
                 }
                 None
             }
@@ -248,21 +330,48 @@ impl JitEngine {
             self.register_extern(hb::SYM_HOST_MAP_GET, Arc::new(|args| hb::map_get(args)));
             self.register_extern(hb::SYM_HOST_MAP_SET, Arc::new(|args| hb::map_set(args)));
             self.register_extern(hb::SYM_HOST_MAP_HAS, Arc::new(|args| hb::map_has(args)));
-            self.register_extern(hb::SYM_HOST_CONSOLE_LOG, Arc::new(|args| hb::console_log(args)));
-            self.register_extern(hb::SYM_HOST_CONSOLE_WARN, Arc::new(|args| hb::console_warn(args)));
-            self.register_extern(hb::SYM_HOST_CONSOLE_ERROR, Arc::new(|args| hb::console_error(args)));
-            self.register_extern(hb::SYM_HOST_INSTANCE_GETFIELD, Arc::new(|args| hb::instance_getfield(args)));
-            self.register_extern(hb::SYM_HOST_INSTANCE_SETFIELD, Arc::new(|args| hb::instance_setfield(args)));
-            self.register_extern(hb::SYM_HOST_STRING_LEN, Arc::new(|args| hb::string_len(args)));
+            self.register_extern(
+                hb::SYM_HOST_CONSOLE_LOG,
+                Arc::new(|args| hb::console_log(args)),
+            );
+            self.register_extern(
+                hb::SYM_HOST_CONSOLE_WARN,
+                Arc::new(|args| hb::console_warn(args)),
+            );
+            self.register_extern(
+                hb::SYM_HOST_CONSOLE_ERROR,
+                Arc::new(|args| hb::console_error(args)),
+            );
+            self.register_extern(
+                hb::SYM_HOST_INSTANCE_GETFIELD,
+                Arc::new(|args| hb::instance_getfield(args)),
+            );
+            self.register_extern(
+                hb::SYM_HOST_INSTANCE_SETFIELD,
+                Arc::new(|args| hb::instance_setfield(args)),
+            );
+            self.register_extern(
+                hb::SYM_HOST_STRING_LEN,
+                Arc::new(|args| hb::string_len(args)),
+            );
         }
     }
 
-    pub fn register_extern(&mut self, name: &str, f: Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>) {
+    pub fn register_extern(
+        &mut self,
+        name: &str,
+        f: Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>,
+    ) {
         self.externs.insert(name.to_string(), f);
     }
 
     /// Lookup an extern symbol (to be used by the lowering once call emission is added)
-    pub fn lookup_extern(&self, name: &str) -> Option<Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>> {
+    pub fn lookup_extern(
+        &self,
+        name: &str,
+    ) -> Option<
+        Arc<dyn Fn(&[crate::backend::vm::VMValue]) -> crate::backend::vm::VMValue + Send + Sync>,
+    > {
         self.externs.get(name).cloned()
     }
 }
