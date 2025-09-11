@@ -137,7 +137,7 @@ impl super::MirBuilder {
         // does not assign the same variable, bind that variable to a Phi of (then_value, pre_if_value).
         let assigned_var_then = extract_assigned_var(&then_ast_for_analysis);
         let assigned_var_else = else_ast_for_analysis.as_ref().and_then(|a| extract_assigned_var(a));
-        let mut result_val = self.value_gen.next();
+        let result_val = self.value_gen.next();
         if let Some(var_name) = assigned_var_then.clone() {
             let else_assigns_same = assigned_var_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
             if !else_assigns_same {

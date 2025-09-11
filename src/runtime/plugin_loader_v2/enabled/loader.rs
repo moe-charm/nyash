@@ -173,8 +173,8 @@ impl PluginLoaderV2 {
         let plugins = self.plugins.read().unwrap();
         let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
         let type_id = if let Some(spec) = self.box_specs.read().unwrap().get(&(lib_name.to_string(), box_type.to_string())) { spec.type_id.unwrap_or_else(|| config.box_types.get(box_type).copied().unwrap_or(0)) } else { let box_conf = config.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?; box_conf.type_id };
-        let mut out = vec![0u8; 1024];
-        let mut out_len = out.len();
+        let out = vec![0u8; 1024];
+        let out_len = out.len();
         let tlv_args = crate::runtime::plugin_ffi_common::encode_empty_args();
         let (birth_result, _len, out_vec) = super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, 0, 0, &tlv_args);
         let out = out_vec;

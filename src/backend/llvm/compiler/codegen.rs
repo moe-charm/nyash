@@ -245,7 +245,7 @@ impl LLVMCompiler {
 
         // Pre-create allocas for locals on demand (entry-only builder)
         let mut allocas: HashMap<ValueId, PointerValue> = HashMap::new();
-        let mut entry_builder = codegen.context.create_builder();
+        let entry_builder = codegen.context.create_builder();
         entry_builder.position_at_end(entry_bb);
 
         // Helper: map MirType to LLVM basic type (value type)
@@ -807,7 +807,7 @@ impl LLVMCompiler {
                             let mut a2 = i64t.const_zero();
                             let mut a3 = i64t.const_zero();
                             let mut a4 = i64t.const_zero();
-                            let mut get_i64 =
+                            let get_i64 =
                                 |vid: ValueId| -> Result<inkwell::values::IntValue, String> {
                                     let v = *vmap.get(&vid).ok_or("arg missing")?;
                                     to_i64_any(codegen.context, &codegen.builder, v)

@@ -215,7 +215,7 @@ impl SocketBox {
         if ms == 0 { return self.accept(); }
 
         let start = std::time::Instant::now();
-        if let Ok(mut guard) = self.listener.write() {
+        if let Ok(guard) = self.listener.write() {
             if let Some(ref listener) = *guard {
                 let _ = listener.set_nonblocking(true);
                 loop {
@@ -319,7 +319,7 @@ impl SocketBox {
         let stream_guard = self.stream.write().unwrap();
         if let Some(ref stream) = *stream_guard {
             match stream.try_clone() {
-                Ok(mut stream_clone) => {
+                Ok(stream_clone) => {
                     drop(stream_guard);
                     let _ = stream_clone.set_read_timeout(Some(Duration::from_millis(ms)));
                     let mut reader = BufReader::new(stream_clone);

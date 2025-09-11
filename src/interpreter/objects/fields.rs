@@ -102,7 +102,7 @@ impl NyashInterpreter {
         let mut all_methods = HashMap::new();
         for parent_name in &box_decl.extends {
             use crate::box_trait::is_builtin_box;
-            let mut is_builtin = is_builtin_box(parent_name);
+            let is_builtin = is_builtin_box(parent_name);
             #[cfg(all(feature = "gui", not(target_arch = "wasm32")))]
             {
                 if parent_name == "EguiBox" { is_builtin = true; }

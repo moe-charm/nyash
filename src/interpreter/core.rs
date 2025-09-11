@@ -98,7 +98,7 @@ impl NyashInterpreter {
             reg.register(udf);
         }
 
-        let mut this = Self {
+        let this = Self {
             shared,
             local_vars: HashMap::new(),
             outbox_vars: HashMap::new(),
@@ -168,7 +168,7 @@ impl NyashInterpreter {
             reg.register(udf);
         }
 
-        let mut this = Self {
+        let this = Self {
             shared,
             local_vars: HashMap::new(),
             outbox_vars: HashMap::new(),

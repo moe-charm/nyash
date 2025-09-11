@@ -31,7 +31,7 @@ impl AotCompilerBox {
             Err(e) => return Box::new(StringBox::new(format!("ERR: current_exe(): {}", e)))
         };
         // Propagate relevant envs (AOT/JIT observe)
-        let mut c = cmd.arg("--backend").arg("vm") // ensures runner path
+        let c = cmd.arg("--backend").arg("vm") // ensures runner path
                       .arg("--compile-native")
                       .arg("-o").arg(out)
                       .arg(file)

@@ -108,7 +108,7 @@ impl P2PBox {
         // Create transport and attach receive callback before boxing
         let (transport_boxed, attach_cb): (Box<dyn Transport>, bool) = match transport_kind {
             TransportKind::InProcess => {
-                let mut t = InProcessTransport::new(node_id.clone());
+                let t = InProcessTransport::new(node_id.clone());
                 // We'll attach callback below after P2PBox struct is created
                 (Box::new(t), true)
             }
