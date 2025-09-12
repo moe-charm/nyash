@@ -54,15 +54,6 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
   - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較
 - **[ビルド方法完全ガイド](docs/guides/build/)** - プラットフォーム別ビルド手順
 
-### 🐍 Python LLVMバックエンド (実験的・開発中)
-```bash
-# Python版でLLVM IR生成（簡潔実装）
-cd src/llvm_py/
-python llvm_builder.py test.mir.json -o test.o
-
-# 特徴：800-1000行で実装予定（Rust版の1/3）
-# 用途：検証ハーネス、高速プロトタイピング
-```
 
 ### 🚀 JIT セルフホスト クイックスタート (Phase 15)
 ```bash
@@ -227,14 +218,10 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 ./target/release/nyash --backend llvm program.nyash
 ```
 
-## 📝 Update (2025-09-10) 🎆 歴史的達成！
-- 🎉 Phase 15到達！セルフホスティング実装中
-- v0 Nyパーサー完成（Ny→JSON IR v0）
-- 🔥 ループビルダーSSAバグ発見・調査完了（ブロッカー）
-- NyコンパイラMVP実装予定（Ny→MIR）
-- MIR 13命令への最終最適化完了
-- 80k→20k行（75%削減）の革命的圧縮を目指す
-- 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
+## 📝 Update (2025-09-12) 🎉 Python LLVM実装完了！
+- 🐍 Python LLVM バックエンド実装完了（~2000行）
+- 🎯 Phase 15セルフホスティング継続中（80k→20k行目標）
+- 📋 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
 
 ## ⚡ 重要な設計原則
 
@@ -396,30 +383,12 @@ box MyBox {
   - Language Guide: [docs/guides/language-guide.md](docs/guides/language-guide.md)
   - Reference: [docs/reference/](docs/reference/)
 
-### 🎯 よく使う情報（クイックアクセス）
-- **📐 言語仕様**: [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
-- **🤖 MIR命令セット**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
-- **📦 Box API**: [boxes-system/](docs/reference/boxes-system/)
-- **⚡ VM実装**: [VM_README.md](docs/VM_README.md)
-- **🌐 Netプラグイン**: [net-plugin.md](docs/reference/plugin-system/net-plugin.md)
-- **🎮 実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
-- **🔧 ABI統合インデックス**: [ABI_INDEX.md](docs/reference/abi/ABI_INDEX.md)
+### 🎯 リファレンス
+- **言語**: [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
+- **MIR**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
+- **API**: [boxes-system/](docs/reference/boxes-system/)
+- **プラグイン**: [plugin-system/](docs/reference/plugin-system/)
 
-## 🎨 GUI開発
-
-### EguiBox - GUIアプリケーション開発
-```nyash
-// EguiBoxでGUIアプリ作成
-local app
-app = new EguiBox()
-app.setTitle("Nyash GUI App") 
-app.setSize(800, 600)
-
-// 注意: 現在メインスレッド制約により
-// app.run() は特別な実行コンテキストが必要
-```
-
-**実装状況**: 基本実装完了、GUI実行コンテキスト対応中
 
 ## 📖 ドキュメントファースト開発（重要！）
 
@@ -550,20 +519,8 @@ NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 ./tools/using_e2e_smoke.sh
 ```
 
-⚠️ **ルートディレクトリの汚染防止ルール** ⚠️
-```bash
-# ❌ 絶対ダメ：ルートで実行
-./target/release/nyash test.nyash        # ログがルートに散乱！
+**ルート汚染防止**: `local_tests/`ディレクトリを使う！
 
-# ✅ 正しい方法：必ずディレクトリを使う
-./target/release/nyash local_tests/test.nyash
-```
-
-### ⚠️ ビルド時間に関する重要な注意
-**JITビルドは比較的高速、LLVMビルドは時間がかかります。**
-- JIT（推奨）: `cargo build --release --features cranelift-jit`（1-2分）
-- LLVM: `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`（3-5分）
-- タイムアウトエラーを避けるため、十分な時間を設定
 
 ### 🐛 デバッグ
 
@@ -605,21 +562,12 @@ bash -c 'ls *.md | wc -l'
 find . -name "*.md" -exec wc -l {} \;
 ```
 
-## 🚨 コンテキスト圧縮時の重要ルール
-
-**コンテキスト圧縮を検出した場合の必須手順：**
-
-1. **⏸️ 作業停止** - 「コンテキスト圧縮を検出しました」と報告
-2. **📊 状況確認** - git status, git log, cargo check
-3. **📋 現在タスク確認** - `CURRENT_TASK.md` を読み取り
-4. **🤝 明示的確認** - ユーザーに「次に何をしましょうか？」と確認
-
-詳細: [Claude環境の既知のバグ](docs/tools/claude-issues.md#コンテキスト圧縮時の重要ルール)
+## 🚨 コンテキスト圧縮時: 作業停止→状況確認→CURRENT_TASK.md確認→ユーザー確認
 
 ---
 
 Notes:
 - ここから先の導線は README.md に集約
 - 詳細情報は各docsファイルへのリンクから辿る
-- このファイルは500行以内を維持する（現在約490行）
+- このファイルは500行以内を維持する
 - Phase 15セルフホスティング実装中！詳細は[Phase 15](docs/development/roadmap/phases/phase-15/)へ
