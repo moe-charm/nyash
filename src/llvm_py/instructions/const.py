@@ -42,7 +42,10 @@ def lower_const(
         # String constant - create global and get pointer
         i8 = ir.IntType(8)
         str_val = str(const_val)
-        str_const = ir.Constant.literal_string(str_val.encode('utf-8') + b'\0')
+        # Create array constant for the string
+        str_bytes = str_val.encode('utf-8') + b'\0'
+        str_const = ir.Constant(ir.ArrayType(i8, len(str_bytes)),
+                               bytearray(str_bytes))
         
         # Create global string constant
         global_name = f".str.{dst}"

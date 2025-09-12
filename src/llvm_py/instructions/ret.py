@@ -45,5 +45,13 @@ def lower_return(
             elif isinstance(return_type, ir.PointerType) and isinstance(ret_val.type, ir.IntType):
                 # int to ptr
                 ret_val = builder.inttoptr(ret_val, return_type)
+            elif isinstance(return_type, ir.IntType) and isinstance(ret_val.type, ir.IntType):
+                # int to int conversion
+                if return_type.width < ret_val.type.width:
+                    # Truncate
+                    ret_val = builder.trunc(ret_val, return_type)
+                elif return_type.width > ret_val.type.width:
+                    # Zero extend
+                    ret_val = builder.zext(ret_val, return_type)
         
         builder.ret(ret_val)

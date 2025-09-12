@@ -4,7 +4,7 @@ Parses Nyash MIR JSON format into Python structures
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Union, Tuple
 from enum import Enum
 
 class MirType(Enum):
@@ -114,3 +114,29 @@ def parse_instruction(data: Dict[str, Any]) -> MirInstruction:
         instr.args = data["args"]
     
     return instr
+
+class MIRReader:
+    """MIR JSON reader wrapper"""
+    def __init__(self, mir_json: Dict[str, Any]):
+        self.mir_json = mir_json
+        self.functions = None
+        
+    def get_functions(self) -> List[Dict[str, Any]]:
+        """Get functions in the expected format for llvm_builder"""
+        if self.functions is not None:
+            return self.functions
+        
+        # Convert from the existing JSON format to what llvm_builder expects
+        self.functions = []
+        
+        funcs = self.mir_json.get("functions", [])
+        if isinstance(funcs, list):
+            # Already in list format
+            self.functions = funcs
+        elif isinstance(funcs, dict):
+            # Convert dict format to list
+            for name, func_data in funcs.items():
+                func_data["name"] = name
+                self.functions.append(func_data)
+        
+        return self.functions

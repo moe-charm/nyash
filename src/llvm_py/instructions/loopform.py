@@ -6,7 +6,7 @@ Experimental loop normalization following paper-e-loop-signal-ir
 import os
 import llvmlite.ir as ir
 from dataclasses import dataclass
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple, List, Optional, Any
 
 @dataclass
 class LoopFormContext:

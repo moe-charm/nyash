@@ -1,0 +1,61 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "newbox",
+              "type": "StringBox",
+              "args": [],
+              "dst": 1
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {
+                "type": "string",
+                "value": "Hello Nyash!"
+              }
+            },
+            {
+              "op": "boxcall",
+              "box": 1,
+              "method": "set",
+              "args": [2],
+              "dst": 3
+            },
+            {
+              "op": "boxcall",
+              "box": 1,
+              "method": "get",
+              "args": [],
+              "dst": 4
+            },
+            {
+              "op": "externcall",
+              "func": "print",
+              "args": [4],
+              "dst": null
+            },
+            {
+              "op": "const",
+              "dst": 5,
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

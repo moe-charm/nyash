@@ -481,6 +481,29 @@ gemini -p "Nyashの実装で困っています..."
 codex exec "質問内容"
 ```
 
+### 🐍 Python LLVM バックエンド (実験的実装)
+**場所**: `/src/llvm_py/`
+
+ChatGPTの調査待ち中に作成した、llvmliteベースのLLVMバックエンド実装にゃ。
+Rust/inkwellの複雑さを回避して、シンプルに2000行程度でMIR14→LLVM変換を実現。
+
+#### 実行方法
+```bash
+cd src/llvm_py
+python3 -m venv venv
+./venv/bin/pip install llvmlite
+./venv/bin/python llvm_builder.py test_minimal.json -o output.o
+```
+
+#### 実装済み命令
+- ✅ const, binop, jump, branch, ret, compare
+- ✅ phi, call, boxcall, externcall  
+- ✅ typeop, newbox, safepoint, barrier
+- ✅ loopform (実験的)
+
+**利点**: シンプル、高速プロトタイピング、llvmliteの安定性
+**用途**: PHI/SSA検証、LoopForm実験、LLVM IR生成テスト
+
 ### 🔄 Codex非同期ワークフロー（並列作業）
 ```bash
 # 基本実行（同期）
