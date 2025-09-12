@@ -1,5 +1,5 @@
 mod blocks;
-mod flow;
+pub mod flow;
 mod externcall;
 mod newbox;
 mod boxcall;

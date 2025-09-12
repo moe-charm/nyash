@@ -122,6 +122,12 @@ impl LLVMCompiler {
                 crate::mir::BasicBlockId,
                 Vec<(ValueId, PhiValue, Vec<(crate::mir::BasicBlockId, ValueId)>)>,
             > = HashMap::new();
+            // Build successors map (for optional sealed-SSA PHI wiring)
+            let mut succs: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> = HashMap::new();
+            for (bid, block) in &func.blocks {
+                let v: Vec<crate::mir::BasicBlockId> = block.successors.iter().copied().collect();
+                succs.insert(*bid, v);
+            }
             // Bind parameters
             for (i, pid) in func.params.iter().enumerate() {
                 if let Some(av) = llvm_func.get_nth_param(i as u32) {
@@ -160,6 +166,25 @@ impl LLVMCompiler {
                             .entry(*bid)
                             .or_default()
                             .push((*dst, phi, inputs.clone()));
+                        if std::env::var("NYASH_LLVM_TRACE_PHI").ok().as_deref() == Some("1") {
+                            let ty_str = phi
+                                .as_basic_value()
+                                .get_type()
+                                .print_to_string()
+                                .to_string();
+                            let mut pairs: Vec<String> = Vec::new();
+                            for (pb, vid) in inputs {
+                                pairs.push(format!("({}->{})", pb.as_u32(), vid.as_u32()));
+                            }
+                            eprintln!(
+                                "[PHI:new] fn={} bb={} dst={} ty={} inputs={}",
+                                fn_label,
+                                bid.as_u32(),
+                                dst.as_u32(),
+                                ty_str,
+                                pairs.join(",")
+                            );
+                        }
                     }
                 }
             }
@@ -168,6 +193,7 @@ impl LLVMCompiler {
             let const_strs = build_const_str_map(func);
 
             // Lower body
+            let sealed_mode = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
             for (bi, bid) in block_ids.iter().enumerate() {
                 let bb = *bb_map.get(bid).unwrap();
                 if codegen
@@ -319,7 +345,10 @@ impl LLVMCompiler {
                     instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                 }
             }
-        }
+                if sealed_mode {
+                    instructions::flow::seal_block(&codegen, *bid, &succs, &bb_map, &phis_by_block, &vmap)?;
+                }
+            }
         // Verify the fully-lowered function once, after all blocks
         if !llvm_func.verify(true) {
             return Err(format!("Function verification failed: {}", name));

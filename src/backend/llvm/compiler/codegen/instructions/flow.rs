@@ -54,6 +54,8 @@ pub(in super::super) fn emit_jump<'ctx>(
     >,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
 ) -> Result<(), String> {
+    let sealed = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
+    if !sealed {
     if let Some(list) = phis_by_block.get(target) {
         for (_dst, phi, inputs) in list {
             if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
@@ -83,6 +85,7 @@ pub(in super::super) fn emit_jump<'ctx>(
             }
         }
     }
+    }
     let tbb = *bb_map.get(target).ok_or("target bb missing")?;
     codegen
         .builder
@@ -106,7 +109,9 @@ pub(in super::super) fn emit_branch<'ctx>(
 ) -> Result<(), String> {
     let cond_v = *vmap.get(condition).ok_or("cond missing")?;
     let b = to_bool(codegen.context, cond_v, &codegen.builder)?;
+    let sealed = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
     // then
+    if !sealed {
     if let Some(list) = phis_by_block.get(then_bb) {
         for (_dst, phi, inputs) in list {
             if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
@@ -137,7 +142,9 @@ pub(in super::super) fn emit_branch<'ctx>(
             }
         }
     }
+    }
     // else
+    if !sealed {
     if let Some(list) = phis_by_block.get(else_bb) {
         for (_dst, phi, inputs) in list {
             if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
@@ -167,6 +174,7 @@ pub(in super::super) fn emit_branch<'ctx>(
                 }
             }
         }
+    }
     }
     let tbb = *bb_map.get(then_bb).ok_or("then bb missing")?;
     let ebb = *bb_map.get(else_bb).ok_or("else bb missing")?;
@@ -232,4 +240,51 @@ fn coerce_to_type<'ctx>(
         // Already matching or unsupported combination
         (_, v) => Ok(v),
     }
+}
+
+/// Sealed-SSA style: when a block is finalized, add PHI incoming for all successor blocks.
+pub(in super::super) fn seal_block<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    bid: BasicBlockId,
+    succs: &HashMap<BasicBlockId, Vec<BasicBlockId>>,
+    bb_map: &HashMap<BasicBlockId, BasicBlock<'ctx>>,
+    phis_by_block: &HashMap<
+        BasicBlockId,
+        Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
+    >,
+    vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
+) -> Result<(), String> {
+    if let Some(slist) = succs.get(&bid) {
+        for sb in slist {
+            if let Some(pl) = phis_by_block.get(sb) {
+                for (_dst, phi, inputs) in pl {
+                    if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
+                        let mut val = *vmap.get(in_vid).ok_or("phi incoming (seal) value missing")?;
+                        let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
+                        val = coerce_to_type(codegen, phi, val)?;
+                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                            let tys = phi
+                                .as_basic_value()
+                                .get_type()
+                                .print_to_string()
+                                .to_string();
+                            eprintln!(
+                                "[PHI] sealed add pred_bb={} val={} ty={}",
+                                bid.as_u32(),
+                                in_vid.as_u32(),
+                                tys
+                            );
+                        }
+                        match val {
+                            BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
+                            BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
+                            BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
+                            _ => return Err("unsupported phi incoming value (seal)".to_string()),
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
