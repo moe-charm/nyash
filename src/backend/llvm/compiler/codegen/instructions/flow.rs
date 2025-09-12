@@ -22,18 +22,28 @@ pub(in super::super) fn emit_return<'ctx, 'b>(
             Ok(())
         }
         (_t, Some(vid)) => {
-            let v = *vmap.get(vid).ok_or("ret value missing")?;
-            // If function expects a pointer but we have an integer handle, convert i64 -> ptr
+            // Resolve return value according to expected type
             let expected = map_mirtype_to_basic(codegen.context, &func.signature.return_type);
             use inkwell::types::BasicTypeEnum as BT;
-            let v_adj = match (expected, v) {
-                (BT::PointerType(pt), BasicValueEnum::IntValue(iv)) => {
-                    cursor.emit_instr(_bid, |b| b
-                        .build_int_to_ptr(iv, pt, "ret_i2p"))
-                        .map_err(|e| e.to_string())?
-                        .into()
+            let v_adj = match expected {
+                BT::IntType(_it) => {
+                    // For now, fallback to vmap; resolver threading requires signature change
+                    *vmap.get(vid).ok_or("ret value missing")?
                 }
-                _ => v,
+                BT::PointerType(pt) => {
+                    if let Some(BasicValueEnum::IntValue(iv)) = vmap.get(vid).copied() {
+                        cursor
+                            .emit_instr(_bid, |b| b.build_int_to_ptr(iv, pt, "ret_i2p"))
+                            .map_err(|e| e.to_string())?
+                            .into()
+                    } else {
+                        *vmap.get(vid).ok_or("ret value missing")?
+                    }
+                }
+                BT::FloatType(_ft) => {
+                    *vmap.get(vid).ok_or("ret value missing")?
+                }
+                _ => *vmap.get(vid).ok_or("ret value missing")?,
             };
             cursor.emit_term(_bid, |b| {
                 b.build_return(Some(&v_adj)).map_err(|e| e.to_string()).unwrap();

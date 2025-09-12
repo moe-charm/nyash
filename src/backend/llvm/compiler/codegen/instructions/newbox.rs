@@ -11,18 +11,22 @@ use super::builder_cursor::BuilderCursor;
 pub(in super::super) fn lower_newbox<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: ValueId,
     box_type: &str,
     args: &[ValueId],
     box_type_ids: &HashMap<String, i64>,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
     match (box_type, args.len()) {
         ("StringBox", 1) => {
-            // Keep as i8* string pointer (AOT string fast-path)
-            let av = *vmap.get(&args[0]).ok_or("StringBox arg missing")?;
-            vmap.insert(dst, av);
+            // Resolve as i8* string pointer (AOT string fast-path)
+            let p = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+            vmap.insert(dst, p.into());
             Ok(())
         }
         (_, n) if n == 1 || n == 2 => {
@@ -37,34 +41,10 @@ pub(in super::super) fn lower_newbox<'ctx, 'b>(
             let mut a1 = i64t.const_zero();
             let mut a2 = i64t.const_zero();
             if args.len() >= 1 {
-                let v = *vmap.get(&args[0]).ok_or("newbox arg[0] missing")?;
-                a1 = match v {
-                    BVE::IntValue(iv) => iv,
-                    BVE::PointerValue(pv) => cursor
-                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "arg0_p2i"))
-                        .map_err(|e| e.to_string())?,
-                    _ => {
-                        return Err(
-                            "newbox arg[0]: unsupported type (expect int or handle ptr)"
-                                .to_string(),
-                        )
-                    }
-                };
+                a1 = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
             }
             if args.len() >= 2 {
-                let v = *vmap.get(&args[1]).ok_or("newbox arg[1] missing")?;
-                a2 = match v {
-                    BVE::IntValue(iv) => iv,
-                    BVE::PointerValue(pv) => cursor
-                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "arg1_p2i"))
-                        .map_err(|e| e.to_string())?,
-                    _ => {
-                        return Err(
-                            "newbox arg[1]: unsupported type (expect int or handle ptr)"
-                                .to_string(),
-                        )
-                    }
-                };
+                a2 = resolver.resolve_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
             }
             let tid = i64t.const_int(type_id as u64, true);
             let call = cursor

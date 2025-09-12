@@ -222,7 +222,20 @@ impl LLVMCompiler {
                 for inst in &block.instructions {
                     match inst {
                         MirInstruction::NewBox { dst, box_type, args } => {
-                            instructions::lower_newbox(&codegen, &mut cursor, *bid, &mut vmap, *dst, box_type, args, &box_type_ids)?;
+                            instructions::lower_newbox(
+                                &codegen,
+                                &mut cursor,
+                                &mut resolver,
+                                *bid,
+                                &mut vmap,
+                                *dst,
+                                box_type,
+                                args,
+                                &box_type_ids,
+                                &bb_map,
+                                &preds,
+                                &block_end_values,
+                            )?;
                             defined_in_block.insert(*dst);
                         },
                         MirInstruction::Const { dst, value } => {
@@ -356,7 +369,20 @@ impl LLVMCompiler {
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::Store { value, ptr } => {
-                        instructions::lower_store(&codegen, &mut cursor, *bid, &vmap, &mut allocas, &mut alloca_elem_types, value, ptr)?;
+                        instructions::lower_store(
+                            &codegen,
+                            &mut cursor,
+                            &mut resolver,
+                            *bid,
+                            &vmap,
+                            &mut allocas,
+                            &mut alloca_elem_types,
+                            value,
+                            ptr,
+                            &bb_map,
+                            &preds,
+                            &block_end_values,
+                        )?;
                     },
                     MirInstruction::Load { dst, ptr } => {
                         instructions::lower_load(&codegen, &mut cursor, *bid, &mut vmap, &mut allocas, &mut alloca_elem_types, dst, ptr)?;

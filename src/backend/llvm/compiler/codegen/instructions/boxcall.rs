@@ -34,20 +34,22 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use super::super::types::classify_tag;
     let i64t = codegen.context.i64_type();
-    let recv_v = *vmap.get(box_val).ok_or("box receiver missing")?;
-    let recv_p = match recv_v {
-        BVE::PointerValue(pv) => pv,
-        BVE::IntValue(iv) => {
-            let pty = codegen.context.ptr_type(AddressSpace::from(0));
-            cursor
-                .emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, pty, "recv_i2p"))
-                .map_err(|e| e.to_string())?
-        }
-        _ => return Err("box receiver must be pointer or i64 handle".to_string()),
-    };
+    // Resolve receiver as handle and pointer (i8*)
+    let pty = codegen.context.ptr_type(AddressSpace::from(0));
     let recv_h = cursor
-        .emit_instr(cur_bid, |b| b.build_ptr_to_int(recv_p, i64t, "recv_p2i"))
+        .emit_instr(cur_bid, |b| {
+            // If vmap has pointer, use it; if int, use it; else zero
+            match vmap.get(box_val).copied() {
+                Some(BVE::PointerValue(pv)) => b.build_ptr_to_int(pv, i64t, "recv_p2i").map_err(|e| e.to_string()),
+                Some(BVE::IntValue(iv)) => Ok(iv),
+                _ => Ok(i64t.const_zero()),
+            }
+        })
         .map_err(|e| e.to_string())?;
+    let recv_p = cursor
+        .emit_instr(cur_bid, |b| b.build_int_to_ptr(recv_h, pty, "recv_i2p"))
+        .map_err(|e| e.to_string())?;
+    let recv_v: BVE = recv_p.into();
 
     // Resolve type_id
     let type_id: i64 = if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
@@ -96,7 +98,7 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     }
 
     // getField/setField
-    if fields::try_handle_field_method(codegen, vmap, dst, method, args, recv_h)? {
+    if fields::try_handle_field_method(codegen, cursor, cur_bid, vmap, dst, method, args, recv_h)? {
         return Ok(());
     }
 

@@ -10,15 +10,30 @@ use super::builder_cursor::BuilderCursor;
 pub(in super::super) fn lower_store<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
     allocas: &mut HashMap<ValueId, inkwell::values::PointerValue<'ctx>>,
     alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
     value: &ValueId,
     ptr: &ValueId,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
     use inkwell::types::BasicTypeEnum;
-    let val = *vmap.get(value).ok_or("store value missing")?;
+    // Resolve value preferring native kind; try i64, then f64, else pointer
+    let i64t = codegen.context.i64_type();
+    let val: BasicValueEnum = if let Ok(iv) = resolver.resolve_i64(codegen, cursor, cur_bid, *value, bb_map, preds, block_end_values, vmap) {
+        iv.into()
+    } else if let Ok(fv) = resolver.resolve_f64(codegen, cursor, cur_bid, *value, bb_map, preds, block_end_values, vmap) {
+        fv.into()
+    } else if let Ok(pv) = resolver.resolve_ptr(codegen, cursor, cur_bid, *value, bb_map, preds, block_end_values, vmap) {
+        pv.into()
+    } else {
+        // Fallback: zero i64
+        i64t.const_zero().into()
+    };
     let elem_ty = match val {
         BasicValueEnum::IntValue(iv) => BasicTypeEnum::IntType(iv.get_type()),
         BasicValueEnum::FloatValue(fv) => BasicTypeEnum::FloatType(fv.get_type()),

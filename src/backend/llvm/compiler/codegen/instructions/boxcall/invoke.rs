@@ -5,7 +5,7 @@ use inkwell::{values::BasicValueEnum as BVE, AddressSpace};
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, ValueId};
 
-use super::marshal::{get_i64, get_tag_const};
+// use super::marshal::{get_i64, get_tag_const};
 
 /// Handle method_id-tagged plugin invoke path; returns Ok(()) if handled.
 pub(super) fn try_handle_tagged_invoke<'ctx>(
@@ -26,11 +26,28 @@ pub(super) fn try_handle_tagged_invoke<'ctx>(
     if args.len() <= 4 {
         let mut a = [i64t.const_zero(); 4];
         for (i, vid) in args.iter().enumerate() {
-            a[i] = get_i64(codegen, vmap, *vid)?;
+            // Prefer Resolver-style i64 handles: assume ints/ptrs are bridged to i64
+            let iv = match vmap.get(vid).copied() {
+                Some(BVE::IntValue(iv)) => iv,
+                Some(BVE::PointerValue(pv)) => codegen.builder.build_ptr_to_int(pv, i64t, "arg_p2i").map_err(|e| e.to_string())?,
+                Some(BVE::FloatValue(fv)) => {
+                    let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
+                    let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
+                    let call = codegen.builder.build_call(callee, &[fv.into()], "arg_f2h").map_err(|e| e.to_string())?;
+                    call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
+                }
+                _ => i64t.const_zero(),
+            };
+            a[i] = iv;
         }
         let mut tags = [i64t.const_int(3, false); 4];
         for (i, vid) in args.iter().enumerate() {
-            tags[i] = get_tag_const(codegen, vmap, *vid);
+            let tag = match func.metadata.value_types.get(vid) {
+                Some(crate::mir::MirType::Float) => 5,
+                Some(crate::mir::MirType::String) | Some(crate::mir::MirType::Box(_)) | Some(crate::mir::MirType::Array(_)) | Some(crate::mir::MirType::Future(_)) | Some(crate::mir::MirType::Unknown) => 8,
+                _ => 3,
+            };
+            tags[i] = i64t.const_int(tag as u64, false);
         }
         let fnty = i64t.fn_type(
             &[
@@ -94,8 +111,22 @@ pub(super) fn try_handle_tagged_invoke<'ctx>(
                 .build_in_bounds_gep(arr_ty, tags_arr, &idx, &format!("t_gep_{}", i))
                 .map_err(|e| e.to_string())?
         };
-        let vi = get_i64(codegen, vmap, *vid)?;
-        let ti = get_tag_const(codegen, vmap, *vid);
+        let vi = match vmap.get(vid).copied() {
+            Some(BVE::IntValue(iv)) => iv,
+            Some(BVE::PointerValue(pv)) => codegen.builder.build_ptr_to_int(pv, i64t, "arg_p2i").map_err(|e| e.to_string())?,
+            Some(BVE::FloatValue(fv)) => {
+                let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
+                let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
+                let call = codegen.builder.build_call(callee, &[fv.into()], "arg_f2h").map_err(|e| e.to_string())?;
+                call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
+            }
+            _ => i64t.const_zero(),
+        };
+        let ti = match func.metadata.value_types.get(vid) {
+            Some(crate::mir::MirType::Float) => i64t.const_int(5, false),
+            Some(crate::mir::MirType::String) | Some(crate::mir::MirType::Box(_)) | Some(crate::mir::MirType::Array(_)) | Some(crate::mir::MirType::Future(_)) | Some(crate::mir::MirType::Unknown) => i64t.const_int(8, false),
+            _ => i64t.const_int(3, false),
+        };
         codegen.builder.build_store(gep_v, vi).map_err(|e| e.to_string())?;
         codegen.builder.build_store(gep_t, ti).map_err(|e| e.to_string())?;
     }

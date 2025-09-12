@@ -1,0 +1,121 @@
+"""
+LoopForm IR implementation
+Experimental loop normalization following paper-e-loop-signal-ir
+"""
+
+import os
+import llvmlite.ir as ir
+from dataclasses import dataclass
+from typing import Dict, Tuple, List, Optional
+
+@dataclass
+class LoopFormContext:
+    """
+    LoopForm fixed block structure
+    preheader → header → body → dispatch → latch/exit
+    """
+    preheader: ir.Block
+    header: ir.Block
+    body: ir.Block
+    dispatch: ir.Block
+    latch: ir.Block
+    exit: ir.Block
+    loop_id: int
+    
+    # PHI nodes in dispatch block
+    tag_phi: Optional[ir.PhiInstr] = None
+    payload_phi: Optional[ir.PhiInstr] = None
+
+def create_loopform_blocks(
+    func: ir.Function,
+    loop_id: int,
+    prefix: str = "main"
+) -> LoopFormContext:
+    """Create the 6-block LoopForm structure"""
+    ctx = LoopFormContext(
+        preheader=func.append_basic_block(f"{prefix}_lf{loop_id}_preheader"),
+        header=func.append_basic_block(f"{prefix}_lf{loop_id}_header"),
+        body=func.append_basic_block(f"{prefix}_lf{loop_id}_body"),
+        dispatch=func.append_basic_block(f"{prefix}_lf{loop_id}_dispatch"),
+        latch=func.append_basic_block(f"{prefix}_lf{loop_id}_latch"),
+        exit=func.append_basic_block(f"{prefix}_lf{loop_id}_exit"),
+        loop_id=loop_id
+    )
+    return ctx
+
+def lower_while_loopform(
+    builder: ir.IRBuilder,
+    func: ir.Function,
+    condition_vid: int,
+    body_instructions: List[Any],
+    loop_id: int,
+    vmap: Dict[int, ir.Value],
+    bb_map: Dict[int, ir.Block]
+) -> bool:
+    """
+    Lower a while loop using LoopForm structure
+    
+    Returns:
+        True if LoopForm was applied, False otherwise
+    """
+    # Check if enabled
+    if os.environ.get('NYASH_ENABLE_LOOPFORM') != '1':
+        return False
+    
+    # Create LoopForm blocks
+    lf = create_loopform_blocks(func, loop_id)
+    
+    # Preheader: Jump to header
+    builder.position_at_end(lf.preheader)
+    builder.branch(lf.header)
+    
+    # Header: Evaluate condition
+    builder.position_at_end(lf.header)
+    cond = vmap.get(condition_vid, ir.Constant(ir.IntType(1), 0))
+    # Convert to i1 if needed
+    if hasattr(cond, 'type') and cond.type == ir.IntType(64):
+        cond = builder.icmp_unsigned('!=', cond, ir.Constant(ir.IntType(64), 0))
+    builder.cbranch(cond, lf.body, lf.dispatch)
+    
+    # Body: Pass through to dispatch (Phase 1)
+    builder.position_at_end(lf.body)
+    builder.branch(lf.dispatch)
+    
+    # Dispatch: Central PHI point
+    builder.position_at_end(lf.dispatch)
+    i8 = ir.IntType(8)
+    i64 = ir.IntType(64)
+    
+    # Create PHI nodes
+    tag_phi = builder.phi(i8, name=f"lf{loop_id}_tag")
+    payload_phi = builder.phi(i64, name=f"lf{loop_id}_payload")
+    
+    # Add incoming values
+    # From header (condition false): Break signal
+    tag_phi.add_incoming(ir.Constant(i8, 1), lf.header)  # Break = 1
+    payload_phi.add_incoming(ir.Constant(i64, 0), lf.header)
+    
+    # Switch on tag
+    tag_val = tag_phi
+    switch = builder.switch(tag_val, lf.exit)
+    switch.add_case(ir.Constant(i8, 0), lf.latch)  # Next = 0
+    
+    # Latch: Back to header (if enabled)
+    builder.position_at_end(lf.latch)
+    if os.environ.get('NYASH_LOOPFORM_LATCH2HEADER') == '1':
+        builder.branch(lf.header)
+    else:
+        builder.unreachable()
+    
+    # Exit: Continue after loop
+    builder.position_at_end(lf.exit)
+    # Builder position will be set by caller
+    
+    # Store context
+    lf.tag_phi = tag_phi
+    lf.payload_phi = payload_phi
+    
+    if os.environ.get('NYASH_CLI_VERBOSE') == '1':
+        print(f"[LoopForm] Created loop structure (id={loop_id})")
+    
+    return True

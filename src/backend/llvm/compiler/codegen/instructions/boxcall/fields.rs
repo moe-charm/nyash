@@ -6,8 +6,12 @@ use crate::backend::llvm::context::CodegenContext;
 use crate::mir::ValueId;
 
 /// Handle getField/setField; returns true if handled.
-pub(super) fn try_handle_field_method<'ctx>(
+use super::super::builder_cursor::BuilderCursor;
+
+pub(super) fn try_handle_field_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    _cursor: &mut BuilderCursor<'ctx, 'b>,
+    _cur_bid: crate::mir::BasicBlockId,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: &Option<ValueId>,
     method: &str,
@@ -20,11 +24,9 @@ pub(super) fn try_handle_field_method<'ctx>(
             if args.len() != 1 {
                 return Err("getField expects 1 arg (name)".to_string());
             }
-            let name_v = *vmap.get(&args[0]).ok_or("getField name missing")?;
-            let name_p = if let BVE::PointerValue(pv) = name_v {
-                pv
-            } else {
-                return Err("getField name must be pointer".to_string());
+            let name_p = match vmap.get(&args[0]).copied() {
+                Some(BVE::PointerValue(pv)) => pv,
+                _ => return Err("getField name must be pointer".to_string()),
             };
             let i8p = codegen.context.ptr_type(AddressSpace::from(0));
             let fnty = i64t.fn_type(&[i64t.into(), i8p.into()], false);
@@ -59,20 +61,13 @@ pub(super) fn try_handle_field_method<'ctx>(
             if args.len() != 2 {
                 return Err("setField expects 2 args (name, value)".to_string());
             }
-            let name_v = *vmap.get(&args[0]).ok_or("setField name missing")?;
-            let val_v = *vmap.get(&args[1]).ok_or("setField value missing")?;
-            let name_p = if let BVE::PointerValue(pv) = name_v {
-                pv
-            } else {
-                return Err("setField name must be pointer".to_string());
+            let name_p = match vmap.get(&args[0]).copied() {
+                Some(BVE::PointerValue(pv)) => pv,
+                _ => return Err("setField name must be pointer".to_string()),
             };
-            let val_h = match val_v {
-                BVE::PointerValue(pv) => codegen
-                    .builder
-                    .build_ptr_to_int(pv, i64t, "valp2i")
-                    .map_err(|e| e.to_string())?,
-                BVE::IntValue(iv) => iv,
-                BVE::FloatValue(_) => return Err("setField value must be int/handle".to_string()),
+            let val_h = match vmap.get(&args[1]).copied() {
+                Some(BVE::PointerValue(pv)) => codegen.builder.build_ptr_to_int(pv, i64t, "valp2i").map_err(|e| e.to_string())?,
+                Some(BVE::IntValue(iv)) => iv,
                 _ => return Err("setField value must be int/handle".to_string()),
             };
             let i8p = codegen.context.ptr_type(AddressSpace::from(0));
@@ -90,4 +85,3 @@ pub(super) fn try_handle_field_method<'ctx>(
         _ => Ok(false),
     }
 }
-

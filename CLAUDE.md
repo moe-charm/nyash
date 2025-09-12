@@ -54,6 +54,16 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
   - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較
 - **[ビルド方法完全ガイド](docs/guides/build/)** - プラットフォーム別ビルド手順
 
+### 🐍 Python LLVMバックエンド (実験的・開発中)
+```bash
+# Python版でLLVM IR生成（簡潔実装）
+cd src/llvm_py/
+python llvm_builder.py test.mir.json -o test.o
+
+# 特徴：800-1000行で実装予定（Rust版の1/3）
+# 用途：検証ハーネス、高速プロトタイピング
+```
+
 ### 🚀 JIT セルフホスト クイックスタート (Phase 15)
 ```bash
 # コアビルド (JIT)
