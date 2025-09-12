@@ -177,8 +177,19 @@ fn store_invoke_return<'ctx>(
                 }
             }
             crate::mir::MirType::String => {
-                // keep as i64 handle
-                vmap.insert(dst, rv);
+                // Normalize to i8* for String to align with PHI/type inference
+                // Plugins return i64 handle; convert handle -> i8* here.
+                let h = if let BVE::IntValue(iv) = rv {
+                    iv
+                } else {
+                    return Err("invoke ret expected i64 for String".to_string());
+                };
+                let pty = codegen.context.ptr_type(inkwell::AddressSpace::from(0));
+                let ptr = codegen
+                    .builder
+                    .build_int_to_ptr(h, pty, "ret_string_handle_to_ptr")
+                    .map_err(|e| e.to_string())?;
+                vmap.insert(dst, ptr.into());
             }
             crate::mir::MirType::Box(_)
             | crate::mir::MirType::Array(_)

@@ -4,6 +4,9 @@
 #[export_name = "nyash.map.size_h"]
 pub extern "C" fn nyash_map_size_h(handle: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
+    if std::env::var("NYASH_LLVM_MAP_DEBUG").ok().as_deref() == Some("1") {
+        eprintln!("[MAP] size_h(handle={})", handle);
+    }
     if handle <= 0 {
         return 0;
     }
@@ -17,6 +20,9 @@ pub extern "C" fn nyash_map_size_h(handle: i64) -> i64 {
                 .as_any()
                 .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
             {
+                if std::env::var("NYASH_LLVM_MAP_DEBUG").ok().as_deref() == Some("1") {
+                    eprintln!("[MAP] size_h => {}", ib.value);
+                }
                 return ib.value;
             }
         }
@@ -31,6 +37,9 @@ pub extern "C" fn nyash_map_get_h(handle: i64, key: i64) -> i64 {
         box_trait::{IntegerBox, NyashBox},
         jit::rt::handles,
     };
+    if std::env::var("NYASH_LLVM_MAP_DEBUG").ok().as_deref() == Some("1") {
+        eprintln!("[MAP] get_h(handle={}, key={})", handle, key);
+    }
     if handle <= 0 {
         return 0;
     }
@@ -43,6 +52,9 @@ pub extern "C" fn nyash_map_get_h(handle: i64, key: i64) -> i64 {
             let v = map.get(kbox);
             let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::from(v);
             let h = handles::to_handle(arc);
+            if std::env::var("NYASH_LLVM_MAP_DEBUG").ok().as_deref() == Some("1") {
+                eprintln!("[MAP] get_h => handle {}", h);
+            }
             return h as i64;
         }
     }
@@ -77,6 +89,9 @@ pub extern "C" fn nyash_map_set_h(handle: i64, key: i64, val: i64) -> i64 {
         box_trait::{IntegerBox, NyashBox},
         jit::rt::handles,
     };
+    if std::env::var("NYASH_LLVM_MAP_DEBUG").ok().as_deref() == Some("1") {
+        eprintln!("[MAP] set_h(handle={}, key={}, val={})", handle, key, val);
+    }
     if handle <= 0 {
         return 0;
     }
@@ -96,6 +111,15 @@ pub extern "C" fn nyash_map_set_h(handle: i64, key: i64, val: i64) -> i64 {
                 Box::new(IntegerBox::new(val))
             };
             let _ = map.set(kbox, vbox);
+            if std::env::var("NYASH_LLVM_MAP_DEBUG").ok().as_deref() == Some("1") {
+                let sz = map
+                    .size()
+                    .as_any()
+                    .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
+                    .map(|i| i.value)
+                    .unwrap_or(-1);
+                eprintln!("[MAP] set_h done; size now {}", sz);
+            }
             return 0;
         }
     }

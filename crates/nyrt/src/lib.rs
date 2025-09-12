@@ -153,6 +153,15 @@ pub extern "C" fn nyash_env_box_new(type_name: *const i8) -> i64 {
         let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(MapBox::new());
         return handles::to_handle(arc) as i64;
     }
+    if ty == "ArrayBox" {
+        use nyash_rust::boxes::array::ArrayBox;
+        let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(ArrayBox::new());
+        let h = handles::to_handle(arc) as i64;
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!("nyrt: env.box.new ArrayBox -> handle={}", h);
+        }
+        return h;
+    }
     let reg = get_global_registry();
     match reg.create_box(ty, &[]) {
         Ok(b) => {

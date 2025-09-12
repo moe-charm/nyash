@@ -58,13 +58,13 @@ pub(in super::super) fn lower_boxcall<'ctx>(
         return Ok(());
     }
 
-    // Delegate Array methods
-    if super::arrays::try_handle_array_method(codegen, func, vmap, dst, box_val, method, args, recv_h)? {
+    // Delegate Map methods first (to avoid Array fallback catching get/set ambiguously)
+    if super::maps::try_handle_map_method(codegen, func, vmap, dst, box_val, method, args, recv_h)? {
         return Ok(());
     }
 
-    // Delegate Map methods
-    if super::maps::try_handle_map_method(codegen, func, vmap, dst, box_val, method, args, recv_h)? {
+    // Delegate Array methods
+    if super::arrays::try_handle_array_method(codegen, func, vmap, dst, box_val, method, args, recv_h)? {
         return Ok(());
     }
 

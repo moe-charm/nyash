@@ -3,6 +3,9 @@
 #[no_mangle]
 pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
     use nyash_rust::{box_trait::IntegerBox, jit::rt::handles};
+    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+        eprintln!("[ARR] get_h(handle={}, idx={})", handle, idx);
+    }
     if handle <= 0 || idx < 0 {
         return 0;
     }
@@ -13,6 +16,9 @@ pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
         {
             let val = arr.get(Box::new(IntegerBox::new(idx)));
             if let Some(ib) = val.as_any().downcast_ref::<IntegerBox>() {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    eprintln!("[ARR] get_h => {}", ib.value);
+                }
                 return ib.value;
             }
         }
@@ -24,6 +30,9 @@ pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
 #[no_mangle]
 pub extern "C" fn nyash_array_set_h(handle: i64, idx: i64, val: i64) -> i64 {
     use nyash_rust::{box_trait::IntegerBox, jit::rt::handles};
+    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+        eprintln!("[ARR] set_h(handle={}, idx={}, val={})", handle, idx, val);
+    }
     if handle <= 0 || idx < 0 {
         return 0;
     }
@@ -44,6 +53,9 @@ pub extern "C" fn nyash_array_set_h(handle: i64, idx: i64, val: i64) -> i64 {
             } else {
                 // Do nothing for gaps (keep behavior conservative)
             }
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[ARR] set_h done; size now {}", arr.len());
+            }
             return 0;
         }
     }
@@ -57,6 +69,9 @@ pub extern "C" fn nyash_array_push_h(handle: i64, val: i64) -> i64 {
         box_trait::{IntegerBox, NyashBox},
         jit::rt::handles,
     };
+    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+        eprintln!("[ARR] push_h(handle={}, val={})", handle, val);
+    }
     if handle <= 0 {
         return 0;
     }
@@ -76,7 +91,11 @@ pub extern "C" fn nyash_array_push_h(handle: i64, val: i64) -> i64 {
                 Box::new(IntegerBox::new(val))
             };
             let _ = arr.push(vbox);
-            return arr.len() as i64;
+            let len = arr.len() as i64;
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[ARR] push_h -> len {}", len);
+            }
+            return len;
         }
     }
     0

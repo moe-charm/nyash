@@ -25,6 +25,9 @@ pub(super) fn try_handle_array_method<'ctx>(
     let i64t = codegen.context.i64_type();
     match method {
         "get" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Array.get (core)");
+            }
             if args.len() != 1 {
                 return Err("ArrayBox.get expects 1 arg".to_string());
             }
@@ -53,6 +56,9 @@ pub(super) fn try_handle_array_method<'ctx>(
             Ok(true)
         }
         "set" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Array.set (core)");
+            }
             if args.len() != 2 {
                 return Err("ArrayBox.set expects 2 arg".to_string());
             }
@@ -80,6 +86,9 @@ pub(super) fn try_handle_array_method<'ctx>(
             Ok(true)
         }
         "push" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Array.push (core)");
+            }
             if args.len() != 1 {
                 return Err("ArrayBox.push expects 1 arg".to_string());
             }
@@ -104,6 +113,9 @@ pub(super) fn try_handle_array_method<'ctx>(
             Ok(true)
         }
         "length" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Array.length (core)");
+            }
             if !args.is_empty() {
                 return Err("ArrayBox.length expects 0 arg".to_string());
             }

@@ -16,13 +16,17 @@ pub(super) fn try_handle_map_method<'ctx>(
     args: &[ValueId],
     recv_h: inkwell::values::IntValue<'ctx>,
 ) -> Result<bool, String> {
-    let is_map = matches!(func.metadata.value_types.get(box_val), Some(crate::mir::MirType::Box(b)) if b == "MapBox");
-    if !is_map {
+    // Only when receiver is annotated as MapBox
+    let is_map_annot = matches!(func.metadata.value_types.get(box_val), Some(crate::mir::MirType::Box(b)) if b == "MapBox");
+    if !is_map_annot {
         return Ok(false);
     }
     let i64t = codegen.context.i64_type();
     match method {
         "size" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Map.size (core)");
+            }
             if !args.is_empty() {
                 return Err("MapBox.size expects 0 arg".to_string());
             }
@@ -45,6 +49,9 @@ pub(super) fn try_handle_map_method<'ctx>(
             Ok(true)
         }
         "has" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Map.has (core)");
+            }
             if args.len() != 1 {
                 return Err("MapBox.has expects 1 arg".to_string());
             }
@@ -76,6 +83,9 @@ pub(super) fn try_handle_map_method<'ctx>(
             Ok(true)
         }
         "get" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Map.get (core)");
+            }
             if args.len() != 1 {
                 return Err("MapBox.get expects 1 arg".to_string());
             }
@@ -131,6 +141,9 @@ pub(super) fn try_handle_map_method<'ctx>(
             Ok(true)
         }
         "set" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Map.set (core)");
+            }
             if args.len() != 2 {
                 return Err("MapBox.set expects 2 args (key, value)".to_string());
             }
@@ -166,4 +179,3 @@ pub(super) fn try_handle_map_method<'ctx>(
         _ => Ok(false),
     }
 }
-

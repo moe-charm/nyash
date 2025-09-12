@@ -96,7 +96,9 @@ pub(in super::super) fn lower_newbox<'ctx>(
                 .as_deref()
                 == Some("1");
             let i64t = codegen.context.i64_type();
-            if type_id != 0 && !(box_type == "MapBox" && !force_plugin_map) {
+            // Core-first: avoid birth_h for built-ins we provide directly (MapBox/ArrayBox)
+            let is_core_builtin = box_type == "MapBox" || box_type == "ArrayBox";
+            if type_id != 0 && !(is_core_builtin && !force_plugin_map) {
                 // declare i64 @nyash.box.birth_h(i64)
                 let fn_ty = i64t.fn_type(&[i64t.into()], false);
                 let callee = codegen
