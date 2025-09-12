@@ -7,6 +7,23 @@ Summary
 - StringBox NewBox i8* fast path; print/log choose automatically.
 - Implement multi-function lowering and Call lowering for MIR14.
 
+Compact Roadmap (2025‑09‑12)
+- Focus: LLVM AOT → Flow hardening, PHI(sealed)安定化, LoopForm導入, BuilderCursor厳格化。
+- Now:
+  - Fallback terminator整備、PHI(sealed)はsnapshot参照へ、castはpred終端直前に限定。
+  - LoopForm Step 2.5/3（検出2段/dispatch骨格）完了。非破壊（Break集約のみ）。
+  - BuilderCursor: post‑terminator挿入を即panic（strings/arith_ops/memへ適用済）。
+- Next (short):
+  1) BuilderCursor厳格化の適用拡大（externcall→newbox→arrays→maps→call）。
+  2) Sealed SSA を既定ONに一本化（finalize_phis停止、seal_blockで完結）。
+  3) LoopForm header PHI正規化の安定化（latch→header ON 時も verifier green）。
+  4) body→dispatchを単純ボディで常用化（段階ゲート）。
+  5) 計測: dispatch-only PHI/ゼロ合成減少、post‑terminator検知ゼロ継続。
+- Flags:
+  - `NYASH_ENABLE_LOOPFORM=1`（非破壊ON）
+  - `NYASH_LOOPFORM_BODY2DISPATCH=1`（実験: 単純ボディのbody→dispatch）
+  - `NYASH_LOOPFORM_LATCH2HEADER=1`（PHI正規化後に有効化）
+
 Update — 2025-09-12 (LLVM flow + BB naming)
 - codegen/mod.rs match arms cleanup:
   - BinOp: unify to instructions::lower_binop(...)
@@ -29,6 +46,14 @@ Hot Update — 2025-09-12 (quick)
 - 現在のブロッカー: esc_json/1 で「phi incoming value missing」
   - 対応: emit_jump/emit_branch の incoming 配線をログ付きで点検し、値未定義箇所（by‑name/fast‑path戻り）を補完
 
+Hot Update — 2025‑09‑12 (Plan: LLVM wrapper via Nyash ABI)
+- 背景: Rust/inkwell のビルド時間と反復速度が課題。LLVM生成を Nyash から呼べる ABI に抽象化し、将来 Nyash スクリプトで LLVM ビルダー実装へ移行する。
+- 方針: Rust 実装は当面維持（1–2日で dep_tree_min_string をグリーンに）。併走で llvmlite(Python) を「検証ハーネス」として導入し、PHI/Loop 形の仕様検証→ Rust へ反映。
+- 入口: Nyash ABI で LLVM emit をラップ。
+  - モード切替フラグ: `NYASH_LLVM_USE_HARNESS=1`（ON時は llvmlite ハーネスに委譲）。
+  - I/O 仕様: 入力=MIR(JSON/メモリ), 出力=.o（`NYASH_AOT_OBJECT_OUT` に書き出し）。
+- 受け入れ: harness ON/OFF で dep_tree_min_string の出力一致（機能同値）。
+
 Hot Repro — esc_json/1 PHI 配線（2025‑09‑12）
 - 対象: apps/selfhost/tools/dep_tree_min_string.nyash
 - 実行（LLVM）:
@@ -40,10 +65,12 @@ Hot Repro — esc_json/1 PHI 配線（2025‑09‑12）
 - 原因仮説: Sealed ON で `seal_block` が pred終端時点の値（value_at_end_of_block）ではなく関数作業用 vmap を参照しているため、未定義扱いになっている。
 
 Next Steps（Sealed SSA 段階導入）
-1) block_end_values を導入し、各BB降下完了時に vmap スナップショットを保存。`seal_block` は pred のスナップショットから in_vid を取得。
-2) Sealed=ON で apps/selfhost/tools/dep_tree_min_string.nyash を再確認（PHIログ=ON）。OFF/ON の一致を比較し、incoming が pred数で揃うことを検証。
-3) 足りない型整合（String/Box/Array→i8*）があれば `coerce_to_type` を拡張。
-4) グリーン後、Sealed をデフォルトONにする前にスモーク一式で回帰確認。
+1) block_end_values を導入し、各BB降下完了時に vmap スナップショットを保存。`seal_block` は pred のスナップショットから in_vid を取得。（完了）
+2) Sealed=ON を既定にし、emit_* 側の配線を停止（`finalize_phis` 無効化）。（実装済/整備中）
+3) BuilderCursor を lowering 全域に適用（externcall/newbox/arrays/maps/call）。
+4) Sealed=ON で apps/selfhost/tools/dep_tree_min_string.nyash を再確認（PHIログ=ON）。
+5) 足りない型整合（String/Box/Array→i8*）があれば `coerce_to_type` を拡張。
+6) グリーン後、LoopForm BODY→DISPATCH を単純ボディで常用化。
 
 TODO — Sealed SSA 段階導入（実装タスク）
 - [x] block_end_values 追加（LLVM Lower 内の per-BB 終端スナップショット）
@@ -155,8 +182,10 @@ Done (today)
   ディスパッチは `externcall/mod.rs` に集約（挙動差分なし・0‑diff）。
  - String Fast‑Path 追加（LLVM/NYRT）: `substring(start,end)` と `lastIndexOf(needle)` を実装。
  - Compare: String/StringBox 注釈のときは内容比較（`nyash.string.eq_hh`）にブリッジ。
- - LLVM 多関数 Lower の骨格を実装: 全関数を事前宣言→順次Lower→`ny_main` ラッパで呼び出し正規化。
- - Call Lowering 追加（MIR14の `MirInstruction::Call`）: callee 文字列定数を解決し、対応するLLVM関数を呼び出し（引数束縛・戻り値格納）。
+- LLVM 多関数 Lower の骨格を実装: 全関数を事前宣言→順次Lower→`ny_main` ラッパで呼び出し正規化。
+- Call Lowering 追加（MIR14の `MirInstruction::Call`）: callee 文字列定数を解決し、対応するLLVM関数を呼び出し（引数束縛・戻り値格納）。
+- BuilderCursor 適用（第1弾）: strings/arith_ops/mem を Cursor 経由に統一。post-terminator 挿入検知を強化。
+- Sealed SSA: `finalize_phis` を停止し、`seal_block` に一本化。LoopForm latch→header の header PHI 正規化を追加（ゲート付）。
 
 Refactor — LLVM codegen instructions modularized (done)
 - Goal achieved: `instructions.rs` を段階分割し、責務ごとに再配置（0‑diff）。
@@ -211,6 +240,50 @@ Risks/Guards
 - Avoid broad implicit conversions; keep concat fallback gated by annotations only.
 - Ensure nyash.map.* との一致（core Map）; plugin経路は環境変数で明示切替。
 - Keep LLVM smokes green continuously; do not gate on VM/JIT.
+- BuilderCursor 全域適用前は `codegen.builder` の直接使用が残存し、挿入点の撹乱によるドミナンス違反のリスクあり（対策: 全域 Cursor 化）。
+
+Hot Update — 2025-09-12 (LoopForm Step 2.5/3)
+- Context reset: コンテキスト問題でひらきなおし。LoopForm を安全な骨格から段階導入する。
+- While 検出強化（Step 2.5）: then/else → header への back-edge を Jump 2 段まで許容し、短い側を body、他方を after に決定（ログに header/body/after/loop_id を表示）。
+- dispatch 骨格（Step 3 最小）: dispatch に phi(tag:i8, payload:i64) を作り、switch(tag){ Next(0)→latch, Break(1)→exit } を実装。
+  - いまは header(false)=Break のみを dispatch に供給（body→dispatch は既定OFFのまま・安全導入）。
+  - latch は unreachable（header の pred を増やさず PHI 整合を保つ）。
+- BuilderCursor 強化（局所）: at_end で終端検知/closed 初期化、emit_instr で post-terminator 挿入を即 panic。
+- 互換: MIR Const Void は i64(0) に無害化して Lower 継続性を向上。
+
+LoopForm Flags（実験）
+- `NYASH_ENABLE_LOOPFORM=1`: LoopForm 検出/配線を有効化（非破壊・Break 集約のみ）。
+- `NYASH_LOOPFORM_BODY2DISPATCH=1`: 単純ボディの Jump→header を dispatch へ差替え（tag=0/payload=0 を追加）。
+- `NYASH_LOOPFORM_LATCH2HEADER=1`: latch→header を有効化（現状は推奨OFF。header PHI 正規化後にONする）。
+
+Next Flow（これからの流れ＝段階導入）
+1) BuilderCursor 厳格化の適用拡大（短期）
+   - 直叩き `build_*` を `emit_instr/emit_term/with_block` に段階置換（strings → arith_ops → mem → types）。
+   - 軽量トラッカーで post-terminator 挿入を即検知（panic、犯人BB特定）。
+2) LoopForm 反復の本線（中期）
+   - header PHI 正規化（LoopForm 追加predを含めて「pred数=エントリ数」を保証）。
+   - 実装: finalize_phis を LoopForm-aware に拡張（MIR由来pred + 追加pred(latch) をマージ）。
+   - 受け渡し: pred 終端直前に局所 cast（既存の `coerce_to_type` を流用）。
+   - 受入: `NYASH_LOOPFORM_LATCH2HEADER=1` をONにしても verifier green（PHI欠落なし）を確認。
+3) body→dispatch 導線の常用化（中期）
+   - 単純ボディから開始（終端が1つ=back-edge のみ）。
+   - その後に複数出口/ネスト break/continue を段階解放（tag/payload で正規化）。
+4) 可視化と計測（並行）
+   - ループごとに dispatch-only PHI を確認（PHI個数/ゼロ合成の削減）。
+   - post-terminator 挿入検知のカバレッジをログ化。
+
+Acceptance（段階ごと）
+- A1: LoopForm ON でも従来挙動と等価（Break 集約のみ・非破壊、smoke green）。
+- A2: BuilderCursor 厳格化で post-terminator が検知ゼロ（panic不発）が続く。
+- A3: header PHI 正規化後、latch→header 有効でも verifier green（PHI 欠落なし）。
+- A4: body→dispatch を単純ボディで常用化し、dispatch 以外に PHI が出ないことを確認。
+- A5: `NYASH_LLVM_USE_HARNESS=1`（llvmlite）と OFF（Rust）の出力が dep_tree_min_string で機能一致。
+
+Execution Plan — Next 48h
+1) BuilderCursor 全域適用（externcall/newbox/arrays/maps/call）。
+2) Sealed=ON で dep_tree_min_string をグリーン（PHI/ドミナンス違反ゼロ）。
+3) （並行）llvmlite 検証ハーネス追加（Nyash ABI 経由、ゲートで切替）。
+4) BODY→DISPATCH 常用化（単純ボディ）。
 
 ## 🎉 LLVMプラグイン戻り値表示問題修正進行中（2025-09-10）
 

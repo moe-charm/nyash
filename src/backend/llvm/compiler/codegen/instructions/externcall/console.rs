@@ -4,10 +4,13 @@ use inkwell::values::BasicValueEnum as BVE;
 use inkwell::AddressSpace;
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::ValueId;
+use crate::mir::{BasicBlockId, ValueId};
+use crate::backend::llvm::compiler::codegen::instructions::builder_cursor::BuilderCursor;
 
-pub(super) fn lower_log_or_trace<'ctx>(
+pub(super) fn lower_log_or_trace<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     vmap: &mut HashMap<ValueId, BVE<'ctx>>,
     dst: &Option<ValueId>,
     iface_name: &str,
@@ -36,9 +39,8 @@ pub(super) fn lower_log_or_trace<'ctx>(
                 .module
                 .get_function(fname)
                 .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
-            let _ = codegen
-                .builder
-                .build_call(callee, &[pv.into()], "console_log_p")
+            let _ = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[pv.into()], "console_log_p"))
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 vmap.insert(*d, codegen.context.i64_type().const_zero().into());
@@ -50,16 +52,14 @@ pub(super) fn lower_log_or_trace<'ctx>(
             let arg_val = match av {
                 BVE::IntValue(iv) => {
                     if iv.get_type() == codegen.context.bool_type() {
-                        codegen
-                            .builder
-                            .build_int_z_extend(iv, codegen.context.i64_type(), "bool2i64")
+                        cursor
+                            .emit_instr(cur_bid, |b| b.build_int_z_extend(iv, codegen.context.i64_type(), "bool2i64"))
                             .map_err(|e| e.to_string())?
                     } else if iv.get_type() == codegen.context.i64_type() {
                         iv
                     } else {
-                        codegen
-                            .builder
-                            .build_int_s_extend(iv, codegen.context.i64_type(), "int2i64")
+                        cursor
+                            .emit_instr(cur_bid, |b| b.build_int_s_extend(iv, codegen.context.i64_type(), "int2i64"))
                             .map_err(|e| e.to_string())?
                     }
                 }
@@ -83,9 +83,8 @@ pub(super) fn lower_log_or_trace<'ctx>(
                 .module
                 .get_function(fname)
                 .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
-            let _ = codegen
-                .builder
-                .build_call(callee, &[arg_val.into()], "console_log_h")
+            let _ = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[arg_val.into()], "console_log_h"))
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 vmap.insert(*d, codegen.context.i64_type().const_zero().into());
@@ -95,8 +94,10 @@ pub(super) fn lower_log_or_trace<'ctx>(
     }
 }
 
-pub(super) fn lower_readline<'ctx>(
+pub(super) fn lower_readline<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     vmap: &mut HashMap<ValueId, BVE<'ctx>>,
     dst: &Option<ValueId>,
     args: &[ValueId],
@@ -110,9 +111,8 @@ pub(super) fn lower_readline<'ctx>(
         .module
         .get_function("nyash.console.readline")
         .unwrap_or_else(|| codegen.module.add_function("nyash.console.readline", fnty, None));
-    let call = codegen
-        .builder
-        .build_call(callee, &[], "readline")
+    let call = cursor
+        .emit_instr(cur_bid, |b| b.build_call(callee, &[], "readline"))
         .map_err(|e| e.to_string())?;
     if let Some(d) = dst {
         let rv = call
@@ -123,4 +123,3 @@ pub(super) fn lower_readline<'ctx>(
     }
     Ok(())
 }
-

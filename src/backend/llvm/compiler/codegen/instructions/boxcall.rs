@@ -9,11 +9,14 @@ pub(crate) mod invoke;
 mod marshal;
 use self::marshal as marshal_mod;
 use self::invoke as invoke_mod;
-use crate::mir::{function::MirFunction, ValueId};
+use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
+use super::builder_cursor::BuilderCursor;
 
 // BoxCall lowering (large): mirrors existing logic; kept in one function for now
-pub(in super::super) fn lower_boxcall<'ctx>(
+pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: &Option<ValueId>,
@@ -23,6 +26,9 @@ pub(in super::super) fn lower_boxcall<'ctx>(
     args: &[ValueId],
     box_type_ids: &HashMap<String, i64>,
     entry_builder: &inkwell::builder::Builder<'ctx>,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use super::super::types::classify_tag;
@@ -32,16 +38,14 @@ pub(in super::super) fn lower_boxcall<'ctx>(
         BVE::PointerValue(pv) => pv,
         BVE::IntValue(iv) => {
             let pty = codegen.context.ptr_type(AddressSpace::from(0));
-            codegen
-                .builder
-                .build_int_to_ptr(iv, pty, "recv_i2p")
+            cursor
+                .emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, pty, "recv_i2p"))
                 .map_err(|e| e.to_string())?
         }
         _ => return Err("box receiver must be pointer or i64 handle".to_string()),
     };
-    let recv_h = codegen
-        .builder
-        .build_ptr_to_int(recv_p, i64t, "recv_p2i")
+    let recv_h = cursor
+        .emit_instr(cur_bid, |b| b.build_ptr_to_int(recv_p, i64t, "recv_p2i"))
         .map_err(|e| e.to_string())?;
 
     // Resolve type_id
@@ -54,23 +58,26 @@ pub(in super::super) fn lower_boxcall<'ctx>(
     };
 
     // Delegate String methods
-    if super::strings::try_handle_string_method(codegen, func, vmap, dst, box_val, method, args, recv_v)? {
+    if super::strings::try_handle_string_method(
+        codegen, cursor, cur_bid, func, vmap, dst, box_val, method, args, recv_v,
+        bb_map, preds, block_end_values,
+    )? {
         return Ok(());
     }
 
     // Delegate Map methods first (to avoid Array fallback catching get/set ambiguously)
-    if super::maps::try_handle_map_method(codegen, func, vmap, dst, box_val, method, args, recv_h)? {
+    if super::maps::try_handle_map_method(codegen, cursor, cur_bid, func, vmap, dst, box_val, method, args, recv_h)? {
         return Ok(());
     }
 
     // Delegate Array methods
-    if super::arrays::try_handle_array_method(codegen, func, vmap, dst, box_val, method, args, recv_h)? {
+    if super::arrays::try_handle_array_method(codegen, cursor, cur_bid, func, vmap, dst, box_val, method, args, recv_h)? {
         return Ok(());
     }
 
     // Console convenience: treat println as env.console.log
     if method == "println" {
-        return super::externcall::lower_externcall(codegen, func, vmap, dst, &"env.console".to_string(), &"log".to_string(), args);
+        return super::externcall::lower_externcall(codegen, cursor, cur_bid, func, vmap, dst, &"env.console".to_string(), &"log".to_string(), args);
     }
 
     // getField/setField
@@ -85,9 +92,8 @@ pub(in super::super) fn lower_boxcall<'ctx>(
             .module
             .get_function("nyash_array_length_h")
             .unwrap_or_else(|| codegen.module.add_function("nyash_array_length_h", fnty, None));
-        let call = codegen
-            .builder
-            .build_call(callee, &[recv_h.into()], "alen_fallback")
+        let call = cursor
+            .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "alen_fallback"))
             .map_err(|e| e.to_string())?;
         if let Some(d) = dst {
             let rv = call
@@ -141,9 +147,8 @@ pub(in super::super) fn lower_boxcall<'ctx>(
                     let tv = coerce_to_type(codegen, v, exp_tys[i])?;
                     call_args.push(tv.into());
                 }
-                let call = codegen
-                    .builder
-                    .build_call(callee, &call_args, "user_meth_call")
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b.build_call(callee, &call_args, "user_meth_call"))
                     .map_err(|e| e.to_string())?;
                 if let Some(d) = dst {
                     if let Some(rv) = call.try_as_basic_value().left() {
@@ -158,9 +163,8 @@ pub(in super::super) fn lower_boxcall<'ctx>(
             use crate::backend::llvm::compiler::codegen::instructions::boxcall::marshal::get_i64 as get_i64_any;
             let i64t = codegen.context.i64_type();
             let argc = i64t.const_int(args.len() as u64, false);
-            let mname = codegen
-                .builder
-                .build_global_string_ptr(method, "meth_name")
+            let mname = cursor
+                .emit_instr(cur_bid, |b| b.build_global_string_ptr(method, "meth_name"))
                 .map_err(|e| e.to_string())?;
             // up to 2 args for this minimal path
             let a1 = if let Some(v0) = args.get(0) { get_i64_any(codegen, vmap, *v0)? } else { i64t.const_zero() };
@@ -177,9 +181,8 @@ pub(in super::super) fn lower_boxcall<'ctx>(
                 .module
                 .get_function("nyash.plugin.invoke_by_name_i64")
                 .unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_by_name_i64", fnty, None));
-            let call = codegen
-                .builder
-                .build_call(callee, &[recv_h.into(), mname.as_pointer_value().into(), argc.into(), a1.into(), a2.into()], "pinvoke_by_name")
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), mname.as_pointer_value().into(), argc.into(), a1.into(), a2.into()], "pinvoke_by_name"))
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call
@@ -194,19 +197,19 @@ pub(in super::super) fn lower_boxcall<'ctx>(
                             if let BVE::IntValue(iv) = rv {
                                 let i64t = codegen.context.i64_type();
                                 let zero = i64t.const_zero();
-                                let b1 = codegen.builder.build_int_compare(inkwell::IntPredicate::NE, iv, zero, "bool_i64_to_i1").map_err(|e| e.to_string())?;
+                                let b1 = cursor.emit_instr(cur_bid, |bd| bd.build_int_compare(inkwell::IntPredicate::NE, iv, zero, "bool_i64_to_i1")).map_err(|e| e.to_string())?;
                                 vmap.insert(*d, b1.into());
                             } else { vmap.insert(*d, rv); }
                         }
                         crate::mir::MirType::String => {
                             if let BVE::IntValue(iv) = rv {
-                                let p = codegen.builder.build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "str_h2p_ret").map_err(|e| e.to_string())?;
+                                let p = cursor.emit_instr(cur_bid, |bd| bd.build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "str_h2p_ret")).map_err(|e| e.to_string())?;
                                 vmap.insert(*d, p.into());
                             } else { vmap.insert(*d, rv); }
                         }
                         crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
                             if let BVE::IntValue(iv) = rv {
-                                let p = codegen.builder.build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "h2p_ret").map_err(|e| e.to_string())?;
+                                let p = cursor.emit_instr(cur_bid, |bd| bd.build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "h2p_ret")).map_err(|e| e.to_string())?;
                                 vmap.insert(*d, p.into());
                             } else { vmap.insert(*d, rv); }
                         }

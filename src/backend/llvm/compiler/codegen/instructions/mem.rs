@@ -3,11 +3,14 @@ use std::collections::HashMap;
 use inkwell::values::BasicValueEnum;
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::ValueId;
+use crate::mir::{BasicBlockId, ValueId};
+use super::builder_cursor::BuilderCursor;
 
 // Lower Store: handle allocas with element type tracking and integer width adjust
-pub(in super::super) fn lower_store<'ctx>(
+pub(in super::super) fn lower_store<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
     allocas: &mut HashMap<ValueId, inkwell::values::PointerValue<'ctx>>,
     alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
@@ -30,38 +33,31 @@ pub(in super::super) fn lower_store<'ctx>(
                     let bw_src = iv.get_type().get_bit_width();
                     let bw_dst = t.get_bit_width();
                     if bw_src < bw_dst {
-                        let adj = codegen
-                            .builder
-                            .build_int_z_extend(iv, t, "zext")
+                        let adj = cursor
+                            .emit_instr(cur_bid, |b| b.build_int_z_extend(iv, t, "zext"))
                             .map_err(|e| e.to_string())?;
-                        codegen
-                            .builder
-                            .build_store(existing, adj)
+                        cursor
+                            .emit_instr(cur_bid, |b| b.build_store(existing, adj))
                             .map_err(|e| e.to_string())?;
                     } else if bw_src > bw_dst {
-                        let adj = codegen
-                            .builder
-                            .build_int_truncate(iv, t, "trunc")
+                        let adj = cursor
+                            .emit_instr(cur_bid, |b| b.build_int_truncate(iv, t, "trunc"))
                             .map_err(|e| e.to_string())?;
-                        codegen
-                            .builder
-                            .build_store(existing, adj)
+                        cursor
+                            .emit_instr(cur_bid, |b| b.build_store(existing, adj))
                             .map_err(|e| e.to_string())?;
                     } else {
-                        codegen
-                            .builder
-                            .build_store(existing, iv)
+                        cursor
+                            .emit_instr(cur_bid, |b| b.build_store(existing, iv))
                             .map_err(|e| e.to_string())?;
                     }
                 }
                 (BasicValueEnum::PointerValue(pv), BasicTypeEnum::PointerType(pt)) => {
-                    let adj = codegen
-                        .builder
-                        .build_pointer_cast(pv, pt, "pcast")
+                    let adj = cursor
+                        .emit_instr(cur_bid, |b| b.build_pointer_cast(pv, pt, "pcast"))
                         .map_err(|e| e.to_string())?;
-                    codegen
-                        .builder
-                        .build_store(existing, adj)
+                    cursor
+                        .emit_instr(cur_bid, |b| b.build_store(existing, adj))
                         .map_err(|e| e.to_string())?;
                 }
                 (BasicValueEnum::FloatValue(fv), BasicTypeEnum::FloatType(ft)) => {
@@ -69,27 +65,23 @@ pub(in super::super) fn lower_store<'ctx>(
                     if fv.get_type() != ft {
                         return Err("float width mismatch in store".to_string());
                     }
-                    codegen
-                        .builder
-                        .build_store(existing, fv)
+                    cursor
+                        .emit_instr(cur_bid, |b| b.build_store(existing, fv))
                         .map_err(|e| e.to_string())?;
                 }
                 _ => return Err("store type mismatch".to_string()),
             }
         } else {
-            codegen
-                .builder
-                .build_store(existing, val)
+            cursor
+                .emit_instr(cur_bid, |b| b.build_store(existing, val))
                 .map_err(|e| e.to_string())?;
         }
     } else {
-        let slot = codegen
-            .builder
-            .build_alloca(elem_ty, &format!("slot_{}", ptr.as_u32()))
+        let slot = cursor
+            .emit_instr(cur_bid, |b| b.build_alloca(elem_ty, &format!("slot_{}", ptr.as_u32())))
             .map_err(|e| e.to_string())?;
-        codegen
-            .builder
-            .build_store(slot, val)
+        cursor
+            .emit_instr(cur_bid, |b| b.build_store(slot, val))
             .map_err(|e| e.to_string())?;
         allocas.insert(*ptr, slot);
         alloca_elem_types.insert(*ptr, elem_ty);
@@ -97,8 +89,10 @@ pub(in super::super) fn lower_store<'ctx>(
     Ok(())
 }
 
-pub(in super::super) fn lower_load<'ctx>(
+pub(in super::super) fn lower_load<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
     allocas: &mut HashMap<ValueId, inkwell::values::PointerValue<'ctx>>,
     alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
@@ -112,17 +106,15 @@ pub(in super::super) fn lower_load<'ctx>(
     } else {
         // Default new slot as i64 for uninitialized loads
         let i64t = codegen.context.i64_type();
-        let slot = codegen
-            .builder
-            .build_alloca(i64t, &format!("slot_{}", ptr.as_u32()))
+        let slot = cursor
+            .emit_instr(cur_bid, |b| b.build_alloca(i64t, &format!("slot_{}", ptr.as_u32())))
             .map_err(|e| e.to_string())?;
         allocas.insert(*ptr, slot);
         alloca_elem_types.insert(*ptr, i64t.into());
         (slot, i64t.into())
     };
-    let lv = codegen
-        .builder
-        .build_load(elem_ty, slot, &format!("load_{}", dst.as_u32()))
+    let lv = cursor
+        .emit_instr(cur_bid, |b| b.build_load(elem_ty, slot, &format!("load_{}", dst.as_u32())))
         .map_err(|e| e.to_string())?;
     vmap.insert(*dst, lv);
     Ok(())

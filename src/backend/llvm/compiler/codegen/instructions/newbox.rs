@@ -4,11 +4,14 @@ use inkwell::AddressSpace;
 use inkwell::values::BasicValueEnum as BVE;
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::ValueId;
+use crate::mir::{BasicBlockId, ValueId};
+use super::builder_cursor::BuilderCursor;
 
 // NewBox lowering (subset consistent with existing code)
-pub(in super::super) fn lower_newbox<'ctx>(
+pub(in super::super) fn lower_newbox<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: ValueId,
     box_type: &str,
@@ -37,9 +40,8 @@ pub(in super::super) fn lower_newbox<'ctx>(
                 let v = *vmap.get(&args[0]).ok_or("newbox arg[0] missing")?;
                 a1 = match v {
                     BVE::IntValue(iv) => iv,
-                    BVE::PointerValue(pv) => codegen
-                        .builder
-                        .build_ptr_to_int(pv, i64t, "arg0_p2i")
+                    BVE::PointerValue(pv) => cursor
+                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "arg0_p2i"))
                         .map_err(|e| e.to_string())?,
                     _ => {
                         return Err(
@@ -53,9 +55,8 @@ pub(in super::super) fn lower_newbox<'ctx>(
                 let v = *vmap.get(&args[1]).ok_or("newbox arg[1] missing")?;
                 a2 = match v {
                     BVE::IntValue(iv) => iv,
-                    BVE::PointerValue(pv) => codegen
-                        .builder
-                        .build_ptr_to_int(pv, i64t, "arg1_p2i")
+                    BVE::PointerValue(pv) => cursor
+                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "arg1_p2i"))
                         .map_err(|e| e.to_string())?,
                     _ => {
                         return Err(
@@ -66,9 +67,8 @@ pub(in super::super) fn lower_newbox<'ctx>(
                 };
             }
             let tid = i64t.const_int(type_id as u64, true);
-            let call = codegen
-                .builder
-                .build_call(callee, &[tid.into(), argc.into(), a1.into(), a2.into()], "birth_i64")
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[tid.into(), argc.into(), a1.into(), a2.into()], "birth_i64"))
                 .map_err(|e| e.to_string())?;
             let h = call
                 .try_as_basic_value()
@@ -76,9 +76,8 @@ pub(in super::super) fn lower_newbox<'ctx>(
                 .ok_or("birth_i64 returned void".to_string())?
                 .into_int_value();
             let pty = codegen.context.ptr_type(AddressSpace::from(0));
-            let ptr = codegen
-                .builder
-                .build_int_to_ptr(h, pty, "handle_to_ptr")
+            let ptr = cursor
+                .emit_instr(cur_bid, |b| b.build_int_to_ptr(h, pty, "handle_to_ptr"))
                 .map_err(|e| e.to_string())?;
             vmap.insert(dst, ptr.into());
             Ok(())
@@ -106,9 +105,8 @@ pub(in super::super) fn lower_newbox<'ctx>(
                     .get_function("nyash.box.birth_h")
                     .unwrap_or_else(|| codegen.module.add_function("nyash.box.birth_h", fn_ty, None));
                 let tid = i64t.const_int(type_id as u64, true);
-                let call = codegen
-                    .builder
-                    .build_call(callee, &[tid.into()], "birth")
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b.build_call(callee, &[tid.into()], "birth"))
                     .map_err(|e| e.to_string())?;
                 let h_i64 = call
                     .try_as_basic_value()
@@ -116,9 +114,8 @@ pub(in super::super) fn lower_newbox<'ctx>(
                     .ok_or("birth_h returned void".to_string())?
                     .into_int_value();
                 let pty = codegen.context.ptr_type(AddressSpace::from(0));
-                let ptr = codegen
-                    .builder
-                    .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
+                let ptr = cursor
+                    .emit_instr(cur_bid, |b| b.build_int_to_ptr(h_i64, pty, "handle_to_ptr"))
                     .map_err(|e| e.to_string())?;
                 vmap.insert(dst, ptr.into());
                 Ok(())
@@ -130,13 +127,11 @@ pub(in super::super) fn lower_newbox<'ctx>(
                     .module
                     .get_function("nyash.env.box.new")
                     .unwrap_or_else(|| codegen.module.add_function("nyash.env.box.new", fn_ty, None));
-                let tn = codegen
-                    .builder
-                    .build_global_string_ptr(box_type, "box_type_name")
+                let tn = cursor
+                    .emit_instr(cur_bid, |b| b.build_global_string_ptr(box_type, "box_type_name"))
                     .map_err(|e| e.to_string())?;
-                let call = codegen
-                    .builder
-                    .build_call(callee, &[tn.as_pointer_value().into()], "env_box_new")
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b.build_call(callee, &[tn.as_pointer_value().into()], "env_box_new"))
                     .map_err(|e| e.to_string())?;
                 let h_i64 = call
                     .try_as_basic_value()
@@ -144,9 +139,8 @@ pub(in super::super) fn lower_newbox<'ctx>(
                     .ok_or("env.box.new returned void".to_string())?
                     .into_int_value();
                 let pty = codegen.context.ptr_type(AddressSpace::from(0));
-                let ptr = codegen
-                    .builder
-                    .build_int_to_ptr(h_i64, pty, "handle_to_ptr")
+                let ptr = cursor
+                    .emit_instr(cur_bid, |b| b.build_int_to_ptr(h_i64, pty, "handle_to_ptr"))
                     .map_err(|e| e.to_string())?;
                 vmap.insert(dst, ptr.into());
                 Ok(())

@@ -3,11 +3,14 @@ use std::collections::HashMap;
 use inkwell::{values::BasicValueEnum as BVE, AddressSpace};
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{function::MirFunction, ValueId};
+use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
+use super::builder_cursor::BuilderCursor;
 
 /// Handle MapBox fast-paths (core-first). Returns true if handled.
-pub(super) fn try_handle_map_method<'ctx>(
+pub(super) fn try_handle_map_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: &Option<ValueId>,
@@ -35,9 +38,8 @@ pub(super) fn try_handle_map_method<'ctx>(
                 .module
                 .get_function("nyash.map.size_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash.map.size_h", fnty, None));
-            let call = codegen
-                .builder
-                .build_call(callee, &[recv_h.into()], "msize")
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "msize"))
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call
@@ -58,9 +60,8 @@ pub(super) fn try_handle_map_method<'ctx>(
             let key_v = *vmap.get(&args[0]).ok_or("map.has key missing")?;
             let key_i = match key_v {
                 BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => codegen
-                    .builder
-                    .build_ptr_to_int(pv, i64t, "key_p2i")
+                BVE::PointerValue(pv) => cursor
+                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "key_p2i"))
                     .map_err(|e| e.to_string())?,
                 _ => return Err("map.has key must be int or handle ptr".to_string()),
             };
@@ -69,9 +70,8 @@ pub(super) fn try_handle_map_method<'ctx>(
                 .module
                 .get_function("nyash.map.has_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash.map.has_h", fnty, None));
-            let call = codegen
-                .builder
-                .build_call(callee, &[recv_h.into(), key_i.into()], "mhas")
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), key_i.into()], "mhas"))
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call
@@ -97,9 +97,8 @@ pub(super) fn try_handle_map_method<'ctx>(
                         .module
                         .get_function("nyash.map.get_h")
                         .unwrap_or_else(|| codegen.module.add_function("nyash.map.get_h", fnty, None));
-                    codegen
-                        .builder
-                        .build_call(callee, &[recv_h.into(), iv.into()], "mget")
+                    cursor
+                        .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), iv.into()], "mget"))
                         .map_err(|e| e.to_string())?
                 }
                 BVE::PointerValue(pv) => {
@@ -110,9 +109,8 @@ pub(super) fn try_handle_map_method<'ctx>(
                         .module
                         .get_function("nyash.box.from_i8_string")
                         .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
-                    let kcall = codegen
-                        .builder
-                        .build_call(conv, &[pv.into()], "key_i8_to_handle")
+                    let kcall = cursor
+                        .emit_instr(cur_bid, |b| b.build_call(conv, &[pv.into()], "key_i8_to_handle"))
                         .map_err(|e| e.to_string())?;
                     let kh = kcall
                         .try_as_basic_value()
@@ -124,9 +122,8 @@ pub(super) fn try_handle_map_method<'ctx>(
                         .module
                         .get_function("nyash.map.get_hh")
                         .unwrap_or_else(|| codegen.module.add_function("nyash.map.get_hh", fnty, None));
-                    codegen
-                        .builder
-                        .build_call(callee, &[recv_h.into(), kh.into()], "mget_hh")
+                    cursor
+                        .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), kh.into()], "mget_hh"))
                         .map_err(|e| e.to_string())?
                 }
                 _ => return Err("map.get key must be int or pointer".to_string()),
@@ -151,17 +148,15 @@ pub(super) fn try_handle_map_method<'ctx>(
             let val_v = *vmap.get(&args[1]).ok_or("map.set value missing")?;
             let key_i = match key_v {
                 BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => codegen
-                    .builder
-                    .build_ptr_to_int(pv, i64t, "key_p2i")
+                BVE::PointerValue(pv) => cursor
+                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "key_p2i"))
                     .map_err(|e| e.to_string())?,
                 _ => return Err("map.set key must be int or handle ptr".to_string()),
             };
             let val_i = match val_v {
                 BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => codegen
-                    .builder
-                    .build_ptr_to_int(pv, i64t, "val_p2i")
+                BVE::PointerValue(pv) => cursor
+                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "val_p2i"))
                     .map_err(|e| e.to_string())?,
                 _ => return Err("map.set value must be int or handle ptr".to_string()),
             };
@@ -170,9 +165,8 @@ pub(super) fn try_handle_map_method<'ctx>(
                 .module
                 .get_function("nyash.map.set_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash.map.set_h", fnty, None));
-            let _ = codegen
-                .builder
-                .build_call(callee, &[recv_h.into(), key_i.into(), val_i.into()], "mset")
+            let _ = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), key_i.into(), val_i.into()], "mset"))
                 .map_err(|e| e.to_string())?;
             Ok(true)
         }

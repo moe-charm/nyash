@@ -1,5 +1,5 @@
 use inkwell::basic_block::BasicBlock;
-use inkwell::values::{BasicValueEnum, PhiValue};
+use inkwell::values::{BasicValueEnum, IntValue, PhiValue};
 use std::collections::HashMap;
 
 use crate::backend::llvm::context::CodegenContext;
@@ -111,9 +111,19 @@ pub(in super::super) fn emit_branch<'ctx, 'b>(
         Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
     >,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
+    preds: &HashMap<BasicBlockId, Vec<BasicBlockId>>,
+    block_end_values: &HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
+    // Localize condition as i64 and convert to i1 via != 0
     let cond_v = *vmap.get(condition).ok_or("cond missing")?;
-    let b = to_bool(codegen.context, cond_v, &codegen.builder)?;
+    let b = match cond_v {
+        BasicValueEnum::IntValue(_) | BasicValueEnum::PointerValue(_) | BasicValueEnum::FloatValue(_) => {
+            let ci = localize_to_i64(codegen, cursor, bid, *condition, bb_map, preds, block_end_values, vmap)?;
+            let zero = codegen.context.i64_type().const_zero();
+            codegen.builder.build_int_compare(inkwell::IntPredicate::NE, ci, zero, "cond_nez").map_err(|e| e.to_string())?
+        }
+        _ => to_bool(codegen.context, cond_v, &codegen.builder)?,
+    };
     let sealed = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
     // then
     if !sealed {
@@ -477,4 +487,71 @@ pub(in super::super) fn finalize_phis<'ctx, 'b>(
         }
     }
     Ok(())
+}
+
+/// Localize a MIR value as an i64 in the current block by creating a PHI that merges
+/// predecessor snapshots. This avoids using values defined in non-dominating blocks.
+/// Sealed SSA mode is assumed; when a predecessor snapshot is missing, synthesize zero.
+pub(in super::super) fn localize_to_i64<'ctx, 'b>(
+    codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
+    vid: ValueId,
+    bb_map: &std::collections::HashMap<BasicBlockId, BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<BasicBlockId, Vec<BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
+    vmap: &std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
+) -> Result<IntValue<'ctx>, String> {
+    let i64t = codegen.context.i64_type();
+    let cur_llbb = *bb_map.get(&cur_bid).ok_or("cur bb missing")?;
+    // If no predecessors, fallback to current vmap or zero
+    let pred_list = preds.get(&cur_bid).cloned().unwrap_or_default();
+    if pred_list.is_empty() {
+        if let Some(v) = vmap.get(&vid).copied() {
+            return Ok(match v {
+                BasicValueEnum::IntValue(iv) => {
+                    if iv.get_type() == i64t { iv }
+                    else { codegen.builder.build_int_z_extend(iv, i64t, "loc_zext").map_err(|e| e.to_string())? }
+                }
+                BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "loc_p2i").map_err(|e| e.to_string())?,
+                BasicValueEnum::FloatValue(fv) => codegen.builder.build_float_to_signed_int(fv, i64t, "loc_f2i").map_err(|e| e.to_string())?,
+                _ => i64t.const_zero(),
+            });
+        }
+        return Ok(i64t.const_zero());
+    }
+    // Build PHI at the top of current block (before any non-PHI), then restore insertion point
+    let saved_ip = codegen.builder.get_insert_block();
+    if let Some(first) = cur_llbb.get_first_instruction() {
+        codegen.builder.position_before(&first);
+    } else {
+        codegen.builder.position_at_end(cur_llbb);
+    }
+    let phi = codegen.builder.build_phi(i64t, &format!("loc_i64_{}", vid.as_u32())).map_err(|e| e.to_string())?;
+    for p in &pred_list {
+        let pred_bb = *bb_map.get(p).ok_or("pred bb missing")?;
+        // Fetch snapshot at end of pred; if missing, synthesize zero
+        let mut val = block_end_values
+            .get(p)
+            .and_then(|m| m.get(&vid).copied())
+            .unwrap_or_else(|| i64t.const_zero().into());
+        // Coerce to i64
+        use inkwell::types::BasicTypeEnum as BT;
+        val = match val {
+            BasicValueEnum::IntValue(iv) => {
+                if iv.get_type() == i64t { iv.into() }
+                else { codegen.builder.build_int_z_extend(iv, i64t, "loc_zext_p").map_err(|e| e.to_string())?.into() }
+            }
+            BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "loc_p2i_p").map_err(|e| e.to_string())?.into(),
+            BasicValueEnum::FloatValue(fv) => codegen.builder.build_float_to_signed_int(fv, i64t, "loc_f2i_p").map_err(|e| e.to_string())?.into(),
+            _ => i64t.const_zero().into(),
+        };
+        match val {
+            BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
+            _ => unreachable!(),
+        }
+    }
+    // Restore insertion point
+    if let Some(bb) = saved_ip { codegen.builder.position_at_end(bb); }
+    Ok(phi.as_basic_value().into_int_value())
 }

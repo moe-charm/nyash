@@ -3,11 +3,14 @@ use std::collections::HashMap;
 use inkwell::values::BasicValueEnum as BVE;
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{function::MirFunction, ValueId};
+use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
+use super::builder_cursor::BuilderCursor;
 
 /// Handle ArrayBox fast-paths. Returns true if handled.
-pub(super) fn try_handle_array_method<'ctx>(
+pub(super) fn try_handle_array_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: &Option<ValueId>,
@@ -42,9 +45,8 @@ pub(super) fn try_handle_array_method<'ctx>(
                 .module
                 .get_function("nyash_array_get_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash_array_get_h", fnty, None));
-            let call = codegen
-                .builder
-                .build_call(callee, &[recv_h.into(), idx_i.into()], "aget")
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), idx_i.into()], "aget"))
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call
@@ -79,9 +81,8 @@ pub(super) fn try_handle_array_method<'ctx>(
                 .module
                 .get_function("nyash_array_set_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash_array_set_h", fnty, None));
-            let _ = codegen
-                .builder
-                .build_call(callee, &[recv_h.into(), idx_i.into(), val_i.into()], "aset")
+            let _ = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), idx_i.into(), val_i.into()], "aset"))
                 .map_err(|e| e.to_string())?;
             Ok(true)
         }
@@ -95,9 +96,8 @@ pub(super) fn try_handle_array_method<'ctx>(
             let val_v = *vmap.get(&args[0]).ok_or("array.push value missing")?;
             let val_i = match val_v {
                 BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => codegen
-                    .builder
-                    .build_ptr_to_int(pv, i64t, "val_p2i")
+                BVE::PointerValue(pv) => cursor
+                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "val_p2i"))
                     .map_err(|e| e.to_string())?,
                 _ => return Err("array.push value must be int or handle ptr".to_string()),
             };
@@ -106,9 +106,8 @@ pub(super) fn try_handle_array_method<'ctx>(
                 .module
                 .get_function("nyash_array_push_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash_array_push_h", fnty, None));
-            let _ = codegen
-                .builder
-                .build_call(callee, &[recv_h.into(), val_i.into()], "apush")
+            let _ = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), val_i.into()], "apush"))
                 .map_err(|e| e.to_string())?;
             Ok(true)
         }
@@ -124,9 +123,8 @@ pub(super) fn try_handle_array_method<'ctx>(
                 .module
                 .get_function("nyash_array_length_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash_array_length_h", fnty, None));
-            let call = codegen
-                .builder
-                .build_call(callee, &[recv_h.into()], "alen")
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "alen"))
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call

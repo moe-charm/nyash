@@ -54,7 +54,9 @@ impl<'ctx, 'b> BuilderCursor<'ctx, 'b> {
     pub fn at_end(&mut self, bid: BasicBlockId, bb: BasicBlock<'ctx>) {
         self.cur_bid = Some(bid);
         self.cur_llbb = Some(bb);
-        self.closed_by_bid.insert(bid, false);
+        // Mark closed if LLVM already has a terminator in this block
+        let has_term = unsafe { bb.get_terminator() }.is_some();
+        self.closed_by_bid.insert(bid, has_term);
         self.builder.position_at_end(bb);
     }
 
@@ -70,6 +72,12 @@ impl<'ctx, 'b> BuilderCursor<'ctx, 'b> {
 
     pub fn emit_instr<T>(&mut self, bid: BasicBlockId, f: impl FnOnce(&Builder<'ctx>) -> T) -> T {
         self.assert_open(bid);
+        // Extra hard guard: check actual LLVM block state before inserting
+        if let Some(bb) = self.cur_llbb {
+            if unsafe { bb.get_terminator() }.is_some() {
+                panic!("post-terminator insert detected in bb {}", bid.as_u32());
+            }
+        }
         f(self.builder)
     }
 

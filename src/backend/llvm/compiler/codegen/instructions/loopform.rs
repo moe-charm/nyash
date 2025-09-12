@@ -161,3 +161,33 @@ pub fn lower_while_loopform<'ctx, 'b>(
     }
     Ok(true)
 }
+
+/// LoopForm header PHI normalization: when enabling latch→header, header gains an extra LLVM
+/// predecessor (latch) that is not represented in MIR predecessors. To satisfy LLVM's verifier,
+/// ensure every PHI in the header has an incoming for the latch. For Phase 1, we conservatively
+/// wire a typed zero as the incoming value for the latch.
+pub fn normalize_header_phis_for_latch<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    header_bid: BasicBlockId,
+    latch_bb: BasicBlock<'ctx>,
+    phis: &[(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)],
+) -> Result<(), String> {
+    use inkwell::types::BasicTypeEnum as BT;
+    let _ = header_bid; // reserved for future diagnostics
+    for (_dst, phi, _inputs) in phis {
+        let bt = phi.as_basic_value().get_type();
+        let z = match bt {
+            BT::IntType(it) => it.const_zero().into(),
+            BT::FloatType(ft) => ft.const_zero().into(),
+            BT::PointerType(pt) => pt.const_zero().into(),
+            _ => return Err("unsupported phi type for latch incoming".to_string()),
+        };
+        match z {
+            BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, latch_bb)]),
+            BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, latch_bb)]),
+            BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, latch_bb)]),
+            _ => return Err("unsupported zero value kind for latch incoming".to_string()),
+        }
+    }
+    Ok(())
+}

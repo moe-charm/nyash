@@ -25,3 +25,4 @@ pub(super) use consts::lower_const;
 pub(super) use arith_ops::{lower_binop, lower_unary};
 pub(super) use call::lower_call;
 pub(super) use loopform::{LoopFormContext, lower_while_loopform};
+pub(super) use loopform::normalize_header_phis_for_latch;

@@ -3,16 +3,22 @@ use std::collections::HashMap;
 use inkwell::values::BasicValueEnum;
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{function::MirFunction, CompareOp, ValueId};
+use crate::mir::{function::MirFunction, BasicBlockId, CompareOp, ValueId};
+use super::builder_cursor::BuilderCursor;
 
 /// Compare lowering: return the resulting BasicValueEnum (i1)
-pub(in super::super) fn lower_compare<'ctx>(
+pub(in super::super) fn lower_compare<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
     op: &CompareOp,
     lhs: &ValueId,
     rhs: &ValueId,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<BasicValueEnum<'ctx>, String> {
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     let lv = if let Some(v) = vmap.get(lhs).copied() {
@@ -46,10 +52,10 @@ pub(in super::super) fn lower_compare<'ctx>(
         if l_is_str && r_is_str {
             let i64t = codegen.context.i64_type();
             // Convert both sides to handles if needed
-            let to_handle = |v: BasicValueEnum<'ctx>| -> Result<inkwell::values::IntValue<'ctx>, String> {
+            let mut to_handle = |v: BasicValueEnum<'ctx>| -> Result<inkwell::values::IntValue<'ctx>, String> {
                 match v {
                     BasicValueEnum::IntValue(iv) => {
-                        if iv.get_type() == i64t { Ok(iv) } else { codegen.builder.build_int_s_extend(iv, i64t, "i2i64").map_err(|e| e.to_string()) }
+                        if iv.get_type() == i64t { Ok(iv) } else { cursor.emit_instr(cur_bid, |b| b.build_int_s_extend(iv, i64t, "i2i64")).map_err(|e| e.to_string()) }
                     }
                     BasicValueEnum::PointerValue(pv) => {
                         let fnty = i64t.fn_type(&[codegen.context.ptr_type(inkwell::AddressSpace::from(0)).into()], false);
@@ -57,9 +63,8 @@ pub(in super::super) fn lower_compare<'ctx>(
                             .module
                             .get_function("nyash.box.from_i8_string")
                             .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
-                        let call = codegen
-                            .builder
-                            .build_call(callee, &[pv.into()], "str_ptr_to_handle_cmp")
+                        let call = cursor
+                            .emit_instr(cur_bid, |b| b.build_call(callee, &[pv.into()], "str_ptr_to_handle_cmp"))
                             .map_err(|e| e.to_string())?;
                         let rv = call
                             .try_as_basic_value()
@@ -77,9 +82,8 @@ pub(in super::super) fn lower_compare<'ctx>(
                 .module
                 .get_function("nyash.string.eq_hh")
                 .unwrap_or_else(|| codegen.module.add_function("nyash.string.eq_hh", fnty, None));
-            let call = codegen
-                .builder
-                .build_call(callee, &[lh.into(), rh.into()], "str_eq_hh")
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[lh.into(), rh.into()], "str_eq_hh"))
                 .map_err(|e| e.to_string())?;
             let iv = call
                 .try_as_basic_value()
@@ -92,27 +96,29 @@ pub(in super::super) fn lower_compare<'ctx>(
             } else {
                 inkwell::IntPredicate::EQ
             };
-            let b = codegen
-                .builder
-                .build_int_compare(pred, iv, zero, "str_eq_to_bool")
+            let b = cursor
+                .emit_instr(cur_bid, |bd| bd.build_int_compare(pred, iv, zero, "str_eq_to_bool"))
                 .map_err(|e| e.to_string())?;
             return Ok(b.into());
         }
     }
-    let out = if let (Some(mut li), Some(mut ri)) = (as_int(lv), as_int(rv)) {
+    let out = if let (Some(_li0), Some(_ri0)) = (as_int(lv), as_int(rv)) {
+        // Localize integer operands into current block to satisfy dominance
+        let mut li = super::flow::localize_to_i64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)
+            .unwrap_or_else(|_| as_int(lv).unwrap());
+        let mut ri = super::flow::localize_to_i64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)
+            .unwrap_or_else(|_| as_int(rv).unwrap());
         // Normalize integer widths: extend the narrower to match the wider to satisfy LLVM
         let lw = li.get_type().get_bit_width();
         let rw = ri.get_type().get_bit_width();
         if lw != rw {
             if lw < rw {
-                li = codegen
-                    .builder
-                    .build_int_z_extend(li, ri.get_type(), "icmp_zext_l")
+                li = cursor
+                    .emit_instr(cur_bid, |b| b.build_int_z_extend(li, ri.get_type(), "icmp_zext_l"))
                     .map_err(|e| e.to_string())?;
             } else {
-                ri = codegen
-                    .builder
-                    .build_int_z_extend(ri, li.get_type(), "icmp_zext_r")
+                ri = cursor
+                    .emit_instr(cur_bid, |b| b.build_int_z_extend(ri, li.get_type(), "icmp_zext_r"))
                     .map_err(|e| e.to_string())?;
             }
         }
@@ -125,9 +131,8 @@ pub(in super::super) fn lower_compare<'ctx>(
             C::Gt => inkwell::IntPredicate::SGT,
             C::Ge => inkwell::IntPredicate::SGE,
         };
-        codegen
-            .builder
-            .build_int_compare(pred, li, ri, "icmp")
+        cursor
+            .emit_instr(cur_bid, |b| b.build_int_compare(pred, li, ri, "icmp"))
             .map_err(|e| e.to_string())?
             .into()
     } else if let (Some(lf), Some(rf)) = (as_float(lv), as_float(rv)) {
@@ -140,9 +145,8 @@ pub(in super::super) fn lower_compare<'ctx>(
             C::Gt => inkwell::FloatPredicate::OGT,
             C::Ge => inkwell::FloatPredicate::OGE,
         };
-        codegen
-            .builder
-            .build_float_compare(pred, lf, rf, "fcmp")
+        cursor
+            .emit_instr(cur_bid, |b| b.build_float_compare(pred, lf, rf, "fcmp"))
             .map_err(|e| e.to_string())?
             .into()
     } else if let (BasicValueEnum::PointerValue(lp), BasicValueEnum::PointerValue(rp)) = (lv, rv) {
@@ -151,22 +155,19 @@ pub(in super::super) fn lower_compare<'ctx>(
         match op {
             C::Eq | C::Ne => {
                 let i64t = codegen.context.i64_type();
-                let li = codegen
-                    .builder
-                    .build_ptr_to_int(lp, i64t, "pi_l")
+                let li = cursor
+                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(lp, i64t, "pi_l"))
                     .map_err(|e| e.to_string())?;
-                let ri = codegen
-                    .builder
-                    .build_ptr_to_int(rp, i64t, "pi_r")
+                let ri = cursor
+                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(rp, i64t, "pi_r"))
                     .map_err(|e| e.to_string())?;
                 let pred = if matches!(op, C::Eq) {
                     inkwell::IntPredicate::EQ
                 } else {
                     inkwell::IntPredicate::NE
                 };
-                codegen
-                    .builder
-                    .build_int_compare(pred, li, ri, "pcmp")
+                cursor
+                    .emit_instr(cur_bid, |b| b.build_int_compare(pred, li, ri, "pcmp"))
                     .map_err(|e| e.to_string())?
                     .into()
             }
@@ -175,9 +176,8 @@ pub(in super::super) fn lower_compare<'ctx>(
     } else if let (BasicValueEnum::PointerValue(lp), BasicValueEnum::IntValue(ri)) = (lv, rv) {
         use CompareOp as C;
         let i64t = codegen.context.i64_type();
-        let li = codegen
-            .builder
-            .build_ptr_to_int(lp, i64t, "pi_l")
+        let li = cursor
+            .emit_instr(cur_bid, |b| b.build_ptr_to_int(lp, i64t, "pi_l"))
             .map_err(|e| e.to_string())?;
         let pred = match op {
             C::Eq => inkwell::IntPredicate::EQ,
@@ -187,17 +187,15 @@ pub(in super::super) fn lower_compare<'ctx>(
             C::Gt => inkwell::IntPredicate::SGT,
             C::Ge => inkwell::IntPredicate::SGE,
         };
-        codegen
-            .builder
-            .build_int_compare(pred, li, ri, "pcmpi")
+        cursor
+            .emit_instr(cur_bid, |b| b.build_int_compare(pred, li, ri, "pcmpi"))
             .map_err(|e| e.to_string())?
             .into()
     } else if let (BasicValueEnum::IntValue(li), BasicValueEnum::PointerValue(rp)) = (lv, rv) {
         use CompareOp as C;
         let i64t = codegen.context.i64_type();
-        let ri = codegen
-            .builder
-            .build_ptr_to_int(rp, i64t, "pi_r")
+        let ri = cursor
+            .emit_instr(cur_bid, |b| b.build_ptr_to_int(rp, i64t, "pi_r"))
             .map_err(|e| e.to_string())?;
         let pred = match op {
             C::Eq => inkwell::IntPredicate::EQ,
@@ -207,9 +205,8 @@ pub(in super::super) fn lower_compare<'ctx>(
             C::Gt => inkwell::IntPredicate::SGT,
             C::Ge => inkwell::IntPredicate::SGE,
         };
-        codegen
-            .builder
-            .build_int_compare(pred, li, ri, "pcmpi")
+        cursor
+            .emit_instr(cur_bid, |b| b.build_int_compare(pred, li, ri, "pcmpi"))
             .map_err(|e| e.to_string())?
             .into()
     } else {

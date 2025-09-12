@@ -4,12 +4,15 @@ mod env;
 use std::collections::HashMap;
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{function::MirFunction, ValueId};
+use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 use inkwell::values::BasicValueEnum as BVE;
+use crate::backend::llvm::compiler::codegen::instructions::builder_cursor::BuilderCursor;
 
 /// Full ExternCall lowering dispatcher (console/debug/env.*)
-pub(in super::super) fn lower_externcall<'ctx>(
+pub(in super::super) fn lower_externcall<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, BVE<'ctx>>,
     dst: &Option<ValueId>,
@@ -22,21 +25,21 @@ pub(in super::super) fn lower_externcall<'ctx>(
         && matches!(method_name, "log" | "warn" | "error"))
         || (iface_name == "env.debug" && method_name == "trace")
     {
-        return console::lower_log_or_trace(codegen, vmap, dst, iface_name, method_name, args);
+        return console::lower_log_or_trace(codegen, cursor, cur_bid, vmap, dst, iface_name, method_name, args);
     }
     if iface_name == "env.console" && method_name == "readLine" {
-        return console::lower_readline(codegen, vmap, dst, args);
+        return console::lower_readline(codegen, cursor, cur_bid, vmap, dst, args);
     }
 
     // env.*
     if iface_name == "env.future" && method_name == "spawn_instance" {
-        return env::lower_future_spawn_instance(codegen, vmap, dst, args);
+        return env::lower_future_spawn_instance(codegen, cursor, cur_bid, vmap, dst, args);
     }
     if iface_name == "env.local" && method_name == "get" {
-        return env::lower_local_get(codegen, func, vmap, dst, args);
+        return env::lower_local_get(codegen, cursor, cur_bid, func, vmap, dst, args);
     }
     if iface_name == "env.box" && method_name == "new" {
-        return env::lower_box_new(codegen, vmap, dst, args);
+        return env::lower_box_new(codegen, cursor, cur_bid, vmap, dst, args);
     }
 
     Err(format!(
@@ -44,4 +47,3 @@ pub(in super::super) fn lower_externcall<'ctx>(
         iface_name, method_name
     ))
 }
-

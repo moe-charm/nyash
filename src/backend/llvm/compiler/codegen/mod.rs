@@ -219,7 +219,7 @@ impl LLVMCompiler {
                 for inst in &block.instructions {
                     match inst {
                         MirInstruction::NewBox { dst, box_type, args } => {
-                            instructions::lower_newbox(&codegen, &mut vmap, *dst, box_type, args, &box_type_ids)?;
+                            instructions::lower_newbox(&codegen, &mut cursor, *bid, &mut vmap, *dst, box_type, args, &box_type_ids)?;
                             defined_in_block.insert(*dst);
                         },
                         MirInstruction::Const { dst, value } => {
@@ -236,7 +236,11 @@ impl LLVMCompiler {
                                 .const_int(*b as u64, false)
                                 .into(),
                             ConstValue::String(s) => {
-                                // Hoist string creation to entry block to dominate all uses
+                                // Hoist string creation to entry block to dominate all uses.
+                                // If the entry block already has a terminator, insert just before it.
+                                let entry_term = unsafe { entry_bb.get_terminator() };
+                                if let Some(t) = entry_term { entry_builder.position_before(&t); }
+                                else { entry_builder.position_at_end(entry_bb); }
                                 let gv = entry_builder
                                     .build_global_string_ptr(s, "str")
                                     .map_err(|e| e.to_string())?;
@@ -270,7 +274,7 @@ impl LLVMCompiler {
                             defined_in_block.insert(*dst);
                         },
                         MirInstruction::Call { dst, func: callee, args, .. } => {
-                            instructions::lower_call(&codegen, func, &mut vmap, dst, callee, args, &const_strs, &llvm_funcs)?;
+                            instructions::lower_call(&codegen, &mut cursor, *bid, func, &mut vmap, dst, callee, args, &const_strs, &llvm_funcs)?;
                             if let Some(d) = dst { defined_in_block.insert(*d); }
                         }
                         MirInstruction::BoxCall {
@@ -284,6 +288,8 @@ impl LLVMCompiler {
                         // Delegate to refactored lowering and skip legacy body
                         instructions::lower_boxcall(
                             &codegen,
+                            &mut cursor,
+                            *bid,
                             func,
                             &mut vmap,
                             dst,
@@ -293,31 +299,34 @@ impl LLVMCompiler {
                             args,
                             &box_type_ids,
                             &entry_builder,
+                            &bb_map,
+                            &preds,
+                            &block_end_values,
                         )?;
                         if let Some(d) = dst { defined_in_block.insert(*d); }
                         },
                     MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
-                        instructions::lower_externcall(&codegen, func, &mut vmap, dst, iface_name, method_name, args)?;
+                        instructions::lower_externcall(&codegen, &mut cursor, *bid, func, &mut vmap, dst, iface_name, method_name, args)?;
                         if let Some(d) = dst { defined_in_block.insert(*d); }
                     },
                     MirInstruction::UnaryOp { dst, op, operand } => {
-                        instructions::lower_unary(&codegen, &mut vmap, *dst, op, operand)?;
+                        instructions::lower_unary(&codegen, &mut cursor, *bid, &mut vmap, *dst, op, operand)?;
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                        instructions::lower_binop(&codegen, func, &mut vmap, *dst, op, lhs, rhs)?;
+                        instructions::lower_binop(&codegen, &mut cursor, *bid, func, &mut vmap, *dst, op, lhs, rhs)?;
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::Compare { dst, op, lhs, rhs } => {
-                        let out = instructions::lower_compare(&codegen, func, &vmap, op, lhs, rhs)?;
+                        let out = instructions::lower_compare(&codegen, &mut cursor, *bid, func, &vmap, op, lhs, rhs, &bb_map, &preds, &block_end_values)?;
                         vmap.insert(*dst, out);
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::Store { value, ptr } => {
-                        instructions::lower_store(&codegen, &vmap, &mut allocas, &mut alloca_elem_types, value, ptr)?;
+                        instructions::lower_store(&codegen, &mut cursor, *bid, &vmap, &mut allocas, &mut alloca_elem_types, value, ptr)?;
                     },
                     MirInstruction::Load { dst, ptr } => {
-                        instructions::lower_load(&codegen, &mut vmap, &mut allocas, &mut alloca_elem_types, dst, ptr)?;
+                        instructions::lower_load(&codegen, &mut cursor, *bid, &mut vmap, &mut allocas, &mut alloca_elem_types, dst, ptr)?;
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::Phi { .. } => {
@@ -430,7 +439,7 @@ impl LLVMCompiler {
                             }
                         }
                         if !handled_by_loopform {
-                            instructions::emit_branch(&codegen, &mut cursor, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
+                            instructions::emit_branch(&codegen, &mut cursor, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap, &preds, &block_end_values)?;
                         }
                     }
                     _ => {
@@ -490,21 +499,25 @@ impl LLVMCompiler {
                 if sealed_mode {
                     instructions::flow::seal_block(&codegen, &mut cursor, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
                     sealed_blocks.insert(*bid);
-                    // If all predecessors of a successor are sealed, finalize its PHIs
-                    if let Some(succ_list) = succs.get(bid) {
-                        for sb in succ_list {
-                            if let Some(pre) = preds.get(sb) {
-                                if pre.iter().all(|p| sealed_blocks.contains(p)) {
-                                    instructions::flow::finalize_phis(&codegen, &mut cursor, func, *sb, &preds, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
-                                }
-                            }
-                        }
-                    }
-                    // Note: LoopForm latch→header adds a new LLVM pred not represented in MIR.
-                    // Header PHI normalization for this extra pred will be implemented later
-                    // using a LoopForm-aware finalize that does not rely on MIR inputs.
+                    // In sealed mode, we rely on seal_block to add incoming per pred when each pred is sealed.
+                    // finalize_phis is intentionally skipped to avoid duplicate incoming entries.
+                    // LoopForm latch→header is normalized in a separate post-pass below.
                 }
             }
+        // LoopForm header PHI normalization when latch→header is enabled (post-pass per function)
+        if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1") &&
+           std::env::var("NYASH_LOOPFORM_LATCH2HEADER").ok().as_deref() == Some("1") {
+            for (hdr_bid, (_dispatch_bb, _tag_phi, _payload_phi, latch_bb)) in &loopform_registry {
+                if let Some(phis) = phis_by_block.get(hdr_bid) {
+                    instructions::normalize_header_phis_for_latch(
+                        &codegen,
+                        *hdr_bid,
+                        *latch_bb,
+                        phis,
+                    )?;
+                }
+            }
+        }
         // Finalize function: ensure every basic block is closed with a terminator.
         // As a last resort, insert 'unreachable' into blocks that remain unterminated.
         for bb in llvm_func.get_basic_blocks() {
@@ -515,6 +528,17 @@ impl LLVMCompiler {
         }
         // Verify the fully-lowered function once, after all blocks
         if !llvm_func.verify(true) {
+            if std::env::var("NYASH_LLVM_DUMP_ON_FAIL").ok().as_deref() == Some("1") {
+                let ir = codegen.module.print_to_string().to_string();
+                let dump_dir = std::path::Path::new("tmp");
+                let _ = std::fs::create_dir_all(dump_dir);
+                let dump_path = dump_dir.join(format!("llvm_fail_{}.ll", sanitize(name)));
+                if let Err(e) = std::fs::write(&dump_path, ir) {
+                    eprintln!("[LLVM] failed to write IR dump: {}", e);
+                } else {
+                    eprintln!("[LLVM] wrote IR dump: {}", dump_path.display());
+                }
+            }
             return Err(format!("Function verification failed: {}", name));
         }
 

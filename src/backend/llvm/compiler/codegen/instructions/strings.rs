@@ -3,11 +3,15 @@ use std::collections::HashMap;
 use inkwell::{values::BasicValueEnum as BVE, AddressSpace};
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{function::MirFunction, ValueId};
+use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
+use super::builder_cursor::BuilderCursor;
+use super::flow::localize_to_i64;
 
 /// Handle String-specific methods. Returns true if handled, false to let caller continue.
-pub(super) fn try_handle_string_method<'ctx>(
+pub(super) fn try_handle_string_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: &Option<ValueId>,
@@ -15,6 +19,9 @@ pub(super) fn try_handle_string_method<'ctx>(
     method: &str,
     args: &[ValueId],
     recv_v: BVE<'ctx>,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
 ) -> Result<bool, String> {
     // Act if receiver is annotated as String/StringBox, or if the actual value is an i8* (string literal path)
     let is_string_recv = match func.metadata.value_types.get(box_val) {
@@ -38,9 +45,9 @@ pub(super) fn try_handle_string_method<'ctx>(
                     .module
                     .get_function("nyash.string.concat_ss")
                     .unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_ss", fnty, None));
-                let call = codegen
-                    .builder
-                    .build_call(callee, &[lp.into(), rp.into()], "concat_ss_call")
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b
+                        .build_call(callee, &[lp.into(), rp.into()], "concat_ss_call"))
                     .map_err(|e| e.to_string())?;
                 if let Some(d) = dst {
                     let rv = call
@@ -51,16 +58,18 @@ pub(super) fn try_handle_string_method<'ctx>(
                 }
                 return Ok(true);
             }
-            (BVE::PointerValue(lp), BVE::IntValue(ri)) => {
+            (BVE::PointerValue(lp), BVE::IntValue(_ri)) => {
                 let i64t = codegen.context.i64_type();
+                // Localize rhs integer in current block
+                let ri = localize_to_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
                 let fnty = i8p.fn_type(&[i8p.into(), i64t.into()], false);
                 let callee = codegen
                     .module
                     .get_function("nyash.string.concat_si")
                     .unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_si", fnty, None));
-                let call = codegen
-                    .builder
-                    .build_call(callee, &[lp.into(), ri.into()], "concat_si_call")
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b
+                        .build_call(callee, &[lp.into(), ri.into()], "concat_si_call"))
                     .map_err(|e| e.to_string())?;
                 if let Some(d) = dst {
                     let rv = call
@@ -71,16 +80,18 @@ pub(super) fn try_handle_string_method<'ctx>(
                 }
                 return Ok(true);
             }
-            (BVE::IntValue(li), BVE::PointerValue(rp)) => {
+            (BVE::IntValue(_li), BVE::PointerValue(rp)) => {
                 let i64t = codegen.context.i64_type();
+                // Localize receiver integer in current block (box_val)
+                let li = localize_to_i64(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
                 let fnty = i8p.fn_type(&[i64t.into(), i8p.into()], false);
                 let callee = codegen
                     .module
                     .get_function("nyash.string.concat_is")
                     .unwrap_or_else(|| codegen.module.add_function("nyash.string.concat_is", fnty, None));
-                let call = codegen
-                    .builder
-                    .build_call(callee, &[li.into(), rp.into()], "concat_is_call")
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b
+                        .build_call(callee, &[li.into(), rp.into()], "concat_is_call"))
                     .map_err(|e| e.to_string())?;
                 if let Some(d) = dst {
                     let rv = call
@@ -107,9 +118,9 @@ pub(super) fn try_handle_string_method<'ctx>(
                     .module
                     .get_function("nyash.box.from_i8_string")
                     .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
-                let call = codegen
-                    .builder
-                    .build_call(callee, &[p.into()], "str_ptr_to_handle")
+                let call = cursor
+                    .emit_instr(cur_bid, |b| b
+                        .build_call(callee, &[p.into()], "str_ptr_to_handle"))
                     .map_err(|e| e.to_string())?;
         
                 let rv = call
@@ -130,9 +141,9 @@ pub(super) fn try_handle_string_method<'ctx>(
             .module
             .get_function("nyash.string.len_h")
             .unwrap_or_else(|| codegen.module.add_function("nyash.string.len_h", fnty, None));
-        let call = codegen
-            .builder
-            .build_call(callee, &[recv_h.into()], "strlen_h")
+        let call = cursor
+            .emit_instr(cur_bid, |b| b
+                .build_call(callee, &[recv_h.into()], "strlen_h"))
             .map_err(|e| e.to_string())?;
         if let Some(d) = dst {
             let rv = call
@@ -154,46 +165,23 @@ pub(super) fn try_handle_string_method<'ctx>(
         // receiver preferably i8*; if it's a handle (i64), conservatively cast to i8*
         let recv_p = match recv_v {
             BVE::PointerValue(p) => p,
-            BVE::IntValue(iv) => codegen
-                .builder
-                .build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "str_h2p_sub")
+            BVE::IntValue(iv) => cursor
+                .emit_instr(cur_bid, |b| b
+                    .build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "str_h2p_sub"))
                 .map_err(|e| e.to_string())?,
             _ => return Ok(false),
         };
-        let a0 = *vmap.get(&args[0]).ok_or("substring start arg missing")?;
-        let a1 = *vmap.get(&args[1]).ok_or("substring end arg missing")?;
-        let s = match a0 {
-            BVE::IntValue(iv) => iv,
-            BVE::PointerValue(pv) => codegen
-                .builder
-                .build_ptr_to_int(pv, i64t, "substr_s_p2i")
-                .map_err(|e| e.to_string())?,
-            BVE::FloatValue(fv) => codegen
-                .builder
-                .build_float_to_signed_int(fv, i64t, "substr_s_f2i")
-                .map_err(|e| e.to_string())?,
-            _ => i64t.const_zero(),
-        };
-        let e = match a1 {
-            BVE::IntValue(iv) => iv,
-            BVE::PointerValue(pv) => codegen
-                .builder
-                .build_ptr_to_int(pv, i64t, "substr_e_p2i")
-                .map_err(|e| e.to_string())?,
-            BVE::FloatValue(fv) => codegen
-                .builder
-                .build_float_to_signed_int(fv, i64t, "substr_e_f2i")
-                .map_err(|e| e.to_string())?,
-            _ => i64t.const_zero(),
-        };
+        // Localize start/end indices to current block via sealed snapshots (i64)
+        let s = localize_to_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+        let e = localize_to_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
         let fnty = i8p.fn_type(&[i8p.into(), i64t.into(), i64t.into()], false);
         let callee = codegen
             .module
             .get_function("nyash.string.substring_sii")
             .unwrap_or_else(|| codegen.module.add_function("nyash.string.substring_sii", fnty, None));
-        let call = codegen
-            .builder
-            .build_call(callee, &[recv_p.into(), s.into(), e.into()], "substring_call")
+        let call = cursor
+            .emit_instr(cur_bid, |b| b
+                .build_call(callee, &[recv_p.into(), s.into(), e.into()], "substring_call"))
             .map_err(|e| e.to_string())?;
         if let Some(d) = dst {
             let rv = call
@@ -227,9 +215,9 @@ pub(super) fn try_handle_string_method<'ctx>(
             .module
             .get_function("nyash.string.lastIndexOf_ss")
             .unwrap_or_else(|| codegen.module.add_function("nyash.string.lastIndexOf_ss", fnty, None));
-        let call = codegen
-            .builder
-            .build_call(callee, &[recv_p.into(), needle_p.into()], "lastindexof_call")
+        let call = cursor
+            .emit_instr(cur_bid, |b| b
+                .build_call(callee, &[recv_p.into(), needle_p.into()], "lastindexof_call"))
             .map_err(|e| e.to_string())?;
         if let Some(d) = dst {
             let rv = call

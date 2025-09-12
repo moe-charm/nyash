@@ -3,15 +3,18 @@ use std::collections::HashMap;
 use inkwell::{types::BasicMetadataTypeEnum as BMT, values::{BasicMetadataValueEnum, BasicValueEnum as BVE, FunctionValue}};
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{function::MirFunction, ValueId};
+use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
+use crate::backend::llvm::compiler::codegen::instructions::builder_cursor::BuilderCursor;
 
 /// Lower a direct Call where callee is provided as a const string ValueId in MIR14.
 ///
 /// Requirements:
 /// - `const_strs`: mapping from ValueId to the string literal value within the same function.
 /// - `llvm_funcs`: predeclared LLVM functions keyed by MIR function name (same string as const).
-pub(in super::super) fn lower_call<'ctx>(
+pub(in super::super) fn lower_call<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     _func: &MirFunction,
     vmap: &mut HashMap<ValueId, BVE<'ctx>>,
     dst: &Option<ValueId>,
@@ -43,12 +46,11 @@ pub(in super::super) fn lower_call<'ctx>(
         let v = *vmap
             .get(a)
             .ok_or_else(|| format!("call arg missing: {}", a.as_u32()))?;
-        let tv = coerce_to_type(codegen, v, exp_tys[i])?;
+        let tv = coerce_to_type_cursor(codegen, cursor, cur_bid, v, exp_tys[i])?;
         params.push(tv.into());
     }
-    let call = codegen
-        .builder
-        .build_call(*target, &params, "call")
+    let call = cursor
+        .emit_instr(cur_bid, |b| b.build_call(*target, &params, "call"))
         .map_err(|e| e.to_string())?;
     if let Some(d) = dst {
         if let Some(rv) = call.try_as_basic_value().left() {
@@ -58,8 +60,10 @@ pub(in super::super) fn lower_call<'ctx>(
     Ok(())
 }
 
-fn coerce_to_type<'ctx>(
+fn coerce_to_type_cursor<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cur_bid: BasicBlockId,
     val: BVE<'ctx>,
     target: BMT<'ctx>,
 ) -> Result<BVE<'ctx>, String> {
@@ -71,40 +75,34 @@ fn coerce_to_type<'ctx>(
             if bw_src == bw_dst {
                 Ok(iv.into())
             } else if bw_src < bw_dst {
-                Ok(codegen
-                    .builder
-                    .build_int_z_extend(iv, it, "call_zext")
+                Ok(cursor
+                    .emit_instr(cur_bid, |b| b.build_int_z_extend(iv, it, "call_zext"))
                     .map_err(|e| e.to_string())?
                     .into())
             } else if bw_dst == 1 {
                 Ok(super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into())
             } else {
-                Ok(codegen
-                    .builder
-                    .build_int_truncate(iv, it, "call_trunc")
+                Ok(cursor
+                    .emit_instr(cur_bid, |b| b.build_int_truncate(iv, it, "call_trunc"))
                     .map_err(|e| e.to_string())?
                     .into())
             }
         }
-        (BVE::PointerValue(pv), BMTy::IntType(it)) => Ok(codegen
-            .builder
-            .build_ptr_to_int(pv, it, "call_p2i")
+        (BVE::PointerValue(pv), BMTy::IntType(it)) => Ok(cursor
+            .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, it, "call_p2i"))
             .map_err(|e| e.to_string())?
             .into()),
-        (BVE::FloatValue(fv), BMTy::IntType(it)) => Ok(codegen
-            .builder
-            .build_float_to_signed_int(fv, it, "call_f2i")
+        (BVE::FloatValue(fv), BMTy::IntType(it)) => Ok(cursor
+            .emit_instr(cur_bid, |b| b.build_float_to_signed_int(fv, it, "call_f2i"))
             .map_err(|e| e.to_string())?
             .into()),
-        (BVE::IntValue(iv), BMTy::PointerType(pt)) => Ok(codegen
-            .builder
-            .build_int_to_ptr(iv, pt, "call_i2p")
+        (BVE::IntValue(iv), BMTy::PointerType(pt)) => Ok(cursor
+            .emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, pt, "call_i2p"))
             .map_err(|e| e.to_string())?
             .into()),
         (BVE::PointerValue(pv), BMTy::PointerType(_)) => Ok(pv.into()),
-        (BVE::IntValue(iv), BMTy::FloatType(ft)) => Ok(codegen
-            .builder
-            .build_signed_int_to_float(iv, ft, "call_i2f")
+        (BVE::IntValue(iv), BMTy::FloatType(ft)) => Ok(cursor
+            .emit_instr(cur_bid, |b| b.build_signed_int_to_float(iv, ft, "call_i2f"))
             .map_err(|e| e.to_string())?
             .into()),
         (BVE::FloatValue(fv), BMTy::FloatType(_)) => Ok(fv.into()),
