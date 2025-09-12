@@ -134,9 +134,17 @@ pub fn lower_while_loopform<'ctx, 'b>(
     registry.insert(header_bid, (lf.dispatch, tag_phi, payload_phi, lf.latch));
     body_to_header.insert(body_bb, header_bid);
 
-    // Latch: keep unreachable for now (avoid adding a new predecessor to header)
+    // Latch: optionally jump back to header (gated), otherwise keep unreachable to avoid header pred増
     codegen.builder.position_at_end(lf.latch);
-    let _ = codegen.builder.build_unreachable();
+    if std::env::var("NYASH_LOOPFORM_LATCH2HEADER").ok().as_deref() == Some("1") {
+        codegen
+            .builder
+            .build_unconditional_branch(header_llbb)
+            .map_err(|e| e.to_string())
+            .unwrap();
+    } else {
+        let _ = codegen.builder.build_unreachable();
+    }
     // Exit: to original after
     codegen.builder.position_at_end(lf.exit);
     codegen

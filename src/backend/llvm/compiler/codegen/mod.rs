@@ -500,6 +500,9 @@ impl LLVMCompiler {
                             }
                         }
                     }
+                    // Note: LoopForm latch→header adds a new LLVM pred not represented in MIR.
+                    // Header PHI normalization for this extra pred will be implemented later
+                    // using a LoopForm-aware finalize that does not rely on MIR inputs.
                 }
             }
         // Finalize function: ensure every basic block is closed with a terminator.
