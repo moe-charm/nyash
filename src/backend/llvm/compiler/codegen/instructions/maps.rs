@@ -10,6 +10,7 @@ use super::builder_cursor::BuilderCursor;
 pub(super) fn try_handle_map_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
@@ -59,10 +60,7 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             }
             let key_v = *vmap.get(&args[0]).ok_or("map.has key missing")?;
             let key_i = match key_v {
-                BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => cursor
-                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "key_p2i"))
-                    .map_err(|e| e.to_string())?,
+                BVE::IntValue(_) | BVE::PointerValue(_) => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap).map_err(|e| e.to_string())?,
                 _ => return Err("map.has key must be int or handle ptr".to_string()),
             };
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
@@ -91,7 +89,8 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             }
             let key_v = *vmap.get(&args[0]).ok_or("map.get key missing")?;
             let call = match key_v {
-                BVE::IntValue(iv) => {
+                BVE::IntValue(_) => {
+                    let iv = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
                     let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
                     let callee = codegen
                         .module
@@ -147,17 +146,11 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             let key_v = *vmap.get(&args[0]).ok_or("map.set key missing")?;
             let val_v = *vmap.get(&args[1]).ok_or("map.set value missing")?;
             let key_i = match key_v {
-                BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => cursor
-                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "key_p2i"))
-                    .map_err(|e| e.to_string())?,
+                BVE::IntValue(_) | BVE::PointerValue(_) => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap).map_err(|e| e.to_string())?,
                 _ => return Err("map.set key must be int or handle ptr".to_string()),
             };
             let val_i = match val_v {
-                BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => cursor
-                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "val_p2i"))
-                    .map_err(|e| e.to_string())?,
+                BVE::IntValue(_) | BVE::PointerValue(_) => resolver.resolve_i64(codegen, cursor, cur_bid, args[1], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap).map_err(|e| e.to_string())?,
                 _ => return Err("map.set value must be int or handle ptr".to_string()),
             };
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into()], false);

@@ -16,6 +16,7 @@ use super::super::types::to_bool;
 
 /// LoopForm scaffolding — fixed block layout for while/loop normalization
 pub struct LoopFormContext<'ctx> {
+    pub preheader: BasicBlock<'ctx>,
     pub header: BasicBlock<'ctx>,
     pub body: BasicBlock<'ctx>,
     pub dispatch: BasicBlock<'ctx>,
@@ -32,6 +33,9 @@ impl<'ctx> LoopFormContext<'ctx> {
         loop_id: u32,
         prefix: &str,
     ) -> Self {
+        let preheader = codegen
+            .context
+            .append_basic_block(function, &format!("{}_lf{}_preheader", prefix, loop_id));
         let header = codegen
             .context
             .append_basic_block(function, &format!("{}_lf{}_header", prefix, loop_id));
@@ -47,7 +51,7 @@ impl<'ctx> LoopFormContext<'ctx> {
         let exit = codegen
             .context
             .append_basic_block(function, &format!("{}_lf{}_exit", prefix, loop_id));
-        Self { header, body, dispatch, latch, exit, loop_id }
+        Self { preheader, header, body, dispatch, latch, exit, loop_id }
     }
 }
 
@@ -78,6 +82,13 @@ pub fn lower_while_loopform<'ctx, 'b>(
 
     // Create LoopForm fixed blocks under the same function
     let lf = LoopFormContext::new(codegen, llvm_func, loop_id, prefix);
+    // Preheader: currently a pass-through to header (Phase 1)
+    codegen.builder.position_at_end(lf.preheader);
+    codegen
+        .builder
+        .build_unconditional_branch(lf.header)
+        .map_err(|e| e.to_string())
+        .unwrap();
 
     // Header: evaluate condition and branch to body (for true) or dispatch (for false)
     let cond_v = *vmap.get(condition).ok_or("loopform: condition value missing")?;

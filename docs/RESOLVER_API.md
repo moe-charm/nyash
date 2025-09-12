@@ -8,7 +8,9 @@ Goals
 Design
 - `Resolver` keeps small per-function caches keyed by `(BasicBlockId, ValueId)`.
 - `resolve_i64(...)` returns an `i64`-typed `IntValue`, inserting PHI and casts as needed using sealed snapshots.
-- Internally uses `flow::localize_to_i64(...)` for now; later, fold logic directly and add `resolve_ptr/resolve_f64`.
+- `resolve_ptr(...)` returns an `i8*` `PointerValue`, PHI at BB start; int handles are bridged via `inttoptr`.
+- `resolve_f64(...)` returns an `f64` `FloatValue`, PHI at BB start; ints bridged via `sitofp`.
+- Internally uses `flow::localize_to_i64(...)` for the i64 path; pointer/float are localized directly.
 
 Usage (planned wiring)
 - Create `let mut resolver = instructions::Resolver::new();` at function lowering start.
@@ -16,10 +18,8 @@ Usage (planned wiring)
 - Keep builder insertion discipline via `BuilderCursor`.
 
 Next
-- Add `resolve_ptr(...)` and `resolve_f64(...)` with same caching discipline.
-- Migrate existing `localize_to_i64` call sites to the resolver.
+- Migrate remaining `localize_to_i64` call sites to the resolver.
 - Enforce vmap direct access ban in lowerers (Resolver-only for reads).
 
 Acceptance tie-in
 - Combined with LoopForm: dispatch-only PHI + resolver-based value access → dominance violations drop to zero (A2.5).
-

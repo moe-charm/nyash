@@ -221,17 +221,14 @@ pub(in super::super) fn seal_block<'ctx, 'b>(
                             }
                         };
                             // Insert any required casts in the predecessor block, right before its terminator
-                            let saved_block = codegen.builder.get_insert_block();
                             if let Some(pred_llbb) = bb_map.get(&bid) {
-                                let term = unsafe { pred_llbb.get_terminator() };
-                                if let Some(t) = term {
-                                    codegen.builder.position_before(&t);
-                                } else {
-                                    codegen.builder.position_at_end(*pred_llbb);
-                                }
+                                cursor.with_block(bid, *pred_llbb, |c| {
+                                    let term = unsafe { pred_llbb.get_terminator() };
+                                    if let Some(t) = term { codegen.builder.position_before(&t); }
+                                    else { c.position_at_end(*pred_llbb); }
+                                    val = coerce_to_type(codegen, phi, val).expect("coerce_to_type in seal_block");
+                                });
                             }
-                            val = coerce_to_type(codegen, phi, val)?;
-                            if let Some(bb) = saved_block { codegen.builder.position_at_end(bb); }
                             let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                                 let tys = phi
@@ -341,14 +338,14 @@ pub(in super::super) fn finalize_phis<'ctx, 'b>(
                         }
                     };
                     // Insert casts in pred block, just before its terminator
-                    let saved_block = codegen.builder.get_insert_block();
                     if let Some(pred_llbb) = bb_map.get(pred) {
-                        let term = unsafe { pred_llbb.get_terminator() };
-                        if let Some(t) = term { codegen.builder.position_before(&t); }
-                        else { codegen.builder.position_at_end(*pred_llbb); }
+                        cursor.with_block(*pred, *pred_llbb, |c| {
+                            let term = unsafe { pred_llbb.get_terminator() };
+                            if let Some(t) = term { codegen.builder.position_before(&t); }
+                            else { c.position_at_end(*pred_llbb); }
+                            val = coerce_to_type(codegen, phi, val).expect("coerce_to_type finalize_phis");
+                        });
                     }
-                    val = coerce_to_type(codegen, phi, val)?;
-                    if let Some(bb) = saved_block { codegen.builder.position_at_end(bb); }
                     let pred_bb = *bb_map.get(pred).ok_or("pred bb missing")?;
                     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                         eprintln!(

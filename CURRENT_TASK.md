@@ -212,6 +212,12 @@ Hot Update — 2025‑09‑12 (sealed + dominator 修正の途中経過)
   - 適用先: strings.substring の start/end、strings.concat の si/is、compare の整数比較、flow.emit_branch の条件（int/ptr/float→i1）
 - 失敗時IRダンプ: `NYASH_LLVM_DUMP_ON_FAIL=1` で `tmp/llvm_fail_<func>.ll` を出力（関数検証失敗時）
 
+Hot Update — 2025‑09‑12 (Resolver 適用拡大 + sealed 既定ON)
+- Resolver: i64/ptr/f64 を実装（per‑functionキャッシュ＋BB先頭PHI）。
+- 適用: emit_branch 条件、strings(substring/concat si|is)、arith_ops(整数演算)、compare(整数比較)、externcall(console/env)、newbox(env.box.new_i64)、call の引数解決を Resolver 経由に統一。
+- 非sealed配線の削除: emit_jump/emit_branch 内の直接incoming追加を撤去。sealedスナップショット＋Resolverの需要駆動で一本化。
+- 既定: `NYASH_LLVM_PHI_SEALED` 未設定=ON（`0` のみOFF）。
+
 Smoke（sealed=ON, dep_tree_min_string）所見
 - 進展: PHI 欠落は再現せず、sealed での incoming 配線は安定
 - 依然NG: Main.node_json/3 で dominator 違反（Instruction does not dominate all uses!）

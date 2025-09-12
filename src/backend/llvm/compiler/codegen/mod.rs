@@ -277,7 +277,22 @@ impl LLVMCompiler {
                             defined_in_block.insert(*dst);
                         },
                         MirInstruction::Call { dst, func: callee, args, .. } => {
-                            instructions::lower_call(&codegen, &mut cursor, *bid, func, &mut vmap, dst, callee, args, &const_strs, &llvm_funcs)?;
+                        instructions::lower_call(
+                            &codegen,
+                            &mut cursor,
+                            &mut resolver,
+                            *bid,
+                            func,
+                            &mut vmap,
+                            dst,
+                            callee,
+                            args,
+                            &const_strs,
+                            &llvm_funcs,
+                            &bb_map,
+                            &preds,
+                            &block_end_values,
+                        )?;
                             if let Some(d) = dst { defined_in_block.insert(*d); }
                         }
                         MirInstruction::BoxCall {

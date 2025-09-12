@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell::values::{BasicValueEnum as BVE, IntValue};
+use inkwell::values::PointerValue;
 
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{BasicBlockId, ValueId};
@@ -12,11 +13,13 @@ use super::flow::localize_to_i64;
 /// redundant PHIs and casts when multiple users in the same block request the same MIR value.
 pub struct Resolver<'ctx> {
     i64_locals: HashMap<(BasicBlockId, ValueId), IntValue<'ctx>>,
+    ptr_locals: HashMap<(BasicBlockId, ValueId), PointerValue<'ctx>>,
+    f64_locals: HashMap<(BasicBlockId, ValueId), inkwell::values::FloatValue<'ctx>>,
 }
 
 impl<'ctx> Resolver<'ctx> {
     pub fn new() -> Self {
-        Self { i64_locals: HashMap::new() }
+        Self { i64_locals: HashMap::new(), ptr_locals: HashMap::new(), f64_locals: HashMap::new() }
     }
 
     /// Resolve a MIR value as an i64 dominating the current block.
@@ -39,5 +42,112 @@ impl<'ctx> Resolver<'ctx> {
         self.i64_locals.insert((cur_bid, vid), iv);
         Ok(iv)
     }
-}
 
+    /// Resolve a MIR value as an i8* pointer dominating the current block.
+    pub fn resolve_ptr<'b>(
+        &mut self,
+        codegen: &CodegenContext<'ctx>,
+        cursor: &mut BuilderCursor<'ctx, 'b>,
+        cur_bid: BasicBlockId,
+        vid: ValueId,
+        bb_map: &std::collections::HashMap<BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+        preds: &std::collections::HashMap<BasicBlockId, Vec<BasicBlockId>>,
+        block_end_values: &std::collections::HashMap<BasicBlockId, std::collections::HashMap<ValueId, BVE<'ctx>>>,
+        vmap: &std::collections::HashMap<ValueId, BVE<'ctx>>,
+    ) -> Result<PointerValue<'ctx>, String> {
+        if let Some(pv) = self.ptr_locals.get(&(cur_bid, vid)).copied() {
+            return Ok(pv);
+        }
+        let i8p = codegen.context.ptr_type(inkwell::AddressSpace::from(0));
+        let cur_llbb = *bb_map.get(&cur_bid).ok_or("cur bb missing")?;
+        let pred_list = preds.get(&cur_bid).cloned().unwrap_or_default();
+        // Insert PHI at block start
+        let saved_ip = codegen.builder.get_insert_block();
+        if let Some(first) = cur_llbb.get_first_instruction() { codegen.builder.position_before(&first); }
+        else { codegen.builder.position_at_end(cur_llbb); }
+        let phi = codegen.builder.build_phi(i8p, &format!("loc_p_{}", vid.as_u32())).map_err(|e| e.to_string())?;
+        if pred_list.is_empty() {
+            // Entry-like block: derive from vmap or zero
+            let base = vmap.get(&vid).copied().unwrap_or_else(|| i8p.const_zero().into());
+            let coerced = match base {
+                BVE::PointerValue(pv) => pv,
+                BVE::IntValue(iv) => cursor.emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, i8p, "loc_i2p")).map_err(|e| e.to_string())?,
+                BVE::FloatValue(_) => i8p.const_zero(),
+                _ => i8p.const_zero(),
+            };
+            phi.add_incoming(&[(&coerced, cur_llbb)]);
+        } else {
+            for p in &pred_list {
+                let pred_bb = *bb_map.get(p).ok_or("pred bb missing")?;
+                let base = block_end_values
+                    .get(p)
+                    .and_then(|m| m.get(&vid).copied())
+                    .unwrap_or_else(|| i8p.const_zero().into());
+                let coerced = match base {
+                    BVE::PointerValue(pv) => pv,
+                    BVE::IntValue(iv) => codegen.builder.build_int_to_ptr(iv, i8p, "loc_i2p_p").map_err(|e| e.to_string())?,
+                    BVE::FloatValue(_) => i8p.const_zero(),
+                    _ => i8p.const_zero(),
+                };
+                phi.add_incoming(&[(&coerced, pred_bb)]);
+            }
+        }
+        if let Some(bb) = saved_ip { codegen.builder.position_at_end(bb); }
+        let out = phi.as_basic_value().into_pointer_value();
+        self.ptr_locals.insert((cur_bid, vid), out);
+        Ok(out)
+    }
+
+    /// Resolve a MIR value as an f64 dominating the current block.
+    pub fn resolve_f64<'b>(
+        &mut self,
+        codegen: &CodegenContext<'ctx>,
+        cursor: &mut BuilderCursor<'ctx, 'b>,
+        cur_bid: BasicBlockId,
+        vid: ValueId,
+        bb_map: &std::collections::HashMap<BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+        preds: &std::collections::HashMap<BasicBlockId, Vec<BasicBlockId>>,
+        block_end_values: &std::collections::HashMap<BasicBlockId, std::collections::HashMap<ValueId, BVE<'ctx>>>,
+        vmap: &std::collections::HashMap<ValueId, BVE<'ctx>>,
+    ) -> Result<inkwell::values::FloatValue<'ctx>, String> {
+        if let Some(fv) = self.f64_locals.get(&(cur_bid, vid)).copied() {
+            return Ok(fv);
+        }
+        let f64t = codegen.context.f64_type();
+        let cur_llbb = *bb_map.get(&cur_bid).ok_or("cur bb missing")?;
+        let pred_list = preds.get(&cur_bid).cloned().unwrap_or_default();
+        let saved_ip = codegen.builder.get_insert_block();
+        if let Some(first) = cur_llbb.get_first_instruction() { codegen.builder.position_before(&first); }
+        else { codegen.builder.position_at_end(cur_llbb); }
+        let phi = codegen.builder.build_phi(f64t, &format!("loc_f64_{}", vid.as_u32())).map_err(|e| e.to_string())?;
+        if pred_list.is_empty() {
+            let base = vmap.get(&vid).copied().unwrap_or_else(|| f64t.const_zero().into());
+            let coerced = match base {
+                BVE::FloatValue(fv) => fv,
+                BVE::IntValue(iv) => codegen.builder.build_signed_int_to_float(iv, f64t, "loc_i2f").map_err(|e| e.to_string())?,
+                BVE::PointerValue(_) => f64t.const_zero(),
+                _ => f64t.const_zero(),
+            };
+            phi.add_incoming(&[(&coerced, cur_llbb)]);
+        } else {
+            for p in &pred_list {
+                let pred_bb = *bb_map.get(p).ok_or("pred bb missing")?;
+                let base = block_end_values
+                    .get(p)
+                    .and_then(|m| m.get(&vid).copied())
+                    .unwrap_or_else(|| f64t.const_zero().into());
+                let coerced = match base {
+                    BVE::FloatValue(fv) => fv,
+                    BVE::IntValue(iv) => codegen.builder.build_signed_int_to_float(iv, f64t, "loc_i2f_p").map_err(|e| e.to_string())?,
+                    BVE::PointerValue(_) => f64t.const_zero(),
+                    _ => f64t.const_zero(),
+                };
+                phi.add_incoming(&[(&coerced, pred_bb)]);
+            }
+        }
+        if let Some(bb) = saved_ip { codegen.builder.position_at_end(bb); }
+        let out = phi.as_basic_value().into_float_value();
+        self.f64_locals.insert((cur_bid, vid), out);
+        Ok(out)
+    }
+}

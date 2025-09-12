@@ -14,6 +14,7 @@ use crate::backend::llvm::compiler::codegen::instructions::builder_cursor::Build
 pub(in super::super) fn lower_call<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     _func: &MirFunction,
     vmap: &mut HashMap<ValueId, BVE<'ctx>>,
@@ -22,6 +23,9 @@ pub(in super::super) fn lower_call<'ctx, 'b>(
     args: &[ValueId],
     const_strs: &HashMap<ValueId, String>,
     llvm_funcs: &HashMap<String, FunctionValue<'ctx>>,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BVE<'ctx>>>,
 ) -> Result<(), String> {
     let name_s = const_strs
         .get(callee)
@@ -43,11 +47,43 @@ pub(in super::super) fn lower_call<'ctx, 'b>(
     }
     let mut params: Vec<BasicMetadataValueEnum> = Vec::with_capacity(args.len());
     for (i, a) in args.iter().enumerate() {
-        let v = *vmap
-            .get(a)
-            .ok_or_else(|| format!("call arg missing: {}", a.as_u32()))?;
-        let tv = coerce_to_type_cursor(codegen, cursor, cur_bid, v, exp_tys[i])?;
-        params.push(tv.into());
+        use inkwell::types::BasicMetadataTypeEnum as BMTy;
+        let coerced: BVE<'ctx> = match exp_tys[i] {
+            BMTy::IntType(it) => {
+                // Localize as i64, then adjust width to callee expectation
+                let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
+                let bw_dst = it.get_bit_width();
+                let bw_src = iv.get_type().get_bit_width();
+                if bw_src == bw_dst { iv.into() }
+                else if bw_src < bw_dst { cursor.emit_instr(cur_bid, |b| b.build_int_z_extend(iv, it, "call_arg_zext")).map_err(|e| e.to_string())?.into() }
+                else if bw_dst == 1 { super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into() }
+                else { cursor.emit_instr(cur_bid, |b| b.build_int_truncate(iv, it, "call_arg_trunc")).map_err(|e| e.to_string())?.into() }
+            }
+            BMTy::PointerType(pt) => {
+                // Localize as i64 handle and convert to expected pointer type
+                let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
+                let p = cursor
+                    .emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, pt, "call_arg_i2p"))
+                    .map_err(|e| e.to_string())?;
+                p.into()
+            }
+            BMTy::FloatType(ft) => {
+                // Localize as f64, then adjust to callee expectation width if needed
+                let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
+                if fv.get_type() == ft { fv.into() }
+                else {
+                    // Cast f64<->f32 as needed
+                    cursor
+                        .emit_instr(cur_bid, |b| b.build_float_cast(fv, ft, "call_arg_fcast"))
+                        .map_err(|e| e.to_string())?
+                        .into()
+                }
+            }
+            _ => {
+                return Err("call: unsupported parameter type (expected int/ptr/float)".to_string());
+            }
+        };
+        params.push(coerced.into());
     }
     let call = cursor
         .emit_instr(cur_bid, |b| b.build_call(*target, &params, "call"))
@@ -58,54 +94,4 @@ pub(in super::super) fn lower_call<'ctx, 'b>(
         }
     }
     Ok(())
-}
-
-fn coerce_to_type_cursor<'ctx, 'b>(
-    codegen: &CodegenContext<'ctx>,
-    cursor: &mut BuilderCursor<'ctx, 'b>,
-    cur_bid: BasicBlockId,
-    val: BVE<'ctx>,
-    target: BMT<'ctx>,
-) -> Result<BVE<'ctx>, String> {
-    use inkwell::types::BasicMetadataTypeEnum as BMTy;
-    match (val, target) {
-        (BVE::IntValue(iv), BMTy::IntType(it)) => {
-            let bw_src = iv.get_type().get_bit_width();
-            let bw_dst = it.get_bit_width();
-            if bw_src == bw_dst {
-                Ok(iv.into())
-            } else if bw_src < bw_dst {
-                Ok(cursor
-                    .emit_instr(cur_bid, |b| b.build_int_z_extend(iv, it, "call_zext"))
-                    .map_err(|e| e.to_string())?
-                    .into())
-            } else if bw_dst == 1 {
-                Ok(super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into())
-            } else {
-                Ok(cursor
-                    .emit_instr(cur_bid, |b| b.build_int_truncate(iv, it, "call_trunc"))
-                    .map_err(|e| e.to_string())?
-                    .into())
-            }
-        }
-        (BVE::PointerValue(pv), BMTy::IntType(it)) => Ok(cursor
-            .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, it, "call_p2i"))
-            .map_err(|e| e.to_string())?
-            .into()),
-        (BVE::FloatValue(fv), BMTy::IntType(it)) => Ok(cursor
-            .emit_instr(cur_bid, |b| b.build_float_to_signed_int(fv, it, "call_f2i"))
-            .map_err(|e| e.to_string())?
-            .into()),
-        (BVE::IntValue(iv), BMTy::PointerType(pt)) => Ok(cursor
-            .emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, pt, "call_i2p"))
-            .map_err(|e| e.to_string())?
-            .into()),
-        (BVE::PointerValue(pv), BMTy::PointerType(_)) => Ok(pv.into()),
-        (BVE::IntValue(iv), BMTy::FloatType(ft)) => Ok(cursor
-            .emit_instr(cur_bid, |b| b.build_signed_int_to_float(iv, ft, "call_i2f"))
-            .map_err(|e| e.to_string())?
-            .into()),
-        (BVE::FloatValue(fv), BMTy::FloatType(_)) => Ok(fv.into()),
-        (v, _) => Ok(v),
-    }
 }

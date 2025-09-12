@@ -10,6 +10,7 @@ use super::builder_cursor::BuilderCursor;
 pub(super) fn try_handle_array_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
@@ -18,6 +19,9 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
     method: &str,
     args: &[ValueId],
     recv_h: inkwell::values::IntValue<'ctx>,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
 ) -> Result<bool, String> {
     // Only when receiver is ArrayBox
     let is_array = matches!(func.metadata.value_types.get(box_val), Some(crate::mir::MirType::Box(b)) if b == "ArrayBox")
@@ -34,12 +38,7 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
             if args.len() != 1 {
                 return Err("ArrayBox.get expects 1 arg".to_string());
             }
-            let idx_v = *vmap.get(&args[0]).ok_or("array.get index missing")?;
-            let idx_i = if let BVE::IntValue(iv) = idx_v {
-                iv
-            } else {
-                return Err("array.get index must be int".to_string());
-            };
+            let idx_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module
@@ -64,18 +63,8 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
             if args.len() != 2 {
                 return Err("ArrayBox.set expects 2 arg".to_string());
             }
-            let idx_v = *vmap.get(&args[0]).ok_or("array.set index missing")?;
-            let val_v = *vmap.get(&args[1]).ok_or("array.set value missing")?;
-            let idx_i = if let BVE::IntValue(iv) = idx_v {
-                iv
-            } else {
-                return Err("array.set index must be int".to_string());
-            };
-            let val_i = if let BVE::IntValue(iv) = val_v {
-                iv
-            } else {
-                return Err("array.set value must be int".to_string());
-            };
+            let idx_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+            let val_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module
@@ -93,14 +82,7 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
             if args.len() != 1 {
                 return Err("ArrayBox.push expects 1 arg".to_string());
             }
-            let val_v = *vmap.get(&args[0]).ok_or("array.push value missing")?;
-            let val_i = match val_v {
-                BVE::IntValue(iv) => iv,
-                BVE::PointerValue(pv) => cursor
-                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(pv, i64t, "val_p2i"))
-                    .map_err(|e| e.to_string())?,
-                _ => return Err("array.push value must be int or handle ptr".to_string()),
-            };
+            let val_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module
