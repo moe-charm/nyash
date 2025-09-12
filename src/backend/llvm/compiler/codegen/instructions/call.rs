@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use inkwell::values::{BasicValueEnum as BVE, FunctionValue};
+use inkwell::{types::BasicMetadataTypeEnum as BMT, values::{BasicMetadataValueEnum, BasicValueEnum as BVE, FunctionValue}};
 
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, ValueId};
@@ -27,16 +27,25 @@ pub(in super::super) fn lower_call<'ctx>(
         .get(name_s)
         .ok_or_else(|| format!("call: function not predeclared: {}", name_s))?;
 
-    // Collect args in order
-    let mut avs: Vec<BVE<'ctx>> = Vec::with_capacity(args.len());
-    for a in args {
+    // Collect and coerce args to the callee's expected parameter types
+    let fn_ty = target.get_type();
+    let exp_tys: Vec<BMT<'ctx>> = fn_ty.get_param_types();
+    if exp_tys.len() != args.len() {
+        return Err(format!(
+            "call: arg count mismatch for {} (expected {}, got {})",
+            name_s,
+            exp_tys.len(),
+            args.len()
+        ));
+    }
+    let mut params: Vec<BasicMetadataValueEnum> = Vec::with_capacity(args.len());
+    for (i, a) in args.iter().enumerate() {
         let v = *vmap
             .get(a)
             .ok_or_else(|| format!("call arg missing: {}", a.as_u32()))?;
-        avs.push(v);
+        let tv = coerce_to_type(codegen, v, exp_tys[i])?;
+        params.push(tv.into());
     }
-    let params: Vec<inkwell::values::BasicMetadataValueEnum> =
-        avs.iter().map(|v| (*v).into()).collect();
     let call = codegen
         .builder
         .build_call(*target, &params, "call")
@@ -49,3 +58,56 @@ pub(in super::super) fn lower_call<'ctx>(
     Ok(())
 }
 
+fn coerce_to_type<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    val: BVE<'ctx>,
+    target: BMT<'ctx>,
+) -> Result<BVE<'ctx>, String> {
+    use inkwell::types::BasicMetadataTypeEnum as BMTy;
+    match (val, target) {
+        (BVE::IntValue(iv), BMTy::IntType(it)) => {
+            let bw_src = iv.get_type().get_bit_width();
+            let bw_dst = it.get_bit_width();
+            if bw_src == bw_dst {
+                Ok(iv.into())
+            } else if bw_src < bw_dst {
+                Ok(codegen
+                    .builder
+                    .build_int_z_extend(iv, it, "call_zext")
+                    .map_err(|e| e.to_string())?
+                    .into())
+            } else if bw_dst == 1 {
+                Ok(super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into())
+            } else {
+                Ok(codegen
+                    .builder
+                    .build_int_truncate(iv, it, "call_trunc")
+                    .map_err(|e| e.to_string())?
+                    .into())
+            }
+        }
+        (BVE::PointerValue(pv), BMTy::IntType(it)) => Ok(codegen
+            .builder
+            .build_ptr_to_int(pv, it, "call_p2i")
+            .map_err(|e| e.to_string())?
+            .into()),
+        (BVE::FloatValue(fv), BMTy::IntType(it)) => Ok(codegen
+            .builder
+            .build_float_to_signed_int(fv, it, "call_f2i")
+            .map_err(|e| e.to_string())?
+            .into()),
+        (BVE::IntValue(iv), BMTy::PointerType(pt)) => Ok(codegen
+            .builder
+            .build_int_to_ptr(iv, pt, "call_i2p")
+            .map_err(|e| e.to_string())?
+            .into()),
+        (BVE::PointerValue(pv), BMTy::PointerType(_)) => Ok(pv.into()),
+        (BVE::IntValue(iv), BMTy::FloatType(ft)) => Ok(codegen
+            .builder
+            .build_signed_int_to_float(iv, ft, "call_i2f")
+            .map_err(|e| e.to_string())?
+            .into()),
+        (BVE::FloatValue(fv), BMTy::FloatType(_)) => Ok(fv.into()),
+        (v, _) => Ok(v),
+    }
+}

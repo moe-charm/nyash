@@ -132,10 +132,14 @@ pub(in super::super) fn lower_boxcall<'ctx>(
                 s
             };
             if let Some(callee) = codegen.module.get_function(&sym) {
+                // Coerce arguments to callee parameter types
+                let exp_tys = callee.get_type().get_param_types();
+                if exp_tys.len() != args.len() { return Err("boxcall direct-call: arg count mismatch".to_string()); }
                 let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = Vec::with_capacity(args.len());
-                for a in args {
+                for (i, a) in args.iter().enumerate() {
                     let v = *vmap.get(a).ok_or("boxcall func arg missing")?;
-                    call_args.push(v.into());
+                    let tv = coerce_to_type(codegen, v, exp_tys[i])?;
+                    call_args.push(tv.into());
                 }
                 let call = codegen
                     .builder
@@ -215,5 +219,35 @@ pub(in super::super) fn lower_boxcall<'ctx>(
             return Ok(());
         }
         Err(format!("BoxCall requires method_id for method '{}'. The method_id should be automatically injected during MIR compilation.", method))
+    }
+}
+
+fn coerce_to_type<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    val: inkwell::values::BasicValueEnum<'ctx>,
+    target: inkwell::types::BasicMetadataTypeEnum<'ctx>,
+) -> Result<inkwell::values::BasicValueEnum<'ctx>, String> {
+    use inkwell::types::BasicMetadataTypeEnum as BT;
+    match (val, target) {
+        (inkwell::values::BasicValueEnum::IntValue(iv), BT::IntType(it)) => {
+            let bw_src = iv.get_type().get_bit_width();
+            let bw_dst = it.get_bit_width();
+            if bw_src == bw_dst {
+                Ok(iv.into())
+            } else if bw_src < bw_dst {
+                Ok(codegen.builder.build_int_z_extend(iv, it, "bc_zext").map_err(|e| e.to_string())?.into())
+            } else if bw_dst == 1 {
+                Ok(super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into())
+            } else {
+                Ok(codegen.builder.build_int_truncate(iv, it, "bc_trunc").map_err(|e| e.to_string())?.into())
+            }
+        }
+        (inkwell::values::BasicValueEnum::PointerValue(pv), BT::IntType(it)) => Ok(codegen.builder.build_ptr_to_int(pv, it, "bc_p2i").map_err(|e| e.to_string())?.into()),
+        (inkwell::values::BasicValueEnum::FloatValue(fv), BT::IntType(it)) => Ok(codegen.builder.build_float_to_signed_int(fv, it, "bc_f2i").map_err(|e| e.to_string())?.into()),
+        (inkwell::values::BasicValueEnum::IntValue(iv), BT::PointerType(pt)) => Ok(codegen.builder.build_int_to_ptr(iv, pt, "bc_i2p").map_err(|e| e.to_string())?.into()),
+        (inkwell::values::BasicValueEnum::PointerValue(pv), BT::PointerType(_)) => Ok(pv.into()),
+        (inkwell::values::BasicValueEnum::IntValue(iv), BT::FloatType(ft)) => Ok(codegen.builder.build_signed_int_to_float(iv, ft, "bc_i2f").map_err(|e| e.to_string())?.into()),
+        (inkwell::values::BasicValueEnum::FloatValue(fv), BT::FloatType(_)) => Ok(fv.into()),
+        (v, _) => Ok(v),
     }
 }

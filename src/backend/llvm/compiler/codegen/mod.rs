@@ -112,7 +112,8 @@ impl LLVMCompiler {
             // Create basic blocks (prefix names with function label to avoid any ambiguity)
             let fn_label = sanitize(name);
             let (mut bb_map, entry_bb) = instructions::create_basic_blocks(&codegen, llvm_func, func, &fn_label);
-            codegen.builder.position_at_end(entry_bb);
+            let mut cursor = instructions::builder_cursor::BuilderCursor::new(&codegen.builder);
+            cursor.at_end(func.entry_block, entry_bb);
             let mut vmap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
             let mut allocas: HashMap<ValueId, PointerValue> = HashMap::new();
             let entry_builder = codegen.context.create_builder();
@@ -198,14 +199,8 @@ impl LLVMCompiler {
             let sealed_mode = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
             for (bi, bid) in block_ids.iter().enumerate() {
                 let bb = *bb_map.get(bid).unwrap();
-                if codegen
-                    .builder
-                    .get_insert_block()
-                    .map(|b| b != bb)
-                    .unwrap_or(true)
-                {
-                    codegen.builder.position_at_end(bb);
-                }
+                // Use cursor to position at BB start for lowering
+                cursor.at_end(*bid, bb);
                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                     eprintln!("[LLVM] lowering bb={}", bid.as_u32());
                 }
@@ -334,32 +329,32 @@ impl LLVMCompiler {
                     eprintln!("[LLVM] terminator present for bb={}", bid.as_u32());
                 }
                 // Ensure builder is positioned at current block before emitting terminator
-                codegen.builder.position_at_end(bb);
+                cursor.at_end(*bid, bb);
                 match term {
                     MirInstruction::Return { value } => {
-                        instructions::emit_return(&codegen, func, &vmap, value)?;
+                        instructions::emit_return(&codegen, &mut cursor, *bid, func, &vmap, value)?;
                     }
                     MirInstruction::Jump { target } => {
-                        instructions::emit_jump(&codegen, *bid, target, &bb_map, &phis_by_block, &vmap)?;
+                        instructions::emit_jump(&codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block, &vmap)?;
                     }
                     MirInstruction::Branch { condition, then_bb, else_bb } => {
-                        instructions::emit_branch(&codegen, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
+                        instructions::emit_branch(&codegen, &mut cursor, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
                     }
                     _ => {
                         // Ensure builder is at this block before fallback branch
-                        codegen.builder.position_at_end(bb);
+                        cursor.at_end(*bid, bb);
                         // Unknown/unhandled terminator: conservatively branch forward
                         if let Some(next_bid) = block_ids.get(bi + 1) {
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                                 eprintln!("[LLVM] unknown terminator fallback: bb={} -> next={}", bid.as_u32(), next_bid.as_u32());
                             }
-                            instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                            instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
                         } else {
                             let entry_first = func.entry_block;
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                                 eprintln!("[LLVM] unknown terminator fallback: bb={} -> entry={}", bid.as_u32(), entry_first.as_u32());
                             }
-                            instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                            instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                         }
                     }
                 }
@@ -368,14 +363,14 @@ impl LLVMCompiler {
                     eprintln!("[LLVM] no terminator in MIR for bb={} (fallback)", bid.as_u32());
                 }
                 // Ensure builder is at this block before fallback branch
-                codegen.builder.position_at_end(bb);
+                cursor.at_end(*bid, bb);
                 // Fallback: branch to the next block if any; otherwise loop to entry
                 if let Some(next_bid) = block_ids.get(bi + 1) {
-                    instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
                 } else {
                     // last block, loop to entry to satisfy verifier
                     let entry_first = func.entry_block;
-                    instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                 }
             }
             // Extra guard: if the current LLVM basic block still lacks a terminator for any reason,
@@ -385,24 +380,32 @@ impl LLVMCompiler {
                     eprintln!("[LLVM] extra guard inserting fallback for bb={}", bid.as_u32());
                 }
                 // Ensure the builder is positioned at the end of this block before inserting the fallback terminator
-                codegen.builder.position_at_end(bb);
+                cursor.at_end(*bid, bb);
                 if let Some(next_bid) = block_ids.get(bi + 1) {
                     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                         eprintln!("[LLVM] fallback terminator: bb={} -> next={}", bid.as_u32(), next_bid.as_u32());
                     }
-                    instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
                 } else {
                     let entry_first = func.entry_block;
                     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                         eprintln!("[LLVM] fallback terminator: bb={} -> entry={}", bid.as_u32(), entry_first.as_u32());
                     }
-                    instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                 }
             }
                 if sealed_mode {
                     instructions::flow::seal_block(&codegen, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
                 }
             }
+        // Finalize function: ensure every basic block is closed with a terminator.
+        // As a last resort, insert 'unreachable' into blocks that remain unterminated.
+        for bb in llvm_func.get_basic_blocks() {
+            if unsafe { bb.get_terminator() }.is_none() {
+                codegen.builder.position_at_end(bb);
+                let _ = codegen.builder.build_unreachable();
+            }
+        }
         // Verify the fully-lowered function once, after all blocks
         if !llvm_func.verify(true) {
             return Err(format!("Function verification failed: {}", name));

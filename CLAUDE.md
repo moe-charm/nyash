@@ -393,6 +393,7 @@ box MyBox {
 - **⚡ VM実装**: [VM_README.md](docs/VM_README.md)
 - **🌐 Netプラグイン**: [net-plugin.md](docs/reference/plugin-system/net-plugin.md)
 - **🎮 実装済みアプリ**: サイコロRPG・統計計算・LISPインタープリター
+- **🔧 ABI統合インデックス**: [ABI_INDEX.md](docs/reference/abi/ABI_INDEX.md)
 
 ## 🎨 GUI開発
 

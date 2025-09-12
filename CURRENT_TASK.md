@@ -72,6 +72,29 @@ TODO — Sealed SSA 段階導入（実装タスク）
 - 収集は `compile_function` の BB ループ内で行い、`phis_by_block` と同スコープで管理すると取り回しが良い
 - 将来の拡張として `value_at_end_of_block(var, bb)` ヘルパを導入し、sealed/unsealed を内部で吸収する API 化を検討
 
+Hot Plan — Structured Terminators（RAII BuilderCursor）
+- 目的: 末端処理を設計で保証（未終端や終端後挿入を構造で不可能に）し、終端まわりのフォールバック重複を削減する
+- ポリシー: 「開いているブロックにのみ命令を挿入できる。終端を置いた瞬間に閉じる。閉じたブロックへの挿入は即panic」
+
+TODO — BuilderCursor 導入と段階適用
+- [ ] 新規: `builder_cursor.rs` を追加（`BuilderCursor` / `BlockState` / `with_block`）
+  - API: `at_end(bid, llbb)`, `emit_instr(f)`, `emit_term(f)`, `assert_open(bid)`
+  - 実装: inkwell::Builder を参照で保持し、`closed_by_bid: HashMap<BasicBlockId,bool>` を管理
+- [ ] 既存終端APIを置換
+  - 変更: `emit_return / emit_jump / emit_branch` を `BuilderCursor::emit_term` 経由に
+  - 呼び出し元: codegen/mod.rs 側から `&mut BuilderCursor` を渡す
+- [ ] 位置ずれの解消（最小）
+  - cast 等の補助命令は「pred終端直前」へ（position_before）を維持
+  - 既存の entry_builder 経路で位置ずれが起きないよう、必要箇所のみ `with_block` を使用
+- [ ] 関数終端の最終保証
+  - `finalize_function`: 未終端BBには `unreachable` を挿入（最後の砦）
+- [ ] 代表スモークの回帰（Sealed=ON）
+  - 期待: 未終端エラー・終端後挿入エラーの消滅。PHI配線は snapshot により安定
+
+Note
+- フェーズ1では「終端APIと位置ずれの構造化」の最小適用に留め、フォールバック（最終unreachable）を併用
+- フェーズ2で with_block の適用範囲を広げ、余剰なガード・分岐フォールバックを削除していく（ソースは小さくシンプルに）
+
 Plan — PHI/SSA Hardening (Sealed SSA)
 - Sealed SSA 入れ替え（安全に段階導入）
   - Blockごとに `sealed: bool` と `incomplete_phis: Map<Var, Phi>` を保持
