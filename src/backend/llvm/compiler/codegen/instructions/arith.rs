@@ -10,6 +10,7 @@ use super::builder_cursor::BuilderCursor;
 pub(in super::super) fn lower_compare<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
@@ -104,9 +105,11 @@ pub(in super::super) fn lower_compare<'ctx, 'b>(
     }
     let out = if let (Some(_li0), Some(_ri0)) = (as_int(lv), as_int(rv)) {
         // Localize integer operands into current block to satisfy dominance
-        let mut li = super::flow::localize_to_i64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)
+        let mut li = resolver
+            .resolve_i64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)
             .unwrap_or_else(|_| as_int(lv).unwrap());
-        let mut ri = super::flow::localize_to_i64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)
+        let mut ri = resolver
+            .resolve_i64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)
             .unwrap_or_else(|_| as_int(rv).unwrap());
         // Normalize integer widths: extend the narrower to match the wider to satisfy LLVM
         let lw = li.get_type().get_bit_width();

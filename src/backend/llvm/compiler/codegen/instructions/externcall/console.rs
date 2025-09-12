@@ -10,12 +10,16 @@ use crate::backend::llvm::compiler::codegen::instructions::builder_cursor::Build
 pub(super) fn lower_log_or_trace<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     vmap: &mut HashMap<ValueId, BVE<'ctx>>,
     dst: &Option<ValueId>,
     iface_name: &str,
     method_name: &str,
     args: &[ValueId],
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BVE<'ctx>>>,
 ) -> Result<(), String> {
     if args.len() != 1 {
         return Err(format!("{}.{} expects 1 arg", iface_name, method_name));
@@ -49,23 +53,8 @@ pub(super) fn lower_log_or_trace<'ctx, 'b>(
         }
         // Otherwise, convert to i64 and call handle variant
         _ => {
-            let arg_val = match av {
-                BVE::IntValue(iv) => {
-                    if iv.get_type() == codegen.context.bool_type() {
-                        cursor
-                            .emit_instr(cur_bid, |b| b.build_int_z_extend(iv, codegen.context.i64_type(), "bool2i64"))
-                            .map_err(|e| e.to_string())?
-                    } else if iv.get_type() == codegen.context.i64_type() {
-                        iv
-                    } else {
-                        cursor
-                            .emit_instr(cur_bid, |b| b.build_int_s_extend(iv, codegen.context.i64_type(), "int2i64"))
-                            .map_err(|e| e.to_string())?
-                    }
-                }
-                BVE::PointerValue(_) => unreachable!(),
-                _ => return Err("console.log arg conversion failed".to_string()),
-            };
+            // Localize to i64 to satisfy dominance
+            let arg_val = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
             let fnty = codegen
                 .context
                 .i64_type()

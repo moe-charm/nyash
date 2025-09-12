@@ -57,6 +57,7 @@ pub(in super::super) fn lower_unary<'ctx, 'b>(
 pub(in super::super) fn lower_binop<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
@@ -64,6 +65,9 @@ pub(in super::super) fn lower_binop<'ctx, 'b>(
     op: &BinaryOp,
     lhs: &ValueId,
     rhs: &ValueId,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use inkwell::values::BasicValueEnum as BVE;
@@ -221,7 +225,12 @@ pub(in super::super) fn lower_binop<'ctx, 'b>(
         return Ok(());
     }
 
-    let out = if let (Some(li), Some(ri)) = (as_int(lv), as_int(rv)) {
+    let out = if let (Some(_li0), Some(_ri0)) = (as_int(lv), as_int(rv)) {
+        // Localize integer operands into current block to satisfy dominance (normalize to i64)
+        let li = resolver.resolve_i64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)
+            .unwrap_or_else(|_| codegen.context.i64_type().const_zero());
+        let ri = resolver.resolve_i64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)
+            .unwrap_or_else(|_| codegen.context.i64_type().const_zero());
         use BinaryOp as B;
         match op {
             B::Add => cursor.emit_instr(cur_bid, |b| b.build_int_add(li, ri, "iadd")).map_err(|e| e.to_string())?.into(),

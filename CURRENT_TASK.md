@@ -15,7 +15,7 @@ Compact Roadmap (2025‑09‑12)
   - BuilderCursor: post‑terminator挿入を即panic（strings/arith_ops/memへ適用済）。
 - Next (short):
   1) BuilderCursor厳格化の適用拡大（externcall→newbox→arrays→maps→call）。
-  2) Sealed SSA を既定ONに一本化（finalize_phis停止、seal_blockで完結）。
+  2) Sealed SSA を既定ONに一本化（finalize_phis停止、seal_blockで完結）。NYASH_LLVM_PHI_SEALED は未設定時=ON。
   3) LoopForm header PHI正規化の安定化（latch→header ON 時も verifier green）。
   4) body→dispatchを単純ボディで常用化（段階ゲート）。
   5) 計測: dispatch-only PHI/ゼロ合成減少、post‑terminator検知ゼロ継続。
@@ -53,6 +53,21 @@ Hot Update — 2025‑09‑12 (Plan: LLVM wrapper via Nyash ABI)
   - モード切替フラグ: `NYASH_LLVM_USE_HARNESS=1`（ON時は llvmlite ハーネスに委譲）。
   - I/O 仕様: 入力=MIR(JSON/メモリ), 出力=.o（`NYASH_AOT_OBJECT_OUT` に書き出し）。
 - 受け入れ: harness ON/OFF で dep_tree_min_string の出力一致（機能同値）。
+
+Scaffold — 2025‑09‑12 (llvmlite harness)
+- Added tools/llvmlite_harness.py (trivial ny_main returning 0) and docs/LLVM_HARNESS.md.
+- Use to validate toolchain wiring; extend to lower MIR14 JSON incrementally.
+
+Scaffold — 2025‑09‑12 (Resolver i64 minimal)
+- Added src/backend/llvm/compiler/codegen/instructions/resolver.rs with `Resolver::resolve_i64(...)` and per-block cache.
+- docs/RESOLVER_API.md documents goals/usage; wiring to replace `localize_to_i64` callsites comes next.
+
+Docs — LLVM layer overview (2025‑09‑12)
+- Added docs/LLVM_LAYER_OVERVIEW.md and linked it with existing docs:
+  - docs/LOWERING_LLVM.md — concrete lowering rules and RT calls
+  - docs/RESOLVER_API.md — value resolution (sealed/localize) API and cache
+  - docs/LLVM_HARNESS.md — llvmlite harness scope and interface
+  Use as the canonical reference for invariants: Resolver-only reads, cast placement, cursor discipline, sealed SSA, and LoopForm shape.
 
 Hot Repro — esc_json/1 PHI 配線（2025‑09‑12）
 - 対象: apps/selfhost/tools/dep_tree_min_string.nyash
@@ -187,6 +202,36 @@ Done (today)
 - BuilderCursor 適用（第1弾）: strings/arith_ops/mem を Cursor 経由に統一。post-terminator 挿入検知を強化。
 - Sealed SSA: `finalize_phis` を停止し、`seal_block` に一本化。LoopForm latch→header の header PHI 正規化を追加（ゲート付）。
 
+Hot Update — 2025‑09‑12 (sealed + dominator 修正の途中経過)
+- BuilderCursor 全域化 拡大（第一波 完了）
+  - externcall(console/env), newbox, arrays, maps, call, compare を Cursor 経由へ移行
+  - 既存 strings/arith_ops/mem とあわせて、ほぼ全 lowering が post‑terminator 防止のガード下に
+- on‑demand PHI（局所化）導入（flow::localize_to_i64）
+  - 目的: 「現在BBで利用する i64 値」を pred スナップショットから PHI 生成して局所定義に置換→支配関係違反を解消
+  - 生成位置: BB 先頭（既存PHIの前）に挿入。挿入点は保存/復元
+  - 適用先: strings.substring の start/end、strings.concat の si/is、compare の整数比較、flow.emit_branch の条件（int/ptr/float→i1）
+- 失敗時IRダンプ: `NYASH_LLVM_DUMP_ON_FAIL=1` で `tmp/llvm_fail_<func>.ll` を出力（関数検証失敗時）
+
+Smoke（sealed=ON, dep_tree_min_string）所見
+- 進展: PHI 欠落は再現せず、sealed での incoming 配線は安定
+- 依然NG: Main.node_json/3 で dominator 違反（Instruction does not dominate all uses!）
+  - iadd→icmp/sub/substring/concat 連鎖の一部で、iadd 定義が利用点を支配していない
+  - 対応済: 分岐条件/整数比較/substring/concat の整数引数は局所化済み
+  - まだの可能性が高い箇所: そのほかの lowering 内で vmap 経由の整数使用（BoxCall/ExternCall/arith_ops 内の再利用点など）
+
+Next（引き継ぎアクション）
+1) 局所化の適用拡大（優先）
+   - vmap から整数値を読み出して利用する全パスで `localize_to_i64` を適用
+   - 候補: arith_ops（BinOpのオペランド再利用箇所）、BoxCall の残りの整数引数、他メソッドの整数パラメータ
+   - types.to_bool 直叩きは emit 側での「局所化→!=0」に段階移行
+2) Resolver API の一般化
+   - 「ValueId→現在BBの値」を返す resolver を導入（まず i64、必要に応じて ptr/f64 へ拡張）
+   - 全 lowering から resolver 経由で値取得し、支配関係崩れを根本排除
+3) IR 可視化/検証強化
+   - 失敗関数の .ll を確認し、局所化漏れの使用点を特定→順次塞ぐ
+4) 併走: llvmlite 検証ハーネス（`NYASH_LLVM_USE_HARNESS=1`）
+   - PHI/loop/短絡の形を高速に検証→Rust 実装へ反映（機能一致を Acceptance A5 で担保）
+
 Refactor — LLVM codegen instructions modularized (done)
 - Goal achieved: `instructions.rs` を段階分割し、責務ごとに再配置（0‑diff）。
 - New layout under `src/backend/llvm/compiler/codegen/instructions/`:
@@ -275,6 +320,7 @@ Next Flow（これからの流れ＝段階導入）
 Acceptance（段階ごと）
 - A1: LoopForm ON でも従来挙動と等価（Break 集約のみ・非破壊、smoke green）。
 - A2: BuilderCursor 厳格化で post-terminator が検知ゼロ（panic不発）が続く。
+- A2.5: sealed=ON で dep_tree_min_string の dominator 違反ゼロ（IR dump 不要レベル）。
 - A3: header PHI 正規化後、latch→header 有効でも verifier green（PHI 欠落なし）。
 - A4: body→dispatch を単純ボディで常用化し、dispatch 以外に PHI が出ないことを確認。
 - A5: `NYASH_LLVM_USE_HARNESS=1`（llvmlite）と OFF（Rust）の出力が dep_tree_min_string で機能一致。

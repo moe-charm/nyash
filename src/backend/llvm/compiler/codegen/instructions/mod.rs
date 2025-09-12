@@ -13,6 +13,7 @@ mod maps;
 mod arith_ops;
 mod call;
 mod loopform;
+mod resolver;
 
 pub(super) use blocks::{create_basic_blocks, precreate_phis};
 pub(super) use flow::{emit_branch, emit_jump, emit_return};
@@ -26,3 +27,4 @@ pub(super) use arith_ops::{lower_binop, lower_unary};
 pub(super) use call::lower_call;
 pub(super) use loopform::{LoopFormContext, lower_while_loopform};
 pub(super) use loopform::normalize_header_phis_for_latch;
+pub(super) use resolver::Resolver;

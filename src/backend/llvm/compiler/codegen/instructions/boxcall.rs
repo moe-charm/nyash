@@ -16,6 +16,7 @@ use super::builder_cursor::BuilderCursor;
 pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
@@ -59,7 +60,7 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
 
     // Delegate String methods
     if super::strings::try_handle_string_method(
-        codegen, cursor, cur_bid, func, vmap, dst, box_val, method, args, recv_v,
+        codegen, cursor, resolver, cur_bid, func, vmap, dst, box_val, method, args, recv_v,
         bb_map, preds, block_end_values,
     )? {
         return Ok(());
@@ -77,7 +78,21 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
 
     // Console convenience: treat println as env.console.log
     if method == "println" {
-        return super::externcall::lower_externcall(codegen, cursor, cur_bid, func, vmap, dst, &"env.console".to_string(), &"log".to_string(), args);
+        return super::externcall::lower_externcall(
+            codegen,
+            cursor,
+            resolver,
+            cur_bid,
+            func,
+            vmap,
+            dst,
+            &"env.console".to_string(),
+            &"log".to_string(),
+            args,
+            bb_map,
+            preds,
+            block_end_values,
+        );
     }
 
     // getField/setField

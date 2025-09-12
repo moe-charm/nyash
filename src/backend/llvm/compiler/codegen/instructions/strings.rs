@@ -5,12 +5,13 @@ use inkwell::{values::BasicValueEnum as BVE, AddressSpace};
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 use super::builder_cursor::BuilderCursor;
-use super::flow::localize_to_i64;
+use super::Resolver;
 
 /// Handle String-specific methods. Returns true if handled, false to let caller continue.
 pub(super) fn try_handle_string_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut Resolver<'ctx>,
     cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
@@ -60,8 +61,8 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
             }
             (BVE::PointerValue(lp), BVE::IntValue(_ri)) => {
                 let i64t = codegen.context.i64_type();
-                // Localize rhs integer in current block
-                let ri = localize_to_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+                // Localize rhs integer in current block via Resolver
+                let ri = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
                 let fnty = i8p.fn_type(&[i8p.into(), i64t.into()], false);
                 let callee = codegen
                     .module
@@ -83,7 +84,7 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
             (BVE::IntValue(_li), BVE::PointerValue(rp)) => {
                 let i64t = codegen.context.i64_type();
                 // Localize receiver integer in current block (box_val)
-                let li = localize_to_i64(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
+                let li = resolver.resolve_i64(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
                 let fnty = i8p.fn_type(&[i64t.into(), i8p.into()], false);
                 let callee = codegen
                     .module
@@ -172,8 +173,8 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
             _ => return Ok(false),
         };
         // Localize start/end indices to current block via sealed snapshots (i64)
-        let s = localize_to_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
-        let e = localize_to_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
+        let s = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+        let e = resolver.resolve_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
         let fnty = i8p.fn_type(&[i8p.into(), i64t.into(), i64t.into()], false);
         let callee = codegen
             .module

@@ -56,38 +56,7 @@ pub(in super::super) fn emit_jump<'ctx, 'b>(
     >,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
 ) -> Result<(), String> {
-    let sealed = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
-    if !sealed {
-    if let Some(list) = phis_by_block.get(target) {
-        for (_dst, phi, inputs) in list {
-            if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
-                let mut val = *vmap.get(in_vid).ok_or("phi incoming value missing")?;
-                let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
-                // Coerce incoming to PHI type when needed
-                val = coerce_to_type(codegen, phi, val)?;
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    let tys = phi
-                        .as_basic_value()
-                        .get_type()
-                        .print_to_string()
-                        .to_string();
-                    eprintln!(
-                        "[PHI] incoming add pred_bb={} val={} ty={}",
-                        bid.as_u32(),
-                        in_vid.as_u32(),
-                        tys
-                    );
-                }
-                match val {
-                    BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
-                    BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
-                    BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
-                    _ => return Err("unsupported phi incoming value".to_string()),
-                }
-            }
-        }
-    }
-    }
+    // Non-sealed incoming wiring removed: rely on sealed snapshots and resolver-driven PHIs.
     let tbb = *bb_map.get(target).ok_or("target bb missing")?;
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
         eprintln!("[LLVM] emit_jump: {} -> {}", bid.as_u32(), target.as_u32());
@@ -101,6 +70,7 @@ pub(in super::super) fn emit_jump<'ctx, 'b>(
 pub(in super::super) fn emit_branch<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     bid: BasicBlockId,
     condition: &ValueId,
     then_bb: &BasicBlockId,
@@ -118,79 +88,13 @@ pub(in super::super) fn emit_branch<'ctx, 'b>(
     let cond_v = *vmap.get(condition).ok_or("cond missing")?;
     let b = match cond_v {
         BasicValueEnum::IntValue(_) | BasicValueEnum::PointerValue(_) | BasicValueEnum::FloatValue(_) => {
-            let ci = localize_to_i64(codegen, cursor, bid, *condition, bb_map, preds, block_end_values, vmap)?;
+            let ci = resolver.resolve_i64(codegen, cursor, bid, *condition, bb_map, preds, block_end_values, vmap)?;
             let zero = codegen.context.i64_type().const_zero();
             codegen.builder.build_int_compare(inkwell::IntPredicate::NE, ci, zero, "cond_nez").map_err(|e| e.to_string())?
         }
         _ => to_bool(codegen.context, cond_v, &codegen.builder)?,
     };
-    let sealed = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
-    // then
-    if !sealed {
-    if let Some(list) = phis_by_block.get(then_bb) {
-        for (_dst, phi, inputs) in list {
-            if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
-                let mut val = *vmap
-                    .get(in_vid)
-                    .ok_or("phi incoming (then) value missing")?;
-                let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
-                val = coerce_to_type(codegen, phi, val)?;
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    let tys = phi
-                        .as_basic_value()
-                        .get_type()
-                        .print_to_string()
-                        .to_string();
-                    eprintln!(
-                        "[PHI] incoming add (then) pred_bb={} val={} ty={}",
-                        bid.as_u32(),
-                        in_vid.as_u32(),
-                        tys
-                    );
-                }
-                match val {
-                    BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
-                    BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
-                    BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
-                    _ => return Err("unsupported phi incoming value (then)".to_string()),
-                }
-            }
-        }
-    }
-    }
-    // else
-    if !sealed {
-    if let Some(list) = phis_by_block.get(else_bb) {
-        for (_dst, phi, inputs) in list {
-            if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
-                let mut val = *vmap
-                    .get(in_vid)
-                    .ok_or("phi incoming (else) value missing")?;
-                let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
-                val = coerce_to_type(codegen, phi, val)?;
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    let tys = phi
-                        .as_basic_value()
-                        .get_type()
-                        .print_to_string()
-                        .to_string();
-                    eprintln!(
-                        "[PHI] incoming add (else) pred_bb={} val={} ty={}",
-                        bid.as_u32(),
-                        in_vid.as_u32(),
-                        tys
-                    );
-                }
-                match val {
-                    BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
-                    BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
-                    BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
-                    _ => return Err("unsupported phi incoming value (else)".to_string()),
-                }
-            }
-        }
-    }
-    }
+    // Non-sealed incoming wiring removed: rely on sealed snapshots and resolver-driven PHIs.
     let tbb = *bb_map.get(then_bb).ok_or("then bb missing")?;
     let ebb = *bb_map.get(else_bb).ok_or("else bb missing")?;
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {

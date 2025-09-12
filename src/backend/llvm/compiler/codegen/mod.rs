@@ -203,10 +203,13 @@ impl LLVMCompiler {
 
             // Lower body
             let mut loopform_loop_id: u32 = 0;
-            let sealed_mode = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
+            // Default sealed-SSA ON unless explicitly disabled with NYASH_LLVM_PHI_SEALED=0
+            let sealed_mode = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() != Some("0");
             // LoopForm registry (per-function lowering; gated)
             let mut loopform_registry: HashMap<crate::mir::BasicBlockId, (inkwell::basic_block::BasicBlock, PhiValue, PhiValue, inkwell::basic_block::BasicBlock)> = HashMap::new();
             let mut loopform_body_to_header: HashMap<crate::mir::BasicBlockId, crate::mir::BasicBlockId> = HashMap::new();
+            // Per-function Resolver for dominance-safe value access (i64 minimal)
+            let mut resolver = instructions::Resolver::new();
             for (bi, bid) in block_ids.iter().enumerate() {
                 let bb = *bb_map.get(bid).unwrap();
                 // Use cursor to position at BB start for lowering
@@ -289,6 +292,7 @@ impl LLVMCompiler {
                         instructions::lower_boxcall(
                             &codegen,
                             &mut cursor,
+                            &mut resolver,
                             *bid,
                             func,
                             &mut vmap,
@@ -306,7 +310,21 @@ impl LLVMCompiler {
                         if let Some(d) = dst { defined_in_block.insert(*d); }
                         },
                     MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
-                        instructions::lower_externcall(&codegen, &mut cursor, *bid, func, &mut vmap, dst, iface_name, method_name, args)?;
+                        instructions::lower_externcall(
+                            &codegen,
+                            &mut cursor,
+                            &mut resolver,
+                            *bid,
+                            func,
+                            &mut vmap,
+                            dst,
+                            iface_name,
+                            method_name,
+                            args,
+                            &bb_map,
+                            &preds,
+                            &block_end_values,
+                        )?;
                         if let Some(d) = dst { defined_in_block.insert(*d); }
                     },
                     MirInstruction::UnaryOp { dst, op, operand } => {
@@ -314,11 +332,11 @@ impl LLVMCompiler {
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                        instructions::lower_binop(&codegen, &mut cursor, *bid, func, &mut vmap, *dst, op, lhs, rhs)?;
+                        instructions::lower_binop(&codegen, &mut cursor, &mut resolver, *bid, func, &mut vmap, *dst, op, lhs, rhs, &bb_map, &preds, &block_end_values)?;
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::Compare { dst, op, lhs, rhs } => {
-                        let out = instructions::lower_compare(&codegen, &mut cursor, *bid, func, &vmap, op, lhs, rhs, &bb_map, &preds, &block_end_values)?;
+                        let out = instructions::lower_compare(&codegen, &mut cursor, &mut resolver, *bid, func, &vmap, op, lhs, rhs, &bb_map, &preds, &block_end_values)?;
                         vmap.insert(*dst, out);
                         defined_in_block.insert(*dst);
                     },
@@ -439,7 +457,7 @@ impl LLVMCompiler {
                             }
                         }
                         if !handled_by_loopform {
-                            instructions::emit_branch(&codegen, &mut cursor, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap, &preds, &block_end_values)?;
+                            instructions::emit_branch(&codegen, &mut cursor, &mut resolver, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap, &preds, &block_end_values)?;
                         }
                     }
                     _ => {
