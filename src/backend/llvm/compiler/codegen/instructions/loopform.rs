@@ -1,6 +1,6 @@
 use inkwell::{
     basic_block::BasicBlock,
-    values::{BasicValueEnum, FunctionValue},
+    values::{BasicValueEnum, FunctionValue, PhiValue},
 };
 
 use crate::backend::llvm::context::CodegenContext;
@@ -69,6 +69,9 @@ pub fn lower_while_loopform<'ctx, 'b>(
     after_bb: BasicBlockId,
     bb_map: &std::collections::HashMap<BasicBlockId, BasicBlock<'ctx>>,
     vmap: &std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
+    // Registry to allow later body→dispatch wiring (simple bodies)
+    registry: &mut std::collections::HashMap<BasicBlockId, (BasicBlock<'ctx>, PhiValue<'ctx>, PhiValue<'ctx>, BasicBlock<'ctx>)>,
+    body_to_header: &mut std::collections::HashMap<BasicBlockId, BasicBlockId>,
 ) -> Result<bool, String> {
     let enabled = std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1");
     if !enabled { return Ok(false); }
@@ -95,22 +98,52 @@ pub fn lower_while_loopform<'ctx, 'b>(
         });
     });
 
-    // Dispatch: currently pass-through to original else/after block
+    // Dispatch: create PHIs (tag i8, payload i64) and switch(tag)
+    // For now, only header(false) contributes (Break=1); body path does not reach dispatch in Phase 1 wiring.
     let orig_after = *bb_map.get(&after_bb).ok_or("loopform: after bb missing")?;
-    cursor.with_block(after_bb, lf.dispatch, |c| {
+    let header_llbb = *bb_map.get(&header_bid).ok_or("loopform: header bb missing")?;
+    let (tag_phi, payload_phi) = cursor.with_block(after_bb, lf.dispatch, |c| {
+        let i8t = codegen.context.i8_type();
+        let i64t = codegen.context.i64_type();
+        let tag_ty: inkwell::types::BasicTypeEnum = i8t.into();
+        let tag_phi = codegen
+            .builder
+            .build_phi(tag_ty, "lf_tag")
+            .map_err(|e| e.to_string())
+            .unwrap();
+        let payload_ty: inkwell::types::BasicTypeEnum = i64t.into();
+        let payload_phi = codegen
+            .builder
+            .build_phi(payload_ty, "lf_payload")
+            .map_err(|e| e.to_string())
+            .unwrap();
+        let tag_break = i8t.const_int(1, false);
+        let payload_zero = i64t.const_zero();
+        tag_phi.add_incoming(&[(&tag_break, header_llbb)]);
+        payload_phi.add_incoming(&[(&payload_zero, header_llbb)]);
+        let tag_iv = tag_phi.as_basic_value().into_int_value();
         c.emit_term(after_bb, |b| {
-            b.build_unconditional_branch(orig_after)
+            b.build_switch(tag_iv, lf.exit, &[(i8t.const_int(0, false), lf.latch)])
                 .map_err(|e| e.to_string())
                 .unwrap();
         });
+        (tag_phi, payload_phi)
     });
 
-    // Latch/Exit are reserved for Phase 2 wiring (PHI + switch), keep them unreachable for now
-    // to avoid verifier errors from unterminated blocks.
+    // Register for simple body→dispatch wiring later (at body terminator lowering time)
+    registry.insert(header_bid, (lf.dispatch, tag_phi, payload_phi, lf.latch));
+    body_to_header.insert(body_bb, header_bid);
+
+    // Latch: keep unreachable for now (avoid adding a new predecessor to header)
     codegen.builder.position_at_end(lf.latch);
     let _ = codegen.builder.build_unreachable();
+    // Exit: to original after
     codegen.builder.position_at_end(lf.exit);
-    let _ = codegen.builder.build_unreachable();
+    codegen
+        .builder
+        .build_unconditional_branch(orig_after)
+        .map_err(|e| e.to_string())
+        .unwrap();
 
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
         eprintln!(

@@ -204,6 +204,9 @@ impl LLVMCompiler {
             // Lower body
             let mut loopform_loop_id: u32 = 0;
             let sealed_mode = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
+            // LoopForm registry (per-function lowering; gated)
+            let mut loopform_registry: HashMap<crate::mir::BasicBlockId, (inkwell::basic_block::BasicBlock, PhiValue, PhiValue, inkwell::basic_block::BasicBlock)> = HashMap::new();
+            let mut loopform_body_to_header: HashMap<crate::mir::BasicBlockId, crate::mir::BasicBlockId> = HashMap::new();
             for (bi, bid) in block_ids.iter().enumerate() {
                 let bb = *bb_map.get(bid).unwrap();
                 // Use cursor to position at BB start for lowering
@@ -339,7 +342,34 @@ impl LLVMCompiler {
                         instructions::emit_return(&codegen, &mut cursor, *bid, func, &vmap, value)?;
                     }
                     MirInstruction::Jump { target } => {
-                        instructions::emit_jump(&codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block, &vmap)?;
+                        // LoopForm simple body→dispatch wiring: if this block is a loop body
+                        // and jumps back to its header, redirect to dispatch and add PHI incoming
+                        let mut handled = false;
+                        if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1") &&
+                           std::env::var("NYASH_LOOPFORM_BODY2DISPATCH").ok().as_deref() == Some("1") {
+                            if let Some(hdr) = loopform_body_to_header.get(bid) {
+                                if hdr == target {
+                                    if let Some((dispatch_bb, tag_phi, payload_phi, _latch_bb)) = loopform_registry.get(hdr) {
+                                        // Add Next(tag=0) + payload=0 incoming from this pred
+                                        let i8t = codegen.context.i8_type();
+                                        let i64t = codegen.context.i64_type();
+                                        let pred_llbb = *bb_map.get(bid).ok_or("loopform: body llbb missing")?;
+                                        let z = i8t.const_zero();
+                                        let pz = i64t.const_zero();
+                                        tag_phi.add_incoming(&[(&z, pred_llbb)]);
+                                        payload_phi.add_incoming(&[(&pz, pred_llbb)]);
+                                        // Redirect to dispatch
+                                        cursor.emit_term(*bid, |b| {
+                                            b.build_unconditional_branch(*dispatch_bb).map_err(|e| e.to_string()).unwrap();
+                                        });
+                                        handled = true;
+                                    }
+                                }
+                            }
+                        }
+                        if !handled {
+                            instructions::emit_jump(&codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block, &vmap)?;
+                        }
                     }
                     MirInstruction::Branch { condition, then_bb, else_bb } => {
                         // LoopForm Phase 1 (gated): detect simple while-pattern and rewire header
@@ -393,6 +423,8 @@ impl LLVMCompiler {
                                     after_sel,
                                     &bb_map,
                                     &vmap,
+                                    &mut loopform_registry,
+                                    &mut loopform_body_to_header,
                                 )?;
                                 loopform_loop_id = loopform_loop_id.wrapping_add(1);
                             }
