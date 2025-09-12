@@ -131,6 +131,12 @@ impl LLVMCompiler {
                 let v: Vec<crate::mir::BasicBlockId> = block.successors.iter().copied().collect();
                 succs.insert(*bid, v);
             }
+            let mut preds: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> = HashMap::new();
+            for (b, ss) in &succs {
+                for s in ss { preds.entry(*s).or_default().push(*b); }
+            }
+            // Track sealed blocks to know when all preds of a successor are sealed
+            let mut sealed_blocks: std::collections::HashSet<crate::mir::BasicBlockId> = std::collections::HashSet::new();
             // Bind parameters
             for (i, pid) in func.params.iter().enumerate() {
                 if let Some(av) = llvm_func.get_nth_param(i as u32) {
@@ -196,6 +202,7 @@ impl LLVMCompiler {
             let const_strs = build_const_str_map(func);
 
             // Lower body
+            let mut loopform_loop_id: u32 = 0;
             let sealed_mode = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() == Some("1");
             for (bi, bid) in block_ids.iter().enumerate() {
                 let bb = *bb_map.get(bid).unwrap();
@@ -331,6 +338,46 @@ impl LLVMCompiler {
                         instructions::emit_jump(&codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block, &vmap)?;
                     }
                     MirInstruction::Branch { condition, then_bb, else_bb } => {
+                        // LoopForm Phase 1 (gated, non-invasive): detect simple while-pattern and call scaffold
+                        if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1") {
+                            let mut body_bb_opt = None;
+                            // Identify which successor jumps back to the current header (simple back-edge)
+                            if let Some(tb) = func.blocks.get(then_bb) {
+                                if let Some(MirInstruction::Jump { target }) = &tb.terminator {
+                                    if target == bid { body_bb_opt = Some(*then_bb); }
+                                }
+                            }
+                            if body_bb_opt.is_none() {
+                                if let Some(eb) = func.blocks.get(else_bb) {
+                                    if let Some(MirInstruction::Jump { target }) = &eb.terminator {
+                                        if target == bid { body_bb_opt = Some(*else_bb); }
+                                    }
+                                }
+                            }
+                            if let Some(body_bb) = body_bb_opt {
+                                let body_block = func.blocks.get(&body_bb).unwrap();
+                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                    eprintln!(
+                                        "[LoopForm] detect while-pattern: header={} body={} other={} (id={})",
+                                        bid.as_u32(), body_bb.as_u32(),
+                                        if body_bb == *then_bb { else_bb.as_u32() } else { then_bb.as_u32() },
+                                        loopform_loop_id
+                                    );
+                                }
+                                // Call scaffold (no-op currently) to stage future lowering
+                                instructions::lower_while_loopform(
+                                    &codegen,
+                                    &mut cursor,
+                                    func,
+                                    llvm_func,
+                                    condition,
+                                    &body_block.instructions,
+                                    loopform_loop_id,
+                                    &fn_label,
+                                )?;
+                                loopform_loop_id = loopform_loop_id.wrapping_add(1);
+                            }
+                        }
                         instructions::emit_branch(&codegen, &mut cursor, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
                     }
                     _ => {
@@ -389,6 +436,17 @@ impl LLVMCompiler {
             }
                 if sealed_mode {
                     instructions::flow::seal_block(&codegen, &mut cursor, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
+                    sealed_blocks.insert(*bid);
+                    // If all predecessors of a successor are sealed, finalize its PHIs
+                    if let Some(succ_list) = succs.get(bid) {
+                        for sb in succ_list {
+                            if let Some(pre) = preds.get(sb) {
+                                if pre.iter().all(|p| sealed_blocks.contains(p)) {
+                                    instructions::flow::finalize_phis(&codegen, &mut cursor, func, *sb, &preds, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         // Finalize function: ensure every basic block is closed with a terminator.

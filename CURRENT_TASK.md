@@ -180,6 +180,17 @@ Next (short, focused)
   - Ensure every lowered block has a terminator; use builder.get_insert_block().get_terminator() guard before fallback
   - Instrument per‑block lowering (bid, has terminator?, emitted kind) to isolate misses
   - Keep fallback minimal and only when MIR.block.terminator is None and LLVM has no terminator
+
+LoopForm IR — Experimental Plan (gated)
+- Goal: Centralize PHIs and simplify terminator management by normalizing loops to a fixed block shape with a dispatch join point.
+- Gate: `NYASH_ENABLE_LOOPFORM=1` enables experimental lowering in LLVM path (MIR unchanged in Phase 1).
+- Representation: Signal-like pair `{ i8 tag, i64 payload }` (0=Next,1=Break initially). Payload carries loop value (Everything is Box handle or scalar).
+- Pattern (blocks): header → body → branch(on tag) → dispatch(phi here only) → switch(tag){ Next→latch, Break→exit } → latch→header.
+- Phase 1 scope: while/loop only; Return/Yield signalization deferred.
+- Success criteria: PHIs appear only in dispatch; no post-terminator insertions; Sealed ON/OFF equivalence; zero-synth minimized.
+- Files:
+  - New: `src/backend/llvm/compiler/codegen/instructions/loopform.rs` scaffolding + helpers
+  - Wire: `instructions/mod.rs` to expose helpers (not yet used by default lowering)
 - MIR readable debug tools:
   - Add --dump-mir-readable to print Nyash‑like pseudo code per function/block
   - Optional DOT output (follow‑up)

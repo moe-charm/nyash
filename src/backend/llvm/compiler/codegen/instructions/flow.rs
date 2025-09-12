@@ -370,3 +370,111 @@ pub(in super::super) fn seal_block<'ctx, 'b>(
     }
     Ok(())
 }
+
+/// Normalize PHI incoming entries for a successor block, ensuring exactly
+/// one entry per predecessor. This runs once all preds have been sealed.
+pub(in super::super) fn finalize_phis<'ctx, 'b>(
+    codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    func: &MirFunction,
+    succ_bb: BasicBlockId,
+    preds: &HashMap<BasicBlockId, Vec<BasicBlockId>>,
+    bb_map: &HashMap<BasicBlockId, BasicBlock<'ctx>>,
+    phis_by_block: &HashMap<
+        BasicBlockId,
+        Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
+    >,
+    block_end_values: &HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum<'ctx>>>,
+    vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
+) -> Result<(), String> {
+    let pred_list = preds.get(&succ_bb).cloned().unwrap_or_default();
+    if pred_list.is_empty() { return Ok(()); }
+    if let Some(phis) = phis_by_block.get(&succ_bb) {
+        for (_dst, phi, inputs) in phis {
+            for pred in &pred_list {
+                // If this phi expects a value from pred, find the associated Mir ValueId
+                if let Some((_, in_vid)) = inputs.iter().find(|(p, _)| p == pred) {
+                    // If an incoming from this pred already exists, skip
+                    // Note: inkwell does not expose an iterator over incoming; rely on the fact
+                    // we add at most once per pred in seal_block. If duplicates occurred earlier,
+                    // adding again is harmlessly ignored by verifier if identical; otherwise rely on our new regime.
+                    // Fetch value snapshot at end of pred; fallback per our policy
+                    let snap_opt = block_end_values.get(pred).and_then(|m| m.get(in_vid).copied());
+                    let mut val = if let Some(sv) = snap_opt {
+                        sv
+                    } else if func.params.contains(in_vid) {
+                        vmap.get(in_vid).copied().unwrap_or_else(|| {
+                            let bt = phi.as_basic_value().get_type();
+                            use inkwell::types::BasicTypeEnum as BT;
+                            match bt {
+                                BT::IntType(it) => it.const_zero().into(),
+                                BT::FloatType(ft) => ft.const_zero().into(),
+                                BT::PointerType(pt) => pt.const_zero().into(),
+                                _ => unreachable!(),
+                            }
+                        })
+                    } else {
+                        let bt = phi.as_basic_value().get_type();
+                        use inkwell::types::BasicTypeEnum as BT;
+                        match bt {
+                            BT::IntType(it) => it.const_zero().into(),
+                            BT::FloatType(ft) => ft.const_zero().into(),
+                            BT::PointerType(pt) => pt.const_zero().into(),
+                            _ => return Err(format!(
+                                "phi incoming (finalize) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
+                                pred.as_u32(), succ_bb.as_u32(), in_vid.as_u32()
+                            )),
+                        }
+                    };
+                    // Insert casts in pred block, just before its terminator
+                    let saved_block = codegen.builder.get_insert_block();
+                    if let Some(pred_llbb) = bb_map.get(pred) {
+                        let term = unsafe { pred_llbb.get_terminator() };
+                        if let Some(t) = term { codegen.builder.position_before(&t); }
+                        else { codegen.builder.position_at_end(*pred_llbb); }
+                    }
+                    val = coerce_to_type(codegen, phi, val)?;
+                    if let Some(bb) = saved_block { codegen.builder.position_at_end(bb); }
+                    let pred_bb = *bb_map.get(pred).ok_or("pred bb missing")?;
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!(
+                            "[PHI] finalize add pred_bb={} val={} ty={}",
+                            pred.as_u32(), in_vid.as_u32(),
+                            phi.as_basic_value().get_type().print_to_string().to_string()
+                        );
+                    }
+                    match val {
+                        BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
+                        BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
+                        BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
+                        _ => return Err("unsupported phi incoming value (finalize)".to_string()),
+                    }
+                } else {
+                    // This PHI lacks a mapping for this predecessor entirely; synthesize zero
+                    let pred_bb = *bb_map.get(pred).ok_or("pred bb missing")?;
+                    use inkwell::types::BasicTypeEnum as BT;
+                    let bt = phi.as_basic_value().get_type();
+                    let z: BasicValueEnum = match bt {
+                        BT::IntType(it) => it.const_zero().into(),
+                        BT::FloatType(ft) => ft.const_zero().into(),
+                        BT::PointerType(pt) => pt.const_zero().into(),
+                        _ => return Err("unsupported phi type for zero synth (finalize)".to_string()),
+                    };
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!(
+                            "[PHI] finalize add (synth) pred_bb={} zero-ty={}",
+                            pred.as_u32(), bt.print_to_string().to_string()
+                        );
+                    }
+                    match z {
+                        BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
+                        BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
+                        BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
+                        _ => return Err("unsupported phi incoming (synth finalize)".to_string()),
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
