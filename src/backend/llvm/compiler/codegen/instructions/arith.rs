@@ -89,7 +89,23 @@ pub(in super::super) fn lower_compare<'ctx>(
             return Ok(b.into());
         }
     }
-    let out = if let (Some(li), Some(ri)) = (as_int(lv), as_int(rv)) {
+    let out = if let (Some(mut li), Some(mut ri)) = (as_int(lv), as_int(rv)) {
+        // Normalize integer widths: extend the narrower to match the wider to satisfy LLVM
+        let lw = li.get_type().get_bit_width();
+        let rw = ri.get_type().get_bit_width();
+        if lw != rw {
+            if lw < rw {
+                li = codegen
+                    .builder
+                    .build_int_z_extend(li, ri.get_type(), "icmp_zext_l")
+                    .map_err(|e| e.to_string())?;
+            } else {
+                ri = codegen
+                    .builder
+                    .build_int_z_extend(ri, li.get_type(), "icmp_zext_r")
+                    .map_err(|e| e.to_string())?;
+            }
+        }
         use CompareOp as C;
         let pred = match op {
             C::Eq => inkwell::IntPredicate::EQ,

@@ -44,6 +44,34 @@ Next Steps（Sealed SSA 段階導入）
 3) 足りない型整合（String/Box/Array→i8*）があれば `coerce_to_type` を拡張。
 4) グリーン後、Sealed をデフォルトONにする前にスモーク一式で回帰確認。
 
+TODO — Sealed SSA 段階導入（実装タスク）
+- [ ] block_end_values 追加（LLVM Lower 内の per-BB 終端スナップショット）
+  - 追加先: `src/backend/llvm/compiler/codegen/mod.rs`
+  - 形式: `HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum>>`
+  - タイミング: 各BBの命令をすべて Lower した「直後」、終端命令を発行する「直前」に `vmap.clone()` を保存
+  - 目的: `seal_block` で pred 終端時点の値を安定取得する（現在の vmap 直接参照をやめる）
+- [ ] `seal_block` をスナップショット参照に切替
+  - 対象: `src/backend/llvm/compiler/codegen/instructions/flow.rs::seal_block`
+  - 取得: `block_end_values[bid].get(in_vid)` を用いて `val` を取得
+  - フォールバック: もしスナップショットが無ければ（例外ケース）従来の `vmap` を参照し、警告ログを出す
+  - ログ: `NYASH_LLVM_TRACE_PHI=1` 時に `[PHI] sealed add pred_bb=.. val=.. ty=.. (snapshot)` と明示
+- [ ] 非 sealed 経路の維持（回帰防止）
+  - `emit_jump/emit_branch` は sealed=OFF の時のみ incoming を追加（現状仕様を維持）
+  - sealed=ON の時は incoming 配線は一切行わず、`seal_block` のみで完結
+- [ ] 型整合（coerce）の継続強化
+  - 対象: `src/backend/llvm/compiler/codegen/instructions/flow.rs::coerce_to_type`
+  - 方針: PHI の型は i8* 優先（String/Box/Array を含む場合）。ptr/int 混在は明示 cast で橋渡し
+  - 検討: i1 ブリッジ（bool）の zext/trunc の置き場所は PHI 外側に寄せる（必要時）
+- [ ] 代表スモークの回帰
+  - 再現対象: `apps/selfhost/tools/dep_tree_min_string.nyash`
+  - 実行: `NYASH_LLVM_PHI_SEALED=1 NYASH_LLVM_TRACE_PHI=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm apps/selfhost/tools/dep_tree_min_string.nyash`
+  - 期待: `PHINode should have one entry for each predecessor` が解消し、OFF/ON で等価な結果
+
+補足（実装メモ）
+- `block_end_values` の寿命はコード生成のライフタイムに束縛されるため、`BasicValueEnum<'ctx>` の所有は問題なし（`Context` が生きている間は有効）
+- 収集は `compile_function` の BB ループ内で行い、`phis_by_block` と同スコープで管理すると取り回しが良い
+- 将来の拡張として `value_at_end_of_block(var, bb)` ヘルパを導入し、sealed/unsealed を内部で吸収する API 化を検討
+
 Plan — PHI/SSA Hardening (Sealed SSA)
 - Sealed SSA 入れ替え（安全に段階導入）
   - Blockごとに `sealed: bool` と `incomplete_phis: Map<Var, Phi>` を保持

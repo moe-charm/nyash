@@ -87,6 +87,9 @@ pub(in super::super) fn emit_jump<'ctx>(
     }
     }
     let tbb = *bb_map.get(target).ok_or("target bb missing")?;
+    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+        eprintln!("[LLVM] emit_jump: {} -> {}", bid.as_u32(), target.as_u32());
+    }
     codegen
         .builder
         .build_unconditional_branch(tbb)
@@ -178,6 +181,9 @@ pub(in super::super) fn emit_branch<'ctx>(
     }
     let tbb = *bb_map.get(then_bb).ok_or("then bb missing")?;
     let ebb = *bb_map.get(else_bb).ok_or("else bb missing")?;
+    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+        eprintln!("[LLVM] emit_branch: {} -> then {} / else {}", bid.as_u32(), then_bb.as_u32(), else_bb.as_u32());
+    }
     codegen
         .builder
         .build_conditional_branch(b, tbb, ebb)
@@ -252,6 +258,9 @@ pub(in super::super) fn seal_block<'ctx>(
         BasicBlockId,
         Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
     >,
+    // Snapshot of value map at end of each predecessor block
+    block_end_values: &HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum<'ctx>>>,
+    // Fallback: current vmap (used only if snapshot missing)
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
 ) -> Result<(), String> {
     if let Some(slist) = succs.get(&bid) {
@@ -259,7 +268,24 @@ pub(in super::super) fn seal_block<'ctx>(
             if let Some(pl) = phis_by_block.get(sb) {
                 for (_dst, phi, inputs) in pl {
                     if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
-                        let mut val = *vmap.get(in_vid).ok_or("phi incoming (seal) value missing")?;
+                        // Prefer the predecessor's block-end snapshot; fall back to current vmap
+                        let snap_opt = block_end_values
+                            .get(&bid)
+                            .and_then(|m| m.get(in_vid).copied());
+                        let mut val = if let Some(sv) = snap_opt {
+                            sv
+                        } else {
+                            match vmap.get(in_vid).copied() {
+                                Some(v) => v,
+                                None => {
+                                    let msg = format!(
+                                        "phi incoming (seal) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
+                                        bid.as_u32(), sb.as_u32(), in_vid.as_u32()
+                                    );
+                                    return Err(msg);
+                                }
+                            }
+                        };
                         let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
                         val = coerce_to_type(codegen, phi, val)?;
                         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
@@ -269,10 +295,11 @@ pub(in super::super) fn seal_block<'ctx>(
                                 .print_to_string()
                                 .to_string();
                             eprintln!(
-                                "[PHI] sealed add pred_bb={} val={} ty={}",
+                                "[PHI] sealed add pred_bb={} val={} ty={}{}",
                                 bid.as_u32(),
                                 in_vid.as_u32(),
-                                tys
+                                tys,
+                                if snap_opt.is_some() { " (snapshot)" } else { " (vmap)" }
                             );
                         }
                         match val {

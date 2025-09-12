@@ -122,6 +122,8 @@ impl LLVMCompiler {
                 crate::mir::BasicBlockId,
                 Vec<(ValueId, PhiValue, Vec<(crate::mir::BasicBlockId, ValueId)>)>,
             > = HashMap::new();
+            // Snapshot of values at the end of each basic block (for sealed-SSA PHI wiring)
+            let mut block_end_values: HashMap<crate::mir::BasicBlockId, HashMap<ValueId, BasicValueEnum>> = HashMap::new();
             // Build successors map (for optional sealed-SSA PHI wiring)
             let mut succs: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> = HashMap::new();
             for (bid, block) in &func.blocks {
@@ -203,6 +205,9 @@ impl LLVMCompiler {
                     .unwrap_or(true)
                 {
                     codegen.builder.position_at_end(bb);
+                }
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    eprintln!("[LLVM] lowering bb={}", bid.as_u32());
                 }
                 let block = func.blocks.get(bid).unwrap();
                 for inst in &block.instructions {
@@ -320,9 +325,16 @@ impl LLVMCompiler {
                     }
                     _ => { /* ignore other ops for 11.1 */ },
                 }
+                // Capture a snapshot of the value map at the end of this block's body
+                block_end_values.insert(*bid, vmap.clone());
             }
             // Emit terminators and provide a conservative fallback when absent
             if let Some(term) = &block.terminator {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    eprintln!("[LLVM] terminator present for bb={}", bid.as_u32());
+                }
+                // Ensure builder is positioned at current block before emitting terminator
+                codegen.builder.position_at_end(bb);
                 match term {
                     MirInstruction::Return { value } => {
                         instructions::emit_return(&codegen, func, &vmap, value)?;
@@ -333,9 +345,30 @@ impl LLVMCompiler {
                     MirInstruction::Branch { condition, then_bb, else_bb } => {
                         instructions::emit_branch(&codegen, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
                     }
-                    _ => {}
+                    _ => {
+                        // Ensure builder is at this block before fallback branch
+                        codegen.builder.position_at_end(bb);
+                        // Unknown/unhandled terminator: conservatively branch forward
+                        if let Some(next_bid) = block_ids.get(bi + 1) {
+                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                eprintln!("[LLVM] unknown terminator fallback: bb={} -> next={}", bid.as_u32(), next_bid.as_u32());
+                            }
+                            instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                        } else {
+                            let entry_first = func.entry_block;
+                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                eprintln!("[LLVM] unknown terminator fallback: bb={} -> entry={}", bid.as_u32(), entry_first.as_u32());
+                            }
+                            instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                        }
+                    }
                 }
             } else {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    eprintln!("[LLVM] no terminator in MIR for bb={} (fallback)", bid.as_u32());
+                }
+                // Ensure builder is at this block before fallback branch
+                codegen.builder.position_at_end(bb);
                 // Fallback: branch to the next block if any; otherwise loop to entry
                 if let Some(next_bid) = block_ids.get(bi + 1) {
                     instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
@@ -348,15 +381,26 @@ impl LLVMCompiler {
             // Extra guard: if the current LLVM basic block still lacks a terminator for any reason,
             // insert a conservative branch to the next block (or entry if last) to satisfy verifier.
             if unsafe { bb.get_terminator() }.is_none() {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    eprintln!("[LLVM] extra guard inserting fallback for bb={}", bid.as_u32());
+                }
+                // Ensure the builder is positioned at the end of this block before inserting the fallback terminator
+                codegen.builder.position_at_end(bb);
                 if let Some(next_bid) = block_ids.get(bi + 1) {
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[LLVM] fallback terminator: bb={} -> next={}", bid.as_u32(), next_bid.as_u32());
+                    }
                     instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
                 } else {
                     let entry_first = func.entry_block;
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[LLVM] fallback terminator: bb={} -> entry={}", bid.as_u32(), entry_first.as_u32());
+                    }
                     instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                 }
             }
                 if sealed_mode {
-                    instructions::flow::seal_block(&codegen, *bid, &succs, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::flow::seal_block(&codegen, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
                 }
             }
         // Verify the fully-lowered function once, after all blocks
