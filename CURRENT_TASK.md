@@ -180,6 +180,7 @@ Next (short, focused)
   - Ensure every lowered block has a terminator; use builder.get_insert_block().get_terminator() guard before fallback
   - Instrument per‑block lowering (bid, has terminator?, emitted kind) to isolate misses
   - Keep fallback minimal and only when MIR.block.terminator is None and LLVM has no terminator
+  - Detection strengthened (LoopForm Step 2.5): while-pattern detection allows 2-step Jump chains and selects body/after deterministically; logs include loop_id and chosen blocks.
 
 LoopForm IR — Experimental Plan (gated)
 - Goal: Centralize PHIs and simplify terminator management by normalizing loops to a fixed block shape with a dispatch join point.

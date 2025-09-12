@@ -1,13 +1,14 @@
-# MIR13 Core‑13 Specification (Draft)
+# MIR14 Core‑14 Specification (Draft)
 
-本メモは、MIR13（Core‑13）命令体系の確定仕様と、将来のLoopForm（LoopSignal IR）との整合、およびレガシー命令の廃止方針をまとめる。実装は“Core‑13既定ON・forbid‑legacy”を前提とする。
+本メモは、MIR14（Core‑14）命令体系の確定仕様と、レガシー命令の廃止方針をまとめる。実装は"Core‑14既定ON・forbid‑legacy"を前提とする。
 
-## 1. Core‑13 命令一覧（最小・固定）
+## 1. Core‑14 命令一覧（最小限＋実践的）
 
 | 区分 | 命令 | 役割（要点） |
 |------|------|---------------|
 | 値   | Const      | 即値・アドレス等の定数生成（副作用なし） |
 | 演算 | BinOp      | 加減乗除/ビット演算（純粋） |
+| 演算 | UnaryOp    | 単項演算（否定、NOT等）【実用性から復活】 |
 | 演算 | Compare    | 比較演算（純粋） |
 | 制御 | Jump       | 無条件遷移（終端） |
 | 制御 | Branch     | 条件分岐遷移（終端） |

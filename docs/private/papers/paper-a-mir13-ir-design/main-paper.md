@@ -1,4 +1,4 @@
-# Minimal Yet Universal: The MIR-13 Instruction Set and Everything-is-Box Philosophy
+# Minimal Yet Practical: The MIR-14 Instruction Set and Everything-is-Box Philosophy
 
 ## Authors
 TBD
@@ -9,8 +9,8 @@ TBD
 ## 1. Introduction
 [See chapters/01-introduction.md]
 
-## 2. The Evolution of MIR: From 26 to 13
-[TODO: Detail the systematic reduction process]
+## 2. The Evolution of MIR: From 27 to 14
+[TODO: Detail the systematic reduction and practical restoration process]
 
 ## 3. BoxCall Unification Architecture
 [TODO: Explain how BoxCall absorbs array/field operations]

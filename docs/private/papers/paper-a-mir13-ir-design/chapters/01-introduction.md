@@ -1,8 +1,8 @@
 # Chapter 1: Introduction
 
-## The 13-Instruction Challenge
+## The 14-Instruction Balance
 
-Can we build a practical programming language with just 13 intermediate representation (IR) instructions? Not a toy language, but one capable of compiling GUI applications, web servers, and distributed systems? This paper demonstrates that the answer is yes—through systematic instruction reduction and the BoxCall unification principle.
+Can we build a practical programming language with just 14 intermediate representation (IR) instructions? This paper demonstrates how we evolved from 27 instructions to 13 through aggressive minimization, then pragmatically added one back (UnaryOp) to achieve the optimal balance between theoretical minimalism and practical efficiency.
 
 ## The Complexity Crisis
 
@@ -16,19 +16,23 @@ Modern intermediate representations have grown alarmingly complex:
 
 This complexity stems from decades of optimization-driven design, where each performance improvement adds new instructions. The result? Compiler implementations measured in millions of lines of code, optimization passes that few understand, and a barrier to entry that excludes most researchers and students.
 
-## The MIR-13 Revolution
+## The MIR-14 Evolution
 
-We present MIR-13, which reduces a traditional 26-instruction set to just 13 through our novel **BoxCall unification principle**:
+We present MIR-14, which evolved through three distinct phases:
+1. **Initial design**: 27 instructions (feature-driven)
+2. **Aggressive reduction**: 13 instructions via BoxCall unification
+3. **Practical restoration**: 14 instructions (Core-13 + UnaryOp)
 
 ```
-Traditional:                    MIR-13:
+Traditional:                    MIR-14:
 ArrayGet → 
 ArraySet →     }  BoxCall
 RefGet   →     }  (unified)
 RefSet   →
+UnaryOp (restored for efficiency)
 ```
 
-The key insight: array operations and field accesses are fundamentally the same—they're all Box method calls. By recognizing this pattern, we achieve 50% instruction reduction without sacrificing expressiveness or performance.
+The key insight: array operations and field accesses are fundamentally the same—they're all Box method calls. By recognizing this pattern, we achieved dramatic instruction reduction. However, practical experience showed that certain primitive operations (negation, NOT) warrant direct representation, leading to our final 14-instruction set.
 
 ## Performance Without Complexity
 
@@ -45,7 +49,7 @@ The secret? Strategic optimization placement at Box boundaries rather than IR co
 
 This paper makes five key contributions:
 
-1. **Systematic Reduction Methodology**: A proven path from Core-26 → Core-15 → Core-13, with empirical validation at each step.
+1. **Evolution Methodology**: A documented journey from Core-27 → Core-13 → Core-14, demonstrating both aggressive reduction and pragmatic restoration.
 
 2. **BoxCall Unification Architecture**: A novel design pattern that elegantly absorbs data access operations into a single instruction.
 

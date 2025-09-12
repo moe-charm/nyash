@@ -257,7 +257,11 @@ impl LLVMCompiler {
                                 .ptr_type(inkwell::AddressSpace::from(0))
                                 .const_zero()
                                 .into(),
-                            ConstValue::Void => return Err("Const Void unsupported".to_string()),
+                            ConstValue::Void => {
+                                // Use i64 0 as a neutral placeholder for void constants in MIR.
+                                // This keeps the value map total without impacting semantics.
+                                codegen.context.i64_type().const_zero().into()
+                            }
                         };
                             vmap.insert(*dst, bval);
                             defined_in_block.insert(*dst);
@@ -338,34 +342,44 @@ impl LLVMCompiler {
                         instructions::emit_jump(&codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block, &vmap)?;
                     }
                     MirInstruction::Branch { condition, then_bb, else_bb } => {
-                        // LoopForm Phase 1 (gated, non-invasive): detect simple while-pattern and call scaffold
+                        // LoopForm Phase 1 (gated): detect simple while-pattern and rewire header
+                        let mut handled_by_loopform = false;
                         if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1") {
-                            let mut body_bb_opt = None;
-                            // Identify which successor jumps back to the current header (simple back-edge)
-                            if let Some(tb) = func.blocks.get(then_bb) {
-                                if let Some(MirInstruction::Jump { target }) = &tb.terminator {
-                                    if target == bid { body_bb_opt = Some(*then_bb); }
-                                }
-                            }
-                            if body_bb_opt.is_none() {
-                                if let Some(eb) = func.blocks.get(else_bb) {
-                                    if let Some(MirInstruction::Jump { target }) = &eb.terminator {
-                                        if target == bid { body_bb_opt = Some(*else_bb); }
+                            // Helper: minimal back-edge detection allowing up to 2-step jump chains via Jump-only
+                            let mut is_back = |start: crate::mir::BasicBlockId| -> u8 {
+                                // direct jump back
+                                if let Some(b) = func.blocks.get(&start) {
+                                    if let Some(crate::mir::instruction::MirInstruction::Jump { target }) = &b.terminator {
+                                        if target == bid { return 1; }
+                                        // one more hop if that block is a Jump back to header
+                                        if let Some(b2) = func.blocks.get(target) {
+                                            if let Some(crate::mir::instruction::MirInstruction::Jump { target: t2 }) = &b2.terminator {
+                                                if t2 == bid { return 2; }
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                            if let Some(body_bb) = body_bb_opt {
-                                let body_block = func.blocks.get(&body_bb).unwrap();
+                                0
+                            };
+                            let d_then = is_back(*then_bb);
+                            let d_else = is_back(*else_bb);
+                            let choose_body = if d_then > 0 && d_else == 0 {
+                                Some((*then_bb, *else_bb))
+                            } else if d_else > 0 && d_then == 0 {
+                                Some((*else_bb, *then_bb))
+                            } else if d_then > 0 && d_else > 0 {
+                                // Prefer shorter back-edge; tie-breaker favors then
+                                if d_then <= d_else { Some((*then_bb, *else_bb)) } else { Some((*else_bb, *then_bb)) }
+                            } else { None };
+                            if let Some((body_sel, after_sel)) = choose_body {
+                                let body_block = func.blocks.get(&body_sel).unwrap();
                                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                                     eprintln!(
-                                        "[LoopForm] detect while-pattern: header={} body={} other={} (id={})",
-                                        bid.as_u32(), body_bb.as_u32(),
-                                        if body_bb == *then_bb { else_bb.as_u32() } else { then_bb.as_u32() },
-                                        loopform_loop_id
+                                        "[LoopForm] detect while-pattern+: header={} body={} after={} (id={})",
+                                        bid.as_u32(), body_sel.as_u32(), after_sel.as_u32(), loopform_loop_id
                                     );
                                 }
-                                // Call scaffold (no-op currently) to stage future lowering
-                                instructions::lower_while_loopform(
+                                handled_by_loopform = instructions::lower_while_loopform(
                                     &codegen,
                                     &mut cursor,
                                     func,
@@ -374,11 +388,18 @@ impl LLVMCompiler {
                                     &body_block.instructions,
                                     loopform_loop_id,
                                     &fn_label,
+                                    *bid,
+                                    body_sel,
+                                    after_sel,
+                                    &bb_map,
+                                    &vmap,
                                 )?;
                                 loopform_loop_id = loopform_loop_id.wrapping_add(1);
                             }
                         }
-                        instructions::emit_branch(&codegen, &mut cursor, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
+                        if !handled_by_loopform {
+                            instructions::emit_branch(&codegen, &mut cursor, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap)?;
+                        }
                     }
                     _ => {
                         // Ensure builder is at this block before fallback branch

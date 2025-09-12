@@ -1,16 +1,18 @@
 use inkwell::{
     basic_block::BasicBlock,
-    values::{BasicValueEnum, FunctionValue, IntValue},
+    values::{BasicValueEnum, FunctionValue},
 };
 
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{
     function::MirFunction,
     instruction::MirInstruction,
+    BasicBlockId,
     ValueId,
 };
 
 use super::builder_cursor::BuilderCursor;
+use super::super::types::to_bool;
 
 /// LoopForm scaffolding — fixed block layout for while/loop normalization
 pub struct LoopFormContext<'ctx> {
@@ -56,29 +58,65 @@ impl<'ctx> LoopFormContext<'ctx> {
 pub fn lower_while_loopform<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
-    _func: &MirFunction,
-    _llvm_func: FunctionValue<'ctx>,
-    _condition: &ValueId,
+    func: &MirFunction,
+    llvm_func: FunctionValue<'ctx>,
+    condition: &ValueId,
     _body_mir: &[MirInstruction],
-    _loop_id: u32,
-    _prefix: &str,
-) -> Result<(), String> {
-    // Gate via env; currently a no-op scaffold so the call sites can be added safely later.
+    loop_id: u32,
+    prefix: &str,
+    header_bid: BasicBlockId,
+    body_bb: BasicBlockId,
+    after_bb: BasicBlockId,
+    bb_map: &std::collections::HashMap<BasicBlockId, BasicBlock<'ctx>>,
+    vmap: &std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
+) -> Result<bool, String> {
     let enabled = std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1");
-    if !enabled {
-        return Ok(());
-    }
-    // Intentionally minimal implementation placeholder to keep compilation stable.
-    // The full lowering will:
-    // 1) Create LoopFormContext blocks
-    // 2) Emit header with conditional branch to body/dispatch
-    // 3) Lower body and build Signal(tag,payload)
-    // 4) In dispatch, create PHIs (payload/tag) and switch(tag) to latch/exit
-    // 5) Latch branches back to header
-    // For now, do nothing to avoid interfering with current lowering flow.
-    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-        eprintln!("[LoopForm] scaffold active but not wired (Phase 1)");
-    }
-    Ok(())
-}
+    if !enabled { return Ok(false); }
 
+    // Create LoopForm fixed blocks under the same function
+    let lf = LoopFormContext::new(codegen, llvm_func, loop_id, prefix);
+
+    // Header: evaluate condition and branch to body (for true) or dispatch (for false)
+    let cond_v = *vmap.get(condition).ok_or("loopform: condition value missing")?;
+    let cond_i1 = to_bool(codegen.context, cond_v, &codegen.builder)?;
+    cursor.emit_term(header_bid, |b| {
+        b.build_conditional_branch(cond_i1, lf.body, lf.dispatch)
+            .map_err(|e| e.to_string())
+            .unwrap();
+    });
+
+    // Body: currently pass-through to original body block (non-invasive Phase 1)
+    let orig_body = *bb_map.get(&body_bb).ok_or("loopform: body bb missing")?;
+    cursor.with_block(body_bb, lf.body, |c| {
+        c.emit_term(body_bb, |b| {
+            b.build_unconditional_branch(orig_body)
+                .map_err(|e| e.to_string())
+                .unwrap();
+        });
+    });
+
+    // Dispatch: currently pass-through to original else/after block
+    let orig_after = *bb_map.get(&after_bb).ok_or("loopform: after bb missing")?;
+    cursor.with_block(after_bb, lf.dispatch, |c| {
+        c.emit_term(after_bb, |b| {
+            b.build_unconditional_branch(orig_after)
+                .map_err(|e| e.to_string())
+                .unwrap();
+        });
+    });
+
+    // Latch/Exit are reserved for Phase 2 wiring (PHI + switch), keep them unreachable for now
+    // to avoid verifier errors from unterminated blocks.
+    codegen.builder.position_at_end(lf.latch);
+    let _ = codegen.builder.build_unreachable();
+    codegen.builder.position_at_end(lf.exit);
+    let _ = codegen.builder.build_unreachable();
+
+    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+        eprintln!(
+            "[LoopForm] wired header->(body/dispatch) and pass-through to then/else (lf_id={})",
+            loop_id
+        );
+    }
+    Ok(true)
+}

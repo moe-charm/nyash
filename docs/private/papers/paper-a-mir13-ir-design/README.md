@@ -1,12 +1,22 @@
-# 論文A: MIR13で作る万能実行系
+# 論文A: MIR14で作る万能実行系
 
 ## 📚 概要
 
-**タイトル**: From Interpreter to Native GUI Apps: Universal Execution with 13 Instructions
+**タイトル**: From Interpreter to Native GUI Apps: Universal Execution with 14 Core Instructions
 
-**主題**: 13命令のミニマルIRで実現する5つの実行形態（インタープリター/VM/JIT/AOT/GUI）
+**主題**: 14命令のミニマルIRで実現する5つの実行形態（インタープリター/VM/JIT/AOT/GUI）
 
 **対象読者**: システム研究者、言語実装者、実用性重視の開発者
+
+## 🌱 MIR命令数の進化史
+
+**初期**: 27命令前後（汎用的にあれもこれも欲しい状態）
+↓
+**削減会議**: Box哲学と抽象化を突き詰めて13命令まで削減
+↓
+**復活**: 「最低限の算術演算は直接あった方が良い」という判断で UnaryOp を追加
+↓
+**MIR14**: 現在のコア命令セット（Core-13 + UnaryOp = 14命令）
 
 ## 🎯 研究ポイント
 
@@ -17,10 +27,10 @@
 - **EXE生成**: lld内蔵で完全自立
 - **Windows GUIアプリ**: EguiBoxで実用アプリ
 
-### 2. MIR13の威力
-- たった13命令ですべての実行形態をサポート
-- 26命令 → 15命令 → 13命令への段階的削減
-- BoxCallへの統一で究極のシンプルさ
+### 2. MIR14の威力
+- 14命令（Core-13 + UnaryOp）ですべての実行形態をサポート
+- 27命令 → 13命令 → 14命令への実践的な進化
+- BoxCallへの統一と必要最小限の算術演算
 
 ### 3. 実用性の証明
 - サイコロRPG（ゲーム）
