@@ -250,8 +250,9 @@ fn coerce_to_type<'ctx>(
 }
 
 /// Sealed-SSA style: when a block is finalized, add PHI incoming for all successor blocks.
-pub(in super::super) fn seal_block<'ctx>(
+pub(in super::super) fn seal_block<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
     func: &MirFunction,
     bid: BasicBlockId,
     succs: &HashMap<BasicBlockId, Vec<BasicBlockId>>,
@@ -269,11 +270,12 @@ pub(in super::super) fn seal_block<'ctx>(
         for sb in slist {
             if let Some(pl) = phis_by_block.get(sb) {
                 for (_dst, phi, inputs) in pl {
-                    if let Some((_, in_vid)) = inputs.iter().find(|(pred, _)| pred == &bid) {
+                    // Handle only the current predecessor (bid)
+                    if let Some((_, in_vid)) = inputs.iter().find(|(p, _)| p == &bid) {
                         // Prefer the predecessor's block-end snapshot; fall back to current vmap
                         let snap_opt = block_end_values
-                            .get(&bid)
-                            .and_then(|m| m.get(in_vid).copied());
+                                .get(&bid)
+                                .and_then(|m| m.get(in_vid).copied());
                         let mut val = if let Some(sv) = snap_opt {
                             sv
                         } else {
@@ -298,72 +300,69 @@ pub(in super::super) fn seal_block<'ctx>(
                                     BT::FloatType(ft) => ft.const_zero().into(),
                                     BT::PointerType(pt) => pt.const_zero().into(),
                                     _ => return Err(format!(
-                                        "phi incoming (seal) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
-                                        bid.as_u32(), sb.as_u32(), in_vid.as_u32()
-                                    )),
+                                            "phi incoming (seal) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
+                                            bid.as_u32(), sb.as_u32(), in_vid.as_u32()
+                                        )),
                                 }
                             }
                         };
-                        // Ensure any required casts are inserted BEFORE the predecessor's terminator
-                        // Save and restore current insertion point around coercion
-                        let saved_block = codegen.builder.get_insert_block();
-                        if let Some(pred_llbb) = bb_map.get(&bid) {
-                            let term = unsafe { pred_llbb.get_terminator() };
-                            if let Some(t) = term {
-                                // Insert casts right before the terminator of predecessor
-                                codegen.builder.position_before(&t);
-                            } else {
-                                codegen.builder.position_at_end(*pred_llbb);
+                            // Insert any required casts in the predecessor block, right before its terminator
+                            let saved_block = codegen.builder.get_insert_block();
+                            if let Some(pred_llbb) = bb_map.get(&bid) {
+                                let term = unsafe { pred_llbb.get_terminator() };
+                                if let Some(t) = term {
+                                    codegen.builder.position_before(&t);
+                                } else {
+                                    codegen.builder.position_at_end(*pred_llbb);
+                                }
                             }
-                        }
-                        val = coerce_to_type(codegen, phi, val)?;
-                        if let Some(bb) = saved_block { codegen.builder.position_at_end(bb); }
-                        let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
-                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                            let tys = phi
-                                .as_basic_value()
-                                .get_type()
-                                .print_to_string()
-                                .to_string();
-                            eprintln!(
-                                "[PHI] sealed add pred_bb={} val={} ty={}{}",
-                                bid.as_u32(),
-                                in_vid.as_u32(),
-                                tys,
-                                if snap_opt.is_some() { " (snapshot)" } else { " (vmap)" }
-                            );
-                        }
-                        match val {
-                            BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
-                            BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
-                            BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
-                            _ => return Err("unsupported phi incoming value (seal)".to_string()),
-                        }
+                            val = coerce_to_type(codegen, phi, val)?;
+                            if let Some(bb) = saved_block { codegen.builder.position_at_end(bb); }
+                            let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
+                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                let tys = phi
+                                    .as_basic_value()
+                                    .get_type()
+                                    .print_to_string()
+                                    .to_string();
+                                eprintln!(
+                                    "[PHI] sealed add pred_bb={} val={} ty={}{}",
+                                    bid.as_u32(),
+                                    in_vid.as_u32(),
+                                    tys,
+                                    if snap_opt.is_some() { " (snapshot)" } else { " (vmap)" }
+                                );
+                            }
+                            match val {
+                                BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
+                                BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
+                                BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
+                                _ => return Err("unsupported phi incoming value (seal)".to_string()),
+                            }
                     } else {
-                        // inputs に pred が見つからない場合でも、検証器は「各predに1エントリ」を要求する。
-                        // ゼロ（型に応じた null/0）を合成して追加する（ログ付）
-                        let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
-                        use inkwell::types::BasicTypeEnum as BT;
-                        let bt = phi.as_basic_value().get_type();
-                        let z: BasicValueEnum = match bt {
-                            BT::IntType(it) => it.const_zero().into(),
-                            BT::FloatType(ft) => ft.const_zero().into(),
-                            BT::PointerType(pt) => pt.const_zero().into(),
-                            _ => return Err("unsupported phi type for zero synth (seal)".to_string()),
-                        };
-                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                            eprintln!(
-                                "[PHI] sealed add (synth) pred_bb={} zero-ty={}",
-                                bid.as_u32(),
-                                bt.print_to_string().to_string()
-                            );
-                        }
-                        match z {
-                            BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
-                            BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
-                            BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
-                            _ => return Err("unsupported phi incoming (synth)".to_string()),
-                        }
+                        // Missing mapping for this predecessor: synthesize a typed zero
+                            let pred_bb = *bb_map.get(&bid).ok_or("pred bb missing")?;
+                            use inkwell::types::BasicTypeEnum as BT;
+                            let bt = phi.as_basic_value().get_type();
+                            let z: BasicValueEnum = match bt {
+                                BT::IntType(it) => it.const_zero().into(),
+                                BT::FloatType(ft) => ft.const_zero().into(),
+                                BT::PointerType(pt) => pt.const_zero().into(),
+                                _ => return Err("unsupported phi type for zero synth (seal)".to_string()),
+                            };
+                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                eprintln!(
+                                    "[PHI] sealed add (synth) pred_bb={} zero-ty={}",
+                                    bid.as_u32(),
+                                    bt.print_to_string().to_string()
+                                );
+                            }
+                            match z {
+                                BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
+                                BasicValueEnum::FloatValue(fv) => phi.add_incoming(&[(&fv, pred_bb)]),
+                                BasicValueEnum::PointerValue(pv) => phi.add_incoming(&[(&pv, pred_bb)]),
+                                _ => return Err("unsupported phi incoming (synth)".to_string()),
+                            }
                     }
                 }
             }

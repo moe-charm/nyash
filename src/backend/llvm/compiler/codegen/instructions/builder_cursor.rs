@@ -26,6 +26,8 @@ impl<'ctx, 'b> BuilderCursor<'ctx, 'b> {
         let prev_bb = self.cur_llbb;
         // Preserve previous closed state
         let prev_closed = prev_bid.and_then(|id| self.closed_by_bid.get(&id).copied());
+        // Preserve target block closed state and restore after
+        let tgt_closed_before = self.closed_by_bid.get(&bid).copied();
 
         self.at_end(bid, bb);
         let r = body(self);
@@ -38,6 +40,13 @@ impl<'ctx, 'b> BuilderCursor<'ctx, 'b> {
         self.cur_llbb = prev_bb;
         if let (Some(pid), Some(closed)) = (prev_bid, prev_closed) {
             self.closed_by_bid.insert(pid, closed);
+        }
+        if let Some(closed) = tgt_closed_before {
+            self.closed_by_bid.insert(bid, closed);
+        } else {
+            // If previously unknown, keep it marked as closed if a terminator exists
+            let has_term = unsafe { bb.get_terminator() }.is_some();
+            self.closed_by_bid.insert(bid, has_term);
         }
         r
     }

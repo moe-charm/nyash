@@ -18,23 +18,29 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 
 ## Next (small boxes)
 
-1) Standard Ny std impl (P0→実体化)
-   - Implement P0 methods for string/array/map in Nyash (keep NyRT primitives minimal)
-   - Enable via `nyash.toml` `[ny_plugins]` (opt‑in); extend `tools/jit_smoke.sh`
-2) Ny compiler MVP (Ny→MIR on JIT path)
-   - Ny tokenizer + recursive‑descent parser (current subset) in Ny; drive existing MIR builder
-   - Flag path: `NYASH_USE_NY_COMPILER=1` to switch rust→ny compiler; rust parser as fallback
-   - Add apps/selfhost-compiler/ and minimal smokes
-3) Bootstrap loop (c0→c1→c1’)
-   - Use existing trace/hash harness to compare parity; add optional CI gate
-4) Plugins CI split (継続)
-   - Core always‑on (JIT, plugins disabled); Plugins as optional job (strict off by default)
-5) LLVM Native EXE Generation
+1) LLVM Native EXE Generation (Phase 15.2) 🚀
    - LLVM backend object → executable pipeline completion
    - Separate `nyash-llvm-compiler` crate (reduce main build weight)
    - Input: MIR (JSON/binary) → Output: native executable
    - Link with nyrt runtime (static/dynamic options)
    - Integration: `nyash --backend llvm --emit exe program.nyash -o program.exe`
+2) Standard Ny std impl (P0→実体化)
+   - Implement P0 methods for string/array/map in Nyash (keep NyRT primitives minimal)
+   - Enable via `nyash.toml` `[ny_plugins]` (opt‑in); extend `tools/jit_smoke.sh`
+3) Ny compiler MVP (Ny→MIR on JIT path) (Phase 15.3) 🎯
+   - Ny tokenizer + recursive‑descent parser (current subset) in Ny; drive existing MIR builder
+   - Flag path: `NYASH_USE_NY_COMPILER=1` to switch rust→ny compiler; rust parser as fallback
+   - Add apps/selfhost-compiler/ and minimal smokes
+4) Bootstrap loop (c0→c1→c1')
+   - Use existing trace/hash harness to compare parity; add optional CI gate
+   - **This achieves self-hosting!** Nyash compiles Nyash
+5) VM Layer in Nyash (Phase 15.4) ⚡
+   - Implement MIR interpreter in Nyash (13 core instructions)
+   - BoxCall/ExternCall bridge to existing infrastructure
+   - Optional LLVM JIT acceleration for hot paths
+   - Enable instant execution without compilation
+6) Plugins CI split (継続)
+   - Core always‑on (JIT, plugins disabled); Plugins as optional job (strict off by default)
 
 ## Later (incremental)
 

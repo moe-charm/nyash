@@ -20,6 +20,7 @@ Update — 2025-09-12 (LLVM flow + BB naming)
 
 Hot Update — 2025-09-12 (quick)
 - Flow: moved function verify to post‑lower; added terminator fallback only when MIR lacks one
+- PHI(sealed): seal_block isolates cast insertion by saving/restoring the insertion point in the predecessor block and wires incoming only for the current predecessor (zero-synth as a last resort, logged). Avoids duplicate incoming and builder state leaks.
 - Compare: allow ptr↔int comparisons for all ops via ptr→i64 bridge
 - Strings: substring now accepts i64(handle) receiver (i2p); len/lastIndexOf stable
 - Arrays: method_id未注入でも get/set/push/length を NyRT 経由で処理
@@ -45,20 +46,20 @@ Next Steps（Sealed SSA 段階導入）
 4) グリーン後、Sealed をデフォルトONにする前にスモーク一式で回帰確認。
 
 TODO — Sealed SSA 段階導入（実装タスク）
-- [ ] block_end_values 追加（LLVM Lower 内の per-BB 終端スナップショット）
+- [x] block_end_values 追加（LLVM Lower 内の per-BB 終端スナップショット）
   - 追加先: `src/backend/llvm/compiler/codegen/mod.rs`
   - 形式: `HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum>>`
   - タイミング: 各BBの命令をすべて Lower した「直後」、終端命令を発行する「直前」に `vmap.clone()` を保存
   - 目的: `seal_block` で pred 終端時点の値を安定取得する（現在の vmap 直接参照をやめる）
-- [ ] `seal_block` をスナップショット参照に切替
+- [x] `seal_block` をスナップショット参照に切替
   - 対象: `src/backend/llvm/compiler/codegen/instructions/flow.rs::seal_block`
   - 取得: `block_end_values[bid].get(in_vid)` を用いて `val` を取得
   - フォールバック: もしスナップショットが無ければ（例外ケース）従来の `vmap` を参照し、警告ログを出す
   - ログ: `NYASH_LLVM_TRACE_PHI=1` 時に `[PHI] sealed add pred_bb=.. val=.. ty=.. (snapshot)` と明示
-- [ ] 非 sealed 経路の維持（回帰防止）
+- [x] 非 sealed 経路の維持（回帰防止）
   - `emit_jump/emit_branch` は sealed=OFF の時のみ incoming を追加（現状仕様を維持）
   - sealed=ON の時は incoming 配線は一切行わず、`seal_block` のみで完結
-- [ ] 型整合（coerce）の継続強化
+- [x] 型整合（coerce）の継続強化
   - 対象: `src/backend/llvm/compiler/codegen/instructions/flow.rs::coerce_to_type`
   - 方針: PHI の型は i8* 優先（String/Box/Array を含む場合）。ptr/int 混在は明示 cast で橋渡し
   - 検討: i1 ブリッジ（bool）の zext/trunc の置き場所は PHI 外側に寄せる（必要時）
@@ -94,6 +95,30 @@ TODO — BuilderCursor 導入と段階適用
 Note
 - フェーズ1では「終端APIと位置ずれの構造化」の最小適用に留め、フォールバック（最終unreachable）を併用
 - フェーズ2で with_block の適用範囲を広げ、余剰なガード・分岐フォールバックを削除していく（ソースは小さくシンプルに）
+
+Progress — 2025-09-12（Sealed + RAII 最小導入）
+- Sealed: block_end_values（BB内定義のみをフィルタ）を導入し、incoming は pred 終端時点の snapshot から配線
+- Cast 挿入: pred 終端直前（position_before）に限定、終端後挿入を回避
+- BuilderCursor: emit_return/emit_jump/emit_branch を構造化（closed ブロックへの挿入を禁止）
+- Call/BoxCall: 実引数を callee の型へ coerce（i2p/p2i/zext/trunc 等）
+- Const String: nyash_string_new を entry ブロックで Hoist し、支配性違反を解消
+- Fallback（暫定）: PHI 欠落や lhs/rhs missing に対し型ゼロを合成して進行（ログ付）
+
+Open Issues（要対応）
+- Sealed配線: 一部合流で『各predに1 incoming』が未充足（synth で穴埋め中）
+- Dominance: ループ/合流で稀に「Instruction does not dominate all uses!」が再出
+- 位置ずれ: Sealed 内の cast 生成が builder の挿入位置に影響する可能性（要隔離）
+
+Next TODO（優先度順）
+1) flow::seal_block の挿入位置を完全隔離
+   - 専用Builder or Cursor.with_block で pred 終端直前に cast を挿入（メインbuilder位置を汚さない）
+2) preds_by_block を構築し、PHI incoming を実CFGの pred へ正規リマップ
+   - snapshot から in_vid を取得し、pred 数ぶんを網羅（synth は最終手段）
+   - 検証: incoming=pred数 を assert/ログ
+3) with_block の適用拡大（entry_builder/配列alloca等のホットスポット）
+   - 位置ずれ温床を解消 → 余剰ガード/フォールバックを削除（コード縮小）
+4) 回帰: Sealed=ON/OFF の一致確認（dep_tree_min_string ほか代表）
+   - NYASH_LLVM_TRACE_PHI=1 で配線ログ確認、ゼロ合成が消えることを目標
 
 Plan — PHI/SSA Hardening (Sealed SSA)
 - Sealed SSA 入れ替え（安全に段階導入）

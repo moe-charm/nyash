@@ -125,7 +125,7 @@ impl LLVMCompiler {
             > = HashMap::new();
             // Snapshot of values at the end of each basic block (for sealed-SSA PHI wiring)
             let mut block_end_values: HashMap<crate::mir::BasicBlockId, HashMap<ValueId, BasicValueEnum>> = HashMap::new();
-            // Build successors map (for optional sealed-SSA PHI wiring)
+            // Build successors and predecessors map (for optional sealed-SSA PHI wiring)
             let mut succs: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> = HashMap::new();
             for (bid, block) in &func.blocks {
                 let v: Vec<crate::mir::BasicBlockId> = block.successors.iter().copied().collect();
@@ -388,7 +388,7 @@ impl LLVMCompiler {
                 }
             }
                 if sealed_mode {
-                    instructions::flow::seal_block(&codegen, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
+                    instructions::flow::seal_block(&codegen, &mut cursor, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
                 }
             }
         // Finalize function: ensure every basic block is closed with a terminator.
