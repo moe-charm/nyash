@@ -345,6 +345,16 @@ impl LLVMCompiler {
                     instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
                 }
             }
+            // Extra guard: if the current LLVM basic block still lacks a terminator for any reason,
+            // insert a conservative branch to the next block (or entry if last) to satisfy verifier.
+            if unsafe { bb.get_terminator() }.is_none() {
+                if let Some(next_bid) = block_ids.get(bi + 1) {
+                    instructions::emit_jump(&codegen, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                } else {
+                    let entry_first = func.entry_block;
+                    instructions::emit_jump(&codegen, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                }
+            }
                 if sealed_mode {
                     instructions::flow::seal_block(&codegen, *bid, &succs, &bb_map, &phis_by_block, &vmap)?;
                 }

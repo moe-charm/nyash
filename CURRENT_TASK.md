@@ -28,6 +28,22 @@ Hot Update — 2025-09-12 (quick)
 - 現在のブロッカー: esc_json/1 で「phi incoming value missing」
   - 対応: emit_jump/emit_branch の incoming 配線をログ付きで点検し、値未定義箇所（by‑name/fast‑path戻り）を補完
 
+Hot Repro — esc_json/1 PHI 配線（2025‑09‑12）
+- 対象: apps/selfhost/tools/dep_tree_min_string.nyash
+- 実行（LLVM）:
+  - Sealed OFF: `NYASH_CLI_VERBOSE=1 NYASH_LLVM_TRACE_PHI=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm apps/selfhost/tools/dep_tree_min_string.nyash`
+  - Sealed ON:  `NYASH_LLVM_PHI_SEALED=1 NYASH_CLI_VERBOSE=1 NYASH_LLVM_TRACE_PHI=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm apps/selfhost/tools/dep_tree_min_string.nyash`
+- 観測:
+  - Sealed OFF: Main.esc_json/1 で PHI incoming 不足（`PHINode should have one entry for each predecessor`）。
+  - Sealed ON: `phi incoming (seal) value missing`（pred側終端値の取得ができていない）。別途 Terminator 欠落も検知→終端フォールバックを実装して解消済み。
+- 原因仮説: Sealed ON で `seal_block` が pred終端時点の値（value_at_end_of_block）ではなく関数作業用 vmap を参照しているため、未定義扱いになっている。
+
+Next Steps（Sealed SSA 段階導入）
+1) block_end_values を導入し、各BB降下完了時に vmap スナップショットを保存。`seal_block` は pred のスナップショットから in_vid を取得。
+2) Sealed=ON で apps/selfhost/tools/dep_tree_min_string.nyash を再確認（PHIログ=ON）。OFF/ON の一致を比較し、incoming が pred数で揃うことを検証。
+3) 足りない型整合（String/Box/Array→i8*）があれば `coerce_to_type` を拡張。
+4) グリーン後、Sealed をデフォルトONにする前にスモーク一式で回帰確認。
+
 Plan — PHI/SSA Hardening (Sealed SSA)
 - Sealed SSA 入れ替え（安全に段階導入）
   - Blockごとに `sealed: bool` と `incomplete_phis: Map<Var, Phi>` を保持
