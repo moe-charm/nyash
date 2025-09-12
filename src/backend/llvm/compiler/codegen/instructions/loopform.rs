@@ -214,3 +214,26 @@ pub fn normalize_header_phis_for_latch<'ctx>(
     }
     Ok(())
 }
+
+// Dev check: when enabled, log PHIs that live outside dispatch blocks created by LoopForm
+pub(in super::super) fn dev_check_dispatch_only_phi<'ctx>(
+    phis_by_block: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        Vec<(crate::mir::ValueId, inkwell::values::PhiValue<'ctx>, Vec<(crate::mir::BasicBlockId, crate::mir::ValueId)>)>,
+    >,
+    loopform_registry: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        (inkwell::basic_block::BasicBlock<'ctx>, inkwell::values::PhiValue<'ctx>, inkwell::values::PhiValue<'ctx>, inkwell::basic_block::BasicBlock<'ctx>)
+    >,
+) {
+    if std::env::var("NYASH_DEV_CHECK_DISPATCH_ONLY_PHI").ok().as_deref() != Some("1") {
+        return;
+    }
+    // Best-effort: Just report PHI presence per block when LoopForm registry is non-empty.
+    if !loopform_registry.is_empty() {
+        for (bid, phis) in phis_by_block.iter() {
+            if phis.is_empty() { continue; }
+            eprintln!("[DEV][PHI] bb={} has {} PHI(s)", bid.as_u32(), phis.len());
+        }
+    }
+}

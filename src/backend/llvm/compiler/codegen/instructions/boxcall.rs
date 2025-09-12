@@ -11,6 +11,7 @@ use self::marshal as marshal_mod;
 use self::invoke as invoke_mod;
 use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 use super::builder_cursor::BuilderCursor;
+use super::ctx::{LowerFnCtx, BlockCtx};
 
 // BoxCall lowering (large): mirrors existing logic; kept in one function for now
 pub(in super::super) fn lower_boxcall<'ctx, 'b>(
@@ -258,6 +259,39 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
         }
         Err(format!("BoxCall requires method_id for method '{}'. The method_id should be automatically injected during MIR compilation.", method))
     }
+}
+
+// Boxed API: thin shim adapting LowerFnCtx/BlockCtx to the existing implementation.
+pub(in super::super) fn lower_boxcall_boxed<'ctx, 'b>(
+    ctx: &mut LowerFnCtx<'ctx, 'b>,
+    blk: &BlockCtx<'ctx>,
+    dst: &Option<ValueId>,
+    box_val: &ValueId,
+    method: &str,
+    method_id: &Option<u16>,
+    args: &[ValueId],
+    entry_builder: &inkwell::builder::Builder<'ctx>,
+) -> Result<(), String> {
+    // Optional dev check: ensure block is open for insertion
+    if ctx.dev_checks { ctx.cursor.assert_open(blk.cur_bid); }
+    lower_boxcall(
+        ctx.codegen,
+        ctx.cursor,
+        ctx.resolver,
+        blk.cur_bid,
+        ctx.func,
+        ctx.vmap,
+        dst,
+        box_val,
+        method,
+        method_id,
+        args,
+        ctx.box_type_ids.ok_or_else(|| "LowerFnCtx.box_type_ids missing".to_string())?,
+        entry_builder,
+        ctx.bb_map,
+        ctx.preds,
+        ctx.block_end_values,
+    )
 }
 
 fn coerce_to_type<'ctx>(

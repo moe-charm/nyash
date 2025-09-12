@@ -4,6 +4,7 @@ use inkwell::{values::BasicValueEnum as BVE, AddressSpace};
 
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, ValueId};
+use super::super::ctx::{LowerFnCtx, BlockCtx};
 
 // use super::marshal::{get_i64, get_tag_const};
 
@@ -239,4 +240,34 @@ fn store_invoke_return<'ctx>(
         vmap.insert(dst, rv);
     }
     Ok(())
+}
+
+// Boxed wrapper delegating to the existing implementation
+pub(super) fn try_handle_tagged_invoke_boxed<'ctx, 'b>(
+    ctx: &mut LowerFnCtx<'ctx, 'b>,
+    blk: &BlockCtx<'ctx>,
+    dst: &Option<ValueId>,
+    mid: u16,
+    type_id: i64,
+    recv_h: inkwell::values::IntValue<'ctx>,
+    args: &[ValueId],
+    entry_builder: &inkwell::builder::Builder<'ctx>,
+) -> Result<(), String> {
+    try_handle_tagged_invoke(
+        ctx.codegen,
+        ctx.func,
+        ctx.cursor,
+        ctx.resolver,
+        ctx.vmap,
+        dst,
+        mid,
+        type_id,
+        recv_h,
+        args,
+        entry_builder,
+        blk.cur_bid,
+        ctx.bb_map,
+        ctx.preds,
+        ctx.block_end_values,
+    )
 }

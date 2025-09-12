@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
 use inkwell::{values::BasicValueEnum as BVE, AddressSpace};
-
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::ValueId;
+use super::super::ctx::{LowerFnCtx, BlockCtx};
 
 /// Handle getField/setField; returns true if handled.
 use super::super::builder_cursor::BuilderCursor;
 
 pub(super) fn try_handle_field_method<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
-    cursor: &mut BuilderCursor<'ctx, 'b>,
+    cursor: &mut super::super::builder_cursor::BuilderCursor<'ctx, 'b>,
     cur_bid: crate::mir::BasicBlockId,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: &Option<ValueId>,
@@ -49,12 +49,12 @@ pub(super) fn try_handle_field_method<'ctx, 'b>(
                 } else {
                     return Err("get_field ret expected i64".to_string());
                 };
-                let pty = codegen.context.ptr_type(AddressSpace::from(0));
-                let ptr = codegen
+            let pty = codegen.context.ptr_type(AddressSpace::from(0));
+            let ptr = codegen
                     .builder
                     .build_int_to_ptr(h, pty, "gf_handle_to_ptr")
                     .map_err(|e| e.to_string())?;
-                vmap.insert(*d, ptr.into());
+            vmap.insert(*d, ptr.into());
             }
             Ok(true)
         }
@@ -79,4 +79,29 @@ pub(super) fn try_handle_field_method<'ctx, 'b>(
         }
         _ => Ok(false),
     }
+}
+
+// Boxed wrapper that delegates to the non-boxed implementation
+pub(super) fn try_handle_field_method_boxed<'ctx, 'b>(
+    ctx: &mut LowerFnCtx<'ctx, 'b>,
+    blk: &BlockCtx<'ctx>,
+    dst: &Option<ValueId>,
+    method: &str,
+    args: &[ValueId],
+    recv_h: inkwell::values::IntValue<'ctx>,
+) -> Result<bool, String> {
+    try_handle_field_method(
+        ctx.codegen,
+        ctx.cursor,
+        blk.cur_bid,
+        ctx.vmap,
+        dst,
+        method,
+        args,
+        recv_h,
+        ctx.resolver,
+        ctx.bb_map,
+        ctx.preds,
+        ctx.block_end_values,
+    )
 }

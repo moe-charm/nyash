@@ -73,7 +73,6 @@ pub(in super::super) fn emit_jump<'ctx, 'b>(
         BasicBlockId,
         Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
     >,
-    vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
 ) -> Result<(), String> {
     // Non-sealed incoming wiring removed: rely on sealed snapshots and resolver-driven PHIs.
     let tbb = *bb_map.get(target).ok_or("target bb missing")?;
@@ -193,8 +192,6 @@ pub(in super::super) fn seal_block<'ctx, 'b>(
     >,
     // Snapshot of value map at end of each predecessor block
     block_end_values: &HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum<'ctx>>>,
-    // Fallback: current vmap (used only if snapshot missing)
-    vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
 ) -> Result<(), String> {
     if let Some(slist) = succs.get(&bid) {
         for sb in slist {

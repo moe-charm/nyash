@@ -317,24 +317,26 @@ impl LLVMCompiler {
                             effects: _,
                         } => {
                         // Delegate to refactored lowering and skip legacy body
-                        instructions::lower_boxcall(
-                            &codegen,
-                            &mut cursor,
-                            &mut resolver,
-                            *bid,
-                            func,
-                            &mut vmap,
-                            dst,
-                            box_val,
-                            method,
-                            method_id,
-                            args,
-                            &box_type_ids,
-                            &entry_builder,
-                            &bb_map,
-                            &preds,
-                            &block_end_values,
-                        )?;
+                        {
+                            instructions::lower_boxcall(
+                                &codegen,
+                                &mut cursor,
+                                &mut resolver,
+                                *bid,
+                                func,
+                                &mut vmap,
+                                dst,
+                                box_val,
+                                method,
+                                method_id,
+                                args,
+                                &box_type_ids,
+                                &entry_builder,
+                                &bb_map,
+                                &preds,
+                                &block_end_values,
+                            )?;
+                        }
                         if let Some(d) = dst { defined_in_block.insert(*d); }
                         },
                     MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
@@ -460,7 +462,7 @@ impl LLVMCompiler {
                             }
                         }
                         if !handled {
-                            instructions::emit_jump(&codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block, &vmap)?;
+                            instructions::emit_jump(&codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block)?;
                         }
                     }
                     MirInstruction::Branch { condition, then_bb, else_bb } => {
@@ -536,13 +538,13 @@ impl LLVMCompiler {
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                                 eprintln!("[LLVM] unknown terminator fallback: bb={} -> next={}", bid.as_u32(), next_bid.as_u32());
                             }
-                            instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                            instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block)?;
                         } else {
                             let entry_first = func.entry_block;
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                                 eprintln!("[LLVM] unknown terminator fallback: bb={} -> entry={}", bid.as_u32(), entry_first.as_u32());
                             }
-                            instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                            instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block)?;
                         }
                     }
                 }
@@ -554,11 +556,11 @@ impl LLVMCompiler {
                 cursor.at_end(*bid, bb);
                 // Fallback: branch to the next block if any; otherwise loop to entry
                 if let Some(next_bid) = block_ids.get(bi + 1) {
-                    instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block)?;
                 } else {
                     // last block, loop to entry to satisfy verifier
                     let entry_first = func.entry_block;
-                    instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block)?;
                 }
             }
             // Extra guard: if the current LLVM basic block still lacks a terminator for any reason,
@@ -573,17 +575,17 @@ impl LLVMCompiler {
                     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                         eprintln!("[LLVM] fallback terminator: bb={} -> next={}", bid.as_u32(), next_bid.as_u32());
                     }
-                    instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block)?;
                 } else {
                     let entry_first = func.entry_block;
                     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                         eprintln!("[LLVM] fallback terminator: bb={} -> entry={}", bid.as_u32(), entry_first.as_u32());
                     }
-                    instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block, &vmap)?;
+                    instructions::emit_jump(&codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block)?;
                 }
             }
                 if sealed_mode {
-                    instructions::flow::seal_block(&codegen, &mut cursor, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
+                    instructions::flow::seal_block(&codegen, &mut cursor, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values)?;
                     sealed_blocks.insert(*bid);
                     // In sealed mode, we rely on seal_block to add incoming per pred when each pred is sealed.
                     // finalize_phis is intentionally skipped to avoid duplicate incoming entries.
@@ -603,6 +605,8 @@ impl LLVMCompiler {
                     )?;
                 }
             }
+            // Dev check (optional): ensure PHIs live only in dispatch blocks
+            instructions::dev_check_dispatch_only_phi(&phis_by_block, &loopform_registry);
         }
         // Finalize function: ensure every basic block is closed with a terminator.
         // As a last resort, insert 'unreachable' into blocks that remain unterminated.

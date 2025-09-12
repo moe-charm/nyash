@@ -78,6 +78,45 @@ Next Plan（精密タスク v2）
 - Seal配線の堅牢化: snapshot優先・pred末端cast挿入の徹底、フォールバックゼロ合成の縮小（非param値のvmapフォールバックを禁止）。
 - Regression: `dep_tree_min_string` オブジェクト生成→ LLVM verifier green（支配違反ゼロ）; Deny-Direct grep=0 をCIチェックに追加。
 
+Plan — Context Boxing（Lower APIの“箱化”）
+- 背景: 降下APIの引数が過多（10+）で、責務が分散しがち。Nyashの“箱理論”に従い、関連情報をコンテキストBoxにまとめて境界を作る。
+- 目的: 責務の一元化・不変条件の型による強制・引数爆発の解消・再発防止。
+- 主要な“箱”
+  - LowerFnCtx<'ctx, 'b>（関数スコープ）
+    - 保持: `codegen`, `func`, `cursor`, `resolver`, `vmap`, `bb_map`, `preds`, `block_end_values`, `phis_by_block`, `const_strs`, `box_type_ids` など
+    - 役割: 関数内の全 lowering に共通する情報とユーティリティ（ensure_i64/i8p/f64、with_block ラッパ 等）
+  - BlockCtx<'ctx>（ブロックスコープ）
+    - 保持: `cur_bid`, `cur_llbb`、必要に応じて `succs`
+    - 役割: その場の挿入点管理、pred終端直前挿入の窓口
+  - InvokeCtx（呼び出し情報）
+    - 保持: `method_id`, `type_id`, `recv_h`, `args`
+    - 役割: plugin invoke（by‑id/by‑name）の統一入口
+  - StringOps（軽量型/ヘルパ）
+    - 型: `StrHandle(i64)`, `StrPtr(i8*)`
+    - 規約: ブロック間は StrHandle のみ／call直前のみ StrPtr 生成。戻りは常に StrHandle
+
+- API の最終形（例）
+  - `lower_boxcall(ctx: &mut LowerFnCtx, blk: &BlockCtx, inst: &BoxCallInst) -> LlResult<()>`
+  - `try_handle_tagged_invoke(ctx: &mut LowerFnCtx, blk: &BlockCtx, call: &InvokeCtx) -> LlResult<()>`
+  - `StringOps::concat(ctx, blk, lhs, rhs) -> LlResult<StrHandle>`
+
+- 構造の不変条件との対応付け
+  - Resolver‑only: `LowerFnCtx` 経由でのみ値取得可能（VMap の直接 `get` は不可にする）
+  - 局所化の規律: `BlockCtx.with_block_pred(..)` 等で pred末端挿入を強制
+  - dispatch‑only PHI: dev チェッカ `PhiGuard::assert_dispatch_only` を追加
+  - preheader必須: LoopForm 生成時に assert（dev）
+
+- マイグレーション手順（段階的）
+  1) `LowerFnCtx/BlockCtx/InvokeCtx` を導入し、`lower_boxcall` と invoke 経路を最初に箱化
+  2) Strings を `StringOps` に集約（戻り=StrHandle）。既存callサイトから直 i8* を排除
+  3) BinOp/Compare/ExternCall を順次 `LowerFnCtx+BlockCtx` 受けに移行
+  4) dev チェッカ（dispatch‑PHI/preheader）をONにし、構造を固定
+
+- 受け入れ（Context Boxing 対応）
+  - `lower_boxcall`/invoke/strings が “箱化API” を使用し、関数シグネチャの引数が 3 箱以内
+  - Resolver‑only/Deny‑Direct 維持（grep 0）
+  - 代表ケースで verifier green（D‑Dominance‑0）
+
 Docs — LLVM layer overview (2025‑09‑12)
 - Added docs/LLVM_LAYER_OVERVIEW.md and linked it with existing docs:
   - docs/LOWERING_LLVM.md — concrete lowering rules and RT calls
@@ -467,6 +506,36 @@ Execution Plan — Next 48h
 - プラグインシグネチャ読み込みを `plugin_sigs.rs` に移動
 - BoxタイプID読み込みを `box_types.rs` に移動
 - PR #134の型情報処理を完全保持
+
+Hot Update — 2025‑09‑12 (Boxing: ctx + dev checks)
+- Added `instructions/ctx.rs` introducing `LowerFnCtx` and `BlockCtx` (Resolver-first accessors: ensure_i64/ptr/f64). Env `NYASH_DEV_CHECKS=1` enables extra cursor-open asserts.
+- Added `instructions/string_ops.rs` with lightweight newtypes `StrHandle(i64)` and `StrPtr(i8*)` (handle-across-blocks policy). Call sites will adopt gradually.
+- Exposed new modules in `instructions/mod.rs` and added a thin `lower_boxcall_boxed(..)` shim.
+- Wiring remains unchanged (still calls existing `lower_boxcall(..)`); borrow conflicts will be avoided by migrating call-sites in small steps.
+- Scope alignment: Boxing covers the full BoxCall lowering suite (fields/invoke/marshal) as we migrate internals in-place.
+
+Hot Update — 2025‑09‑12 (flow API trim)
+- `emit_jump` から `vmap` 引数を削除（sealed前提で未使用のため）。
+- `seal_block` から `vmap` 引数を削除（snapshot優先・ゼロ合成で代替）。
+- 上記により `compile_module` 内の借用競合（&mut cursor と &vmap の競合）を縮小。
+
+Dev Checks（実装）
+- 追加: `NYASH_DEV_CHECK_DISPATCH_ONLY_PHI=1` で LoopForm 登録がある関数の PHI 分布をログ出力（暫定: dispatch-only 厳格検証は今後強化）。
+- 既存: BuilderCursor の post-terminator ガードを全域適用済み（emit_instr/emit_term）。
+
+結果（Step 4 検証）
+- dep_tree_min_string の LLVM オブジェクト生成が成功（sealed=ON, plugins OFF）。
+  - コマンド（例）:
+    - `cargo build --features llvm --bin nyash`
+    - `NYASH_DISABLE_PLUGINS=1 NYASH_LLVM_OBJ_OUT=tmp/dep_tree_min_string.o target/debug/nyash --backend llvm apps/selfhost/tools/dep_tree_min_string.nyash`
+  - 出力: `tmp/dep_tree_min_string.o`（約 10KB）
+
+次の一手（箱化の本適用・安全切替）
+- lower_boxcall 内部の段階移行（fields → invoke → marshal）を小スコープで進め、呼び出し側の `&mut cursor` 借用境界と競合しない形で flip。
+- flip 後、Deny-Direct（`rg "vmap\.get\("` = 0）を下流のCIメモに追記、必要なら `#[cfg(debug_assertions)]` の簡易ガードを追加。
+
+Note（箱化の段階切替）
+- BoxCall 呼び出しを `lower_boxcall_boxed` へ全面切替は、`compile_module` のループ内における `&mut cursor` の借用境界と干渉するため、いったん保留。内部の移行（fields/invoke/marshal）を先に進め、借用の生存域を短縮した上で切替予定。
 
 ## 🎯 Restart Notes — Ny Syntax Alignment (2025‑09‑07)
 
