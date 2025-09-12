@@ -205,10 +205,12 @@ impl LLVMCompiler {
                     eprintln!("[LLVM] lowering bb={}", bid.as_u32());
                 }
                 let block = func.blocks.get(bid).unwrap();
+                let mut defined_in_block: std::collections::HashSet<ValueId> = std::collections::HashSet::new();
                 for inst in &block.instructions {
                     match inst {
                         MirInstruction::NewBox { dst, box_type, args } => {
                             instructions::lower_newbox(&codegen, &mut vmap, *dst, box_type, args, &box_type_ids)?;
+                            defined_in_block.insert(*dst);
                         },
                         MirInstruction::Const { dst, value } => {
                             let bval = match value {
@@ -224,43 +226,24 @@ impl LLVMCompiler {
                                 .const_int(*b as u64, false)
                                 .into(),
                             ConstValue::String(s) => {
-                                let gv = codegen
-                                    .builder
+                                // Hoist string creation to entry block to dominate all uses
+                                let gv = entry_builder
                                     .build_global_string_ptr(s, "str")
                                     .map_err(|e| e.to_string())?;
-                                let len =
-                                    codegen.context.i32_type().const_int(s.len() as u64, false);
-                                // declare i8* @nyash_string_new(i8*, i32)
-                                let rt = codegen
-                                    .context
-                                    .ptr_type(inkwell::AddressSpace::from(0));
-                                let fn_ty = rt.fn_type(
-                                    &[
-                                        codegen
-                                            .context
-                                            .ptr_type(inkwell::AddressSpace::from(0))
-                                            .into(),
-                                        codegen.context.i32_type().into(),
-                                    ],
-                                    false,
-                                );
+                                let len = codegen.context.i32_type().const_int(s.len() as u64, false);
+                                let rt = codegen.context.ptr_type(inkwell::AddressSpace::from(0));
+                                let fn_ty = rt.fn_type(&[
+                                    codegen.context.ptr_type(inkwell::AddressSpace::from(0)).into(),
+                                    codegen.context.i32_type().into(),
+                                ], false);
                                 let callee = codegen
                                     .module
                                     .get_function("nyash_string_new")
-                                    .unwrap_or_else(|| {
-                                        codegen.module.add_function("nyash_string_new", fn_ty, None)
-                                    });
-                                let call = codegen
-                                    .builder
-                                    .build_call(
-                                        callee,
-                                        &[gv.as_pointer_value().into(), len.into()],
-                                        "strnew",
-                                    )
+                                    .unwrap_or_else(|| codegen.module.add_function("nyash_string_new", fn_ty, None));
+                                let call = entry_builder
+                                    .build_call(callee, &[gv.as_pointer_value().into(), len.into()], "strnew")
                                     .map_err(|e| e.to_string())?;
-                                call.try_as_basic_value()
-                                    .left()
-                                    .ok_or("nyash_string_new returned void".to_string())?
+                                call.try_as_basic_value().left().ok_or("nyash_string_new returned void".to_string())?
                             }
                             ConstValue::Null => codegen
                                 .context
@@ -270,9 +253,11 @@ impl LLVMCompiler {
                             ConstValue::Void => return Err("Const Void unsupported".to_string()),
                         };
                             vmap.insert(*dst, bval);
+                            defined_in_block.insert(*dst);
                         },
                         MirInstruction::Call { dst, func: callee, args, .. } => {
                             instructions::lower_call(&codegen, func, &mut vmap, dst, callee, args, &const_strs, &llvm_funcs)?;
+                            if let Some(d) = dst { defined_in_block.insert(*d); }
                         }
                         MirInstruction::BoxCall {
                             dst,
@@ -295,33 +280,41 @@ impl LLVMCompiler {
                             &box_type_ids,
                             &entry_builder,
                         )?;
+                        if let Some(d) = dst { defined_in_block.insert(*d); }
                         },
                     MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
                         instructions::lower_externcall(&codegen, func, &mut vmap, dst, iface_name, method_name, args)?;
+                        if let Some(d) = dst { defined_in_block.insert(*d); }
                     },
                     MirInstruction::UnaryOp { dst, op, operand } => {
                         instructions::lower_unary(&codegen, &mut vmap, *dst, op, operand)?;
+                        defined_in_block.insert(*dst);
                     },
                     MirInstruction::BinOp { dst, op, lhs, rhs } => {
                         instructions::lower_binop(&codegen, func, &mut vmap, *dst, op, lhs, rhs)?;
+                        defined_in_block.insert(*dst);
                     },
                     MirInstruction::Compare { dst, op, lhs, rhs } => {
                         let out = instructions::lower_compare(&codegen, func, &vmap, op, lhs, rhs)?;
                         vmap.insert(*dst, out);
+                        defined_in_block.insert(*dst);
                     },
                     MirInstruction::Store { value, ptr } => {
                         instructions::lower_store(&codegen, &vmap, &mut allocas, &mut alloca_elem_types, value, ptr)?;
                     },
                     MirInstruction::Load { dst, ptr } => {
                         instructions::lower_load(&codegen, &mut vmap, &mut allocas, &mut alloca_elem_types, dst, ptr)?;
+                        defined_in_block.insert(*dst);
                     },
                     MirInstruction::Phi { .. } => {
                         // Already created in pre-pass; nothing to do here.
                     }
                     _ => { /* ignore other ops for 11.1 */ },
                 }
-                // Capture a snapshot of the value map at the end of this block's body
-                block_end_values.insert(*bid, vmap.clone());
+                // Capture a filtered snapshot of the value map at the end of this block's body
+                let mut snap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
+                for vid in &defined_in_block { if let Some(v) = vmap.get(vid).copied() { snap.insert(*vid, v); } }
+                block_end_values.insert(*bid, snap);
             }
             // Emit terminators and provide a conservative fallback when absent
             if let Some(term) = &block.terminator {
@@ -395,7 +388,7 @@ impl LLVMCompiler {
                 }
             }
                 if sealed_mode {
-                    instructions::flow::seal_block(&codegen, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
+                    instructions::flow::seal_block(&codegen, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values, &vmap)?;
                 }
             }
         // Finalize function: ensure every basic block is closed with a terminator.

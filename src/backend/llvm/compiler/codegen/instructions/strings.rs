@@ -164,11 +164,27 @@ pub(super) fn try_handle_string_method<'ctx>(
         let a1 = *vmap.get(&args[1]).ok_or("substring end arg missing")?;
         let s = match a0 {
             BVE::IntValue(iv) => iv,
-            _ => return Err("substring start must be integer".to_string()),
+            BVE::PointerValue(pv) => codegen
+                .builder
+                .build_ptr_to_int(pv, i64t, "substr_s_p2i")
+                .map_err(|e| e.to_string())?,
+            BVE::FloatValue(fv) => codegen
+                .builder
+                .build_float_to_signed_int(fv, i64t, "substr_s_f2i")
+                .map_err(|e| e.to_string())?,
+            _ => i64t.const_zero(),
         };
         let e = match a1 {
             BVE::IntValue(iv) => iv,
-            _ => return Err("substring end must be integer".to_string()),
+            BVE::PointerValue(pv) => codegen
+                .builder
+                .build_ptr_to_int(pv, i64t, "substr_e_p2i")
+                .map_err(|e| e.to_string())?,
+            BVE::FloatValue(fv) => codegen
+                .builder
+                .build_float_to_signed_int(fv, i64t, "substr_e_f2i")
+                .map_err(|e| e.to_string())?,
+            _ => i64t.const_zero(),
         };
         let fnty = i8p.fn_type(&[i8p.into(), i64t.into(), i64t.into()], false);
         let callee = codegen

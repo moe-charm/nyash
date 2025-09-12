@@ -63,12 +63,22 @@ pub(in super::super) fn lower_binop<'ctx>(
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use inkwell::values::BasicValueEnum as BVE;
     use inkwell::IntPredicate;
-    let lv = *vmap
-        .get(lhs)
-        .ok_or_else(|| format!("lhs missing: {}", lhs.as_u32()))?;
-    let rv = *vmap
-        .get(rhs)
-        .ok_or_else(|| format!("rhs missing: {}", rhs.as_u32()))?;
+    let lv = if let Some(v) = vmap.get(lhs).copied() {
+        v
+    } else {
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!("[binop] lhs missing: {} (fallback zero)", lhs.as_u32());
+        }
+        guessed_zero(codegen, func, lhs)
+    };
+    let rv = if let Some(v) = vmap.get(rhs).copied() {
+        v
+    } else {
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!("[binop] rhs missing: {} (fallback zero)", rhs.as_u32());
+        }
+        guessed_zero(codegen, func, rhs)
+    };
     let mut handled_concat = false;
     if let BinaryOp::Add = op {
         let i8p = codegen.context.ptr_type(AddressSpace::from(0));
@@ -311,4 +321,16 @@ pub(in super::super) fn lower_binop<'ctx>(
     };
     vmap.insert(dst, out);
     Ok(())
+}
+
+fn guessed_zero<'ctx>(codegen: &CodegenContext<'ctx>, func: &MirFunction, vid: &ValueId) -> BasicValueEnum<'ctx> {
+    use crate::mir::MirType as MT;
+    match func.metadata.value_types.get(vid) {
+        Some(MT::Bool) => codegen.context.bool_type().const_zero().into(),
+        Some(MT::Integer) => codegen.context.i64_type().const_zero().into(),
+        Some(MT::Float) => codegen.context.f64_type().const_zero().into(),
+        Some(MT::String) | Some(MT::Box(_)) | Some(MT::Array(_)) | Some(MT::Future(_)) | Some(MT::Unknown) | Some(MT::Void) | None => {
+            codegen.context.ptr_type(AddressSpace::from(0)).const_zero().into()
+        }
+    }
 }

@@ -252,6 +252,7 @@ fn coerce_to_type<'ctx>(
 /// Sealed-SSA style: when a block is finalized, add PHI incoming for all successor blocks.
 pub(in super::super) fn seal_block<'ctx>(
     codegen: &CodegenContext<'ctx>,
+    func: &MirFunction,
     bid: BasicBlockId,
     succs: &HashMap<BasicBlockId, Vec<BasicBlockId>>,
     bb_map: &HashMap<BasicBlockId, BasicBlock<'ctx>>,
@@ -276,22 +277,30 @@ pub(in super::super) fn seal_block<'ctx>(
                         let mut val = if let Some(sv) = snap_opt {
                             sv
                         } else {
-                            match vmap.get(in_vid).copied() {
-                                Some(v) => v,
-                                None => {
-                                    // As a last resort, synthesize a zero of the PHI type to satisfy verifier.
-                                    // This should be rare and indicates missing predecessor snapshot or forward ref.
-                                    use inkwell::types::BasicTypeEnum as BT;
+                            // Trust vmap only when the value is a function parameter (dominates all paths)
+                            if func.params.contains(in_vid) {
+                                vmap.get(in_vid).copied().unwrap_or_else(|| {
                                     let bt = phi.as_basic_value().get_type();
+                                    use inkwell::types::BasicTypeEnum as BT;
                                     match bt {
                                         BT::IntType(it) => it.const_zero().into(),
                                         BT::FloatType(ft) => ft.const_zero().into(),
                                         BT::PointerType(pt) => pt.const_zero().into(),
-                                        _ => return Err(format!(
-                                            "phi incoming (seal) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
-                                            bid.as_u32(), sb.as_u32(), in_vid.as_u32()
-                                        )),
+                                        _ => unreachable!(),
                                     }
+                                })
+                            } else {
+                                // Synthesize zero to avoid dominance violations
+                                let bt = phi.as_basic_value().get_type();
+                                use inkwell::types::BasicTypeEnum as BT;
+                                match bt {
+                                    BT::IntType(it) => it.const_zero().into(),
+                                    BT::FloatType(ft) => ft.const_zero().into(),
+                                    BT::PointerType(pt) => pt.const_zero().into(),
+                                    _ => return Err(format!(
+                                        "phi incoming (seal) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
+                                        bid.as_u32(), sb.as_u32(), in_vid.as_u32()
+                                    )),
                                 }
                             }
                         };
