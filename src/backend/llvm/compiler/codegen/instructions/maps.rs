@@ -58,10 +58,21 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             if args.len() != 1 {
                 return Err("MapBox.has expects 1 arg".to_string());
             }
-            let key_v = *vmap.get(&args[0]).ok_or("map.has key missing")?;
-            let key_i = match key_v {
-                BVE::IntValue(_) | BVE::PointerValue(_) => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap).map_err(|e| e.to_string())?,
-                _ => return Err("map.has key must be int or handle ptr".to_string()),
+            let key_i = match func.metadata.value_types.get(&args[0]) {
+                Some(crate::mir::MirType::String) => {
+                    // string key: i8* -> handle
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
+                    let fnty_conv = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                    let conv = codegen
+                        .module
+                        .get_function("nyash.box.from_i8_string")
+                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                    let kcall = cursor
+                        .emit_instr(cur_bid, |b| b.build_call(conv, &[pv.into()], "key_i8_to_handle"))
+                        .map_err(|e| e.to_string())?;
+                    kcall.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
+                }
+                _ => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?
             };
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
             let callee = codegen
@@ -87,21 +98,10 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             if args.len() != 1 {
                 return Err("MapBox.get expects 1 arg".to_string());
             }
-            let key_v = *vmap.get(&args[0]).ok_or("map.get key missing")?;
-            let call = match key_v {
-                BVE::IntValue(_) => {
-                    let iv = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
-                    let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
-                    let callee = codegen
-                        .module
-                        .get_function("nyash.map.get_h")
-                        .unwrap_or_else(|| codegen.module.add_function("nyash.map.get_h", fnty, None));
-                    cursor
-                        .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), iv.into()], "mget"))
-                        .map_err(|e| e.to_string())?
-                }
-                BVE::PointerValue(pv) => {
+            let call = match func.metadata.value_types.get(&args[0]) {
+                Some(crate::mir::MirType::String) => {
                     // key: i8* -> i64 handle via from_i8_string (string key)
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
                     let fnty_conv = i64t
                         .fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
                     let conv = codegen
@@ -125,7 +125,17 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
                         .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), kh.into()], "mget_hh"))
                         .map_err(|e| e.to_string())?
                 }
-                _ => return Err("map.get key must be int or pointer".to_string()),
+                _ => {
+                    let iv = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
+                    let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
+                    let callee = codegen
+                        .module
+                        .get_function("nyash.map.get_h")
+                        .unwrap_or_else(|| codegen.module.add_function("nyash.map.get_h", fnty, None));
+                    cursor
+                        .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), iv.into()], "mget"))
+                        .map_err(|e| e.to_string())?
+                }
             };
             if let Some(d) = dst {
                 let rv = call
@@ -143,16 +153,22 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             if args.len() != 2 {
                 return Err("MapBox.set expects 2 args (key, value)".to_string());
             }
-            let key_v = *vmap.get(&args[0]).ok_or("map.set key missing")?;
-            let val_v = *vmap.get(&args[1]).ok_or("map.set value missing")?;
-            let key_i = match key_v {
-                BVE::IntValue(_) | BVE::PointerValue(_) => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap).map_err(|e| e.to_string())?,
-                _ => return Err("map.set key must be int or handle ptr".to_string()),
+            let key_i = match func.metadata.value_types.get(&args[0]) {
+                Some(crate::mir::MirType::String) => {
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
+                    let fnty_conv = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                    let conv = codegen
+                        .module
+                        .get_function("nyash.box.from_i8_string")
+                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                    let kcall = cursor
+                        .emit_instr(cur_bid, |b| b.build_call(conv, &[pv.into()], "key_i8_to_handle"))
+                        .map_err(|e| e.to_string())?;
+                    kcall.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
+                }
+                _ => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?
             };
-            let val_i = match val_v {
-                BVE::IntValue(_) | BVE::PointerValue(_) => resolver.resolve_i64(codegen, cursor, cur_bid, args[1], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap).map_err(|e| e.to_string())?,
-                _ => return Err("map.set value must be int or handle ptr".to_string()),
-            };
+            let val_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[1], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module

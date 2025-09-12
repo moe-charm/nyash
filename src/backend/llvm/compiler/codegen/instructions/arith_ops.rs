@@ -11,42 +11,34 @@ use super::builder_cursor::BuilderCursor;
 pub(in super::super) fn lower_unary<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
+    func: &MirFunction,
     vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
     dst: ValueId,
     op: &UnaryOp,
     operand: &ValueId,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
-    use crate::backend::llvm::compiler::helpers::{as_float, as_int};
-    let v = *vmap.get(operand).ok_or("operand missing")?;
+    use crate::mir::MirType as MT;
     let out = match op {
         UnaryOp::Neg => {
-            if let Some(iv) = as_int(v) {
-                cursor
-                    .emit_instr(cur_bid, |b| b
-                        .build_int_neg(iv, "ineg"))
-                    .map_err(|e| e.to_string())?
-                    .into()
-            } else if let Some(fv) = as_float(v) {
-                cursor
-                    .emit_instr(cur_bid, |b| b
-                        .build_float_neg(fv, "fneg"))
-                    .map_err(|e| e.to_string())?
-                    .into()
-            } else {
-                return Err("neg on non-number".to_string());
+            match func.metadata.value_types.get(operand) {
+                Some(MT::Float) => {
+                    let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *operand, bb_map, preds, block_end_values, vmap)?;
+                    cursor.emit_instr(cur_bid, |b| b.build_float_neg(fv, "fneg")).map_err(|e| e.to_string())?.into()
+                }
+                _ => {
+                    let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *operand, bb_map, preds, block_end_values, vmap)?;
+                    cursor.emit_instr(cur_bid, |b| b.build_int_neg(iv, "ineg")).map_err(|e| e.to_string())?.into()
+                }
             }
         }
         UnaryOp::Not | UnaryOp::BitNot => {
-            if let Some(iv) = as_int(v) {
-                cursor
-                    .emit_instr(cur_bid, |b| b
-                        .build_not(iv, "inot"))
-                    .map_err(|e| e.to_string())?
-                    .into()
-            } else {
-                return Err("not on non-int".to_string());
-            }
+            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *operand, bb_map, preds, block_end_values, vmap)?;
+            cursor.emit_instr(cur_bid, |b| b.build_not(iv, "inot")).map_err(|e| e.to_string())?.into()
         }
     };
     vmap.insert(dst, out);
@@ -72,21 +64,16 @@ pub(in super::super) fn lower_binop<'ctx, 'b>(
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use inkwell::values::BasicValueEnum as BVE;
     use inkwell::IntPredicate;
-    let lv = if let Some(v) = vmap.get(lhs).copied() {
-        v
-    } else {
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("[binop] lhs missing: {} (fallback zero)", lhs.as_u32());
-        }
-        guessed_zero(codegen, func, lhs)
+    // Construct lhs/rhs proxy values via Resolver according to metadata (no vmap direct access)
+    let lv: BasicValueEnum<'ctx> = match func.metadata.value_types.get(lhs) {
+        Some(crate::mir::MirType::Float) => resolver.resolve_f64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)?.into(),
+        Some(crate::mir::MirType::String) | Some(crate::mir::MirType::Box(_)) => resolver.resolve_ptr(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)?.into(),
+        _ => resolver.resolve_i64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)?.into(),
     };
-    let rv = if let Some(v) = vmap.get(rhs).copied() {
-        v
-    } else {
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("[binop] rhs missing: {} (fallback zero)", rhs.as_u32());
-        }
-        guessed_zero(codegen, func, rhs)
+    let rv: BasicValueEnum<'ctx> = match func.metadata.value_types.get(rhs) {
+        Some(crate::mir::MirType::Float) => resolver.resolve_f64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)?.into(),
+        Some(crate::mir::MirType::String) | Some(crate::mir::MirType::Box(_)) => resolver.resolve_ptr(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)?.into(),
+        _ => resolver.resolve_i64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)?.into(),
     };
     let mut handled_concat = false;
     if let BinaryOp::Add = op {
@@ -113,7 +100,12 @@ pub(in super::super) fn lower_binop<'ctx, 'b>(
                     .try_as_basic_value()
                     .left()
                     .ok_or("concat_ss returned void".to_string())?;
-                vmap.insert(dst, rv);
+                // store as handle (i64) across blocks
+                let i64t = codegen.context.i64_type();
+                let h = cursor
+                    .emit_instr(cur_bid, |b| b.build_ptr_to_int(rv.into_pointer_value(), i64t, "str_ptr2i"))
+                    .map_err(|e| e.to_string())?;
+                vmap.insert(dst, h.into());
                 handled_concat = true;
             }
             (BVE::PointerValue(lp), BVE::IntValue(ri)) => {
@@ -163,7 +155,11 @@ pub(in super::super) fn lower_binop<'ctx, 'b>(
                         .try_as_basic_value()
                         .left()
                         .ok_or("concat_si returned void".to_string())?;
-                    vmap.insert(dst, rv);
+                    let i64t = codegen.context.i64_type();
+                    let h = cursor
+                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(rv.into_pointer_value(), i64t, "str_ptr2i"))
+                        .map_err(|e| e.to_string())?;
+                    vmap.insert(dst, h.into());
                     handled_concat = true;
                 }
             }
@@ -214,7 +210,11 @@ pub(in super::super) fn lower_binop<'ctx, 'b>(
                         .try_as_basic_value()
                         .left()
                         .ok_or("concat_is returned void".to_string())?;
-                    vmap.insert(dst, rv);
+                    let i64t = codegen.context.i64_type();
+                    let h = cursor
+                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(rv.into_pointer_value(), i64t, "str_ptr2i"))
+                        .map_err(|e| e.to_string())?;
+                    vmap.insert(dst, h.into());
                     handled_concat = true;
                 }
             }

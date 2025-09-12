@@ -12,6 +12,7 @@ use crate::mir::{
 };
 
 use super::builder_cursor::BuilderCursor;
+use super::Resolver;
 use super::super::types::to_bool;
 
 /// LoopForm scaffolding — fixed block layout for while/loop normalization
@@ -62,6 +63,7 @@ impl<'ctx> LoopFormContext<'ctx> {
 pub fn lower_while_loopform<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut Resolver<'ctx>,
     func: &MirFunction,
     llvm_func: FunctionValue<'ctx>,
     condition: &ValueId,
@@ -73,6 +75,8 @@ pub fn lower_while_loopform<'ctx, 'b>(
     after_bb: BasicBlockId,
     bb_map: &std::collections::HashMap<BasicBlockId, BasicBlock<'ctx>>,
     vmap: &std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
+    preds: &std::collections::HashMap<BasicBlockId, Vec<BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
     // Registry to allow later body→dispatch wiring (simple bodies)
     registry: &mut std::collections::HashMap<BasicBlockId, (BasicBlock<'ctx>, PhiValue<'ctx>, PhiValue<'ctx>, BasicBlock<'ctx>)>,
     body_to_header: &mut std::collections::HashMap<BasicBlockId, BasicBlockId>,
@@ -90,9 +94,17 @@ pub fn lower_while_loopform<'ctx, 'b>(
         .map_err(|e| e.to_string())
         .unwrap();
 
-    // Header: evaluate condition and branch to body (for true) or dispatch (for false)
-    let cond_v = *vmap.get(condition).ok_or("loopform: condition value missing")?;
-    let cond_i1 = to_bool(codegen.context, cond_v, &codegen.builder)?;
+    // Header: evaluate condition via Resolver and branch to body (for true) or dispatch (for false)
+    let ci = resolver.resolve_i64(codegen, cursor, header_bid, *condition, bb_map, preds, block_end_values, vmap)?;
+    let cond_i1 = codegen
+        .builder
+        .build_int_compare(
+            inkwell::IntPredicate::NE,
+            ci,
+            codegen.context.i64_type().const_zero(),
+            "lf_cond_nez",
+        )
+        .map_err(|e| e.to_string())?;
     cursor.emit_term(header_bid, |b| {
         b.build_conditional_branch(cond_i1, lf.body, lf.dispatch)
             .map_err(|e| e.to_string())

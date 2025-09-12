@@ -8,9 +8,11 @@ use crate::mir::{function::MirFunction, ValueId};
 // use super::marshal::{get_i64, get_tag_const};
 
 /// Handle method_id-tagged plugin invoke path; returns Ok(()) if handled.
-pub(super) fn try_handle_tagged_invoke<'ctx>(
+pub(super) fn try_handle_tagged_invoke<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     func: &MirFunction,
+    cursor: &mut crate::backend::llvm::compiler::codegen::instructions::builder_cursor::BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::super::Resolver<'ctx>,
     vmap: &mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
     dst: &Option<ValueId>,
     mid: u16,
@@ -18,6 +20,10 @@ pub(super) fn try_handle_tagged_invoke<'ctx>(
     recv_h: inkwell::values::IntValue<'ctx>,
     args: &[ValueId],
     entry_builder: &inkwell::builder::Builder<'ctx>,
+    cur_bid: crate::mir::BasicBlockId,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
     let i64t = codegen.context.i64_type();
     let argc_val = i64t.const_int(args.len() as u64, false);
@@ -26,17 +32,15 @@ pub(super) fn try_handle_tagged_invoke<'ctx>(
     if args.len() <= 4 {
         let mut a = [i64t.const_zero(); 4];
         for (i, vid) in args.iter().enumerate() {
-            // Prefer Resolver-style i64 handles: assume ints/ptrs are bridged to i64
-            let iv = match vmap.get(vid).copied() {
-                Some(BVE::IntValue(iv)) => iv,
-                Some(BVE::PointerValue(pv)) => codegen.builder.build_ptr_to_int(pv, i64t, "arg_p2i").map_err(|e| e.to_string())?,
-                Some(BVE::FloatValue(fv)) => {
+            let iv = match func.metadata.value_types.get(vid) {
+                Some(crate::mir::MirType::Float) => {
+                    let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *vid, bb_map, preds, block_end_values, vmap)?;
                     let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
                     let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
                     let call = codegen.builder.build_call(callee, &[fv.into()], "arg_f2h").map_err(|e| e.to_string())?;
                     call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
                 }
-                _ => i64t.const_zero(),
+                _ => resolver.resolve_i64(codegen, cursor, cur_bid, *vid, bb_map, preds, block_end_values, vmap)?,
             };
             a[i] = iv;
         }
@@ -111,16 +115,15 @@ pub(super) fn try_handle_tagged_invoke<'ctx>(
                 .build_in_bounds_gep(arr_ty, tags_arr, &idx, &format!("t_gep_{}", i))
                 .map_err(|e| e.to_string())?
         };
-        let vi = match vmap.get(vid).copied() {
-            Some(BVE::IntValue(iv)) => iv,
-            Some(BVE::PointerValue(pv)) => codegen.builder.build_ptr_to_int(pv, i64t, "arg_p2i").map_err(|e| e.to_string())?,
-            Some(BVE::FloatValue(fv)) => {
+        let vi = match func.metadata.value_types.get(vid) {
+            Some(crate::mir::MirType::Float) => {
+                let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *vid, bb_map, preds, block_end_values, vmap)?;
                 let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
                 let callee = codegen.module.get_function("nyash.box.from_f64").unwrap_or_else(|| codegen.module.add_function("nyash.box.from_f64", fnty, None));
                 let call = codegen.builder.build_call(callee, &[fv.into()], "arg_f2h").map_err(|e| e.to_string())?;
                 call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
             }
-            _ => i64t.const_zero(),
+            _ => resolver.resolve_i64(codegen, cursor, cur_bid, *vid, bb_map, preds, block_end_values, vmap)?,
         };
         let ti = match func.metadata.value_types.get(vid) {
             Some(crate::mir::MirType::Float) => i64t.const_int(5, false),
@@ -208,19 +211,9 @@ fn store_invoke_return<'ctx>(
                 }
             }
             crate::mir::MirType::String => {
-                // Normalize to i8* for String to align with PHI/type inference
-                // Plugins return i64 handle; convert handle -> i8* here.
-                let h = if let BVE::IntValue(iv) = rv {
-                    iv
-                } else {
-                    return Err("invoke ret expected i64 for String".to_string());
-                };
-                let pty = codegen.context.ptr_type(inkwell::AddressSpace::from(0));
-                let ptr = codegen
-                    .builder
-                    .build_int_to_ptr(h, pty, "ret_string_handle_to_ptr")
-                    .map_err(|e| e.to_string())?;
-                vmap.insert(dst, ptr.into());
+                // Keep as i64 handle across blocks (pointer is produced on demand via Resolver)
+                if let BVE::IntValue(iv) = rv { vmap.insert(dst, iv.into()); }
+                else { return Err("invoke ret expected i64 for String".to_string()); }
             }
             crate::mir::MirType::Box(_)
             | crate::mir::MirType::Array(_)

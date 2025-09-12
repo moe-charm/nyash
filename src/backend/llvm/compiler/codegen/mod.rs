@@ -356,7 +356,20 @@ impl LLVMCompiler {
                         if let Some(d) = dst { defined_in_block.insert(*d); }
                     },
                     MirInstruction::UnaryOp { dst, op, operand } => {
-                        instructions::lower_unary(&codegen, &mut cursor, *bid, &mut vmap, *dst, op, operand)?;
+                        instructions::lower_unary(
+                            &codegen,
+                            &mut cursor,
+                            &mut resolver,
+                            *bid,
+                            func,
+                            &mut vmap,
+                            *dst,
+                            op,
+                            operand,
+                            &bb_map,
+                            &preds,
+                            &block_end_values,
+                        )?;
                         defined_in_block.insert(*dst);
                     },
                     MirInstruction::BinOp { dst, op, lhs, rhs } => {
@@ -407,7 +420,18 @@ impl LLVMCompiler {
                 cursor.at_end(*bid, bb);
                 match term {
                     MirInstruction::Return { value } => {
-                        instructions::emit_return(&codegen, &mut cursor, *bid, func, &vmap, value)?;
+                        instructions::emit_return(
+                            &codegen,
+                            &mut cursor,
+                            &mut resolver,
+                            *bid,
+                            func,
+                            &vmap,
+                            value,
+                            &bb_map,
+                            &preds,
+                            &block_end_values,
+                        )?;
                     }
                     MirInstruction::Jump { target } => {
                         // LoopForm simple body→dispatch wiring: if this block is a loop body
@@ -480,6 +504,7 @@ impl LLVMCompiler {
                                 handled_by_loopform = instructions::lower_while_loopform(
                                     &codegen,
                                     &mut cursor,
+                                    &mut resolver,
                                     func,
                                     llvm_func,
                                     condition,
@@ -491,6 +516,8 @@ impl LLVMCompiler {
                                     after_sel,
                                     &bb_map,
                                     &vmap,
+                                    &preds,
+                                    &block_end_values,
                                     &mut loopform_registry,
                                     &mut loopform_body_to_header,
                                 )?;

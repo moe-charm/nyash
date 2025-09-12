@@ -62,6 +62,22 @@ Scaffold — 2025‑09‑12 (Resolver i64 minimal)
 - Added src/backend/llvm/compiler/codegen/instructions/resolver.rs with `Resolver::resolve_i64(...)` and per-block cache.
 - docs/RESOLVER_API.md documents goals/usage; wiring to replace `localize_to_i64` callsites comes next.
 
+Hot Update — 2025‑09‑12 (Structural Invariants v1)
+- Core invariants adopted to eliminate dominance violations structurally:
+  - Resolver-only value access: forbid direct `vmap.get(...)` in lowering; always use `Resolver::{resolve_i64, resolve_ptr, resolve_f64}`.
+  - Localization discipline: PHIs are created at BB head; casts/incoming coercions are inserted at predecessor end via `BuilderCursor::with_block` (never inside PHI site).
+  - Strings rule: across blocks keep StrHandle(i64) only; convert to StrPtr(i8*) at call sites inside the same BB. Return values of string ops are stored as i64 handles.
+  - LoopForm rule: preheader is mandatory; header condition resolved via Resolver; dispatch-only PHI; optional latch→header normalization is gated.
+  - BuilderCursor guard: deny post‑terminator insertion; avoid raw builder calls from lowering sites.
+- Acceptance A2.5 (added): sealed=ON (default) with dominator violations = 0 on `apps/selfhost/tools/dep_tree_min_string.nyash`.
+
+Next Plan（精密タスク v2）
+- Deny-Direct purge: eliminate remaining `vmap.get(...)` in lowering modules（maps.rs, arith.rs, arith_ops.rs, externcall/env.rs, boxcall/{invoke,marshal,fields}.rs, mem.rs ほか）。
+- Enforce string handle invariant end-to-end（helpers/Resolverに軽量StrHandle/StrPtr型or helperを追加、戻りは常にi64、呼び出し直前だけinttoptr）。
+- L-Dispatch-PHI checker（dev）: dispatch以外のPHI検出でpanic/ログ。preheader必須の検証も追加。
+- Seal配線の堅牢化: snapshot優先・pred末端cast挿入の徹底、フォールバックゼロ合成の縮小（非param値のvmapフォールバックを禁止）。
+- Regression: `dep_tree_min_string` オブジェクト生成→ LLVM verifier green（支配違反ゼロ）; Deny-Direct grep=0 をCIチェックに追加。
+
 Docs — LLVM layer overview (2025‑09‑12)
 - Added docs/LLVM_LAYER_OVERVIEW.md and linked it with existing docs:
   - docs/LOWERING_LLVM.md — concrete lowering rules and RT calls
@@ -217,6 +233,35 @@ Hot Update — 2025‑09‑12 (Resolver 適用拡大 + sealed 既定ON)
 - 適用: emit_branch 条件、strings(substring/concat si|is)、arith_ops(整数演算)、compare(整数比較)、externcall(console/env)、newbox(env.box.new_i64)、call の引数解決を Resolver 経由に統一。
 - 非sealed配線の削除: emit_jump/emit_branch 内の直接incoming追加を撤去。sealedスナップショット＋Resolverの需要駆動で一本化。
 - 既定: `NYASH_LLVM_PHI_SEALED` 未設定=ON（`0` のみOFF）。
+
+Status — VMap Purge (Phase 1 done)
+- Done (Resolver化済み):
+  - flow: branch 条件（i64→i1）
+  - strings: substring/concat(si|is)、lastIndexOf の needle
+  - arith_ops: 整数演算の左右オペランド（i64 正規化）
+  - compare: 整数比較の左右（i64 正規化）
+  - externcall: console(log/warn/error/trace) は handle 経路に統一（resolve_i64）。future.spawn_instance 名は resolve_ptr。
+  - env.box.new_i64: int/ptr 引数は resolve_i64（f64→from_f64）
+  - arrays/maps: index/key/value の整数/ptr は resolve_i64
+  - call: 実引数を callee 期待型へ（int→resolve_i64、ptr→i64→i2p、float→resolve_f64）
+  - mem.store: 値を resolve_i64/resolve_f64/resolve_ptr の順で解決
+  - boxcall: recv を i64/ptr 両形で取得、direct call 引数を Resolver 経由に統一
+
+- Remaining (vmap.get 参照の置換ターゲット):
+  - flow.emit_return: 戻り値の型に応じて resolve_* に統一（シグネチャ拡張）
+  - loopform.lower_while_loopform: 条件の vmap 直参照→ resolve_i64（シグネチャ拡張）
+  - strings.try_handle_string_method: 一部 vmap 残存箇所の整理（recv は boxcall 側で ptr 統一済み）
+  - extern.env: env.box.new の型名（arg0）や一部名引数を resolve_ptr に統一
+  - arith/arith_ops/compare: 局所の vmap 判定/ゼロフォールバックの縮小（Resolver 経由へ）
+  - snapshot 用の vmap アクセス（compile_module 内のスナップショット作成）は維持（仕様上の例外）
+
+Plan — Next (precise)
+1) flow.emit_return を Resolver 化（resolve_i64/resolve_f64/inttoptr へ）。
+2) loopform.lower_while_loopform に Resolver/CFG を渡し、条件解決を resolve_i64 に統一。
+3) strings の vmap 残を metadata + Resolver へ置換（concat rhs 判別の簡素化）。
+4) extern.env.* 名引数を resolve_ptr 化（local.get / box.new 名など）。
+5) marshal/fields の vmap 読みを Resolver/型注釈へ段階置換（最小に縮退させる）。
+6) LoopForm: preheader 既定化 + 最小 LoopState（tag+i64）導入→ dispatch-only PHI 完了（ゲート）。
 
 Smoke（sealed=ON, dep_tree_min_string）所見
 - 進展: PHI 欠落は再現せず、sealed での incoming 配線は安定

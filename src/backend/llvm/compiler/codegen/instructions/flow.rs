@@ -7,45 +7,54 @@ use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 
 use super::super::types::{to_bool, map_mirtype_to_basic};
 use super::builder_cursor::BuilderCursor;
+use super::Resolver;
 
 pub(in super::super) fn emit_return<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
-    _bid: BasicBlockId,
+    resolver: &mut Resolver<'ctx>,
+    cur_bid: BasicBlockId,
     func: &MirFunction,
     vmap: &HashMap<ValueId, BasicValueEnum<'ctx>>,
     value: &Option<ValueId>,
+    bb_map: &HashMap<BasicBlockId, BasicBlock<'ctx>>,
+    preds: &HashMap<BasicBlockId, Vec<BasicBlockId>>,
+    block_end_values: &HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
     match (&func.signature.return_type, value) {
         (crate::mir::MirType::Void, _) => {
-            cursor.emit_term(_bid, |b| { b.build_return(None).unwrap(); });
+            cursor.emit_term(cur_bid, |b| { b.build_return(None).unwrap(); });
             Ok(())
         }
         (_t, Some(vid)) => {
             // Resolve return value according to expected type
             let expected = map_mirtype_to_basic(codegen.context, &func.signature.return_type);
             use inkwell::types::BasicTypeEnum as BT;
-            let v_adj = match expected {
-                BT::IntType(_it) => {
-                    // For now, fallback to vmap; resolver threading requires signature change
-                    *vmap.get(vid).ok_or("ret value missing")?
+            let v_adj: BasicValueEnum<'ctx> = match expected {
+                BT::IntType(it) => {
+                    let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *vid, bb_map, preds, block_end_values, vmap)?;
+                    // Cast to expected width
+                    let bw_src = iv.get_type().get_bit_width();
+                    let bw_dst = it.get_bit_width();
+                    if bw_src == bw_dst { iv.into() }
+                    else if bw_src < bw_dst { cursor.emit_instr(cur_bid, |b| b.build_int_z_extend(iv, it, "ret_zext")).map_err(|e| e.to_string())?.into() }
+                    else if bw_dst == 1 { to_bool(codegen.context, iv.into(), &codegen.builder)?.into() }
+                    else { cursor.emit_instr(cur_bid, |b| b.build_int_truncate(iv, it, "ret_trunc")).map_err(|e| e.to_string())?.into() }
                 }
                 BT::PointerType(pt) => {
-                    if let Some(BasicValueEnum::IntValue(iv)) = vmap.get(vid).copied() {
-                        cursor
-                            .emit_instr(_bid, |b| b.build_int_to_ptr(iv, pt, "ret_i2p"))
-                            .map_err(|e| e.to_string())?
-                            .into()
-                    } else {
-                        *vmap.get(vid).ok_or("ret value missing")?
-                    }
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, *vid, bb_map, preds, block_end_values, vmap)?;
+                    // If expected pointer type differs (e.g., typed ptr vs i8*), bitcast
+                    if pv.get_type() == pt { pv.into() }
+                    else { codegen.builder.build_pointer_cast(pv, pt, "ret_bitcast").map_err(|e| e.to_string())?.into() }
                 }
-                BT::FloatType(_ft) => {
-                    *vmap.get(vid).ok_or("ret value missing")?
+                BT::FloatType(ft) => {
+                    let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *vid, bb_map, preds, block_end_values, vmap)?;
+                    if fv.get_type() == ft { fv.into() }
+                    else { cursor.emit_instr(cur_bid, |b| b.build_float_cast(fv, ft, "ret_fcast")).map_err(|e| e.to_string())?.into() }
                 }
-                _ => *vmap.get(vid).ok_or("ret value missing")?,
+                _ => return Err("unsupported return basic type".to_string()),
             };
-            cursor.emit_term(_bid, |b| {
+            cursor.emit_term(cur_bid, |b| {
                 b.build_return(Some(&v_adj)).map_err(|e| e.to_string()).unwrap();
             });
             Ok(())
@@ -94,16 +103,13 @@ pub(in super::super) fn emit_branch<'ctx, 'b>(
     preds: &HashMap<BasicBlockId, Vec<BasicBlockId>>,
     block_end_values: &HashMap<BasicBlockId, HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<(), String> {
-    // Localize condition as i64 and convert to i1 via != 0
-    let cond_v = *vmap.get(condition).ok_or("cond missing")?;
-    let b = match cond_v {
-        BasicValueEnum::IntValue(_) | BasicValueEnum::PointerValue(_) | BasicValueEnum::FloatValue(_) => {
-            let ci = resolver.resolve_i64(codegen, cursor, bid, *condition, bb_map, preds, block_end_values, vmap)?;
-            let zero = codegen.context.i64_type().const_zero();
-            codegen.builder.build_int_compare(inkwell::IntPredicate::NE, ci, zero, "cond_nez").map_err(|e| e.to_string())?
-        }
-        _ => to_bool(codegen.context, cond_v, &codegen.builder)?,
-    };
+    // Localize condition as i64 and convert to i1 via != 0（Resolver 経由のみ）
+    let ci = resolver.resolve_i64(codegen, cursor, bid, *condition, bb_map, preds, block_end_values, vmap)?;
+    let zero = codegen.context.i64_type().const_zero();
+    let b = codegen
+        .builder
+        .build_int_compare(inkwell::IntPredicate::NE, ci, zero, "cond_nez")
+        .map_err(|e| e.to_string())?;
     // Non-sealed incoming wiring removed: rely on sealed snapshots and resolver-driven PHIs.
     let tbb = *bb_map.get(then_bb).ok_or("then bb missing")?;
     let ebb = *bb_map.get(else_bb).ok_or("else bb missing")?;
@@ -196,38 +202,24 @@ pub(in super::super) fn seal_block<'ctx, 'b>(
                 for (_dst, phi, inputs) in pl {
                     // Handle only the current predecessor (bid)
                     if let Some((_, in_vid)) = inputs.iter().find(|(p, _)| p == &bid) {
-                        // Prefer the predecessor's block-end snapshot; fall back to current vmap
+                        // Prefer the predecessorの block-end snapshot。なければ型ゼロを合成
                         let snap_opt = block_end_values
                                 .get(&bid)
                                 .and_then(|m| m.get(in_vid).copied());
                         let mut val = if let Some(sv) = snap_opt {
                             sv
                         } else {
-                            // Trust vmap only when the value is a function parameter (dominates all paths)
-                            if func.params.contains(in_vid) {
-                                vmap.get(in_vid).copied().unwrap_or_else(|| {
-                                    let bt = phi.as_basic_value().get_type();
-                                    use inkwell::types::BasicTypeEnum as BT;
-                                    match bt {
-                                        BT::IntType(it) => it.const_zero().into(),
-                                        BT::FloatType(ft) => ft.const_zero().into(),
-                                        BT::PointerType(pt) => pt.const_zero().into(),
-                                        _ => unreachable!(),
-                                    }
-                                })
-                            } else {
-                                // Synthesize zero to avoid dominance violations
-                                let bt = phi.as_basic_value().get_type();
-                                use inkwell::types::BasicTypeEnum as BT;
-                                match bt {
-                                    BT::IntType(it) => it.const_zero().into(),
-                                    BT::FloatType(ft) => ft.const_zero().into(),
-                                    BT::PointerType(pt) => pt.const_zero().into(),
-                                    _ => return Err(format!(
-                                            "phi incoming (seal) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
-                                            bid.as_u32(), sb.as_u32(), in_vid.as_u32()
-                                        )),
-                                }
+                            // Synthesize zero to avoid dominance violations（vmap には依存しない）
+                            let bt = phi.as_basic_value().get_type();
+                            use inkwell::types::BasicTypeEnum as BT;
+                            match bt {
+                                BT::IntType(it) => it.const_zero().into(),
+                                BT::FloatType(ft) => ft.const_zero().into(),
+                                BT::PointerType(pt) => pt.const_zero().into(),
+                                _ => return Err(format!(
+                                        "phi incoming (seal) missing: pred={} succ_bb={} in_vid={} (no snapshot)",
+                                        bid.as_u32(), sb.as_u32(), in_vid.as_u32()
+                                    )),
                             }
                         };
                             // Insert any required casts in the predecessor block, right before its terminator
@@ -251,7 +243,7 @@ pub(in super::super) fn seal_block<'ctx, 'b>(
                                     bid.as_u32(),
                                     in_vid.as_u32(),
                                     tys,
-                                    if snap_opt.is_some() { " (snapshot)" } else { " (vmap)" }
+                                    if snap_opt.is_some() { " (snapshot)" } else { " (synth)" }
                                 );
                             }
                             match val {
@@ -323,17 +315,6 @@ pub(in super::super) fn finalize_phis<'ctx, 'b>(
                     let snap_opt = block_end_values.get(pred).and_then(|m| m.get(in_vid).copied());
                     let mut val = if let Some(sv) = snap_opt {
                         sv
-                    } else if func.params.contains(in_vid) {
-                        vmap.get(in_vid).copied().unwrap_or_else(|| {
-                            let bt = phi.as_basic_value().get_type();
-                            use inkwell::types::BasicTypeEnum as BT;
-                            match bt {
-                                BT::IntType(it) => it.const_zero().into(),
-                                BT::FloatType(ft) => ft.const_zero().into(),
-                                BT::PointerType(pt) => pt.const_zero().into(),
-                                _ => unreachable!(),
-                            }
-                        })
                     } else {
                         let bt = phi.as_basic_value().get_type();
                         use inkwell::types::BasicTypeEnum as BT;
@@ -414,21 +395,13 @@ pub(in super::super) fn localize_to_i64<'ctx, 'b>(
     vmap: &std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
 ) -> Result<IntValue<'ctx>, String> {
     let i64t = codegen.context.i64_type();
+    // Note: avoid using current vmap directly here, as it may hold values
+    // defined in non-dominating predecessors. We rely on predecessor snapshots
+    // in sealed SSA mode to maintain dominance.
     let cur_llbb = *bb_map.get(&cur_bid).ok_or("cur bb missing")?;
-    // If no predecessors, fallback to current vmap or zero
+    // If no predecessors, conservatively return zero（vmap には依存しない）
     let pred_list = preds.get(&cur_bid).cloned().unwrap_or_default();
     if pred_list.is_empty() {
-        if let Some(v) = vmap.get(&vid).copied() {
-            return Ok(match v {
-                BasicValueEnum::IntValue(iv) => {
-                    if iv.get_type() == i64t { iv }
-                    else { codegen.builder.build_int_z_extend(iv, i64t, "loc_zext").map_err(|e| e.to_string())? }
-                }
-                BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "loc_p2i").map_err(|e| e.to_string())?,
-                BasicValueEnum::FloatValue(fv) => codegen.builder.build_float_to_signed_int(fv, i64t, "loc_f2i").map_err(|e| e.to_string())?,
-                _ => i64t.const_zero(),
-            });
-        }
         return Ok(i64t.const_zero());
     }
     // Build PHI at the top of current block (before any non-PHI), then restore insertion point
@@ -442,25 +415,25 @@ pub(in super::super) fn localize_to_i64<'ctx, 'b>(
     for p in &pred_list {
         let pred_bb = *bb_map.get(p).ok_or("pred bb missing")?;
         // Fetch snapshot at end of pred; if missing, synthesize zero
-        let mut val = block_end_values
+        let base = block_end_values
             .get(p)
             .and_then(|m| m.get(&vid).copied())
             .unwrap_or_else(|| i64t.const_zero().into());
-        // Coerce to i64
-        use inkwell::types::BasicTypeEnum as BT;
-        val = match val {
-            BasicValueEnum::IntValue(iv) => {
-                if iv.get_type() == i64t { iv.into() }
-                else { codegen.builder.build_int_z_extend(iv, i64t, "loc_zext_p").map_err(|e| e.to_string())?.into() }
-            }
-            BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "loc_p2i_p").map_err(|e| e.to_string())?.into(),
-            BasicValueEnum::FloatValue(fv) => codegen.builder.build_float_to_signed_int(fv, i64t, "loc_f2i_p").map_err(|e| e.to_string())?.into(),
-            _ => i64t.const_zero().into(),
-        };
-        match val {
-            BasicValueEnum::IntValue(iv) => phi.add_incoming(&[(&iv, pred_bb)]),
-            _ => unreachable!(),
-        }
+        // Insert required casts in the predecessor block before its terminator
+        let mut iv_out = i64t.const_zero();
+        cursor.with_block(*p, pred_bb, |c| {
+            let term = unsafe { pred_bb.get_terminator() };
+            if let Some(t) = term { codegen.builder.position_before(&t); } else { c.position_at_end(pred_bb); }
+            iv_out = match base {
+                BasicValueEnum::IntValue(iv) => {
+                    if iv.get_type() == i64t { iv } else { codegen.builder.build_int_z_extend(iv, i64t, "loc_zext_p").map_err(|e| e.to_string()).unwrap() }
+                }
+                BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "loc_p2i_p").map_err(|e| e.to_string()).unwrap(),
+                BasicValueEnum::FloatValue(fv) => codegen.builder.build_float_to_signed_int(fv, i64t, "loc_f2i_p").map_err(|e| e.to_string()).unwrap(),
+                _ => i64t.const_zero(),
+            };
+        });
+        phi.add_incoming(&[(&iv_out, pred_bb)]);
     }
     // Restore insertion point
     if let Some(bb) = saved_ip { codegen.builder.position_at_end(bb); }

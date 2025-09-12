@@ -34,21 +34,13 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use super::super::types::classify_tag;
     let i64t = codegen.context.i64_type();
-    // Resolve receiver as handle and pointer (i8*)
-    let pty = codegen.context.ptr_type(AddressSpace::from(0));
-    let recv_h = cursor
-        .emit_instr(cur_bid, |b| {
-            // If vmap has pointer, use it; if int, use it; else zero
-            match vmap.get(box_val).copied() {
-                Some(BVE::PointerValue(pv)) => b.build_ptr_to_int(pv, i64t, "recv_p2i").map_err(|e| e.to_string()),
-                Some(BVE::IntValue(iv)) => Ok(iv),
-                _ => Ok(i64t.const_zero()),
-            }
-        })
-        .map_err(|e| e.to_string())?;
-    let recv_p = cursor
-        .emit_instr(cur_bid, |b| b.build_int_to_ptr(recv_h, pty, "recv_i2p"))
-        .map_err(|e| e.to_string())?;
+    // Resolve receiver as handle and pointer (i8*) via Resolver to ensure dominance safety
+    let recv_h = resolver.resolve_i64(
+        codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap,
+    )?;
+    let recv_p = resolver.resolve_ptr(
+        codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap,
+    )?;
     let recv_v: BVE = recv_p.into();
 
     // Resolve type_id
@@ -62,7 +54,7 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
 
     // Delegate String methods
     if super::strings::try_handle_string_method(
-        codegen, cursor, resolver, cur_bid, func, vmap, dst, box_val, method, args, recv_v,
+        codegen, cursor, resolver, cur_bid, func, vmap, dst, box_val, method, args,
         bb_map, preds, block_end_values,
     )? {
         return Ok(());
@@ -98,7 +90,7 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     }
 
     // getField/setField
-    if fields::try_handle_field_method(codegen, cursor, cur_bid, vmap, dst, method, args, recv_h)? {
+    if fields::try_handle_field_method(codegen, cursor, cur_bid, vmap, dst, method, args, recv_h, resolver, bb_map, preds, block_end_values)? {
         return Ok(());
     }
 
@@ -126,6 +118,8 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
         invoke::try_handle_tagged_invoke(
             codegen,
             func,
+            cursor,
+            resolver,
             vmap,
             dst,
             *mid,
@@ -133,6 +127,10 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
             recv_h,
             args,
             entry_builder,
+            cur_bid,
+            bb_map,
+            preds,
+            block_end_values,
         )?;
         return Ok(());
     } else {
@@ -160,9 +158,30 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
                 if exp_tys.len() != args.len() { return Err("boxcall direct-call: arg count mismatch".to_string()); }
                 let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = Vec::with_capacity(args.len());
                 for (i, a) in args.iter().enumerate() {
-                    let v = *vmap.get(a).ok_or("boxcall func arg missing")?;
-                    let tv = coerce_to_type(codegen, v, exp_tys[i])?;
-                    call_args.push(tv.into());
+                    use inkwell::types::BasicMetadataTypeEnum as BMTy;
+                    let coerced: BVE<'ctx> = match exp_tys[i] {
+                        BMTy::IntType(it) => {
+                            // Use Resolver via our surrounding lowering
+                            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
+                            let bw_dst = it.get_bit_width();
+                            let bw_src = iv.get_type().get_bit_width();
+                            if bw_src == bw_dst { iv.into() }
+                            else if bw_src < bw_dst { cursor.emit_instr(cur_bid, |b| b.build_int_z_extend(iv, it, "boxcall_arg_zext")).map_err(|e| e.to_string())?.into() }
+                            else if bw_dst == 1 { super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into() }
+                            else { cursor.emit_instr(cur_bid, |b| b.build_int_truncate(iv, it, "boxcall_arg_trunc")).map_err(|e| e.to_string())?.into() }
+                        }
+                        BMTy::PointerType(pt) => {
+                            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
+                            let p = cursor.emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, pt, "boxcall_arg_i2p")).map_err(|e| e.to_string())?;
+                            p.into()
+                        }
+                        BMTy::FloatType(ft) => {
+                            let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
+                            if fv.get_type() == ft { fv.into() } else { cursor.emit_instr(cur_bid, |b| b.build_float_cast(fv, ft, "boxcall_arg_fcast")).map_err(|e| e.to_string())?.into() }
+                        }
+                        _ => return Err("boxcall direct-call: unsupported parameter type".to_string()),
+                    };
+                    call_args.push(coerced.into());
                 }
                 let call = cursor
                     .emit_instr(cur_bid, |b| b.build_call(callee, &call_args, "user_meth_call"))
@@ -177,15 +196,14 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
         }
         // Last resort: invoke plugin by name (host resolves method_id)
         {
-            use crate::backend::llvm::compiler::codegen::instructions::boxcall::marshal::get_i64 as get_i64_any;
             let i64t = codegen.context.i64_type();
             let argc = i64t.const_int(args.len() as u64, false);
             let mname = cursor
                 .emit_instr(cur_bid, |b| b.build_global_string_ptr(method, "meth_name"))
                 .map_err(|e| e.to_string())?;
             // up to 2 args for this minimal path
-            let a1 = if let Some(v0) = args.get(0) { get_i64_any(codegen, vmap, *v0)? } else { i64t.const_zero() };
-            let a2 = if let Some(v1) = args.get(1) { get_i64_any(codegen, vmap, *v1)? } else { i64t.const_zero() };
+            let a1 = if let Some(v0) = args.get(0) { resolver.resolve_i64(codegen, cursor, cur_bid, *v0, bb_map, preds, block_end_values, vmap)? } else { i64t.const_zero() };
+            let a2 = if let Some(v1) = args.get(1) { resolver.resolve_i64(codegen, cursor, cur_bid, *v1, bb_map, preds, block_end_values, vmap)? } else { i64t.const_zero() };
             let fnty = i64t.fn_type(
                 &[
                     i64t.into(),                                                     // recv handle

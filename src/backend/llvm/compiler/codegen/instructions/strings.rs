@@ -19,18 +19,17 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
     box_val: &ValueId,
     method: &str,
     args: &[ValueId],
-    recv_v: BVE<'ctx>,
     bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
     preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
     block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
 ) -> Result<bool, String> {
-    // Act if receiver is annotated as String/StringBox, or if the actual value is an i8* (string literal path)
-    let is_string_recv = match func.metadata.value_types.get(box_val) {
+    // Receiver annotation check (kept for future diagnostics)
+    let _is_string_recv = match func.metadata.value_types.get(box_val) {
         Some(crate::mir::MirType::String) => true,
         Some(crate::mir::MirType::Box(b)) if b == "StringBox" => true,
-        _ => matches!(recv_v, BVE::PointerValue(_)),
+        _ => false,
     };
-    // Do not early-return; allow method-specific checks below to validate types
+    // Do not early-return; method-specific checksで型検証を行う
 
     // concat fast-paths
     if method == "concat" {
@@ -38,8 +37,20 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
             return Err("String.concat expects 1 arg".to_string());
         }
         let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-        let rhs_v = *vmap.get(&args[0]).ok_or("concat arg missing")?;
-        match (recv_v, rhs_v) {
+        // Resolve rhs as either pointer (string) or i64 (handle/int)
+        let rhs_val = match func.metadata.value_types.get(&args[0]) {
+            Some(crate::mir::MirType::String) => {
+                let p = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+                BVE::PointerValue(p)
+            }
+            _ => {
+                // Default to integer form for non-String metadata
+                let iv = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+                BVE::IntValue(iv)
+            }
+        };
+        let lp = resolver.resolve_ptr(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
+        match (BVE::PointerValue(lp), rhs_val) {
             (BVE::PointerValue(lp), BVE::PointerValue(rp)) => {
                 let fnty = i8p.fn_type(&[i8p.into(), i8p.into()], false);
                 let callee = codegen
@@ -55,7 +66,12 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
                         .try_as_basic_value()
                         .left()
                         .ok_or("concat_ss returned void".to_string())?;
-                    vmap.insert(*d, rv);
+                    // return as handle (i64) across blocks
+                    let i64t = codegen.context.i64_type();
+                    let h = cursor
+                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(rv.into_pointer_value(), i64t, "str_ptr2i"))
+                        .map_err(|e| e.to_string())?;
+                    vmap.insert(*d, h.into());
                 }
                 return Ok(true);
             }
@@ -77,11 +93,15 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
                         .try_as_basic_value()
                         .left()
                         .ok_or("concat_si returned void".to_string())?;
-                    vmap.insert(*d, rv);
+                    let i64t = codegen.context.i64_type();
+                    let h = cursor
+                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(rv.into_pointer_value(), i64t, "str_ptr2i"))
+                        .map_err(|e| e.to_string())?;
+                    vmap.insert(*d, h.into());
                 }
                 return Ok(true);
             }
-            (BVE::IntValue(_li), BVE::PointerValue(rp)) => {
+            (BVE::PointerValue(_li_as_p), BVE::PointerValue(rp)) => {
                 let i64t = codegen.context.i64_type();
                 // Localize receiver integer in current block (box_val)
                 let li = resolver.resolve_i64(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
@@ -99,7 +119,11 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
                         .try_as_basic_value()
                         .left()
                         .ok_or("concat_is returned void".to_string())?;
-                    vmap.insert(*d, rv);
+                    let i64t = codegen.context.i64_type();
+                    let h = cursor
+                        .emit_instr(cur_bid, |b| b.build_ptr_to_int(rv.into_pointer_value(), i64t, "str_ptr2i"))
+                        .map_err(|e| e.to_string())?;
+                    vmap.insert(*d, h.into());
                 }
                 return Ok(true);
             }
@@ -111,9 +135,11 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
     if method == "length" || method == "len" {
         let i64t = codegen.context.i64_type();
         // Ensure handle for receiver (i8* -> i64 via from_i8_string)
-        let recv_h = match recv_v {
-            BVE::IntValue(h) => h,
-            BVE::PointerValue(p) => {
+        let recv_h = {
+            // Prefer i64 handle from resolver; if metadata says String but actual is i8*, box it
+            if let Some(crate::mir::MirType::String) = func.metadata.value_types.get(box_val) {
+                // Receiver is a String: resolve pointer then box to i64
+                let p = resolver.resolve_ptr(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
                 let fnty = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
                 let callee = codegen
                     .module
@@ -123,18 +149,14 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
                     .emit_instr(cur_bid, |b| b
                         .build_call(callee, &[p.into()], "str_ptr_to_handle"))
                     .map_err(|e| e.to_string())?;
-        
                 let rv = call
                     .try_as_basic_value()
                     .left()
                     .ok_or("from_i8_string returned void".to_string())?;
-                if let BVE::IntValue(iv) = rv {
-                    iv
-                } else {
-                    return Err("from_i8_string ret expected i64".to_string());
-                }
+                if let BVE::IntValue(iv) = rv { iv } else { return Err("from_i8_string ret expected i64".to_string()); }
+            } else {
+                resolver.resolve_i64(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?
             }
-            _ => return Err("String.length receiver type unsupported".to_string()),
         };
         // call i64 @nyash.string.len_h(i64)
         let fnty = i64t.fn_type(&[i64t.into()], false);
@@ -163,15 +185,8 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
         }
         let i64t = codegen.context.i64_type();
         let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-        // receiver preferably i8*; if it's a handle (i64), conservatively cast to i8*
-        let recv_p = match recv_v {
-            BVE::PointerValue(p) => p,
-            BVE::IntValue(iv) => cursor
-                .emit_instr(cur_bid, |b| b
-                    .build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "str_h2p_sub"))
-                .map_err(|e| e.to_string())?,
-            _ => return Ok(false),
-        };
+        // receiver pointer via Resolver
+        let recv_p = resolver.resolve_ptr(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
         // Localize start/end indices to current block via sealed snapshots (i64)
         let s = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
         let e = resolver.resolve_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
@@ -189,7 +204,11 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
                 .try_as_basic_value()
                 .left()
                 .ok_or("substring returned void".to_string())?;
-            vmap.insert(*d, rv);
+            let i64t = codegen.context.i64_type();
+            let h = cursor
+                .emit_instr(cur_bid, |b| b.build_ptr_to_int(rv.into_pointer_value(), i64t, "str_ptr2i_sub"))
+                .map_err(|e| e.to_string())?;
+            vmap.insert(*d, h.into());
         }
         return Ok(true);
     }
@@ -201,16 +220,10 @@ pub(super) fn try_handle_string_method<'ctx, 'b>(
         }
         let i64t = codegen.context.i64_type();
         let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-        // receiver must be i8* for this fast path
-        let recv_p = match recv_v {
-            BVE::PointerValue(p) => p,
-            _ => return Ok(false),
-        };
-        let a0 = *vmap.get(&args[0]).ok_or("lastIndexOf arg missing")?;
-        let needle_p = match a0 {
-            BVE::PointerValue(p) => p,
-            _ => return Err("lastIndexOf arg must be i8*".to_string()),
-        };
+        // receiver pointer via Resolver (String fast path)
+        let recv_p = resolver.resolve_ptr(codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap)?;
+        let needle_p = resolver
+            .resolve_ptr(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
         let fnty = i64t.fn_type(&[i8p.into(), i8p.into()], false);
         let callee = codegen
             .module

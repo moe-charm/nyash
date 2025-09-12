@@ -43,7 +43,7 @@ pub(in super::super) fn lower_externcall<'ctx, 'b>(
         return env::lower_local_get(codegen, cursor, resolver, cur_bid, func, vmap, dst, args, bb_map, preds, block_end_values);
     }
     if iface_name == "env.box" && method_name == "new" {
-        return env::lower_box_new(codegen, cursor, resolver, cur_bid, vmap, dst, args, bb_map, preds, block_end_values);
+        return env::lower_box_new(codegen, cursor, resolver, cur_bid, func, vmap, dst, args, bb_map, preds, block_end_values);
     }
 
     Err(format!(

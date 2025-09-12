@@ -22,21 +22,16 @@ pub(in super::super) fn lower_compare<'ctx, 'b>(
     block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
 ) -> Result<BasicValueEnum<'ctx>, String> {
     use crate::backend::llvm::compiler::helpers::{as_float, as_int};
-    let lv = if let Some(v) = vmap.get(lhs).copied() {
-        v
-    } else {
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("[cmp] lhs missing: {} (fallback zero)", lhs.as_u32());
-        }
-        guessed_zero(codegen, func, lhs)
+    // Synthesize proxy values via Resolver according to metadata
+    let lv: BasicValueEnum<'ctx> = match func.metadata.value_types.get(lhs) {
+        Some(crate::mir::MirType::Float) => resolver.resolve_f64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)?.into(),
+        Some(crate::mir::MirType::String) | Some(crate::mir::MirType::Box(_)) => resolver.resolve_ptr(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)?.into(),
+        _ => resolver.resolve_i64(codegen, cursor, cur_bid, *lhs, bb_map, preds, block_end_values, vmap)?.into(),
     };
-    let rv = if let Some(v) = vmap.get(rhs).copied() {
-        v
-    } else {
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("[cmp] rhs missing: {} (fallback zero)", rhs.as_u32());
-        }
-        guessed_zero(codegen, func, rhs)
+    let rv: BasicValueEnum<'ctx> = match func.metadata.value_types.get(rhs) {
+        Some(crate::mir::MirType::Float) => resolver.resolve_f64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)?.into(),
+        Some(crate::mir::MirType::String) | Some(crate::mir::MirType::Box(_)) => resolver.resolve_ptr(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)?.into(),
+        _ => resolver.resolve_i64(codegen, cursor, cur_bid, *rhs, bb_map, preds, block_end_values, vmap)?.into(),
     };
     // String equality/inequality by content when annotated as String/StringBox
     if matches!(op, CompareOp::Eq | CompareOp::Ne) {

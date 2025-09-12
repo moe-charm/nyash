@@ -24,63 +24,30 @@ pub(super) fn lower_log_or_trace<'ctx, 'b>(
     if args.len() != 1 {
         return Err(format!("{}.{} expects 1 arg", iface_name, method_name));
     }
-    let av = *vmap.get(&args[0]).ok_or("extern arg missing")?;
-    match av {
-        // If argument is i8* (string), call string variant
-        BVE::PointerValue(pv) => {
-            let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-            let fnty = codegen.context.i64_type().fn_type(&[i8p.into()], false);
-            let fname = if iface_name == "env.console" {
-                match method_name {
-                    "log" => "nyash.console.log",
-                    "warn" => "nyash.console.warn",
-                    _ => "nyash.console.error",
-                }
-            } else {
-                "nyash.debug.trace"
-            };
-            let callee = codegen
-                .module
-                .get_function(fname)
-                .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
-            let _ = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[pv.into()], "console_log_p"))
-                .map_err(|e| e.to_string())?;
-            if let Some(d) = dst {
-                vmap.insert(*d, codegen.context.i64_type().const_zero().into());
-            }
-            Ok(())
+    // Localize to i64 (handle path) to avoid vmap shape inspection
+    let arg_val = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+    let i64t = codegen.context.i64_type();
+    let fnty = i64t.fn_type(&[i64t.into()], false);
+    let fname = if iface_name == "env.console" {
+        match method_name {
+            "log" => "nyash.console.log_handle",
+            "warn" => "nyash.console.warn_handle",
+            _ => "nyash.console.error_handle",
         }
-        // Otherwise, convert to i64 and call handle variant
-        _ => {
-            // Localize to i64 to satisfy dominance
-            let arg_val = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
-            let fnty = codegen
-                .context
-                .i64_type()
-                .fn_type(&[codegen.context.i64_type().into()], false);
-            let fname = if iface_name == "env.console" {
-                match method_name {
-                    "log" => "nyash.console.log_handle",
-                    "warn" => "nyash.console.warn_handle",
-                    _ => "nyash.console.error_handle",
-                }
-            } else {
-                "nyash.debug.trace_handle"
-            };
-            let callee = codegen
-                .module
-                .get_function(fname)
-                .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
-            let _ = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[arg_val.into()], "console_log_h"))
-                .map_err(|e| e.to_string())?;
-            if let Some(d) = dst {
-                vmap.insert(*d, codegen.context.i64_type().const_zero().into());
-            }
-            Ok(())
-        }
+    } else {
+        "nyash.debug.trace_handle"
+    };
+    let callee = codegen
+        .module
+        .get_function(fname)
+        .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
+    let _ = cursor
+        .emit_instr(cur_bid, |b| b.build_call(callee, &[arg_val.into()], "console_log_h"))
+        .map_err(|e| e.to_string())?;
+    if let Some(d) = dst {
+        vmap.insert(*d, codegen.context.i64_type().const_zero().into());
     }
+    Ok(())
 }
 
 pub(super) fn lower_readline<'ctx, 'b>(

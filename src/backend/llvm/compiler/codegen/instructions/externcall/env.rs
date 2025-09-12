@@ -24,19 +24,8 @@ pub(super) fn lower_future_spawn_instance<'ctx, 'b>(
     }
     let i64t = codegen.context.i64_type();
     let i8p = codegen.context.ptr_type(AddressSpace::from(0));
-    let recv_v = *vmap.get(&args[0]).ok_or("recv missing")?;
-    let recv_h = match recv_v {
-        BVE::IntValue(_) | BVE::PointerValue(_) => {
-            // Localize to i64 to satisfy dominance; converts ptr→i64 if needed
-            resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?
-        }
-        _ => return Err("spawn_instance recv must be int or ptr".to_string()),
-    };
-    let name_v = *vmap.get(&args[1]).ok_or("method name missing")?;
-    let name_p = match name_v {
-        BVE::PointerValue(pv) => pv,
-        _ => return Err("spawn_instance method name must be i8*".to_string()),
-    };
+    let recv_h = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+    let name_p = resolver.resolve_ptr(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
     let fnty = i64t.fn_type(&[i64t.into(), i8p.into()], false);
     let callee = codegen
         .module
@@ -71,12 +60,8 @@ pub(super) fn lower_local_get<'ctx, 'b>(
     if args.len() != 1 {
         return Err("env.local.get expects 1 arg".to_string());
     }
-    let name_v = *vmap.get(&args[0]).ok_or("local.get name missing")?;
-    let name_p = if let BVE::PointerValue(pv) = name_v {
-        pv
-    } else {
-        return Err("env.local.get name must be i8*".to_string());
-    };
+    let name_p = _resolver
+        .resolve_ptr(codegen, cursor, cur_bid, args[0], _bb_map, _preds, _block_end_values, vmap)?;
     let i64t = codegen.context.i64_type();
     let i8p = codegen.context.ptr_type(AddressSpace::from(0));
     let fnty = i64t.fn_type(&[i8p.into()], false);
@@ -129,6 +114,7 @@ pub(super) fn lower_box_new<'ctx, 'b>(
     cursor: &mut BuilderCursor<'ctx, 'b>,
     resolver: &mut super::super::Resolver<'ctx>,
     cur_bid: BasicBlockId,
+    func: &MirFunction,
     vmap: &mut HashMap<ValueId, BVE<'ctx>>,
     dst: &Option<ValueId>,
     args: &[ValueId],
@@ -141,12 +127,8 @@ pub(super) fn lower_box_new<'ctx, 'b>(
     let i64t = codegen.context.i64_type();
     let i8p = codegen.context.ptr_type(AddressSpace::from(0));
     if args.len() == 1 {
-        let name_v = *vmap.get(&args[0]).ok_or("env.box.new name missing")?;
-        let name_p = if let BVE::PointerValue(pv) = name_v {
-            pv
-        } else {
-            return Err("env.box.new name must be i8*".to_string());
-        };
+        let name_p = resolver
+            .resolve_ptr(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
         let fnty = i64t.fn_type(&[i8p.into()], false);
         let callee = codegen
             .module
@@ -190,18 +172,13 @@ pub(super) fn lower_box_new<'ctx, 'b>(
         if args.is_empty() {
             return Err("env.box.new_i64 requires at least type name".to_string());
         }
-        let ty_ptr = match *vmap.get(&args[0]).ok_or("type name missing")? {
-            BVE::PointerValue(pv) => pv,
-            _ => return Err("env.box.new_i64 arg0 must be i8* type name".to_string()),
-        };
+        let ty_ptr = resolver
+            .resolve_ptr(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
         let mut a1 = i64t.const_zero();
         if args.len() >= 2 {
-            let bv = *vmap.get(&args[1]).ok_or("arg missing")?;
-            a1 = match bv {
-                BVE::IntValue(_) | BVE::PointerValue(_) => {
-                    resolver.resolve_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?
-                }
-                BVE::FloatValue(fv) => {
+            a1 = match func.metadata.value_types.get(&args[1]) {
+                Some(crate::mir::MirType::Float) => {
+                    let fv = resolver.resolve_f64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
                     let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
                     let callee = codegen
                         .module
@@ -210,24 +187,28 @@ pub(super) fn lower_box_new<'ctx, 'b>(
                     let call = cursor
                         .emit_instr(cur_bid, |b| b.build_call(callee, &[fv.into()], "arg1_f64_to_box"))
                         .map_err(|e| e.to_string())?;
-                    let rv = call
-                        .try_as_basic_value()
-                        .left()
-                        .ok_or("from_f64 returned void".to_string())?;
-                    if let BVE::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                    call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
                 }
-                // Pointer handled above by resolve_i64
-                _ => return Err("unsupported arg value for env.box.new".to_string()),
+                Some(crate::mir::MirType::String) => {
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
+                    let fnty = i64t.fn_type(&[i8p.into()], false);
+                    let callee = codegen
+                        .module
+                        .get_function("nyash.box.from_i8_string")
+                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                    let call = cursor
+                        .emit_instr(cur_bid, |b| b.build_call(callee, &[pv.into()], "arg1_i8_to_box"))
+                        .map_err(|e| e.to_string())?;
+                    call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
+                }
+                _ => resolver.resolve_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?,
             };
         }
         let mut a2 = i64t.const_zero();
         if args.len() >= 3 {
-            let bv = *vmap.get(&args[2]).ok_or("arg missing")?;
-            a2 = match bv {
-                BVE::IntValue(_) | BVE::PointerValue(_) => {
-                    resolver.resolve_i64(codegen, cursor, cur_bid, args[2], bb_map, preds, block_end_values, vmap)?
-                }
-                BVE::FloatValue(fv) => {
+            a2 = match func.metadata.value_types.get(&args[2]) {
+                Some(crate::mir::MirType::Float) => {
+                    let fv = resolver.resolve_f64(codegen, cursor, cur_bid, args[2], bb_map, preds, block_end_values, vmap)?;
                     let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
                     let callee = codegen
                         .module
@@ -236,22 +217,31 @@ pub(super) fn lower_box_new<'ctx, 'b>(
                     let call = cursor
                         .emit_instr(cur_bid, |b| b.build_call(callee, &[fv.into()], "arg2_f64_to_box"))
                         .map_err(|e| e.to_string())?;
-                    let rv = call
-                        .try_as_basic_value()
-                        .left()
-                        .ok_or("from_f64 returned void".to_string())?;
-                    if let BVE::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                    call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
                 }
-                // Pointer handled above by resolve_i64
-                _ => return Err("unsupported arg value for env.box.new".to_string()),
+                Some(crate::mir::MirType::String) => {
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[2], bb_map, preds, block_end_values, vmap)?;
+                    let fnty = i64t.fn_type(&[i8p.into()], false);
+                    let callee = codegen
+                        .module
+                        .get_function("nyash.box.from_i8_string")
+                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty, None));
+                    let call = cursor
+                        .emit_instr(cur_bid, |b| b.build_call(callee, &[pv.into()], "arg2_i8_to_box"))
+                        .map_err(|e| e.to_string())?;
+                    call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
+                }
+                _ => resolver.resolve_i64(codegen, cursor, cur_bid, args[2], bb_map, preds, block_end_values, vmap)?,
             };
         }
         let mut a3 = i64t.const_zero();
         if args.len() >= 4 {
-            let bv = *vmap.get(&args[3]).ok_or("arg missing")?;
-            a3 = match bv {
-                BVE::IntValue(iv) => iv,
-                BVE::FloatValue(fv) => {
+            a3 = match func.metadata.value_types.get(&args[3]) {
+                Some(crate::mir::MirType::Integer) | Some(crate::mir::MirType::Bool) => {
+                    resolver.resolve_i64(codegen, cursor, cur_bid, args[3], bb_map, preds, block_end_values, vmap)?
+                }
+                Some(crate::mir::MirType::Float) => {
+                    let fv = resolver.resolve_f64(codegen, cursor, cur_bid, args[3], bb_map, preds, block_end_values, vmap)?;
                     let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
                     let callee = codegen
                         .module
@@ -260,13 +250,10 @@ pub(super) fn lower_box_new<'ctx, 'b>(
                     let call = cursor
                         .emit_instr(cur_bid, |b| b.build_call(callee, &[fv.into()], "arg3_f64_to_box"))
                         .map_err(|e| e.to_string())?;
-                    let rv = call
-                        .try_as_basic_value()
-                        .left()
-                        .ok_or("from_f64 returned void".to_string())?;
-                    if let BVE::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                    call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
                 }
-                BVE::PointerValue(pv) => {
+                Some(crate::mir::MirType::String) => {
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[3], bb_map, preds, block_end_values, vmap)?;
                     let fnty = i64t.fn_type(&[i8p.into()], false);
                     let callee = codegen
                         .module
@@ -275,18 +262,19 @@ pub(super) fn lower_box_new<'ctx, 'b>(
                     let call = cursor
                         .emit_instr(cur_bid, |b| b.build_call(callee, &[pv.into()], "arg3_i8_to_box"))
                         .map_err(|e| e.to_string())?;
-                    let rv = call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?;
-                    if let BVE::IntValue(h) = rv { h } else { return Err("from_i8_string ret expected i64".to_string()); }
+                    call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
                 }
                 _ => return Err("unsupported arg value for env.box.new".to_string()),
             };
         }
         let mut a4 = i64t.const_zero();
         if args.len() >= 5 {
-            let bv = *vmap.get(&args[4]).ok_or("arg missing")?;
-            a4 = match bv {
-                BVE::IntValue(iv) => iv,
-                BVE::FloatValue(fv) => {
+            a4 = match func.metadata.value_types.get(&args[4]) {
+                Some(crate::mir::MirType::Integer) | Some(crate::mir::MirType::Bool) => {
+                    resolver.resolve_i64(codegen, cursor, cur_bid, args[4], bb_map, preds, block_end_values, vmap)?
+                }
+                Some(crate::mir::MirType::Float) => {
+                    let fv = resolver.resolve_f64(codegen, cursor, cur_bid, args[4], bb_map, preds, block_end_values, vmap)?;
                     let fnty = i64t.fn_type(&[codegen.context.f64_type().into()], false);
                     let callee = codegen
                         .module
@@ -295,13 +283,10 @@ pub(super) fn lower_box_new<'ctx, 'b>(
                     let call = cursor
                         .emit_instr(cur_bid, |b| b.build_call(callee, &[fv.into()], "arg4_f64_to_box"))
                         .map_err(|e| e.to_string())?;
-                    let rv = call
-                        .try_as_basic_value()
-                        .left()
-                        .ok_or("from_f64 returned void".to_string())?;
-                    if let BVE::IntValue(h) = rv { h } else { return Err("from_f64 ret expected i64".to_string()); }
+                    call.try_as_basic_value().left().ok_or("from_f64 returned void".to_string())?.into_int_value()
                 }
-                BVE::PointerValue(pv) => {
+                Some(crate::mir::MirType::String) => {
+                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[4], bb_map, preds, block_end_values, vmap)?;
                     let fnty = i64t.fn_type(&[i8p.into()], false);
                     let callee = codegen
                         .module
@@ -310,8 +295,7 @@ pub(super) fn lower_box_new<'ctx, 'b>(
                     let call = cursor
                         .emit_instr(cur_bid, |b| b.build_call(callee, &[pv.into()], "arg4_i8_to_box"))
                         .map_err(|e| e.to_string())?;
-                    let rv = call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?;
-                    if let BVE::IntValue(h) = rv { h } else { return Err("from_i8_string ret expected i64".to_string()); }
+                    call.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
                 }
                 _ => return Err("unsupported arg value for env.box.new".to_string()),
             };
