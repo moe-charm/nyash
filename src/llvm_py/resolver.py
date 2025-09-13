@@ -33,6 +33,8 @@ class Resolver:
         self.f64_cache: Dict[Tuple[str, int], ir.Value] = {}
         # String literal map: value_id -> Python string (for by-name calls)
         self.string_literals: Dict[int, str] = {}
+        # Optional: value_id -> i8* pointer for string constants (lower_const can populate)
+        self.string_ptrs: Dict[int, ir.Value] = {}
         # Track value-ids that are known to represent string handles (i64)
         # This is a best-effort tag used to decide '+' as string concat when both sides are i64.
         self.string_ids: set[int] = set()

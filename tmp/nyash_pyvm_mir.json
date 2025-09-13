@@ -61,7 +61,7 @@
           "id": 1,
           "instructions": [
             {
-              "dst": 8,
+              "dst": 9,
               "incoming": [
                 [
                   2,
@@ -75,21 +75,21 @@
               "op": "phi"
             },
             {
-              "dst": 7,
+              "dst": 8,
               "incoming": [
                 [
-                  4,
+                  1,
                   0
                 ],
                 [
-                  7,
+                  8,
                   2
                 ]
               ],
               "op": "phi"
             },
             {
-              "dst": 6,
+              "dst": 7,
               "incoming": [
                 [
                   3,
@@ -106,7 +106,7 @@
               "dst": 5,
               "incoming": [
                 [
-                  1,
+                  4,
                   0
                 ],
                 [
@@ -118,10 +118,10 @@
             },
             {
               "dst": 10,
-              "lhs": 6,
+              "lhs": 7,
               "op": "compare",
               "operation": "<",
-              "rhs": 7
+              "rhs": 5
             },
             {
               "cond": 10,
@@ -147,7 +147,7 @@
             },
             {
               "dst": 12,
-              "lhs": 8,
+              "lhs": 9,
               "op": "binop",
               "operation": "+",
               "rhs": 11
@@ -162,7 +162,7 @@
             },
             {
               "dst": 14,
-              "lhs": 6,
+              "lhs": 7,
               "op": "binop",
               "operation": "+",
               "rhs": 13
@@ -178,9 +178,9 @@
           "instructions": [
             {
               "args": [
-                8
+                9
               ],
-              "box": 5,
+              "box": 8,
               "dst": 16,
               "method": "println",
               "op": "boxcall"

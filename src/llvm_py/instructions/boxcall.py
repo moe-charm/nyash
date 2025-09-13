@@ -131,6 +131,8 @@ def lower_boxcall(
                 try:
                     if resolver is not None and hasattr(resolver, 'mark_string'):
                         resolver.mark_string(dst_vid)
+                    if resolver is not None and hasattr(resolver, 'string_ptrs'):
+                        resolver.string_ptrs[int(dst_vid)] = p
                 except Exception:
                     pass
             return
@@ -196,27 +198,42 @@ def lower_boxcall(
         return
 
     if method_name in ("print", "println", "log"):
-        # Console mapping
-        if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-            arg0 = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if args else None
-        else:
-            arg0 = vmap.get(args[0]) if args else None
-        if arg0 is None:
-            arg0 = ir.Constant(i8p, None)
-        # Prefer handle API if arg is i64, else pointer API
-        if hasattr(arg0, 'type') and isinstance(arg0.type, ir.IntType) and arg0.type.width == 64:
-            # Optional runtime trace of the handle
-            import os as _os
-            if _os.environ.get('NYASH_LLVM_TRACE_FINAL') == '1':
-                trace = _declare(module, "nyash.debug.trace_handle", i64, [i64])
-                _ = builder.call(trace, [arg0], name="trace_handle")
-            callee = _declare(module, "nyash.console.log_handle", i64, [i64])
-            _ = builder.call(callee, [arg0], name="console_log_h")
-        else:
-            if hasattr(arg0, 'type') and isinstance(arg0.type, ir.IntType):
-                arg0 = builder.inttoptr(arg0, i8p)
+        # Console mapping (prefer pointer-API when possible to avoid handle registry mismatch)
+        use_ptr = False
+        arg0_vid = args[0] if args else None
+        arg0_ptr = None
+        if resolver is not None and hasattr(resolver, 'string_ptrs') and arg0_vid is not None:
+            try:
+                arg0_ptr = resolver.string_ptrs.get(int(arg0_vid))
+                if arg0_ptr is not None:
+                    use_ptr = True
+            except Exception:
+                pass
+        if use_ptr and arg0_ptr is not None:
             callee = _declare(module, "nyash.console.log", i64, [i8p])
-            _ = builder.call(callee, [arg0], name="console_log")
+            _ = builder.call(callee, [arg0_ptr], name="console_log_ptr")
+        else:
+            # Fallback: resolve i64 and prefer pointer API via to_i8p_h bridge
+            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+                arg0 = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if args else None
+            else:
+                arg0 = vmap.get(args[0]) if args else None
+            if arg0 is None:
+                arg0 = ir.Constant(i64, 0)
+            # If we have a handle (i64), convert to i8* via bridge and log via pointer API
+            if hasattr(arg0, 'type') and isinstance(arg0.type, ir.IntType):
+                if arg0.type.width != 64:
+                    arg0 = builder.zext(arg0, i64)
+                bridge = _declare(module, "nyash.string.to_i8p_h", i8p, [i64])
+                p = builder.call(bridge, [arg0], name="str_h2p_for_log")
+                callee = _declare(module, "nyash.console.log", i64, [i8p])
+                _ = builder.call(callee, [p], name="console_log_p")
+            else:
+                # Non-integer value: coerce to i8* and log
+                if hasattr(arg0, 'type') and isinstance(arg0.type, ir.IntType):
+                    arg0 = builder.inttoptr(arg0, i8p)
+                callee = _declare(module, "nyash.console.log", i64, [i8p])
+                _ = builder.call(callee, [arg0], name="console_log")
         if dst_vid is not None:
             vmap[dst_vid] = ir.Constant(i64, 0)
         return

@@ -12,11 +12,19 @@ OFF_EXE=${OFF_EXE:-$ROOT_DIR/app_dep_tree_rust}
 echo "[compare] target app: $APP"
 
 echo "[compare] build (OFF/Rust LLVM or harness fallback) ..."
-# If legacy inkwell backend is not in use, fall back to harness for OFF as well
-NYASH_LLVM_SKIP_NYRT_BUILD=1 NYASH_LLVM_USE_HARNESS=1 "$ROOT_DIR/tools/build_llvm.sh" "$APP" -o "$OFF_EXE" >/dev/null
+if [[ "${NYASH_COMPARE_INKWELL:-0}" == "1" ]]; then
+  echo "    OFF=inkwell-legacy"
+  NYASH_LLVM_SKIP_NYRT_BUILD=1 NYASH_LLVM_FEATURE=llvm-inkwell-legacy \
+    "$ROOT_DIR/tools/build_llvm.sh" "$APP" -o "$OFF_EXE" >/dev/null
+else
+  echo "    OFF=harness"
+  NYASH_LLVM_SKIP_NYRT_BUILD=1 NYASH_LLVM_FEATURE=llvm \
+    "$ROOT_DIR/tools/build_llvm.sh" "$APP" -o "$OFF_EXE" >/dev/null
+fi
 
 echo "[compare] build (ON/llvmlite harness) ..."
-NYASH_LLVM_SKIP_NYRT_BUILD=1 NYASH_LLVM_USE_HARNESS=1 "$ROOT_DIR/tools/build_llvm.sh" "$APP" -o "$ON_EXE" >/dev/null
+NYASH_LLVM_SKIP_NYRT_BUILD=1 NYASH_LLVM_FEATURE=llvm \
+  "$ROOT_DIR/tools/build_llvm.sh" "$APP" -o "$ON_EXE" >/dev/null
 
 echo "[compare] run both and capture output ..."
 ON_OUT="$OUTDIR/on.out"; OFF_OUT="$OUTDIR/off.out"

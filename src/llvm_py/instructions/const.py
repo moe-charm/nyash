@@ -39,7 +39,7 @@ def lower_const(
         llvm_val = ir.Constant(f64, float(const_val))
         vmap[dst] = llvm_val
         
-    elif const_type == 'string':
+    elif const_type == 'string' or (isinstance(const_type, dict) and const_type.get('kind') in ('handle','ptr') and const_type.get('box_type') == 'StringBox'):
         # String constant - create global and immediately box to i64 handle
         i8 = ir.IntType(8)
         str_val = str(const_val)
@@ -82,6 +82,11 @@ def lower_const(
             # Mark this value-id as string-ish to guide '+' and '==' lowering
             if hasattr(resolver, 'mark_string'):
                 resolver.mark_string(dst)
+            # Keep raw pointer for potential pointer-API sites (e.g., console.log)
+            try:
+                resolver.string_ptrs[dst] = gep
+            except Exception:
+                pass
         
     elif const_type == 'void':
         # Void/null constant - use i64 zero

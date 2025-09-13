@@ -83,7 +83,7 @@ pub extern "C" fn nyash_string_concat_is(a: i64, b: *const i8) -> *mut i8 {
 // Exported as: nyash.string.substring_sii(i8* s, i64 start, i64 end) -> i8*
 #[export_name = "nyash.string.substring_sii"]
 pub extern "C" fn nyash_string_substring_sii(s: *const i8, start: i64, end: i64) -> *mut i8 {
-    use std::ffi::CStr;
+use std::ffi::CStr;
     if s.is_null() {
         return std::ptr::null_mut();
     }
@@ -120,4 +120,35 @@ pub extern "C" fn nyash_string_lastindexof_ss(s: *const i8, needle: *const i8) -
     if let Some(pos) = h.rfind(n) {
         pos as i64
     } else { -1 }
+}
+
+// Exported as: nyash.string.to_i8p_h(i64 handle) -> i8*
+#[export_name = "nyash.string.to_i8p_h"]
+pub extern "C" fn nyash_string_to_i8p_h(handle: i64) -> *mut i8 {
+    use nyash_rust::jit::rt::handles;
+    if handle <= 0 {
+        // return "0" for consistency with existing fallback behavior
+        let s = handle.to_string();
+        let mut bytes = s.into_bytes();
+        bytes.push(0);
+        let boxed = bytes.into_boxed_slice();
+        let raw = Box::into_raw(boxed) as *mut u8;
+        return raw as *mut i8;
+    }
+    if let Some(obj) = handles::get(handle as u64) {
+        let s = obj.to_string_box().value;
+        let mut bytes = s.into_bytes();
+        bytes.push(0);
+        let boxed = bytes.into_boxed_slice();
+        let raw = Box::into_raw(boxed) as *mut u8;
+        raw as *mut i8
+    } else {
+        // not found -> print numeric handle string
+        let s = handle.to_string();
+        let mut bytes = s.into_bytes();
+        bytes.push(0);
+        let boxed = bytes.into_boxed_slice();
+        let raw = Box::into_raw(boxed) as *mut u8;
+        raw as *mut i8
+    }
 }

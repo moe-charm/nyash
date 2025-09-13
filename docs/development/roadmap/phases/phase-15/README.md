@@ -14,26 +14,26 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 4. **エコシステムの自立**: Nyashだけで完結する開発環境
 5. **劇的なコード圧縮**: 75%削減で保守性・可読性の革命
 
-## 🚀 実装戦略（2025年9月更新）
+## 🚀 実装戦略（2025年9月更新・改定）
 
-### Phase 15.2: LLVM層の独立化（実装中）
-- **Python/llvmlite実装を正式採用**（開発速度10倍、~2400行）
-- nyash-llvm-compiler crateの分離（Rust版も継続）
-- MIR JSON/バイナリ入力 → ネイティブEXE出力
-- プラグイン全方向ビルド戦略（.so/.o/.a同時生成）
-- 独立したツールとして配布可能
+### Phase 15.2: LLVM（llvmlite）安定化 + PyVM導入
+- JIT/Cranelift は一時停止（古い/非対応）。Rust/inkwell は参照のみ。
+- 既定のコンパイル経路は **Python/llvmlite**（harness）のみ
+  - MIR(JSON) → LLVM IR → .o → NyRTリンク → EXE
+  - Resolver-only / Sealed SSA / 文字列ハンドル不変 を強化
+- 新規: **PyVM（Python MIR VM）** を導入し、2本目の実行経路を確保
+  - 最小命令: const/binop/compare/phi/branch/jump/ret + 最小 boxcall（Console/File/Path/String）
+  - ランナー統合: `NYASH_VM_USE_PY=1` で MIR(JSON) を PyVM に渡して実行
+  - 代表スモーク（esc_dirname_smoke / dep_tree_min_string）で llvmlite とパリティ確認
 
-### Phase 15.3: Nyashコンパイラ実装
-- NyashでNyashパーサー実装（800行目標）
-- AST→MIR変換（2500行目標）
-- **循環依存なし**：nyrtがStringBox/ArrayBoxをC ABI経由で提供
-- ブートストラップでセルフホスティング達成！
+### Phase 15.3: NyashコンパイラMVP（後段）
+- PyVM 安定後、Nyash製パーサ/レクサ（サブセット）と MIR ビルダを段階導入
+- フラグでRustフォールバックと併存（例: `NYASH_USE_NY_COMPILER=1`）
+- JIT不要、PyVM/llvmlite のパリティで正しさを担保
 
-### Phase 15.4: VM層のNyash化（革新的）
-- MIR解釈エンジンをNyashで実装（~5000行予想）
-- 動的ディスパッチ（MapBox）で13命令処理
-- コンパイル不要の即座実行
-- デバッグ・開発効率の劇的向上
+### Phase 15.4: VM層のNyash化（PyVMからの置換）
+- PyVM を足場に、VMコアを Nyash 実装へ段階移植（命令サブセットから）
+- 動的ディスパッチで13命令処理を目標に拡張
 
 詳細：[セルフホスティング戦略 2025年9月版](implementation/self-hosting-strategy-2025-09.md)
 
@@ -71,7 +71,7 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 この究極のシンプルさにより、直接x86変換も現実的に！
 
 ### バックエンドの選択肢
-#### 1. Cranelift + lld内蔵（ChatGPT5推奨）
+#### 1. Cranelift + lld内蔵（保留）
 - **軽量**: 3-5MB程度（LLVMの1/10以下）
 - **JIT特化**: メモリ上での動的コンパイル
 - **Rust統合**: 静的リンクで配布容易
@@ -173,18 +173,15 @@ box TemplateStitcher {
 
 ## 🔗 EXEファイル生成・リンク戦略
 
-### 統合ツールチェーン
+### 統合ツールチェーン（現状）
 ```bash
-# Cranelift版（一時停止中）
-nyash build main.ny --backend=cranelift --target=x86_64-pc-windows-msvc
-
-# LLVM版（ChatGPT5実装中）
-nyash build main.ny --backend=llvm --emit exe -o program.exe
+nyash build main.ny --backend=llvm --emit exe -o program.exe   # llvmlite/harness 経路
+NYASH_VM_USE_PY=1 nyash run main.ny --backend=vm               # PyVM（MIR JSON を実行）
 ```
 
 ### 実装戦略
 
-#### LLVM バックエンド（優先）
+#### LLVM バックエンド（優先・llvmlite）
 1. **MIR→LLVM IR**: MIR13をLLVM IRに変換（✅ 実装済み）
 2. **LLVM IR→Object**: ネイティブオブジェクトファイル生成（✅ 実装済み）
 3. **Python/llvmlite実装**: Resolver patternでSSA安全性確保（✅ 実証済み）
@@ -233,10 +230,10 @@ ny_free_buf(buffer)
 ## 📅 実施時期（修正版）
 
 - **現在進行中**（2025年9月）
-  - Python/llvmlite実装でブレークスルー
-  - dep_tree_min_string.nyashオブジェクト生成成功！
-- **Phase 15.2**: LLVM独立化（2025年9-10月完成予定）
-- **Phase 15.3**: Nyashコンパイラ（2025年11-12月）
+  - Python/llvmlite（既定）／Craneliftは停止
+  - PyVM（Python MIR VM）導入・代表スモークで llvmlite とパリティ確認
+- **Phase 15.2**: llvmlite安定化 + PyVM最小完成（2025年9-10月）
+- **Phase 15.3**: NyashコンパイラMVP（2025年11-12月）
 - **Phase 15.4**: VM層Nyash化（2026年1-3月）
 - **Phase 15.5**: ABI移行（LLVM完成後、必要に応じて）
 

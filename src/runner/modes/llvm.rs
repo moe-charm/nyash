@@ -2,7 +2,6 @@ use super::super::NyashRunner;
 use nyash_rust::{parser::NyashParser, mir::{MirCompiler, MirInstruction}, box_trait::IntegerBox};
 use nyash_rust::mir::passes::method_id_inject::inject_method_ids;
 use std::{fs, process};
-use serde_json::json;
 
 impl NyashRunner {
     /// Execute LLVM mode (split)
@@ -56,7 +55,7 @@ impl NyashRunner {
                             let tmp_dir = std::path::Path::new("tmp");
                             let _ = std::fs::create_dir_all(tmp_dir);
                             let mir_json_path = tmp_dir.join("nyash_harness_mir.json");
-                            if let Err(e) = emit_mir_json_for_harness(&module, &mir_json_path) {
+                            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness(&module, &mir_json_path) {
                                 eprintln!("❌ MIR JSON emit error: {}", e);
                                 process::exit(1);
                             }
@@ -182,92 +181,4 @@ impl NyashRunner {
     }
 }
 
-fn emit_mir_json_for_harness(module: &nyash_rust::mir::MirModule, path: &std::path::Path) -> Result<(), String> {
-    use nyash_rust::mir::{MirInstruction as I, BinaryOp as B, CompareOp as C};
-    // Build JSON structure expected by python builder: { functions: [ { name, params, blocks: [ { id, instructions: [ ... ] } ] } ] }
-    let mut funs = Vec::new();
-    for (name, f) in &module.functions {
-        let mut blocks = Vec::new();
-        let mut ids: Vec<_> = f.blocks.keys().copied().collect();
-        ids.sort();
-        for bid in ids {
-            if let Some(bb) = f.blocks.get(&bid) {
-                let mut insts = Vec::new();
-                // PHI first（オプション）
-                for inst in &bb.instructions {
-                        if let I::Phi { dst, inputs } = inst {
-                        let incoming: Vec<_> = inputs.iter().map(|(b, v)| json!([v.as_u32(), b.as_u32()])).collect();
-                        insts.push(json!({"op":"phi","dst": dst.as_u32(), "incoming": incoming}));
-                        }
-                }
-                // Non-PHI
-                for inst in &bb.instructions {
-                    match inst {
-                        I::Const { dst, value } => {
-                            let (t, val) = match value {
-                                nyash_rust::mir::ConstValue::Integer(i) => ("i64", json!(i)),
-                                nyash_rust::mir::ConstValue::Float(fv) => ("f64", json!(fv)),
-                                nyash_rust::mir::ConstValue::Bool(b) => ("i64", json!(if *b {1} else {0})),
-                                nyash_rust::mir::ConstValue::String(s) => ("string", json!(s)),
-                                nyash_rust::mir::ConstValue::Null => ("void", json!(0)),
-                                nyash_rust::mir::ConstValue::Void => ("void", json!(0)),
-                            };
-                            insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": t, "value": val}}));
-                        }
-                        I::BinOp { dst, op, lhs, rhs } => {
-                            let op_s = match op { B::Add=>"+",B::Sub=>"-",B::Mul=>"*",B::Div=>"/",B::Mod=>"%",B::BitAnd=>"&",B::BitOr=>"|",B::BitXor=>"^",B::Shl=>"<<",B::Shr=>">>",B::And=>"&",B::Or=>"|"};
-                            insts.push(json!({"op":"binop","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
-                        }
-                        I::Compare { dst, op, lhs, rhs } => {
-                            let op_s = match op { C::Lt=>"<", C::Le=>"<=", C::Gt=>">", C::Ge=>">=", C::Eq=>"==", C::Ne=>"!=" };
-                            insts.push(json!({"op":"compare","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
-                        }
-                        I::Call { dst, func, args, .. } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
-                        }
-                        I::ExternCall { dst, iface_name, method_name, args, .. } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            // Map known interfaces to NyRT symbols
-                            let func_name = if iface_name == "env.console" {
-                                format!("nyash.console.{}", method_name)
-                            } else { format!("{}.{}", iface_name, method_name) };
-                            insts.push(json!({"op":"externcall","func": func_name, "args": args_a, "dst": dst.map(|d| d.as_u32())}));
-                        }
-                        I::BoxCall { dst, box_val, method, args, .. } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            insts.push(json!({"op":"boxcall","box": box_val.as_u32(), "method": method, "args": args_a, "dst": dst.map(|d| d.as_u32())}));
-                        }
-                        I::NewBox { dst, box_type, args } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
-                        }
-                        I::Branch { condition, then_bb, else_bb } => {
-                            insts.push(json!({"op":"branch","cond": condition.as_u32(), "then": then_bb.as_u32(), "else": else_bb.as_u32()}));
-                        }
-                        I::Jump { target } => {
-                            insts.push(json!({"op":"jump","target": target.as_u32()}));
-                        }
-                        I::Return { value } => {
-                            insts.push(json!({"op":"ret","value": value.map(|v| v.as_u32())}));
-                        }
-                        _ => { /* skip non-essential ops for initial harness */ }
-                    }
-                }
-                // Terminator (if present)
-                if let Some(term) = &bb.terminator {
-                    match term {
-                        I::Return { value } => insts.push(json!({"op":"ret","value": value.map(|v| v.as_u32())})),
-                        I::Jump { target } => insts.push(json!({"op":"jump","target": target.as_u32()})),
-                        I::Branch { condition, then_bb, else_bb } => insts.push(json!({"op":"branch","cond": condition.as_u32(), "then": then_bb.as_u32(), "else": else_bb.as_u32()})),
-                        _ => {}
-                    }
-                }
-                blocks.push(json!({"id": bid.as_u32(), "instructions": insts}));
-            }
-        }
-        funs.push(json!({"name": name, "params": [], "blocks": blocks}));
-    }
-    let root = json!({"functions": funs});
-    std::fs::write(path, serde_json::to_string_pretty(&root).unwrap()).map_err(|e| format!("write mir json: {}", e))
-}
+// emit_mir_json_for_harness moved to crate::runner::mir_json_emit

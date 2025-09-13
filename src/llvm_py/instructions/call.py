@@ -107,5 +107,18 @@ def lower_call(
                     'esc_json', 'node_json', 'dirname', 'join', 'read_all', 'toJson'
                 ]):
                     resolver.mark_string(dst_vid)
+            # Additionally, create a pointer view via bridge for println pointer-API
+            if resolver is not None and hasattr(resolver, 'string_ptrs'):
+                i64 = ir.IntType(64)
+                i8p = ir.IntType(8).as_pointer()
+                if hasattr(result, 'type') and isinstance(result.type, ir.IntType) and result.type.width == 64:
+                    bridge = None
+                    for f in module.functions:
+                        if f.name == 'nyash.string.to_i8p_h':
+                            bridge = f; break
+                    if bridge is None:
+                        bridge = ir.Function(module, ir.FunctionType(i8p, [i64]), name='nyash.string.to_i8p_h')
+                    pv = builder.call(bridge, [result], name=f"ret_h2p_{dst_vid}")
+                    resolver.string_ptrs[int(dst_vid)] = pv
         except Exception:
             pass

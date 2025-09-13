@@ -69,6 +69,7 @@ def lower_binop(
         i8p = ir.IntType(8).as_pointer()
         lhs_raw = vmap.get(lhs)
         rhs_raw = vmap.get(rhs)
+        # Prefer handle pipeline to keep handles consistent across blocks/ret
         # pointer present?
         is_ptr_side = (hasattr(lhs_raw, 'type') and isinstance(lhs_raw.type, ir.PointerType)) or \
                       (hasattr(rhs_raw, 'type') and isinstance(rhs_raw.type, ir.PointerType))
@@ -86,7 +87,7 @@ def lower_binop(
         is_str = is_ptr_side or any_tagged
         if is_str:
             # Helper: convert raw or resolved value to string handle
-            def to_handle(raw, val, tag: str):
+            def to_handle(raw, val, tag: str, vid: int):
                 if raw is not None and hasattr(raw, 'type') and isinstance(raw.type, ir.PointerType):
                     # pointer-to-array -> GEP
                     try:
@@ -104,11 +105,29 @@ def lower_binop(
                     return builder.call(cal, [raw], name=f"str_ptr2h_{tag}_{dst}")
                 # if already i64
                 if val is not None and hasattr(val, 'type') and isinstance(val.type, ir.IntType) and val.type.width == 64:
-                    return val
+                    # Distinguish handle vs numeric: if vid is tagged string-ish, treat as handle; otherwise box numeric to handle
+                    is_tag = False
+                    try:
+                        if resolver is not None and hasattr(resolver, 'is_stringish'):
+                            is_tag = resolver.is_stringish(vid)
+                    except Exception:
+                        is_tag = False
+                    if is_tag:
+                        return val
+                    # Box numeric i64 to IntegerBox handle
+                    cal = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.box.from_i64':
+                            cal = f; break
+                    if cal is None:
+                        cal = ir.Function(builder.module, ir.FunctionType(i64, [i64]), name='nyash.box.from_i64')
+                    # Ensure value is i64
+                    v64 = val if val.type.width == 64 else builder.zext(val, i64)
+                    return builder.call(cal, [v64], name=f"int_i2h_{tag}_{dst}")
                 return ir.Constant(i64, 0)
 
-            hl = to_handle(lhs_raw, lhs_val, 'l')
-            hr = to_handle(rhs_raw, rhs_val, 'r')
+            hl = to_handle(lhs_raw, lhs_val, 'l', lhs)
+            hr = to_handle(rhs_raw, rhs_val, 'r', rhs)
             # concat_hh(handle, handle) -> handle
             hh_fnty = ir.FunctionType(i64, [i64, i64])
             callee = None

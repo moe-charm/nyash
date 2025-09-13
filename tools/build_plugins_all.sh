@@ -7,9 +7,15 @@ ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
 PROFILE=${PROFILE:-release}
+JOBS=${JOBS:-24}
 
-echo "[plugins] building all (profile=$PROFILE)"
+echo "[plugins] building all (profile=$PROFILE, jobs=$JOBS)"
 
+# Build all plugins in one go for maximum efficiency
+echo "[plugins] building workspace..."
+cargo build --workspace --$PROFILE -j $JOBS >/dev/null
+
+# Copy artifacts to plugin directories
 for dir in plugins/*; do
   [[ -d "$dir" && -f "$dir/Cargo.toml" ]] || continue
   pkg=$(grep -m1 '^name\s*=\s*"' "$dir/Cargo.toml" | sed -E 's/.*"(.*)".*/\1/')
@@ -19,7 +25,6 @@ for dir in plugins/*; do
     libname=${pkg//-/_}
   fi
   echo "[plugins] -> $pkg (libname=$libname)"
-  cargo build -p "$pkg" --$PROFILE >/dev/null
   # Copy artifacts
   outdir="target/$PROFILE"
   # cdylib (.so/.dylib/.dll)

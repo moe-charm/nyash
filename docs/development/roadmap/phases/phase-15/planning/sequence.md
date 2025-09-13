@@ -1,10 +1,10 @@
-# Phase 15 推奨進行順（JIT優先・自己ホスティング最小）
+# Phase 15 推奨進行順（llvmlite+PyVM 優先・自己ホスティング最小）
 
 更新日: 2025-09-05
 
 ## 方針（原則）
 
-- JITオンリー（Cranelift）で前進。LLVM/AOT・lld系は後段にスライド。
+- JIT/Cranelift は停止。LLVM（llvmlite）と PyVM の2経路で前進。
 - 最小自己ホスト体験を早期に成立 → ドキュメント/スモーク/CIを先に固める。
 - using（名前空間）はゲート付きで段階導入。NyModulesとny_pluginsの基盤を強化。
 - tmux + codex-async を使い、常時2本並走で小粒に積み上げる。
@@ -25,18 +25,17 @@
 **完了基準:**
 - env.modules.get("acme.logger") などが取得可能、LIST_ONLY/Fail-continue維持、予約拒否ログが出る。
 
-### 2) 最小コンパイラ経路（JIT）
+### 2) 最小VM（PyVM）
 
 **要点:**
-- パーサ/レクサのサブセット: ident/literals/let/call/return/if/block
-- Nyash から呼べる MIR ビルダ（小さなサブセット）
-- VM/JIT ブリッジを通して apps/selfhost-minimal が走る
+- MIR(JSON) を Python VM（PyVM）で実行。最小命令 + 最小 boxcall（Console/File/Path/String）
+- ランナー統合（`NYASH_VM_USE_PY=1`）→ 代表スモークが llvmlite と一致
 
 **スモーク/CI:**
-- tools/jit_smoke.sh, tools/selfhost_vm_smoke.sh
+- tools/compare_harness_on_off.sh（ハーネス）、compare_vm_vs_harness.sh（PyVM vs llvmlite）
 
 **完了基準:**
-- ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash が安定実行し、CIでJITスモーク合格。
+- esc_dirname_smoke / dep_tree_min_string が PyVM と llvmlite で一致。
 
 ### 3) using（ゲート付き）設計・実装（15.2/15.3）
 

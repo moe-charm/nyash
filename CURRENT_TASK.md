@@ -1,25 +1,19 @@
-# Current Task (2025-09-11) — Phase 15 LLVM（主経路） + llvmlite Harness（検証・将来主役）
+# Current Task (2025-09-13 改定) — Phase 15 llvmlite（既定）+ PyVM（新規）
 
 Summary
-- LLVM AOT（Rust/inkwell）は引き続き主経路。ただし「反復速度・仕様変更耐性」を担保するため、Python/llvmlite ハーネスを正式導入し、代表ケースで両者の等価性を検証する。
-- VM/Cranelift/Interpreter は MIR14 非対応。MIR 正規化（Resolver・LoopForm規約）を Rust 側で担保し、ハーネスにも同じ形を供給する。
-- 代表ケース（apps/selfhost/tools/dep_tree_min_string.nyash）で `.o`（および必要時 EXE）を安定生成。Harness ON/OFF で機能同値を確認。
+- JIT/Cranelift は一時停止。Rust/inkwell LLVM は参照のみ。
+- 既定の実行/ビルド経路は Python/llvmlite ハーネス（MIR JSON→.o→NyRT link）。
+- 2本目の実行経路として PyVM（Python MIR VM）を導入し、llvmlite との機能同値で安定化する。
 
-Quick Status — 2025‑09‑13（compressed, post‑harness fixes）
-- Harness ON（llvmlite）で .ll verify green → .o → link 成立（dep_tree_min_string）
-- Resolver‑only 統一（vmap 直読排除）。PHI は BB 先頭に集約・i64（ハンドル）固定／pointer incoming は pred 終端直前で boxing（GEP+from_i8_string）
-- 降下順序: preds 優先の擬似トポロジカル順に block 降下。非 PHI 命令は「現在 BB」末尾に挿入（dominance 安定）
-- 文字列: ‘+’ は string タグ/ptr 検出時のみ concat_hh、len/eq 対応、substring/lastIndexOf は handle 版（_hii/_hh）を NyRT に実装・使用
-- const(string): Global を保持→使用側で GEP→i8* に正規化。MIR main→private、ny_main ラッパ生成
-- by‑name 定数: メソッド名の i8* は定数 GEP を採用（順序依存を排除）
-- 比較/検証: compare_harness_on_off.sh で ON/OFF の Exit 一致（現状 JSON は双方空。最終 JSON 一致は次フェーズで詰め）
+Quick Status — 2025‑09‑13（post‑harness hardening）
+- llvmlite（ハーネス）で verify green → .o → link が代表ケースで成立（dep_tree_min_string）
+- Resolver‑only/Sealed SSA/文字列ハンドル不変を強化。PHIはBB先頭・pred終端でboxing/cast。
+- IRダンプ/PHIガード/deny-directチェックが利用可能（NYASH_LLVM_DUMP_IR, NYASH_LLVM_PHI_STRICT, tools/llvmlite_check_deny_direct.sh）。
 
-Focus Shift — Python/llvmlite Only（2025‑09‑13）
-- Rust/inkwell 側は当面「保守」へ。開発・詰めは Nyash スクリプト＋Python/llvmlite のみで進行。
-- 追加スモーク: apps/tests/esc_dirname_smoke.nyash（esc_json/dirname の最小 2 行出力）。
-- 追加トレース: `NYASH_LLVM_TRACE_FINAL=1` で println 直前に `nyash.debug.trace_handle(i64)` を呼び、最終ハンドルを観測。
-- Lifetime ヒント（軽量）: `def_blocks`（value_id → 定義ブロック集合）を Builder が収集、Resolver は現ブロック定義済みの i64 を優先再利用（PHI 過剰化を抑制）。
-- const(string) 改善: 即時 `from_i8_string` で i64 ハンドル化（後段連鎖の 0 落ちを軽減）。
+Focus Shift — llvmlite（既定）+ PyVM（新規）
+- Rust/inkwell は保守のみ。Python（llvmlite/PyVM）中心で開発。
+- 追加スモーク: esc_dirname_smoke / dep_tree_min_string を llvmlite と PyVM の両方で常時維持。
+- 追跡: `NYASH_LLVM_TRACE_FINAL=1`（最終ハンドル）、`NYASH_LLVM_TRACE_PHI=1`（PHIログ）
 
 Hot Update — 2025‑09‑13（Harness 配線・フォールバック廃止）
 - Runner（LLVMモード）にハーネス配線を追加。`NYASH_LLVM_USE_HARNESS=1` のとき:
@@ -39,14 +33,43 @@ Hot Update — 2025‑09‑13（Resolver‑only 統一 + Harness ON green）
   - `main` 衝突回避: MIR 由来 `main` は private にし、`ny_main()` ラッパを自動生成（NyRT `main` と整合）。
 - 代表ケース（dep_tree_min_string）: Harness ON で `.ll verify green → .o` を確認し、NyRT とリンクして EXE 生成成功。
 
-Next（short, refreshed — Py/llvmlite 線）
-1) スモーク確定: esc_dirname_smoke の 2 行出力を ON/OFF 完全一致に（行比較）。
-2) dep_tree_min_string の最終 JSON 一致（`{` 以降の diff=空）。
-   - `NYASH_LLVM_TRACE_FINAL=1`＋`NYASH_LLVM_TRACE_VALUES=1` で println 引数ハンドルの鎖を観測し、synth‑zero 起点を特定→ Resolver/PHI で局所是正。
-   - PHI/snapshot は「pred で materialize→無ければ snap→最後に synth(0)」の順を徹底。None を入れない。
-3) CI/補助
-   - スモークを compare_harness_on_off.sh からも容易に呼べるよう維持（必要なら行比較モード追加）。
-   - Deny‑Direct（`vmap.get(` 直読の抑止）を継続チェック。
+Next（short — Py/llvmlite + PyVM）
+1) PyVM スキャフォールド: `tools/pyvm_runner.py` と `src/llvm_py/pyvm/` 追加（最小命令+boxcall）。
+2) ランナー統合: `NYASH_VM_USE_PY=1` → MIR(JSON) を PyVM に渡して実行。
+3) パリティ基盤: 汎用パリティスクリプト `tools/parity.sh` を追加（stdout+exit code 比較、pyvm/vm/llvmlite 任意ペア）。
+4) 型メタ導入（MIR v0.5 互換）: JSON MIR に String の handle/ptr 種別を明示し、llvmlite/PyVM で推測を排除。
+5) スモーク拡充: esc_dirname_smoke / dep_tree_min_string の両経路一致（終了コード+JSON）。
+
+Hot Update — MIR v0.5 Type Metadata（2025‑09‑14 着手）
+- 背景: 文字列を i64 として曖昧に扱っており、llvmlite で handle/ptr の推測が必要→不安定の温床。
+- 追加仕様（後方互換、最小差分）:
+  - Const(string): `{"value": {"type": {"kind":"handle","box_type":"StringBox"}, "value":"..."}}`
+    - 既存の `type:"string"` 表記は併記しない（受け側は新表示を優先、無ければ従来推測）。
+  - BoxCall/ExternCall: 可能な範囲で `dst_type` を付与（例: substring→StringBox(handle), length/lastIndexOf→i64）。
+- 実装計画:
+  - A) 共有エミッタ `src/runner/mir_json_emit.rs` を拡張（string const/最小メソッドの `dst_type`）。
+  - B) Python 側: `llvm_builder.py` が `dst_type` を検知して `resolver.mark_string(dst)` を行う（型タグの明示化）。
+  - C) Console 出力の安定化: 当面は既存のポインタAPI/ハンドルAPIを維持。型メタ普及後に handle→ptr ブリッジ導入を検討。
+- 受け入れ（第一段）：
+  - JSON に string const の型メタが出ること
+  - Python 側で `dst_type` により string ハンドルのタグ付けが行われること
+  - `tools/parity.sh` が esc_dirname_smoke で実行できること（完全一致は第二段で目標）
+
+Hot Update — Box Theory PHI（2025‑09‑14 追加予定）
+- 背景: ループの PHI が snapshot 未構築時に 0 合成へ落ちる（forward 参照をその場 resolve しているため）。
+- 方針（箱理論に基づく簡素化）:
+  - Block=箱（BoxScope）。各ブロック末尾の `block_end_values` を箱として扱う。
+  - PHI は即時解決せず defer 収集 → 全ブロック降下後に finalize で箱（pred の snapshot）から値を取り出して配線。
+  - ブロック間は String は常に handle(i64) 固定。pointer PHI は禁止。必要な boxing（ptr→handle）は pred 末端（terminator 直前）で挿入。
+  - ‘+’ は常に concat_hh(handle,handle)。i64 プリミティブは from_i64 で昇格、リテラルは from_i8_string。
+- 実装計画:
+  - A) `llvm_builder.py`: `lower_phi` を defer 化、`finalize_phis` を追加（incoming=(pred_bid,val_id) を materialize）。
+  - B) `llvm_builder.py`: `block_end_values` の網羅性を補強（関数引数/const/新規 dst/phi dst/循環値が確実に入る）。
+  - C) `resolver._value_at_end_i64`: pred 末端での局所 boxing/cast を強制、未定義→0 合成を抑制（strict 時は警告）。
+- 受け入れ（第二段）：
+  - 最小再現 `apps/tests/min_str_cat_loop/main.nyash` で PyVM と llvmlite の parity 緑（`xxx`）
+  - `apps/tests/esc_dirname_smoke.nyash` で parity 緑（1行目の 0 が解消）
+  - `tools/parity.sh` で stdout 完全一致＋終了コード一致
 
 Compact Roadmap（2025‑09‑13 改定）
 - Focus A（Rust LLVM 維持）: Flow hardening, PHI(sealed) 安定化, LoopForm 仕様遵守。

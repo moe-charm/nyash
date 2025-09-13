@@ -58,6 +58,7 @@ def lower_phi(
 
     # Collect incoming values
     incoming_pairs: List[Tuple[ir.Block, ir.Value]] = []
+    used_default_zero = False
     for block_id in actual_preds:
         block = bb_map.get(block_id)
         vid = incoming_map.get(block_id)
@@ -76,6 +77,7 @@ def lower_phi(
             if val is None:
                 # Missing incoming for this predecessor → default 0
                 val = ir.Constant(phi_type, 0)
+                used_default_zero = True
         else:
             # Snapshot fallback
             if block_end_values is not None:
@@ -86,6 +88,7 @@ def lower_phi(
             if not val:
                 # Missing incoming for this predecessor → default 0
                 val = ir.Constant(phi_type, 0)
+                used_default_zero = True
             # Coerce pointer to i64 at predecessor end
             if hasattr(val, 'type') and val.type != phi_type:
                 pb = ir.IRBuilder(block)
@@ -127,6 +130,16 @@ def lower_phi(
     
     # Store PHI result
     vmap[dst_vid] = phi
+    # Strict mode: fail fast on synthesized zeros (indicates incomplete incoming or dominance issue)
+    import os
+    if used_default_zero and os.environ.get('NYASH_LLVM_PHI_STRICT') == '1':
+        raise RuntimeError(f"[LLVM_PY] PHI dst={dst_vid} used synthesized zero; check preds/incoming")
+    if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+        try:
+            blkname = str(current_block.name)
+        except Exception:
+            blkname = '<blk>'
+        print(f"[PHI] {blkname} v{dst_vid} incoming={len(incoming_pairs)} zero={1 if used_default_zero else 0}")
     # Propagate string-ness: if any incoming value-id is tagged string-ish, mark dst as string-ish.
     try:
         if resolver is not None and hasattr(resolver, 'is_stringish') and hasattr(resolver, 'mark_string'):

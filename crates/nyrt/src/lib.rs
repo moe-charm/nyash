@@ -79,7 +79,9 @@ pub extern "C" fn nyash_string_concat_hh_export(a_h: i64, b_h: i64) -> i64 {
     };
     let s = format!("{}{}", to_s(a_h), to_s(b_h));
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
-    handles::to_handle(arc) as i64
+    let h = handles::to_handle(arc) as i64;
+    eprintln!("[TRACE] concat_hh -> {}", h);
+    h
 }
 
 // String.eq_hh(lhs_h, rhs_h) -> i64 (0/1)
@@ -120,7 +122,9 @@ pub extern "C" fn nyash_string_substring_hii_export(h: i64, start: i64, end: i64
     let (st_u, en_u) = (st as usize, en as usize);
     let sub = s.get(st_u.min(s.len())..en_u.min(s.len())).unwrap_or("");
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(sub.to_string()));
-    handles::to_handle(arc) as i64
+    let nh = handles::to_handle(arc) as i64;
+    eprintln!("[TRACE] substring_hii -> {}", nh);
+    nh
 }
 
 // String.lastIndexOf_hh(haystack_h, needle_h) -> i64
@@ -159,7 +163,9 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
         Err(_) => return 0,
     };
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
-    handles::to_handle(arc) as i64
+    let h = handles::to_handle(arc) as i64;
+    eprintln!("[TRACE] from_i8_string -> {}", h);
+    h
 }
 
 // box.from_f64(val) -> handle
@@ -168,6 +174,15 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
 pub extern "C" fn nyash_box_from_f64(val: f64) -> i64 {
     use nyash_rust::{box_trait::NyashBox, boxes::FloatBox, jit::rt::handles};
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(FloatBox::new(val));
+    handles::to_handle(arc) as i64
+}
+
+// box.from_i64(val) -> handle
+// Helper: build an IntegerBox and return a handle
+#[export_name = "nyash.box.from_i64"]
+pub extern "C" fn nyash_box_from_i64(val: i64) -> i64 {
+    use nyash_rust::{box_trait::{NyashBox, IntegerBox}, jit::rt::handles};
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(IntegerBox::new(val));
     handles::to_handle(arc) as i64
 }
 

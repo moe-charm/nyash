@@ -1,0 +1,26 @@
+{
+  "functions": [
+    {
+      "name": "Main.main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op":"const","dst":1,"value":{"type":"string","value":"CURRENT_TASK.md"}},
+            {"op":"const","dst":2,"value":{"type":"string","value":"r"}},
+            {"op":"newbox","type":"FileBox","args":[],"dst":3},
+            {"op":"boxcall","box":3,"method":"open","args":[1,2],"dst":4},
+            {"op":"newbox","type":"ConsoleBox","args":[],"dst":5},
+            {"op":"boxcall","box":5,"method":"println","args":[4],"dst":null},
+            {"op":"boxcall","box":3,"method":"read","args":[],"dst":6},
+            {"op":"boxcall","box":6,"method":"length","args":[],"dst":7},
+            {"op":"boxcall","box":5,"method":"println","args":[7],"dst":null},
+            {"op":"const","dst":8,"value":{"type":"i64","value":0}},
+            {"op":"ret","value":8}
+          ]
+        }
+      ]
+    }
+  ]
+}

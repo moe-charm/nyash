@@ -43,11 +43,12 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
   exit 2
 fi
 
-echo "[1/4] Building nyash (feature=llvm, harness-friendly) ..."
+echo "[1/4] Building nyash (feature selectable) ..."
 _LLVMPREFIX=$(llvm-config-18 --prefix)
-# Build only the core package to avoid compiling workspace plugin crates
+# Select LLVM feature: default harness (llvm), or legacy inkwell when NYASH_LLVM_FEATURE=llvm-inkwell-legacy
+LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-  CARGO_INCREMENTAL=1 cargo build --release -p nyash-rust --features llvm >/dev/null
+  CARGO_INCREMENTAL=1 cargo build --release -p nyash-rust --features "$LLVM_FEATURE" >/dev/null
 
 echo "[2/4] Emitting object (.o) via LLVM backend ..."
 # Default object output path under target/aot_objects
@@ -57,7 +58,15 @@ stem=${stem%.nyash}
 OBJ="${NYASH_LLVM_OBJ_OUT:-$PWD/target/aot_objects/${stem}.o}"
 if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
   rm -f "$OBJ"
-  NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
+  if [[ "${NYASH_LLVM_FEATURE:-llvm}" == "llvm-inkwell-legacy" ]]; then
+    # Legacy path: do not use harness
+    NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+      ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
+  else
+    # Harness path
+    NYASH_LLVM_OBJ_OUT="$OBJ" NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+      ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
+  fi
 fi
 if [[ ! -f "$OBJ" ]]; then
   echo "error: object not generated: $OBJ" >&2

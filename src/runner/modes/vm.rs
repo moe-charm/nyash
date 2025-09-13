@@ -118,6 +118,58 @@ impl NyashRunner {
             }
         }
 
+        // Optional: PyVM path. When NYASH_VM_USE_PY=1, emit MIR(JSON) and delegate execution to tools/pyvm_runner.py
+        if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+            let py = which::which("python3").ok();
+            if let Some(py3) = py {
+                let runner = std::path::Path::new("tools/pyvm_runner.py");
+                if runner.exists() {
+                    // Emit MIR(JSON)
+                    let tmp_dir = std::path::Path::new("tmp");
+                    let _ = std::fs::create_dir_all(tmp_dir);
+                    let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                    if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness(&module_vm, &mir_json_path) {
+                        eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                        process::exit(1);
+                    }
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[Runner/VM] using PyVM → {} (mir={})", filename, mir_json_path.display());
+                    }
+                    // Determine entry function hint (prefer Main.main if present)
+                    let entry = if module_vm.functions.contains_key("Main.main") {
+                        "Main.main"
+                    } else if module_vm.functions.contains_key("main") { "main" } else { "Main.main" };
+                    // Spawn runner
+                    let status = std::process::Command::new(py3)
+                        .args([
+                            runner.to_string_lossy().as_ref(),
+                            "--in",
+                            &mir_json_path.display().to_string(),
+                            "--entry",
+                            entry,
+                        ])
+                        .status()
+                        .map_err(|e| format!("spawn pyvm: {}", e))
+                        .unwrap();
+                    if !status.success() {
+                        eprintln!("❌ PyVM failed (status={})", status.code().unwrap_or(-1));
+                        process::exit(1);
+                    }
+                    // Propagate exit code if set
+                    if let Some(code) = status.code() {
+                        process::exit(code);
+                    }
+                    process::exit(0);
+                } else {
+                    eprintln!("❌ PyVM runner not found: {}", runner.display());
+                    process::exit(1);
+                }
+            } else {
+                eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM.");
+                process::exit(1);
+            }
+        }
+
         // Expose GC/scheduler hooks globally for JIT externs (checkpoint/await, etc.)
         nyash_rust::runtime::global_hooks::set_from_runtime(&runtime);
 

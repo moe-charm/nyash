@@ -30,6 +30,7 @@ use std::{fs, process};
 mod modes;
 mod demos;
 mod json_v0_bridge;
+mod mir_json_emit;
 
 // v2 plugin system imports
 use nyash_rust::runtime;

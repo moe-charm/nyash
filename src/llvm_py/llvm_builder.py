@@ -140,7 +140,22 @@ class NyashLLVMBuilder:
                 else:
                     b.ret(ir.Constant(self.i32, 0))
         
-        return str(self.module)
+        ir_text = str(self.module)
+        # Optional IR dump to file for debugging
+        try:
+            dump_path = os.environ.get('NYASH_LLVM_DUMP_IR')
+            if dump_path:
+                os.makedirs(os.path.dirname(dump_path), exist_ok=True)
+                with open(dump_path, 'w') as f:
+                    f.write(ir_text)
+            elif os.environ.get('NYASH_CLI_VERBOSE') == '1':
+                # Default dump location when verbose and not explicitly set
+                os.makedirs('tmp', exist_ok=True)
+                with open('tmp/nyash_harness.ll', 'w') as f:
+                    f.write(ir_text)
+        except Exception:
+            pass
+        return ir_text
     
     def _create_dummy_main(self) -> str:
         """Create dummy ny_main that returns 0"""
@@ -185,6 +200,8 @@ class NyashLLVMBuilder:
                 self.resolver.string_ids.clear()
             if hasattr(self.resolver, 'string_literals'):
                 self.resolver.string_literals.clear()
+            if hasattr(self.resolver, 'string_ptrs'):
+                self.resolver.string_ptrs.clear()
         except Exception:
             pass
 
@@ -403,6 +420,15 @@ class NyashLLVMBuilder:
             dst = inst.get("dst")
             lower_boxcall(builder, self.module, box_vid, method, args, dst,
                           self.vmap, self.resolver, self.preds, self.block_end_values, self.bb_map)
+            # Optional: honor explicit dst_type for tagging (string handle)
+            try:
+                dst_type = inst.get("dst_type")
+                if dst is not None and isinstance(dst_type, dict):
+                    if dst_type.get("kind") == "handle" and dst_type.get("box_type") == "StringBox":
+                        if hasattr(self.resolver, 'mark_string'):
+                            self.resolver.mark_string(int(dst))
+            except Exception:
+                pass
             
         elif op == "externcall":
             func_name = inst.get("func")
@@ -661,7 +687,7 @@ def main():
 
     llvm_ir = builder.build_from_mir(mir_json)
     if os.environ.get('NYASH_CLI_VERBOSE') == '1':
-        print(f"[Python LLVM] Generated LLVM IR:\n{llvm_ir}")
+        print(f"[Python LLVM] Generated LLVM IR (see NYASH_LLVM_DUMP_IR or tmp/nyash_harness.ll)")
 
     builder.compile_to_object(output_file)
     print(f"Compiled to {output_file}")

@@ -30,12 +30,36 @@ def lower_return(
         builder.ret_void()
     else:
         # Get return value (prefer resolver)
+        ret_val = None
         if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-            if isinstance(return_type, ir.PointerType):
-                ret_val = resolver.resolve_ptr(value_id, builder.block, preds, block_end_values, vmap)
-            else:
-                ret_val = resolver.resolve_i64(value_id, builder.block, preds, block_end_values, vmap, bb_map)
-        else:
+            try:
+                if isinstance(return_type, ir.PointerType):
+                    ret_val = resolver.resolve_ptr(value_id, builder.block, preds, block_end_values, vmap)
+                else:
+                    # Prefer pointer→handle reboxing for string-ish returns even if function return type is i64
+                    is_stringish = False
+                    if hasattr(resolver, 'is_stringish'):
+                        try:
+                            is_stringish = resolver.is_stringish(int(value_id))
+                        except Exception:
+                            is_stringish = False
+                    if is_stringish and hasattr(resolver, 'string_ptrs') and int(value_id) in getattr(resolver, 'string_ptrs'):
+                        # Re-box known string pointer to handle
+                        p = resolver.string_ptrs[int(value_id)]
+                        i8p = ir.IntType(8).as_pointer()
+                        i64 = ir.IntType(64)
+                        boxer = None
+                        for f in builder.module.functions:
+                            if f.name == 'nyash.box.from_i8_string':
+                                boxer = f; break
+                        if boxer is None:
+                            boxer = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
+                        ret_val = builder.call(boxer, [p], name='ret_ptr2h')
+                    else:
+                        ret_val = resolver.resolve_i64(value_id, builder.block, preds, block_end_values, vmap, bb_map)
+            except Exception:
+                ret_val = None
+        if ret_val is None:
             ret_val = vmap.get(value_id)
         if not ret_val:
             # Default based on return type
