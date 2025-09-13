@@ -42,10 +42,20 @@ def lower_compare(
     i64 = ir.IntType(64)
     i8p = ir.IntType(8).as_pointer()
 
-    # String-aware equality: if both are pointers, assume i8* strings
-    if op in ('==','!=') and hasattr(lhs_val, 'type') and hasattr(rhs_val, 'type'):
-        if isinstance(lhs_val.type, ir.PointerType) and isinstance(rhs_val.type, ir.PointerType):
-            # Box both to handles and call nyash.string.eq_hh
+    # String-aware equality: if either side is a pointer or tagged as string-ish, compare via eq_hh
+    if op in ('==','!='):
+        lhs_ptr = hasattr(lhs_val, 'type') and isinstance(lhs_val.type, ir.PointerType)
+        rhs_ptr = hasattr(rhs_val, 'type') and isinstance(rhs_val.type, ir.PointerType)
+        lhs_tag = False
+        rhs_tag = False
+        try:
+            if resolver is not None and hasattr(resolver, 'is_stringish'):
+                lhs_tag = resolver.is_stringish(lhs)
+                rhs_tag = resolver.is_stringish(rhs)
+        except Exception:
+            pass
+        if lhs_ptr or rhs_ptr or lhs_tag or rhs_tag:
+            # Convert both to handles (i64) then nyash.string.eq_hh
             # nyash.box.from_i8_string(i8*) -> i64
             box_from = None
             for f in builder.module.functions:
@@ -54,9 +64,18 @@ def lower_compare(
                     break
             if not box_from:
                 box_from = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
-            lh = builder.call(box_from, [lhs_val], name='lhs_ptr2h')
-            rh = builder.call(box_from, [rhs_val], name='rhs_ptr2h')
-
+            def to_h(v):
+                if hasattr(v, 'type') and isinstance(v.type, ir.PointerType):
+                    return builder.call(box_from, [v])
+                else:
+                    # assume i64 handle or number; zext/trunc to i64 if needed
+                    if hasattr(v, 'type') and isinstance(v.type, ir.IntType) and v.type.width != 64:
+                        return builder.zext(v, i64) if v.type.width < 64 else builder.trunc(v, i64)
+                    if hasattr(v, 'type') and isinstance(v.type, ir.PointerType):
+                        return builder.ptrtoint(v, i64)
+                    return v if hasattr(v, 'type') else ir.Constant(i64, 0)
+            lh = to_h(lhs_val)
+            rh = to_h(rhs_val)
             eqf = None
             for f in builder.module.functions:
                 if f.name == 'nyash.string.eq_hh':
@@ -68,7 +87,6 @@ def lower_compare(
             if op == '==':
                 vmap[dst] = eq
             else:
-                # ne = 1 - eq
                 one = ir.Constant(i64, 1)
                 ne = builder.sub(one, eq, name='str_ne')
                 vmap[dst] = ne

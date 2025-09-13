@@ -166,6 +166,25 @@ class NyashLLVMBuilder:
             param_types = [self.i64] * arity
             func_ty = ir.FunctionType(self.i64, param_types)
         
+        # Reset per-function maps and resolver caches to avoid cross-function collisions
+        try:
+            self.vmap.clear()
+        except Exception:
+            self.vmap = {}
+        # Reset resolver caches (they key by block name; avoid collisions across functions)
+        try:
+            self.resolver.i64_cache.clear()
+            self.resolver.ptr_cache.clear()
+            self.resolver.f64_cache.clear()
+            if hasattr(self.resolver, '_end_i64_cache'):
+                self.resolver._end_i64_cache.clear()
+            if hasattr(self.resolver, 'string_ids'):
+                self.resolver.string_ids.clear()
+            if hasattr(self.resolver, 'string_literals'):
+                self.resolver.string_literals.clear()
+        except Exception:
+            pass
+
         # Create or reuse function
         func = None
         for f in self.module.functions:
@@ -211,9 +230,44 @@ class NyashLLVMBuilder:
             bb = func.append_basic_block(block_name)
             self.bb_map[bid] = bb
         
-        # Process each block
+        # Build quick lookup for blocks by id
+        block_by_id: Dict[int, Dict[str, Any]] = {}
         for block_data in blocks:
-            bid = block_data.get("id", 0)
+            block_by_id[block_data.get("id", 0)] = block_data
+
+        # Determine entry block: first with no predecessors; fallback to first block
+        entry_bid = None
+        for bid, preds in self.preds.items():
+            if len(preds) == 0:
+                entry_bid = bid
+                break
+        if entry_bid is None and blocks:
+            entry_bid = blocks[0].get("id", 0)
+
+        # Compute a preds-first (approx topological) order
+        visited = set()
+        order: List[int] = []
+
+        def visit(bid: int):
+            if bid in visited:
+                return
+            visited.add(bid)
+            for p in self.preds.get(bid, []):
+                visit(p)
+            order.append(bid)
+
+        if entry_bid is not None:
+            visit(entry_bid)
+        # Include any blocks not reachable from entry
+        for bid in block_by_id.keys():
+            if bid not in visited:
+                visit(bid)
+
+        # Process blocks in the computed order
+        for bid in order:
+            block_data = block_by_id.get(bid)
+            if block_data is None:
+                continue
             bb = self.bb_map[bid]
             self.lower_block(bb, block_data, func)
     
@@ -228,9 +282,45 @@ class NyashLLVMBuilder:
             pass
         instructions = block_data.get("instructions", [])
         created_ids: List[int] = []
-        
-        # Process each instruction
-        for inst in instructions:
+        # Two-pass: lower all PHIs first to keep them grouped at top
+        phi_insts = [inst for inst in instructions if inst.get("op") == "phi"]
+        non_phi_insts = [inst for inst in instructions if inst.get("op") != "phi"]
+        # Lower PHIs
+        if phi_insts:
+            # Ensure insertion at block start
+            builder.position_at_start(bb)
+            for inst in phi_insts:
+                self.lower_instruction(builder, inst, func)
+                try:
+                    dst = inst.get("dst")
+                    if isinstance(dst, int) and dst not in created_ids and dst in self.vmap:
+                        created_ids.append(dst)
+                except Exception:
+                    pass
+        # Lower non-PHI instructions in a coarse dependency-friendly order
+        # (ensure producers like newbox/const appear before consumers like boxcall/externcall)
+        order = {
+            'newbox': 0,
+            'const': 1,
+            'typeop': 2,
+            'load': 3,
+            'store': 3,
+            'binop': 4,
+            'compare': 5,
+            'call': 6,
+            'boxcall': 6,
+            'externcall': 7,
+            'safepoint': 8,
+            'barrier': 8,
+            'while': 8,
+            'jump': 9,
+            'branch': 9,
+            'ret': 10,
+        }
+        non_phi_insts_sorted = sorted(non_phi_insts, key=lambda i: order.get(i.get('op'), 100))
+        for inst in non_phi_insts_sorted:
+            # Append in program order to preserve dominance; avoid re-inserting before a terminator here
+            builder.position_at_end(bb)
             self.lower_instruction(builder, inst, func)
             try:
                 dst = inst.get("dst")
@@ -451,12 +541,21 @@ class NyashLLVMBuilder:
                 if val_id == dst_vid:
                     val = phi
                 else:
-                    snap = self.block_end_values.get(pred_bid, {})
-                    # Special-case: incoming 0 means typed zero/null, not value-id 0
-                    if isinstance(val_id, int) and val_id == 0:
-                        val = None
+                    # Prefer resolver-driven localization at the end of the predecessor block
+                    if hasattr(self, 'resolver') and self.resolver is not None:
+                        try:
+                            pred_block_obj = pred_bb
+                            val = self.resolver.resolve_i64(val_id, pred_block_obj, self.preds, self.block_end_values, self.vmap, self.bb_map)
+                        except Exception:
+                            val = None
                     else:
-                        val = snap.get(val_id)
+                        # Snapshot fallback
+                        snap = self.block_end_values.get(pred_bid, {})
+                        # Special-case: incoming 0 means typed zero/null, not value-id 0
+                        if isinstance(val_id, int) and val_id == 0:
+                            val = None
+                        else:
+                            val = snap.get(val_id)
                     if val is None:
                         # Default based on phi type
                         if isinstance(phi_type, ir.IntType):
@@ -477,11 +576,11 @@ class NyashLLVMBuilder:
                             pb.position_at_end(pred_bb)
                     except Exception:
                         pb.position_at_end(pred_bb)
-                    if isinstance(phi_type, ir.IntType) and isinstance(val.type, ir.PointerType):
+                    if isinstance(phi_type, ir.IntType) and hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
                         val = pb.ptrtoint(val, phi_type, name=f"phi_p2i_{dst_vid}_{pred_bid}")
-                    elif isinstance(phi_type, ir.PointerType) and isinstance(val.type, ir.IntType):
+                    elif isinstance(phi_type, ir.PointerType) and hasattr(val, 'type') and isinstance(val.type, ir.IntType):
                         val = pb.inttoptr(val, phi_type, name=f"phi_i2p_{dst_vid}_{pred_bid}")
-                    elif isinstance(phi_type, ir.IntType) and isinstance(val.type, ir.IntType):
+                    elif isinstance(phi_type, ir.IntType) and hasattr(val, 'type') and isinstance(val.type, ir.IntType):
                         if phi_type.width > val.type.width:
                             val = pb.zext(val, phi_type, name=f"phi_zext_{dst_vid}_{pred_bid}")
                         elif phi_type.width < val.type.width:

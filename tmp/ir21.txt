@@ -1,0 +1,822 @@
+[Python LLVM] Generated LLVM IR:
+; ModuleID = "nyash_module"
+target triple = "unknown-unknown-unknown"
+target datalayout = ""
+
+define i64 @"Main.read_all/1"(i64 %".1")
+{
+bb83:
+  %".3" = getelementptr inbounds [8 x i8], [8 x i8]* @".box_ty_Main.read_all/1_1", i32 0, i32 0
+  %"new_FileBox" = call i64 @"nyash.env.box.new_i64x"(i8* %".3", i64 0, i64 0, i64 0, i64 0, i64 0)
+  %".4" = getelementptr inbounds [6 x i8], [6 x i8]* @".meth_Main.read_all/1_birth", i32 0, i32 0
+  %"pinvoke_by_name" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_FileBox", i8* %".4", i64 0, i64 0, i64 0)
+  %".5" = getelementptr inbounds [5 x i8], [5 x i8]* @".meth_Main.read_all/1_open", i32 0, i32 0
+  %"res_gep_2" = getelementptr [2 x i8], [2 x i8]* @".str.Main.read_all/1.2", i32 0, i32 0
+  %"res_ptr2h_2" = call i64 @"nyash.box.from_i8_string"(i8* %"res_gep_2")
+  %"pinvoke_by_name.1" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_FileBox", i8* %".5", i64 2, i64 %".1", i64 %"res_ptr2h_2")
+  %"cmp_5" = icmp eq i64 %"pinvoke_by_name.1", 0
+  %"cmp_i64_5" = zext i1 %"cmp_5" to i64
+  %"cond_i1" = icmp ne i64 %"cmp_i64_5", 0
+  br i1 %"cond_i1", label %"bb84", label %"bb85"
+bb84:
+  ret i64 0
+bb85:
+  br label %"bb86"
+bb86:
+  %".9" = getelementptr inbounds [5 x i8], [5 x i8]* @".meth_Main.read_all/1_read", i32 0, i32 0
+  %"pinvoke_by_name.2" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_FileBox", i8* %".9", i64 0, i64 0, i64 0)
+  %".10" = getelementptr inbounds [6 x i8], [6 x i8]* @".meth_Main.read_all/1_close", i32 0, i32 0
+  %"pinvoke_by_name.3" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_FileBox", i8* %".10", i64 0, i64 0, i64 0)
+  ret i64 %"pinvoke_by_name.2"
+}
+
+define i64 @"Main.node_json/3"(i64 %".1", i64 %".2", i64 %".3")
+{
+bb5:
+  %"cmp_4" = icmp sge i64 %".3", 64
+  %"cmp_i64_4" = zext i1 %"cmp_4" to i64
+  %"cond_i1" = icmp ne i64 %"cmp_i64_4", 0
+  br i1 %"cond_i1", label %"bb6", label %"bb7"
+bb6:
+  %"loc_i64_9" = phi  i64 [0, %"bb5"]
+  %"loc_i64_5" = phi  i64 [0, %"bb5"]
+  %"loc_i64_6" = phi  i64 [0, %"bb5"]
+  %".6" = getelementptr inbounds [9 x i8], [9 x i8]* @".meth_Main.node_json/3_esc_json", i32 0, i32 0
+  %"pinvoke_by_name" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"loc_i64_6", i8* %".6", i64 1, i64 %".1", i64 0)
+  %"bin_gep_l_8" = getelementptr [13 x i8], [13 x i8]* @".str.Main.node_json/3.5", i32 0, i32 0
+  %"str_ptr2h_l_8" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_l_8")
+  %"concat_hh_8" = call i64 @"nyash.string.concat_hh"(i64 %"str_ptr2h_l_8", i64 %"pinvoke_by_name")
+  %"bin_gep_r_10" = getelementptr [36 x i8], [36 x i8]* @".str.Main.node_json/3.9", i32 0, i32 0
+  %"str_ptr2h_r_10" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_10")
+  %"concat_hh_10" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_8", i64 %"str_ptr2h_r_10")
+  ret i64 %"concat_hh_10"
+bb7:
+  br label %"bb8"
+bb8:
+  %"loc_i64_6.1" = phi  i64 [0, %"bb7"]
+  %".9" = getelementptr inbounds [9 x i8], [9 x i8]* @".meth_Main.node_json/3_read_all", i32 0, i32 0
+  %"pinvoke_by_name.1" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"loc_i64_6.1", i8* %".9", i64 1, i64 %".1", i64 0)
+  %"cmp_15" = icmp eq i64 %"pinvoke_by_name.1", 0
+  %"cmp_i64_15" = zext i1 %"cmp_15" to i64
+  %"cond_i1.1" = icmp ne i64 %"cmp_i64_15", 0
+  br i1 %"cond_i1.1", label %"bb9", label %"bb10"
+bb9:
+  %"loc_i64_19" = phi  i64 [0, %"bb8"]
+  %"loc_i64_16" = phi  i64 [0, %"bb8"]
+  %"loc_i64_6.2" = phi  i64 [0, %"bb8"]
+  %".11" = getelementptr inbounds [9 x i8], [9 x i8]* @".meth_Main.node_json/3_esc_json.1", i32 0, i32 0
+  %"pinvoke_by_name.2" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"loc_i64_6.2", i8* %".11", i64 1, i64 %".1", i64 0)
+  %"bin_gep_l_18" = getelementptr [13 x i8], [13 x i8]* @".str.Main.node_json/3.16", i32 0, i32 0
+  %"str_ptr2h_l_18" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_l_18")
+  %"concat_hh_18" = call i64 @"nyash.string.concat_hh"(i64 %"str_ptr2h_l_18", i64 %"pinvoke_by_name.2")
+  %"bin_gep_r_20" = getelementptr [36 x i8], [36 x i8]* @".str.Main.node_json/3.19", i32 0, i32 0
+  %"str_ptr2h_r_20" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_20")
+  %"concat_hh_20" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_18", i64 %"str_ptr2h_r_20")
+  ret i64 %"concat_hh_20"
+bb10:
+  br label %"bb11"
+bb11:
+  %"loc_i64_6.3" = phi  i64 [0, %"bb10"]
+  %".14" = getelementptr inbounds [8 x i8], [8 x i8]* @".meth_Main.node_json/3_dirname", i32 0, i32 0
+  %"pinvoke_by_name.3" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"loc_i64_6.3", i8* %".14", i64 1, i64 %".1", i64 0)
+  %"any_length_h" = call i64 @"nyash.any.length_h"(i64 %"pinvoke_by_name.1")
+  %"res_gep_11_140111356550208" = getelementptr [1 x i8], [1 x i8]* @".str.Main.node_json/3.24", i32 0, i32 0
+  %"res_ptr2h_11" = call i64 @"nyash.box.from_i8_string"(i8* %"res_gep_11_140111356550208")
+  %"res_gep_11_140111356550544" = getelementptr [1 x i8], [1 x i8]* @".str.Main.node_json/3.26", i32 0, i32 0
+  %"res_ptr2h_11.1" = call i64 @"nyash.box.from_i8_string"(i8* %"res_gep_11_140111356550544")
+  br label %"bb12"
+bb12:
+  %"phi_45" = phi  i64 [%".1", %"bb11"], [0, %"bb17"]
+  %"phi_44" = phi  i64 [%"pinvoke_by_name.3", %"bb11"], [0, %"bb17"]
+  %"phi_43" = phi  i64 [0, %"bb11"], [0, %"bb17"]
+  %"phi_42" = phi  i64 [%"any_length_h", %"bb11"], [0, %"bb17"]
+  %"phi_41" = phi  i64 [%"pinvoke_by_name.1", %"bb11"], [0, %"bb17"]
+  %"phi_40" = phi  i64 [0, %"bb11"], [0, %"bb17"]
+  %"phi_39" = phi  i64 [%"res_ptr2h_11", %"bb11"], [0, %"bb17"]
+  %"phi_38" = phi  i64 [0, %"bb11"], [0, %"bb17"]
+  %"phi_37" = phi  i64 [%".2", %"bb11"], [0, %"bb17"]
+  %"phi_36" = phi  i64 [1, %"bb11"], [0, %"bb17"]
+  %"phi_35" = phi  i64 [%".3", %"bb11"], [0, %"bb17"]
+  %"phi_34" = phi  i64 [1, %"bb11"], [0, %"bb17"]
+  %"phi_33" = phi  i64 [0, %"bb11"], [0, %"bb17"]
+  %"phi_32" = phi  i64 [%"res_ptr2h_11.1", %"bb11"], [0, %"bb17"]
+  %"cmp_46" = icmp slt i64 %"phi_33", %"phi_42"
+  %"cmp_i64_46" = zext i1 %"cmp_46" to i64
+  %"cond_i1.2" = icmp ne i64 %"cmp_i64_46", 0
+  br i1 %"cond_i1.2", label %"bb13", label %"bb14"
+bb13:
+  %"add_48" = add i64 %"phi_33", 1
+  %"substring_h" = call i64 @"nyash.string.substring_hii"(i64 %"phi_41", i64 %"phi_33", i64 %"add_48")
+  %"cmp_51" = icmp eq i64 %"phi_43", 1
+  %"cmp_i64_51" = zext i1 %"cmp_51" to i64
+  %"cond_i1.3" = icmp ne i64 %"cmp_i64_51", 0
+  br i1 %"cond_i1.3", label %"bb15", label %"bb16"
+bb14:
+  %"loc_i64_227" = phi  i64 [0, %"bb12"]
+  %"loc_i64_224" = phi  i64 [0, %"bb12"]
+  %"loc_i64_221" = phi  i64 [0, %"bb12"]
+  %"loc_i64_218" = phi  i64 [0, %"bb12"]
+  %".18" = getelementptr inbounds [9 x i8], [9 x i8]* @".meth_Main.node_json/3_esc_json.2", i32 0, i32 0
+  %"pinvoke_by_name.4" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"phi_40", i8* %".18", i64 1, i64 %"phi_45", i64 0)
+  %"bin_gep_l_220" = getelementptr [13 x i8], [13 x i8]* @".str.Main.node_json/3.218", i32 0, i32 0
+  %"str_ptr2h_l_220" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_l_220")
+  %"concat_hh_220" = call i64 @"nyash.string.concat_hh"(i64 %"str_ptr2h_l_220", i64 %"pinvoke_by_name.4")
+  %"bin_gep_r_222" = getelementptr [18 x i8], [18 x i8]* @".str.Main.node_json/3.221", i32 0, i32 0
+  %"str_ptr2h_r_222" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_222")
+  %"concat_hh_222" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_220", i64 %"str_ptr2h_r_222")
+  %"add_223" = add i64 %"concat_hh_222", %"phi_39"
+  %"bin_gep_r_225" = getelementptr [17 x i8], [17 x i8]* @".str.Main.node_json/3.224", i32 0, i32 0
+  %"str_ptr2h_r_225" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_225")
+  %"concat_hh_225" = call i64 @"nyash.string.concat_hh"(i64 %"add_223", i64 %"str_ptr2h_r_225")
+  %"add_226" = add i64 %"concat_hh_225", %"phi_32"
+  %"bin_gep_r_228" = getelementptr [3 x i8], [3 x i8]* @".str.Main.node_json/3.227", i32 0, i32 0
+  %"str_ptr2h_r_228" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_228")
+  %"concat_hh_228" = call i64 @"nyash.string.concat_hh"(i64 %"add_226", i64 %"str_ptr2h_r_228")
+  ret i64 %"concat_hh_228"
+bb15:
+  %"loc_i64_52" = phi  i64 [0, %"bb13"]
+  %"str_eq" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"loc_i64_52")
+  %"cond_i1.4" = icmp ne i64 %"str_eq", 0
+  br i1 %"cond_i1.4", label %"bb18", label %"bb19"
+bb16:
+  %"cmp_60" = icmp eq i64 %"phi_38", 1
+  %"cmp_i64_60" = zext i1 %"cmp_60" to i64
+  %"cond_i1.5" = icmp ne i64 %"cmp_i64_60", 0
+  br i1 %"cond_i1.5", label %"bb21", label %"bb22"
+bb17:
+  %"phi_216" = phi  i64 [0, %"bb20"], [0, %"bb23"]
+  br label %"bb12"
+bb18:
+  br label %"bb20"
+bb19:
+  br label %"bb20"
+bb20:
+  %"add_58" = add i64 %"phi_33", 1
+  br label %"bb17"
+bb21:
+  %"loc_i64_61" = phi  i64 [0, %"bb16"]
+  %"str_eq.1" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"loc_i64_61")
+  %"cond_i1.6" = icmp ne i64 %"str_eq.1", 0
+  br i1 %"cond_i1.6", label %"bb24", label %"bb25"
+bb22:
+  %"loc_i64_90" = phi  i64 [0, %"bb16"]
+  %"loc_i64_78" = phi  i64 [0, %"bb16"]
+  %"loc_i64_79" = phi  i64 [0, %"bb16"]
+  %"str_eq.2" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"loc_i64_79")
+  %"add_82" = add i64 %"loc_i64_78", 1
+  %"cmp_83" = icmp slt i64 %"add_82", %"phi_42"
+  %"cmp_i64_83" = zext i1 %"cmp_83" to i64
+  %"and_84" = and i64 %"str_eq.2", %"cmp_i64_83"
+  %"add_86" = add i64 %"loc_i64_78", 1
+  %"add_88" = add i64 %"loc_i64_78", 2
+  %"substring_h.1" = call i64 @"nyash.string.substring_hii"(i64 %"phi_41", i64 %"add_86", i64 %"add_88")
+  %"str_eq.3" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h.1", i64 %"loc_i64_90")
+  %"and_92" = and i64 %"and_84", %"str_eq.3"
+  %"cond_i1.7" = icmp ne i64 %"and_92", 0
+  br i1 %"cond_i1.7", label %"bb33", label %"bb34"
+bb23:
+  br label %"bb17"
+bb24:
+  %"cmp_64" = icmp eq i64 %"add_58", 0
+  %"cmp_i64_64" = zext i1 %"cmp_64" to i64
+  %"cond_i1.8" = icmp ne i64 %"cmp_i64_64", 0
+  br i1 %"cond_i1.8", label %"bb27", label %"bb28"
+bb25:
+  br label %"bb26"
+bb26:
+  %"add_78" = add i64 %"add_58", 1
+  br label %"bb23"
+bb27:
+  br label %"bb29"
+bb28:
+  %"loc_i64_69" = phi  i64 [0, %"bb24"]
+  %"sub_67" = sub i64 %"add_58", 1
+  %"substring_h.2" = call i64 @"nyash.string.substring_hii"(i64 %"phi_41", i64 %"sub_67", i64 %"add_58")
+  %"str_eq.4" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h.2", i64 %"loc_i64_69")
+  %"str_ne" = sub i64 1, %"str_eq.4"
+  %"cond_i1.9" = icmp ne i64 %"str_ne", 0
+  br i1 %"cond_i1.9", label %"bb30", label %"bb31"
+bb29:
+  br label %"bb26"
+bb30:
+  br label %"bb32"
+bb31:
+  br label %"bb32"
+bb32:
+  br label %"bb29"
+bb33:
+  %"add_95" = add i64 %"add_78", 2
+  br label %"bb35"
+bb34:
+  %"loc_i64_96" = phi  i64 [0, %"bb22"]
+  %"str_eq.5" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"loc_i64_96")
+  %"cond_i1.10" = icmp ne i64 %"str_eq.5", 0
+  br i1 %"cond_i1.10", label %"bb36", label %"bb37"
+bb35:
+  br label %"bb23"
+bb36:
+  %"add_100" = add i64 %"add_95", 1
+  br label %"bb38"
+bb37:
+  %"loc_i64_101" = phi  i64 [0, %"bb34"]
+  %"str_eq.6" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"loc_i64_101")
+  %"cond_i1.11" = icmp ne i64 %"str_eq.6", 0
+  br i1 %"cond_i1.11", label %"bb39", label %"bb40"
+bb38:
+  br label %"bb35"
+bb39:
+  %"add_105" = add i64 %"add_100", 1
+  br label %"bb41"
+bb40:
+  %"loc_i64_112" = phi  i64 [0, %"bb37"]
+  %"add_107" = add i64 %"add_105", 9
+  %"cmp_108" = icmp sle i64 %"add_107", %"phi_42"
+  %"cmp_i64_108" = zext i1 %"cmp_108" to i64
+  %"add_110" = add i64 %"add_105", 9
+  %"substring_h.3" = call i64 @"nyash.string.substring_hii"(i64 %"phi_41", i64 %"add_105", i64 %"add_110")
+  %"str_eq.7" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h.3", i64 %"loc_i64_112")
+  %"and_114" = and i64 %"cmp_i64_108", %"str_eq.7"
+  %"cond_i1.12" = icmp ne i64 %"and_114", 0
+  br i1 %"cond_i1.12", label %"bb42", label %"bb43"
+bb41:
+  br label %"bb38"
+bb42:
+  %"add_116" = add i64 %"add_105", 9
+  br label %"bb45"
+bb43:
+  br label %"bb44"
+bb44:
+  br label %"bb41"
+bb45:
+  %"phi_135" = phi  i64 [0, %"bb42"], [0, %"bb50"]
+  %"phi_134" = phi  i64 [%"phi_44", %"bb42"], [0, %"bb50"]
+  %"phi_133" = phi  i64 [%"phi_42", %"bb42"], [0, %"bb50"]
+  %"phi_132" = phi  i64 [%"phi_40", %"bb42"], [0, %"bb50"]
+  %"phi_131" = phi  i64 [%"phi_39", %"bb42"], [0, %"bb50"]
+  %"phi_130" = phi  i64 [%"add_116", %"bb42"], [0, %"bb50"]
+  %"phi_129" = phi  i64 [0, %"bb42"], [0, %"bb50"]
+  %"phi_128" = phi  i64 [%"phi_34", %"bb42"], [0, %"bb50"]
+  %"phi_127" = phi  i64 [0, %"bb42"], [0, %"bb50"]
+  %"phi_126" = phi  i64 [%"phi_32", %"bb42"], [0, %"bb50"]
+  %"phi_125" = phi  i64 [%"phi_41", %"bb42"], [0, %"bb50"]
+  %"phi_123" = phi  i64 [0, %"bb42"], [0, %"bb50"]
+  %"phi_122" = phi  i64 [%"phi_37", %"bb42"], [0, %"bb50"]
+  %"phi_121" = phi  i64 [%"phi_36", %"bb42"], [0, %"bb50"]
+  %"phi_120" = phi  i64 [%"phi_35", %"bb42"], [0, %"bb50"]
+  %"phi_118" = phi  i64 [%"phi_45", %"bb42"], [0, %"bb50"]
+  %"cmp_136" = icmp slt i64 %"phi_130", %"phi_133"
+  %"cmp_i64_136" = zext i1 %"cmp_136" to i64
+  %"cmp_138" = icmp eq i64 %"phi_123", 0
+  %"cmp_i64_138" = zext i1 %"cmp_138" to i64
+  %"and_139" = and i64 %"cmp_i64_136", %"cmp_i64_138"
+  %"cond_i1.13" = icmp ne i64 %"and_139", 0
+  br i1 %"cond_i1.13", label %"bb46", label %"bb47"
+bb46:
+  %"loc_i64_143" = phi  i64 [0, %"bb45"]
+  %"add_141" = add i64 %"phi_130", 1
+  %"substring_h.4" = call i64 @"nyash.string.substring_hii"(i64 %"phi_125", i64 %"phi_130", i64 %"add_141")
+  %"str_eq.8" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h.4", i64 %"loc_i64_143")
+  %"cond_i1.14" = icmp ne i64 %"str_eq.8", 0
+  br i1 %"cond_i1.14", label %"bb48", label %"bb49"
+bb47:
+  %"cmp_159" = icmp eq i64 %"phi_123", 1
+  %"cmp_i64_159" = zext i1 %"cmp_159" to i64
+  %"cond_i1.15" = icmp ne i64 %"cmp_i64_159", 0
+  br i1 %"cond_i1.15", label %"bb54", label %"bb55"
+bb48:
+  %"loc_i64_148" = phi  i64 [0, %"bb46"]
+  %"sub_146" = sub i64 %"phi_130", 1
+  %"substring_h.5" = call i64 @"nyash.string.substring_hii"(i64 %"phi_125", i64 %"sub_146", i64 %"phi_130")
+  %"str_eq.9" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h.5", i64 %"loc_i64_148")
+  %"str_ne.1" = sub i64 1, %"str_eq.9"
+  %"cond_i1.16" = icmp ne i64 %"str_ne.1", 0
+  br i1 %"cond_i1.16", label %"bb51", label %"bb52"
+bb49:
+  %"loc_i64_152" = phi  i64 [0, %"bb46"]
+  %"add_155" = add i64 %"loc_i64_152", 1
+  br label %"bb50"
+bb50:
+  br label %"bb45"
+bb51:
+  br label %"bb53"
+bb52:
+  %"add_152" = add i64 %"phi_130", 1
+  br label %"bb53"
+bb53:
+  %"phi_153" = phi  i64 [1, %"bb51"], [%"phi_123", %"bb52"]
+  br label %"bb50"
+bb54:
+  %"add_161" = add i64 %"phi_135", 9
+  %"substring_h.6" = call i64 @"nyash.string.substring_hii"(i64 %"phi_125", i64 %"add_161", i64 %"phi_130")
+  %"cmp_164" = icmp eq i64 %"phi_121", 1
+  %"cmp_i64_164" = zext i1 %"cmp_164" to i64
+  %"cond_i1.17" = icmp ne i64 %"cmp_i64_164", 0
+  br i1 %"cond_i1.17", label %"bb57", label %"bb58"
+bb55:
+  br label %"bb56"
+bb56:
+  br label %"bb44"
+bb57:
+  %"loc_i64_169" = phi  i64 [0, %"bb54"]
+  %"loc_i64_165" = phi  i64 [0, %"bb54"]
+  %"bin_gep_r_166" = getelementptr [2 x i8], [2 x i8]* @".str.Main.node_json/3.165", i32 0, i32 0
+  %"str_ptr2h_r_166" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_166")
+  %"concat_hh_166" = call i64 @"nyash.string.concat_hh"(i64 %"phi_131", i64 %"str_ptr2h_r_166")
+  %".62" = getelementptr inbounds [9 x i8], [9 x i8]* @".meth_Main.node_json/3_esc_json.3", i32 0, i32 0
+  %"pinvoke_by_name.5" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"phi_132", i8* %".62", i64 1, i64 %"substring_h.6", i64 0)
+  %"add_168" = add i64 %"concat_hh_166", %"pinvoke_by_name.5"
+  %"bin_gep_r_170" = getelementptr [2 x i8], [2 x i8]* @".str.Main.node_json/3.169", i32 0, i32 0
+  %"str_ptr2h_r_170" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_170")
+  %"concat_hh_170" = call i64 @"nyash.string.concat_hh"(i64 %"add_168", i64 %"str_ptr2h_r_170")
+  br label %"bb59"
+bb58:
+  %"loc_i64_176" = phi  i64 [0, %"bb54"]
+  %"loc_i64_172" = phi  i64 [0, %"bb54"]
+  %"bin_gep_r_173" = getelementptr [3 x i8], [3 x i8]* @".str.Main.node_json/3.172", i32 0, i32 0
+  %"str_ptr2h_r_173" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_173")
+  %"concat_hh_173" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_170", i64 %"str_ptr2h_r_173")
+  %".64" = getelementptr inbounds [9 x i8], [9 x i8]* @".meth_Main.node_json/3_esc_json.4", i32 0, i32 0
+  %"pinvoke_by_name.6" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"phi_132", i8* %".64", i64 1, i64 %"substring_h.6", i64 0)
+  %"add_175" = add i64 %"concat_hh_173", %"pinvoke_by_name.6"
+  %"bin_gep_r_177" = getelementptr [2 x i8], [2 x i8]* @".str.Main.node_json/3.176", i32 0, i32 0
+  %"str_ptr2h_r_177" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_177")
+  %"concat_hh_177" = call i64 @"nyash.string.concat_hh"(i64 %"add_175", i64 %"str_ptr2h_r_177")
+  br label %"bb59"
+bb59:
+  %"phi_178" = phi  i64 [0, %"bb57"], [0, %"bb58"]
+  %".66" = getelementptr inbounds [5 x i8], [5 x i8]* @".meth_Main.node_json/3_join", i32 0, i32 0
+  %"pinvoke_by_name.7" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"phi_132", i8* %".66", i64 2, i64 %"phi_134", i64 %"substring_h.6")
+  %".67" = getelementptr inbounds [13 x i8], [13 x i8]* @".meth_Main.node_json/3_has_in_stack", i32 0, i32 0
+  %"pinvoke_by_name.8" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"phi_132", i8* %".67", i64 2, i64 %"phi_122", i64 %"pinvoke_by_name.7")
+  %"cmp_183" = icmp eq i64 %"pinvoke_by_name.8", 1
+  %"cmp_i64_183" = zext i1 %"cmp_183" to i64
+  %"cond_i1.18" = icmp ne i64 %"cmp_i64_183", 0
+  br i1 %"cond_i1.18", label %"bb60", label %"bb61"
+bb60:
+  %"loc_i64_187" = phi  i64 [0, %"bb59"]
+  %"loc_i64_184" = phi  i64 [0, %"bb59"]
+  %".69" = getelementptr inbounds [9 x i8], [9 x i8]* @".meth_Main.node_json/3_esc_json.5", i32 0, i32 0
+  %"pinvoke_by_name.9" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"phi_132", i8* %".69", i64 1, i64 %"pinvoke_by_name.7", i64 0)
+  %"bin_gep_l_186" = getelementptr [13 x i8], [13 x i8]* @".str.Main.node_json/3.184", i32 0, i32 0
+  %"str_ptr2h_l_186" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_l_186")
+  %"concat_hh_186" = call i64 @"nyash.string.concat_hh"(i64 %"str_ptr2h_l_186", i64 %"pinvoke_by_name.9")
+  %"bin_gep_r_188" = getelementptr [36 x i8], [36 x i8]* @".str.Main.node_json/3.187", i32 0, i32 0
+  %"str_ptr2h_r_188" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_188")
+  %"concat_hh_188" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_186", i64 %"str_ptr2h_r_188")
+  br label %"bb62"
+bb61:
+  %"loc_i64_190" = phi  i64 [0, %"bb59"]
+  %"add_189" = add i64 %"phi_122", %"pinvoke_by_name.7"
+  %"bin_gep_r_191" = getelementptr [2 x i8], [2 x i8]* @".str.Main.node_json/3.190", i32 0, i32 0
+  %"str_ptr2h_r_191" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_191")
+  %"concat_hh_191" = call i64 @"nyash.string.concat_hh"(i64 %"add_189", i64 %"str_ptr2h_r_191")
+  %"add_193" = add i64 %"phi_120", 1
+  %".71" = getelementptr inbounds [10 x i8], [10 x i8]* @".meth_Main.node_json/3_node_json", i32 0, i32 0
+  %"pinvoke_by_name.10" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"phi_132", i8* %".71", i64 2, i64 %"pinvoke_by_name.7", i64 %"concat_hh_191")
+  br label %"bb62"
+bb62:
+  %"phi_195" = phi  i64 [%"concat_hh_188", %"bb60"], [%"pinvoke_by_name.10", %"bb61"]
+  %"cmp_197" = icmp eq i64 %"phi_128", 1
+  %"cmp_i64_197" = zext i1 %"cmp_197" to i64
+  %"cond_i1.19" = icmp ne i64 %"cmp_i64_197", 0
+  br i1 %"cond_i1.19", label %"bb63", label %"bb64"
+bb63:
+  %"add_198" = add i64 %"phi_126", %"phi_195"
+  br label %"bb65"
+bb64:
+  %"loc_i64_200" = phi  i64 [0, %"bb62"]
+  %"bin_gep_r_201" = getelementptr [2 x i8], [2 x i8]* @".str.Main.node_json/3.200", i32 0, i32 0
+  %"str_ptr2h_r_201" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_201")
+  %"concat_hh_201" = call i64 @"nyash.string.concat_hh"(i64 %"add_198", i64 %"str_ptr2h_r_201")
+  %"add_202" = add i64 %"concat_hh_201", %"phi_195"
+  br label %"bb65"
+bb65:
+  %"phi_203" = phi  i64 [0, %"bb63"], [0, %"bb64"]
+  br label %"bb56"
+}
+
+define private i64 @"main"()
+{
+bb0:
+  %".2" = getelementptr inbounds [9 x i8], [9 x i8]* @".box_ty_main_0", i32 0, i32 0
+  %"new_ArrayBox" = call i64 @"nyash.env.box.new_i64x"(i8* %".2", i64 0, i64 0, i64 0, i64 0, i64 0)
+  %".3" = getelementptr inbounds [11 x i8], [11 x i8]* @".box_ty_main_1", i32 0, i32 0
+  %"new_ConsoleBox" = call i64 @"nyash.env.box.new_i64x"(i8* %".3", i64 0, i64 0, i64 0, i64 0, i64 0)
+  %".4" = getelementptr inbounds [6 x i8], [6 x i8]* @".meth_main_birth", i32 0, i32 0
+  %"pinvoke_by_name" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_ConsoleBox", i8* %".4", i64 0, i64 0, i64 0)
+  %"cmp_4" = icmp ne i64 %"new_ArrayBox", 0
+  %"cmp_i64_4" = zext i1 %"cmp_4" to i64
+  %"any_length_h" = call i64 @"nyash.any.length_h"(i64 %"new_ArrayBox")
+  %"cmp_7" = icmp sge i64 %"any_length_h", 1
+  %"cmp_i64_7" = zext i1 %"cmp_7" to i64
+  %"and_8" = and i64 %"cmp_i64_4", %"cmp_i64_7"
+  %"cond_i1" = icmp ne i64 %"and_8", 0
+  br i1 %"cond_i1", label %"bb97", label %"bb98"
+bb97:
+  %"arr_get_h" = call i64 @"nyash.array.get_h"(i64 %"new_ArrayBox", i64 0)
+  br label %"bb99"
+bb98:
+  br label %"bb99"
+bb99:
+  %"loc_i64_15" = phi  i64 [0, %"bb97"], [0, %"bb98"]
+  %"phi_12" = phi  i64 [%"arr_get_h", %"bb97"], [0, %"bb98"]
+  %"cmp_14" = icmp eq i64 %"phi_12", 0
+  %"cmp_i64_14" = zext i1 %"cmp_14" to i64
+  %"str_eq" = call i64 @"nyash.string.eq_hh"(i64 %"phi_12", i64 %"loc_i64_15")
+  %"or_17" = or i64 %"cmp_i64_14", %"str_eq"
+  %"cond_i1.1" = icmp ne i64 %"or_17", 0
+  br i1 %"cond_i1.1", label %"bb100", label %"bb101"
+bb100:
+  %"res_gep_100_140111354791744" = getelementptr [41 x i8], [41 x i8]* @".str.main.18", i32 0, i32 0
+  %"res_ptr2h_100" = call i64 @"nyash.box.from_i8_string"(i8* %"res_gep_100_140111354791744")
+  br label %"bb102"
+bb101:
+  br label %"bb102"
+bb102:
+  %"loc_i64_35" = phi  i64 [0, %"bb100"], [0, %"bb101"]
+  %"loc_i64_32" = phi  i64 [0, %"bb100"], [0, %"bb101"]
+  %"loc_i64_28" = phi  i64 [0, %"bb100"], [0, %"bb101"]
+  %"loc_i64_23" = phi  i64 [0, %"bb100"], [0, %"bb101"]
+  %"loc_i64_21" = phi  i64 [0, %"bb100"], [0, %"bb101"]
+  %"phi_20" = phi  i64 [%"res_ptr2h_100", %"bb100"], [%"phi_12", %"bb101"]
+  %"bin_gep_l_22" = getelementptr [2 x i8], [2 x i8]* @".str.main.21", i32 0, i32 0
+  %"str_ptr2h_l_22" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_l_22")
+  %"concat_hh_22" = call i64 @"nyash.string.concat_hh"(i64 %"str_ptr2h_l_22", i64 %"phi_20")
+  %"bin_gep_r_24" = getelementptr [2 x i8], [2 x i8]* @".str.main.23", i32 0, i32 0
+  %"str_ptr2h_r_24" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_24")
+  %"concat_hh_24" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_22", i64 %"str_ptr2h_r_24")
+  %"call_27" = call i64 @"Main.node_json/3"(i64 %"phi_20", i64 %"concat_hh_24", i64 0)
+  %"call_30" = call i64 @"Main.esc_json/1"(i64 %"phi_20")
+  %"bin_gep_l_31" = getelementptr [32 x i8], [32 x i8]* @".str.main.28", i32 0, i32 0
+  %"str_ptr2h_l_31" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_l_31")
+  %"concat_hh_31" = call i64 @"nyash.string.concat_hh"(i64 %"str_ptr2h_l_31", i64 %"call_30")
+  %"bin_gep_r_33" = getelementptr [13 x i8], [13 x i8]* @".str.main.32", i32 0, i32 0
+  %"str_ptr2h_r_33" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_33")
+  %"concat_hh_33" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_31", i64 %"str_ptr2h_r_33")
+  %"concat_hh_34" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_33", i64 %"call_27")
+  %"bin_gep_r_36" = getelementptr [2 x i8], [2 x i8]* @".str.main.35", i32 0, i32 0
+  %"str_ptr2h_r_36" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_36")
+  %"concat_hh_36" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_34", i64 %"str_ptr2h_r_36")
+  %"console_log_h" = call i64 @"nyash.console.log_handle"(i64 %"concat_hh_36")
+  ret i64 0
+}
+
+define i64 @"Main.has_in_stack/2"(i64 %".1", i64 %".2")
+{
+bb66:
+  %"res_gep_2" = getelementptr [2 x i8], [2 x i8]* @".str.Main.has_in_stack/2.2", i32 0, i32 0
+  %"res_ptr2h_2" = call i64 @"nyash.box.from_i8_string"(i8* %"res_gep_2")
+  %"bin_gep_l_3" = getelementptr [2 x i8], [2 x i8]* @".str.Main.has_in_stack/2.2", i32 0, i32 0
+  %"str_ptr2h_l_3" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_l_3")
+  %"concat_hh_3" = call i64 @"nyash.string.concat_hh"(i64 %"str_ptr2h_l_3", i64 %".2")
+  %"res_gep_4" = getelementptr [2 x i8], [2 x i8]* @".str.Main.has_in_stack/2.4", i32 0, i32 0
+  %"res_ptr2h_4" = call i64 @"nyash.box.from_i8_string"(i8* %"res_gep_4")
+  %"bin_gep_r_5" = getelementptr [2 x i8], [2 x i8]* @".str.Main.has_in_stack/2.4", i32 0, i32 0
+  %"str_ptr2h_r_5" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_5")
+  %"concat_hh_5" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_3", i64 %"str_ptr2h_r_5")
+  %"any_length_h" = call i64 @"nyash.any.length_h"(i64 %".1")
+  %"any_length_h.1" = call i64 @"nyash.any.length_h"(i64 %"concat_hh_5")
+  %"str_eq" = call i64 @"nyash.string.eq_hh"(i64 %"any_length_h.1", i64 0)
+  %"cond_i1" = icmp ne i64 %"str_eq", 0
+  br i1 %"cond_i1", label %"bb67", label %"bb68"
+bb67:
+  ret i64 0
+bb68:
+  br label %"bb69"
+bb69:
+  br label %"bb70"
+bb70:
+  %"phi_19" = phi  i64 [%"any_length_h.1", %"bb69"], [0, %"bb75"]
+  %"phi_17" = phi  i64 [%"concat_hh_5", %"bb69"], [0, %"bb75"]
+  %"phi_16" = phi  i64 [%".1", %"bb69"], [0, %"bb75"]
+  %"phi_15" = phi  i64 [0, %"bb69"], [0, %"bb75"]
+  %"phi_14" = phi  i64 [%"any_length_h", %"bb69"], [0, %"bb75"]
+  %"concat_hh_20" = call i64 @"nyash.string.concat_hh"(i64 %"phi_15", i64 %"phi_19")
+  %"cmp_21" = icmp sle i64 %"concat_hh_20", %"phi_14"
+  %"cmp_i64_21" = zext i1 %"cmp_21" to i64
+  %"cond_i1.1" = icmp ne i64 %"cmp_i64_21", 0
+  br i1 %"cond_i1.1", label %"bb71", label %"bb72"
+bb71:
+  %"concat_hh_22" = call i64 @"nyash.string.concat_hh"(i64 %"phi_15", i64 %"phi_19")
+  %"substring_h" = call i64 @"nyash.string.substring_hii"(i64 %"phi_16", i64 %"phi_15", i64 %"concat_hh_22")
+  %"str_eq.1" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"phi_17")
+  %"cond_i1.2" = icmp ne i64 %"str_eq.1", 0
+  br i1 %"cond_i1.2", label %"bb73", label %"bb74"
+bb72:
+  ret i64 0
+bb73:
+  ret i64 1
+bb74:
+  br label %"bb75"
+bb75:
+  %"concat_hh_29" = call i64 @"nyash.string.concat_hh"(i64 %"phi_15", i64 1)
+  br label %"bb70"
+}
+
+define i64 @"Main.dirname/1"(i64 %".1")
+{
+bb76:
+  %".3" = getelementptr inbounds [8 x i8], [8 x i8]* @".box_ty_Main.dirname/1_1", i32 0, i32 0
+  %"new_PathBox" = call i64 @"nyash.env.box.new_i64x"(i8* %".3", i64 0, i64 0, i64 0, i64 0, i64 0)
+  %".4" = getelementptr inbounds [6 x i8], [6 x i8]* @".meth_Main.dirname/1_birth", i32 0, i32 0
+  %"pinvoke_by_name" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_PathBox", i8* %".4", i64 0, i64 0, i64 0)
+  %".5" = getelementptr inbounds [8 x i8], [8 x i8]* @".meth_Main.dirname/1_dirname", i32 0, i32 0
+  %"pinvoke_by_name.1" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_PathBox", i8* %".5", i64 1, i64 %".1", i64 0)
+  %"str_eq" = call i64 @"nyash.string.eq_hh"(i64 %"pinvoke_by_name.1", i64 0)
+  %"str_ne" = sub i64 1, %"str_eq"
+  %"cond_i1" = icmp ne i64 %"str_ne", 0
+  br i1 %"cond_i1", label %"bb77", label %"bb78"
+bb77:
+  ret i64 %"pinvoke_by_name.1"
+bb78:
+  br label %"bb79"
+bb79:
+  %"loc_i64_7" = phi  i64 [0, %"bb78"]
+  %"lastIndexOf_hh" = call i64 @"nyash.string.lastIndexOf_hh"(i64 %".1", i64 %"loc_i64_7")
+  %"cmp_10" = icmp slt i64 %"lastIndexOf_hh", 0
+  %"cmp_i64_10" = zext i1 %"cmp_10" to i64
+  %"cond_i1.1" = icmp ne i64 %"cmp_i64_10", 0
+  br i1 %"cond_i1.1", label %"bb80", label %"bb81"
+bb80:
+  %"loc_i64_11" = phi  i64 [0, %"bb79"]
+  ret i64 %"loc_i64_11"
+bb81:
+  br label %"bb82"
+bb82:
+  %"substring_h" = call i64 @"nyash.string.substring_hii"(i64 %".1", i64 0, i64 %"lastIndexOf_hh")
+  ret i64 %"substring_h"
+}
+
+define i64 @"Main.esc_json/1"(i64 %".1")
+{
+bb87:
+  %"any_length_h" = call i64 @"nyash.any.length_h"(i64 %".1")
+  %"res_gep_87_140111354908208" = getelementptr [1 x i8], [1 x i8]* @".str.Main.esc_json/1.1", i32 0, i32 0
+  %"res_ptr2h_87" = call i64 @"nyash.box.from_i8_string"(i8* %"res_gep_87_140111354908208")
+  br label %"bb88"
+bb88:
+  %"phi_7" = phi  i64 [%"res_ptr2h_87", %"bb87"], [0, %"bb93"]
+  %"phi_6" = phi  i64 [0, %"bb87"], [0, %"bb93"]
+  %"phi_5" = phi  i64 [%"any_length_h", %"bb87"], [0, %"bb93"]
+  %"phi_4" = phi  i64 [%".1", %"bb87"], [0, %"bb93"]
+  %"cmp_8" = icmp slt i64 %"phi_6", %"phi_5"
+  %"cmp_i64_8" = zext i1 %"cmp_8" to i64
+  %"cond_i1" = icmp ne i64 %"cmp_i64_8", 0
+  br i1 %"cond_i1", label %"bb89", label %"bb90"
+bb89:
+  %"loc_i64_12" = phi  i64 [0, %"bb88"]
+  %"concat_hh_10" = call i64 @"nyash.string.concat_hh"(i64 %"phi_6", i64 1)
+  %"substring_h" = call i64 @"nyash.string.substring_hii"(i64 %"phi_4", i64 %"phi_6", i64 %"concat_hh_10")
+  %"str_eq" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"loc_i64_12")
+  %"cond_i1.1" = icmp ne i64 %"str_eq", 0
+  br i1 %"cond_i1.1", label %"bb91", label %"bb92"
+bb90:
+  ret i64 %"phi_7"
+bb91:
+  %"loc_i64_14" = phi  i64 [0, %"bb89"]
+  %"bin_gep_r_15" = getelementptr [3 x i8], [3 x i8]* @".str.Main.esc_json/1.14", i32 0, i32 0
+  %"str_ptr2h_r_15" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_15")
+  %"concat_hh_15" = call i64 @"nyash.string.concat_hh"(i64 %"phi_7", i64 %"str_ptr2h_r_15")
+  br label %"bb93"
+bb92:
+  %"loc_i64_16" = phi  i64 [0, %"bb89"]
+  %"str_eq.1" = call i64 @"nyash.string.eq_hh"(i64 %"substring_h", i64 %"loc_i64_16")
+  %"cond_i1.2" = icmp ne i64 %"str_eq.1", 0
+  br i1 %"cond_i1.2", label %"bb94", label %"bb95"
+bb93:
+  %"phi_22" = phi  i64 [%"concat_hh_15", %"bb91"], [0, %"bb96"]
+  %"concat_hh_24" = call i64 @"nyash.string.concat_hh"(i64 %"phi_6", i64 1)
+  br label %"bb88"
+bb94:
+  br label %"bb96"
+bb95:
+  br label %"bb96"
+bb96:
+  br label %"bb93"
+}
+
+define i64 @"Main.join/2"(i64 %".1", i64 %".2")
+{
+bb1:
+  %".4" = getelementptr inbounds [8 x i8], [8 x i8]* @".box_ty_Main.join/2_2", i32 0, i32 0
+  %"new_PathBox" = call i64 @"nyash.env.box.new_i64x"(i8* %".4", i64 0, i64 0, i64 0, i64 0, i64 0)
+  %".5" = getelementptr inbounds [6 x i8], [6 x i8]* @".meth_Main.join/2_birth", i32 0, i32 0
+  %"pinvoke_by_name" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_PathBox", i8* %".5", i64 0, i64 0, i64 0)
+  %".6" = getelementptr inbounds [5 x i8], [5 x i8]* @".meth_Main.join/2_join", i32 0, i32 0
+  %"pinvoke_by_name.1" = call i64 @"nyash.plugin.invoke_by_name_i64"(i64 %"new_PathBox", i8* %".6", i64 2, i64 %".1", i64 %".2")
+  %"str_eq" = call i64 @"nyash.string.eq_hh"(i64 %"pinvoke_by_name.1", i64 0)
+  %"str_ne" = sub i64 1, %"str_eq"
+  %"cond_i1" = icmp ne i64 %"str_ne", 0
+  br i1 %"cond_i1", label %"bb2", label %"bb3"
+bb2:
+  ret i64 %"pinvoke_by_name.1"
+bb3:
+  br label %"bb4"
+bb4:
+  %"loc_i64_8" = phi  i64 [0, %"bb3"]
+  %"bin_gep_r_9" = getelementptr [2 x i8], [2 x i8]* @".str.Main.join/2.8", i32 0, i32 0
+  %"str_ptr2h_r_9" = call i64 @"nyash.box.from_i8_string"(i8* %"bin_gep_r_9")
+  %"concat_hh_9" = call i64 @"nyash.string.concat_hh"(i64 %".1", i64 %"str_ptr2h_r_9")
+  %"concat_hh_10" = call i64 @"nyash.string.concat_hh"(i64 %"concat_hh_9", i64 %".2")
+  ret i64 %"concat_hh_10"
+}
+
+declare i64 @"nyash.env.box.new_i64x"(i8* %".1", i64 %".2", i64 %".3", i64 %".4", i64 %".5", i64 %".6")
+
+@".box_ty_Main.read_all/1_1" = private constant [8 x i8] c"FileBox\00"
+@".meth_Main.read_all/1_birth" = private constant [6 x i8] c"birth\00"
+declare i64 @"nyash.plugin.invoke_by_name_i64"(i64 %".1", i8* %".2", i64 %".3", i64 %".4", i64 %".5")
+
+@".str.Main.read_all/1.2" = private constant [2 x i8] c"r\00"
+@".meth_Main.read_all/1_open" = private constant [5 x i8] c"open\00"
+declare i64 @"nyash.box.from_i8_string"(i8* %".1")
+
+@".meth_Main.read_all/1_read" = private constant [5 x i8] c"read\00"
+@".meth_Main.read_all/1_close" = private constant [6 x i8] c"close\00"
+@".str.Main.node_json/3.5" = private constant [13 x i8] c"{\5c\22path\5c\22:\5c\22\00"
+@".str.Main.node_json/3.6" = private constant [7 x i8] c"__me__\00"
+@".meth_Main.node_json/3_esc_json" = private constant [9 x i8] c"esc_json\00"
+declare i64 @"nyash.string.concat_hh"(i64 %".1", i64 %".2")
+
+@".str.Main.node_json/3.9" = private constant [36 x i8] c"\5c\22,\5c\22includes\5c\22:[],\5c\22children\5c\22:[]}\00"
+@".meth_Main.node_json/3_read_all" = private constant [9 x i8] c"read_all\00"
+@".str.Main.node_json/3.16" = private constant [13 x i8] c"{\5c\22path\5c\22:\5c\22\00"
+@".meth_Main.node_json/3_esc_json.1" = private constant [9 x i8] c"esc_json\00"
+@".str.Main.node_json/3.19" = private constant [36 x i8] c"\5c\22,\5c\22includes\5c\22:[],\5c\22children\5c\22:[]}\00"
+@".meth_Main.node_json/3_dirname" = private constant [8 x i8] c"dirname\00"
+@".str.Main.node_json/3.24" = private constant [1 x i8] c"\00"
+@".str.Main.node_json/3.26" = private constant [1 x i8] c"\00"
+declare i64 @"nyash.any.length_h"(i64 %".1")
+
+declare i64 @"nyash.string.substring_hii"(i64 %".1", i64 %".2", i64 %".3")
+
+@".str.Main.node_json/3.218" = private constant [13 x i8] c"{\5c\22path\5c\22:\5c\22\00"
+@".meth_Main.node_json/3_esc_json.2" = private constant [9 x i8] c"esc_json\00"
+@".str.Main.node_json/3.221" = private constant [18 x i8] c"\5c\22,\5c\22includes\5c\22:[\00"
+@".str.Main.node_json/3.224" = private constant [17 x i8] c"],\5c\22children\5c\22:[\00"
+@".str.Main.node_json/3.227" = private constant [3 x i8] c"]}\00"
+@".str.Main.node_json/3.52" = private constant [2 x i8] c"\0a\00"
+declare i64 @"nyash.string.eq_hh"(i64 %".1", i64 %".2")
+
+@".str.Main.node_json/3.61" = private constant [2 x i8] c"\22\00"
+@".str.Main.node_json/3.79" = private constant [2 x i8] c"/\00"
+@".str.Main.node_json/3.90" = private constant [2 x i8] c"/\00"
+@".str.Main.node_json/3.69" = private constant [2 x i8] c"\5c\00"
+@".str.Main.node_json/3.96" = private constant [2 x i8] c"#\00"
+@".str.Main.node_json/3.101" = private constant [2 x i8] c"\22\00"
+@".str.Main.node_json/3.112" = private constant [10 x i8] c"include \22\00"
+@".str.Main.node_json/3.143" = private constant [2 x i8] c"\22\00"
+@".str.Main.node_json/3.148" = private constant [2 x i8] c"\5c\00"
+@".str.Main.node_json/3.165" = private constant [2 x i8] c"\22\00"
+@".meth_Main.node_json/3_esc_json.3" = private constant [9 x i8] c"esc_json\00"
+@".str.Main.node_json/3.169" = private constant [2 x i8] c"\22\00"
+@".str.Main.node_json/3.172" = private constant [3 x i8] c",\22\00"
+@".meth_Main.node_json/3_esc_json.4" = private constant [9 x i8] c"esc_json\00"
+@".str.Main.node_json/3.176" = private constant [2 x i8] c"\22\00"
+@".meth_Main.node_json/3_join" = private constant [5 x i8] c"join\00"
+@".meth_Main.node_json/3_has_in_stack" = private constant [13 x i8] c"has_in_stack\00"
+@".str.Main.node_json/3.184" = private constant [13 x i8] c"{\5c\22path\5c\22:\5c\22\00"
+@".meth_Main.node_json/3_esc_json.5" = private constant [9 x i8] c"esc_json\00"
+@".str.Main.node_json/3.187" = private constant [36 x i8] c"\5c\22,\5c\22includes\5c\22:[],\5c\22children\5c\22:[]}\00"
+@".str.Main.node_json/3.190" = private constant [2 x i8] c"\0a\00"
+@".meth_Main.node_json/3_node_json" = private constant [10 x i8] c"node_json\00"
+@".str.Main.node_json/3.200" = private constant [2 x i8] c",\00"
+@".box_ty_main_0" = private constant [9 x i8] c"ArrayBox\00"
+@".box_ty_main_1" = private constant [11 x i8] c"ConsoleBox\00"
+@".meth_main_birth" = private constant [6 x i8] c"birth\00"
+declare i64 @"nyash.array.get_h"(i64 %".1", i64 %".2")
+
+@".str.main.15" = private constant [1 x i8] c"\00"
+@".str.main.18" = private constant [41 x i8] c"apps/selfhost/ny-parser-nyash/main.nyash\00"
+@".str.main.21" = private constant [2 x i8] c"\0a\00"
+@".str.main.23" = private constant [2 x i8] c"\0a\00"
+@".str.main.27" = private constant [17 x i8] c"Main.node_json/3\00"
+@".str.main.28" = private constant [32 x i8] c"{\5c\22version\5c\22:1,\5c\22root_path\5c\22:\5c\22\00"
+@".str.main.30" = private constant [16 x i8] c"Main.esc_json/1\00"
+@".str.main.32" = private constant [13 x i8] c"\5c\22,\5c\22tree\5c\22:\00"
+@".str.main.35" = private constant [2 x i8] c"}\00"
+declare i64 @"nyash.console.log_handle"(i64 %".1")
+
+@".str.Main.has_in_stack/2.2" = private constant [2 x i8] c"\0a\00"
+@".str.Main.has_in_stack/2.4" = private constant [2 x i8] c"\0a\00"
+@".box_ty_Main.dirname/1_1" = private constant [8 x i8] c"PathBox\00"
+@".meth_Main.dirname/1_birth" = private constant [6 x i8] c"birth\00"
+@".meth_Main.dirname/1_dirname" = private constant [8 x i8] c"dirname\00"
+@".str.Main.dirname/1.7" = private constant [2 x i8] c"/\00"
+declare i64 @"nyash.string.lastIndexOf_hh"(i64 %".1", i64 %".2")
+
+@".str.Main.dirname/1.11" = private constant [2 x i8] c".\00"
+@".str.Main.esc_json/1.1" = private constant [1 x i8] c"\00"
+@".str.Main.esc_json/1.12" = private constant [2 x i8] c"\5c\00"
+@".str.Main.esc_json/1.14" = private constant [3 x i8] c"\5c\5c\00"
+@".str.Main.esc_json/1.16" = private constant [2 x i8] c"\22\00"
+@".box_ty_Main.join/2_2" = private constant [8 x i8] c"PathBox\00"
+@".meth_Main.join/2_birth" = private constant [6 x i8] c"birth\00"
+@".meth_Main.join/2_join" = private constant [5 x i8] c"join\00"
+@".str.Main.join/2.8" = private constant [2 x i8] c"/\00"
+define i32 @"ny_main"()
+{
+entry:
+  %"call_user_main" = call i64 @"main"()
+  %".2" = trunc i64 %"call_user_main" to i32
+  ret i32 %".2"
+}
+[harness] error: Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %cmp_64 = icmp eq i64 %add_58, 0
+Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %add_78 = add i64 %add_58, 1
+Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %sub_67 = sub i64 %add_58, 1
+Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %substring_h.2 = call i64 @nyash.string.substring_hii(i64 %phi_41, i64 %sub_67, i64 %add_58)
+Instruction does not dominate all uses!
+  %add_78 = add i64 %add_58, 1
+  %add_95 = add i64 %add_78, 2
+Instruction does not dominate all uses!
+  %add_95 = add i64 %add_78, 2
+  %add_100 = add i64 %add_95, 1
+Instruction does not dominate all uses!
+  %add_100 = add i64 %add_95, 1
+  %add_105 = add i64 %add_100, 1
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %add_107 = add i64 %add_105, 9
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %add_110 = add i64 %add_105, 9
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %substring_h.3 = call i64 @nyash.string.substring_hii(i64 %phi_41, i64 %add_105, i64 %add_110)
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %add_116 = add i64 %add_105, 9
+Instruction does not dominate all uses!
+  %concat_hh_170 = call i64 @nyash.string.concat_hh(i64 %add_168, i64 %str_ptr2h_r_170)
+  %concat_hh_173 = call i64 @nyash.string.concat_hh(i64 %concat_hh_170, i64 %str_ptr2h_r_173)
+Instruction does not dominate all uses!
+  %add_198 = add i64 %phi_126, %phi_195
+  %concat_hh_201 = call i64 @nyash.string.concat_hh(i64 %add_198, i64 %str_ptr2h_r_201)
+
+Traceback (most recent call last):
+  File "/mnt/c/git/nyash-project/nyash_self_main/tools/llvmlite_harness.py", line 77, in <module>
+    main()
+  File "/mnt/c/git/nyash-project/nyash_self_main/tools/llvmlite_harness.py", line 72, in main
+    run_from_json(args.infile, args.outfile)
+  File "/mnt/c/git/nyash-project/nyash_self_main/tools/llvmlite_harness.py", line 59, in run_from_json
+    runpy.run_path(str(PY_BUILDER), run_name="__main__")
+  File "<frozen runpy>", line 286, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/llvm_builder.py", line 572, in <module>
+    main()
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/llvm_builder.py", line 568, in main
+    builder.compile_to_object(output_file)
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/llvm_builder.py", line 514, in compile_to_object
+    mod.verify()
+  File "/home/tomoaki/.local/lib/python3.12/site-packages/llvmlite/binding/module.py", line 115, in verify
+    raise RuntimeError(str(outmsg))
+RuntimeError: Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %cmp_64 = icmp eq i64 %add_58, 0
+Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %add_78 = add i64 %add_58, 1
+Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %sub_67 = sub i64 %add_58, 1
+Instruction does not dominate all uses!
+  %add_58 = add i64 %phi_33, 1
+  %substring_h.2 = call i64 @nyash.string.substring_hii(i64 %phi_41, i64 %sub_67, i64 %add_58)
+Instruction does not dominate all uses!
+  %add_78 = add i64 %add_58, 1
+  %add_95 = add i64 %add_78, 2
+Instruction does not dominate all uses!
+  %add_95 = add i64 %add_78, 2
+  %add_100 = add i64 %add_95, 1
+Instruction does not dominate all uses!
+  %add_100 = add i64 %add_95, 1
+  %add_105 = add i64 %add_100, 1
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %add_107 = add i64 %add_105, 9
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %add_110 = add i64 %add_105, 9
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %substring_h.3 = call i64 @nyash.string.substring_hii(i64 %phi_41, i64 %add_105, i64 %add_110)
+Instruction does not dominate all uses!
+  %add_105 = add i64 %add_100, 1
+  %add_116 = add i64 %add_105, 9
+Instruction does not dominate all uses!
+  %concat_hh_170 = call i64 @nyash.string.concat_hh(i64 %add_168, i64 %str_ptr2h_r_170)
+  %concat_hh_173 = call i64 @nyash.string.concat_hh(i64 %concat_hh_170, i64 %str_ptr2h_r_173)
+Instruction does not dominate all uses!
+  %add_198 = add i64 %phi_126, %phi_195
+  %concat_hh_201 = call i64 @nyash.string.concat_hh(i64 %add_198, i64 %str_ptr2h_r_201)
+
+

@@ -63,8 +63,12 @@ def lower_const(
         g.global_constant = True
         # Store the GlobalVariable; resolver.resolve_ptr will emit GEP in the current block
         vmap[dst] = g
-        if resolver is not None and hasattr(resolver, 'string_literals'):
-            resolver.string_literals[dst] = str_val
+        if resolver is not None:
+            if hasattr(resolver, 'string_literals'):
+                resolver.string_literals[dst] = str_val
+            # Mark this value-id as string-ish to guide '+' and '==' lowering
+            if hasattr(resolver, 'mark_string'):
+                resolver.mark_string(dst)
         
     elif const_type == 'void':
         # Void/null constant - use i64 zero

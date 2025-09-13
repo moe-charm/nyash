@@ -45,17 +45,40 @@ def lower_binop(
     
     # Relational/equality operators delegate to compare
     if op in ('==','!=','<','>','<=','>='):
-        lower_compare(builder, op, lhs, rhs, dst, vmap)
+        # Delegate to compare with resolver/preds context to maintain dominance via localization
+        lower_compare(
+            builder,
+            op,
+            lhs,
+            rhs,
+            dst,
+            vmap,
+            resolver=resolver,
+            current_block=current_block,
+            preds=preds,
+            block_end_values=block_end_values,
+            bb_map=bb_map,
+        )
         return
 
-    # String-aware concatenation unified to handles (i64) when any side is pointer string
+    # String-aware concatenation unified to handles (i64).
+    # Use concat_hh when either side is a pointer string OR tagged as string handle.
     if op == '+':
         i64 = ir.IntType(64)
         i8p = ir.IntType(8).as_pointer()
         lhs_raw = vmap.get(lhs)
         rhs_raw = vmap.get(rhs)
-        is_str = (hasattr(lhs_raw, 'type') and isinstance(lhs_raw.type, ir.PointerType)) or \
-                 (hasattr(rhs_raw, 'type') and isinstance(rhs_raw.type, ir.PointerType))
+        # pointer present?
+        is_ptr_side = (hasattr(lhs_raw, 'type') and isinstance(lhs_raw.type, ir.PointerType)) or \
+                      (hasattr(rhs_raw, 'type') and isinstance(rhs_raw.type, ir.PointerType))
+        # tagged string handles?（両辺ともに string-ish のときのみ）
+        both_tagged = False
+        try:
+            if resolver is not None and hasattr(resolver, 'is_stringish'):
+                both_tagged = resolver.is_stringish(lhs) and resolver.is_stringish(rhs)
+        except Exception:
+            pass
+        is_str = is_ptr_side or both_tagged
         if is_str:
             # Helper: convert raw or resolved value to string handle
             def to_handle(raw, val, tag: str):
@@ -91,6 +114,12 @@ def lower_binop(
                 callee = ir.Function(builder.module, hh_fnty, name='nyash.string.concat_hh')
             res = builder.call(callee, [hl, hr], name=f"concat_hh_{dst}")
             vmap[dst] = res
+            # Tag result as string handle so subsequent '+' stays in string domain
+            try:
+                if resolver is not None and hasattr(resolver, 'mark_string'):
+                    resolver.mark_string(dst)
+            except Exception:
+                pass
             return
 
     # Ensure both are i64

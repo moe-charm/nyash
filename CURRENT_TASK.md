@@ -5,6 +5,14 @@ Summary
 - VM/Cranelift/Interpreter は MIR14 非対応。MIR 正規化（Resolver・LoopForm規約）を Rust 側で担保し、ハーネスにも同じ形を供給する。
 - 代表ケース（apps/selfhost/tools/dep_tree_min_string.nyash）で `.o`（および必要時 EXE）を安定生成。Harness ON/OFF で機能同値を確認。
 
+Quick Status — 2025‑09‑13（compressed）
+- Harness ON（llvmlite）で .ll verify green → .o → link 成立（dep_tree_min_string）
+- Resolver-only 統一（vmap直読排除）。PHIはBB先頭に集約・i64（ハンドル）固定、pointer incomingはpred終端で boxing（GEP+from_i8_string）
+- 降下順序: preds優先の擬似トポロジカル順に block 降下。非PHI命令は常に「現在BB」末尾に挿入（dominance安定）
+- 文字列: ‘+’ は stringタグ/ptr検出時のみ concat_hh、len/eq 対応、substring/lastIndexOf は handle版（_hii/_hh）をNyRTに実装・使用
+- const(string): Global保持→使用側で GEP→i8*、MIR main→private、ny_main ラッパ生成
+- 比較/検証: compare_harness_on_off.sh で ON/OFF のExit一致（現状JSONは双方空、最終一致に向け調整中）
+
 Hot Update — 2025‑09‑13（Harness 配線・フォールバック廃止）
 - Runner（LLVMモード）にハーネス配線を追加。`NYASH_LLVM_USE_HARNESS=1` のとき:
   - MIR(JSON) を `tmp/nyash_harness_mir.json` へ出力
@@ -24,9 +32,9 @@ Hot Update — 2025‑09‑13（Resolver‑only 統一 + Harness ON green）
 - 代表ケース（dep_tree_min_string）: Harness ON で `.ll verify green → .o` を確認し、NyRT とリンクして EXE 生成成功。
 
 Next（short）
-1) ON/OFF 等価性の拡張（戻り値/検証ログ/最終出力の一致まで）
-2) Resolver フォールバックの残存箇所を削除し、完全 Resolver‑only に固定
-3) 代表ケースの拡充（println/実出力の比較）とドキュメント更新（Resolver 規約・PHI/ptr/i64 ポリシー）
+1) PHI/dominance最終安定化（Main.esc_json/1, Main.dirname/1）→ ON/OFF の最終JSON一致
+2) 残オンデマンドPHI/フォールバック撤去（完全 Resolver‑only 固定・vmap直読ゼロ）
+3) Docs/Trace 更新（Resolver/PHI/ptr↔i64、不変条件、NYASH_LLVM_TRACE_FINAL）
 
 Compact Roadmap（2025‑09‑13 改定）
 - Focus A（Rust LLVM 維持）: Flow hardening, PHI(sealed) 安定化, LoopForm 仕様遵守。
@@ -34,9 +42,9 @@ Compact Roadmap（2025‑09‑13 改定）
 - Now:
   - Sealed SSA・Cursor 厳格化を導入済み。dep_tree_min_string の `.o` 生成と verifier green を Rust LLVM で確認済み。
 - Next（short）:
-  1) ON/OFF 等価性の拡張（戻り値/ログ/出力比較）
-  2) Resolver フォールバックの完全除去（常時 Resolver 経由）
-  3) ドキュメント更新（Resolver-only/局所化規律、PHI(sealed)、ptr/i64 ブリッジ）
+  1) ON/OFF 等価性（戻り値/ログ/最終JSON）の一致確認
+  2) 残フォールバック撤去（完全 Resolver‑only 固定）
+  3) Docs 更新（Resolver/PHI/ptr↔i64 ブリッジ）
 - Flags:
   - `NYASH_ENABLE_LOOPFORM=1`（非破壊ON）
   - `NYASH_LOOPFORM_BODY2DISPATCH=1`（実験: 単純ボディのbody→dispatch）

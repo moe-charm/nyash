@@ -87,7 +87,25 @@ def lower_call(
     
     # Make the call
     result = builder.call(func, call_args, name=f"call_{func_name}")
+    # Optional trace for final debugging
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_TRACE_FINAL') == '1' and isinstance(actual_name, str):
+            if actual_name in ("Main.node_json/3", "Main.esc_json/1", "main"):
+                print(f"[TRACE] call {actual_name} args={len(call_args)}", flush=True)
+    except Exception:
+        pass
     
     # Store result if needed
     if dst_vid is not None:
         vmap[dst_vid] = result
+        # Heuristic: mark known string-producing functions as string handles
+        try:
+            name_for_tag = actual_name if isinstance(actual_name, str) else str(actual_name)
+            if resolver is not None and hasattr(resolver, 'mark_string'):
+                if any(key in name_for_tag for key in [
+                    'esc_json', 'node_json', 'dirname', 'join', 'read_all', 'toJson'
+                ]):
+                    resolver.mark_string(dst_vid)
+        except Exception:
+            pass

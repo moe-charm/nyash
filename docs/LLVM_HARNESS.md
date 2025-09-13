@@ -7,6 +7,10 @@ Purpose
 Switch
 - `NYASH_LLVM_USE_HARNESS=1` でハーネス優先（LLVM バックエンド入口から起動）。
 
+Tracing
+- `NYASH_LLVM_TRACE_FINAL=1` を設定すると、代表コール（`Main.node_json/3`, `Main.esc_json/1`, `main` 等）を標準出力へ簡易トレースします。
+  ON/OFF の最終 JSON 突合の補助に使用してください。
+
 Protocol
 - Input: MIR14 JSON（Rust 前段で Resolver/LoopForm 規約を満たした形）。
 - Output: `.o` オブジェクト（既定: `NYASH_AOT_OBJECT_OUT` または `NYASH_LLVM_OBJ_OUT`）。

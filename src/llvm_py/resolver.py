@@ -32,11 +32,28 @@ class Resolver:
         self.f64_cache: Dict[Tuple[str, int], ir.Value] = {}
         # String literal map: value_id -> Python string (for by-name calls)
         self.string_literals: Dict[int, str] = {}
+        # Track value-ids that are known to represent string handles (i64)
+        # This is a best-effort tag used to decide '+' as string concat when both sides are i64.
+        self.string_ids: set[int] = set()
         
         # Type shortcuts
         self.i64 = ir.IntType(64)
         self.i8p = ir.IntType(8).as_pointer()
         self.f64_type = ir.DoubleType()
+        # Cache for recursive end-of-block i64 resolution
+        self._end_i64_cache: Dict[Tuple[int, int], ir.Value] = {}
+
+    def mark_string(self, value_id: int) -> None:
+        try:
+            self.string_ids.add(int(value_id))
+        except Exception:
+            pass
+
+    def is_stringish(self, value_id: int) -> bool:
+        try:
+            return int(value_id) in self.string_ids
+        except Exception:
+            return False
     
     def resolve_i64(
         self,
@@ -67,72 +84,72 @@ class Resolver:
         pred_ids = [p for p in preds.get(bid, []) if p != bid]
         
         if not pred_ids:
-            # Entry block or no predecessors
-            base_val = vmap.get(value_id, ir.Constant(self.i64, 0))
-            # Do not emit casts here; if pointer, fall back to zero
-            if hasattr(base_val, 'type') and isinstance(base_val.type, ir.IntType):
-                result = base_val if base_val.type.width == 64 else ir.Constant(self.i64, 0)
-            elif hasattr(base_val, 'type') and isinstance(base_val.type, ir.PointerType):
+            # Entry block or no predecessors: prefer local vmap value (already dominating)
+            base_val = vmap.get(value_id)
+            if base_val is None:
                 result = ir.Constant(self.i64, 0)
             else:
-                result = ir.Constant(self.i64, 0)
-        else:
-            # Create PHI at block start
-            saved_pos = None
-            if self.builder is not None:
-                saved_pos = self.builder.block
-                self.builder.position_at_start(current_block)
-            
-            phi = self.builder.phi(self.i64, name=f"loc_i64_{value_id}")
-            
-            # Add incoming values from predecessors
-            for pred_id in pred_ids:
-                pred_vals = block_end_values.get(pred_id, {})
-                val = pred_vals.get(value_id)
-                # Coerce in predecessor block if needed
-                if val is None:
-                    coerced = ir.Constant(self.i64, 0)
-                else:
-                    if hasattr(val, 'type') and isinstance(val.type, ir.IntType):
-                        coerced = val if val.type.width == 64 else ir.Constant(self.i64, 0)
-                    elif hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
-                        # insert ptrtoint in predecessor
-                        pred_bb = bb_map.get(pred_id) if bb_map is not None else None
-                        if pred_bb is not None:
-                            pb = ir.IRBuilder(pred_bb)
-                            try:
-                                term = pred_bb.terminator
-                                if term is not None:
-                                    pb.position_before(term)
-                                else:
-                                    pb.position_at_end(pred_bb)
-                            except Exception:
-                                pb.position_at_end(pred_bb)
-                            coerced = pb.ptrtoint(val, self.i64, name=f"res_p2i_{value_id}_{pred_id}")
-                        else:
-                            coerced = ir.Constant(self.i64, 0)
+                # If pointer string, box to handle in current block (use local builder)
+                if hasattr(base_val, 'type') and isinstance(base_val.type, ir.PointerType) and self.module is not None:
+                    pb = ir.IRBuilder(current_block)
+                    try:
+                        pb.position_at_start(current_block)
+                    except Exception:
+                        pass
+                    i8p = ir.IntType(8).as_pointer()
+                    v = base_val
+                    try:
+                        if hasattr(v.type, 'pointee') and isinstance(v.type.pointee, ir.ArrayType):
+                            c0 = ir.Constant(ir.IntType(32), 0)
+                            v = pb.gep(v, [c0, c0], name=f"res_gep_{value_id}")
+                    except Exception:
+                        pass
+                    # declare and call boxer
+                    for f in self.module.functions:
+                        if f.name == 'nyash.box.from_i8_string':
+                            box_from = f
+                            break
                     else:
-                        coerced = ir.Constant(self.i64, 0)
-                # Use predecessor block if available
-                pred_bb = None
-                if bb_map is not None:
-                    pred_bb = bb_map.get(pred_id)
-                if pred_bb is not None:
-                    phi.add_incoming(coerced, pred_bb)
-            # If no valid incoming were added, fold to zero to avoid invalid PHI
-            if len(getattr(phi, 'incoming', [])) == 0:
-                # Replace with zero constant and discard phi
+                        box_from = ir.Function(self.module, ir.FunctionType(self.i64, [i8p]), name='nyash.box.from_i8_string')
+                    result = pb.call(box_from, [v], name=f"res_ptr2h_{value_id}")
+                elif hasattr(base_val, 'type') and isinstance(base_val.type, ir.IntType):
+                    result = base_val if base_val.type.width == 64 else ir.Constant(self.i64, 0)
+                else:
+                    result = ir.Constant(self.i64, 0)
+        else:
+            # Sealed SSA localization: create a PHI at the start of current block
+            # that merges i64-coerced snapshots from each predecessor. This guarantees
+            # dominance for downstream uses within the current block.
+            # Use shared builder so insertion order is respected relative to other instructions.
+            # Save current insertion point
+            sb = self.builder
+            if sb is None:
+                # As a conservative fallback, synthesize zero (should not happen in normal lowering)
                 result = ir.Constant(self.i64, 0)
-                # Restore position and cache
-                if saved_pos and self.builder is not None:
-                    self.builder.position_at_end(saved_pos)
                 self.i64_cache[cache_key] = result
                 return result
-            
-            # Restore position
-            if saved_pos and self.builder is not None:
-                self.builder.position_at_end(saved_pos)
-            
+            orig_block = sb.block
+            # Insert PHI at the very start of current_block
+            sb.position_at_start(current_block)
+            phi = sb.phi(self.i64, name=f"loc_i64_{value_id}")
+            for pred_id in pred_ids:
+                # Value at the end of predecessor, coerced to i64 within pred block
+                coerced = self._value_at_end_i64(value_id, pred_id, preds, block_end_values, vmap, bb_map)
+                pred_bb = bb_map.get(pred_id) if bb_map is not None else None
+                if pred_bb is None:
+                    continue
+                phi.add_incoming(coerced, pred_bb)
+            # Restore insertion point to original location
+            try:
+                if orig_block is not None:
+                    term = orig_block.terminator
+                    if term is not None:
+                        sb.position_before(term)
+                    else:
+                        sb.position_at_end(orig_block)
+            except Exception:
+                pass
+            # Use the PHI value as the localized definition for this block
             result = phi
         
         # Cache and return
@@ -165,6 +182,100 @@ class Resolver:
                 result = ir.Constant(self.i8p, None)
         self.ptr_cache[cache_key] = result
         return result
+
+    def _value_at_end_i64(self, value_id: int, block_id: int, preds: Dict[int, list],
+                          block_end_values: Dict[int, Dict[int, Any]], vmap: Dict[int, Any],
+                          bb_map: Optional[Dict[int, ir.Block]] = None,
+                          _vis: Optional[set] = None) -> ir.Value:
+        """Resolve value as i64 at the end of a given block by traversing predecessors if needed."""
+        key = (block_id, value_id)
+        if key in self._end_i64_cache:
+            return self._end_i64_cache[key]
+        if _vis is None:
+            _vis = set()
+        if key in _vis:
+            return ir.Constant(self.i64, 0)
+        _vis.add(key)
+
+        # If present in snapshot, coerce there
+        snap = block_end_values.get(block_id, {})
+        if value_id in snap and snap[value_id] is not None:
+            val = snap[value_id]
+            coerced = self._coerce_in_block_to_i64(val, block_id, bb_map)
+            self._end_i64_cache[key] = coerced
+            return coerced
+
+        # Try recursively from predecessors
+        pred_ids = [p for p in preds.get(block_id, []) if p != block_id]
+        for p in pred_ids:
+            v = self._value_at_end_i64(value_id, p, preds, block_end_values, vmap, bb_map, _vis)
+            if v is not None:
+                self._end_i64_cache[key] = v
+                return v
+
+        # Do not use global vmap here; if not materialized by end of this block
+        # (or its preds), bail out with zero to preserve dominance.
+
+        z = ir.Constant(self.i64, 0)
+        self._end_i64_cache[key] = z
+        return z
+
+    def _coerce_in_block_to_i64(self, val: Any, block_id: int, bb_map: Optional[Dict[int, ir.Block]]) -> ir.Value:
+        """Ensure a value is available as i64 at the end of the given block by inserting casts/boxing there."""
+        if hasattr(val, 'type') and isinstance(val.type, ir.IntType):
+            # Re-materialize an i64 definition in the predecessor block to satisfy dominance
+            pred_bb = bb_map.get(block_id) if bb_map is not None else None
+            if pred_bb is None:
+                return ir.Constant(self.i64, 0)
+            pb = ir.IRBuilder(pred_bb)
+            try:
+                term = pred_bb.terminator
+                if term is not None:
+                    pb.position_before(term)
+                else:
+                    pb.position_at_end(pred_bb)
+            except Exception:
+                pb.position_at_end(pred_bb)
+            if val.type.width == 64:
+                z = ir.Constant(self.i64, 0)
+                return pb.add(val, z, name=f"res_copy_{block_id}")
+            else:
+                # Extend/truncate to i64 in pred block
+                if val.type.width < 64:
+                    return pb.zext(val, self.i64, name=f"res_zext_{block_id}")
+                else:
+                    return pb.trunc(val, self.i64, name=f"res_trunc_{block_id}")
+        if hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
+            pred_bb = bb_map.get(block_id) if bb_map is not None else None
+            if pred_bb is None:
+                return ir.Constant(self.i64, 0)
+            pb = ir.IRBuilder(pred_bb)
+            try:
+                term = pred_bb.terminator
+                if term is not None:
+                    pb.position_before(term)
+                else:
+                    pb.position_at_end(pred_bb)
+            except Exception:
+                pb.position_at_end(pred_bb)
+            i8p = ir.IntType(8).as_pointer()
+            v = val
+            try:
+                if hasattr(v.type, 'pointee') and isinstance(v.type.pointee, ir.ArrayType):
+                    c0 = ir.Constant(ir.IntType(32), 0)
+                    v = pb.gep(v, [c0, c0], name=f"res_gep_{block_id}_{id(val)}")
+            except Exception:
+                pass
+            # declare boxer
+            box_from = None
+            for f in self.module.functions:
+                if f.name == 'nyash.box.from_i8_string':
+                    box_from = f
+                    break
+            if box_from is None:
+                box_from = ir.Function(self.module, ir.FunctionType(self.i64, [i8p]), name='nyash.box.from_i8_string')
+            return pb.call(box_from, [v], name=f"res_ptr2h_{block_id}")
+        return ir.Constant(self.i64, 0)
     
     def resolve_f64(self, value_id: int, current_block: ir.Block,
                     preds: Dict, block_end_values: Dict, vmap: Dict) -> ir.Value:

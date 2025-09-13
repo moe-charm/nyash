@@ -34,20 +34,9 @@ def lower_phi(
         vmap[dst_vid] = ir.Constant(ir.IntType(64), 0)
         return
     
-    # Determine PHI type from snapshots or fallback i64
+    # Use i64 for PHI to carry handles across blocks (strings/boxes),
+    # avoiding pointer PHIs that complicate dominance and boxing.
     phi_type = ir.IntType(64)
-    if block_end_values is not None:
-        for val_id, pred_bid in incoming:
-            snap = block_end_values.get(pred_bid, {})
-            val = snap.get(val_id)
-            if val is not None and hasattr(val, 'type'):
-                phi_type = val.type
-                # Prefer pointer type
-                if hasattr(phi_type, 'is_pointer') and phi_type.is_pointer:
-                    break
-    
-    # Create PHI instruction
-    phi = builder.phi(phi_type, name=f"phi_{dst_vid}")
     
     # Build map from provided incoming
     incoming_map: Dict[int, int] = {}
@@ -67,60 +56,71 @@ def lower_phi(
         # Fallback: use blocks in incoming list
         actual_preds = [b for _, b in incoming]
 
-    # Add incoming for each actual predecessor
+    # Collect incoming values
+    incoming_pairs: List[Tuple[ir.Block, ir.Value]] = []
     for block_id in actual_preds:
         block = bb_map.get(block_id)
-        # Prefer pred snapshot
-        if block_end_values is not None:
-            snap = block_end_values.get(block_id, {})
-            vid = incoming_map.get(block_id)
-            val = snap.get(vid) if vid is not None else None
-        else:
-            vid = incoming_map.get(block_id)
-            val = vmap.get(vid) if vid is not None else None
-        
-        if not val:
-            # Create default value based on type
-            if isinstance(phi_type, ir.IntType):
-                val = ir.Constant(phi_type, 0)
-            elif isinstance(phi_type, ir.DoubleType):
-                val = ir.Constant(phi_type, 0.0)
-            else:
-                # Pointer type - null
-                val = ir.Constant(phi_type, None)
-        
-        if not block:
-            # Skip if block not found
+        vid = incoming_map.get(block_id)
+        if block is None:
             continue
-            
-        # Type conversion if needed
-        if hasattr(val, 'type') and val.type != phi_type:
-            # Position at end (before terminator) of predecessor block
-            pb = ir.IRBuilder(block)
+        # Prefer resolver-driven localization per predecessor block to satisfy dominance
+        if vid is not None and resolver is not None and bb_map is not None:
             try:
-                term = block.terminator
-                if term is not None:
-                    pb.position_before(term)
+                pred_block_obj = bb_map.get(block_id)
+                if pred_block_obj is not None and hasattr(resolver, 'resolve_i64'):
+                    val = resolver.resolve_i64(vid, pred_block_obj, preds_map or {}, block_end_values or {}, vmap, bb_map)
                 else:
-                    pb.position_at_end(block)
+                    val = None
             except Exception:
-                pb.position_at_end(block)
-            
-            # Convert types
-            if isinstance(phi_type, ir.IntType) and val.type.is_pointer:
-                val = pb.ptrtoint(val, phi_type, name=f"cast_p2i_{val_id}")
-            elif phi_type.is_pointer and isinstance(val.type, ir.IntType):
-                val = pb.inttoptr(val, phi_type, name=f"cast_i2p_{val_id}")
-            elif isinstance(phi_type, ir.IntType) and isinstance(val.type, ir.IntType):
-                # Int to int
-                if phi_type.width > val.type.width:
-                    val = pb.zext(val, phi_type, name=f"zext_{val_id}")
-                else:
-                    val = pb.trunc(val, phi_type, name=f"trunc_{val_id}")
-        
-        # Add to PHI (skip if no block)
-        if block is not None:
-            phi.add_incoming(val, block)
+                val = None
+        else:
+            # Snapshot fallback
+            if block_end_values is not None:
+                snap = block_end_values.get(block_id, {})
+                val = snap.get(vid) if vid is not None else None
+            else:
+                val = vmap.get(vid) if vid is not None else None
+            if not val:
+                # Missing incoming for this predecessor → default 0
+                val = ir.Constant(phi_type, 0)
+            # Coerce pointer to i64 at predecessor end
+            if hasattr(val, 'type') and val.type != phi_type:
+                pb = ir.IRBuilder(block)
+                try:
+                    term = block.terminator
+                    if term is not None:
+                        pb.position_before(term)
+                    else:
+                        pb.position_at_end(block)
+                except Exception:
+                    pb.position_at_end(block)
+                if isinstance(phi_type, ir.IntType) and val.type.is_pointer:
+                    i8p = ir.IntType(8).as_pointer()
+                    try:
+                        if hasattr(val.type, 'pointee') and isinstance(val.type.pointee, ir.ArrayType):
+                            c0 = ir.Constant(ir.IntType(32), 0)
+                            val = pb.gep(val, [c0, c0], name=f"phi_gep_{vid}")
+                    except Exception:
+                        pass
+                    boxer = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.box.from_i8_string':
+                            boxer = f
+                            break
+                    if boxer is None:
+                        boxer = ir.Function(builder.module, ir.FunctionType(ir.IntType(64), [i8p]), name='nyash.box.from_i8_string')
+                    val = pb.call(boxer, [val], name=f"phi_ptr2h_{vid}")
+        incoming_pairs.append((block, val))
+
+    # If nothing collected, use zero constant and bail out
+    if not incoming_pairs:
+        vmap[dst_vid] = ir.Constant(phi_type, 0)
+        return
+
+    # Create PHI instruction now and add incoming
+    phi = builder.phi(phi_type, name=f"phi_{dst_vid}")
+    for block, val in incoming_pairs:
+        phi.add_incoming(val, block)
     
     # Store PHI result
     vmap[dst_vid] = phi

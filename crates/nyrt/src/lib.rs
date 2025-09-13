@@ -101,6 +101,46 @@ pub extern "C" fn nyash_string_eq_hh_export(a_h: i64, b_h: i64) -> i64 {
     }
 }
 
+// String.substring_hii(handle, start, end) -> handle
+#[export_name = "nyash.string.substring_hii"]
+pub extern "C" fn nyash_string_substring_hii_export(h: i64, start: i64, end: i64) -> i64 {
+    use nyash_rust::{box_trait::NyashBox, box_trait::StringBox, jit::rt::handles};
+    if h <= 0 {
+        return 0;
+    }
+    let s = if let Some(obj) = handles::get(h as u64) {
+        if let Some(sb) = obj.as_any().downcast_ref::<StringBox>() { sb.value.clone() } else { String::new() }
+    } else { String::new() };
+    let n = s.len() as i64;
+    let mut st = if start < 0 { 0 } else { start };
+    let mut en = if end < 0 { 0 } else { end };
+    if st > n { st = n; }
+    if en > n { en = n; }
+    if en < st { std::mem::swap(&mut st, &mut en); }
+    let (st_u, en_u) = (st as usize, en as usize);
+    let sub = s.get(st_u.min(s.len())..en_u.min(s.len())).unwrap_or("");
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(sub.to_string()));
+    handles::to_handle(arc) as i64
+}
+
+// String.lastIndexOf_hh(haystack_h, needle_h) -> i64
+#[export_name = "nyash.string.lastIndexOf_hh"]
+pub extern "C" fn nyash_string_lastindexof_hh_export(h: i64, n: i64) -> i64 {
+    use nyash_rust::{box_trait::StringBox, jit::rt::handles};
+    let hay = if h > 0 {
+        if let Some(o) = handles::get(h as u64) {
+            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() { sb.value.clone() } else { String::new() }
+        } else { String::new() }
+    } else { String::new() };
+    let nee = if n > 0 {
+        if let Some(o) = handles::get(n as u64) {
+            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() { sb.value.clone() } else { String::new() }
+        } else { String::new() }
+    } else { String::new() };
+    if nee.is_empty() { return hay.len() as i64; }
+    if let Some(pos) = hay.rfind(&nee) { pos as i64 } else { -1 }
+}
+
 // box.from_i8_string(ptr) -> handle
 // Helper: build a StringBox from i8* and return a handle for AOT marshalling
 #[export_name = "nyash.box.from_i8_string"]
