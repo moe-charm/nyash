@@ -43,9 +43,11 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
   exit 2
 fi
 
-echo "[1/4] Building nyash (feature=llvm) ..."
+echo "[1/4] Building nyash (feature=llvm, harness-friendly) ..."
 _LLVMPREFIX=$(llvm-config-18 --prefix)
-LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" cargo build --release --features llvm >/dev/null
+# Build only the core package to avoid compiling workspace plugin crates
+LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+  CARGO_INCREMENTAL=1 cargo build --release -p nyash-rust --features llvm >/dev/null
 
 echo "[2/4] Emitting object (.o) via LLVM backend ..."
 # Default object output path under target/aot_objects

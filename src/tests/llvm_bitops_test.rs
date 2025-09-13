@@ -42,7 +42,7 @@ fn llvm_bitops_compile_and_exec() {
     assert_eq!(out.to_string_box().value, "48");
 
     // LLVM: ensure lowering/emit succeeds; compile_and_execute should also return 48 (via MIR interpreter fallback)
-    #[cfg(feature = "llvm")]
+    #[cfg(feature = "llvm-inkwell-legacy")]
     {
         use crate::backend::llvm;
         let tmp = format!("{}/target/aot_objects/test_bitops", env!("CARGO_MANIFEST_DIR"));
@@ -51,4 +51,3 @@ fn llvm_bitops_compile_and_exec() {
         assert_eq!(out2.to_string_box().value, "48");
     }
 }
-

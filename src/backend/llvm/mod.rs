@@ -1,40 +1,16 @@
-/*!
- * LLVM Backend Module - Compile MIR to LLVM IR for AOT execution
- *
- * This module provides LLVM-based compilation of Nyash MIR to native code.
- * Phase 9.78 PoC implementation focused on minimal "return 42" support.
- */
+//! Deprecated shim module for legacy Rust/inkwell backend
+//! Please use `crate::backend::llvm_legacy` directly. This module re-exports
+//! items to keep old paths working until full removal.
 
-pub mod box_types;
-pub mod compiler;
-pub mod context;
+pub use crate::backend::llvm_legacy::{compile_and_execute, compile_to_object};
 
-use crate::box_trait::{IntegerBox, NyashBox};
-use crate::mir::function::MirModule;
-
-/// Compile MIR module to object file and execute
-pub fn compile_and_execute(
-    mir_module: &MirModule,
-    output_path: &str,
-) -> Result<Box<dyn NyashBox>, String> {
-    let mut compiler = compiler::LLVMCompiler::new()?;
-    compiler.compile_and_execute(mir_module, output_path)
+pub mod context {
+    pub use crate::backend::llvm_legacy::context::*;
+}
+pub mod compiler {
+    pub use crate::backend::llvm_legacy::compiler::*;
+}
+pub mod box_types {
+    pub use crate::backend::llvm_legacy::box_types::*;
 }
 
-/// Compile MIR module to object file only
-pub fn compile_to_object(mir_module: &MirModule, output_path: &str) -> Result<(), String> {
-    let compiler = compiler::LLVMCompiler::new()?;
-    compiler.compile_module(mir_module, output_path)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_llvm_module_creation() {
-        // Basic test to ensure the module can be loaded
-        // Actual compilation tests require full MIR infrastructure
-        assert!(true);
-    }
-}

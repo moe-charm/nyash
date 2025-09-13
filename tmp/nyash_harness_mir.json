@@ -3,166 +3,27 @@
     {
       "blocks": [
         {
-          "id": 76,
+          "id": 1,
           "instructions": [
             {
-              "args": [],
               "dst": 1,
-              "op": "newbox",
-              "type": "FileBox"
-            },
-            {
-              "args": [],
-              "box": 1,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "dst": 2,
               "op": "const",
               "value": {
                 "type": "string",
-                "value": "r"
+                "value": "/"
               }
             },
             {
               "args": [
-                0,
-                2
+                1
               ],
-              "box": 1,
-              "dst": 3,
-              "method": "open",
-              "op": "boxcall"
-            },
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 5,
-              "lhs": 3,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 4
-            },
-            {
-              "cond": 5,
-              "else": 78,
-              "op": "branch",
-              "then": 77
-            }
-          ]
-        },
-        {
-          "id": 77,
-          "instructions": [
-            {
-              "dst": 6,
-              "op": "const",
-              "value": {
-                "type": "void",
-                "value": 0
-              }
-            },
-            {
-              "op": "ret",
-              "value": 6
-            }
-          ]
-        },
-        {
-          "id": 78,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 79
-            }
-          ]
-        },
-        {
-          "id": 79,
-          "instructions": [
-            {
-              "args": [],
-              "box": 1,
-              "dst": 9,
-              "method": "read",
-              "op": "boxcall"
-            },
-            {
-              "args": [],
-              "box": 1,
-              "dst": 10,
-              "method": "close",
-              "op": "boxcall"
-            },
-            {
-              "op": "ret",
-              "value": 9
-            }
-          ]
-        }
-      ],
-      "name": "Main.read_all/1",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\n"
-              }
-            },
-            {
-              "dst": 3,
-              "lhs": 2,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 1
-            },
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\n"
-              }
-            },
-            {
-              "dst": 5,
-              "lhs": 3,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 4
-            },
-            {
-              "args": [],
               "box": 0,
-              "dst": 6,
-              "method": "length",
+              "dst": 2,
+              "method": "lastIndexOf",
               "op": "boxcall"
             },
             {
-              "args": [],
-              "box": 5,
-              "dst": 7,
-              "method": "length",
-              "op": "boxcall"
-            },
-            {
-              "dst": 8,
+              "dst": 3,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -170,14 +31,14 @@
               }
             },
             {
-              "dst": 9,
-              "lhs": 7,
+              "dst": 4,
+              "lhs": 2,
               "op": "compare",
-              "operation": "==",
-              "rhs": 8
+              "operation": "<",
+              "rhs": 3
             },
             {
-              "cond": 9,
+              "cond": 4,
               "else": 3,
               "op": "branch",
               "then": 2
@@ -188,16 +49,16 @@
           "id": 2,
           "instructions": [
             {
-              "dst": 10,
+              "dst": 5,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 0
+                "type": "string",
+                "value": "."
               }
             },
             {
               "op": "ret",
-              "value": 10
+              "value": 5
             }
           ]
         },
@@ -214,7 +75,7 @@
           "id": 4,
           "instructions": [
             {
-              "dst": 13,
+              "dst": 8,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -222,103 +83,56 @@
               }
             },
             {
-              "op": "jump",
-              "target": 5
+              "args": [
+                8,
+                2
+              ],
+              "box": 0,
+              "dst": 9,
+              "method": "substring",
+              "op": "boxcall"
+            },
+            {
+              "op": "ret",
+              "value": 9
             }
           ]
-        },
+        }
+      ],
+      "name": "Main.dirname/1",
+      "params": []
+    },
+    {
+      "blocks": [
         {
           "id": 5,
           "instructions": [
             {
-              "dst": 19,
-              "incoming": [
-                [
-                  13,
-                  4
-                ],
-                [
-                  29,
-                  10
-                ]
-              ],
-              "op": "phi"
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "string",
+                "value": ""
+              }
             },
             {
-              "dst": 18,
-              "incoming": [
-                [
-                  6,
-                  4
-                ],
-                [
-                  18,
-                  10
-                ]
-              ],
-              "op": "phi"
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
             },
             {
-              "dst": 17,
-              "incoming": [
-                [
-                  0,
-                  4
-                ],
-                [
-                  17,
-                  10
-                ]
-              ],
-              "op": "phi"
+              "args": [],
+              "box": 0,
+              "dst": 3,
+              "method": "length",
+              "op": "boxcall"
             },
             {
-              "dst": 16,
-              "incoming": [
-                [
-                  7,
-                  4
-                ],
-                [
-                  16,
-                  10
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 15,
-              "incoming": [
-                [
-                  5,
-                  4
-                ],
-                [
-                  15,
-                  10
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 20,
-              "lhs": 19,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 16
-            },
-            {
-              "dst": 21,
-              "lhs": 20,
-              "op": "compare",
-              "operation": "<=",
-              "rhs": 18
-            },
-            {
-              "cond": 21,
-              "else": 7,
-              "op": "branch",
-              "then": 6
+              "op": "jump",
+              "target": 6
             }
           ]
         },
@@ -326,34 +140,73 @@
           "id": 6,
           "instructions": [
             {
-              "dst": 22,
-              "lhs": 19,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 16
-            },
-            {
-              "args": [
-                19,
-                22
+              "dst": 7,
+              "incoming": [
+                [
+                  2,
+                  5
+                ],
+                [
+                  24,
+                  11
+                ]
               ],
-              "box": 17,
-              "dst": 23,
-              "method": "substring",
-              "op": "boxcall"
+              "op": "phi"
             },
             {
-              "dst": 24,
-              "lhs": 23,
+              "dst": 6,
+              "incoming": [
+                [
+                  3,
+                  5
+                ],
+                [
+                  6,
+                  11
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 5,
+              "incoming": [
+                [
+                  0,
+                  5
+                ],
+                [
+                  5,
+                  11
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 4,
+              "incoming": [
+                [
+                  1,
+                  5
+                ],
+                [
+                  22,
+                  11
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 8,
+              "lhs": 7,
               "op": "compare",
-              "operation": "==",
-              "rhs": 15
+              "operation": "<",
+              "rhs": 6
             },
             {
-              "cond": 24,
-              "else": 9,
+              "cond": 8,
+              "else": 8,
               "op": "branch",
-              "then": 8
+              "then": 7
             }
           ]
         },
@@ -361,16 +214,50 @@
           "id": 7,
           "instructions": [
             {
-              "dst": 31,
+              "dst": 9,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 0
+                "value": 1
               }
             },
             {
-              "op": "ret",
-              "value": 31
+              "dst": 10,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 9
+            },
+            {
+              "args": [
+                7,
+                10
+              ],
+              "box": 5,
+              "dst": 11,
+              "method": "substring",
+              "op": "boxcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "string",
+                "value": "\\"
+              }
+            },
+            {
+              "dst": 13,
+              "lhs": 11,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 12
+            },
+            {
+              "cond": 13,
+              "else": 10,
+              "op": "branch",
+              "then": 9
             }
           ]
         },
@@ -378,16 +265,8 @@
           "id": 8,
           "instructions": [
             {
-              "dst": 25,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
               "op": "ret",
-              "value": 25
+              "value": 4
             }
           ]
         },
@@ -395,8 +274,23 @@
           "id": 9,
           "instructions": [
             {
+              "dst": 14,
+              "op": "const",
+              "value": {
+                "type": "string",
+                "value": "\\\\"
+              }
+            },
+            {
+              "dst": 15,
+              "lhs": 4,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 14
+            },
+            {
               "op": "jump",
-              "target": 10
+              "target": 11
             }
           ]
         },
@@ -404,7 +298,47 @@
           "id": 10,
           "instructions": [
             {
-              "dst": 28,
+              "dst": 16,
+              "op": "const",
+              "value": {
+                "type": "string",
+                "value": "\""
+              }
+            },
+            {
+              "dst": 17,
+              "lhs": 11,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 16
+            },
+            {
+              "cond": 17,
+              "else": 13,
+              "op": "branch",
+              "then": 12
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "instructions": [
+            {
+              "dst": 22,
+              "incoming": [
+                [
+                  15,
+                  9
+                ],
+                [
+                  4,
+                  10
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 23,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -412,188 +346,47 @@
               }
             },
             {
-              "dst": 29,
-              "lhs": 19,
+              "dst": 24,
+              "lhs": 7,
               "op": "binop",
               "operation": "+",
-              "rhs": 28
+              "rhs": 23
             },
             {
               "op": "jump",
-              "target": 5
+              "target": 6
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 14
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 14
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 11
             }
           ]
         }
       ],
-      "name": "Main.has_in_stack/2",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 80,
-          "instructions": [
-            {
-              "args": [],
-              "dst": 1,
-              "op": "newbox",
-              "type": "PathBox"
-            },
-            {
-              "args": [],
-              "box": 1,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "args": [
-                0
-              ],
-              "box": 1,
-              "dst": 2,
-              "method": "dirname",
-              "op": "boxcall"
-            },
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": "void",
-                "value": 0
-              }
-            },
-            {
-              "dst": 4,
-              "lhs": 2,
-              "op": "compare",
-              "operation": "!=",
-              "rhs": 3
-            },
-            {
-              "cond": 4,
-              "else": 82,
-              "op": "branch",
-              "then": 81
-            }
-          ]
-        },
-        {
-          "id": 81,
-          "instructions": [
-            {
-              "op": "ret",
-              "value": 2
-            }
-          ]
-        },
-        {
-          "id": 82,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 83
-            }
-          ]
-        },
-        {
-          "id": 83,
-          "instructions": [
-            {
-              "dst": 7,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "/"
-              }
-            },
-            {
-              "args": [
-                7
-              ],
-              "box": 0,
-              "dst": 8,
-              "method": "lastIndexOf",
-              "op": "boxcall"
-            },
-            {
-              "dst": 9,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 10,
-              "lhs": 8,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 9
-            },
-            {
-              "cond": 10,
-              "else": 85,
-              "op": "branch",
-              "then": 84
-            }
-          ]
-        },
-        {
-          "id": 84,
-          "instructions": [
-            {
-              "dst": 11,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "."
-              }
-            },
-            {
-              "op": "ret",
-              "value": 11
-            }
-          ]
-        },
-        {
-          "id": 85,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 86
-            }
-          ]
-        },
-        {
-          "id": 86,
-          "instructions": [
-            {
-              "dst": 14,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "args": [
-                14,
-                8
-              ],
-              "box": 0,
-              "dst": 15,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "op": "ret",
-              "value": 15
-            }
-          ]
-        }
-      ],
-      "name": "Main.dirname/1",
+      "name": "Main.esc_json/1",
       "params": []
     },
     {
@@ -624,268 +417,12 @@
               "dst": 2,
               "op": "const",
               "value": {
-                "type": "void",
-                "value": 0
-              }
-            },
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": "void",
-                "value": 0
+                "type": "string",
+                "value": "A\\\"B\\\\C"
               }
             },
             {
               "dst": 4,
-              "lhs": 0,
-              "op": "compare",
-              "operation": "!=",
-              "rhs": 3
-            },
-            {
-              "args": [],
-              "box": 0,
-              "dst": 5,
-              "method": "length",
-              "op": "boxcall"
-            },
-            {
-              "dst": 6,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 7,
-              "lhs": 5,
-              "op": "compare",
-              "operation": ">=",
-              "rhs": 6
-            },
-            {
-              "dst": 8,
-              "lhs": 4,
-              "op": "binop",
-              "operation": "&",
-              "rhs": 7
-            },
-            {
-              "cond": 8,
-              "else": 98,
-              "op": "branch",
-              "then": 97
-            }
-          ]
-        },
-        {
-          "id": 97,
-          "instructions": [
-            {
-              "dst": 9,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "args": [
-                9
-              ],
-              "box": 0,
-              "dst": 10,
-              "method": "get",
-              "op": "boxcall"
-            },
-            {
-              "op": "jump",
-              "target": 99
-            }
-          ]
-        },
-        {
-          "id": 98,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 99
-            }
-          ]
-        },
-        {
-          "id": 99,
-          "instructions": [
-            {
-              "dst": 12,
-              "incoming": [
-                [
-                  10,
-                  97
-                ],
-                [
-                  2,
-                  98
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 13,
-              "op": "const",
-              "value": {
-                "type": "void",
-                "value": 0
-              }
-            },
-            {
-              "dst": 14,
-              "lhs": 12,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 13
-            },
-            {
-              "dst": 15,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": ""
-              }
-            },
-            {
-              "dst": 16,
-              "lhs": 12,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 15
-            },
-            {
-              "dst": 17,
-              "lhs": 14,
-              "op": "binop",
-              "operation": "|",
-              "rhs": 16
-            },
-            {
-              "cond": 17,
-              "else": 101,
-              "op": "branch",
-              "then": 100
-            }
-          ]
-        },
-        {
-          "id": 100,
-          "instructions": [
-            {
-              "dst": 18,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "apps/selfhost/ny-parser-nyash/main.nyash"
-              }
-            },
-            {
-              "op": "jump",
-              "target": 102
-            }
-          ]
-        },
-        {
-          "id": 101,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 102
-            }
-          ]
-        },
-        {
-          "id": 102,
-          "instructions": [
-            {
-              "dst": 20,
-              "incoming": [
-                [
-                  18,
-                  100
-                ],
-                [
-                  12,
-                  101
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 21,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\n"
-              }
-            },
-            {
-              "dst": 22,
-              "lhs": 21,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 20
-            },
-            {
-              "dst": 23,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\n"
-              }
-            },
-            {
-              "dst": 24,
-              "lhs": 22,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 23
-            },
-            {
-              "dst": 25,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 27,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "Main.node_json/3"
-              }
-            },
-            {
-              "args": [
-                20,
-                24,
-                25
-              ],
-              "dst": 26,
-              "func": 27,
-              "op": "call"
-            },
-            {
-              "dst": 28,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "{\\\"version\\\":1,\\\"root_path\\\":\\\""
-              }
-            },
-            {
-              "dst": 30,
               "op": "const",
               "value": {
                 "type": "string",
@@ -894,67 +431,56 @@
             },
             {
               "args": [
-                20
+                2
               ],
-              "dst": 29,
-              "func": 30,
+              "dst": 3,
+              "func": 4,
               "op": "call"
             },
             {
-              "dst": 31,
-              "lhs": 28,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 29
-            },
-            {
-              "dst": 32,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\\",\\\"tree\\\":"
-              }
-            },
-            {
-              "dst": 33,
-              "lhs": 31,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 32
-            },
-            {
-              "dst": 34,
-              "lhs": 33,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 26
-            },
-            {
-              "dst": 35,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "}"
-              }
-            },
-            {
-              "dst": 36,
-              "lhs": 34,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 35
-            },
-            {
               "args": [
-                36
+                3
               ],
               "box": 1,
-              "dst": 37,
+              "dst": 5,
               "method": "println",
               "op": "boxcall"
             },
             {
-              "dst": 38,
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": "string",
+                "value": "dir1/dir2/file.txt"
+              }
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "string",
+                "value": "Main.dirname/1"
+              }
+            },
+            {
+              "args": [
+                6
+              ],
+              "dst": 7,
+              "func": 8,
+              "op": "call"
+            },
+            {
+              "args": [
+                7
+              ],
+              "box": 1,
+              "dst": 9,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 10,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -963,2710 +489,12 @@
             },
             {
               "op": "ret",
-              "value": 38
+              "value": 10
             }
           ]
         }
       ],
       "name": "main",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 15,
-          "instructions": [
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 64
-              }
-            },
-            {
-              "dst": 4,
-              "lhs": 2,
-              "op": "compare",
-              "operation": ">=",
-              "rhs": 3
-            },
-            {
-              "cond": 4,
-              "else": 17,
-              "op": "branch",
-              "then": 16
-            }
-          ]
-        },
-        {
-          "id": 16,
-          "instructions": [
-            {
-              "dst": 5,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "{\\\"path\\\":\\\""
-              }
-            },
-            {
-              "dst": 6,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "__me__"
-              }
-            },
-            {
-              "args": [
-                0
-              ],
-              "box": 6,
-              "dst": 7,
-              "method": "esc_json",
-              "op": "boxcall"
-            },
-            {
-              "dst": 8,
-              "lhs": 5,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 7
-            },
-            {
-              "dst": 9,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
-              }
-            },
-            {
-              "dst": 10,
-              "lhs": 8,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 9
-            },
-            {
-              "op": "ret",
-              "value": 10
-            }
-          ]
-        },
-        {
-          "id": 17,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 18
-            }
-          ]
-        },
-        {
-          "id": 18,
-          "instructions": [
-            {
-              "args": [
-                0
-              ],
-              "box": 6,
-              "dst": 13,
-              "method": "read_all",
-              "op": "boxcall"
-            },
-            {
-              "dst": 14,
-              "op": "const",
-              "value": {
-                "type": "void",
-                "value": 0
-              }
-            },
-            {
-              "dst": 15,
-              "lhs": 13,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 14
-            },
-            {
-              "cond": 15,
-              "else": 20,
-              "op": "branch",
-              "then": 19
-            }
-          ]
-        },
-        {
-          "id": 19,
-          "instructions": [
-            {
-              "dst": 16,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "{\\\"path\\\":\\\""
-              }
-            },
-            {
-              "args": [
-                0
-              ],
-              "box": 6,
-              "dst": 17,
-              "method": "esc_json",
-              "op": "boxcall"
-            },
-            {
-              "dst": 18,
-              "lhs": 16,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 17
-            },
-            {
-              "dst": 19,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
-              }
-            },
-            {
-              "dst": 20,
-              "lhs": 18,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 19
-            },
-            {
-              "op": "ret",
-              "value": 20
-            }
-          ]
-        },
-        {
-          "id": 20,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 21
-            }
-          ]
-        },
-        {
-          "id": 21,
-          "instructions": [
-            {
-              "args": [
-                0
-              ],
-              "box": 6,
-              "dst": 23,
-              "method": "dirname",
-              "op": "boxcall"
-            },
-            {
-              "dst": 24,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": ""
-              }
-            },
-            {
-              "dst": 25,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 26,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": ""
-              }
-            },
-            {
-              "dst": 27,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 28,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "args": [],
-              "box": 13,
-              "dst": 29,
-              "method": "length",
-              "op": "boxcall"
-            },
-            {
-              "dst": 30,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 31,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "op": "jump",
-              "target": 22
-            }
-          ]
-        },
-        {
-          "id": 22,
-          "instructions": [
-            {
-              "dst": 45,
-              "incoming": [
-                [
-                  26,
-                  21
-                ],
-                [
-                  202,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 44,
-              "incoming": [
-                [
-                  31,
-                  21
-                ],
-                [
-                  133,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 43,
-              "incoming": [
-                [
-                  2,
-                  21
-                ],
-                [
-                  135,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 42,
-              "incoming": [
-                [
-                  24,
-                  21
-                ],
-                [
-                  177,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 41,
-              "incoming": [
-                [
-                  27,
-                  21
-                ],
-                [
-                  203,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 40,
-              "incoming": [
-                [
-                  30,
-                  21
-                ],
-                [
-                  132,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 39,
-              "incoming": [
-                [
-                  25,
-                  21
-                ],
-                [
-                  178,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 38,
-              "incoming": [
-                [
-                  23,
-                  21
-                ],
-                [
-                  121,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 37,
-              "incoming": [
-                [
-                  28,
-                  21
-                ],
-                [
-                  216,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 36,
-              "incoming": [
-                [
-                  6,
-                  21
-                ],
-                [
-                  131,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 35,
-              "incoming": [
-                [
-                  0,
-                  21
-                ],
-                [
-                  119,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 34,
-              "incoming": [
-                [
-                  1,
-                  21
-                ],
-                [
-                  130,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 33,
-              "incoming": [
-                [
-                  29,
-                  21
-                ],
-                [
-                  129,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 32,
-              "incoming": [
-                [
-                  13,
-                  21
-                ],
-                [
-                  118,
-                  27
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 46,
-              "lhs": 37,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 33
-            },
-            {
-              "cond": 46,
-              "else": 24,
-              "op": "branch",
-              "then": 23
-            }
-          ]
-        },
-        {
-          "id": 23,
-          "instructions": [
-            {
-              "dst": 47,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 48,
-              "lhs": 37,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 47
-            },
-            {
-              "args": [
-                37,
-                48
-              ],
-              "box": 32,
-              "dst": 49,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 50,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 51,
-              "lhs": 44,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 50
-            },
-            {
-              "cond": 51,
-              "else": 26,
-              "op": "branch",
-              "then": 25
-            }
-          ]
-        },
-        {
-          "id": 24,
-          "instructions": [
-            {
-              "dst": 218,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "{\\\"path\\\":\\\""
-              }
-            },
-            {
-              "args": [
-                35
-              ],
-              "box": 36,
-              "dst": 219,
-              "method": "esc_json",
-              "op": "boxcall"
-            },
-            {
-              "dst": 220,
-              "lhs": 218,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 219
-            },
-            {
-              "dst": 221,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\\",\\\"includes\\\":["
-              }
-            },
-            {
-              "dst": 222,
-              "lhs": 220,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 221
-            },
-            {
-              "dst": 223,
-              "lhs": 222,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 42
-            },
-            {
-              "dst": 224,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "],\\\"children\\\":["
-              }
-            },
-            {
-              "dst": 225,
-              "lhs": 223,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 224
-            },
-            {
-              "dst": 226,
-              "lhs": 225,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 45
-            },
-            {
-              "dst": 227,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "]}"
-              }
-            },
-            {
-              "dst": 228,
-              "lhs": 226,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 227
-            },
-            {
-              "op": "ret",
-              "value": 228
-            }
-          ]
-        },
-        {
-          "id": 25,
-          "instructions": [
-            {
-              "dst": 52,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\n"
-              }
-            },
-            {
-              "dst": 53,
-              "lhs": 49,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 52
-            },
-            {
-              "cond": 53,
-              "else": 29,
-              "op": "branch",
-              "then": 28
-            }
-          ]
-        },
-        {
-          "id": 26,
-          "instructions": [
-            {
-              "dst": 59,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 60,
-              "lhs": 40,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 59
-            },
-            {
-              "cond": 60,
-              "else": 32,
-              "op": "branch",
-              "then": 31
-            }
-          ]
-        },
-        {
-          "id": 27,
-          "instructions": [
-            {
-              "dst": 216,
-              "incoming": [
-                [
-                  58,
-                  25
-                ],
-                [
-                  37,
-                  26
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "op": "jump",
-              "target": 22
-            }
-          ]
-        },
-        {
-          "id": 28,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 30
-            }
-          ]
-        },
-        {
-          "id": 29,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 30
-            }
-          ]
-        },
-        {
-          "id": 30,
-          "instructions": [
-            {
-              "dst": 57,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 58,
-              "lhs": 37,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 57
-            },
-            {
-              "op": "jump",
-              "target": 27
-            }
-          ]
-        },
-        {
-          "id": 31,
-          "instructions": [
-            {
-              "dst": 61,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\""
-              }
-            },
-            {
-              "dst": 62,
-              "lhs": 49,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 61
-            },
-            {
-              "cond": 62,
-              "else": 35,
-              "op": "branch",
-              "then": 34
-            }
-          ]
-        },
-        {
-          "id": 32,
-          "instructions": [
-            {
-              "dst": 79,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "/"
-              }
-            },
-            {
-              "dst": 80,
-              "lhs": 49,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 79
-            },
-            {
-              "dst": 81,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 82,
-              "lhs": 78,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 81
-            },
-            {
-              "dst": 83,
-              "lhs": 82,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 33
-            },
-            {
-              "dst": 84,
-              "lhs": 80,
-              "op": "binop",
-              "operation": "&",
-              "rhs": 83
-            },
-            {
-              "dst": 85,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 86,
-              "lhs": 78,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 85
-            },
-            {
-              "dst": 87,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 88,
-              "lhs": 78,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 87
-            },
-            {
-              "args": [
-                86,
-                88
-              ],
-              "box": 32,
-              "dst": 89,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 90,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "/"
-              }
-            },
-            {
-              "dst": 91,
-              "lhs": 89,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 90
-            },
-            {
-              "dst": 92,
-              "lhs": 84,
-              "op": "binop",
-              "operation": "&",
-              "rhs": 91
-            },
-            {
-              "cond": 92,
-              "else": 44,
-              "op": "branch",
-              "then": 43
-            }
-          ]
-        },
-        {
-          "id": 33,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 27
-            }
-          ]
-        },
-        {
-          "id": 34,
-          "instructions": [
-            {
-              "dst": 63,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 64,
-              "lhs": 58,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 63
-            },
-            {
-              "cond": 64,
-              "else": 38,
-              "op": "branch",
-              "then": 37
-            }
-          ]
-        },
-        {
-          "id": 35,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 36
-            }
-          ]
-        },
-        {
-          "id": 36,
-          "instructions": [
-            {
-              "dst": 77,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 78,
-              "lhs": 58,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 77
-            },
-            {
-              "op": "jump",
-              "target": 33
-            }
-          ]
-        },
-        {
-          "id": 37,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 39
-            }
-          ]
-        },
-        {
-          "id": 38,
-          "instructions": [
-            {
-              "dst": 66,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 67,
-              "lhs": 58,
-              "op": "binop",
-              "operation": "-",
-              "rhs": 66
-            },
-            {
-              "args": [
-                67,
-                58
-              ],
-              "box": 32,
-              "dst": 68,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 69,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\"
-              }
-            },
-            {
-              "dst": 70,
-              "lhs": 68,
-              "op": "compare",
-              "operation": "!=",
-              "rhs": 69
-            },
-            {
-              "cond": 70,
-              "else": 41,
-              "op": "branch",
-              "then": 40
-            }
-          ]
-        },
-        {
-          "id": 39,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 36
-            }
-          ]
-        },
-        {
-          "id": 40,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 42
-            }
-          ]
-        },
-        {
-          "id": 41,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 42
-            }
-          ]
-        },
-        {
-          "id": 42,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 39
-            }
-          ]
-        },
-        {
-          "id": 43,
-          "instructions": [
-            {
-              "dst": 94,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 95,
-              "lhs": 78,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 94
-            },
-            {
-              "op": "jump",
-              "target": 45
-            }
-          ]
-        },
-        {
-          "id": 44,
-          "instructions": [
-            {
-              "dst": 96,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "#"
-              }
-            },
-            {
-              "dst": 97,
-              "lhs": 49,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 96
-            },
-            {
-              "cond": 97,
-              "else": 47,
-              "op": "branch",
-              "then": 46
-            }
-          ]
-        },
-        {
-          "id": 45,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 33
-            }
-          ]
-        },
-        {
-          "id": 46,
-          "instructions": [
-            {
-              "dst": 98,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 99,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 100,
-              "lhs": 95,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 99
-            },
-            {
-              "op": "jump",
-              "target": 48
-            }
-          ]
-        },
-        {
-          "id": 47,
-          "instructions": [
-            {
-              "dst": 101,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\""
-              }
-            },
-            {
-              "dst": 102,
-              "lhs": 49,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 101
-            },
-            {
-              "cond": 102,
-              "else": 50,
-              "op": "branch",
-              "then": 49
-            }
-          ]
-        },
-        {
-          "id": 48,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 45
-            }
-          ]
-        },
-        {
-          "id": 49,
-          "instructions": [
-            {
-              "dst": 103,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 104,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 105,
-              "lhs": 100,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 104
-            },
-            {
-              "op": "jump",
-              "target": 51
-            }
-          ]
-        },
-        {
-          "id": 50,
-          "instructions": [
-            {
-              "dst": 106,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 9
-              }
-            },
-            {
-              "dst": 107,
-              "lhs": 105,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 106
-            },
-            {
-              "dst": 108,
-              "lhs": 107,
-              "op": "compare",
-              "operation": "<=",
-              "rhs": 33
-            },
-            {
-              "dst": 109,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 9
-              }
-            },
-            {
-              "dst": 110,
-              "lhs": 105,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 109
-            },
-            {
-              "args": [
-                105,
-                110
-              ],
-              "box": 32,
-              "dst": 111,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 112,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "include \""
-              }
-            },
-            {
-              "dst": 113,
-              "lhs": 111,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 112
-            },
-            {
-              "dst": 114,
-              "lhs": 108,
-              "op": "binop",
-              "operation": "&",
-              "rhs": 113
-            },
-            {
-              "cond": 114,
-              "else": 53,
-              "op": "branch",
-              "then": 52
-            }
-          ]
-        },
-        {
-          "id": 51,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 48
-            }
-          ]
-        },
-        {
-          "id": 52,
-          "instructions": [
-            {
-              "dst": 115,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 9
-              }
-            },
-            {
-              "dst": 116,
-              "lhs": 105,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 115
-            },
-            {
-              "dst": 117,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "op": "jump",
-              "target": 55
-            }
-          ]
-        },
-        {
-          "id": 53,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 54
-            }
-          ]
-        },
-        {
-          "id": 54,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 51
-            }
-          ]
-        },
-        {
-          "id": 55,
-          "instructions": [
-            {
-              "dst": 135,
-              "incoming": [
-                [
-                  43,
-                  52
-                ],
-                [
-                  135,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 134,
-              "incoming": [
-                [
-                  42,
-                  52
-                ],
-                [
-                  134,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 133,
-              "incoming": [
-                [
-                  98,
-                  52
-                ],
-                [
-                  133,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 132,
-              "incoming": [
-                [
-                  103,
-                  52
-                ],
-                [
-                  132,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 131,
-              "incoming": [
-                [
-                  36,
-                  52
-                ],
-                [
-                  131,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 130,
-              "incoming": [
-                [
-                  34,
-                  52
-                ],
-                [
-                  130,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 129,
-              "incoming": [
-                [
-                  33,
-                  52
-                ],
-                [
-                  129,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 128,
-              "incoming": [
-                [
-                  45,
-                  52
-                ],
-                [
-                  128,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 127,
-              "incoming": [
-                [
-                  117,
-                  52
-                ],
-                [
-                  153,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 126,
-              "incoming": [
-                [
-                  116,
-                  52
-                ],
-                [
-                  155,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 124,
-              "incoming": [
-                [
-                  41,
-                  52
-                ],
-                [
-                  124,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 122,
-              "incoming": [
-                [
-                  39,
-                  52
-                ],
-                [
-                  122,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 121,
-              "incoming": [
-                [
-                  38,
-                  52
-                ],
-                [
-                  121,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 120,
-              "incoming": [
-                [
-                  105,
-                  52
-                ],
-                [
-                  120,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 119,
-              "incoming": [
-                [
-                  35,
-                  52
-                ],
-                [
-                  119,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 118,
-              "incoming": [
-                [
-                  32,
-                  52
-                ],
-                [
-                  118,
-                  60
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 136,
-              "lhs": 126,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 129
-            },
-            {
-              "dst": 137,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 138,
-              "lhs": 127,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 137
-            },
-            {
-              "dst": 139,
-              "lhs": 136,
-              "op": "binop",
-              "operation": "&",
-              "rhs": 138
-            },
-            {
-              "cond": 139,
-              "else": 57,
-              "op": "branch",
-              "then": 56
-            }
-          ]
-        },
-        {
-          "id": 56,
-          "instructions": [
-            {
-              "dst": 140,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 141,
-              "lhs": 126,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 140
-            },
-            {
-              "args": [
-                126,
-                141
-              ],
-              "box": 118,
-              "dst": 142,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 143,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\""
-              }
-            },
-            {
-              "dst": 144,
-              "lhs": 142,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 143
-            },
-            {
-              "cond": 144,
-              "else": 59,
-              "op": "branch",
-              "then": 58
-            }
-          ]
-        },
-        {
-          "id": 57,
-          "instructions": [
-            {
-              "dst": 158,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 159,
-              "lhs": 127,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 158
-            },
-            {
-              "cond": 159,
-              "else": 65,
-              "op": "branch",
-              "then": 64
-            }
-          ]
-        },
-        {
-          "id": 58,
-          "instructions": [
-            {
-              "dst": 145,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 146,
-              "lhs": 126,
-              "op": "binop",
-              "operation": "-",
-              "rhs": 145
-            },
-            {
-              "args": [
-                146,
-                126
-              ],
-              "box": 118,
-              "dst": 147,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 148,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\"
-              }
-            },
-            {
-              "dst": 149,
-              "lhs": 147,
-              "op": "compare",
-              "operation": "!=",
-              "rhs": 148
-            },
-            {
-              "cond": 149,
-              "else": 62,
-              "op": "branch",
-              "then": 61
-            }
-          ]
-        },
-        {
-          "id": 59,
-          "instructions": [
-            {
-              "dst": 154,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 155,
-              "lhs": 152,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 154
-            },
-            {
-              "op": "jump",
-              "target": 60
-            }
-          ]
-        },
-        {
-          "id": 60,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 55
-            }
-          ]
-        },
-        {
-          "id": 61,
-          "instructions": [
-            {
-              "dst": 150,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "op": "jump",
-              "target": 63
-            }
-          ]
-        },
-        {
-          "id": 62,
-          "instructions": [
-            {
-              "dst": 151,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 152,
-              "lhs": 126,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 151
-            },
-            {
-              "op": "jump",
-              "target": 63
-            }
-          ]
-        },
-        {
-          "id": 63,
-          "instructions": [
-            {
-              "dst": 153,
-              "incoming": [
-                [
-                  150,
-                  61
-                ],
-                [
-                  127,
-                  62
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "op": "jump",
-              "target": 60
-            }
-          ]
-        },
-        {
-          "id": 64,
-          "instructions": [
-            {
-              "dst": 160,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 9
-              }
-            },
-            {
-              "dst": 161,
-              "lhs": 120,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 160
-            },
-            {
-              "args": [
-                161,
-                126
-              ],
-              "box": 118,
-              "dst": 162,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 163,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 164,
-              "lhs": 122,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 163
-            },
-            {
-              "cond": 164,
-              "else": 68,
-              "op": "branch",
-              "then": 67
-            }
-          ]
-        },
-        {
-          "id": 65,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 66
-            }
-          ]
-        },
-        {
-          "id": 66,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 54
-            }
-          ]
-        },
-        {
-          "id": 67,
-          "instructions": [
-            {
-              "dst": 165,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\""
-              }
-            },
-            {
-              "dst": 166,
-              "lhs": 134,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 165
-            },
-            {
-              "args": [
-                162
-              ],
-              "box": 131,
-              "dst": 167,
-              "method": "esc_json",
-              "op": "boxcall"
-            },
-            {
-              "dst": 168,
-              "lhs": 166,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 167
-            },
-            {
-              "dst": 169,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\""
-              }
-            },
-            {
-              "dst": 170,
-              "lhs": 168,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 169
-            },
-            {
-              "dst": 171,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "op": "jump",
-              "target": 69
-            }
-          ]
-        },
-        {
-          "id": 68,
-          "instructions": [
-            {
-              "dst": 172,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": ",\""
-              }
-            },
-            {
-              "dst": 173,
-              "lhs": 170,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 172
-            },
-            {
-              "args": [
-                162
-              ],
-              "box": 131,
-              "dst": 174,
-              "method": "esc_json",
-              "op": "boxcall"
-            },
-            {
-              "dst": 175,
-              "lhs": 173,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 174
-            },
-            {
-              "dst": 176,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\""
-              }
-            },
-            {
-              "dst": 177,
-              "lhs": 175,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 176
-            },
-            {
-              "op": "jump",
-              "target": 69
-            }
-          ]
-        },
-        {
-          "id": 69,
-          "instructions": [
-            {
-              "dst": 178,
-              "incoming": [
-                [
-                  171,
-                  67
-                ],
-                [
-                  122,
-                  68
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "args": [
-                121,
-                162
-              ],
-              "box": 131,
-              "dst": 179,
-              "method": "join",
-              "op": "boxcall"
-            },
-            {
-              "args": [
-                130,
-                179
-              ],
-              "box": 131,
-              "dst": 181,
-              "method": "has_in_stack",
-              "op": "boxcall"
-            },
-            {
-              "dst": 182,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 183,
-              "lhs": 181,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 182
-            },
-            {
-              "cond": 183,
-              "else": 71,
-              "op": "branch",
-              "then": 70
-            }
-          ]
-        },
-        {
-          "id": 70,
-          "instructions": [
-            {
-              "dst": 184,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "{\\\"path\\\":\\\""
-              }
-            },
-            {
-              "args": [
-                179
-              ],
-              "box": 131,
-              "dst": 185,
-              "method": "esc_json",
-              "op": "boxcall"
-            },
-            {
-              "dst": 186,
-              "lhs": 184,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 185
-            },
-            {
-              "dst": 187,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
-              }
-            },
-            {
-              "dst": 188,
-              "lhs": 186,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 187
-            },
-            {
-              "op": "jump",
-              "target": 72
-            }
-          ]
-        },
-        {
-          "id": 71,
-          "instructions": [
-            {
-              "dst": 189,
-              "lhs": 130,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 179
-            },
-            {
-              "dst": 190,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\n"
-              }
-            },
-            {
-              "dst": 191,
-              "lhs": 189,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 190
-            },
-            {
-              "dst": 192,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 193,
-              "lhs": 135,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 192
-            },
-            {
-              "args": [
-                179,
-                191,
-                193
-              ],
-              "box": 131,
-              "dst": 194,
-              "method": "node_json",
-              "op": "boxcall"
-            },
-            {
-              "op": "jump",
-              "target": 72
-            }
-          ]
-        },
-        {
-          "id": 72,
-          "instructions": [
-            {
-              "dst": 195,
-              "incoming": [
-                [
-                  188,
-                  70
-                ],
-                [
-                  194,
-                  71
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 196,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 197,
-              "lhs": 124,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 196
-            },
-            {
-              "cond": 197,
-              "else": 74,
-              "op": "branch",
-              "then": 73
-            }
-          ]
-        },
-        {
-          "id": 73,
-          "instructions": [
-            {
-              "dst": 198,
-              "lhs": 128,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 195
-            },
-            {
-              "dst": 199,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "op": "jump",
-              "target": 75
-            }
-          ]
-        },
-        {
-          "id": 74,
-          "instructions": [
-            {
-              "dst": 200,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": ","
-              }
-            },
-            {
-              "dst": 201,
-              "lhs": 198,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 200
-            },
-            {
-              "dst": 202,
-              "lhs": 201,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 195
-            },
-            {
-              "op": "jump",
-              "target": 75
-            }
-          ]
-        },
-        {
-          "id": 75,
-          "instructions": [
-            {
-              "dst": 203,
-              "incoming": [
-                [
-                  199,
-                  73
-                ],
-                [
-                  124,
-                  74
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "op": "jump",
-              "target": 66
-            }
-          ]
-        }
-      ],
-      "name": "Main.node_json/3",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 11,
-          "instructions": [
-            {
-              "args": [],
-              "dst": 2,
-              "op": "newbox",
-              "type": "PathBox"
-            },
-            {
-              "args": [],
-              "box": 2,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "args": [
-                0,
-                1
-              ],
-              "box": 2,
-              "dst": 3,
-              "method": "join",
-              "op": "boxcall"
-            },
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "void",
-                "value": 0
-              }
-            },
-            {
-              "dst": 5,
-              "lhs": 3,
-              "op": "compare",
-              "operation": "!=",
-              "rhs": 4
-            },
-            {
-              "cond": 5,
-              "else": 13,
-              "op": "branch",
-              "then": 12
-            }
-          ]
-        },
-        {
-          "id": 12,
-          "instructions": [
-            {
-              "op": "ret",
-              "value": 3
-            }
-          ]
-        },
-        {
-          "id": 13,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 14
-            }
-          ]
-        },
-        {
-          "id": 14,
-          "instructions": [
-            {
-              "dst": 8,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "/"
-              }
-            },
-            {
-              "dst": 9,
-              "lhs": 0,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 8
-            },
-            {
-              "dst": 10,
-              "lhs": 9,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 1
-            },
-            {
-              "op": "ret",
-              "value": 10
-            }
-          ]
-        }
-      ],
-      "name": "Main.join/2",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 87,
-          "instructions": [
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": ""
-              }
-            },
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "args": [],
-              "box": 0,
-              "dst": 3,
-              "method": "length",
-              "op": "boxcall"
-            },
-            {
-              "op": "jump",
-              "target": 88
-            }
-          ]
-        },
-        {
-          "id": 88,
-          "instructions": [
-            {
-              "dst": 7,
-              "incoming": [
-                [
-                  3,
-                  87
-                ],
-                [
-                  7,
-                  93
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 6,
-              "incoming": [
-                [
-                  1,
-                  87
-                ],
-                [
-                  22,
-                  93
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 5,
-              "incoming": [
-                [
-                  0,
-                  87
-                ],
-                [
-                  5,
-                  93
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 4,
-              "incoming": [
-                [
-                  2,
-                  87
-                ],
-                [
-                  24,
-                  93
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 8,
-              "lhs": 4,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 7
-            },
-            {
-              "cond": 8,
-              "else": 90,
-              "op": "branch",
-              "then": 89
-            }
-          ]
-        },
-        {
-          "id": 89,
-          "instructions": [
-            {
-              "dst": 9,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 10,
-              "lhs": 4,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 9
-            },
-            {
-              "args": [
-                4,
-                10
-              ],
-              "box": 5,
-              "dst": 11,
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "dst": 12,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\"
-              }
-            },
-            {
-              "dst": 13,
-              "lhs": 11,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 12
-            },
-            {
-              "cond": 13,
-              "else": 92,
-              "op": "branch",
-              "then": 91
-            }
-          ]
-        },
-        {
-          "id": 90,
-          "instructions": [
-            {
-              "op": "ret",
-              "value": 6
-            }
-          ]
-        },
-        {
-          "id": 91,
-          "instructions": [
-            {
-              "dst": 14,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\\\\"
-              }
-            },
-            {
-              "dst": 15,
-              "lhs": 6,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 14
-            },
-            {
-              "op": "jump",
-              "target": 93
-            }
-          ]
-        },
-        {
-          "id": 92,
-          "instructions": [
-            {
-              "dst": 16,
-              "op": "const",
-              "value": {
-                "type": "string",
-                "value": "\""
-              }
-            },
-            {
-              "dst": 17,
-              "lhs": 11,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 16
-            },
-            {
-              "cond": 17,
-              "else": 95,
-              "op": "branch",
-              "then": 94
-            }
-          ]
-        },
-        {
-          "id": 93,
-          "instructions": [
-            {
-              "dst": 22,
-              "incoming": [
-                [
-                  15,
-                  91
-                ],
-                [
-                  6,
-                  92
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 23,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 24,
-              "lhs": 4,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 23
-            },
-            {
-              "op": "jump",
-              "target": 88
-            }
-          ]
-        },
-        {
-          "id": 94,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 96
-            }
-          ]
-        },
-        {
-          "id": 95,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 96
-            }
-          ]
-        },
-        {
-          "id": 96,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 93
-            }
-          ]
-        }
-      ],
-      "name": "Main.esc_json/1",
       "params": []
     }
   ]

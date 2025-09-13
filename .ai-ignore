@@ -1,0 +1,5 @@
+# AI tools should ignore legacy or archived paths
+src/backend/llvm_legacy/
+archived/
+*.tar.gz
+

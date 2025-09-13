@@ -1,0 +1,37 @@
+// esc_dirname_smoke.nyash — minimal smoke for esc_json/dirname and println
+
+static box Main {
+  esc_json(s) {
+    // very small escaper: replace \ and "
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" } else {
+        if ch == "\"" { out = out + "\\\"" } else { out = out + ch }
+      }
+      i = i + 1
+    }
+    return out
+  }
+
+  dirname(path) {
+    // simple pure string dirname: lastIndexOf('/')
+    local i = path.lastIndexOf("/")
+    if i < 0 { return "." }
+    return path.substring(0, i)
+  }
+
+  main(args) {
+    local console = new ConsoleBox()
+    // Test escaping (A\"B\\C)
+    local t1 = me.esc_json("A\\\"B\\\\C")
+    console.println(t1)
+    // Test dirname
+    local t2 = me.dirname("dir1/dir2/file.txt")
+    console.println(t2)
+    return 0
+  }
+}
+

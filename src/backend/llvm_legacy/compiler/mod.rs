@@ -6,20 +6,20 @@ pub struct LLVMCompiler {
     values: HashMap<ValueId, Box<dyn NyashBox>>,
 }
 
-#[cfg(not(feature = "llvm"))]
+#[cfg(not(feature = "llvm-inkwell-legacy"))]
 mod mock;
-#[cfg(not(feature = "llvm"))]
+#[cfg(not(feature = "llvm-inkwell-legacy"))]
 pub use mock::*;
 
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 mod aot;
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 mod codegen;
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 mod helpers;
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 mod interpreter;
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 pub use aot::*;
 
 #[cfg(test)]
@@ -31,3 +31,4 @@ mod tests {
         assert!(true);
     }
 }
+

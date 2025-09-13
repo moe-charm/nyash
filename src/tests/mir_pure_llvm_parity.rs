@@ -1,4 +1,4 @@
-#[cfg(all(test, feature = "llvm"))]
+#[cfg(all(test, feature = "llvm-inkwell-legacy"))]
 mod tests {
     use crate::parser::NyashParser;
     use crate::backend::VM;
@@ -24,4 +24,3 @@ mod tests {
         std::env::remove_var("NYASH_MIR_CORE13_PURE");
     }
 }
-

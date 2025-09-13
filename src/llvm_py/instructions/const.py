@@ -40,7 +40,7 @@ def lower_const(
         vmap[dst] = llvm_val
         
     elif const_type == 'string':
-        # String constant - create global, store GlobalVariable (not GEP) to avoid dominance issues
+        # String constant - create global and immediately box to i64 handle
         i8 = ir.IntType(8)
         str_val = str(const_val)
         str_bytes = str_val.encode('utf-8') + b'\0'
@@ -61,8 +61,21 @@ def lower_const(
         g.initializer = str_const
         g.linkage = 'private'
         g.global_constant = True
-        # Store the GlobalVariable; resolver.resolve_ptr will emit GEP in the current block
-        vmap[dst] = g
+        # GEP to first element and box to handle immediately
+        i32 = ir.IntType(32)
+        c0 = ir.Constant(i32, 0)
+        gep = builder.gep(g, [c0, c0], inbounds=True)
+        i8p = i8.as_pointer()
+        boxer_ty = ir.FunctionType(ir.IntType(64), [i8p])
+        boxer = None
+        for f in module.functions:
+            if f.name == 'nyash.box.from_i8_string':
+                boxer = f
+                break
+        if boxer is None:
+            boxer = ir.Function(module, boxer_ty, name='nyash.box.from_i8_string')
+        handle = builder.call(boxer, [gep], name=f"const_str_h_{dst}")
+        vmap[dst] = handle
         if resolver is not None:
             if hasattr(resolver, 'string_literals'):
                 resolver.string_literals[dst] = str_val

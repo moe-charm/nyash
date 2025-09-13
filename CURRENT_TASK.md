@@ -5,13 +5,21 @@ Summary
 - VM/Cranelift/Interpreter は MIR14 非対応。MIR 正規化（Resolver・LoopForm規約）を Rust 側で担保し、ハーネスにも同じ形を供給する。
 - 代表ケース（apps/selfhost/tools/dep_tree_min_string.nyash）で `.o`（および必要時 EXE）を安定生成。Harness ON/OFF で機能同値を確認。
 
-Quick Status — 2025‑09‑13（compressed）
+Quick Status — 2025‑09‑13（compressed, post‑harness fixes）
 - Harness ON（llvmlite）で .ll verify green → .o → link 成立（dep_tree_min_string）
-- Resolver-only 統一（vmap直読排除）。PHIはBB先頭に集約・i64（ハンドル）固定、pointer incomingはpred終端で boxing（GEP+from_i8_string）
-- 降下順序: preds優先の擬似トポロジカル順に block 降下。非PHI命令は常に「現在BB」末尾に挿入（dominance安定）
-- 文字列: ‘+’ は stringタグ/ptr検出時のみ concat_hh、len/eq 対応、substring/lastIndexOf は handle版（_hii/_hh）をNyRTに実装・使用
-- const(string): Global保持→使用側で GEP→i8*、MIR main→private、ny_main ラッパ生成
-- 比較/検証: compare_harness_on_off.sh で ON/OFF のExit一致（現状JSONは双方空、最終一致に向け調整中）
+- Resolver‑only 統一（vmap 直読排除）。PHI は BB 先頭に集約・i64（ハンドル）固定／pointer incoming は pred 終端直前で boxing（GEP+from_i8_string）
+- 降下順序: preds 優先の擬似トポロジカル順に block 降下。非 PHI 命令は「現在 BB」末尾に挿入（dominance 安定）
+- 文字列: ‘+’ は string タグ/ptr 検出時のみ concat_hh、len/eq 対応、substring/lastIndexOf は handle 版（_hii/_hh）を NyRT に実装・使用
+- const(string): Global を保持→使用側で GEP→i8* に正規化。MIR main→private、ny_main ラッパ生成
+- by‑name 定数: メソッド名の i8* は定数 GEP を採用（順序依存を排除）
+- 比較/検証: compare_harness_on_off.sh で ON/OFF の Exit 一致（現状 JSON は双方空。最終 JSON 一致は次フェーズで詰め）
+
+Focus Shift — Python/llvmlite Only（2025‑09‑13）
+- Rust/inkwell 側は当面「保守」へ。開発・詰めは Nyash スクリプト＋Python/llvmlite のみで進行。
+- 追加スモーク: apps/tests/esc_dirname_smoke.nyash（esc_json/dirname の最小 2 行出力）。
+- 追加トレース: `NYASH_LLVM_TRACE_FINAL=1` で println 直前に `nyash.debug.trace_handle(i64)` を呼び、最終ハンドルを観測。
+- Lifetime ヒント（軽量）: `def_blocks`（value_id → 定義ブロック集合）を Builder が収集、Resolver は現ブロック定義済みの i64 を優先再利用（PHI 過剰化を抑制）。
+- const(string) 改善: 即時 `from_i8_string` で i64 ハンドル化（後段連鎖の 0 落ちを軽減）。
 
 Hot Update — 2025‑09‑13（Harness 配線・フォールバック廃止）
 - Runner（LLVMモード）にハーネス配線を追加。`NYASH_LLVM_USE_HARNESS=1` のとき:
@@ -31,10 +39,14 @@ Hot Update — 2025‑09‑13（Resolver‑only 統一 + Harness ON green）
   - `main` 衝突回避: MIR 由来 `main` は private にし、`ny_main()` ラッパを自動生成（NyRT `main` と整合）。
 - 代表ケース（dep_tree_min_string）: Harness ON で `.ll verify green → .o` を確認し、NyRT とリンクして EXE 生成成功。
 
-Next（short）
-1) PHI/dominance最終安定化（Main.esc_json/1, Main.dirname/1）→ ON/OFF の最終JSON一致
-2) 残オンデマンドPHI/フォールバック撤去（完全 Resolver‑only 固定・vmap直読ゼロ）
-3) Docs/Trace 更新（Resolver/PHI/ptr↔i64、不変条件、NYASH_LLVM_TRACE_FINAL）
+Next（short, refreshed — Py/llvmlite 線）
+1) スモーク確定: esc_dirname_smoke の 2 行出力を ON/OFF 完全一致に（行比較）。
+2) dep_tree_min_string の最終 JSON 一致（`{` 以降の diff=空）。
+   - `NYASH_LLVM_TRACE_FINAL=1`＋`NYASH_LLVM_TRACE_VALUES=1` で println 引数ハンドルの鎖を観測し、synth‑zero 起点を特定→ Resolver/PHI で局所是正。
+   - PHI/snapshot は「pred で materialize→無ければ snap→最後に synth(0)」の順を徹底。None を入れない。
+3) CI/補助
+   - スモークを compare_harness_on_off.sh からも容易に呼べるよう維持（必要なら行比較モード追加）。
+   - Deny‑Direct（`vmap.get(` 直読の抑止）を継続チェック。
 
 Compact Roadmap（2025‑09‑13 改定）
 - Focus A（Rust LLVM 維持）: Flow hardening, PHI(sealed) 安定化, LoopForm 仕様遵守。

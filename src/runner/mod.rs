@@ -24,7 +24,7 @@ use std::sync::Arc;
 #[cfg(feature = "wasm-backend")]
 use nyash_rust::backend::{wasm::WasmBackend, aot::AotBackend};
 
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 use nyash_rust::backend::{llvm_compile_and_execute};
 use std::{fs, process};
 mod modes;
@@ -757,7 +757,7 @@ impl NyashRunner {
         println!("📊 Functions: {}", compile_result.module.functions.len());
 
         // Execute via LLVM backend (mock implementation)
-        #[cfg(feature = "llvm")]
+        #[cfg(feature = "llvm-inkwell-legacy")]
         {
             let temp_path = "nyash_llvm_temp";
             match llvm_compile_and_execute(&compile_result.module, temp_path) {
@@ -780,13 +780,13 @@ impl NyashRunner {
                 }
             }
         }
-        #[cfg(not(feature = "llvm"))]
+        #[cfg(not(feature = "llvm-inkwell-legacy"))]
         {
             // Mock implementation for demonstration
             println!("🔧 Mock LLVM Backend Execution:");
             println!("   This demonstrates the LLVM backend integration structure.");
-            println!("   For actual LLVM compilation, build with --features llvm");
-            println!("   and ensure LLVM 17+ development libraries are installed.");
+            println!("   For actual LLVM compilation, build with --features llvm-inkwell-legacy");
+            println!("   and ensure LLVM 18 development libraries are installed.");
             
             // Analyze the MIR to provide a meaningful mock result
             if let Some(main_func) = compile_result.module.functions.get("Main.main") {

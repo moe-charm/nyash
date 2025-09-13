@@ -4,6 +4,7 @@ Based on src/backend/llvm/compiler/codegen/instructions/resolver.rs
 """
 
 from typing import Dict, Optional, Any, Tuple
+import os
 import llvmlite.ir as ir
 
 class Resolver:
@@ -42,6 +43,9 @@ class Resolver:
         self.f64_type = ir.DoubleType()
         # Cache for recursive end-of-block i64 resolution
         self._end_i64_cache: Dict[Tuple[int, int], ir.Value] = {}
+        # Lifetime hint: value_id -> set(block_id) where it's known to be defined
+        # Populated by the builder when available.
+        self.def_blocks = {}
 
     def mark_string(self, value_id: int) -> None:
         try:
@@ -74,7 +78,7 @@ class Resolver:
         if cache_key in self.i64_cache:
             return self.i64_cache[cache_key]
 
-        # Do not trust global vmap across blocks: always localize via preds when available
+        # Do not trust global vmap across blocks unless we know it's defined in this block.
         
         # Get predecessor blocks
         try:
@@ -82,6 +86,19 @@ class Resolver:
         except Exception:
             bid = -1
         pred_ids = [p for p in preds.get(bid, []) if p != bid]
+
+        # Lifetime hint: if value is defined in this block, and present in vmap as i64, reuse it.
+        try:
+            defined_here = value_id in self.def_blocks and bid in self.def_blocks.get(value_id, set())
+        except Exception:
+            defined_here = False
+        if defined_here:
+            existing = vmap.get(value_id)
+            if existing is not None and hasattr(existing, 'type') and isinstance(existing.type, ir.IntType) and existing.type.width == 64:
+                if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
+                    print(f"[VAL] reuse local v{value_id} in bb{bid}", flush=True)
+                self.i64_cache[cache_key] = existing
+                return existing
         
         if not pred_ids:
             # Entry block or no predecessors: prefer local vmap value (already dominating)

@@ -29,7 +29,10 @@ pub mod aot;
 #[cfg(feature = "wasm-backend")]
 pub mod wasm_v2;
 
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
+pub mod llvm_legacy;
+// Back-compat shim so existing paths crate::backend::llvm::* keep working
+#[cfg(feature = "llvm-inkwell-legacy")]
 pub mod llvm;
 #[cfg(feature = "cranelift-jit")]
 pub mod cranelift;
@@ -42,7 +45,7 @@ pub use wasm::{WasmBackend, WasmError};
 #[cfg(feature = "wasm-backend")]
 pub use aot::{AotBackend, AotError, AotConfig, AotStats};
 
-#[cfg(feature = "llvm")]
-pub use llvm::{compile_and_execute as llvm_compile_and_execute, compile_to_object as llvm_compile_to_object};
+#[cfg(feature = "llvm-inkwell-legacy")]
+pub use llvm_legacy::{compile_and_execute as llvm_compile_and_execute, compile_to_object as llvm_compile_to_object};
 #[cfg(feature = "cranelift-jit")]
 pub use cranelift::{compile_and_execute as cranelift_compile_and_execute, compile_to_object as cranelift_compile_to_object};

@@ -1,34 +1,31 @@
 /*!
- * LLVM Context Management - Handle LLVM context, module, and target setup
+ * LLVM Context Management - Handle LLVM context, module, and target setup (legacy)
  */
 
-/// Mock implementation for environments without LLVM development libraries
-/// This demonstrates the structure needed for LLVM integration
-#[cfg(not(feature = "llvm"))]
+/// Mock implementation when legacy inkwell backend is disabled
+#[cfg(not(feature = "llvm-inkwell-legacy"))]
 pub struct CodegenContext {
     _phantom: std::marker::PhantomData<()>,
 }
 
-#[cfg(not(feature = "llvm"))]
+#[cfg(not(feature = "llvm-inkwell-legacy"))]
 impl CodegenContext {
     pub fn new(_module_name: &str) -> Result<Self, String> {
-        Ok(Self {
-            _phantom: std::marker::PhantomData,
-        })
+        Ok(Self { _phantom: std::marker::PhantomData })
     }
 }
 
-// Real implementation (compiled only when feature "llvm" is enabled)
-#[cfg(feature = "llvm")]
+// Real implementation (compiled only when feature "llvm-inkwell-legacy" is enabled)
+#[cfg(feature = "llvm-inkwell-legacy")]
 use inkwell::context::Context;
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 use inkwell::module::Module;
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 use inkwell::builder::Builder;
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 use inkwell::targets::{Target, TargetMachine, InitializationConfig};
 
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 pub struct CodegenContext<'ctx> {
     pub context: &'ctx Context,
     pub module: Module<'ctx>,
@@ -36,17 +33,12 @@ pub struct CodegenContext<'ctx> {
     pub target_machine: TargetMachine,
 }
 
-#[cfg(feature = "llvm")]
+#[cfg(feature = "llvm-inkwell-legacy")]
 impl<'ctx> CodegenContext<'ctx> {
     pub fn new(context: &'ctx Context, module_name: &str) -> Result<Self, String> {
-        // 1. Initialize native target
         Target::initialize_native(&InitializationConfig::default())
             .map_err(|e| format!("Failed to initialize native target: {}", e))?;
-
-        // 2. Create module
         let module = context.create_module(module_name);
-
-        // 3. Create target machine
         let triple = TargetMachine::get_default_triple();
         let target = Target::from_triple(&triple)
             .map_err(|e| format!("Failed to get target: {}", e))?;
@@ -60,16 +52,8 @@ impl<'ctx> CodegenContext<'ctx> {
                 inkwell::targets::CodeModel::Default,
             )
             .ok_or_else(|| "Failed to create target machine".to_string())?;
-
-        // 4. Set data layout
-        module.set_triple(&triple);
-        module.set_data_layout(&target_machine.get_target_data().get_data_layout());
-
-        Ok(Self {
-            context,
-            module,
-            builder: context.create_builder(),
-            target_machine,
-        })
+        let builder = context.create_builder();
+        Ok(Self { context, module, builder, target_machine })
     }
 }
+

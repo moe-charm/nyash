@@ -59,6 +59,9 @@ class NyashLLVMBuilder:
         # Predecessor map and per-block end snapshots
         self.preds: Dict[int, List[int]] = {}
         self.block_end_values: Dict[int, Dict[int, ir.Value]] = {}
+        # Definition map: value_id -> set(block_id) where the value is defined
+        # Used as a lightweight lifetime hint to avoid over-localization
+        self.def_blocks: Dict[int, set] = {}
         
         # Resolver for unified value resolution
         self.resolver = Resolver(self.vmap, self.bb_map)
@@ -270,6 +273,12 @@ class NyashLLVMBuilder:
                 continue
             bb = self.bb_map[bid]
             self.lower_block(bb, block_data, func)
+
+        # Provide lifetime hints to resolver (which blocks define which values)
+        try:
+            self.resolver.def_blocks = self.def_blocks
+        except Exception:
+            pass
     
     def lower_block(self, bb: ir.Block, block_data: Dict[str, Any], func: ir.Function):
         """Lower a single basic block"""
@@ -297,29 +306,16 @@ class NyashLLVMBuilder:
                         created_ids.append(dst)
                 except Exception:
                     pass
-        # Lower non-PHI instructions in a coarse dependency-friendly order
-        # (ensure producers like newbox/const appear before consumers like boxcall/externcall)
-        order = {
-            'newbox': 0,
-            'const': 1,
-            'typeop': 2,
-            'load': 3,
-            'store': 3,
-            'binop': 4,
-            'compare': 5,
-            'call': 6,
-            'boxcall': 6,
-            'externcall': 7,
-            'safepoint': 8,
-            'barrier': 8,
-            'while': 8,
-            'jump': 9,
-            'branch': 9,
-            'ret': 10,
-        }
-        non_phi_insts_sorted = sorted(non_phi_insts, key=lambda i: order.get(i.get('op'), 100))
-        for inst in non_phi_insts_sorted:
-            # Append in program order to preserve dominance; avoid re-inserting before a terminator here
+        # Lower non-PHI instructions strictly in original program order.
+        # Reordering here can easily introduce use-before-def within the same
+        # basic block (e.g., string ops that depend on prior me.* calls).
+        for inst in non_phi_insts:
+            # Stop if a terminator has already been emitted for this block
+            try:
+                if bb.terminator is not None:
+                    break
+            except Exception:
+                pass
             builder.position_at_end(bb)
             self.lower_instruction(builder, inst, func)
             try:
@@ -343,6 +339,8 @@ class NyashLLVMBuilder:
             val = self.vmap.get(vid)
             if val is not None:
                 snap[vid] = val
+                # Record block-local definition for lifetime hinting
+                self.def_blocks.setdefault(vid, set()).add(block_data.get("id", 0))
         self.block_end_values[bid] = snap
     
     def lower_instruction(self, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
@@ -451,6 +449,19 @@ class NyashLLVMBuilder:
         else:
             if os.environ.get('NYASH_CLI_VERBOSE') == '1':
                 print(f"[Python LLVM] Unknown instruction: {op}")
+        # Record per-inst definition for lifetime hinting as soon as available
+        try:
+            dst_maybe = inst.get("dst")
+            if isinstance(dst_maybe, int) and dst_maybe in self.vmap:
+                cur_bid = None
+                try:
+                    cur_bid = int(str(builder.block.name).replace('bb',''))
+                except Exception:
+                    pass
+                if cur_bid is not None:
+                    self.def_blocks.setdefault(dst_maybe, set()).add(cur_bid)
+        except Exception:
+            pass
     
     def _lower_while_regular(self, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
         """Fallback regular while lowering"""
@@ -596,7 +607,9 @@ class NyashLLVMBuilder:
         
         # Compile
         mod = llvm.parse_assembly(str(self.module))
-        mod.verify()
+        # Allow skipping verifier for iterative bring-up
+        if os.environ.get('NYASH_LLVM_SKIP_VERIFY') != '1':
+            mod.verify()
         
         # Generate object code
         obj = target_machine.emit_object(mod)

@@ -62,7 +62,8 @@ def lower_binop(
         return
 
     # String-aware concatenation unified to handles (i64).
-    # Use concat_hh when either side is a pointer string OR tagged as string handle.
+    # Use concat_hh when either side is a pointer string OR either side is tagged as string handle
+    # (including literal strings and PHI-propagated tags).
     if op == '+':
         i64 = ir.IntType(64)
         i8p = ir.IntType(8).as_pointer()
@@ -71,14 +72,18 @@ def lower_binop(
         # pointer present?
         is_ptr_side = (hasattr(lhs_raw, 'type') and isinstance(lhs_raw.type, ir.PointerType)) or \
                       (hasattr(rhs_raw, 'type') and isinstance(rhs_raw.type, ir.PointerType))
-        # tagged string handles?（両辺ともに string-ish のときのみ）
-        both_tagged = False
+        # tagged string handles?（どちらかが string-ish のとき）
+        any_tagged = False
         try:
-            if resolver is not None and hasattr(resolver, 'is_stringish'):
-                both_tagged = resolver.is_stringish(lhs) and resolver.is_stringish(rhs)
+            if resolver is not None:
+                if hasattr(resolver, 'is_stringish'):
+                    any_tagged = resolver.is_stringish(lhs) or resolver.is_stringish(rhs)
+                # literal strings are tracked separately
+                if not any_tagged and hasattr(resolver, 'string_literals'):
+                    any_tagged = (lhs in resolver.string_literals) or (rhs in resolver.string_literals)
         except Exception:
             pass
-        is_str = is_ptr_side or both_tagged
+        is_str = is_ptr_side or any_tagged
         if is_str:
             # Helper: convert raw or resolved value to string handle
             def to_handle(raw, val, tag: str):

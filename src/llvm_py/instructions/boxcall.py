@@ -205,6 +205,11 @@ def lower_boxcall(
             arg0 = ir.Constant(i8p, None)
         # Prefer handle API if arg is i64, else pointer API
         if hasattr(arg0, 'type') and isinstance(arg0.type, ir.IntType) and arg0.type.width == 64:
+            # Optional runtime trace of the handle
+            import os as _os
+            if _os.environ.get('NYASH_LLVM_TRACE_FINAL') == '1':
+                trace = _declare(module, "nyash.debug.trace_handle", i64, [i64])
+                _ = builder.call(trace, [arg0], name="trace_handle")
             callee = _declare(module, "nyash.console.log_handle", i64, [i64])
             _ = builder.call(callee, [arg0], name="console_log_h")
         else:
@@ -221,8 +226,19 @@ def lower_boxcall(
         cur_fn_name = str(builder.block.parent.name)
     except Exception:
         cur_fn_name = ''
-    # Heuristic: value-id 0 is often the implicit receiver for `me` in MIR
-    if box_vid == 0 and cur_fn_name.startswith('Main.'):
+    # Heuristic: MIR encodes `me` as a string literal "__me__" or sometimes value-id 0.
+    is_me = False
+    try:
+        if box_vid == 0:
+            is_me = True
+        # Prefer literal marker captured by resolver (from const lowering)
+        elif resolver is not None and hasattr(resolver, 'string_literals'):
+            lit = resolver.string_literals.get(box_vid)
+            if lit == "__me__":
+                is_me = True
+    except Exception:
+        pass
+    if is_me and cur_fn_name.startswith('Main.'):
         # Build target function name with arity
         arity = len(args)
         target = f"Main.{method_name}/{arity}"
@@ -300,3 +316,9 @@ def lower_boxcall(
     result = builder.call(callee, [recv_h, mptr, argc, a1, a2], name="pinvoke_by_name")
     if dst_vid is not None:
         vmap[dst_vid] = result
+        # Heuristic tagging: common plugin methods returning strings
+        try:
+            if resolver is not None and hasattr(resolver, 'mark_string') and method_name in ("read", "dirname", "join"):
+                resolver.mark_string(dst_vid)
+        except Exception:
+            pass

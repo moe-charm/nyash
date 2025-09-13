@@ -42,7 +42,7 @@ impl NyashRunner {
 
         // If explicit object path is requested, emit object only
         if let Ok(out_path) = std::env::var("NYASH_LLVM_OBJ_OUT") {
-            #[cfg(feature = "llvm")]
+            #[cfg(feature = "llvm-harness")]
             {
                 // Harness path (optional): if NYASH_LLVM_USE_HARNESS=1, try Python/llvmlite first.
                 let use_harness = std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1");
@@ -91,25 +91,12 @@ impl NyashRunner {
                     }
                     eprintln!("❌ python3 not found in PATH. Install Python 3 to use the harness.");
                     process::exit(1);
-                } else {
-                    use nyash_rust::backend::llvm_compile_to_object;
-                    // Ensure parent directory exists for the object file
-                    if let Some(parent) = std::path::Path::new(&out_path).parent() {
-                        let _ = std::fs::create_dir_all(parent);
-                    }
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                        eprintln!("[Runner/LLVM] emitting object to {} (cwd={})", out_path, std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default());
-                    }
-                    if let Err(e) = llvm_compile_to_object(&module, &out_path) {
-                        eprintln!("❌ LLVM object emit error: {}", e);
-                        process::exit(1);
-                    }
                 }
                 // Verify object presence and size (>0)
                 match std::fs::metadata(&out_path) {
                     Ok(meta) => {
                         if meta.len() == 0 {
-                            eprintln!("❌ LLVM object is empty: {}", out_path);
+                            eprintln!("❌ harness object is empty: {}", out_path);
                             process::exit(1);
                         }
                         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
@@ -117,34 +104,37 @@ impl NyashRunner {
                         }
                     }
                     Err(e) => {
-                        // Try one immediate retry by writing through the compiler again (rare FS lag safeguards)
-                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                            eprintln!("[Runner/LLVM] object not found after emit, retrying once: {} ({})", out_path, e);
-                        }
-                        if let Err(e2) = nyash_rust::backend::llvm_compile_to_object(&module, &out_path) {
-                            eprintln!("❌ LLVM object emit error (retry): {}", e2);
-                            process::exit(1);
-                        }
-                        match std::fs::metadata(&out_path) {
-                            Ok(meta2) => {
-                                if meta2.len() == 0 {
-                                    eprintln!("❌ LLVM object is empty (after retry): {}", out_path);
-                                    process::exit(1);
-                                }
-                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                    eprintln!("[LLVM] object emitted after retry: {} ({} bytes)", out_path, meta2.len());
-                                }
-                            }
-                            Err(e3) => {
-                                eprintln!("❌ LLVM object not found after emit (retry): {} ({})", out_path, e3);
-                                process::exit(1);
-                            }
-                        }
+                        eprintln!("❌ harness output not found after emit: {} ({})", out_path, e);
+                        process::exit(1);
                     }
                 }
                 return;
             }
-            #[cfg(not(feature = "llvm"))]
+            #[cfg(all(not(feature = "llvm-harness"), feature = "llvm-inkwell-legacy"))]
+            {
+                use nyash_rust::backend::llvm_compile_to_object;
+                // Ensure parent directory exists for the object file
+                if let Some(parent) = std::path::Path::new(&out_path).parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    eprintln!("[Runner/LLVM] emitting object to {} (cwd={})", out_path, std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default());
+                }
+                if let Err(e) = llvm_compile_to_object(&module, &out_path) {
+                    eprintln!("❌ LLVM object emit error: {}", e);
+                    process::exit(1);
+                }
+                match std::fs::metadata(&out_path) {
+                    Ok(meta) if meta.len() > 0 => {
+                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                            eprintln!("[LLVM] object emitted: {} ({} bytes)", out_path, meta.len());
+                        }
+                    }
+                    _ => { eprintln!("❌ LLVM object not found or empty: {}", out_path); process::exit(1); }
+                }
+                return;
+            }
+            #[cfg(all(not(feature = "llvm-harness"), not(feature = "llvm-inkwell-legacy")))]
             {
                 eprintln!("❌ LLVM backend not available (object emit).");
                 process::exit(1);
@@ -152,7 +142,7 @@ impl NyashRunner {
         }
 
         // Execute via LLVM backend (mock or real)
-        #[cfg(feature = "llvm")]
+        #[cfg(feature = "llvm-inkwell-legacy")]
         {
             use nyash_rust::backend::llvm_compile_and_execute;
             let temp_path = "nyash_llvm_temp";
@@ -171,10 +161,10 @@ impl NyashRunner {
                 Err(e) => { eprintln!("❌ LLVM execution error: {}", e); process::exit(1); }
             }
         }
-        #[cfg(not(feature = "llvm"))]
+        #[cfg(all(not(feature = "llvm-inkwell-legacy")))]
         {
             println!("🔧 Mock LLVM Backend Execution:");
-            println!("   Build with --features llvm for real compilation.");
+            println!("   Build with --features llvm-inkwell-legacy for Rust/inkwell backend, or set NYASH_LLVM_OBJ_OUT and NYASH_LLVM_USE_HARNESS=1 for harness.");
             if let Some(main_func) = module.functions.get("Main.main") {
                 for (_bid, block) in &main_func.blocks {
                     for inst in &block.instructions {

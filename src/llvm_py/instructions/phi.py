@@ -73,6 +73,9 @@ def lower_phi(
                     val = None
             except Exception:
                 val = None
+            if val is None:
+                # Missing incoming for this predecessor → default 0
+                val = ir.Constant(phi_type, 0)
         else:
             # Snapshot fallback
             if block_end_values is not None:
@@ -124,6 +127,18 @@ def lower_phi(
     
     # Store PHI result
     vmap[dst_vid] = phi
+    # Propagate string-ness: if any incoming value-id is tagged string-ish, mark dst as string-ish.
+    try:
+        if resolver is not None and hasattr(resolver, 'is_stringish') and hasattr(resolver, 'mark_string'):
+            for val_id, _b in incoming:
+                try:
+                    if resolver.is_stringish(val_id):
+                        resolver.mark_string(dst_vid)
+                        break
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 def defer_phi_wiring(
     dst_vid: int,
