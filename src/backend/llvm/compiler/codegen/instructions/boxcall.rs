@@ -91,7 +91,20 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     }
 
     // getField/setField
-    if fields::try_handle_field_method(codegen, cursor, cur_bid, vmap, dst, method, args, recv_h, resolver, bb_map, preds, block_end_values)? {
+    if fields::try_handle_field_method(
+        codegen,
+        cursor,
+        cur_bid,
+        vmap,
+        dst,
+        method,
+        args,
+        recv_h,
+        resolver,
+        bb_map,
+        preds,
+        block_end_values,
+    )? {
         return Ok(());
     }
 
@@ -291,6 +304,50 @@ pub(in super::super) fn lower_boxcall_boxed<'ctx, 'b>(
         ctx.bb_map,
         ctx.preds,
         ctx.block_end_values,
+    )
+}
+
+// Convenience wrapper: construct LowerFnCtx/BlockCtx inside to keep caller borrow scopes short.
+pub(in super::super) fn lower_boxcall_via_ctx<'ctx, 'b>(
+    codegen: &'ctx CodegenContext<'ctx>,
+    cursor: &'b mut BuilderCursor<'ctx, 'b>,
+    resolver: &'b mut super::Resolver<'ctx>,
+    cur_bid: BasicBlockId,
+    func: &'b MirFunction,
+    vmap: &'b mut HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
+    dst: &Option<ValueId>,
+    box_val: &ValueId,
+    method: &str,
+    method_id: &Option<u16>,
+    args: &[ValueId],
+    box_type_ids: &'b HashMap<String, i64>,
+    entry_builder: &inkwell::builder::Builder<'ctx>,
+    bb_map: &'b std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &'b std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &'b std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
+) -> Result<(), String> {
+    let llbb = *bb_map.get(&cur_bid).ok_or("missing cur bb")?;
+    let blkctx = BlockCtx::new(cur_bid, llbb);
+    let mut fnctx = LowerFnCtx::new(
+        codegen,
+        func,
+        cursor,
+        resolver,
+        vmap,
+        bb_map,
+        preds,
+        block_end_values,
+    )
+    .with_box_type_ids(box_type_ids);
+    lower_boxcall_boxed(
+        &mut fnctx,
+        &blkctx,
+        dst,
+        box_val,
+        method,
+        method_id,
+        args,
+        entry_builder,
     )
 }
 

@@ -47,7 +47,11 @@ def lower_atomic_op(
     val_vid: Optional[int],
     dst_vid: Optional[int],
     vmap: Dict[int, ir.Value],
-    ordering: str = "seq_cst"
+    ordering: str = "seq_cst",
+    resolver=None,
+    preds=None,
+    block_end_values=None,
+    bb_map=None
 ) -> None:
     """
     Lower atomic operations
@@ -62,7 +66,10 @@ def lower_atomic_op(
         ordering: Memory ordering
     """
     # Get pointer
-    ptr = vmap.get(ptr_vid)
+    if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+        ptr = resolver.resolve_ptr(ptr_vid, builder.block, preds, block_end_values, vmap)
+    else:
+        ptr = vmap.get(ptr_vid)
     if not ptr:
         # Create dummy pointer
         i64 = ir.IntType(64)
@@ -78,13 +85,19 @@ def lower_atomic_op(
     elif op == "store":
         # Atomic store
         if val_vid is not None:
-            val = vmap.get(val_vid, ir.Constant(ir.IntType(64), 0))
+            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+                val = resolver.resolve_i64(val_vid, builder.block, preds, block_end_values, vmap, bb_map)
+            else:
+                val = vmap.get(val_vid, ir.Constant(ir.IntType(64), 0))
             builder.store_atomic(val, ptr, ordering=ordering, align=8)
             
     elif op == "add":
         # Atomic add (fetch_add)
         if val_vid is not None:
-            val = vmap.get(val_vid, ir.Constant(ir.IntType(64), 1))
+            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+                val = resolver.resolve_i64(val_vid, builder.block, preds, block_end_values, vmap, bb_map)
+            else:
+                val = ir.Constant(ir.IntType(64), 1)
             result = builder.atomic_rmw("add", ptr, val, ordering=ordering)
             if dst_vid is not None:
                 vmap[dst_vid] = result

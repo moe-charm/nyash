@@ -1,24 +1,42 @@
-# Current Task (2025-09-11) — Phase 15 LLVM‑only
+# Current Task (2025-09-11) — Phase 15 LLVM（主経路） + llvmlite Harness（検証・将来主役）
 
 Summary
-- LLVM is the authoritative path; VM/Cranelift/Interpreter are not MIR14‑ready.
-- Keep fallbacks minimal; fix MIR annotations first.
-- ExternCall(console/debug) auto‑selects ptr/handle by IR type.
-- StringBox NewBox i8* fast path; print/log choose automatically.
-- Implement multi-function lowering and Call lowering for MIR14.
+- LLVM AOT（Rust/inkwell）は引き続き主経路。ただし「反復速度・仕様変更耐性」を担保するため、Python/llvmlite ハーネスを正式導入し、代表ケースで両者の等価性を検証する。
+- VM/Cranelift/Interpreter は MIR14 非対応。MIR 正規化（Resolver・LoopForm規約）を Rust 側で担保し、ハーネスにも同じ形を供給する。
+- 代表ケース（apps/selfhost/tools/dep_tree_min_string.nyash）で `.o`（および必要時 EXE）を安定生成。Harness ON/OFF で機能同値を確認。
 
-Compact Roadmap (2025‑09‑12)
-- Focus: LLVM AOT → Flow hardening, PHI(sealed)安定化, LoopForm導入, BuilderCursor厳格化。
+Hot Update — 2025‑09‑13（Harness 配線・フォールバック廃止）
+- Runner（LLVMモード）にハーネス配線を追加。`NYASH_LLVM_USE_HARNESS=1` のとき:
+  - MIR(JSON) を `tmp/nyash_harness_mir.json` へ出力
+  - `python3 tools/llvmlite_harness.py --in … --out …` で .o を生成
+  - 失敗時は即エラー終了（Rust LLVM へのフォールバックは廃止）
+- `tools/llvmlite_harness.py` を追加（ダミー/JSON入力の両方に対応）。
+- Python 側スキャフォールドを微修正（PHI 直配線、Resolver 最小実装、ExternCall x NyRT 記号、NewBox→`nyash.env.box.new`）。
+- プラグインを cdylib/staticlib 両対応に一括回収（主要プラグイン）。`tools/build_plugins_all.sh` 追加。
+
+Hot Update — 2025‑09‑13（Resolver‑only 統一 + Harness ON green）
+- Python/llvmlite 側で Resolver‑only を徹底（vmap 直参照を原則廃止）。
+  - compare/binop/branch/call/externcall/boxcall/ret/typeop/safepoint のオペランド解決を `resolve_i64/resolve_ptr` に統一。
+  - JSON φ はブロック先頭で即時降下（sealed配線）。incoming は pred の `block_end_values` から取得。型変換は pred terminator 直前に挿入。
+  - 文字列はブロック間 i64（ハンドル）固定。i8* は call 直前のみ生成（concat/substring/lastIndexOf/len_h/eq_hh 実装）。
+  - const(string) は GlobalVariable を保持し、使用側で GEP→i8* に正規化（dominator 違反回避）。
+  - `main` 衝突回避: MIR 由来 `main` は private にし、`ny_main()` ラッパを自動生成（NyRT `main` と整合）。
+- 代表ケース（dep_tree_min_string）: Harness ON で `.ll verify green → .o` を確認し、NyRT とリンクして EXE 生成成功。
+
+Next（short）
+1) ON/OFF 等価性の拡張（戻り値/検証ログ/最終出力の一致まで）
+2) Resolver フォールバックの残存箇所を削除し、完全 Resolver‑only に固定
+3) 代表ケースの拡充（println/実出力の比較）とドキュメント更新（Resolver 規約・PHI/ptr/i64 ポリシー）
+
+Compact Roadmap（2025‑09‑13 改定）
+- Focus A（Rust LLVM 維持）: Flow hardening, PHI(sealed) 安定化, LoopForm 仕様遵守。
+- Focus B（Python Harness 導入）: llvmlite による MIR(JSON)→IR/obj の高速経路を追加。ON/OFF で等価性を検証。
 - Now:
-  - Fallback terminator整備、PHI(sealed)はsnapshot参照へ、castはpred終端直前に限定。
-  - LoopForm Step 2.5/3（検出2段/dispatch骨格）完了。非破壊（Break集約のみ）。
-  - BuilderCursor: post‑terminator挿入を即panic（strings/arith_ops/memへ適用済）。
-- Next (short):
-  1) BuilderCursor厳格化の適用拡大（externcall→newbox→arrays→maps→call）。
-  2) Sealed SSA を既定ONに一本化（finalize_phis停止、seal_blockで完結）。NYASH_LLVM_PHI_SEALED は未設定時=ON。
-  3) LoopForm header PHI正規化の安定化（latch→header ON 時も verifier green）。
-  4) body→dispatchを単純ボディで常用化（段階ゲート）。
-  5) 計測: dispatch-only PHI/ゼロ合成減少、post‑terminator検知ゼロ継続。
+  - Sealed SSA・Cursor 厳格化を導入済み。dep_tree_min_string の `.o` 生成と verifier green を Rust LLVM で確認済み。
+- Next（short）:
+  1) ON/OFF 等価性の拡張（戻り値/ログ/出力比較）
+  2) Resolver フォールバックの完全除去（常時 Resolver 経由）
+  3) ドキュメント更新（Resolver-only/局所化規律、PHI(sealed)、ptr/i64 ブリッジ）
 - Flags:
   - `NYASH_ENABLE_LOOPFORM=1`（非破壊ON）
   - `NYASH_LOOPFORM_BODY2DISPATCH=1`（実験: 単純ボディのbody→dispatch）
@@ -53,6 +71,35 @@ Hot Update — 2025‑09‑12 (Plan: LLVM wrapper via Nyash ABI)
   - モード切替フラグ: `NYASH_LLVM_USE_HARNESS=1`（ON時は llvmlite ハーネスに委譲）。
   - I/O 仕様: 入力=MIR(JSON/メモリ), 出力=.o（`NYASH_AOT_OBJECT_OUT` に書き出し）。
 - 受け入れ: harness ON/OFF で dep_tree_min_string の出力一致（機能同値）。
+
+Update — 2025‑09‑13（Harness 本採用・責務分離）
+- 目的: Rust×inkwell の反復コストを下げ、仕様変更への追従を高速化。
+- 切替方針:
+  - Rust: MIR 正規化（Resolver 統一・LoopForm 規約）＋ MIR(JSON) 出力＋ランチャー。
+  - Python（llvmlite）: IR/JIT/`.ll`/`.o` 生成（まずは `.ll→llc→.o`）。
+- スイッチ:
+  - `NYASH_LLVM_USE_HARNESS=1` → MIR(JSON) を書き出し `tools/llvmlite_harness.py` を起動し `.o` を生成。
+  - OFF → 従来どおり Rust LLVM で `.o` 生成。
+- 受け入れ基準（A5 改定）:
+  - dep_tree_min_string で Harness ON/OFF ともに `.ll verify green`（ハーネス経路）および `.o` 生成成功。
+  - 代表ケースの戻り値・主なログが一致（必要に応じ IR 差分検査は参考）。
+
+Tasks（Harness 導入の具体）
+1) ランチャー配線と CLI 拡張
+   - `--emit-mir-json <path>` を追加（Resolver/LoopForm 規約済みの MIR14 を JSON で吐く）。
+   - `NYASH_LLVM_USE_HARNESS=1` 時は `.json → tools/llvmlite_harness.py --in … --out …` を実行して `.o` を生成。
+   - 出力先は `NYASH_LLVM_OBJ_OUT`（既存）または `NYASH_AOT_OBJECT_OUT` を尊重。
+2) llvmlite_harness 実装（docs/LLVM_HARNESS.md に準拠）
+   - 最小命令: Const/BinOp/Compare/Phi/Branch/Jump/Return。
+   - 文字列/NyRT 呼び出し: `nyash.string.*`, `nyash.box.*`, `nyash.env.box.*` を declare して call。
+   - ループ/PHI: Rust 側が担保した dispatch‑only PHI に従い、PHI 作成と incoming 追加を素直に行う。
+3) スモーク＆代表ケース
+   - ny-llvm-smoke で Round Trip → dep_tree_min_string で `.ll verify → .o` まで。
+4) Deny‑Direct 継続
+   - lowering から `vmap.get(` 直参照ゼロ（Resolver 経由の原則を Python 側仕様にも反映）。
+
+Notes（リンク形態）
+- NyRT は静的リンク（libnyrt.a）。完全静的（-static）は musl 推奨で別途対応（プラグイン動的ロードは不可になる）。
 
 Scaffold — 2025‑09‑12 (llvmlite harness)
 - Added tools/llvmlite_harness.py (trivial ny_main returning 0) and docs/LLVM_HARNESS.md.

@@ -29,60 +29,40 @@ def lower_newbox(
         vmap: Value map
         resolver: Optional resolver for type handling
     """
-    # Look up or declare the box creation function
-    create_func_name = f"ny_create_{box_type}"
-    create_func = None
-    
+    # Use NyRT shim: nyash.env.box.new(type_name: i8*) -> i64
+    i64 = ir.IntType(64)
+    i8p = ir.IntType(8).as_pointer()
+    # Prefer variadic shim: nyash.env.box.new_i64x(type_name, argc, a1, a2, a3, a4)
+    new_i64x = None
     for f in module.functions:
-        if f.name == create_func_name:
-            create_func = f
+        if f.name == "nyash.env.box.new_i64x":
+            new_i64x = f
             break
-    
-    if not create_func:
-        # Declare box creation function
-        # Signature depends on box type
-        i64 = ir.IntType(64)
-        i8 = ir.IntType(8)
-        
-        if box_type in ["StringBox", "IntegerBox", "BoolBox"]:
-            # Built-in boxes - default constructors (no args)
-            # Real implementation may have optional args
-            func_type = ir.FunctionType(i64, [])
-        else:
-            # Generic box - variable arguments
-            # For now, assume no args
-            func_type = ir.FunctionType(i64, [])
-        
-        create_func = ir.Function(module, func_type, name=create_func_name)
-    
-    # Prepare arguments
-    call_args = []
-    for i, arg_id in enumerate(args):
-        arg_val = vmap.get(arg_id)
-        
-        if not arg_val:
-            # Default based on box type
-            if box_type == "StringBox":
-                # Empty string
-                i8 = ir.IntType(8)
-                arg_val = ir.Constant(i8.as_pointer(), None)
-            else:
-                # Zero
-                arg_val = ir.Constant(ir.IntType(64), 0)
-        
-        # Type conversion if needed
-        if box_type == "StringBox" and hasattr(arg_val, 'type'):
-            if isinstance(arg_val.type, ir.IntType):
-                # int to string ptr
-                i8 = ir.IntType(8)
-                arg_val = builder.inttoptr(arg_val, i8.as_pointer())
-        
-        call_args.append(arg_val)
-    
-    # Create the box
-    handle = builder.call(create_func, call_args, name=f"new_{box_type}")
-    
-    # Store handle
+    if not new_i64x:
+        new_i64x = ir.Function(module, ir.FunctionType(i64, [i8p, i64, i64, i64, i64, i64]), name="nyash.env.box.new_i64x")
+
+    # Build C-string for type name (unique global per function)
+    sbytes = (box_type + "\0").encode('utf-8')
+    arr_ty = ir.ArrayType(ir.IntType(8), len(sbytes))
+    try:
+        fn = builder.block.parent
+        fn_name = getattr(fn, 'name', 'fn')
+    except Exception:
+        fn_name = 'fn'
+    base = f".box_ty_{fn_name}_{dst_vid}"
+    existing = {g.name for g in module.global_values}
+    name = base
+    n = 1
+    while name in existing:
+        name = f"{base}.{n}"; n += 1
+    g = ir.GlobalVariable(module, arr_ty, name=name)
+    g.linkage = 'private'
+    g.global_constant = True
+    g.initializer = ir.Constant(arr_ty, bytearray(sbytes))
+    c0 = ir.Constant(ir.IntType(32), 0)
+    ptr = builder.gep(g, [c0, c0], inbounds=True)
+    zero = ir.Constant(i64, 0)
+    handle = builder.call(new_i64x, [ptr, zero, zero, zero, zero, zero], name=f"new_{box_type}")
     vmap[dst_vid] = handle
 
 def lower_newbox_generic(

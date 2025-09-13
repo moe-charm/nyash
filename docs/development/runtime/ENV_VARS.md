@@ -43,6 +43,9 @@ NYASH_DISABLE_PLUGINS = "1"
 ## LLVM/AOT
 - LLVM_SYS_180_PREFIX: LLVM 18 のパス指定
 - NYASH_LLVM_VINVOKE_RET_SMOKE, NYASH_LLVM_ARRAY_RET_SMOKE: CI 用スモークトグル
+- NYASH_LLVM_OBJ_OUT: Rust LLVM 経路で生成する `.o` の出力パス（Runner/スクリプトが尊重）
+- NYASH_AOT_OBJECT_OUT: AOT パイプラインで使用する `.o` 出力ディレクトリ/パス
+- NYASH_LLVM_USE_HARNESS: "1" で llvmlite ハーネス経路を有効化（MIR(JSON)→Python→.ll→llc→.o）
 
 ## 管理方針（提案）
 - コード側: `src/config/env.rs` を単一の集約窓口に（JIT は `jit::config` に委譲）。

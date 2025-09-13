@@ -19,16 +19,20 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 ## Next (small boxes)
 
 1) LLVM Native EXE Generation (Phase 15.2) 🚀
+   - Python/llvmlite implementation as primary path (2400 lines, 10x faster development)
    - LLVM backend object → executable pipeline completion
    - Separate `nyash-llvm-compiler` crate (reduce main build weight)
    - Input: MIR (JSON/binary) → Output: native executable
    - Link with nyrt runtime (static/dynamic options)
+   - Plugin all-direction build strategy (.so/.o/.a simultaneous generation)
    - Integration: `nyash --backend llvm --emit exe program.nyash -o program.exe`
 2) Standard Ny std impl (P0→実体化)
    - Implement P0 methods for string/array/map in Nyash (keep NyRT primitives minimal)
    - Enable via `nyash.toml` `[ny_plugins]` (opt‑in); extend `tools/jit_smoke.sh`
 3) Ny compiler MVP (Ny→MIR on JIT path) (Phase 15.3) 🎯
    - Ny tokenizer + recursive‑descent parser (current subset) in Ny; drive existing MIR builder
+   - Target: 800 lines parser + 2500 lines MIR builder = 3300 lines total
+   - No circular dependency: nyrt provides StringBox/ArrayBox via C ABI
    - Flag path: `NYASH_USE_NY_COMPILER=1` to switch rust→ny compiler; rust parser as fallback
    - Add apps/selfhost-compiler/ and minimal smokes
 4) Bootstrap loop (c0→c1→c1')
@@ -36,9 +40,11 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
    - **This achieves self-hosting!** Nyash compiles Nyash
 5) VM Layer in Nyash (Phase 15.4) ⚡
    - Implement MIR interpreter in Nyash (13 core instructions)
+   - Dynamic dispatch via MapBox for instruction handlers
    - BoxCall/ExternCall bridge to existing infrastructure
    - Optional LLVM JIT acceleration for hot paths
    - Enable instant execution without compilation
+   - Expected: 5000 lines for complete VM implementation
 6) Plugins CI split (継続)
    - Core always‑on (JIT, plugins disabled); Plugins as optional job (strict off by default)
 
@@ -64,6 +70,13 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 
 - JSON v0 bridge: `tools/ny_parser_bridge_smoke.sh` / `tools/ny_parser_bridge_smoke.ps1`
 - E2E roundtrip: `tools/ny_roundtrip_smoke.sh` / `tools/ny_roundtrip_smoke.ps1`
+
+## Implementation Dependencies
+
+- Phase 15.2 (LLVM EXE) → Phase 15.3 (Nyash Compiler) → Phase 15.4 (VM in Nyash)
+- Python llvmlite serves as rapid prototyping path while Rust/inkwell continues
+- Plugin all-direction build enables static executable generation
+- Total expected Nyash code: ~20,000 lines (75% reduction from 80k Rust)
 
 ## Stop criteria (Phase 15)
 

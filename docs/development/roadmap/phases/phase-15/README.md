@@ -17,17 +17,21 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 ## 🚀 実装戦略（2025年9月更新）
 
 ### Phase 15.2: LLVM層の独立化（実装中）
-- nyash-llvm-compiler crateの分離
+- **Python/llvmlite実装を正式採用**（開発速度10倍、~2400行）
+- nyash-llvm-compiler crateの分離（Rust版も継続）
 - MIR JSON/バイナリ入力 → ネイティブEXE出力
+- プラグイン全方向ビルド戦略（.so/.o/.a同時生成）
 - 独立したツールとして配布可能
 
 ### Phase 15.3: Nyashコンパイラ実装
-- NyashでNyashパーサー実装
-- AST→MIR変換
+- NyashでNyashパーサー実装（800行目標）
+- AST→MIR変換（2500行目標）
+- **循環依存なし**：nyrtがStringBox/ArrayBoxをC ABI経由で提供
 - ブートストラップでセルフホスティング達成！
 
 ### Phase 15.4: VM層のNyash化（革新的）
-- MIR解釈エンジンをNyashで実装
+- MIR解釈エンジンをNyashで実装（~5000行予想）
+- 動的ディスパッチ（MapBox）で13命令処理
 - コンパイル不要の即座実行
 - デバッグ・開発効率の劇的向上
 
@@ -84,6 +88,7 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 - **型システム簡略化**: 動的型付けの恩恵（-20%）
 - **エラー処理統一**: Result<T,E>地獄からの解放（-15%）
 - **動的ディスパッチ**: match文の大幅削減（-10%）
+- **合計**: 80,000行→20,000行（75%削減）
 
 ### 実装例
 ```nyash
@@ -180,10 +185,11 @@ nyash build main.ny --backend=llvm --emit exe -o program.exe
 ### 実装戦略
 
 #### LLVM バックエンド（優先）
-1. **MIR→LLVM IR**: MIR13をLLVM IRに変換（実装済み）
-2. **LLVM IR→Object**: ネイティブオブジェクトファイル生成（実装済み）
-3. **Object→EXE**: リンカー統合でEXE作成（実装中）
-4. **独立コンパイラ**: `nyash-llvm-compiler` crateとして分離（計画中）
+1. **MIR→LLVM IR**: MIR13をLLVM IRに変換（✅ 実装済み）
+2. **LLVM IR→Object**: ネイティブオブジェクトファイル生成（✅ 実装済み）
+3. **Python/llvmlite実装**: Resolver patternでSSA安全性確保（✅ 実証済み）
+4. **Object→EXE**: リンカー統合でEXE作成（🚀 実装中）
+5. **独立コンパイラ**: `nyash-llvm-compiler` crateとして分離（📝 計画中）
 
 詳細は[**LLVM EXE生成戦略**](implementation/llvm-exe-strategy.md)を参照。
 
@@ -224,13 +230,15 @@ ny_free_buf(buffer)
 - [Phase 12.7: ANCP圧縮](../phase-12.7/)
 - [Phase 15.1: AOT計画](phase-15.1/)
 
-## 📅 実施時期
+## 📅 実施時期（修正版）
 
 - **現在進行中**（2025年9月）
-- **Phase 15.2**: LLVM独立化（実装中）
-- **Phase 15.3**: Nyashコンパイラ（2025年後半）
-- **Phase 15.4**: VM層Nyash化（2026年前半）
-- **Phase 15.5**: ABI移行（LLVM完成後）
+  - Python/llvmlite実装でブレークスルー
+  - dep_tree_min_string.nyashオブジェクト生成成功！
+- **Phase 15.2**: LLVM独立化（2025年9-10月完成予定）
+- **Phase 15.3**: Nyashコンパイラ（2025年11-12月）
+- **Phase 15.4**: VM層Nyash化（2026年1-3月）
+- **Phase 15.5**: ABI移行（LLVM完成後、必要に応じて）
 
 ## 💡 期待される成果
 
@@ -260,6 +268,13 @@ ny_free_buf(buffer)
 - コンパイラもBox
 - リンカーもBox  
 - アセンブラもBox
+- プラグインもBox（.so/.o/.a全方向対応）
 - すべてがBox！
 
 **世界一美しい箱は、自分自身さえも美しく包み込む**
+
+### 🚀 次のマイルストーン
+- ✅ LLVM dominance違反解決（Resolver pattern）
+- 🚀 Python/llvmliteでEXE生成パイプライン完成
+- 📝 nyash-llvm-compiler分離設計
+- 📝 NyashパーサーMVP実装開始

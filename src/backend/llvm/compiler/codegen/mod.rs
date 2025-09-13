@@ -50,6 +50,7 @@ fn lower_one_function<'ctx>(
     func: &crate::mir::function::MirFunction,
     name: &str,
     box_type_ids: &HashMap<String, i64>,
+    llvm_funcs: &HashMap<String, FunctionValue<'ctx>>,
 ) -> Result<(), String> {
     // Create basic blocks (prefix names with function label to avoid any ambiguity)
     let fn_label = sanitize_symbol(name);
@@ -226,7 +227,7 @@ fn lower_one_function<'ctx>(
                         callee,
                         args,
                         &build_const_str_map(func),
-                        &std::collections::HashMap::new(),
+                        llvm_funcs,
                         &bb_map,
                         &preds,
                         &block_end_values,
@@ -579,7 +580,7 @@ impl LLVMCompiler {
         // Lower all functions
         for (name, func) in &mir_module.functions {
             let llvm_func = *llvm_funcs.get(name).ok_or("predecl not found")?;
-            lower_one_function(&codegen, llvm_func, func, name, &box_type_ids)?;
+            lower_one_function(&codegen, llvm_func, func, name, &box_type_ids, &llvm_funcs)?;
         }
 
         // Build entry wrapper and emit object
@@ -587,7 +588,7 @@ impl LLVMCompiler {
     }
 }
 
-/* BEGIN_OLD_BLOCK
+/*
                         MirInstruction::NewBox { dst, box_type, args } => {
                             instructions::lower_newbox(
                                 &codegen,
@@ -1127,7 +1128,8 @@ impl LLVMCompiler {
         }
     }
 }
-END_OLD_BLOCK */
+Old duplicate lowering block removed
+*/
 
 #[cfg(test)]
 mod tests {

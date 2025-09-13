@@ -13,7 +13,10 @@ def lower_typeop(
     dst_vid: int,
     target_type: Optional[str],
     vmap: Dict[int, ir.Value],
-    resolver=None
+    resolver=None,
+    preds=None,
+    block_end_values=None,
+    bb_map=None
 ) -> None:
     """
     Lower MIR TypeOp instruction
@@ -32,7 +35,10 @@ def lower_typeop(
         vmap: Value map
         resolver: Optional resolver for type handling
     """
-    src_val = vmap.get(src_vid, ir.Constant(ir.IntType(64), 0))
+    if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+        src_val = resolver.resolve_i64(src_vid, builder.block, preds, block_end_values, vmap, bb_map)
+    else:
+        src_val = vmap.get(src_vid, ir.Constant(ir.IntType(64), 0))
     
     if op == "cast":
         # Type casting - for now just pass through
@@ -73,7 +79,11 @@ def lower_convert(
     dst_vid: int,
     from_type: str,
     to_type: str,
-    vmap: Dict[int, ir.Value]
+    vmap: Dict[int, ir.Value],
+    resolver=None,
+    preds=None,
+    block_end_values=None,
+    bb_map=None
 ) -> None:
     """
     Lower type conversion between primitive types
@@ -86,7 +96,14 @@ def lower_convert(
         to_type: Target type
         vmap: Value map
     """
-    src_val = vmap.get(src_vid)
+    if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+        # Choose resolution based on from_type
+        if from_type == "ptr":
+            src_val = resolver.resolve_ptr(src_vid, builder.block, preds, block_end_values, vmap)
+        else:
+            src_val = resolver.resolve_i64(src_vid, builder.block, preds, block_end_values, vmap, bb_map)
+    else:
+        src_val = vmap.get(src_vid)
     if not src_val:
         # Default based on target type
         if to_type == "f64":
@@ -108,10 +125,10 @@ def lower_convert(
     elif from_type == "i64" and to_type == "ptr":
         # int to pointer
         i8 = ir.IntType(8)
-        result = builder.inttoptr(src_val, i8.as_pointer())
+        result = builder.inttoptr(src_val, i8.as_pointer(), name=f"conv_i2p_{dst_vid}")
     elif from_type == "ptr" and to_type == "i64":
         # pointer to int
-        result = builder.ptrtoint(src_val, ir.IntType(64))
+        result = builder.ptrtoint(src_val, ir.IntType(64), name=f"conv_p2i_{dst_vid}")
     elif from_type == "i32" and to_type == "i64":
         # sign extend
         result = builder.sext(src_val, ir.IntType(64))

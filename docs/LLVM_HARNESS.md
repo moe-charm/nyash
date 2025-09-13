@@ -1,36 +1,41 @@
-# llvmlite Harness (Experimental)
+# llvmlite Harness（正式導入・Rust LLVM 対置運用）
 
 Purpose
-- Provide a fast, scriptable LLVM emission path using Python + llvmlite for validation and prototyping.
-- Run in parallel with the Rust/inkwell path; keep outputs functionally equivalent for targeted smokes.
+- Python + llvmlite による高速・柔軟な LLVM 生成経路を提供（検証・プロトタイプと将来の主役）。
+- Rust/inkwell 経路と並走し、代表ケースで機能同値（戻り値・検証）を維持。
 
 Switch
-- Set `NYASH_LLVM_USE_HARNESS=1` to prefer the harness (future: wired in LLVM backend entry).
+- `NYASH_LLVM_USE_HARNESS=1` でハーネス優先（LLVM バックエンド入口から起動）。
 
-Protocol (tentative)
-- Input: MIR14 JSON file path (subset sufficient for dep_tree_min_string initially).
-- Output: `.o` object file written to `NYASH_AOT_OBJECT_OUT` or `--out` path.
-- Entry function: `ny_main(i64 argc, i8** argv) -> i64` (returns app exit code/box-handle per ABI).
+Protocol
+- Input: MIR14 JSON（Rust 前段で Resolver/LoopForm 規約を満たした形）。
+- Output: `.o` オブジェクト（既定: `NYASH_AOT_OBJECT_OUT` または `NYASH_LLVM_OBJ_OUT`）。
+- 入口: `ny_main() -> i64`（戻り値は exit code 相当。必要時 handle 正規化を行う）。
 
 Quick Start
-- Install deps: `python3 -m pip install llvmlite`
-- Generate a dummy object to validate toolchain:
+- 依存: `python3 -m pip install llvmlite`
+- ダミー生成（配線検証）:
   - `python3 tools/llvmlite_harness.py --out /tmp/dummy.o`
-  - Link with NyRT as usual to produce an executable.
+  - NyRT（libnyrt.a）とリンクして EXE 化（例: `cc /tmp/dummy.o -L target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o app_dummy`）。
 
-Intended Wiring (Rust side)
-- LLVM backend checks `NYASH_LLVM_USE_HARNESS=1` and, if set, exports MIR14 of the target module to a temp JSON, then invokes:
-  - `python3 tools/llvmlite_harness.py --in <mir.json> --out <obj.o>`
-- On success, the normal link step continues using `<obj.o>`.
+Wiring（Rust 側）
+- `NYASH_LLVM_USE_HARNESS=1` のとき:
+  1) `--emit-mir-json <path>` 等で MIR(JSON) を出力
+  2) `python3 tools/llvmlite_harness.py --in <mir.json> --out <obj.o>` を起動
+  3) 成功後は通常のリンク手順（NyRT とリンク）
 
-Scope (Phase 15)
-- Minimal ops: i64 arithmetic, comparisons, branches, PHI(Sealed), basic string ops through NyRT shims.
-- Target case: `apps/selfhost/tools/dep_tree_min_string.nyash` builds and runs.
+Scope（Phase 15）
+- 最小命令: Const/BinOp/Compare/Phi/Branch/Jump/Return
+- 文字列: NyRT Shim（`nyash.string.len_h`, `charCodeAt_h`, `concat_hh`, `eq_hh`）を declare → call
+- NewBox/ExternCall/BoxCall: まずは固定シンボル／by-id を優先（段階導入）
+- 目標: `apps/selfhost/tools/dep_tree_min_string.nyash` の `.ll verify green → .o` 安定化
 
 Acceptance
-- A5: Harness ON vs OFF produce functionally equivalent output for the target smoke.
+- Harness ON/OFF で機能同値（戻り値/検証）。代表ケースで `.ll verify green` と `.o` 生成成功。
 
 Notes
-- The first version may ignore MIR details and emit a fixed `ny_main` body for smoke scaffolding; then iterate to lower MIR ops.
-- Keep the harness self-contained; no external state besides inputs and env.
+- 初版は固定 `ny_main` から開始してもよい（配線確認）。以降、MIR 命令を順次対応。
+- ハーネスは自律（外部状態に依存しない）。エラーは即 stderr に詳細を出す。
 
+Appendix: 静的リンクについて
+- 生成 EXE は NyRT（libnyrt.a）を静的リンク。完全静的（-static）は musl 推奨（dlopen 不可になるため動的プラグインは使用不可）。

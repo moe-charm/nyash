@@ -12,7 +12,10 @@ def lower_branch(
     then_bid: int,
     else_bid: int,
     vmap: Dict[int, ir.Value],
-    bb_map: Dict[int, ir.Block]
+    bb_map: Dict[int, ir.Block],
+    resolver=None,
+    preds=None,
+    block_end_values=None
 ) -> None:
     """
     Lower MIR Branch instruction
@@ -26,7 +29,10 @@ def lower_branch(
         bb_map: Block map
     """
     # Get condition value
-    cond = vmap.get(cond_vid)
+    if resolver is not None and preds is not None and block_end_values is not None:
+        cond = resolver.resolve_i64(cond_vid, builder.block, preds, block_end_values, vmap, bb_map)
+    else:
+        cond = vmap.get(cond_vid)
     if not cond:
         # Default to false if missing
         cond = ir.Constant(ir.IntType(1), 0)

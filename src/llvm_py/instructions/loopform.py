@@ -50,7 +50,10 @@ def lower_while_loopform(
     body_instructions: List[Any],
     loop_id: int,
     vmap: Dict[int, ir.Value],
-    bb_map: Dict[int, ir.Block]
+    bb_map: Dict[int, ir.Block],
+    resolver=None,
+    preds=None,
+    block_end_values=None
 ) -> bool:
     """
     Lower a while loop using LoopForm structure
@@ -71,7 +74,12 @@ def lower_while_loopform(
     
     # Header: Evaluate condition
     builder.position_at_end(lf.header)
-    cond = vmap.get(condition_vid, ir.Constant(ir.IntType(1), 0))
+    if resolver is not None and preds is not None and block_end_values is not None:
+        cond64 = resolver.resolve_i64(condition_vid, builder.block, preds, block_end_values, vmap, bb_map)
+        zero64 = ir.IntType(64)(0)
+        cond = builder.icmp_unsigned('!=', cond64, zero64)
+    else:
+        cond = vmap.get(condition_vid, ir.Constant(ir.IntType(1), 0))
     # Convert to i1 if needed
     if hasattr(cond, 'type') and cond.type == ir.IntType(64):
         cond = builder.icmp_unsigned('!=', cond, ir.Constant(ir.IntType(64), 0))

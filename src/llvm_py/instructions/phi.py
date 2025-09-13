@@ -13,7 +13,9 @@ def lower_phi(
     vmap: Dict[int, ir.Value],
     bb_map: Dict[int, ir.Block],
     current_block: ir.Block,
-    resolver=None  # Resolver instance (optional)
+    resolver=None,  # Resolver instance (optional)
+    block_end_values: Optional[Dict[int, Dict[int, ir.Value]]] = None,
+    preds_map: Optional[Dict[int, List[int]]] = None
 ) -> None:
     """
     Lower MIR PHI instruction
@@ -32,23 +34,50 @@ def lower_phi(
         vmap[dst_vid] = ir.Constant(ir.IntType(64), 0)
         return
     
-    # Determine PHI type from first incoming value
-    first_val_id = incoming[0][0]
-    first_val = vmap.get(first_val_id)
-    
-    if first_val and hasattr(first_val, 'type'):
-        phi_type = first_val.type
-    else:
-        # Default to i64
-        phi_type = ir.IntType(64)
+    # Determine PHI type from snapshots or fallback i64
+    phi_type = ir.IntType(64)
+    if block_end_values is not None:
+        for val_id, pred_bid in incoming:
+            snap = block_end_values.get(pred_bid, {})
+            val = snap.get(val_id)
+            if val is not None and hasattr(val, 'type'):
+                phi_type = val.type
+                # Prefer pointer type
+                if hasattr(phi_type, 'is_pointer') and phi_type.is_pointer:
+                    break
     
     # Create PHI instruction
     phi = builder.phi(phi_type, name=f"phi_{dst_vid}")
     
-    # Add incoming values
+    # Build map from provided incoming
+    incoming_map: Dict[int, int] = {}
     for val_id, block_id in incoming:
-        val = vmap.get(val_id)
+        incoming_map[block_id] = val_id
+
+    # Resolve actual predecessor set
+    cur_bid = None
+    try:
+        cur_bid = int(str(current_block.name).replace('bb',''))
+    except Exception:
+        pass
+    actual_preds = []
+    if preds_map is not None and cur_bid is not None:
+        actual_preds = [p for p in preds_map.get(cur_bid, []) if p != cur_bid]
+    else:
+        # Fallback: use blocks in incoming list
+        actual_preds = [b for _, b in incoming]
+
+    # Add incoming for each actual predecessor
+    for block_id in actual_preds:
         block = bb_map.get(block_id)
+        # Prefer pred snapshot
+        if block_end_values is not None:
+            snap = block_end_values.get(block_id, {})
+            vid = incoming_map.get(block_id)
+            val = snap.get(vid) if vid is not None else None
+        else:
+            vid = incoming_map.get(block_id)
+            val = vmap.get(vid) if vid is not None else None
         
         if not val:
             # Create default value based on type
@@ -66,34 +95,32 @@ def lower_phi(
             
         # Type conversion if needed
         if hasattr(val, 'type') and val.type != phi_type:
-            # Save current position
-            saved_block = builder.block
-            saved_pos = None
-            if hasattr(builder, '_anchor'):
-                saved_pos = builder._anchor
-            
-            # Position at end of predecessor block
-            builder.position_at_end(block)
+            # Position at end (before terminator) of predecessor block
+            pb = ir.IRBuilder(block)
+            try:
+                term = block.terminator
+                if term is not None:
+                    pb.position_before(term)
+                else:
+                    pb.position_at_end(block)
+            except Exception:
+                pb.position_at_end(block)
             
             # Convert types
             if isinstance(phi_type, ir.IntType) and val.type.is_pointer:
-                val = builder.ptrtoint(val, phi_type, name=f"cast_p2i_{val_id}")
+                val = pb.ptrtoint(val, phi_type, name=f"cast_p2i_{val_id}")
             elif phi_type.is_pointer and isinstance(val.type, ir.IntType):
-                val = builder.inttoptr(val, phi_type, name=f"cast_i2p_{val_id}")
+                val = pb.inttoptr(val, phi_type, name=f"cast_i2p_{val_id}")
             elif isinstance(phi_type, ir.IntType) and isinstance(val.type, ir.IntType):
                 # Int to int
                 if phi_type.width > val.type.width:
-                    val = builder.zext(val, phi_type, name=f"zext_{val_id}")
+                    val = pb.zext(val, phi_type, name=f"zext_{val_id}")
                 else:
-                    val = builder.trunc(val, phi_type, name=f"trunc_{val_id}")
-            
-            # Restore position
-            builder.position_at_end(saved_block)
-            if saved_pos and hasattr(builder, '_anchor'):
-                builder._anchor = saved_pos
+                    val = pb.trunc(val, phi_type, name=f"trunc_{val_id}")
         
-        # Add to PHI
-        phi.add_incoming(val, block)
+        # Add to PHI (skip if no block)
+        if block is not None:
+            phi.add_incoming(val, block)
     
     # Store PHI result
     vmap[dst_vid] = phi

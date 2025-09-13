@@ -11,7 +11,8 @@ def lower_const(
     module: ir.Module,
     dst: int,
     value: Dict[str, Any],
-    vmap: Dict[int, ir.Value]
+    vmap: Dict[int, ir.Value],
+    resolver=None
 ) -> None:
     """
     Lower MIR Const instruction
@@ -39,25 +40,31 @@ def lower_const(
         vmap[dst] = llvm_val
         
     elif const_type == 'string':
-        # String constant - create global and get pointer
+        # String constant - create global, store GlobalVariable (not GEP) to avoid dominance issues
         i8 = ir.IntType(8)
         str_val = str(const_val)
-        # Create array constant for the string
         str_bytes = str_val.encode('utf-8') + b'\0'
-        str_const = ir.Constant(ir.ArrayType(i8, len(str_bytes)),
-                               bytearray(str_bytes))
-        
-        # Create global string constant
-        global_name = f".str.{dst}"
-        global_str = ir.GlobalVariable(module, str_const.type, name=global_name)
-        global_str.initializer = str_const
-        global_str.linkage = 'private'
-        global_str.global_constant = True
-        
-        # Get pointer to first element
-        indices = [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)]
-        ptr = builder.gep(global_str, indices, name=f"str_ptr_{dst}")
-        vmap[dst] = ptr
+        arr_ty = ir.ArrayType(i8, len(str_bytes))
+        str_const = ir.Constant(arr_ty, bytearray(str_bytes))
+        try:
+            fn = builder.block.parent
+            fn_name = getattr(fn, 'name', 'fn')
+        except Exception:
+            fn_name = 'fn'
+        base = f".str.{fn_name}.{dst}"
+        existing = {g.name for g in module.global_values}
+        name = base
+        n = 1
+        while name in existing:
+            name = f"{base}.{n}"; n += 1
+        g = ir.GlobalVariable(module, arr_ty, name=name)
+        g.initializer = str_const
+        g.linkage = 'private'
+        g.global_constant = True
+        # Store the GlobalVariable; resolver.resolve_ptr will emit GEP in the current block
+        vmap[dst] = g
+        if resolver is not None and hasattr(resolver, 'string_literals'):
+            resolver.string_literals[dst] = str_val
         
     elif const_type == 'void':
         # Void/null constant - use i64 zero

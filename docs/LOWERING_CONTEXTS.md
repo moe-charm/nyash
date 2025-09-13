@@ -56,7 +56,7 @@ Invariants Enforced by Design
 Dev Guards (optional, recommended)
 - `PhiGuard::assert_dispatch_only(&LowerFnCtx)` to fail fast when non-dispatch PHIs appear.
 - `LoopGuard::assert_preheader(&LowerFnCtx)` to ensure preheader presence and header i1 formation point.
-- CI Deny-Direct: `rg "vmap\.get\("` must match zero in lowering sources.
+- CI Deny-Direct: `rg -n "vmap\.get\(" src/backend/llvm/compiler/codegen/instructions | wc -l` must be `0`.
 
 Migration Plan
 1) Introduce `LowerFnCtx`/`BlockCtx`/`InvokeCtx`; migrate `lower_boxcall` and invoke path first.
@@ -66,5 +66,5 @@ Migration Plan
 
 Acceptance
 - Refactored entrypoints accept at most three boxed parameters.
-- Deny-Direct passes (no direct `vmap.get` in lowering).
+- Deny-Direct passes (no direct `vmap.get` in lowering/instructions).
 - Dominance: verifier green on representative functions (e.g., dep_tree_min_string).

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]  # 動的ライブラリとしてビルド
+crate-type = ["cdylib", "staticlib"]  # 動的/静的 両対応
 
 [dependencies]
 # 最小限の依存関係のみ

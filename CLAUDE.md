@@ -216,12 +216,29 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 
 # LLVMプラグイン実行（method_id使用）
 ./target/release/nyash --backend llvm program.nyash
+
+# Python/llvmliteハーネス使用（開発中）
+NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
-## 📝 Update (2025-09-12) 🎉 Python LLVM実装完了！
-- 🐍 Python LLVM バックエンド実装完了（~2000行）
+## 📝 Update (2025-09-13) 🎉 LLVM大進展！
+- ✅ dep_tree_min_string.nyashのオブジェクト生成成功！（10.4KB）
+- ✅ LLVM verifier green - dominance違反解決！
+- 🐍 Python/llvmlite版を正式採用予定（開発速度10倍）
 - 🎯 Phase 15セルフホスティング継続中（80k→20k行目標）
 - 📋 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
+
+### 🚀 新発見：プラグイン全方向ビルド戦略
+```bash
+# 同じソースから全形式生成！
+plugins/filebox/
+├── filebox.so     # 動的版（開発用）
+├── filebox.o      # 静的リンク用
+└── filebox.a      # アーカイブ版
+
+# 単一EXE生成可能に！
+clang main.o filebox.o pathbox.o libnyrt.a -o nyash_static.exe
+```
 
 ## ⚡ 重要な設計原則
 

@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 name = "nyash_file"
-crate-type = ["cdylib"]  # 動的ライブラリとして生成
+crate-type = ["cdylib", "staticlib"]  # 動的/静的 両対応
 
 [dependencies]
 # C FFI用

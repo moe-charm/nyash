@@ -1,0 +1,14 @@
+{
+  "functions": [
+    {"name": "ny_main", "params": [], "blocks": [
+      {"id": 0, "instructions": [
+        {"op":"const","dst":1,"value":{"type":"string","value":"ab"}},
+        {"op":"const","dst":2,"value":{"type":"string","value":"cd"}},
+        {"op":"binop","operation":"+","lhs":1,"rhs":2,"dst":3},
+        {"op":"externcall","func":"nyash.console.log","args":[3],"dst":null},
+        {"op":"const","dst":4,"value":{"type":"i64","value":0}},
+        {"op":"ret","value":4}
+      ]}
+    ]}
+  ]
+}

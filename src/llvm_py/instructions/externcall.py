@@ -1,39 +1,10 @@
 """
 ExternCall instruction lowering
-Handles the minimal 5 runtime functions: print, error, panic, exit, now
+Minimal mapping for NyRT-exported symbols (console/log family等)
 """
 
 import llvmlite.ir as ir
 from typing import Dict, List, Optional
-
-# The 5 minimal external functions
-EXTERN_FUNCS = {
-    "print": {
-        "ret": "void",
-        "args": ["i8*"],  # String pointer
-        "llvm_name": "ny_print"
-    },
-    "error": {
-        "ret": "void", 
-        "args": ["i8*"],  # Error message
-        "llvm_name": "ny_error"
-    },
-    "panic": {
-        "ret": "void",
-        "args": ["i8*"],  # Panic message
-        "llvm_name": "ny_panic"
-    },
-    "exit": {
-        "ret": "void",
-        "args": ["i64"],  # Exit code
-        "llvm_name": "ny_exit"
-    },
-    "now": {
-        "ret": "i64",
-        "args": [],  # No arguments
-        "llvm_name": "ny_now"
-    }
-}
 
 def lower_externcall(
     builder: ir.IRBuilder,
@@ -42,7 +13,10 @@ def lower_externcall(
     args: List[int],
     dst_vid: Optional[int],
     vmap: Dict[int, ir.Value],
-    resolver=None
+    resolver=None,
+    preds=None,
+    block_end_values=None,
+    bb_map=None
 ) -> None:
     """
     Lower MIR ExternCall instruction
@@ -56,94 +30,121 @@ def lower_externcall(
         vmap: Value map
         resolver: Optional resolver for type handling
     """
-    if func_name not in EXTERN_FUNCS:
-        # Unknown extern function - treat as void()
-        print(f"Warning: Unknown extern function: {func_name}")
-        return
-    
-    extern_info = EXTERN_FUNCS[func_name]
-    llvm_name = extern_info["llvm_name"]
-    
-    # Look up or declare function
+    # Accept full symbol names (e.g., "nyash.console.log", "nyash.string.len_h").
+    llvm_name = func_name
+
+    i8 = ir.IntType(8)
+    i64 = ir.IntType(64)
+    i8p = i8.as_pointer()
+    void = ir.VoidType()
+
+    # Known NyRT signatures
+    sig_map = {
+        # Strings (handle-based)
+        "nyash.string.len_h": (i64, [i64]),
+        "nyash.string.charCodeAt_h": (i64, [i64, i64]),
+        "nyash.string.concat_hh": (i64, [i64, i64]),
+        "nyash.string.eq_hh": (i64, [i64, i64]),
+        # Strings (pointer-based plugin functions)
+        "nyash.string.concat_ss": (i8p, [i8p, i8p]),
+        "nyash.string.concat_si": (i8p, [i8p, i64]),
+        "nyash.string.concat_is": (i8p, [i64, i8p]),
+        "nyash.string.substring_sii": (i8p, [i8p, i64, i64]),
+        "nyash.string.lastIndexOf_ss": (i64, [i8p, i8p]),
+        # Boxing helpers
+        "nyash.box.from_i8_string": (i64, [i8p]),
+        # Console (string pointer expected)
+        # Many call sites pass handles or pointers; we coerce below.
+    }
+
+    # Find or declare function with appropriate prototype
     func = None
     for f in module.functions:
         if f.name == llvm_name:
             func = f
             break
-    
     if not func:
-        # Build function type
-        i8 = ir.IntType(8)
-        i64 = ir.IntType(64)
-        void = ir.VoidType()
-        
-        # Return type
-        if extern_info["ret"] == "void":
-            ret_type = void
-        elif extern_info["ret"] == "i64":
-            ret_type = i64
+        if llvm_name in sig_map:
+            ret_ty, arg_tys = sig_map[llvm_name]
+            fnty = ir.FunctionType(ret_ty, arg_tys)
+            func = ir.Function(module, fnty, name=llvm_name)
+        elif llvm_name.startswith("nyash.console."):
+            # console.*: (i8*) -> i64
+            fnty = ir.FunctionType(i64, [i8p])
+            func = ir.Function(module, fnty, name=llvm_name)
         else:
-            ret_type = void
-        
-        # Argument types
-        arg_types = []
-        for arg_type_str in extern_info["args"]:
-            if arg_type_str == "i8*":
-                arg_types.append(i8.as_pointer())
-            elif arg_type_str == "i64":
-                arg_types.append(i64)
-        
-        func_type = ir.FunctionType(ret_type, arg_types)
-        func = ir.Function(module, func_type, name=llvm_name)
-    
-    # Prepare arguments
-    call_args = []
+            # Unknown extern: declare as void(...no args...) and call without args
+            fnty = ir.FunctionType(void, [])
+            func = ir.Function(module, fnty, name=llvm_name)
+
+    # Prepare/coerce arguments
+    call_args: List[ir.Value] = []
     for i, arg_id in enumerate(args):
-        if i >= len(extern_info["args"]):
-            break  # Too many arguments
-        
-        expected_type_str = extern_info["args"][i]
-        arg_val = vmap.get(arg_id)
-        
-        if not arg_val:
-            # Default value
-            if expected_type_str == "i8*":
-                # Null string
-                i8 = ir.IntType(8)
-                arg_val = ir.Constant(i8.as_pointer(), None)
-            elif expected_type_str == "i64":
-                arg_val = ir.Constant(ir.IntType(64), 0)
-        
-        # Type conversion
-        if expected_type_str == "i8*":
-            # Need string pointer
-            if hasattr(arg_val, 'type'):
-                if isinstance(arg_val.type, ir.IntType):
-                    # int to ptr
-                    i8 = ir.IntType(8)
-                    arg_val = builder.inttoptr(arg_val, i8.as_pointer())
-                elif not arg_val.type.is_pointer:
-                    # Need pointer type
-                    i8 = ir.IntType(8)
-                    arg_val = ir.Constant(i8.as_pointer(), None)
-        elif expected_type_str == "i64":
-            # Need i64
-            if hasattr(arg_val, 'type'):
-                if arg_val.type.is_pointer:
-                    arg_val = builder.ptrtoint(arg_val, ir.IntType(64))
-                elif arg_val.type != ir.IntType(64):
-                    # Convert to i64
-                    pass  # TODO: Handle other conversions
-        
-        call_args.append(arg_val)
-    
-    # Make the call
-    if extern_info["ret"] == "void":
-        builder.call(func, call_args)
-        if dst_vid is not None:
-            # Void return - store 0
-            vmap[dst_vid] = ir.Constant(ir.IntType(64), 0)
-    else:
+        # Prefer resolver
+        if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+            if len(func.args) > i and isinstance(func.args[i].type, ir.PointerType):
+                aval = resolver.resolve_ptr(arg_id, builder.block, preds, block_end_values, vmap)
+            else:
+                aval = resolver.resolve_i64(arg_id, builder.block, preds, block_end_values, vmap, bb_map)
+        else:
+            aval = vmap.get(arg_id)
+        if aval is None:
+            # Default guess
+            aval = ir.Constant(i64, 0)
+
+        # If function prototype is known, coerce to expected type
+        if len(func.args) > i:
+            expected_ty = func.args[i].type
+            if isinstance(expected_ty, ir.PointerType):
+                # Need pointer
+                if hasattr(aval, 'type'):
+                    if isinstance(aval.type, ir.IntType):
+                        aval = builder.inttoptr(aval, expected_ty, name=f"ext_i2p_arg{i}")
+                    elif not aval.type.is_pointer:
+                        aval = ir.Constant(expected_ty, None)
+                    else:
+                        # Pointer but wrong element type: if pointer-to-array -> GEP to i8*
+                        try:
+                            if isinstance(aval.type.pointee, ir.ArrayType) and isinstance(expected_ty.pointee, ir.IntType) and expected_ty.pointee.width == 8:
+                                c0 = ir.Constant(ir.IntType(32), 0)
+                                aval = builder.gep(aval, [c0, c0], name=f"ext_gep_arg{i}")
+                        except Exception:
+                            pass
+                else:
+                    aval = ir.Constant(expected_ty, None)
+            elif isinstance(expected_ty, ir.IntType) and expected_ty.width == 64:
+                # Need i64
+                if hasattr(aval, 'type'):
+                    if isinstance(aval.type, ir.PointerType):
+                        aval = builder.ptrtoint(aval, i64, name=f"ext_p2i_arg{i}")
+                    elif isinstance(aval.type, ir.IntType) and aval.type.width != 64:
+                        # extend/trunc
+                        if aval.type.width < 64:
+                            aval = builder.zext(aval, i64, name=f"ext_zext_{i}")
+                        else:
+                            aval = builder.trunc(aval, i64, name=f"ext_trunc_{i}")
+                else:
+                    aval = ir.Constant(i64, 0)
+        else:
+            # Prototype shorter than args: best-effort pointer->i64 for string-ish APIs
+            if hasattr(aval, 'type') and isinstance(aval.type, ir.PointerType):
+                aval = builder.ptrtoint(aval, i64, name=f"ext_p2i_arg{i}")
+        call_args.append(aval)
+
+    # Truncate extra args if prototype shorter
+    if len(call_args) > len(func.args):
+        call_args = call_args[:len(func.args)]
+
+    # Issue the call
+    if len(call_args) == len(func.args):
         result = builder.call(func, call_args, name=f"extern_{func_name}")
-        if dst_vid is not None:
+    else:
+        result = builder.call(func, call_args[:len(func.args)])
+
+    # Materialize result into vmap
+    if dst_vid is not None:
+        rty = func.function_type.return_type
+        if isinstance(rty, ir.VoidType):
+            vmap[dst_vid] = ir.Constant(i64, 0)
+        else:
             vmap[dst_vid] = result

@@ -142,4 +142,4 @@ docs/research/notes/
 # 査読中・未公開論文 - Git追跡除外
 docs/research/papers-under-review/
 
-# 完成・公開済み論文は docs/research/papers-published/ に配置（Git追跡対象）
+# 完成・公開済み論文は docs/research/papers-published/ に配置（Git追跡対象）.pyenv/

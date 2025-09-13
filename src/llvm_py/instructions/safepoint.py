@@ -11,7 +11,11 @@ def lower_safepoint(
     module: ir.Module,
     live_values: List[int],
     vmap: Dict[int, ir.Value],
-    safepoint_id: Optional[int] = None
+    safepoint_id: Optional[int] = None,
+    resolver=None,
+    preds=None,
+    block_end_values=None,
+    bb_map=None
 ) -> None:
     """
     Lower MIR Safepoint instruction
@@ -49,11 +53,14 @@ def lower_safepoint(
         
         # Store each live value
         for i, vid in enumerate(live_values):
-            val = vmap.get(vid, ir.Constant(i64, 0))
+            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+                val = resolver.resolve_i64(vid, builder.block, preds, block_end_values, vmap, bb_map)
+            else:
+                val = vmap.get(vid, ir.Constant(i64, 0))
             
             # Ensure i64 (handles are i64)
             if hasattr(val, 'type') and val.type.is_pointer:
-                val = builder.ptrtoint(val, i64)
+                val = builder.ptrtoint(val, i64, name=f"sp_p2i_{vid}")
             
             idx = ir.Constant(ir.IntType(32), i)
             ptr = builder.gep(live_array, [idx])
