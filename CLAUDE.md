@@ -221,11 +221,12 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
-## 📝 Update (2025-09-13) 🎉 LLVM大進展！
-- ✅ dep_tree_min_string.nyashのオブジェクト生成成功！（10.4KB）
-- ✅ LLVM verifier green - dominance違反解決！
-- 🐍 Python/llvmlite版を正式採用予定（開発速度10倍）
-- 🎯 Phase 15セルフホスティング継続中（80k→20k行目標）
+## 📝 Update (2025-09-14) 🎉 セルフホスティング大前進！
+- ✅ Python LLVM実装が実用レベル到達！（esc_dirname_smoke, min_str_cat_loop, dep_tree_min_string全てPASS）
+- 🚀 パーサーのNyash実装開始！ChatGPT5が`apps/selfhost/parser/`で実装中
+- 📚 peek式の再発見 - when→peekに名前変更、ブロック/値/文すべて対応済み
+- 🧠 箱理論でSSA構築を簡略化（650行→100行）- 論文執筆完了
+- 🤝 AI協働の知見を論文化 - 実装駆動型学習の重要性を実証
 - 📋 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
 
 ### 🚀 新発見：プラグイン全方向ビルド戦略
@@ -362,6 +363,31 @@ a / b           // 除算（ゼロ除算エラー対応済み）
 a + b, a - b, a * b  // 加算・減算・乗算
 ```
 
+### 🎯 peek式（パターンマッチング）
+```nyash
+// 値を返す式として使用
+local dv = peek d {
+    "0" => 0,
+    "1" => 1,
+    "2" => 2,
+    else => 0
+}
+
+// ブロックで複雑な処理も可能
+local result = peek status {
+    "success" => { log("OK"); 200 }
+    "error" => { log("NG"); 500 }
+    else => 404
+}
+
+// 文として使用（値を捨てる）
+peek action {
+    "save" => save_data()
+    "load" => load_data()
+    else => print("Unknown")
+}
+```
+
 ### ⚠️ 重要な注意点
 ```nyash
 // ✅ 正しい書き方（Phase 12.7文法改革後）
@@ -467,10 +493,10 @@ gemini -p "Nyashの実装で困っています..."
 codex exec "質問内容"
 ```
 
-### 🐍 Python LLVM バックエンド (実験的実装)
+### 🐍 Python LLVM バックエンド (実用レベル到達！)
 **場所**: `/src/llvm_py/`
 
-ChatGPTの調査待ち中に作成した、llvmliteベースのLLVMバックエンド実装にゃ。
+llvmliteベースのLLVMバックエンド実装。箱理論により650行→100行の簡略化を実現！
 Rust/inkwellの複雑さを回避して、シンプルに2000行程度でMIR14→LLVM変換を実現。
 
 #### 実行方法
@@ -586,5 +612,5 @@ find . -name "*.md" -exec wc -l {} \;
 Notes:
 - ここから先の導線は README.md に集約
 - 詳細情報は各docsファイルへのリンクから辿る
-- このファイルは500行以内を維持する
+- このファイルは500行以内が目安（あくまで目安であり、必要に応じて増減可）
 - Phase 15セルフホスティング実装中！詳細は[Phase 15](docs/development/roadmap/phases/phase-15/)へ

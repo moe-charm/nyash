@@ -93,12 +93,12 @@ impl NyashParser {
             let then_expr = self.parse_expression()?;
             self.consume(TokenType::COLON)?; // ':'
             let else_expr = self.parse_expression()?;
-            // Lower to PeekExpr over boolean scrutinee: peek cond { true => then, else => else }
-            return Ok(ASTNode::PeekExpr {
-                scrutinee: Box::new(cond),
-                arms: vec![(crate::ast::LiteralValue::Bool(true), then_expr)],
-                else_expr: Box::new(else_expr),
-                span: Span::unknown(),
+            // Lower to If-expression AST (builder側でPhi化）
+            return Ok(ASTNode::If {
+                condition: Box::new(cond),
+                then_body: vec![then_expr],
+                else_body: Some(vec![else_expr]),
+                span: Span::Unknown,
             });
         }
         Ok(cond)
@@ -613,11 +613,14 @@ impl NyashParser {
                     expr = ASTNode::Call { callee: Box::new(expr), arguments, span: Span::unknown() };
                 }
             } else if self.match_token(&TokenType::QUESTION) {
-                // 後置 ?（Result伝播）。ただし三項演算子 '?:' と衝突するため、次トークンが ':' の場合は消費しない。
-                // 例: (cond) ? then : else ではここで '?' を処理せず、上位の parse_ternary に委ねる。
-                if self.peek_token() == &TokenType::COLON {
-                    break;
-                }
+                // 後置 ?（Result伝播）。三項 '?:' と衝突するため、
+                // 次トークンが式開始（識別子/数値/括弧/文字列/true/false/null など）の場合は消費せず上位へ委譲。
+                // ここでは「終端系（NEWLINE/EOF/)/, /}）」のみ後置?を許容する。
+                let nt = self.peek_token();
+                let is_ender = matches!(nt,
+                    TokenType::NEWLINE | TokenType::EOF | TokenType::RPAREN | TokenType::COMMA | TokenType::RBRACE
+                );
+                if !is_ender { break; }
                 self.advance();
                 expr = ASTNode::QMarkPropagate { expression: Box::new(expr), span: Span::unknown() };
             } else {

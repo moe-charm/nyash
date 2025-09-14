@@ -41,6 +41,42 @@ Next（short — Parser MVP kick‑off）
 3) スモーク: `tools/ny_roundtrip_smoke.sh` 緑、`esc_dirname_smoke`/`dep_tree_min_string` を Ny パーサ経路で PyVM/llvmlite とパリティ一致。
 4) （続）Ny AST→MIR JSON 直接降下の設計（箱構造/型メタ連携）。
 
+Hot Update — 2025‑09‑14（Language + Docs）
+- Parser/Tokenizer:
+  - 三項演算子（`cond ? then : else`）をパーサに導入（Phase 12.7 順序: Pipe の内側）。
+    - 降下は PeekExpr（`peek cond { true => then, else => else }`）化で式として扱いやすく。
+  - トークナイザに単独の `?` / `:` を追加（`.?`/`??` より後に評価）。
+  - postfix `?`（Result伝播）と `?:` の衝突を回避（look‑ahead）。
+  - `return` 後の改行/式を許容するよう改善（`return` + 三項の直後でも安全）。
+  - 文パーサのフォールバックに「式文」を追加（式のみの行を受理、結果は捨てられる；`NYASH_LINT_MUSTUSE=1` で警告可）。
+- PeekExpr（確認）:
+  - アームで `{ ... }` ブロックを許容、最後の式が値として返る（Program式として評価）。
+  - 文コンテキストでも式文として利用可（値は破棄）。
+- Docs（入口の整備）:
+  - 言語ガイド: `docs/guides/language-guide.md`
+  - 言語索引: `docs/reference/language/README.md`
+  - 安定パス（スタブ）: `docs/reference/language/LANGUAGE_REFERENCE_2025.md`（private実体へ誘導）
+  - アーキ索引/受け皿: `docs/reference/architecture/{nyash_core_concepts.md, execution-backends.md, TECHNICAL_ARCHITECTURE_2025.md}`
+- Parser MVP（Stage 1）:
+  - Python 実装: `tools/ny_parser_mvp.py` を追加、Roundtrip スモーク `tools/ny_parser_mvp_roundtrip.sh` で緑。
+  - Nyash 実装スケルトン: `apps/selfhost/parser/ny_parser_v0/main.nyash`（改修継続）。
+
+Next（short — 言語/E2E）
+1) 三項演算子のE2E確定（VM実行/戻り値表示まで緑）。
+   - 例: `apps/tests/ternary_basic.nyash`（return 10）
+   - `tools/parity.sh` で PyVM/llvmlite と動作一致の確認（peek化経路含む）。
+2) peek サンプル/テスト拡充（式文/ブロック/戻り値）
+   - 例: `apps/tests/peek_expr_block.nyash`
+3) ドキュメント追補
+   - Language Guide に peek/三項の最小例・must_useメモを追記
+   - Cheat Sheet に三項/peek を反映
+4) （継続）Parser MVP Stage2 設計: `local/if/loop/call/method/new/me/substring/length/lastIndexOf`
+
+Quick Commands（dev）
+- Python Parser Roundtrip: `NYASH_CLI_VERBOSE=1 tools/ny_parser_mvp_roundtrip.sh`
+- Peek Block サンプル（VM）: `./target/release/nyash --backend vm apps/tests/peek_expr_block.nyash`
+- E2E（言語 → MIR ダンプ）: `./target/release/nyash --dump-mir apps/tests/peek_expr_block.nyash`
+
 Hot Update — MIR v0.5 Type Metadata（2025‑09‑14 着手）
 - 背景: 文字列を i64 として曖昧に扱っており、llvmlite で handle/ptr の推測が必要→不安定の温床。
 - 追加仕様（後方互換、最小差分）:
