@@ -48,6 +48,8 @@ class Resolver:
         # Lifetime hint: value_id -> set(block_id) where it's known to be defined
         # Populated by the builder when available.
         self.def_blocks = {}
+        # Optional: block -> { dst_vid -> [(pred_bid, val_vid), ...] } for PHIs from MIR JSON
+        self.block_phi_incomings = {}
 
     def mark_string(self, value_id: int) -> None:
         try:
@@ -81,6 +83,23 @@ class Resolver:
             return self.i64_cache[cache_key]
 
         # Do not trust global vmap across blocks unless we know it's defined in this block.
+
+        # If this block has a declared MIR PHI for the value, prefer that placeholder
+        # and avoid creating any PHI here. Incoming is wired by finalize_phis().
+        try:
+            try:
+                block_id = int(str(current_block.name).replace('bb',''))
+            except Exception:
+                block_id = -1
+            if isinstance(self.block_phi_incomings, dict):
+                bmap = self.block_phi_incomings.get(block_id)
+                if isinstance(bmap, dict) and value_id in bmap:
+                    existing_cur = vmap.get(value_id)
+                    if existing_cur is not None and hasattr(existing_cur, 'add_incoming'):
+                        self.i64_cache[cache_key] = existing_cur
+                        return existing_cur
+        except Exception:
+            pass
         
         # Get predecessor blocks
         try:
@@ -98,15 +117,36 @@ class Resolver:
             existing = vmap.get(value_id)
             if existing is not None and hasattr(existing, 'type') and isinstance(existing.type, ir.IntType) and existing.type.width == 64:
                 if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                    print(f"[VAL] reuse local v{value_id} in bb{bid}", flush=True)
+                    print(f"[resolve] local reuse: bb{bid} v{value_id}", flush=True)
                 self.i64_cache[cache_key] = existing
                 return existing
+        else:
+            # Prefer a directly available SSA value from vmap（同一ブロック直前定義の再利用）。
+            # def_blocks が未更新でも、vmap に存在するなら局所定義とみなす。
+            try:
+                existing = vmap.get(value_id)
+            except Exception:
+                existing = None
+            if existing is not None and hasattr(existing, 'type') and isinstance(existing.type, ir.IntType):
+                if existing.type.width == 64:
+                    if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
+                        print(f"[resolve] vmap-fast reuse: bb{bid} v{value_id}", flush=True)
+                    self.i64_cache[cache_key] = existing
+                    return existing
+                else:
+                    zextd = self.builder.zext(existing, self.i64) if self.builder is not None else ir.Constant(self.i64, 0)
+                    if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
+                        print(f"[resolve] vmap-fast zext: bb{bid} v{value_id}", flush=True)
+                    self.i64_cache[cache_key] = zextd
+                    return zextd
         
         if not pred_ids:
             # Entry block or no predecessors: prefer local vmap value (already dominating)
             base_val = vmap.get(value_id)
             if base_val is None:
                 result = ir.Constant(self.i64, 0)
+                if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+                    print(f"[resolve] bb{bid} v{value_id} entry/no-preds → 0", flush=True)
             else:
                 # If pointer string, box to handle in current block (use local builder)
                 if hasattr(base_val, 'type') and isinstance(base_val.type, ir.PointerType) and self.module is not None:
@@ -135,41 +175,37 @@ class Resolver:
                     result = base_val if base_val.type.width == 64 else ir.Constant(self.i64, 0)
                 else:
                     result = ir.Constant(self.i64, 0)
+        elif len(pred_ids) == 1:
+            # Single-predecessor block: take predecessor end-of-block value directly
+            coerced = self._value_at_end_i64(value_id, pred_ids[0], preds, block_end_values, vmap, bb_map)
+            self.i64_cache[cache_key] = coerced
+            return coerced
         else:
-            # Sealed SSA localization: create a PHI at the start of current block
-            # that merges i64-coerced snapshots from each predecessor. This guarantees
-            # dominance for downstream uses within the current block.
-            # Use shared builder so insertion order is respected relative to other instructions.
-            # Save current insertion point
-            sb = self.builder
-            if sb is None:
-                # As a conservative fallback, synthesize zero (should not happen in normal lowering)
-                result = ir.Constant(self.i64, 0)
-                self.i64_cache[cache_key] = result
-                return result
-            orig_block = sb.block
-            # Insert PHI at the very start of current_block
-            sb.position_at_start(current_block)
-            phi = sb.phi(self.i64, name=f"loc_i64_{value_id}")
-            for pred_id in pred_ids:
-                # Value at the end of predecessor, coerced to i64 within pred block
-                coerced = self._value_at_end_i64(value_id, pred_id, preds, block_end_values, vmap, bb_map)
-                pred_bb = bb_map.get(pred_id) if bb_map is not None else None
-                if pred_bb is None:
-                    continue
-                phi.add_incoming(coerced, pred_bb)
-            # Restore insertion point to original location
+            # Multi-pred: if JSON declares a PHI for (current block, value_id),
+            # materialize it on-demand via end-of-block resolver. Otherwise, avoid
+            # synthesizing a localization PHI (return zero to preserve dominance).
             try:
-                if orig_block is not None:
-                    term = orig_block.terminator
-                    if term is not None:
-                        sb.position_before(term)
-                    else:
-                        sb.position_at_end(orig_block)
+                cur_bid = int(str(current_block.name).replace('bb',''))
             except Exception:
-                pass
-            # Use the PHI value as the localized definition for this block
-            result = phi
+                cur_bid = -1
+            declared = False
+            try:
+                if isinstance(self.block_phi_incomings, dict):
+                    m = self.block_phi_incomings.get(cur_bid)
+                    if isinstance(m, dict) and value_id in m:
+                        declared = True
+            except Exception:
+                declared = False
+            if declared:
+                # Return existing placeholder if present; do not create a new PHI here.
+                if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+                    print(f"[resolve] use placeholder PHI: bb{cur_bid} v{value_id}", flush=True)
+                placeholder = vmap.get(value_id)
+                result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
+            else:
+                if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+                    print(f"[resolve] multi-pred no-declare: bb{cur_bid} v{value_id} -> 0", flush=True)
+                result = ir.Constant(self.i64, 0)
         
         # Cache and return
         self.i64_cache[cache_key] = result
@@ -207,19 +243,43 @@ class Resolver:
                           bb_map: Optional[Dict[int, ir.Block]] = None,
                           _vis: Optional[set] = None) -> ir.Value:
         """Resolve value as i64 at the end of a given block by traversing predecessors if needed."""
+        if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+            try:
+                print(f"[resolve] end_i64 enter: bb{block_id} v{value_id}", flush=True)
+            except Exception:
+                pass
         key = (block_id, value_id)
         if key in self._end_i64_cache:
             return self._end_i64_cache[key]
         if _vis is None:
             _vis = set()
         if key in _vis:
+            if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+                print(f"[resolve] cycle detected at end_i64(bb{block_id}, v{value_id}) → 0", flush=True)
             return ir.Constant(self.i64, 0)
         _vis.add(key)
+
+        # Do not synthesize PHIs here. Placeholders are created in the function prepass.
 
         # If present in snapshot, coerce there
         snap = block_end_values.get(block_id, {})
         if value_id in snap and snap[value_id] is not None:
             val = snap[value_id]
+            is_phi_val = False
+            try:
+                is_phi_val = hasattr(val, 'add_incoming')
+            except Exception:
+                is_phi_val = False
+            if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+                try:
+                    ty = 'phi' if is_phi_val else ('ptr' if hasattr(val, 'type') and isinstance(val.type, ir.PointerType) else ('i'+str(getattr(val.type,'width','?')) if hasattr(val,'type') and isinstance(val.type, ir.IntType) else 'other'))
+                    print(f"[resolve]  snap hit: bb{block_id} v{value_id} type={ty}", flush=True)
+                except Exception:
+                    pass
+            if is_phi_val:
+                # Using a dominating PHI placeholder as incoming is valid for finalize_phis
+                self._end_i64_cache[key] = val
+                return val
             coerced = self._coerce_in_block_to_i64(val, block_id, bb_map)
             self._end_i64_cache[key] = coerced
             return coerced
@@ -235,6 +295,9 @@ class Resolver:
         # Do not use global vmap here; if not materialized by end of this block
         # (or its preds), bail out with zero to preserve dominance.
 
+        if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+            preds_s = ','.join(str(x) for x in pred_ids)
+            print(f"[resolve] end_i64 miss: bb{block_id} v{value_id} preds=[{preds_s}] → 0", flush=True)
         z = ir.Constant(self.i64, 0)
         self._end_i64_cache[key] = z
         return z
@@ -242,7 +305,11 @@ class Resolver:
     def _coerce_in_block_to_i64(self, val: Any, block_id: int, bb_map: Optional[Dict[int, ir.Block]]) -> ir.Value:
         """Ensure a value is available as i64 at the end of the given block by inserting casts/boxing there."""
         if hasattr(val, 'type') and isinstance(val.type, ir.IntType):
-            # Re-materialize an i64 definition in the predecessor block to satisfy dominance
+            # If already i64, avoid re-materializing in predecessor block.
+            # Using a value defined in another block inside pred may violate dominance (e.g., self-referential PHIs).
+            if val.type.width == 64:
+                return val
+            # Otherwise, extend/truncate in predecessor block just before the terminator.
             pred_bb = bb_map.get(block_id) if bb_map is not None else None
             if pred_bb is None:
                 return ir.Constant(self.i64, 0)
@@ -255,15 +322,10 @@ class Resolver:
                     pb.position_at_end(pred_bb)
             except Exception:
                 pb.position_at_end(pred_bb)
-            if val.type.width == 64:
-                z = ir.Constant(self.i64, 0)
-                return pb.add(val, z, name=f"res_copy_{block_id}")
+            if val.type.width < 64:
+                return pb.zext(val, self.i64, name=f"res_zext_{block_id}")
             else:
-                # Extend/truncate to i64 in pred block
-                if val.type.width < 64:
-                    return pb.zext(val, self.i64, name=f"res_zext_{block_id}")
-                else:
-                    return pb.trunc(val, self.i64, name=f"res_trunc_{block_id}")
+                return pb.trunc(val, self.i64, name=f"res_trunc_{block_id}")
         if hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
             pred_bb = bb_map.get(block_id) if bb_map is not None else None
             if pred_bb is None:

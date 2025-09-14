@@ -1,0 +1,27 @@
+[resolve] vmap-fast reuse: bb5 v0
+[resolve] vmap-fast reuse: bb7 v9
+[resolve] vmap-fast reuse: bb7 v10
+[compare] lhs v11 type=64 rhs v12 type=64 force_str=False
+[resolve] vmap-fast reuse: bb7 v13
+[resolve] vmap-fast reuse: bb9 v14
+[compare] lhs v11 type=64 rhs v16 type=64 force_str=False
+[resolve] vmap-fast reuse: bb10 v17
+[resolve] vmap-fast reuse: bb11 v23
+[resolve] vmap-fast reuse: bb6 v8
+[resolve] vmap-fast reuse: bb8 v7
+[resolve] local reuse: bb0 v1
+[resolve] local reuse: bb0 v2
+[resolve] local reuse: bb0 v6
+[resolve] local reuse: bb0 v10
+[resolve] vmap-fast reuse: bb1 v0
+[resolve] local reuse: bb1 v1
+[resolve] local reuse: bb1 v4
+[resolve] vmap-fast reuse: bb4 v0
+[resolve] local reuse: bb4 v8
+[resolve] vmap-fast reuse: bb4 v2
+[resolve] local reuse: bb4 v9
+[harness] error: LLVM IR parsing error
+<string>:17:3: error: expected '[' in phi value list
+  %"phi_6" = phi  i64
+  ^
+

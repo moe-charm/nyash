@@ -1,0 +1,42 @@
+[resolve] end_i64 enter: bb3 v0
+[resolve] end_i64 enter: bb3 v8
+[resolve] end_i64 enter: bb1 v8
+[resolve] end_i64 miss: bb1 v8 preds=[] → 0
+[resolve] end_i64 enter: bb3 v2
+[resolve] end_i64 enter: bb3 v9
+[resolve] end_i64 enter: bb1 v9
+[resolve] end_i64 miss: bb1 v9 preds=[] → 0
+[resolve] end_i64 enter: bb6 v6
+[resolve] end_i64 enter: bb5 v6
+[resolve] end_i64 miss: bb5 v6 preds=[] → 0
+[resolve] end_i64 enter: bb6 v7
+[resolve] end_i64 enter: bb5 v7
+[resolve] end_i64 miss: bb5 v7 preds=[] → 0
+[resolve] end_i64 enter: bb7 v5
+[resolve] end_i64 enter: bb6 v5
+[resolve] end_i64 enter: bb5 v5
+[resolve] end_i64 miss: bb5 v5 preds=[] → 0
+[resolve] end_i64 enter: bb7 v11
+[resolve] end_i64 enter: bb9 v6
+[resolve] end_i64 enter: bb7 v6
+[resolve] end_i64 enter: bb6 v6
+[resolve] end_i64 enter: bb14 v6
+[resolve] end_i64 enter: bb12 v6
+[resolve] end_i64 enter: bb10 v6
+[resolve] end_i64 enter: bb7 v6
+[resolve] end_i64 enter: bb5 v6
+[resolve] end_i64 enter: bb11 v6
+[resolve] end_i64 enter: bb9 v6
+[resolve] end_i64 enter: bb5 v4
+[resolve] end_i64 miss: bb5 v4 preds=[] → 0
+[resolve] end_i64 enter: bb11 v4
+[resolve] end_i64 enter: bb9 v4
+[resolve] end_i64 enter: bb7 v4
+[resolve] end_i64 enter: bb6 v4
+[resolve] on-demand PHI at bb6 for v4 incomings=(b5,v3),(b11,v4)
+[resolve] end_i64 enter: bb5 v3
+[resolve] end_i64 enter: bb11 v4
+[resolve] cycle detected at end_i64(bb11, v4) → 0
+[resolve] end_i64 enter: bb6 v5
+Compiled to tmp/h_dbg3.o
+[harness] object written: tmp/h_dbg3.o

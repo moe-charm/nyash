@@ -18,7 +18,7 @@ from instructions.compare import lower_compare
 from instructions.jump import lower_jump
 from instructions.branch import lower_branch
 from instructions.ret import lower_return
-from instructions.phi import lower_phi, defer_phi_wiring
+# PHI are deferred; finalize_phis wires incoming edges after snapshots
 from instructions.call import lower_call
 from instructions.boxcall import lower_boxcall
 from instructions.externcall import lower_externcall
@@ -101,12 +101,9 @@ class NyashLLVMBuilder:
             if not exists:
                 ir.Function(self.module, fty, name=name)
         
-        # Process each function
+        # Process each function (finalize PHIs per function to avoid cross-function map collisions)
         for func_data in functions:
             self.lower_function(func_data)
-        
-        # Wire deferred PHIs
-        self._wire_deferred_phis()
 
         # Create ny_main wrapper if necessary
         has_ny_main = any(f.name == 'ny_main' for f in self.module.functions)
@@ -189,6 +186,11 @@ class NyashLLVMBuilder:
             self.vmap.clear()
         except Exception:
             self.vmap = {}
+        # Reset basic-block map per function (block ids are local to function)
+        try:
+            self.bb_map.clear()
+        except Exception:
+            self.bb_map = {}
         # Reset resolver caches (they key by block name; avoid collisions across functions)
         try:
             self.resolver.i64_cache.clear()
@@ -284,6 +286,98 @@ class NyashLLVMBuilder:
                 visit(bid)
 
         # Process blocks in the computed order
+        # Prepass: collect producer stringish hints and PHI metadata for all blocks
+        # and create placeholders at each block head so that resolver can safely
+        # return existing PHIs without creating new ones.
+        try:
+            # Pass A: collect producer stringish hints per value-id
+            produced_str: Dict[int, bool] = {}
+            for block_data in blocks:
+                for inst in block_data.get("instructions", []) or []:
+                    try:
+                        opx = inst.get("op")
+                        dstx = inst.get("dst")
+                        if dstx is None:
+                            continue
+                        is_str = False
+                        if opx == "const":
+                            v = inst.get("value", {}) or {}
+                            t = v.get("type")
+                            if t == "string" or (isinstance(t, dict) and t.get("kind") in ("handle","ptr") and t.get("box_type") == "StringBox"):
+                                is_str = True
+                        elif opx in ("binop","boxcall","externcall"):
+                            t = inst.get("dst_type")
+                            if isinstance(t, dict) and t.get("kind") == "handle" and t.get("box_type") == "StringBox":
+                                is_str = True
+                        if is_str:
+                            produced_str[int(dstx)] = True
+                    except Exception:
+                        pass
+            self.block_phi_incomings = {}
+            for block_data in blocks:
+                bid0 = block_data.get("id", 0)
+                bb0 = self.bb_map.get(bid0)
+                for inst in block_data.get("instructions", []) or []:
+                    if inst.get("op") == "phi":
+                        try:
+                            dst0 = int(inst.get("dst"))
+                            incoming0 = inst.get("incoming", []) or []
+                        except Exception:
+                            dst0 = None; incoming0 = []
+                        if dst0 is None:
+                            continue
+                        # Record incoming metadata for finalize_phis
+                        try:
+                            self.block_phi_incomings.setdefault(bid0, {})[dst0] = [
+                                (int(b), int(v)) for (v, b) in incoming0
+                            ]
+                        except Exception:
+                            pass
+                        # Ensure placeholder exists at block head
+                        if bb0 is not None:
+                            b0 = ir.IRBuilder(bb0)
+                            try:
+                                b0.position_at_start(bb0)
+                            except Exception:
+                                pass
+                            existing = self.vmap.get(dst0)
+                            is_phi = False
+                            try:
+                                is_phi = hasattr(existing, 'add_incoming')
+                            except Exception:
+                                is_phi = False
+                            if not is_phi:
+                                ph0 = b0.phi(self.i64, name=f"phi_{dst0}")
+                                self.vmap[dst0] = ph0
+                            # Tag propagation: if explicit dst_type marks string or any incoming was produced as string-ish, tag dst
+                            try:
+                                dst_type0 = inst.get("dst_type")
+                                mark_str = isinstance(dst_type0, dict) and dst_type0.get("kind") == "handle" and dst_type0.get("box_type") == "StringBox"
+                                if not mark_str:
+                                    for (v_id, _b_id) in incoming0:
+                                        try:
+                                            if produced_str.get(int(v_id)):
+                                                mark_str = True; break
+                                        except Exception:
+                                            pass
+                                if mark_str and hasattr(self.resolver, 'mark_string'):
+                                    self.resolver.mark_string(int(dst0))
+                            except Exception:
+                                pass
+                            # Definition hint: PHI defines dst in this block
+                            try:
+                                self.def_blocks.setdefault(int(dst0), set()).add(int(bid0))
+                            except Exception:
+                                pass
+            # Sync to resolver
+            try:
+                self.resolver.block_phi_incomings = self.block_phi_incomings
+            except Exception:
+                pass
+        except Exception:
+            pass
+        
+        # Now lower blocks
         for bid in order:
             block_data = block_by_id.get(bid)
             if block_data is None:
@@ -294,8 +388,12 @@ class NyashLLVMBuilder:
         # Provide lifetime hints to resolver (which blocks define which values)
         try:
             self.resolver.def_blocks = self.def_blocks
+            # Provide phi metadata for this function to resolver
+            self.resolver.block_phi_incomings = getattr(self, 'block_phi_incomings', {})
         except Exception:
             pass
+        # Finalize PHIs for this function now that all snapshots for it exist
+        self.finalize_phis()
     
     def lower_block(self, bb: ir.Block, block_data: Dict[str, Any], func: ir.Function):
         """Lower a single basic block"""
@@ -307,25 +405,11 @@ class NyashLLVMBuilder:
         except Exception:
             pass
         instructions = block_data.get("instructions", [])
-        created_ids: List[int] = []
-        # Two-pass: lower all PHIs first to keep them grouped at top
-        phi_insts = [inst for inst in instructions if inst.get("op") == "phi"]
-        non_phi_insts = [inst for inst in instructions if inst.get("op") != "phi"]
-        # Lower PHIs
-        if phi_insts:
-            # Ensure insertion at block start
-            builder.position_at_start(bb)
-            for inst in phi_insts:
-                self.lower_instruction(builder, inst, func)
-                try:
-                    dst = inst.get("dst")
-                    if isinstance(dst, int) and dst not in created_ids and dst in self.vmap:
-                        created_ids.append(dst)
-                except Exception:
-                    pass
         # Lower non-PHI instructions strictly in original program order.
         # Reordering here can easily introduce use-before-def within the same
         # basic block (e.g., string ops that depend on prior me.* calls).
+        created_ids: List[int] = []
+        non_phi_insts = [inst for inst in instructions if inst.get("op") != "phi"]
         for inst in non_phi_insts:
             # Stop if a terminator has already been emitted for this block
             try:
@@ -343,20 +427,21 @@ class NyashLLVMBuilder:
                 pass
         # Snapshot end-of-block values for sealed PHI wiring
         bid = block_data.get("id", 0)
-        snap: Dict[int, ir.Value] = {}
-        # include function args (avoid 0 constant confusion later via special-case)
+        # Robust snapshot: clone the entire vmap at block end so that
+        # values that were not redefined in this block (but remain live)
+        # are available to PHI finalize wiring. This avoids omissions of
+        # phi-dst/cyclic and carry-over values.
+        snap: Dict[int, ir.Value] = dict(self.vmap)
         try:
-            arity = len(func.args)
+            import os
+            if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+                keys = sorted(list(snap.keys()))
+                print(f"[builder] snapshot bb{bid} keys={keys[:20]}...", flush=True)
         except Exception:
-            arity = 0
-        for i in range(arity):
-            if i in self.vmap:
-                snap[i] = self.vmap[i]
+            pass
+        # Record block-local definitions for lifetime hinting
         for vid in created_ids:
-            val = self.vmap.get(vid)
-            if val is not None:
-                snap[vid] = val
-                # Record block-local definition for lifetime hinting
+            if vid in self.vmap:
                 self.def_blocks.setdefault(vid, set()).add(block_data.get("id", 0))
         self.block_end_values[bid] = snap
     
@@ -374,8 +459,10 @@ class NyashLLVMBuilder:
             lhs = inst.get("lhs")
             rhs = inst.get("rhs")
             dst = inst.get("dst")
+            dst_type = inst.get("dst_type")
             lower_binop(builder, self.resolver, operation, lhs, rhs, dst,
-                        self.vmap, builder.block, self.preds, self.block_end_values, self.bb_map)
+                        self.vmap, builder.block, self.preds, self.block_end_values, self.bb_map,
+                        dst_type=dst_type)
             
         elif op == "jump":
             target = inst.get("target")
@@ -393,19 +480,19 @@ class NyashLLVMBuilder:
                          self.resolver, self.preds, self.block_end_values, self.bb_map)
             
         elif op == "phi":
-            dst = inst.get("dst")
-            incoming = inst.get("incoming", [])
-            # Wire PHI immediately at the start of the current block using snapshots
-            lower_phi(builder, dst, incoming, self.vmap, self.bb_map, builder.block, self.resolver, self.block_end_values, self.preds)
-        
+            # No-op here: PHIはメタのみ（resolverがon‑demand生成）
+            return
+            
         elif op == "compare":
             # Dedicated compare op
             operation = inst.get("operation") or inst.get("op")
             lhs = inst.get("lhs")
             rhs = inst.get("rhs")
             dst = inst.get("dst")
+            cmp_kind = inst.get("cmp_kind")
             lower_compare(builder, operation, lhs, rhs, dst, self.vmap,
-                          self.resolver, builder.block, self.preds, self.block_end_values, self.bb_map)
+                          self.resolver, builder.block, self.preds, self.block_end_values, self.bb_map,
+                          meta={"cmp_kind": cmp_kind} if cmp_kind else None)
             
         elif op == "call":
             func_name = inst.get("func")
@@ -550,80 +637,127 @@ class NyashLLVMBuilder:
                 builder.position_at_end(cont)
             self.lower_instruction(builder, sub, func)
     
-    def _wire_deferred_phis(self):
-        """Wire all deferred PHI nodes"""
-        for cur_bid, dst_vid, incoming in self.phi_deferrals:
-            bb = self.bb_map.get(cur_bid)
+    def finalize_phis(self):
+        """Finalize PHIs declared in JSON by wiring incoming edges at block heads.
+        Uses resolver._value_at_end_i64 to materialize values at predecessor ends,
+        ensuring casts/boxing are inserted in predecessor blocks (dominance-safe)."""
+        # Iterate JSON-declared PHIs per block
+        # Build succ map for nearest-predecessor mapping
+        succs: Dict[int, List[int]] = {}
+        for to_bid, from_list in (self.preds or {}).items():
+            for fr in from_list:
+                succs.setdefault(fr, []).append(to_bid)
+        for block_id, dst_map in (getattr(self, 'block_phi_incomings', {}) or {}).items():
+            bb = self.bb_map.get(block_id)
             if bb is None:
                 continue
             b = ir.IRBuilder(bb)
-            b.position_at_start(bb)
-            # Determine phi type: prefer pointer if any incoming is pointer; else f64; else i64
-            phi_type = self.i64
-            for (val_id, pred_bid) in incoming:
-                snap = self.block_end_values.get(pred_bid, {})
-                val = snap.get(val_id)
-                if val is not None and hasattr(val, 'type'):
-                    if hasattr(val.type, 'is_pointer') and val.type.is_pointer:
-                        phi_type = val.type
+            try:
+                b.position_at_start(bb)
+            except Exception:
+                pass
+            for dst_vid, incoming in (dst_map or {}).items():
+                # Ensure placeholder exists at block head
+                phi = self.vmap.get(dst_vid)
+                try:
+                    is_phi = hasattr(phi, 'add_incoming')
+                except Exception:
+                    is_phi = False
+                if not is_phi:
+                    phi = b.phi(self.i64, name=f"phi_{dst_vid}")
+                    self.vmap[dst_vid] = phi
+                # Wire incoming per CFG predecessor; map src_vid when provided
+                preds_raw = [p for p in self.preds.get(block_id, []) if p != block_id]
+                # Deduplicate while preserving order
+                seen = set()
+                preds_list: List[int] = []
+                for p in preds_raw:
+                    if p not in seen:
+                        preds_list.append(p)
+                        seen.add(p)
+                # Helper: find the nearest immediate predecessor on a path decl_b -> ... -> block_id
+                def nearest_pred_on_path(decl_b: int) -> Optional[int]:
+                    # BFS from decl_b to block_id; return the parent of block_id on that path.
+                    from collections import deque
+                    q = deque([decl_b])
+                    visited = set([decl_b])
+                    parent: Dict[int, Optional[int]] = {decl_b: None}
+                    while q:
+                        cur = q.popleft()
+                        if cur == block_id:
+                            par = parent.get(block_id)
+                            return par if par in preds_list else None
+                        for nx in succs.get(cur, []):
+                            if nx not in visited:
+                                visited.add(nx)
+                                parent[nx] = cur
+                                q.append(nx)
+                    return None
+                # Precompute a non-self initial source (if present) to use for self-carry cases
+                init_src_vid: Optional[int] = None
+                for (b_decl0, v_src0) in incoming:
+                    try:
+                        vs0 = int(v_src0)
+                    except Exception:
+                        continue
+                    if vs0 != int(dst_vid):
+                        init_src_vid = vs0
                         break
-                    elif str(val.type) == str(self.f64):
-                        phi_type = self.f64
-            phi = b.phi(phi_type, name=f"phi_{dst_vid}")
-            for (val_id, pred_bid) in incoming:
-                pred_bb = self.bb_map.get(pred_bid)
-                if pred_bb is None:
-                    continue
-                # Self-reference takes precedence regardless of snapshot
-                if val_id == dst_vid:
-                    val = phi
-                else:
-                    # Prefer resolver-driven localization at the end of the predecessor block
-                    if hasattr(self, 'resolver') and self.resolver is not None:
+                # Pre-resolve declared incomings to nearest immediate predecessors
+                chosen: Dict[int, ir.Value] = {}
+                for (b_decl, v_src) in incoming:
+                    try:
+                        bd = int(b_decl); vs = int(v_src)
+                    except Exception:
+                        continue
+                    pred_match = nearest_pred_on_path(bd)
+                    if pred_match is None:
+                        continue
+                    # If self-carry is specified (vs == dst_vid), map to init_src_vid when available
+                    if vs == int(dst_vid) and init_src_vid is not None:
+                        vs = int(init_src_vid)
+                    try:
+                        val = self.resolver._value_at_end_i64(vs, pred_match, self.preds, self.block_end_values, self.vmap, self.bb_map)
+                    except Exception:
+                        val = None
+                    if val is None:
+                        val = ir.Constant(self.i64, 0)
+                    chosen[pred_match] = val
+                # Fill remaining predecessors with dst carry or zero
+                for pred_bid in preds_list:
+                    if pred_bid not in chosen:
                         try:
-                            pred_block_obj = pred_bb
-                            val = self.resolver.resolve_i64(val_id, pred_block_obj, self.preds, self.block_end_values, self.vmap, self.bb_map)
+                            val = self.resolver._value_at_end_i64(dst_vid, pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
                         except Exception:
                             val = None
-                    else:
-                        # Snapshot fallback
-                        snap = self.block_end_values.get(pred_bid, {})
-                        # Special-case: incoming 0 means typed zero/null, not value-id 0
-                        if isinstance(val_id, int) and val_id == 0:
-                            val = None
-                        else:
-                            val = snap.get(val_id)
-                    if val is None:
-                        # Default based on phi type
-                        if isinstance(phi_type, ir.IntType):
-                            val = ir.Constant(phi_type, 0)
-                        elif isinstance(phi_type, ir.DoubleType):
-                            val = ir.Constant(phi_type, 0.0)
-                        else:
-                            val = ir.Constant(phi_type, None)
-                # Type adjust if needed
-                if hasattr(val, 'type') and val.type != phi_type:
-                    # Insert cast in predecessor block before its terminator
-                    pb = ir.IRBuilder(pred_bb)
-                    try:
-                        term = pred_bb.terminator
-                        if term is not None:
-                            pb.position_before(term)
-                        else:
-                            pb.position_at_end(pred_bb)
-                    except Exception:
-                        pb.position_at_end(pred_bb)
-                    if isinstance(phi_type, ir.IntType) and hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
-                        val = pb.ptrtoint(val, phi_type, name=f"phi_p2i_{dst_vid}_{pred_bid}")
-                    elif isinstance(phi_type, ir.PointerType) and hasattr(val, 'type') and isinstance(val.type, ir.IntType):
-                        val = pb.inttoptr(val, phi_type, name=f"phi_i2p_{dst_vid}_{pred_bid}")
-                    elif isinstance(phi_type, ir.IntType) and hasattr(val, 'type') and isinstance(val.type, ir.IntType):
-                        if phi_type.width > val.type.width:
-                            val = pb.zext(val, phi_type, name=f"phi_zext_{dst_vid}_{pred_bid}")
-                        elif phi_type.width < val.type.width:
-                            val = pb.trunc(val, phi_type, name=f"phi_trunc_{dst_vid}_{pred_bid}")
-                phi.add_incoming(val, pred_bb)
-            self.vmap[dst_vid] = phi
+                        if val is None:
+                            val = ir.Constant(self.i64, 0)
+                        chosen[pred_bid] = val
+                # Finally add incomings (each predecessor at most once)
+                for pred_bid, val in chosen.items():
+                    pred_bb = self.bb_map.get(pred_bid)
+                    if pred_bb is None:
+                        continue
+                    phi.add_incoming(val, pred_bb)
+                # Tag dst as string-ish if any declared source was string-ish (post-lowering info)
+                try:
+                    if hasattr(self.resolver, 'is_stringish') and hasattr(self.resolver, 'mark_string'):
+                        any_str = False
+                        for (_b_decl_i, v_src_i) in incoming:
+                            try:
+                                if self.resolver.is_stringish(int(v_src_i)):
+                                    any_str = True; break
+                            except Exception:
+                                pass
+                        if any_str:
+                            self.resolver.mark_string(int(dst_vid))
+                except Exception:
+                    pass
+        # Clear legacy deferrals if any
+        try:
+            self.phi_deferrals.clear()
+        except Exception:
+            pass
     
     def compile_to_object(self, output_path: str):
         """Compile module to object file"""

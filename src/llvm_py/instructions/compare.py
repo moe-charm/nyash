@@ -4,7 +4,7 @@ Handles comparison operations (<, >, <=, >=, ==, !=)
 """
 
 import llvmlite.ir as ir
-from typing import Dict
+from typing import Dict, Optional, Any
 from .externcall import lower_externcall
 
 def lower_compare(
@@ -18,7 +18,8 @@ def lower_compare(
     current_block=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    meta: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Lower MIR Compare instruction
@@ -32,20 +33,27 @@ def lower_compare(
         vmap: Value map
     """
     # Get operands
-    if resolver is not None and preds is not None and block_end_values is not None and current_block is not None:
-        lhs_val = resolver.resolve_i64(lhs, current_block, preds, block_end_values, vmap, bb_map)
-        rhs_val = resolver.resolve_i64(rhs, current_block, preds, block_end_values, vmap, bb_map)
-    else:
-        lhs_val = vmap.get(lhs)
-        rhs_val = vmap.get(rhs)
+    # Prefer same-block SSA from vmap; fallback to resolver for cross-block dominance
+    lhs_val = vmap.get(lhs)
+    rhs_val = vmap.get(rhs)
+    if (lhs_val is None or rhs_val is None) and resolver is not None and preds is not None and block_end_values is not None and current_block is not None:
+        if lhs_val is None:
+            lhs_val = resolver.resolve_i64(lhs, current_block, preds, block_end_values, vmap, bb_map)
+        if rhs_val is None:
+            rhs_val = resolver.resolve_i64(rhs, current_block, preds, block_end_values, vmap, bb_map)
 
     i64 = ir.IntType(64)
     i8p = ir.IntType(8).as_pointer()
 
-    # String-aware equality: if either side is a pointer or tagged as string-ish, compare via eq_hh
+    # String-aware equality: if meta marks string or either side is tagged string-ish,
+    # compare handles directly via nyash.string.eq_hh
     if op in ('==','!='):
-        lhs_ptr = hasattr(lhs_val, 'type') and isinstance(lhs_val.type, ir.PointerType)
-        rhs_ptr = hasattr(rhs_val, 'type') and isinstance(rhs_val.type, ir.PointerType)
+        force_string = False
+        try:
+            if isinstance(meta, dict) and meta.get('cmp_kind') == 'string':
+                force_string = True
+        except Exception:
+            pass
         lhs_tag = False
         rhs_tag = False
         try:
@@ -54,28 +62,30 @@ def lower_compare(
                 rhs_tag = resolver.is_stringish(rhs)
         except Exception:
             pass
-        if lhs_ptr or rhs_ptr or lhs_tag or rhs_tag:
-            # Convert both to handles (i64) then nyash.string.eq_hh
-            # nyash.box.from_i8_string(i8*) -> i64
-            box_from = None
-            for f in builder.module.functions:
-                if f.name == 'nyash.box.from_i8_string':
-                    box_from = f
-                    break
-            if not box_from:
-                box_from = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
-            def to_h(v):
-                if hasattr(v, 'type') and isinstance(v.type, ir.PointerType):
-                    return builder.call(box_from, [v])
-                else:
-                    # assume i64 handle or number; zext/trunc to i64 if needed
-                    if hasattr(v, 'type') and isinstance(v.type, ir.IntType) and v.type.width != 64:
-                        return builder.zext(v, i64) if v.type.width < 64 else builder.trunc(v, i64)
-                    if hasattr(v, 'type') and isinstance(v.type, ir.PointerType):
-                        return builder.ptrtoint(v, i64)
-                    return v if hasattr(v, 'type') else ir.Constant(i64, 0)
-            lh = to_h(lhs_val)
-            rh = to_h(rhs_val)
+        if force_string or lhs_tag or rhs_tag:
+            try:
+                import os
+                if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
+                    print(f"[compare] string-eq path: lhs={lhs} rhs={rhs} force={force_string} tagL={lhs_tag} tagR={rhs_tag}", flush=True)
+            except Exception:
+                pass
+            # Prefer same-block SSA (vmap) since string handles are produced in-place; fallback to resolver
+            lh = lhs_val if lhs_val is not None else (
+                resolver.resolve_i64(lhs, current_block, preds, block_end_values, vmap, bb_map)
+                if (resolver is not None and preds is not None and block_end_values is not None and current_block is not None) else ir.Constant(i64, 0)
+            )
+            rh = rhs_val if rhs_val is not None else (
+                resolver.resolve_i64(rhs, current_block, preds, block_end_values, vmap, bb_map)
+                if (resolver is not None and preds is not None and block_end_values is not None and current_block is not None) else ir.Constant(i64, 0)
+            )
+            try:
+                import os
+                if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
+                    lz = isinstance(lh, ir.Constant) and getattr(getattr(lh,'constant',None),'constant',None) == 0
+                    rz = isinstance(rh, ir.Constant) and getattr(getattr(rh,'constant',None),'constant',None) == 0
+                    print(f"[compare] string-eq args: lh_is_const={isinstance(lh, ir.Constant)} rh_is_const={isinstance(rh, ir.Constant)}", flush=True)
+            except Exception:
+                pass
             eqf = None
             for f in builder.module.functions:
                 if f.name == 'nyash.string.eq_hh':

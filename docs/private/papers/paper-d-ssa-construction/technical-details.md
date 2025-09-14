@@ -179,6 +179,100 @@ NYASH_ENABLE_LOOPFORM=1      # LoopForm実験
 - 課題：意味的正確性の保証
 - 将来：Box型システムでのnull安全性
 
+## 7. 箱理論による革命的簡略化
+
+### 7.1 実装アーキテクチャ
+```python
+class BoxBasedSSA:
+    def __init__(self):
+        self.boxes = {}      # block_id -> {var: value}
+        self.current_box = {}
+        self.deferred_phis = []  # 後処理用
+```
+
+### 7.2 PHI処理の簡略化
+```python
+# 従来：複雑なdominance計算とキャッシュ
+def resolve_phi_complex(self, phi_info):
+    # 300行のResolver処理...
+    # dominance確認、型変換、キャッシュ管理
+
+# 箱理論：単純な値選択
+def resolve_phi_simple(self, var, predecessors):
+    for pred_id, _ in predecessors:
+        if self.came_from(pred_id):
+            return self.boxes[pred_id].get(var, 0)
+    return 0
+```
+
+### 7.3 alloca/load/store方式への転換
+```python
+# SSA形式を諦めて、メモリベースの実装
+def emit_variable_access(self, var):
+    if var not in self.allocas:
+        # 変数用のメモリ確保
+        self.allocas[var] = self.builder.alloca(self.i64, name=var)
+    
+    # 読み込み
+    def load_var():
+        return self.builder.load(self.allocas[var])
+    
+    # 書き込み
+    def store_var(value):
+        self.builder.store(value, self.allocas[var])
+```
+
+### 7.4 型システムの単純化
+```python
+# すべてをi64として扱う
+def to_i64(self, value):
+    if is_pointer(value):
+        # ポインタ→ハンドル変換
+        return self.call_from_i8_string(value)
+    elif is_integer(value):
+        return value
+    else:
+        return 0  # デフォルト
+
+# 必要時のみポインタ変換
+def to_ptr_if_needed(self, value, context):
+    if context == "console_log":
+        return self.call_to_i8p_h(value)
+    return value
+```
+
+### 7.5 パフォーマンス特性
+```
+従来のSSA実装:
+- コンパイル時間: 遅い（PHI配線で50分）
+- 実行時性能: 最適
+- メモリ使用: 少ない
+
+箱理論実装:
+- コンパイル時間: 高速（5分以内）
+- 実行時性能: やや遅い（alloca/load/storeのオーバーヘッド）
+- メモリ使用: やや多い（変数ごとにalloca）
+
+トレードオフ: "動かないより100倍マシ"
+```
+
+### 7.6 実装の段階的移行
+```python
+# Phase 1: 最小動作確認（現在）
+- allocaベースで全変数管理
+- PHI完全スキップ
+- 動作優先
+
+# Phase 2: 部分的最適化（将来）
+- 読み取り専用変数はSSA
+- ループ変数のみalloca
+- 段階的性能改善
+
+# Phase 3: 完全最適化（長期）
+- 箱理論の知見を活かしたSSA再実装
+- 100行のシンプルさを維持
+```
+
 ---
 
-*これらの技術詳細は、論文の Technical Section の基礎となる。*
+*これらの技術詳細は、論文の Technical Section の基礎となる。箱理論により、理論的な美しさより実装の実用性を優先した新しいアプローチを示している。*

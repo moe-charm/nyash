@@ -213,11 +213,10 @@ def lower_boxcall(
             callee = _declare(module, "nyash.console.log", i64, [i8p])
             _ = builder.call(callee, [arg0_ptr], name="console_log_ptr")
         else:
-            # Fallback: resolve i64 and prefer pointer API via to_i8p_h bridge
-            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-                arg0 = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if args else None
-            else:
-                arg0 = vmap.get(args[0]) if args else None
+            # Fallback: prefer raw vmap value; resolve only if missing (avoid synthesizing PHIs here)
+            arg0 = vmap.get(args[0]) if args else None
+            if arg0 is None and resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+                arg0 = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map)
             if arg0 is None:
                 arg0 = ir.Constant(i64, 0)
             # If we have a handle (i64), convert to i8* via bridge and log via pointer API

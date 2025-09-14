@@ -138,6 +138,9 @@ class PyVM:
                         out = float(vv)
                     elif ty == "string":
                         out = str(vv)
+                    elif isinstance(ty, dict) and ty.get('kind') in ('handle','ptr') and ty.get('box_type') == 'StringBox':
+                        # Treat handle/pointer-typed string constants as Python str for VM semantics
+                        out = str(vv)
                     else:
                         out = None
                     self._set(regs, inst.get("dst"), out)

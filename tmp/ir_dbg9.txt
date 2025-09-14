@@ -1,0 +1,141 @@
+[builder] snapshot bb5 keys=[0, 1, 2, 3]...
+[resolve] end_i64 enter: bb6 v5
+[resolve] on-demand PHI at bb6 for v5 incomings=(b5,v2),(b11,v24)
+[resolve]  bb6 v5 ← pred bb5 uses v2
+[resolve] end_i64 enter: bb5 v2
+[resolve]  snap hit: bb5 v2 type=i64
+[resolve]  bb6 v5 ← pred bb11 uses v24
+[resolve] end_i64 enter: bb11 v24
+[resolve] end_i64 enter: bb9 v24
+[resolve] end_i64 enter: bb7 v24
+[resolve] end_i64 enter: bb6 v24
+[resolve] end_i64 enter: bb5 v24
+[resolve] end_i64 miss: bb5 v24 preds=[] → 0
+[resolve] end_i64 enter: bb6 v9
+[resolve] end_i64 enter: bb5 v9
+[resolve] end_i64 miss: bb5 v9 preds=[] → 0
+[resolve] end_i64 enter: bb6 v6
+[resolve] on-demand PHI at bb6 for v6 incomings=(b5,v0),(b11,v6)
+[resolve]  bb6 v6 ← pred bb5 uses v0
+[resolve] end_i64 enter: bb5 v0
+[resolve]  snap hit: bb5 v0 type=i64
+[resolve]  bb6 v6 ← pred bb11 uses v6
+[resolve] end_i64 enter: bb11 v6
+[resolve] end_i64 enter: bb9 v6
+[resolve] end_i64 enter: bb7 v6
+[resolve] end_i64 enter: bb6 v6
+[resolve] end_i64 enter: bb6 v10
+[resolve] end_i64 enter: bb5 v10
+[resolve] end_i64 miss: bb5 v10 preds=[] → 0
+[resolve] end_i64 enter: bb6 v11
+[resolve] end_i64 enter: bb5 v11
+[resolve] end_i64 miss: bb5 v11 preds=[] → 0
+[resolve] end_i64 enter: bb6 v12
+[resolve] end_i64 enter: bb5 v12
+[resolve] end_i64 miss: bb5 v12 preds=[] → 0
+[resolve] end_i64 enter: bb6 v13
+[resolve] end_i64 enter: bb5 v13
+[resolve] end_i64 miss: bb5 v13 preds=[] → 0
+[builder] snapshot bb7 keys=[0, 1, 2, 3, 9, 10, 11, 12, 13]...
+[resolve] end_i64 enter: bb7 v7
+[resolve] end_i64 enter: bb6 v7
+[resolve] on-demand PHI at bb6 for v7 incomings=(b5,v1),(b11,v22)
+[resolve]  bb6 v7 ← pred bb5 uses v1
+[resolve] end_i64 enter: bb5 v1
+[resolve]  snap hit: bb5 v1 type=i64
+[resolve]  bb6 v7 ← pred bb11 uses v22
+[resolve] end_i64 enter: bb11 v22
+[resolve] on-demand PHI at bb11 for v22 incomings=(b9,v15),(b10,v7)
+[resolve]  bb11 v22 ← pred bb9 uses v15
+[resolve] end_i64 enter: bb9 v15
+[resolve] end_i64 enter: bb7 v15
+[resolve] end_i64 enter: bb6 v15
+[resolve] end_i64 enter: bb5 v15
+[resolve] end_i64 miss: bb5 v15 preds=[] → 0
+[resolve]  bb11 v22 ← pred bb14 uses v22
+[resolve] end_i64 enter: bb14 v22
+[resolve] end_i64 enter: bb12 v22
+[resolve] end_i64 enter: bb10 v22
+[resolve] end_i64 enter: bb7 v22
+[resolve] end_i64 enter: bb6 v22
+[resolve] end_i64 enter: bb5 v22
+[resolve] end_i64 miss: bb5 v22 preds=[] → 0
+[resolve] end_i64 enter: bb7 v14
+[resolve] end_i64 enter: bb6 v14
+[resolve] end_i64 enter: bb5 v14
+[resolve] end_i64 miss: bb5 v14 preds=[] → 0
+[builder] snapshot bb9 keys=[0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15]...
+[resolve] end_i64 enter: bb7 v11
+[resolve]  snap hit: bb7 v11 type=i64
+[resolve] end_i64 enter: bb7 v16
+[resolve] end_i64 enter: bb6 v16
+[resolve] end_i64 enter: bb5 v16
+[resolve] end_i64 miss: bb5 v16 preds=[] → 0
+[resolve] end_i64 enter: bb7 v17
+[resolve] end_i64 enter: bb6 v17
+[resolve] end_i64 enter: bb5 v17
+[resolve] end_i64 miss: bb5 v17 preds=[] → 0
+[builder] snapshot bb10 keys=[0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17]...
+[builder] snapshot bb12 keys=[0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17]...
+[builder] snapshot bb13 keys=[0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17]...
+[builder] snapshot bb14 keys=[0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17]...
+[builder] record phi bb11 dst v22 inc=[(b9,v15),(b10,v7)]
+[resolve] end_i64 enter: bb9 v5
+[resolve] end_i64 enter: bb7 v5
+[resolve] end_i64 enter: bb6 v5
+[resolve] end_i64 enter: bb14 v5
+[resolve] end_i64 enter: bb12 v5
+[resolve] end_i64 enter: bb10 v5
+[resolve] end_i64 enter: bb7 v5
+[resolve] end_i64 enter: bb9 v23
+[resolve] end_i64 enter: bb7 v23
+[resolve] end_i64 enter: bb6 v23
+[resolve] end_i64 enter: bb5 v23
+[resolve] end_i64 miss: bb5 v23 preds=[] → 0
+[resolve] end_i64 enter: bb14 v23
+[resolve] end_i64 enter: bb12 v23
+[resolve] end_i64 enter: bb10 v23
+[resolve] end_i64 enter: bb7 v23
+[builder] snapshot bb11 keys=[0, 1, 2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17, 23, 24]...
+[builder] record phi bb6 dst v7 inc=[(b5,v1),(b11,v22)]
+[builder] record phi bb6 dst v6 inc=[(b5,v0),(b11,v6)]
+[builder] record phi bb6 dst v5 inc=[(b5,v2),(b11,v24)]
+[builder] record phi bb6 dst v4 inc=[(b5,v3),(b11,v4)]
+[resolve] end_i64 enter: bb5 v5
+[resolve] end_i64 miss: bb5 v5 preds=[] → 0
+[resolve] end_i64 enter: bb11 v5
+[resolve] end_i64 enter: bb9 v5
+[resolve] end_i64 enter: bb5 v4
+[resolve] end_i64 miss: bb5 v4 preds=[] → 0
+[resolve] end_i64 enter: bb11 v4
+[resolve] end_i64 enter: bb9 v4
+[resolve] end_i64 enter: bb7 v4
+[resolve] end_i64 enter: bb6 v4
+[resolve] on-demand PHI at bb6 for v4 incomings=(b5,v3),(b11,v4)
+[resolve]  bb6 v4 ← pred bb5 uses v3
+[resolve] end_i64 enter: bb5 v3
+[resolve]  snap hit: bb5 v3 type=i64
+[resolve]  bb6 v4 ← pred bb11 uses v4
+[resolve] end_i64 enter: bb11 v4
+[resolve] cycle detected at end_i64(bb11, v4) → 0
+[resolve] end_i64 enter: bb5 v8
+[resolve] end_i64 miss: bb5 v8 preds=[] → 0
+[resolve] end_i64 enter: bb11 v8
+[resolve] end_i64 enter: bb9 v8
+[resolve] end_i64 enter: bb7 v8
+[resolve] end_i64 enter: bb6 v8
+[resolve] end_i64 enter: bb5 v8
+[builder] snapshot bb6 keys=[0, 1, 2, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 23, 24]...
+[resolve] end_i64 enter: bb6 v7
+[builder] snapshot bb8 keys=[0, 1, 2, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 23, 24]...
+[builder] snapshot bb0 keys=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]...
+[builder] snapshot bb1 keys=[0, 1, 2, 3, 4]...
+[builder] snapshot bb2 keys=[0, 1, 2, 3, 4, 5]...
+[builder] snapshot bb3 keys=[0, 1, 2, 3, 4, 5]...
+[resolve] end_i64 enter: bb3 v0
+[resolve]  snap hit: bb3 v0 type=i64
+[resolve] end_i64 enter: bb3 v2
+[resolve]  snap hit: bb3 v2 type=i64
+[builder] snapshot bb4 keys=[0, 1, 2, 3, 4, 5, 8, 9]...
+Compiled to tmp/h_dbg9.o
+[harness] object written: tmp/h_dbg9.o

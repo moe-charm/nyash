@@ -1,0 +1,65 @@
+[builder] snapshot bb11 keys=[0, 1, 2, 3, 4]...
+[builder] snapshot bb12 keys=[0, 1, 2, 3, 4, 5]...
+[builder] snapshot bb13 keys=[0, 1, 2, 3, 4, 5]...
+[builder] snapshot bb14 keys=[0, 1, 2, 3, 4, 5, 8, 9]...
+[builder] snapshot bb0 keys=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]...
+[builder] snapshot bb1 keys=[0, 1, 2, 3]...
+[resolve] end_i64 enter: bb2 v5
+[resolve] on-demand PHI at bb2 for v5 incomings=(b1,v2),(b7,v24)
+[resolve]  bb2 v5 ← pred bb1 uses v2
+[resolve] end_i64 enter: bb1 v2
+[resolve]  snap hit: bb1 v2 type=i64
+[resolve]  bb2 v5 ← pred bb7 uses v24
+[resolve] end_i64 enter: bb7 v24
+[resolve] end_i64 enter: bb5 v24
+[resolve] end_i64 enter: bb3 v24
+[resolve] end_i64 enter: bb2 v24
+[resolve] end_i64 enter: bb1 v24
+[resolve] end_i64 miss: bb1 v24 preds=[] → 0
+[resolve] end_i64 enter: bb2 v6
+[resolve] on-demand PHI at bb2 for v6 incomings=(b1,v0),(b7,v6)
+[resolve]  bb2 v6 ← pred bb1 uses v0
+[resolve] end_i64 enter: bb1 v0
+[resolve]  snap hit: bb1 v0 type=i64
+[resolve]  bb2 v6 ← pred bb7 uses v6
+[resolve] end_i64 enter: bb7 v6
+[resolve] end_i64 enter: bb5 v6
+[resolve] end_i64 enter: bb3 v6
+[resolve] end_i64 enter: bb2 v6
+[builder] snapshot bb3 keys=[0, 1, 2, 3, 5, 6, 9, 10, 11, 12, 13]...
+[resolve] end_i64 enter: bb3 v4
+[resolve] end_i64 enter: bb2 v4
+[resolve] on-demand PHI at bb2 for v4 incomings=(b1,v1),(b7,v22)
+[resolve]  bb2 v4 ← pred bb1 uses v1
+[resolve] end_i64 enter: bb1 v1
+[resolve]  snap hit: bb1 v1 type=i64
+[resolve]  bb2 v4 ← pred bb7 uses v22
+[resolve] end_i64 enter: bb7 v22
+[resolve] on-demand PHI at bb7 for v22 incomings=(b5,v15),(b6,v4)
+[resolve]  bb7 v22 ← pred bb5 uses v15
+[resolve] end_i64 enter: bb5 v15
+[resolve] end_i64 enter: bb3 v15
+[resolve] end_i64 enter: bb2 v15
+[resolve] end_i64 enter: bb1 v15
+[resolve] end_i64 miss: bb1 v15 preds=[] → 0
+[resolve]  bb7 v22 ← pred bb10 uses v22
+[resolve] end_i64 enter: bb10 v22
+[resolve] end_i64 enter: bb8 v22
+[resolve] end_i64 enter: bb6 v22
+[resolve] end_i64 enter: bb3 v22
+[resolve] end_i64 enter: bb2 v22
+[resolve] end_i64 enter: bb1 v22
+[resolve] end_i64 miss: bb1 v22 preds=[] → 0
+[builder] snapshot bb5 keys=[0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 22]...
+[builder] snapshot bb6 keys=[0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22]...
+[builder] snapshot bb8 keys=[0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22]...
+[builder] snapshot bb9 keys=[0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22]...
+[builder] snapshot bb10 keys=[0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22]...
+[builder] snapshot bb7 keys=[0, 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22, 23, 24]...
+[builder] snapshot bb2 keys=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22, 23]...
+[builder] snapshot bb4 keys=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 22, 23]...
+[harness] error: LLVM IR parsing error
+<string>:64:3: error: expected '[' in phi value list
+  %"phi_4" = phi  i64 [%"res_copy_1.2", %"bb1"], [%"phi_22", %"bb7"]
+  ^
+

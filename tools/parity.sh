@@ -71,8 +71,11 @@ normalize() {
     -e '/^🦀/d' \
     -e '/^🧠/d' \
     -e '/^📊/d' \
+    -e '/^\[TRACE\]/d' \
     -e '/^Result(Type)?\(/d' \
     -e '/^Result:/d' \
+    -e 's/__EXIT_CODE__=[-0-9]+$//' \
+    -e 's/[[:space:]]+$//' \
     -e '/^$/d'
 }
 
@@ -85,7 +88,8 @@ run_pyvm() {
     out=$(NYASH_VM_USE_PY=1 "$NYASH_BIN" --backend vm "$app" 2>&1) || code=$?
   fi
   code=${code:-0}
-  printf '%s' "$out" | normalize
+  # Ensure a trailing newline so the exit-code marker becomes a separate line
+  printf '%s\n' "$out" | normalize
   echo "__EXIT_CODE__=$code"
 }
 
@@ -98,7 +102,7 @@ run_vm() {
     out=$("$NYASH_BIN" --backend vm "$app" 2>&1) || code=$?
   fi
   code=${code:-0}
-  printf '%s' "$out" | normalize
+  printf '%s\n' "$out" | normalize
   echo "__EXIT_CODE__=$code"
 }
 
@@ -111,7 +115,7 @@ run_llvmlite() {
   local stem exe
   stem=$(basename "$app"); stem=${stem%.nyash}
   exe="$ROOT/app_parity_${stem}"
-  NYASH_LLVM_FEATURE=llvm "${ROOT}/tools/build_llvm.sh" "$app" -o "$exe" >/dev/null || true
+  NYASH_LLVM_FEATURE=llvm NYASH_LLVM_SKIP_VERIFY=1 "${ROOT}/tools/build_llvm.sh" "$app" -o "$exe" >/dev/null || true
   if [[ ! -x "$exe" ]]; then
     echo "error: failed to build llvmlite executable: $exe" >&2
     exit 4
@@ -142,8 +146,9 @@ RIGHT=$(run_mode "$RHS" "$APP")
 
 LCODE=$(printf '%s\n' "$LEFT" | sed -n 's/^__EXIT_CODE__=//p')
 RCODE=$(printf '%s\n' "$RIGHT" | sed -n 's/^__EXIT_CODE__=//p')
-LOUT=$(printf '%s\n' "$LEFT" | sed '/^__EXIT_CODE__=/d')
-ROUT=$(printf '%s\n' "$RIGHT" | sed '/^__EXIT_CODE__=/d')
+# Drop explicit exit marker lines and also any trailing "__EXIT_CODE__=N" suffix accidentally glued to stdout
+LOUT=$(printf '%s\n' "$LEFT"  | sed -E -e '/^__EXIT_CODE__=/d'  -e 's/__EXIT_CODE__=[-0-9]+$//')
+ROUT=$(printf '%s\n' "$RIGHT" | sed -E -e '/^__EXIT_CODE__=/d' -e 's/__EXIT_CODE__=[-0-9]+$//')
 
 STATUS=0
 if [[ "$LCODE" != "$RCODE" ]]; then

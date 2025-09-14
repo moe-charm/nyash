@@ -7,7 +7,7 @@ pub fn emit_mir_json_for_harness(
     module: &nyash_rust::mir::MirModule,
     path: &std::path::Path,
 ) -> Result<(), String> {
-    use nyash_rust::mir::{MirInstruction as I, BinaryOp as B, CompareOp as C};
+    use nyash_rust::mir::{MirInstruction as I, BinaryOp as B, CompareOp as C, MirType};
     let mut funs = Vec::new();
     for (name, f) in &module.functions {
         let mut blocks = Vec::new();
@@ -23,7 +23,22 @@ pub fn emit_mir_json_for_harness(
                             .iter()
                             .map(|(b, v)| json!([v.as_u32(), b.as_u32()]))
                             .collect();
-                        insts.push(json!({"op":"phi","dst": dst.as_u32(), "incoming": incoming}));
+                        // dst_type hint: if all incoming values are String-ish, annotate result as String handle
+                        let all_str = inputs.iter().all(|(_b, v)| {
+                            match f.metadata.value_types.get(v) {
+                                Some(MirType::String) => true,
+                                Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                _ => false,
+                            }
+                        });
+                        if all_str {
+                            insts.push(json!({
+                                "op":"phi","dst": dst.as_u32(), "incoming": incoming,
+                                "dst_type": {"kind":"handle","box_type":"StringBox"}
+                            }));
+                        } else {
+                            insts.push(json!({"op":"phi","dst": dst.as_u32(), "incoming": incoming}));
+                        }
                     }
                 }
                 // Non-PHI
@@ -58,11 +73,45 @@ pub fn emit_mir_json_for_harness(
                         }
                         I::BinOp { dst, op, lhs, rhs } => {
                             let op_s = match op { B::Add=>"+",B::Sub=>"-",B::Mul=>"*",B::Div=>"/",B::Mod=>"%",B::BitAnd=>"&",B::BitOr=>"|",B::BitXor=>"^",B::Shl=>"<<",B::Shr=>">>",B::And=>"&",B::Or=>"|"};
-                            insts.push(json!({"op":"binop","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
+                            let mut obj = json!({"op":"binop","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()});
+                            // dst_type hint for string concatenation: if either side is String-ish and op is '+', mark result as String handle
+                            if matches!(op, B::Add) {
+                                let lhs_is_str = match f.metadata.value_types.get(lhs) {
+                                    Some(MirType::String) => true,
+                                    Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                    _ => false,
+                                };
+                                let rhs_is_str = match f.metadata.value_types.get(rhs) {
+                                    Some(MirType::String) => true,
+                                    Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                    _ => false,
+                                };
+                                if lhs_is_str || rhs_is_str {
+                                    obj["dst_type"] = json!({"kind":"handle","box_type":"StringBox"});
+                                }
+                            }
+                            insts.push(obj);
                         }
                         I::Compare { dst, op, lhs, rhs } => {
                             let op_s = match op { C::Lt=>"<", C::Le=>"<=", C::Gt=>">", C::Ge=>">=", C::Eq=>"==", C::Ne=>"!=" };
-                            insts.push(json!({"op":"compare","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
+                            let mut obj = json!({"op":"compare","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()});
+                            // cmp_kind hint for string equality
+                            if matches!(op, C::Eq|C::Ne) {
+                                let lhs_is_str = match f.metadata.value_types.get(lhs) {
+                                    Some(MirType::String) => true,
+                                    Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                    _ => false,
+                                };
+                                let rhs_is_str = match f.metadata.value_types.get(rhs) {
+                                    Some(MirType::String) => true,
+                                    Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                    _ => false,
+                                };
+                                if lhs_is_str && rhs_is_str {
+                                    obj["cmp_kind"] = json!("string");
+                                }
+                            }
+                            insts.push(obj);
                         }
                         I::Call { dst, func, args, .. } => {
                             let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
@@ -73,7 +122,18 @@ pub fn emit_mir_json_for_harness(
                             let func_name = if iface_name == "env.console" {
                                 format!("nyash.console.{}", method_name)
                             } else { format!("{}.{}", iface_name, method_name) };
-                            insts.push(json!({"op":"externcall","func": func_name, "args": args_a, "dst": dst.map(|d| d.as_u32())}));
+                            let mut obj = json!({
+                                "op": "externcall",
+                                "func": func_name,
+                                "args": args_a,
+                                "dst": dst.map(|d| d.as_u32()),
+                            });
+                            // Minimal dst_type hints for known externs
+                            if iface_name == "env.console" {
+                                // console.* returns i64 status (ignored by user code)
+                                if dst.is_some() { obj["dst_type"] = json!("i64"); }
+                            }
+                            insts.push(obj);
                         }
                         I::BoxCall { dst, box_val, method, args, .. } => {
                             let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
@@ -82,7 +142,7 @@ pub fn emit_mir_json_for_harness(
                                 "op":"boxcall","box": box_val.as_u32(), "method": method, "args": args_a, "dst": dst.map(|d| d.as_u32())
                             });
                             let m = method.as_str();
-                            let dst_ty = if m == "substring" {
+                            let dst_ty = if m == "substring" || m == "dirname" || m == "join" || m == "read_all" || m == "read" {
                                 Some(json!({"kind":"handle","box_type":"StringBox"}))
                             } else if m == "length" || m == "lastIndexOf" {
                                 Some(json!("i64"))

@@ -55,6 +55,42 @@ Hot Update — MIR v0.5 Type Metadata（2025‑09‑14 着手）
   - Python 側で `dst_type` により string ハンドルのタグ付けが行われること
   - `tools/parity.sh` が esc_dirname_smoke で実行できること（完全一致は第二段で目標）
 
+Hot Update — 2025‑09‑14（typed binop/compare/phi + PHI on‑demand）
+- 目的: LLVM層での型推測を廃止し、MIR→JSONの型メタにもとづく機械的降下へ移行。
+- JSONエミッタ（src/runner/mir_json_emit.rs）
+  - BinOp: “+” で一方が文字列のとき `dst_type:{kind:"handle",box_type:"StringBox"}` を付与。
+  - Compare: “==/!=” で両辺が文字列のとき `cmp_kind:"string"` を付与。
+  - Phi: incoming が全て文字列のとき `dst_type:StringBox(handle)` を付与。
+- Python/llvmlite 側（src/llvm_py/**）
+  - binop: `dst_type` が String の場合は強制的に `concat_hh(handle,handle)` を選択。
+  - compare: `cmp_kind:"string"` の場合は `nyash.string.eq_hh` を使用。
+  - PHI: JSONのphiはメタ情報とし、resolver が on‑demand でブロック先頭にPHIを合成（循環は先にPHIをcacheへ入れてからincomingを追加）。
+  - finalize_phis は関数単位で呼び出し（実質no‑op）。ブロック終端スナップショットは vmap 全体を保存。
+  - resolver: 単一predブロックはPHIを作らず pred 終端値を直返し。局所定義は vmap 直接再利用を優先（不要PHI抑制）。
+- パリティ補助（tools/parity.sh）: ノイズ（[TRACE] など）除去と exit code 行の正規化を強化。
+- 所見: esc_dirname_smoke はハーネスで .o まで生成できるようになったが、1行目（エスケープ結果）が 0 になる回帰が残存。原因は `Main.esc_json/1` の return 経路で、pred 連鎖の値取得が 0 合成に落ちるケースがあるため（resolver の `_value_at_end_i64` での取りこぼし）。
+
+Next（handoff — short plan）
+1) PHI 一元化（Resolver‑only配線・placeholder先行）
+   - Prepass（関数冒頭）: 全ブロックのphi(dst)について、ブロック先頭にplaceholder `phi_{dst}` を一括生成し `vmap[dst]` に登録。`block_phi_incomings` も先に収集。
+   - resolver: PHIを新規生成しない（常にplaceholderを返す）。`_value_at_end_i64` は“値のmaterialize（i64/boxing）”のみ行い、配線はしない。
+   - finalize_phis: 唯一の配線フェーズ。CFG predごとに一意にincomingを追加（重複除去）。pred→src_vid は JSON incoming を優先。未定義predはログ＋保守的0（将来strict）。
+   - 禁止事項: current_blockでのローカライズPHI生成（loc_*）と、resolver側からのincoming追加。
+   - 診断: `NYASH_LLVM_TRACE_PHI=1` で placeholder生成/配線、pred→src_vid、snap命中タイプを出力。
+2) Parity（pyvm ↔ llvmlite に限定）
+   - `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/min_str_cat_loop/main.nyash`
+   - `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash`
+   - 受け入れ: 1行目が0にならない、stdout/exit一致。
+3) 型メタ（第二段の準備）
+   - Compare: “==/!=（両辺文字列）→ cmp_kind:"string"” を JSON に出力（llvmlite は `nyash.string.eq_hh`）。
+   - BinOp: “+” の `dst_type:StringBox(handle)` を最優先に concat_hh 強制。
+   - Call/ExternCall: 既知APIに `dst_type` 付与（console.*→i64、dirname/join/read/read_all→StringBox(handle) 等）。
+
+How to run（メモ）
+- LLVM（ハーネスON）: `NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_DUMP_IR=tmp/nyash_harness.ll NYASH_LLVM_OBJ_OUT=tmp/app.o target/release/nyash --backend llvm <app.nyash>`
+- Parity: `tools/parity.sh --timeout 120 --show-diff apps/tests/esc_dirname_smoke.nyash`
+- PyVM: `NYASH_VM_USE_PY=1 target/release/nyash --backend vm <app.nyash>`
+
 Hot Update — Box Theory PHI（2025‑09‑14 追加予定）
 - 背景: ループの PHI が snapshot 未構築時に 0 合成へ落ちる（forward 参照をその場 resolve しているため）。
 - 方針（箱理論に基づく簡素化）:

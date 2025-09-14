@@ -4,7 +4,7 @@ Handles +, -, *, /, %, &, |, ^, <<, >>
 """
 
 import llvmlite.ir as ir
-from typing import Dict
+from typing import Dict, Optional, Any
 from .compare import lower_compare
 import llvmlite.ir as ir
 
@@ -19,7 +19,9 @@ def lower_binop(
     current_block: ir.Block,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    *,
+    dst_type: Optional[Any] = None,
 ) -> None:
     """
     Lower MIR BinOp instruction
@@ -73,6 +75,13 @@ def lower_binop(
         # pointer present?
         is_ptr_side = (hasattr(lhs_raw, 'type') and isinstance(lhs_raw.type, ir.PointerType)) or \
                       (hasattr(rhs_raw, 'type') and isinstance(rhs_raw.type, ir.PointerType))
+        # Explicit dst_type hint from MIR JSON?
+        force_string = False
+        try:
+            if isinstance(dst_type, dict) and dst_type.get('kind') == 'handle' and dst_type.get('box_type') == 'StringBox':
+                force_string = True
+        except Exception:
+            pass
         # tagged string handles?（どちらかが string-ish のとき）
         any_tagged = False
         try:
@@ -84,10 +93,36 @@ def lower_binop(
                     any_tagged = (lhs in resolver.string_literals) or (rhs in resolver.string_literals)
         except Exception:
             pass
-        is_str = is_ptr_side or any_tagged
+        is_str = force_string or is_ptr_side or any_tagged
         if is_str:
             # Helper: convert raw or resolved value to string handle
             def to_handle(raw, val, tag: str, vid: int):
+                # If we already have an i64 in vmap (raw), prefer it
+                if raw is not None and hasattr(raw, 'type') and isinstance(raw.type, ir.IntType) and raw.type.width == 64:
+                    is_tag = False
+                    try:
+                        if resolver is not None and hasattr(resolver, 'is_stringish'):
+                            is_tag = resolver.is_stringish(vid)
+                    except Exception:
+                        is_tag = False
+                    if force_string or is_tag:
+                        return raw
+                    # Heuristic: PHI values in string concat are typically handles; prefer pass-through
+                    try:
+                        raw_is_phi = hasattr(raw, 'add_incoming')
+                    except Exception:
+                        raw_is_phi = False
+                    if raw_is_phi:
+                        return raw
+                    # Otherwise, box numeric i64 to IntegerBox handle
+                    cal = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.box.from_i64':
+                            cal = f; break
+                    if cal is None:
+                        cal = ir.Function(builder.module, ir.FunctionType(i64, [i64]), name='nyash.box.from_i64')
+                    v64 = raw
+                    return builder.call(cal, [v64], name=f"int_i2h_{tag}_{dst}")
                 if raw is not None and hasattr(raw, 'type') and isinstance(raw.type, ir.PointerType):
                     # pointer-to-array -> GEP
                     try:
@@ -112,9 +147,16 @@ def lower_binop(
                             is_tag = resolver.is_stringish(vid)
                     except Exception:
                         is_tag = False
-                    if is_tag:
+                    if force_string or is_tag:
                         return val
-                    # Box numeric i64 to IntegerBox handle
+                    # Heuristic: if vmap has a PHI placeholder for this vid, treat as handle
+                    try:
+                        maybe_phi = vmap.get(vid)
+                        if maybe_phi is not None and hasattr(maybe_phi, 'add_incoming'):
+                            return val
+                    except Exception:
+                        pass
+                    # Otherwise, box numeric i64 to IntegerBox handle
                     cal = None
                     for f in builder.module.functions:
                         if f.name == 'nyash.box.from_i64':
