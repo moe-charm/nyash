@@ -151,15 +151,14 @@ impl NyashRunner {
                         .status()
                         .map_err(|e| format!("spawn pyvm: {}", e))
                         .unwrap();
+                    // Always propagate PyVM exit code to match llvmlite semantics
+                    let code = status.code().unwrap_or(1);
                     if !status.success() {
-                        eprintln!("❌ PyVM failed (status={})", status.code().unwrap_or(-1));
-                        process::exit(1);
+                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                            eprintln!("❌ PyVM failed (status={})", code);
+                        }
                     }
-                    // Propagate exit code if set
-                    if let Some(code) = status.code() {
-                        process::exit(code);
-                    }
-                    process::exit(0);
+                    process::exit(code);
                 } else {
                     eprintln!("❌ PyVM runner not found: {}", runner.display());
                     process::exit(1);

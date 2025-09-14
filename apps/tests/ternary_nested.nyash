@@ -1,0 +1,10 @@
+static box Main {
+  main(args) {
+    local a = 3
+    local b = 5
+    // Nested ternary: should evaluate to 50
+    local v = (a < b) ? ((b < 0) ? 40 : 50) : 60
+    return v
+  }
+}
+

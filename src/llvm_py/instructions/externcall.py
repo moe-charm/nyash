@@ -82,6 +82,7 @@ def lower_externcall(
     # Prepare/coerce arguments
     call_args: List[ir.Value] = []
     for i, arg_id in enumerate(args):
+        orig_arg_id = arg_id
         # Prefer resolver
         if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
             if len(func.args) > i and isinstance(func.args[i].type, ir.PointerType):
@@ -99,19 +100,47 @@ def lower_externcall(
             expected_ty = func.args[i].type
             if isinstance(expected_ty, ir.PointerType):
                 # Need pointer
-                if hasattr(aval, 'type'):
-                    if isinstance(aval.type, ir.IntType):
-                        aval = builder.inttoptr(aval, expected_ty, name=f"ext_i2p_arg{i}")
-                    elif not aval.type.is_pointer:
-                        aval = ir.Constant(expected_ty, None)
-                    else:
-                        # Pointer but wrong element type: if pointer-to-array -> GEP to i8*
-                        try:
-                            if isinstance(aval.type.pointee, ir.ArrayType) and isinstance(expected_ty.pointee, ir.IntType) and expected_ty.pointee.width == 8:
-                                c0 = ir.Constant(ir.IntType(32), 0)
-                                aval = builder.gep(aval, [c0, c0], name=f"ext_gep_arg{i}")
-                        except Exception:
-                            pass
+                # Prefer string literal pointer or handle->i8* bridge when argument is string-ish
+                used_string_h2p = False
+                try:
+                    if resolver is not None and hasattr(resolver, 'string_ptrs'):
+                        sp = resolver.string_ptrs.get(orig_arg_id)
+                        if sp is not None:
+                            aval = sp
+                            used_string_h2p = True
+                    if not used_string_h2p and resolver is not None and hasattr(resolver, 'is_stringish') and resolver.is_stringish(orig_arg_id):
+                        # Declare nyash.string.to_i8p_h(i64) and call with handle
+                        i64 = ir.IntType(64)
+                        i8p = ir.IntType(8).as_pointer()
+                        to_i8p = None
+                        for f in module.functions:
+                            if f.name == 'nyash.string.to_i8p_h':
+                                to_i8p = f; break
+                        if to_i8p is None:
+                            to_i8p = ir.Function(module, ir.FunctionType(i8p, [i64]), name='nyash.string.to_i8p_h')
+                        # Ensure we have an i64 handle to pass
+                        if hasattr(aval, 'type') and isinstance(aval.type, ir.PointerType):
+                            aval = builder.ptrtoint(aval, i64, name=f"ext_p2h_{i}")
+                        elif hasattr(aval, 'type') and isinstance(aval.type, ir.IntType) and aval.type.width != 64:
+                            aval = builder.zext(aval, i64, name=f"ext_zext_h_{i}")
+                        aval = builder.call(to_i8p, [aval], name=f"ext_h2p_arg{i}")
+                        used_string_h2p = True
+                except Exception:
+                    used_string_h2p = used_string_h2p or False
+                if not used_string_h2p:
+                    if hasattr(aval, 'type'):
+                        if isinstance(aval.type, ir.IntType):
+                            aval = builder.inttoptr(aval, expected_ty, name=f"ext_i2p_arg{i}")
+                        elif not aval.type.is_pointer:
+                            aval = ir.Constant(expected_ty, None)
+                        else:
+                            # Pointer but wrong element type: if pointer-to-array -> GEP to i8*
+                            try:
+                                if isinstance(aval.type.pointee, ir.ArrayType) and isinstance(expected_ty.pointee, ir.IntType) and expected_ty.pointee.width == 8:
+                                    c0 = ir.Constant(ir.IntType(32), 0)
+                                    aval = builder.gep(aval, [c0, c0], name=f"ext_gep_arg{i}")
+                            except Exception:
+                                pass
                 else:
                     aval = ir.Constant(expected_ty, None)
             elif isinstance(expected_ty, ir.IntType) and expected_ty.width == 64:

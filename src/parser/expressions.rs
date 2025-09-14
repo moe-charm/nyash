@@ -98,7 +98,7 @@ impl NyashParser {
                 condition: Box::new(cond),
                 then_body: vec![then_expr],
                 else_body: Some(vec![else_expr]),
-                span: Span::Unknown,
+                span: Span::unknown(),
             });
         }
         Ok(cond)

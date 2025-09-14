@@ -1,5 +1,23 @@
 # Current Task (2025-09-14 改定) — Phase 15 llvmlite（既定）+ PyVM（新規）
 
+Context Snapshot — Open After Reset
+- Status: A6 受入（PyVM↔llvmlite parity + LLVM verify→.o→EXE）完了。
+- Lang: peek ブロック式（最後の式が値）OK、式文フォールバックOK、三項(?:)パーサ導入済み（VM E2E 緑）。
+- Docs: 言語/アーキの入口を整備（guides/language-guide.md, reference/language/**, reference/architecture/**）。
+- Parser MVP: Python Stage‑1 実装 + roundtrip スモーク緑。Nyash 実装スケルトン配置済み。
+
+Next (short)
+1) 三項(?:)の PyVM/llvmlite パリティE2E（`tools/parity.sh`）
+2) peek サンプル/テスト拡充（式文・ブロック・戻り値）
+3) Docs 追補（最小例、must_use 注意）
+4) Parser MVP Stage‑2 設計（local/if/loop/call/method/new/me/substring/length/lastIndexOf）
+
+Quick Verify
+- Ternary (VM): create file with `return (1 < 2) ? 10 : 20` and run
+  `./target/release/nyash --backend vm /tmp/tern4.nyash`
+- Peek block (VM): `./target/release/nyash --backend vm apps/tests/peek_expr_block.nyash`
+- Python parser RT: `NYASH_CLI_VERBOSE=1 tools/ny_parser_mvp_roundtrip.sh`
+
 Summary
 - JIT/Cranelift は一時停止。Rust/inkwell LLVM は参照のみ。
 - 既定の実行/ビルド経路は Python/llvmlite ハーネス（MIR JSON→.o→NyRT link）。
