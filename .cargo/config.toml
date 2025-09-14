@@ -1,0 +1,9 @@
+# Cargo configuration for Nyash project
+
+[build]
+# Use 24 threads by default for all cargo builds
+jobs = 24
+
+[env]
+# Environment variables for all cargo commands
+CARGO_INCREMENTAL = "1"
