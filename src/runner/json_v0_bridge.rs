@@ -242,10 +242,23 @@ fn lower_expr_with_vars(
     match e {
         ExprV0::Var { name } => {
             if let Some(&vid) = vars.get(name) {
-                Ok((vid, cur_bb))
-            } else {
-                Err(format!("undefined variable: {}", name))
+                return Ok((vid, cur_bb));
             }
+            if name == "me" {
+                // Optional gate: allow a dummy 'me' instance for Stage-2 JSON smoke
+                if std::env::var("NYASH_BRIDGE_ME_DUMMY").ok().as_deref() == Some("1") {
+                    let class = std::env::var("NYASH_BRIDGE_ME_CLASS").unwrap_or_else(|_| "Main".to_string());
+                    let dst = f.next_value_id();
+                    if let Some(bb) = f.get_block_mut(cur_bb) {
+                        bb.add_instruction(MirInstruction::NewBox { dst, box_type: class, args: vec![] });
+                    }
+                    vars.insert("me".to_string(), dst);
+                    return Ok((dst, cur_bb));
+                } else {
+                    return Err("undefined 'me' outside box context (set NYASH_BRIDGE_ME_DUMMY=1 to inject placeholder)".into());
+                }
+            }
+            Err(format!("undefined variable: {}", name))
         }
         ExprV0::Call { name, args } => {
             // Lower args

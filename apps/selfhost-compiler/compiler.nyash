@@ -1,0 +1,309 @@
+// Selfhost Compiler MVP (Phase 15.3)
+// Reads tmp/ny_parser_input.ny and prints a minimal JSON v0 program.
+
+static box Main {
+  // ---- IO helper ----
+  read_all(path) {
+    local fb = new FileBox()
+    fb.open(path, "r")
+    local s = fb.read()
+    fb.close()
+    return s
+  }
+
+  // ---- JSON helpers ----
+  esc_json(s) {
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" } else {
+        if ch == "\"" { out = out + "\\\"" } else { out = out + ch }
+      }
+      i = i + 1
+    }
+    return out
+  }
+
+  // ---- Lexer helpers ----
+  is_digit(ch) {
+    return ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9"
+  }
+  is_space(ch) { return ch == " " || ch == "\t" || ch == "\n" || ch == "\r" || ch == ";" }
+
+  // ---- Parser (Stage-1/mini Stage-2) ----
+  // Global cursor for second-pass parser (no pack strings)
+  gpos_set(i) {
+    me.gpos = i
+    return 0
+  }
+  gpos_get() { return me.gpos }
+
+  parse_number2(src, i) {
+    local n = src.length()
+    local j = i
+    loop(j < n && me.is_digit(src.substring(j, j+1))) { j = j + 1 }
+    local s = src.substring(i, j)
+    me.gpos_set(j)
+    return "{\"type\":\"Int\",\"value\":" + s + "}"
+  }
+
+  parse_string2(src, i) {
+    local n = src.length()
+    local j = i + 1
+    local out = ""
+    local done = 0
+    loop(j < n && done == 0) {
+      local ch = src.substring(j, j+1)
+      if ch == "\"" {
+        j = j + 1
+        done = 1
+      } else {
+      if ch == "\\" && j + 1 < n {
+        local nx = src.substring(j+1, j+2)
+        if nx == "\"" { out = out + "\"" } else { if nx == "\\" { out = out + "\\" } else { out = out + nx } }
+        j = j + 2
+      } else {
+        out = out + ch
+        j = j + 1
+      }
+      }
+    }
+    me.gpos_set(j)
+    return "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}"
+  }
+
+  parse_factor2(src, i) {
+    local j = me.skip_ws(src, i)
+    local ch = src.substring(j, j+1)
+    if ch == "(" {
+      local inner = me.parse_expr2(src, j + 1)
+      local k = me.gpos_get()
+      k = me.skip_ws(src, k)
+      if src.substring(k, k+1) == ")" { k = k + 1 }
+      me.gpos_set(k)
+      return inner
+    }
+    if ch == "\"" { return me.parse_string2(src, j) }
+    return me.parse_number2(src, j)
+  }
+
+  parse_term2(src, i) {
+    local lhs = me.parse_factor2(src, i)
+    local j = me.gpos_get()
+    local cont = 1
+    loop(cont == 1) {
+      j = me.skip_ws(src, j)
+      if j >= src.length() { cont = 0 } else {
+        local op = src.substring(j, j+1)
+        if op != "*" && op != "/" { cont = 0 } else {
+          local rhs = me.parse_factor2(src, j+1)
+          j = me.gpos_get()
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+    me.gpos_set(j)
+    return lhs
+  }
+
+  parse_expr2(src, i) {
+    local lhs = me.parse_term2(src, i)
+    local j = me.gpos_get()
+    local cont = 1
+    loop(cont == 1) {
+      j = me.skip_ws(src, j)
+      if j >= src.length() { cont = 0 } else {
+        local op = src.substring(j, j+1)
+        if op != "+" && op != "-" { cont = 0 } else {
+          local rhs = me.parse_term2(src, j+1)
+          j = me.gpos_get()
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+    me.gpos_set(j)
+    return lhs
+  }
+
+  parse_program2(src) {
+    local i = me.skip_ws(src, 0)
+    local j = me.skip_return_kw(src, i)
+    if j == i { j = i } // optional 'return'
+    local expr = me.parse_expr2(src, j)
+    return "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":" + expr + "}]}"
+  }
+  i2s(n) {
+    // integer to decimal string (non-negative only for MVP)
+    if n == 0 { return "0" }
+    local x = n
+    if x < 0 { x = 0 } // MVP: clamp negatives to 0 to avoid surprises
+    local out = ""
+    loop(x > 0) {
+      local q = x / 10
+      local d = x - q * 10
+      local ch = "0"
+      if d == 1 { ch = "1" } else {
+        if d == 2 { ch = "2" } else {
+          if d == 3 { ch = "3" } else {
+            if d == 4 { ch = "4" } else {
+              if d == 5 { ch = "5" } else {
+                if d == 6 { ch = "6" } else {
+                  if d == 7 { ch = "7" } else {
+                    if d == 8 { ch = "8" } else {
+                      if d == 9 { ch = "9" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      out = ch + out
+      x = q
+    }
+    return out
+  }
+  to_int(s) {
+    local n = s.length()
+    if n == 0 { return 0 }
+    local i = 0
+    local acc = 0
+    loop(i < n) {
+      local d = s.substring(i, i+1)
+      local dv = 0
+      if d == "1" { dv = 1 } else { if d == "2" { dv = 2 } else { if d == "3" { dv = 3 } else { if d == "4" { dv = 4 } else { if d == "5" { dv = 5 } else { if d == "6" { dv = 6 } else { if d == "7" { dv = 7 } else { if d == "8" { dv = 8 } else { if d == "9" { dv = 9 } } } } } } } } }
+      acc = acc * 10 + dv
+      i = i + 1
+    }
+    return acc
+  }
+
+  parse_number(src, i) {
+    local n = src.length()
+    local j = i
+    loop(j < n && me.is_digit(src.substring(j, j+1))) { j = j + 1 }
+    local s = src.substring(i, j)
+    local json = "{\"type\":\"Int\",\"value\":" + s + "}"
+    return json + "@" + me.i2s(j)
+  }
+
+  parse_string(src, i) {
+    local n = src.length()
+    local j = i + 1
+    local out = ""
+    loop(j < n) {
+      local ch = src.substring(j, j+1)
+      if ch == "\"" {
+        j = j + 1
+        return "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}@" + j
+      }
+      if ch == "\\" && j + 1 < n {
+        local nx = src.substring(j+1, j+2)
+        if nx == "\"" { out = out + "\"" } else { if nx == "\\" { out = out + "\\" } else { out = out + nx } }
+        j = j + 2
+      } else {
+        out = out + ch
+        j = j + 1
+      }
+    }
+    return "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}@" + me.i2s(j)
+  }
+
+  skip_ws(src, i) {
+    local n = src.length()
+    loop(i < n && me.is_space(src.substring(i, i+1))) { i = i + 1 }
+    return i
+  }
+
+  skip_return_kw(src, i) {
+    // If source at i starts with "return", advance; otherwise return i unchanged
+    local n = src.length()
+    local j = i
+    if j < n && src.substring(j, j+1) == "r" { j = j + 1 } else { return i }
+    if j < n && src.substring(j, j+1) == "e" { j = j + 1 } else { return i }
+    if j < n && src.substring(j, j+1) == "t" { j = j + 1 } else { return i }
+    if j < n && src.substring(j, j+1) == "u" { j = j + 1 } else { return i }
+    if j < n && src.substring(j, j+1) == "r" { j = j + 1 } else { return i }
+    if j < n && src.substring(j, j+1) == "n" { j = j + 1 } else { return i }
+    return j
+  }
+
+  parse_factor(src, i) {
+    i = me.skip_ws(src, i)
+    local ch = src.substring(i, i+1)
+    if ch == "(" {
+      local p = me.parse_expr(src, i + 1)
+      local at = p.lastIndexOf("@")
+      local ej = p.substring(0, at)
+      local j = me.to_int(p.substring(at+1, p.length()))
+      j = me.skip_ws(src, j)
+      if src.substring(j, j+1) == ")" { j = j + 1 }
+      return ej + "@" + me.i2s(j)
+    }
+    if ch == "\"" { return me.parse_string(src, i) }
+    return me.parse_number(src, i)
+  }
+
+  parse_term(src, i) {
+    local p = me.parse_factor(src, i)
+    local at = p.lastIndexOf("@")
+    local lhs = p.substring(0, at)
+    local j = me.to_int(p.substring(at+1, p.length()))
+    local cont = 1
+    loop(cont == 1) {
+      j = me.skip_ws(src, j)
+      if j >= src.length() { cont = 0 } else {
+        local op = src.substring(j, j+1)
+        if op != "*" && op != "/" { cont = 0 } else {
+          local q = me.parse_factor(src, j+1)
+          local at2 = q.lastIndexOf("@")
+          local rhs = q.substring(0, at2)
+          j = me.to_int(q.substring(at2+1, q.length()))
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+    return lhs + "@" + me.i2s(j)
+  }
+
+  parse_expr(src, i) {
+    local p = me.parse_term(src, i)
+    local at = p.lastIndexOf("@")
+    local lhs = p.substring(0, at)
+    local j = me.to_int(p.substring(at+1, p.length()))
+    local cont = 1
+    loop(cont == 1) {
+      j = me.skip_ws(src, j)
+      if j >= src.length() { cont = 0 } else {
+        local op = src.substring(j, j+1)
+        if op != "+" && op != "-" { cont = 0 } else {
+          local q = me.parse_term(src, j+1)
+          local at2 = q.lastIndexOf("@")
+          local rhs = q.substring(0, at2)
+          j = me.to_int(q.substring(at2+1, q.length()))
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+    return lhs + "@" + me.i2s(j)
+  }
+
+  parse_program(src) {
+    // Legacy packed path (debug) removed; use parser2
+    return me.parse_program2(src)
+  }
+
+  main(args) {
+    // Parse the input and emit JSON v0
+    local src = me.read_all("tmp/ny_parser_input.ny")
+    if src == null { src = "return 1+2*3" }
+    local json = me.parse_program(src)
+    local console = new ConsoleBox()
+    // console.println(json) -- final output only
+    console.println(json)
+    return 0
+  }
+}

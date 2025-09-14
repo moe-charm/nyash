@@ -41,5 +41,34 @@ NY
 OUT2=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/phi_loop_sample.ny" | "$BIN" --ny-parser-pipe || true)
 echo "$OUT2" | rg -q '^Result:\s*3\b' && echo "✅ Loop PHI merge OK" || { echo "❌ Loop PHI merge FAILED"; echo "$OUT2"; exit 1; }
 
-echo "All Stage-2 PHI smokes PASS" >&2
+# If (no-else) PHI merge with base
+cat >"$TMP_DIR/phi_if_noelse_sample.ny" <<'NY'
+local x = 1
+if 1 > 2 {
+  local x = 10
+}
+return x
+NY
 
+OUT3=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/phi_if_noelse_sample.ny" | "$BIN" --ny-parser-pipe || true)
+echo "$OUT3" | rg -q '^Result:\s*1\b' && echo "✅ If(no-else) PHI merge OK" || { echo "❌ If(no-else) PHI merge FAILED"; echo "$OUT3"; exit 1; }
+
+# Nested If PHI merge
+cat >"$TMP_DIR/phi_if_nested_sample.ny" <<'NY'
+local x = 1
+if 1 < 2 {
+  if 2 < 1 {
+    local x = 100
+  } else {
+    local x = 200
+  }
+} else {
+  local x = 300
+}
+return x
+NY
+
+OUT4=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/phi_if_nested_sample.ny" | "$BIN" --ny-parser-pipe || true)
+echo "$OUT4" | rg -q '^Result:\s*200\b' && echo "✅ Nested If PHI merge OK" || { echo "❌ Nested If PHI merge FAILED"; echo "$OUT4"; exit 1; }
+
+echo "All Stage-2 PHI smokes PASS" >&2

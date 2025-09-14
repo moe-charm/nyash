@@ -35,6 +35,17 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
    - No circular dependency: nyrt provides StringBox/ArrayBox via C ABI
    - Flag path: `NYASH_USE_NY_COMPILER=1` to switch rust→ny compiler; rust parser as fallback
    - Add apps/selfhost-compiler/ and minimal smokes
+   - Stage‑1 checklist:
+     - [ ] return/int/string/arithmetic/paren JSON v0 emit
+     - [ ] Minimal ASI（newline separator + continuation tokens）
+     - [ ] Smokes: `return 1+2*3` / grouping / string literal
+   - Stage‑2 checklist:
+     - [ ] local/if/loop/call/method/new/var/logical/compare
+     - [ ] PHI 合流は Bridge に委譲（If/Loop）
+     - [ ] Smokes: nested if / loop 累積 / and/or × if/loop
+4) PHI 自動化は Phase‑15 後（Core‑14 LoopForm）
+   - Phase‑15: 現行の Bridge‑PHI を維持し、E2E 緑とパリティを最優先
+   - Core‑14: LoopForm 強化＋逆Loweringで PHI を自動生成（合流点の定型化）
 4) Bootstrap loop (c0→c1→c1')
    - Use existing trace/hash harness to compare parity; add optional CI gate
    - **This achieves self-hosting!** Nyash compiles Nyash
@@ -63,6 +74,8 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 
 - Parser path: `--parser {rust|ny}` or `NYASH_USE_NY_PARSER=1`
 - JSON dump: `NYASH_DUMP_JSON_IR=1`
+- （予告）LoopForm: Core‑14 で仕様化予定
+ - Selfhost compiler: `NYASH_USE_NY_COMPILER=1`, child quiet: `NYASH_JSON_ONLY=1`
 - Load Ny plugins: `NYASH_LOAD_NY_PLUGINS=1` / `--load-ny-plugins`
 - AOT smoke: `CLIF_SMOKE_RUN=1`
 
@@ -83,6 +96,8 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 - v0 E2E green (parser pipe + direct bridge) including Ny compiler MVP switch
 - v1 minimal samples pass via JSON bridge
 - AOT P2: emit→link→run stable for constant/arith
+- Phase‑15 STOP には PHI 切替を含めない（PHI は LoopForm/Core‑14 で扱う）
+ - 15.3: Stage‑1 代表サンプル緑 + Bootstrap smoke（フォールバック許容）+ 文分離ポリシー公開
 - Docs/recipes usable on Windows/Unix
 
 ## Notes

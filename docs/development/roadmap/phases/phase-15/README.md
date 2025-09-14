@@ -31,6 +31,14 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 - dep_tree_min_string: PyVM↔llvmlite パリティ一致、llvmlite 経路で `.ll verify → .o → EXE` 完走。
 - 一時救済ゲート `NYASH_LLVM_ESC_JSON_FIX` は受入には未使用（OFF）。
 
+#### PHI 取り扱い方針（Phase‑15 中）
+- 現行: JSON v0 Bridge 側で If/Loop の PHI を生成（安定・緑）。
+- 方針: Phase‑15 ではこのまま完成させる（変更しない）。
+- 理由: LoopForm（Core‑14）導入時に、逆Loweringで PHI を自動生成する案（推薦）に寄せるため。
+  - PHI は「合流点での別名付け」であり、Boxの操作ではない。
+  - 抽象レイヤの純度維持（Everything is Box）。
+  - 実装責務の一極化（行数削減／保守性向上）。
+
 ### Phase 15.3: NyashコンパイラMVP（次フェーズ着手）
 - PyVM 安定後、Nyash製パーサ/レクサ（サブセット）と MIR ビルダを段階導入
 - フラグでRustフォールバックと併存（例: `NYASH_USE_NY_COMPILER=1`）
@@ -41,15 +49,75 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 - ステージ2: 文/式サブセット拡張（local/if/loop/call/method/new/me/substring/length/lastIndexOf）。
 - ステージ3: Ny AST→MIR JSON 降下（直接 llvmlite/PyVM へ渡す）。
 
+#### Phase 15.3 — Detailed Plan（Ny compiler MVP）
+- Directory layout（selfhost compiler）
+  - `apps/selfhost-compiler/compiler.nyash`（CompilerBox entry; Ny→JSON v0 emit）
+  - `apps/selfhost-compiler/parser/{lexer.nyash,parser.nyash,ast.nyash}`（Stage‑2 へ段階拡張）
+  - `apps/selfhost-compiler/emitter/json_v0.nyash`（将来: emit 分離。MVPは inline でも可）
+  - `apps/selfhost-compiler/mir/{builder.nyash,optimizer.nyash}`（将来）
+  - `apps/selfhost-compiler/tests/{stage1,stage2}`（サンプルと期待JSON）
+
+- Runner integration（安全ゲート）
+  - フラグ: `NYASH_USE_NY_COMPILER=1`（既定OFF）
+  - 子プロセス: `--backend vm` で selfhost compiler を起動し、stdout から JSON v0 1行を収集
+  - 環境: `NYASH_JSON_ONLY=1` を子に渡して余計な出力を抑制。失敗時は静かにフォールバック
+
+- Stage‑1（小さく積む）
+  1) return / 整数 / 文字列 / 四則 / 括弧（左結合）
+  2) 文分離（最小ASI）: 改行=文区切り、継続子（+ - * / . ,）やグルーピング中は継続
+  3) 代表スモーク: `return 1+2*3` → JSON v0 → Bridge → MIR 実行 = 7
+
+- Stage‑2（本命へ）
+  - local / if / loop / call / method / new / var / 比較 / 論理（短絡）
+  - PHI: Bridge 側の合流（If/Loop）に依存（Phase‑15中は現行維持）
+  - 代表スモーク: nested if / loop 累積 / 短絡 and/or と if/loop の交錯
+
+- Acceptance（15.3）
+  - Stage‑1: 代表サンプルで JSON v0 emit → Bridge → PyVM/llvmlite で一致（差分なし）
+  - Bootstrap: `tools/bootstrap_selfhost_smoke.sh` で c0→c1→c1' が PASS（フォールバックは許容）
+  - Docs: 文分離ポリシー（改行＋最小ASI）を公開（link: reference/language/statements.md）
+
+- Smokes / Tools（更新）
+  - `tools/selfhost_compiler_smoke.sh`（入口）
+  - `tools/ny_stage2_bridge_smoke.sh`（算術/比較/短絡/ネストif）
+  - `tools/ny_parser_stage2_phi_smoke.sh`（If/Loop の PHI 合流）
+  - `tools/parity.sh --lhs pyvm --rhs llvmlite <test.nyash>`（常時）
+
+Imports/Namespace plan（15.3‑late）
+- See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_ENABLE_USING=1`.
+
+- Operational switches
+  - `NYASH_USE_NY_COMPILER=1`（selfhost compiler 経路ON）
+  - `NYASH_JSON_ONLY=1`（子プロセスの余計な出力抑止）
+  - `NYASH_DISABLE_PLUGINS=1`（必要に応じて子のみ最小化）
+  - 文分離: 最小ASIルール（深さ0・直前が継続子でない改行のみ終端）
+
+- Risks / Rollback
+  - 子プロセス出力がJSONでない→フォールバックで安全運用
+  - 代表ケースで parity 不一致→selfhost 経路のみ切替OFF
+  - 影響範囲: CLI/Runner 層の限定的変更（ゲートOFFなら既存経路と同値）
+
 【受入（MVP）】
 - `tools/ny_roundtrip_smoke.sh` 緑（Case A/B）。
 - `apps/tests/esc_dirname_smoke.nyash` / `apps/selfhost/tools/dep_tree_min_string.nyash` を Ny パーサ経路で実行し、PyVM/llvmlite とパリティ一致（stdout/exit）。
+
+#### 予告: LoopForm（Core‑14）での PHI 自動化（Phase‑15 後）
+- LoopForm を強化し、`loop.begin(loop_carried_values) / loop.iter / loop.branch / loop.end` の構造的情報から逆Loweringで PHI を合成。
+- If/短絡についても同様に、構造ブロックから合流点を決めて PHI を自動化。
+- スケジュール: Phase‑15 後（Core‑14）で検討・実装。Phase‑15 では変更しない。
 
 ### Phase 15.4: VM層のNyash化（PyVMからの置換）
 - PyVM を足場に、VMコアを Nyash 実装へ段階移植（命令サブセットから）
 - 動的ディスパッチで13命令処理を目標に拡張
 
 詳細：[セルフホスティング戦略 2025年9月版](implementation/self-hosting-strategy-2025-09.md)
+
+---
+
+補足: JSON v0 の扱い（互換）
+- Phase‑15: Bridge で PHI を生成（現行継続）。
+- Core‑14 以降: LoopForm で PHI 自動化後、JSON 側の PHI は非必須（将来は除外方向）。
+- 型メタ（“+”の文字列混在／文字列比較）は継続。
 
 ## 📊 主要成果物
 
@@ -65,7 +133,7 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 ### 自動生成基盤
 - [ ] boxes.yaml（Box型定義）
 - [ ] externs.yaml（C ABI境界）
-- [ ] semantics.yaml（MIR15定義）
+- [ ] semantics.yaml（MIR14定義）
 - [ ] build.rs（自動生成システム）
 
 ### ブートストラップ
@@ -75,13 +143,21 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 
 ## 🔧 技術的アプローチ
 
-### MIR 13命令の革命
-- **基本演算(5)**: Const, UnaryOp, BinOp, Compare, TypeOp
-- **メモリ(2)**: Load, Store
-- **制御(4)**: Branch, Jump, Return, Phi
-- **Box(1)**: BoxCall（すべての箱操作を統合）
-- **外部(1)**: ExternCall
-
+### MIR 14命令の革命
+1. Const - 定数
+  2. BinOp - 二項演算
+  3. UnaryOp - 単項演算（復活！）
+  4. Compare - 比較
+  5. Jump - 無条件ジャンプ
+  6. Branch - 条件分岐
+  7. Return - 戻り値
+  8. Phi - SSA合流
+  9. Call - 関数呼び出し
+  10. BoxCall - Box操作（配列/フィールド/メソッド統一！）
+  11. ExternCall - 外部呼び出し
+  12. TypeOp - 型操作
+  13. Safepoint - GC安全点
+  14. Barrier - メモリバリア
 この究極のシンプルさにより、直接x86変換も現実的に！
 
 ### バックエンドの選択肢
@@ -238,6 +314,8 @@ ny_free_buf(buffer)
 ### ✅ クイックスモーク（現状）
 - PyVM↔llvmlite パリティ: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash`
 - dep_tree（ハーネスON）: `NYASH_LLVM_FEATURE=llvm ./tools/build_llvm.sh apps/selfhost/tools/dep_tree_min_string.nyash -o app_dep && ./app_dep`
+- JSON v0 bridge spec: `docs/reference/ir/json_v0.md`
+- Stage‑2 smokes: `tools/ny_stage2_bridge_smoke.sh`, `tools/ny_parser_stage2_phi_smoke.sh`, `tools/ny_me_dummy_smoke.sh`
 
 ### 📚 関連フェーズ
 - [Phase 10: Cranelift JIT](../phase-10/)

@@ -1,12 +1,39 @@
 # Current Task (2025-09-14 改定) — Phase 15 llvmlite（既定）+ PyVM（新規）
 
+Handoff — TL;DR（2025‑09‑15）
+- フェーズ: 15.3（Ny コンパイラMVP 入口を統合済み／Stage‑1 実装中）
+- ランナー統合: `NYASH_USE_NY_COMPILER=1` で selfhost compiler を子プロセス実行→stdout の JSON v0 を Bridge→MIR 実行（失敗時は自動フォールバック）
+- Selfhost compiler 配置: `apps/selfhost-compiler/`（`compiler.nyash` がエントリ。parser/emitter骨子あり）
+- 進捗:
+  - Stage‑1 パーサ骨子（number/string/term/expr/returnスキップ）実装済み（2パス gpos 方針）。
+  - セミコロン最小対応: selfhost 側で `;` を空白同等にスキップ（改行ベース＋必要時のみ;）。Rustパーサは未対応のまま。
+  - 仕様ドキュメント更新: `docs/reference/language/statements.md`（改行＋最小ASI）。
+  - imports/namespace/nyash.toml: Phase‑15 中は Runner(Rust) で解決継続。selfhost は `using` 受理（no‑op）を 15.3後半に導入予定（計画: `docs/development/roadmap/phases/phase-15/imports-namespace-plan.md`）。VM 変更は不要。
+- そのまま回せるスモーク（緑）:
+  - `tools/ny_stage2_bridge_smoke.sh`（算術/比較/短絡/ネストif）
+  - `tools/ny_parser_stage2_phi_smoke.sh`（If/Loop PHI）
+  - `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash`
+  - `tools/selfhost_compiler_smoke.sh`（selfhost 入口／MVPはResult:0）
+- 次にやること（短期）:
+  1) Stage‑1: `return 1+2*3` の JSON v0 正常化（左結合/優先度準拠）→ Bridge → MIR 実行 = 7 を確定。
+  2) 最小ASI導入（深さ0・直前が継続子でない改行のみ文終端）。代表ケースのスモーク追加（if/else連結、return継続、演算子継続、ドットチェイン）。
+  3) Stage‑2 着手（local/if/loop/call/method/new/var/論理/比較）— PHI は Bridge 側に委譲のまま。
+- 守ること:
+  - PHI: Bridge 側（If/Loop）で合流、LoopForm(Core‑14) 導入時に逆Loweringで自動化へ（現状維持）。
+  - imports/namespace: 15.3 は Runner で解決維持（selfhost は no‑op 受理のみ）。
+  - フォールバックは常時安全（selfhost 経路失敗→既存経路）。
+
+
 Quick Summary（反映内容）
 - 実装済み: peek CFG修正、llvmlite文字列ブリッジ、混在‘+’結合、追加テスト緑。
 - JSON v0 Bridge拡張: Stmt(Expr/Local/If/Loop)、Expr(Call/Method/New/Var) 降下を実装。
 - PHI合流: If/Loop の PHI 合流を Bridge 側で実装（If: then/else→merge、Loop: preheader/loop‑latch→header）。
 - PythonパーサMVP: Stage‑2 サブセット（local/if/loop/call/method/new/var ほか）を出力。
+- Ny コンパイラMVP（入口）: `NYASH_USE_NY_COMPILER=1` で Ny→JSON v0 パスを試行（失敗時は自動フォールバック）。初期実装は `apps/selfhost-compiler/compiler.nyash`（優先）/`apps/selfhost/parser/ny_parser_v0/main.nyash` を子プロセスで実行して JSON を収集。
+- 文分離ポリシー: 「改行ベース＋必要時のみセミコロン」。最小ASI（深さ0かつ直前が継続子でない改行のみ文終端）。ドキュメント反映済み。
 - Outstanding: then/else 片側のみで新規生成された変数のスコープ（現在は外へ未伝播）。
 - Next（handoff）: Stage‑2 E2E緑化→me の扱い検討（Method糖衣）。
+- 後続計画: MIR‑SSA（Sealed SSA）骨子を 15.2 終盤で投入（既定OFF）、15.3 で並走→15.3 終盤で既定化。
 - How to run: 下の手順に確認コマンドを追記。
 
 Hot Update — 2025‑09‑14（JSON v0 Bridge/Parser Stage‑2 + Parity hardening）
@@ -15,6 +42,7 @@ Hot Update — 2025‑09‑14（JSON v0 Bridge/Parser Stage‑2 + Parity hardeni
   - console.* の文字列引数を to_i8p_h ブリッジで正規化（from_i8_string 直呼び回避）。
   - “文字列＋数値” 混在 ‘+’ を concat_si/is＋from_i8_string による橋渡しで安定化、両辺文字列は concat_hh。
   - 代表追加テスト（緑）: string_ops_basic / me_method_call / loop_if_phi。
+  - 追加パリティ確認（緑）: string_ops_basic / peek_expr_block / peek_return_value / ternary_basic / ternary_nested / esc_dirname_smoke。
 
 - JSON v0 Bridge（Option A）の受け口を Stage‑2 方向に拡張（src/runner/json_v0_bridge.rs）
   - StmtV0: Expr / Local / If / Loop を追加。If/Loop は実ブロック生成（then/else/merge、cond/body/exit）まで実装、未終端 Jump 補完、最後に未終端ブロックへ ret 0 補完。
@@ -35,7 +63,10 @@ Outstanding（要対応）
 Next（handoff short plan）
 1) JSON Bridge: PHI 合流実装（If/Loop）と最小テスト追加（ループ後/if後の変数参照）。
 2) Parser MVP: Stage‑2 生成 JSON の if/loop ケースで Bridge→MIR→PyVM/llvmlite の parity 緑化。
-3) me の扱い検討（当面は Method 降下で十分。必要なら me→Main.method/N 直呼シンタックスを Bridge 側で糖衣対応）。
+3) me の扱い（MVP方針）
+   - JSON v0: `Method{ recv: Var{"me"} }` を許容（文脈があれば var_map に解決）。
+   - Bridge: 既定は未定義エラー。デバッグ用に `NYASH_BRIDGE_ME_DUMMY=1`（任意 `NYASH_BRIDGE_ME_CLASS`=Main 既定）で `NewBox{class}` を注入して `me` を仮解決。
+   - 将来: Ny Builder が box/method 文脈で `me` を提供（Bridge のダミーは撤去予定）。
 
 How to run（現状確認）
 - Build（release）: `cargo build --release`（必要に応じて `NYASH_CLI_VERBOSE=1`）。
@@ -44,6 +75,38 @@ How to run（現状確認）
 - Parser Stage‑2 → Bridge: `python3 tools/ny_parser_mvp.py tmp/sample.ny | target/release/nyash --ny-parser-pipe`。
 - Bridge smoke（一式）: `./tools/ny_parser_bridge_smoke.sh`（pipe/--json-file の両経路）。
 - Stage‑2 PHI smoke: `./tools/ny_parser_stage2_phi_smoke.sh`（If/Loop の PHI 合流検証）。
+- me dummy smoke（デバッグゲート）: `./tools/ny_me_dummy_smoke.sh`（`NYASH_BRIDGE_ME_DUMMY=1` で Var("me") をダミー注入）。
+- Stage‑2 Bridge smoke（サブセット一括）: `./tools/ny_stage2_bridge_smoke.sh`（算術/比較/短絡/ネストif）。
+- 自己ホスト準備（ブートストラップ）: `./tools/bootstrap_selfhost_smoke.sh`（c0→c1→c1'、MVPはフォールバック許容）。
+- Nyコンパイラ入口スモーク: `./tools/selfhost_compiler_smoke.sh`（json_v0 emit → Result:0）。
+
+Phase 15.3 — Ny compiler MVP 詳細計画（抜粋）
+- 入口: Runner に `NYASH_USE_NY_COMPILER=1` を追加し、selfhost compiler を子プロセス実行（stdout の JSON v0 を Bridge へ）。失敗は自動フォールバック。
+- Stage‑1（小さく積む）
+  1) return / 整数 / 文字列 / 四則 / 括弧（左結合）。
+  2) 文分離（最小ASI）: 改行=文区切り、継続子（+ - * / . ,）やグルーピング中は継続。
+  3) スモーク: `return 1+2*3` → JSON v0 → Bridge → MIR 実行 = 7。
+- Stage‑2（本命）
+  - local / if / loop / call / method / new / var / 比較 / 論理（短絡）。
+  - PHI: Bridge 側の合流（If/Loop）に依存（Phase‑15 中は現行維持）。
+  - スモーク: nested if / loop 累積 / 短絡 and/or × if/loop。
+- 受け入れ（15.3）
+  - Stage‑1: 代表サンプル緑（PyVM/llvmlite 一致）。
+  - Bootstrap: `tools/bootstrap_selfhost_smoke.sh` PASS（フォールバックは許容）。
+  - Docs: `docs/reference/language/statements.md` 公開（方針/例/実装ノート）。
+
+Parity memo（確認済み）
+- `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/string_ops_basic.nyash` → 緑
+- `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/peek_expr_block.nyash` → 緑
+- `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/peek_return_value.nyash` → 緑
+- `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/ternary_basic.nyash` → 緑
+- `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/ternary_nested.nyash` → 緑
+- `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash` → 緑
+
+Notes — PHI 方針（Phase‑15→Core‑14）
+- Phase‑15: 現行の Bridge‑PHI（If/Loop 合流）を維持して完成まで駆け抜ける（変更しない）。
+- Core‑14: LoopForm を強化し、逆Loweringで PHI を自動生成（構造ブロック→合流点 PHI）。
+- JSON v0: Phase‑15 は従来通り PHI を含める／Core‑14 以降は非必須（将来は除外方向）。
 
 Context Snapshot — Open After Reset
 - Status: A6 受入（PyVM↔llvmlite parity + LLVM verify→.o→EXE）完了。
@@ -120,6 +183,7 @@ Hot Update — 2025‑09‑14（Language + Docs）
   - 言語索引: `docs/reference/language/README.md`
   - 安定パス（スタブ）: `docs/reference/language/LANGUAGE_REFERENCE_2025.md`（private実体へ誘導）
   - アーキ索引/受け皿: `docs/reference/architecture/{nyash_core_concepts.md, execution-backends.md, TECHNICAL_ARCHITECTURE_2025.md}`
+  - 文分離ポリシー: `docs/reference/language/statements.md`（改行ベース＋必要時のみセミコロン、最小ASI）
 - Parser MVP（Stage 1）:
   - Python 実装: `tools/ny_parser_mvp.py` を追加、Roundtrip スモーク `tools/ny_parser_mvp_roundtrip.sh` で緑。
   - Nyash 実装スケルトン: `apps/selfhost/parser/ny_parser_v0/main.nyash`（改修継続）。

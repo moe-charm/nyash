@@ -10,6 +10,9 @@ This is the entry point for Nyash language documentation.
 - Sugar Transformations (?., ??, |> and friends): parser/sugar.rs (source) and tools/nyfmt/NYFMT_POC_ROADMAP.md
 - Peek Expression Design/Usage: covered in the Language Reference and Phase 12.7 specs above
 
+Statement separation and semicolons
+- See: reference/language/statements.md — newline as primary separator; semicolons optional for multiple statements on one line; minimal ASI rules.
+
 Related implementation notes
 - Tokenizer: src/tokenizer.rs
 - Parser (expressions/statements): src/parser/expressions.rs, src/parser/statements.rs

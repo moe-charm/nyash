@@ -66,8 +66,11 @@ NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh
 # ラウンドトリップ (パーサーパイプ + JSON)
 ./tools/ny_roundtrip_smoke.sh
 
-# Nyコンパイラ MVP経路 (実験的)
+# Nyコンパイラ MVP経路 (Phase 15.3実装中!)
 NYASH_USE_NY_COMPILER=1 ./target/release/nyash program.nyash
+
+# JSON v0 Bridge経由実行（完成済み）
+python tools/ny_parser_mvp.py program.nyash | ./target/release/nyash --ny-parser-pipe
 ```
 
 ### 🐧 Linux/WSL版
@@ -193,6 +196,12 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 # ラウンドトリップテスト
 ./tools/ny_roundtrip_smoke.sh
 
+# Stage-2 PHIスモーク（If/Loop PHI合流）
+./tools/ny_parser_stage2_phi_smoke.sh
+
+# Stage-2 Bridgeスモーク（算術/比較/短絡/if）
+./tools/ny_stage2_bridge_smoke.sh
+
 # プラグインスモーク（オプション）
 NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 
@@ -223,10 +232,13 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 
 ## 📝 Update (2025-09-14) 🎉 セルフホスティング大前進！
 - ✅ Python LLVM実装が実用レベル到達！（esc_dirname_smoke, min_str_cat_loop, dep_tree_min_string全てPASS）
-- 🚀 パーサーのNyash実装開始！ChatGPT5が`apps/selfhost/parser/`で実装中
+- 🚀 **Phase 15.3開始！** NyashコンパイラMVP実装が`apps/selfhost-compiler/`でスタート！
+- ✅ JSON v0 Bridge完成 - If/Loop PHI生成実装済み（ChatGPT実装）
+- 🔧 Python MVPパーサーStage-2完成 - local/if/loop/call/method/new対応
 - 📚 peek式の再発見 - when→peekに名前変更、ブロック/値/文すべて対応済み
 - 🧠 箱理論でSSA構築を簡略化（650行→100行）- 論文執筆完了
 - 🤝 AI協働の知見を論文化 - 実装駆動型学習の重要性を実証
+- 🎯 **LoopForm戦略決定**: PHIは逆Lowering時に自動生成（Codex推奨）
 - 📋 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
 
 ### 🚀 新発見：プラグイン全方向ビルド戦略
@@ -246,6 +258,12 @@ clang main.o filebox.o pathbox.o libnyrt.a -o nyash_static.exe
 ### 🏗️ Everything is Box
 - すべての値がBox（StringBox, IntegerBox, BoolBox等）
 - ユーザー定義Box: `box ClassName { field1: TypeBox field2: TypeBox }`
+- **MIR14命令**: たった14個の命令で全機能実現！
+  - 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
+  - メモリ(2): Load, Store  
+  - 制御(4): Branch, Jump, Return, Phi
+  - Box(2): NewBox, BoxCall
+  - 外部(1): ExternCall
 
 ### 🌟 完全明示デリゲーション
 ```nyash

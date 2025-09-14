@@ -36,6 +36,14 @@ fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
 impl NyashRunner {
     /// File-mode dispatcher (thin wrapper around backend/mode selection)
     pub(crate) fn run_file(&self, filename: &str) {
+        // Phase-15.3: Ny compiler MVP (Ny -> JSON v0) behind env gate
+        if std::env::var("NYASH_USE_NY_COMPILER").ok().as_deref() == Some("1") {
+            if self.try_run_ny_compiler_pipeline(filename) {
+                return;
+            } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[ny-compiler] fallback to default path (MVP unavailable for this input)");
+            }
+        }
         // Direct v0 bridge when requested via CLI/env
         let use_ny_parser = self.config.parser_ny || std::env::var("NYASH_USE_NY_PARSER").ok().as_deref() == Some("1");
         if use_ny_parser {
@@ -137,6 +145,84 @@ impl NyashRunner {
                     println!("====================================================");
                 }
                 self.execute_nyash_file(filename);
+            }
+        }
+    }
+
+    /// Phase-15.3: Attempt Ny compiler pipeline (Ny -> JSON v0 via Ny program), then execute MIR
+    fn try_run_ny_compiler_pipeline(&self, filename: &str) -> bool {
+        use std::io::Write;
+        // Read input source
+        let code = match fs::read_to_string(filename) {
+            Ok(c) => c,
+            Err(e) => { eprintln!("[ny-compiler] read error: {}", e); return false; }
+        };
+        // Write to tmp/ny_parser_input.ny (as expected by Ny parser v0)
+        let tmp_dir = std::path::Path::new("tmp");
+        if let Err(e) = std::fs::create_dir_all(tmp_dir) {
+            eprintln!("[ny-compiler] mkdir tmp failed: {}", e);
+            return false;
+        }
+        let tmp_path = tmp_dir.join("ny_parser_input.ny");
+        match std::fs::File::create(&tmp_path) {
+            Ok(mut f) => {
+                if let Err(e) = f.write_all(code.as_bytes()) {
+                    eprintln!("[ny-compiler] write tmp failed: {}", e);
+                    return false;
+                }
+            }
+            Err(e) => { eprintln!("[ny-compiler] open tmp failed: {}", e); return false; }
+        }
+        // Locate current exe to invoke Ny VM for the Ny parser program
+        let exe = match std::env::current_exe() {
+            Ok(p) => p,
+            Err(e) => { eprintln!("[ny-compiler] current_exe failed: {}", e); return false; }
+        };
+        // Prefer new selfhost-compiler entry; fallback to legacy ny_parser_v0
+        let cand_new = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
+        let cand_old = std::path::Path::new("apps/selfhost/parser/ny_parser_v0/main.nyash");
+        let parser_prog = if cand_new.exists() { cand_new } else { cand_old };
+        if !parser_prog.exists() { eprintln!("[ny-compiler] compiler program not found: {}", parser_prog.display()); return false; }
+        let mut cmd = std::process::Command::new(exe);
+        cmd.arg("--backend").arg("vm").arg(parser_prog);
+        // Propagate minimal env; disable plugins to reduce noise
+        cmd.env_remove("NYASH_USE_NY_COMPILER");
+        // Suppress parent runner's result printing in child
+        cmd.env("NYASH_JSON_ONLY", "1");
+        let out = match cmd.output() {
+            Ok(o) => o,
+            Err(e) => { eprintln!("[ny-compiler] spawn failed: {}", e); return false; }
+        };
+        if !out.status.success() {
+            if let Ok(s) = String::from_utf8(out.stderr) { eprintln!("[ny-compiler] parser stderr:\n{}", s); }
+            return false;
+        }
+        let stdout = match String::from_utf8(out.stdout) { Ok(s) => s, Err(_) => String::new() };
+        let mut json_line = String::new();
+        for line in stdout.lines() {
+            let t = line.trim();
+            if t.starts_with('{') && t.contains("\"version\":0") { json_line = t.to_string(); break; }
+        }
+        if json_line.is_empty() {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                let head: String = stdout.chars().take(200).collect();
+                eprintln!("[ny-compiler] JSON not found in child stdout (head): {}", head.replace('\n', "\\n"));
+            }
+            return false;
+        }
+        // Parse JSON v0 → MIR module
+        match json_v0_bridge::parse_json_v0_to_module(&json_line) {
+            Ok(module) => {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    println!("🚀 Ny compiler MVP (ny→json_v0) path ON");
+                }
+                json_v0_bridge::maybe_dump_mir(&module);
+                self.execute_mir_module(&module);
+                true
+            }
+            Err(e) => {
+                eprintln!("[ny-compiler] JSON parse failed: {}", e);
+                false
             }
         }
     }
