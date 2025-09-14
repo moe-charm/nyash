@@ -100,12 +100,13 @@ impl<'a> LoopBuilder<'a> {
         for stmt in body {
             self.build_statement(stmt)?;
         }
-        // latchブロックのスナップショットを保存（phi入力解決用）
-        let latch_snapshot = self.get_current_variable_map();
-        self.block_var_maps.insert(body_id, latch_snapshot);
-        
         // 8. Latchブロック（ボディの最後）からHeaderへ戻る
+        // 現在の挿入先が latch（最後のブロック）なので、そのブロックIDでスナップショットを保存する
         let latch_id = self.current_block()?;
+        let latch_snapshot = self.get_current_variable_map();
+        // 以前は body_id に保存していたが、複数ブロックのボディや continue 混在時に不正確になるため
+        // 実際の latch_id に対してスナップショットを紐づける
+        self.block_var_maps.insert(latch_id, latch_snapshot);
         self.emit_jump(header_id)?;
         let _ = self.add_predecessor(header_id, latch_id);
         

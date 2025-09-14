@@ -1,14 +1,16 @@
-# Current Task (2025-09-13 改定) — Phase 15 llvmlite（既定）+ PyVM（新規）
+# Current Task (2025-09-14 改定) — Phase 15 llvmlite（既定）+ PyVM（新規）
 
 Summary
 - JIT/Cranelift は一時停止。Rust/inkwell LLVM は参照のみ。
 - 既定の実行/ビルド経路は Python/llvmlite ハーネス（MIR JSON→.o→NyRT link）。
 - 2本目の実行経路として PyVM（Python MIR VM）を導入し、llvmlite との機能同値で安定化する。
+- A6 受入（parity+verify）を達成済み。次は Nyash パーサMVP 着手。
 
-Quick Status — 2025‑09‑13（post‑harness hardening）
-- llvmlite（ハーネス）で verify green → .o → link が代表ケースで成立（dep_tree_min_string）
-- Resolver‑only/Sealed SSA/文字列ハンドル不変を強化。PHIはBB先頭・pred終端でboxing/cast。
-- IRダンプ/PHIガード/deny-directチェックが利用可能（NYASH_LLVM_DUMP_IR, NYASH_LLVM_PHI_STRICT, tools/llvmlite_check_deny_direct.sh）。
+Quick Status — 2025‑09‑14（A6 Accepted）
+- esc_dirname_smoke: PyVM↔llvmlite パリティ一致（ゲートOFF）。
+- dep_tree_min_string: PyVM↔llvmlite パリティ一致。llvmlite 経路で `.ll verify → .o → EXE` 完走。
+- 一時救済ゲート `NYASH_LLVM_ESC_JSON_FIX` は受入では未使用（OFF）。
+- Resolver‑only/Sealed SSA/文字列ハンドル不変は継続運用。IRダンプ/PHIガード/deny-direct チェック利用可。
 
 Focus Shift — llvmlite（既定）+ PyVM（新規）
 - Rust/inkwell は保守のみ。Python（llvmlite/PyVM）中心で開発。
@@ -33,12 +35,11 @@ Hot Update — 2025‑09‑13（Resolver‑only 統一 + Harness ON green）
   - `main` 衝突回避: MIR 由来 `main` は private にし、`ny_main()` ラッパを自動生成（NyRT `main` と整合）。
 - 代表ケース（dep_tree_min_string）: Harness ON で `.ll verify green → .o` を確認し、NyRT とリンクして EXE 生成成功。
 
-Next（short — Py/llvmlite + PyVM）
-1) PyVM スキャフォールド: `tools/pyvm_runner.py` と `src/llvm_py/pyvm/` 追加（最小命令+boxcall）。
-2) ランナー統合: `NYASH_VM_USE_PY=1` → MIR(JSON) を PyVM に渡して実行。
-3) パリティ基盤: 汎用パリティスクリプト `tools/parity.sh` を追加（stdout+exit code 比較、pyvm/vm/llvmlite 任意ペア）。
-4) 型メタ導入（MIR v0.5 互換）: JSON MIR に String の handle/ptr 種別を明示し、llvmlite/PyVM で推測を排除。
-5) スモーク拡充: esc_dirname_smoke / dep_tree_min_string の両経路一致（終了コード+JSON）。
+Next（short — Parser MVP kick‑off）
+1) Ny→JSON v0 パイプを Nyash で実装（整数/文字列/四則/括弧/return）。
+2) `--ny-parser-pipe`/`--json-file` と互換の JSON v0 を出力し、既存ブリッジで実行。
+3) スモーク: `tools/ny_roundtrip_smoke.sh` 緑、`esc_dirname_smoke`/`dep_tree_min_string` を Ny パーサ経路で PyVM/llvmlite とパリティ一致。
+4) （続）Ny AST→MIR JSON 直接降下の設計（箱構造/型メタ連携）。
 
 Hot Update — MIR v0.5 Type Metadata（2025‑09‑14 着手）
 - 背景: 文字列を i64 として曖昧に扱っており、llvmlite で handle/ptr の推測が必要→不安定の温床。
@@ -54,6 +55,30 @@ Hot Update — MIR v0.5 Type Metadata（2025‑09‑14 着手）
   - JSON に string const の型メタが出ること
   - Python 側で `dst_type` により string ハンドルのタグ付けが行われること
   - `tools/parity.sh` が esc_dirname_smoke で実行できること（完全一致は第二段で目標）
+
+Hot Update — 2025‑09‑14（Option A: A6 受入完了）
+- 方針: mem2reg は採らず、MIR→JSON→llvmlite で収束。
+- 実施: if/loop の MIR 補強（then/else 再代入のPhi化、latch→header seal の堅牢化）。
+- 結果: esc_dirname_smoke / min_str_cat_loop / dep_tree_min_string が PyVM↔llvmlite で一致。LLVM verifier green → .o 成立。
+
+Tasks（短期・優先順 — ParserMVP）
+1) Parser v0（Ny→JSON v0）
+   - `apps/selfhost/parser/` に LexerBox/ParserBox を配置し、整数/文字列/四則/括弧/return をJSON v0に吐く。
+2) CLI/ブリッジ動線
+   - `nyash --ny-parser-pipe` と同等フォーマットで出力→既存 `json_v0_bridge` で実行。
+3) スモーク整備
+   - `tools/ny_roundtrip_smoke.sh`/`tools/ny_parser_bridge_smoke.sh` を Ny パーサ経路でも緑に。
+4) 設計
+   - Ny AST→MIR JSON 直接降下の箱設計（型メタ/Resolverフック）。
+
+Notes（ゲート/保護）
+- 進行中のみの一時救済ゲート: `NYASH_LLVM_ESC_JSON_FIX=1`
+  - finalize_phis で esc_json のデフォルト枝に `out = concat(out, substring)` を pred末端に合成（dominance-safe）
+  - 本命の MIR 修正が入ったため、受け入れには使用しない（OFF）。
+
+Back‑up Plan（実験レーン・必要時）
+- Python MIR Builder（AST→MIR を Python で生成）を `NYASH_MIR_PYBUILDER=1` のフラグで限定導入し、smoke 2本（min_str/esc_dirname）で PyVM/llvmlite 一致を先に確保。
+- 良好なら段階移行。ダメなら即OFF（現行MIRを維持）。
 
 Hot Update — 2025‑09‑14（typed binop/compare/phi + PHI on‑demand）
 - 目的: LLVM層での型推測を廃止し、MIR→JSONの型メタにもとづく機械的降下へ移行。

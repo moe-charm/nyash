@@ -37,6 +37,8 @@
 **完了基準:**
 - esc_dirname_smoke / dep_tree_min_string が PyVM と llvmlite で一致。
 
+【Status 2025‑09‑14】完了（A6 受入）。
+
 ### 3) using（ゲート付き）設計・実装（15.2/15.3）
 
 **要点:**
@@ -50,6 +52,22 @@
 
 **完了基準:**
 - フラグONで using 経路が動作し、未解決時の診断・キャッシュ挙動がテストで担保。
+
+【Next】Ny パーサMVPと並走で段階導入（フラグ: `--enable-using`/`NYASH_ENABLE_USING=1`）。
+
+### 3.5) Nyash パーサMVP（サブセット）
+
+**要点:**
+- ステージ1: Ny→JSON v0 パイプ（最小表現）。
+- ステージ2: 文/式のサブセット拡張。
+- ステージ3: Ny AST→MIR JSON 直接降下（llvmlite/PyVMへ）。
+
+**スモーク/CI:**
+- `tools/ny_roundtrip_smoke.sh` / `tools/ny_parser_bridge_smoke.sh`
+- `tools/parity.sh --lhs pyvm --rhs llvmlite <smoke.nyash>`（Nyパーサ経路ON）
+
+**完了基準:**
+- esc_dirname_smoke / dep_tree_min_string が Ny パーサ経路でも PyVM/llvmlite と一致（stdout/exit）。
 
 ### 4) nyash.link ミニマルリゾルバ（15.4）
 

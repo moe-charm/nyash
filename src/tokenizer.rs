@@ -206,6 +206,10 @@ impl NyashTokenizer {
                 self.advance();
                 return Ok(Token::new(TokenType::QmarkQmark, start_line, start_column));
             }
+            Some('?') => {
+                self.advance();
+                return Ok(Token::new(TokenType::QUESTION, start_line, start_column));
+            }
             Some('+') if self.peek_char() == Some('=') => {
                 self.advance();
                 self.advance();
@@ -262,6 +266,10 @@ impl NyashTokenizer {
                 self.advance();
                 self.advance();
                 Ok(Token::new(TokenType::DoubleColon, start_line, start_column))
+            }
+            Some(':') => {
+                self.advance();
+                Ok(Token::new(TokenType::COLON, start_line, start_column))
             }
             Some('=') if self.peek_char() == Some('>') => {
                 self.advance();

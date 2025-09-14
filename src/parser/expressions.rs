@@ -25,7 +25,7 @@ impl NyashParser {
     /// パイプライン演算子: lhs |> f(a,b) / lhs |> obj.m(a)
     /// 基本方針: 右辺が関数呼び出しなら先頭に lhs を挿入。メソッド呼び出しなら引数の先頭に lhs を挿入。
     fn parse_pipeline(&mut self) -> Result<ASTNode, ParseError> {
-        let mut expr = self.parse_coalesce()?;
+        let mut expr = self.parse_ternary()?;
 
         while self.match_token(&TokenType::PipeForward) {
             if !is_sugar_enabled() {
@@ -80,6 +80,28 @@ impl NyashParser {
         }
 
         Ok(expr)
+    }
+
+    /// 三項演算子: cond ? then : else
+    /// Grammar (Phase 12.7): TernaryExpr = NullsafeExpr ( "?" Expr ":" Expr )?
+    /// 実装: coalesce の上に差し込み、`cond ? a : b` を If式に変換する。
+    fn parse_ternary(&mut self) -> Result<ASTNode, ParseError> {
+        let cond = self.parse_coalesce()?;
+        if self.match_token(&TokenType::QUESTION) {
+            // consume '?' and parse then/else expressions
+            self.advance();
+            let then_expr = self.parse_expression()?;
+            self.consume(TokenType::COLON)?; // ':'
+            let else_expr = self.parse_expression()?;
+            // Lower to PeekExpr over boolean scrutinee: peek cond { true => then, else => else }
+            return Ok(ASTNode::PeekExpr {
+                scrutinee: Box::new(cond),
+                arms: vec![(crate::ast::LiteralValue::Bool(true), then_expr)],
+                else_expr: Box::new(else_expr),
+                span: Span::unknown(),
+            });
+        }
+        Ok(cond)
     }
 
     /// デフォルト値（??）: x ?? y => peek x { null => y, else => x }
@@ -591,7 +613,11 @@ impl NyashParser {
                     expr = ASTNode::Call { callee: Box::new(expr), arguments, span: Span::unknown() };
                 }
             } else if self.match_token(&TokenType::QUESTION) {
-                // 後置 ?（Result伝播）
+                // 後置 ?（Result伝播）。ただし三項演算子 '?:' と衝突するため、次トークンが ':' の場合は消費しない。
+                // 例: (cond) ? then : else ではここで '?' を処理せず、上位の parse_ternary に委ねる。
+                if self.peek_token() == &TokenType::COLON {
+                    break;
+                }
                 self.advance();
                 expr = ASTNode::QMarkPropagate { expression: Box::new(expr), span: Span::unknown() };
             } else {

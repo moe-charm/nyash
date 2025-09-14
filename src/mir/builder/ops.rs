@@ -27,8 +27,27 @@ impl super::MirBuilder {
             // Arithmetic operations
             BinaryOpType::Arithmetic(op) => {
                 self.emit_instruction(MirInstruction::BinOp { dst, op, lhs, rhs })?;
-                // Arithmetic results are integers for now (Core-1)
-                self.value_types.insert(dst, MirType::Integer);
+                // '+' は文字列連結の可能性がある。オペランドが String/StringBox なら結果を String と注釈。
+                if matches!(op, crate::mir::BinaryOp::Add) {
+                    let lhs_is_str = match self.value_types.get(&lhs) {
+                        Some(MirType::String) => true,
+                        Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                        _ => false,
+                    };
+                    let rhs_is_str = match self.value_types.get(&rhs) {
+                        Some(MirType::String) => true,
+                        Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                        _ => false,
+                    };
+                    if lhs_is_str || rhs_is_str {
+                        self.value_types.insert(dst, MirType::String);
+                    } else {
+                        self.value_types.insert(dst, MirType::Integer);
+                    }
+                } else {
+                    // その他の算術は整数
+                    self.value_types.insert(dst, MirType::Integer);
+                }
             }
             // Comparison operations
             BinaryOpType::Comparison(op) => {

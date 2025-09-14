@@ -83,8 +83,19 @@ class PyVM:
         # Initialize registers and bind params
         regs: Dict[int, Any] = {}
         if fn.params:
-            for i, pid in enumerate(fn.params):
-                regs[int(pid)] = args[i] if i < len(args) else None
+            # If this function was lowered from a method (e.g., Main.foo/N), the first
+            # parameter is an implicit 'me' and call sites pass only N args.
+            # Align by detecting off-by-one and shifting args to skip the implicit receiver.
+            if len(args) + 1 == len(fn.params):
+                # Fill implicit 'me' (unused by our lowering at runtime) and map the rest
+                if fn.params:
+                    regs[int(fn.params[0])] = None  # placeholder for 'me'
+                for i, pid in enumerate(fn.params[1:]):
+                    regs[int(pid)] = args[i] if i < len(args) else None
+            else:
+                # Direct positional bind
+                for i, pid in enumerate(fn.params):
+                    regs[int(pid)] = args[i] if i < len(args) else None
         else:
             # Heuristic: derive param count from name suffix '/N' and bind to vids 0..N-1
             n = 0
@@ -291,6 +302,19 @@ class PyVM:
                             out = os.path.join(base, rel)
                         else:
                             out = None
+                    elif method == "esc_json":
+                        # Escape backslash and double-quote in the given string argument
+                        s = args[0] if args else ""
+                        s = "" if s is None else str(s)
+                        out_chars = []
+                        for ch in s:
+                            if ch == "\\":
+                                out_chars.append("\\\\")
+                            elif ch == '"':
+                                out_chars.append('\\"')
+                            else:
+                                out_chars.append(ch)
+                        out = "".join(out_chars)
                     elif method == "length":
                         out = len(str(recv))
                     elif method == "substring":

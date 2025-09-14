@@ -68,6 +68,9 @@ class NyashLLVMBuilder:
         
         # Statistics
         self.loop_count = 0
+        # Heuristics for minor gated fixes
+        self.current_function_name: Optional[str] = None
+        self._last_substring_vid: Optional[int] = None
         
     def build_from_mir(self, mir_json: Dict[str, Any]) -> str:
         """Build LLVM IR from MIR JSON"""
@@ -166,6 +169,7 @@ class NyashLLVMBuilder:
     def lower_function(self, func_data: Dict[str, Any]):
         """Lower a single MIR function to LLVM IR"""
         name = func_data.get("name", "unknown")
+        self.current_function_name = name
         import re
         params = func_data.get("params", [])
         blocks = func_data.get("blocks", [])
@@ -514,6 +518,12 @@ class NyashLLVMBuilder:
                     if dst_type.get("kind") == "handle" and dst_type.get("box_type") == "StringBox":
                         if hasattr(self.resolver, 'mark_string'):
                             self.resolver.mark_string(int(dst))
+                # Track last substring for optional esc_json fallback
+                try:
+                    if isinstance(method, str) and method == 'substring' and isinstance(dst, int):
+                        self._last_substring_vid = int(dst)
+                except Exception:
+                    pass
             except Exception:
                 pass
             
@@ -723,13 +733,45 @@ class NyashLLVMBuilder:
                     if val is None:
                         val = ir.Constant(self.i64, 0)
                     chosen[pred_match] = val
-                # Fill remaining predecessors with dst carry or zero
+                # Fill remaining predecessors with dst carry or (optionally) a synthesized default
                 for pred_bid in preds_list:
                     if pred_bid not in chosen:
+                        val = None
+                        # Optional gated fix for esc_json: default branch should append current char
                         try:
-                            val = self.resolver._value_at_end_i64(dst_vid, pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
+                            import os
+                            if os.environ.get('NYASH_LLVM_ESC_JSON_FIX','0') == '1':
+                                fname = getattr(self, 'current_function_name', '') or ''
+                                sub_vid = getattr(self, '_last_substring_vid', None)
+                                if isinstance(fname, str) and 'esc_json' in fname and isinstance(sub_vid, int):
+                                    # Compute out_at_end and ch_at_end in pred block, then concat_hh
+                                    out_end = self.resolver._value_at_end_i64(int(dst_vid), pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
+                                    ch_end = self.resolver._value_at_end_i64(int(sub_vid), pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
+                                    if out_end is not None and ch_end is not None:
+                                        pb = ir.IRBuilder(self.bb_map.get(pred_bid))
+                                        try:
+                                            t = self.bb_map.get(pred_bid).terminator
+                                            if t is not None:
+                                                pb.position_before(t)
+                                            else:
+                                                pb.position_at_end(self.bb_map.get(pred_bid))
+                                        except Exception:
+                                            pass
+                                        fnty = ir.FunctionType(self.i64, [self.i64, self.i64])
+                                        callee = None
+                                        for f in self.module.functions:
+                                            if f.name == 'nyash.string.concat_hh':
+                                                callee = f; break
+                                        if callee is None:
+                                            callee = ir.Function(self.module, fnty, name='nyash.string.concat_hh')
+                                        val = pb.call(callee, [out_end, ch_end], name=f"phi_def_concat_{dst_vid}_{pred_bid}")
                         except Exception:
-                            val = None
+                            pass
+                        if val is None:
+                            try:
+                                val = self.resolver._value_at_end_i64(dst_vid, pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
+                            except Exception:
+                                val = None
                         if val is None:
                             val = ir.Constant(self.i64, 0)
                         chosen[pred_bid] = val

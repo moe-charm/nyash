@@ -1,0 +1,217 @@
+// ny_parser_v0 — Stage 1 MVP: Ny -> JSON v0 (minimal)
+// Supports: return <expr>;  expr ::= term (('+'|'-') term)*
+//          term  ::= factor (('*'|'/') factor)*
+//          factor::= INT | STRING | '(' expr ')'
+
+static box Main {
+  // --- Utilities ---
+  is_digit(ch) { return ch >= "0" && ch <= "9" }
+  is_space(ch) {
+    return ch == " " || ch == "\t" || ch == "\n" || ch == "\r"
+  }
+
+  esc_json(s) {
+    // escape backslash and quote for JSON strings
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" } else {
+        if ch == "\"" { out = out + "\\\"" } else { out = out + ch }
+      }
+      i = i + 1
+    }
+    return out
+  }
+
+  // Cursor helpers over source string
+  skip_ws(src, i) {
+    local n = src.length()
+    loop(i < n && me.is_space(src.substring(i, i+1))) { i = i + 1 }
+    return i
+  }
+
+  // (helper match removed; inline checks in parse_program)
+
+  parse_number(src, i) {
+    // returns (json, next_i)
+    local n = src.length()
+    local j = i
+    loop(j < n && me.is_digit(src.substring(j, j+1))) { j = j + 1 }
+    local s = src.substring(i, j)
+    local json = "{\"type\":\"Int\",\"value\":" + s + "}"
+    return json + "@" + j // pack result with '@' separator
+  }
+
+  parse_string(src, i) {
+    local n = src.length()
+    local j = i + 1 // skip opening quote
+    local out = ""
+    loop(j < n) {
+      local ch = src.substring(j, j+1)
+      if ch == "\"" {
+        j = j + 1
+        local json0 = "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}"
+        return json0 + "@" + j
+      }
+      if ch == "\\" && j + 1 < n {
+        local nx = src.substring(j+1, j+2)
+        // minimal escapes (\" and \\)
+        if nx == "\"" { out = out + "\"" } else { if nx == "\\" { out = out + "\\" } else { out = out + nx } }
+        j = j + 2
+      } else {
+        out = out + ch
+        j = j + 1
+      }
+    }
+    // Unterminated string (fallback)
+    local json = "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}"
+    return json + "@" + j
+  }
+
+  // Recursive descent
+  parse_factor(src, i) {
+    // skip ws
+    local nsrc = src.length()
+    loop(i < nsrc && me.is_space(src.substring(i, i+1))) { i = i + 1 }
+    local ch = src.substring(i, i+1)
+    if ch == "(" {
+      // (expr)
+      local p = me.parse_expr(src, i + 1)
+      local at = p.lastIndexOf("@")
+      local ej = p.substring(0, at)
+      local j = me.to_int(p.substring(at+1, p.length()))
+      // skip ws
+      local n2 = src.length()
+      loop(j < n2 && me.is_space(src.substring(j, j+1))) { j = j + 1 }
+      if src.substring(j, j+1) == ")" { j = j + 1 }
+      return ej + "@" + j
+    }
+    if ch == "\"" { return me.parse_string(src, i) }
+    // number
+    return me.parse_number(src, i)
+  }
+
+  parse_term(src, i) {
+    local p = me.parse_factor(src, i)
+    local at = p.lastIndexOf("@")
+    local lhs = p.substring(0, at)
+    local j = me.to_int(p.substring(at+1, p.length()))
+    local cont = 1
+    loop(cont == 1) {
+      // skip ws
+      local n3 = src.length()
+      loop(j < n3 && me.is_space(src.substring(j, j+1))) { j = j + 1 }
+      if j >= src.length() { cont = 0 } else {
+        local op = src.substring(j, j+1)
+        if op != "*" && op != "/" { cont = 0 } else {
+          // parse rhs
+          local q = me.parse_factor(src, j+1)
+          local at2 = q.lastIndexOf("@")
+          local rhs = q.substring(0, at2)
+          j = me.to_int(q.substring(at2+1, q.length()))
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+    return lhs + "@" + j
+  }
+
+  parse_expr(src, i) {
+    local p = me.parse_term(src, i)
+    local at = p.lastIndexOf("@")
+    local lhs = p.substring(0, at)
+    local j = me.to_int(p.substring(at+1, p.length()))
+    local cont = 1
+    loop(cont == 1) {
+      // skip ws
+      local n4 = src.length()
+      loop(j < n4 && me.is_space(src.substring(j, j+1))) { j = j + 1 }
+      if j >= src.length() { cont = 0 } else {
+        local op = src.substring(j, j+1)
+        if op != "+" && op != "-" { cont = 0 } else {
+          // parse rhs
+          local q = me.parse_term(src, j+1)
+          local at2 = q.lastIndexOf("@")
+          local rhs = q.substring(0, at2)
+          j = me.to_int(q.substring(at2+1, q.length()))
+          lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+        }
+      }
+    }
+    return lhs + "@" + j
+  }
+
+  to_int(s) {
+    // parse decimal int from string s
+    // 簡易に桁を読む（ここでは利用側が整数のみで使う）
+    // ただしここは内部専用で index を取り出すだけなので、s は数字のみ想定
+    // 実装簡略化のため、長さ0なら0、それ以外は手動で畳み込み
+    local n = s.length()
+    if n == 0 { return 0 }
+    local i = 0
+    local acc = 0
+    loop(i < n) {
+      local d = s.substring(i, i+1)
+      local dv = 0
+      if d == "1" { dv = 1 } else {
+        if d == "2" { dv = 2 } else {
+          if d == "3" { dv = 3 } else {
+            if d == "4" { dv = 4 } else {
+              if d == "5" { dv = 5 } else {
+                if d == "6" { dv = 6 } else {
+                  if d == "7" { dv = 7 } else {
+                    if d == "8" { dv = 8 } else {
+                      if d == "9" { dv = 9 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      acc = acc * 10 + dv
+      i = i + 1
+    }
+    return acc
+  }
+
+  parse_program(src) {
+    // optional leading ws + optional 'return'
+    // skip leading ws
+    local i = 0
+    local n0 = src.length()
+    loop(i < n0 && me.is_space(src.substring(i, i+1))) { i = i + 1 }
+    local j = i
+    local n = src.length()
+    if i + 6 <= n && src.substring(i, i+6) == "return" { j = i + 6 }
+    local p = me.parse_expr(src, j)
+    local at = p.lastIndexOf("@")
+    local ej = p.substring(0, at)
+    local body = "[{\"type\":\"Return\",\"expr\":" + ej + "}]"
+    return "{\"version\":0,\"kind\":\"Program\",\"body\":" + body + "}"
+  }
+
+  read_all(path) {
+    local fb = new FileBox()
+    fb.open(path, "r")
+    local s = fb.read()
+    fb.close()
+    return s
+  }
+
+  main(args) {
+    // usage: nyash --backend vm apps/selfhost/parser/ny_parser_v0/main.nyash
+    // Input source is read from tmp/ny_parser_input.ny (written by wrapper script)
+    local console = new ConsoleBox()
+    local src = null
+    local default_path = "tmp/ny_parser_input.ny"
+    src = me.read_all(default_path)
+    if src == null { src = "return 1+2*3" }
+    local json = me.parse_program(src)
+    console.println(json)
+    return 0
+  }
+}

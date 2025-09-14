@@ -1,0 +1,6 @@
+static box Main {
+  main(args) {
+    return (1 < 2) ? 10 : 20
+  }
+}
+

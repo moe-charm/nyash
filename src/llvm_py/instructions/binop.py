@@ -97,32 +97,9 @@ def lower_binop(
         if is_str:
             # Helper: convert raw or resolved value to string handle
             def to_handle(raw, val, tag: str, vid: int):
-                # If we already have an i64 in vmap (raw), prefer it
+                # If we already have an i64 SSA (handle) in vmap/raw or resolved val, prefer pass-through.
                 if raw is not None and hasattr(raw, 'type') and isinstance(raw.type, ir.IntType) and raw.type.width == 64:
-                    is_tag = False
-                    try:
-                        if resolver is not None and hasattr(resolver, 'is_stringish'):
-                            is_tag = resolver.is_stringish(vid)
-                    except Exception:
-                        is_tag = False
-                    if force_string or is_tag:
-                        return raw
-                    # Heuristic: PHI values in string concat are typically handles; prefer pass-through
-                    try:
-                        raw_is_phi = hasattr(raw, 'add_incoming')
-                    except Exception:
-                        raw_is_phi = False
-                    if raw_is_phi:
-                        return raw
-                    # Otherwise, box numeric i64 to IntegerBox handle
-                    cal = None
-                    for f in builder.module.functions:
-                        if f.name == 'nyash.box.from_i64':
-                            cal = f; break
-                    if cal is None:
-                        cal = ir.Function(builder.module, ir.FunctionType(i64, [i64]), name='nyash.box.from_i64')
-                    v64 = raw
-                    return builder.call(cal, [v64], name=f"int_i2h_{tag}_{dst}")
+                    return raw
                 if raw is not None and hasattr(raw, 'type') and isinstance(raw.type, ir.PointerType):
                     # pointer-to-array -> GEP
                     try:
@@ -140,32 +117,8 @@ def lower_binop(
                     return builder.call(cal, [raw], name=f"str_ptr2h_{tag}_{dst}")
                 # if already i64
                 if val is not None and hasattr(val, 'type') and isinstance(val.type, ir.IntType) and val.type.width == 64:
-                    # Distinguish handle vs numeric: if vid is tagged string-ish, treat as handle; otherwise box numeric to handle
-                    is_tag = False
-                    try:
-                        if resolver is not None and hasattr(resolver, 'is_stringish'):
-                            is_tag = resolver.is_stringish(vid)
-                    except Exception:
-                        is_tag = False
-                    if force_string or is_tag:
-                        return val
-                    # Heuristic: if vmap has a PHI placeholder for this vid, treat as handle
-                    try:
-                        maybe_phi = vmap.get(vid)
-                        if maybe_phi is not None and hasattr(maybe_phi, 'add_incoming'):
-                            return val
-                    except Exception:
-                        pass
-                    # Otherwise, box numeric i64 to IntegerBox handle
-                    cal = None
-                    for f in builder.module.functions:
-                        if f.name == 'nyash.box.from_i64':
-                            cal = f; break
-                    if cal is None:
-                        cal = ir.Function(builder.module, ir.FunctionType(i64, [i64]), name='nyash.box.from_i64')
-                    # Ensure value is i64
-                    v64 = val if val.type.width == 64 else builder.zext(val, i64)
-                    return builder.call(cal, [v64], name=f"int_i2h_{tag}_{dst}")
+                    # Treat resolved i64 as a handle in string domain（never box numeric here）
+                    return val
                 return ir.Constant(i64, 0)
 
             hl = to_handle(lhs_raw, lhs_val, 'l', lhs)

@@ -26,10 +26,24 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
   - ランナー統合: `NYASH_VM_USE_PY=1` で MIR(JSON) を PyVM に渡して実行
   - 代表スモーク（esc_dirname_smoke / dep_tree_min_string）で llvmlite とパリティ確認
 
-### Phase 15.3: NyashコンパイラMVP（後段）
+【Current Status — 2025‑09‑14】
+- A6 受入達成: esc_dirname_smoke の PyVM↔llvmlite パリティ一致（ゲートOFF）、LLVM verifier green → .o → リンク → 実行OK。
+- dep_tree_min_string: PyVM↔llvmlite パリティ一致、llvmlite 経路で `.ll verify → .o → EXE` 完走。
+- 一時救済ゲート `NYASH_LLVM_ESC_JSON_FIX` は受入には未使用（OFF）。
+
+### Phase 15.3: NyashコンパイラMVP（次フェーズ着手）
 - PyVM 安定後、Nyash製パーサ/レクサ（サブセット）と MIR ビルダを段階導入
 - フラグでRustフォールバックと併存（例: `NYASH_USE_NY_COMPILER=1`）
 - JIT不要、PyVM/llvmlite のパリティで正しさを担保
+
+【Kickoff 目標（MVP）】
+- ステージ1: Ny→JSON v0 パイプ（整数/文字列/加減乗除/括弧/return）。CLI: `--ny-parser-pipe` と互換のJSONを生成。
+- ステージ2: 文/式サブセット拡張（local/if/loop/call/method/new/me/substring/length/lastIndexOf）。
+- ステージ3: Ny AST→MIR JSON 降下（直接 llvmlite/PyVM へ渡す）。
+
+【受入（MVP）】
+- `tools/ny_roundtrip_smoke.sh` 緑（Case A/B）。
+- `apps/tests/esc_dirname_smoke.nyash` / `apps/selfhost/tools/dep_tree_min_string.nyash` を Ny パーサ経路で実行し、PyVM/llvmlite とパリティ一致（stdout/exit）。
 
 ### Phase 15.4: VM層のNyash化（PyVMからの置換）
 - PyVM を足場に、VMコアを Nyash 実装へ段階移植（命令サブセットから）
@@ -220,6 +234,10 @@ ny_free_buf(buffer)
 
 ### 🔧 実行チェックリスト
 - [ROADMAP.md](ROADMAP.md) - 進捗管理用チェックリスト
+
+### ✅ クイックスモーク（現状）
+- PyVM↔llvmlite パリティ: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash`
+- dep_tree（ハーネスON）: `NYASH_LLVM_FEATURE=llvm ./tools/build_llvm.sh apps/selfhost/tools/dep_tree_min_string.nyash -o app_dep && ./app_dep`
 
 ### 📚 関連フェーズ
 - [Phase 10: Cranelift JIT](../phase-10/)

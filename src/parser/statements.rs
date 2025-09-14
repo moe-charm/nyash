@@ -86,8 +86,9 @@ impl NyashParser {
                 self.parse_assignment_or_function_call()
             }
             _ => {
-                let line = self.current_token().line;
-                Err(ParseError::InvalidStatement { line })
+                // Fallback: treat as expression statement
+                // Allows forms like: print("x")  or a bare literal as the last value in a block
+                Ok(self.parse_expression()?)
             }
         };
         
@@ -246,13 +247,12 @@ impl NyashParser {
     /// return文をパース
     pub(super) fn parse_return(&mut self) -> Result<ASTNode, ParseError> {
         self.advance(); // consume 'return'
-        
-        // returnの後に式があるかチェック
-        let value = if self.is_at_end() || self.match_token(&TokenType::NEWLINE) {
-            // return単体の場合はvoidを返す
+        // 許容: 改行をスキップしてから式有無を判定
+        self.skip_newlines();
+        // returnの後に式があるかチェック（RBRACE/EOFなら値なし）
+        let value = if self.is_at_end() || self.match_token(&TokenType::RBRACE) {
             None
         } else {
-            // 式をパースして返す
             Some(Box::new(self.parse_expression()?))
         };
         
