@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+BIN="$ROOT_DIR/target/release/nyash"
+
+if [[ ! -x "$BIN" ]]; then
+  echo "[build] nyash (release) ..." >&2
+  cargo build --release >/dev/null
+fi
+
+TMP_DIR="$ROOT_DIR/tmp"
+mkdir -p "$TMP_DIR"
+
+# If/Else PHI merge
+cat >"$TMP_DIR/phi_if_sample.ny" <<'NY'
+local x = 1
+if 1 < 2 {
+  local x = 10
+} else {
+  local x = 20
+}
+return x
+NY
+
+OUT1=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/phi_if_sample.ny" | "$BIN" --ny-parser-pipe || true)
+echo "$OUT1" | rg -q '^Result:\s*10\b' && echo "✅ If/Else PHI merge OK" || { echo "❌ If/Else PHI merge FAILED"; echo "$OUT1"; exit 1; }
+
+# Loop PHI merge
+cat >"$TMP_DIR/phi_loop_sample.ny" <<'NY'
+local i = 0
+local s = 0
+loop(i < 3) {
+  local s = s + 1
+  local i = i + 1
+}
+return s
+NY
+
+OUT2=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/phi_loop_sample.ny" | "$BIN" --ny-parser-pipe || true)
+echo "$OUT2" | rg -q '^Result:\s*3\b' && echo "✅ Loop PHI merge OK" || { echo "❌ Loop PHI merge FAILED"; echo "$OUT2"; exit 1; }
+
+echo "All Stage-2 PHI smokes PASS" >&2
+

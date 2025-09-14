@@ -1,0 +1,12 @@
+static box Main {
+  helper(s) {
+    return s.length()
+  }
+  main(args) {
+    local console = new ConsoleBox()
+    local n = me.helper("abc")
+    console.println("n=" + n)
+    return 0
+  }
+}
+

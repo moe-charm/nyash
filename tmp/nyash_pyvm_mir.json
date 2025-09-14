@@ -12,19 +12,37 @@
               "type": "ArrayBox"
             },
             {
+              "args": [],
               "dst": 1,
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 2,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "1"
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
               }
             },
             {
               "op": "jump",
-              "target": 2
+              "target": 1
             }
           ]
         },
@@ -32,26 +50,67 @@
           "id": 1,
           "instructions": [
             {
-              "dst": 2,
+              "dst": 7,
               "incoming": [
                 [
-                  6,
-                  4
+                  1,
+                  0
                 ],
                 [
-                  10,
+                  7,
                   6
-                ],
-                [
-                  12,
-                  3
                 ]
               ],
               "op": "phi"
             },
             {
-              "op": "ret",
-              "value": 2
+              "dst": 6,
+              "incoming": [
+                [
+                  3,
+                  0
+                ],
+                [
+                  17,
+                  6
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 5,
+              "incoming": [
+                [
+                  2,
+                  0
+                ],
+                [
+                  19,
+                  6
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 5
+              }
+            },
+            {
+              "dst": 9,
+              "lhs": 5,
+              "op": "compare",
+              "operation": "<=",
+              "rhs": 8
+            },
+            {
+              "cond": 9,
+              "else": 3,
+              "op": "branch",
+              "then": 2
             }
           ]
         },
@@ -59,25 +118,37 @@
           "id": 2,
           "instructions": [
             {
-              "dst": 3,
+              "dst": 10,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "0"
+                "type": "i64",
+                "value": 2
               }
             },
             {
-              "dst": 4,
-              "lhs": 1,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 3
+              "dst": 11,
+              "lhs": 5,
+              "op": "binop",
+              "operation": "%",
+              "rhs": 10
             },
             {
-              "cond": 4,
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 13,
+              "lhs": 11,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 12
+            },
+            {
+              "cond": 13,
               "else": 5,
               "op": "branch",
               "then": 4
@@ -88,26 +159,38 @@
           "id": 3,
           "instructions": [
             {
-              "dst": 11,
+              "dst": 21,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "other"
+                "value": "sum="
               }
             },
             {
-              "args": [
-                11
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "dst": 22,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 21,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 6
             },
             {
-              "dst": 12,
+              "args": [
+                22
+              ],
+              "box": 7,
+              "dst": 23,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 24,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -115,8 +198,8 @@
               }
             },
             {
-              "op": "jump",
-              "target": 1
+              "op": "ret",
+              "value": 24
             }
           ]
         },
@@ -124,35 +207,15 @@
           "id": 4,
           "instructions": [
             {
-              "dst": 5,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "found zero"
-              }
-            },
-            {
-              "args": [
-                5
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 6,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
+              "dst": 14,
+              "lhs": 6,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 5
             },
             {
               "op": "jump",
-              "target": 1
+              "target": 6
             }
           ]
         },
@@ -160,28 +223,23 @@
           "id": 5,
           "instructions": [
             {
-              "dst": 7,
+              "dst": 15,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "1"
+                "type": "i64",
+                "value": 0
               }
             },
             {
-              "dst": 8,
-              "lhs": 1,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 7
+              "dst": 16,
+              "lhs": 6,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 15
             },
             {
-              "cond": 8,
-              "else": 3,
-              "op": "branch",
-              "then": 6
+              "op": "jump",
+              "target": 6
             }
           ]
         },
@@ -189,31 +247,33 @@
           "id": 6,
           "instructions": [
             {
-              "dst": 9,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "found one"
-              }
-            },
-            {
-              "args": [
-                9
+              "dst": 17,
+              "incoming": [
+                [
+                  14,
+                  4
+                ],
+                [
+                  16,
+                  5
+                ]
               ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "op": "phi"
             },
             {
-              "dst": 10,
+              "dst": 18,
               "op": "const",
               "value": {
                 "type": "i64",
                 "value": 1
               }
+            },
+            {
+              "dst": 19,
+              "lhs": 5,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 18
             },
             {
               "op": "jump",

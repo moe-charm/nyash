@@ -121,18 +121,101 @@ def lower_binop(
                     return val
                 return ir.Constant(i64, 0)
 
-            hl = to_handle(lhs_raw, lhs_val, 'l', lhs)
-            hr = to_handle(rhs_raw, rhs_val, 'r', rhs)
-            # concat_hh(handle, handle) -> handle
-            hh_fnty = ir.FunctionType(i64, [i64, i64])
-            callee = None
-            for f in builder.module.functions:
-                if f.name == 'nyash.string.concat_hh':
-                    callee = f; break
-            if callee is None:
-                callee = ir.Function(builder.module, hh_fnty, name='nyash.string.concat_hh')
-            res = builder.call(callee, [hl, hr], name=f"concat_hh_{dst}")
-            vmap[dst] = res
+            # Decide route: handle+handle when both sides are string-ish; otherwise pointer+int route.
+            lhs_tag = False; rhs_tag = False
+            try:
+                if resolver is not None and hasattr(resolver, 'is_stringish'):
+                    lhs_tag = resolver.is_stringish(lhs)
+                    rhs_tag = resolver.is_stringish(rhs)
+            except Exception:
+                pass
+            if lhs_tag and rhs_tag:
+                # Both sides string-ish: concat_hh(handle, handle)
+                hl = to_handle(lhs_raw, lhs_val, 'l', lhs)
+                hr = to_handle(rhs_raw, rhs_val, 'r', rhs)
+                hh_fnty = ir.FunctionType(i64, [i64, i64])
+                callee = None
+                for f in builder.module.functions:
+                    if f.name == 'nyash.string.concat_hh':
+                        callee = f; break
+                if callee is None:
+                    callee = ir.Function(builder.module, hh_fnty, name='nyash.string.concat_hh')
+                res = builder.call(callee, [hl, hr], name=f"concat_hh_{dst}")
+                vmap[dst] = res
+            else:
+                # Mixed string + non-string (e.g., "len=" + 5). Use pointer concat helpers then box.
+                i32 = ir.IntType(32); i8p = ir.IntType(8).as_pointer(); i64 = ir.IntType(64)
+                # Helper: to i8* pointer for stringish side
+                def to_i8p_from_vid(vid: int, raw, val, tag: str):
+                    # If raw is pointer-to-array: GEP
+                    if raw is not None and hasattr(raw, 'type') and isinstance(raw.type, ir.PointerType):
+                        try:
+                            if isinstance(raw.type.pointee, ir.ArrayType):
+                                c0 = ir.Constant(i32, 0)
+                                return builder.gep(raw, [c0, c0], name=f"bin_gep_{tag}_{dst}")
+                        except Exception:
+                            pass
+                    # If we have a string handle: call to_i8p_h
+                    to_i8p = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.string.to_i8p_h':
+                            to_i8p = f; break
+                    if to_i8p is None:
+                        to_i8p = ir.Function(builder.module, ir.FunctionType(i8p, [i64]), name='nyash.string.to_i8p_h')
+                    # Ensure we pass an i64 handle
+                    hv = val
+                    if hv is None:
+                        hv = ir.Constant(i64, 0)
+                    if hasattr(hv, 'type') and isinstance(hv.type, ir.PointerType):
+                        hv = builder.ptrtoint(hv, i64, name=f"bin_p2h_{tag}_{dst}")
+                    elif hasattr(hv, 'type') and isinstance(hv.type, ir.IntType) and hv.type.width != 64:
+                        hv = builder.zext(hv, i64, name=f"bin_zext_h_{tag}_{dst}")
+                    return builder.call(to_i8p, [hv], name=f"bin_h2p_{tag}_{dst}")
+
+                # Resolve numeric side as i64 value
+                def as_i64(val):
+                    if val is None:
+                        return ir.Constant(i64, 0)
+                    if hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
+                        return builder.ptrtoint(val, i64, name=f"bin_p2i_{dst}")
+                    if hasattr(val, 'type') and isinstance(val.type, ir.IntType) and val.type.width != 64:
+                        return builder.zext(val, i64, name=f"bin_zext_i_{dst}")
+                    return val
+
+                if lhs_tag:
+                    lp = to_i8p_from_vid(lhs, lhs_raw, lhs_val, 'l')
+                    ri = as_i64(rhs_val)
+                    cf = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.string.concat_si':
+                            cf = f; break
+                    if cf is None:
+                        cf = ir.Function(builder.module, ir.FunctionType(i8p, [i8p, i64]), name='nyash.string.concat_si')
+                    p = builder.call(cf, [lp, ri], name=f"concat_si_{dst}")
+                    boxer = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.box.from_i8_string':
+                            boxer = f; break
+                    if boxer is None:
+                        boxer = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
+                    vmap[dst] = builder.call(boxer, [p], name=f"concat_box_{dst}")
+                else:
+                    li = as_i64(lhs_val)
+                    rp = to_i8p_from_vid(rhs, rhs_raw, rhs_val, 'r')
+                    cf = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.string.concat_is':
+                            cf = f; break
+                    if cf is None:
+                        cf = ir.Function(builder.module, ir.FunctionType(i8p, [i64, i8p]), name='nyash.string.concat_is')
+                    p = builder.call(cf, [li, rp], name=f"concat_is_{dst}")
+                    boxer = None
+                    for f in builder.module.functions:
+                        if f.name == 'nyash.box.from_i8_string':
+                            boxer = f; break
+                    if boxer is None:
+                        boxer = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
+                    vmap[dst] = builder.call(boxer, [p], name=f"concat_box_{dst}")
             # Tag result as string handle so subsequent '+' stays in string domain
             try:
                 if resolver is not None and hasattr(resolver, 'mark_string'):

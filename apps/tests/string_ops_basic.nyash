@@ -1,0 +1,15 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local s = "abcde"
+    // length
+    console.println("len=" + s.length())
+    // substring [1,4) -> bcd
+    local t = s.substring(1, 4)
+    console.println("sub=" + t)
+    // lastIndexOf("b") -> 1
+    console.println("idx=" + s.lastIndexOf("b"))
+    return 0
+  }
+}
+

@@ -1,10 +1,55 @@
 # Current Task (2025-09-14 改定) — Phase 15 llvmlite（既定）+ PyVM（新規）
 
+Quick Summary（反映内容）
+- 実装済み: peek CFG修正、llvmlite文字列ブリッジ、混在‘+’結合、追加テスト緑。
+- JSON v0 Bridge拡張: Stmt(Expr/Local/If/Loop)、Expr(Call/Method/New/Var) 降下を実装。
+- PHI合流: If/Loop の PHI 合流を Bridge 側で実装（If: then/else→merge、Loop: preheader/loop‑latch→header）。
+- PythonパーサMVP: Stage‑2 サブセット（local/if/loop/call/method/new/var ほか）を出力。
+- Outstanding: then/else 片側のみで新規生成された変数のスコープ（現在は外へ未伝播）。
+- Next（handoff）: Stage‑2 E2E緑化→me の扱い検討（Method糖衣）。
+- How to run: 下の手順に確認コマンドを追記。
+
+Hot Update — 2025‑09‑14（JSON v0 Bridge/Parser Stage‑2 + Parity hardening）
+- llvmlite/PyVM parity 強化（緑維持）:
+  - peek の MIR 降下を修正（entry→dispatch 明示 jump、then/else/merge 正規 CFG、全ブロック終端保障）。
+  - console.* の文字列引数を to_i8p_h ブリッジで正規化（from_i8_string 直呼び回避）。
+  - “文字列＋数値” 混在 ‘+’ を concat_si/is＋from_i8_string による橋渡しで安定化、両辺文字列は concat_hh。
+  - 代表追加テスト（緑）: string_ops_basic / me_method_call / loop_if_phi。
+
+- JSON v0 Bridge（Option A）の受け口を Stage‑2 方向に拡張（src/runner/json_v0_bridge.rs）
+  - StmtV0: Expr / Local / If / Loop を追加。If/Loop は実ブロック生成（then/else/merge、cond/body/exit）まで実装、未終端 Jump 補完、最後に未終端ブロックへ ret 0 補完。
+  - ExprV0: Call / Method / New / Var を追加。Lowering: Call→Const+Call、Method→BoxCall、New→NewBox、Var→簡易 var_map 解決。
+  - 現状の制限: 変数の合流（PHI）は未実装（If/Loop 内で同名 Local を更新→外側参照する場合の値統合）。
+
+- Python Parser MVP（tools/ny_parser_mvp.py）を Stage‑2 サブセットへ拡張
+  - 構文: local / if / loop / call / method / new / var / 比較（==,!=,<,>,<=,>=）/ 論理（&&,||）/ 算術。
+  - 出力: 上記に対応する JSON v0（Bridge と互換）。
+  - 確認: 小さな local/return ケースは JSON→Bridge→MIR で実行可。If/Loop の合流は Bridge 側 PHI 実装後に E2E 緑化予定。
+
+Outstanding（要対応）
+- PHI 合流（JSON v0 ブリッジ側）
+  - If: then/else で同名 Local を更新した変数を merge で Phi 統合（なければ片側/既存値を採用）。
+  - Loop: header で初期値と body 末端の更新を Phi 化（latch→header）。
+  - 変数スコープ: 現状は簡易 var_map。PHI 決定時に then_vars / else_vars / 事前値の差分から対象を検出。
+
+Next（handoff short plan）
+1) JSON Bridge: PHI 合流実装（If/Loop）と最小テスト追加（ループ後/if後の変数参照）。
+2) Parser MVP: Stage‑2 生成 JSON の if/loop ケースで Bridge→MIR→PyVM/llvmlite の parity 緑化。
+3) me の扱い検討（当面は Method 降下で十分。必要なら me→Main.method/N 直呼シンタックスを Bridge 側で糖衣対応）。
+
+How to run（現状確認）
+- Build（release）: `cargo build --release`（必要に応じて `NYASH_CLI_VERBOSE=1`）。
+- Parser MVP RT（算術/return）: `./tools/ny_parser_mvp_roundtrip.sh`（緑）。
+- Bridge（JSON v0 パイプ）: `echo '{...}' | target/release/nyash --ny-parser-pipe`。
+- Parser Stage‑2 → Bridge: `python3 tools/ny_parser_mvp.py tmp/sample.ny | target/release/nyash --ny-parser-pipe`。
+- Bridge smoke（一式）: `./tools/ny_parser_bridge_smoke.sh`（pipe/--json-file の両経路）。
+- Stage‑2 PHI smoke: `./tools/ny_parser_stage2_phi_smoke.sh`（If/Loop の PHI 合流検証）。
+
 Context Snapshot — Open After Reset
 - Status: A6 受入（PyVM↔llvmlite parity + LLVM verify→.o→EXE）完了。
 - Lang: peek ブロック式（最後の式が値）OK、式文フォールバックOK、三項(?:)パーサ導入済み（VM E2E 緑）。
 - Docs: 言語/アーキの入口を整備（guides/language-guide.md, reference/language/**, reference/architecture/**）。
-- Parser MVP: Python Stage‑1 実装 + roundtrip スモーク緑。Nyash 実装スケルトン配置済み。
+- Parser MVP: Python Stage‑2 サブセットまで拡張（Stage‑1 roundtrip 緑維持）。Nyash 実装スケルトン配置済み。
 
 Next (short)
 1) 三項(?:)の PyVM/llvmlite パリティE2E（`tools/parity.sh`）
