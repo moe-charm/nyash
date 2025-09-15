@@ -18,6 +18,14 @@ What Changed (today)
 - Runner/Bridge 実行系
   - `--ny-parser-pipe` は `NYASH_PIPE_USE_PYVM=1` で PyVM に委譲（exit code 判定に統一）。
   - 自己ホスト JSON 生成は Python MVP を優先、LLVM EXE/インラインVMを段階フォールバック。
+  - Runner 分割（第1弾〜第2弾）: `dispatch.rs` へ backend 分岐を集約、`tasks.rs`/`build.rs`/`demos.rs` へ職責分離。`mod.rs` を薄型化。
+- LLVM Codegen リファクタ（第1弾〜第2弾）
+  - `codegen/utils.rs` を新設し `sanitize_symbol`/`build_const_str_map` を抽出。
+  - `codegen/function.rs` を追加し `lower_one_function` を完全移管（呼び出しは `function::lower_one_function`）。
+  - 旧レガシー断片コメントを除去して軽量化。機能・出力は不変。
+- MIR Builder 整理（小分割）
+  - `builder/vars.rs` を追加し、Lambda の自由変数収集ロジックを外出し。
+  - 既存の `LoopBuilder`/`phi` 分割方針は維持（今後 small utils を `loops.rs` に抽出予定）。
 
 Current Status
 - Stage‑2: 自己ホスト → JSON v0 → PyVM の代表スモークは緑（配列/文字列/論理/if/loop）。
@@ -63,9 +71,23 @@ Refactor Candidates (early plan)
   - runner/selfhost.rs（自己ホスト EXE/VM/Python フォールバック、timeout/ログ含む）
   - runner/dispatch.rs（backend 選択と実行、PyVM 委譲）
   - 既存 json_v0_bridge/mir_json_emit は流用、mod.rs から薄いファサードに縮退。
-- backend/llvm/compiler/codegen/mod.rs（~160行だが責務密度が高い）
-  - 既存 types/instructions を核に、call/boxcall/extern/phi/branch を更に下位モジュールへ分割。
-  - 目標: compile_module/lower_one_function の肥大化抑制と単体テスト容易化。
+- backend/llvm/compiler/codegen（責務分割の継続）
+  - 済: utils 抽出、`lower_one_function` を `function.rs` へ移管。
+  - 次: 終端系・選択系の薄層切り出し。
+    - `instructions/terminators.rs`: return/jump/branch の分岐ドライバ（emit_* 呼び出し集約）。
+    - `instructions/select.rs`: 条件・短絡・PHI 前処理（sealed-SSA 前提の前段正規化）。
+  - 目標: `function.rs` の見通し改善（1関数=制御フロー骨格）、テスト容易化。
 - mir/builder.rs（ヘッダ~80行、全体~1K行）
   - 既に多くを modules に分割済み。残る “variable/phi 合流”“loop ヘッダ/出口管理” を builder/loops.rs / builder/phi.rs に抽出。
   - 目標: 依存関係（utils/exprs/stmts）を維持したまま、1ファイル1責務を徹底。
+
+Recommended Next (short list)
+- LLVM Codegen（B 継続）
+  - `instructions/terminators.rs` を新設し、`function.rs` から終端分岐（return/jump/branch）を移譲。
+  - `instructions/select.rs` を新設し、条件/短絡/PHI 前処理（sealed-SSA 前提の軽い正規化）を集約。
+  - `function.rs` は「BB 周回＋各 lowering 呼び出し」の骨格のみへ縮退。
+- MIR Builder（C 継続）
+  - `builder/loops.rs` を新設し、ループのヘッダ/出口の小物ユーティリティを抽出（`LoopBuilder` の補助レイヤ）。
+  - `builder/vars.rs` に SSA 変数正規化の小物を段階追加（変数名再束縛/スコープ終端の型ヒント伝搬など）。
+- Runner（仕上げ）
+  - `mod.rs` の残置ヘルパ（usingの候補提示・環境注入ログ）を `pipeline/dispatch` へ集約し、`mod.rs` を最小のオーケストレーションに。
