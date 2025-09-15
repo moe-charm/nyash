@@ -41,28 +41,7 @@ pub(super) fn builder_debug_log(msg: &str) {
     }
 }
 
-// PHI-based return type inference helper
-pub(super) fn infer_type_from_phi(
-    function: &super::MirFunction,
-    ret_val: super::ValueId,
-    types: &std::collections::HashMap<super::ValueId, super::MirType>,
-) -> Option<super::MirType> {
-    for (_bid, bb) in function.blocks.iter() {
-        for inst in bb.instructions.iter() {
-            if let super::MirInstruction::Phi { dst, inputs } = inst {
-                if *dst == ret_val {
-                    let mut it = inputs.iter().filter_map(|(_, v)| types.get(v));
-                    if let Some(first) = it.next() {
-                        if it.all(|mt| mt == first) {
-                            return Some(first.clone());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    None
-}
+
 
 // Lightweight helpers moved from builder.rs to reduce file size
 impl super::MirBuilder {

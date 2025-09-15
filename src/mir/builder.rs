@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 mod builder_calls;
+mod phi;
 mod stmts;
 mod ops;
 mod utils;
@@ -28,6 +29,7 @@ mod exprs_peek;    // peek expression
 mod exprs_lambda;  // lambda lowering
 mod exprs_include; // include lowering
 mod plugin_sigs; // plugin signature loader
+mod vars; // variables/scope helpers
 
 // moved helpers to builder/utils.rs
 
@@ -284,12 +286,12 @@ impl MirBuilder {
                     if let super::MirInstruction::Return { value: Some(v) } = inst {
                         if let Some(mt) = self.value_types.get(v).cloned() { inferred = Some(mt); break 'outer; }
                         // 追加: v が PHI の場合は入力側の型から推定
-                if let Some(mt) = utils::infer_type_from_phi(&function, *v, &self.value_types) { inferred = Some(mt); break 'outer; }
+                if let Some(mt) = phi::infer_type_from_phi(&function, *v, &self.value_types) { inferred = Some(mt); break 'outer; }
                     }
                 }
                 if let Some(super::MirInstruction::Return { value: Some(v) }) = &bb.terminator {
                     if let Some(mt) = self.value_types.get(v).cloned() { inferred = Some(mt); break; }
-                    if let Some(mt) = utils::infer_type_from_phi(&function, *v, &self.value_types) { inferred = Some(mt); break; }
+                    if let Some(mt) = phi::infer_type_from_phi(&function, *v, &self.value_types) { inferred = Some(mt); break; }
                 }
             }
             if let Some(mt) = inferred { function.signature.return_type = mt; }
@@ -524,52 +526,7 @@ impl MirBuilder {
                 let mut used: HashSet<String> = HashSet::new();
                 let mut locals: HashSet<String> = HashSet::new();
                 for p in params.iter() { locals.insert(p.clone()); }
-                fn collect_vars(node: &crate::ast::ASTNode, used: &mut HashSet<String>, locals: &mut HashSet<String>) {
-                    match node {
-                        crate::ast::ASTNode::Variable { name, .. } => {
-                            if name != "me" && name != "this" && !locals.contains(name) {
-                                used.insert(name.clone());
-                            }
-                        }
-                        crate::ast::ASTNode::Local { variables, .. } => { for v in variables { locals.insert(v.clone()); } }
-                        crate::ast::ASTNode::Assignment { target, value, .. } => { collect_vars(target, used, locals); collect_vars(value, used, locals); }
-                        crate::ast::ASTNode::BinaryOp { left, right, .. } => { collect_vars(left, used, locals); collect_vars(right, used, locals); }
-                        crate::ast::ASTNode::UnaryOp { operand, .. } => { collect_vars(operand, used, locals); }
-                        crate::ast::ASTNode::MethodCall { object, arguments, .. } => { collect_vars(object, used, locals); for a in arguments { collect_vars(a, used, locals); } }
-                        crate::ast::ASTNode::FunctionCall { arguments, .. } => { for a in arguments { collect_vars(a, used, locals); } }
-                        crate::ast::ASTNode::Call { callee, arguments, .. } => { collect_vars(callee, used, locals); for a in arguments { collect_vars(a, used, locals); } }
-                        crate::ast::ASTNode::FieldAccess { object, .. } => { collect_vars(object, used, locals); }
-                        crate::ast::ASTNode::New { arguments, .. } => { for a in arguments { collect_vars(a, used, locals); } }
-                        crate::ast::ASTNode::If { condition, then_body, else_body, .. } => {
-                            collect_vars(condition, used, locals);
-                            for st in then_body { collect_vars(st, used, locals); }
-                            if let Some(eb) = else_body { for st in eb { collect_vars(st, used, locals); } }
-                        }
-                        crate::ast::ASTNode::Loop { condition, body, .. } => { collect_vars(condition, used, locals); for st in body { collect_vars(st, used, locals); } }
-                        crate::ast::ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => {
-                            for st in try_body { collect_vars(st, used, locals); }
-                            for c in catch_clauses { for st in &c.body { collect_vars(st, used, locals); } }
-                            if let Some(fb) = finally_body { for st in fb { collect_vars(st, used, locals); } }
-                        }
-                        crate::ast::ASTNode::Throw { expression, .. } => { collect_vars(expression, used, locals); }
-                        crate::ast::ASTNode::Print { expression, .. } => { collect_vars(expression, used, locals); }
-                        crate::ast::ASTNode::Return { value, .. } => { if let Some(v) = value { collect_vars(v, used, locals); } }
-                        crate::ast::ASTNode::AwaitExpression { expression, .. } => { collect_vars(expression, used, locals); }
-                        crate::ast::ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => {
-                            collect_vars(scrutinee, used, locals);
-                            for (_, e) in arms { collect_vars(e, used, locals); }
-                            collect_vars(else_expr, used, locals);
-                        }
-                        crate::ast::ASTNode::Program { statements, .. } => { for st in statements { collect_vars(st, used, locals); } }
-                        crate::ast::ASTNode::FunctionDeclaration { params, body, .. } => {
-                            let mut inner = locals.clone();
-                            for p in params { inner.insert(p.clone()); }
-                            for st in body { collect_vars(st, used, &mut inner); }
-                        }
-                        _ => {}
-                    }
-                }
-                for st in body.iter() { collect_vars(st, &mut used, &mut locals); }
+                for st in body.iter() { vars::collect_free_vars(st, &mut used, &mut locals); }
                 // Materialize captures from current variable_map if known
                 let mut captures: Vec<(String, ValueId)> = Vec::new();
                 for name in used.into_iter() {

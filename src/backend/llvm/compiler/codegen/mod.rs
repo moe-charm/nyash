@@ -18,32 +18,19 @@ use self::types::{
     classify_tag, cmp_eq_ne_any, i64_to_ptr, map_mirtype_to_basic, to_bool, to_i64_any,
 };
 mod instructions;
+mod utils;
+mod function;
 
 // --- Local helpers (refactor to keep compile_module slim) ---
 
-fn sanitize_symbol(name: &str) -> String {
-    name.chars()
-        .map(|c| match c { '.' | '/' | '-' => '_', other => other })
-        .collect()
-}
+// Moved to utils.rs
+fn sanitize_symbol(name: &str) -> String { utils::sanitize_symbol(name) }
 
-fn build_const_str_map(f: &crate::mir::function::MirFunction) -> HashMap<ValueId, String> {
-    let mut m = HashMap::new();
-    for bid in f.block_ids() {
-        if let Some(b) = f.blocks.get(&bid) {
-            for inst in &b.instructions {
-                if let MirInstruction::Const { dst, value: ConstValue::String(s) } = inst {
-                    m.insert(*dst, s.clone());
-                }
-            }
-            if let Some(MirInstruction::Const { dst, value: ConstValue::String(s) }) = &b.terminator {
-                m.insert(*dst, s.clone());
-            }
-        }
-    }
-    m
-}
+// Moved to utils.rs
+fn build_const_str_map(f: &crate::mir::function::MirFunction) -> HashMap<ValueId, String> { utils::build_const_str_map(f) }
 
+// moved: lower_one_function is implemented in function.rs
+#[cfg(any())]
 fn lower_one_function<'ctx>(
     codegen: &CodegenContext<'ctx>,
     llvm_func: FunctionValue<'ctx>,
@@ -142,7 +129,7 @@ fn lower_one_function<'ctx>(
     }
 
     // Map of const strings for Call resolution
-    let const_strs = build_const_str_map(func);
+    let const_strs = utils::build_const_str_map(func);
 
     // Lower body
     let mut loopform_loop_id: u32 = 0;
@@ -572,7 +559,7 @@ impl LLVMCompiler {
                 BasicTypeEnum::PointerType(t) => t.fn_type(&params_bt.iter().map(|t| (*t).into()).collect::<Vec<_>>(), false),
                 _ => return Err("Unsupported return basic type".to_string()),
             };
-            let sym = format!("ny_f_{}", sanitize_symbol(name));
+            let sym = format!("ny_f_{}", utils::sanitize_symbol(name));
             let lf = codegen.module.add_function(&sym, ll_fn_ty, None);
             llvm_funcs.insert(name.clone(), lf);
         }
@@ -580,7 +567,7 @@ impl LLVMCompiler {
         // Lower all functions
         for (name, func) in &mir_module.functions {
             let llvm_func = *llvm_funcs.get(name).ok_or("predecl not found")?;
-            lower_one_function(&codegen, llvm_func, func, name, &box_type_ids, &llvm_funcs)?;
+            function::lower_one_function(&codegen, llvm_func, func, name, &box_type_ids, &llvm_funcs)?;
         }
 
         // Build entry wrapper and emit object

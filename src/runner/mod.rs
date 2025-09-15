@@ -33,6 +33,8 @@ mod json_v0_bridge;
 mod mir_json_emit;
 mod pipe_io;
 mod pipeline;
+mod tasks;
+mod build;
 mod dispatch;
 mod selfhost;
 
@@ -43,35 +45,7 @@ use std::path::PathBuf;
 
 /// Resolve a using target according to priority: modules > relative > using-paths
 /// Returns Ok(resolved_path_or_token). On strict mode, ambiguous matches cause error.
-fn resolve_using_target(
-    tgt: &str,
-    is_path: bool,
-    modules: &[(String, String)],
-    using_paths: &[String],
-    context_dir: Option<&std::path::Path>,
-    strict: bool,
-    verbose: bool,
-) -> Result<String, String> {
-    if is_path { return Ok(tgt.to_string()); }
-    // 1) modules mapping
-    if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) { return Ok(p.clone()); }
-    // 2) build candidate list: relative then using-paths
-    let rel = tgt.replace('.', "/") + ".nyash";
-    let mut cand: Vec<String> = Vec::new();
-    if let Some(dir) = context_dir { let c = dir.join(&rel); if c.exists() { cand.push(c.to_string_lossy().to_string()); } }
-    for base in using_paths {
-        let c = std::path::Path::new(base).join(&rel);
-        if c.exists() { cand.push(c.to_string_lossy().to_string()); }
-    }
-    if cand.is_empty() {
-        if verbose { eprintln!("[using] unresolved '{}' (searched: rel+paths)", tgt); }
-        return Ok(tgt.to_string());
-    }
-    if cand.len() > 1 && strict {
-        return Err(format!("ambiguous using '{}': {}", tgt, cand.join(", ")));
-    }
-    Ok(cand.remove(0))
-}
+use pipeline::resolve_using_target;
 
 /// Main execution coordinator
 pub struct NyashRunner {
@@ -79,30 +53,7 @@ pub struct NyashRunner {
 }
 
 /// Minimal task runner: read nyash.toml [env] and [tasks], run the named task via shell
-fn run_named_task(name: &str) -> Result<(), String> {
-    let cfg_path = "nyash.toml";
-    let text = fs::read_to_string(cfg_path).map_err(|e| format!("read {}: {}", cfg_path, e))?;
-    let doc = toml::from_str::<toml::Value>(&text).map_err(|e| format!("parse {}: {}", cfg_path, e))?;
-    // Apply [env]
-    if let Some(env_tbl) = doc.get("env").and_then(|v| v.as_table()) {
-        for (k, v) in env_tbl.iter() {
-            if let Some(s) = v.as_str() { std::env::set_var(k, s); }
-        }
-    }
-    // Lookup [tasks]
-    let tasks = doc.get("tasks").and_then(|v| v.as_table()).ok_or("[tasks] not found in nyash.toml")?;
-    let cmd = tasks.get(name).and_then(|v| v.as_str()).ok_or_else(|| format!("task '{}' not found", name))?;
-    // Basic variable substitution
-    let root = std::env::current_dir().unwrap_or(PathBuf::from(".")).display().to_string();
-    let cmd = cmd.replace("{root}", &root);
-    // Run via shell
-    #[cfg(windows)]
-    let status = std::process::Command::new("cmd").args(["/C", &cmd]).status().map_err(|e| e.to_string())?;
-    #[cfg(not(windows))]
-    let status = std::process::Command::new("sh").arg("-lc").arg(&cmd).status().map_err(|e| e.to_string())?;
-    if !status.success() { return Err(format!("task '{}' failed with status {:?}", name, status.code())); }
-    Ok(())
-}
+use tasks::run_named_task;
 
 impl NyashRunner {
     /// Create a new runner with the given configuration
@@ -392,7 +343,7 @@ impl NyashRunner {
             // Delegate file-mode execution to modes::common dispatcher
             self.run_file(filename);
         } else {
-            self.execute_demo_mode();
+            demos::run_all_demos();
         }
     }
 
@@ -400,20 +351,7 @@ impl NyashRunner {
 
     /// Execute file-based mode with backend selection
 
-    /// Execute demo mode with all demonstrations
-    fn execute_demo_mode(&self) {
-        println!("🦀 Nyash Rust Implementation - Everything is Box! 🦀");
-        println!("====================================================");
-        demos::demo_basic_boxes();
-        demos::demo_box_operations();
-        demos::demo_box_collections();
-        demos::demo_environment_system();
-        demos::demo_tokenizer_system();
-        demos::demo_parser_system();
-        demos::demo_interpreter_system();
-        println!("\n🎉 All Box operations completed successfully!");
-        println!("Memory safety guaranteed by Rust's borrow checker! 🛡️");
-    }
+    // demo runner moved to runner/demos.rs
 
     /// Execute Nyash file with interpreter (moved to modes/common.rs)
     #[cfg(any())]
@@ -838,143 +776,9 @@ impl NyashRunner {
 
     // execute_mir_module moved to runner/dispatch.rs
 
-    /// Minimal AOT build pipeline driven by nyash.toml (MVP, single-platform, best-effort)
+    /// Minimal AOT build pipeline driven by nyash.toml (mvp)
     fn run_build_mvp(&self, cfg_path: &str) -> Result<(), String> {
-        use std::path::{Path, PathBuf};
-        let cwd = std::env::current_dir().unwrap_or(PathBuf::from("."));
-        let cfg_abspath = if Path::new(cfg_path).is_absolute() { PathBuf::from(cfg_path) } else { cwd.join(cfg_path) };
-        // 1) Load nyash.toml
-        let text = std::fs::read_to_string(&cfg_abspath).map_err(|e| format!("read {}: {}", cfg_abspath.display(), e))?;
-        let doc = toml::from_str::<toml::Value>(&text).map_err(|e| format!("parse {}: {}", cfg_abspath.display(), e))?;
-        // 2) Apply [env]
-        if let Some(env_tbl) = doc.get("env").and_then(|v| v.as_table()) {
-            for (k, v) in env_tbl.iter() { if let Some(s) = v.as_str() { std::env::set_var(k, s); } }
-        }
-        // Derive options
-        let profile = self.config.build_profile.clone().unwrap_or_else(|| "release".into());
-        let aot = self.config.build_aot.clone().unwrap_or_else(|| "cranelift".into());
-        let out = self.config.build_out.clone();
-        let target = self.config.build_target.clone();
-        // 3) Build plugins: read [plugins] values as paths and build each
-        if let Some(pl_tbl) = doc.get("plugins").and_then(|v| v.as_table()) {
-            for (name, v) in pl_tbl.iter() {
-                if let Some(path) = v.as_str() {
-                    let p = if Path::new(path).is_absolute() { PathBuf::from(path) } else { cwd.join(path) };
-                    let mut cmd = std::process::Command::new("cargo");
-                    cmd.arg("build");
-                    if profile == "release" { cmd.arg("--release"); }
-                    if let Some(t) = &target { cmd.args(["--target", t]); }
-                    cmd.current_dir(&p);
-                    println!("[build] plugin {} at {}", name, p.display());
-                    let status = cmd.status().map_err(|e| format!("spawn cargo (plugin {}): {}", name, e))?;
-                    if !status.success() {
-                        return Err(format!("plugin build failed: {} (dir={})", name, p.display()));
-                    }
-                }
-            }
-        }
-        // 4) Build nyash core (features)
-        {
-            let mut cmd = std::process::Command::new("cargo");
-            cmd.arg("build");
-            if profile == "release" { cmd.arg("--release"); }
-            match aot.as_str() { "llvm" => { cmd.args(["--features","llvm"]); }, _ => { cmd.args(["--features","cranelift-jit"]); } }
-            if let Some(t) = &target { cmd.args(["--target", t]); }
-            println!("[build] nyash core ({}, features={})", profile, if aot=="llvm" {"llvm"} else {"cranelift-jit"});
-            let status = cmd.status().map_err(|e| format!("spawn cargo (core): {}", e))?;
-            if !status.success() { return Err("nyash core build failed".into()); }
-        }
-        // 5) Determine app entry
-        let app = if let Some(a) = self.config.build_app.clone() { a } else {
-            // try [build].app, else suggest
-            if let Some(tbl) = doc.get("build").and_then(|v| v.as_table()) {
-                if let Some(s) = tbl.get("app").and_then(|v| v.as_str()) { s.to_string() } else { String::new() }
-            } else { String::new() }
-        };
-        let app = if !app.is_empty() { app } else {
-            // collect candidates under apps/**/main.nyash
-            let mut cand: Vec<String> = Vec::new();
-            fn walk(dir: &Path, acc: &mut Vec<String>) {
-                if let Ok(rd) = std::fs::read_dir(dir) {
-                    for e in rd.flatten() {
-                        let p = e.path();
-                        if p.is_dir() { walk(&p, acc); }
-                        else if p.file_name().map(|n| n=="main.nyash").unwrap_or(false) {
-                            acc.push(p.display().to_string());
-                        }
-                    }
-                }
-            }
-            walk(&cwd.join("apps"), &mut cand);
-            let msg = if cand.is_empty() {
-                "no app specified (--app) and no apps/**/main.nyash found".to_string()
-            } else {
-                format!("no app specified (--app). Candidates:\n  - {}", cand.join("\n  - "))
-            };
-            return Err(msg);
-        };
-        // 6) Emit object
-        let obj_dir = cwd.join("target").join("aot_objects");
-        let _ = std::fs::create_dir_all(&obj_dir);
-        let obj_path = obj_dir.join("main.o");
-        if aot == "llvm" {
-            if std::env::var("LLVM_SYS_180_PREFIX").ok().is_none() && std::env::var("LLVM_SYS_181_PREFIX").ok().is_none() {
-                return Err("LLVM 18 not configured. Set LLVM_SYS_180_PREFIX or install LLVM 18 (llvm-config)".into());
-            }
-            std::env::set_var("NYASH_LLVM_OBJ_OUT", &obj_path);
-            println!("[emit] LLVM object → {}", obj_path.display());
-            let status = std::process::Command::new(cwd.join("target").join(profile.clone()).join(if cfg!(windows) {"nyash.exe"} else {"nyash"}))
-                .args(["--backend","llvm", &app])
-                .status().map_err(|e| format!("spawn nyash llvm: {}", e))?;
-            if !status.success() { return Err("LLVM emit failed".into()); }
-        } else {
-            std::env::set_var("NYASH_AOT_OBJECT_OUT", &obj_dir);
-            println!("[emit] Cranelift object → {} (directory)", obj_dir.display());
-            let status = std::process::Command::new(cwd.join("target").join(profile.clone()).join(if cfg!(windows) {"nyash.exe"} else {"nyash"}))
-                .args(["--backend","vm", &app])
-                .status().map_err(|e| format!("spawn nyash jit-aot: {}", e))?;
-            if !status.success() { return Err("Cranelift emit failed".into()); }
-        }
-        if !obj_path.exists() {
-            // In Cranelift path we produce target/aot_objects/<name>.o; fall back to main.o default
-            if !obj_dir.join("main.o").exists() { return Err(format!("object not generated under {}", obj_dir.display())); }
-        }
-        let out_path = if let Some(o) = out { PathBuf::from(o) } else { if cfg!(windows) { cwd.join("app.exe") } else { cwd.join("app") } };
-        // 7) Link
-        println!("[link] → {}", out_path.display());
-        #[cfg(windows)]
-        {
-            // Prefer MSVC link.exe, then clang fallback
-            if let Ok(link) = which::which("link") {
-                let status = std::process::Command::new(&link).args(["/NOLOGO", &format!("/OUT:{}", out_path.display().to_string())])
-                    .arg(&obj_path)
-                    .arg(cwd.join("target").join("release").join("nyrt.lib"))
-                    .status().map_err(|e| format!("spawn link.exe: {}", e))?;
-                if status.success() { println!("OK"); return Ok(()); }
-            }
-            if let Ok(clang) = which::which("clang") {
-                let status = std::process::Command::new(&clang)
-                    .args(["-o", &out_path.display().to_string(), &obj_path.display().to_string()])
-                    .arg(cwd.join("target").join("release").join("nyrt.lib").display().to_string())
-                    .arg("-lntdll")
-                    .status().map_err(|e| format!("spawn clang: {}", e))?;
-                if status.success() { println!("OK"); return Ok(()); }
-                return Err("link failed on Windows (tried link.exe and clang)".into());
-            }
-            return Err("no linker found (need Visual Studio link.exe or LLVM clang)".into());
-        }
-        #[cfg(not(windows))]
-        {
-            let status = std::process::Command::new("cc")
-                .arg(&obj_path)
-                .args(["-L", &cwd.join("target").join("release").display().to_string()])
-                .args(["-Wl,--whole-archive", "-lnyrt", "-Wl,--no-whole-archive", "-lpthread", "-ldl", "-lm"])
-                .args(["-o", &out_path.display().to_string()])
-                .status().map_err(|e| format!("spawn cc: {}", e))?;
-            if !status.success() { return Err("link failed (cc)".into()); }
-        }
-        println!("✅ Success: {}", out_path.display());
-        Ok(())
+        build::run_build_mvp_impl(self, cfg_path)
     }
 }
 

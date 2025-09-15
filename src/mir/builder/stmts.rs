@@ -2,6 +2,7 @@ use super::{MirInstruction, EffectMask, Effect, ConstValue, ValueId};
 use crate::mir::TypeOpKind;
 use crate::mir::loop_builder::LoopBuilder;
 use crate::ast::ASTNode;
+use super::phi::extract_assigned_var;
 
 impl super::MirBuilder {
     // Print statement: env.console.log(value) with early TypeOp handling
@@ -140,31 +141,18 @@ impl super::MirBuilder {
         // merge + phi
         self.current_block = Some(merge_block);
         self.ensure_block_exists(merge_block)?;
-        // If only the then-branch assigns a variable (e.g., `if c { x = ... }`) and the else
-        // does not assign the same variable, bind that variable to a Phi of (then_value, pre_if_value).
-        let assigned_var_then = extract_assigned_var(&then_ast_for_analysis);
-        let assigned_var_else = else_ast_for_analysis.as_ref().and_then(|a| extract_assigned_var(a));
-        let result_val = self.value_gen.next();
-        if let Some(var_name) = assigned_var_then.clone() {
-            let else_assigns_same = assigned_var_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
-            // Resolve branch-end values for the assigned variable
-            let then_value_for_var = then_var_map_end.get(&var_name).copied().unwrap_or(then_value_raw);
-            let else_value_for_var = if else_assigns_same {
-                else_var_map_end_opt.as_ref().and_then(|m| m.get(&var_name).copied()).unwrap_or(else_value_raw)
-            } else {
-                // Else doesn't assign: use pre-if value if available
-                pre_then_var_value.unwrap_or(else_value_raw)
-            };
-            // Emit Phi for the assigned variable and bind it
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value_for_var), (else_block, else_value_for_var)] })?;
-            self.variable_map = pre_if_var_map.clone();
-            self.variable_map.insert(var_name, result_val);
-        } else {
-            // No variable assignment pattern detected – just emit Phi for expression result
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value_raw), (else_block, else_value_raw)] })?;
-            // Merge variable map conservatively to pre-if snapshot (no new bindings)
-            self.variable_map = pre_if_var_map.clone();
-        }
+        let result_val = self.normalize_if_else_phi(
+            then_block,
+            else_block,
+            then_value_raw,
+            else_value_raw,
+            &pre_if_var_map,
+            &then_ast_for_analysis,
+            &else_ast_for_analysis,
+            &then_var_map_end,
+            &else_var_map_end_opt,
+            pre_then_var_value,
+        )?;
 
         Ok(result_val)
     }
@@ -328,26 +316,4 @@ impl super::MirBuilder {
     }
 }
 
-// Local helper for if-statement analysis
-fn extract_assigned_var(ast: &ASTNode) -> Option<String> {
-    match ast {
-        ASTNode::Assignment { target, .. } => {
-            if let ASTNode::Variable { name, .. } = target.as_ref() { Some(name.clone()) } else { None }
-        }
-        ASTNode::Program { statements, .. } => statements.last().and_then(|st| extract_assigned_var(st)),
-        ASTNode::If { then_body, else_body, .. } => {
-            // Look into nested if: if both sides assign the same variable, propagate that name upward.
-            let then_prog = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
-            let tvar = extract_assigned_var(&then_prog);
-            let evar = else_body.as_ref().and_then(|eb| {
-                let ep = ASTNode::Program { statements: eb.clone(), span: crate::ast::Span::unknown() };
-                extract_assigned_var(&ep)
-            });
-            match (tvar, evar) {
-                (Some(tv), Some(ev)) if tv == ev => Some(tv),
-                _ => None,
-            }
-        }
-        _ => None,
-    }
-}
+

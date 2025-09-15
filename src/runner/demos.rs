@@ -134,3 +134,18 @@ pub(super) fn demo_interpreter_system() {
         Err(e) => println!("    ❌ Parse error: {}", e),
     }
 }
+
+/// Run all demo sections (moved from runner/mod.rs)
+pub(super) fn run_all_demos() {
+    println!("🦀 Nyash Rust Implementation - Everything is Box! 🦀");
+    println!("====================================================");
+    demo_basic_boxes();
+    demo_box_operations();
+    demo_box_collections();
+    demo_environment_system();
+    demo_tokenizer_system();
+    demo_parser_system();
+    demo_interpreter_system();
+    println!("\n🎉 All Box operations completed successfully!");
+    println!("Memory safety guaranteed by Rust's borrow checker! 🛡️");
+}

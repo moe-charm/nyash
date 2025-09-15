@@ -99,3 +99,35 @@ pub(super) fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
     let p = std::path::Path::new(base);
     walk(p, leaf, out, 4);
 }
+
+/// Resolve a using target according to priority: modules > relative > using-paths
+/// Returns Ok(resolved_path_or_token). On strict mode, ambiguous matches cause error.
+pub(super) fn resolve_using_target(
+    tgt: &str,
+    is_path: bool,
+    modules: &[(String, String)],
+    using_paths: &[String],
+    context_dir: Option<&std::path::Path>,
+    strict: bool,
+    verbose: bool,
+) -> Result<String, String> {
+    if is_path { return Ok(tgt.to_string()); }
+    // 1) modules mapping
+    if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) { return Ok(p.clone()); }
+    // 2) build candidate list: relative then using-paths
+    let rel = tgt.replace('.', "/") + ".nyash";
+    let mut cand: Vec<String> = Vec::new();
+    if let Some(dir) = context_dir { let c = dir.join(&rel); if c.exists() { cand.push(c.to_string_lossy().to_string()); } }
+    for base in using_paths {
+        let c = std::path::Path::new(base).join(&rel);
+        if c.exists() { cand.push(c.to_string_lossy().to_string()); }
+    }
+    if cand.is_empty() {
+        if verbose { eprintln!("[using] unresolved '{}' (searched: rel+paths)", tgt); }
+        return Ok(tgt.to_string());
+    }
+    if cand.len() > 1 && strict {
+        return Err(format!("ambiguous using '{}': {}", tgt, cand.join(", ")));
+    }
+    Ok(cand.remove(0))
+}
