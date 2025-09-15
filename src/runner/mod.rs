@@ -126,6 +126,30 @@ impl NyashRunner {
             for s in p.split(':') { let s=s.trim(); if !s.is_empty() { using_paths.push(s.to_string()); } }
         }
         if using_paths.is_empty() { using_paths.extend(["apps","lib","."].into_iter().map(|s| s.to_string())); }
+        // nyash.toml: load [modules] and [using.paths]
+        if std::path::Path::new("nyash.toml").exists() {
+            if let Ok(text) = fs::read_to_string("nyash.toml") {
+                if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                    if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
+                        for (k, v) in mods.iter() {
+                            if let Some(path) = v.as_str() {
+                                pending_modules.push((k.to_string(), path.to_string()));
+                            }
+                        }
+                    }
+                    if let Some(using_tbl) = doc.get("using").and_then(|v| v.as_table()) {
+                        if let Some(paths_arr) = using_tbl.get("paths").and_then(|v| v.as_array()) {
+                            for p in paths_arr {
+                                if let Some(s) = p.as_str() {
+                                    let s = s.trim();
+                                    if !s.is_empty() { using_paths.push(s.to_string()); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // Modules mapping from env (e.g., FOO=path)
         if let Ok(ms) = std::env::var("NYASH_MODULES") {
             for ent in ms.split(',') {
@@ -176,7 +200,54 @@ impl NyashRunner {
                 Ok(module) => {
                     // Optional dump via env verbose
                     json_v0_bridge::maybe_dump_mir(&module);
-                    // Execute via MIR interpreter
+                    // Optional: delegate to PyVM when NYASH_PIPE_USE_PYVM=1
+                    if std::env::var("NYASH_PIPE_USE_PYVM").ok().as_deref() == Some("1") {
+                        let py = which::which("python3").ok();
+                        if let Some(py3) = py {
+                            let runner = std::path::Path::new("tools/pyvm_runner.py");
+                            if runner.exists() {
+                                // Emit MIR(JSON) for PyVM
+                                let tmp_dir = std::path::Path::new("tmp");
+                                let _ = std::fs::create_dir_all(tmp_dir);
+                                let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                                if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                                    eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                                    std::process::exit(1);
+                                }
+                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                    eprintln!("[Bridge] using PyVM (pipe) → {}", mir_json_path.display());
+                                }
+                                // Determine entry function hint (prefer Main.main if present)
+                                let entry = if module.functions.contains_key("Main.main") { "Main.main" }
+                                            else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                                let status = std::process::Command::new(py3)
+                                    .args([
+                                        runner.to_string_lossy().as_ref(),
+                                        "--in",
+                                        &mir_json_path.display().to_string(),
+                                        "--entry",
+                                        entry,
+                                    ])
+                                    .status()
+                                    .map_err(|e| format!("spawn pyvm: {}", e))
+                                    .unwrap();
+                                let code = status.code().unwrap_or(1);
+                                if !status.success() {
+                                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                        eprintln!("❌ PyVM (pipe) failed (status={})", code);
+                                    }
+                                }
+                                std::process::exit(code);
+                            } else {
+                                eprintln!("❌ PyVM runner not found: {}", runner.display());
+                                std::process::exit(1);
+                            }
+                        } else {
+                            eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM with --ny-parser-pipe.");
+                            std::process::exit(1);
+                        }
+                    }
+                    // Default: Execute via MIR interpreter
                     self.execute_mir_module(&module);
                     return;
                 }

@@ -15,10 +15,17 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 - [x] using/namespace (gated) + nyash.link minimal resolver
 - [x] NyModules + ny_plugins regression suite (Windows path normalization/namespace derivation)
 - [x] Standard Ny scripts scaffolds added (string/array/map P0) + examples + jit_smoke
+- [x] Selfhost Parser accepts positional input file arg（EXE運用の前提）
 
 ## Next (small boxes)
 
-1) LLVM Native EXE Generation (Phase 15.2) 🚀
+1) EXE-first: Selfhost Parser → EXE（Phase 15.2）🚀
+   - tools/build_compiler_exe.sh で EXE をビルド（同梱distパッケージ作成）
+   - dist/nyash_compiler/{nyash_compiler,nyash.toml,plugins/...} で独立実行
+   - 入力: Nyソース → 出力: JSON v0（stdout）
+   - Smokes: sample.nyash→JSON 行生成（JSONのみ出力）
+   - リスク: プラグイン解決（FileBox）をnyash.tomlで固定
+2) LLVM Native EXE Generation（AOTパイプライン継続）
    - Python/llvmlite implementation as primary path (2400 lines, 10x faster development)
    - LLVM backend object → executable pipeline completion
    - Separate `nyash-llvm-compiler` crate (reduce main build weight)
@@ -26,10 +33,10 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
    - Link with nyrt runtime (static/dynamic options)
    - Plugin all-direction build strategy (.so/.o/.a simultaneous generation)
    - Integration: `nyash --backend llvm --emit exe program.nyash -o program.exe`
-2) Standard Ny std impl (P0→実体化)
+3) Standard Ny std impl (P0→実体化)
    - Implement P0 methods for string/array/map in Nyash (keep NyRT primitives minimal)
    - Enable via `nyash.toml` `[ny_plugins]` (opt‑in); extend `tools/jit_smoke.sh`
-3) Ny compiler MVP (Ny→MIR on JIT path) (Phase 15.3) 🎯
+4) Ny compiler MVP (Ny→MIR on JIT path) (Phase 15.3) 🎯
    - Ny tokenizer + recursive‑descent parser (current subset) in Ny; drive existing MIR builder
    - Target: 800 lines parser + 2500 lines MIR builder = 3300 lines total
    - No circular dependency: nyrt provides StringBox/ArrayBox via C ABI
@@ -43,13 +50,13 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
      - [ ] local/if/loop/call/method/new/var/logical/compare
      - [ ] PHI 合流は Bridge に委譲（If/Loop）
      - [ ] Smokes: nested if / loop 累積 / and/or × if/loop
-4) PHI 自動化は Phase‑15 後（Core‑14 LoopForm）
+5) PHI 自動化は Phase‑15 後（LoopForm = MIR18）
    - Phase‑15: 現行の Bridge‑PHI を維持し、E2E 緑とパリティを最優先
-   - Core‑14: LoopForm 強化＋逆Loweringで PHI を自動生成（合流点の定型化）
-4) Bootstrap loop (c0→c1→c1')
+   - MIR18 (LoopForm): LoopForm 強化＋逆Loweringで PHI を自動生成（合流点の定型化）
+6) Bootstrap loop (c0→c1→c1')
    - Use existing trace/hash harness to compare parity; add optional CI gate
    - **This achieves self-hosting!** Nyash compiles Nyash
-5) VM Layer in Nyash (Phase 15.4) ⚡
+7) VM Layer in Nyash (Phase 15.4) ⚡
    - Implement MIR interpreter in Nyash (13 core instructions)
    - Dynamic dispatch via MapBox for instruction handlers
    - BoxCall/ExternCall bridge to existing infrastructure
@@ -74,8 +81,9 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 
 - Parser path: `--parser {rust|ny}` or `NYASH_USE_NY_PARSER=1`
 - JSON dump: `NYASH_DUMP_JSON_IR=1`
-- （予告）LoopForm: Core‑14 で仕様化予定
+ - （予告）LoopForm: MIR18 で仕様化予定
  - Selfhost compiler: `NYASH_USE_NY_COMPILER=1`, child quiet: `NYASH_JSON_ONLY=1`
+- EXE-first bundle: `tools/build_compiler_exe.sh` → `dist/nyash_compiler/`
 - Load Ny plugins: `NYASH_LOAD_NY_PLUGINS=1` / `--load-ny-plugins`
 - AOT smoke: `CLIF_SMOKE_RUN=1`
 
@@ -83,6 +91,7 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 
 - JSON v0 bridge: `tools/ny_parser_bridge_smoke.sh` / `tools/ny_parser_bridge_smoke.ps1`
 - E2E roundtrip: `tools/ny_roundtrip_smoke.sh` / `tools/ny_roundtrip_smoke.ps1`
+- EXE-first smoke: `tools/build_compiler_exe.sh && (cd dist/nyash_compiler && ./nyash_compiler tmp/sample.nyash > sample.json)`
 
 ## Implementation Dependencies
 
@@ -96,7 +105,7 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 - v0 E2E green (parser pipe + direct bridge) including Ny compiler MVP switch
 - v1 minimal samples pass via JSON bridge
 - AOT P2: emit→link→run stable for constant/arith
-- Phase‑15 STOP には PHI 切替を含めない（PHI は LoopForm/Core‑14 で扱う）
+ - Phase‑15 STOP には PHI 切替を含めない（PHI は LoopForm/MIR18 で扱う）
  - 15.3: Stage‑1 代表サンプル緑 + Bootstrap smoke（フォールバック許容）+ 文分離ポリシー公開
 - Docs/recipes usable on Windows/Unix
 

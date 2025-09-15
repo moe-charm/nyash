@@ -4,6 +4,10 @@ use nyash_rust::{parser::NyashParser, interpreter::NyashInterpreter};
 // Use the library crate's plugin init module rather than the bin crate root
 use nyash_rust::runner_plugin_init;
 use std::{fs, process};
+use std::io::Read;
+use std::process::Stdio;
+use std::time::{Duration, Instant};
+use std::thread::sleep;
 
 // limited directory walk: add matching files ending with .nyash and given leaf name
 fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
@@ -157,68 +161,297 @@ impl NyashRunner {
             Ok(c) => c,
             Err(e) => { eprintln!("[ny-compiler] read error: {}", e); return false; }
         };
-        // Write to tmp/ny_parser_input.ny (as expected by Ny parser v0)
+        // Optional Phase-15: strip `using` lines and register modules (same policy as execute_nyash_file)
+        let enable_using = std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1");
+        let mut code_ref: std::borrow::Cow<'_, str> = std::borrow::Cow::Borrowed(&code);
+        if enable_using {
+            let mut out = String::with_capacity(code.len());
+            let mut used_names: Vec<(String, Option<String>)> = Vec::new();
+            for line in code.lines() {
+                let t = line.trim_start();
+                if t.starts_with("using ") {
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[using] stripped(line→selfhost): {}", line);
+                    }
+                    let rest0 = t.strip_prefix("using ").unwrap().trim();
+                    let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
+                    let (target, alias) = if let Some(pos) = rest0.find(" as ") {
+                        (rest0[..pos].trim().to_string(), Some(rest0[pos+4..].trim().to_string()))
+                    } else { (rest0.to_string(), None) };
+                    let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+                    if is_path {
+                        let path = target.trim_matches('"').to_string();
+                        let name = alias.clone().unwrap_or_else(|| {
+                            std::path::Path::new(&path).file_stem().and_then(|s| s.to_str()).unwrap_or("module").to_string()
+                        });
+                        used_names.push((name, Some(path)));
+                    } else {
+                        used_names.push((target, alias));
+                    }
+                    continue;
+                }
+                out.push_str(line);
+                out.push('\n');
+            }
+            // Register modules into minimal registry with best-effort path resolution
+            for (ns_or_alias, alias_or_path) in used_names {
+                if let Some(path) = alias_or_path {
+                    let sb = crate::box_trait::StringBox::new(path);
+                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
+                } else {
+                    let rel = format!("apps/{}.nyash", ns_or_alias.replace('.', "/"));
+                    let exists = std::path::Path::new(&rel).exists();
+                    let path_or_ns = if exists { rel } else { ns_or_alias.clone() };
+                    let sb = crate::box_trait::StringBox::new(path_or_ns);
+                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
+                }
+            }
+            code_ref = std::borrow::Cow::Owned(out);
+        }
+
+        // Write to tmp/ny_parser_input.ny (as expected by Ny parser v0), unless forced to reuse existing tmp
+        let use_tmp_only = std::env::var("NYASH_NY_COMPILER_USE_TMP_ONLY").ok().as_deref() == Some("1");
         let tmp_dir = std::path::Path::new("tmp");
         if let Err(e) = std::fs::create_dir_all(tmp_dir) {
             eprintln!("[ny-compiler] mkdir tmp failed: {}", e);
             return false;
         }
         let tmp_path = tmp_dir.join("ny_parser_input.ny");
-        match std::fs::File::create(&tmp_path) {
-            Ok(mut f) => {
-                if let Err(e) = f.write_all(code.as_bytes()) {
-                    eprintln!("[ny-compiler] write tmp failed: {}", e);
+        if !use_tmp_only {
+            match std::fs::File::create(&tmp_path) {
+                Ok(mut f) => {
+                    if let Err(e) = f.write_all(code_ref.as_bytes()) {
+                        eprintln!("[ny-compiler] write tmp failed: {}", e);
+                        return false;
+                    }
+                }
+                Err(e) => { eprintln!("[ny-compiler] open tmp failed: {}", e); return false; }
+            }
+        }
+        // EXE-first: if requested, try external parser EXE (nyash_compiler)
+        if std::env::var("NYASH_USE_NY_COMPILER_EXE").ok().as_deref() == Some("1") {
+            // Resolve parser EXE path
+            let exe_path = if let Ok(p) = std::env::var("NYASH_NY_COMPILER_EXE_PATH") {
+                std::path::PathBuf::from(p)
+            } else {
+                let mut p = std::path::PathBuf::from("dist/nyash_compiler");
+                #[cfg(windows)]
+                { p.push("nyash_compiler.exe"); }
+                #[cfg(not(windows))]
+                { p.push("nyash_compiler"); }
+                if !p.exists() {
+                    // Try PATH
+                    if let Ok(w) = which::which("nyash_compiler") { w } else { p }
+                } else { p }
+            };
+            if exe_path.exists() {
+                let mut cmd = std::process::Command::new(&exe_path);
+                // Prefer passing the original filename directly (parser EXE accepts positional path)
+                cmd.arg(filename);
+                // Gates
+                if std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") { cmd.arg("--min-json"); }
+                if std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") { cmd.arg("--read-tmp"); }
+                if let Ok(raw) = std::env::var("NYASH_NY_COMPILER_CHILD_ARGS") { for tok in raw.split_whitespace() { cmd.arg(tok); } }
+                let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
+                let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+                let mut child = match cmd.spawn() { Ok(c) => c, Err(e) => { eprintln!("[ny-compiler] exe spawn failed: {}", e); return false; } };
+                let mut ch_stdout = child.stdout.take();
+                let mut ch_stderr = child.stderr.take();
+                let start = Instant::now();
+                let mut timed_out = false;
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(_status)) => { break; }
+                        Ok(None) => {
+                            if start.elapsed() >= Duration::from_millis(timeout_ms) { let _ = child.kill(); let _ = child.wait(); timed_out = true; break; }
+                            sleep(Duration::from_millis(10));
+                        }
+                        Err(e) => { eprintln!("[ny-compiler] exe wait error: {}", e); return false; }
+                    }
+                }
+                let mut out_buf = Vec::new();
+                let mut err_buf = Vec::new();
+                if let Some(mut s) = ch_stdout { let _ = s.read_to_end(&mut out_buf); }
+                if let Some(mut s) = ch_stderr { let _ = s.read_to_end(&mut err_buf); }
+                if timed_out {
+                    let head = String::from_utf8_lossy(&out_buf).chars().take(200).collect::<String>();
+                    eprintln!("[ny-compiler] exe timeout after {} ms; stdout(head)='{}'", timeout_ms, head.replace('\n', "\\n"));
                     return false;
                 }
+                let stdout = match String::from_utf8(out_buf) { Ok(s) => s, Err(_) => String::new() };
+                let mut json_line = String::new();
+                for line in stdout.lines() { let t = line.trim(); if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; } }
+                if json_line.is_empty() {
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        let head: String = stdout.chars().take(200).collect();
+                        let errh: String = String::from_utf8_lossy(&err_buf).chars().take(200).collect();
+                        eprintln!("[ny-compiler] exe produced no JSON; stdout(head)='{}' stderr(head)='{}'", head.replace('\n', "\\n"), errh.replace('\n', "\\n"));
+                    }
+                    return false;
+                }
+                // Parse JSON v0 → MIR module
+                match json_v0_bridge::parse_json_v0_to_module(&json_line) {
+                    Ok(module) => {
+                        println!("🚀 Ny compiler EXE path (ny→json_v0) ON");
+                        json_v0_bridge::maybe_dump_mir(&module);
+                        let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1";
+                        if emit_only {
+                            return false;
+                        } else {
+                            self.execute_mir_module(&module);
+                            return true;
+                        }
+                    }
+                    Err(e) => { eprintln!("[ny-compiler] JSON parse failed (exe): {}", e); return false; }
+                }
+            } else {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") { eprintln!("[ny-compiler] exe not found at {}", exe_path.display()); }
             }
-            Err(e) => { eprintln!("[ny-compiler] open tmp failed: {}", e); return false; }
         }
+
         // Locate current exe to invoke Ny VM for the Ny parser program
         let exe = match std::env::current_exe() {
             Ok(p) => p,
             Err(e) => { eprintln!("[ny-compiler] current_exe failed: {}", e); return false; }
         };
-        // Prefer new selfhost-compiler entry; fallback to legacy ny_parser_v0
+        // Select selfhost compiler entry
+        //   NYASH_NY_COMPILER_PREF=legacy|new|auto (default auto: prefer new when exists)
         let cand_new = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
         let cand_old = std::path::Path::new("apps/selfhost/parser/ny_parser_v0/main.nyash");
-        let parser_prog = if cand_new.exists() { cand_new } else { cand_old };
+        let pref = std::env::var("NYASH_NY_COMPILER_PREF").ok();
+        let parser_prog = match pref.as_deref() {
+            Some("legacy") => cand_old,
+            Some("new") => cand_new,
+            _ => if cand_new.exists() { cand_new } else { cand_old },
+        };
         if !parser_prog.exists() { eprintln!("[ny-compiler] compiler program not found: {}", parser_prog.display()); return false; }
         let mut cmd = std::process::Command::new(exe);
         cmd.arg("--backend").arg("vm").arg(parser_prog);
+        // Gate: pass script args to child parser program
+        // - NYASH_NY_COMPILER_MIN_JSON=1 → "-- --min-json"
+        // - NYASH_SELFHOST_READ_TMP=1   → "-- --read-tmp"
+        // - NYASH_NY_COMPILER_CHILD_ARGS: additional raw args (split by whitespace)
+        let min_json = std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().unwrap_or_else(|| "0".to_string());
+        if min_json == "1" { cmd.arg("--").arg("--min-json"); }
+        if std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") {
+            cmd.arg("--").arg("--read-tmp");
+        }
+        if let Ok(raw) = std::env::var("NYASH_NY_COMPILER_CHILD_ARGS") {
+            for tok in raw.split_whitespace() { cmd.arg(tok); }
+        }
         // Propagate minimal env; disable plugins to reduce noise
         cmd.env_remove("NYASH_USE_NY_COMPILER");
+        cmd.env_remove("NYASH_CLI_VERBOSE");
         // Suppress parent runner's result printing in child
         cmd.env("NYASH_JSON_ONLY", "1");
-        let out = match cmd.output() {
-            Ok(o) => o,
+        // Propagate optional gates to child (if present)
+        if let Ok(v) = std::env::var("NYASH_JSON_INCLUDE_USINGS") { cmd.env("NYASH_JSON_INCLUDE_USINGS", v); }
+        if let Ok(v) = std::env::var("NYASH_ENABLE_USING") { cmd.env("NYASH_ENABLE_USING", v); }
+        // Child timeout guard (Hotfix for potential infinite loop in child Ny parser)
+        // Config: NYASH_NY_COMPILER_TIMEOUT_MS (default 2000ms)
+        let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(2000);
+        let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
             Err(e) => { eprintln!("[ny-compiler] spawn failed: {}", e); return false; }
         };
-        if !out.status.success() {
-            if let Ok(s) = String::from_utf8(out.stderr) { eprintln!("[ny-compiler] parser stderr:\n{}", s); }
-            return false;
+        let mut ch_stdout = child.stdout.take();
+        let mut ch_stderr = child.stderr.take();
+        let start = Instant::now();
+        let mut timed_out = false;
+        loop {
+            match child.try_wait() {
+                Ok(Some(_status)) => { break; }
+                Ok(None) => {
+                    if start.elapsed() >= Duration::from_millis(timeout_ms) {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        timed_out = true;
+                        break;
+                    }
+                    sleep(Duration::from_millis(10));
+                }
+                Err(e) => { eprintln!("[ny-compiler] wait error: {}", e); return false; }
+            }
         }
-        let stdout = match String::from_utf8(out.stdout) { Ok(s) => s, Err(_) => String::new() };
+        // Collect any available output
+        let mut out_buf = Vec::new();
+        let mut err_buf = Vec::new();
+        if let Some(mut s) = ch_stdout { let _ = s.read_to_end(&mut out_buf); }
+        if let Some(mut s) = ch_stderr { let _ = s.read_to_end(&mut err_buf); }
+        if timed_out {
+            let head = String::from_utf8_lossy(&out_buf).chars().take(200).collect::<String>();
+            eprintln!("[ny-compiler] child timeout after {} ms; stdout(head)='{}'", timeout_ms, head.replace('\n', "\\n"));
+        }
+        let stdout = match String::from_utf8(out_buf) { Ok(s) => s, Err(_) => String::new() };
+        if timed_out {
+            // Fall back path will be taken below when json_line remains empty
+        } else if let Ok(s) = String::from_utf8(err_buf.clone()) {
+            // If the child exited non-zero and printed stderr, surface it and fallback
+            // We cannot easily access ExitStatus here after try_wait loop; rely on JSON detection path.
+            if s.trim().len() > 0 && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[ny-compiler] parser stderr:\n{}", s);
+            }
+        }
         let mut json_line = String::new();
         for line in stdout.lines() {
             let t = line.trim();
-            if t.starts_with('{') && t.contains("\"version\":0") { json_line = t.to_string(); break; }
+            if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; }
         }
         if json_line.is_empty() {
+            // Fallback: try Python MVP parser to produce JSON v0 from the same tmp source.
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                 let head: String = stdout.chars().take(200).collect();
                 eprintln!("[ny-compiler] JSON not found in child stdout (head): {}", head.replace('\n', "\\n"));
+                eprintln!("[ny-compiler] falling back to tools/ny_parser_mvp.py for this input");
             }
-            return false;
+            let py = which::which("python3").ok();
+            if let Some(py3) = py {
+                let script = std::path::Path::new("tools/ny_parser_mvp.py");
+                if script.exists() {
+                    let out2 = std::process::Command::new(py3)
+                        .arg(script)
+                        .arg(tmp_path.as_os_str())
+                        .output();
+                    match out2 {
+                        Ok(o2) if o2.status.success() => {
+                            if let Ok(s2) = String::from_utf8(o2.stdout) {
+                                // pick the first JSON-ish line
+                                for line in s2.lines() {
+                                    let t = line.trim();
+                                    if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; }
+                                }
+                            }
+                        }
+                        Ok(o2) => {
+                            let msg = String::from_utf8_lossy(&o2.stderr);
+                            eprintln!("[ny-compiler] python parser failed: {}", msg);
+                        }
+                        Err(e2) => {
+                            eprintln!("[ny-compiler] spawn python3 failed: {}", e2);
+                        }
+                    }
+                }
+            }
+            if json_line.is_empty() { return false; }
         }
         // Parse JSON v0 → MIR module
         match json_v0_bridge::parse_json_v0_to_module(&json_line) {
             Ok(module) => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    println!("🚀 Ny compiler MVP (ny→json_v0) path ON");
-                }
+                let emit_only_default = "1".to_string();
+                let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or(emit_only_default) == "1";
+                println!("🚀 Ny compiler MVP (ny→json_v0) path ON");
                 json_v0_bridge::maybe_dump_mir(&module);
-                self.execute_mir_module(&module);
-                true
+                if emit_only {
+                    // Do not execute; fall back to default path to keep final Result unaffected (Stage‑1 policy)
+                    false
+                } else {
+                    self.execute_mir_module(&module);
+                    true
+                }
             }
             Err(e) => {
                 eprintln!("[ny-compiler] JSON parse failed: {}", e);

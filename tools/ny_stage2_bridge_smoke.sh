@@ -21,6 +21,20 @@ printf 'return 1+2*3\n' > "$TMP_DIR/s2_a_arith.ny"
 OUT=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/s2_a_arith.ny" | "$BIN" --ny-parser-pipe || true)
 echo "$OUT" | rg -q '^Result:\s*7\b' && pass_case "Stage2 arithmetic" || fail_case "Stage2 arithmetic" "$OUT"
 
+# Case A2: unary minus precedence (-3 + 5 -> 2)
+printf 'return -3 + 5\n' > "$TMP_DIR/s2_a2_unary.ny"
+OUT=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/s2_a2_unary.ny" | "$BIN" --ny-parser-pipe || true)
+echo "$OUT" | rg -q '^Result:\s*2\b' && pass_case "Stage2 unary minus" || fail_case "Stage2 unary minus" "$OUT"
+
+# Case A3: ASI — operator continuation across newline (1 + 2 + 3)
+cat > "$TMP_DIR/s2_a3_asi_op.ny" <<'NY'
+return 1 +
+       2 +
+       3
+NY
+OUT=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/s2_a3_asi_op.ny" | "$BIN" --ny-parser-pipe || true)
+echo "$OUT" | rg -q '^Result:\s*6\b' && pass_case "Stage2 ASI: op continuation" || fail_case "Stage2 ASI: op continuation" "$OUT"
+
 # Case B: logical and (short-circuit)
 cat > "$TMP_DIR/s2_b_and.ny" <<'NY'
 return (1 < 2) && (2 < 3)
@@ -59,5 +73,18 @@ NY
 OUT=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/s2_e_nested_if.ny" | "$BIN" --ny-parser-pipe || true)
 echo "$OUT" | rg -q '^Result:\s*200\b' && pass_case "Stage2 nested if" || fail_case "Stage2 nested if" "$OUT"
 
-echo "All Stage-2 bridge smokes PASS" >&2
+# Case F: if/else on separate lines (no stray semicolon insertion)
+cat > "$TMP_DIR/s2_f_if_else_asi.ny" <<'NY'
+local x = 0
+if 1 < 2 {
+  local x = 10
+}
+else {
+  local x = 20
+}
+return x
+NY
+OUT=$(python3 "$ROOT_DIR/tools/ny_parser_mvp.py" "$TMP_DIR/s2_f_if_else_asi.ny" | "$BIN" --ny-parser-pipe || true)
+echo "$OUT" | rg -q '^Result:\s*10\b' && pass_case "Stage2 ASI: if/else separation" || fail_case "Stage2 ASI: if/else separation" "$OUT"
 
+echo "All Stage-2 bridge smokes PASS" >&2

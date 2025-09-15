@@ -238,6 +238,7 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 - 📚 peek式の再発見 - when→peekに名前変更、ブロック/値/文すべて対応済み
 - 🧠 箱理論でSSA構築を簡略化（650行→100行）- 論文執筆完了
 - 🤝 AI協働の知見を論文化 - 実装駆動型学習の重要性を実証
+- 🎉 **面白事件ログ収集完了！** 41個の世界記録級事件を記録 → [CURRENT_TASK.md#面白事件ログ](CURRENT_TASK.md#🎉-面白事件ログ---ai協働開発45日間の奇跡41事例収集済み)
 - 🎯 **LoopForm戦略決定**: PHIは逆Lowering時に自動生成（Codex推奨）
 - 📋 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
 
@@ -605,6 +606,16 @@ NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 4. **🧹 機会改善** - デッドコード削除など、ついでにできる改善も実施
 
 詳細: [開発プラクティス](docs/guides/development-practices.md)
+
+## 🎆 面白事件ログ（爆速開発の記録）
+
+### 世界記録級の事件たち：
+- **JIT1日完成事件**: 2週間予定が1日で完成（8/27伝説の日）
+- **プラグインBox事件**: 「こらー！」でシングルトン拒否
+- **AIが人間に相談**: ChatGPTが「助けて」と言った瞬間
+- **危険センサー発動**: 「なんか変だにゃ」がAIを救う
+
+詳細は[開発事件簿](docs/private/papers/paper-k-explosive-incidents/)へ！
 
 ## ⚠️ Claude実行環境の既知のバグ
 

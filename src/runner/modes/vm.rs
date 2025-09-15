@@ -6,6 +6,8 @@ use std::sync::Arc;
 impl NyashRunner {
     /// Execute VM mode (split)
     pub(crate) fn execute_vm_mode(&self, filename: &str) {
+        // Quiet mode for child pipelines (e.g., selfhost compiler JSON emit)
+        let quiet_pipe = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1");
         // Enforce plugin-first policy for VM on this branch (deterministic):
         // - Initialize plugin host if not yet loaded
         // - Prefer plugin implementations for core boxes
@@ -176,7 +178,7 @@ impl NyashRunner {
         let mut vm = VM::with_runtime(runtime);
         match vm.execute_module(&module_vm) {
             Ok(result) => {
-                println!("✅ VM execution completed successfully!");
+                if !quiet_pipe { println!("✅ VM execution completed successfully!"); }
                 // Pretty-print with coercions for plugin-backed values
                 // Prefer MIR signature when available, but fall back to runtime coercions to keep VM/JIT consistent.
                 let (ety, sval) = if let Some(func) = compile_result.module.functions.get("main") {
@@ -237,8 +239,10 @@ impl NyashRunner {
                         ("String", s)
                     } else { (result.type_name(), result.to_string_box().value) }
                 };
-                println!("ResultType(MIR): {}", ety);
-                println!("Result: {}", sval);
+                if !quiet_pipe {
+                    println!("ResultType(MIR): {}", ety);
+                    println!("Result: {}", sval);
+                }
             },
             Err(e) => { eprintln!("❌ VM execution error: {}", e); process::exit(1); }
         }

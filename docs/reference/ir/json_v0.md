@@ -38,7 +38,7 @@ PHI merging (current behavior)
   - Else欠落時は else 側に分岐前(base)を採用。
   - 片側にしか存在しない新規変数はスコープ外として外へ未伝播。
 - Loop: `cond_bb` にヘッダ PHI を先置き（preheader/base と latch/body end を合流）。
-- 目的: Stage‑2 を早期に安定化させるための橋渡し。将来（Core‑14）は LoopForm からの逆LoweringでPHI自動化予定。
+- 目的: Stage‑2 を早期に安定化させるための橋渡し。将来（LoopForm= MIR18）では LoopForm からの逆Loweringで PHI を自動化予定。
 
 Type meta (emitter/LLVM harness cooperation)
 - `+` with any string operand → string concat path（handle固定）。
@@ -78,4 +78,3 @@ If with local + PHI merge
   {"type":"Return","expr":{"type":"Var","name":"x"}}
 ]}
 ```
-

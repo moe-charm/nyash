@@ -1,0 +1,18 @@
+// EmitterBox — thin wrapper to emit JSON v0 (extracted)
+box EmitterBox {
+  emit_program(json, usings_json) {
+    if usings_json == null { return json }
+    // Attach meta.usings when available and non-empty (bridge ignores unknown fields)
+    if usings_json.length() == 0 { return json }
+    if usings_json == "[]" { return json }
+    // naive injection: insert before the final '}' of the top-level object
+    local n = json.lastIndexOf("}")
+    if n < 0 { return json }
+    local head = json.substring(0, n)
+    return head + ",\"meta\":{\"usings\":" + usings_json + "}}"
+  }
+}
+
+static box EmitterStub {
+  main(args) { return 0 }
+}

@@ -180,6 +180,7 @@ fn lower_expr(f: &mut MirFunction, cur_bb: BasicBlockId, e: &ExprV0) -> Result<(
                 "shortcircuit",
                 "<json_v0>"
             );
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") { eprintln!("[bridge/logical] op={} rhs_bb={} fall_bb={} merge_bb={}", if is_and {"and"} else {"or"}, rhs_bb.0, fall_bb.0, merge_bb.0); }
             // false/true constant in fall_bb depending on op
             let cdst = f.next_value_id();
             if let Some(bb) = f.get_block_mut(fall_bb) {
@@ -187,15 +188,16 @@ fn lower_expr(f: &mut MirFunction, cur_bb: BasicBlockId, e: &ExprV0) -> Result<(
                 bb.add_instruction(MirInstruction::Const { dst: cdst, value: cval });
                 bb.set_terminator(MirInstruction::Jump { target: merge_bb });
             }
-            // evaluate rhs in rhs_bb
-            let (rval, _rhs_end) = lower_expr(f, rhs_bb, rhs)?;
-            if let Some(bb) = f.get_block_mut(rhs_bb) {
+            // evaluate rhs starting at rhs_bb and ensure the terminal block jumps to merge
+            let (rval, rhs_end) = lower_expr(f, rhs_bb, rhs)?;
+            if let Some(bb) = f.get_block_mut(rhs_end) {
                 if !bb.is_terminated() { bb.set_terminator(MirInstruction::Jump { target: merge_bb }); }
             }
-            // merge with phi
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") { eprintln!("[bridge/logical] rhs_end={} jump->merge_bb={}", rhs_end.0, merge_bb.0); }
+            // merge with phi (use actual predecessors rhs_end and fall_bb)
             let out = f.next_value_id();
             if let Some(bb) = f.get_block_mut(merge_bb) {
-                bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs: vec![(rhs_bb, rval), (fall_bb, cdst)] });
+                bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs: vec![(rhs_end, rval), (fall_bb, cdst)] });
             }
             Ok((out, merge_bb))
         }
@@ -213,6 +215,16 @@ fn lower_expr(f: &mut MirFunction, cur_bb: BasicBlockId, e: &ExprV0) -> Result<(
             Ok((dst, cur))
         }
         ExprV0::Method { recv, method, args } => {
+            // Heuristic: new ConsoleBox().println(x) → externcall env.console.log(x)
+            let recv_is_console_new = matches!(&**recv, ExprV0::New { class, .. } if class == "ConsoleBox");
+            if recv_is_console_new && (method == "println" || method == "print" || method == "log") {
+                let (arg_ids, cur2) = lower_args(f, cur_bb, args)?;
+                let dst = f.next_value_id();
+                if let Some(bb) = f.get_block_mut(cur2) {
+                    bb.add_instruction(MirInstruction::ExternCall { dst: Some(dst), iface_name: "env.console".into(), method_name: "log".into(), args: arg_ids, effects: EffectMask::READ });
+                }
+                return Ok((dst, cur2));
+            }
             let (recv_v, cur) = lower_expr(f, cur_bb, recv)?;
             let (arg_ids, cur2) = lower_args(f, cur, args)?;
             let dst = f.next_value_id();
@@ -275,6 +287,15 @@ fn lower_expr_with_vars(
             Ok((dst, cur))
         }
         ExprV0::Method { recv, method, args } => {
+            let recv_is_console_new = matches!(&**recv, ExprV0::New { class, .. } if class == "ConsoleBox");
+            if recv_is_console_new && (method == "println" || method == "print" || method == "log") {
+                let (arg_ids, cur2) = lower_args_with_vars(f, cur_bb, args, vars)?;
+                let dst = f.next_value_id();
+                if let Some(bb) = f.get_block_mut(cur2) {
+                    bb.add_instruction(MirInstruction::ExternCall { dst: Some(dst), iface_name: "env.console".into(), method_name: "log".into(), args: arg_ids, effects: EffectMask::READ });
+                }
+                return Ok((dst, cur2));
+            }
             let (recv_v, cur) = lower_expr_with_vars(f, cur_bb, recv, vars)?;
             let (arg_ids, cur2) = lower_args_with_vars(f, cur, args, vars)?;
             let dst = f.next_value_id();
@@ -341,10 +362,10 @@ fn lower_expr_with_vars(
                 bb.add_instruction(MirInstruction::Const { dst: cdst, value: cval });
                 bb.set_terminator(MirInstruction::Jump { target: merge_bb });
             }
-            let (rval, _rhs_end) = lower_expr_with_vars(f, rhs_bb, rhs, vars)?;
-            if let Some(bb) = f.get_block_mut(rhs_bb) { if !bb.is_terminated() { bb.set_terminator(MirInstruction::Jump { target: merge_bb }); } }
+            let (rval, rhs_end) = lower_expr_with_vars(f, rhs_bb, rhs, vars)?;
+            if let Some(bb) = f.get_block_mut(rhs_end) { if !bb.is_terminated() { bb.set_terminator(MirInstruction::Jump { target: merge_bb }); } }
             let out = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(merge_bb) { bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs: vec![(rhs_bb, rval), (fall_bb, cdst)] }); }
+            if let Some(bb) = f.get_block_mut(merge_bb) { bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs: vec![(rhs_end, rval), (fall_bb, cdst)] }); }
             Ok((out, merge_bb))
         }
         _ => lower_expr(f, cur_bb, e),
@@ -603,7 +624,8 @@ fn lex(input: &str) -> Result<Vec<Tok>, String> {
     let mut toks = Vec::new();
     while i < n {
         let c = bytes[i] as char;
-        if c.is_whitespace() { i += 1; continue; }
+        // Treat semicolon as whitespace (Stage-1 minimal ASI: optional ';')
+        if c.is_whitespace() || c == ';' { i += 1; continue; }
         match c {
             '+' => { toks.push(Tok::Plus); i+=1; }
             '-' => { toks.push(Tok::Minus); i+=1; }

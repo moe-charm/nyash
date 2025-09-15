@@ -44,6 +44,10 @@ pub fn emit_mir_json_for_harness(
                 // Non-PHI
                 for inst in &bb.instructions {
                     match inst {
+                        I::UnaryOp { dst, op, operand } => {
+                            let kind = match op { nyash_rust::mir::UnaryOp::Neg => "neg", nyash_rust::mir::UnaryOp::Not => "not", nyash_rust::mir::UnaryOp::BitNot => "bitnot" };
+                            insts.push(json!({"op":"unop","kind": kind, "src": operand.as_u32(), "dst": dst.as_u32()}));
+                        }
                         I::Const { dst, value } => {
                             match value {
                                 nyash_rust::mir::ConstValue::Integer(i) => {
@@ -178,6 +182,150 @@ pub fn emit_mir_json_for_harness(
             }
         }
         // Export parameter value-ids so a VM can bind arguments
+        let params: Vec<_> = f.params.iter().map(|v| v.as_u32()).collect();
+        funs.push(json!({"name": name, "params": params, "blocks": blocks}));
+    }
+    let root = json!({"functions": funs});
+    std::fs::write(path, serde_json::to_string_pretty(&root).unwrap())
+        .map_err(|e| format!("write mir json: {}", e))
+}
+
+/// Variant for the bin crate's local MIR type
+pub fn emit_mir_json_for_harness_bin(
+    module: &crate::mir::MirModule,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    use crate::mir::{MirInstruction as I, BinaryOp as B, CompareOp as C, MirType};
+    let mut funs = Vec::new();
+    for (name, f) in &module.functions {
+        let mut blocks = Vec::new();
+        let mut ids: Vec<_> = f.blocks.keys().copied().collect();
+        ids.sort();
+        for bid in ids {
+            if let Some(bb) = f.blocks.get(&bid) {
+                let mut insts = Vec::new();
+                for inst in &bb.instructions {
+                    if let I::Phi { dst, inputs } = inst {
+                        let incoming: Vec<_> = inputs
+                            .iter()
+                            .map(|(b, v)| json!([v.as_u32(), b.as_u32()]))
+                            .collect();
+                        let all_str = inputs.iter().all(|(_b, v)| {
+                            match f.metadata.value_types.get(v) {
+                                Some(MirType::String) => true,
+                                Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                _ => false,
+                            }
+                        });
+                        if all_str {
+                            insts.push(json!({
+                                "op":"phi","dst": dst.as_u32(), "incoming": incoming,
+                                "dst_type": {"kind":"handle","box_type":"StringBox"}
+                            }));
+                        } else {
+                            insts.push(json!({"op":"phi","dst": dst.as_u32(), "incoming": incoming}));
+                        }
+                    }
+                }
+                for inst in &bb.instructions {
+                    match inst {
+                        I::Const { dst, value } => {
+                            match value {
+                                crate::mir::ConstValue::Integer(i) => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "i64", "value": i}}));
+                                }
+                                crate::mir::ConstValue::Float(fv) => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "f64", "value": fv}}));
+                                }
+                                crate::mir::ConstValue::Bool(b) => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "i64", "value": if *b {1} else {0}}}));
+                                }
+                                crate::mir::ConstValue::String(s) => {
+                                    insts.push(json!({
+                                        "op":"const",
+                                        "dst": dst.as_u32(),
+                                        "value": {
+                                            "type": {"kind":"handle","box_type":"StringBox"},
+                                            "value": s
+                                        }
+                                    }));
+                                }
+                                crate::mir::ConstValue::Null | crate::mir::ConstValue::Void => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "void", "value": 0}}));
+                                }
+                            }
+                        }
+                        I::BinOp { dst, op, lhs, rhs } => {
+                            let op_s = match op { B::Add=>"+",B::Sub=>"-",B::Mul=>"*",B::Div=>"/",B::Mod=>"%",B::BitAnd=>"&",B::BitOr=>"|",B::BitXor=>"^",B::Shl=>"<<",B::Shr=>">>",B::And=>"&",B::Or=>"|"};
+                            let mut obj = json!({"op":"binop","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()});
+                            if matches!(op, B::Add) {
+                                let lhs_is_str = match f.metadata.value_types.get(lhs) {
+                                    Some(MirType::String) => true,
+                                    Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                    _ => false,
+                                };
+                                let rhs_is_str = match f.metadata.value_types.get(rhs) {
+                                    Some(MirType::String) => true,
+                                    Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                    _ => false,
+                                };
+                                if lhs_is_str || rhs_is_str {
+                                    obj["dst_type"] = json!({"kind":"handle","box_type":"StringBox"});
+                                }
+                            }
+                            insts.push(obj);
+                        }
+                        I::Compare { dst, op, lhs, rhs } => {
+                            let op_s = match op { C::Eq=>"==",C::Ne=>"!=",C::Lt=>"<",C::Le=>"<=",C::Gt=>">",C::Ge=>">=" };
+                            insts.push(json!({"op":"compare","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
+                        }
+                        I::ExternCall { dst, iface_name, method_name, args, .. } => {
+                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                            let mut obj = json!({
+                                "op":"externcall","func": format!("{}.{}", iface_name, method_name), "args": args_a,
+                                "dst": dst.map(|d| d.as_u32()),
+                            });
+                            if iface_name == "env.console" { if dst.is_some() { obj["dst_type"] = json!("i64"); } }
+                            insts.push(obj);
+                        }
+                        I::BoxCall { dst, box_val, method, args, .. } => {
+                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                            let mut obj = json!({
+                                "op":"boxcall","box": box_val.as_u32(), "method": method, "args": args_a, "dst": dst.map(|d| d.as_u32())
+                            });
+                            let m = method.as_str();
+                            let dst_ty = if m == "substring" || m == "dirname" || m == "join" || m == "read_all" || m == "read" {
+                                Some(json!({"kind":"handle","box_type":"StringBox"}))
+                            } else if m == "length" || m == "lastIndexOf" {
+                                Some(json!("i64"))
+                            } else { None };
+                            if let Some(t) = dst_ty { obj["dst_type"] = t; }
+                            insts.push(obj);
+                        }
+                        I::NewBox { dst, box_type, args } => {
+                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                            insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
+                        }
+                        I::Branch { condition, then_bb, else_bb } => {
+                            insts.push(json!({"op":"branch","cond": condition.as_u32(), "then": then_bb.as_u32(), "else": else_bb.as_u32()}));
+                        }
+                        I::Jump { target } => {
+                            insts.push(json!({"op":"jump","target": target.as_u32()}));
+                        }
+                        I::Return { value } => {
+                            insts.push(json!({"op":"ret","value": value.map(|v| v.as_u32())}));
+                        }
+                        _ => { }
+                    }
+                }
+                if let Some(term) = &bb.terminator { match term {
+                    I::Return { value } => insts.push(json!({"op":"ret","value": value.map(|v| v.as_u32())})),
+                    I::Jump { target } => insts.push(json!({"op":"jump","target": target.as_u32()})),
+                    I::Branch { condition, then_bb, else_bb } => insts.push(json!({"op":"branch","cond": condition.as_u32(), "then": then_bb.as_u32(), "else": else_bb.as_u32()})),
+                    _ => {} } }
+                blocks.push(json!({"id": bid.as_u32(), "instructions": insts}));
+            }
+        }
         let params: Vec<_> = f.params.iter().map(|v| v.as_u32()).collect();
         funs.push(json!({"name": name, "params": params, "blocks": blocks}));
     }

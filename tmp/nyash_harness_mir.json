@@ -280,7 +280,7 @@
               "dst": 7,
               "incoming": [
                 [
-                  0,
+                  3,
                   1
                 ],
                 [
@@ -294,20 +294,6 @@
               "dst": 6,
               "incoming": [
                 [
-                  3,
-                  1
-                ],
-                [
-                  6,
-                  7
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 5,
-              "incoming": [
-                [
                   2,
                   1
                 ],
@@ -319,7 +305,7 @@
               "op": "phi"
             },
             {
-              "dst": 4,
+              "dst": 5,
               "incoming": [
                 [
                   1,
@@ -333,11 +319,25 @@
               "op": "phi"
             },
             {
+              "dst": 4,
+              "incoming": [
+                [
+                  0,
+                  1
+                ],
+                [
+                  4,
+                  7
+                ]
+              ],
+              "op": "phi"
+            },
+            {
               "dst": 8,
-              "lhs": 5,
+              "lhs": 6,
               "op": "compare",
               "operation": "<",
-              "rhs": 6
+              "rhs": 7
             },
             {
               "cond": 8,
@@ -360,17 +360,17 @@
             },
             {
               "dst": 10,
-              "lhs": 5,
+              "lhs": 6,
               "op": "binop",
               "operation": "+",
               "rhs": 9
             },
             {
               "args": [
-                5,
+                6,
                 10
               ],
-              "box": 7,
+              "box": 4,
               "dst": 11,
               "dst_type": {
                 "box_type": "StringBox",
@@ -410,7 +410,7 @@
           "instructions": [
             {
               "op": "ret",
-              "value": 4
+              "value": 5
             }
           ]
         },
@@ -430,7 +430,7 @@
             },
             {
               "dst": 15,
-              "lhs": 4,
+              "lhs": 5,
               "op": "binop",
               "operation": "+",
               "rhs": 14
@@ -497,7 +497,7 @@
             },
             {
               "dst": 24,
-              "lhs": 5,
+              "lhs": 6,
               "op": "binop",
               "operation": "+",
               "rhs": 23
@@ -524,7 +524,7 @@
             },
             {
               "dst": 19,
-              "lhs": 4,
+              "lhs": 5,
               "op": "binop",
               "operation": "+",
               "rhs": 18
@@ -540,7 +540,7 @@
           "instructions": [
             {
               "dst": 20,
-              "lhs": 4,
+              "lhs": 5,
               "op": "binop",
               "operation": "+",
               "rhs": 11

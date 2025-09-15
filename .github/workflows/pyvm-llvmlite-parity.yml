@@ -1,0 +1,55 @@
+name: PyVM ↔ llvmlite Parity (Optional)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      NYASH_DISABLE_PLUGINS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install LLVM 18 (llvm-config-18)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates lsb-release wget gnupg
+          curl -fsSL https://apt.llvm.org/llvm.sh -o llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18
+          llvm-config-18 --version
+
+      - name: Build nyash (release)
+        run: cargo build --release -j 2
+
+      - name: Parity esc_dirname_smoke (PyVM vs llvmlite)
+        run: tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash --timeout 20
+
+      - name: Parity string_ops_basic (PyVM vs llvmlite)
+        run: tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/string_ops_basic.nyash --timeout 20
+
+      - name: Parity ternary_nested (PyVM vs llvmlite)
+        run: tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/ternary_nested.nyash --timeout 20
+
+      - name: Parity peek_return_value (PyVM vs llvmlite)
+        run: tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/peek_return_value.nyash --timeout 20
+

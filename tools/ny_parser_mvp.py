@@ -15,7 +15,8 @@ Grammar (subset):
   logic    := compare (('&&'|'||') compare)*
   compare  := sum (('=='|'!='|'<'|'>'|'<='|'>=') sum)?
   sum      := term (('+'|'-') term)*
-  term     := factor (('*'|'/') factor)*
+  term     := unary (('*'|'/') unary)*
+  unary    := '-' unary | factor
   factor   := INT | STRING | IDENT call_tail* | '(' expr ')' | 'new' IDENT '(' args? ')'
   call_tail:= '.' IDENT '(' args? ')'   # method
             | '(' args? ')'             # function call
@@ -126,11 +127,17 @@ class P:
             rhs=self.term(); lhs={"type":"Binary","op":op,"lhs":lhs,"rhs":rhs}
         return lhs
     def term(self):
-        lhs=self.factor()
+        lhs=self.unary()
         while self.cur().kind in ('*','/'):
             op=self.cur().kind; self.i+=1
-            rhs=self.factor(); lhs={"type":"Binary","op":op,"lhs":lhs,"rhs":rhs}
+            rhs=self.unary(); lhs={"type":"Binary","op":op,"lhs":lhs,"rhs":rhs}
         return lhs
+    def unary(self):
+        if self.cur().kind=='-':
+            self.i+=1
+            rhs=self.unary()
+            return {"type":"Binary","op":"-","lhs":{"type":"Int","value":0},"rhs":rhs}
+        return self.factor()
     def factor(self):
         tok=self.cur()
         if self.eat('INT'): return {"type":"Int","value":tok.val}

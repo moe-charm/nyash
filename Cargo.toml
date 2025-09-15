@@ -63,6 +63,10 @@ name = "test-plugin-loader-v2"
 path = "src/bin/test_plugin_loader_v2.rs"
 required-features = ["dynamic-file"]
 
+[[bin]]
+name = "ny_mir_builder"
+path = "src/bin/ny_mir_builder.rs"
+
 # Examples for development - only available as examples, not bins
 [[example]]
 name = "gui_simple_notepad"
@@ -243,3 +247,6 @@ panic = "abort"
 # 開発用設定
 opt-level = 0
 debug = true
+[profile.release.package."nyash-net-plugin"]
+opt-level = "z"
+strip = true

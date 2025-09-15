@@ -28,7 +28,7 @@ Acceptance (15.3)
 - Ny compiler can lex/parse `using` forms without breaking Stage‑1/2 programs
 - Runner path (Rust) continues to resolve `using` and `nyash.toml` as before (parity unchanged)
 
-Looking ahead (Core‑14 / Phase 16)
+Looking ahead (MIR18 / Phase 16)
 - Evaluate moving `nyash.toml` parsing to Ny as a library box (ConfigBox)
 - Unify include/import/namespace into a single resolver pass in Ny with a small JSON side channel back to the runner
 - Keep VM unchanged; all resolution before MIR build

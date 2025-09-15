@@ -16,6 +16,13 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 
 ## 🚀 実装戦略（2025年9月更新・改定）
 
+### Self‑Hosting 優先（Phase‑15 基礎固め）
+- 目的: Nyash製パーサ/言語機能/Bridge整合/パリティを完成させ、自己ホスト c0→c1→c1' を達成する。
+- 運用:
+  - Runner から `NYASH_USE_NY_COMPILER=1` を推奨（子プロセス実行→JSON v0→Bridge→MIR 実行）。
+  - EXE化は任意の実験導線として維持（配布は Phase‑15 の外）。
+  - PyVM は参照実行器として意味論検証に用い、パリティ監視を継続。
+
 ### Phase 15.2: LLVM（llvmlite）安定化 + PyVM導入
 - JIT/Cranelift は一時停止（古い/非対応）。Rust/inkwell は参照のみ。
 - 既定のコンパイル経路は **Python/llvmlite**（harness）のみ
@@ -34,7 +41,7 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 #### PHI 取り扱い方針（Phase‑15 中）
 - 現行: JSON v0 Bridge 側で If/Loop の PHI を生成（安定・緑）。
 - 方針: Phase‑15 ではこのまま完成させる（変更しない）。
-- 理由: LoopForm（Core‑14）導入時に、逆Loweringで PHI を自動生成する案（推薦）に寄せるため。
+- 理由: LoopForm（MIR18）導入時に、逆Loweringで PHI を自動生成する案（推薦）に寄せるため。
   - PHI は「合流点での別名付け」であり、Boxの操作ではない。
   - 抽象レイヤの純度維持（Everything is Box）。
   - 実装責務の一極化（行数削減／保守性向上）。
@@ -79,6 +86,7 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 
 - Smokes / Tools（更新）
   - `tools/selfhost_compiler_smoke.sh`（入口）
+  - `tools/build_compiler_exe.sh`（Selfhost Parser のEXE化）
   - `tools/ny_stage2_bridge_smoke.sh`（算術/比較/短絡/ネストif）
   - `tools/ny_parser_stage2_phi_smoke.sh`（If/Loop の PHI 合流）
   - `tools/parity.sh --lhs pyvm --rhs llvmlite <test.nyash>`（常時）
@@ -101,10 +109,10 @@ Imports/Namespace plan（15.3‑late）
 - `tools/ny_roundtrip_smoke.sh` 緑（Case A/B）。
 - `apps/tests/esc_dirname_smoke.nyash` / `apps/selfhost/tools/dep_tree_min_string.nyash` を Ny パーサ経路で実行し、PyVM/llvmlite とパリティ一致（stdout/exit）。
 
-#### 予告: LoopForm（Core‑14）での PHI 自動化（Phase‑15 後）
+#### 予告: LoopForm（MIR18）での PHI 自動化（Phase‑15 後）
 - LoopForm を強化し、`loop.begin(loop_carried_values) / loop.iter / loop.branch / loop.end` の構造的情報から逆Loweringで PHI を合成。
 - If/短絡についても同様に、構造ブロックから合流点を決めて PHI を自動化。
-- スケジュール: Phase‑15 後（Core‑14）で検討・実装。Phase‑15 では変更しない。
+- スケジュール: Phase‑15 後（MIR18/LoopForm）で検討・実装。Phase‑15 では変更しない。
 
 ### Phase 15.4: VM層のNyash化（PyVMからの置換）
 - PyVM を足場に、VMコアを Nyash 実装へ段階移植（命令サブセットから）
@@ -116,7 +124,7 @@ Imports/Namespace plan（15.3‑late）
 
 補足: JSON v0 の扱い（互換）
 - Phase‑15: Bridge で PHI を生成（現行継続）。
-- Core‑14 以降: LoopForm で PHI 自動化後、JSON 側の PHI は非必須（将来は除外方向）。
+- MIR18（LoopForm）以降: PHI 自動化後、JSON 側の PHI は非必須（将来は除外方向）。
 - 型メタ（“+”の文字列混在／文字列比較）は継続。
 
 ## 📊 主要成果物
@@ -314,8 +322,12 @@ ny_free_buf(buffer)
 ### ✅ クイックスモーク（現状）
 - PyVM↔llvmlite パリティ: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash`
 - dep_tree（ハーネスON）: `NYASH_LLVM_FEATURE=llvm ./tools/build_llvm.sh apps/selfhost/tools/dep_tree_min_string.nyash -o app_dep && ./app_dep`
+- Selfhost Parser EXE: `tools/build_compiler_exe.sh && (cd dist/nyash_compiler && ./nyash_compiler tmp/sample.nyash > sample.json)`
 - JSON v0 bridge spec: `docs/reference/ir/json_v0.md`
 - Stage‑2 smokes: `tools/ny_stage2_bridge_smoke.sh`, `tools/ny_parser_stage2_phi_smoke.sh`, `tools/ny_me_dummy_smoke.sh`
+
+WSL Quickstart
+- See: `docs/guides/exe-first-wsl.md`（依存の導入→Parser EXE バンドル→スモークの順）
 
 ### 📚 関連フェーズ
 - [Phase 10: Cranelift JIT](../phase-10/)

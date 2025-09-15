@@ -124,17 +124,31 @@ class PyVM:
                 op = inst.get("op")
 
                 if op == "phi":
-                    # incoming: [[vid, pred_bid], ...]
+                    # incoming: prefer [[vid, pred_bid]], but accept [pred_bid, vid] robustly
                     incoming = inst.get("incoming", [])
                     chosen: Any = None
-                    # Prefer predecessor match; otherwise fallback to first
-                    for vid, pb in incoming:
-                        if prev is not None and int(pb) == int(prev):
-                            chosen = regs.get(int(vid))
+                    for pair in incoming:
+                        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                            continue
+                        a, b = pair[0], pair[1]
+                        # Case 1: [vid, pred]
+                        if prev is not None and int(b) == int(prev) and int(a) in regs:
+                            chosen = regs.get(int(a))
+                            break
+                        # Case 2: [pred, vid]
+                        if prev is not None and int(a) == int(prev) and int(b) in regs:
+                            chosen = regs.get(int(b))
                             break
                     if chosen is None and incoming:
-                        vid, _ = incoming[0]
-                        chosen = regs.get(int(vid))
+                        # Fallback to first element that resolves to a known vid
+                        for pair in incoming:
+                            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+                                continue
+                            a, b = pair[0], pair[1]
+                            if int(a) in regs:
+                                chosen = regs.get(int(a)); break
+                            if int(b) in regs:
+                                chosen = regs.get(int(b)); break
                     self._set(regs, inst.get("dst"), chosen)
                     i += 1
                     continue
@@ -229,6 +243,30 @@ class PyVM:
                     i += 1
                     continue
 
+                if op == "unop":
+                    kind = inst.get("kind")
+                    src = self._read(regs, inst.get("src"))
+                    out: Any
+                    if kind == "neg":
+                        if isinstance(src, (int, float)):
+                            out = -src
+                        elif src is None:
+                            out = 0
+                        else:
+                            try:
+                                out = -int(src)
+                            except Exception:
+                                out = 0
+                    elif kind == "not":
+                        out = 0 if self._truthy(src) else 1
+                    elif kind == "bitnot":
+                        out = ~int(src) if src is not None else -1
+                    else:
+                        out = None
+                    self._set(regs, inst.get("dst"), out)
+                    i += 1
+                    continue
+
                 if op == "newbox":
                     btype = inst.get("type")
                     if btype == "ConsoleBox":
@@ -236,6 +274,10 @@ class PyVM:
                     elif btype == "StringBox":
                         # empty string instance
                         val = ""
+                    elif btype == "ArrayBox":
+                        val = {"__box__": "ArrayBox", "__arr": []}
+                    elif btype == "MapBox":
+                        val = {"__box__": "MapBox", "__map": {}}
                     else:
                         # Unknown box -> opaque
                         val = {"__box__": btype}
@@ -302,6 +344,58 @@ class PyVM:
                             out = os.path.join(base, rel)
                         else:
                             out = None
+                    # ArrayBox minimal methods
+                    elif isinstance(recv, dict) and recv.get("__box__") == "ArrayBox":
+                        arr = recv.get("__arr", [])
+                        if method in ("len", "size"):
+                            out = len(arr)
+                        elif method == "get":
+                            idx = int(args[0]) if args else 0
+                            out = arr[idx] if 0 <= idx < len(arr) else None
+                        elif method == "set":
+                            idx = int(args[0]) if len(args) > 0 else 0
+                            val = args[1] if len(args) > 1 else None
+                            if 0 <= idx < len(arr):
+                                arr[idx] = val
+                            elif idx == len(arr):
+                                arr.append(val)
+                            else:
+                                # extend with None up to idx, then set
+                                while len(arr) < idx:
+                                    arr.append(None)
+                                arr.append(val)
+                            out = 0
+                        elif method == "push":
+                            val = args[0] if args else None
+                            arr.append(val)
+                            out = len(arr)
+                        elif method == "toString":
+                            out = "[" + ",".join(str(x) for x in arr) + "]"
+                        else:
+                            out = None
+                        recv["__arr"] = arr
+                    # MapBox minimal methods
+                    elif isinstance(recv, dict) and recv.get("__box__") == "MapBox":
+                        m = recv.get("__map", {})
+                        if method == "size":
+                            out = len(m)
+                        elif method == "has":
+                            key = str(args[0]) if args else ""
+                            out = 1 if key in m else 0
+                        elif method == "get":
+                            key = str(args[0]) if args else ""
+                            out = m.get(key)
+                        elif method == "set":
+                            key = str(args[0]) if len(args) > 0 else ""
+                            val = args[1] if len(args) > 1 else None
+                            m[key] = val
+                            out = 0
+                        elif method == "toString":
+                            items = ",".join(f"{k}:{m[k]}" for k in m)
+                            out = "{" + items + "}"
+                        else:
+                            out = None
+                        recv["__map"] = m
                     elif method == "esc_json":
                         # Escape backslash and double-quote in the given string argument
                         s = args[0] if args else ""

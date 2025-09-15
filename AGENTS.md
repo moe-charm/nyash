@@ -31,6 +31,77 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
   - ランナー: `src/runner/modes/cranelift.rs`, `--jit-direct` は `src/runner/mod.rs`
 - 進行中の論点と手順は `CURRENT_TASK.md` を参照してね（最新のデバッグ方針・フラグが載ってるよ）。
 
+**PyVM 主経路（Phase‑15 方針）**
+- 主経路: Python/llvmlite + PyVM を標準の実行/検証経路として扱うよ。Rust VM/JIT は補助（保守/比較/プラグイン検証）。
+- 使い分け:
+  - PyVM（推奨・日常確認）: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`
+  - llvmlite ハーネス: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
+  - パリティ検証: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/CASE.nyash`
+- 自己ホスト（Ny→JSON v0）: `NYASH_USE_NY_COMPILER=1` は emit‑only 既定で運用（`NYASH_NY_COMPILER_EMIT_ONLY=1`）。子プロセスは Quiet pipe（`NYASH_JSON_ONLY=1`）。
+- 子プロセス安全策: タイムアウト `NYASH_NY_COMPILER_TIMEOUT_MS`（既定 2000ms）。違反時は kill→フォールバック（無限ループ抑止）。
+- スモーク（代表）:
+  - PyVM Stage‑2: `tools/pyvm_stage2_smoke.sh`
+  - PHI/Stage‑2: `tools/ny_parser_stage2_phi_smoke.sh`
+  - Bridge/Stage‑2: `tools/ny_stage2_bridge_smoke.sh`
+  - 文字列/dirname など: `apps/tests/*.nyash` を PyVM で都度確認
+- 注意: Phase‑15 では VM/JIT は MIR14 以降の更新を最小とし、PyVM/llvmlite のパリティを最優先で維持するよ。
+
+Docs links（開発方針/スタイル）
+- Language statements (ASI): `docs/reference/language/statements.md`
+- using 文の方針: `docs/reference/language/using.md`
+- Nyash ソースのスタイルガイド: `docs/guides/style-guide.md`
+- Stage‑2 EBNF: `docs/reference/language/EBNF.md`
+
+Dev Helpers
+- 推奨フラグ一括: `source tools/dev_env.sh pyvm`（PyVMを既定、Bridge→PyVM直送: `NYASH_PIPE_USE_PYVM=1`）
+- 解除: `source tools/dev_env.sh reset`
+
+Selfhost 子プロセスの引数透過（開発者向け）
+- 親→子にスクリプト引数を渡す環境変数:
+  - `NYASH_NY_COMPILER_MIN_JSON=1` → 子に `-- --min-json`
+  - `NYASH_SELFHOST_READ_TMP=1`    → 子に `-- --read-tmp`（`tmp/ny_parser_input.ny` を FileBox で読み込む。CIでは未使用）
+  - `NYASH_NY_COMPILER_CHILD_ARGS` → スペース区切りで子にそのまま渡す
+- 子側（apps/selfhost-compiler/compiler.nyash）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
+
+**PyVM Scope & Policy（Stage‑2 開発用の範囲）**
+- 目的: PyVM は「開発用の参照実行器」だよ。JSON v0 → MIR 実行の意味論確認と llvmlite とのパリティ監視に使う（プロダクション最適化はしない）。
+- 必須命令: `const/binop/compare/branch/jump/ret/phi`、`call/externcall/boxcall`（最小）。
+- Box/メソッド（最小実装）:
+  - ConsoleBox: `print/println/log`
+  - String: `length/substring/lastIndexOf/esc_json`、文字列連結（`+`）
+  - ArrayBox: `size/len/get/set/push/toString`
+  - MapBox: `size/has/get/set/toString`（キーは文字列前提）
+  - FileBox: 読み取り限定の `open/read/close`（必要最小）
+  - PathBox: `dirname/join`（POSIX 風の最小）
+- 真偽・短絡: 比較は i64 0/1、分岐は truthy 規約。`&&`/`||` は分岐+PHI で短絡を表現（副作用なしは Bridge、ありは PyVM 側で検証）。
+- エントリ/終了: `--entry` 省略時に `Main.main`/`main` を自動解決。整数は exit code に反映、bool は 0/1。
+- 非対象（やらない）: プラグイン動的ロード/ABI、GC/スケジューラ、例外/非同期、大きな I/O/OS 依存、性能最適化。
+- 運用ポリシー: 仕様差は llvmlite に合わせて PyVM を調整。未知の extern/boxcall は安全に `None`/no-op。既定は静音、`NYASH_CLI_VERBOSE=1` で詳細。
+- 実行とスモーク:
+  - PyVM 実行: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/tests/CASE.nyash`
+  - 代表スクリプト: `tools/pyvm_stage2_smoke.sh`, `tools/pyvm_collections_smoke.sh`, `tools/pyvm_stage2_dot_chain_smoke.sh`
+  - Bridge 短絡（RHS スキップ）: `tools/ny_stage2_shortcircuit_smoke.sh`
+- CI: `.github/workflows/pyvm-smoke.yml` を常時緑に維持。LLVM18 がある環境では `tools/parity.sh --lhs pyvm --rhs llvmlite` を任意ジョブで回す。
+
+**Interpreter vs PyVM（実行経路の役割と優先度）**
+- 優先経路: PyVM（Python）を“意味論リファレンス実行器”として採用。日常の機能確認・CI の軽量ゲート・llvmlite とのパリティ監視を PyVM で行う。
+- 補助経路: Rust の MIR Interpreter は純Rust単独で回る簡易器として維持。拡張はしない（BoxCall 等の未対応は既知）。Python が使えない環境での簡易再現や Pipe ブリッジの補助に限定。
+- Bridge（--ny-parser-pipe）: 既定は Rust MIR Interpreter を使用。副作用なしの短絡など、実装範囲内を確認。副作用を含む実行検証は PyVM スモーク側で担保。
+- 開発の原則: 仕様差が出た場合、llvmlite に合わせて PyVM を優先調整。Rust Interpreter は凍結維持（安全修正のみ）。
+
+**脱Rust（開発効率最優先）ポリシー**
+- Phase‑15 中は Rust VM/JIT への新規機能追加を最小化し、Python（llvmlite/PyVM）側での実装・検証を優先する。
+- Runner/Bridge は必要最小の配線のみ（子プロセスタイムアウト・静音・フォールバック）。意味論の追加はまず PyVM/llvmlite に実装し、必要時のみ Rust 側へ反映。
+
+**Self‑Hosting への移行（PyVM → Nyash）ロードマップ（将来）**
+- 目標: PyVM の最小実行器を Nyash スクリプトへ段階移植し、自己ホスト中も Python 依存を徐々に縮小する。
+- ステップ（小粒度）:
+  1) Nyash で MIR(JSON) ローダ（ファイル→構造体）を実装（最小 op セット）。
+  2) const/binop/compare/branch/jump/ret/phi を Nyash で実装し、既存 PyVM スモークを通過。
+  3) call/externcall/boxcall（最小）・String/Array/Map の必要メソッドを Nyash で薄く実装。
+  4) CI は当面 PyVM を主、Nyash 実装は実験ジョブとして並走→安定後に切替検討。
+- 注意: 本移行は自己ホストの進捗に合わせて段階実施（Phase‑15 では設計・骨格の準備のみ）。
+
 ⚠ 現状の安定度に関する重要メモ（Phase‑15 進行中）
 - VM と Cranelift(JIT) は MIR14 へ移行中のため、現在は実行経路として安定していないよ（検証・実装作業の都合で壊れている場合があるにゃ）。
 - 当面の実行・配布は LLVM ラインを最優先・全力で整備する方針だよ。開発・確認は `--features llvm` を有効にして進めてね。

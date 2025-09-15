@@ -13,6 +13,12 @@ This is the entry point for Nyash language documentation.
 Statement separation and semicolons
 - See: reference/language/statements.md — newline as primary separator; semicolons optional for multiple statements on one line; minimal ASI rules.
 
+Imports and namespaces
+- See: reference/language/using.md — `using` syntax, runner resolution, and style guidance.
+
+Grammar (EBNF)
+- See: reference/language/EBNF.md — Stage‑2 grammar specification used by parser implementations.
+
 Related implementation notes
 - Tokenizer: src/tokenizer.rs
 - Parser (expressions/statements): src/parser/expressions.rs, src/parser/statements.rs

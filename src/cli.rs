@@ -103,6 +103,12 @@ impl CliConfig {
                     .value_name("FILE")
                     .help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter")
             )
+            .arg(
+                Arg::new("ny-compiler-args")
+                    .long("ny-compiler-args")
+                    .value_name("ARGS")
+                    .help("Pass additional args to selfhost child compiler (equivalent to NYASH_NY_COMPILER_CHILD_ARGS)")
+            )
             
             .arg(
                 Arg::new("debug-fuel")
@@ -366,6 +372,10 @@ impl CliConfig {
 
     /// Convert ArgMatches to CliConfig
     fn from_matches(matches: &ArgMatches) -> Self {
+        // Side-effect: forward child args for selfhost compiler via env
+        if let Some(a) = matches.get_one::<String>("ny-compiler-args") {
+            std::env::set_var("NYASH_NY_COMPILER_CHILD_ARGS", a);
+        }
         Self {
             file: matches.get_one::<String>("file").cloned(),
             debug_fuel: parse_debug_fuel(matches.get_one::<String>("debug-fuel").unwrap()),

@@ -1,0 +1,83 @@
+name: PyVM + Using Smoke
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'apps/**'
+      - 'tools/**'
+      - 'docs/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/pyvm-smoke.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'apps/**'
+      - 'tools/**'
+      - 'docs/**'
+
+jobs:
+  pyvm-smokes:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      NYASH_DISABLE_PLUGINS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build (release)
+        run: cargo build --release -j 2
+
+      - name: PyVM Stage-2 smokes
+        run: bash tools/pyvm_stage2_smoke.sh
+
+      - name: PyVM nested control smokes
+        run: bash tools/pyvm_stage2_nested_control_smoke.sh
+
+      - name: PyVM call/args smokes
+        run: bash tools/pyvm_stage2_call_args_smoke.sh
+
+      - name: Bridge Stage-2 (parser MVP) smokes
+        run: bash tools/ny_stage2_bridge_smoke.sh
+
+      - name: PyVM collections smokes
+        run: bash tools/pyvm_collections_smoke.sh
+
+      - name: PyVM compare smokes
+        run: bash tools/pyvm_stage2_compare_smoke.sh
+
+      - name: Bridge Stage-2 short-circuit smoke
+        run: bash tools/ny_stage2_shortcircuit_smoke.sh
+
+      - name: PyVM Stage-2 dot-chain smoke
+        run: bash tools/pyvm_stage2_dot_chain_smoke.sh
+
+      - name: PyVM Stage-2 new/method smoke
+        run: bash tools/ny_stage2_new_method_smoke.sh
+
+      - name: Selfhost using acceptance (no-op)
+        run: bash tools/ny_selfhost_using_smoke.sh
+
+      - name: Emitter meta.usings gate (fallback allowed)
+        run: bash tools/selfhost_emitter_usings_gate_smoke.sh
