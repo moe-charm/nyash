@@ -1,5 +1,5 @@
 // Declarations lowering: static boxes and box declarations
-use super::{MirInstruction, ConstValue, ValueId, BasicBlockId};
+use super::{MirInstruction, ConstValue, ValueId};
 use crate::ast::ASTNode;
 use std::collections::HashSet;
 use crate::mir::slot_registry::{get_or_assign_type_id, reserve_method_slot};

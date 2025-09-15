@@ -7,7 +7,7 @@
  */
 
 use crate::ast::ASTNode;
-use crate::box_trait::{NyashBox, VoidBox, StringBox, BoolBox};
+use crate::box_trait::{NyashBox, BoolBox};
 use crate::boxes::gc_config_box::GcConfigBox;
 use crate::boxes::debug_config_box::DebugConfigBox;
 use crate::interpreter::{NyashInterpreter, RuntimeError};

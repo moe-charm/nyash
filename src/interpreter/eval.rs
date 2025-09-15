@@ -1,7 +1,7 @@
 //! Evaluation entry points: execute program and nodes
 
 use crate::ast::ASTNode;
-use crate::box_trait::{NyashBox, VoidBox, StringBox};
+use crate::box_trait::{NyashBox, VoidBox};
 use super::{NyashInterpreter, RuntimeError, ControlFlow};
 
 impl NyashInterpreter {

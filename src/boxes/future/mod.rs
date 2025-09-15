@@ -28,7 +28,7 @@ struct Inner {
 /// Used for non-owning registries (TaskGroup/implicit group) to avoid leaks.
 #[derive(Clone, Debug)]
 pub struct FutureWeak {
-    pub(crate) inner: Weak<Inner>,
+    inner: Weak<Inner>,
 }
 
 impl Clone for NyashFutureBox {

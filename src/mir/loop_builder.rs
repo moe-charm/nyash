@@ -67,9 +67,8 @@ impl<'a> LoopBuilder<'a> {
         let after_loop_id = self.new_block();
         self.loop_header = Some(header_id);
         self.continue_snapshots.clear();
-        self.parent_builder.loop_exit_stack.push(after_loop_id);
         // Push loop context to parent builder (for nested break/continue lowering)
-        self.parent_builder.loop_header_stack.push(header_id);
+        crate::mir::builder::loops::push_loop_context(self.parent_builder, header_id, after_loop_id);
         
         // 2. Preheader -> Header へのジャンプ
         self.emit_jump(header_id)?;
@@ -119,9 +118,7 @@ impl<'a> LoopBuilder<'a> {
         // 10. ループ後の処理
         self.set_current_block(after_loop_id)?;
         // Pop loop context
-        let _ = self.parent_builder.loop_header_stack.pop();
-        // loop exit stack mirrors header stack; maintain symmetry
-        let _ = self.parent_builder.loop_exit_stack.pop();
+        crate::mir::builder::loops::pop_loop_context(self.parent_builder);
 
         // void値を返す
         let void_dst = self.new_value();
@@ -386,12 +383,12 @@ impl<'a> LoopBuilder<'a> {
                 // Jump to loop exit (after_loop_id) if available
                 let cur_block = self.current_block()?;
                 // Ensure parent has recorded current loop exit; if not, record now
-                if self.parent_builder.loop_exit_stack.last().copied().is_none() {
+                if crate::mir::builder::loops::current_exit(self.parent_builder).is_none() {
                     // Determine after_loop by peeking the next id used earlier:
                     // In this builder, after_loop_id was created above; record it for nested lowering
                     // We approximate by using the next block id minus 1 (after_loop) which we set below before branch
                 }
-                if let Some(exit_bb) = self.parent_builder.loop_exit_stack.last().copied() {
+                if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
                     self.emit_jump(exit_bb)?;
                     let _ = self.add_predecessor(exit_bb, cur_block);
                 }

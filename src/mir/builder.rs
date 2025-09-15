@@ -5,13 +5,12 @@
  */
 
 use super::{
-    MirInstruction, BasicBlock, BasicBlockId, MirFunction, MirModule, 
-    FunctionSignature, ValueId, ConstValue, BinaryOp, UnaryOp, CompareOp,
+    MirInstruction, BasicBlock, BasicBlockId, MirFunction, MirModule,
+    FunctionSignature, ValueId, ConstValue, CompareOp,
     MirType, EffectMask, Effect, BasicBlockIdGenerator, ValueIdGenerator
 };
-use super::slot_registry::{get_or_assign_type_id, reserve_method_slot};
 use super::slot_registry::resolve_slot_by_type_name;
-use crate::ast::{ASTNode, LiteralValue, BinaryOperator};
+use crate::ast::{ASTNode, LiteralValue};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -30,6 +29,7 @@ mod exprs_lambda;  // lambda lowering
 mod exprs_include; // include lowering
 mod plugin_sigs; // plugin signature loader
 mod vars; // variables/scope helpers
+pub(crate) mod loops; // small loop helpers (header/exit context)
 
 // moved helpers to builder/utils.rs
 
@@ -90,62 +90,6 @@ pub struct MirBuilder {
 }
 
 impl MirBuilder {
-    /// Emit a Box method call (unified: BoxCall)
-    fn emit_box_or_plugin_call(
-        &mut self,
-        dst: Option<ValueId>,
-        box_val: ValueId,
-        method: String,
-        method_id: Option<u16>,
-        args: Vec<ValueId>,
-        effects: EffectMask,
-    ) -> Result<(), String> {
-        // Emit instruction first
-        self.emit_instruction(MirInstruction::BoxCall { dst, box_val, method: method.clone(), method_id, args, effects })?;
-        // Heuristic return type inference for common builtin box methods
-        if let Some(d) = dst {
-            // Try to infer receiver box type from NewBox origin; fallback to current value_types
-            let mut recv_box: Option<String> = self.value_origin_newbox.get(&box_val).cloned();
-            if recv_box.is_none() {
-                if let Some(t) = self.value_types.get(&box_val) {
-                    match t {
-                        super::MirType::String => recv_box = Some("StringBox".to_string()),
-                        super::MirType::Box(name) => recv_box = Some(name.clone()),
-                        _ => {}
-                    }
-                }
-            }
-            if let Some(bt) = recv_box {
-                if let Some(mt) = self.plugin_method_sigs.get(&(bt.clone(), method.clone())) {
-                    self.value_types.insert(d, mt.clone());
-                } else {
-                    let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
-                        // Built-in box methods
-                        ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
-                        ("StringBox", "is_empty") => Some(super::MirType::Bool),
-                        ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
-                        // String-producing methods (important for LLVM ret handling)
-                        ("StringBox", "substring")
-                        | ("StringBox", "concat")
-                        | ("StringBox", "replace")
-                        | ("StringBox", "trim")
-                        | ("StringBox", "toUpper")
-                        | ("StringBox", "toLower") => Some(super::MirType::String),
-                        ("ArrayBox", "length") => Some(super::MirType::Integer),
-                        // Core MapBox minimal inference (core-first)
-                        ("MapBox", "size") => Some(super::MirType::Integer),
-                        ("MapBox", "has") => Some(super::MirType::Bool),
-                        ("MapBox", "get") => Some(super::MirType::Box("Any".to_string())),
-                        _ => None,
-                    };
-                    if let Some(mt) = inferred {
-                        self.value_types.insert(d, mt);
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
     /// Create a new MIR builder
     pub fn new() -> Self {
         let plugin_method_sigs = plugin_sigs::load_plugin_method_sigs();
@@ -171,57 +115,6 @@ impl MirBuilder {
         }
     }
 
-    /// Emit a type check instruction (Unified: TypeOp(Check))
-    #[allow(dead_code)]
-    pub(super) fn emit_type_check(&mut self, value: ValueId, expected_type: String) -> Result<ValueId, String> {
-        let dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Check, value, ty: super::MirType::Box(expected_type) })?;
-        Ok(dst)
-    }
-
-    /// Emit a cast instruction (Unified: TypeOp(Cast))
-    #[allow(dead_code)]
-    pub(super) fn emit_cast(&mut self, value: ValueId, target_type: super::MirType) -> Result<ValueId, String> {
-        let dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::TypeOp { dst, op: super::TypeOpKind::Cast, value, ty: target_type.clone() })?;
-        Ok(dst)
-    }
-
-    /// Emit a weak reference creation (Unified: WeakRef(New))
-    #[allow(dead_code)]
-    pub(super) fn emit_weak_new(&mut self, box_val: ValueId) -> Result<ValueId, String> {
-        if crate::config::env::mir_core13_pure() {
-            // Pure mode: avoid WeakRef emission; pass-through
-            return Ok(box_val);
-        }
-        let dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::New, value: box_val })?;
-        Ok(dst)
-    }
-
-    /// Emit a weak reference load (Unified: WeakRef(Load))
-    #[allow(dead_code)]
-    pub(super) fn emit_weak_load(&mut self, weak_ref: ValueId) -> Result<ValueId, String> {
-        if crate::config::env::mir_core13_pure() {
-            // Pure mode: avoid WeakRef emission; pass-through
-            return Ok(weak_ref);
-        }
-        let dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::WeakRef { dst, op: super::WeakRefOp::Load, value: weak_ref })?;
-        Ok(dst)
-    }
-
-    /// Emit a barrier read (Unified: Barrier(Read))
-    #[allow(dead_code)]
-    pub(super) fn emit_barrier_read(&mut self, ptr: ValueId) -> Result<(), String> {
-        self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Read, ptr })
-    }
-
-    /// Emit a barrier write (Unified: Barrier(Write))
-    #[allow(dead_code)]
-    pub(super) fn emit_barrier_write(&mut self, ptr: ValueId) -> Result<(), String> {
-        self.emit_instruction(MirInstruction::Barrier { op: super::BarrierOp::Write, ptr })
-    }
 
     // moved to builder_calls.rs: lower_method_as_function
     

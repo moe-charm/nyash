@@ -19,7 +19,6 @@ use crate::boxes::debug_box::DebugBox;
 // WASM-specific Box types (conditionally included)
 #[cfg(target_arch = "wasm32")]
 use crate::boxes::web::{WebDisplayBox, WebConsoleBox, WebCanvasBox};
-use crate::finalization;
 use crate::exception_box;
 use std::collections::HashMap;
 

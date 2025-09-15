@@ -1,5 +1,5 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, mir::{MirCompiler, MirInstruction}, box_trait::IntegerBox};
+use nyash_rust::{parser::NyashParser, mir::{MirCompiler, MirInstruction}};
 use nyash_rust::mir::passes::method_id_inject::inject_method_ids;
 use std::{fs, process};
 
@@ -40,13 +40,13 @@ impl NyashRunner {
         }
 
         // If explicit object path is requested, emit object only
-        if let Ok(out_path) = std::env::var("NYASH_LLVM_OBJ_OUT") {
+        if let Ok(_out_path) = std::env::var("NYASH_LLVM_OBJ_OUT") {
             #[cfg(feature = "llvm-harness")]
             {
                 // Harness path (optional): if NYASH_LLVM_USE_HARNESS=1, try Python/llvmlite first.
                 let use_harness = std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1");
                 if use_harness {
-                    if let Some(parent) = std::path::Path::new(&out_path).parent() { let _ = std::fs::create_dir_all(parent); }
+                            if let Some(parent) = std::path::Path::new(&_out_path).parent() { let _ = std::fs::create_dir_all(parent); }
                     let py = which::which("python3").ok();
                     if let Some(py3) = py {
                         let harness = std::path::Path::new("tools/llvmlite_harness.py");
@@ -60,29 +60,29 @@ impl NyashRunner {
                                 process::exit(1);
                             }
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                eprintln!("[Runner/LLVM] using llvmlite harness → {} (mir={})", out_path, mir_json_path.display());
+                                eprintln!("[Runner/LLVM] using llvmlite harness → {} (mir={})", _out_path, mir_json_path.display());
                             }
                             // 2) Run harness with --in/--out（失敗時は即エラー）
                             let status = std::process::Command::new(py3)
-                                .args([harness.to_string_lossy().as_ref(), "--in", &mir_json_path.display().to_string(), "--out", &out_path])
+                                .args([harness.to_string_lossy().as_ref(), "--in", &mir_json_path.display().to_string(), "--out", &_out_path])
                                 .status().map_err(|e| format!("spawn harness: {}", e)).unwrap();
                             if !status.success() {
                                 eprintln!("❌ llvmlite harness failed (status={})", status.code().unwrap_or(-1));
                                 process::exit(1);
                             }
                             // Verify
-                            match std::fs::metadata(&out_path) {
-                                Ok(meta) if meta.len() > 0 => {
-                                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                        eprintln!("[LLVM] object emitted by harness: {} ({} bytes)", out_path, meta.len());
+                                match std::fs::metadata(&_out_path) {
+                                    Ok(meta) if meta.len() > 0 => {
+                                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                            eprintln!("[LLVM] object emitted by harness: {} ({} bytes)", _out_path, meta.len());
+                                        }
+                                        return;
                                     }
-                                    return;
+                                    _ => {
+                                        eprintln!("❌ harness output not found or empty: {}", _out_path);
+                                        process::exit(1);
+                                    }
                                 }
-                                _ => {
-                                    eprintln!("❌ harness output not found or empty: {}", out_path);
-                                    process::exit(1);
-                                }
-                            }
                         } else {
                             eprintln!("❌ harness script not found: {}", harness.display());
                             process::exit(1);
@@ -92,18 +92,18 @@ impl NyashRunner {
                     process::exit(1);
                 }
                 // Verify object presence and size (>0)
-                match std::fs::metadata(&out_path) {
+                match std::fs::metadata(&_out_path) {
                     Ok(meta) => {
                         if meta.len() == 0 {
-                            eprintln!("❌ harness object is empty: {}", out_path);
+                            eprintln!("❌ harness object is empty: {}", _out_path);
                             process::exit(1);
                         }
                         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                            eprintln!("[LLVM] object emitted: {} ({} bytes)", out_path, meta.len());
+                            eprintln!("[LLVM] object emitted: {} ({} bytes)", _out_path, meta.len());
                         }
                     }
                     Err(e) => {
-                        eprintln!("❌ harness output not found after emit: {} ({})", out_path, e);
+                        eprintln!("❌ harness output not found after emit: {} ({})", _out_path, e);
                         process::exit(1);
                     }
                 }
@@ -113,23 +113,23 @@ impl NyashRunner {
             {
                 use nyash_rust::backend::llvm_compile_to_object;
                 // Ensure parent directory exists for the object file
-                if let Some(parent) = std::path::Path::new(&out_path).parent() {
+                if let Some(parent) = std::path::Path::new(&_out_path).parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    eprintln!("[Runner/LLVM] emitting object to {} (cwd={})", out_path, std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default());
+                    eprintln!("[Runner/LLVM] emitting object to {} (cwd={})", _out_path, std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default());
                 }
-                if let Err(e) = llvm_compile_to_object(&module, &out_path) {
+                if let Err(e) = llvm_compile_to_object(&module, &_out_path) {
                     eprintln!("❌ LLVM object emit error: {}", e);
                     process::exit(1);
                 }
-                match std::fs::metadata(&out_path) {
+                match std::fs::metadata(&_out_path) {
                     Ok(meta) if meta.len() > 0 => {
                         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                            eprintln!("[LLVM] object emitted: {} ({} bytes)", out_path, meta.len());
+                            eprintln!("[LLVM] object emitted: {} ({} bytes)", _out_path, meta.len());
                         }
                     }
-                    _ => { eprintln!("❌ LLVM object not found or empty: {}", out_path); process::exit(1); }
+                    _ => { eprintln!("❌ LLVM object not found or empty: {}", _out_path); process::exit(1); }
                 }
                 return;
             }

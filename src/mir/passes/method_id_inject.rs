@@ -45,7 +45,7 @@ pub fn inject_method_ids(module: &mut MirModule) -> usize {
                                 let mid_u16 = if let Some(h) = host_guard.as_ref() {
                                     // Try resolve via plugin config (may fail for builtins)
                                     match h.resolve_method(&bt, method) {
-                                        Ok(mh) => Some((mh.method_id as u16)),
+                    Ok(mh) => Some(mh.method_id as u16),
                                         Err(_) => resolve_slot_by_type_name(&bt, method),
                                     }
                                 } else {
@@ -63,7 +63,7 @@ pub fn inject_method_ids(module: &mut MirModule) -> usize {
                             // Resolve id as above
                             let mid_u16 = if let Some(h) = host_guard.as_ref() {
                                 match h.resolve_method(&bt, method) {
-                                    Ok(mh) => Some((mh.method_id as u16)),
+                Ok(mh) => Some(mh.method_id as u16),
                                     Err(_) => resolve_slot_by_type_name(&bt, method),
                                 }
                             } else {
@@ -91,4 +91,3 @@ pub fn inject_method_ids(module: &mut MirModule) -> usize {
 
     injected
 }
-

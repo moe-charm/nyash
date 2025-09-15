@@ -518,6 +518,11 @@ codex exec "質問内容"
 llvmliteベースのLLVMバックエンド実装。箱理論により650行→100行の簡略化を実現！
 Rust/inkwellの複雑さを回避して、シンプルに2000行程度でMIR14→LLVM変換を実現。
 
+⚠️ **重要**: **JIT/Craneliftは現在まともに動作しません！**
+- ビルドは可能（`cargo build --release --features cranelift-jit`）
+- 実行は不可（内部実装が未完成）
+- **Python LLVMルートとPyVMのみが現在の開発対象です**
+
 #### 実行方法
 ```bash
 cd src/llvm_py

@@ -8,7 +8,6 @@ use crate::interpreter::RuntimeError;
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox};
 use crate::boxes::{IntentBox, P2PBox};
-use crate::box_trait::BoolBox;
 
 impl NyashInterpreter {
     /// IntentBoxのメソッド実行 (RwLock版)

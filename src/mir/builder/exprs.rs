@@ -1,6 +1,6 @@
 // Expression lowering split from builder.rs to keep files lean
-use super::{MirInstruction, ConstValue, BasicBlockId, ValueId};
-use crate::ast::{ASTNode, LiteralValue};
+use super::{MirInstruction, ConstValue, ValueId};
+use crate::ast::ASTNode;
 
 impl super::MirBuilder {
     // Main expression dispatcher

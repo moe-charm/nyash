@@ -31,6 +31,7 @@ pub(crate) fn debug_log(msg: &str) {
 }
 
 // Conditional debug macro - unified with utils::debug_on()
+#[allow(unused_macros)]
 macro_rules! debug_trace {
     ($($arg:tt)*) => {
         if crate::interpreter::utils::debug_on() { eprintln!($($arg)*); }

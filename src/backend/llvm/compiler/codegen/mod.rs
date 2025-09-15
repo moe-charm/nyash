@@ -1,3 +1,12 @@
+//! LLVM Codegen Orchestrator
+//!
+//! Structure
+//! - `function.rs`: per-function lowering (MIR → LLVM IR)
+//! - `utils.rs`: helpers like `sanitize_symbol` and const-string maps
+//! - `instructions/*`: focused lowerers and terminators (branch/jump/return, calls, boxcall, externcall)
+//! - `types.rs`: MIR→LLVM type mapping and classifiers
+//!
+//! Keep this file slim: predeclare functions, delegate lowering, emit entry wrapper/object.
 use super::helpers::{as_float, as_int, map_type};
 use super::LLVMCompiler;
 use crate::backend::llvm::context::CodegenContext;
@@ -1115,13 +1124,169 @@ impl LLVMCompiler {
         }
     }
 }
-Old duplicate lowering block removed
 */
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_compiler_creation() {
+        let compiler = LLVMCompiler::new();
+        assert!(compiler.is_ok());
+    }
+}
+//! LLVM Codegen Orchestrator
+//!
+//! Structure
+//! - `function.rs`: per-function lowering (MIR → LLVM IR)
+//! - `utils.rs`: helpers like `sanitize_symbol`
+//! - `instructions/*`: focused lowerers and terminators (branch/jump/return, calls, boxcall, externcall)
+//! - `types.rs`: MIR→LLVM type mapping and classifiers
+//!
+//! Keep this file slim: predeclare functions, delegate lowering, emit entry wrapper/object.
+
+use super::helpers::map_type;
+use super::LLVMCompiler;
+use crate::backend::llvm::context::CodegenContext;
+use crate::mir::function::MirModule;
+use inkwell::context::Context;
+use inkwell::{
+    types::BasicTypeEnum,
+    values::{BasicValueEnum, FunctionValue},
+};
+use std::collections::HashMap;
+
+// Submodules
+mod types;
+mod instructions;
+mod utils;
+mod function;
+
+// Local helpers (thin wrappers)
+fn sanitize_symbol(name: &str) -> String { utils::sanitize_symbol(name) }
+
+fn emit_wrapper_and_object<'ctx>(
+    codegen: &CodegenContext<'ctx>,
+    entry_name: &str,
+    output_path: &str,
+) -> Result<(), String> {
+    let i64t = codegen.context.i64_type();
+    let ny_main_ty = i64t.fn_type(&[], false);
+    let ny_main = codegen.module.add_function("ny_main", ny_main_ty, None);
+    let entry_bb = codegen.context.append_basic_block(ny_main, "entry");
+    codegen.builder.position_at_end(entry_bb);
+    let entry_sym = format!("ny_f_{}", sanitize_symbol(&entry_name));
+    let entry_fn = codegen
+        .module
+        .get_function(&entry_sym)
+        .ok_or_else(|| format!("entry function symbol not found: {}", entry_sym))?;
+    let call = codegen.builder.build_call(entry_fn, &[], "call_main").map_err(|e| e.to_string())?;
+    let rv = call.try_as_basic_value().left();
+    let ret_v = if let Some(v) = rv {
+        match v {
+            BasicValueEnum::IntValue(iv) => {
+                if iv.get_type().get_bit_width() == 64 { iv } else { codegen.builder.build_int_z_extend(iv, i64t, "ret_zext").map_err(|e| e.to_string())? }
+            }
+            BasicValueEnum::PointerValue(pv) => codegen.builder.build_ptr_to_int(pv, i64t, "ret_p2i").map_err(|e| e.to_string())?,
+            BasicValueEnum::FloatValue(fv) => codegen.builder.build_float_to_signed_int(fv, i64t, "ret_f2i").map_err(|e| e.to_string())?,
+            _ => i64t.const_zero(),
+        }
+    } else { i64t.const_zero() };
+    codegen.builder.build_return(Some(&ret_v)).map_err(|e| e.to_string())?;
+    if !ny_main.verify(true) { return Err("ny_main verification failed".to_string()); }
+    let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+    if verbose { eprintln!("[LLVM] emitting object to {} (begin)", output_path); }
+    match codegen.target_machine.write_to_file(&codegen.module, inkwell::targets::FileType::Object, std::path::Path::new(output_path)) {
+        Ok(_) => {
+            if std::fs::metadata(output_path).is_err() {
+                let buf = codegen.target_machine.write_to_memory_buffer(&codegen.module, inkwell::targets::FileType::Object).map_err(|e| format!("Failed to get object buffer: {}", e))?;
+                std::fs::write(output_path, buf.as_slice()).map_err(|e| format!("Failed to write object to '{}': {}", output_path, e))?;
+                if verbose { eprintln!("[LLVM] wrote object via memory buffer fallback: {} ({} bytes)", output_path, buf.get_size()); }
+            } else if verbose {
+                if let Ok(meta) = std::fs::metadata(output_path) { eprintln!("[LLVM] wrote object via file API: {} ({} bytes)", output_path, meta.len()); }
+            }
+            if verbose { eprintln!("[LLVM] emit complete (Ok branch) for {}", output_path); }
+            Ok(())
+        }
+        Err(e) => {
+            let buf = codegen.target_machine.write_to_memory_buffer(&codegen.module, inkwell::targets::FileType::Object).map_err(|ee| format!("Failed to write object ({}); and memory buffer failed: {}", e, ee))?;
+            std::fs::write(output_path, buf.as_slice()).map_err(|ee| format!("Failed to write object to '{}': {} (original error: {})", output_path, ee, e))?;
+            if verbose { eprintln!("[LLVM] wrote object via error fallback: {} ({} bytes)", output_path, buf.get_size()); eprintln!("[LLVM] emit complete (Err branch handled) for {}", output_path); }
+            Ok(())
+        }
+    }
+}
+
+impl LLVMCompiler {
+    pub fn new() -> Result<Self, String> {
+        Ok(Self { values: HashMap::new() })
+    }
+
+    pub fn compile_module(&self, mir_module: &MirModule, output_path: &str) -> Result<(), String> {
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!(
+                "[LLVM] compile_module start: functions={}, out={}",
+                mir_module.functions.len(),
+                output_path
+            );
+        }
+        let context = Context::create();
+        let codegen = CodegenContext::new(&context, "nyash_module")?;
+        let box_type_ids = crate::backend::llvm::box_types::load_box_type_ids();
+
+        // Find entry function
+        let (entry_name, _entry_func_ref) = if let Some((n, f)) = mir_module
+            .functions
+            .iter()
+            .find(|(_n, f)| f.metadata.is_entry_point)
+        {
+            (n.clone(), f)
+        } else if let Some(f) = mir_module.functions.get("Main.main") {
+            ("Main.main".to_string(), f)
+        } else if let Some(f) = mir_module.functions.get("main") {
+            ("main".to_string(), f)
+        } else if let Some((n, f)) = mir_module.functions.iter().next() {
+            (n.clone(), f)
+        } else {
+            return Err("Main.main function not found in module".to_string());
+        };
+
+        // Predeclare all MIR functions as LLVM functions
+        let mut llvm_funcs: HashMap<String, FunctionValue> = HashMap::new();
+        for (name, f) in &mir_module.functions {
+            let ret_bt = match f.signature.return_type {
+                crate::mir::MirType::Void => codegen.context.i64_type().into(),
+                ref t => map_type(codegen.context, t)?,
+            };
+            let mut params_bt: Vec<BasicTypeEnum> = Vec::new();
+            for pt in &f.signature.params { params_bt.push(map_type(codegen.context, pt)?); }
+            let param_vals: Vec<_> = params_bt.iter().map(|t| (*t).into()).collect();
+            let ll_fn_ty = match ret_bt {
+                BasicTypeEnum::IntType(t) => t.fn_type(&param_vals, false),
+                BasicTypeEnum::FloatType(t) => t.fn_type(&param_vals, false),
+                BasicTypeEnum::PointerType(t) => t.fn_type(&param_vals, false),
+                _ => return Err("Unsupported return basic type".to_string()),
+            };
+            let sym = format!("ny_f_{}", utils::sanitize_symbol(name));
+            let lf = codegen.module.add_function(&sym, ll_fn_ty, None);
+            llvm_funcs.insert(name.clone(), lf);
+        }
+
+        // Lower all functions
+        for (name, func) in &mir_module.functions {
+            let llvm_func = *llvm_funcs.get(name).ok_or("predecl not found")?;
+            function::lower_one_function(&codegen, llvm_func, func, name, &box_type_ids, &llvm_funcs)?;
+        }
+
+        // Build entry wrapper and emit object
+        emit_wrapper_and_object(&codegen, &entry_name, output_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
     #[test]
     fn test_compiler_creation() {
         let compiler = LLVMCompiler::new();

@@ -22,7 +22,7 @@ use std::sync::Arc;
 impl NyashInterpreter {
     /// Build closure environment by capturing 'me' and free variables by value (P1)
     fn build_closure_env(&mut self, params: &Vec<String>, body: &Vec<ASTNode>) -> Result<crate::boxes::function_box::ClosureEnv, RuntimeError> {
-        use std::collections::{HashSet, VecDeque};
+        use std::collections::HashSet;
         let mut env = crate::boxes::function_box::ClosureEnv::new();
         // Capture 'me' if bound
         if let Ok(mev) = self.resolve_variable("me") { env.me_value = Some(Arc::downgrade(&mev)); }
