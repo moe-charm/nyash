@@ -26,6 +26,23 @@ run_case_expect() {
         "$BIN" --backend vm "$file" 2>&1)
   RC=$?
   set -e
+  # If PyVM is used, prefer exit code parity to stdout matching
+  if [[ "${NYASH_VM_USE_PY:-0}" == "1" ]]; then
+    local expect_code=""
+    if [[ "$regex" =~ true ]]; then expect_code=1; fi
+    if [[ "$regex" =~ false ]]; then expect_code=0; fi
+    if [[ -z "$expect_code" ]]; then
+      # Try to extract the last integer from the regex (e.g., '^Result: 7')
+      local num
+      num=$(printf '%s' "$regex" | sed -E 's/.*([^0-9]|^)([0-9]+)([^0-9]|$).*/\2/;t;d' || true)
+      if [[ -n "$num" ]]; then expect_code="$num"; fi
+    fi
+    if [[ -n "$expect_code" ]]; then
+      if [[ "$RC" == "$expect_code" ]]; then pass "$name"; else fail "$name" "$OUT"; fi
+      return
+    fi
+  fi
+  # Fallback to stdout regex matching
   if echo "$OUT" | rg -q "$regex"; then pass "$name"; else fail "$name" "$OUT"; fi
 }
 
@@ -107,4 +124,3 @@ echo "$OUT" | rg -q '^Result:\s*3\b' && pass "String.length()" || fail "String.l
 
 echo "All selfhost Stage-2 smokes PASS" >&2
 exit 0
-

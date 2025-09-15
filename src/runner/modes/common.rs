@@ -8,41 +8,17 @@ use std::io::Read;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
+use crate::runner::pipeline::suggest_in_base;
 
-// limited directory walk: add matching files ending with .nyash and given leaf name
-fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
-    use std::fs;
-    fn walk(dir: &std::path::Path, leaf: &str, out: &mut Vec<String>, depth: usize) {
-        if depth == 0 || out.len() >= 5 { return; }
-        if let Ok(entries) = fs::read_dir(dir) {
-            for e in entries.flatten() {
-                let path = e.path();
-                if path.is_dir() {
-                    walk(&path, leaf, out, depth - 1);
-                    if out.len() >= 5 { return; }
-                } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    if ext == "nyash" {
-                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                            if stem == leaf {
-                                out.push(path.to_string_lossy().to_string());
-                                if out.len() >= 5 { return; }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    let p = std::path::Path::new(base);
-    walk(p, leaf, out, 4);
-}
+// (moved) suggest_in_base is now in runner/pipeline.rs
 
 impl NyashRunner {
     /// File-mode dispatcher (thin wrapper around backend/mode selection)
-    pub(crate) fn run_file(&self, filename: &str) {
+    #[allow(dead_code)]
+    pub(crate) fn run_file_legacy(&self, filename: &str) {
         // Phase-15.3: Ny compiler MVP (Ny -> JSON v0) behind env gate
         if std::env::var("NYASH_USE_NY_COMPILER").ok().as_deref() == Some("1") {
-            if self.try_run_ny_compiler_pipeline(filename) {
+            if self.try_run_selfhost_pipeline(filename) {
                 return;
             } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                 eprintln!("[ny-compiler] fallback to default path (MVP unavailable for this input)");
@@ -154,7 +130,7 @@ impl NyashRunner {
     }
 
     /// Phase-15.3: Attempt Ny compiler pipeline (Ny -> JSON v0 via Ny program), then execute MIR
-    fn try_run_ny_compiler_pipeline(&self, filename: &str) -> bool {
+    pub(crate) fn try_run_ny_compiler_pipeline(&self, filename: &str) -> bool {
         use std::io::Write;
         // Read input source
         let code = match fs::read_to_string(filename) {

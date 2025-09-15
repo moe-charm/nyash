@@ -31,6 +31,10 @@ mod modes;
 mod demos;
 mod json_v0_bridge;
 mod mir_json_emit;
+mod pipe_io;
+mod pipeline;
+mod dispatch;
+mod selfhost;
 
 // v2 plugin system imports
 use nyash_rust::runtime;
@@ -116,50 +120,10 @@ impl NyashRunner {
             }
             return;
         }
-        // Using/module overrides via env only (MVP)
-        // Prepare shared accumulators for script/env processing
-        let mut using_paths: Vec<String> = Vec::new();
-        let mut pending_modules: Vec<(String, String)> = Vec::new();
+        // Using/module overrides pre-processing
+        let mut using_ctx = self.init_using_context();
         let mut pending_using: Vec<(String, Option<String>)> = Vec::new();
-        // Using-paths from env, with defaults
-        if let Ok(p) = std::env::var("NYASH_USING_PATH") {
-            for s in p.split(':') { let s=s.trim(); if !s.is_empty() { using_paths.push(s.to_string()); } }
-        }
-        if using_paths.is_empty() { using_paths.extend(["apps","lib","."].into_iter().map(|s| s.to_string())); }
-        // nyash.toml: load [modules] and [using.paths]
-        if std::path::Path::new("nyash.toml").exists() {
-            if let Ok(text) = fs::read_to_string("nyash.toml") {
-                if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
-                    if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
-                        for (k, v) in mods.iter() {
-                            if let Some(path) = v.as_str() {
-                                pending_modules.push((k.to_string(), path.to_string()));
-                            }
-                        }
-                    }
-                    if let Some(using_tbl) = doc.get("using").and_then(|v| v.as_table()) {
-                        if let Some(paths_arr) = using_tbl.get("paths").and_then(|v| v.as_array()) {
-                            for p in paths_arr {
-                                if let Some(s) = p.as_str() {
-                                    let s = s.trim();
-                                    if !s.is_empty() { using_paths.push(s.to_string()); }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        // Modules mapping from env (e.g., FOO=path)
-        if let Ok(ms) = std::env::var("NYASH_MODULES") {
-            for ent in ms.split(',') {
-                if let Some((k,v)) = ent.split_once('=') {
-                    let k=k.trim(); let v=v.trim();
-                    if !k.is_empty() && !v.is_empty() { pending_modules.push((k.to_string(), v.to_string())); }
-                }
-            }
-        }
-        for (ns, path) in pending_modules.iter() {
+        for (ns, path) in using_ctx.pending_modules.iter() {
             let sb = crate::box_trait::StringBox::new(path.clone());
             crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
         }
@@ -182,81 +146,7 @@ impl NyashRunner {
         }
 
         // Phase-15: JSON IR v0 bridge (stdin/file)
-        if self.config.ny_parser_pipe || self.config.json_file.is_some() {
-            let json = if let Some(path) = &self.config.json_file {
-                match std::fs::read_to_string(path) {
-                    Ok(s) => s,
-                    Err(e) => { eprintln!("❌ json-file read error: {}", e); std::process::exit(1); }
-                }
-            } else {
-                use std::io::Read;
-                let mut buf = String::new();
-                if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
-                    eprintln!("❌ stdin read error: {}", e); std::process::exit(1);
-                }
-                buf
-            };
-            match json_v0_bridge::parse_json_v0_to_module(&json) {
-                Ok(module) => {
-                    // Optional dump via env verbose
-                    json_v0_bridge::maybe_dump_mir(&module);
-                    // Optional: delegate to PyVM when NYASH_PIPE_USE_PYVM=1
-                    if std::env::var("NYASH_PIPE_USE_PYVM").ok().as_deref() == Some("1") {
-                        let py = which::which("python3").ok();
-                        if let Some(py3) = py {
-                            let runner = std::path::Path::new("tools/pyvm_runner.py");
-                            if runner.exists() {
-                                // Emit MIR(JSON) for PyVM
-                                let tmp_dir = std::path::Path::new("tmp");
-                                let _ = std::fs::create_dir_all(tmp_dir);
-                                let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
-                                if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
-                                    eprintln!("❌ PyVM MIR JSON emit error: {}", e);
-                                    std::process::exit(1);
-                                }
-                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                    eprintln!("[Bridge] using PyVM (pipe) → {}", mir_json_path.display());
-                                }
-                                // Determine entry function hint (prefer Main.main if present)
-                                let entry = if module.functions.contains_key("Main.main") { "Main.main" }
-                                            else if module.functions.contains_key("main") { "main" } else { "Main.main" };
-                                let status = std::process::Command::new(py3)
-                                    .args([
-                                        runner.to_string_lossy().as_ref(),
-                                        "--in",
-                                        &mir_json_path.display().to_string(),
-                                        "--entry",
-                                        entry,
-                                    ])
-                                    .status()
-                                    .map_err(|e| format!("spawn pyvm: {}", e))
-                                    .unwrap();
-                                let code = status.code().unwrap_or(1);
-                                if !status.success() {
-                                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                        eprintln!("❌ PyVM (pipe) failed (status={})", code);
-                                    }
-                                }
-                                std::process::exit(code);
-                            } else {
-                                eprintln!("❌ PyVM runner not found: {}", runner.display());
-                                std::process::exit(1);
-                            }
-                        } else {
-                            eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM with --ny-parser-pipe.");
-                            std::process::exit(1);
-                        }
-                    }
-                    // Default: Execute via MIR interpreter
-                    self.execute_mir_module(&module);
-                    return;
-                }
-                Err(e) => {
-                    eprintln!("❌ JSON v0 bridge error: {}", e);
-                    std::process::exit(1);
-                }
-            }
-        }
+        if self.try_run_json_v0_pipe() { return; }
         // Run named task from nyash.toml (MVP)
         if let Some(task) = self.config.run_task.clone() {
             if let Err(e) = run_named_task(&task) {
@@ -307,20 +197,21 @@ impl NyashRunner {
                 }
 
                 // Env overrides for using rules
+                // Merge late env overrides (if any)
                 if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
-                    for p in paths.split(':') { let p = p.trim(); if !p.is_empty() { using_paths.push(p.to_string()); } }
+                    for p in paths.split(':') { let p = p.trim(); if !p.is_empty() { using_ctx.using_paths.push(p.to_string()); } }
                 }
                 if let Ok(mods) = std::env::var("NYASH_MODULES") {
                     for ent in mods.split(',') {
                         if let Some((k,v)) = ent.split_once('=') {
                             let k = k.trim(); let v = v.trim();
-                            if !k.is_empty() && !v.is_empty() { pending_modules.push((k.to_string(), v.to_string())); }
+                            if !k.is_empty() && !v.is_empty() { using_ctx.pending_modules.push((k.to_string(), v.to_string())); }
                         }
                     }
                 }
 
                 // Apply pending modules to registry as StringBox (path or ns token)
-                for (ns, path) in pending_modules.iter() {
+                for (ns, path) in using_ctx.pending_modules.iter() {
                     let sb = nyash_rust::box_trait::StringBox::new(path.clone());
                     nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
                 }
@@ -329,7 +220,7 @@ impl NyashRunner {
                 let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
                 let ctx = std::path::Path::new(filename).parent();
                 for (ns, alias) in pending_using.iter() {
-                    let value = match resolve_using_target(ns, false, &pending_modules, &using_paths, ctx, strict, verbose) {
+                    let value = match resolve_using_target(ns, false, &using_ctx.pending_modules, &using_ctx.using_paths, ctx, strict, verbose) {
                         Ok(v) => v,
                         Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
                     };
@@ -945,57 +836,7 @@ impl NyashRunner {
             if speedup > 1.0 { "faster" } else { "slower" });
     }
 
-    /// Execute a prepared MIR module via the interpreter (Phase-15 path)
-    fn execute_mir_module(&self, module: &crate::mir::MirModule) {
-        use crate::backend::MirInterpreter;
-        use crate::mir::MirType;
-        use crate::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
-        use crate::boxes::FloatBox;
-
-        let mut interp = MirInterpreter::new();
-        match interp.execute_module(module) {
-            Ok(result) => {
-                println!("✅ MIR interpreter execution completed!");
-                if let Some(func) = module.functions.get("main") {
-                    let (ety, sval) = match &func.signature.return_type {
-                        MirType::Float => {
-                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
-                                ("Float", format!("{}", fb.value))
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Float", format!("{}", ib.value as f64))
-                            } else { ("Float", result.to_string_box().value) }
-                        }
-                        MirType::Integer => {
-                            if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Integer", ib.value.to_string())
-                            } else { ("Integer", result.to_string_box().value) }
-                        }
-                        MirType::Bool => {
-                            if let Some(bb) = result.as_any().downcast_ref::<BoolBox>() {
-                                ("Bool", bb.value.to_string())
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Bool", (ib.value != 0).to_string())
-                            } else { ("Bool", result.to_string_box().value) }
-                        }
-                        MirType::String => {
-                            if let Some(sb) = result.as_any().downcast_ref::<StringBox>() {
-                                ("String", sb.value.clone())
-                            } else { ("String", result.to_string_box().value) }
-                        }
-                        _ => { (result.type_name(), result.to_string_box().value) }
-                    };
-                    println!("ResultType(MIR): {}", ety);
-                    println!("Result: {}", sval);
-                } else {
-                    println!("Result: {:?}", result);
-                }
-            }
-            Err(e) => {
-                eprintln!("❌ MIR interpreter error: {}", e);
-                std::process::exit(1);
-            }
-        }
-    }
+    // execute_mir_module moved to runner/dispatch.rs
 
     /// Minimal AOT build pipeline driven by nyash.toml (MVP, single-platform, best-effort)
     fn run_build_mvp(&self, cfg_path: &str) -> Result<(), String> {

@@ -1,0 +1,96 @@
+/*!
+ * Runner Pipe I/O helpers — JSON v0 handling
+ *
+ * Extracted from runner/mod.rs to keep the main runner slimmer.
+ * Handles:
+ *  - Reading JSON v0 from stdin or file
+ *  - Optional MIR dump
+ *  - Optional PyVM delegation via tools/pyvm_runner.py
+ *  - Fallback to MIR interpreter execution
+ */
+
+use super::*;
+
+impl NyashRunner {
+    /// Try to handle `--ny-parser-pipe` / `--json-file` flow.
+    /// Returns true if the request was handled (program should return early).
+    pub(super) fn try_run_json_v0_pipe(&self) -> bool {
+        if !(self.config.ny_parser_pipe || self.config.json_file.is_some()) {
+            return false;
+        }
+        let json = if let Some(path) = &self.config.json_file {
+            match std::fs::read_to_string(path) {
+                Ok(s) => s,
+                Err(e) => { eprintln!("❌ json-file read error: {}", e); std::process::exit(1); }
+            }
+        } else {
+            use std::io::Read;
+            let mut buf = String::new();
+            if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
+                eprintln!("❌ stdin read error: {}", e); std::process::exit(1);
+            }
+            buf
+        };
+        match super::json_v0_bridge::parse_json_v0_to_module(&json) {
+            Ok(module) => {
+                // Optional dump via env verbose
+                super::json_v0_bridge::maybe_dump_mir(&module);
+                // Optional: delegate to PyVM when NYASH_PIPE_USE_PYVM=1
+                if std::env::var("NYASH_PIPE_USE_PYVM").ok().as_deref() == Some("1") {
+                    let py = which::which("python3").ok();
+                    if let Some(py3) = py {
+                        let runner = std::path::Path::new("tools/pyvm_runner.py");
+                        if runner.exists() {
+                            // Emit MIR(JSON) for PyVM
+                            let tmp_dir = std::path::Path::new("tmp");
+                            let _ = std::fs::create_dir_all(tmp_dir);
+                            let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                            if let Err(e) = super::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                                eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                                std::process::exit(1);
+                            }
+                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                eprintln!("[Bridge] using PyVM (pipe) → {}", mir_json_path.display());
+                            }
+                            // Determine entry function hint (prefer Main.main if present)
+                            let entry = if module.functions.contains_key("Main.main") { "Main.main" }
+                                        else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                            let status = std::process::Command::new(py3)
+                                .args([
+                                    runner.to_string_lossy().as_ref(),
+                                    "--in",
+                                    &mir_json_path.display().to_string(),
+                                    "--entry",
+                                    entry,
+                                ])
+                                .status()
+                                .map_err(|e| format!("spawn pyvm: {}", e))
+                                .unwrap();
+                            let code = status.code().unwrap_or(1);
+                            if !status.success() {
+                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                    eprintln!("❌ PyVM (pipe) failed (status={})", code);
+                                }
+                            }
+                            std::process::exit(code);
+                        } else {
+                            eprintln!("❌ PyVM runner not found: {}", runner.display());
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM with --ny-parser-pipe.");
+                        std::process::exit(1);
+                    }
+                }
+                // Default: Execute via MIR interpreter
+                self.execute_mir_module(&module);
+                true
+            }
+            Err(e) => {
+                eprintln!("❌ JSON v0 bridge error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+

@@ -9,11 +9,8 @@
               "dst": 0,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "abcd"
+                "type": "i64",
+                "value": 1
               }
             },
             {
@@ -21,42 +18,19 @@
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 1
+                "value": 2
               }
             },
             {
               "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 3
-              }
-            },
-            {
-              "args": [
-                1,
-                2
-              ],
-              "box": 0,
-              "dst": 3,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "method": "substring",
-              "op": "boxcall"
-            },
-            {
-              "args": [],
-              "box": 3,
-              "dst": 4,
-              "dst_type": "i64",
-              "method": "length",
-              "op": "boxcall"
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
             },
             {
               "op": "ret",
-              "value": 4
+              "value": 2
             }
           ]
         }
