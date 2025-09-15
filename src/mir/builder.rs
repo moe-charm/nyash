@@ -80,6 +80,11 @@ pub struct MirBuilder {
     include_loading: HashSet<String>,
     /// Include visited cache: canonical path -> box name
     include_box_map: HashMap<String, String>,
+
+    /// Loop context stacks for lowering break/continue inside nested control flow
+    /// Top of stack corresponds to the innermost active loop
+    pub(super) loop_header_stack: Vec<BasicBlockId>,
+    pub(super) loop_exit_stack: Vec<BasicBlockId>,
 }
 
 impl MirBuilder {
@@ -159,6 +164,8 @@ impl MirBuilder {
             current_static_box: None,
             include_loading: HashSet::new(),
             include_box_map: HashMap::new(),
+            loop_header_stack: Vec::new(),
+            loop_exit_stack: Vec::new(),
         }
     }
 

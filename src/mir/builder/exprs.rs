@@ -77,6 +77,8 @@ impl super::MirBuilder {
 
             ASTNode::Return { value, .. } => self.build_return_statement(value.clone()),
 
+            // Control flow: break/continue are handled inside LoopBuilder context
+
             ASTNode::Local { variables, initial_values, .. } =>
                 self.build_local_statement(variables.clone(), initial_values.clone()),
 

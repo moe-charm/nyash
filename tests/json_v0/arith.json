@@ -1,0 +1,8 @@
+{"version":0,"kind":"Program","body":[
+  {"type":"Return","expr":{
+    "type":"Binary","op":"+",
+    "lhs":{"type":"Int","value":1},
+    "rhs":{"type":"Binary","op":"*","lhs":{"type":"Int","value":2},"rhs":{"type":"Int","value":3}}
+  }}
+]}
+

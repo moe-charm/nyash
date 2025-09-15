@@ -1,0 +1,4 @@
+{"version":0,"kind":"Program","body":[
+  {"type":"Return","expr":{"type":"Method","recv":{"type":"Str","value":"abc"},"method":"length","args":[]}}
+]}
+

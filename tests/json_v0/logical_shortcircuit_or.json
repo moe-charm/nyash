@@ -1,0 +1,10 @@
+{"version":0,"kind":"Program","body":[
+  {"type":"Local","name":"a","expr":{"type":"New","class":"ArrayBox","args":[]}},
+  {"type":"Local","name":"t","expr":{"type":"Bool","value":true}},
+  {"type":"Expr","expr":{"type":"Logical","op":"||",
+    "lhs":{"type":"Var","name":"t"},
+    "rhs":{"type":"Method","recv":{"type":"Var","name":"a"},"method":"push","args":[{"type":"Int","value":1}]}
+  }},
+  {"type":"Return","expr":{"type":"Method","recv":{"type":"Var","name":"a"},"method":"size","args":[]}}
+]}
+

@@ -311,6 +311,25 @@ box ParserBox {
       me.gpos_set(j)
       return ""
     }
+    // simple assignment: IDENT '=' expr ;  → JSON v0 Local{name, expr} (Stage‑2 uses Local for updates)
+    if me.is_alpha(src.substring(j, j+1)) {
+      local idp0 = me.read_ident2(src, j)
+      local at0 = idp0.lastIndexOf("@")
+      if at0 > 0 {
+        local name0 = idp0.substring(0, at0)
+        local k0 = me.to_int(idp0.substring(at0+1, idp0.length()))
+        k0 = me.skip_ws(src, k0)
+        if src.substring(k0, k0+1) == "=" {
+          k0 = k0 + 1
+          k0 = me.skip_ws(src, k0)
+          local e0 = me.parse_expr2(src, k0)
+          k0 = me.gpos_get()
+          if k0 <= stmt_start { if k0 < src.length() { k0 = k0 + 1 } else { k0 = src.length() } }
+          me.gpos_set(k0)
+          return "{\"type\":\"Local\",\"name\":\"" + name0 + "\",\"expr\":" + e0 + "}"
+        }
+      }
+    }
     if me.starts_with_kw(src, j, "return") == 1 {
       j = j + 6
       j = me.skip_ws(src, j)
@@ -454,3 +473,70 @@ box ParserBox {
 }
 
 static box ParserStub { main(args) { return 0 } }
+    // Stage-3 acceptance (syntax only): break / continue → no-op expression
+    if me.starts_with_kw(src, j, "break") == 1 {
+      j = j + 5
+      if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+      me.gpos_set(j)
+      return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
+    }
+    if me.starts_with_kw(src, j, "continue") == 1 {
+      j = j + 8
+      if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+      me.gpos_set(j)
+      return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
+    }
+    // Stage-3 acceptance: throw expr → degrade to Expr(expr)
+    if me.starts_with_kw(src, j, "throw") == 1 {
+      j = j + 5
+      j = me.skip_ws(src, j)
+      local e_throw = me.parse_expr2(src, j)
+      j = me.gpos_get()
+      if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+      me.gpos_set(j)
+      return "{\"type\":\"Expr\",\"expr\":" + e_throw + "}"
+    }
+    // Stage-3 acceptance: try { ... } (catch ...)* (finally { ... })? → degrade to no-op (syntax only)
+    if me.starts_with_kw(src, j, "try") == 1 {
+      j = j + 3
+      j = me.skip_ws(src, j)
+      // parse try block
+      local try_res = me.parse_block2(src, j)
+      local at_t = try_res.lastIndexOf("@")
+      j = me.to_int(try_res.substring(at_t+1, try_res.length()))
+      // zero or more catch
+      local guard_ct = 0
+      local max_ct = 100
+      local cont_ct = 1
+      loop(cont_ct == 1) {
+        if guard_ct > max_ct { cont_ct = 0 } else { guard_ct = guard_ct + 1 }
+        j = me.skip_ws(src, j)
+        if me.starts_with_kw(src, j, "catch") == 1 {
+          j = j + 5
+          j = me.skip_ws(src, j)
+          if src.substring(j, j+1) == "(" { j = j + 1 j = me.skip_ws(src, j)
+            // optional type + name
+            if me.is_alpha(src.substring(j, j+1)) { local id1 = me.read_ident2(src, j) local at1 = id1.lastIndexOf("@") j = me.to_int(id1.substring(at1+1, id1.length())) j = me.skip_ws(src, j) }
+            if me.is_alpha(src.substring(j, j+1)) { local id2 = me.read_ident2(src, j) local at2 = id2.lastIndexOf("@") j = me.to_int(id2.substring(at2+1, id2.length())) j = me.skip_ws(src, j) }
+            if src.substring(j, j+1) == ")" { j = j + 1 }
+          }
+          j = me.skip_ws(src, j)
+          // catch body
+          local c_res = me.parse_block2(src, j)
+          local atc = c_res.lastIndexOf("@")
+          j = me.to_int(c_res.substring(atc+1, c_res.length()))
+        } else { cont_ct = 0 }
+      }
+      // optional finally
+      j = me.skip_ws(src, j)
+      if me.starts_with_kw(src, j, "finally") == 1 {
+        j = j + 7
+        j = me.skip_ws(src, j)
+        local f_res = me.parse_block2(src, j)
+        local atf = f_res.lastIndexOf("@")
+        j = me.to_int(f_res.substring(atf+1, f_res.length()))
+      }
+      if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+      me.gpos_set(j)
+      return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
+    }

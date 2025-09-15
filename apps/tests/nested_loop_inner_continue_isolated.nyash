@@ -1,0 +1,18 @@
+static box Main {
+  main(args) {
+    local i = 0
+    local s = 0
+    loop(i < 2) {
+      local j = 0
+      loop(j < 3) {
+        j = j + 1
+        if (j == 1) { continue }
+        s = s + 1
+      }
+      i = i + 1
+    }
+    // outer=2 回、各回で j=2,3 のみ加算 → 2×2=4
+    return s
+  }
+}
+

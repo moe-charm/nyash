@@ -1,0 +1,12 @@
+{"version":0,"kind":"Program","body":[
+  {"type":"Local","name":"i","expr":{"type":"Int","value":0}},
+  {"type":"Local","name":"s","expr":{"type":"Int","value":0}},
+  {"type":"Loop","cond":{"type":"Compare","op":"<","lhs":{"type":"Var","name":"i"},"rhs":{"type":"Int","value":3}},
+    "body":[
+      {"type":"Local","name":"s","expr":{"type":"Binary","op":"+","lhs":{"type":"Var","name":"s"},"rhs":{"type":"Int","value":1}}},
+      {"type":"Local","name":"i","expr":{"type":"Binary","op":"+","lhs":{"type":"Var","name":"i"},"rhs":{"type":"Int","value":1}}}
+    ]
+  },
+  {"type":"Return","expr":{"type":"Var","name":"s"}}
+]}
+

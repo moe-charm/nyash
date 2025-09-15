@@ -166,8 +166,24 @@ impl NyashTokenizer {
         let mut tokens = Vec::new();
         
         while !self.is_at_end() {
-            // 空白をスキップ
+            // 空白・コメントをスキップ
             self.skip_whitespace();
+            // 連続するブロックコメントや行コメントもまとめてスキップ
+            loop {
+                // block comment: /* ... */
+                if self.current_char() == Some('/') && self.peek_char() == Some('*') {
+                    self.skip_block_comment()?;
+                    self.skip_whitespace();
+                    continue;
+                }
+                // line comments: // ... or # ...
+                if (self.current_char() == Some('/') && self.peek_char() == Some('/')) || self.current_char() == Some('#') {
+                    self.skip_line_comment();
+                    self.skip_whitespace();
+                    continue;
+                }
+                break;
+            }
             
             if self.is_at_end() {
                 break;
@@ -190,6 +206,12 @@ impl NyashTokenizer {
         let start_column = self.column;
         
         match self.current_char() {
+            // Block comment should have been skipped by tokenize() pre-loop, but be defensive here
+            Some('/') if self.peek_char() == Some('*') => {
+                self.skip_block_comment()?;
+                // After skipping, restart tokenization for next token
+                return self.tokenize_next();
+            }
             // 2文字（またはそれ以上）の演算子は最長一致で先に判定
             Some('|') if self.peek_char() == Some('>') => {
                 self.advance();
@@ -586,6 +608,24 @@ impl NyashTokenizer {
             }
             self.advance();
         }
+    }
+    
+    /// ブロックコメントをスキップ: /* ... */（ネスト非対応）
+    fn skip_block_comment(&mut self) -> Result<(), TokenizeError> {
+        // Assume current position is at '/' and next is '*'
+        self.advance(); // '/'
+        self.advance(); // '*'
+        while let Some(c) = self.current_char() {
+            // detect end '*/'
+            if c == '*' && self.peek_char() == Some('/') {
+                self.advance(); // '*'
+                self.advance(); // '/'
+                return Ok(());
+            }
+            self.advance();
+        }
+        // EOF reached without closing */
+        Err(TokenizeError::UnterminatedComment { line: self.line })
     }
     
     /// 空白文字をスキップ（改行は除く：改行はNEWLINEトークンとして扱う）

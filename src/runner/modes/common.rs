@@ -298,6 +298,57 @@ impl NyashRunner {
                         if emit_only {
                             return false;
                         } else {
+                            // Prefer PyVM when requested AND the module contains BoxCalls (Stage-2 semantics)
+                            let needs_pyvm = module.functions.values().any(|f| {
+                                f.blocks.values().any(|bb| bb.instructions.iter().any(|inst| matches!(inst, crate::mir::MirInstruction::BoxCall { .. })))
+                            });
+                            if needs_pyvm && std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                                if let Ok(py3) = which::which("python3") {
+                                    let runner = std::path::Path::new("tools/pyvm_runner.py");
+                                    if runner.exists() {
+                                        let tmp_dir = std::path::Path::new("tmp");
+                                        let _ = std::fs::create_dir_all(tmp_dir);
+                                        let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                                        if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                                            eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                                            return true; // prevent double-run fallback
+                                        }
+                                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                            eprintln!("[ny-compiler] using PyVM (exe) → {}", mir_json_path.display());
+                                        }
+                                        // Determine entry function hint (prefer Main.main if present)
+                                        let entry = if module.functions.contains_key("Main.main") { "Main.main" }
+                                                    else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                                        let status = std::process::Command::new(py3)
+                                            .args([
+                                                runner.to_string_lossy().as_ref(),
+                                                "--in",
+                                                &mir_json_path.display().to_string(),
+                                                "--entry",
+                                                entry,
+                                            ])
+                                            .status()
+                                            .map_err(|e| format!("spawn pyvm: {}", e))
+                                            .unwrap();
+                                        let code = status.code().unwrap_or(1);
+                                        if !status.success() {
+                                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                                eprintln!("❌ PyVM (exe) failed (status={})", code);
+                                            }
+                                        }
+                                        // Harmonize CLI output with interpreter path for smokes
+                                        println!("Result: {}", code);
+                                        std::process::exit(code);
+                                    } else {
+                                        eprintln!("❌ PyVM runner not found: {}", runner.display());
+                                        std::process::exit(1);
+                                    }
+                                } else {
+                                    eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM.");
+                                    std::process::exit(1);
+                                }
+                            }
+                            // Default: execute via built-in MIR interpreter
                             self.execute_mir_module(&module);
                             return true;
                         }
@@ -449,6 +500,57 @@ impl NyashRunner {
                     // Do not execute; fall back to default path to keep final Result unaffected (Stage‑1 policy)
                     false
                 } else {
+                    // Prefer PyVM when requested AND the module contains BoxCalls
+                    let needs_pyvm = module.functions.values().any(|f| {
+                        f.blocks.values().any(|bb| bb.instructions.iter().any(|inst| matches!(inst, crate::mir::MirInstruction::BoxCall { .. })))
+                    });
+                    if needs_pyvm && std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                        if let Ok(py3) = which::which("python3") {
+                            let runner = std::path::Path::new("tools/pyvm_runner.py");
+                            if runner.exists() {
+                                let tmp_dir = std::path::Path::new("tmp");
+                                let _ = std::fs::create_dir_all(tmp_dir);
+                                let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                                if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                                    eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                                    return true; // prevent double-run fallback
+                                }
+                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                    eprintln!("[ny-compiler] using PyVM (mvp) → {}", mir_json_path.display());
+                                }
+                                // Determine entry function hint (prefer Main.main if present)
+                                let entry = if module.functions.contains_key("Main.main") { "Main.main" }
+                                            else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                                let status = std::process::Command::new(py3)
+                                    .args([
+                                        runner.to_string_lossy().as_ref(),
+                                        "--in",
+                                        &mir_json_path.display().to_string(),
+                                        "--entry",
+                                        entry,
+                                    ])
+                                    .status()
+                                    .map_err(|e| format!("spawn pyvm: {}", e))
+                                    .unwrap();
+                                let code = status.code().unwrap_or(1);
+                                if !status.success() {
+                                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                        eprintln!("❌ PyVM (mvp) failed (status={})", code);
+                                    }
+                                }
+                                // Harmonize CLI output with interpreter path for smokes
+                                println!("Result: {}", code);
+                                std::process::exit(code);
+                            } else {
+                                eprintln!("❌ PyVM runner not found: {}", runner.display());
+                                std::process::exit(1);
+                            }
+                        } else {
+                            eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM.");
+                            std::process::exit(1);
+                        }
+                    }
+                    // Default: execute via MIR interpreter
                     self.execute_mir_module(&module);
                     true
                 }

@@ -1,0 +1,11 @@
+static box Main {
+  main(args) {
+    // try 内の return より finally の return を優先（現行仕様）
+    try {
+      return 1
+    } finally {
+      return 2
+    }
+  }
+}
+

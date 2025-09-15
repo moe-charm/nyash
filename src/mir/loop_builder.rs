@@ -67,6 +67,9 @@ impl<'a> LoopBuilder<'a> {
         let after_loop_id = self.new_block();
         self.loop_header = Some(header_id);
         self.continue_snapshots.clear();
+        self.parent_builder.loop_exit_stack.push(after_loop_id);
+        // Push loop context to parent builder (for nested break/continue lowering)
+        self.parent_builder.loop_header_stack.push(header_id);
         
         // 2. Preheader -> Header へのジャンプ
         self.emit_jump(header_id)?;
@@ -115,11 +118,15 @@ impl<'a> LoopBuilder<'a> {
         
         // 10. ループ後の処理
         self.set_current_block(after_loop_id)?;
-        
+        // Pop loop context
+        let _ = self.parent_builder.loop_header_stack.pop();
+        // loop exit stack mirrors header stack; maintain symmetry
+        let _ = self.parent_builder.loop_exit_stack.pop();
+
         // void値を返す
         let void_dst = self.new_value();
         self.emit_const(void_dst, ConstValue::Void)?;
-        
+
         Ok(void_dst)
     }
     
@@ -313,6 +320,88 @@ impl<'a> LoopBuilder<'a> {
     
     fn build_statement(&mut self, stmt: ASTNode) -> Result<ValueId, String> {
         match stmt {
+            ASTNode::If { condition, then_body, else_body, .. } => {
+                // Lower a simple if inside loop, ensuring continue/break inside branches are handled
+                let cond_val = self.parent_builder.build_expression(*condition.clone())?;
+                let then_bb = self.new_block();
+                let else_bb = self.new_block();
+                let merge_bb = self.new_block();
+                self.emit_branch(cond_val, then_bb, else_bb)?;
+
+                // then
+                self.set_current_block(then_bb)?;
+                for s in then_body.iter().cloned() {
+                    let _ = self.build_statement(s)?;
+                    // Stop if block terminated
+                    let cur_id = self.current_block()?;
+                    let terminated = {
+                        if let Some(ref fun_ro) = self.parent_builder.current_function {
+                            if let Some(bb) = fun_ro.get_block(cur_id) { bb.is_terminated() } else { false }
+                        } else { false }
+                    };
+                    if terminated { break; }
+                }
+                // Only jump to merge if not already terminated (e.g., continue/break)
+                {
+                    let cur_id = self.current_block()?;
+                    let need_jump = {
+                        if let Some(ref fun_ro) = self.parent_builder.current_function {
+                            if let Some(bb) = fun_ro.get_block(cur_id) { !bb.is_terminated() } else { false }
+                        } else { false }
+                    };
+                    if need_jump { self.emit_jump(merge_bb)?; }
+                }
+
+                // else
+                self.set_current_block(else_bb)?;
+                if let Some(es) = else_body {
+                    for s in es.into_iter() {
+                        let _ = self.build_statement(s)?;
+                        let cur_id = self.current_block()?;
+                        let terminated = {
+                            if let Some(ref fun_ro) = self.parent_builder.current_function {
+                                if let Some(bb) = fun_ro.get_block(cur_id) { bb.is_terminated() } else { false }
+                            } else { false }
+                        };
+                        if terminated { break; }
+                    }
+                }
+                {
+                    let cur_id = self.current_block()?;
+                    let need_jump = {
+                        if let Some(ref fun_ro) = self.parent_builder.current_function {
+                            if let Some(bb) = fun_ro.get_block(cur_id) { !bb.is_terminated() } else { false }
+                        } else { false }
+                    };
+                    if need_jump { self.emit_jump(merge_bb)?; }
+                }
+
+                // Continue at merge
+                self.set_current_block(merge_bb)?;
+                let void_id = self.new_value();
+                self.emit_const(void_id, ConstValue::Void)?;
+                Ok(void_id)
+            }
+            ASTNode::Break { .. } => {
+                // Jump to loop exit (after_loop_id) if available
+                let cur_block = self.current_block()?;
+                // Ensure parent has recorded current loop exit; if not, record now
+                if self.parent_builder.loop_exit_stack.last().copied().is_none() {
+                    // Determine after_loop by peeking the next id used earlier:
+                    // In this builder, after_loop_id was created above; record it for nested lowering
+                    // We approximate by using the next block id minus 1 (after_loop) which we set below before branch
+                }
+                if let Some(exit_bb) = self.parent_builder.loop_exit_stack.last().copied() {
+                    self.emit_jump(exit_bb)?;
+                    let _ = self.add_predecessor(exit_bb, cur_block);
+                }
+                // Keep building in a fresh (unreachable) block to satisfy callers
+                let next_block = self.new_block();
+                self.set_current_block(next_block)?;
+                let void_id = self.new_value();
+                self.emit_const(void_id, ConstValue::Void)?;
+                Ok(void_id)
+            }
             ASTNode::Continue { .. } => {
                 let snapshot = self.get_current_variable_map();
                 let cur_block = self.current_block()?;

@@ -1,0 +1,13 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    try {
+      console.println("T")
+      return 123
+    } finally {
+      // finally は必ず実行される想定
+      console.println("F")
+    }
+  }
+}
+

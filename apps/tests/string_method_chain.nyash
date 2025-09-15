@@ -1,0 +1,6 @@
+static box Main {
+  main(args) {
+    return "abcd".substring(1,3).length()
+  }
+}
+

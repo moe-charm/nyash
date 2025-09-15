@@ -1,0 +1,9 @@
+static box Main {
+  main(args) {
+    local x = 0
+    ((x = x + 1) >= 0) || ((x = x + 1) < 0)
+    // LHS が true → RHS は評価されず x は 1 のまま
+    return x
+  }
+}
+

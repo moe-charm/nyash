@@ -1,0 +1,6 @@
+local i = 0
+loop(i < 10) {
+  if i == 3 { break }
+  i = i + 1
+}
+return i
