@@ -42,6 +42,29 @@ pub struct LoopBuilder<'a> {
     continue_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
 }
 
+// Local copy: detect a variable name assigned within an AST fragment
+fn extract_assigned_var_local(ast: &ASTNode) -> Option<String> {
+    match ast {
+        ASTNode::Assignment { target, .. } => {
+            if let ASTNode::Variable { name, .. } = target.as_ref() { Some(name.clone()) } else { None }
+        }
+        ASTNode::Program { statements, .. } => statements.last().and_then(|st| extract_assigned_var_local(st)),
+        ASTNode::If { then_body, else_body, .. } => {
+            let then_prog = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
+            let tvar = extract_assigned_var_local(&then_prog);
+            let evar = else_body.as_ref().and_then(|eb| {
+                let ep = ASTNode::Program { statements: eb.clone(), span: crate::ast::Span::unknown() };
+                extract_assigned_var_local(&ep)
+            });
+            match (tvar, evar) {
+                (Some(tv), Some(ev)) if tv == ev => Some(tv),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 impl<'a> LoopBuilder<'a> {
     /// 新しいループビルダーを作成
     pub fn new(parent: &'a mut super::builder::MirBuilder) -> Self {
@@ -325,6 +348,10 @@ impl<'a> LoopBuilder<'a> {
                 let merge_bb = self.new_block();
                 self.emit_branch(cond_val, then_bb, else_bb)?;
 
+                // Capture pre-if variable map (used for phi normalization)
+                let pre_if_var_map = self.get_current_variable_map();
+                let pre_then_var_value = pre_if_var_map.clone();
+
                 // then
                 self.set_current_block(then_bb)?;
                 for s in then_body.iter().cloned() {
@@ -338,6 +365,7 @@ impl<'a> LoopBuilder<'a> {
                     };
                     if terminated { break; }
                 }
+                let then_var_map_end = self.get_current_variable_map();
                 // Only jump to merge if not already terminated (e.g., continue/break)
                 {
                     let cur_id = self.current_block()?;
@@ -351,7 +379,8 @@ impl<'a> LoopBuilder<'a> {
 
                 // else
                 self.set_current_block(else_bb)?;
-                if let Some(es) = else_body {
+                let mut else_var_map_end_opt: Option<std::collections::HashMap<String, super::ValueId>> = None;
+                if let Some(es) = else_body.clone() {
                     for s in es.into_iter() {
                         let _ = self.build_statement(s)?;
                         let cur_id = self.current_block()?;
@@ -362,6 +391,7 @@ impl<'a> LoopBuilder<'a> {
                         };
                         if terminated { break; }
                     }
+                    else_var_map_end_opt = Some(self.get_current_variable_map());
                 }
                 {
                     let cur_id = self.current_block()?;
@@ -375,6 +405,29 @@ impl<'a> LoopBuilder<'a> {
 
                 // Continue at merge
                 self.set_current_block(merge_bb)?;
+                // If both branches assign the same variable, emit phi and bind it
+                let then_prog = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
+                let assigned_then = extract_assigned_var_local(&then_prog);
+                let assigned_else = else_body.as_ref().and_then(|es| {
+                    let ep = ASTNode::Program { statements: es.clone(), span: crate::ast::Span::unknown() };
+                    extract_assigned_var_local(&ep)
+                });
+                if let Some(var_name) = assigned_then {
+                    let else_assigns_same = assigned_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
+                    let then_value_for_var = then_var_map_end.get(&var_name).copied();
+                    let else_value_for_var = if else_assigns_same {
+                        else_var_map_end_opt.as_ref().and_then(|m| m.get(&var_name).copied())
+                    } else {
+                        pre_then_var_value.get(&var_name).copied()
+                    };
+                    if let (Some(tv), Some(ev)) = (then_value_for_var, else_value_for_var) {
+                        let phi_id = self.new_value();
+                        self.emit_phi_at_block_start(merge_bb, phi_id, vec![(then_bb, tv), (else_bb, ev)])?;
+                        // Reset to pre-if map and bind the phi result
+                        self.parent_builder.variable_map = pre_if_var_map.clone();
+                        self.parent_builder.variable_map.insert(var_name, phi_id);
+                    }
+                }
                 let void_id = self.new_value();
                 self.emit_const(void_id, ConstValue::Void)?;
                 Ok(void_id)

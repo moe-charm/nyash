@@ -631,9 +631,71 @@ impl NyashParser {
         Ok(expr)
     }
     
-    /// 基本式をパース: リテラル、変数、括弧、this、new
+    /// 基本式をパース: リテラル、変数、括弧、this、new、配列リテラル（糖衣）
     fn parse_primary(&mut self) -> Result<ASTNode, ParseError> {
         match &self.current_token().token_type {
+            TokenType::LBRACK => {
+                // Array literal: [e1, e2, ...] (sugar)
+                let sugar_on = crate::parser::sugar_gate::is_enabled()
+                    || std::env::var("NYASH_ENABLE_ARRAY_LITERAL").ok().as_deref() == Some("1");
+                if !sugar_on {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full or NYASH_ENABLE_ARRAY_LITERAL=1".to_string(),
+                        line,
+                    });
+                }
+                self.advance(); // consume '['
+                let mut elems: Vec<ASTNode> = Vec::new();
+                while !self.match_token(&TokenType::RBRACK) && !self.is_at_end() {
+                    must_advance!(self, _unused, "array literal element parsing");
+                    let el = self.parse_expression()?;
+                    elems.push(el);
+                    if self.match_token(&TokenType::COMMA) { self.advance(); }
+                }
+                self.consume(TokenType::RBRACK)?;
+                Ok(ASTNode::ArrayLiteral { elements: elems, span: Span::unknown() })
+            }
+            TokenType::LBRACE => {
+                // Map literal (Stage‑2, string keys only)
+                let sugar_on = crate::parser::sugar_gate::is_enabled()
+                    || std::env::var("NYASH_ENABLE_MAP_LITERAL").ok().as_deref() == Some("1");
+                if !sugar_on {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full or NYASH_ENABLE_MAP_LITERAL=1".to_string(),
+                        line,
+                    });
+                }
+                self.advance(); // consume '{'
+                let mut entries: Vec<(String, ASTNode)> = Vec::new();
+                let sugar_level = std::env::var("NYASH_SYNTAX_SUGAR_LEVEL").ok();
+                let ident_key_on = std::env::var("NYASH_ENABLE_MAP_IDENT_KEY").ok().as_deref() == Some("1")
+                    || sugar_level.as_deref() == Some("full");
+                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                    // Key: string literal (Stage‑2) or identifier key sugar (Stage‑3; gated)
+                    let key = match &self.current_token().token_type {
+                        TokenType::STRING(s) => { let v = s.clone(); self.advance(); v }
+                        TokenType::IDENTIFIER(id) if ident_key_on => { let v = id.clone(); self.advance(); v }
+                        _ => {
+                            let line = self.current_token().line;
+                            return Err(ParseError::UnexpectedToken {
+                                found: self.current_token().token_type.clone(),
+                                expected: if ident_key_on { "string or identifier key in map literal".to_string() } else { "string key in map literal".to_string() },
+                                line,
+                            });
+                        }
+                    };
+                    self.consume(TokenType::COLON)?;
+                    let value_expr = self.parse_expression()?;
+                    entries.push((key, value_expr));
+                    if self.match_token(&TokenType::COMMA) { self.advance(); }
+                }
+                self.consume(TokenType::RBRACE)?;
+                Ok(ASTNode::MapLiteral { entries, span: Span::unknown() })
+            }
             TokenType::INCLUDE => {
                 // Allow include as an expression: include "path"
                 self.parse_include()

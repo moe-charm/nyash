@@ -1,0 +1,11 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local x = 1
+    // array literal sugar
+    local arr = [x, 2, 3]
+    console.println(arr.size())
+    return 0
+  }
+}
+

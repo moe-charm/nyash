@@ -1,5 +1,5 @@
-use crate::mir::{MirFunction, MirInstruction, ConstValue, BinaryOp, CompareOp, ValueId};
-use super::builder::{IRBuilder, BinOpKind, CmpKind};
+use crate::mir::{MirFunction, MirInstruction, ConstValue, ValueId};
+use super::builder::{IRBuilder, BinOpKind};
 
 mod analysis;
 mod cfg;

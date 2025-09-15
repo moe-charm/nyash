@@ -1,4 +1,3 @@
-use crate::box_trait::NyashBox;
 use crate::mir::ValueId;
 use crate::backend::vm::ControlFlow;
 use crate::backend::{VM, VMError, VMValue};
@@ -7,7 +6,7 @@ impl VM {
     /// Small helpers to reduce duplication in vtable stub paths.
     #[inline]
     fn vmvalue_to_box(val: &VMValue) -> Box<dyn crate::box_trait::NyashBox> {
-        use crate::box_trait::{NyashBox, StringBox as SBox, IntegerBox as IBox, BoolBox as BBox};
+        use crate::box_trait::{StringBox as SBox, IntegerBox as IBox, BoolBox as BBox};
         match val {
             VMValue::Integer(i) => Box::new(IBox::new(*i)),
             VMValue::String(s) => Box::new(SBox::new(s)),
@@ -900,3 +899,4 @@ impl VM {
         Ok(None)
     }
 }
+use crate::box_trait::NyashBox;

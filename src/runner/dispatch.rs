@@ -86,6 +86,12 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
                 }
                 runner.execute_mir_mode(filename);
             }
+            "vm" => {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
+                }
+                runner.execute_vm_mode(filename);
+            }
             #[cfg(feature = "cranelift-jit")]
             "jit-direct" => {
                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {

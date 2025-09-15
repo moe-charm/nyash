@@ -94,6 +94,8 @@ pub enum TokenType {
     DoubleColon,     // :: (Parent::method) - P1用（定義のみ）
     LPAREN,          // (
     RPAREN,          // )
+    LBRACK,          // [
+    RBRACK,          // ]
     LBRACE,          // {
     RBRACE,          // }
     COMMA,           // ,
@@ -395,6 +397,14 @@ impl NyashTokenizer {
                 self.advance();
                 Ok(Token::new(TokenType::RPAREN, start_line, start_column))
             }
+            Some('[') => {
+                self.advance();
+                Ok(Token::new(TokenType::LBRACK, start_line, start_column))
+            }
+            Some(']') => {
+                self.advance();
+                Ok(Token::new(TokenType::RBRACK, start_line, start_column))
+            }
             Some('{') => {
                 self.advance();
                 Ok(Token::new(TokenType::LBRACE, start_line, start_column))
@@ -407,14 +417,7 @@ impl NyashTokenizer {
                 self.advance();
                 Ok(Token::new(TokenType::COMMA, start_line, start_column))
             }
-            Some('?') => {
-                self.advance();
-                Ok(Token::new(TokenType::QUESTION, start_line, start_column))
-            }
-            Some(':') => {
-                self.advance();
-                Ok(Token::new(TokenType::COLON, start_line, start_column))
-            }
+            // '?' and ':' are handled earlier (including variants); avoid duplicate arms
             Some('\n') => {
                 self.advance();
                 Ok(Token::new(TokenType::NEWLINE, start_line, start_column))

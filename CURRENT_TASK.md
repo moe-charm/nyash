@@ -5,6 +5,21 @@ TL;DR
 - PyVM は意味論の参照実行器（開発補助）。llvmlite は AOT/検証。配布やバンドル化は後回し（基礎固めが先）。
 
 What Changed (today)
+- リファクタリング一式 完了（Runner/LLVM/MIR Builder の分割第2弾まで）。機能差分なしで整理のみ。
+- Phase‑15（自己ホスト）を再開。まずはスモークで挙動を再確認してから警告掃除へ進む方針に切り替え。
+- 決定: 先にスモーク（PyVM/自己ホスト/Bridge）を回して“緑”を確認→ その後に `ops_ext.rs` と `runner/selfhost.rs` の警告削減に着手する。
+- 構文糖衣の導入計画（A案）を承認: Stage‑1 で配列リテラル（[a,b,c]）を追加（IR変更なし、デシュガリング）。
+
+Quick Next (today)
+- 短時間スモーク優先（挙動の健全性を早期確認）：
+  - `source tools/dev_env.sh pyvm`
+  - `NYASH_VM_USE_PY=1 ./tools/pyvm_stage2_smoke.sh`（参照実行器・意味論確認）
+  - `NYASH_USE_NY_COMPILER=1 ./tools/selfhost_stage2_smoke.sh`（自己ホスト直）
+  - `NYASH_USE_NY_COMPILER=1 ./tools/selfhost_stage2_bridge_smoke.sh`（自己ホスト→JSON→PyVM）
+  - 任意: `./tools/selfhost_stage3_accept_smoke.sh`（Stage‑3 受理のみ確認）
+- スモークが緑なら、警告の削減に移行：
+  - `src/jit/lower/core/ops_ext.rs`（未使用・到達不能/冗長の解消、保存スロットの一貫化）
+  - `src/runner/selfhost.rs`（到達不能の除去、変数寿命の短縮、細かな `let`/`mut` 是正）
 - ParserBox 強化（Stage‑2 完了 + Stage‑3 受理を追加）
   - 進捗ガード（parse_program2/parse_block2/parse_stmt2）。
   - Stage‑2 受理一式: 単項/二項/比較/論理/呼出/メソッド/引数/if/else/loop/using/local/return/new。
@@ -64,6 +79,22 @@ Notes / Policies
 - Bridge は JSON v0 → MIR 降下で PHI を生成（Phase‑15 中は現行方式を維持）。
 - 配布/バンドル/EXE 化は任意の実験導線として維持（Phase‑15 の主目的外）。
 
+Smoke Snapshot (2025‑09‑15)
+- 修正: `runner/dispatch.rs` に `vm` 分岐が欠落しており `--backend vm` が interpreter にフォールバックしていたため、PyVM スモークが作動せず。分岐を追加して復旧済み。
+- PyVM Stage‑2 部分結果:
+  - PASS: string ops basic, me method call
+  - FAIL: loop/if/phi → 出力 `sum=4`（期待 `sum=9`）
+    - 原因分析: ループ内 if の merge で `sum` の Phi 正規化が入らず、latch 側スナップショットが else 系の一時値を優先（`16`）しうる構造。`LoopBuilder::build_statement(If)` が `normalize_if_else_phi` 相当を呼ばず、変数マップが φ 統合されていない。
+    - 対応方針（最小修正）:
+      - LoopBuilder の If 降下で merge 到達時に「両枝が同一変数に代入」の場合は `phi(dst=[then,else])` を emit→その φ を対象変数に bind。
+      - latch スナップショットはこの φ 後の変数マップで採取する。
+      - 代替（短期）: Builder 側の `normalize_if_else_phi` を呼ぶ薄いフックを設けて流用。
+
+Fixes Applied (2025‑09‑15)
+- LoopBuilder If 降下に φ 正規化を追加（両枝代入の変数を merge 時に φ で束ねて再束縛）。
+- PyVM φ 解決ロジックを安定化（incoming を [value, pred] 形に限定し、[pred, value] の曖昧推測を削除）。偶然一致による誤選択を排除。
+- これにより `tools/pyvm_stage2_smoke.sh` は全 PASS を確認済み。
+
 Refactor Candidates (early plan)
 - runner/mod.rs（~70K chars）: “runner pipeline” を用途別に分割（TODO #15）
   - runner/pipeline.rs（入力正規化/using解決/環境注入）
@@ -91,3 +122,38 @@ Recommended Next (short list)
   - `builder/vars.rs` に SSA 変数正規化の小物を段階追加（変数名再束縛/スコープ終端の型ヒント伝搬など）。
 - Runner（仕上げ）
   - `mod.rs` の残置ヘルパ（usingの候補提示・環境注入ログ）を `pipeline/dispatch` へ集約し、`mod.rs` を最小のオーケストレーションに。
+  - Namespaces Phase‑1（実装着手）: BoxIndex 構築・3段階解決・toml aliases・曖昧エラー改善・トレース
+
+Array/Map Literals Plan（Syntax Sugar）
+- Stage‑1: Array literal `[e1, e2, ...]` を実装（ゲート: `NYASH_SYNTAX_SUGAR_LEVEL=basic|full` または `NYASH_ENABLE_ARRAY_LITERAL=1`）。
+  - Lowering: `new ArrayBox()` → 各要素を評価 → `.push(elem)` を左から右に順に発行 → 最後に配列値を返す。
+  - 末尾カンマ許可。
+  - スモーク: `apps/tests/array_literal_basic.nyash`（size/順序/副作用1回性）。
+- Stage‑2: Map literal `{ "k": v, ... }`（文字列キー限定）を実装（ゲート: `NYASH_SYNTAX_SUGAR_LEVEL=basic|full` or `NYASH_ENABLE_MAP_LITERAL=1`）。
+  - Lowering: `new MapBox()` → 各ペアを評価 → `.set("k", v)` を左から右に順に発行 → 最後に map 値を返す。
+  - 末尾カンマ許可。識別子キー糖 `{name: v}` は次フェーズ。
+  - スモーク: `apps/tests/map_literal_basic.nyash`（size/get/順序検証）。
+- Stage‑3: 識別子キー糖 `{name: v}` と末尾カンマを強化（任意）。
+
+Gates / Semantics
+- 左から右で評価（一度だけ）。push/set 失敗は即時伝播（既存 BoxCall 規約に追従）。
+- IR 変更なし（BoxCall/MethodCall のみ）。将来 `with_capacity(n)` 最適化は任意で追加。
+
+Decision Log (2025‑09‑15)
+- Q: 警告削減（`ops_ext.rs` / `selfhost.rs`）を先にやる？それとも挙動スモークを先に回す？
+- A: スモークを先に実施。理由は以下。
+  - リファクタ直後は回帰検出を最優先（PyVM/自己ホスト/Bridge の3レーンで即座に検証）。
+  - 警告削減は挙動非変化を原則とするが、微妙なスコープや保存スロットの触りが混入し得るため、先に“緑”を固める。
+Namespaces / Using（計画合意）
+- 3段階の解決順（決定性）: 1) ローカル/コアボックス → 2) エイリアス（nyash.toml/needs） → 3) プラグイン（短名/qualified）
+- 曖昧時はエラー＋候補提示。qualified または alias を要求（自動推測はしない）。
+- モード切替: Relaxed（既定）/Strict（`NYASH_PLUGIN_REQUIRE_PREFIX=1` or toml `[plugins] require_prefix=true`）
+- needs 糖衣は using の同義（Runner で alias 登録）。`needs plugin.network.HttpClient as HttpClient` 等。
+- Plugins は統合名前空間（短名はユニーク時のみ）。qualified `network.HttpClient` を常時許可。
+- nyash.toml（MVP）: `[imports]`/`[aliases]`，`[plugins.<name>] { path, prefix, require_prefix, expose_short_names }`
+- Index とキャッシュ（Runner）:
+  - BoxIndex: `local_boxes`, `plugin_boxes`, `aliases` を保持
+  - `RESOLVE_CACHE`（thread‑local）で同一解決の再計算を回避
+  - `NYASH_RESOLVE_TRACE=1` で解決過程をログ出力
+
+  - スモークが緑＝基礎健全性確認後に、静的ノイズの除去を安全に一気通貫で行う。

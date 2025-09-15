@@ -114,6 +114,28 @@ impl super::MirBuilder {
             ASTNode::New { class, arguments, .. } =>
                 self.build_new_expression(class.clone(), arguments.clone()),
 
+            ASTNode::ArrayLiteral { elements, .. } => {
+                let arr_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::NewBox { dst: arr_id, box_type: "ArrayBox".to_string(), args: vec![] })?;
+                for e in elements {
+                    let v = self.build_expression_impl(e)?;
+                    self.emit_instruction(MirInstruction::BoxCall { dst: None, box_val: arr_id, method: "push".to_string(), method_id: None, args: vec![v], effects: super::EffectMask::MUT })?;
+                }
+                Ok(arr_id)
+            }
+            ASTNode::MapLiteral { entries, .. } => {
+                let map_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::NewBox { dst: map_id, box_type: "MapBox".to_string(), args: vec![] })?;
+                for (k, expr) in entries {
+                    // const string key
+                    let k_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: k_id, value: ConstValue::String(k) })?;
+                    let v_id = self.build_expression_impl(expr)?;
+                    self.emit_instruction(MirInstruction::BoxCall { dst: None, box_val: map_id, method: "set".to_string(), method_id: None, args: vec![k_id, v_id], effects: super::EffectMask::MUT })?;
+                }
+                Ok(map_id)
+            }
+
             ASTNode::Nowait { variable, expression, .. } =>
                 self.build_nowait_statement(variable.clone(), *expression.clone()),
 

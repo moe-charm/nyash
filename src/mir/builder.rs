@@ -487,6 +487,17 @@ impl MirBuilder {
                 self.build_new_expression(class.clone(), arguments.clone())
             },
             
+            ASTNode::ArrayLiteral { elements, .. } => {
+                // Lower: new ArrayBox(); for each elem: .push(elem)
+                let arr_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::NewBox { dst: arr_id, box_type: "ArrayBox".to_string(), args: vec![] })?;
+                for e in elements {
+                    let v = self.build_expression(e)?;
+                    self.emit_instruction(MirInstruction::BoxCall { dst: None, box_val: arr_id, method: "push".to_string(), method_id: None, args: vec![v], effects: super::EffectMask::MUT })?;
+                }
+                Ok(arr_id)
+            },
+            
             // Phase 7: Async operations
             ASTNode::Nowait { variable, expression, .. } => {
                 self.build_nowait_statement(variable.clone(), *expression.clone())

@@ -183,7 +183,7 @@ impl NyashRunner {
                 // Prefer MIR signature when available, but fall back to runtime coercions to keep VM/JIT consistent.
                 let (ety, sval) = if let Some(func) = compile_result.module.functions.get("main") {
                     use nyash_rust::mir::MirType;
-                    use nyash_rust::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
+                    use nyash_rust::box_trait::{IntegerBox, BoolBox, StringBox};
                     use nyash_rust::boxes::FloatBox;
                     match &func.signature.return_type {
                         MirType::Float => {
@@ -272,7 +272,7 @@ impl NyashRunner {
             format!("./{}", filename)
         }
 
-        use std::collections::{HashSet, VecDeque};
+        use std::collections::HashSet;
 
         fn walk_with_state(node: &ASTNode, runtime: &NyashRuntime, stack: &mut Vec<String>, visited: &mut HashSet<String>) {
             match node {

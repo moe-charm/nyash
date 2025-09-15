@@ -12,7 +12,7 @@ use crate::mir::{BasicBlockId, ValueId};
 use crate::runtime::NyashRuntime;
 use crate::scope_tracker::ScopeTracker;
 use std::collections::HashMap;
-use std::time::Instant;
+// use std::time::Instant; // not used in this module
 
 impl VM {
     fn jit_threshold_from_env() -> u32 {

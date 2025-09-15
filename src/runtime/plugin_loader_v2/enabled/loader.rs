@@ -1,6 +1,6 @@
-use super::types::{PluginBoxV2, PluginHandleInner, NyashTypeBoxFfi, LoadedPluginV2};
+use super::types::{PluginBoxV2, PluginHandleInner, LoadedPluginV2};
 use crate::bid::{BidResult, BidError};
-use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox};
+use crate::box_trait::NyashBox;
 use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

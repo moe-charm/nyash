@@ -47,7 +47,7 @@ impl NyashInterpreter {
             }
             "MathBox" => {
                 if let Ok(reg) = self.runtime.box_registry.lock() {
-                    if let Ok(b) = reg.create_box("MathBox", &[]) {
+                    if let Ok(_b) = reg.create_box("MathBox", &[]) {
                         // Note: execute_math_method expects builtin MathBox; plugin path should route via VM/BoxCall in new pipeline.
                         // Here we simply return void; method paths should prefer plugin invoke in VM.
                         return Ok(Box::new(VoidBox::new()));

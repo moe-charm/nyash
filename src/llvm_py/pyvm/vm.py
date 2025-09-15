@@ -127,6 +127,9 @@ class PyVM:
                     # incoming: prefer [[vid, pred_bid]], but accept [pred_bid, vid] robustly
                     incoming = inst.get("incoming", [])
                     chosen: Any = None
+                    dbg = os.environ.get('NYASH_PYVM_DEBUG_PHI') == '1'
+                    if dbg:
+                        print(f"[pyvm.phi] prev={prev} incoming={incoming}")
                     for pair in incoming:
                         if not isinstance(pair, (list, tuple)) or len(pair) < 2:
                             continue
@@ -134,10 +137,8 @@ class PyVM:
                         # Case 1: [vid, pred]
                         if prev is not None and int(b) == int(prev) and int(a) in regs:
                             chosen = regs.get(int(a))
-                            break
-                        # Case 2: [pred, vid]
-                        if prev is not None and int(a) == int(prev) and int(b) in regs:
-                            chosen = regs.get(int(b))
+                            if dbg:
+                                print(f"[pyvm.phi] case1 match: use v{a} from pred {b} -> {chosen}")
                             break
                     if chosen is None and incoming:
                         # Fallback to first element that resolves to a known vid
@@ -147,8 +148,9 @@ class PyVM:
                             a, b = pair[0], pair[1]
                             if int(a) in regs:
                                 chosen = regs.get(int(a)); break
-                            if int(b) in regs:
-                                chosen = regs.get(int(b)); break
+                            # Do not try to resolve by assuming [pred, vid] — avoid false matches
+                    if dbg:
+                        print(f"[pyvm.phi] chosen={chosen}")
                     self._set(regs, inst.get("dst"), chosen)
                     i += 1
                     continue

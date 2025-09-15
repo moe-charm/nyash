@@ -6,7 +6,26 @@
           "id": 0,
           "instructions": [
             {
+              "args": [],
               "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [],
+              "dst": 1,
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 2,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -14,7 +33,22 @@
               }
             },
             {
-              "dst": 1,
+              "args": [],
+              "dst": 3,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [
+                2
+              ],
+              "box": 3,
+              "dst": null,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 4,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -22,15 +56,58 @@
               }
             },
             {
-              "dst": 2,
-              "lhs": 0,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 1
+              "args": [
+                4
+              ],
+              "box": 3,
+              "dst": null,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 3
+              }
+            },
+            {
+              "args": [
+                5
+              ],
+              "box": 3,
+              "dst": null,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "args": [],
+              "box": 3,
+              "dst": 6,
+              "method": "size",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                6
+              ],
+              "box": 1,
+              "dst": 7,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
             },
             {
               "op": "ret",
-              "value": 2
+              "value": 8
             }
           ]
         }

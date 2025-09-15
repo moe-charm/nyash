@@ -135,9 +135,9 @@ impl VM {
 
     /// Execute a single function
     pub(super) fn execute_function(&mut self, function: &MirFunction) -> Result<VMValue, VMError> {
-        use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
+        // unused: local downcasts not required here
         use crate::runtime::global_hooks;
-        use crate::instance_v2::InstanceBox;
+        // use crate::instance_v2::InstanceBox; // not used in this path
         use super::control_flow;
 
         self.current_function = Some(function.signature.name.clone());

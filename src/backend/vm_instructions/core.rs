@@ -1,5 +1,5 @@
 use crate::mir::{ConstValue, BinaryOp, CompareOp, UnaryOp, ValueId, BasicBlockId, TypeOpKind, MirType};
-use crate::box_trait::{NyashBox, BoolBox, VoidBox};
+use crate::box_trait::{BoolBox, VoidBox};
 use crate::boxes::ArrayBox;
 use std::sync::Arc;
 use crate::backend::vm::ControlFlow;

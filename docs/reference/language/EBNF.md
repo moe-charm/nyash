@@ -24,6 +24,10 @@ factor    := INT
            | IDENT call_tail*
            | '(' expr ')'
            | 'new' IDENT '(' args? ')'
+           | '[' args? ']'           ; Array literal (Stage‑1 sugar, gated)
+           | '{' map_entries? '}'    ; Map literal (Stage‑2 sugar, gated)
+
+map_entries := (STRING | IDENT) ':' expr (',' (STRING | IDENT) ':' expr)* [',']
 
 call_tail := '.' IDENT '(' args? ')'   ; method
            | '(' args? ')'             ; function call
@@ -35,4 +39,6 @@ Notes
 - Short-circuit: '&&' and '||' must not evaluate the RHS when not needed.
 - Unary minus has higher precedence than '*' and '/'.
 - IDENT names consist of [A-Za-z_][A-Za-z0-9_]*
-
+- Array literal is enabled when syntax sugar is on (NYASH_SYNTAX_SUGAR_LEVEL=basic|full) or when NYASH_ENABLE_ARRAY_LITERAL=1 is set.
+- Map literal is enabled when syntax sugar is on (NYASH_SYNTAX_SUGAR_LEVEL=basic|full) or when NYASH_ENABLE_MAP_LITERAL=1 is set.
+- Identifier keys (`{name: v}`) are Stage‑3 and require either NYASH_SYNTAX_SUGAR_LEVEL=full or NYASH_ENABLE_MAP_IDENT_KEY=1.

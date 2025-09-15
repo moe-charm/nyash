@@ -6,20 +6,8 @@
  */
 
 use nyash_rust::cli::CliConfig;
-use nyash_rust::{
-    box_trait::{StringBox, IntegerBox, BoolBox, VoidBox, AddBox},
-    tokenizer::{NyashTokenizer},
-    ast::ASTNode,
-    parser::NyashParser,
-    interpreter::NyashInterpreter,
-    mir::{MirCompiler, MirPrinter, MirInstruction},
-    backend::VM,
-};
-use nyash_rust::runtime::{NyashRuntime, NyashRuntimeBuilder};
-use nyash_rust::interpreter::SharedState;
-use nyash_rust::box_factory::user_defined::UserDefinedBoxFactory;
-use nyash_rust::core::model::BoxDeclaration as CoreBoxDecl;
-use std::sync::Arc;
+// prune heavy unused imports here; modules import what they need locally
+// pruned unused runtime imports in this module
 
 #[cfg(feature = "wasm-backend")]
 use nyash_rust::backend::{wasm::WasmBackend, aot::AotBackend};

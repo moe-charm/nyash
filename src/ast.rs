@@ -201,6 +201,7 @@ pub enum ExpressionNode {
         else_expr: Box<ASTNode>,
         span: Span,
     },
+    // (Stage‑2 sugar for literals is represented in unified ASTNode, not here)
 }
 
 /// 文ノード - 実行可能なアクション  
@@ -476,6 +477,16 @@ pub enum ASTNode {
         else_expr: Box<ASTNode>,
         span: Span,
     },
+    /// 配列リテラル（糖衣）: [e1, e2, ...]
+    ArrayLiteral {
+        elements: Vec<ASTNode>,
+        span: Span,
+    },
+    /// マップリテラル（糖衣）: { "k": v, ... } （Stage‑2: 文字列キー限定）
+    MapLiteral {
+        entries: Vec<(String, ASTNode)>,
+        span: Span,
+    },
     
     /// 無名関数（最小P1: 値としてのみ。呼び出しは未対応）
     Lambda {
@@ -708,6 +719,8 @@ impl ASTNode {
             ASTNode::QMarkPropagate { .. } => "QMarkPropagate",
             ASTNode::PeekExpr { .. } => "PeekExpr",
             ASTNode::Lambda { .. } => "Lambda",
+            ASTNode::ArrayLiteral { .. } => "ArrayLiteral",
+            ASTNode::MapLiteral { .. } => "MapLiteral",
         }
     }
     
@@ -740,6 +753,8 @@ impl ASTNode {
             ASTNode::PeekExpr { .. } => ASTNodeType::Expression,
             ASTNode::QMarkPropagate { .. } => ASTNodeType::Expression,
             ASTNode::Lambda { .. } => ASTNodeType::Expression,
+            ASTNode::ArrayLiteral { .. } => ASTNodeType::Expression,
+            ASTNode::MapLiteral { .. } => ASTNodeType::Expression,
             
             // Statement nodes - 実行可能なアクション
             ASTNode::Program { .. } => ASTNodeType::Statement, // プログラム全体
@@ -903,6 +918,12 @@ impl ASTNode {
             ASTNode::Lambda { params, body, .. } => {
                 format!("Lambda({} params, {} statements)", params.len(), body.len())
             }
+            ASTNode::ArrayLiteral { elements, .. } => {
+                format!("ArrayLiteral({} elements)", elements.len())
+            }
+            ASTNode::MapLiteral { entries, .. } => {
+                format!("MapLiteral({} entries)", entries.len())
+            }
         }
     }
     
@@ -947,6 +968,8 @@ impl ASTNode {
             ASTNode::PeekExpr { span, .. } => *span,
             ASTNode::QMarkPropagate { span, .. } => *span,
             ASTNode::Lambda { span, .. } => *span,
+            ASTNode::ArrayLiteral { span, .. } => *span,
+            ASTNode::MapLiteral { span, .. } => *span,
         }
     }
 }

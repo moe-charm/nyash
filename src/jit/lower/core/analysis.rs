@@ -1,9 +1,8 @@
-use std::collections::{HashMap, HashSet, BTreeSet};
+use std::collections::HashSet;
 
 use crate::mir::{BasicBlockId, MirFunction, MirInstruction, ValueId};
 
-use super::super::builder::IRBuilder;
-use super::super::core_ops; // ensure module link remains
+// removed unused imports
 use super::LowerCore;
 
 impl LowerCore {
@@ -114,4 +113,3 @@ impl LowerCore {
         }
     }
 }
-

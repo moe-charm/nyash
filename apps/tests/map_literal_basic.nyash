@@ -1,0 +1,11 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    // map literal sugar (string keys)
+    local m = {"name": "Alice", "age": 25}
+    console.println(m.size())
+    console.println(m.get("name"))
+    return 0
+  }
+}
+
