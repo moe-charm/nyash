@@ -1,5 +1,6 @@
 //! Result-related JIT extern symbols
 
+#[cfg(feature = "cranelift-jit")]
 use crate::box_trait::NyashBox;
 
 /// Symbol name for wrapping a handle into Result.Ok(handle)

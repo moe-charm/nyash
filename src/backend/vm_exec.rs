@@ -11,11 +11,10 @@
  * Behavior and public APIs are preserved. This is a pure move/refactor.
  */
 
-use crate::mir::{MirModule, MirFunction, MirInstruction, ValueId, BasicBlockId};
+use crate::mir::{MirModule, MirFunction, MirInstruction, BasicBlockId};
 use crate::box_trait::NyashBox;
 use super::{vm::VM, vm::VMError, vm::VMValue};
 use crate::backend::vm_control_flow::ControlFlow;
-use std::sync::Arc;
 
 impl VM {
     /// Execute a MIR module

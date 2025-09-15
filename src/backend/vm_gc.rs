@@ -6,7 +6,7 @@
  * - Debug prints for roots snapshot and shallow reachability
  */
 
-use super::vm::{VM, VMError, VMValue};
+use super::vm::{VM, VMValue};
 
 impl VM {
     /// Enter a GC root region and return a guard that leaves on drop
@@ -96,4 +96,3 @@ impl VM {
         eprintln!("[GC] depth2_children: total={} top5={:?}", child_count, top);
     }
 }
-

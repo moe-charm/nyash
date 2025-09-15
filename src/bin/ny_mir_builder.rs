@@ -1,6 +1,6 @@
-use clap::{Arg, ArgAction, Command, value_parser};
+use clap::{Arg, ArgAction, Command};
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command as PCommand, Stdio};
 
@@ -117,11 +117,12 @@ fn current_dir_bin(name: &str) -> PathBuf {
         }
     }
     // Fallback to target/release
-    let mut cand = PathBuf::from("target/release").join(name);
+    let cand = PathBuf::from("target/release").join(name);
     if cand.exists() { return cand; }
     #[cfg(windows)]
     {
-        cand = PathBuf::from("target/release").join(format!("{}.exe", name));
+        let cand = PathBuf::from("target/release").join(format!("{}.exe", name));
+        return cand;
     }
     cand
 }

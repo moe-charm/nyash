@@ -8,7 +8,7 @@
  * - Dead code elimination
  */
 
-use super::{MirModule, MirFunction, MirInstruction, ValueId, MirType, TypeOpKind, EffectMask, Effect};
+use super::{MirModule, MirFunction, MirInstruction, ValueId, MirType, EffectMask, Effect};
 use std::collections::{HashMap, HashSet};
 
 /// MIR optimization passes
@@ -464,7 +464,7 @@ impl MirOptimizer {
     /// Rewrites: PluginInvoke { box_val=py (PyRuntimeBox), method="getattr"|"call", args=[obj, rest...] }
     ///        →  PluginInvoke { box_val=obj, method, args=[rest...] }
     fn normalize_python_helper_calls(&mut self, module: &mut MirModule) -> OptimizationStats {
-        use super::{MirInstruction as I, MirType};
+        use super::MirInstruction as I;
         let mut stats = OptimizationStats::new();
         for (_fname, function) in &mut module.functions {
             for (_bb, block) in &mut function.blocks {
@@ -914,7 +914,7 @@ impl MirOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, BasicBlock, BasicBlockId, ValueId, ConstValue};
+    use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, TypeOpKind, BasicBlock, BasicBlockId, ValueId, ConstValue};
     
     #[test]
     fn test_optimizer_creation() {

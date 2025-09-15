@@ -1,5 +1,4 @@
 pub fn dump_cfg_dot(func: &crate::mir::MirFunction, path: &str, phi_min: bool) -> std::io::Result<()> {
-    use std::io::Write;
     let mut out = String::new();
     out.push_str(&format!("digraph \"{}\" {{\n", func.signature.name));
     out.push_str("  node [shape=box, fontsize=10];\n");

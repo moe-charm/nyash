@@ -597,7 +597,7 @@ fn lower_args(f: &mut MirFunction, cur_bb: BasicBlockId, args: &[ExprV0]) -> Res
 
 pub fn maybe_dump_mir(module: &MirModule) {
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-        let mut p = MirPrinter::new();
+        let p = MirPrinter::new();
         println!("{}", p.print_module(module));
     }
 }

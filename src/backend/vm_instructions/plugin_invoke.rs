@@ -1,5 +1,4 @@
 use crate::mir::ValueId;
-use std::sync::Arc;
 use crate::backend::vm::ControlFlow;
 use crate::backend::{VM, VMError, VMValue};
 

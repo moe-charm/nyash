@@ -1,5 +1,5 @@
 use super::Semantics;
-use crate::jit::lower::builder::{IRBuilder, BinOpKind, CmpKind, ParamKind};
+use crate::jit::lower::builder::{IRBuilder, BinOpKind, CmpKind};
 use crate::mir::{ValueId, BasicBlockId};
 
 /// Adapter that translates Semantics operations into IRBuilder calls (Cranelift path)
@@ -53,4 +53,3 @@ impl<'a> Semantics for ClifSemanticsAdapter<'a> {
     fn barrier_write(&mut self, _ptr: &Self::Ptr, v: Self::Val) -> Self::Val { v }
     fn safepoint(&mut self) { /* Lowered via explicit hostcall in LowerCore path */ }
 }
-
