@@ -71,8 +71,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         if runner.config.compile_native {
             #[cfg(feature = "cranelift-jit")]
             { 
-                use super::super::modes::aot;
-                aot::execute_aot_mode(runner, filename); 
+                runner.execute_aot_mode(filename); 
                 return; 
             }
             #[cfg(not(feature = "cranelift-jit"))]
