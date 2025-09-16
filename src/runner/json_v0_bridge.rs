@@ -202,7 +202,45 @@ fn lower_expr(f: &mut MirFunction, cur_bb: BasicBlockId, e: &ExprV0) -> Result<(
             Ok((out, merge_bb))
         }
         ExprV0::Call { name, args } => {
-            // Fallback: no vars context; treat as normal call
+            // Special: array literal lowering — Call{name:"array.of", args:[...]} → new ArrayBox(); push(...); result=array
+            if name == "array.of" {
+                // Create array first
+                let arr = f.next_value_id();
+                if let Some(bb) = f.get_block_mut(cur_bb) {
+                    bb.add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![] });
+                }
+                // For each element: eval then push
+                let mut cur = cur_bb;
+                for e in args {
+                    let (v, c) = lower_expr(f, cur, e)?; cur = c;
+                    let tmp = f.next_value_id();
+                    if let Some(bb) = f.get_block_mut(cur) {
+                        bb.add_instruction(MirInstruction::BoxCall { dst: Some(tmp), box_val: arr, method: "push".into(), method_id: None, args: vec![v], effects: EffectMask::READ });
+                    }
+                }
+                return Ok((arr, cur));
+            }
+            // Special: map literal lowering — Call{name:"map.of", args:[k1, v1, k2, v2, ...]} → new MapBox(); set(k,v)...; result=map
+            if name == "map.of" {
+                let mapv = f.next_value_id();
+                if let Some(bb) = f.get_block_mut(cur_bb) {
+                    bb.add_instruction(MirInstruction::NewBox { dst: mapv, box_type: "MapBox".into(), args: vec![] });
+                }
+                let mut cur = cur_bb;
+                let mut it = args.iter();
+                while let Some(k) = it.next() {
+                    if let Some(v) = it.next() {
+                        let (kv, cur2) = lower_expr(f, cur, k)?; cur = cur2;
+                        let (vv, cur3) = lower_expr(f, cur, v)?; cur = cur3;
+                        let tmp = f.next_value_id();
+                        if let Some(bb) = f.get_block_mut(cur) {
+                            bb.add_instruction(MirInstruction::BoxCall { dst: Some(tmp), box_val: mapv, method: "set".into(), method_id: None, args: vec![kv, vv], effects: EffectMask::READ });
+                        }
+                    } else { break; }
+                }
+                return Ok((mapv, cur));
+            }
+            // Fallback: treat as normal dynamic call
             let (arg_ids, cur) = lower_args(f, cur_bb, args)?;
             let fun_val = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur) {
@@ -273,6 +311,42 @@ fn lower_expr_with_vars(
             Err(format!("undefined variable: {}", name))
         }
         ExprV0::Call { name, args } => {
+            // Special: array literal lowering in vars context
+            if name == "array.of" {
+                let arr = f.next_value_id();
+                if let Some(bb) = f.get_block_mut(cur_bb) {
+                    bb.add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![] });
+                }
+                let mut cur = cur_bb;
+                for e in args {
+                    let (v, c) = lower_expr_with_vars(f, cur, e, vars)?; cur = c;
+                    let tmp = f.next_value_id();
+                    if let Some(bb) = f.get_block_mut(cur) {
+                        bb.add_instruction(MirInstruction::BoxCall { dst: Some(tmp), box_val: arr, method: "push".into(), method_id: None, args: vec![v], effects: EffectMask::READ });
+                    }
+                }
+                return Ok((arr, cur));
+            }
+            // Special: map literal lowering in vars context
+            if name == "map.of" {
+                let mapv = f.next_value_id();
+                if let Some(bb) = f.get_block_mut(cur_bb) {
+                    bb.add_instruction(MirInstruction::NewBox { dst: mapv, box_type: "MapBox".into(), args: vec![] });
+                }
+                let mut cur = cur_bb;
+                let mut it = args.iter();
+                while let Some(k) = it.next() {
+                    if let Some(v) = it.next() {
+                        let (kv, cur2) = lower_expr_with_vars(f, cur, k, vars)?; cur = cur2;
+                        let (vv, cur3) = lower_expr_with_vars(f, cur, v, vars)?; cur = cur3;
+                        let tmp = f.next_value_id();
+                        if let Some(bb) = f.get_block_mut(cur) {
+                            bb.add_instruction(MirInstruction::BoxCall { dst: Some(tmp), box_val: mapv, method: "set".into(), method_id: None, args: vec![kv, vv], effects: EffectMask::READ });
+                        }
+                    } else { break; }
+                }
+                return Ok((mapv, cur));
+            }
             // Lower args
             let (arg_ids, cur) = lower_args_with_vars(f, cur_bb, args, vars)?;
             // Encode as: const fun_name; call

@@ -1,3 +1,2 @@
-local x = 1
-local x = x + 2
-return x
+local m = {"name": "Alice", "age": 25}
+return m.size()

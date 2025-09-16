@@ -545,6 +545,23 @@ pub extern "C" fn nyash_console_birth_h_export() -> i64 {
     0
 }
 
+
+
+// ArrayBox birth shim for AOT/JIT handle-based creation
+#[export_name = "nyash.array.birth_h"]
+pub extern "C" fn nyash_array_birth_h_export() -> i64 {
+    let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
+        std::sync::Arc::new(nyash_rust::boxes::array::ArrayBox::new());
+    nyash_rust::jit::rt::handles::to_handle(arc) as i64
+}
+
+// MapBox birth shim for AOT/JIT handle-based creation
+#[export_name = "nyash.map.birth_h"]
+pub extern "C" fn nyash_map_birth_h_export() -> i64 {
+    let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
+        std::sync::Arc::new(nyash_rust::boxes::map_box::MapBox::new());
+    nyash_rust::jit::rt::handles::to_handle(arc) as i64
+}
 // ---- Process entry (driver) ----
 #[cfg(not(test))]
 #[no_mangle]

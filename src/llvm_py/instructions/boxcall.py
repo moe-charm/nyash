@@ -84,6 +84,15 @@ def lower_boxcall(
             vmap[dst_vid] = result
         return
 
+    if method_name == "size":
+        # Map/Array size via any.length_h
+        recv_h = _ensure_handle(builder, module, recv_val)
+        callee = _declare(module, "nyash.any.length_h", i64, [i64])
+        result = builder.call(callee, [recv_h], name="any_size_h")
+        if dst_vid is not None:
+            vmap[dst_vid] = result
+        return
+
     if method_name == "substring":
         # substring(start, end)
         # If receiver is a handle (i64), use handle-based helper; else pointer-based API
@@ -180,22 +189,59 @@ def lower_boxcall(
 
     if method_name == "get":
         # ArrayBox.get(index) → nyash.array.get_h(handle, idx)
+        # MapBox.get(key) → nyash.map.get_hh(handle, key_any)
         recv_h = _ensure_handle(builder, module, recv_val)
         if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-            idx = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if args else ir.Constant(i64, 0)
+            k = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if args else ir.Constant(i64, 0)
         else:
-            idx = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
-        callee = _declare(module, "nyash.array.get_h", i64, [i64, i64])
-        res = builder.call(callee, [recv_h, idx], name="arr_get_h")
+            k = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
+        callee_map = _declare(module, "nyash.map.get_hh", i64, [i64, i64])
+        res = builder.call(callee_map, [recv_h, k], name="map_get_hh")
         if dst_vid is not None:
             vmap[dst_vid] = res
-            try:
-                if resolver is not None and hasattr(resolver, 'mark_string'):
-                    # Heuristic: args array often stores strings for CLI; tag as string-ish
-                    resolver.mark_string(dst_vid)
-            except Exception:
-                pass
         return
+
+    if method_name == "push":
+        # ArrayBox.push(val) → nyash.array.push_h(handle, val)
+        recv_h = _ensure_handle(builder, module, recv_val)
+        if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+            v0 = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if args else ir.Constant(i64, 0)
+        else:
+            v0 = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
+        callee = _declare(module, "nyash.array.push_h", i64, [i64, i64])
+        res = builder.call(callee, [recv_h, v0], name="arr_push_h")
+        if dst_vid is not None:
+            vmap[dst_vid] = res
+        return
+
+    if method_name == "set":
+        # MapBox.set(key, val) → nyash.map.set_hh(handle, key_any, val_any)
+        recv_h = _ensure_handle(builder, module, recv_val)
+        if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+            k = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if len(args) > 0 else ir.Constant(i64, 0)
+            v = resolver.resolve_i64(args[1], builder.block, preds, block_end_values, vmap, bb_map) if len(args) > 1 else ir.Constant(i64, 0)
+        else:
+            k = vmap.get(args[0], ir.Constant(i64, 0)) if len(args) > 0 else ir.Constant(i64, 0)
+            v = vmap.get(args[1], ir.Constant(i64, 0)) if len(args) > 1 else ir.Constant(i64, 0)
+        callee = _declare(module, "nyash.map.set_hh", i64, [i64, i64, i64])
+        res = builder.call(callee, [recv_h, k, v], name="map_set_hh")
+        if dst_vid is not None:
+            vmap[dst_vid] = res
+        return
+
+    if method_name == "has":
+        # MapBox.has(key) → nyash.map.has_hh(handle, key_any)
+        recv_h = _ensure_handle(builder, module, recv_val)
+        if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+            k = resolver.resolve_i64(args[0], builder.block, preds, block_end_values, vmap, bb_map) if args else ir.Constant(i64, 0)
+        else:
+            k = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
+        callee = _declare(module, "nyash.map.has_hh", i64, [i64, i64])
+        res = builder.call(callee, [recv_h, k], name="map_has_hh")
+        if dst_vid is not None:
+            vmap[dst_vid] = res
+        return
+
 
     if method_name in ("print", "println", "log"):
         # Console mapping (prefer pointer-API when possible to avoid handle registry mismatch)

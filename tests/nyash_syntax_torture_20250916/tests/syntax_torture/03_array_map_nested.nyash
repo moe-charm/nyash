@@ -1,0 +1,4 @@
+
+# Expect: 42
+local a = [1, [2, [3, [4, 42]]], {k: [{z: 7}, {z: 9}]}]
+print(a[1][1][1])  # 42 (0-based assumed; adjust if 1-based)

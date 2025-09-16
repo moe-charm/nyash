@@ -29,9 +29,22 @@ def lower_newbox(
         vmap: Value map
         resolver: Optional resolver for type handling
     """
-    # Use NyRT shim: nyash.env.box.new(type_name: i8*) -> i64
+    # Use NyRT shim: prefer birth_h for core boxes, otherwise env.box.new_i64x
     i64 = ir.IntType(64)
     i8p = ir.IntType(8).as_pointer()
+    # Core fast paths
+    if box_type in ("ArrayBox", "MapBox"):
+        birth_name = "nyash.array.birth_h" if box_type == "ArrayBox" else "nyash.map.birth_h"
+        birth = None
+        for f in module.functions:
+            if f.name == birth_name:
+                birth = f
+                break
+        if not birth:
+            birth = ir.Function(module, ir.FunctionType(i64, []), name=birth_name)
+        handle = builder.call(birth, [], name=f"birth_{box_type}")
+        vmap[dst_vid] = handle
+        return
     # Prefer variadic shim: nyash.env.box.new_i64x(type_name, argc, a1, a2, a3, a4)
     new_i64x = None
     for f in module.functions:

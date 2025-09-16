@@ -1,35 +1,44 @@
-# Current Task — Phase 15 Self‑Hosting (2025‑09‑15)
+# Current Task — Phase 15 Self‑Hosting (2025‑09‑16)
 
 TL;DR
 - 目標は「自己ホスティング達成」＝ Nyash製パーサで Ny → JSON v0 → Bridge → MIR 実行を安定化すること。
 - PyVM は意味論の参照実行器（開発補助）。llvmlite は AOT/検証。配布やバンドル化は後回し（基礎固めが先）。
 
 What Changed (today)
-- リファクタリング一式 完了（Runner/LLVM/MIR Builder の分割第2弾まで）。機能差分なしで整理のみ。
-- Phase‑15（自己ホスト）を再開。まずはスモークで挙動を再確認してから警告掃除へ進む方針に切り替え。
-- 決定: 先にスモーク（PyVM/自己ホスト/Bridge）を回して“緑”を確認→ その後に `ops_ext.rs` と `runner/selfhost.rs` の警告削減に着手する。
-- 構文糖衣の導入計画（A案）を承認: Stage‑1 で配列リテラル（[a,b,c]）を追加（IR変更なし、デシュガリング）。
+- Selfhost 経路の安定化（Python MVP 優先→PyVM 実行）。Selfhost Stage‑2（直/Bridge）スモークは緑化。
+- Using/Resolver を Runner 前処理に集約し、BoxIndex（グローバル）＋解決キャッシュを導入。
+  - nyash.toml の `[aliases]`/env `NYASH_ALIASES` 対応、候補提示、`NYASH_RESOLVE_TRACE=1` でトレース。
+  - strict プレフィクス: `NYASH_PLUGIN_REQUIRE_PREFIX=1` または `[plugins] require_prefix=true`。
+  - per‑plugin meta（`prefix/require_prefix/expose_short_names`）の読取導線を実装（挙動は現状据え置き）。
+- CLI `--using` を追加（`--using "ns as Alias"` / `--using '"apps/foo.nyash" as Foo'`）。
+- フィールドは box 先頭のみルールのリンタを Runner に追加（`NYASH_FIELDS_TOP_STRICT=1` でエラー）。
+- Syntax Torture スイートの実行正規化（末行比較）。一部テスト本文を Nyash 仕様に合わせて修正。
+
+- llvmlite/AOT（本戦）強化 — コアコレクション配線とエントリ統一
+  - Array/Map の BoxCall を NyRT ハンドルAPIに直結：
+    - Array: `push`→`nyash.array.push_h`、`length/len`→`nyash.any.length_h`
+    - Map: `set`→`nyash.map.set_hh`、`get`→`nyash.map.get_hh`、`has`→`nyash.map.has_hh`、`size`→`nyash.any.length_h`
+  - `ny_main` を i64 戻りに統一し、`Main.main/1` を優先（既定 args は `new ArrayBox()`）。
+  - Core Box 生成の安定化：`nyash.array.birth_h` / `nyash.map.birth_h` を追加し、llvmlite `new` は birth_h を優先。
+  - AOT 実行確認：
+    - `[1,2,3].length()` → `Result: 3`
+    - `{"name":"Alice","age":25}.size()` → `Result: 2`
+    - `m.has("name") ? m.get("name").length() : 0` → `Result: 5`
+
 
 Quick Next (today)
-- 短時間スモーク優先（挙動の健全性を早期確認）：
-  - `source tools/dev_env.sh pyvm`
-  - `NYASH_VM_USE_PY=1 ./tools/pyvm_stage2_smoke.sh`（参照実行器・意味論確認）
-  - `NYASH_USE_NY_COMPILER=1 ./tools/selfhost_stage2_smoke.sh`（自己ホスト直）
-  - `NYASH_USE_NY_COMPILER=1 ./tools/selfhost_stage2_bridge_smoke.sh`（自己ホスト→JSON→PyVM）
-  - 任意: `./tools/selfhost_stage3_accept_smoke.sh`（Stage‑3 受理のみ確認）
-- スモークが緑なら、警告の削減に移行：
-  - `src/jit/lower/core/ops_ext.rs`（未使用・到達不能/冗長の解消、保存スロットの一貫化）
-  - `src/runner/selfhost.rs`（到達不能の除去、変数寿命の短縮、細かな `let`/`mut` 是正）
-- ParserBox 強化（Stage‑2 完了 + Stage‑3 受理を追加）
-  - 進捗ガード（parse_program2/parse_block2/parse_stmt2）。
-  - Stage‑2 受理一式: 単項/二項/比較/論理/呼出/メソッド/引数/if/else/loop/using/local/return/new。
-  - 代入文（identifier = expr）を受理（Stage‑2 は Local に正規化）。
-  - Stage‑3 受理のみ（意味論降下は後続）: break/continue/throw/try-catch-finally を no-op/Expr に降格して受理。
-- Smokes 追加/拡充
-  - Stage‑2: `tools/selfhost_stage2_smoke.sh`（自己ホスト直）・`tools/selfhost_stage2_bridge_smoke.sh`（自己ホスト→JSON→PyVM）。
-  - JSON 固定ベクトル: `tests/json_v0/*.json` と `tools/pyvm_json_vectors_smoke.sh`（arith/if/while/logical/strings 代表）。
-  - 新規 apps/tests: try/finally 合成、短絡＋PHI、二重ループ独立性、ループ片側PHI、メソッドチェーン。
-  - Stage‑3 受理確認: `tools/selfhost_stage3_accept_smoke.sh`（受理のみを確認、実行意味論は降格）。
+- いよいよ「Nyash で書く」段階へ（Self‑Hosting 実装の着手）：
+  1) ParserBox 拡張（Stage‑2 の堅牢化・回帰修正）
+     - 算術/比較/論理/呼出/メソッド/if/else/loop/local/return/new の受理を再確認。
+     - 代入文の正規化（`identifier = expr` → Local/Store）。
+  2) EmitterBox 拡張（JSON v0 の安定化）
+     - `meta.usings` の付与一貫化、配列/Map リテラルの後方対応（将来拡張の下地）。
+  3) 自己ホスト経路で Ny 実装切替のゲート準備（現状は Python MVP 優先を維持）。
+  4) テスト:
+     - `source tools/dev_env.sh pyvm`
+     - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_smoke.sh`
+     - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_bridge_smoke.sh`
+     - Torture（VM中心）: `(cd tests/nyash_syntax_torture_20250916 && BACKENDS="vm" NYASH_BIN=../../target/release/nyash bash run_spec_smoke.sh)`
 - Runner/Bridge 実行系
   - `--ny-parser-pipe` は `NYASH_PIPE_USE_PYVM=1` で PyVM に委譲（exit code 判定に統一）。
   - 自己ホスト JSON 生成は Python MVP を優先、LLVM EXE/インラインVMを段階フォールバック。
@@ -44,14 +53,21 @@ Quick Next (today)
 
 Current Status
 - Stage‑2: 自己ホスト → JSON v0 → PyVM の代表スモークは緑（配列/文字列/論理/if/loop）。
-- Stage‑3: 構文受理のみ完了（break/continue/throw/try/catch/finally）。現時点では JSON 降格（no-op/Expr）で安全受理。
-- Runner: `--ny-parser-pipe` で PyVM 委譲（exit code 判定）。自己ホスト JSON は Python MVP/EXE/VM の3段フォールバックで生成可能。
+- Stage‑3: 構文受理のみ完了（break/continue/throw/try/catch/finally）。現時点では JSON 降格（no‑op/Expr）で安全受理。
+- Runner: Using/Resolver を前処理に統合（BoxIndex/キャッシュ/strict）。`--ny-parser-pipe` は PyVM 委譲（exit code 判定）。
+- llvmlite/AOT: Array/Map の基本操作（push/get/set/has/size, length）が NyRT ハンドルAPIで動作。`ny_main` は i64 戻り・`Main.main/1` 優先で起動。
 
 Open
 - Bridge/PHI の正規化: 短絡（入れ子）における merge/PHI incoming を固定化（rhs_end/fall_bb の順序）。
 - JSON v0 の拡張方針: break/continue/try/catch/finally の表現（受け皿設計 or 受理時の事前降下）。
+- per‑plugin meta の反映: `require_prefix/expose_short_names/prefix` を Resolver 挙動へ段階適用（導線は実装済み）。
 - `me` の扱い: MVP は `NYASH_BRIDGE_ME_DUMMY=1` の仮注入を継続（将来撤去）。
 - LLVM 直結（任意）: JSON v0 → LLVM の導線追加は後回し。
+
+- NyRT 整頓:
+  - FFI ヘルパー化（handles/boxing 正規化）／birth_h→new_i64x 統合／Core Box のプラグイン事前登録／FFI エクスポートのマクロ化。
+- llvmlite 整頓:
+  - boxcall のテーブル駆動化、追加 API（delete/keys/values など）の段階配線。
 
 Plan (to Self‑Hosting)
 1) Phase‑1: Stage‑2 完了＋堅牢化（今ここ）
@@ -157,3 +173,7 @@ Namespaces / Using（現状）
   - `NYASH_RESOLVE_TRACE=1`: 解決手順/キャッシュヒット/未解決候補をログ出力。
 
   - スモークが緑＝基礎健全性確認後に、静的ノイズの除去を安全に一気通貫で行う。
+
+**AOT Quick**
+- Array literal: `NYASH_SYNTAX_SUGAR_LEVEL=basic ./tools/build_llvm.sh tmp/aot_array_literal_main.nyash -o app && ./app`
+- Map literal: `NYASH_SYNTAX_SUGAR_LEVEL=basic NYASH_ENABLE_MAP_LITERAL=1 ./tools/build_llvm.sh tmp/aot_map_literal_main.nyash -o app && ./app`

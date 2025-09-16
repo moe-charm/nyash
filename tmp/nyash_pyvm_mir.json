@@ -6,31 +6,82 @@
           "id": 0,
           "instructions": [
             {
+              "args": [],
               "dst": 0,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
+              "op": "newbox",
+              "type": "MapBox"
             },
             {
               "dst": 1,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 2
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "name"
               }
             },
             {
               "dst": 2,
-              "lhs": 0,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 1
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Alice"
+              }
+            },
+            {
+              "args": [
+                1,
+                2
+              ],
+              "box": 0,
+              "dst": 3,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "age"
+              }
+            },
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 25
+              }
+            },
+            {
+              "args": [
+                4,
+                5
+              ],
+              "box": 0,
+              "dst": 6,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "args": [],
+              "box": 0,
+              "dst": 7,
+              "method": "size",
+              "op": "boxcall"
             },
             {
               "op": "ret",
-              "value": 2
+              "value": 7
             }
           ]
         }

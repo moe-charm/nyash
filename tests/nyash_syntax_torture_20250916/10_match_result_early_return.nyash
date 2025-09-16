@@ -1,0 +1,18 @@
+
+# Expect: ok:42
+box Result {
+  private { ok, val }
+  birth(ok, val) { me.ok = ok; me.val = val }
+  isOk() { return me.ok }
+  get() { return me.val }
+}
+fn check(n) {
+  if n < 0 { return new Result(false, 0) }
+  return new Result(true, n*2)
+}
+local r = check(21)
+if r.isOk() {
+  print("ok:" + r.get())
+} else {
+  print("err")
+}

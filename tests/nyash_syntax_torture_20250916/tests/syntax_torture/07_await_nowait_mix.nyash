@@ -1,0 +1,5 @@
+
+# Expect: 3
+# Simulate async using tasks; if runtime not ready, keep as a spec stub.
+nowait t1 = 1 + 2
+print(await t1)
