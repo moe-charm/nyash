@@ -1,6 +1,6 @@
 // Expression lowering split from builder.rs to keep files lean
 use super::{ConstValue, MirInstruction, ValueId};
-use crate::ast::{ASTNode, AssignStmt, ReturnStmt};
+use crate::ast::{ASTNode, AssignStmt, ReturnStmt, BinaryExpr, CallExpr};
 
 impl super::MirBuilder {
     // Main expression dispatcher
@@ -19,12 +19,11 @@ impl super::MirBuilder {
         match ast {
             ASTNode::Literal { value, .. } => self.build_literal(value),
 
-            ASTNode::BinaryOp {
-                left,
-                operator,
-                right,
-                ..
-            } => self.build_binary_op(*left, operator, *right),
+            node @ ASTNode::BinaryOp { .. } => {
+                // Use BinaryExpr for clear destructuring (no behavior change)
+                let e = BinaryExpr::try_from(node).expect("ASTNode::BinaryOp must convert");
+                self.build_binary_op(*e.left, e.operator, *e.right)
+            }
 
             ASTNode::UnaryOp {
                 operator, operand, ..
@@ -87,9 +86,10 @@ impl super::MirBuilder {
                 }
             }
 
-            ASTNode::FunctionCall {
-                name, arguments, ..
-            } => self.build_function_call(name.clone(), arguments.clone()),
+            node @ ASTNode::FunctionCall { .. } => {
+                let c = CallExpr::try_from(node).expect("ASTNode::FunctionCall must convert");
+                self.build_function_call(c.name, c.arguments)
+            }
 
             ASTNode::Call {
                 callee, arguments, ..

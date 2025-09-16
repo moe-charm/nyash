@@ -103,21 +103,14 @@ impl<'a> LoopBuilder<'a> {
     ) -> Result<ValueId, String> {
         // 1. ブロックの準備
         let preheader_id = self.current_block()?;
-        let header_id = self.new_block();
-        let body_id = self.new_block();
-        let after_loop_id = self.new_block();
+        let (header_id, body_id, after_loop_id) =
+            crate::mir::builder::loops::create_loop_blocks(self.parent_builder);
         self.loop_header = Some(header_id);
         self.continue_snapshots.clear();
-        // Push loop context to parent builder (for nested break/continue lowering)
-        crate::mir::builder::loops::push_loop_context(
-            self.parent_builder,
-            header_id,
-            after_loop_id,
-        );
 
         // 2. Preheader -> Header へのジャンプ
         self.emit_jump(header_id)?;
-        let _ = self.add_predecessor(header_id, preheader_id);
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, header_id, preheader_id);
 
         // 3. Headerブロックの準備（unsealed状態）
         self.set_current_block(header_id)?;
@@ -133,8 +126,8 @@ impl<'a> LoopBuilder<'a> {
 
         // 6. 条件分岐
         self.emit_branch(condition_value, body_id, after_loop_id)?;
-        let _ = self.add_predecessor(body_id, header_id);
-        let _ = self.add_predecessor(after_loop_id, header_id);
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, body_id, header_id);
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, after_loop_id, header_id);
 
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
@@ -159,7 +152,7 @@ impl<'a> LoopBuilder<'a> {
         // 実際の latch_id に対してスナップショットを紐づける
         self.block_var_maps.insert(latch_id, latch_snapshot);
         self.emit_jump(header_id)?;
-        let _ = self.add_predecessor(header_id, latch_id);
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, header_id, latch_id);
 
         // 9. Headerブロックをシール（全predecessors確定）
         self.seal_block(header_id, latch_id)?;
@@ -539,7 +532,7 @@ impl<'a> LoopBuilder<'a> {
                 let cur_block = self.current_block()?;
                 if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
                     self.emit_jump(exit_bb)?;
-                    let _ = self.add_predecessor(exit_bb, cur_block);
+                    let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, exit_bb, cur_block);
                 }
                 // Continue building in a fresh (unreachable) block to satisfy callers
                 let next_block = self.new_block();
@@ -556,7 +549,7 @@ impl<'a> LoopBuilder<'a> {
 
                 if let Some(header) = self.loop_header {
                     self.emit_jump(header)?;
-                    let _ = self.add_predecessor(header, cur_block);
+                    let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, header, cur_block);
                 }
 
                 let next_block = self.new_block();
