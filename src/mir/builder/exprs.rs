@@ -1,6 +1,6 @@
 // Expression lowering split from builder.rs to keep files lean
 use super::{ConstValue, MirInstruction, ValueId};
-use crate::ast::{ASTNode, AssignStmt, ReturnStmt, BinaryExpr, CallExpr};
+use crate::ast::{ASTNode, AssignStmt, ReturnStmt, BinaryExpr, CallExpr, MethodCallExpr, FieldAccessExpr};
 
 impl super::MirBuilder {
     // Main expression dispatcher
@@ -39,32 +39,19 @@ impl super::MirBuilder {
 
             ASTNode::Me { .. } => self.build_me_expression(),
 
-            ASTNode::MethodCall {
-                object,
-                method,
-                arguments,
-                ..
-            } => {
-                if (method == "is" || method == "as") && arguments.len() == 1 {
-                    if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
-                        let obj_val = self.build_expression_impl(*object.clone())?;
+            node @ ASTNode::MethodCall { .. } => {
+                let m = MethodCallExpr::try_from(node).expect("ASTNode::MethodCall must convert");
+                if (m.method == "is" || m.method == "as") && m.arguments.len() == 1 {
+                    if let Some(type_name) = Self::extract_string_literal(&m.arguments[0]) {
+                        let obj_val = self.build_expression_impl(*m.object.clone())?;
                         let ty = Self::parse_type_name_to_mir(&type_name);
                         let dst = self.value_gen.next();
-                        let op = if method == "is" {
-                            crate::mir::TypeOpKind::Check
-                        } else {
-                            crate::mir::TypeOpKind::Cast
-                        };
-                        self.emit_instruction(MirInstruction::TypeOp {
-                            dst,
-                            op,
-                            value: obj_val,
-                            ty,
-                        })?;
+                        let op = if m.method == "is" { crate::mir::TypeOpKind::Check } else { crate::mir::TypeOpKind::Cast };
+                        self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
                         return Ok(dst);
                     }
                 }
-                self.build_method_call(*object.clone(), method.clone(), arguments.clone())
+                self.build_method_call(*m.object.clone(), m.method.clone(), m.arguments.clone())
             }
 
             ASTNode::FromCall {
@@ -186,8 +173,9 @@ impl super::MirBuilder {
                 }
             }
 
-            ASTNode::FieldAccess { object, field, .. } => {
-                self.build_field_access(*object.clone(), field.clone())
+            node @ ASTNode::FieldAccess { .. } => {
+                let f = FieldAccessExpr::try_from(node).expect("ASTNode::FieldAccess must convert");
+                self.build_field_access(*f.object.clone(), f.field.clone())
             }
 
             ASTNode::New {

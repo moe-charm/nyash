@@ -132,3 +132,51 @@ impl From<CallExpr> for ASTNode {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct MethodCallExpr {
+    pub object: Box<ASTNode>,
+    pub method: String,
+    pub arguments: Vec<ASTNode>,
+    pub span: Span,
+}
+
+impl TryFrom<ASTNode> for MethodCallExpr {
+    type Error = ASTNode;
+    fn try_from(node: ASTNode) -> Result<Self, Self::Error> {
+        match node {
+            ASTNode::MethodCall { object, method, arguments, span } =>
+                Ok(MethodCallExpr { object, method, arguments, span }),
+            other => Err(other),
+        }
+    }
+}
+
+impl From<MethodCallExpr> for ASTNode {
+    fn from(m: MethodCallExpr) -> Self {
+        ASTNode::MethodCall { object: m.object, method: m.method, arguments: m.arguments, span: m.span }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldAccessExpr {
+    pub object: Box<ASTNode>,
+    pub field: String,
+    pub span: Span,
+}
+
+impl TryFrom<ASTNode> for FieldAccessExpr {
+    type Error = ASTNode;
+    fn try_from(node: ASTNode) -> Result<Self, Self::Error> {
+        match node {
+            ASTNode::FieldAccess { object, field, span } =>
+                Ok(FieldAccessExpr { object, field, span }),
+            other => Err(other),
+        }
+    }
+}
+
+impl From<FieldAccessExpr> for ASTNode {
+    fn from(f: FieldAccessExpr) -> Self {
+        ASTNode::FieldAccess { object: f.object, field: f.field, span: f.span }
+    }
+}
