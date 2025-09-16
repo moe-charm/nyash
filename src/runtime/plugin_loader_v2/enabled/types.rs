@@ -1,4 +1,5 @@
-use crate::box_trait::{NyashBox, BoxCore, StringBox};
+use crate::box_trait::{BoxCore, NyashBox, StringBox};
+use super::host_bridge::InvokeFn;
 use std::any::Any;
 use std::sync::Arc;
 
@@ -10,14 +11,23 @@ pub struct LoadedPluginV2 {
     pub(super) box_types: Vec<String>,
     pub(super) typeboxes: std::collections::HashMap<String, usize>,
     pub(super) init_fn: Option<unsafe extern "C" fn() -> i32>,
-    pub(super) invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+    pub(super) invoke_fn: InvokeFn,
+}
+
+#[derive(Clone)]
+pub struct PluginBoxMetadata {
+    pub lib_name: String,
+    pub box_type: String,
+    pub type_id: u32,
+    pub invoke_fn: InvokeFn,
+    pub fini_method_id: Option<u32>,
 }
 
 /// v2 Plugin Box handle core
 #[derive(Debug)]
 pub struct PluginHandleInner {
     pub type_id: u32,
-    pub invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+    pub invoke_fn: InvokeFn,
     pub instance_id: u32,
     pub fini_method_id: Option<u32>,
     pub(super) finalized: std::sync::atomic::AtomicBool,
@@ -104,7 +114,7 @@ impl PluginBoxV2 {
 }
 
 /// Helper to construct a PluginBoxV2 from raw ids and invoke pointer safely
-pub fn make_plugin_box_v2(box_type: String, type_id: u32, instance_id: u32, invoke_fn: unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize) -> i32) -> PluginBoxV2 {
+pub fn make_plugin_box_v2(box_type: String, type_id: u32, instance_id: u32, invoke_fn: InvokeFn) -> PluginBoxV2 {
     PluginBoxV2 { box_type, inner: Arc::new(PluginHandleInner { type_id, invoke_fn, instance_id, fini_method_id: None, finalized: std::sync::atomic::AtomicBool::new(false) }) }
 }
 
@@ -112,7 +122,7 @@ pub fn make_plugin_box_v2(box_type: String, type_id: u32, instance_id: u32, invo
 pub fn construct_plugin_box(
     box_type: String,
     type_id: u32,
-    invoke_fn: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+    invoke_fn: InvokeFn,
     instance_id: u32,
     fini_method_id: Option<u32>,
 ) -> PluginBoxV2 {

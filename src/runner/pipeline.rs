@@ -8,7 +8,6 @@
  */
 
 use super::*;
-use super::box_index::BoxIndex;
 use std::collections::HashMap;
 
 /// Using/module resolution context accumulated from config/env/nyash.toml
@@ -135,39 +134,24 @@ pub(super) fn resolve_using_target(
 ) -> Result<String, String> {
     if is_path { return Ok(tgt.to_string()); }
     let trace = verbose || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
-    // Strict plugin prefix: if enabled and target matches a known plugin box type
-    // and is not qualified (contains '.'), require a qualified/prefixed name.
-    // Strict mode: env or nyash.toml [plugins] require_prefix=true
-    let mut strict_effective = strict;
-    if !strict_effective {
-        if let Ok(text) = std::fs::read_to_string("nyash.toml") {
-            if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
-                if let Some(tbl) = doc.get("plugins").and_then(|v| v.as_table()) {
-                    if let Some(v) = tbl.get("require_prefix").and_then(|v| v.as_bool()) { if v { strict_effective = true; } }
-                }
-            }
-        }
-    }
+    let idx = super::box_index::get_box_index();
+    let mut strict_effective = strict || idx.plugins_require_prefix_global;
     if std::env::var("NYASH_PLUGIN_REQUIRE_PREFIX").ok().as_deref() == Some("1") { strict_effective = true; }
-
-    if strict_effective {
-        let mut is_plugin_short = super::box_index::BoxIndex::is_known_plugin_short(tgt);
-        if !is_plugin_short {
-            // Fallback: heuristic list or env override
-            if let Ok(raw) = std::env::var("NYASH_KNOWN_PLUGIN_SHORTNAMES") {
-                let set: std::collections::HashSet<String> = raw.split(',').map(|s| s.trim().to_string()).collect();
-                is_plugin_short = set.contains(tgt);
-            } else {
-                // Minimal builtins set
-                const KNOWN: &[&str] = &[
-                    "ArrayBox","MapBox","StringBox","ConsoleBox","FileBox","PathBox","MathBox","IntegerBox","TOMLBox"
-                ];
-                is_plugin_short = KNOWN.iter().any(|k| *k == tgt);
+    let meta_for_target = idx.plugin_meta_by_box.get(tgt).cloned();
+    let mut require_prefix_target = meta_for_target.as_ref().map(|m| m.require_prefix).unwrap_or(false);
+    if let Some(m) = &meta_for_target { if !m.expose_short_names { require_prefix_target = true; } }
+    let mut is_plugin_short = meta_for_target.is_some();
+    if !is_plugin_short {
+        is_plugin_short = idx.plugin_boxes.contains(tgt) || super::box_index::BoxIndex::is_known_plugin_short(tgt);
+    }
+    if (strict_effective || require_prefix_target) && is_plugin_short && !tgt.contains('.') {
+        let mut msg = format!("plugin short name '{}' requires prefix", tgt);
+        if let Some(meta) = &meta_for_target {
+            if let Some(pref) = &meta.prefix {
+                msg.push_str(&format!(" (use '{}.{}')", pref, tgt));
             }
         }
-        if is_plugin_short && !tgt.contains('.') {
-            return Err(format!("plugin short name '{}' requires prefix (strict)", tgt));
-        }
+        return Err(msg);
     }
     let key = {
         let base = context_dir.and_then(|p| p.to_str()).unwrap_or("");
@@ -331,4 +315,49 @@ pub(super) fn lint_fields_top(code: &str, strict: bool, verbose: bool) -> Result
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn plugin_meta_requires_prefix_even_when_relaxed() {
+        let dir = tempdir().expect("tempdir");
+        let old = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(dir.path()).expect("chdir");
+        let toml = r#"
+[plugins]
+require_prefix = false
+
+[plugins."test-plugin"]
+prefix = "test"
+require_prefix = true
+expose_short_names = false
+boxes = ["ArrayBox"]
+"#;
+        std::fs::write("nyash.toml", toml).expect("write nyash.toml");
+        crate::runner::box_index::refresh_box_index();
+        crate::runner::box_index::cache_clear();
+
+        let res = resolve_using_target(
+            "ArrayBox",
+            false,
+            &[],
+            &[],
+            &HashMap::new(),
+            None,
+            false,
+            false,
+        );
+        assert!(res.is_err(), "expected prefix enforcement");
+        let err = res.err().unwrap();
+        assert!(err.contains("requires prefix"));
+        assert!(err.contains("test."));
+
+        std::env::set_current_dir(old).expect("restore cwd");
+        crate::runner::box_index::refresh_box_index();
+        crate::runner::box_index::cache_clear();
+    }
 }

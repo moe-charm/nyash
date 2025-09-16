@@ -122,5 +122,20 @@ OUT=$(NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 NYASH_VM_USE_PY=${NY
 set -e
 echo "$OUT" | rg -q '^Result:\s*3\b' && pass "String.length()" || fail "String.length()" "$OUT"
 
+# J) ternary expression → 10
+cat > "$TMP/selfhost_ternary_basic.nyash" <<'NY'
+return (1 < 2) ? 10 : 20
+NY
+set +e
+NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 NYASH_VM_USE_PY=${NYASH_VM_USE_PY:-1} \
+      "$BIN" --backend vm "$TMP/selfhost_ternary_basic.nyash" >/dev/null 2>&1
+CODE=$?
+set -e
+if [[ "$CODE" -eq 10 ]]; then
+  pass "Ternary basic"
+else
+  fail "Ternary basic" "exit=$CODE"
+fi
+
 echo "All selfhost Stage-2 smokes PASS" >&2
 exit 0

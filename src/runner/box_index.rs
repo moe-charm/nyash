@@ -15,6 +15,7 @@ pub struct BoxIndex {
     pub aliases: HashMap<String, String>,
     pub plugin_boxes: HashSet<String>,
     pub plugin_meta: HashMap<String, PluginMeta>,
+    pub plugin_meta_by_box: HashMap<String, PluginMeta>,
     pub plugins_require_prefix_global: bool,
 }
 
@@ -43,6 +44,7 @@ impl BoxIndex {
         // plugin box types (best-effort; may be empty if host not initialized yet)
         let mut plugin_boxes: HashSet<String> = HashSet::new();
         let mut plugin_meta: HashMap<String, PluginMeta> = HashMap::new();
+        let mut plugin_meta_by_box: HashMap<String, PluginMeta> = HashMap::new();
         let mut plugins_require_prefix_global = false;
 
         // Read per-plugin meta and global flags from nyash.toml when available
@@ -59,7 +61,13 @@ impl BoxIndex {
                             let prefix = t.get("prefix").and_then(|x| x.as_str()).map(|s| s.to_string());
                             let require_prefix = t.get("require_prefix").and_then(|x| x.as_bool()).unwrap_or(false);
                             let expose_short_names = t.get("expose_short_names").and_then(|x| x.as_bool()).unwrap_or(true);
-                            plugin_meta.insert(k.clone(), PluginMeta { prefix, require_prefix, expose_short_names });
+                            let meta = PluginMeta { prefix, require_prefix, expose_short_names };
+                            plugin_meta.insert(k.clone(), meta.clone());
+                            if let Some(arr) = t.get("boxes").and_then(|x| x.as_array()) {
+                                for b in arr {
+                                    if let Some(name) = b.as_str() { plugin_meta_by_box.insert(name.to_string(), meta.clone()); }
+                                }
+                            }
                         }
                     }
                 }
@@ -68,13 +76,18 @@ impl BoxIndex {
         let host = crate::runtime::get_global_plugin_host();
         if let Ok(h) = host.read() {
             if let Some(cfg) = h.config_ref() {
-                for (_lib, def) in &cfg.libraries {
-                    for bt in &def.boxes { plugin_boxes.insert(bt.clone()); }
+                for (lib, def) in &cfg.libraries {
+                    for bt in &def.boxes {
+                        plugin_boxes.insert(bt.clone());
+                        if let Some(meta) = plugin_meta.get(lib) {
+                            plugin_meta_by_box.insert(bt.clone(), meta.clone());
+                        }
+                    }
                 }
             }
         }
 
-        Self { aliases, plugin_boxes, plugin_meta, plugins_require_prefix_global }
+        Self { aliases, plugin_boxes, plugin_meta, plugin_meta_by_box, plugins_require_prefix_global }
     }
 
     pub fn is_known_plugin_short(name: &str) -> bool {

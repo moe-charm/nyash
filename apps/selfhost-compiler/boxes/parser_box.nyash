@@ -402,7 +402,37 @@ box ParserBox {
   parse_term2(src, i) { local lhs = me.parse_unary2(src, i) local j = me.gpos_get() local cont = 1 loop(cont == 1) { j = me.skip_ws(src, j) if j >= src.length() { cont = 0 } else { local op = src.substring(j, j+1) if op != "*" && op != "/" { cont = 0 } else { local rhs = me.parse_unary2(src, j+1) j = me.gpos_get() lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}" } } } me.gpos_set(j) return lhs }
   parse_sum2(src, i) { local lhs = me.parse_term2(src, i) local j = me.gpos_get() local cont = 1 loop(cont == 1) { j = me.skip_ws(src, j) if j >= src.length() { cont = 0 } else { local op = src.substring(j, j+1) if op != "+" && op != "-" { cont = 0 } else { local rhs = me.parse_term2(src, j+1) j = me.gpos_get() lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}" } } } me.gpos_set(j) return lhs }
   parse_compare2(src, i) { local lhs = me.parse_sum2(src, i) local j = me.gpos_get() j = me.skip_ws(src, j) local two = src.substring(j, j+2) local one = src.substring(j, j+1) local op = "" if two == "==" || two == "!=" || two == "<=" || two == ">=" { op = two j = j + 2 } else { if one == "<" || one == ">" { op = one j = j + 1 } } if op == "" { me.gpos_set(j) return lhs } local rhs = me.parse_sum2(src, j) j = me.gpos_get() me.gpos_set(j) return "{\"type\":\"Compare\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}" }
-  parse_expr2(src, i) { local lhs = me.parse_compare2(src, i) local j = me.gpos_get() local cont = 1 loop(cont == 1) { j = me.skip_ws(src, j) local two = src.substring(j, j+2) if two != "&&" && two != "||" { cont = 0 } else { local rhs = me.parse_compare2(src, j+2) j = me.gpos_get() lhs = "{\"type\":\"Logical\",\"op\":\"" + two + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}" } } me.gpos_set(j) return lhs }
+  parse_expr2(src, i) {
+    local lhs = me.parse_compare2(src, i)
+    local j = me.gpos_get()
+    local cont = 1
+    loop(cont == 1) {
+      j = me.skip_ws(src, j)
+      local two = src.substring(j, j+2)
+      if two != "&&" && two != "||" { cont = 0 } else {
+        local rhs = me.parse_compare2(src, j+2)
+        j = me.gpos_get()
+        lhs = "{\"type\":\"Logical\",\"op\":\"" + two + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
+      }
+    }
+    j = me.skip_ws(src, j)
+    if src.substring(j, j+1) == "?" {
+      j = j + 1
+      j = me.skip_ws(src, j)
+      local then_expr = me.parse_expr2(src, j)
+      j = me.gpos_get()
+      j = me.skip_ws(src, j)
+      if src.substring(j, j+1) == ":" { j = j + 1 }
+      j = me.skip_ws(src, j)
+      local else_expr = me.parse_expr2(src, j)
+      j = me.gpos_get()
+      if else_expr.length() == 0 { else_expr = "{\"type\":\"Int\",\"value\":0}" }
+      me.gpos_set(j)
+      return "{\"type\":\"Ternary\",\"cond\":" + lhs + ",\"then\":" + then_expr + ",\"else\":" + else_expr + "}"
+    }
+    me.gpos_set(j)
+    return lhs
+  }
   parse_args2(src, i) {
     local j = me.skip_ws(src, i)
     local n = src.length()

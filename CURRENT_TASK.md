@@ -31,10 +31,14 @@ Quick Next (today)
   1) ParserBox 拡張（Stage‑2 の堅牢化・回帰修正）✅ Done 2025‑09‑16
      - bool/null リテラルと空 RHS（代入/return/local）を Int(0) フォールバックで正規化。
      - simple assignment → Local 正常化を `==` 判定と共に調整。
+     - 三項演算子 `cond ? a : b` を `Ternary` ノードに正規化し、自走スモーク追加。
   2) EmitterBox 拡張（JSON v0 の安定化）✅ Done 2025‑09‑16
      - `meta.usings` を常時出力（空は `[]`）。
-  3) 自己ホスト経路で Ny 実装切替のゲート準備（現状は Python MVP 優先を維持）。
-  4) テスト:
+  3) Resolver/BoxIndex の prefix メタ反映 ✅ Done 2025‑09‑16
+     - `plugin_meta_by_box` を構築し、`require_prefix` / `expose_short_names` を `resolve_using_target` へ適用。
+     - `NYASH_PLUGIN_REQUIRE_PREFIX` が無効でも per-plugin meta で短名禁止を検知。
+  4) 自己ホスト経路で Ny 実装切替のゲート準備（現状は Python MVP 優先を維持）。
+  5) テスト:
      - `source tools/dev_env.sh pyvm`
      - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_smoke.sh`
      - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_bridge_smoke.sh`

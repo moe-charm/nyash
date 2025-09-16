@@ -1,4 +1,4 @@
-use super::types::{PluginBoxV2, PluginHandleInner, LoadedPluginV2};
+use super::types::{PluginBoxMetadata, PluginBoxV2, PluginHandleInner, LoadedPluginV2};
 use crate::bid::{BidResult, BidError};
 use crate::box_trait::NyashBox;
 use crate::config::nyash_toml_v2::{NyashConfigV2, LibraryDefinition};
@@ -144,6 +144,40 @@ impl PluginLoaderV2 {
             }
         }
         None
+    }
+
+    pub fn metadata_for_type_id(&self, type_id: u32) -> Option<PluginBoxMetadata> {
+        let config = self.config.as_ref()?;
+        let cfg_path = self.config_path.as_ref()?;
+        let toml_str = std::fs::read_to_string(cfg_path).ok()?;
+        let toml_value: toml::Value = toml::from_str(&toml_str).ok()?;
+        let (lib_name, box_type) = self.find_box_by_type_id(config, &toml_value, type_id)?;
+        let plugin = {
+            let plugins = self.plugins.read().ok()?;
+            plugins.get(lib_name)?.clone()
+        };
+        let spec_key = (lib_name.to_string(), box_type.to_string());
+        let mut resolved_type = type_id;
+        let mut fini_method = None;
+        if let Some(spec) = self.box_specs.read().ok()?.get(&spec_key).cloned() {
+            if let Some(tid) = spec.type_id { resolved_type = tid; }
+            if let Some(fini) = spec.fini_method_id { fini_method = Some(fini); }
+        }
+        if resolved_type == type_id || fini_method.is_none() {
+            if let Some(cfg) = config.get_box_config(lib_name, box_type, &toml_value) {
+                if resolved_type == type_id { resolved_type = cfg.type_id; }
+                if fini_method.is_none() {
+                    fini_method = cfg.methods.get("fini").map(|m| m.method_id);
+                }
+            }
+        }
+        Some(PluginBoxMetadata {
+            lib_name: lib_name.to_string(),
+            box_type: box_type.to_string(),
+            type_id: resolved_type,
+            invoke_fn: plugin.invoke_fn,
+            fini_method_id: fini_method,
+        })
     }
 
     pub fn construct_existing_instance(&self, type_id: u32, instance_id: u32) -> Option<Box<dyn NyashBox>> {
