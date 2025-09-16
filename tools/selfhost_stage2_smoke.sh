@@ -12,6 +12,10 @@ fi
 TMP="$ROOT_DIR/tmp"
 mkdir -p "$TMP"
 
+# Default to PyVM reference unless explicitly disabled by caller
+: "${NYASH_VM_USE_PY:=1}"
+export NYASH_VM_USE_PY
+
 pass() { echo "✅ $1" >&2; }
 fail() { echo "❌ $1" >&2; echo "$2" >&2; exit 1; }
 

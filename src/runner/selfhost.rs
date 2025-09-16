@@ -165,6 +165,7 @@ impl NyashRunner {
                 // Gates
                 if std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") { cmd.arg("--min-json"); }
                 if std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") { cmd.arg("--read-tmp"); }
+                if std::env::var("NYASH_NY_COMPILER_STAGE3").ok().as_deref() == Some("1") { cmd.arg("--stage3"); }
                 if let Ok(raw) = std::env::var("NYASH_NY_COMPILER_CHILD_ARGS") { for tok in raw.split_whitespace() { cmd.arg(tok); } }
                 let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
                 let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -212,11 +213,9 @@ impl NyashRunner {
                         if emit_only {
                             return false;
                         } else {
-                            // Prefer PyVM when requested AND the module contains BoxCalls (Stage-2 semantics)
-                            let needs_pyvm = module.functions.values().any(|f| {
-                                f.blocks.values().any(|bb| bb.instructions.iter().any(|inst| matches!(inst, crate::mir::MirInstruction::BoxCall { .. })))
-                            });
-                            if needs_pyvm && std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                            // Prefer PyVM when requested (reference semantics), regardless of BoxCall presence
+                            let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
+                            if prefer_pyvm {
                                 if let Ok(py3) = which::which("python3") {
                                     let runner = std::path::Path::new("tools/pyvm_runner.py");
                                     if runner.exists() {
@@ -272,7 +271,7 @@ impl NyashRunner {
             }
             let inline_path = std::path::Path::new("tmp").join("inline_selfhost_emit.nyash");
             let inline_code = format!(
-                "include \"apps/selfhost-compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
+                "include \"apps/selfhost-compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
                 esc
             );
             if let Err(e) = std::fs::write(&inline_path, inline_code) {

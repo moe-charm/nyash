@@ -14,8 +14,15 @@ What Changed (today)
 - フィールドは box 先頭のみルールのリンタを Runner に追加（`NYASH_FIELDS_TOP_STRICT=1` でエラー）。
 - Syntax Torture スイートの実行正規化（末行比較）。一部テスト本文を Nyash 仕様に合わせて修正。
 - JSON v0 仕様に Stage‑3 ノード（Break/Continue/Throw/Try）を追記。Parser Stage‑3 設計メモの現状/残課題を更新。
-- LLVM smoke に Stage‑3 loop サンプル（break/continue + throw/try/catch/finally 付き）を追加（`NYASH_LLVM_STAGE3_SMOKE=1`）。
-- Bridge (`json_v0`) に Stage‑3 throw/try の実稼働ルートを追加（`NYASH_BRIDGE_THROW_ENABLE=1` / `NYASH_BRIDGE_TRY_ENABLE=1` で MIR Throw/Catch を生成）。
+- LLVM curated smokes を新設（`tools/smokes/curated_llvm.sh`）。core/async/loop/peek を10s/ケースで実行、PHI‑off も検証可（`--phi-off`）。
+- LLVM Stage‑3 受理スモークを追加（`tools/smokes/curated_llvm_stage3.sh`）。try/finally・dead throw を10s/ケースで実行。PHI‑off（`--phi-off`）/trap抑止（`NYASH_LLVM_TRAP_ON_THROW=0`）も確認。
+- 旧スモークは `tools/smokes/archive/` へ整理（JIT/Cranelift 系は当面対象外）。
+- Bridge/Builder に PHI 非生成モードを導入（`NYASH_MIR_NO_PHI=1`）。LLVM Resolver 合成と統一し、Verifier は緩和ゲート（`verify_allow_no_phi()`）を追加。
+- LLVM 側に PHI 合成トレースを追加（`NYASH_LLVM_TRACE_PHI=1`）。jump/finalize/resolve の観測を統一タグで出力。
+- LLVM Throw を最小降ろし（`llvm.trap`→`unreachable`、`NYASH_LLVM_TRAP_ON_THROW=0` で trap 抑止）。
+- 環境変数アクセスを `config::env` に集約（`mir_no_phi()`/`verify_allow_no_phi()`/`llvm_use_harness()`）。
+- dev プロファイル `tools/dev_env.sh phi_off` を追加。ルート清掃ユーティリティ `tools/clean_root_artifacts.sh` を追加。
+- CI（GH Actions）を curated LLVM（PHI‑on/off）実行に刷新。旧JITジョブは停止。
 
 Decision (Phase‑15 wrap‑up)
 - MIR13 移行（PHI 非生成）: Phase‑15 の締めとして、MIR 生成層（Bridge/Builder）は PHI を生成しない方針に切替。PHI 合成は LLVM 層（llvmlite/Resolver）に集約。
@@ -26,10 +33,15 @@ Next Focus (Throw/Try — LLVM first)
 - ブリッジ設計: `emit_degraded_throw` の差し替え方針を策定し、JSON v0 `Try` ノード → MIR 変換の仕様を決める（Stage-3 例外モデル）。
 - MIR Builder/Runtime 調査: Rust VM/PyVM の `ControlFlow::Throw` 経路と既存 TryCatch 降格の挙動を整理。必要に応じて docs と CURRENT_TASK に反映。
 - PyVM 設計: 例外モデルをどこまで Python 側に実装するか決め、最小テスト計画を用意。
-- LLVM 実装方針: Throw/Try の MIR 命令を LLVM 側がどう扱うか（panic扱い or fallback）を設計し、smoke 更新案を作る。
+- LLVM 実装方針: Throw/Try の MIR 命令を LLVM 側がどう扱うか（panic扱い or fallback）を設計し、smoke 更新案を作る（現状 Throw は trap/unreachable 最小降ろし完了）。
 - テスト計画: JSON フィクスチャと `tools/llvm_smoke.sh` を中心に Stage-3 例外用のスモーク/単体テストを整備。
 
 ※ Cranelift/JIT 系は当面対象外。ビルド時も LLVM のみを有効化（JIT 関連 feature/CI は無視）。
+
+Runner updates (2025‑09‑16)
+- Selfhost pipeline: PyVM 優先（`NYASH_VM_USE_PY=1`）を全分岐で適用（EXE/inline/child 経路の一貫性）。
+- 重複関数の整理: `modes/common.rs::try_run_ny_compiler_pipeline` は `selfhost.rs::try_run_selfhost_pipeline` に委譲（ドリフト防止）。
+- Stage‑3 受理導線: `NYASH_NY_COMPILER_STAGE3=1` で子プロセスに `--stage3` を付与。inline フォールバックは `stage3_enable(1)` を既定有効化。
 
 - llvmlite/AOT（本戦）強化 — コアコレクション配線とエントリ統一
   - Array/Map の BoxCall を NyRT ハンドルAPIに直結：
@@ -170,6 +182,18 @@ Smoke Policy (Phase‑15)
 - PyVM: 一部チェックのみ（async/nowait/await/GC/sync は対象外）
 - LLVM: フル対応（llvmlite harness）。`tools/smokes/curated_llvm.sh [--phi-off]` を利用
 - JIT: 未整備（JIT向けスモークは `tools/smokes/archive/` に移管）
+ - Stage‑3 acceptance（Bridge 経路）: `tools/ny_stage3_bridge_accept_smoke.sh`（Try/Break/Continue/Throw を JSON v0 で受理できることを確認）
+
+Next Phase — Selfhost Parser/Compiler in Nyash（着手準備完了）
+- 目的: Nyash スクリプトで Parser/Emitter を実装し、Ny → JSON v0 → Bridge → MIR 実行の自己ホスト路線に移行。
+- ステップ（最小 MVP）:
+  1) `apps/selfhost-compiler/` に ParserBox/EmitterBox を Nyash で実装（Stage‑2 構文、JSON v0 出力）。
+  2) ランナーに `NYASH_USE_NY_COMPILER=1` ゲートを追加し、子プロセス/pipe で JSON v0 を受け取って Bridge→MIR 実行。
+  3) curated LLVM スモークの一部を自己ホスト経路で通す（PyVMは非対象、LLVMで検証）。
+  4) CI に自己ホスト最小ジョブを追加（timeout/静音運用、PHI‑on 既定）。
+- ガード/ポリシー:
+  - 既存 Rust Parser/Emitter はフォールバックとして保持（`NYASH_SKIP_TOML_ENV=1` で隔離可能）。
+  - 仕様差が出た場合は LLVM 側の意味論に合わせて Nyash 実装を調整。
 
 MIR13 Plan（Phase‑15 終盤）
 - Bridge/Builder: PHI を生成しない（受理は維持）。If/Loop の合流は LLVM Resolver に任せる。

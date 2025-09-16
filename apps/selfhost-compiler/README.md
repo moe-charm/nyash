@@ -12,6 +12,7 @@ Run (behind flag)
 - `NYASH_USE_NY_COMPILER=1 target/release/nyash --backend vm <program.nyash>`
   - The runner writes the input to `tmp/ny_parser_input.ny` and invokes this program.
   - It captures a JSON v0 line from stdout and executes it via the JSON bridge.
+  - Stage‑3 syntax gate: set `NYASH_NY_COMPILER_STAGE3=1` to pass `--stage3` to the parser (accepts Break/Continue/Throw/Try in JSON v0).
 
 Notes
 - Early MVP emits a minimal JSON v0 (currently a placeholder: return 0). We will gradually wire lexer/parser/emitter.

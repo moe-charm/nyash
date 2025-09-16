@@ -60,6 +60,7 @@ Selfhost 子プロセスの引数透過（開発者向け）
 - 親→子にスクリプト引数を渡す環境変数:
   - `NYASH_NY_COMPILER_MIN_JSON=1` → 子に `-- --min-json`
   - `NYASH_SELFHOST_READ_TMP=1`    → 子に `-- --read-tmp`（`tmp/ny_parser_input.ny` を FileBox で読み込む。CIでは未使用）
+  - `NYASH_NY_COMPILER_STAGE3=1`   → 子に `-- --stage3`（Stage‑3 構文受理: Break/Continue/Throw/Try）
   - `NYASH_NY_COMPILER_CHILD_ARGS` → スペース区切りで子にそのまま渡す
 - 子側（apps/selfhost-compiler/compiler.nyash）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
 

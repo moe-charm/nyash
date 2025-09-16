@@ -131,6 +131,8 @@ impl NyashRunner {
 
     /// Phase-15.3: Attempt Ny compiler pipeline (Ny -> JSON v0 via Ny program), then execute MIR
     pub(crate) fn try_run_ny_compiler_pipeline(&self, filename: &str) -> bool {
+        // Delegate to centralized selfhost pipeline to avoid drift
+        return self.try_run_selfhost_pipeline(filename);
         use std::io::Write;
         // Read input source
         let code = match fs::read_to_string(filename) {
@@ -274,11 +276,9 @@ impl NyashRunner {
                         if emit_only {
                             return false;
                         } else {
-                            // Prefer PyVM when requested AND the module contains BoxCalls (Stage-2 semantics)
-                            let needs_pyvm = module.functions.values().any(|f| {
-                                f.blocks.values().any(|bb| bb.instructions.iter().any(|inst| matches!(inst, crate::mir::MirInstruction::BoxCall { .. })))
-                            });
-                            if needs_pyvm && std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                            // Prefer PyVM when requested (reference semantics), regardless of BoxCall presence
+                            let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
+                            if prefer_pyvm {
                                 if let Ok(py3) = which::which("python3") {
                                     let runner = std::path::Path::new("tools/pyvm_runner.py");
                                     if runner.exists() {
@@ -467,7 +467,7 @@ impl NyashRunner {
         }
         // Parse JSON v0 → MIR module
         match json_v0_bridge::parse_json_v0_to_module(&json_line) {
-            Ok(module) => {
+                    Ok(module) => {
                 let emit_only_default = "1".to_string();
                 let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or(emit_only_default) == "1";
                 println!("🚀 Ny compiler MVP (ny→json_v0) path ON");
@@ -476,11 +476,9 @@ impl NyashRunner {
                     // Do not execute; fall back to default path to keep final Result unaffected (Stage‑1 policy)
                     false
                 } else {
-                    // Prefer PyVM when requested AND the module contains BoxCalls
-                    let needs_pyvm = module.functions.values().any(|f| {
-                        f.blocks.values().any(|bb| bb.instructions.iter().any(|inst| matches!(inst, crate::mir::MirInstruction::BoxCall { .. })))
-                    });
-                    if needs_pyvm && std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                    // Prefer PyVM when requested (reference semantics)
+                    let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
+                    if prefer_pyvm {
                         if let Ok(py3) = which::which("python3") {
                             let runner = std::path::Path::new("tools/pyvm_runner.py");
                             if runner.exists() {
