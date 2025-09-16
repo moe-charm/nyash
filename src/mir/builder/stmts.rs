@@ -1,6 +1,6 @@
 use super::phi::extract_assigned_var;
 use super::{ConstValue, Effect, EffectMask, MirInstruction, ValueId};
-use crate::ast::ASTNode;
+use crate::ast::{ASTNode, CallExpr};
 use crate::mir::loop_builder::LoopBuilder;
 use crate::mir::TypeOpKind;
 
@@ -8,6 +8,32 @@ impl super::MirBuilder {
     // Print statement: env.console.log(value) with early TypeOp handling
     pub(super) fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         super::utils::builder_debug_log("enter build_print_statement");
+        // Prefer wrapper for simple function-call pattern (non-breaking refactor)
+        if let Ok(call) = CallExpr::try_from(expression.clone()) {
+            if (call.name == "isType" || call.name == "asType") && call.arguments.len() == 2 {
+                super::utils::builder_debug_log("pattern: print(FunctionCall isType|asType) [via wrapper]");
+                if let Some(type_name) = super::MirBuilder::extract_string_literal(&call.arguments[1]) {
+                    super::utils::builder_debug_log(&format!("extract_string_literal OK: {}", type_name));
+                    let val = self.build_expression(call.arguments[0].clone())?;
+                    let ty = super::MirBuilder::parse_type_name_to_mir(&type_name);
+                    let dst = self.value_gen.next();
+                    let op = if call.name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
+                    super::utils::builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
+                    self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None,
+                        iface_name: "env.console".to_string(),
+                        method_name: "log".to_string(),
+                        args: vec![dst],
+                        effects: EffectMask::PURE.add(Effect::Io),
+                    })?;
+                    return Ok(dst);
+                } else {
+                    super::utils::builder_debug_log("extract_string_literal FAIL [via wrapper]");
+                }
+            }
+        }
+
         match &expression {
             // print(isType(val, "Type")) / print(asType(...))
             ASTNode::FunctionCall {
