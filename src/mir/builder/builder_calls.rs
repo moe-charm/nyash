@@ -4,6 +4,111 @@ use crate::ast::{ASTNode, LiteralValue, MethodCallExpr};
 use crate::mir::{slot_registry, TypeOpKind};
 
 impl super::MirBuilder {
+    /// Try handle math.* function in function-style (sin/cos/abs/min/max).
+    /// Returns Some(result) if handled, otherwise None.
+    fn try_handle_math_function(
+        &mut self,
+        name: &str,
+        raw_args: Vec<ASTNode>,
+    ) -> Option<Result<ValueId, String>> {
+        let is_math_func = matches!(name, "sin" | "cos" | "abs" | "min" | "max");
+        if !is_math_func {
+            return None;
+        }
+        // Build numeric args directly for math.* to preserve f64 typing
+        let mut math_args: Vec<ValueId> = Vec::new();
+        for a in raw_args.into_iter() {
+            match a {
+                ASTNode::New { class, arguments, .. } if class == "FloatBox" && arguments.len() == 1 => {
+                    match self.build_expression(arguments[0].clone()) { v @ Ok(_) => math_args.push(v.unwrap()), err @ Err(_) => return Some(err), }
+                }
+                ASTNode::New { class, arguments, .. } if class == "IntegerBox" && arguments.len() == 1 => {
+                    let iv = match self.build_expression(arguments[0].clone()) { Ok(v) => v, Err(e) => return Some(Err(e)) };
+                    let fv = self.value_gen.next();
+                    if let Err(e) = self.emit_instruction(MirInstruction::TypeOp { dst: fv, op: TypeOpKind::Cast, value: iv, ty: MirType::Float }) { return Some(Err(e)); }
+                    math_args.push(fv);
+                }
+                ASTNode::Literal { value: LiteralValue::Float(_), .. } => {
+                    match self.build_expression(a) { v @ Ok(_) => math_args.push(v.unwrap()), err @ Err(_) => return Some(err), }
+                }
+                other => {
+                    match self.build_expression(other) { v @ Ok(_) => math_args.push(v.unwrap()), err @ Err(_) => return Some(err), }
+                }
+            }
+        }
+        // new MathBox()
+        let math_recv = self.value_gen.next();
+        if let Err(e) = self.emit_instruction(MirInstruction::NewBox { dst: math_recv, box_type: "MathBox".to_string(), args: vec![] }) { return Some(Err(e)); }
+        self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
+        // birth()
+        let birt_mid = slot_registry::resolve_slot_by_type_name("MathBox", "birth");
+        if let Err(e) = self.emit_box_or_plugin_call(None, math_recv, "birth".to_string(), birt_mid, vec![], EffectMask::READ) { return Some(Err(e)); }
+        // call method
+        let dst = self.value_gen.next();
+        if let Err(e) = self.emit_box_or_plugin_call(Some(dst), math_recv, name.to_string(), None, math_args, EffectMask::READ) { return Some(Err(e)); }
+        Some(Ok(dst))
+    }
+
+    /// Try handle env.* extern methods like env.console.log via FieldAccess(object, field).
+    fn try_handle_env_method(
+        &mut self,
+        object: &ASTNode,
+        method: &str,
+        arguments: &Vec<ASTNode>,
+    ) -> Option<Result<ValueId, String>> {
+        let ASTNode::FieldAccess { object: env_obj, field: env_field, .. } = object else { return None; };
+        if let ASTNode::Variable { name: env_name, .. } = env_obj.as_ref() {
+            if env_name != "env" { return None; }
+            // Build arguments once
+            let mut arg_values = Vec::new();
+            for arg in arguments {
+                match self.build_expression(arg.clone()) { Ok(v) => arg_values.push(v), Err(e) => return Some(Err(e)) }
+            }
+            let iface = env_field.as_str();
+            let m = method;
+            let mut extern_call = |iface_name: &str, method_name: &str, effects: EffectMask, returns: bool| -> Result<ValueId, String> {
+                let result_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::ExternCall { dst: if returns { Some(result_id) } else { None }, iface_name: iface_name.to_string(), method_name: method_name.to_string(), args: arg_values.clone(), effects })?;
+                if returns {
+                    Ok(result_id)
+                } else {
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: void_id, value: super::ConstValue::Void })?;
+                    Ok(void_id)
+                }
+            };
+            return Some(match (iface, m) {
+                ("future", "delay") => extern_call("env.future", "delay", EffectMask::READ.add(Effect::Io), true),
+                ("task", "currentToken") => extern_call("env.task", "currentToken", EffectMask::READ, true),
+                ("task", "cancelCurrent") => extern_call("env.task", "cancelCurrent", EffectMask::IO, false),
+                ("console", "log") => extern_call("env.console", "log", EffectMask::IO, false),
+                ("console", "readLine") => extern_call("env.console", "readLine", EffectMask::IO, true),
+                ("canvas", m) if matches!(m, "fillRect" | "fillText") => extern_call("env.canvas", m, EffectMask::IO, false),
+                _ => return None,
+            });
+        }
+        None
+    }
+
+    /// Try direct static call for `me` in static box
+    fn try_handle_me_direct_call(
+        &mut self,
+        method: &str,
+        arguments: &Vec<ASTNode>,
+    ) -> Option<Result<ValueId, String>> {
+        let Some(cls_name) = self.current_static_box.clone() else { return None; };
+        // Build args
+        let mut arg_values = Vec::new();
+        for a in arguments {
+            match self.build_expression(a.clone()) { Ok(v) => arg_values.push(v), Err(e) => return Some(Err(e)) }
+        }
+        let result_id = self.value_gen.next();
+        let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
+        let fun_val = self.value_gen.next();
+        if let Err(e) = self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(fun_name) }) { return Some(Err(e)); }
+        if let Err(e) = self.emit_instruction(MirInstruction::Call { dst: Some(result_id), func: fun_val, args: arg_values, effects: EffectMask::READ.add(Effect::ReadHeap) }) { return Some(Err(e)); }
+        Some(Ok(result_id))
+    }
     // Build function call: name(args)
     pub(super) fn build_function_call(
         &mut self,
@@ -33,77 +138,9 @@ impl super::MirBuilder {
         // Keep original args for special handling (math.*)
         let raw_args = args.clone();
 
-        let dst = self.value_gen.next();
+        if let Some(res) = self.try_handle_math_function(&name, raw_args) { return res; }
 
-        // Special-case: math.* as function-style (sin/cos/abs/min/max)
-        let is_math_func = matches!(name.as_str(), "sin" | "cos" | "abs" | "min" | "max");
-        if is_math_func {
-            // Build numeric args directly for math.* to preserve f64 typing
-            let mut math_args: Vec<ValueId> = Vec::new();
-            for a in raw_args.into_iter() {
-                match a {
-                    ASTNode::New {
-                        class, arguments, ..
-                    } if class == "FloatBox" && arguments.len() == 1 => {
-                        let v = self.build_expression(arguments[0].clone())?;
-                        math_args.push(v);
-                    }
-                    ASTNode::New {
-                        class, arguments, ..
-                    } if class == "IntegerBox" && arguments.len() == 1 => {
-                        let iv = self.build_expression(arguments[0].clone())?;
-                        let fv = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::TypeOp {
-                            dst: fv,
-                            op: TypeOpKind::Cast,
-                            value: iv,
-                            ty: MirType::Float,
-                        })?;
-                        math_args.push(fv);
-                    }
-                    ASTNode::Literal {
-                        value: LiteralValue::Float(_),
-                        ..
-                    } => {
-                        let v = self.build_expression(a)?;
-                        math_args.push(v);
-                    }
-                    other => {
-                        let v = self.build_expression(other)?;
-                        math_args.push(v);
-                    }
-                }
-            }
-            // new MathBox()
-            let math_recv = self.value_gen.next();
-            self.emit_instruction(MirInstruction::NewBox {
-                dst: math_recv,
-                box_type: "MathBox".to_string(),
-                args: vec![],
-            })?;
-            self.value_origin_newbox
-                .insert(math_recv, "MathBox".to_string());
-            // birth()
-            let birt_mid = slot_registry::resolve_slot_by_type_name("MathBox", "birth");
-            self.emit_box_or_plugin_call(
-                None,
-                math_recv,
-                "birth".to_string(),
-                birt_mid,
-                vec![],
-                EffectMask::READ,
-            )?;
-            // call method
-            self.emit_box_or_plugin_call(
-                Some(dst),
-                math_recv,
-                name,
-                None,
-                math_args,
-                EffectMask::READ,
-            )?;
-            return Ok(dst);
-        }
+        let dst = self.value_gen.next();
 
         // Default: call via fully-qualified function name string
         let mut arg_values = Vec::new();
@@ -151,130 +188,10 @@ impl super::MirBuilder {
                 return Ok(dst);
             }
         }
-        // ExternCall: env.X.* pattern via field access (e.g., env.future.delay)
-        if let ASTNode::FieldAccess {
-            object: env_obj,
-            field: env_field,
-            ..
-        } = object.clone()
-        {
-            if let ASTNode::Variable { name: env_name, .. } = *env_obj {
-                if env_name == "env" {
-                    let mut arg_values = Vec::new();
-                    for arg in &arguments {
-                        arg_values.push(self.build_expression(arg.clone())?);
-                    }
-                    match (env_field.as_str(), method.as_str()) {
-                        ("future", "delay") => {
-                            let result_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: Some(result_id),
-                                iface_name: "env.future".to_string(),
-                                method_name: "delay".to_string(),
-                                args: arg_values,
-                                effects: EffectMask::READ.add(Effect::Io),
-                            })?;
-                            return Ok(result_id);
-                        }
-                        ("task", "currentToken") => {
-                            let result_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: Some(result_id),
-                                iface_name: "env.task".to_string(),
-                                method_name: "currentToken".to_string(),
-                                args: arg_values,
-                                effects: EffectMask::READ,
-                            })?;
-                            return Ok(result_id);
-                        }
-                        ("task", "cancelCurrent") => {
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: None,
-                                iface_name: "env.task".to_string(),
-                                method_name: "cancelCurrent".to_string(),
-                                args: arg_values,
-                                effects: EffectMask::IO,
-                            })?;
-                            let void_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const {
-                                dst: void_id,
-                                value: super::ConstValue::Void,
-                            })?;
-                            return Ok(void_id);
-                        }
-                        ("console", "log") => {
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: None,
-                                iface_name: "env.console".to_string(),
-                                method_name: "log".to_string(),
-                                args: arg_values,
-                                effects: EffectMask::IO,
-                            })?;
-                            let void_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const {
-                                dst: void_id,
-                                value: super::ConstValue::Void,
-                            })?;
-                            return Ok(void_id);
-                        }
-                        ("console", "readLine") => {
-                            let result_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: Some(result_id),
-                                iface_name: "env.console".to_string(),
-                                method_name: "readLine".to_string(),
-                                args: arg_values,
-                                effects: EffectMask::IO,
-                            })?;
-                            return Ok(result_id);
-                        }
-                        ("canvas", m @ ("fillRect" | "fillText")) => {
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: None,
-                                iface_name: "env.canvas".to_string(),
-                                method_name: m.to_string(),
-                                args: arg_values,
-                                effects: EffectMask::IO,
-                            })?;
-                            let void_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const {
-                                dst: void_id,
-                                value: super::ConstValue::Void,
-                            })?;
-                            return Ok(void_id);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
+        if let Some(res) = self.try_handle_env_method(&object, &method, &arguments) { return res; }
         // If object is `me` within a static box, lower to direct Call: BoxName.method/N
         if let ASTNode::Me { .. } = object {
-            if let Some(cls_name) = self.current_static_box.clone() {
-                let mut arg_values: Vec<ValueId> = Vec::new();
-                for a in &arguments {
-                    arg_values.push(self.build_expression(a.clone())?);
-                }
-                let result_id = self.value_gen.next();
-                let fun_name = format!(
-                    "{}.{}{}",
-                    cls_name,
-                    method,
-                    format!("/{}", arg_values.len())
-                );
-                let fun_val = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const {
-                    dst: fun_val,
-                    value: super::ConstValue::String(fun_name),
-                })?;
-                self.emit_instruction(MirInstruction::Call {
-                    dst: Some(result_id),
-                    func: fun_val,
-                    args: arg_values,
-                    effects: EffectMask::READ.add(Effect::ReadHeap),
-                })?;
-                return Ok(result_id);
-            }
+            if let Some(res) = self.try_handle_me_direct_call(&method, &arguments) { return res; }
         }
         // Build the object expression (wrapper allows simple access if needed in future)
         let _mc = MethodCallExpr { object: Box::new(object.clone()), method: method.clone(), arguments: arguments.clone(), span: crate::ast::Span::unknown() };
