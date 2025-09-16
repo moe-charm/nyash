@@ -33,8 +33,9 @@ static box Main {
   }
 
   // Parser delegation
-  parse_program(src) {
+  parse_program(src, stage3_flag) {
     local parser = new ParserBox()
+    if stage3_flag == 1 { parser.stage3_enable(1) }
     // Collect using metadata (no-op acceptance in Stage‑15)
     parser.extract_usings(src)
     me._usings = parser.get_usings_json()
@@ -53,15 +54,23 @@ static box Main {
     local src = "return 1+2*3"
     local read_tmp = 0
     local input_path = null
+    local stage3_mode = 0
     if args != null {
       local alen = args.length()
       local i = 0
       loop(i < alen) {
         local a = args.get(i)
-        if a == "--read-tmp" { read_tmp = 1 } else {
-          if a == "--min-json" { /* handled later */ } else {
-            // First non-flag arg as input path
-            if input_path == null { input_path = a }
+        if a == "--read-tmp" {
+          read_tmp = 1
+        } else {
+          if a == "--min-json" {
+            /* handled later */
+          } else {
+            if a == "--stage3" {
+              stage3_mode = 1
+            } else {
+              if input_path == null { input_path = a }
+            }
           }
         }
         i = i + 1
@@ -85,7 +94,8 @@ static box Main {
       local alen = args.length()
       local i = 0
       loop(i < alen) {
-        if args.get(i) == "--min-json" { min_mode = 1 }
+        local arg = args.get(i)
+        if arg == "--min-json" { min_mode = 1 }
         i = i + 1
       }
     }
@@ -93,7 +103,7 @@ static box Main {
     if min_mode == 1 {
       json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
     } else {
-      json = me.parse_program(src)
+      json = me.parse_program(src, stage3_mode)
     }
 
     // Emit via EmitterBox (attach meta.usings when available)

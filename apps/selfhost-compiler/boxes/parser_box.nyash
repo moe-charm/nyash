@@ -2,8 +2,20 @@
 box ParserBox {
   gpos
   usings_json
+  stage3
 
-  birth() { me.gpos = 0 me.usings_json = "[]" return 0 }
+  birth() { me.gpos = 0 me.usings_json = "[]" me.stage3 = 0 return 0 }
+
+  stage3_enable(flag) {
+    if flag == null { flag = 0 }
+    if flag == 0 { me.stage3 = 0 } else { me.stage3 = 1 }
+    return 0
+  }
+
+  stage3_enabled() {
+    if me.stage3 == 1 { return 1 }
+    return 0
+  }
 
   esc_json(s) {
     local out = ""
@@ -613,12 +625,24 @@ box ParserBox {
     // Stage-3 acceptance (syntax only): break / continue → no-op expression
     if me.starts_with_kw(src, j, "break") == 1 {
       j = j + 5
+      if me.stage3_enabled() == 1 {
+        j = me.skip_ws(src, j)
+        if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+        me.gpos_set(j)
+        return "{\"type\":\"Break\"}"
+      }
       if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
       me.gpos_set(j)
       return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
     }
     if me.starts_with_kw(src, j, "continue") == 1 {
       j = j + 8
+      if me.stage3_enabled() == 1 {
+        j = me.skip_ws(src, j)
+        if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+        me.gpos_set(j)
+        return "{\"type\":\"Continue\"}"
+      }
       if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
       me.gpos_set(j)
       return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
@@ -629,6 +653,11 @@ box ParserBox {
       j = me.skip_ws(src, j)
       local e_throw = me.parse_expr2(src, j)
       j = me.gpos_get()
+      if me.stage3_enabled() == 1 {
+        if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+        me.gpos_set(j)
+        return "{\"type\":\"Throw\",\"expr\":" + e_throw + "}"
+      }
       if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
       me.gpos_set(j)
       return "{\"type\":\"Expr\",\"expr\":" + e_throw + "}"
@@ -640,7 +669,10 @@ box ParserBox {
       // parse try block
       local try_res = me.parse_block2(src, j)
       local at_t = try_res.lastIndexOf("@")
+      local try_json = try_res.substring(0, at_t)
       j = me.to_int(try_res.substring(at_t+1, try_res.length()))
+      local catches_json = "["
+      local catch_first = 1
       // zero or more catch
       local guard_ct = 0
       local max_ct = 100
@@ -651,10 +683,24 @@ box ParserBox {
         if me.starts_with_kw(src, j, "catch") == 1 {
           j = j + 5
           j = me.skip_ws(src, j)
+          local catch_type = null
+          local catch_param = null
           if src.substring(j, j+1) == "(" { j = j + 1 j = me.skip_ws(src, j)
             // optional type + name
-            if me.is_alpha(src.substring(j, j+1)) { local id1 = me.read_ident2(src, j) local at1 = id1.lastIndexOf("@") j = me.to_int(id1.substring(at1+1, id1.length())) j = me.skip_ws(src, j) }
-            if me.is_alpha(src.substring(j, j+1)) { local id2 = me.read_ident2(src, j) local at2 = id2.lastIndexOf("@") j = me.to_int(id2.substring(at2+1, id2.length())) j = me.skip_ws(src, j) }
+            if me.is_alpha(src.substring(j, j+1)) {
+              local id1 = me.read_ident2(src, j)
+              local at1 = id1.lastIndexOf("@")
+              catch_type = id1.substring(0, at1)
+              j = me.to_int(id1.substring(at1+1, id1.length()))
+              j = me.skip_ws(src, j)
+            }
+            if me.is_alpha(src.substring(j, j+1)) {
+              local id2 = me.read_ident2(src, j)
+              local at2 = id2.lastIndexOf("@")
+              catch_param = id2.substring(0, at2)
+              j = me.to_int(id2.substring(at2+1, id2.length()))
+              j = me.skip_ws(src, j)
+            }
             if src.substring(j, j+1) == ")" { j = j + 1 }
           }
           j = me.skip_ws(src, j)
@@ -662,16 +708,37 @@ box ParserBox {
           local c_res = me.parse_block2(src, j)
           local atc = c_res.lastIndexOf("@")
           j = me.to_int(c_res.substring(atc+1, c_res.length()))
+          if me.stage3_enabled() == 1 {
+            local entry = "{"
+            local wrote = 0
+            if catch_param != null && catch_param.length() > 0 { entry = entry + "\"param\":\"" + me.esc_json(catch_param) + "\"" wrote = 1 }
+            if catch_type != null && catch_type.length() > 0 { if wrote == 1 { entry = entry + "," } entry = entry + "\"typeHint\":\"" + me.esc_json(catch_type) + "\"" wrote = 1 }
+            local body_json = c_res.substring(0, atc)
+            if wrote == 1 { entry = entry + "," }
+            entry = entry + "\"body\":" + body_json + "}"
+            if catch_first == 0 { catches_json = catches_json + "," + entry } else { catches_json = catches_json + entry catch_first = 0 }
+          }
         } else { cont_ct = 0 }
       }
+      catches_json = catches_json + "]"
       // optional finally
       j = me.skip_ws(src, j)
+      local finally_json = null
       if me.starts_with_kw(src, j, "finally") == 1 {
         j = j + 7
         j = me.skip_ws(src, j)
         local f_res = me.parse_block2(src, j)
         local atf = f_res.lastIndexOf("@")
         j = me.to_int(f_res.substring(atf+1, f_res.length()))
+        finally_json = f_res.substring(0, atf)
+      }
+      if me.stage3_enabled() == 1 {
+        if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
+        me.gpos_set(j)
+        local node = "{\"type\":\"Try\",\"try\":" + try_json + ",\"catches\":" + catches_json
+        if finally_json != null { node = node + ",\"finally\":" + finally_json }
+        node = node + "}"
+        return node
       }
       if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
       me.gpos_set(j)

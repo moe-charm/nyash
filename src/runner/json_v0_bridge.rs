@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crate::mir::{
     MirModule, MirFunction, FunctionSignature, BasicBlockId, MirInstruction,
-    ConstValue, BinaryOp, MirType, EffectMask, MirPrinter,
+    ConstValue, BinaryOp, MirType, EffectMask, MirPrinter, ValueId,
 };
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -24,6 +24,19 @@ enum StmtV0 {
     If { cond: ExprV0, then: Vec<StmtV0>, #[serde(rename="else", default)] r#else: Option<Vec<StmtV0>> },
     // Optional: loop (Stage-2)
     Loop { cond: ExprV0, body: Vec<StmtV0> },
+    Break,
+    Continue,
+    Try { #[serde(rename="try")] try_body: Vec<StmtV0>, #[serde(default)] catches: Vec<CatchV0>, #[serde(default)] finally: Vec<StmtV0> },
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+struct CatchV0 {
+    #[serde(rename="param", default)]
+    param: Option<String>,
+    #[serde(rename="typeHint", default)]
+    type_hint: Option<String>,
+    #[serde(default)]
+    body: Vec<StmtV0>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -41,6 +54,7 @@ enum ExprV0 {
     Method { recv: Box<ExprV0>, method: String, args: Vec<ExprV0> },
     New { class: String, args: Vec<ExprV0> },
     Var { name: String },
+    Throw { expr: Box<ExprV0> },
 }
 
 pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
@@ -197,7 +211,16 @@ fn lower_expr(f: &mut MirFunction, cur_bb: BasicBlockId, e: &ExprV0) -> Result<(
             // merge with phi (use actual predecessors rhs_end and fall_bb)
             let out = f.next_value_id();
             if let Some(bb) = f.get_block_mut(merge_bb) {
-                bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs: vec![(rhs_end, rval), (fall_bb, cdst)] });
+                let mut inputs: Vec<(BasicBlockId, ValueId)> = vec![(fall_bb, cdst)];
+                if rhs_end != fall_bb {
+                    inputs.push((rhs_end, rval));
+                } else {
+                    // Degenerate case: RHS ended in fall_bb (e.g., constant expression).
+                    // Reuse the constant to keep PHI well-formed.
+                    inputs.push((fall_bb, rval));
+                }
+                inputs.sort_by_key(|(bbid, _)| bbid.0);
+                bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs });
             }
             Ok((out, merge_bb))
         }
@@ -280,6 +303,14 @@ fn lower_expr(f: &mut MirFunction, cur_bb: BasicBlockId, e: &ExprV0) -> Result<(
             Ok((dst, cur))
         }
         ExprV0::Var { name } => Err(format!("undefined variable in this context: {}", name)),
+        ExprV0::Throw { expr } => {
+            let (_ignored, cur) = lower_expr(f, cur_bb, expr)?;
+            let dst = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(cur) {
+                bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::Integer(0) });
+            }
+            Ok((dst, cur))
+        }
     }
 }
 
@@ -309,6 +340,14 @@ fn lower_expr_with_vars(
                 }
             }
             Err(format!("undefined variable: {}", name))
+        }
+        ExprV0::Throw { expr } => {
+            let (_ignored, cur) = lower_expr_with_vars(f, cur_bb, expr, vars)?;
+            let dst = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(cur) {
+                bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::Integer(0) });
+            }
+            Ok((dst, cur))
         }
         ExprV0::Call { name, args } => {
             // Special: array literal lowering in vars context
@@ -468,6 +507,21 @@ fn lower_stmt_with_vars(
         }
         StmtV0::Local { name, expr } => {
             let (v, cur) = lower_expr_with_vars(f, cur_bb, expr, vars)?; vars.insert(name.clone(), v); Ok(cur)
+        }
+        StmtV0::Break => {
+            // Stage-3 placeholder: no-op until loop lowering supports break
+            Ok(cur_bb)
+        }
+        StmtV0::Continue => {
+            // Stage-3 placeholder: no-op until loop lowering supports continue
+            Ok(cur_bb)
+        }
+        StmtV0::Try { try_body, .. } => {
+            // Stage-3 placeholder: lower try body sequentially, ignore catches/finally for now
+            let mut tmp_vars = vars.clone();
+            let next_bb = lower_stmt_list_with_vars(f, cur_bb, try_body, &mut tmp_vars)?;
+            *vars = tmp_vars;
+            Ok(next_bb)
         }
         StmtV0::If { cond, then, r#else } => {
             // Lower condition first

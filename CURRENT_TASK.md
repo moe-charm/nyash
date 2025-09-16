@@ -37,8 +37,12 @@ Quick Next (today)
   3) Resolver/BoxIndex の prefix メタ反映 ✅ Done 2025‑09‑16
      - `plugin_meta_by_box` を構築し、`require_prefix` / `expose_short_names` を `resolve_using_target` へ適用。
      - `NYASH_PLUGIN_REQUIRE_PREFIX` が無効でも per-plugin meta で短名禁止を検知。
-  4) 自己ホスト経路で Ny 実装切替のゲート準備（現状は Python MVP 優先を維持）。
-  5) テスト:
+  4) Parser Stage‑3 下地 ✅ Done 2025‑09‑16
+     - `ParserBox.stage3_enable()` を追加し、Break/Continue/Throw/Try を JSON v0 に出力できるゲートを実装。
+     - `--stage3` CLI フラグから ParserBox へ渡す導線を追加。
+     - `docs/reference/architecture/parser_mvp_stage3.md` に Stage‑3 設計を記録。
+  5) 自己ホスト経路で Ny 実装切替のゲート準備（現状は Python MVP 優先を維持）。
+  6) テスト:
      - `source tools/dev_env.sh pyvm`
      - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_smoke.sh`
      - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_bridge_smoke.sh`
@@ -63,8 +67,8 @@ Current Status
 
 Open
 - Bridge/PHI の正規化: 短絡（入れ子）における merge/PHI incoming を固定化（rhs_end/fall_bb の順序）。
-- JSON v0 の拡張方針: break/continue/try/catch/finally の表現（受け皿設計 or 受理時の事前降下）。
-- per‑plugin meta の反映: `require_prefix/expose_short_names/prefix` を Resolver 挙動へ段階適用（導線は実装済み）。
+- JSON v0 の拡張方針: break/continue/try/catch/finally の表現（受け皿設計 or 受理時の事前降下）。➡ `docs/reference/architecture/parser_mvp_stage3.md`
+- per‑plugin meta の反映: `require_prefix/expose_short_names/prefix` を Resolver 挙動へ段階適用（導線は実装済み）。✅ 2025‑09‑16 prefix enforcement とテスト追加済み。
 - `me` の扱い: MVP は `NYASH_BRIDGE_ME_DUMMY=1` の仮注入を継続（将来撤去）。
 - LLVM 直結（任意）: JSON v0 → LLVM の導線追加は後回し。
 
