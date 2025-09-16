@@ -62,8 +62,11 @@ impl MirOptimizer {
         // Normalize Python helper form: py.getattr(obj, name) → obj.getattr(name)
         stats.merge(self.normalize_python_helper_calls(module));
 
-        // Pass 1: Dead code elimination
-        stats.merge(self.eliminate_dead_code(module));
+        // Pass 1: Dead code elimination (modularized pass)
+        {
+            let eliminated = crate::mir::passes::dce::eliminate_dead_code(module);
+            stats.dead_code_eliminated += eliminated;
+        }
         
         // Pass 2: Pure instruction CSE (Common Subexpression Elimination)
         stats.merge(self.common_subexpression_elimination(module));
