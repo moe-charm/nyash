@@ -106,6 +106,12 @@ impl CliConfig {
                     .help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter")
             )
             .arg(
+                Arg::new("stage3")
+                    .long("stage3")
+                    .help("Enable Stage-3 syntax acceptance for selfhost parser (sets NYASH_NY_COMPILER_STAGE3=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
                 Arg::new("ny-compiler-args")
                     .long("ny-compiler-args")
                     .value_name("ARGS")
@@ -381,6 +387,10 @@ impl CliConfig {
 
     /// Convert ArgMatches to CliConfig
     fn from_matches(matches: &ArgMatches) -> Self {
+        // Stage-3 gate: when specified via CLI, set env for selfhost child
+        if matches.get_flag("stage3") {
+            std::env::set_var("NYASH_NY_COMPILER_STAGE3", "1");
+        }
         // Side-effect: forward child args for selfhost compiler via env
         if let Some(a) = matches.get_one::<String>("ny-compiler-args") {
             std::env::set_var("NYASH_NY_COMPILER_CHILD_ARGS", a);
