@@ -9,6 +9,8 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
 use crate::runner::pipeline::{suggest_in_base, resolve_using_target};
+use crate::runner::trace::cli_verbose;
+use crate::cli_v;
 
 // (moved) suggest_in_base is now in runner/pipeline.rs
 
@@ -97,9 +99,7 @@ impl NyashRunner {
             "cranelift" => {
                 #[cfg(feature = "cranelift-jit")]
                 {
-                    if crate::config::env::cli_verbose() {
-                        println!("⚙️  Nyash Cranelift JIT - Executing file: {}", filename);
-                    }
+                    if cli_verbose() { println!("⚙️  Nyash Cranelift JIT - Executing file: {}", filename); }
                     self.execute_cranelift_mode(filename);
                 }
                 #[cfg(not(feature = "cranelift-jit"))]
@@ -109,13 +109,11 @@ impl NyashRunner {
                 }
             }
             "llvm" => {
-                if crate::config::env::cli_verbose() {
-                    println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
-                }
+                if cli_verbose() { println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename); }
                 self.execute_llvm_mode(filename);
             }
             _ => {
-                if crate::config::env::cli_verbose() {
+                if cli_verbose() {
                     println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
                     if let Some(fuel) = self.config.debug_fuel {
                         println!("🔥 Debug fuel limit: {} iterations", fuel);
