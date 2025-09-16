@@ -537,18 +537,11 @@ impl<'a> LoopBuilder<'a> {
             ASTNode::Break { .. } => {
                 // Jump to loop exit (after_loop_id) if available
                 let cur_block = self.current_block()?;
-                // Ensure parent has recorded current loop exit; if not, record now
-                if crate::mir::builder::loops::current_exit(self.parent_builder).is_none() {
-                    // Determine after_loop by peeking the next id used earlier:
-                    // In this builder, after_loop_id was created above; record it for nested lowering
-                    // We approximate by using the next block id minus 1 (after_loop) which we set below before branch
-                }
-                if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder)
-                {
+                if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
                     self.emit_jump(exit_bb)?;
                     let _ = self.add_predecessor(exit_bb, cur_block);
                 }
-                // Keep building in a fresh (unreachable) block to satisfy callers
+                // Continue building in a fresh (unreachable) block to satisfy callers
                 let next_block = self.new_block();
                 self.set_current_block(next_block)?;
                 let void_id = self.new_value();

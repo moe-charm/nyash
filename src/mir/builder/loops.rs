@@ -26,3 +26,13 @@ pub(crate) fn current_header(builder: &super::MirBuilder) -> Option<BasicBlockId
 pub(crate) fn current_exit(builder: &super::MirBuilder) -> Option<BasicBlockId> {
     builder.loop_exit_stack.last().copied()
 }
+
+/// Returns true if the builder is currently inside at least one loop context.
+pub(crate) fn in_loop(builder: &super::MirBuilder) -> bool {
+    !builder.loop_header_stack.is_empty()
+}
+
+/// Current loop nesting depth (0 means not in a loop).
+pub(crate) fn depth(builder: &super::MirBuilder) -> usize {
+    builder.loop_header_stack.len()
+}
