@@ -11,6 +11,8 @@ use std::fmt;
 mod span;
 pub use span::Span;
 mod utils;
+mod nodes;
+pub use nodes::*;
 
 // Span は src/ast/span.rs へ分離（re-export で後方互換維持）
 
