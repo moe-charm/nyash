@@ -1,18 +1,12 @@
-/*!
- * Runner trace utilities — centralized verbose logging
- */
+//! Runner tracing helpers (verbose-guarded)
 
-/// Returns true when runner-level verbose tracing is enabled.
-/// Controlled by `NYASH_CLI_VERBOSE=1` or `NYASH_RESOLVE_TRACE=1`.
-pub fn enabled() -> bool {
-    std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1")
-        || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1")
-}
+/// Return whether CLI verbose logging is enabled
+pub fn cli_verbose() -> bool { crate::config::env::cli_verbose() }
 
-/// Emit a single-line trace message when enabled.
-pub fn log<S: AsRef<str>>(msg: S) {
-    if enabled() {
-        eprintln!("{}", msg.as_ref());
-    }
+#[macro_export]
+macro_rules! cli_v {
+    ($($arg:tt)*) => {{
+        if crate::config::env::cli_verbose() { eprintln!($($arg)*); }
+    }};
 }
 

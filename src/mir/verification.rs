@@ -223,8 +223,8 @@ impl MirVerifier {
         let mut errors = Vec::new();
 
         // Build def -> block map and dominators
-        let def_block = self.compute_def_blocks(function);
-        let dominators = self.compute_dominators(function);
+        let def_block = utils::compute_def_blocks(function);
+        let dominators = utils::compute_dominators(function);
 
         for (use_block_id, block) in &function.blocks {
             for instruction in block.all_instructions() {
@@ -267,7 +267,7 @@ impl MirVerifier {
         }
         
         // Check that all blocks are reachable from entry
-        let reachable = self.compute_reachable_blocks(function);
+        let reachable = utils::compute_reachable_blocks(function);
         for block_id in function.blocks.keys() {
             if !reachable.contains(block_id) && *block_id != function.entry_block {
                 errors.push(VerificationError::UnreachableBlock {
@@ -292,9 +292,9 @@ impl MirVerifier {
             return Ok(());
         }
         let mut errors = Vec::new();
-        let preds = self.compute_predecessors(function);
-        let def_block = self.compute_def_blocks(function);
-        let dominators = self.compute_dominators(function);
+        let preds = utils::compute_predecessors(function);
+        let def_block = utils::compute_def_blocks(function);
+        let dominators = utils::compute_dominators(function);
         // Helper: collect phi dsts in a block
         let mut phi_dsts_in_block: std::collections::HashMap<BasicBlockId, std::collections::HashSet<ValueId>> = std::collections::HashMap::new();
         for (bid, block) in &function.blocks {
@@ -334,11 +334,6 @@ impl MirVerifier {
         if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
     
-    /// Compute reachable blocks from entry
-    fn compute_reachable_blocks(&self, function: &MirFunction) -> HashSet<BasicBlockId> {
-        utils::compute_reachable_blocks(function)
-    }
-    
     /// Get all verification errors from the last run
     pub fn get_errors(&self) -> &[VerificationError] {
         &self.errors
@@ -349,20 +344,7 @@ impl MirVerifier {
         self.errors.clear();
     }
 
-    /// Build predecessor map for all blocks
-    fn compute_predecessors(&self, function: &MirFunction) -> HashMap<BasicBlockId, Vec<BasicBlockId>> {
-        utils::compute_predecessors(function)
-    }
-
-    /// Build a map from ValueId to its defining block
-    fn compute_def_blocks(&self, function: &MirFunction) -> HashMap<ValueId, BasicBlockId> {
-        utils::compute_def_blocks(function)
-    }
-
-    /// Compute dominator sets per block using standard iterative algorithm
-    fn compute_dominators(&self, function: &MirFunction) -> HashMap<BasicBlockId, HashSet<BasicBlockId>> {
-        utils::compute_dominators(function)
-    }
+    // Wrapper helpers removed; use verification::utils directly at call sites
 }
 
 impl Default for MirVerifier {

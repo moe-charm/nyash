@@ -1,4 +1,11 @@
 pub(crate) mod ternary;
 pub(crate) mod coalesce;
 pub(crate) mod logic;
-
+pub(crate) mod bit;
+pub(crate) mod compare;
+pub(crate) mod range;
+pub(crate) mod term;
+pub(crate) mod shift;
+pub(crate) mod factor;
+pub(crate) mod call;
+pub(crate) mod primary;

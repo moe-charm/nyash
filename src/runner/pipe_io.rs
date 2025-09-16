@@ -36,7 +36,7 @@ impl NyashRunner {
                 // Optional dump via env verbose
                 super::json_v0_bridge::maybe_dump_mir(&module);
                 // Optional: delegate to PyVM when NYASH_PIPE_USE_PYVM=1
-                if std::env::var("NYASH_PIPE_USE_PYVM").ok().as_deref() == Some("1") {
+                if crate::config::env::pipe_use_pyvm() {
                     let py = which::which("python3").ok();
                     if let Some(py3) = py {
                         let runner = std::path::Path::new("tools/pyvm_runner.py");
@@ -93,4 +93,3 @@ impl NyashRunner {
         }
     }
 }
-

@@ -166,3 +166,22 @@ pub fn vm_pic_threshold() -> u32 {
 
 /// Route VM ExternCall via name→slot handlers when available
 pub fn extern_route_slots() -> bool { std::env::var("NYASH_EXTERN_ROUTE_SLOTS").ok().as_deref() == Some("1") }
+
+// ---- Runner/CLI common toggles (hot-path centralization)
+pub fn cli_verbose() -> bool { std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") }
+pub fn enable_using() -> bool { std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1") }
+pub fn vm_use_py() -> bool { std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") }
+pub fn pipe_use_pyvm() -> bool { std::env::var("NYASH_PIPE_USE_PYVM").ok().as_deref() == Some("1") }
+pub fn vm_use_dispatch() -> bool { std::env::var("NYASH_VM_USE_DISPATCH").ok().as_deref() == Some("1") }
+
+// Self-host compiler knobs
+pub fn ny_compiler_timeout_ms() -> u64 { std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000) }
+pub fn ny_compiler_emit_only() -> bool { std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1" }
+pub fn ny_compiler_skip_py() -> bool { std::env::var("NYASH_NY_COMPILER_SKIP_PY").ok().as_deref() == Some("1") }
+pub fn use_ny_compiler_exe() -> bool { std::env::var("NYASH_USE_NY_COMPILER_EXE").ok().as_deref() == Some("1") }
+pub fn ny_compiler_exe_path() -> Option<String> { std::env::var("NYASH_NY_COMPILER_EXE_PATH").ok() }
+pub fn ny_compiler_min_json() -> bool { std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") }
+pub fn selfhost_read_tmp() -> bool { std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") }
+pub fn ny_compiler_stage3() -> bool { std::env::var("NYASH_NY_COMPILER_STAGE3").ok().as_deref() == Some("1") }
+pub fn ny_compiler_child_args() -> Option<String> { std::env::var("NYASH_NY_COMPILER_CHILD_ARGS").ok() }
+pub fn ny_compiler_use_tmp_only() -> bool { std::env::var("NYASH_NY_COMPILER_USE_TMP_ONLY").ok().as_deref() == Some("1") }

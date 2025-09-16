@@ -1,2 +1,6 @@
-if false { break } else { }
-return 0
+static box Main {
+  main() {
+    print("hello")
+    return 0
+  }
+}

@@ -25,7 +25,7 @@ impl NyashRunner {
             Err(e) => { eprintln!("[ny-compiler] read error: {}", e); return false; }
         };
         // Optional Phase-15: strip `using` lines and register modules (same policy as execute_nyash_file)
-        let enable_using = std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1");
+        let enable_using = crate::config::env::enable_using();
         let mut code_ref: std::borrow::Cow<'_, str> = std::borrow::Cow::Borrowed(&code);
         if enable_using {
             let mut out = String::with_capacity(code.len());
@@ -33,7 +33,7 @@ impl NyashRunner {
             for line in code.lines() {
                 let t = line.trim_start();
                 if t.starts_with("using ") {
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    if crate::config::env::cli_verbose() {
                         eprintln!("[using] stripped(line→selfhost): {}", line);
                     }
                     let rest0 = t.strip_prefix("using ").unwrap().trim();
@@ -73,7 +73,7 @@ impl NyashRunner {
         }
 
         // Write to tmp/ny_parser_input.ny (as expected by Ny parser v0), unless forced to reuse existing tmp
-        let use_tmp_only = std::env::var("NYASH_NY_COMPILER_USE_TMP_ONLY").ok().as_deref() == Some("1");
+        let use_tmp_only = crate::config::env::ny_compiler_use_tmp_only();
         let tmp_dir = std::path::Path::new("tmp");
         if let Err(e) = std::fs::create_dir_all(tmp_dir) {
             eprintln!("[ny-compiler] mkdir tmp failed: {}", e);
@@ -100,19 +100,19 @@ impl NyashRunner {
                 let mut cmd = std::process::Command::new(&exe);
                 cmd.arg("--backend").arg("vm").arg(parser_prog);
                 // Forward minimal args to child parser program
-                if std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") {
+                if crate::config::env::ny_compiler_min_json() {
                     cmd.arg("--").arg("--min-json");
                 }
                 // Always feed input via tmp file written by the parent pipeline
                 cmd.arg("--").arg("--read-tmp");
-                if std::env::var("NYASH_NY_COMPILER_STAGE3").ok().as_deref() == Some("1") {
+                if crate::config::env::ny_compiler_stage3() {
                     cmd.arg("--").arg("--stage3");
                 }
                 // Suppress parent noise and keep only JSON from child
                 cmd.env_remove("NYASH_USE_NY_COMPILER");
                 cmd.env_remove("NYASH_CLI_VERBOSE");
                 cmd.env("NYASH_JSON_ONLY", "1");
-                let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
+                let timeout_ms: u64 = crate::config::env::ny_compiler_timeout_ms();
                 let mut cmd = cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
                 if let Ok(mut child) = cmd.spawn() {
                     let mut ch_stdout = child.stdout.take();
@@ -146,10 +146,10 @@ impl NyashRunner {
                         match super::json_v0_bridge::parse_json_v0_to_module(&json_line) {
                             Ok(module) => {
                                 super::json_v0_bridge::maybe_dump_mir(&module);
-                                let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1";
+                                let emit_only = crate::config::env::ny_compiler_emit_only();
                                 if emit_only { return false; }
                                 // Prefer PyVM path when requested
-                                if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                                if crate::config::env::vm_use_py() {
                                     if let Ok(py3) = which::which("python3") {
                                         let runner = std::path::Path::new("tools/pyvm_runner.py");
                                         if runner.exists() {

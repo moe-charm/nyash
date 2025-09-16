@@ -20,7 +20,7 @@ impl NyashRunner {
         if std::env::var("NYASH_USE_NY_COMPILER").ok().as_deref() == Some("1") {
             if self.try_run_selfhost_pipeline(filename) {
                 return;
-            } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            } else if crate::config::env::cli_verbose() {
                 eprintln!("[ny-compiler] fallback to default path (MVP unavailable for this input)");
             }
         }
@@ -33,7 +33,7 @@ impl NyashRunner {
             };
             match json_v0_bridge::parse_source_v0_to_module(&code) {
                 Ok(module) => {
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    if crate::config::env::cli_verbose() {
                         println!("🚀 Nyash MIR Interpreter - (parser=ny) Executing file: {} 🚀", filename);
                     }
                     self.execute_mir_module(&module);
@@ -59,7 +59,7 @@ impl NyashRunner {
 
         // MIR dump/verify
         if self.config.dump_mir || self.config.verify_mir {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            if crate::config::env::cli_verbose() {
                 println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             }
             self.execute_mir_mode(filename);
@@ -83,13 +83,13 @@ impl NyashRunner {
         // Backend selection
         match self.config.backend.as_str() {
             "mir" => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                if crate::config::env::cli_verbose() {
                     println!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
                 }
                 self.execute_mir_interpreter_mode(filename);
             }
             "vm" => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                if crate::config::env::cli_verbose() {
                     println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
                 }
                 self.execute_vm_mode(filename);
@@ -97,7 +97,7 @@ impl NyashRunner {
             "cranelift" => {
                 #[cfg(feature = "cranelift-jit")]
                 {
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    if crate::config::env::cli_verbose() {
                         println!("⚙️  Nyash Cranelift JIT - Executing file: {}", filename);
                     }
                     self.execute_cranelift_mode(filename);
@@ -109,13 +109,13 @@ impl NyashRunner {
                 }
             }
             "llvm" => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                if crate::config::env::cli_verbose() {
                     println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
                 }
                 self.execute_llvm_mode(filename);
             }
             _ => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                if crate::config::env::cli_verbose() {
                     println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
                     if let Some(fuel) = self.config.debug_fuel {
                         println!("🔥 Debug fuel limit: {} iterations", fuel);
@@ -140,7 +140,7 @@ impl NyashRunner {
             Err(e) => { eprintln!("[ny-compiler] read error: {}", e); return false; }
         };
         // Optional Phase-15: strip `using` lines and register modules (same policy as execute_nyash_file)
-        let enable_using = std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1");
+        let enable_using = crate::config::env::enable_using();
         let mut code_ref: std::borrow::Cow<'_, str> = std::borrow::Cow::Borrowed(&code);
         if enable_using {
             let mut out = String::with_capacity(code.len());
@@ -148,9 +148,7 @@ impl NyashRunner {
             for line in code.lines() {
                 let t = line.trim_start();
                 if t.starts_with("using ") {
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                        eprintln!("[using] stripped(line→selfhost): {}", line);
-                    }
+                    cli_v!("[using] stripped(line→selfhost): {}", line);
                     let rest0 = t.strip_prefix("using ").unwrap().trim();
                     let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
                     let (target, alias) = if let Some(pos) = rest0.find(" as ") {
@@ -188,7 +186,7 @@ impl NyashRunner {
         }
 
         // Write to tmp/ny_parser_input.ny (as expected by Ny parser v0), unless forced to reuse existing tmp
-        let use_tmp_only = std::env::var("NYASH_NY_COMPILER_USE_TMP_ONLY").ok().as_deref() == Some("1");
+        let use_tmp_only = crate::config::env::ny_compiler_use_tmp_only();
         let tmp_dir = std::path::Path::new("tmp");
         if let Err(e) = std::fs::create_dir_all(tmp_dir) {
             eprintln!("[ny-compiler] mkdir tmp failed: {}", e);
@@ -207,9 +205,9 @@ impl NyashRunner {
             }
         }
         // EXE-first: if requested, try external parser EXE (nyash_compiler)
-        if std::env::var("NYASH_USE_NY_COMPILER_EXE").ok().as_deref() == Some("1") {
+        if crate::config::env::use_ny_compiler_exe() {
             // Resolve parser EXE path
-            let exe_path = if let Ok(p) = std::env::var("NYASH_NY_COMPILER_EXE_PATH") {
+            let exe_path = if let Some(p) = crate::config::env::ny_compiler_exe_path() {
                 std::path::PathBuf::from(p)
             } else {
                 let mut p = std::path::PathBuf::from("dist/nyash_compiler");
@@ -227,10 +225,10 @@ impl NyashRunner {
                 // Prefer passing the original filename directly (parser EXE accepts positional path)
                 cmd.arg(filename);
                 // Gates
-                if std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") { cmd.arg("--min-json"); }
-                if std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") { cmd.arg("--read-tmp"); }
-                if let Ok(raw) = std::env::var("NYASH_NY_COMPILER_CHILD_ARGS") { for tok in raw.split_whitespace() { cmd.arg(tok); } }
-                let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
+                if crate::config::env::ny_compiler_min_json() { cmd.arg("--min-json"); }
+                if crate::config::env::selfhost_read_tmp() { cmd.arg("--read-tmp"); }
+                if let Some(raw) = crate::config::env::ny_compiler_child_args() { for tok in raw.split_whitespace() { cmd.arg(tok); } }
+                let timeout_ms: u64 = crate::config::env::ny_compiler_timeout_ms();
                 let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
                 let mut child = match cmd.spawn() { Ok(c) => c, Err(e) => { eprintln!("[ny-compiler] exe spawn failed: {}", e); return false; } };
                 let mut ch_stdout = child.stdout.take();
@@ -260,7 +258,7 @@ impl NyashRunner {
                 let mut json_line = String::new();
                 for line in stdout.lines() { let t = line.trim(); if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; } }
                 if json_line.is_empty() {
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    if crate::config::env::cli_verbose() {
                         let head: String = stdout.chars().take(200).collect();
                         let errh: String = String::from_utf8_lossy(&err_buf).chars().take(200).collect();
                         eprintln!("[ny-compiler] exe produced no JSON; stdout(head)='{}' stderr(head)='{}'", head.replace('\n', "\\n"), errh.replace('\n', "\\n"));
@@ -272,12 +270,12 @@ impl NyashRunner {
                     Ok(module) => {
                         println!("🚀 Ny compiler EXE path (ny→json_v0) ON");
                         json_v0_bridge::maybe_dump_mir(&module);
-                        let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1";
+                        let emit_only = crate::config::env::ny_compiler_emit_only();
                         if emit_only {
                             return false;
                         } else {
                             // Prefer PyVM when requested (reference semantics), regardless of BoxCall presence
-                            let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
+                            let prefer_pyvm = crate::config::env::vm_use_py();
                             if prefer_pyvm {
                                 if let Ok(py3) = which::which("python3") {
                                     let runner = std::path::Path::new("tools/pyvm_runner.py");
@@ -289,7 +287,7 @@ impl NyashRunner {
                                             eprintln!("❌ PyVM MIR JSON emit error: {}", e);
                                             return true; // prevent double-run fallback
                                         }
-                                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                        if crate::config::env::cli_verbose() {
                                             eprintln!("[ny-compiler] using PyVM (exe) → {}", mir_json_path.display());
                                         }
                                         // Determine entry function hint (prefer Main.main if present)
@@ -307,11 +305,7 @@ impl NyashRunner {
                                             .map_err(|e| format!("spawn pyvm: {}", e))
                                             .unwrap();
                                         let code = status.code().unwrap_or(1);
-                                        if !status.success() {
-                                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                                eprintln!("❌ PyVM (exe) failed (status={})", code);
-                                            }
-                                        }
+                                        if !status.success() { if crate::config::env::cli_verbose() { eprintln!("❌ PyVM (exe) failed (status={})", code); } }
                                         // Harmonize CLI output with interpreter path for smokes
                                         println!("Result: {}", code);
                                         std::process::exit(code);
@@ -332,7 +326,7 @@ impl NyashRunner {
                     Err(e) => { eprintln!("[ny-compiler] JSON parse failed (exe): {}", e); return false; }
                 }
             } else {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") { eprintln!("[ny-compiler] exe not found at {}", exe_path.display()); }
+                if crate::config::env::cli_verbose() { eprintln!("[ny-compiler] exe not found at {}", exe_path.display()); }
             }
         }
 
@@ -419,7 +413,7 @@ impl NyashRunner {
         } else if let Ok(s) = String::from_utf8(err_buf.clone()) {
             // If the child exited non-zero and printed stderr, surface it and fallback
             // We cannot easily access ExitStatus here after try_wait loop; rely on JSON detection path.
-            if s.trim().len() > 0 && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            if s.trim().len() > 0 && crate::config::env::cli_verbose() {
                 eprintln!("[ny-compiler] parser stderr:\n{}", s);
             }
         }
@@ -430,10 +424,10 @@ impl NyashRunner {
         }
         if json_line.is_empty() {
         // Fallback: try Python MVP parser to produce JSON v0 from the same tmp source (unless skipped).
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+        if crate::config::env::cli_verbose() {
             let head: String = stdout.chars().take(200).collect();
-            eprintln!("[ny-compiler] JSON not found in child stdout (head): {}", head.replace('\n', "\\n"));
-            eprintln!("[ny-compiler] falling back to tools/ny_parser_mvp.py for this input");
+            cli_v!("[ny-compiler] JSON not found in child stdout (head): {}", head.replace('\\n', "\\n"));
+            cli_v!("[ny-compiler] falling back to tools/ny_parser_mvp.py for this input");
         }
         if std::env::var("NYASH_NY_COMPILER_SKIP_PY").ok().as_deref() != Some("1") {
         let py = which::which("python3").ok();
@@ -470,7 +464,7 @@ impl NyashRunner {
         match json_v0_bridge::parse_json_v0_to_module(&json_line) {
                     Ok(module) => {
                 let emit_only_default = "1".to_string();
-                let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or(emit_only_default) == "1";
+                let emit_only = if emit_only_default == "1" { true } else { crate::config::env::ny_compiler_emit_only() };
                 println!("🚀 Ny compiler MVP (ny→json_v0) path ON");
                 json_v0_bridge::maybe_dump_mir(&module);
                 if emit_only {
@@ -478,7 +472,7 @@ impl NyashRunner {
                     false
                 } else {
                     // Prefer PyVM when requested (reference semantics)
-                    let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
+                    let prefer_pyvm = crate::config::env::vm_use_py();
                     if prefer_pyvm {
                         if let Ok(py3) = which::which("python3") {
                             let runner = std::path::Path::new("tools/pyvm_runner.py");
@@ -490,7 +484,7 @@ impl NyashRunner {
                                     eprintln!("❌ PyVM MIR JSON emit error: {}", e);
                                     return true; // prevent double-run fallback
                                 }
-                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                if crate::config::env::cli_verbose() {
                                     eprintln!("[ny-compiler] using PyVM (mvp) → {}", mir_json_path.display());
                                 }
                                 // Determine entry function hint (prefer Main.main if present)
@@ -508,11 +502,7 @@ impl NyashRunner {
                                     .map_err(|e| format!("spawn pyvm: {}", e))
                                     .unwrap();
                                 let code = status.code().unwrap_or(1);
-                                if !status.success() {
-                                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                        eprintln!("❌ PyVM (mvp) failed (status={})", code);
-                                    }
-                                }
+                                if !status.success() { if crate::config::env::cli_verbose() { eprintln!("❌ PyVM (mvp) failed (status={})", code); } }
                                 // Harmonize CLI output with interpreter path for smokes
                                 println!("Result: {}", code);
                                 std::process::exit(code);
@@ -550,14 +540,14 @@ impl NyashRunner {
             Ok(content) => content,
             Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
         };
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") && !quiet_pipe {
+        if crate::config::env::cli_verbose() && !quiet_pipe {
             println!("📝 File contents:\n{}", code);
             println!("\n🚀 Parsing and executing...\n");
         }
 
         // Optional Phase-15: strip `using` lines (gate) for minimal acceptance
         let mut code_ref: &str = &code;
-        let enable_using = std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1");
+        let enable_using = crate::config::env::enable_using();
         let cleaned_code_owned;
         if enable_using {
             let mut out = String::with_capacity(code.len());
@@ -566,7 +556,7 @@ impl NyashRunner {
                 let t = line.trim_start();
                 if t.starts_with("using ") {
                     // Skip `using ns` or `using ns as alias` lines (MVP)
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    if crate::config::env::cli_verbose() {
                         eprintln!("[using] stripped line: {}", line);
                     }
                     // Parse namespace or path and optional alias
@@ -587,7 +577,7 @@ impl NyashRunner {
                             if std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1") {
                                 eprintln!("❌ using: path not found: {}", path);
                                 std::process::exit(1);
-                            } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                            } else if crate::config::env::cli_verbose() {
                                 eprintln!("[using] path not found (continuing): {}", path);
                             }
                         }
@@ -612,7 +602,7 @@ impl NyashRunner {
             // Register modules with resolver (aliases/modules/paths)
             let using_ctx = self.init_using_context();
             let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
-            let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+            let verbose = crate::config::env::cli_verbose();
             let ctx_dir = std::path::Path::new(filename).parent();
             for (ns_or_alias, alias_or_path) in used_names {
                 if let Some(path) = alias_or_path {
@@ -656,7 +646,7 @@ impl NyashRunner {
                         if std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1") {
                             eprintln!("❌ import: path not found: {} (from {})", p.display(), filename);
                             process::exit(1);
-                        } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") || std::env::var("NYASH_IMPORT_TRACE").ok().as_deref() == Some("1") {
+                        } else if crate::config::env::cli_verbose() || std::env::var("NYASH_IMPORT_TRACE").ok().as_deref() == Some("1") {
                             eprintln!("[import] path not found (continuing): {}", p.display());
                         }
                     }
@@ -673,8 +663,8 @@ impl NyashRunner {
             }
         }
 
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") && !quiet_pipe {
-            println!("✅ Parse successful!");
+        if crate::config::env::cli_verbose() && !quiet_pipe {
+            if crate::config::env::cli_verbose() { println!("✅ Parse successful!"); }
         }
 
         // Execute the AST
@@ -682,8 +672,8 @@ impl NyashRunner {
         eprintln!("🔍 DEBUG: Starting execution...");
         match interpreter.execute(ast) {
             Ok(result) => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") && !quiet_pipe {
-                    println!("✅ Execution completed successfully!");
+                if crate::config::env::cli_verbose() && !quiet_pipe {
+                    if crate::config::env::cli_verbose() { println!("✅ Execution completed successfully!"); }
                 }
                 // Normalize display via semantics: prefer numeric, then string, then fallback
                 let disp = {

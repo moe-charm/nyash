@@ -23,6 +23,12 @@ What Changed (today)
 - 環境変数アクセスを `config::env` に集約（`mir_no_phi()`/`verify_allow_no_phi()`/`llvm_use_harness()`）。
 - dev プロファイル `tools/dev_env.sh phi_off` を追加。ルート清掃ユーティリティ `tools/clean_root_artifacts.sh` を追加。
 - CI（GH Actions）を curated LLVM（PHI‑on/off）実行に刷新。旧JITジョブは停止。
+- Verifier: verification.rs 内の compute_* ラッパーを撤去し、全て `verification::utils::*` を直参照に置換。
+- Parser: `bit_or/xor/and` と `equality/comparison/range/term/shift/factor` に加え、`call/primary` も `parser/expr/` へ分割。`expressions.rs` は委譲ラッパーのみに縮退（互換維持）。
+- Optimizer(BoxField): 同一ブロック内の set 直後の get（同一 box+index）を Copy に置換する軽量 peephole を追加（load-after-store 短絡）。
+- LLVM(select/terminators): `function.rs` から `instructions::term_emit_*` を利用しつつ、`normalize_branch_condition()` をブランチ直前で適用する流れを固定化（truthy 正規化の前段フック）。
+- Runner/env 集約: `src/config/env.rs` に CLI/自ホスト/VM まわりの getter を追加（`cli_verbose()/enable_using()/vm_use_py()/ny_compiler_*()` など）。`runner/selfhost.rs`/`runner/pipe_io.rs`/`runner/modes/common.rs` のホットパスを getter 参照に更新（段階導入）。
+- VM dispatch: 実装は既に dispatch 中央化済み（`backend::dispatch` 経由）。`NYASH_VM_USE_DISPATCH` フラグの getter を追加（将来の選択切替用）。
 
 Refactor Progress (2025‑09‑16, end of day)
 - Runner: ヘッダ指令スキャンとトレース出力を分離（`runner/cli_directives.rs`, `runner/trace.rs`）。using 解決ログを集約。

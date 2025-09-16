@@ -2,8 +2,12 @@ include "apps/selfhost-compiler/boxes/parser_box.nyash"
 include "apps/selfhost-compiler/boxes/emitter_box.nyash"
 static box Main {
   main(args) {
-    local s = "if false { break } else { }
-return 0
+    local s = "static box Main {
+  main() {
+    print(\"hello\")
+    return 0
+  }
+}
 "
     local p = new ParserBox()
     p.stage3_enable(1)
