@@ -1,6 +1,6 @@
 // Extracted call-related builders from builder.rs to keep files lean
 use super::{Effect, EffectMask, FunctionSignature, MirInstruction, MirType, ValueId};
-use crate::ast::{ASTNode, LiteralValue};
+use crate::ast::{ASTNode, LiteralValue, MethodCallExpr};
 use crate::mir::{slot_registry, TypeOpKind};
 
 impl super::MirBuilder {
@@ -276,7 +276,8 @@ impl super::MirBuilder {
                 return Ok(result_id);
             }
         }
-        // Build the object expression
+        // Build the object expression (wrapper allows simple access if needed in future)
+        let _mc = MethodCallExpr { object: Box::new(object.clone()), method: method.clone(), arguments: arguments.clone(), span: crate::ast::Span::unknown() };
         let object_value = self.build_expression(object.clone())?;
         // Secondary interception for is/as
         if (method == "is" || method == "as") && arguments.len() == 1 {
