@@ -231,6 +231,10 @@ box ParserBox {
 
   parse_factor2(src, i) {
     local j = me.skip_ws(src, i)
+    if j >= src.length() { me.gpos_set(j) return "{\"type\":\"Int\",\"value\":0}" }
+    if me.starts_with_kw(src, j, "true") == 1 { me.gpos_set(j + 4) return "{\"type\":\"Bool\",\"value\":true}" }
+    if me.starts_with_kw(src, j, "false") == 1 { me.gpos_set(j + 5) return "{\"type\":\"Bool\",\"value\":false}" }
+    if me.starts_with_kw(src, j, "null") == 1 { me.gpos_set(j + 4) return "{\"type\":\"Null\"}" }
     local ch = src.substring(j, j+1)
     // Parenthesized
     if ch == "(" {
@@ -465,32 +469,54 @@ box ParserBox {
       return ""
     }
     // simple assignment: IDENT '=' expr ;  → JSON v0 Local{name, expr} (Stage‑2 uses Local for updates)
-    if me.is_alpha(src.substring(j, j+1)) {
+    if j < src.length() && me.is_alpha(src.substring(j, j+1)) {
       local idp0 = me.read_ident2(src, j)
       local at0 = idp0.lastIndexOf("@")
       if at0 > 0 {
         local name0 = idp0.substring(0, at0)
         local k0 = me.to_int(idp0.substring(at0+1, idp0.length()))
         k0 = me.skip_ws(src, k0)
-        if src.substring(k0, k0+1) == "=" {
-          k0 = k0 + 1
-          k0 = me.skip_ws(src, k0)
-          local e0 = me.parse_expr2(src, k0)
-          k0 = me.gpos_get()
-          if k0 <= stmt_start { if k0 < src.length() { k0 = k0 + 1 } else { k0 = src.length() } }
-          me.gpos_set(k0)
-          return "{\"type\":\"Local\",\"name\":\"" + name0 + "\",\"expr\":" + e0 + "}"
+        if k0 < src.length() && src.substring(k0, k0+1) == "=" {
+          local eq_two = "="
+          if k0 + 1 < src.length() { eq_two = src.substring(k0, k0+2) }
+          if eq_two != "==" {
+            k0 = k0 + 1
+            k0 = me.skip_ws(src, k0)
+            local default_local = "{\"type\":\"Int\",\"value\":0}"
+            local expr_json0 = default_local
+            local end_pos0 = k0
+            if k0 < src.length() {
+              local ahead = src.substring(k0, k0+1)
+              if ahead != "}" && ahead != ";" {
+                expr_json0 = me.parse_expr2(src, k0)
+                end_pos0 = me.gpos_get()
+              }
+            }
+            k0 = end_pos0
+            if k0 <= stmt_start { if k0 < src.length() { k0 = k0 + 1 } else { k0 = src.length() } }
+            me.gpos_set(k0)
+            return "{\"type\":\"Local\",\"name\":\"" + name0 + "\",\"expr\":" + expr_json0 + "}"
+          }
         }
       }
     }
     if me.starts_with_kw(src, j, "return") == 1 {
       j = j + 6
       j = me.skip_ws(src, j)
-      local e = me.parse_expr2(src, j)
-      j = me.gpos_get()
+      local default_ret = "{\"type\":\"Int\",\"value\":0}"
+      local expr_json_ret = default_ret
+      local end_pos_ret = j
+      if j < src.length() {
+        local ahead_ret = src.substring(j, j+1)
+        if ahead_ret != "}" && ahead_ret != ";" {
+          expr_json_ret = me.parse_expr2(src, j)
+          end_pos_ret = me.gpos_get()
+        }
+      }
+      j = end_pos_ret
       if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
       me.gpos_set(j)
-      return "{\"type\":\"Return\",\"expr\":" + e + "}"
+      return "{\"type\":\"Return\",\"expr\":" + expr_json_ret + "}"
     }
     if me.starts_with_kw(src, j, "local") == 1 {
       j = j + 5
@@ -500,13 +526,22 @@ box ParserBox {
       local name = idp.substring(0, at)
       j = me.to_int(idp.substring(at+1, idp.length()))
       j = me.skip_ws(src, j)
-      if src.substring(j, j+1) == "=" { j = j + 1 }
+      if j < src.length() && src.substring(j, j+1) == "=" { j = j + 1 }
       j = me.skip_ws(src, j)
-      local e2 = me.parse_expr2(src, j)
-      j = me.gpos_get()
+      local default_local = "{\"type\":\"Int\",\"value\":0}"
+      local expr_json_local = default_local
+      local end_pos_local = j
+      if j < src.length() {
+        local ahead_local = src.substring(j, j+1)
+        if ahead_local != "}" && ahead_local != ";" {
+          expr_json_local = me.parse_expr2(src, j)
+          end_pos_local = me.gpos_get()
+        }
+      }
+      j = end_pos_local
       if j <= stmt_start { if j < src.length() { j = j + 1 } else { j = src.length() } }
       me.gpos_set(j)
-      return "{\"type\":\"Local\",\"name\":\"" + name + "\",\"expr\":" + e2 + "}"
+      return "{\"type\":\"Local\",\"name\":\"" + name + "\",\"expr\":" + expr_json_local + "}"
     }
     if me.starts_with_kw(src, j, "if") == 1 {
       j = j + 2
