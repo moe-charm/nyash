@@ -28,11 +28,11 @@ What Changed (today)
 
 Quick Next (today)
 - いよいよ「Nyash で書く」段階へ（Self‑Hosting 実装の着手）：
-  1) ParserBox 拡張（Stage‑2 の堅牢化・回帰修正）
-     - 算術/比較/論理/呼出/メソッド/if/else/loop/local/return/new の受理を再確認。
-     - 代入文の正規化（`identifier = expr` → Local/Store）。
-  2) EmitterBox 拡張（JSON v0 の安定化）
-     - `meta.usings` の付与一貫化、配列/Map リテラルの後方対応（将来拡張の下地）。
+  1) ParserBox 拡張（Stage‑2 の堅牢化・回帰修正）✅ Done 2025‑09‑16
+     - bool/null リテラルと空 RHS（代入/return/local）を Int(0) フォールバックで正規化。
+     - simple assignment → Local 正常化を `==` 判定と共に調整。
+  2) EmitterBox 拡張（JSON v0 の安定化）✅ Done 2025‑09‑16
+     - `meta.usings` を常時出力（空は `[]`）。
   3) 自己ホスト経路で Ny 実装切替のゲート準備（現状は Python MVP 優先を維持）。
   4) テスト:
      - `source tools/dev_env.sh pyvm`
