@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use inkwell::{values::BasicValueEnum as BVE, AddressSpace};
 
+use super::builder_cursor::BuilderCursor;
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
-use super::builder_cursor::BuilderCursor;
 
 /// Handle MapBox fast-paths (core-first). Returns true if handled.
 pub(super) fn try_handle_map_method<'ctx, 'b>(
@@ -61,18 +61,49 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             let key_i = match func.metadata.value_types.get(&args[0]) {
                 Some(crate::mir::MirType::String) => {
                     // string key: i8* -> handle
-                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
-                    let fnty_conv = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                    let pv = resolver.resolve_ptr(
+                        codegen,
+                        cursor,
+                        cur_bid,
+                        args[0],
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        vmap,
+                    )?;
+                    let fnty_conv = i64t.fn_type(
+                        &[codegen.context.ptr_type(AddressSpace::from(0)).into()],
+                        false,
+                    );
                     let conv = codegen
                         .module
                         .get_function("nyash.box.from_i8_string")
-                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                        .unwrap_or_else(|| {
+                            codegen
+                                .module
+                                .add_function("nyash.box.from_i8_string", fnty_conv, None)
+                        });
                     let kcall = cursor
-                        .emit_instr(cur_bid, |b| b.build_call(conv, &[pv.into()], "key_i8_to_handle"))
+                        .emit_instr(cur_bid, |b| {
+                            b.build_call(conv, &[pv.into()], "key_i8_to_handle")
+                        })
                         .map_err(|e| e.to_string())?;
-                    kcall.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
+                    kcall
+                        .try_as_basic_value()
+                        .left()
+                        .ok_or("from_i8_string returned void".to_string())?
+                        .into_int_value()
                 }
-                _ => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?
+                _ => resolver.resolve_i64(
+                    codegen,
+                    cursor,
+                    cur_bid,
+                    args[0],
+                    &std::collections::HashMap::new(),
+                    &std::collections::HashMap::new(),
+                    &std::collections::HashMap::new(),
+                    vmap,
+                )?,
             };
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
             let callee = codegen
@@ -80,7 +111,9 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
                 .get_function("nyash.map.has_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash.map.has_h", fnty, None));
             let call = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), key_i.into()], "mhas"))
+                .emit_instr(cur_bid, |b| {
+                    b.build_call(callee, &[recv_h.into(), key_i.into()], "mhas")
+                })
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call
@@ -101,15 +134,32 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             let call = match func.metadata.value_types.get(&args[0]) {
                 Some(crate::mir::MirType::String) => {
                     // key: i8* -> i64 handle via from_i8_string (string key)
-                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
-                    let fnty_conv = i64t
-                        .fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                    let pv = resolver.resolve_ptr(
+                        codegen,
+                        cursor,
+                        cur_bid,
+                        args[0],
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        vmap,
+                    )?;
+                    let fnty_conv = i64t.fn_type(
+                        &[codegen.context.ptr_type(AddressSpace::from(0)).into()],
+                        false,
+                    );
                     let conv = codegen
                         .module
                         .get_function("nyash.box.from_i8_string")
-                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                        .unwrap_or_else(|| {
+                            codegen
+                                .module
+                                .add_function("nyash.box.from_i8_string", fnty_conv, None)
+                        });
                     let kcall = cursor
-                        .emit_instr(cur_bid, |b| b.build_call(conv, &[pv.into()], "key_i8_to_handle"))
+                        .emit_instr(cur_bid, |b| {
+                            b.build_call(conv, &[pv.into()], "key_i8_to_handle")
+                        })
                         .map_err(|e| e.to_string())?;
                     let kh = kcall
                         .try_as_basic_value()
@@ -120,20 +170,37 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
                     let callee = codegen
                         .module
                         .get_function("nyash.map.get_hh")
-                        .unwrap_or_else(|| codegen.module.add_function("nyash.map.get_hh", fnty, None));
+                        .unwrap_or_else(|| {
+                            codegen.module.add_function("nyash.map.get_hh", fnty, None)
+                        });
                     cursor
-                        .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), kh.into()], "mget_hh"))
+                        .emit_instr(cur_bid, |b| {
+                            b.build_call(callee, &[recv_h.into(), kh.into()], "mget_hh")
+                        })
                         .map_err(|e| e.to_string())?
                 }
                 _ => {
-                    let iv = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
+                    let iv = resolver.resolve_i64(
+                        codegen,
+                        cursor,
+                        cur_bid,
+                        args[0],
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        vmap,
+                    )?;
                     let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
                     let callee = codegen
                         .module
                         .get_function("nyash.map.get_h")
-                        .unwrap_or_else(|| codegen.module.add_function("nyash.map.get_h", fnty, None));
+                        .unwrap_or_else(|| {
+                            codegen.module.add_function("nyash.map.get_h", fnty, None)
+                        });
                     cursor
-                        .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), iv.into()], "mget"))
+                        .emit_instr(cur_bid, |b| {
+                            b.build_call(callee, &[recv_h.into(), iv.into()], "mget")
+                        })
                         .map_err(|e| e.to_string())?
                 }
             };
@@ -155,27 +222,69 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
             }
             let key_i = match func.metadata.value_types.get(&args[0]) {
                 Some(crate::mir::MirType::String) => {
-                    let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
-                    let fnty_conv = i64t.fn_type(&[codegen.context.ptr_type(AddressSpace::from(0)).into()], false);
+                    let pv = resolver.resolve_ptr(
+                        codegen,
+                        cursor,
+                        cur_bid,
+                        args[0],
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        &std::collections::HashMap::new(),
+                        vmap,
+                    )?;
+                    let fnty_conv = i64t.fn_type(
+                        &[codegen.context.ptr_type(AddressSpace::from(0)).into()],
+                        false,
+                    );
                     let conv = codegen
                         .module
                         .get_function("nyash.box.from_i8_string")
-                        .unwrap_or_else(|| codegen.module.add_function("nyash.box.from_i8_string", fnty_conv, None));
+                        .unwrap_or_else(|| {
+                            codegen
+                                .module
+                                .add_function("nyash.box.from_i8_string", fnty_conv, None)
+                        });
                     let kcall = cursor
-                        .emit_instr(cur_bid, |b| b.build_call(conv, &[pv.into()], "key_i8_to_handle"))
+                        .emit_instr(cur_bid, |b| {
+                            b.build_call(conv, &[pv.into()], "key_i8_to_handle")
+                        })
                         .map_err(|e| e.to_string())?;
-                    kcall.try_as_basic_value().left().ok_or("from_i8_string returned void".to_string())?.into_int_value()
+                    kcall
+                        .try_as_basic_value()
+                        .left()
+                        .ok_or("from_i8_string returned void".to_string())?
+                        .into_int_value()
                 }
-                _ => resolver.resolve_i64(codegen, cursor, cur_bid, args[0], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?
+                _ => resolver.resolve_i64(
+                    codegen,
+                    cursor,
+                    cur_bid,
+                    args[0],
+                    &std::collections::HashMap::new(),
+                    &std::collections::HashMap::new(),
+                    &std::collections::HashMap::new(),
+                    vmap,
+                )?,
             };
-            let val_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[1], &std::collections::HashMap::new(), &std::collections::HashMap::new(), &std::collections::HashMap::new(), vmap)?;
+            let val_i = resolver.resolve_i64(
+                codegen,
+                cursor,
+                cur_bid,
+                args[1],
+                &std::collections::HashMap::new(),
+                &std::collections::HashMap::new(),
+                &std::collections::HashMap::new(),
+                vmap,
+            )?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module
                 .get_function("nyash.map.set_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash.map.set_h", fnty, None));
             let _ = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), key_i.into(), val_i.into()], "mset"))
+                .emit_instr(cur_bid, |b| {
+                    b.build_call(callee, &[recv_h.into(), key_i.into(), val_i.into()], "mset")
+                })
                 .map_err(|e| e.to_string())?;
             Ok(true)
         }

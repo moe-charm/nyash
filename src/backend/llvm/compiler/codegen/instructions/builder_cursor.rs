@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use inkwell::{
-    basic_block::BasicBlock,
-    builder::Builder,
-};
+use inkwell::{basic_block::BasicBlock, builder::Builder};
 
 use crate::mir::BasicBlockId;
 
@@ -17,11 +14,21 @@ pub struct BuilderCursor<'ctx, 'b> {
 
 impl<'ctx, 'b> BuilderCursor<'ctx, 'b> {
     pub fn new(builder: &'b Builder<'ctx>) -> Self {
-        Self { builder, closed_by_bid: HashMap::new(), cur_bid: None, cur_llbb: None }
+        Self {
+            builder,
+            closed_by_bid: HashMap::new(),
+            cur_bid: None,
+            cur_llbb: None,
+        }
     }
 
     /// Temporarily switch to another block, run body, then restore previous position/state.
-    pub fn with_block<R>(&mut self, bid: BasicBlockId, bb: BasicBlock<'ctx>, body: impl FnOnce(&mut BuilderCursor<'ctx, 'b>) -> R) -> R {
+    pub fn with_block<R>(
+        &mut self,
+        bid: BasicBlockId,
+        bb: BasicBlock<'ctx>,
+        body: impl FnOnce(&mut BuilderCursor<'ctx, 'b>) -> R,
+    ) -> R {
         let prev_bid = self.cur_bid;
         let prev_bb = self.cur_llbb;
         // Preserve previous closed state
@@ -66,7 +73,11 @@ impl<'ctx, 'b> BuilderCursor<'ctx, 'b> {
 
     pub fn assert_open(&self, bid: BasicBlockId) {
         if let Some(closed) = self.closed_by_bid.get(&bid) {
-            assert!(!closed, "attempt to insert into closed block {}", bid.as_u32());
+            assert!(
+                !closed,
+                "attempt to insert into closed block {}",
+                bid.as_u32()
+            );
         }
     }
 
@@ -86,7 +97,11 @@ impl<'ctx, 'b> BuilderCursor<'ctx, 'b> {
         f(self.builder);
         // After emitting a terminator, assert the current basic block now has one
         if let Some(bb) = self.cur_llbb {
-            assert!(unsafe { bb.get_terminator() }.is_some(), "expected terminator in bb {}", bid.as_u32());
+            assert!(
+                unsafe { bb.get_terminator() }.is_some(),
+                "expected terminator in bb {}",
+                bid.as_u32()
+            );
         }
         self.closed_by_bid.insert(bid, true);
     }

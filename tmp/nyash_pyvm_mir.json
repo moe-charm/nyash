@@ -6,8 +6,25 @@
           "id": 0,
           "instructions": [
             {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
               "op": "jump",
-              "target": 1
+              "target": 2
             }
           ]
         },
@@ -15,33 +32,56 @@
           "id": 1,
           "instructions": [
             {
-              "dst": 0,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
               "dst": 2,
-              "lhs": 0,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 1
+              "incoming": [
+                [
+                  5,
+                  4
+                ],
+                [
+                  8,
+                  6
+                ],
+                [
+                  9,
+                  3
+                ]
+              ],
+              "op": "phi"
             },
             {
-              "cond": 2,
-              "else": 3,
-              "op": "branch",
-              "then": 2
+              "args": [],
+              "dst": 10,
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 10,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                2
+              ],
+              "box": 10,
+              "dst": 11,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 12
             }
           ]
         },
@@ -49,13 +89,50 @@
           "id": 2,
           "instructions": [
             {
-              "op": "jump",
-              "target": 3
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "0"
+              }
+            },
+            {
+              "dst": 4,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 3
+            },
+            {
+              "cond": 4,
+              "else": 5,
+              "op": "branch",
+              "then": 4
             }
           ]
         },
         {
           "id": 3,
+          "instructions": [
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        },
+        {
+          "id": 4,
           "instructions": [
             {
               "dst": 5,
@@ -66,14 +143,51 @@
               }
             },
             {
-              "op": "ret",
-              "value": 5
+              "op": "jump",
+              "target": 1
             }
           ]
         },
         {
-          "id": 4,
+          "id": 5,
           "instructions": [
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "dst": 7,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 6
+            },
+            {
+              "cond": 7,
+              "else": 3,
+              "op": "branch",
+              "then": 6
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
             {
               "op": "jump",
               "target": 1

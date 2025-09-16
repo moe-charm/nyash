@@ -7,10 +7,13 @@ pub struct StrPtr<'ctx>(pub PointerValue<'ctx>);
 
 impl<'ctx> StrHandle<'ctx> {
     #[inline]
-    pub fn as_i64(&self) -> IntValue<'ctx> { self.0 }
+    pub fn as_i64(&self) -> IntValue<'ctx> {
+        self.0
+    }
 }
 
 impl<'ctx> From<PointerValue<'ctx>> for StrPtr<'ctx> {
-    fn from(p: PointerValue<'ctx>) -> Self { Self(p) }
+    fn from(p: PointerValue<'ctx>) -> Self {
+        Self(p)
+    }
 }
-

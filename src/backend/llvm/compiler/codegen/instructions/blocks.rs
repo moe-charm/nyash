@@ -2,8 +2,8 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::values::{BasicValueEnum, FunctionValue, PhiValue};
 use std::collections::HashMap;
 
-use crate::backend::llvm::context::CodegenContext;
 use super::super::types::map_mirtype_to_basic;
+use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 
 // Small, safe extraction: create LLVM basic blocks for a MIR function and
@@ -16,9 +16,10 @@ pub(in super::super) fn create_basic_blocks<'ctx>(
 ) -> (HashMap<BasicBlockId, BasicBlock<'ctx>>, BasicBlock<'ctx>) {
     let mut bb_map: HashMap<BasicBlockId, BasicBlock> = HashMap::new();
     let entry_first = func.entry_block;
-    let entry_bb = codegen
-        .context
-        .append_basic_block(llvm_func, &format!("{}_bb{}", fn_label, entry_first.as_u32()));
+    let entry_bb = codegen.context.append_basic_block(
+        llvm_func,
+        &format!("{}_bb{}", fn_label, entry_first.as_u32()),
+    );
     bb_map.insert(entry_first, entry_bb);
     for bid in func.block_ids() {
         if bid == entry_first {
@@ -38,10 +39,7 @@ pub(in super::super) fn precreate_phis<'ctx>(
     bb_map: &HashMap<BasicBlockId, BasicBlock<'ctx>>,
     vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
 ) -> Result<
-    HashMap<
-        BasicBlockId,
-        Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>,
-    >,
+    HashMap<BasicBlockId, Vec<(ValueId, PhiValue<'ctx>, Vec<(BasicBlockId, ValueId)>)>>,
     String,
 > {
     use super::super::types::map_mirtype_to_basic;
@@ -63,15 +61,34 @@ pub(in super::super) fn precreate_phis<'ctx>(
                 // Prefer pointer when any input (or dst) is String/Box/Array/Future/Unknown
                 let mut wants_ptr = false;
                 if let Some(mt) = func.metadata.value_types.get(dst) {
-                    wants_ptr |= matches!(mt, crate::mir::MirType::String | crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown);
+                    wants_ptr |= matches!(
+                        mt,
+                        crate::mir::MirType::String
+                            | crate::mir::MirType::Box(_)
+                            | crate::mir::MirType::Array(_)
+                            | crate::mir::MirType::Future(_)
+                            | crate::mir::MirType::Unknown
+                    );
                 }
                 for (_, iv) in inputs.iter() {
                     if let Some(mt) = func.metadata.value_types.get(iv) {
-                        wants_ptr |= matches!(mt, crate::mir::MirType::String | crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown);
+                        wants_ptr |= matches!(
+                            mt,
+                            crate::mir::MirType::String
+                                | crate::mir::MirType::Box(_)
+                                | crate::mir::MirType::Array(_)
+                                | crate::mir::MirType::Future(_)
+                                | crate::mir::MirType::Unknown
+                        );
                     }
                 }
                 if wants_ptr {
-                    phi_ty = Some(codegen.context.ptr_type(inkwell::AddressSpace::from(0)).into());
+                    phi_ty = Some(
+                        codegen
+                            .context
+                            .ptr_type(inkwell::AddressSpace::from(0))
+                            .into(),
+                    );
                 } else if let Some(mt) = func.metadata.value_types.get(dst) {
                     phi_ty = Some(map_mirtype_to_basic(codegen.context, mt));
                 } else if let Some((_, iv)) = inputs.first() {

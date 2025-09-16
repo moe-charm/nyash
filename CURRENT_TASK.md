@@ -24,6 +24,15 @@ What Changed (today)
 - dev プロファイル `tools/dev_env.sh phi_off` を追加。ルート清掃ユーティリティ `tools/clean_root_artifacts.sh` を追加。
 - CI（GH Actions）を curated LLVM（PHI‑on/off）実行に刷新。旧JITジョブは停止。
 
+Self‑Hosting plumbing (2025‑09‑16, later in day)
+- Runner: 自己ホスト経路で子プログラム（`apps/selfhost-compiler/compiler.nyash`）を優先実行し、`--read-tmp` 常時付与で安定運用に変更。
+- PyVM 優先の統一（`NYASH_VM_USE_PY=1`）は EXE/inline/child の全分岐で尊重。
+- CLI: `--stage3` を追加（`NYASH_NY_COMPILER_STAGE3=1` を設定）。
+- Script args パススルー（B案）実装: `nyash ... FILE -- arg1 arg2` → `NYASH_SCRIPT_ARGS_JSON=["arg1","arg2"]` として `Main.main(args)` に ArrayBox で注入。
+  - Interpreter: `ArrayBox.of(...)` を追加して初期配列を簡潔に構築。
+  - Runner: Python MVP は `NYASH_NY_COMPILER_SKIP_PY=1` でスキップ可能（自己ホスト子を優先）。
+
+
 Decision (Phase‑15 wrap‑up)
 - MIR13 移行（PHI 非生成）: Phase‑15 の締めとして、MIR 生成層（Bridge/Builder）は PHI を生成しない方針に切替。PHI 合成は LLVM 層（llvmlite/Resolver）に集約。
 - LoopForm は次フェーズ（MIR18）で導入: まずは MIR14 を維持し、次フェーズで `LoopHeader/Enter/Latch` 等の占位命令を追加。現行 Phase‑15 は CFG パターン検知でループ搬送値を合成。
@@ -35,6 +44,22 @@ Next Focus (Throw/Try — LLVM first)
 - PyVM 設計: 例外モデルをどこまで Python 側に実装するか決め、最小テスト計画を用意。
 - LLVM 実装方針: Throw/Try の MIR 命令を LLVM 側がどう扱うか（panic扱い or fallback）を設計し、smoke 更新案を作る（現状 Throw は trap/unreachable 最小降ろし完了）。
 - テスト計画: JSON フィクスチャと `tools/llvm_smoke.sh` を中心に Stage-3 例外用のスモーク/単体テストを整備。
+
+Open Items (handoff)
+- Selfhost Stage‑3 E2E smoke（Runner→子→JSON→Bridge）の最終緑化
+  - 現状: 子へ `--read-tmp` は付与済み。`--stage3` は env→子へ透過済み。
+  - 直近 TODO: tools/selfhost_stage3_accept_smoke.sh を Runner 優先経路に再調整し、`NYASH_NY_COMPILER_SKIP_PY=1` 併用で安定化。
+  - 期待値: try/finally/break/continue/throw(accept) で exit=0（degrade 経路）
+- CLI argv 前処理の挙動監視
+  - `--` なしの通常実行での Positional FILE 受理を再検証（Clapの警告再現時は build_command の宣言順/Arg要件を再点検）。
+- LLVM: Throw 実投げの終了コード方針を決定し、trap on/off の期待値を固定化。
+
+Next Steps (suggested order)
+1) Selfhost Stage‑3 E2E 緑化（smoke 修正 → 確認）
+2) CLI FILE positional の回帰があれば即修正（Clap設定の微調整）
+3) LLVM Throw 実投げの設計（終了コード/シグナル）＋スモーク
+4) Runner 実装の集約（modes/common → selfhost.rs）と微ノイズ削減
+5) CI に Selfhost Stage‑2/E2E（軽量）をオプションで追加
 
 ※ Cranelift/JIT 系は当面対象外。ビルド時も LLVM のみを有効化（JIT 関連 feature/CI は無視）。
 

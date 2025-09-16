@@ -44,4 +44,7 @@ run "$ROOT_DIR/apps/tests/loop_if_phi.nyash"
 # Peek expression
 run "$ROOT_DIR/apps/tests/peek_expr_block.nyash"
 
+# Try/finally control-flow without actual throw
+run "$ROOT_DIR/apps/tests/try_finally_break_inner_loop.nyash"
+
 echo "[curated-llvm] OK"

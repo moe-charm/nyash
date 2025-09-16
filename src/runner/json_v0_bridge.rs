@@ -3,6 +3,7 @@ use crate::mir::{
     MirModule, MirPrinter, MirType, ValueId,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ProgramV0 {
@@ -125,12 +126,97 @@ struct LoopContext {
     exit_bb: BasicBlockId,
 }
 
+struct BridgeEnv {
+    throw_enabled: bool,
+    mir_no_phi: bool,
+    allow_me_dummy: bool,
+    me_class: String,
+}
+
+impl BridgeEnv {
+    fn load() -> Self {
+        Self {
+            throw_enabled: std::env::var("NYASH_BRIDGE_THROW_ENABLE").ok().as_deref() == Some("1"),
+            mir_no_phi: crate::config::env::mir_no_phi(),
+            allow_me_dummy: std::env::var("NYASH_BRIDGE_ME_DUMMY").ok().as_deref() == Some("1"),
+            me_class: std::env::var("NYASH_BRIDGE_ME_CLASS").unwrap_or_else(|_| "Main".to_string()),
+        }
+    }
+}
+
+trait VarScope {
+    fn resolve(
+        &mut self,
+        env: &BridgeEnv,
+        f: &mut MirFunction,
+        cur_bb: BasicBlockId,
+        name: &str,
+    ) -> Result<Option<ValueId>, String>;
+}
+
+struct NoVars;
+
+impl VarScope for NoVars {
+    fn resolve(
+        &mut self,
+        _env: &BridgeEnv,
+        _f: &mut MirFunction,
+        _cur_bb: BasicBlockId,
+        name: &str,
+    ) -> Result<Option<ValueId>, String> {
+        Err(format!("undefined variable in this context: {}", name))
+    }
+}
+
+struct MapVars<'a> {
+    vars: &'a mut HashMap<String, ValueId>,
+}
+
+impl<'a> MapVars<'a> {
+    fn new(vars: &'a mut HashMap<String, ValueId>) -> Self {
+        Self { vars }
+    }
+}
+
+impl<'a> VarScope for MapVars<'a> {
+    fn resolve(
+        &mut self,
+        env: &BridgeEnv,
+        f: &mut MirFunction,
+        cur_bb: BasicBlockId,
+        name: &str,
+    ) -> Result<Option<ValueId>, String> {
+        if let Some(&vid) = self.vars.get(name) {
+            return Ok(Some(vid));
+        }
+        if name == "me" {
+            if env.allow_me_dummy {
+                let dst = f.next_value_id();
+                if let Some(bb) = f.get_block_mut(cur_bb) {
+                    bb.add_instruction(MirInstruction::NewBox {
+                        dst,
+                        box_type: env.me_class.clone(),
+                        args: vec![],
+                    });
+                }
+                self.vars.insert(name.to_string(), dst);
+                Ok(Some(dst))
+            } else {
+                Err("undefined 'me' outside box context (set NYASH_BRIDGE_ME_DUMMY=1 to inject placeholder)".into())
+            }
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 fn lower_throw(
+    env: &BridgeEnv,
     f: &mut MirFunction,
     cur_bb: BasicBlockId,
     exception_value: ValueId,
 ) -> (ValueId, BasicBlockId) {
-    if std::env::var("NYASH_BRIDGE_THROW_ENABLE").ok().as_deref() == Some("1") {
+    if env.throw_enabled {
         if let Some(bb) = f.get_block_mut(cur_bb) {
             bb.set_terminator(MirInstruction::Throw {
                 exception: exception_value,
@@ -158,6 +244,7 @@ pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
     }
     // Create module and main function
     let mut module = MirModule::new("ny_json_v0".into());
+    let env = BridgeEnv::load();
     let sig = FunctionSignature {
         name: "main".into(),
         params: vec![],
@@ -172,12 +259,17 @@ pub fn parse_json_v0_to_module(json: &str) -> Result<MirModule, String> {
     }
 
     // Variable map for simple locals (Stage-2; currently minimal)
-    let mut var_map: std::collections::HashMap<String, crate::mir::ValueId> =
-        std::collections::HashMap::new();
+    let mut var_map: HashMap<String, ValueId> = HashMap::new();
     let mut loop_stack: Vec<LoopContext> = Vec::new();
     let start_bb = f.entry_block;
-    let end_bb =
-        lower_stmt_list_with_vars(&mut f, start_bb, &prog.body, &mut var_map, &mut loop_stack)?;
+    let end_bb = lower_stmt_list_with_vars(
+        &mut f,
+        start_bb,
+        &prog.body,
+        &mut var_map,
+        &mut loop_stack,
+        &env,
+    )?;
     // Ensure function terminates: add `ret 0` to last un-terminated block (prefer end_bb else entry)
     let need_default_ret = f.blocks.iter().any(|(_k, b)| !b.is_terminated());
     if need_default_ret {
@@ -211,11 +303,13 @@ fn next_block_id(f: &MirFunction) -> BasicBlockId {
     BasicBlockId::new(mx)
 }
 
-fn lower_expr(
+fn lower_expr_with_scope<S: VarScope>(
+    env: &BridgeEnv,
     f: &mut MirFunction,
     cur_bb: BasicBlockId,
     e: &ExprV0,
-) -> Result<(crate::mir::ValueId, BasicBlockId), String> {
+    vars: &mut S,
+) -> Result<(ValueId, BasicBlockId), String> {
     match e {
         ExprV0::Int { value } => {
             // Accept number or stringified digits
@@ -256,8 +350,8 @@ fn lower_expr(
             Ok((dst, cur_bb))
         }
         ExprV0::Binary { op, lhs, rhs } => {
-            let (l, cur_after_l) = lower_expr(f, cur_bb, lhs)?;
-            let (r, cur_after_r) = lower_expr(f, cur_after_l, rhs)?;
+            let (l, cur_after_l) = lower_expr_with_scope(env, f, cur_bb, lhs, vars)?;
+            let (r, cur_after_r) = lower_expr_with_scope(env, f, cur_after_l, rhs, vars)?;
             let bop = match op.as_str() {
                 "+" => BinaryOp::Add,
                 "-" => BinaryOp::Sub,
@@ -281,7 +375,7 @@ fn lower_expr(
             method,
             args,
         } => {
-            let (arg_ids, cur2) = lower_args(f, cur_bb, args)?;
+            let (arg_ids, cur2) = lower_args_with_scope(env, f, cur_bb, args, vars)?;
             let dst = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur2) {
                 bb.add_instruction(MirInstruction::ExternCall {
@@ -295,8 +389,8 @@ fn lower_expr(
             Ok((dst, cur2))
         }
         ExprV0::Compare { op, lhs, rhs } => {
-            let (l, cur_after_l) = lower_expr(f, cur_bb, lhs)?;
-            let (r, cur_after_r) = lower_expr(f, cur_after_l, rhs)?;
+            let (l, cur_after_l) = lower_expr_with_scope(env, f, cur_bb, lhs, vars)?;
+            let (r, cur_after_r) = lower_expr_with_scope(env, f, cur_after_l, rhs, vars)?;
             let cop = match op.as_str() {
                 "==" => crate::mir::CompareOp::Eq,
                 "!=" => crate::mir::CompareOp::Ne,
@@ -319,7 +413,7 @@ fn lower_expr(
         }
         ExprV0::Logical { op, lhs, rhs } => {
             // Short-circuit boolean logic with branches (+phi or edge-copy)
-            let (l, cur_after_l) = lower_expr(f, cur_bb, lhs)?;
+            let (l, cur_after_l) = lower_expr_with_scope(env, f, cur_bb, lhs, vars)?;
             let rhs_bb = next_block_id(f);
             let fall_bb = BasicBlockId::new(rhs_bb.0 + 1);
             let merge_bb = BasicBlockId::new(rhs_bb.0 + 2);
@@ -380,7 +474,7 @@ fn lower_expr(
                 bb.set_terminator(MirInstruction::Jump { target: merge_bb });
             }
             // evaluate rhs starting at rhs_bb and ensure the terminal block jumps to merge
-            let (rval, rhs_end) = lower_expr(f, rhs_bb, rhs)?;
+            let (rval, rhs_end) = lower_expr_with_scope(env, f, rhs_bb, rhs, vars)?;
             if let Some(bb) = f.get_block_mut(rhs_end) {
                 if !bb.is_terminated() {
                     bb.set_terminator(MirInstruction::Jump { target: merge_bb });
@@ -393,15 +487,21 @@ fn lower_expr(
                 );
             }
             // Merge: PHI または edge-copy で合流値を定義
-            let no_phi = crate::config::env::mir_no_phi();
+            let no_phi = env.mir_no_phi;
             let out = f.next_value_id();
             if no_phi {
                 // Edge copies in predecessors
                 if let Some(bb) = f.get_block_mut(fall_bb) {
-                    bb.add_instruction(MirInstruction::Copy { dst: out, src: cdst });
+                    bb.add_instruction(MirInstruction::Copy {
+                        dst: out,
+                        src: cdst,
+                    });
                 }
                 if let Some(bb) = f.get_block_mut(rhs_end) {
-                    bb.add_instruction(MirInstruction::Copy { dst: out, src: rval });
+                    bb.add_instruction(MirInstruction::Copy {
+                        dst: out,
+                        src: rval,
+                    });
                 }
             } else if let Some(bb) = f.get_block_mut(merge_bb) {
                 let mut inputs: Vec<(BasicBlockId, ValueId)> = vec![(fall_bb, cdst)];
@@ -432,7 +532,7 @@ fn lower_expr(
                 // For each element: eval then push
                 let mut cur = cur_bb;
                 for e in args {
-                    let (v, c) = lower_expr(f, cur, e)?;
+                    let (v, c) = lower_expr_with_scope(env, f, cur, e, vars)?;
                     cur = c;
                     let tmp = f.next_value_id();
                     if let Some(bb) = f.get_block_mut(cur) {
@@ -462,9 +562,9 @@ fn lower_expr(
                 let mut it = args.iter();
                 while let Some(k) = it.next() {
                     if let Some(v) = it.next() {
-                        let (kv, cur2) = lower_expr(f, cur, k)?;
+                        let (kv, cur2) = lower_expr_with_scope(env, f, cur, k, vars)?;
                         cur = cur2;
-                        let (vv, cur3) = lower_expr(f, cur, v)?;
+                        let (vv, cur3) = lower_expr_with_scope(env, f, cur, v, vars)?;
                         cur = cur3;
                         let tmp = f.next_value_id();
                         if let Some(bb) = f.get_block_mut(cur) {
@@ -484,7 +584,7 @@ fn lower_expr(
                 return Ok((mapv, cur));
             }
             // Fallback: treat as normal dynamic call
-            let (arg_ids, cur) = lower_args(f, cur_bb, args)?;
+            let (arg_ids, cur) = lower_args_with_scope(env, f, cur_bb, args, vars)?;
             let fun_val = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur) {
                 bb.add_instruction(MirInstruction::Const {
@@ -509,7 +609,7 @@ fn lower_expr(
                 matches!(&**recv, ExprV0::New { class, .. } if class == "ConsoleBox");
             if recv_is_console_new && (method == "println" || method == "print" || method == "log")
             {
-                let (arg_ids, cur2) = lower_args(f, cur_bb, args)?;
+                let (arg_ids, cur2) = lower_args_with_scope(env, f, cur_bb, args, vars)?;
                 let dst = f.next_value_id();
                 if let Some(bb) = f.get_block_mut(cur2) {
                     bb.add_instruction(MirInstruction::ExternCall {
@@ -522,8 +622,8 @@ fn lower_expr(
                 }
                 return Ok((dst, cur2));
             }
-            let (recv_v, cur) = lower_expr(f, cur_bb, recv)?;
-            let (arg_ids, cur2) = lower_args(f, cur, args)?;
+            let (recv_v, cur) = lower_expr_with_scope(env, f, cur_bb, recv, vars)?;
+            let (arg_ids, cur2) = lower_args_with_scope(env, f, cur, args, vars)?;
             let dst = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur2) {
                 bb.add_instruction(MirInstruction::BoxCall {
@@ -538,7 +638,7 @@ fn lower_expr(
             Ok((dst, cur2))
         }
         ExprV0::New { class, args } => {
-            let (arg_ids, cur) = lower_args(f, cur_bb, args)?;
+            let (arg_ids, cur) = lower_args_with_scope(env, f, cur_bb, args, vars)?;
             let dst = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur) {
                 bb.add_instruction(MirInstruction::NewBox {
@@ -549,292 +649,50 @@ fn lower_expr(
             }
             Ok((dst, cur))
         }
-        ExprV0::Var { name } => Err(format!("undefined variable in this context: {}", name)),
+        ExprV0::Var { name } => match vars.resolve(env, f, cur_bb, name)? {
+            Some(v) => Ok((v, cur_bb)),
+            None => Err(format!("undefined variable: {}", name)),
+        },
         ExprV0::Throw { expr } => {
-            let (exc, cur) = lower_expr(f, cur_bb, expr)?;
-            let (dst, cur) = lower_throw(f, cur, exc);
+            let (exc, cur) = lower_expr_with_scope(env, f, cur_bb, expr, vars)?;
+            let (dst, cur) = lower_throw(env, f, cur, exc);
             Ok((dst, cur))
         }
     }
 }
 
-fn lower_expr_with_vars(
+fn lower_expr(
+    env: &BridgeEnv,
     f: &mut MirFunction,
     cur_bb: BasicBlockId,
     e: &ExprV0,
-    vars: &mut std::collections::HashMap<String, crate::mir::ValueId>,
-) -> Result<(crate::mir::ValueId, BasicBlockId), String> {
-    match e {
-        ExprV0::Var { name } => {
-            if let Some(&vid) = vars.get(name) {
-                return Ok((vid, cur_bb));
-            }
-            if name == "me" {
-                // Optional gate: allow a dummy 'me' instance for Stage-2 JSON smoke
-                if std::env::var("NYASH_BRIDGE_ME_DUMMY").ok().as_deref() == Some("1") {
-                    let class = std::env::var("NYASH_BRIDGE_ME_CLASS")
-                        .unwrap_or_else(|_| "Main".to_string());
-                    let dst = f.next_value_id();
-                    if let Some(bb) = f.get_block_mut(cur_bb) {
-                        bb.add_instruction(MirInstruction::NewBox {
-                            dst,
-                            box_type: class,
-                            args: vec![],
-                        });
-                    }
-                    vars.insert("me".to_string(), dst);
-                    return Ok((dst, cur_bb));
-                } else {
-                    return Err("undefined 'me' outside box context (set NYASH_BRIDGE_ME_DUMMY=1 to inject placeholder)".into());
-                }
-            }
-            Err(format!("undefined variable: {}", name))
-        }
-        ExprV0::Throw { expr } => {
-            let (exc, cur) = lower_expr_with_vars(f, cur_bb, expr, vars)?;
-            let (dst, cur) = lower_throw(f, cur, exc);
-            Ok((dst, cur))
-        }
-        ExprV0::Call { name, args } => {
-            // Special: array literal lowering in vars context
-            if name == "array.of" {
-                let arr = f.next_value_id();
-                if let Some(bb) = f.get_block_mut(cur_bb) {
-                    bb.add_instruction(MirInstruction::NewBox {
-                        dst: arr,
-                        box_type: "ArrayBox".into(),
-                        args: vec![],
-                    });
-                }
-                let mut cur = cur_bb;
-                for e in args {
-                    let (v, c) = lower_expr_with_vars(f, cur, e, vars)?;
-                    cur = c;
-                    let tmp = f.next_value_id();
-                    if let Some(bb) = f.get_block_mut(cur) {
-                        bb.add_instruction(MirInstruction::BoxCall {
-                            dst: Some(tmp),
-                            box_val: arr,
-                            method: "push".into(),
-                            method_id: None,
-                            args: vec![v],
-                            effects: EffectMask::READ,
-                        });
-                    }
-                }
-                return Ok((arr, cur));
-            }
-            // Special: map literal lowering in vars context
-            if name == "map.of" {
-                let mapv = f.next_value_id();
-                if let Some(bb) = f.get_block_mut(cur_bb) {
-                    bb.add_instruction(MirInstruction::NewBox {
-                        dst: mapv,
-                        box_type: "MapBox".into(),
-                        args: vec![],
-                    });
-                }
-                let mut cur = cur_bb;
-                let mut it = args.iter();
-                while let Some(k) = it.next() {
-                    if let Some(v) = it.next() {
-                        let (kv, cur2) = lower_expr_with_vars(f, cur, k, vars)?;
-                        cur = cur2;
-                        let (vv, cur3) = lower_expr_with_vars(f, cur, v, vars)?;
-                        cur = cur3;
-                        let tmp = f.next_value_id();
-                        if let Some(bb) = f.get_block_mut(cur) {
-                            bb.add_instruction(MirInstruction::BoxCall {
-                                dst: Some(tmp),
-                                box_val: mapv,
-                                method: "set".into(),
-                                method_id: None,
-                                args: vec![kv, vv],
-                                effects: EffectMask::READ,
-                            });
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                return Ok((mapv, cur));
-            }
-            // Lower args
-            let (arg_ids, cur) = lower_args_with_vars(f, cur_bb, args, vars)?;
-            // Encode as: const fun_name; call
-            let fun_val = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(cur) {
-                bb.add_instruction(MirInstruction::Const {
-                    dst: fun_val,
-                    value: ConstValue::String(name.clone()),
-                });
-            }
-            let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(cur) {
-                bb.add_instruction(MirInstruction::Call {
-                    dst: Some(dst),
-                    func: fun_val,
-                    args: arg_ids,
-                    effects: EffectMask::READ,
-                });
-            }
-            Ok((dst, cur))
-        }
-        ExprV0::Method { recv, method, args } => {
-            let recv_is_console_new =
-                matches!(&**recv, ExprV0::New { class, .. } if class == "ConsoleBox");
-            if recv_is_console_new && (method == "println" || method == "print" || method == "log")
-            {
-                let (arg_ids, cur2) = lower_args_with_vars(f, cur_bb, args, vars)?;
-                let dst = f.next_value_id();
-                if let Some(bb) = f.get_block_mut(cur2) {
-                    bb.add_instruction(MirInstruction::ExternCall {
-                        dst: Some(dst),
-                        iface_name: "env.console".into(),
-                        method_name: "log".into(),
-                        args: arg_ids,
-                        effects: EffectMask::READ,
-                    });
-                }
-                return Ok((dst, cur2));
-            }
-            let (recv_v, cur) = lower_expr_with_vars(f, cur_bb, recv, vars)?;
-            let (arg_ids, cur2) = lower_args_with_vars(f, cur, args, vars)?;
-            let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(cur2) {
-                bb.add_instruction(MirInstruction::BoxCall {
-                    dst: Some(dst),
-                    box_val: recv_v,
-                    method: method.clone(),
-                    method_id: None,
-                    args: arg_ids,
-                    effects: EffectMask::READ,
-                });
-            }
-            Ok((dst, cur2))
-        }
-        ExprV0::New { class, args } => {
-            let (arg_ids, cur) = lower_args_with_vars(f, cur_bb, args, vars)?;
-            let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(cur) {
-                bb.add_instruction(MirInstruction::NewBox {
-                    dst,
-                    box_type: class.clone(),
-                    args: arg_ids,
-                });
-            }
-            Ok((dst, cur))
-        }
-        ExprV0::Binary { op, lhs, rhs } => {
-            let (l, cur_after_l) = lower_expr_with_vars(f, cur_bb, lhs, vars)?;
-            let (r, cur_after_r) = lower_expr_with_vars(f, cur_after_l, rhs, vars)?;
-            let bop = match op.as_str() {
-                "+" => BinaryOp::Add,
-                "-" => BinaryOp::Sub,
-                "*" => BinaryOp::Mul,
-                "/" => BinaryOp::Div,
-                _ => return Err("unsupported op".into()),
-            };
-            let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(cur_after_r) {
-                bb.add_instruction(MirInstruction::BinOp {
-                    dst,
-                    op: bop,
-                    lhs: l,
-                    rhs: r,
-                });
-            }
-            Ok((dst, cur_after_r))
-        }
-        ExprV0::Compare { op, lhs, rhs } => {
-            let (l, cur_after_l) = lower_expr_with_vars(f, cur_bb, lhs, vars)?;
-            let (r, cur_after_r) = lower_expr_with_vars(f, cur_after_l, rhs, vars)?;
-            let cop = match op.as_str() {
-                "==" => crate::mir::CompareOp::Eq,
-                "!=" => crate::mir::CompareOp::Ne,
-                "<" => crate::mir::CompareOp::Lt,
-                "<=" => crate::mir::CompareOp::Le,
-                ">" => crate::mir::CompareOp::Gt,
-                ">=" => crate::mir::CompareOp::Ge,
-                _ => return Err("unsupported compare op".into()),
-            };
-            let dst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(cur_after_r) {
-                bb.add_instruction(MirInstruction::Compare {
-                    dst,
-                    op: cop,
-                    lhs: l,
-                    rhs: r,
-                });
-            }
-            Ok((dst, cur_after_r))
-        }
-        ExprV0::Logical { op, lhs, rhs } => {
-            let (l, cur_after_l) = lower_expr_with_vars(f, cur_bb, lhs, vars)?;
-            let rhs_bb = next_block_id(f);
-            let fall_bb = BasicBlockId::new(rhs_bb.0 + 1);
-            let merge_bb = BasicBlockId::new(rhs_bb.0 + 2);
-            f.add_block(crate::mir::BasicBlock::new(rhs_bb));
-            f.add_block(crate::mir::BasicBlock::new(fall_bb));
-            f.add_block(crate::mir::BasicBlock::new(merge_bb));
-            let is_and = matches!(op.as_str(), "&&" | "and");
-            if let Some(bb) = f.get_block_mut(cur_after_l) {
-                if is_and {
-                    bb.set_terminator(MirInstruction::Branch {
-                        condition: l,
-                        then_bb: rhs_bb,
-                        else_bb: fall_bb,
-                    });
-                } else {
-                    bb.set_terminator(MirInstruction::Branch {
-                        condition: l,
-                        then_bb: fall_bb,
-                        else_bb: rhs_bb,
-                    });
-                }
-            }
-            let cdst = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(fall_bb) {
-                let cval = if is_and {
-                    ConstValue::Bool(false)
-                } else {
-                    ConstValue::Bool(true)
-                };
-                bb.add_instruction(MirInstruction::Const {
-                    dst: cdst,
-                    value: cval,
-                });
-                bb.set_terminator(MirInstruction::Jump { target: merge_bb });
-            }
-            let (rval, rhs_end) = lower_expr_with_vars(f, rhs_bb, rhs, vars)?;
-            if let Some(bb) = f.get_block_mut(rhs_end) {
-                if !bb.is_terminated() {
-                    bb.set_terminator(MirInstruction::Jump { target: merge_bb });
-                }
-            }
-            let out = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(merge_bb) {
-                bb.insert_instruction_after_phis(MirInstruction::Phi {
-                    dst: out,
-                    inputs: vec![(rhs_end, rval), (fall_bb, cdst)],
-                });
-            }
-            Ok((out, merge_bb))
-        }
-        _ => lower_expr(f, cur_bb, e),
-    }
+) -> Result<(ValueId, BasicBlockId), String> {
+    let mut scope = NoVars;
+    lower_expr_with_scope(env, f, cur_bb, e, &mut scope)
+}
+
+fn lower_expr_with_vars(
+    env: &BridgeEnv,
+    f: &mut MirFunction,
+    cur_bb: BasicBlockId,
+    e: &ExprV0,
+    vars: &mut HashMap<String, ValueId>,
+) -> Result<(ValueId, BasicBlockId), String> {
+    let mut scope = MapVars::new(vars);
+    lower_expr_with_scope(env, f, cur_bb, e, &mut scope)
 }
 
 fn lower_stmt_with_vars(
     f: &mut MirFunction,
     cur_bb: BasicBlockId,
     s: &StmtV0,
-    vars: &mut std::collections::HashMap<String, crate::mir::ValueId>,
+    vars: &mut HashMap<String, ValueId>,
     loop_stack: &mut Vec<LoopContext>,
+    env: &BridgeEnv,
 ) -> Result<BasicBlockId, String> {
     match s {
         StmtV0::Return { expr } => {
-            let (v, cur) = lower_expr_with_vars(f, cur_bb, expr, vars)?;
+            let (v, cur) = lower_expr_with_vars(env, f, cur_bb, expr, vars)?;
             if let Some(bb) = f.get_block_mut(cur) {
                 bb.set_terminator(MirInstruction::Return { value: Some(v) });
             }
@@ -845,7 +703,7 @@ fn lower_stmt_with_vars(
             method,
             args,
         } => {
-            let (arg_ids, cur) = lower_args_with_vars(f, cur_bb, args, vars)?;
+            let (arg_ids, cur) = lower_args_with_vars(env, f, cur_bb, args, vars)?;
             if let Some(bb) = f.get_block_mut(cur) {
                 bb.add_instruction(MirInstruction::ExternCall {
                     dst: None,
@@ -858,11 +716,11 @@ fn lower_stmt_with_vars(
             Ok(cur)
         }
         StmtV0::Expr { expr } => {
-            let (_v, cur) = lower_expr_with_vars(f, cur_bb, expr, vars)?;
+            let (_v, cur) = lower_expr_with_vars(env, f, cur_bb, expr, vars)?;
             Ok(cur)
         }
         StmtV0::Local { name, expr } => {
-            let (v, cur) = lower_expr_with_vars(f, cur_bb, expr, vars)?;
+            let (v, cur) = lower_expr_with_vars(env, f, cur_bb, expr, vars)?;
             vars.insert(name.clone(), v);
             Ok(cur)
         }
@@ -918,10 +776,16 @@ fn lower_stmt_with_vars(
             if !try_enabled || catches.is_empty() || catches.len() > 1 {
                 let mut tmp_vars = vars.clone();
                 let mut next_bb =
-                    lower_stmt_list_with_vars(f, cur_bb, try_body, &mut tmp_vars, loop_stack)?;
+                    lower_stmt_list_with_vars(f, cur_bb, try_body, &mut tmp_vars, loop_stack, env)?;
                 if !finally.is_empty() {
-                    next_bb =
-                        lower_stmt_list_with_vars(f, next_bb, finally, &mut tmp_vars, loop_stack)?;
+                    next_bb = lower_stmt_list_with_vars(
+                        f,
+                        next_bb,
+                        finally,
+                        &mut tmp_vars,
+                        loop_stack,
+                        env,
+                    )?;
                 }
                 *vars = tmp_vars;
                 return Ok(next_bb);
@@ -960,7 +824,7 @@ fn lower_stmt_with_vars(
 
             let mut try_vars = vars.clone();
             let try_end =
-                lower_stmt_list_with_vars(f, try_bb, try_body, &mut try_vars, loop_stack)?;
+                lower_stmt_list_with_vars(f, try_bb, try_body, &mut try_vars, loop_stack, env)?;
             if let Some(bb) = f.get_block_mut(try_end) {
                 if !bb.is_terminated() {
                     bb.set_terminator(MirInstruction::Jump {
@@ -980,6 +844,7 @@ fn lower_stmt_with_vars(
                 &catch_clause.body,
                 &mut catch_vars,
                 loop_stack,
+                env,
             )?;
             if let Some(param) = &catch_clause.param {
                 catch_vars.remove(param);
@@ -1045,6 +910,7 @@ fn lower_stmt_with_vars(
                     finally,
                     &mut finally_vars,
                     loop_stack,
+                    env,
                 )?;
                 if let Some(bb) = f.get_block_mut(final_end) {
                     if !bb.is_terminated() {
@@ -1098,7 +964,7 @@ fn lower_stmt_with_vars(
         }
         StmtV0::If { cond, then, r#else } => {
             // Lower condition first
-            let (cval, cur) = lower_expr_with_vars(f, cur_bb, cond, vars)?;
+            let (cval, cur) = lower_expr_with_vars(env, f, cur_bb, cond, vars)?;
             // Create then/else/merge blocks
             let then_bb = next_block_id(f);
             let else_bb = BasicBlockId::new(then_bb.0 + 1);
@@ -1118,7 +984,8 @@ fn lower_stmt_with_vars(
             // Clone current vars as branch-local maps
             let base_vars = vars.clone();
             let mut then_vars = base_vars.clone();
-            let tend = lower_stmt_list_with_vars(f, then_bb, then, &mut then_vars, loop_stack)?;
+            let tend =
+                lower_stmt_list_with_vars(f, then_bb, then, &mut then_vars, loop_stack, env)?;
             if let Some(bb) = f.get_block_mut(tend) {
                 if !bb.is_terminated() {
                     bb.set_terminator(MirInstruction::Jump { target: merge_bb });
@@ -1127,7 +994,7 @@ fn lower_stmt_with_vars(
 
             let (else_end_pred, else_vars) = if let Some(elses) = r#else {
                 let mut ev = base_vars.clone();
-                let eend = lower_stmt_list_with_vars(f, else_bb, elses, &mut ev, loop_stack)?;
+                let eend = lower_stmt_list_with_vars(f, else_bb, elses, &mut ev, loop_stack, env)?;
                 if let Some(bb) = f.get_block_mut(eend) {
                     if !bb.is_terminated() {
                         bb.set_terminator(MirInstruction::Jump { target: merge_bb });
@@ -1144,10 +1011,14 @@ fn lower_stmt_with_vars(
 
             // Merge at then/else predecessors（PHI or edge-copy）
             use std::collections::HashSet;
-            let no_phi = crate::config::env::mir_no_phi();
+            let no_phi = env.mir_no_phi;
             let mut names: HashSet<String> = base_vars.keys().cloned().collect();
-            for k in then_vars.keys() { names.insert(k.clone()); }
-            for k in else_vars.keys() { names.insert(k.clone()); }
+            for k in then_vars.keys() {
+                names.insert(k.clone());
+            }
+            for k in else_vars.keys() {
+                names.insert(k.clone());
+            }
 
             for name in names {
                 let tv = then_vars.get(&name).copied();
@@ -1155,13 +1026,22 @@ fn lower_stmt_with_vars(
                 let exists_base = base_vars.contains_key(&name);
                 match (tv, ev, exists_base) {
                     (Some(tval), Some(eval), _) => {
-                        let merged = if tval == eval { tval } else {
+                        let merged = if tval == eval {
+                            tval
+                        } else {
                             let dst = f.next_value_id();
                             if no_phi {
-                                if let Some(bb) = f.get_block_mut(tend) { bb.add_instruction(MirInstruction::Copy { dst, src: tval }); }
-                                if let Some(bb) = f.get_block_mut(else_end_pred) { bb.add_instruction(MirInstruction::Copy { dst, src: eval }); }
+                                if let Some(bb) = f.get_block_mut(tend) {
+                                    bb.add_instruction(MirInstruction::Copy { dst, src: tval });
+                                }
+                                if let Some(bb) = f.get_block_mut(else_end_pred) {
+                                    bb.add_instruction(MirInstruction::Copy { dst, src: eval });
+                                }
                             } else if let Some(bb) = f.get_block_mut(merge_bb) {
-                                bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs: vec![(tend, tval), (else_end_pred, eval)] });
+                                bb.insert_instruction_after_phis(MirInstruction::Phi {
+                                    dst,
+                                    inputs: vec![(tend, tval), (else_end_pred, eval)],
+                                });
                             }
                             dst
                         };
@@ -1169,13 +1049,22 @@ fn lower_stmt_with_vars(
                     }
                     (Some(tval), None, true) => {
                         if let Some(&bval) = base_vars.get(&name) {
-                            let merged = if tval == bval { tval } else {
+                            let merged = if tval == bval {
+                                tval
+                            } else {
                                 let dst = f.next_value_id();
                                 if no_phi {
-                                    if let Some(bb) = f.get_block_mut(tend) { bb.add_instruction(MirInstruction::Copy { dst, src: tval }); }
-                                    if let Some(bb) = f.get_block_mut(else_end_pred) { bb.add_instruction(MirInstruction::Copy { dst, src: bval }); }
+                                    if let Some(bb) = f.get_block_mut(tend) {
+                                        bb.add_instruction(MirInstruction::Copy { dst, src: tval });
+                                    }
+                                    if let Some(bb) = f.get_block_mut(else_end_pred) {
+                                        bb.add_instruction(MirInstruction::Copy { dst, src: bval });
+                                    }
                                 } else if let Some(bb) = f.get_block_mut(merge_bb) {
-                                    bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs: vec![(tend, tval), (else_end_pred, bval)] });
+                                    bb.insert_instruction_after_phis(MirInstruction::Phi {
+                                        dst,
+                                        inputs: vec![(tend, tval), (else_end_pred, bval)],
+                                    });
                                 }
                                 dst
                             };
@@ -1184,13 +1073,22 @@ fn lower_stmt_with_vars(
                     }
                     (None, Some(eval), true) => {
                         if let Some(&bval) = base_vars.get(&name) {
-                            let merged = if eval == bval { eval } else {
+                            let merged = if eval == bval {
+                                eval
+                            } else {
                                 let dst = f.next_value_id();
                                 if no_phi {
-                                    if let Some(bb) = f.get_block_mut(tend) { bb.add_instruction(MirInstruction::Copy { dst, src: bval }); }
-                                    if let Some(bb) = f.get_block_mut(else_end_pred) { bb.add_instruction(MirInstruction::Copy { dst, src: eval }); }
+                                    if let Some(bb) = f.get_block_mut(tend) {
+                                        bb.add_instruction(MirInstruction::Copy { dst, src: bval });
+                                    }
+                                    if let Some(bb) = f.get_block_mut(else_end_pred) {
+                                        bb.add_instruction(MirInstruction::Copy { dst, src: eval });
+                                    }
                                 } else if let Some(bb) = f.get_block_mut(merge_bb) {
-                                    bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs: vec![(tend, bval), (else_end_pred, eval)] });
+                                    bb.insert_instruction_after_phis(MirInstruction::Phi {
+                                        dst,
+                                        inputs: vec![(tend, bval), (else_end_pred, eval)],
+                                    });
                                 }
                                 dst
                             };
@@ -1220,11 +1118,10 @@ fn lower_stmt_with_vars(
             }
 
             // Snapshot base vars and set up merged ids for loop-carried vars
-            let no_phi = crate::config::env::mir_no_phi();
+            let no_phi = env.mir_no_phi;
             let base_vars = vars.clone();
             let orig_names: Vec<String> = base_vars.keys().cloned().collect();
-            let mut phi_map: std::collections::HashMap<String, crate::mir::ValueId> =
-                std::collections::HashMap::new();
+            let mut phi_map: HashMap<String, ValueId> = HashMap::new();
             for name in &orig_names {
                 if let Some(&bval) = base_vars.get(name) {
                     let dst = f.next_value_id();
@@ -1235,7 +1132,10 @@ fn lower_stmt_with_vars(
                         }
                     } else if let Some(bb) = f.get_block_mut(cond_bb) {
                         // Initial incoming from preheader via PHI
-                        bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs: vec![(cur_bb, bval)] });
+                        bb.insert_instruction_after_phis(MirInstruction::Phi {
+                            dst,
+                            inputs: vec![(cur_bb, bval)],
+                        });
                     }
                     phi_map.insert(name.clone(), dst);
                 }
@@ -1246,7 +1146,7 @@ fn lower_stmt_with_vars(
             }
 
             // Lower condition using phi-backed vars
-            let (cval, _cend) = lower_expr_with_vars(f, cond_bb, cond, vars)?;
+            let (cval, _cend) = lower_expr_with_vars(env, f, cond_bb, cond, vars)?;
             if let Some(bb) = f.get_block_mut(cond_bb) {
                 bb.set_terminator(MirInstruction::Branch {
                     condition: cval,
@@ -1258,7 +1158,8 @@ fn lower_stmt_with_vars(
             // Lower body; record end block and body-out vars
             let mut body_vars = vars.clone();
             loop_stack.push(LoopContext { cond_bb, exit_bb });
-            let bend_res = lower_stmt_list_with_vars(f, body_bb, body, &mut body_vars, loop_stack);
+            let bend_res =
+                lower_stmt_list_with_vars(f, body_bb, body, &mut body_vars, loop_stack, env);
             loop_stack.pop();
             let bend = bend_res?;
             if let Some(bb) = f.get_block_mut(bend) {
@@ -1278,7 +1179,10 @@ fn lower_stmt_with_vars(
                     for (name, &phi_dst) in &phi_map {
                         if let Some(&latch_val) = body_vars.get(name) {
                             if let Some(bb) = f.get_block_mut(bend) {
-                                bb.add_instruction(MirInstruction::Copy { dst: phi_dst, src: latch_val });
+                                bb.add_instruction(MirInstruction::Copy {
+                                    dst: phi_dst,
+                                    src: latch_val,
+                                });
                             }
                         }
                     }
@@ -1317,12 +1221,13 @@ fn lower_stmt_list_with_vars(
     f: &mut MirFunction,
     start_bb: BasicBlockId,
     stmts: &[StmtV0],
-    vars: &mut std::collections::HashMap<String, crate::mir::ValueId>,
+    vars: &mut HashMap<String, ValueId>,
     loop_stack: &mut Vec<LoopContext>,
+    env: &BridgeEnv,
 ) -> Result<BasicBlockId, String> {
     let mut cur = start_bb;
     for s in stmts {
-        cur = lower_stmt_with_vars(f, cur, s, vars, loop_stack)?;
+        cur = lower_stmt_with_vars(f, cur, s, vars, loop_stack, env)?;
         if let Some(bb) = f.blocks.get(&cur) {
             if bb.is_terminated() {
                 break;
@@ -1331,16 +1236,17 @@ fn lower_stmt_list_with_vars(
     }
     Ok(cur)
 }
-fn lower_args_with_vars(
+fn lower_args_with_scope<S: VarScope>(
+    env: &BridgeEnv,
     f: &mut MirFunction,
     cur_bb: BasicBlockId,
     args: &[ExprV0],
-    vars: &mut std::collections::HashMap<String, crate::mir::ValueId>,
-) -> Result<(Vec<crate::mir::ValueId>, BasicBlockId), String> {
+    scope: &mut S,
+) -> Result<(Vec<ValueId>, BasicBlockId), String> {
     let mut out = Vec::with_capacity(args.len());
     let mut cur = cur_bb;
     for a in args {
-        let (v, c) = lower_expr_with_vars(f, cur, a, vars)?;
+        let (v, c) = lower_expr_with_scope(env, f, cur, a, scope)?;
         out.push(v);
         cur = c;
     }
@@ -1348,18 +1254,24 @@ fn lower_args_with_vars(
 }
 
 fn lower_args(
+    env: &BridgeEnv,
     f: &mut MirFunction,
     cur_bb: BasicBlockId,
     args: &[ExprV0],
-) -> Result<(Vec<crate::mir::ValueId>, BasicBlockId), String> {
-    let mut out = Vec::with_capacity(args.len());
-    let mut cur = cur_bb;
-    for a in args {
-        let (v, c) = lower_expr(f, cur, a)?;
-        out.push(v);
-        cur = c;
-    }
-    Ok((out, cur))
+) -> Result<(Vec<ValueId>, BasicBlockId), String> {
+    let mut scope = NoVars;
+    lower_args_with_scope(env, f, cur_bb, args, &mut scope)
+}
+
+fn lower_args_with_vars(
+    env: &BridgeEnv,
+    f: &mut MirFunction,
+    cur_bb: BasicBlockId,
+    args: &[ExprV0],
+    vars: &mut HashMap<String, ValueId>,
+) -> Result<(Vec<ValueId>, BasicBlockId), String> {
+    let mut scope = MapVars::new(vars);
+    lower_args_with_scope(env, f, cur_bb, args, &mut scope)
 }
 
 pub fn maybe_dump_mir(module: &MirModule) {

@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use inkwell::values::BasicValueEnum as BVE;
 use inkwell::AddressSpace;
 
+use crate::backend::llvm::compiler::codegen::instructions::builder_cursor::BuilderCursor;
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{BasicBlockId, ValueId};
-use crate::backend::llvm::compiler::codegen::instructions::builder_cursor::BuilderCursor;
 
 pub(super) fn lower_log_or_trace<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
@@ -17,15 +17,30 @@ pub(super) fn lower_log_or_trace<'ctx, 'b>(
     iface_name: &str,
     method_name: &str,
     args: &[ValueId],
-    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    bb_map: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        inkwell::basic_block::BasicBlock<'ctx>,
+    >,
     preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
-    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BVE<'ctx>>>,
+    block_end_values: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        std::collections::HashMap<ValueId, BVE<'ctx>>,
+    >,
 ) -> Result<(), String> {
     if args.len() != 1 {
         return Err(format!("{}.{} expects 1 arg", iface_name, method_name));
     }
     // Localize to i64 (handle path) to avoid vmap shape inspection
-    let arg_val = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+    let arg_val = resolver.resolve_i64(
+        codegen,
+        cursor,
+        cur_bid,
+        args[0],
+        bb_map,
+        preds,
+        block_end_values,
+        vmap,
+    )?;
     let i64t = codegen.context.i64_type();
     let fnty = i64t.fn_type(&[i64t.into()], false);
     let fname = if iface_name == "env.console" {
@@ -42,7 +57,9 @@ pub(super) fn lower_log_or_trace<'ctx, 'b>(
         .get_function(fname)
         .unwrap_or_else(|| codegen.module.add_function(fname, fnty, None));
     let _ = cursor
-        .emit_instr(cur_bid, |b| b.build_call(callee, &[arg_val.into()], "console_log_h"))
+        .emit_instr(cur_bid, |b| {
+            b.build_call(callee, &[arg_val.into()], "console_log_h")
+        })
         .map_err(|e| e.to_string())?;
     if let Some(d) = dst {
         vmap.insert(*d, codegen.context.i64_type().const_zero().into());
@@ -66,7 +83,11 @@ pub(super) fn lower_readline<'ctx, 'b>(
     let callee = codegen
         .module
         .get_function("nyash.console.readline")
-        .unwrap_or_else(|| codegen.module.add_function("nyash.console.readline", fnty, None));
+        .unwrap_or_else(|| {
+            codegen
+                .module
+                .add_function("nyash.console.readline", fnty, None)
+        });
     let call = cursor
         .emit_instr(cur_bid, |b| b.build_call(callee, &[], "readline"))
         .map_err(|e| e.to_string())?;

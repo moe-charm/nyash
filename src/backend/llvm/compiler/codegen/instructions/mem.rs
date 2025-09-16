@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use inkwell::values::BasicValueEnum;
 
+use super::builder_cursor::BuilderCursor;
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{BasicBlockId, ValueId};
-use super::builder_cursor::BuilderCursor;
 
 // Lower Store: handle allocas with element type tracking and integer width adjust
 pub(in super::super) fn lower_store<'ctx, 'b>(
@@ -17,18 +17,51 @@ pub(in super::super) fn lower_store<'ctx, 'b>(
     alloca_elem_types: &mut HashMap<ValueId, inkwell::types::BasicTypeEnum<'ctx>>,
     value: &ValueId,
     ptr: &ValueId,
-    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    bb_map: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        inkwell::basic_block::BasicBlock<'ctx>,
+    >,
     preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
-    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
+    block_end_values: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
+    >,
 ) -> Result<(), String> {
     use inkwell::types::BasicTypeEnum;
     // Resolve value preferring native kind; try i64, then f64, else pointer
     let i64t = codegen.context.i64_type();
-    let val: BasicValueEnum = if let Ok(iv) = resolver.resolve_i64(codegen, cursor, cur_bid, *value, bb_map, preds, block_end_values, vmap) {
+    let val: BasicValueEnum = if let Ok(iv) = resolver.resolve_i64(
+        codegen,
+        cursor,
+        cur_bid,
+        *value,
+        bb_map,
+        preds,
+        block_end_values,
+        vmap,
+    ) {
         iv.into()
-    } else if let Ok(fv) = resolver.resolve_f64(codegen, cursor, cur_bid, *value, bb_map, preds, block_end_values, vmap) {
+    } else if let Ok(fv) = resolver.resolve_f64(
+        codegen,
+        cursor,
+        cur_bid,
+        *value,
+        bb_map,
+        preds,
+        block_end_values,
+        vmap,
+    ) {
         fv.into()
-    } else if let Ok(pv) = resolver.resolve_ptr(codegen, cursor, cur_bid, *value, bb_map, preds, block_end_values, vmap) {
+    } else if let Ok(pv) = resolver.resolve_ptr(
+        codegen,
+        cursor,
+        cur_bid,
+        *value,
+        bb_map,
+        preds,
+        block_end_values,
+        vmap,
+    ) {
         pv.into()
     } else {
         // Fallback: zero i64
@@ -41,7 +74,9 @@ pub(in super::super) fn lower_store<'ctx, 'b>(
         _ => return Err("unsupported store value type".to_string()),
     };
     if let Some(existing) = allocas.get(ptr).copied() {
-        let existing_elem = *alloca_elem_types.get(ptr).ok_or("alloca elem type missing")?;
+        let existing_elem = *alloca_elem_types
+            .get(ptr)
+            .ok_or("alloca elem type missing")?;
         if existing_elem != elem_ty {
             match (val, existing_elem) {
                 (BasicValueEnum::IntValue(iv), BasicTypeEnum::IntType(t)) => {
@@ -93,7 +128,9 @@ pub(in super::super) fn lower_store<'ctx, 'b>(
         }
     } else {
         let slot = cursor
-            .emit_instr(cur_bid, |b| b.build_alloca(elem_ty, &format!("slot_{}", ptr.as_u32())))
+            .emit_instr(cur_bid, |b| {
+                b.build_alloca(elem_ty, &format!("slot_{}", ptr.as_u32()))
+            })
             .map_err(|e| e.to_string())?;
         cursor
             .emit_instr(cur_bid, |b| b.build_store(slot, val))
@@ -116,20 +153,26 @@ pub(in super::super) fn lower_load<'ctx, 'b>(
 ) -> Result<(), String> {
     use inkwell::types::BasicTypeEnum;
     let (slot, elem_ty) = if let Some(s) = allocas.get(ptr).copied() {
-        let et = *alloca_elem_types.get(ptr).ok_or("alloca elem type missing")?;
+        let et = *alloca_elem_types
+            .get(ptr)
+            .ok_or("alloca elem type missing")?;
         (s, et)
     } else {
         // Default new slot as i64 for uninitialized loads
         let i64t = codegen.context.i64_type();
         let slot = cursor
-            .emit_instr(cur_bid, |b| b.build_alloca(i64t, &format!("slot_{}", ptr.as_u32())))
+            .emit_instr(cur_bid, |b| {
+                b.build_alloca(i64t, &format!("slot_{}", ptr.as_u32()))
+            })
             .map_err(|e| e.to_string())?;
         allocas.insert(*ptr, slot);
         alloca_elem_types.insert(*ptr, i64t.into());
         (slot, i64t.into())
     };
     let lv = cursor
-        .emit_instr(cur_bid, |b| b.build_load(elem_ty, slot, &format!("load_{}", dst.as_u32())))
+        .emit_instr(cur_bid, |b| {
+            b.build_load(elem_ty, slot, &format!("load_{}", dst.as_u32()))
+        })
         .map_err(|e| e.to_string())?;
     vmap.insert(*dst, lv);
     Ok(())
@@ -145,9 +188,15 @@ pub(in super::super) fn lower_copy<'ctx, 'b>(
     vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
     dst: &ValueId,
     src: &ValueId,
-    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    bb_map: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        inkwell::basic_block::BasicBlock<'ctx>,
+    >,
     preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
-    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
+    block_end_values: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
+    >,
 ) -> Result<(), String> {
     // Choose resolution kind based on metadata type preference
     use inkwell::types::BasicTypeEnum as BT;
@@ -160,20 +209,56 @@ pub(in super::super) fn lower_copy<'ctx, 'b>(
     let out: BasicValueEnum<'ctx> = match expected_bt {
         Some(BT::IntType(_)) | None => {
             // Prefer i64 for unknown
-            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            let iv = resolver.resolve_i64(
+                codegen,
+                cursor,
+                cur_bid,
+                *src,
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
             iv.into()
         }
         Some(BT::PointerType(_)) => {
-            let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            let pv = resolver.resolve_ptr(
+                codegen,
+                cursor,
+                cur_bid,
+                *src,
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
             pv.into()
         }
         Some(BT::FloatType(_)) => {
-            let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            let fv = resolver.resolve_f64(
+                codegen,
+                cursor,
+                cur_bid,
+                *src,
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
             fv.into()
         }
         _ => {
             // Fallback i64
-            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            let iv = resolver.resolve_i64(
+                codegen,
+                cursor,
+                cur_bid,
+                *src,
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
             iv.into()
         }
     };

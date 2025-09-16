@@ -4,16 +4,11 @@ use inkwell::{
 };
 
 use crate::backend::llvm::context::CodegenContext;
-use crate::mir::{
-    function::MirFunction,
-    instruction::MirInstruction,
-    BasicBlockId,
-    ValueId,
-};
+use crate::mir::{function::MirFunction, instruction::MirInstruction, BasicBlockId, ValueId};
 
+use super::super::types::to_bool;
 use super::builder_cursor::BuilderCursor;
 use super::Resolver;
-use super::super::types::to_bool;
 
 /// LoopForm scaffolding — fixed block layout for while/loop normalization
 pub struct LoopFormContext<'ctx> {
@@ -52,7 +47,15 @@ impl<'ctx> LoopFormContext<'ctx> {
         let exit = codegen
             .context
             .append_basic_block(function, &format!("{}_lf{}_exit", prefix, loop_id));
-        Self { preheader, header, body, dispatch, latch, exit, loop_id }
+        Self {
+            preheader,
+            header,
+            body,
+            dispatch,
+            latch,
+            exit,
+            loop_id,
+        }
     }
 }
 
@@ -76,13 +79,26 @@ pub fn lower_while_loopform<'ctx, 'b>(
     bb_map: &std::collections::HashMap<BasicBlockId, BasicBlock<'ctx>>,
     vmap: &std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
     preds: &std::collections::HashMap<BasicBlockId, Vec<BasicBlockId>>,
-    block_end_values: &std::collections::HashMap<BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
+    block_end_values: &std::collections::HashMap<
+        BasicBlockId,
+        std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>,
+    >,
     // Registry to allow later body→dispatch wiring (simple bodies)
-    registry: &mut std::collections::HashMap<BasicBlockId, (BasicBlock<'ctx>, PhiValue<'ctx>, PhiValue<'ctx>, BasicBlock<'ctx>)>,
+    registry: &mut std::collections::HashMap<
+        BasicBlockId,
+        (
+            BasicBlock<'ctx>,
+            PhiValue<'ctx>,
+            PhiValue<'ctx>,
+            BasicBlock<'ctx>,
+        ),
+    >,
     body_to_header: &mut std::collections::HashMap<BasicBlockId, BasicBlockId>,
 ) -> Result<bool, String> {
     let enabled = std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1");
-    if !enabled { return Ok(false); }
+    if !enabled {
+        return Ok(false);
+    }
 
     // Create LoopForm fixed blocks under the same function
     let lf = LoopFormContext::new(codegen, llvm_func, loop_id, prefix);
@@ -95,7 +111,16 @@ pub fn lower_while_loopform<'ctx, 'b>(
         .unwrap();
 
     // Header: evaluate condition via Resolver and branch to body (for true) or dispatch (for false)
-    let ci = resolver.resolve_i64(codegen, cursor, header_bid, *condition, bb_map, preds, block_end_values, vmap)?;
+    let ci = resolver.resolve_i64(
+        codegen,
+        cursor,
+        header_bid,
+        *condition,
+        bb_map,
+        preds,
+        block_end_values,
+        vmap,
+    )?;
     let cond_i1 = codegen
         .builder
         .build_int_compare(
@@ -124,7 +149,9 @@ pub fn lower_while_loopform<'ctx, 'b>(
     // Dispatch: create PHIs (tag i8, payload i64) and switch(tag)
     // For now, only header(false) contributes (Break=1); body path does not reach dispatch in Phase 1 wiring.
     let orig_after = *bb_map.get(&after_bb).ok_or("loopform: after bb missing")?;
-    let header_llbb = *bb_map.get(&header_bid).ok_or("loopform: header bb missing")?;
+    let header_llbb = *bb_map
+        .get(&header_bid)
+        .ok_or("loopform: header bb missing")?;
     let (tag_phi, payload_phi) = cursor.with_block(after_bb, lf.dispatch, |c| {
         let i8t = codegen.context.i8_type();
         let i64t = codegen.context.i64_type();
@@ -219,20 +246,35 @@ pub fn normalize_header_phis_for_latch<'ctx>(
 pub(in super::super) fn dev_check_dispatch_only_phi<'ctx>(
     phis_by_block: &std::collections::HashMap<
         crate::mir::BasicBlockId,
-        Vec<(crate::mir::ValueId, inkwell::values::PhiValue<'ctx>, Vec<(crate::mir::BasicBlockId, crate::mir::ValueId)>)>,
+        Vec<(
+            crate::mir::ValueId,
+            inkwell::values::PhiValue<'ctx>,
+            Vec<(crate::mir::BasicBlockId, crate::mir::ValueId)>,
+        )>,
     >,
     loopform_registry: &std::collections::HashMap<
         crate::mir::BasicBlockId,
-        (inkwell::basic_block::BasicBlock<'ctx>, inkwell::values::PhiValue<'ctx>, inkwell::values::PhiValue<'ctx>, inkwell::basic_block::BasicBlock<'ctx>)
+        (
+            inkwell::basic_block::BasicBlock<'ctx>,
+            inkwell::values::PhiValue<'ctx>,
+            inkwell::values::PhiValue<'ctx>,
+            inkwell::basic_block::BasicBlock<'ctx>,
+        ),
     >,
 ) {
-    if std::env::var("NYASH_DEV_CHECK_DISPATCH_ONLY_PHI").ok().as_deref() != Some("1") {
+    if std::env::var("NYASH_DEV_CHECK_DISPATCH_ONLY_PHI")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
         return;
     }
     // Best-effort: Just report PHI presence per block when LoopForm registry is non-empty.
     if !loopform_registry.is_empty() {
         for (bid, phis) in phis_by_block.iter() {
-            if phis.is_empty() { continue; }
+            if phis.is_empty() {
+                continue;
+            }
             eprintln!("[DEV][PHI] bb={} has {} PHI(s)", bid.as_u32(), phis.len());
         }
     }

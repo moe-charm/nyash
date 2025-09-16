@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
-use inkwell::AddressSpace;
 use inkwell::values::BasicValueEnum as BVE;
+use inkwell::AddressSpace;
 
 use crate::backend::llvm::context::CodegenContext;
 mod fields;
 pub(crate) mod invoke;
 mod marshal;
-use self::marshal as marshal_mod;
 use self::invoke as invoke_mod;
-use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
+use self::marshal as marshal_mod;
 use super::builder_cursor::BuilderCursor;
-use super::ctx::{LowerFnCtx, BlockCtx};
+use super::ctx::{BlockCtx, LowerFnCtx};
+use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
 
 // BoxCall lowering (large): mirrors existing logic; kept in one function for now
 pub(in super::super) fn lower_boxcall<'ctx, 'b>(
@@ -28,46 +28,95 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
     args: &[ValueId],
     box_type_ids: &HashMap<String, i64>,
     entry_builder: &inkwell::builder::Builder<'ctx>,
-    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    bb_map: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        inkwell::basic_block::BasicBlock<'ctx>,
+    >,
     preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
-    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
+    block_end_values: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
+    >,
 ) -> Result<(), String> {
-    use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     use super::super::types::classify_tag;
+    use crate::backend::llvm::compiler::helpers::{as_float, as_int};
     let i64t = codegen.context.i64_type();
     // Resolve receiver as handle and pointer (i8*) via Resolver to ensure dominance safety
     let recv_h = resolver.resolve_i64(
-        codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap,
+        codegen,
+        cursor,
+        cur_bid,
+        *box_val,
+        bb_map,
+        preds,
+        block_end_values,
+        vmap,
     )?;
     let recv_p = resolver.resolve_ptr(
-        codegen, cursor, cur_bid, *box_val, bb_map, preds, block_end_values, vmap,
+        codegen,
+        cursor,
+        cur_bid,
+        *box_val,
+        bb_map,
+        preds,
+        block_end_values,
+        vmap,
     )?;
     let recv_v: BVE = recv_p.into();
 
     // Resolve type_id
-    let type_id: i64 = if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
-        *box_type_ids.get(bname).unwrap_or(&0)
-    } else if let Some(crate::mir::MirType::String) = func.metadata.value_types.get(box_val) {
-        *box_type_ids.get("StringBox").unwrap_or(&0)
-    } else {
-        0
-    };
+    let type_id: i64 =
+        if let Some(crate::mir::MirType::Box(bname)) = func.metadata.value_types.get(box_val) {
+            *box_type_ids.get(bname).unwrap_or(&0)
+        } else if let Some(crate::mir::MirType::String) = func.metadata.value_types.get(box_val) {
+            *box_type_ids.get("StringBox").unwrap_or(&0)
+        } else {
+            0
+        };
 
     // Delegate String methods
     if super::strings::try_handle_string_method(
-        codegen, cursor, resolver, cur_bid, func, vmap, dst, box_val, method, args,
-        bb_map, preds, block_end_values,
+        codegen,
+        cursor,
+        resolver,
+        cur_bid,
+        func,
+        vmap,
+        dst,
+        box_val,
+        method,
+        args,
+        bb_map,
+        preds,
+        block_end_values,
     )? {
         return Ok(());
     }
 
     // Delegate Map methods first (to avoid Array fallback catching get/set ambiguously)
-    if super::maps::try_handle_map_method(codegen, cursor, resolver, cur_bid, func, vmap, dst, box_val, method, args, recv_h)? {
+    if super::maps::try_handle_map_method(
+        codegen, cursor, resolver, cur_bid, func, vmap, dst, box_val, method, args, recv_h,
+    )? {
         return Ok(());
     }
 
     // Delegate Array methods
-    if super::arrays::try_handle_array_method(codegen, cursor, resolver, cur_bid, func, vmap, dst, box_val, method, args, recv_h, bb_map, preds, block_end_values)? {
+    if super::arrays::try_handle_array_method(
+        codegen,
+        cursor,
+        resolver,
+        cur_bid,
+        func,
+        vmap,
+        dst,
+        box_val,
+        method,
+        args,
+        recv_h,
+        bb_map,
+        preds,
+        block_end_values,
+    )? {
         return Ok(());
     }
 
@@ -114,9 +163,15 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
         let callee = codegen
             .module
             .get_function("nyash_array_length_h")
-            .unwrap_or_else(|| codegen.module.add_function("nyash_array_length_h", fnty, None));
+            .unwrap_or_else(|| {
+                codegen
+                    .module
+                    .add_function("nyash_array_length_h", fnty, None)
+            });
         let call = cursor
-            .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "alen_fallback"))
+            .emit_instr(cur_bid, |b| {
+                b.build_call(callee, &[recv_h.into()], "alen_fallback")
+            })
             .map_err(|e| e.to_string())?;
         if let Some(d) = dst {
             let rv = call
@@ -163,42 +218,116 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
             // Sanitize symbol the same way as codegen/mod.rs does
             let sym: String = {
                 let mut s = String::from("ny_f_");
-                s.push_str(&candidate.replace('.', "_").replace('/', "_").replace('-', "_"));
+                s.push_str(
+                    &candidate
+                        .replace('.', "_")
+                        .replace('/', "_")
+                        .replace('-', "_"),
+                );
                 s
             };
             if let Some(callee) = codegen.module.get_function(&sym) {
                 // Coerce arguments to callee parameter types
                 let exp_tys = callee.get_type().get_param_types();
-                if exp_tys.len() != args.len() { return Err("boxcall direct-call: arg count mismatch".to_string()); }
-                let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = Vec::with_capacity(args.len());
+                if exp_tys.len() != args.len() {
+                    return Err("boxcall direct-call: arg count mismatch".to_string());
+                }
+                let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> =
+                    Vec::with_capacity(args.len());
                 for (i, a) in args.iter().enumerate() {
                     use inkwell::types::BasicMetadataTypeEnum as BMTy;
                     let coerced: BVE<'ctx> = match exp_tys[i] {
                         BMTy::IntType(it) => {
                             // Use Resolver via our surrounding lowering
-                            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
+                            let iv = resolver.resolve_i64(
+                                codegen,
+                                cursor,
+                                cur_bid,
+                                *a,
+                                bb_map,
+                                preds,
+                                block_end_values,
+                                vmap,
+                            )?;
                             let bw_dst = it.get_bit_width();
                             let bw_src = iv.get_type().get_bit_width();
-                            if bw_src == bw_dst { iv.into() }
-                            else if bw_src < bw_dst { cursor.emit_instr(cur_bid, |b| b.build_int_z_extend(iv, it, "boxcall_arg_zext")).map_err(|e| e.to_string())?.into() }
-                            else if bw_dst == 1 { super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into() }
-                            else { cursor.emit_instr(cur_bid, |b| b.build_int_truncate(iv, it, "boxcall_arg_trunc")).map_err(|e| e.to_string())?.into() }
+                            if bw_src == bw_dst {
+                                iv.into()
+                            } else if bw_src < bw_dst {
+                                cursor
+                                    .emit_instr(cur_bid, |b| {
+                                        b.build_int_z_extend(iv, it, "boxcall_arg_zext")
+                                    })
+                                    .map_err(|e| e.to_string())?
+                                    .into()
+                            } else if bw_dst == 1 {
+                                super::super::types::to_bool(
+                                    codegen.context,
+                                    iv.into(),
+                                    &codegen.builder,
+                                )?
+                                .into()
+                            } else {
+                                cursor
+                                    .emit_instr(cur_bid, |b| {
+                                        b.build_int_truncate(iv, it, "boxcall_arg_trunc")
+                                    })
+                                    .map_err(|e| e.to_string())?
+                                    .into()
+                            }
                         }
                         BMTy::PointerType(pt) => {
-                            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
-                            let p = cursor.emit_instr(cur_bid, |b| b.build_int_to_ptr(iv, pt, "boxcall_arg_i2p")).map_err(|e| e.to_string())?;
+                            let iv = resolver.resolve_i64(
+                                codegen,
+                                cursor,
+                                cur_bid,
+                                *a,
+                                bb_map,
+                                preds,
+                                block_end_values,
+                                vmap,
+                            )?;
+                            let p = cursor
+                                .emit_instr(cur_bid, |b| {
+                                    b.build_int_to_ptr(iv, pt, "boxcall_arg_i2p")
+                                })
+                                .map_err(|e| e.to_string())?;
                             p.into()
                         }
                         BMTy::FloatType(ft) => {
-                            let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *a, bb_map, preds, block_end_values, vmap)?;
-                            if fv.get_type() == ft { fv.into() } else { cursor.emit_instr(cur_bid, |b| b.build_float_cast(fv, ft, "boxcall_arg_fcast")).map_err(|e| e.to_string())?.into() }
+                            let fv = resolver.resolve_f64(
+                                codegen,
+                                cursor,
+                                cur_bid,
+                                *a,
+                                bb_map,
+                                preds,
+                                block_end_values,
+                                vmap,
+                            )?;
+                            if fv.get_type() == ft {
+                                fv.into()
+                            } else {
+                                cursor
+                                    .emit_instr(cur_bid, |b| {
+                                        b.build_float_cast(fv, ft, "boxcall_arg_fcast")
+                                    })
+                                    .map_err(|e| e.to_string())?
+                                    .into()
+                            }
                         }
-                        _ => return Err("boxcall direct-call: unsupported parameter type".to_string()),
+                        _ => {
+                            return Err(
+                                "boxcall direct-call: unsupported parameter type".to_string()
+                            )
+                        }
                     };
                     call_args.push(coerced.into());
                 }
                 let call = cursor
-                    .emit_instr(cur_bid, |b| b.build_call(callee, &call_args, "user_meth_call"))
+                    .emit_instr(cur_bid, |b| {
+                        b.build_call(callee, &call_args, "user_meth_call")
+                    })
                     .map_err(|e| e.to_string())?;
                 if let Some(d) = dst {
                     if let Some(rv) = call.try_as_basic_value().left() {
@@ -216,22 +345,66 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
                 .emit_instr(cur_bid, |b| b.build_global_string_ptr(method, "meth_name"))
                 .map_err(|e| e.to_string())?;
             // up to 2 args for this minimal path
-            let a1 = if let Some(v0) = args.get(0) { resolver.resolve_i64(codegen, cursor, cur_bid, *v0, bb_map, preds, block_end_values, vmap)? } else { i64t.const_zero() };
-            let a2 = if let Some(v1) = args.get(1) { resolver.resolve_i64(codegen, cursor, cur_bid, *v1, bb_map, preds, block_end_values, vmap)? } else { i64t.const_zero() };
+            let a1 = if let Some(v0) = args.get(0) {
+                resolver.resolve_i64(
+                    codegen,
+                    cursor,
+                    cur_bid,
+                    *v0,
+                    bb_map,
+                    preds,
+                    block_end_values,
+                    vmap,
+                )?
+            } else {
+                i64t.const_zero()
+            };
+            let a2 = if let Some(v1) = args.get(1) {
+                resolver.resolve_i64(
+                    codegen,
+                    cursor,
+                    cur_bid,
+                    *v1,
+                    bb_map,
+                    preds,
+                    block_end_values,
+                    vmap,
+                )?
+            } else {
+                i64t.const_zero()
+            };
             let fnty = i64t.fn_type(
                 &[
-                    i64t.into(),                                                     // recv handle
-                    codegen.context.ptr_type(AddressSpace::from(0)).into(),          // method cstr
-                    i64t.into(), i64t.into(), i64t.into(),                           // argc, a1, a2
+                    i64t.into(),                                            // recv handle
+                    codegen.context.ptr_type(AddressSpace::from(0)).into(), // method cstr
+                    i64t.into(),
+                    i64t.into(),
+                    i64t.into(), // argc, a1, a2
                 ],
                 false,
             );
             let callee = codegen
                 .module
                 .get_function("nyash.plugin.invoke_by_name_i64")
-                .unwrap_or_else(|| codegen.module.add_function("nyash.plugin.invoke_by_name_i64", fnty, None));
+                .unwrap_or_else(|| {
+                    codegen
+                        .module
+                        .add_function("nyash.plugin.invoke_by_name_i64", fnty, None)
+                });
             let call = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), mname.as_pointer_value().into(), argc.into(), a1.into(), a2.into()], "pinvoke_by_name"))
+                .emit_instr(cur_bid, |b| {
+                    b.build_call(
+                        callee,
+                        &[
+                            recv_h.into(),
+                            mname.as_pointer_value().into(),
+                            argc.into(),
+                            a1.into(),
+                            a2.into(),
+                        ],
+                        "pinvoke_by_name",
+                    )
+                })
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call
@@ -241,28 +414,66 @@ pub(in super::super) fn lower_boxcall<'ctx, 'b>(
                 // Inline minimal return normalization similar to store_invoke_return()
                 if let Some(mt) = func.metadata.value_types.get(d) {
                     match mt {
-                        crate::mir::MirType::Integer => { vmap.insert(*d, rv); }
+                        crate::mir::MirType::Integer => {
+                            vmap.insert(*d, rv);
+                        }
                         crate::mir::MirType::Bool => {
                             if let BVE::IntValue(iv) = rv {
                                 let i64t = codegen.context.i64_type();
                                 let zero = i64t.const_zero();
-                                let b1 = cursor.emit_instr(cur_bid, |bd| bd.build_int_compare(inkwell::IntPredicate::NE, iv, zero, "bool_i64_to_i1")).map_err(|e| e.to_string())?;
+                                let b1 = cursor
+                                    .emit_instr(cur_bid, |bd| {
+                                        bd.build_int_compare(
+                                            inkwell::IntPredicate::NE,
+                                            iv,
+                                            zero,
+                                            "bool_i64_to_i1",
+                                        )
+                                    })
+                                    .map_err(|e| e.to_string())?;
                                 vmap.insert(*d, b1.into());
-                            } else { vmap.insert(*d, rv); }
+                            } else {
+                                vmap.insert(*d, rv);
+                            }
                         }
                         crate::mir::MirType::String => {
                             if let BVE::IntValue(iv) = rv {
-                                let p = cursor.emit_instr(cur_bid, |bd| bd.build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "str_h2p_ret")).map_err(|e| e.to_string())?;
+                                let p = cursor
+                                    .emit_instr(cur_bid, |bd| {
+                                        bd.build_int_to_ptr(
+                                            iv,
+                                            codegen.context.ptr_type(AddressSpace::from(0)),
+                                            "str_h2p_ret",
+                                        )
+                                    })
+                                    .map_err(|e| e.to_string())?;
                                 vmap.insert(*d, p.into());
-                            } else { vmap.insert(*d, rv); }
+                            } else {
+                                vmap.insert(*d, rv);
+                            }
                         }
-                        crate::mir::MirType::Box(_) | crate::mir::MirType::Array(_) | crate::mir::MirType::Future(_) | crate::mir::MirType::Unknown => {
+                        crate::mir::MirType::Box(_)
+                        | crate::mir::MirType::Array(_)
+                        | crate::mir::MirType::Future(_)
+                        | crate::mir::MirType::Unknown => {
                             if let BVE::IntValue(iv) = rv {
-                                let p = cursor.emit_instr(cur_bid, |bd| bd.build_int_to_ptr(iv, codegen.context.ptr_type(AddressSpace::from(0)), "h2p_ret")).map_err(|e| e.to_string())?;
+                                let p = cursor
+                                    .emit_instr(cur_bid, |bd| {
+                                        bd.build_int_to_ptr(
+                                            iv,
+                                            codegen.context.ptr_type(AddressSpace::from(0)),
+                                            "h2p_ret",
+                                        )
+                                    })
+                                    .map_err(|e| e.to_string())?;
                                 vmap.insert(*d, p.into());
-                            } else { vmap.insert(*d, rv); }
+                            } else {
+                                vmap.insert(*d, rv);
+                            }
                         }
-                        _ => { vmap.insert(*d, rv); }
+                        _ => {
+                            vmap.insert(*d, rv);
+                        }
                     }
                 } else {
                     vmap.insert(*d, rv);
@@ -286,7 +497,9 @@ pub(in super::super) fn lower_boxcall_boxed<'ctx, 'b>(
     entry_builder: &inkwell::builder::Builder<'ctx>,
 ) -> Result<(), String> {
     // Optional dev check: ensure block is open for insertion
-    if ctx.dev_checks { ctx.cursor.assert_open(blk.cur_bid); }
+    if ctx.dev_checks {
+        ctx.cursor.assert_open(blk.cur_bid);
+    }
     lower_boxcall(
         ctx.codegen,
         ctx.cursor,
@@ -299,7 +512,8 @@ pub(in super::super) fn lower_boxcall_boxed<'ctx, 'b>(
         method,
         method_id,
         args,
-        ctx.box_type_ids.ok_or_else(|| "LowerFnCtx.box_type_ids missing".to_string())?,
+        ctx.box_type_ids
+            .ok_or_else(|| "LowerFnCtx.box_type_ids missing".to_string())?,
         entry_builder,
         ctx.bb_map,
         ctx.preds,
@@ -322,9 +536,15 @@ pub(in super::super) fn lower_boxcall_via_ctx<'ctx, 'b>(
     args: &[ValueId],
     box_type_ids: &'b HashMap<String, i64>,
     entry_builder: &inkwell::builder::Builder<'ctx>,
-    bb_map: &'b std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    bb_map: &'b std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        inkwell::basic_block::BasicBlock<'ctx>,
+    >,
     preds: &'b std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
-    block_end_values: &'b std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
+    block_end_values: &'b std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
+    >,
 ) -> Result<(), String> {
     let llbb = *bb_map.get(&cur_bid).ok_or("missing cur bb")?;
     let blkctx = BlockCtx::new(cur_bid, llbb);
@@ -364,18 +584,45 @@ fn coerce_to_type<'ctx>(
             if bw_src == bw_dst {
                 Ok(iv.into())
             } else if bw_src < bw_dst {
-                Ok(codegen.builder.build_int_z_extend(iv, it, "bc_zext").map_err(|e| e.to_string())?.into())
+                Ok(codegen
+                    .builder
+                    .build_int_z_extend(iv, it, "bc_zext")
+                    .map_err(|e| e.to_string())?
+                    .into())
             } else if bw_dst == 1 {
-                Ok(super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?.into())
+                Ok(
+                    super::super::types::to_bool(codegen.context, iv.into(), &codegen.builder)?
+                        .into(),
+                )
             } else {
-                Ok(codegen.builder.build_int_truncate(iv, it, "bc_trunc").map_err(|e| e.to_string())?.into())
+                Ok(codegen
+                    .builder
+                    .build_int_truncate(iv, it, "bc_trunc")
+                    .map_err(|e| e.to_string())?
+                    .into())
             }
         }
-        (inkwell::values::BasicValueEnum::PointerValue(pv), BT::IntType(it)) => Ok(codegen.builder.build_ptr_to_int(pv, it, "bc_p2i").map_err(|e| e.to_string())?.into()),
-        (inkwell::values::BasicValueEnum::FloatValue(fv), BT::IntType(it)) => Ok(codegen.builder.build_float_to_signed_int(fv, it, "bc_f2i").map_err(|e| e.to_string())?.into()),
-        (inkwell::values::BasicValueEnum::IntValue(iv), BT::PointerType(pt)) => Ok(codegen.builder.build_int_to_ptr(iv, pt, "bc_i2p").map_err(|e| e.to_string())?.into()),
+        (inkwell::values::BasicValueEnum::PointerValue(pv), BT::IntType(it)) => Ok(codegen
+            .builder
+            .build_ptr_to_int(pv, it, "bc_p2i")
+            .map_err(|e| e.to_string())?
+            .into()),
+        (inkwell::values::BasicValueEnum::FloatValue(fv), BT::IntType(it)) => Ok(codegen
+            .builder
+            .build_float_to_signed_int(fv, it, "bc_f2i")
+            .map_err(|e| e.to_string())?
+            .into()),
+        (inkwell::values::BasicValueEnum::IntValue(iv), BT::PointerType(pt)) => Ok(codegen
+            .builder
+            .build_int_to_ptr(iv, pt, "bc_i2p")
+            .map_err(|e| e.to_string())?
+            .into()),
         (inkwell::values::BasicValueEnum::PointerValue(pv), BT::PointerType(_)) => Ok(pv.into()),
-        (inkwell::values::BasicValueEnum::IntValue(iv), BT::FloatType(ft)) => Ok(codegen.builder.build_signed_int_to_float(iv, ft, "bc_i2f").map_err(|e| e.to_string())?.into()),
+        (inkwell::values::BasicValueEnum::IntValue(iv), BT::FloatType(ft)) => Ok(codegen
+            .builder
+            .build_signed_int_to_float(iv, ft, "bc_i2f")
+            .map_err(|e| e.to_string())?
+            .into()),
         (inkwell::values::BasicValueEnum::FloatValue(fv), BT::FloatType(_)) => Ok(fv.into()),
         (v, _) => Ok(v),
     }
