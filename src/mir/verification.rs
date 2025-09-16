@@ -5,89 +5,15 @@
  */
 
 use super::{MirModule, MirFunction, BasicBlockId, ValueId};
+use crate::mir::verification_types::VerificationError;
 use crate::debug::log as dlog;
 use std::collections::{HashSet, HashMap};
+mod legacy;
+mod barrier;
+mod awaits;
+mod utils;
 
-/// Verification error types
-#[derive(Debug, Clone, PartialEq)]
-pub enum VerificationError {
-    /// Undefined value used
-    UndefinedValue {
-        value: ValueId,
-        block: BasicBlockId,
-        instruction_index: usize,
-    },
-    
-    /// Value defined multiple times
-    MultipleDefinition {
-        value: ValueId,
-        first_block: BasicBlockId,
-        second_block: BasicBlockId,
-    },
-    
-    /// Invalid phi function
-    InvalidPhi {
-        phi_value: ValueId,
-        block: BasicBlockId,
-        reason: String,
-    },
-    
-    /// Unreachable block
-    UnreachableBlock {
-        block: BasicBlockId,
-    },
-    
-    /// Control flow error
-    ControlFlowError {
-        block: BasicBlockId,
-        reason: String,
-    },
-    
-    /// Dominator violation
-    DominatorViolation {
-        value: ValueId,
-        use_block: BasicBlockId,
-        def_block: BasicBlockId,
-    },
-    /// Merge block uses predecessor-defined value directly instead of Phi
-    MergeUsesPredecessorValue {
-        value: ValueId,
-        merge_block: BasicBlockId,
-        pred_block: BasicBlockId,
-    },
-    /// WeakRef(load) must originate from a WeakNew/WeakRef(new)
-    InvalidWeakRefSource {
-        weak_ref: ValueId,
-        block: BasicBlockId,
-        instruction_index: usize,
-        reason: String,
-    },
-    /// Barrier pointer must not be a void constant
-    InvalidBarrierPointer {
-        ptr: ValueId,
-        block: BasicBlockId,
-        instruction_index: usize,
-        reason: String,
-    },
-    /// Barrier appears without nearby memory ops (diagnostic; strict mode only)
-    SuspiciousBarrierContext {
-        block: BasicBlockId,
-        instruction_index: usize,
-        note: String,
-    },
-    /// Legacy/Deprecated instruction encountered (should have been rewritten to Core-15)
-    UnsupportedLegacyInstruction {
-        block: BasicBlockId,
-        instruction_index: usize,
-        name: String,
-    },
-    /// Await must be surrounded by checkpoints (before and after)
-    MissingCheckpointAroundAwait {
-        block: BasicBlockId,
-        instruction_index: usize,
-        position: &'static str, // "before" | "after"
-    },
-}
+// VerificationError moved to crate::mir::verification_types
 
 /// MIR verifier for SSA form and semantic correctness
 pub struct MirVerifier {
@@ -219,211 +145,25 @@ impl MirVerifier {
     /// Reject legacy instructions that should be rewritten to Core-15 equivalents
     /// Skips check when NYASH_VERIFY_ALLOW_LEGACY=1
     fn verify_no_legacy_ops(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
-        if std::env::var("NYASH_VERIFY_ALLOW_LEGACY").ok().as_deref() == Some("1") {
-            return Ok(());
-        }
-        use super::MirInstruction as I;
-        let mut errors = Vec::new();
-        for (bid, block) in &function.blocks {
-            for (idx, inst) in block.all_instructions().enumerate() {
-                let legacy_name = match inst {
-                    // Explicit legacy forms that must be rewritten to unified/core ops
-                    I::TypeCheck { .. } => Some("TypeCheck"),   // -> TypeOp(Check)
-                    I::Cast { .. } => Some("Cast"),             // -> TypeOp(Cast)
-                    I::WeakNew { .. } => Some("WeakNew"),       // -> WeakRef(New)
-                    I::WeakLoad { .. } => Some("WeakLoad"),     // -> WeakRef(Load)
-                    I::BarrierRead { .. } => Some("BarrierRead"),   // -> Barrier(Read)
-                    I::BarrierWrite { .. } => Some("BarrierWrite"), // -> Barrier(Write)
-                    I::Print { .. } => Some("Print"),           // -> ExternCall(env.console.log)
-                    I::ArrayGet { .. } => Some("ArrayGet"),     // -> BoxCall("get")
-                    I::ArraySet { .. } => Some("ArraySet"),     // -> BoxCall("set")
-                    I::RefGet { .. } => Some("RefGet"),         // -> BoxCall("getField")
-                    I::RefSet { .. } => Some("RefSet"),         // -> BoxCall("setField")
-                    I::PluginInvoke { .. } => Some("PluginInvoke"), // -> BoxCall
-                    // Keep generic Call for now (migration ongoing)
-                    // Meta/exceptional ops are handled separately; not hard-forbidden here
-                    _ => None,
-                };
-                if let Some(name) = legacy_name {
-                    errors.push(VerificationError::UnsupportedLegacyInstruction {
-                        block: *bid,
-                        instruction_index: idx,
-                        name: name.to_string(),
-                    });
-                }
-            }
-        }
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        legacy::check_no_legacy_ops(function)
     }
 
     /// Ensure that each Await instruction (or ExternCall(env.future.await)) is immediately
     /// preceded and followed by a checkpoint.
     /// A checkpoint is either MirInstruction::Safepoint or ExternCall("env.runtime", "checkpoint").
     fn verify_await_checkpoints(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
-        use super::MirInstruction as I;
-        let mut errors = Vec::new();
-        let is_cp = |inst: &I| match inst {
-            I::Safepoint => true,
-            I::ExternCall { iface_name, method_name, .. } => iface_name == "env.runtime" && method_name == "checkpoint",
-            _ => false,
-        };
-        for (bid, block) in &function.blocks {
-            let instrs = &block.instructions;
-            for (idx, inst) in instrs.iter().enumerate() {
-                let is_await_like = match inst {
-                    I::Await { .. } => true,
-                    I::ExternCall { iface_name, method_name, .. } => iface_name == "env.future" && method_name == "await",
-                    _ => false,
-                };
-                if is_await_like {
-                    // Check immediate previous
-                    if idx == 0 || !is_cp(&instrs[idx - 1]) {
-                        errors.push(VerificationError::MissingCheckpointAroundAwait { block: *bid, instruction_index: idx, position: "before" });
-                    }
-                    // Check immediate next (within instructions list)
-                    if idx + 1 >= instrs.len() || !is_cp(&instrs[idx + 1]) {
-                        errors.push(VerificationError::MissingCheckpointAroundAwait { block: *bid, instruction_index: idx, position: "after" });
-                    }
-                }
-            }
-        }
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        awaits::check_await_checkpoints(function)
     }
 
     /// Verify WeakRef/Barrier minimal semantics
     fn verify_weakref_and_barrier(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
-        use super::MirInstruction;
-        let mut errors = Vec::new();
-        // Build def map value -> (block, idx, &inst)
-        let mut def_map: HashMap<ValueId, (BasicBlockId, usize, &MirInstruction)> = HashMap::new();
-        for (bid, block) in &function.blocks {
-            for (idx, inst) in block.all_instructions().enumerate() {
-                if let Some(dst) = inst.dst_value() {
-                    def_map.insert(dst, (*bid, idx, inst));
-                }
-            }
-        }
-
-        for (bid, block) in &function.blocks {
-            for (idx, inst) in block.all_instructions().enumerate() {
-                match inst {
-                    MirInstruction::WeakRef { op: super::WeakRefOp::Load, value, .. } => {
-                        match def_map.get(value) {
-                            Some((_db, _di, def_inst)) => match def_inst {
-                                MirInstruction::WeakRef { op: super::WeakRefOp::New, .. } | MirInstruction::WeakNew { .. } => {}
-                                _ => {
-                                    errors.push(VerificationError::InvalidWeakRefSource {
-                                        weak_ref: *value,
-                                        block: *bid,
-                                        instruction_index: idx,
-                                        reason: "weakref.load source is not a weakref.new/weak_new".to_string(),
-                                    });
-                                }
-                            },
-                            None => {
-                                errors.push(VerificationError::InvalidWeakRefSource {
-                                    weak_ref: *value,
-                                    block: *bid,
-                                    instruction_index: idx,
-                                    reason: "weakref.load source is undefined".to_string(),
-                                });
-                            }
-                        }
-                    }
-                    MirInstruction::WeakLoad { weak_ref, .. } => {
-                        match def_map.get(weak_ref) {
-                            Some((_db, _di, def_inst)) => match def_inst {
-                                MirInstruction::WeakNew { .. } | MirInstruction::WeakRef { op: super::WeakRefOp::New, .. } => {}
-                                _ => {
-                                    errors.push(VerificationError::InvalidWeakRefSource {
-                                        weak_ref: *weak_ref,
-                                        block: *bid,
-                                        instruction_index: idx,
-                                        reason: "weak_load source is not a weak_new/weakref.new".to_string(),
-                                    });
-                                }
-                            },
-                            None => {
-                                errors.push(VerificationError::InvalidWeakRefSource {
-                                    weak_ref: *weak_ref,
-                                    block: *bid,
-                                    instruction_index: idx,
-                                    reason: "weak_load source is undefined".to_string(),
-                                });
-                            }
-                        }
-                    }
-                    MirInstruction::Barrier { ptr, .. } | MirInstruction::BarrierRead { ptr } | MirInstruction::BarrierWrite { ptr } => {
-                        if let Some((_db, _di, def_inst)) = def_map.get(ptr) {
-                            if let MirInstruction::Const { value: super::ConstValue::Void, .. } = def_inst {
-                                errors.push(VerificationError::InvalidBarrierPointer {
-                                    ptr: *ptr,
-                                    block: *bid,
-                                    instruction_index: idx,
-                                    reason: "barrier pointer is void".to_string(),
-                                });
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        barrier::check_weakref_and_barrier(function)
     }
 
     /// Light diagnostic: Barrier should be near memory ops in the same block (best-effort)
     /// Enabled only when NYASH_VERIFY_BARRIER_STRICT=1
     fn verify_barrier_context(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
-        let strict = std::env::var("NYASH_VERIFY_BARRIER_STRICT").ok().as_deref() == Some("1");
-        if !strict { return Ok(()); }
-
-        use super::MirInstruction;
-        let mut errors = Vec::new();
-        for (bid, block) in &function.blocks {
-            // Build a flat vec of (idx, &inst) including terminator (as last)
-            let mut insts: Vec<(usize, &MirInstruction)> = block.instructions.iter().enumerate().collect();
-            if let Some(term) = &block.terminator {
-                insts.push((usize::MAX, term));
-            }
-            for (idx, inst) in &insts {
-                let is_barrier = matches!(inst,
-                    MirInstruction::Barrier { .. } |
-                    MirInstruction::BarrierRead { .. } |
-                    MirInstruction::BarrierWrite { .. }
-                );
-                if !is_barrier { continue; }
-
-                // Look around +-2 instructions for a memory op hint
-                let mut has_mem_neighbor = false;
-                for (j, other) in &insts {
-                    if *j == *idx { continue; }
-                    // integer distance (treat usize::MAX as distant)
-                    let dist = if *idx == usize::MAX || *j == usize::MAX { 99 } else { idx.max(j) - idx.min(j) };
-                    if dist > 2 { continue; }
-                    if matches!(other,
-                        MirInstruction::Load { .. } |
-                        MirInstruction::Store { .. } |
-                        MirInstruction::ArrayGet { .. } |
-                        MirInstruction::ArraySet { .. } |
-                        MirInstruction::RefGet { .. } |
-                        MirInstruction::RefSet { .. }
-                    ) {
-                        has_mem_neighbor = true;
-                        break;
-                    }
-                }
-                if !has_mem_neighbor {
-                    errors.push(VerificationError::SuspiciousBarrierContext {
-                        block: *bid,
-                        instruction_index: *idx,
-                        note: "barrier without nearby memory op (±2 inst)".to_string(),
-                    });
-                }
-            }
-        }
-        if errors.is_empty() { Ok(()) } else { Err(errors) }
+        barrier::check_barrier_context(function)
     }
     
     /// Verify SSA form properties
@@ -596,41 +336,7 @@ impl MirVerifier {
     
     /// Compute reachable blocks from entry
     fn compute_reachable_blocks(&self, function: &MirFunction) -> HashSet<BasicBlockId> {
-        let mut reachable = HashSet::new();
-        let mut worklist = vec![function.entry_block];
-        
-        while let Some(current) = worklist.pop() {
-            if reachable.insert(current) {
-                if let Some(block) = function.blocks.get(&current) {
-                    // Add normal successors
-                    for successor in &block.successors {
-                        if !reachable.contains(successor) {
-                            worklist.push(*successor);
-                        }
-                    }
-                    
-                    // Add exception handler blocks as reachable
-                    for instruction in &block.instructions {
-                        if let super::MirInstruction::Catch { handler_bb, .. } = instruction {
-                            if !reachable.contains(handler_bb) {
-                                worklist.push(*handler_bb);
-                            }
-                        }
-                    }
-                    
-                    // Also check terminator for exception handlers
-                    if let Some(ref terminator) = block.terminator {
-                        if let super::MirInstruction::Catch { handler_bb, .. } = terminator {
-                            if !reachable.contains(handler_bb) {
-                                worklist.push(*handler_bb);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        reachable
+        utils::compute_reachable_blocks(function)
     }
     
     /// Get all verification errors from the last run
@@ -645,66 +351,17 @@ impl MirVerifier {
 
     /// Build predecessor map for all blocks
     fn compute_predecessors(&self, function: &MirFunction) -> HashMap<BasicBlockId, Vec<BasicBlockId>> {
-        let mut preds: HashMap<BasicBlockId, Vec<BasicBlockId>> = HashMap::new();
-        for (bid, block) in &function.blocks {
-            for succ in &block.successors {
-                preds.entry(*succ).or_default().push(*bid);
-            }
-        }
-        preds
+        utils::compute_predecessors(function)
     }
 
     /// Build a map from ValueId to its defining block
     fn compute_def_blocks(&self, function: &MirFunction) -> HashMap<ValueId, BasicBlockId> {
-        let mut def_block: HashMap<ValueId, BasicBlockId> = HashMap::new();
-        for (bid, block) in &function.blocks {
-            for inst in block.all_instructions() {
-                if let Some(dst) = inst.dst_value() { def_block.insert(dst, *bid); }
-            }
-        }
-        def_block
+        utils::compute_def_blocks(function)
     }
 
     /// Compute dominator sets per block using standard iterative algorithm
     fn compute_dominators(&self, function: &MirFunction) -> HashMap<BasicBlockId, HashSet<BasicBlockId>> {
-        let all_blocks: HashSet<BasicBlockId> = function.blocks.keys().copied().collect();
-        let preds = self.compute_predecessors(function);
-        let mut dom: HashMap<BasicBlockId, HashSet<BasicBlockId>> = HashMap::new();
-
-        for &b in function.blocks.keys() {
-            if b == function.entry_block {
-                let mut set = HashSet::new();
-                set.insert(b);
-                dom.insert(b, set);
-            } else {
-                dom.insert(b, all_blocks.clone());
-            }
-        }
-
-        let mut changed = true;
-        while changed {
-            changed = false;
-            for &b in function.blocks.keys() {
-                if b == function.entry_block { continue; }
-                let mut new_set: HashSet<BasicBlockId> = all_blocks.clone();
-                if let Some(ps) = preds.get(&b) {
-                    if !ps.is_empty() {
-                        for (i, p) in ps.iter().enumerate() {
-                            if let Some(p_set) = dom.get(p) {
-                                if i == 0 { new_set = p_set.clone(); }
-                                else { new_set = new_set.intersection(p_set).copied().collect(); }
-                            }
-                        }
-                    }
-                }
-                new_set.insert(b);
-                if let Some(old) = dom.get(&b) {
-                    if &new_set != old { dom.insert(b, new_set); changed = true; }
-                }
-            }
-        }
-
-        dom
+        utils::compute_dominators(function)
     }
 }
 

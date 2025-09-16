@@ -9,6 +9,7 @@
  */
 
 use super::{MirModule, MirFunction, MirInstruction, ValueId, MirType, EffectMask, Effect};
+use crate::mir::optimizer_stats::OptimizationStats;
 use std::collections::{HashMap, HashSet};
 
 /// MIR optimization passes
@@ -47,20 +48,20 @@ impl MirOptimizer {
 
         // Pass 0: Normalize legacy instructions to unified forms
         //  - Includes optional Array→BoxCall guarded by env (inside the pass)
-        stats.merge(self.normalize_legacy_instructions(module));
+        stats.merge(crate::mir::optimizer_passes::normalize::normalize_legacy_instructions(self, module));
         // Pass 0.1: RefGet/RefSet → BoxCall(getField/setField) (guarded)
         if ref_to_boxcall {
-            stats.merge(self.normalize_ref_field_access(module));
+            stats.merge(crate::mir::optimizer_passes::normalize::normalize_ref_field_access(self, module));
         }
         
         // Option: Force BoxCall → PluginInvoke (env)
         if crate::config::env::mir_plugin_invoke()
             || crate::config::env::plugin_only() {
-            stats.merge(self.force_plugin_invoke(module));
+            stats.merge(crate::mir::optimizer_passes::normalize::force_plugin_invoke(self, module));
         }
 
         // Normalize Python helper form: py.getattr(obj, name) → obj.getattr(name)
-        stats.merge(self.normalize_python_helper_calls(module));
+        stats.merge(crate::mir::optimizer_passes::normalize::normalize_python_helper_calls(self, module));
 
         // Pass 1: Dead code elimination (modularized pass)
         {
@@ -75,15 +76,15 @@ impl MirOptimizer {
         }
         
         // Pass 3: Pure instruction reordering for better locality
-        stats.merge(self.reorder_pure_instructions(module));
+        stats.merge(crate::mir::optimizer_passes::reorder::reorder_pure_instructions(self, module));
         
         // Pass 4: Intrinsic function optimization
-        stats.merge(self.optimize_intrinsic_calls(module));
+        stats.merge(crate::mir::optimizer_passes::intrinsics::optimize_intrinsic_calls(self, module));
 
         // Safety-net passesは削除（Phase 2: 変換の一本化）。診断のみ後段で実施。
         
         // Pass 5: BoxField dependency optimization
-        stats.merge(self.optimize_boxfield_operations(module));
+        stats.merge(crate::mir::optimizer_passes::boxfield::optimize_boxfield_operations(self, module));
 
         // Pass 6: 受け手型ヒントの伝搬（callsite→callee）
         // 目的: helper(arr){ return arr.length() } のようなケースで、
@@ -101,10 +102,10 @@ impl MirOptimizer {
             println!("✅ Optimization complete: {}", stats);
         }
         // Diagnostics (informational): report unlowered patterns
-        let diag1 = self.diagnose_unlowered_type_ops(module);
+        let diag1 = crate::mir::optimizer_passes::diagnostics::diagnose_unlowered_type_ops(self, module);
         stats.merge(diag1);
         // Diagnostics (policy): detect legacy (pre-unified) instructions when requested
-        let diag2 = self.diagnose_legacy_instructions(module);
+        let diag2 = crate::mir::optimizer_passes::diagnostics::diagnose_legacy_instructions(self, module);
         stats.merge(diag2);
         
         stats
@@ -371,98 +372,18 @@ impl MirOptimizer {
         }
     }
     
-    /// Reorder pure instructions for better locality
-    fn reorder_pure_instructions(&mut self, module: &mut MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
-        
-        for (func_name, function) in &mut module.functions {
-            if self.debug {
-                println!("  🔀 Pure instruction reordering in function: {}", func_name);
-            }
-            
-            stats.reorderings += self.reorder_in_function(function);
-        }
-        
-        stats
-    }
-    
-    /// Reorder instructions in a function
-    fn reorder_in_function(&mut self, _function: &mut MirFunction) -> usize {
-        // Simplified implementation - in full version would implement:
-        // 1. Build dependency graph
-        // 2. Topological sort respecting effects
-        // 3. Group pure instructions together
-        // 4. Move loads closer to uses
-        0
-    }
-    
-    /// Optimize intrinsic function calls
-    fn optimize_intrinsic_calls(&mut self, module: &mut MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
-        
-        for (func_name, function) in &mut module.functions {
-            if self.debug {
-                println!("  ⚡ Intrinsic optimization in function: {}", func_name);
-            }
-            
-            stats.intrinsic_optimizations += self.optimize_intrinsics_in_function(function);
-        }
-        
-        stats
-    }
-    
-    /// Optimize intrinsics in a function
-    fn optimize_intrinsics_in_function(&mut self, _function: &mut MirFunction) -> usize {
-        // Simplified implementation - would optimize:
-        // 1. Constant folding in intrinsic calls
-        // 2. Strength reduction (e.g., @unary_neg(@unary_neg(x)) → x)
-        // 3. Identity elimination (e.g., x + 0 → x)
-        0
-    }
+    // Reorder/Intrinsics/BoxField passes moved to optimizer_passes/* modules
+}
 
-    
-    /// Optimize BoxField operations
-    fn optimize_boxfield_operations(&mut self, module: &mut MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
-        
-        for (func_name, function) in &mut module.functions {
-            if self.debug {
-                println!("  📦 BoxField optimization in function: {}", func_name);
-            }
-            
-            stats.boxfield_optimizations += self.optimize_boxfield_in_function(function);
-        }
-        
-        stats
-    }
-    
-    /// Optimize BoxField operations in a function
-    fn optimize_boxfield_in_function(&mut self, _function: &mut MirFunction) -> usize {
-        // Simplified implementation - would optimize:
-        // 1. Load-after-store elimination
-        // 2. Store-after-store elimination  
-        // 3. Load forwarding
-        // 4. Field access coalescing
-        0
-    }
+impl MirOptimizer {
+    /// Expose debug flag for helper modules
+    pub(crate) fn debug_enabled(&self) -> bool { self.debug }
 }
 
 impl MirOptimizer {
     /// Rewrite all BoxCall to PluginInvoke to force plugin path (no builtin fallback)
     fn force_plugin_invoke(&mut self, module: &mut MirModule) -> OptimizationStats {
-        use super::MirInstruction as I;
-        let mut stats = OptimizationStats::new();
-        for (_fname, function) in &mut module.functions {
-            for (_bb, block) in &mut function.blocks {
-                for inst in &mut block.instructions {
-                    if let I::BoxCall { dst, box_val, method, args, effects, .. } = inst.clone() {
-                        *inst = I::PluginInvoke { dst, box_val, method, args, effects };
-                        stats.intrinsic_optimizations += 1;
-                    }
-                }
-            }
-        }
-        stats
+        crate::mir::optimizer_passes::normalize::force_plugin_invoke(self, module)
     }
 
     /// Normalize Python helper calls that route via PyRuntimeBox into proper receiver form.
@@ -470,33 +391,7 @@ impl MirOptimizer {
     /// Rewrites: PluginInvoke { box_val=py (PyRuntimeBox), method="getattr"|"call", args=[obj, rest...] }
     ///        →  PluginInvoke { box_val=obj, method, args=[rest...] }
     fn normalize_python_helper_calls(&mut self, module: &mut MirModule) -> OptimizationStats {
-        use super::MirInstruction as I;
-        let mut stats = OptimizationStats::new();
-        for (_fname, function) in &mut module.functions {
-            for (_bb, block) in &mut function.blocks {
-                for inst in &mut block.instructions {
-                    if let I::PluginInvoke { box_val, method, args, .. } = inst {
-                        if method == "getattr" && args.len() >= 2 {
-                            // Prefer metadata when available
-                            // Heuristic: helper形式 (obj, name) のときのみ書換
-                            // Rewrite receiver to args[0]
-                            let new_recv = args[0];
-                            // Remove first arg and keep the rest
-                            args.remove(0);
-                            *box_val = new_recv;
-                            stats.intrinsic_optimizations += 1;
-                        } else if method == "call" && !args.is_empty() {
-                            // call は helper形式 (func, args...) を receiver=func に正規化
-                            let new_recv = args[0];
-                            args.remove(0);
-                            *box_val = new_recv;
-                            stats.intrinsic_optimizations += 1;
-                        }
-                    }
-                }
-            }
-        }
-        stats
+        crate::mir::optimizer_passes::normalize::normalize_python_helper_calls(self, module)
     }
     /// Normalize legacy instructions into unified MIR26 forms.
     /// - TypeCheck/Cast → TypeOp(Check/Cast)
@@ -767,50 +662,7 @@ impl Default for MirOptimizer {
     }
 }
 
-/// Statistics from optimization passes
-#[derive(Debug, Clone, Default)]
-pub struct OptimizationStats {
-    pub dead_code_eliminated: usize,
-    pub cse_eliminated: usize,
-    pub reorderings: usize,
-    pub intrinsic_optimizations: usize,
-    pub boxfield_optimizations: usize,
-    pub diagnostics_reported: usize,
-}
-
-impl OptimizationStats {
-    pub fn new() -> Self {
-        Default::default()
-    }
-    
-    pub fn merge(&mut self, other: OptimizationStats) {
-        self.dead_code_eliminated += other.dead_code_eliminated;
-        self.cse_eliminated += other.cse_eliminated;
-        self.reorderings += other.reorderings;
-        self.intrinsic_optimizations += other.intrinsic_optimizations;
-        self.boxfield_optimizations += other.boxfield_optimizations;
-        self.diagnostics_reported += other.diagnostics_reported;
-    }
-    
-    pub fn total_optimizations(&self) -> usize {
-        self.dead_code_eliminated + self.cse_eliminated + self.reorderings + 
-        self.intrinsic_optimizations + self.boxfield_optimizations
-    }
-}
-
-impl std::fmt::Display for OptimizationStats {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, 
-            "dead_code: {}, cse: {}, reorder: {}, intrinsic: {}, boxfield: {} (total: {})",
-            self.dead_code_eliminated,
-            self.cse_eliminated, 
-            self.reorderings,
-            self.intrinsic_optimizations,
-            self.boxfield_optimizations,
-            self.total_optimizations()
-        )
-    }
-}
+// OptimizationStats moved to crate::mir::optimizer_stats
 
 impl MirOptimizer {
     /// Diagnostic: detect unlowered is/as/isType/asType after Builder

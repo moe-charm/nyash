@@ -56,7 +56,7 @@ impl VM {
             }
             Entry::Vacant(v) => { v.insert(vec![(label.clone(), ver, func_name.to_string())]); }
         }
-        if std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") {
+        if crate::config::env::vm_pic_stats() {
             if let Some(v) = self.boxcall_poly_pic.get(pic_site_key) {
                 eprintln!("[PIC] site={} size={} last=({}, v{}) -> {}", pic_site_key, v.len(), label, ver, func_name);
             }

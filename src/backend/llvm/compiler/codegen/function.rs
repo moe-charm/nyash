@@ -400,7 +400,7 @@ pub(super) fn lower_one_function<'ctx>(
             cursor.at_end(*bid, bb);
             match term {
                 MirInstruction::Return { value } => {
-                    instructions::emit_return(
+                    instructions::term_emit_return(
                         codegen,
                         &mut cursor,
                         &mut resolver,
@@ -443,7 +443,7 @@ pub(super) fn lower_one_function<'ctx>(
                         }
                     }
                     if !handled {
-                        instructions::emit_jump(
+                        instructions::term_emit_jump(
                             codegen,
                             &mut cursor,
                             *bid,
@@ -526,12 +526,13 @@ pub(super) fn lower_one_function<'ctx>(
                         }
                     }
                     if !handled_by_loopform {
-                        instructions::emit_branch(
+                        let cond_norm = instructions::normalize_branch_condition(func, condition);
+                        instructions::term_emit_branch(
                             codegen,
                             &mut cursor,
                             &mut resolver,
                             *bid,
-                            condition,
+                            &cond_norm,
                             then_bb,
                             else_bb,
                             &bb_map,
@@ -545,7 +546,7 @@ pub(super) fn lower_one_function<'ctx>(
                 _ => {
                     cursor.at_end(*bid, bb);
                     if let Some(next_bid) = block_ids.get(bi + 1) {
-                        instructions::emit_jump(
+                        instructions::term_emit_jump(
                             codegen,
                             &mut cursor,
                             *bid,
@@ -555,7 +556,7 @@ pub(super) fn lower_one_function<'ctx>(
                         )?;
                     } else {
                         let entry_first = func.entry_block;
-                        instructions::emit_jump(
+                        instructions::term_emit_jump(
                             codegen,
                             &mut cursor,
                             *bid,
@@ -575,7 +576,7 @@ pub(super) fn lower_one_function<'ctx>(
             }
             cursor.at_end(*bid, bb);
             if let Some(next_bid) = block_ids.get(bi + 1) {
-                instructions::emit_jump(
+                instructions::term_emit_jump(
                     codegen,
                     &mut cursor,
                     *bid,
@@ -585,7 +586,7 @@ pub(super) fn lower_one_function<'ctx>(
                 )?;
             } else {
                 let entry_first = func.entry_block;
-                instructions::emit_jump(
+                instructions::term_emit_jump(
                     codegen,
                     &mut cursor,
                     *bid,
@@ -604,7 +605,7 @@ pub(super) fn lower_one_function<'ctx>(
             }
             cursor.at_end(*bid, bb);
             if let Some(next_bid) = block_ids.get(bi + 1) {
-                instructions::emit_jump(
+                instructions::term_emit_jump(
                     codegen,
                     &mut cursor,
                     *bid,
@@ -614,7 +615,7 @@ pub(super) fn lower_one_function<'ctx>(
                 )?;
             } else {
                 let entry_first = func.entry_block;
-                instructions::emit_jump(
+                instructions::term_emit_jump(
                     codegen,
                     &mut cursor,
                     *bid,

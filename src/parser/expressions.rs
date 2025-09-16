@@ -85,99 +85,19 @@ impl NyashParser {
     /// 三項演算子: cond ? then : else
     /// Grammar (Phase 12.7): TernaryExpr = NullsafeExpr ( "?" Expr ":" Expr )?
     /// 実装: coalesce の上に差し込み、`cond ? a : b` を If式に変換する。
-    fn parse_ternary(&mut self) -> Result<ASTNode, ParseError> {
-        let cond = self.parse_coalesce()?;
-        if self.match_token(&TokenType::QUESTION) {
-            // consume '?' and parse then/else expressions
-            self.advance();
-            let then_expr = self.parse_expression()?;
-            self.consume(TokenType::COLON)?; // ':'
-            let else_expr = self.parse_expression()?;
-            // Lower to If-expression AST (builder側でPhi化）
-            return Ok(ASTNode::If {
-                condition: Box::new(cond),
-                then_body: vec![then_expr],
-                else_body: Some(vec![else_expr]),
-                span: Span::unknown(),
-            });
-        }
-        Ok(cond)
-    }
+    fn parse_ternary(&mut self) -> Result<ASTNode, ParseError> { self.expr_parse_ternary() }
 
     /// デフォルト値（??）: x ?? y => peek x { null => y, else => x }
-    fn parse_coalesce(&mut self) -> Result<ASTNode, ParseError> {
-        let mut expr = self.parse_or()?;
-        while self.match_token(&TokenType::QmarkQmark) {
-            if !is_sugar_enabled() {
-                let line = self.current_token().line;
-                return Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full for '??'".to_string(),
-                    line,
-                });
-            }
-            self.advance(); // consume '??'
-            let rhs = self.parse_or()?;
-            let scr = expr;
-            expr = ASTNode::PeekExpr {
-                scrutinee: Box::new(scr.clone()),
-                arms: vec![(crate::ast::LiteralValue::Null, rhs)],
-                else_expr: Box::new(scr),
-                span: Span::unknown(),
-            };
-        }
-        Ok(expr)
-    }
+    fn parse_coalesce(&mut self) -> Result<ASTNode, ParseError> { self.expr_parse_coalesce() }
     
     /// OR演算子をパース: ||
-    fn parse_or(&mut self) -> Result<ASTNode, ParseError> {
-        let mut expr = self.parse_and()?;
-        
-        while self.match_token(&TokenType::OR) {
-            let operator = BinaryOperator::Or;
-            self.advance();
-            let right = self.parse_and()?;
-            // Non-invasive syntax diff: record binop
-            if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
-                let ok = crate::grammar::engine::get().syntax_is_allowed_binop("or");
-                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop 'or' not allowed by syntax rules"); }
-            }
-            expr = ASTNode::BinaryOp {
-                operator,
-                left: Box::new(expr),
-                right: Box::new(right),
-                span: Span::unknown(),
-            };
-        }
-        
-        Ok(expr)
-    }
+    fn parse_or(&mut self) -> Result<ASTNode, ParseError> { self.expr_parse_or() }
     
     /// AND演算子をパース: &&
-    fn parse_and(&mut self) -> Result<ASTNode, ParseError> {
-        let mut expr = self.parse_bit_or()?;
-        
-        while self.match_token(&TokenType::AND) {
-            let operator = BinaryOperator::And;
-            self.advance();
-            let right = self.parse_equality()?;
-            if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
-                let ok = crate::grammar::engine::get().syntax_is_allowed_binop("and");
-                if !ok { eprintln!("[GRAMMAR-DIFF][Parser] binop 'and' not allowed by syntax rules"); }
-            }
-            expr = ASTNode::BinaryOp {
-                operator,
-                left: Box::new(expr),
-                right: Box::new(right),
-                span: Span::unknown(),
-            };
-        }
-        
-        Ok(expr)
-    }
+    fn parse_and(&mut self) -> Result<ASTNode, ParseError> { self.expr_parse_and() }
 
     /// ビットOR: |
-    fn parse_bit_or(&mut self) -> Result<ASTNode, ParseError> {
+    pub(crate) fn parse_bit_or(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_bit_xor()?;
         while self.match_token(&TokenType::BitOr) {
             let operator = BinaryOperator::BitOr;
@@ -213,7 +133,7 @@ impl NyashParser {
     }
     
     /// 等値演算子をパース: == !=
-    fn parse_equality(&mut self) -> Result<ASTNode, ParseError> {
+    pub(crate) fn parse_equality(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_comparison()?;
         
         while self.match_token(&TokenType::EQUALS) || self.match_token(&TokenType::NotEquals) {

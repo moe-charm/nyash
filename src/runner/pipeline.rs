@@ -158,12 +158,12 @@ pub(super) fn resolve_using_target(
         format!("{}|{}|{}|{}", tgt, base, strict as i32, using_paths.join(":"))
     };
     if let Some(hit) = crate::runner::box_index::cache_get(&key) {
-        if trace { eprintln!("[using/cache] '{}' -> '{}'", tgt, hit); }
+        if trace { crate::runner::trace::log(format!("[using/cache] '{}' -> '{}'", tgt, hit)); }
         return Ok(hit);
     }
     // Resolve aliases early (provided map)
     if let Some(v) = aliases.get(tgt) {
-        if trace { eprintln!("[using/resolve] alias '{}' -> '{}'", tgt, v); }
+        if trace { crate::runner::trace::log(format!("[using/resolve] alias '{}' -> '{}'", tgt, v)); }
         crate::runner::box_index::cache_put(&key, v.clone());
         return Ok(v.clone());
     }
@@ -173,7 +173,7 @@ pub(super) fn resolve_using_target(
             if let Some((k,v)) = ent.split_once('=') {
                 if k.trim() == tgt {
                     let out = v.trim().to_string();
-                    if trace { eprintln!("[using/resolve] env-alias '{}' -> '{}'", tgt, out); }
+                    if trace { crate::runner::trace::log(format!("[using/resolve] env-alias '{}' -> '{}'", tgt, out)); }
                     crate::runner::box_index::cache_put(&key, out.clone());
                     return Ok(out);
                 }
@@ -183,7 +183,7 @@ pub(super) fn resolve_using_target(
     // 1) modules mapping
     if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) {
         let out = p.clone();
-        if trace { eprintln!("[using/resolve] modules '{}' -> '{}'", tgt, out); }
+        if trace { crate::runner::trace::log(format!("[using/resolve] modules '{}' -> '{}'", tgt, out)); }
         crate::runner::box_index::cache_put(&key, out.clone());
         return Ok(out);
     }
@@ -204,9 +204,13 @@ pub(super) fn resolve_using_target(
             if cands.len() < 5 { suggest_in_base("lib", leaf, &mut cands); }
             if cands.len() < 5 { suggest_in_base(".", leaf, &mut cands); }
             if cands.is_empty() {
-                eprintln!("[using] unresolved '{}' (searched: rel+paths)", tgt);
+                crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths)", tgt));
             } else {
-                eprintln!("[using] unresolved '{}' (searched: rel+paths) candidates: {}", tgt, cands.join(", "));
+                crate::runner::trace::log(format!(
+                    "[using] unresolved '{}' (searched: rel+paths) candidates: {}",
+                    tgt,
+                    cands.join(", ")
+                ));
             }
         }
         return Ok(tgt.to_string());
@@ -215,7 +219,7 @@ pub(super) fn resolve_using_target(
         return Err(format!("ambiguous using '{}': {}", tgt, cand.join(", ")));
     }
     let out = cand.remove(0);
-    if trace { eprintln!("[using/resolve] '{}' -> '{}'", tgt, out); }
+    if trace { crate::runner::trace::log(format!("[using/resolve] '{}' -> '{}'", tgt, out)); }
     crate::runner::box_index::cache_put(&key, out.clone());
     Ok(out)
 }

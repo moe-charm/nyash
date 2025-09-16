@@ -24,6 +24,40 @@ What Changed (today)
 - dev プロファイル `tools/dev_env.sh phi_off` を追加。ルート清掃ユーティリティ `tools/clean_root_artifacts.sh` を追加。
 - CI（GH Actions）を curated LLVM（PHI‑on/off）実行に刷新。旧JITジョブは停止。
 
+Refactor Progress (2025‑09‑16, end of day)
+- Runner: ヘッダ指令スキャンとトレース出力を分離（`runner/cli_directives.rs`, `runner/trace.rs`）。using 解決ログを集約。
+- LLVM: terminators(select) の足場を追加し、呼び出しを alias 経由に切替（挙動不変）。
+- Optimizer: パス別に分割し、オーケストレータから委譲（挙動不変の足場）。
+  - `optimizer_passes/{normalize,diagnostics,reorder,boxfield,intrinsics}.rs`
+  - 統計を `optimizer_stats.rs` へ分離。
+- Verifier: 主要チェックをモジュール化し、`verification.rs` を薄いオーケストレータ化。
+  - `verification/{ssa,dom,cfg,barrier,legacy,awaits,utils}.rs`
+- AST: `Span` を `ast/span.rs` へ分離し、`ast.rs` は re‑export。
+- Parser: expressions を段階分割（ternary/coalesce/logic を `parser/expr/*` へ）。
+
+Remaining Refactors (Phase‑15 mainline)
+- Verifier（仕上げ）
+  - `verification.rs` 内の `compute_*` ラッパーを完全撤去し、全呼び出しを `verification::utils` に集約。
+  - テスト追加: reachability/phi/await チェックの簡易ケース（任意）。
+- Parser（段階分割の続き）
+  - `bit_or/bit_xor/bit_and`、`comparison/range/term/shift/factor` を `parser/expr/` へ移動し、`parse_expression` チェインを維持。
+  - `call/primary` は最後に移動（依存が多いため）。
+- AST（構造の分離）
+  - `ast/nodes/{structure,expression,statement}.rs` へノード定義を分離し、`ast.rs` は `pub use` 集約のみへ縮退。
+- Optimizer（足場→実装へ）
+  - `reorder/boxfield/intrinsics` の実装を段階導入（まず small win: CSE のキーフィルタ改善、boxfield の load-after-store）。
+  - `normalize` の terminator 側の補完（未移行箇所があれば寄せる）。
+- Runner/env 集約
+  - ホットパスの環境参照を `config::env` getter へ置換（残件: VM trace/diagnostics の一部）。
+- LLVM select/terminators（実装化）
+  - `select` に truthy 規約の軽い正規化を追加（等価変換のみ）。
+  - `terminators` へ実体移動（`flow` からの段階的差し替え）。
+- VM dispatch（段階導入）
+  - `NYASH_VM_USE_DISPATCH=1` フラグを導入し、無副作用命令から `backend/dispatch.rs` 経由に切替。
+
+Notes
+- すべて挙動等価の範囲で段階的に進める。足場化したモジュールは後続で実装を徐々に移す。
+
 Self‑Hosting plumbing (2025‑09‑16, later in day)
 - Runner: 自己ホスト経路で子プログラム（`apps/selfhost-compiler/compiler.nyash`）を優先実行し、`--read-tmp` 常時付与で安定運用に変更。
 - PyVM 優先の統一（`NYASH_VM_USE_PY=1`）は EXE/inline/child の全分岐で尊重。
@@ -198,6 +232,33 @@ Recommended Next (short list)
   - `function.rs` は「BB 周回＋各 lowering 呼び出し」の骨格のみへ縮退。
 - MIR Builder（C 継続）
   - `builder/loops.rs` を新設し、ループのヘッダ/出口の小物ユーティリティを抽出（`LoopBuilder` の補助レイヤ）。
+
+Refactor Plan (MIR Core / Parser / Runner)
+
+- MIR Core（中〜高）
+  - 問題点
+    - `optimizer.rs` と `verification.rs` に処理が集中し、追加パスや検証増に弱い構造（巨大化: 994/980 行規模）。
+  - 提案
+    - パス駆動に分割: `mir/passes/{dce.rs, ssa.rs, const_fold.rs, simplify.rs}` と `MirPass` トレイト（`run(&mut MirModule)`）。
+      - 進捗: dce/cse 抽出済み、`MirPass` 骨格導入済み。次は normalize 系の抽出を段階実施。
+    - `optimizer.rs` はパイプライン組立（順序・ゲート・Stats 集約）に縮小。
+    - `verification.rs` もカテゴリ分割（ブロック整合性、SSA/PHI、型整合）。失敗メッセージ表現の一貫化（hintを統一）。
+
+- Parser/Tokenizer（中）
+  - 問題点
+    - `parser/expressions.rs`（~986行）、`parser/statements.rs`（~562行）、`tokenizer.rs`（~863行）が肥大。
+  - 提案
+    - Pratt/precedence テーブル化で演算子別分岐の重複削減。
+    - 共通エラー生成ユーティリティで `expected(...)` メッセージを統一。
+    - `tokenizer.rs` を `tokens.rs`（定義）と `lexer.rs`（実装）に分離。テストは `tests/lexer_*.rs` へ退避。
+
+- Runner（中）
+  - 問題点
+    - `runner/modes/common.rs`（~734行）、`runner/mod.rs`（~597行）に CLI/環境フラグ/実行分岐が混載。
+  - 提案
+    - `runner/modes/common/` ディレクトリ化し、CLI引数処理・環境フラグ解決・モードディスパッチを分離。
+    - 重複ログ/検証を共通ヘルパへ集約。
+
   - `builder/vars.rs` に SSA 変数正規化の小物を段階追加（変数名再束縛/スコープ終端の型ヒント伝搬など）。
 - Runner（仕上げ）
   - `mod.rs` の残置ヘルパ（usingの候補提示・環境注入ログ）を `pipeline/dispatch` へ集約し、`mod.rs` を最小のオーケストレーションに。

@@ -13,10 +13,13 @@ pub mod builder;
 pub mod loop_builder; // SSA loop construction with phi nodes
 pub mod loop_api;     // Minimal LoopBuilder facade (adapter-ready)
 pub mod verification;
+pub mod verification_types; // extracted error types
 pub mod printer;
 pub mod value_id;
 pub mod effect;
 pub mod optimizer;
+pub mod optimizer_stats; // extracted stats struct
+pub mod optimizer_passes; // optimizer passes (normalize/diagnostics)
 pub mod slot_registry; // Phase 9.79b.1: method slot resolution (IDs)
 #[cfg(feature = "aot-plan-import")]
 pub mod aot_plan_import;
@@ -27,7 +30,8 @@ pub use instruction::{MirInstruction, BinaryOp, CompareOp, UnaryOp, ConstValue, 
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use function::{MirFunction, MirModule, FunctionSignature};
 pub use builder::MirBuilder;
-pub use verification::{MirVerifier, VerificationError};
+pub use verification::MirVerifier;
+pub use verification_types::VerificationError;
 pub use printer::MirPrinter;
 pub use value_id::{ValueId, LocalId, ValueIdGenerator};
 pub use effect::{EffectMask, Effect};

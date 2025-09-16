@@ -44,7 +44,7 @@ impl NyashRunner {
             #[cfg(feature = "llvm-harness")]
             {
                 // Harness path (optional): if NYASH_LLVM_USE_HARNESS=1, try Python/llvmlite first.
-                let use_harness = std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1");
+                let use_harness = crate::config::env::llvm_use_harness();
                 if use_harness {
                             if let Some(parent) = std::path::Path::new(&_out_path).parent() { let _ = std::fs::create_dir_all(parent); }
                     let py = which::which("python3").ok();
