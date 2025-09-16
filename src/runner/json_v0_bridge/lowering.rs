@@ -103,6 +103,13 @@ fn next_block_id(f: &MirFunction) -> BasicBlockId {
     BasicBlockId::new(mx)
 }
 
+/// Create a fresh basic block and insert it into the function.
+fn new_block(f: &mut MirFunction) -> BasicBlockId {
+    let id = next_block_id(f);
+    f.add_block(BasicBlock::new(id));
+    id
+}
+
 fn lower_throw(
     env: &BridgeEnv,
     f: &mut MirFunction,
@@ -238,12 +245,9 @@ fn lower_expr_with_scope<S: VarScope>(
         }
         ExprV0::Logical { op, lhs, rhs } => {
             let (l, cur_after_l) = lower_expr_with_scope(env, f, cur_bb, lhs, vars)?;
-            let rhs_bb = next_block_id(f);
-            let fall_bb = BasicBlockId::new(rhs_bb.0 + 1);
-            let merge_bb = BasicBlockId::new(rhs_bb.0 + 2);
-            f.add_block(BasicBlock::new(rhs_bb));
-            f.add_block(BasicBlock::new(fall_bb));
-            f.add_block(BasicBlock::new(merge_bb));
+            let rhs_bb = new_block(f);
+            let fall_bb = new_block(f);
+            let merge_bb = new_block(f);
             let is_and = matches!(op.as_str(), "&&" | "and");
             if let Some(bb) = f.get_block_mut(cur_after_l) {
                 if is_and {
@@ -464,6 +468,7 @@ fn lower_args_with_scope<S: VarScope>(
     Ok((out, cur))
 }
 
+#[allow(dead_code)]
 fn lower_expr(
     env: &BridgeEnv,
     f: &mut MirFunction,
@@ -485,6 +490,7 @@ fn lower_expr_with_vars(
     lower_expr_with_scope(env, f, cur_bb, e, &mut scope)
 }
 
+#[allow(dead_code)]
 fn lower_args(
     env: &BridgeEnv,
     f: &mut MirFunction,
@@ -603,20 +609,16 @@ fn lower_stmt_with_vars(
             }
 
             let base_vars = vars.clone();
-            let try_bb = next_block_id(f);
-            f.add_block(BasicBlock::new(try_bb));
+            let try_bb = new_block(f);
             let catch_clause = &catches[0];
-            let catch_bb = next_block_id(f);
-            f.add_block(BasicBlock::new(catch_bb));
+            let catch_bb = new_block(f);
             let finally_bb = if !finally.is_empty() {
-                let id = next_block_id(f);
-                f.add_block(BasicBlock::new(id));
+                let id = new_block(f);
                 Some(id)
             } else {
                 None
             };
-            let exit_bb = next_block_id(f);
-            f.add_block(BasicBlock::new(exit_bb));
+            let exit_bb = new_block(f);
             let handler_target = finally_bb.unwrap_or(exit_bb);
             let exception_value = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur_bb) {
@@ -890,12 +892,9 @@ fn lower_stmt_with_vars(
             Ok(merge_bb)
         }
         StmtV0::Loop { cond, body } => {
-            let cond_bb = next_block_id(f);
-            let body_bb = BasicBlockId::new(cond_bb.0 + 1);
-            let exit_bb = BasicBlockId::new(cond_bb.0 + 2);
-            f.add_block(BasicBlock::new(cond_bb));
-            f.add_block(BasicBlock::new(body_bb));
-            f.add_block(BasicBlock::new(exit_bb));
+            let cond_bb = new_block(f);
+            let body_bb = new_block(f);
+            let exit_bb = new_block(f);
             if let Some(bb) = f.get_block_mut(cur_bb) {
                 if !bb.is_terminated() {
                     bb.add_instruction(MirInstruction::Jump { target: cond_bb });
