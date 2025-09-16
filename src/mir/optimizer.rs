@@ -68,8 +68,11 @@ impl MirOptimizer {
             stats.dead_code_eliminated += eliminated;
         }
         
-        // Pass 2: Pure instruction CSE (Common Subexpression Elimination)
-        stats.merge(self.common_subexpression_elimination(module));
+        // Pass 2: Pure instruction CSE (modularized)
+        {
+            let eliminated = crate::mir::passes::cse::eliminate_common_subexpressions(module);
+            stats.cse_eliminated += eliminated;
+        }
         
         // Pass 3: Pure instruction reordering for better locality
         stats.merge(self.reorder_pure_instructions(module));

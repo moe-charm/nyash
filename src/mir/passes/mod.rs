@@ -5,6 +5,7 @@ pub mod type_hints;
 pub mod escape;
 pub mod method_id_inject;
 pub mod dce;
+pub mod cse;
 
 /// Minimal pass trait for future expansion. Currently unused by the main
 /// optimizer pipeline but provided to guide modularization.
