@@ -10,3 +10,5 @@ macro_rules! cli_v {
     }};
 }
 
+/// Unstructured trace output function used by pipeline helpers
+pub fn log<S: AsRef<str>>(msg: S) { eprintln!("{}", msg.as_ref()); }

@@ -11,6 +11,8 @@ use std::thread::sleep;
 use crate::runner::pipeline::{suggest_in_base, resolve_using_target};
 use crate::runner::trace::cli_verbose;
 use crate::cli_v;
+use crate::runner::trace::cli_verbose;
+use crate::cli_v;
 
 // (moved) suggest_in_base is now in runner/pipeline.rs
 
@@ -124,6 +126,101 @@ impl NyashRunner {
                 }
                 self.execute_nyash_file(filename);
             }
+        }
+    }
+
+    /// Helper: run PyVM harness over a MIR module, returning the exit code
+    fn run_pyvm_harness(&self, module: &nyash_rust::mir::MirModule, tag: &str) -> Result<i32, String> {
+        let py3 = which::which("python3").map_err(|e| format!("python3 not found: {}", e))?;
+        let runner = std::path::Path::new("tools/pyvm_runner.py");
+        if !runner.exists() { return Err(format!("PyVM runner not found: {}", runner.display())); }
+        let tmp_dir = std::path::Path::new("tmp");
+        let _ = std::fs::create_dir_all(tmp_dir);
+        let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+        crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(module, &mir_json_path)
+            .map_err(|e| format!("PyVM MIR JSON emit error: {}", e))?;
+        cli_v!("[ny-compiler] using PyVM ({} ) → {}", tag, mir_json_path.display());
+        // Determine entry function hint (prefer Main.main if present)
+        let entry = if module.functions.contains_key("Main.main") { "Main.main" }
+                    else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+        let status = std::process::Command::new(py3)
+            .args([
+                runner.to_string_lossy().as_ref(),
+                "--in",
+                &mir_json_path.display().to_string(),
+                "--entry",
+                entry,
+            ])
+            .status()
+            .map_err(|e| format!("spawn pyvm: {}", e))?;
+        let code = status.code().unwrap_or(1);
+        if !status.success() { cli_v!("❌ PyVM ({}) failed (status={})", tag, code); }
+        Ok(code)
+    }
+
+    /// Helper: try external selfhost compiler EXE to parse Ny -> JSON v0 and return MIR module
+    /// Returns Some(module) on success, None on failure (timeout/invalid output/missing exe)
+    fn exe_try_parse_json_v0(&self, filename: &str, timeout_ms: u64) -> Option<nyash_rust::mir::MirModule> {
+        // Resolve parser EXE path
+        let exe_path = if let Ok(p) = std::env::var("NYASH_NY_COMPILER_EXE_PATH") {
+            std::path::PathBuf::from(p)
+        } else {
+            let mut p = std::path::PathBuf::from("dist/nyash_compiler");
+            #[cfg(windows)]
+            { p.push("nyash_compiler.exe"); }
+            #[cfg(not(windows))]
+            { p.push("nyash_compiler"); }
+            if !p.exists() {
+                if let Ok(w) = which::which("nyash_compiler") { w } else { p }
+            } else { p }
+        };
+        if !exe_path.exists() { cli_v!("[ny-compiler] exe not found at {}", exe_path.display()); return None; }
+
+        // Build command
+        let mut cmd = std::process::Command::new(&exe_path);
+        cmd.arg(filename);
+        if crate::config::env::ny_compiler_min_json() { cmd.arg("--min-json"); }
+        if crate::config::env::selfhost_read_tmp() { cmd.arg("--read-tmp"); }
+        if let Some(raw) = crate::config::env::ny_compiler_child_args() { for tok in raw.split_whitespace() { cmd.arg(tok); } }
+        let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut child = match cmd.spawn() { Ok(c) => c, Err(e) => { eprintln!("[ny-compiler] exe spawn failed: {}", e); return None; } };
+        let mut ch_stdout = child.stdout.take();
+        let mut ch_stderr = child.stderr.take();
+        let start = Instant::now();
+        let mut timed_out = false;
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => {
+                    if start.elapsed() >= Duration::from_millis(timeout_ms) { let _ = child.kill(); let _ = child.wait(); timed_out = true; break; }
+                    sleep(Duration::from_millis(10));
+                }
+                Err(e) => { eprintln!("[ny-compiler] exe wait error: {}", e); return None; }
+            }
+        }
+        let mut out_buf = Vec::new();
+        let mut err_buf = Vec::new();
+        if let Some(mut s) = ch_stdout { let _ = s.read_to_end(&mut out_buf); }
+        if let Some(mut s) = ch_stderr { let _ = s.read_to_end(&mut err_buf); }
+        if timed_out {
+            let head = String::from_utf8_lossy(&out_buf).chars().take(200).collect::<String>();
+            eprintln!("[ny-compiler] exe timeout after {} ms; stdout(head)='{}'", timeout_ms, head.replace('\n', "\\n"));
+            return None;
+        }
+        let stdout = match String::from_utf8(out_buf) { Ok(s) => s, Err(_) => String::new() };
+        let mut json_line = String::new();
+        for line in stdout.lines() { let t = line.trim(); if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; } }
+        if json_line.is_empty() {
+            if cli_verbose() {
+                let head: String = stdout.chars().take(200).collect();
+                let errh: String = String::from_utf8_lossy(&err_buf).chars().take(200).collect();
+                cli_v!("[ny-compiler] exe produced no JSON; stdout(head)='{}' stderr(head)='{}'", head.replace('\n', "\\n"), errh.replace('\n', "\\n"));
+            }
+            return None;
+        }
+        match json_v0_bridge::parse_json_v0_to_module(&json_line) {
+            Ok(module) => Some(module),
+            Err(e) => { eprintln!("[ny-compiler] JSON parse failed (exe): {}", e); None }
         }
     }
 
@@ -285,26 +382,7 @@ impl NyashRunner {
                                             eprintln!("❌ PyVM MIR JSON emit error: {}", e);
                                             return true; // prevent double-run fallback
                                         }
-                                        if crate::config::env::cli_verbose() {
-                                            eprintln!("[ny-compiler] using PyVM (exe) → {}", mir_json_path.display());
-                                        }
-                                        // Determine entry function hint (prefer Main.main if present)
-                                        let entry = if module.functions.contains_key("Main.main") { "Main.main" }
-                                                    else if module.functions.contains_key("main") { "main" } else { "Main.main" };
-                                        let status = std::process::Command::new(py3)
-                                            .args([
-                                                runner.to_string_lossy().as_ref(),
-                                                "--in",
-                                                &mir_json_path.display().to_string(),
-                                                "--entry",
-                                                entry,
-                                            ])
-                                            .status()
-                                            .map_err(|e| format!("spawn pyvm: {}", e))
-                                            .unwrap();
-                                        let code = status.code().unwrap_or(1);
-                                        if !status.success() { if crate::config::env::cli_verbose() { eprintln!("❌ PyVM (exe) failed (status={})", code); } }
-                                        // Harmonize CLI output with interpreter path for smokes
+                                        let code = self.run_pyvm_harness(&module, "exe").unwrap_or(1);
                                         println!("Result: {}", code);
                                         std::process::exit(code);
                                     } else {
@@ -488,20 +566,7 @@ impl NyashRunner {
                                 // Determine entry function hint (prefer Main.main if present)
                                 let entry = if module.functions.contains_key("Main.main") { "Main.main" }
                                             else if module.functions.contains_key("main") { "main" } else { "Main.main" };
-                                let status = std::process::Command::new(py3)
-                                    .args([
-                                        runner.to_string_lossy().as_ref(),
-                                        "--in",
-                                        &mir_json_path.display().to_string(),
-                                        "--entry",
-                                        entry,
-                                    ])
-                                    .status()
-                                    .map_err(|e| format!("spawn pyvm: {}", e))
-                                    .unwrap();
-                                let code = status.code().unwrap_or(1);
-                                if !status.success() { if crate::config::env::cli_verbose() { eprintln!("❌ PyVM (mvp) failed (status={})", code); } }
-                                // Harmonize CLI output with interpreter path for smokes
+                                let code = self.run_pyvm_harness(&module, "mvp").unwrap_or(1);
                                 println!("Result: {}", code);
                                 std::process::exit(code);
                             } else {

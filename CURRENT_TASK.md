@@ -29,6 +29,8 @@ What Changed (today)
 - LLVM(select/terminators): `function.rs` から `instructions::term_emit_*` を利用しつつ、`normalize_branch_condition()` をブランチ直前で適用する流れを固定化（truthy 正規化の前段フック）。
 - Runner/env 集約: `src/config/env.rs` に CLI/自ホスト/VM まわりの getter を追加（`cli_verbose()/enable_using()/vm_use_py()/ny_compiler_*()` など）。`runner/selfhost.rs`/`runner/pipe_io.rs`/`runner/modes/common.rs` のホットパスを getter 参照に更新（段階導入）。
 - VM dispatch: 実装は既に dispatch 中央化済み（`backend::dispatch` 経由）。`NYASH_VM_USE_DISPATCH` フラグの getter を追加（将来の選択切替用）。
+- Runner/log: `runner/trace.rs` を追加。`cli_verbose()` と `cli_v!` マクロを導入し、`modes/common.rs` の一部情報ログを置換（verbose ガードの明確化）。
+- Selfhost helpers: PyVM ハーネス実行を `NyashRunner::run_pyvm_harness(..)` として共通化。EXE パーサ経路の JSON 抽出をまとめる `exe_try_parse_json_v0(..)` を追加（段階適用の足場）。
 
 Refactor Progress (2025‑09‑16, end of day)
 - Runner: ヘッダ指令スキャンとトレース出力を分離（`runner/cli_directives.rs`, `runner/trace.rs`）。using 解決ログを集約。
@@ -55,6 +57,10 @@ Remaining Refactors (Phase‑15 mainline)
   - `normalize` の terminator 側の補完（未移行箇所があれば寄せる）。
 - Runner/env 集約
   - ホットパスの環境参照を `config::env` getter へ置換（残件: VM trace/diagnostics の一部）。
+- Runner/log 整理（第2〜第3弾）
+  - 情報ログ（verbose 連動）を `cli_v!` に一本化。エラー系は従来通り eprintln のまま。
+- Selfhost EXE 経路の関数抽出（仕上げ）
+  - 既存の EXE‑first ブロックを `exe_try_parse_json_v0(..)` を用いた薄い分岐に縮退（挙動不変）。
 - LLVM select/terminators（実装化）
   - `select` に truthy 規約の軽い正規化を追加（等価変換のみ）。
   - `terminators` へ実体移動（`flow` からの段階的差し替え）。
@@ -159,6 +165,7 @@ Current Status
 - Stage‑3: 構文受理のみ完了（break/continue/throw/try/catch/finally）。現時点では JSON 降格（no‑op/Expr）で安全受理。
 - Runner: Using/Resolver を前処理に統合（BoxIndex/キャッシュ/strict）。`--ny-parser-pipe` は PyVM 委譲（exit code 判定）。
 - llvmlite/AOT: Array/Map の基本操作（push/get/set/has/size, length）が NyRT ハンドルAPIで動作。`ny_main` は i64 戻り・`Main.main/1` 優先で起動。
+- ログ: verbose 出力の一部を `cli_v!` で共通化（引き続き適用範囲を拡大中）。
 
 Open
 - Bridge/PHI の正規化: 短絡（入れ子）における merge/PHI incoming を固定化（rhs_end/fall_bb の順序）。
@@ -192,6 +199,11 @@ Smokes
 - 無限ループ防止: `./tools/selfhost_progress_guard_smoke.sh`
 - 自己ホスト → Interpreter（BoxCallなし集合）: `./tools/selfhost_stage2_smoke.sh`
 - 自己ホスト → JSON → PyVM（Array/String/Console 含む）: `./tools/selfhost_stage2_bridge_smoke.sh`
+- 動作確認（ローカル）
+  - VM: `./target/debug/nyash --backend vm apps/tmp_hello.nyash`（Result: 0）
+  - LLVM モック: `./target/debug/nyash --backend llvm apps/tmp_hello.nyash`
+  - PyVM/Stage‑2: `tools/pyvm_stage2_smoke.sh`（All PASS）
+  - Bridge/Stage‑2: `tools/ny_stage2_bridge_smoke.sh`（All PASS）
 
 Notes / Policies
 - PyVM は意味論の参照実行器として運用（exit code 判定を基本）。
