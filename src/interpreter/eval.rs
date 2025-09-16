@@ -64,14 +64,32 @@ impl NyashInterpreter {
                     // Main static boxを初期化
                     self.ensure_static_box_initialized("Main")?;
 
-                    // Main.main(args?) を呼び出し（引数が1つなら空配列をデフォルト注入）
+                    // Main.main(args?) を呼び出し（引数が1つならデフォルトで args を注入）
                     let mut default_args: Vec<ASTNode> = Vec::new();
                     if let Ok(defs) = self.shared.static_box_definitions.read() {
                         if let Some(main_def) = defs.get("Main") {
                             if let Some(m) = main_def.methods.get("main") {
                                 if let ASTNode::FunctionDeclaration { params, .. } = m {
                                     if params.len() == 1 {
-                                        default_args.push(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() });
+                                        // Try to read script args from env (JSON array); fallback to empty ArrayBox
+                                        if let Ok(json) = std::env::var("NYASH_SCRIPT_ARGS_JSON") {
+                                            if let Ok(vals) = serde_json::from_str::<Vec<String>>(&json) {
+                                                let mut str_nodes: Vec<ASTNode> = Vec::with_capacity(vals.len());
+                                                for s in vals {
+                                                    str_nodes.push(ASTNode::Literal { value: crate::ast::LiteralValue::String(s), span: crate::ast::Span::unknown() });
+                                                }
+                                                default_args.push(ASTNode::MethodCall {
+                                                    object: Box::new(ASTNode::Variable { name: "ArrayBox".to_string(), span: crate::ast::Span::unknown() }),
+                                                    method: "of".to_string(),
+                                                    arguments: str_nodes,
+                                                    span: crate::ast::Span::unknown(),
+                                                });
+                                            } else {
+                                                default_args.push(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() });
+                                            }
+                                        } else {
+                                            default_args.push(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() });
+                                        }
                                     }
                                 }
                             }

@@ -6,6 +6,7 @@
  */
 
 use clap::{Arg, Command, ArgMatches};
+use serde_json;
 
 /// Command-line configuration structure
 #[derive(Debug, Clone)]
@@ -71,8 +72,23 @@ pub struct CliConfig {
 impl CliConfig {
     /// Parse command-line arguments and return configuration
     pub fn parse() -> Self {
-        let matches = Self::build_command().get_matches();
-        Self::from_matches(&matches)
+        // Pre-process raw argv to capture trailing script args after '--'
+        let argv: Vec<String> = std::env::args().collect();
+        if let Some(pos) = argv.iter().position(|s| s == "--") {
+            // Everything after '--' is script args
+            let script_args: Vec<String> = argv.iter().skip(pos + 1).cloned().collect();
+            if !script_args.is_empty() {
+                if let Ok(json) = serde_json::to_string(&script_args) {
+                    std::env::set_var("NYASH_SCRIPT_ARGS_JSON", json);
+                }
+            }
+            // Only parse CLI args up to '--'
+            let matches = Self::build_command().try_get_matches_from(&argv[..pos]).unwrap_or_else(|e| e.exit());
+            Self::from_matches(&matches)
+        } else {
+            let matches = Self::build_command().get_matches();
+            Self::from_matches(&matches)
+        }
     }
 
     /// Build the clap Command structure

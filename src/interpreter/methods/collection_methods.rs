@@ -16,6 +16,16 @@ impl NyashInterpreter {
     pub(in crate::interpreter) fn execute_array_method(&mut self, array_box: &ArrayBox, method: &str, arguments: &[ASTNode]) 
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
+            "of" => {
+                // Build a new ArrayBox from provided arguments
+                let mut elems: Vec<Box<dyn NyashBox>> = Vec::with_capacity(arguments.len());
+                for arg in arguments {
+                    let v = self.execute_expression(arg)?;
+                    elems.push(v);
+                }
+                let arr = ArrayBox::new_with_elements(elems);
+                return Ok(Box::new(arr));
+            }
             "push" => {
                 if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {

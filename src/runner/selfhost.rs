@@ -91,7 +91,97 @@ impl NyashRunner {
                 Err(e) => { eprintln!("[ny-compiler] open tmp failed: {}", e); return false; }
             }
         }
-        // Python MVP-first: prefer the lightweight harness to produce JSON v0
+        // Preferred: run Ny selfhost compiler program (apps/selfhost-compiler/compiler.nyash)
+        // This avoids inline embedding pitfalls and supports Stage-3 gating via args.
+        {
+            let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
+            let parser_prog = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
+            if parser_prog.exists() {
+                let mut cmd = std::process::Command::new(&exe);
+                cmd.arg("--backend").arg("vm").arg(parser_prog);
+                // Forward minimal args to child parser program
+                if std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") {
+                    cmd.arg("--").arg("--min-json");
+                }
+                // Always feed input via tmp file written by the parent pipeline
+                cmd.arg("--").arg("--read-tmp");
+                if std::env::var("NYASH_NY_COMPILER_STAGE3").ok().as_deref() == Some("1") {
+                    cmd.arg("--").arg("--stage3");
+                }
+                // Suppress parent noise and keep only JSON from child
+                cmd.env_remove("NYASH_USE_NY_COMPILER");
+                cmd.env_remove("NYASH_CLI_VERBOSE");
+                cmd.env("NYASH_JSON_ONLY", "1");
+                let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
+                let mut cmd = cmd.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+                if let Ok(mut child) = cmd.spawn() {
+                    let mut ch_stdout = child.stdout.take();
+                    let mut ch_stderr = child.stderr.take();
+                    let start = std::time::Instant::now();
+                    let mut timed_out = false;
+                    loop {
+                        match child.try_wait() {
+                            Ok(Some(_)) => break,
+                            Ok(None) => {
+                                if start.elapsed() >= std::time::Duration::from_millis(timeout_ms) {
+                                    let _ = child.kill(); let _ = child.wait(); timed_out = true; break;
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                            }
+                            Err(_) => break,
+                        }
+                    }
+                    let mut out_buf = Vec::new();
+                    let mut err_buf = Vec::new();
+                    if let Some(mut s) = ch_stdout { let _ = s.read_to_end(&mut out_buf); }
+                    if let Some(mut s) = ch_stderr { let _ = s.read_to_end(&mut err_buf); }
+                    if timed_out {
+                        let head = String::from_utf8_lossy(&out_buf).chars().take(200).collect::<String>();
+                        eprintln!("[ny-compiler] child timeout after {} ms; stdout(head)='{}'", timeout_ms, head.replace('\n', "\\n"));
+                    }
+                    let stdout = String::from_utf8_lossy(&out_buf).to_string();
+                    let mut json_line = String::new();
+                    for line in stdout.lines() { let t = line.trim(); if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; } }
+                    if !json_line.is_empty() {
+                        match super::json_v0_bridge::parse_json_v0_to_module(&json_line) {
+                            Ok(module) => {
+                                super::json_v0_bridge::maybe_dump_mir(&module);
+                                let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1";
+                                if emit_only { return false; }
+                                // Prefer PyVM path when requested
+                                if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                                    if let Ok(py3) = which::which("python3") {
+                                        let runner = std::path::Path::new("tools/pyvm_runner.py");
+                                        if runner.exists() {
+                                            let tmp_dir = std::path::Path::new("tmp");
+                                            let _ = std::fs::create_dir_all(tmp_dir);
+                                            let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                                            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                                                eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                                                std::process::exit(1);
+                                            }
+                                            let entry = if module.functions.contains_key("Main.main") { "Main.main" } else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                                            let status = std::process::Command::new(py3)
+                                                .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", entry])
+                                                .status().map_err(|e| format!("spawn pyvm: {}", e)).unwrap();
+                                            let code = status.code().unwrap_or(1);
+                                            println!("Result: {}", code);
+                                            std::process::exit(code);
+                                        }
+                                    }
+                                }
+                                self.execute_mir_module(&module);
+                                return true;
+                            }
+                            Err(e) => { eprintln!("[ny-compiler] json parse error (child): {}", e); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Python MVP-first: prefer the lightweight harness to produce JSON v0 (unless skipped)
+        if std::env::var("NYASH_NY_COMPILER_SKIP_PY").ok().as_deref() != Some("1") {
         if let Ok(py3) = which::which("python3") {
             let py = std::path::Path::new("tools/ny_parser_mvp.py");
             if py.exists() {
@@ -141,7 +231,7 @@ impl NyashRunner {
                     }
                 }
             }
-        }
+        } }
         // EXE-first: if requested, try external parser EXE (nyash_compiler)
         if std::env::var("NYASH_USE_NY_COMPILER_EXE").ok().as_deref() == Some("1") {
             // Resolve parser EXE path

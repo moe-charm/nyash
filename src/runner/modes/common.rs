@@ -429,40 +429,41 @@ impl NyashRunner {
             if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; }
         }
         if json_line.is_empty() {
-            // Fallback: try Python MVP parser to produce JSON v0 from the same tmp source.
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                let head: String = stdout.chars().take(200).collect();
-                eprintln!("[ny-compiler] JSON not found in child stdout (head): {}", head.replace('\n', "\\n"));
-                eprintln!("[ny-compiler] falling back to tools/ny_parser_mvp.py for this input");
-            }
-            let py = which::which("python3").ok();
-            if let Some(py3) = py {
-                let script = std::path::Path::new("tools/ny_parser_mvp.py");
-                if script.exists() {
-                    let out2 = std::process::Command::new(py3)
-                        .arg(script)
-                        .arg(tmp_path.as_os_str())
-                        .output();
-                    match out2 {
-                        Ok(o2) if o2.status.success() => {
-                            if let Ok(s2) = String::from_utf8(o2.stdout) {
-                                // pick the first JSON-ish line
-                                for line in s2.lines() {
-                                    let t = line.trim();
-                                    if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; }
-                                }
+        // Fallback: try Python MVP parser to produce JSON v0 from the same tmp source (unless skipped).
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            let head: String = stdout.chars().take(200).collect();
+            eprintln!("[ny-compiler] JSON not found in child stdout (head): {}", head.replace('\n', "\\n"));
+            eprintln!("[ny-compiler] falling back to tools/ny_parser_mvp.py for this input");
+        }
+        if std::env::var("NYASH_NY_COMPILER_SKIP_PY").ok().as_deref() != Some("1") {
+        let py = which::which("python3").ok();
+        if let Some(py3) = py {
+            let script = std::path::Path::new("tools/ny_parser_mvp.py");
+            if script.exists() {
+                let out2 = std::process::Command::new(py3)
+                    .arg(script)
+                    .arg(tmp_path.as_os_str())
+                    .output();
+                match out2 {
+                    Ok(o2) if o2.status.success() => {
+                        if let Ok(s2) = String::from_utf8(o2.stdout) {
+                            // pick the first JSON-ish line
+                            for line in s2.lines() {
+                                let t = line.trim();
+                                if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") { json_line = t.to_string(); break; }
                             }
                         }
-                        Ok(o2) => {
-                            let msg = String::from_utf8_lossy(&o2.stderr);
-                            eprintln!("[ny-compiler] python parser failed: {}", msg);
-                        }
-                        Err(e2) => {
-                            eprintln!("[ny-compiler] spawn python3 failed: {}", e2);
-                        }
+                    }
+                    Ok(o2) => {
+                        let msg = String::from_utf8_lossy(&o2.stderr);
+                        eprintln!("[ny-compiler] python parser failed: {}", msg);
+                    }
+                    Err(e2) => {
+                        eprintln!("[ny-compiler] spawn python3 failed: {}", e2);
                     }
                 }
             }
+        } }
             if json_line.is_empty() { return false; }
         }
         // Parse JSON v0 → MIR module
