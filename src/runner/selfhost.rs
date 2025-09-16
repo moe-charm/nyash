@@ -91,6 +91,57 @@ impl NyashRunner {
                 Err(e) => { eprintln!("[ny-compiler] open tmp failed: {}", e); return false; }
             }
         }
+        // Python MVP-first: prefer the lightweight harness to produce JSON v0
+        if let Ok(py3) = which::which("python3") {
+            let py = std::path::Path::new("tools/ny_parser_mvp.py");
+            if py.exists() {
+                let mut cmd = std::process::Command::new(&py3);
+                cmd.arg(py).arg(&tmp_path);
+                let out = match cmd.output() { Ok(o) => o, Err(e) => { eprintln!("[ny-compiler] python harness failed to spawn: {}", e); return false; } };
+                if out.status.success() {
+                    if let Ok(line) = String::from_utf8(out.stdout).map(|s| s.lines().next().unwrap_or("").to_string()) {
+                        if line.contains("\"version\"") && line.contains("\"kind\"") {
+                            match super::json_v0_bridge::parse_json_v0_to_module(&line) {
+                                Ok(module) => {
+                                    super::json_v0_bridge::maybe_dump_mir(&module);
+                                    let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1";
+                                    if emit_only { return false; }
+                                    // Prefer PyVM for selfhost pipeline (parity reference)
+                                    if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                                        // Reuse the common PyVM runner path
+                                        let tmp_dir = std::path::Path::new("tmp");
+                                        let _ = std::fs::create_dir_all(tmp_dir);
+                                        let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                                        if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                                            eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                                            process::exit(1);
+                                        }
+                                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                            eprintln!("[Bridge] using PyVM (selfhost-py) → {}", mir_json_path.display());
+                                        }
+                                        let entry = if module.functions.contains_key("Main.main") { "Main.main" } else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                                        let status = std::process::Command::new(&py3)
+                                            .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", entry])
+                                            .status().map_err(|e| format!("spawn pyvm: {}", e)).unwrap();
+                                        let code = status.code().unwrap_or(1);
+                                        if !status.success() {
+                                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                                                eprintln!("❌ PyVM (selfhost-py) failed (status={})", code);
+                                            }
+                                        }
+                                        println!("Result: {}", code);
+                                        std::process::exit(code);
+                                    }
+                                    self.execute_mir_module(&module);
+                                    return true;
+                                }
+                                Err(e) => { eprintln!("[ny-compiler] json parse error: {}", e); return false; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // EXE-first: if requested, try external parser EXE (nyash_compiler)
         if std::env::var("NYASH_USE_NY_COMPILER_EXE").ok().as_deref() == Some("1") {
             // Resolve parser EXE path
@@ -204,57 +255,60 @@ impl NyashRunner {
             }
         }
 
-        // Fallback: run compiler.nyash via VM(PyVM) and pick the JSON line
-        // Guard against recursion: ensure child does NOT enable selfhost pipeline.
+        // Fallback: inline VM run (embed source into a tiny wrapper that prints JSON)
+        // This avoids CLI arg forwarding complexity and does not require FileBox.
         let mut raw = String::new();
         {
-            // Locate current nyash executable
+            // Escape source for embedding as string literal
+            let mut esc = String::with_capacity(code_ref.len());
+            for ch in code_ref.chars() {
+                match ch {
+                    '\\' => esc.push_str("\\\\"),
+                    '"' => esc.push_str("\\\""),
+                    '\n' => esc.push_str("\n"),
+                    '\r' => esc.push_str(""),
+                    _ => esc.push(ch),
+                }
+            }
+            let inline_path = std::path::Path::new("tmp").join("inline_selfhost_emit.nyash");
+            let inline_code = format!(
+                "include \"apps/selfhost-compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
+                esc
+            );
+            if let Err(e) = std::fs::write(&inline_path, inline_code) {
+                eprintln!("[ny-compiler] write inline failed: {}", e);
+                return false;
+            }
             let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
             let mut cmd = std::process::Command::new(exe);
-            cmd.arg("--backend").arg("vm").arg("apps/selfhost-compiler/compiler.nyash");
-            // Pass script args to child when gated
-            if std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") { cmd.arg("--").arg("--min-json"); }
-            if std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") { cmd.arg("--").arg("--read-tmp"); }
-            // Recursion guard and minimal, quiet env for child
+            cmd.arg("--backend").arg("vm").arg(&inline_path);
             cmd.env_remove("NYASH_USE_NY_COMPILER");
             cmd.env_remove("NYASH_CLI_VERBOSE");
             cmd.env("NYASH_JSON_ONLY", "1");
-            if let Ok(v) = std::env::var("NYASH_JSON_INCLUDE_USINGS") { cmd.env("NYASH_JSON_INCLUDE_USINGS", v); }
-            if let Ok(v) = std::env::var("NYASH_ENABLE_USING") { cmd.env("NYASH_ENABLE_USING", v); }
-
-            // Timeout guard (default 2000ms)
             let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
             let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-            let mut child = match cmd.spawn() {
-                Ok(c) => c,
-                Err(e) => { eprintln!("[ny-compiler] spawn nyash vm failed: {}", e); return false; }
-            };
+            let mut child = match cmd.spawn() { Ok(c) => c, Err(e) => { eprintln!("[ny-compiler] spawn inline vm failed: {}", e); return false; } };
             let mut ch_stdout = child.stdout.take();
             let mut ch_stderr = child.stderr.take();
             let start = Instant::now();
             let mut timed_out = false;
             loop {
                 match child.try_wait() {
-                    Ok(Some(_status)) => { break; }
+                    Ok(Some(_)) => break,
                     Ok(None) => {
                         if start.elapsed() >= Duration::from_millis(timeout_ms) {
-                            let _ = child.kill();
-                            let _ = child.wait();
-                            timed_out = true;
-                            break;
+                            let _ = child.kill(); let _ = child.wait(); timed_out = true; break;
                         }
                         sleep(Duration::from_millis(10));
                     }
-                    Err(e) => { eprintln!("[ny-compiler] child wait error: {}", e); break; }
+                    Err(e) => { eprintln!("[ny-compiler] inline wait error: {}", e); break; }
                 }
             }
             let mut out_buf = Vec::new();
-            let mut err_buf = Vec::new();
             if let Some(mut s) = ch_stdout { let _ = s.read_to_end(&mut out_buf); }
-            if let Some(mut s) = ch_stderr { let _ = s.read_to_end(&mut err_buf); }
             if timed_out {
                 let head = String::from_utf8_lossy(&out_buf).chars().take(200).collect::<String>();
-                eprintln!("[ny-compiler] child timeout after {} ms; stdout(head)='{}'", timeout_ms, head.replace('\n', "\\n"));
+                eprintln!("[ny-compiler] inline timeout after {} ms; stdout(head)='{}'", timeout_ms, head.replace('\n', "\\n"));
             }
             raw = String::from_utf8_lossy(&out_buf).to_string();
         }
@@ -269,11 +323,14 @@ impl NyashRunner {
                 super::json_v0_bridge::maybe_dump_mir(&module);
                 let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1";
                 if emit_only { return false; }
-                // Prefer PyVM when requested AND the module contains BoxCalls (Stage-2 semantics)
-                let needs_pyvm = module.functions.values().any(|f| {
+                // Phase-15 policy: when NYASH_VM_USE_PY=1, prefer PyVM as reference executor
+                // regardless of BoxCall presence to ensure semantics parity (e.g., PHI merges).
+                let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
+                // Backward compatibility: if not preferring PyVM explicitly, still auto-enable when BoxCalls exist.
+                let needs_pyvm = !prefer_pyvm && module.functions.values().any(|f| {
                     f.blocks.values().any(|bb| bb.instructions.iter().any(|inst| matches!(inst, crate::mir::MirInstruction::BoxCall { .. })))
                 });
-                if needs_pyvm && std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                if prefer_pyvm || needs_pyvm {
                     if let Ok(py3) = which::which("python3") {
                         let runner = std::path::Path::new("tools/pyvm_runner.py");
                         if runner.exists() {
@@ -285,7 +342,8 @@ impl NyashRunner {
                                 process::exit(1);
                             }
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                eprintln!("[Bridge] using PyVM (selfhost-fallback) → {}", mir_json_path.display());
+                                let mode = if prefer_pyvm { "selfhost" } else { "selfhost-fallback" };
+                                eprintln!("[Bridge] using PyVM ({}) → {}", mode, mir_json_path.display());
                             }
                             let entry = if module.functions.contains_key("Main.main") { "Main.main" } else if module.functions.contains_key("main") { "main" } else { "Main.main" };
                             let status = std::process::Command::new(py3)

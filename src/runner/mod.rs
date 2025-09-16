@@ -21,6 +21,7 @@ mod json_v0_bridge;
 mod mir_json_emit;
 mod pipe_io;
 mod pipeline;
+mod box_index;
 mod tasks;
 mod build;
 mod dispatch;
@@ -61,7 +62,26 @@ impl NyashRunner {
         }
         // Using/module overrides pre-processing
         let mut using_ctx = self.init_using_context();
-        let pending_using: Vec<(String, Option<String>)> = Vec::new();
+        let mut pending_using: Vec<(String, Option<String>)> = Vec::new();
+        // CLI --using SPEC entries (SPEC: 'ns', 'ns as Alias', '"path" as Alias')
+        for spec in &self.config.cli_usings {
+            let s = spec.trim();
+            if s.is_empty() { continue; }
+            let (target, alias) = if let Some(pos) = s.find(" as ") {
+                (s[..pos].trim().to_string(), Some(s[pos+4..].trim().to_string()))
+            } else { (s.to_string(), None) };
+            // Normalize quotes for path
+            let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+            if is_path {
+                let path = target.trim_matches('"').to_string();
+                let name = alias.clone().unwrap_or_else(|| {
+                    std::path::Path::new(&path).file_stem().and_then(|s| s.to_str()).unwrap_or("module").to_string()
+                });
+                pending_using.push((name, Some(path)));
+            } else {
+                pending_using.push((target, alias));
+            }
+        }
         for (ns, path) in using_ctx.pending_modules.iter() {
             let sb = crate::box_trait::StringBox::new(path.clone());
             crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
@@ -135,6 +155,13 @@ impl NyashRunner {
                     }
                 }
 
+                // Lint: fields must be at top of box
+                let strict_fields = std::env::var("NYASH_FIELDS_TOP_STRICT").ok().as_deref() == Some("1");
+                if let Err(e) = pipeline::lint_fields_top(&code, strict_fields, self.config.cli_verbose) {
+                    eprintln!("❌ Lint error: {}", e);
+                    std::process::exit(1);
+                }
+
                 // Env overrides for using rules
                 // Merge late env overrides (if any)
                 if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
@@ -159,7 +186,7 @@ impl NyashRunner {
                 let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
                 let ctx = std::path::Path::new(filename).parent();
                 for (ns, alias) in pending_using.iter() {
-                    let value = match resolve_using_target(ns, false, &using_ctx.pending_modules, &using_ctx.using_paths, ctx, strict, verbose) {
+                    let value = match resolve_using_target(ns, false, &using_ctx.pending_modules, &using_ctx.using_paths, &using_ctx.aliases, ctx, strict, verbose) {
                         Ok(v) => v,
                         Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
                     };
@@ -184,13 +211,15 @@ impl NyashRunner {
             }
         }
 
-        // 🏭 Phase 9.78b: Initialize unified registry
-        runtime::init_global_unified_registry();
-        
-        // Try to initialize BID plugins from nyash.toml (best-effort)
+    // 🏭 Phase 9.78b: Initialize unified registry
+    runtime::init_global_unified_registry();
+    
+    // Try to initialize BID plugins from nyash.toml (best-effort)
         // Allow disabling during snapshot/CI via NYASH_DISABLE_PLUGINS=1
         if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
             runner_plugin_init::init_bid_plugins();
+            // Build BoxIndex after plugin host is initialized
+            crate::runner::box_index::refresh_box_index();
         }
         // Allow interpreter to create plugin-backed boxes via unified registry
         // Opt-in by default for FileBox/TOMLBox which are required by ny-config and similar tools.

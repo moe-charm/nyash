@@ -8,11 +8,14 @@
  */
 
 use super::*;
+use super::box_index::BoxIndex;
+use std::collections::HashMap;
 
 /// Using/module resolution context accumulated from config/env/nyash.toml
 pub(super) struct UsingContext {
     pub using_paths: Vec<String>,
     pub pending_modules: Vec<(String, String)>,
+    pub aliases: std::collections::HashMap<String, String>,
 }
 
 impl NyashRunner {
@@ -20,6 +23,7 @@ impl NyashRunner {
     pub(super) fn init_using_context(&self) -> UsingContext {
         let mut using_paths: Vec<String> = Vec::new();
         let mut pending_modules: Vec<(String, String)> = Vec::new();
+        let mut aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
         // Defaults
         using_paths.extend(["apps", "lib", "."].into_iter().map(|s| s.to_string()));
@@ -45,6 +49,14 @@ impl NyashRunner {
                             }
                         }
                     }
+                    // Optional: [aliases] table maps short name -> path or namespace token
+                    if let Some(alias_tbl) = doc.get("aliases").and_then(|v| v.as_table()) {
+                        for (k, v) in alias_tbl.iter() {
+                            if let Some(target) = v.as_str() {
+                                aliases.insert(k.to_string(), target.to_string());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -67,8 +79,17 @@ impl NyashRunner {
                 if !s.is_empty() { using_paths.push(s.to_string()); }
             }
         }
+        // Env aliases: comma-separated k=v pairs
+        if let Ok(raw) = std::env::var("NYASH_ALIASES") {
+            for ent in raw.split(',') {
+                if let Some((k,v)) = ent.split_once('=') {
+                    let k = k.trim(); let v = v.trim();
+                    if !k.is_empty() && !v.is_empty() { aliases.insert(k.to_string(), v.to_string()); }
+                }
+            }
+        }
 
-        UsingContext { using_paths, pending_modules }
+        UsingContext { using_paths, pending_modules, aliases }
     }
 }
 
@@ -107,13 +128,81 @@ pub(super) fn resolve_using_target(
     is_path: bool,
     modules: &[(String, String)],
     using_paths: &[String],
+    aliases: &HashMap<String, String>,
     context_dir: Option<&std::path::Path>,
     strict: bool,
     verbose: bool,
 ) -> Result<String, String> {
     if is_path { return Ok(tgt.to_string()); }
+    let trace = verbose || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
+    // Strict plugin prefix: if enabled and target matches a known plugin box type
+    // and is not qualified (contains '.'), require a qualified/prefixed name.
+    // Strict mode: env or nyash.toml [plugins] require_prefix=true
+    let mut strict_effective = strict;
+    if !strict_effective {
+        if let Ok(text) = std::fs::read_to_string("nyash.toml") {
+            if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                if let Some(tbl) = doc.get("plugins").and_then(|v| v.as_table()) {
+                    if let Some(v) = tbl.get("require_prefix").and_then(|v| v.as_bool()) { if v { strict_effective = true; } }
+                }
+            }
+        }
+    }
+    if std::env::var("NYASH_PLUGIN_REQUIRE_PREFIX").ok().as_deref() == Some("1") { strict_effective = true; }
+
+    if strict_effective {
+        let mut is_plugin_short = super::box_index::BoxIndex::is_known_plugin_short(tgt);
+        if !is_plugin_short {
+            // Fallback: heuristic list or env override
+            if let Ok(raw) = std::env::var("NYASH_KNOWN_PLUGIN_SHORTNAMES") {
+                let set: std::collections::HashSet<String> = raw.split(',').map(|s| s.trim().to_string()).collect();
+                is_plugin_short = set.contains(tgt);
+            } else {
+                // Minimal builtins set
+                const KNOWN: &[&str] = &[
+                    "ArrayBox","MapBox","StringBox","ConsoleBox","FileBox","PathBox","MathBox","IntegerBox","TOMLBox"
+                ];
+                is_plugin_short = KNOWN.iter().any(|k| *k == tgt);
+            }
+        }
+        if is_plugin_short && !tgt.contains('.') {
+            return Err(format!("plugin short name '{}' requires prefix (strict)", tgt));
+        }
+    }
+    let key = {
+        let base = context_dir.and_then(|p| p.to_str()).unwrap_or("");
+        format!("{}|{}|{}|{}", tgt, base, strict as i32, using_paths.join(":"))
+    };
+    if let Some(hit) = crate::runner::box_index::cache_get(&key) {
+        if trace { eprintln!("[using/cache] '{}' -> '{}'", tgt, hit); }
+        return Ok(hit);
+    }
+    // Resolve aliases early (provided map)
+    if let Some(v) = aliases.get(tgt) {
+        if trace { eprintln!("[using/resolve] alias '{}' -> '{}'", tgt, v); }
+        crate::runner::box_index::cache_put(&key, v.clone());
+        return Ok(v.clone());
+    }
+    // Also consult env aliases
+    if let Ok(raw) = std::env::var("NYASH_ALIASES") {
+        for ent in raw.split(',') {
+            if let Some((k,v)) = ent.split_once('=') {
+                if k.trim() == tgt {
+                    let out = v.trim().to_string();
+                    if trace { eprintln!("[using/resolve] env-alias '{}' -> '{}'", tgt, out); }
+                    crate::runner::box_index::cache_put(&key, out.clone());
+                    return Ok(out);
+                }
+            }
+        }
+    }
     // 1) modules mapping
-    if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) { return Ok(p.clone()); }
+    if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) {
+        let out = p.clone();
+        if trace { eprintln!("[using/resolve] modules '{}' -> '{}'", tgt, out); }
+        crate::runner::box_index::cache_put(&key, out.clone());
+        return Ok(out);
+    }
     // 2) build candidate list: relative then using-paths
     let rel = tgt.replace('.', "/") + ".nyash";
     let mut cand: Vec<String> = Vec::new();
@@ -123,11 +212,123 @@ pub(super) fn resolve_using_target(
         if c.exists() { cand.push(c.to_string_lossy().to_string()); }
     }
     if cand.is_empty() {
-        if verbose { eprintln!("[using] unresolved '{}' (searched: rel+paths)", tgt); }
+        if trace {
+            // Try suggest candidates by leaf across bases (apps/lib/.)
+            let leaf = tgt.split('.').last().unwrap_or(tgt);
+            let mut cands: Vec<String> = Vec::new();
+            suggest_in_base("apps", leaf, &mut cands);
+            if cands.len() < 5 { suggest_in_base("lib", leaf, &mut cands); }
+            if cands.len() < 5 { suggest_in_base(".", leaf, &mut cands); }
+            if cands.is_empty() {
+                eprintln!("[using] unresolved '{}' (searched: rel+paths)", tgt);
+            } else {
+                eprintln!("[using] unresolved '{}' (searched: rel+paths) candidates: {}", tgt, cands.join(", "));
+            }
+        }
         return Ok(tgt.to_string());
     }
     if cand.len() > 1 && strict {
         return Err(format!("ambiguous using '{}': {}", tgt, cand.join(", ")));
     }
-    Ok(cand.remove(0))
+    let out = cand.remove(0);
+    if trace { eprintln!("[using/resolve] '{}' -> '{}'", tgt, out); }
+    crate::runner::box_index::cache_put(&key, out.clone());
+    Ok(out)
+}
+
+/// Lint: enforce "fields must be at the top of box" rule.
+/// - Warns by default (when verbose); when `strict` is true, returns Err on any violation.
+pub(super) fn lint_fields_top(code: &str, strict: bool, verbose: bool) -> Result<(), String> {
+    let mut brace: i32 = 0;
+    let mut in_box = false;
+    let mut box_depth: i32 = 0;
+    let mut seen_method = false;
+    let mut cur_box: String = String::new();
+    let mut violations: Vec<(usize, String, String)> = Vec::new(); // (line, field, box)
+
+    for (idx, line) in code.lines().enumerate() {
+        let lno = idx + 1;
+        let pre_brace = brace;
+        let trimmed = line.trim();
+        // Count braces for this line
+        let opens = line.matches('{').count() as i32;
+        let closes = line.matches('}').count() as i32;
+
+        // Enter box on same-line K&R style: `box Name {` or `static box Name {`
+        if !in_box && trimmed.starts_with("box ") || trimmed.starts_with("static box ") {
+            // capture name
+            let mut name = String::new();
+            let after = if let Some(rest) = trimmed.strip_prefix("static box ") { rest } else { trimmed.strip_prefix("box ").unwrap_or("") };
+            for ch in after.chars() {
+                if ch.is_alphanumeric() || ch == '_' { name.push(ch); } else { break; }
+            }
+            // require K&R brace on same line to start tracking
+            if opens > 0 {
+                in_box = true;
+                cur_box = name;
+                box_depth = pre_brace + 1; // assume one level for box body
+                seen_method = false;
+            }
+        }
+
+        if in_box {
+            // Top-level inside box only
+            if pre_brace == box_depth {
+                // Skip empty/comment lines
+                if !trimmed.is_empty() && !trimmed.starts_with("//") {
+                    // Detect method: name(args) {
+                    let is_method = {
+                        // starts with identifier then '(' and later '{'
+                        let mut it = trimmed.chars();
+                        let mut ident = String::new();
+                        while let Some(c) = it.next() { if c.is_whitespace() { continue; } if c.is_alphabetic() || c=='_' { ident.push(c); break; } else { break; } }
+                        while let Some(c) = it.next() { if c.is_alphanumeric() || c=='_' { ident.push(c); } else { break; } }
+                        trimmed.contains('(') && trimmed.ends_with('{') && !ident.is_empty()
+                    };
+                    if is_method { seen_method = true; }
+
+                    // Detect field: ident ':' Type (rough heuristic)
+                    let is_field = {
+                        let parts: Vec<&str> = trimmed.split(':').collect();
+                        if parts.len() == 2 {
+                            let lhs = parts[0].trim();
+                            let rhs = parts[1].trim();
+                            let lhs_ok = !lhs.is_empty() && lhs.chars().next().map(|c| c.is_alphabetic() || c=='_').unwrap_or(false);
+                            let rhs_ok = !rhs.is_empty() && rhs.chars().next().map(|c| c.is_alphabetic() || c=='_').unwrap_or(false);
+                            lhs_ok && rhs_ok && !trimmed.contains('(') && !trimmed.contains(')')
+                        } else { false }
+                    };
+                    if is_field && seen_method {
+                        violations.push((lno, trimmed.to_string(), cur_box.clone()));
+                    }
+                }
+            }
+            // Exit box when closing brace reduces depth below box_depth
+            let post_brace = pre_brace + opens - closes;
+            if post_brace < box_depth { in_box = false; cur_box.clear(); }
+        }
+
+        // Update brace after processing
+        brace += opens - closes;
+    }
+
+    if violations.is_empty() {
+        return Ok(());
+    }
+    if strict {
+        // Compose error message
+        let mut msg = String::from("Field declarations must appear at the top of box. Violations:\n");
+        for (lno, fld, bx) in violations.iter().take(10) {
+            msg.push_str(&format!("  line {} in box {}: '{}" , lno, if bx.is_empty(){"<unknown>"} else {bx}, fld));
+            msg.push_str("'\n");
+        }
+        if violations.len() > 10 { msg.push_str(&format!("  ... and {} more\n", violations.len()-10)); }
+        return Err(msg);
+    }
+    if verbose || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+        for (lno, fld, bx) in violations {
+            eprintln!("[lint] fields-top: line {} in box {} -> {}", lno, if bx.is_empty(){"<unknown>"} else {&bx}, fld);
+        }
+    }
+    Ok(())
 }

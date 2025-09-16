@@ -64,6 +64,8 @@ pub struct CliConfig {
     pub build_aot: Option<String>,
     pub build_profile: Option<String>,
     pub build_target: Option<String>,
+    // Using (CLI)
+    pub cli_usings: Vec<String>,
 }
 
 impl CliConfig {
@@ -108,6 +110,13 @@ impl CliConfig {
                     .long("ny-compiler-args")
                     .value_name("ARGS")
                     .help("Pass additional args to selfhost child compiler (equivalent to NYASH_NY_COMPILER_CHILD_ARGS)")
+            )
+            .arg(
+                Arg::new("using")
+                    .long("using")
+                    .value_name("SPEC")
+                    .help("Register a using entry (e.g., 'ns as Alias' or '\"apps/foo.nyash\" as Foo'). Repeatable.")
+                    .action(clap::ArgAction::Append)
             )
             
             .arg(
@@ -423,6 +432,7 @@ impl CliConfig {
             build_aot: matches.get_one::<String>("build-aot").cloned(),
             build_profile: matches.get_one::<String>("build-profile").cloned(),
             build_target: matches.get_one::<String>("build-target").cloned(),
+            cli_usings: matches.get_many::<String>("using").map(|v| v.cloned().collect()).unwrap_or_else(|| Vec::new()),
         }
     }
 }
@@ -475,6 +485,7 @@ impl Default for CliConfig {
             build_aot: None,
             build_profile: None,
             build_target: None,
+            cli_usings: Vec::new(),
         }
     }
 }

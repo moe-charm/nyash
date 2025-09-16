@@ -17,8 +17,8 @@ Policy
   3) Plugins (short name if unique, otherwise qualified `pluginName.BoxName`)
 - On ambiguity: error with candidates and remediation (qualify or define alias).
 - Modes:
-  - Relaxed (default): short names allowed when unique.
-  - Strict: require plugin prefix (env `NYASH_PLUGIN_REQUIRE_PREFIX=1` or nyash.toml `[plugins] require_prefix=true`).
+  - Relaxed (default): short names allowed when unique。
+  - Strict: plugin短名にprefix必須（env `NYASH_PLUGIN_REQUIRE_PREFIX=1` または nyash.toml `[plugins] require_prefix=true`）。
 - Aliases:
   - nyash.toml `[imports] HttpClient = "network.HttpClient"`
   - needs sugar: `needs plugin.network.HttpClient as HttpClient` (file‑scoped alias)
@@ -27,6 +27,7 @@ Policy
 - Unified namespace with Boxes. Prefer short names when unique.
 - Qualified form: `network.HttpClient`
 - Per‑plugin control (nyash.toml): `prefix`, `require_prefix`, `expose_short_names`
+  - 現状は設定の読み取りのみ（導線）。挙動への反映は段階的に実施予定。
 
 ## `needs` sugar (optional)
 - Treated as a synonym to `using` on the Runner side; registers aliases only.
@@ -37,21 +38,11 @@ Policy
 - `[plugins.<name>]`: `path`, `prefix`, `require_prefix`, `expose_short_names`
 
 ## Index and Cache (Runner)
-- Build a Box index once per run to make resolution fast and predictable:
-```
-struct BoxIndex {
-    local_boxes: HashMap<String, PathBuf>,
-    plugin_boxes: HashMap<String, Vec<PluginBox>>,
-    aliases: HashMap<String, String>,
-}
-```
-- Maintain a small resolve cache per thread:
-```
-thread_local! {
-    static RESOLVE_CACHE: RefCell<HashMap<String, ResolvedBox>> = /* ... */;
-}
-```
-- Trace: `NYASH_RESOLVE_TRACE=1` prints resolution steps (for debugging/CI logs).
+- BoxIndex（グローバル）：プラグインBox一覧とaliasesを集約し、Runner起動時（plugins init後）に構築・更新。
+  - `aliases: HashMap<String,String>`（nyash.toml `[aliases]` と env `NYASH_ALIASES`）
+  - `plugin_boxes: HashSet<String>`（読み取り専用）
+- 解決キャッシュ：グローバルの小さなキャッシュで同一キーの再解決を回避（キー: `tgt|base|strict|paths`）。
+- トレース：`NYASH_RESOLVE_TRACE=1` で解決手順やキャッシュヒット、未解決候補を出力。
 
 Syntax
 - Namespace: `using core.std` or `using core.std as Std`
@@ -102,9 +93,14 @@ static box Main {
 
 Runner Configuration
 - Enable using pre‑processing: `NYASH_ENABLE_USING=1`
+- CLI from-the-top registration: `--using "ns as Alias"` or `--using '"apps/foo.nyash" as Foo'` (repeatable)
+- Strict mode (plugin prefix required): `NYASH_PLUGIN_REQUIRE_PREFIX=1` または `nyash.toml` の `[plugins] require_prefix=true`
+- Aliases from env: `NYASH_ALIASES="Foo=apps/foo/main.nyash,Bar=lib/bar.nyash"`
+- Additional search paths: `NYASH_USING_PATH="apps:lib:."`
 - Selfhost pipeline keeps child stdout quiet and extracts JSON only: `NYASH_JSON_ONLY=1` (set by Runner automatically for child)
 - Selfhost emits `meta.usings` automatically when present; no additional flags required.
 
 Notes
 - Phase 15 keeps resolution in the Runner to minimize parser complexity. Future phases may leverage `meta.usings` for compiler decisions.
 - Unknown fields in the top‑level JSON (like `meta`) are ignored by the current bridge.
+ - 未解決時（非strict）は実行を継続し、`NYASH_RESOLVE_TRACE=1` で候補を提示。strict時はエラーで候補を表示。

@@ -1,0 +1,14 @@
+include "apps/selfhost-compiler/boxes/parser_box.nyash"
+include "apps/selfhost-compiler/boxes/emitter_box.nyash"
+static box Main {
+  main(args) {
+    local s = "return 1+2"
+    local p = new ParserBox()
+    local json = p.parse_program2(s)
+    local e = new EmitterBox()
+    json = e.emit_program(json, "[]")
+    local c = new ConsoleBox()
+    c.println(json)
+    return 0
+  }
+}

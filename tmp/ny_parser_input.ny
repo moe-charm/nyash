@@ -1,1 +1,3 @@
-return 1+2*3
+local x = 1
+local x = x + 2
+return x

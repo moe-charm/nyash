@@ -144,16 +144,16 @@ Decision Log (2025‑09‑15)
 - A: スモークを先に実施。理由は以下。
   - リファクタ直後は回帰検出を最優先（PyVM/自己ホスト/Bridge の3レーンで即座に検証）。
   - 警告削減は挙動非変化を原則とするが、微妙なスコープや保存スロットの触りが混入し得るため、先に“緑”を固める。
-Namespaces / Using（計画合意）
-- 3段階の解決順（決定性）: 1) ローカル/コアボックス → 2) エイリアス（nyash.toml/needs） → 3) プラグイン（短名/qualified）
-- 曖昧時はエラー＋候補提示。qualified または alias を要求（自動推測はしない）。
-- モード切替: Relaxed（既定）/Strict（`NYASH_PLUGIN_REQUIRE_PREFIX=1` or toml `[plugins] require_prefix=true`）
-- needs 糖衣は using の同義（Runner で alias 登録）。`needs plugin.network.HttpClient as HttpClient` 等。
-- Plugins は統合名前空間（短名はユニーク時のみ）。qualified `network.HttpClient` を常時許可。
-- nyash.toml（MVP）: `[imports]`/`[aliases]`，`[plugins.<name>] { path, prefix, require_prefix, expose_short_names }`
+Namespaces / Using（現状）
+- 解決順（決定性）: 1) ローカル/コア → 2) エイリアス（nyash.toml/env）→ 3) 相対/using.paths → 4) プラグイン（短名/qualified）
+- 曖昧時はエラー＋候補提示（qualified または alias を要求）。
+- モード切替: Relaxed（既定）/Strict（`NYASH_PLUGIN_REQUIRE_PREFIX=1` または toml `[plugins] require_prefix=true`）
+- needs 糖衣は using の同義（Runner で alias 登録）。
+- Plugins は統合名前空間。qualified `network.HttpClient` 常時許可。
+- nyash.toml（MVP）: `[aliases]`/`[plugins]`（グローバル `require_prefix` のみ反映。per‑plugin は導線のみ）
 - Index とキャッシュ（Runner）:
-  - BoxIndex: `local_boxes`, `plugin_boxes`, `aliases` を保持
-  - `RESOLVE_CACHE`（thread‑local）で同一解決の再計算を回避
-  - `NYASH_RESOLVE_TRACE=1` で解決過程をログ出力
+  - BoxIndex（グローバル）: `plugin_boxes`, `aliases` を保持。plugins init 後に構築。
+  - Resolve Cache（グローバル）: `tgt|base|strict|paths` キーで再解決回避。
+  - `NYASH_RESOLVE_TRACE=1`: 解決手順/キャッシュヒット/未解決候補をログ出力。
 
   - スモークが緑＝基礎健全性確認後に、静的ノイズの除去を安全に一気通貫で行う。

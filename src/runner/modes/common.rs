@@ -8,7 +8,7 @@ use std::io::Read;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
-use crate::runner::pipeline::suggest_in_base;
+use crate::runner::pipeline::{suggest_in_base, resolve_using_target};
 
 // (moved) suggest_in_base is now in runner/pipeline.rs
 
@@ -610,30 +610,26 @@ impl NyashRunner {
             cleaned_code_owned = out;
             code_ref = &cleaned_code_owned;
 
-            // Register modules into minimal registry with best-effort path resolution
+            // Register modules with resolver (aliases/modules/paths)
+            let using_ctx = self.init_using_context();
+            let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+            let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+            let ctx_dir = std::path::Path::new(filename).parent();
             for (ns_or_alias, alias_or_path) in used_names {
-                // alias_or_path Some(path) means this entry was a direct path using
                 if let Some(path) = alias_or_path {
                     let sb = crate::box_trait::StringBox::new(path);
                     crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
                 } else {
-                    let rel = format!("apps/{}.nyash", ns_or_alias.replace('.', "/"));
-                    let exists = std::path::Path::new(&rel).exists();
-                    if !exists && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                        eprintln!("[using] unresolved namespace '{}'; tried '{}'. Hint: add @module {}={} or --module {}={}", ns_or_alias, rel, ns_or_alias, rel, ns_or_alias, rel);
-                        // naive candidates by suffix within common bases
-                        let leaf = ns_or_alias.split('.').last().unwrap_or(&ns_or_alias);
-                        let mut cands: Vec<String> = Vec::new();
-                        suggest_in_base("apps", leaf, &mut cands);
-                        if cands.len() < 5 { suggest_in_base("lib", leaf, &mut cands); }
-                        if cands.len() < 5 { suggest_in_base(".", leaf, &mut cands); }
-                        if !cands.is_empty() {
-                            eprintln!("[using] candidates: {}", cands.join(", "));
+                    match resolve_using_target(&ns_or_alias, false, &using_ctx.pending_modules, &using_ctx.using_paths, &using_ctx.aliases, ctx_dir, strict, verbose) {
+                        Ok(value) => {
+                            let sb = crate::box_trait::StringBox::new(value);
+                            crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
+                        }
+                        Err(e) => {
+                            eprintln!("❌ using: {}", e);
+                            std::process::exit(1);
                         }
                     }
-                    let path_or_ns = if exists { rel } else { ns_or_alias.clone() };
-                    let sb = crate::box_trait::StringBox::new(path_or_ns);
-                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
                 }
             }
         }
