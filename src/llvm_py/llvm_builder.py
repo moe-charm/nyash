@@ -322,6 +322,33 @@ class NyashLLVMBuilder:
         # Prepass: collect producer stringish hints and PHI metadata for all blocks
         # and create placeholders at each block head so that resolver can safely
         # return existing PHIs without creating new ones.
+        self.setup_phi_placeholders(blocks)
+        
+        # Now lower blocks
+        for bid in order:
+            block_data = block_by_id.get(bid)
+            if block_data is None:
+                continue
+            bb = self.bb_map[bid]
+            self.lower_block(bb, block_data, func)
+
+        # Provide lifetime hints to resolver (which blocks define which values)
+        try:
+            self.resolver.def_blocks = self.def_blocks
+            # Provide phi metadata for this function to resolver
+            self.resolver.block_phi_incomings = getattr(self, 'block_phi_incomings', {})
+        except Exception:
+            pass
+        # Finalize PHIs for this function now that all snapshots for it exist
+        self.finalize_phis()
+
+    def setup_phi_placeholders(self, blocks: List[Dict[str, Any]]):
+        """Predeclare PHIs and collect incoming metadata for finalize_phis.
+
+        This pass is function-local and must be invoked after basic blocks are
+        created and before lowering individual blocks. It also tags string-ish
+        values eagerly to help downstream resolvers choose correct intrinsics.
+        """
         try:
             # Pass A: collect producer stringish hints per value-id
             produced_str: Dict[int, bool] = {}
@@ -346,6 +373,7 @@ class NyashLLVMBuilder:
                             produced_str[int(dstx)] = True
                     except Exception:
                         pass
+            # Pass B: materialize PHI placeholders and record incoming metadata
             self.block_phi_incomings = {}
             for block_data in blocks:
                 bid0 = block_data.get("id", 0)
@@ -409,24 +437,6 @@ class NyashLLVMBuilder:
                 pass
         except Exception:
             pass
-        
-        # Now lower blocks
-        for bid in order:
-            block_data = block_by_id.get(bid)
-            if block_data is None:
-                continue
-            bb = self.bb_map[bid]
-            self.lower_block(bb, block_data, func)
-
-        # Provide lifetime hints to resolver (which blocks define which values)
-        try:
-            self.resolver.def_blocks = self.def_blocks
-            # Provide phi metadata for this function to resolver
-            self.resolver.block_phi_incomings = getattr(self, 'block_phi_incomings', {})
-        except Exception:
-            pass
-        # Finalize PHIs for this function now that all snapshots for it exist
-        self.finalize_phis()
     
     def lower_block(self, bb: ir.Block, block_data: Dict[str, Any], func: ir.Function):
         """Lower a single basic block"""
