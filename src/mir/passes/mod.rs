@@ -1,11 +1,11 @@
 // MIR optimization subpasses module
 // Minimal scaffold to unblock builds when type hint propagation is not yet implemented.
 
-pub mod type_hints;
+pub mod cse;
+pub mod dce;
 pub mod escape;
 pub mod method_id_inject;
-pub mod dce;
-pub mod cse;
+pub mod type_hints;
 
 /// Minimal pass trait for future expansion. Currently unused by the main
 /// optimizer pipeline but provided to guide modularization.

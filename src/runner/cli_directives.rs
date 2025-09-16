@@ -20,7 +20,9 @@ pub(super) fn apply_cli_directives_from_source(
     for (i, line) in code.lines().take(128).enumerate() {
         let l = line.trim();
         if !(l.starts_with("//") || l.starts_with("#!") || l.is_empty()) {
-            if i > 0 { break; }
+            if i > 0 {
+                break;
+            }
         }
         if let Some(rest) = l.strip_prefix("//") {
             let rest = rest.trim();
@@ -28,7 +30,9 @@ pub(super) fn apply_cli_directives_from_source(
                 if let Some((k, v)) = dir.split_once('=') {
                     let key = k.trim();
                     let val = v.trim();
-                    if !key.is_empty() { std::env::set_var(key, val); }
+                    if !key.is_empty() {
+                        std::env::set_var(key, val);
+                    }
                 }
             } else if rest == "@plugin-builtins" {
                 std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
@@ -53,4 +57,3 @@ pub(super) fn apply_cli_directives_from_source(
     // Lint: enforce fields at top-of-box (delegated)
     super::pipeline::lint_fields_top(code, strict_fields, verbose)
 }
-

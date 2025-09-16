@@ -31,10 +31,25 @@ pub struct MethodThunk {
 }
 
 impl MethodThunk {
-    pub fn new() -> Self { Self { target: RwLock::new(None), _flags: RwLock::new(0) } }
-    pub fn get_target(&self) -> Option<ThunkTarget> { self.target.read().ok().and_then(|g| g.clone()) }
-    pub fn set_mir_target(&self, name: String) { if let Ok(mut g) = self.target.write() { *g = Some(ThunkTarget::MirFunction(name)); } }
-    pub fn set_plugin_invoke(&self, method_id: u16) { if let Ok(mut g) = self.target.write() { *g = Some(ThunkTarget::PluginInvoke { method_id }); } }
+    pub fn new() -> Self {
+        Self {
+            target: RwLock::new(None),
+            _flags: RwLock::new(0),
+        }
+    }
+    pub fn get_target(&self) -> Option<ThunkTarget> {
+        self.target.read().ok().and_then(|g| g.clone())
+    }
+    pub fn set_mir_target(&self, name: String) {
+        if let Ok(mut g) = self.target.write() {
+            *g = Some(ThunkTarget::MirFunction(name));
+        }
+    }
+    pub fn set_plugin_invoke(&self, method_id: u16) {
+        if let Ok(mut g) = self.target.write() {
+            *g = Some(ThunkTarget::PluginInvoke { method_id });
+        }
+    }
 }
 
 /// Per-type metadata including thunk table
@@ -46,7 +61,10 @@ pub struct TypeMeta {
 
 impl TypeMeta {
     fn new(class_name: String) -> Self {
-        Self { class_name, thunks: RwLock::new(Vec::new()) }
+        Self {
+            class_name,
+            thunks: RwLock::new(Vec::new()),
+        }
     }
 
     /// Ensure that the thunk table length is at least `len`.
@@ -54,7 +72,9 @@ impl TypeMeta {
         if let Ok(mut tbl) = self.thunks.write() {
             if tbl.len() < len {
                 let to_add = len - tbl.len();
-                for _ in 0..to_add { tbl.push(Arc::new(MethodThunk::new())); }
+                for _ in 0..to_add {
+                    tbl.push(Arc::new(MethodThunk::new()));
+                }
             }
         }
     }
@@ -68,12 +88,16 @@ impl TypeMeta {
     /// Set thunk target name for slot
     pub fn set_thunk_mir_target(&self, slot: usize, target_name: String) {
         self.ensure_len(slot + 1);
-        if let Some(th) = self.get_thunk(slot) { th.set_mir_target(target_name); }
+        if let Some(th) = self.get_thunk(slot) {
+            th.set_mir_target(target_name);
+        }
     }
 
     pub fn set_thunk_plugin_invoke(&self, slot: usize, method_id: u16) {
         self.ensure_len(slot + 1);
-        if let Some(th) = self.get_thunk(slot) { th.set_plugin_invoke(method_id); }
+        if let Some(th) = self.get_thunk(slot) {
+            th.set_plugin_invoke(method_id);
+        }
     }
 
     pub fn set_thunk_builtin(&self, slot: usize, method: String) {
@@ -91,12 +115,15 @@ impl TypeMeta {
     }
 }
 
-static TYPE_META_REGISTRY: Lazy<Mutex<HashMap<String, Arc<TypeMeta>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static TYPE_META_REGISTRY: Lazy<Mutex<HashMap<String, Arc<TypeMeta>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// Get or create TypeMeta for a given class name
 pub fn get_or_create_type_meta(class_name: &str) -> Arc<TypeMeta> {
     let mut map = TYPE_META_REGISTRY.lock().unwrap();
-    if let Some(m) = map.get(class_name) { return m.clone(); }
+    if let Some(m) = map.get(class_name) {
+        return m.clone();
+    }
     let m = Arc::new(TypeMeta::new(class_name.to_string()));
     map.insert(class_name.to_string(), m.clone());
     m

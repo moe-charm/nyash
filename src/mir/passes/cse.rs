@@ -4,7 +4,7 @@
 //! counts eliminations without rewriting uses (SSA update is TODO). This keeps
 //! behavior identical while modularizing the pass for future enhancement.
 
-use crate::mir::{MirInstruction, MirModule, MirFunction, ValueId};
+use crate::mir::{MirFunction, MirInstruction, MirModule, ValueId};
 use std::collections::HashMap;
 
 /// Run CSE across the module. Returns the number of eliminated expressions.
@@ -42,15 +42,20 @@ fn cse_in_function(function: &mut MirFunction) -> usize {
 fn instruction_key(i: &MirInstruction) -> String {
     match i {
         MirInstruction::Const { value, .. } => format!("const_{:?}", value),
-        MirInstruction::BinOp { op, lhs, rhs, .. } =>
-            format!("binop_{:?}_{}_{}", op, lhs.as_u32(), rhs.as_u32()),
-        MirInstruction::Compare { op, lhs, rhs, .. } =>
-            format!("cmp_{:?}_{}_{}", op, lhs.as_u32(), rhs.as_u32()),
+        MirInstruction::BinOp { op, lhs, rhs, .. } => {
+            format!("binop_{:?}_{}_{}", op, lhs.as_u32(), rhs.as_u32())
+        }
+        MirInstruction::Compare { op, lhs, rhs, .. } => {
+            format!("cmp_{:?}_{}_{}", op, lhs.as_u32(), rhs.as_u32())
+        }
         MirInstruction::Call { func, args, .. } => {
-            let args_str = args.iter().map(|v| v.as_u32().to_string()).collect::<Vec<_>>().join(",");
+            let args_str = args
+                .iter()
+                .map(|v| v.as_u32().to_string())
+                .collect::<Vec<_>>()
+                .join(",");
             format!("call_{}_{}", func.as_u32(), args_str)
         }
         other => format!("other_{:?}", other),
     }
 }
-

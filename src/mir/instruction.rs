@@ -1,10 +1,10 @@
 /*!
  * MIR Instruction Set - 20 Core Instructions per ChatGPT5 Design
- * 
+ *
  * SSA-form instructions with effect tracking for optimization
  */
 
-use super::{ValueId, EffectMask, Effect};
+use super::{Effect, EffectMask, ValueId};
 // use crate::value::NyashValue;  // Commented out to avoid circular dependency
 use std::fmt;
 
@@ -14,11 +14,8 @@ pub enum MirInstruction {
     // === Constants and Values ===
     /// Load a constant value
     /// `%dst = const value`
-    Const {
-        dst: ValueId,
-        value: ConstValue,
-    },
-    
+    Const { dst: ValueId, value: ConstValue },
+
     // === Arithmetic Operations ===
     /// Binary arithmetic operation
     /// `%dst = %lhs op %rhs`
@@ -28,7 +25,7 @@ pub enum MirInstruction {
         lhs: ValueId,
         rhs: ValueId,
     },
-    
+
     /// Unary operation
     /// `%dst = op %operand`
     UnaryOp {
@@ -36,7 +33,7 @@ pub enum MirInstruction {
         op: UnaryOp,
         operand: ValueId,
     },
-    
+
     // === Comparison Operations ===
     /// Compare two values
     /// `%dst = %lhs cmp %rhs`
@@ -46,22 +43,16 @@ pub enum MirInstruction {
         lhs: ValueId,
         rhs: ValueId,
     },
-    
+
     // === Memory Operations ===
     /// Load from memory/variable
     /// `%dst = load %ptr`
-    Load {
-        dst: ValueId,
-        ptr: ValueId,
-    },
-    
+    Load { dst: ValueId, ptr: ValueId },
+
     /// Store to memory/variable
     /// `store %value -> %ptr`
-    Store {
-        value: ValueId,
-        ptr: ValueId,
-    },
-    
+    Store { value: ValueId, ptr: ValueId },
+
     // === Function Calls ===
     /// Call a function
     /// `%dst = call %func(%args...)`
@@ -84,7 +75,7 @@ pub enum MirInstruction {
         /// Optional 'me' value to capture weakly if it is a BoxRef at runtime
         me: Option<ValueId>,
     },
-    
+
     /// Box method invocation
     /// `%dst = invoke %box.method(%args...)`
     /// method_id: Optional numeric slot id when resolved at build time
@@ -107,7 +98,7 @@ pub enum MirInstruction {
         args: Vec<ValueId>,
         effects: EffectMask,
     },
-    
+
     // === Control Flow ===
     /// Conditional branch
     /// `br %condition -> %then_bb, %else_bb`
@@ -116,19 +107,15 @@ pub enum MirInstruction {
         then_bb: super::BasicBlockId,
         else_bb: super::BasicBlockId,
     },
-    
+
     /// Unconditional jump
     /// `jmp %target_bb`
-    Jump {
-        target: super::BasicBlockId,
-    },
-    
+    Jump { target: super::BasicBlockId },
+
     /// Return from function
     /// `ret %value` or `ret void`
-    Return {
-        value: Option<ValueId>,
-    },
-    
+    Return { value: Option<ValueId> },
+
     // === SSA Phi Function ===
     /// SSA phi function for merging values from different paths
     /// `%dst = phi [%val1 from %bb1, %val2 from %bb2, ...]`
@@ -136,7 +123,7 @@ pub enum MirInstruction {
         dst: ValueId,
         inputs: Vec<(super::BasicBlockId, ValueId)>,
     },
-    
+
     // === Box Operations ===
     /// Create a new Box instance
     /// `%dst = new_box "BoxType"(%args...)`
@@ -145,7 +132,7 @@ pub enum MirInstruction {
         box_type: String,
         args: Vec<ValueId>,
     },
-    
+
     /// Check Box type
     /// `%dst = type_check %box "BoxType"`
     TypeCheck {
@@ -153,7 +140,7 @@ pub enum MirInstruction {
         value: ValueId,
         expected_type: String,
     },
-    
+
     // === Type Conversion ===
     /// Convert between types
     /// `%dst = cast %value as Type`
@@ -172,7 +159,7 @@ pub enum MirInstruction {
         value: ValueId,
         ty: MirType,
     },
-    
+
     // === Array Operations ===
     /// Get array element
     /// `%dst = %array[%index]`
@@ -181,7 +168,7 @@ pub enum MirInstruction {
         array: ValueId,
         index: ValueId,
     },
-    
+
     /// Set array element
     /// `%array[%index] = %value`
     ArraySet {
@@ -189,41 +176,31 @@ pub enum MirInstruction {
         index: ValueId,
         value: ValueId,
     },
-    
+
     // === Special Operations ===
     /// Copy a value (for optimization passes)
     /// `%dst = copy %src`
-    Copy {
-        dst: ValueId,
-        src: ValueId,
-    },
-    
+    Copy { dst: ValueId, src: ValueId },
+
     /// Debug/introspection instruction
     /// `debug %value "message"`
-    Debug {
-        value: ValueId,
-        message: String,
-    },
-    
+    Debug { value: ValueId, message: String },
+
     /// Print instruction for console output
     /// `print %value`
-    Print {
-        value: ValueId,
-        effects: EffectMask,
-    },
-    
+    Print { value: ValueId, effects: EffectMask },
+
     /// No-op instruction (for optimization placeholders)
     Nop,
-    
+
     // === Control Flow & Exception Handling (Phase 5) ===
-    
     /// Throw an exception
     /// `throw %exception_value`
     Throw {
         exception: ValueId,
         effects: EffectMask,
     },
-    
+
     /// Catch handler setup (landing pad for exceptions)
     /// `catch %exception_type -> %handler_bb`
     Catch {
@@ -231,20 +208,16 @@ pub enum MirInstruction {
         exception_value: ValueId,       // Where to store caught exception
         handler_bb: super::BasicBlockId,
     },
-    
+
     /// Safepoint instruction (no-op for now, can be used for GC/debugging)
     /// `safepoint`
     Safepoint,
-    
+
     // === Phase 6: Box Reference Operations ===
-    
     /// Create a new reference to a Box
     /// `%dst = ref_new %box`
-    RefNew {
-        dst: ValueId,
-        box_val: ValueId,
-    },
-    
+    RefNew { dst: ValueId, box_val: ValueId },
+
     /// Get/dereference a Box field through reference
     /// `%dst = ref_get %ref.field`
     RefGet {
@@ -252,7 +225,7 @@ pub enum MirInstruction {
         reference: ValueId,
         field: String,
     },
-    
+
     /// Set/assign Box field through reference
     /// `ref_set %ref.field = %value`
     RefSet {
@@ -260,32 +233,22 @@ pub enum MirInstruction {
         field: String,
         value: ValueId,
     },
-    
+
     /// Create a weak reference to a Box
     /// `%dst = weak_new %box`
-    WeakNew {
-        dst: ValueId,
-        box_val: ValueId,
-    },
-    
+    WeakNew { dst: ValueId, box_val: ValueId },
+
     /// Load from weak reference (if still alive)
     /// `%dst = weak_load %weak_ref`
-    WeakLoad {
-        dst: ValueId,
-        weak_ref: ValueId,
-    },
-    
+    WeakLoad { dst: ValueId, weak_ref: ValueId },
+
     /// Memory barrier read (no-op for now, proper effect annotation)
     /// `barrier_read %ptr`
-    BarrierRead {
-        ptr: ValueId,
-    },
-    
+    BarrierRead { ptr: ValueId },
+
     /// Memory barrier write (no-op for now, proper effect annotation)
     /// `barrier_write %ptr`
-    BarrierWrite {
-        ptr: ValueId,
-    },
+    BarrierWrite { ptr: ValueId },
 
     // === Unified PoC: WeakRef/Barrier (flags-only scaffolding) ===
     /// Unified weak reference op (PoC)
@@ -298,42 +261,28 @@ pub enum MirInstruction {
 
     /// Unified barrier op (PoC)
     /// `barrier read %ptr` or `barrier write %ptr`
-    Barrier {
-        op: BarrierOp,
-        ptr: ValueId,
-    },
-    
+    Barrier { op: BarrierOp, ptr: ValueId },
+
     // === Phase 7: Async/Future Operations ===
-    
     /// Create a new Future with initial value
     /// `%dst = future_new %value`
-    FutureNew {
-        dst: ValueId,
-        value: ValueId,
-    },
-    
+    FutureNew { dst: ValueId, value: ValueId },
+
     /// Set Future value and mark as ready
     /// `future_set %future = %value`
-    FutureSet {
-        future: ValueId,
-        value: ValueId,
-    },
-    
+    FutureSet { future: ValueId, value: ValueId },
+
     /// Wait for Future completion and get value
     /// `%dst = await %future`
-    Await {
-        dst: ValueId,
-        future: ValueId,
-    },
-    
+    Await { dst: ValueId, future: ValueId },
+
     // === Phase 9.7: External Function Calls (Box FFI/ABI) ===
-    
     /// External function call through Box FFI/ABI
     /// `%dst = extern_call interface.method(%args...)`
     ExternCall {
         dst: Option<ValueId>,
-        iface_name: String,         // e.g., "env.console"
-        method_name: String,        // e.g., "log"
+        iface_name: String,  // e.g., "env.console"
+        method_name: String, // e.g., "log"
         args: Vec<ValueId>,
         effects: EffectMask,
     },
@@ -354,13 +303,22 @@ pub enum ConstValue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
     // Arithmetic
-    Add, Sub, Mul, Div, Mod,
-    
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+
     // Bitwise
-    BitAnd, BitOr, BitXor, Shl, Shr,
-    
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
+
     // Logical
-    And, Or,
+    And,
+    Or,
 }
 
 /// Unary operations
@@ -368,10 +326,10 @@ pub enum BinaryOp {
 pub enum UnaryOp {
     // Arithmetic
     Neg,
-    
+
     // Logical
     Not,
-    
+
     // Bitwise
     BitNot,
 }
@@ -379,7 +337,12 @@ pub enum UnaryOp {
 /// Comparison operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompareOp {
-    Eq, Ne, Lt, Le, Gt, Ge,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
 }
 
 /// MIR type system
@@ -401,47 +364,46 @@ impl MirInstruction {
     pub fn effects(&self) -> EffectMask {
         match self {
             // Pure operations
-            MirInstruction::Const { .. } |
-            MirInstruction::BinOp { .. } |
-            MirInstruction::UnaryOp { .. } |
-            MirInstruction::Compare { .. } |
-            MirInstruction::Cast { .. } |
-            MirInstruction::TypeOp { .. } |
-            MirInstruction::Copy { .. } |
-            MirInstruction::Phi { .. } |
-            MirInstruction::TypeCheck { .. } |
-            MirInstruction::Nop => EffectMask::PURE,
-            
+            MirInstruction::Const { .. }
+            | MirInstruction::BinOp { .. }
+            | MirInstruction::UnaryOp { .. }
+            | MirInstruction::Compare { .. }
+            | MirInstruction::Cast { .. }
+            | MirInstruction::TypeOp { .. }
+            | MirInstruction::Copy { .. }
+            | MirInstruction::Phi { .. }
+            | MirInstruction::TypeCheck { .. }
+            | MirInstruction::Nop => EffectMask::PURE,
+
             // Memory operations
             MirInstruction::Load { .. } => EffectMask::READ,
-            MirInstruction::Store { .. } |
-            MirInstruction::ArraySet { .. } => EffectMask::WRITE,
+            MirInstruction::Store { .. } | MirInstruction::ArraySet { .. } => EffectMask::WRITE,
             MirInstruction::ArrayGet { .. } => EffectMask::READ,
-            
+
             // Function calls use provided effect mask
-            MirInstruction::Call { effects, .. } |
-            MirInstruction::BoxCall { effects, .. } |
-            MirInstruction::PluginInvoke { effects, .. } => *effects,
-            
+            MirInstruction::Call { effects, .. }
+            | MirInstruction::BoxCall { effects, .. }
+            | MirInstruction::PluginInvoke { effects, .. } => *effects,
+
             // Control flow (pure but affects execution)
-            MirInstruction::Branch { .. } |
-            MirInstruction::Jump { .. } |
-            MirInstruction::Return { .. } => EffectMask::PURE,
-            
+            MirInstruction::Branch { .. }
+            | MirInstruction::Jump { .. }
+            | MirInstruction::Return { .. } => EffectMask::PURE,
+
             // Box creation may allocate
             MirInstruction::NewBox { .. } => EffectMask::PURE.add(Effect::Alloc),
-            
+
             // Debug has debug effect
             MirInstruction::Debug { .. } => EffectMask::PURE.add(Effect::Debug),
-            
+
             // Print has external write effect
             MirInstruction::Print { effects, .. } => *effects,
-            
+
             // Phase 5: Control flow & exception handling
             MirInstruction::Throw { effects, .. } => *effects,
             MirInstruction::Catch { .. } => EffectMask::CONTROL, // Handler setup affects control handling
-            MirInstruction::Safepoint => EffectMask::PURE,    // No-op for now
-            
+            MirInstruction::Safepoint => EffectMask::PURE,       // No-op for now
+
             // Phase 6: Box reference operations
             MirInstruction::RefNew { .. } => EffectMask::PURE, // Creating reference is pure
             MirInstruction::RefGet { .. } => EffectMask::READ, // Reading field has read effects
@@ -459,143 +421,154 @@ impl MirInstruction {
                 BarrierOp::Read => EffectMask::READ.add(Effect::Barrier),
                 BarrierOp::Write => EffectMask::WRITE.add(Effect::Barrier),
             },
-            
+
             // Phase 7: Async/Future Operations
             MirInstruction::FutureNew { .. } => EffectMask::PURE.add(Effect::Alloc), // Creating future may allocate
             MirInstruction::FutureSet { .. } => EffectMask::WRITE, // Setting future has write effects
             MirInstruction::Await { .. } => EffectMask::READ.add(Effect::Async), // Await blocks and reads
-            
+
             // Phase 9.7: External Function Calls
             MirInstruction::ExternCall { effects, .. } => *effects, // Use provided effect mask
             // Function value construction: treat as pure with allocation
             MirInstruction::FunctionNew { .. } => EffectMask::PURE.add(Effect::Alloc),
         }
     }
-    
+
     /// Get the destination ValueId if this instruction produces a value
     pub fn dst_value(&self) -> Option<ValueId> {
         match self {
-            MirInstruction::Const { dst, .. } |
-            MirInstruction::BinOp { dst, .. } |
-            MirInstruction::UnaryOp { dst, .. } |
-            MirInstruction::Compare { dst, .. } |
-            MirInstruction::Load { dst, .. } |
-            MirInstruction::Phi { dst, .. } |
-            MirInstruction::NewBox { dst, .. } |
-            MirInstruction::TypeCheck { dst, .. } |
-            MirInstruction::Cast { dst, .. } |
-            MirInstruction::TypeOp { dst, .. } |
-            MirInstruction::ArrayGet { dst, .. } |
-            MirInstruction::Copy { dst, .. } |
-            MirInstruction::RefNew { dst, .. } |
-            MirInstruction::RefGet { dst, .. } |
-            MirInstruction::WeakNew { dst, .. } |
-            MirInstruction::WeakLoad { dst, .. } |
-            MirInstruction::WeakRef { dst, .. } |
-            MirInstruction::FutureNew { dst, .. } |
-            MirInstruction::Await { dst, .. } => Some(*dst),
+            MirInstruction::Const { dst, .. }
+            | MirInstruction::BinOp { dst, .. }
+            | MirInstruction::UnaryOp { dst, .. }
+            | MirInstruction::Compare { dst, .. }
+            | MirInstruction::Load { dst, .. }
+            | MirInstruction::Phi { dst, .. }
+            | MirInstruction::NewBox { dst, .. }
+            | MirInstruction::TypeCheck { dst, .. }
+            | MirInstruction::Cast { dst, .. }
+            | MirInstruction::TypeOp { dst, .. }
+            | MirInstruction::ArrayGet { dst, .. }
+            | MirInstruction::Copy { dst, .. }
+            | MirInstruction::RefNew { dst, .. }
+            | MirInstruction::RefGet { dst, .. }
+            | MirInstruction::WeakNew { dst, .. }
+            | MirInstruction::WeakLoad { dst, .. }
+            | MirInstruction::WeakRef { dst, .. }
+            | MirInstruction::FutureNew { dst, .. }
+            | MirInstruction::Await { dst, .. } => Some(*dst),
             MirInstruction::FunctionNew { dst, .. } => Some(*dst),
-            
-            MirInstruction::Call { dst, .. } |
-            MirInstruction::BoxCall { dst, .. } |
-            MirInstruction::PluginInvoke { dst, .. } |
-            MirInstruction::ExternCall { dst, .. } => *dst,
-            
-            MirInstruction::Store { .. } |
-            MirInstruction::Branch { .. } |
-            MirInstruction::Jump { .. } |
-            MirInstruction::Return { .. } |
-            MirInstruction::ArraySet { .. } |
-            MirInstruction::Debug { .. } |
-            MirInstruction::Print { .. } |
-            MirInstruction::Throw { .. } |
-            MirInstruction::RefSet { .. } |
-            MirInstruction::BarrierRead { .. } |
-            MirInstruction::BarrierWrite { .. } |
-            MirInstruction::Barrier { .. } |
-            MirInstruction::FutureSet { .. } |
-            MirInstruction::Safepoint |
-            MirInstruction::Nop => None,
-            
-            MirInstruction::Catch { exception_value, .. } => Some(*exception_value),
+
+            MirInstruction::Call { dst, .. }
+            | MirInstruction::BoxCall { dst, .. }
+            | MirInstruction::PluginInvoke { dst, .. }
+            | MirInstruction::ExternCall { dst, .. } => *dst,
+
+            MirInstruction::Store { .. }
+            | MirInstruction::Branch { .. }
+            | MirInstruction::Jump { .. }
+            | MirInstruction::Return { .. }
+            | MirInstruction::ArraySet { .. }
+            | MirInstruction::Debug { .. }
+            | MirInstruction::Print { .. }
+            | MirInstruction::Throw { .. }
+            | MirInstruction::RefSet { .. }
+            | MirInstruction::BarrierRead { .. }
+            | MirInstruction::BarrierWrite { .. }
+            | MirInstruction::Barrier { .. }
+            | MirInstruction::FutureSet { .. }
+            | MirInstruction::Safepoint
+            | MirInstruction::Nop => None,
+
+            MirInstruction::Catch {
+                exception_value, ..
+            } => Some(*exception_value),
         }
     }
-    
+
     /// Get all ValueIds used by this instruction
     pub fn used_values(&self) -> Vec<ValueId> {
         match self {
-            MirInstruction::Const { .. } |
-            MirInstruction::Jump { .. } |
-            MirInstruction::Nop => Vec::new(),
-            
-            MirInstruction::UnaryOp { operand, .. } |
-            MirInstruction::Load { ptr: operand, .. } |
-            MirInstruction::TypeCheck { value: operand, .. } |
-            MirInstruction::Cast { value: operand, .. } |
-            MirInstruction::TypeOp { value: operand, .. } |
-            MirInstruction::Copy { src: operand, .. } |
-            MirInstruction::Debug { value: operand, .. } |
-            MirInstruction::Print { value: operand, .. } => vec![*operand],
-            
-            MirInstruction::BinOp { lhs, rhs, .. } |
-            MirInstruction::Compare { lhs, rhs, .. } |
-            MirInstruction::Store { value: lhs, ptr: rhs, .. } => vec![*lhs, *rhs],
-            
+            MirInstruction::Const { .. } | MirInstruction::Jump { .. } | MirInstruction::Nop => {
+                Vec::new()
+            }
+
+            MirInstruction::UnaryOp { operand, .. }
+            | MirInstruction::Load { ptr: operand, .. }
+            | MirInstruction::TypeCheck { value: operand, .. }
+            | MirInstruction::Cast { value: operand, .. }
+            | MirInstruction::TypeOp { value: operand, .. }
+            | MirInstruction::Copy { src: operand, .. }
+            | MirInstruction::Debug { value: operand, .. }
+            | MirInstruction::Print { value: operand, .. } => vec![*operand],
+
+            MirInstruction::BinOp { lhs, rhs, .. }
+            | MirInstruction::Compare { lhs, rhs, .. }
+            | MirInstruction::Store {
+                value: lhs,
+                ptr: rhs,
+                ..
+            } => vec![*lhs, *rhs],
+
             MirInstruction::ArrayGet { array, index, .. } => vec![*array, *index],
-            
-            MirInstruction::ArraySet { array, index, value } => vec![*array, *index, *value],
-            
+
+            MirInstruction::ArraySet {
+                array,
+                index,
+                value,
+            } => vec![*array, *index, *value],
+
             MirInstruction::Branch { condition, .. } => vec![*condition],
-            
-            MirInstruction::Return { value } => {
-                value.map(|v| vec![v]).unwrap_or_default()
-            },
-            
+
+            MirInstruction::Return { value } => value.map(|v| vec![v]).unwrap_or_default(),
+
             MirInstruction::Call { func, args, .. } => {
                 let mut used = vec![*func];
                 used.extend(args);
                 used
-            },
+            }
             MirInstruction::FunctionNew { captures, me, .. } => {
                 let mut used: Vec<ValueId> = Vec::new();
                 used.extend(captures.iter().map(|(_, v)| *v));
-                if let Some(m) = me { used.push(*m); }
+                if let Some(m) = me {
+                    used.push(*m);
+                }
                 used
             }
-            
-            MirInstruction::BoxCall { box_val, args, .. } | MirInstruction::PluginInvoke { box_val, args, .. } => {
+
+            MirInstruction::BoxCall { box_val, args, .. }
+            | MirInstruction::PluginInvoke { box_val, args, .. } => {
                 let mut used = vec![*box_val];
                 used.extend(args);
                 used
-            },
-            
+            }
+
             MirInstruction::NewBox { args, .. } => args.clone(),
-            
-            MirInstruction::Phi { inputs, .. } => {
-                inputs.iter().map(|(_, value)| *value).collect()
-            },
-            
+
+            MirInstruction::Phi { inputs, .. } => inputs.iter().map(|(_, value)| *value).collect(),
+
             // Phase 5: Control flow & exception handling
             MirInstruction::Throw { exception, .. } => vec![*exception],
             MirInstruction::Catch { .. } => Vec::new(), // Handler setup doesn't use values
             MirInstruction::Safepoint => Vec::new(),
-            
+
             // Phase 6: Box reference operations
             MirInstruction::RefNew { box_val, .. } => vec![*box_val],
             MirInstruction::RefGet { reference, .. } => vec![*reference],
-            MirInstruction::RefSet { reference, value, .. } => vec![*reference, *value],
+            MirInstruction::RefSet {
+                reference, value, ..
+            } => vec![*reference, *value],
             MirInstruction::WeakNew { box_val, .. } => vec![*box_val],
             MirInstruction::WeakLoad { weak_ref, .. } => vec![*weak_ref],
             MirInstruction::BarrierRead { ptr } => vec![*ptr],
             MirInstruction::BarrierWrite { ptr } => vec![*ptr],
             MirInstruction::WeakRef { value, .. } => vec![*value],
             MirInstruction::Barrier { ptr, .. } => vec![*ptr],
-            
+
             // Phase 7: Async/Future Operations
             MirInstruction::FutureNew { value, .. } => vec![*value],
             MirInstruction::FutureSet { future, value } => vec![*future, *value],
             MirInstruction::Await { future, .. } => vec![*future],
-            
+
             // Phase 9.7: External Function Calls
             MirInstruction::ExternCall { args, .. } => args.clone(),
         }
@@ -611,11 +584,17 @@ pub enum TypeOpKind {
 
 /// Kind of unified weak reference operation (PoC)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WeakRefOp { New, Load }
+pub enum WeakRefOp {
+    New,
+    Load,
+}
 
 /// Kind of unified barrier operation (PoC)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BarrierOp { Read, Write }
+pub enum BarrierOp {
+    Read,
+    Write,
+}
 
 impl ConstValue {
     /*
@@ -630,7 +609,7 @@ impl ConstValue {
             ConstValue::Void => NyashValue::new_void(),
         }
     }
-    
+
     /// Create from NyashValue
     pub fn from_nyash_value(value: &NyashValue) -> Option<Self> {
         match value {
@@ -651,60 +630,126 @@ impl fmt::Display for MirInstruction {
         match self {
             MirInstruction::Const { dst, value } => {
                 write!(f, "{} = const {}", dst, value)
-            },
+            }
             MirInstruction::BinOp { dst, op, lhs, rhs } => {
                 write!(f, "{} = {} {:?} {}", dst, lhs, op, rhs)
-            },
+            }
             MirInstruction::UnaryOp { dst, op, operand } => {
                 write!(f, "{} = {:?} {}", dst, op, operand)
-            },
+            }
             MirInstruction::Compare { dst, op, lhs, rhs } => {
                 write!(f, "{} = {} {:?} {}", dst, lhs, op, rhs)
-            },
+            }
             MirInstruction::Load { dst, ptr } => {
                 write!(f, "{} = load {}", dst, ptr)
-            },
+            }
             MirInstruction::Store { value, ptr } => {
                 write!(f, "store {} -> {}", value, ptr)
-            },
-            MirInstruction::Call { dst, func, args, effects } => {
+            }
+            MirInstruction::Call {
+                dst,
+                func,
+                args,
+                effects,
+            } => {
                 if let Some(dst) = dst {
-                    write!(f, "{} = call {}({}); effects: {}", dst, func, 
-                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
-                           effects)
+                    write!(
+                        f,
+                        "{} = call {}({}); effects: {}",
+                        dst,
+                        func,
+                        args.iter()
+                            .map(|v| format!("{}", v))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        effects
+                    )
                 } else {
-                    write!(f, "call {}({}); effects: {}", func, 
-                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
-                           effects)
+                    write!(
+                        f,
+                        "call {}({}); effects: {}",
+                        func,
+                        args.iter()
+                            .map(|v| format!("{}", v))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        effects
+                    )
                 }
-            },
-            MirInstruction::PluginInvoke { dst, box_val, method, args, effects: _ } => {
+            }
+            MirInstruction::PluginInvoke {
+                dst,
+                box_val,
+                method,
+                args,
+                effects: _,
+            } => {
                 if let Some(dst) = dst {
-                    write!(f, "{} = plugin_invoke {}.{}({})", dst, box_val, method,
-                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "))
+                    write!(
+                        f,
+                        "{} = plugin_invoke {}.{}({})",
+                        dst,
+                        box_val,
+                        method,
+                        args.iter()
+                            .map(|v| format!("{}", v))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 } else {
-                    write!(f, "plugin_invoke {}.{}({})", box_val, method,
-                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "))
+                    write!(
+                        f,
+                        "plugin_invoke {}.{}({})",
+                        box_val,
+                        method,
+                        args.iter()
+                            .map(|v| format!("{}", v))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 }
-            },
+            }
             MirInstruction::Return { value } => {
                 if let Some(value) = value {
                     write!(f, "ret {}", value)
                 } else {
                     write!(f, "ret void")
                 }
-            },
-            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects } => {
+            }
+            MirInstruction::ExternCall {
+                dst,
+                iface_name,
+                method_name,
+                args,
+                effects,
+            } => {
                 if let Some(dst) = dst {
-                    write!(f, "{} = extern_call {}.{}({}); effects: {}", dst, iface_name, method_name,
-                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
-                           effects)
+                    write!(
+                        f,
+                        "{} = extern_call {}.{}({}); effects: {}",
+                        dst,
+                        iface_name,
+                        method_name,
+                        args.iter()
+                            .map(|v| format!("{}", v))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        effects
+                    )
                 } else {
-                    write!(f, "extern_call {}.{}({}); effects: {}", iface_name, method_name,
-                           args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", "),
-                           effects)
+                    write!(
+                        f,
+                        "extern_call {}.{}({}); effects: {}",
+                        iface_name,
+                        method_name,
+                        args.iter()
+                            .map(|v| format!("{}", v))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        effects
+                    )
                 }
-            },
+            }
             _ => write!(f, "{:?}", self), // Fallback for other instructions
         }
     }
@@ -726,7 +771,7 @@ impl fmt::Display for ConstValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_const_instruction() {
         let dst = ValueId::new(0);
@@ -734,136 +779,161 @@ mod tests {
             dst,
             value: ConstValue::Integer(42),
         };
-        
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert!(inst.used_values().is_empty());
         assert!(inst.effects().is_pure());
     }
-    
+
     #[test]
     fn test_binop_instruction() {
         let dst = ValueId::new(0);
         let lhs = ValueId::new(1);
         let rhs = ValueId::new(2);
-        
+
         let inst = MirInstruction::BinOp {
-            dst, op: BinaryOp::Add, lhs, rhs
+            dst,
+            op: BinaryOp::Add,
+            lhs,
+            rhs,
         };
-        
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert_eq!(inst.used_values(), vec![lhs, rhs]);
         assert!(inst.effects().is_pure());
     }
-    
+
     #[test]
     fn test_call_instruction() {
         let dst = ValueId::new(0);
         let func = ValueId::new(1);
         let arg1 = ValueId::new(2);
         let arg2 = ValueId::new(3);
-        
+
         let inst = MirInstruction::Call {
             dst: Some(dst),
             func,
             args: vec![arg1, arg2],
             effects: EffectMask::IO,
         };
-        
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert_eq!(inst.used_values(), vec![func, arg1, arg2]);
         assert_eq!(inst.effects(), EffectMask::IO);
     }
-    
+
     /*
     #[test]
     fn test_const_value_conversion() {
         let const_val = ConstValue::Integer(42);
         let nyash_val = const_val.to_nyash_value();
-        
+
         assert_eq!(nyash_val, NyashValue::new_integer(42));
-        
+
         let back = ConstValue::from_nyash_value(&nyash_val).unwrap();
         assert_eq!(back, const_val);
     }
     */
-    
+
     #[test]
     fn test_ref_new_instruction() {
         let dst = ValueId::new(0);
         let box_val = ValueId::new(1);
         let inst = MirInstruction::RefNew { dst, box_val };
-        
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert_eq!(inst.used_values(), vec![box_val]);
         assert!(inst.effects().is_pure());
     }
-    
+
     #[test]
     fn test_ref_get_instruction() {
         let dst = ValueId::new(0);
         let reference = ValueId::new(1);
         let field = "name".to_string();
-        let inst = MirInstruction::RefGet { dst, reference, field };
-        
+        let inst = MirInstruction::RefGet {
+            dst,
+            reference,
+            field,
+        };
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert_eq!(inst.used_values(), vec![reference]);
         assert!(!inst.effects().is_pure());
-        assert!(inst.effects().contains(super::super::effect::Effect::ReadHeap));
+        assert!(inst
+            .effects()
+            .contains(super::super::effect::Effect::ReadHeap));
     }
-    
+
     #[test]
     fn test_ref_set_instruction() {
         let reference = ValueId::new(0);
         let field = "value".to_string();
         let value = ValueId::new(1);
-        let inst = MirInstruction::RefSet { reference, field, value };
-        
+        let inst = MirInstruction::RefSet {
+            reference,
+            field,
+            value,
+        };
+
         assert_eq!(inst.dst_value(), None);
         assert_eq!(inst.used_values(), vec![reference, value]);
         assert!(!inst.effects().is_pure());
-        assert!(inst.effects().contains(super::super::effect::Effect::WriteHeap));
+        assert!(inst
+            .effects()
+            .contains(super::super::effect::Effect::WriteHeap));
     }
-    
-    #[test] 
+
+    #[test]
     fn test_weak_new_instruction() {
         let dst = ValueId::new(0);
         let box_val = ValueId::new(1);
         let inst = MirInstruction::WeakNew { dst, box_val };
-        
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert_eq!(inst.used_values(), vec![box_val]);
         assert!(inst.effects().is_pure());
     }
-    
+
     #[test]
     fn test_weak_load_instruction() {
         let dst = ValueId::new(0);
         let weak_ref = ValueId::new(1);
         let inst = MirInstruction::WeakLoad { dst, weak_ref };
-        
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert_eq!(inst.used_values(), vec![weak_ref]);
         assert!(!inst.effects().is_pure());
-        assert!(inst.effects().contains(super::super::effect::Effect::ReadHeap));
+        assert!(inst
+            .effects()
+            .contains(super::super::effect::Effect::ReadHeap));
     }
-    
+
     #[test]
     fn test_barrier_instructions() {
         let ptr = ValueId::new(0);
-        
+
         let read_barrier = MirInstruction::BarrierRead { ptr };
         assert_eq!(read_barrier.dst_value(), None);
         assert_eq!(read_barrier.used_values(), vec![ptr]);
-        assert!(read_barrier.effects().contains(super::super::effect::Effect::Barrier));
-        assert!(read_barrier.effects().contains(super::super::effect::Effect::ReadHeap));
-        
+        assert!(read_barrier
+            .effects()
+            .contains(super::super::effect::Effect::Barrier));
+        assert!(read_barrier
+            .effects()
+            .contains(super::super::effect::Effect::ReadHeap));
+
         let write_barrier = MirInstruction::BarrierWrite { ptr };
         assert_eq!(write_barrier.dst_value(), None);
         assert_eq!(write_barrier.used_values(), vec![ptr]);
-        assert!(write_barrier.effects().contains(super::super::effect::Effect::Barrier));
-        assert!(write_barrier.effects().contains(super::super::effect::Effect::WriteHeap));
+        assert!(write_barrier
+            .effects()
+            .contains(super::super::effect::Effect::Barrier));
+        assert!(write_barrier
+            .effects()
+            .contains(super::super::effect::Effect::WriteHeap));
     }
-    
+
     #[test]
     fn test_extern_call_instruction() {
         let dst = ValueId::new(0);
@@ -876,11 +946,11 @@ mod tests {
             args: vec![arg1, arg2],
             effects: super::super::effect::EffectMask::IO,
         };
-        
+
         assert_eq!(inst.dst_value(), Some(dst));
         assert_eq!(inst.used_values(), vec![arg1, arg2]);
         assert_eq!(inst.effects(), super::super::effect::EffectMask::IO);
-        
+
         // Test void extern call
         let void_inst = MirInstruction::ExternCall {
             dst: None,
@@ -889,7 +959,7 @@ mod tests {
             args: vec![arg1],
             effects: super::super::effect::EffectMask::IO,
         };
-        
+
         assert_eq!(void_inst.dst_value(), None);
         assert_eq!(void_inst.used_values(), vec![arg1]);
     }

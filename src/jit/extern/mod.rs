@@ -4,10 +4,10 @@
 //! JIT can call via symbol names. Lowering will resolve MIR ops into
 //! these externs once call emission is added.
 
-pub mod collections;
-pub mod host_bridge;
-pub mod handles;
-pub mod birth;
-pub mod runtime;
 pub mod r#async;
+pub mod birth;
+pub mod collections;
+pub mod handles;
+pub mod host_bridge;
 pub mod result;
+pub mod runtime;

@@ -11,10 +11,10 @@
  * Behavior and public APIs are preserved. This is a pure move/refactor.
  */
 
-use crate::mir::{MirModule, MirFunction, MirInstruction, BasicBlockId};
-use crate::box_trait::NyashBox;
-use super::{vm::VM, vm::VMError, vm::VMValue};
+use super::{vm::VMError, vm::VMValue, vm::VM};
 use crate::backend::vm_control_flow::ControlFlow;
+use crate::box_trait::NyashBox;
+use crate::mir::{BasicBlockId, MirFunction, MirInstruction, MirModule};
 
 impl VM {
     /// Execute a MIR module
@@ -34,12 +34,17 @@ impl VM {
         if crate::config::env::vm_pic_stats() {
             self.print_cache_stats_summary();
         }
-        if let Some(jm) = &self.jit_manager { jm.print_summary(); }
+        if let Some(jm) = &self.jit_manager {
+            jm.print_summary();
+        }
         {
             let lvl = crate::config::env::gc_trace_level();
             if lvl > 0 {
                 if let Some((sp, rd, wr)) = self.runtime.gc.snapshot_counters() {
-                    eprintln!("[GC] counters: safepoints={} read_barriers={} write_barriers={}", sp, rd, wr);
+                    eprintln!(
+                        "[GC] counters: safepoints={} read_barriers={} write_barriers={}",
+                        sp, rd, wr
+                    );
                 }
                 let roots_total = self.scope_tracker.root_count_total();
                 let root_regions = self.scope_tracker.root_regions();
@@ -48,8 +53,12 @@ impl VM {
                     "[GC] mock_mark: roots_total={} regions={} object_field_slots={}",
                     roots_total, root_regions, field_slots
                 );
-                if lvl >= 2 { self.gc_print_roots_breakdown(); }
-                if lvl >= 3 { self.gc_print_reachability_depth2(); }
+                if lvl >= 2 {
+                    self.gc_print_roots_breakdown();
+                }
+                if lvl >= 3 {
+                    self.gc_print_reachability_depth2();
+                }
             }
         }
         Ok(result.to_nyash_box())
@@ -97,9 +106,9 @@ impl VM {
             .module
             .as_ref()
             .ok_or_else(|| VMError::InvalidInstruction("No active module".to_string()))?;
-        let function_ref = module_ref
-            .get_function(func_name)
-            .ok_or_else(|| VMError::InvalidInstruction(format!("Function '{}' not found", func_name)))?;
+        let function_ref = module_ref.get_function(func_name).ok_or_else(|| {
+            VMError::InvalidInstruction(format!("Function '{}' not found", func_name))
+        })?;
         let function = function_ref.clone();
 
         let saved_values = std::mem::take(&mut self.values);
@@ -143,7 +152,11 @@ impl VM {
         self.current_function = Some(function.signature.name.clone());
         if let Some(jm) = &mut self.jit_manager {
             if let Ok(s) = std::env::var("NYASH_JIT_THRESHOLD") {
-                if let Ok(t) = s.parse::<u32>() { if t > 0 { jm.set_threshold(t); } }
+                if let Ok(t) = s.parse::<u32>() {
+                    if t > 0 {
+                        jm.set_threshold(t);
+                    }
+                }
             }
             jm.record_entry(&function.signature.name);
             let _ = jm.maybe_compile(&function.signature.name, function);
@@ -197,7 +210,10 @@ impl VM {
                     } else if std::env::var("NYASH_JIT_STATS").ok().as_deref() == Some("1")
                         || std::env::var("NYASH_JIT_TRAP_LOG").ok().as_deref() == Some("1")
                     {
-                        eprintln!("[JIT] fallback: VM path taken for {}", function.signature.name);
+                        eprintln!(
+                            "[JIT] fallback: VM path taken for {}",
+                            function.signature.name
+                        );
                         if jit_only {
                             self.leave_root_region();
                             self.scope_tracker.pop_scope();
@@ -285,9 +301,13 @@ impl VM {
                 if should_return.is_none() && next_block.is_none() {
                     if let Some(term) = &block.terminator {
                         match self.execute_instruction(term)? {
-                            ControlFlow::Continue => {},
-                            ControlFlow::Jump(target) => { next_block = Some(target); },
-                            ControlFlow::Return(value) => { should_return = Some(value); },
+                            ControlFlow::Continue => {}
+                            ControlFlow::Jump(target) => {
+                                next_block = Some(target);
+                            }
+                            ControlFlow::Return(value) => {
+                                should_return = Some(value);
+                            }
                         }
                     }
                 }
@@ -320,10 +340,16 @@ impl VM {
     }
 
     /// Execute a single instruction
-    pub(super) fn execute_instruction(&mut self, instruction: &MirInstruction) -> Result<ControlFlow, VMError> {
+    pub(super) fn execute_instruction(
+        &mut self,
+        instruction: &MirInstruction,
+    ) -> Result<ControlFlow, VMError> {
         let debug_global = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1");
-        let debug_exec = debug_global || std::env::var("NYASH_VM_DEBUG_EXEC").ok().as_deref() == Some("1");
-        if debug_exec { eprintln!("[VM] execute_instruction: {:?}", instruction); }
+        let debug_exec =
+            debug_global || std::env::var("NYASH_VM_DEBUG_EXEC").ok().as_deref() == Some("1");
+        if debug_exec {
+            eprintln!("[VM] execute_instruction: {:?}", instruction);
+        }
         self.record_instruction(instruction);
         super::dispatch::execute_instruction(self, instruction, debug_global)
     }

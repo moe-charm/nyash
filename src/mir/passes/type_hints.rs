@@ -10,4 +10,3 @@ use crate::mir::MirModule;
 pub fn propagate_param_type_hints(_module: &mut MirModule) -> u32 {
     0
 }
-

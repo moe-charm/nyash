@@ -10,7 +10,9 @@ impl super::MirBuilder {
     ) -> Result<ValueId, String> {
         let callee_id = self.build_expression_impl(callee)?;
         let mut arg_ids: Vec<ValueId> = Vec::new();
-        for a in arguments { arg_ids.push(self.build_expression_impl(a)?); }
+        for a in arguments {
+            arg_ids.push(self.build_expression_impl(a)?);
+        }
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::Call {
             dst: Some(dst),
@@ -21,4 +23,3 @@ impl super::MirBuilder {
         Ok(dst)
     }
 }
-

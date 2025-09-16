@@ -1,7 +1,7 @@
+use super::{BoxDeclaration, StaticBoxDefinition};
 use crate::instance_v2::InstanceBox;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
-use super::{BoxDeclaration, StaticBoxDefinition};
 
 /// スレッド間で共有される状態
 #[derive(Clone)]
@@ -30,8 +30,8 @@ impl SharedState {
     pub fn new() -> Self {
         let global_box = InstanceBox::new(
             "Global".to_string(),
-            vec![],          // フィールド名（空から始める）
-            HashMap::new(),  // メソッド（グローバル関数）
+            vec![],         // フィールド名（空から始める）
+            HashMap::new(), // メソッド（グローバル関数）
         );
 
         Self {

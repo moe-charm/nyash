@@ -29,6 +29,9 @@ fn plugin_invoke_hygiene_string_len_is_hostcall() {
             assert_eq!(symbol, c::SYM_STRING_LEN_H);
             assert_eq!(reason, "mapped_symbol");
         }
-        other => panic!("expected HostCall(mapped_symbol) for String.len, got: {:?}", other),
+        other => panic!(
+            "expected HostCall(mapped_symbol) for String.len, got: {:?}",
+            other
+        ),
     }
 }

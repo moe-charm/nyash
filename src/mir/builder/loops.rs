@@ -1,8 +1,12 @@
 //! Small loop utilities for MirBuilder
-use super::{BasicBlockId};
+use super::BasicBlockId;
 
 /// Push loop context (header/exit) onto the MirBuilder stacks.
-pub(crate) fn push_loop_context(builder: &mut super::MirBuilder, header: BasicBlockId, exit: BasicBlockId) {
+pub(crate) fn push_loop_context(
+    builder: &mut super::MirBuilder,
+    header: BasicBlockId,
+    exit: BasicBlockId,
+) {
     builder.loop_header_stack.push(header);
     builder.loop_exit_stack.push(exit);
 }

@@ -15,12 +15,17 @@ pub struct NyashEnv {
 
 impl NyashEnv {
     pub fn from_env() -> Self {
-        Self { jit: crate::jit::config::JitConfig::from_env(), overrides: BTreeMap::new() }
+        Self {
+            jit: crate::jit::config::JitConfig::from_env(),
+            overrides: BTreeMap::new(),
+        }
     }
     /// Apply current struct values into process environment
     pub fn apply_env(&self) {
         self.jit.apply_env();
-        for (k, v) in &self.overrides { std::env::set_var(k, v); }
+        for (k, v) in &self.overrides {
+            std::env::set_var(k, v);
+        }
     }
 }
 
@@ -32,14 +37,19 @@ static GLOBAL_ENV: OnceCell<RwLock<NyashEnv>> = OnceCell::new();
 
 pub fn current() -> NyashEnv {
     if let Some(lock) = GLOBAL_ENV.get() {
-        if let Ok(cfg) = lock.read() { return cfg.clone(); }
+        if let Ok(cfg) = lock.read() {
+            return cfg.clone();
+        }
     }
     NyashEnv::from_env()
 }
 
 pub fn set_current(cfg: NyashEnv) {
     if let Some(lock) = GLOBAL_ENV.get() {
-        if let Ok(mut w) = lock.write() { *w = cfg; return; }
+        if let Ok(mut w) = lock.write() {
+            *w = cfg;
+            return;
+        }
     }
     let _ = GLOBAL_ENV.set(RwLock::new(cfg));
 }
@@ -56,9 +66,16 @@ pub fn bootstrap_from_toml_env() {
         return;
     }
     let path = "nyash.toml";
-    let content = match std::fs::read_to_string(path) { Ok(s) => s, Err(_) => return };
-    let Ok(value) = toml::from_str::<toml::Value>(&content) else { return };
-    let Some(env_tbl) = value.get("env").and_then(|v| v.as_table()) else { return };
+    let content = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&content) else {
+        return;
+    };
+    let Some(env_tbl) = value.get("env").and_then(|v| v.as_table()) else {
+        return;
+    };
     let mut overrides: BTreeMap<String, String> = BTreeMap::new();
     for (k, v) in env_tbl {
         if let Some(s) = v.as_str() {
@@ -82,12 +99,17 @@ pub fn bootstrap_from_toml_env() {
 
 /// Get await maximum milliseconds, centralized here for consistency.
 pub fn await_max_ms() -> u64 {
-    std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000)
+    std::env::var("NYASH_AWAIT_MAX_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5000)
 }
 
 // ---- MIR PHI-less (edge-copy) mode ----
 /// Enable MIR PHI non-generation. Bridge/Builder emit edge copies instead of PHI.
-pub fn mir_no_phi() -> bool { std::env::var("NYASH_MIR_NO_PHI").ok().as_deref() == Some("1") }
+pub fn mir_no_phi() -> bool {
+    std::env::var("NYASH_MIR_NO_PHI").ok().as_deref() == Some("1")
+}
 
 /// Allow verifier to skip SSA/dominance/merge checks for PHI-less MIR.
 pub fn verify_allow_no_phi() -> bool {
@@ -95,7 +117,9 @@ pub fn verify_allow_no_phi() -> bool {
 }
 
 // ---- LLVM harness toggle (llvmlite) ----
-pub fn llvm_use_harness() -> bool { std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1") }
+pub fn llvm_use_harness() -> bool {
+    std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1")
+}
 
 // ---- Phase 11.8 MIR cleanup toggles ----
 /// Core-13 minimal MIR mode toggle
@@ -109,30 +133,65 @@ pub fn mir_core13() -> bool {
         None => true,
     }
 }
-pub fn mir_ref_boxcall() -> bool { std::env::var("NYASH_MIR_REF_BOXCALL").ok().as_deref() == Some("1") || mir_core13() }
-pub fn mir_array_boxcall() -> bool { std::env::var("NYASH_MIR_ARRAY_BOXCALL").ok().as_deref() == Some("1") || mir_core13() }
-pub fn mir_plugin_invoke() -> bool { std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1") }
-pub fn plugin_only() -> bool { std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1") }
+pub fn mir_ref_boxcall() -> bool {
+    std::env::var("NYASH_MIR_REF_BOXCALL").ok().as_deref() == Some("1") || mir_core13()
+}
+pub fn mir_array_boxcall() -> bool {
+    std::env::var("NYASH_MIR_ARRAY_BOXCALL").ok().as_deref() == Some("1") || mir_core13()
+}
+pub fn mir_plugin_invoke() -> bool {
+    std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1")
+}
+pub fn plugin_only() -> bool {
+    std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1")
+}
 
 /// Core-13 "pure" mode: after normalization, only the 13 canonical ops are allowed.
 /// If enabled, the optimizer will try lightweight rewrites for Load/Store/NewBox/Unary,
 /// and the final verifier will reject any remaining non-Core-13 ops.
-pub fn mir_core13_pure() -> bool { std::env::var("NYASH_MIR_CORE13_PURE").ok().as_deref() == Some("1") }
+pub fn mir_core13_pure() -> bool {
+    std::env::var("NYASH_MIR_CORE13_PURE").ok().as_deref() == Some("1")
+}
 
 // ---- Optimizer diagnostics ----
-pub fn opt_debug() -> bool { std::env::var("NYASH_OPT_DEBUG").is_ok() }
-pub fn opt_diag() -> bool { std::env::var("NYASH_OPT_DIAG").is_ok() }
-pub fn opt_diag_forbid_legacy() -> bool { std::env::var("NYASH_OPT_DIAG_FORBID_LEGACY").is_ok() }
-pub fn opt_diag_fail() -> bool { std::env::var("NYASH_OPT_DIAG_FAIL").is_ok() }
+pub fn opt_debug() -> bool {
+    std::env::var("NYASH_OPT_DEBUG").is_ok()
+}
+pub fn opt_diag() -> bool {
+    std::env::var("NYASH_OPT_DIAG").is_ok()
+}
+pub fn opt_diag_forbid_legacy() -> bool {
+    std::env::var("NYASH_OPT_DIAG_FORBID_LEGACY").is_ok()
+}
+pub fn opt_diag_fail() -> bool {
+    std::env::var("NYASH_OPT_DIAG_FAIL").is_ok()
+}
 
 // ---- GC/Runtime tracing (execution-affecting visibility) ----
-pub fn gc_trace() -> bool { std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1") }
-pub fn gc_barrier_trace() -> bool { std::env::var("NYASH_GC_BARRIER_TRACE").ok().as_deref() == Some("1") }
-pub fn runtime_checkpoint_trace() -> bool { std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE").ok().as_deref() == Some("1") }
-pub fn vm_pic_stats() -> bool { std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1") }
-pub fn vm_vt_trace() -> bool { std::env::var("NYASH_VM_VT_TRACE").ok().as_deref() == Some("1") }
-pub fn vm_pic_trace() -> bool { std::env::var("NYASH_VM_PIC_TRACE").ok().as_deref() == Some("1") }
-pub fn gc_barrier_strict() -> bool { std::env::var("NYASH_GC_BARRIER_STRICT").ok().as_deref() == Some("1") }
+pub fn gc_trace() -> bool {
+    std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1")
+}
+pub fn gc_barrier_trace() -> bool {
+    std::env::var("NYASH_GC_BARRIER_TRACE").ok().as_deref() == Some("1")
+}
+pub fn runtime_checkpoint_trace() -> bool {
+    std::env::var("NYASH_RUNTIME_CHECKPOINT_TRACE")
+        .ok()
+        .as_deref()
+        == Some("1")
+}
+pub fn vm_pic_stats() -> bool {
+    std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1")
+}
+pub fn vm_vt_trace() -> bool {
+    std::env::var("NYASH_VM_VT_TRACE").ok().as_deref() == Some("1")
+}
+pub fn vm_pic_trace() -> bool {
+    std::env::var("NYASH_VM_PIC_TRACE").ok().as_deref() == Some("1")
+}
+pub fn gc_barrier_strict() -> bool {
+    std::env::var("NYASH_GC_BARRIER_STRICT").ok().as_deref() == Some("1")
+}
 
 /// Return 0 (off) to 3 (max) for `NYASH_GC_TRACE`.
 pub fn gc_trace_level() -> u8 {
@@ -146,42 +205,97 @@ pub fn gc_trace_level() -> u8 {
 }
 
 // ---- Rewriter flags (optimizer transforms)
-pub fn rewrite_debug() -> bool { std::env::var("NYASH_REWRITE_DEBUG").ok().as_deref() == Some("1") }
-pub fn rewrite_safepoint() -> bool { std::env::var("NYASH_REWRITE_SAFEPOINT").ok().as_deref() == Some("1") }
-pub fn rewrite_future() -> bool { std::env::var("NYASH_REWRITE_FUTURE").ok().as_deref() == Some("1") }
+pub fn rewrite_debug() -> bool {
+    std::env::var("NYASH_REWRITE_DEBUG").ok().as_deref() == Some("1")
+}
+pub fn rewrite_safepoint() -> bool {
+    std::env::var("NYASH_REWRITE_SAFEPOINT").ok().as_deref() == Some("1")
+}
+pub fn rewrite_future() -> bool {
+    std::env::var("NYASH_REWRITE_FUTURE").ok().as_deref() == Some("1")
+}
 
 // ---- Phase 12: Nyash ABI (vtable) toggles ----
-pub fn abi_vtable() -> bool { std::env::var("NYASH_ABI_VTABLE").ok().as_deref() == Some("1") }
-pub fn abi_strict() -> bool { std::env::var("NYASH_ABI_STRICT").ok().as_deref() == Some("1") }
+pub fn abi_vtable() -> bool {
+    std::env::var("NYASH_ABI_VTABLE").ok().as_deref() == Some("1")
+}
+pub fn abi_strict() -> bool {
+    std::env::var("NYASH_ABI_STRICT").ok().as_deref() == Some("1")
+}
 
 // ---- ExternCall strict diagnostics ----
-pub fn extern_strict() -> bool { std::env::var("NYASH_EXTERN_STRICT").ok().as_deref() == Some("1") }
-pub fn extern_trace() -> bool { std::env::var("NYASH_EXTERN_TRACE").ok().as_deref() == Some("1") }
+pub fn extern_strict() -> bool {
+    std::env::var("NYASH_EXTERN_STRICT").ok().as_deref() == Some("1")
+}
+pub fn extern_trace() -> bool {
+    std::env::var("NYASH_EXTERN_TRACE").ok().as_deref() == Some("1")
+}
 
 // ---- Phase 12: thresholds and routing policies ----
 /// PIC hotness threshold before promoting to mono cache.
 pub fn vm_pic_threshold() -> u32 {
-    std::env::var("NYASH_VM_PIC_THRESHOLD").ok().and_then(|s| s.parse().ok()).unwrap_or(8)
+    std::env::var("NYASH_VM_PIC_THRESHOLD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8)
 }
 
 /// Route VM ExternCall via name→slot handlers when available
-pub fn extern_route_slots() -> bool { std::env::var("NYASH_EXTERN_ROUTE_SLOTS").ok().as_deref() == Some("1") }
+pub fn extern_route_slots() -> bool {
+    std::env::var("NYASH_EXTERN_ROUTE_SLOTS").ok().as_deref() == Some("1")
+}
 
 // ---- Runner/CLI common toggles (hot-path centralization)
-pub fn cli_verbose() -> bool { std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") }
-pub fn enable_using() -> bool { std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1") }
-pub fn vm_use_py() -> bool { std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") }
-pub fn pipe_use_pyvm() -> bool { std::env::var("NYASH_PIPE_USE_PYVM").ok().as_deref() == Some("1") }
-pub fn vm_use_dispatch() -> bool { std::env::var("NYASH_VM_USE_DISPATCH").ok().as_deref() == Some("1") }
+pub fn cli_verbose() -> bool {
+    std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1")
+}
+pub fn enable_using() -> bool {
+    std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1")
+}
+pub fn vm_use_py() -> bool {
+    std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1")
+}
+pub fn pipe_use_pyvm() -> bool {
+    std::env::var("NYASH_PIPE_USE_PYVM").ok().as_deref() == Some("1")
+}
+pub fn vm_use_dispatch() -> bool {
+    std::env::var("NYASH_VM_USE_DISPATCH").ok().as_deref() == Some("1")
+}
 
 // Self-host compiler knobs
-pub fn ny_compiler_timeout_ms() -> u64 { std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000) }
-pub fn ny_compiler_emit_only() -> bool { std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1" }
-pub fn ny_compiler_skip_py() -> bool { std::env::var("NYASH_NY_COMPILER_SKIP_PY").ok().as_deref() == Some("1") }
-pub fn use_ny_compiler_exe() -> bool { std::env::var("NYASH_USE_NY_COMPILER_EXE").ok().as_deref() == Some("1") }
-pub fn ny_compiler_exe_path() -> Option<String> { std::env::var("NYASH_NY_COMPILER_EXE_PATH").ok() }
-pub fn ny_compiler_min_json() -> bool { std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1") }
-pub fn selfhost_read_tmp() -> bool { std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") }
-pub fn ny_compiler_stage3() -> bool { std::env::var("NYASH_NY_COMPILER_STAGE3").ok().as_deref() == Some("1") }
-pub fn ny_compiler_child_args() -> Option<String> { std::env::var("NYASH_NY_COMPILER_CHILD_ARGS").ok() }
-pub fn ny_compiler_use_tmp_only() -> bool { std::env::var("NYASH_NY_COMPILER_USE_TMP_ONLY").ok().as_deref() == Some("1") }
+pub fn ny_compiler_timeout_ms() -> u64 {
+    std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2000)
+}
+pub fn ny_compiler_emit_only() -> bool {
+    std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1"
+}
+pub fn ny_compiler_skip_py() -> bool {
+    std::env::var("NYASH_NY_COMPILER_SKIP_PY").ok().as_deref() == Some("1")
+}
+pub fn use_ny_compiler_exe() -> bool {
+    std::env::var("NYASH_USE_NY_COMPILER_EXE").ok().as_deref() == Some("1")
+}
+pub fn ny_compiler_exe_path() -> Option<String> {
+    std::env::var("NYASH_NY_COMPILER_EXE_PATH").ok()
+}
+pub fn ny_compiler_min_json() -> bool {
+    std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().as_deref() == Some("1")
+}
+pub fn selfhost_read_tmp() -> bool {
+    std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1")
+}
+pub fn ny_compiler_stage3() -> bool {
+    std::env::var("NYASH_NY_COMPILER_STAGE3").ok().as_deref() == Some("1")
+}
+pub fn ny_compiler_child_args() -> Option<String> {
+    std::env::var("NYASH_NY_COMPILER_CHILD_ARGS").ok()
+}
+pub fn ny_compiler_use_tmp_only() -> bool {
+    std::env::var("NYASH_NY_COMPILER_USE_TMP_ONLY")
+        .ok()
+        .as_deref()
+        == Some("1")
+}

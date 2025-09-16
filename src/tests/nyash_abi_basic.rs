@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::runtime::type_registry::{resolve_slot_by_name, known_methods_for};
+    use crate::runtime::type_registry::{known_methods_for, resolve_slot_by_name};
 
     #[test]
     fn type_registry_resolves_core_slots() {
@@ -28,36 +28,99 @@ mod tests {
     #[ignore]
     fn vm_vtable_map_set_get_has() {
         use crate::backend::vm::VM;
-        use crate::mir::{MirModule, MirFunction, FunctionSignature, BasicBlockId, MirInstruction, EffectMask, ConstValue, MirType, ValueId};
+        use crate::mir::{
+            BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
+            MirModule, MirType, ValueId,
+        };
 
         // Enable vtable-preferred path
         std::env::set_var("NYASH_ABI_VTABLE", "1");
 
         // Program: m = new MapBox(); m.set("k","v"); h = m.has("k"); g = m.get("k"); return g
         let mut m = MirModule::new("nyash_abi_map_get".into());
-        let sig = FunctionSignature { name: "main".into(), params: vec![], return_type: MirType::String, effects: EffectMask::PURE };
+        let sig = FunctionSignature {
+            name: "main".into(),
+            params: vec![],
+            return_type: MirType::String,
+            effects: EffectMask::PURE,
+        };
         let mut f = MirFunction::new(sig, BasicBlockId::new(0));
         let bb = f.entry_block;
 
         let mapv = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: mapv, box_type: "MapBox".into(), args: vec![] });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::NewBox {
+                dst: mapv,
+                box_type: "MapBox".into(),
+                args: vec![],
+            });
 
         let k = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: k, value: ConstValue::String("k".into()) });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Const {
+                dst: k,
+                value: ConstValue::String("k".into()),
+            });
         let v = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: v, value: ConstValue::String("v".into()) });
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::BoxCall { dst: None, box_val: mapv, method: "set".into(), args: vec![k, v], method_id: None, effects: EffectMask::PURE });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Const {
+                dst: v,
+                value: ConstValue::String("v".into()),
+            });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::BoxCall {
+                dst: None,
+                box_val: mapv,
+                method: "set".into(),
+                args: vec![k, v],
+                method_id: None,
+                effects: EffectMask::PURE,
+            });
 
         let k2 = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: k2, value: ConstValue::String("k".into()) });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Const {
+                dst: k2,
+                value: ConstValue::String("k".into()),
+            });
         let hasv = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::BoxCall { dst: Some(hasv), box_val: mapv, method: "has".into(), args: vec![k2], method_id: None, effects: EffectMask::PURE });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::BoxCall {
+                dst: Some(hasv),
+                box_val: mapv,
+                method: "has".into(),
+                args: vec![k2],
+                method_id: None,
+                effects: EffectMask::PURE,
+            });
 
         let k3 = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: k3, value: ConstValue::String("k".into()) });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Const {
+                dst: k3,
+                value: ConstValue::String("k".into()),
+            });
         let got = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::BoxCall { dst: Some(got), box_val: mapv, method: "get".into(), args: vec![k3], method_id: None, effects: EffectMask::PURE });
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: Some(got) });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::BoxCall {
+                dst: Some(got),
+                box_val: mapv,
+                method: "get".into(),
+                args: vec![k3],
+                method_id: None,
+                effects: EffectMask::PURE,
+            });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Return { value: Some(got) });
 
         m.add_function(f);
 
@@ -69,8 +132,8 @@ mod tests {
     #[test]
     fn mapbox_keys_values_return_arrays() {
         // Direct Box-level test (not via VM): keys()/values() should return ArrayBox
+        use crate::box_trait::{IntegerBox, NyashBox, StringBox};
         use crate::boxes::map_box::MapBox;
-        use crate::box_trait::{NyashBox, StringBox, IntegerBox};
 
         let map = MapBox::new();
         map.set(Box::new(StringBox::new("a")), Box::new(IntegerBox::new(1)));

@@ -1,6 +1,6 @@
 /*!
  * I/O Operations Box Methods Module
- * 
+ *
  * Extracted from box_methods.rs
  * Contains method implementations for I/O and error handling operations:
  * - FileBox (execute_file_method) - File I/O operations
@@ -8,17 +8,21 @@
  */
 
 use super::super::*;
-use crate::boxes::ResultBox;
-use crate::box_trait::{StringBox, NyashBox};
-use crate::boxes::FileBox;
+use crate::box_trait::{NyashBox, StringBox};
 use crate::boxes::ref_cell_box::RefCellBox;
+use crate::boxes::FileBox;
+use crate::boxes::ResultBox;
 // use crate::bid::plugin_box::PluginFileBox;  // legacy - FileBox専用
 
 impl NyashInterpreter {
     /// FileBoxのメソッド呼び出しを実行
     /// Handles file I/O operations including read, write, exists, delete, and copy
-    pub(in crate::interpreter) fn execute_file_method(&mut self, file_box: &FileBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_file_method(
+        &mut self,
+        file_box: &FileBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "read" => {
                 if !arguments.is_empty() {
@@ -70,14 +74,18 @@ impl NyashInterpreter {
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for FileBox", method),
-            })
+            }),
         }
     }
 
     /// ResultBoxのメソッド呼び出しを実行
     /// Handles result/error checking operations for error handling patterns
-    pub(in crate::interpreter) fn execute_result_method(&mut self, result_box: &ResultBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_result_method(
+        &mut self,
+        result_box: &ResultBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "isOk" | "is_ok" => {
                 if !arguments.is_empty() {
@@ -105,38 +113,50 @@ impl NyashInterpreter {
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for ResultBox", method),
-            })
+            }),
         }
     }
 
     /// RefCellBox のメソッド: get()/set(value)
-    pub(in crate::interpreter) fn execute_refcell_method(&mut self, cell: &RefCellBox, method: &str, arguments: &[ASTNode])
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_refcell_method(
+        &mut self,
+        cell: &RefCellBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "get" => {
                 if !arguments.is_empty() {
-                    return Err(RuntimeError::InvalidOperation { message: format!("get() expects 0 arguments, got {}", arguments.len()) });
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("get() expects 0 arguments, got {}", arguments.len()),
+                    });
                 }
                 Ok(cell.borrow())
             }
             "set" => {
-                if arguments.len() != 1 { return Err(RuntimeError::InvalidOperation { message: format!("set() expects 1 argument, got {}", arguments.len()) }); }
+                if arguments.len() != 1 {
+                    return Err(RuntimeError::InvalidOperation {
+                        message: format!("set() expects 1 argument, got {}", arguments.len()),
+                    });
+                }
                 let v = self.execute_expression(&arguments[0])?;
                 cell.replace(v);
                 Ok(Box::new(crate::box_trait::VoidBox::new()))
             }
-            _ => Err(RuntimeError::InvalidOperation { message: format!("Unknown method '{}' for RefCellBox", method) })
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for RefCellBox", method),
+            }),
         }
     }
 
     /* legacy - PluginFileBox専用
     /// 汎用プラグインメソッド呼び出し実行 (BID-FFI system)
     /// Handles generic plugin method calls via dynamic method discovery
-    pub(in crate::interpreter) fn execute_plugin_method_generic(&mut self, plugin_box: &PluginFileBox, method: &str, arguments: &[ASTNode]) 
+    pub(in crate::interpreter) fn execute_plugin_method_generic(&mut self, plugin_box: &PluginFileBox, method: &str, arguments: &[ASTNode])
         -> Result<Box<dyn NyashBox>, RuntimeError> {
-        
+
         eprintln!("🔍 execute_plugin_method_generic: method='{}', args_count={}", method, arguments.len());
-        
+
         // まず利用可能なメソッドを確認
         match plugin_box.get_available_methods() {
             Ok(methods) => {
@@ -147,11 +167,11 @@ impl NyashInterpreter {
             }
             Err(e) => eprintln!("⚠️ Failed to get plugin methods: {:?}", e),
         }
-        
+
         // 引数をTLVエンコード（メソッド名も渡す）
         let encoded_args = self.encode_arguments_to_tlv(arguments, method)?;
         eprintln!("🔍 Encoded args length: {} bytes", encoded_args.len());
-        
+
         // プラグインのメソッドを動的呼び出し
         match plugin_box.call_method(method, &encoded_args) {
             Ok(response_bytes) => {
@@ -172,25 +192,25 @@ impl NyashInterpreter {
     fn encode_arguments_to_tlv(&mut self, arguments: &[ASTNode], method_name: &str) -> Result<Vec<u8>, RuntimeError> {
         use crate::bid::tlv::TlvEncoder;
         use crate::bid::registry;
-        
+
         let mut encoder = TlvEncoder::new();
-        
+
         // 型情報を取得（FileBoxのみ対応、後で拡張）
         let type_info = registry::global()
             .and_then(|reg| reg.get_method_type_info("FileBox", method_name));
-        
+
         // 型情報がある場合は、それに従って変換
         if let Some(type_info) = type_info {
             eprintln!("✨ Using type info for method '{}'", method_name);
-            
+
             // 引数の数をチェック
             if arguments.len() != type_info.args.len() {
                 return Err(RuntimeError::InvalidOperation {
-                    message: format!("{} expects {} arguments, got {}", 
+                    message: format!("{} expects {} arguments, got {}",
                                    method_name, type_info.args.len(), arguments.len()),
                 });
             }
-            
+
             // 各引数を型情報に従ってエンコード
             for (i, (arg, mapping)) in arguments.iter().zip(&type_info.args).enumerate() {
                 eprintln!("  🔄 Arg[{}]: {} -> {} conversion", i, mapping.from, mapping.to);
@@ -205,15 +225,15 @@ impl NyashInterpreter {
                 self.encode_value_default(&mut encoder, value)?;
             }
         }
-        
+
         Ok(encoder.finish())
     }
-    
+
     /// 型マッピングに基づいて値をエンコード（美しい！）
     fn encode_value_with_mapping(
-        &self, 
-        encoder: &mut crate::bid::tlv::TlvEncoder, 
-        value: Box<dyn NyashBox>, 
+        &self,
+        encoder: &mut crate::bid::tlv::TlvEncoder,
+        value: Box<dyn NyashBox>,
         mapping: &crate::bid::ArgTypeMapping
     ) -> Result<(), RuntimeError> {
         // determine_bid_tag()を使って適切なタグを決定
@@ -221,7 +241,7 @@ impl NyashInterpreter {
             .ok_or_else(|| RuntimeError::InvalidOperation {
                 message: format!("Unsupported type mapping: {} -> {}", mapping.from, mapping.to),
             })?;
-        
+
         // タグに応じてエンコード
         match tag {
             crate::bid::BidTag::String => {
@@ -267,7 +287,7 @@ impl NyashInterpreter {
             })
         }
     }
-    
+
     /// デフォルトエンコード（型情報がない場合のフォールバック）
     fn encode_value_default(
         &self,
@@ -297,26 +317,26 @@ impl NyashInterpreter {
                 })
         }
     }
-    
+
     /// TLVレスポンスをNyashBoxに変換
     fn decode_tlv_to_nyash_box(&self, response_bytes: &[u8], method_name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
         use crate::bid::tlv::TlvDecoder;
         use crate::bid::types::BidTag;
-        
+
         if response_bytes.is_empty() {
             return Ok(Box::new(StringBox::new("".to_string())));
         }
-        
+
         let mut decoder = TlvDecoder::new(response_bytes)
             .map_err(|e| RuntimeError::InvalidOperation {
                 message: format!("TLV decoder creation failed: {:?}", e),
             })?;
-        
+
         if let Some((tag, payload)) = decoder.decode_next()
             .map_err(|e| RuntimeError::InvalidOperation {
                 message: format!("TLV decoding failed: {:?}", e),
             })? {
-            
+
             match tag {
                 BidTag::String => {
                     let text = String::from_utf8_lossy(payload).to_string();
@@ -359,7 +379,7 @@ impl NyashInterpreter {
     /// Handles plugin-backed file I/O operations via FFI interface
     /// 🚨 DEPRECATED: This method has hardcoded method names and violates BID-FFI principles
     /// Use execute_plugin_method_generic instead for true dynamic method calling
-    pub(in crate::interpreter) fn execute_plugin_file_method(&mut self, plugin_file_box: &PluginFileBox, method: &str, arguments: &[ASTNode]) 
+    pub(in crate::interpreter) fn execute_plugin_file_method(&mut self, plugin_file_box: &PluginFileBox, method: &str, arguments: &[ASTNode])
         -> Result<Box<dyn NyashBox>, RuntimeError> {
         // 🎯 新しい汎用システムにリダイレクト
         self.execute_plugin_method_generic(plugin_file_box, method, arguments)

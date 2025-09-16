@@ -5,8 +5,13 @@ thread_local! {
 }
 
 pub fn is_enabled_env() -> bool {
-    if std::env::var("NYASH_FORCE_SUGAR").ok().as_deref() == Some("1") { return true; }
-    matches!(std::env::var("NYASH_SYNTAX_SUGAR_LEVEL").ok().as_deref(), Some("basic") | Some("full"))
+    if std::env::var("NYASH_FORCE_SUGAR").ok().as_deref() == Some("1") {
+        return true;
+    }
+    matches!(
+        std::env::var("NYASH_SYNTAX_SUGAR_LEVEL").ok().as_deref(),
+        Some("basic") | Some("full")
+    )
 }
 
 pub fn is_enabled() -> bool {
@@ -22,4 +27,3 @@ pub fn with_enabled<T>(f: impl FnOnce() -> T) -> T {
         r
     })
 }
-

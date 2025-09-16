@@ -1,11 +1,13 @@
-use crate::parser::{NyashParser, ParseError};
-use crate::parser::common::ParserUtils;
-use crate::tokenizer::TokenType;
 use crate::ast::{ASTNode, Span};
 use crate::must_advance;
+use crate::parser::common::ParserUtils;
+use crate::parser::{NyashParser, ParseError};
+use crate::tokenizer::TokenType;
 
 #[inline]
-fn is_sugar_enabled() -> bool { crate::parser::sugar_gate::is_enabled() }
+fn is_sugar_enabled() -> bool {
+    crate::parser::sugar_gate::is_enabled()
+}
 
 impl NyashParser {
     pub(crate) fn expr_parse_call(&mut self) -> Result<ASTNode, ParseError> {
@@ -70,12 +72,20 @@ impl NyashParser {
                     });
                 }
                 self.advance(); // consume '?.'
-                // ident then optional call
+                                // ident then optional call
                 let name = match &self.current_token().token_type {
-                    TokenType::IDENTIFIER(s) => { let v = s.clone(); self.advance(); v }
+                    TokenType::IDENTIFIER(s) => {
+                        let v = s.clone();
+                        self.advance();
+                        v
+                    }
                     _ => {
                         let line = self.current_token().line;
-                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "identifier after '?.'".to_string(), line });
+                        return Err(ParseError::UnexpectedToken {
+                            found: self.current_token().token_type.clone(),
+                            expected: "identifier after '?.'".to_string(),
+                            line,
+                        });
                     }
                 };
                 let access = if self.match_token(&TokenType::LPAREN) {
@@ -85,23 +95,39 @@ impl NyashParser {
                     while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
                         must_advance!(self, _unused, "safe method call arg parsing");
                         arguments.push(self.parse_expression()?);
-                        if self.match_token(&TokenType::COMMA) { self.advance(); }
+                        if self.match_token(&TokenType::COMMA) {
+                            self.advance();
+                        }
                     }
                     self.consume(TokenType::RPAREN)?;
-                    ASTNode::MethodCall { object: Box::new(expr.clone()), method: name, arguments, span: Span::unknown() }
+                    ASTNode::MethodCall {
+                        object: Box::new(expr.clone()),
+                        method: name,
+                        arguments,
+                        span: Span::unknown(),
+                    }
                 } else {
                     // field access
-                    ASTNode::FieldAccess { object: Box::new(expr.clone()), field: name, span: Span::unknown() }
+                    ASTNode::FieldAccess {
+                        object: Box::new(expr.clone()),
+                        field: name,
+                        span: Span::unknown(),
+                    }
                 };
 
                 // Wrap with peek: peek expr { null => null, else => access(expr) }
                 expr = ASTNode::PeekExpr {
                     scrutinee: Box::new(expr.clone()),
-                    arms: vec![(crate::ast::LiteralValue::Null, ASTNode::Literal { value: crate::ast::LiteralValue::Null, span: Span::unknown() })],
+                    arms: vec![(
+                        crate::ast::LiteralValue::Null,
+                        ASTNode::Literal {
+                            value: crate::ast::LiteralValue::Null,
+                            span: Span::unknown(),
+                        },
+                    )],
                     else_expr: Box::new(access),
                     span: Span::unknown(),
                 };
-
             } else if self.match_token(&TokenType::LPAREN) {
                 // 関数呼び出し: function(args) または 一般式呼び出し: (callee)(args)
                 self.advance(); // consume '('
@@ -109,23 +135,43 @@ impl NyashParser {
                 while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
                     must_advance!(self, _unused, "function call argument parsing");
                     arguments.push(self.parse_expression()?);
-                    if self.match_token(&TokenType::COMMA) { self.advance(); }
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance();
+                    }
                 }
                 self.consume(TokenType::RPAREN)?;
 
                 if let ASTNode::Variable { name, .. } = expr.clone() {
-                    expr = ASTNode::FunctionCall { name, arguments, span: Span::unknown() };
+                    expr = ASTNode::FunctionCall {
+                        name,
+                        arguments,
+                        span: Span::unknown(),
+                    };
                 } else {
-                    expr = ASTNode::Call { callee: Box::new(expr), arguments, span: Span::unknown() };
+                    expr = ASTNode::Call {
+                        callee: Box::new(expr),
+                        arguments,
+                        span: Span::unknown(),
+                    };
                 }
             } else if self.match_token(&TokenType::QUESTION) {
                 let nt = self.peek_token();
-                let is_ender = matches!(nt,
-                    TokenType::NEWLINE | TokenType::EOF | TokenType::RPAREN | TokenType::COMMA | TokenType::RBRACE
+                let is_ender = matches!(
+                    nt,
+                    TokenType::NEWLINE
+                        | TokenType::EOF
+                        | TokenType::RPAREN
+                        | TokenType::COMMA
+                        | TokenType::RBRACE
                 );
-                if !is_ender { break; }
+                if !is_ender {
+                    break;
+                }
                 self.advance();
-                expr = ASTNode::QMarkPropagate { expression: Box::new(expr), span: Span::unknown() };
+                expr = ASTNode::QMarkPropagate {
+                    expression: Box::new(expr),
+                    span: Span::unknown(),
+                };
             } else {
                 break;
             }

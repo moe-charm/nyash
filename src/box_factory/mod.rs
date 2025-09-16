@@ -1,9 +1,9 @@
 /*!
  * Unified Box Factory Architecture
- * 
+ *
  * Phase 9.78: 統合BoxFactoryアーキテクチャ
  * すべてのBox生成（ビルトイン、ユーザー定義、プラグイン）を統一的に扱う
- * 
+ *
  * Design principles:
  * - "Everything is Box" 哲学の実装レベルでの体現
  * - birth/finiライフサイクルの明確な責務分離
@@ -23,15 +23,15 @@ pub trait BoxFactory: Send + Sync {
         name: &str,
         args: &[Box<dyn NyashBox>],
     ) -> Result<Box<dyn NyashBox>, RuntimeError>;
-    
+
     /// Check if this factory is currently available
     fn is_available(&self) -> bool {
         true
     }
-    
+
     /// Get list of Box types this factory can create
     fn box_types(&self) -> Vec<&str>;
-    
+
     /// Check if this factory supports birth/fini lifecycle
     fn supports_birth(&self) -> bool {
         true
@@ -47,7 +47,7 @@ pub trait BoxFactory: Send + Sync {
 pub struct UnifiedBoxRegistry {
     /// Ordered list of factories (priority: builtin > user > plugin)
     pub factories: Vec<Arc<dyn BoxFactory>>,
-    
+
     /// Quick lookup cache for performance
     type_cache: RwLock<HashMap<String, usize>>, // maps type name to factory index
 }
@@ -60,13 +60,13 @@ impl UnifiedBoxRegistry {
             type_cache: RwLock::new(HashMap::new()),
         }
     }
-    
+
     /// Register a new factory
     pub fn register(&mut self, factory: Arc<dyn BoxFactory>) {
         // Get all types this factory can create
         let types = factory.box_types();
         let factory_index = self.factories.len();
-        
+
         // Update cache
         let mut cache = self.type_cache.write().unwrap();
         // Reserved core types that must remain builtin-owned
@@ -105,10 +105,10 @@ impl UnifiedBoxRegistry {
                 }
             }
         }
-        
+
         self.factories.push(factory);
     }
-    
+
     /// Create a Box using the unified interface
     pub fn create_box(
         &self,
@@ -119,8 +119,12 @@ impl UnifiedBoxRegistry {
         if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
             use crate::runtime::{get_global_registry, BoxProvider};
             // Allowlist types for override: env NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox" (default: none)
-            let allow: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
-                list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+            let allow: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES")
+            {
+                list.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
             } else {
                 vec![]
             };
@@ -128,8 +132,11 @@ impl UnifiedBoxRegistry {
                 let v2 = get_global_registry();
                 if let Some(provider) = v2.get_provider(name) {
                     if let BoxProvider::Plugin(_lib) = provider {
-                        return v2.create_box(name, args)
-                            .map_err(|e| RuntimeError::InvalidOperation { message: format!("Plugin Box creation failed: {}", e) });
+                        return v2.create_box(name, args).map_err(|e| {
+                            RuntimeError::InvalidOperation {
+                                message: format!("Plugin Box creation failed: {}", e),
+                            }
+                        });
                     }
                 }
             }
@@ -144,19 +151,19 @@ impl UnifiedBoxRegistry {
             }
         }
         drop(cache);
-        
+
         // Linear search through all factories
         for factory in &self.factories {
             if !factory.is_available() {
                 continue;
             }
-            
+
             // For factories that advertise types, check if they support this type
             let box_types = factory.box_types();
             if !box_types.is_empty() && !box_types.contains(&name) {
                 continue;
             }
-            
+
             // Try to create the box (factories with empty box_types() will always be tried)
             match factory.create_box(name, args) {
                 Ok(boxed) => return Ok(boxed),
@@ -185,19 +192,25 @@ impl UnifiedBoxRegistry {
             let cache = self.type_cache.read().unwrap();
             if let Some(&idx) = cache.get(name) {
                 if let Some(factory) = self.factories.get(idx) {
-                    if factory.is_available() { return true; }
+                    if factory.is_available() {
+                        return true;
+                    }
                 }
             }
         }
         // Fallback: scan factories that can enumerate types
         for factory in &self.factories {
-            if !factory.is_available() { continue; }
+            if !factory.is_available() {
+                continue;
+            }
             let types = factory.box_types();
-            if !types.is_empty() && types.contains(&name) { return true; }
+            if !types.is_empty() && types.contains(&name) {
+                return true;
+            }
         }
         false
     }
-    
+
     /// Get all available Box types
     pub fn available_types(&self) -> Vec<String> {
         let mut types = Vec::new();
@@ -214,15 +227,15 @@ impl UnifiedBoxRegistry {
     }
 }
 
+pub mod builtin;
+pub mod plugin;
 /// Re-export submodules
 pub mod user_defined;
-pub mod plugin;
-pub mod builtin;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_registry_creation() {
         let registry = UnifiedBoxRegistry::new();

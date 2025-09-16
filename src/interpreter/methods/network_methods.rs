@@ -1,6 +1,6 @@
 /*!
  * Network and Communication Box Methods Module
- * 
+ *
  * Contains method implementations for network-related Box types:
  * - HttpClientBox (execute_http_method) - HTTP client operations
  * - StreamBox (execute_stream_method) - Stream processing operations
@@ -12,8 +12,12 @@ use crate::boxes::{HttpClientBox, StreamBox};
 
 impl NyashInterpreter {
     /// HttpClientBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_http_method(&mut self, http_box: &HttpClientBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_http_method(
+        &mut self,
+        http_box: &HttpClientBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "get" => {
                 if arguments.len() != 1 {
@@ -66,13 +70,17 @@ impl NyashInterpreter {
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for HttpClientBox", method),
-            })
+            }),
         }
     }
 
     /// StreamBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_stream_method(&mut self, stream_box: &StreamBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_stream_method(
+        &mut self,
+        stream_box: &StreamBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "write" => {
                 if arguments.len() != 1 {
@@ -118,7 +126,7 @@ impl NyashInterpreter {
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for StreamBox", method),
-            })
+            }),
         }
     }
 }

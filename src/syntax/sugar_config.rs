@@ -1,20 +1,32 @@
 use std::{env, fs, path::Path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SugarLevel { None, Basic, Full }
+pub enum SugarLevel {
+    None,
+    Basic,
+    Full,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SugarConfig { pub level: SugarLevel }
+pub struct SugarConfig {
+    pub level: SugarLevel,
+}
 
 impl Default for SugarConfig {
-    fn default() -> Self { Self { level: SugarLevel::None } }
+    fn default() -> Self {
+        Self {
+            level: SugarLevel::None,
+        }
+    }
 }
 
 impl SugarConfig {
     pub fn from_env_or_toml(path: impl AsRef<Path>) -> Self {
         // 1) env override
         if let Ok(s) = env::var("NYASH_SYNTAX_SUGAR_LEVEL") {
-            return Self { level: parse_level(&s) };
+            return Self {
+                level: parse_level(&s),
+            };
         }
         // 2) toml [syntax].sugar_level
         let path = path.as_ref();
@@ -22,7 +34,9 @@ impl SugarConfig {
             if let Ok(val) = toml::from_str::<toml::Value>(&content) {
                 if let Some(table) = val.get("syntax").and_then(|v| v.as_table()) {
                     if let Some(level_str) = table.get("sugar_level").and_then(|v| v.as_str()) {
-                        return Self { level: parse_level(level_str) };
+                        return Self {
+                            level: parse_level(level_str),
+                        };
                     }
                 }
             }

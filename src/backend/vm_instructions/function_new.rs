@@ -1,7 +1,7 @@
+use crate::backend::vm::ControlFlow;
+use crate::backend::{VMError, VMValue, VM};
 use crate::mir::ValueId;
 use std::sync::Arc;
-use crate::backend::vm::ControlFlow;
-use crate::backend::{VM, VMError, VMValue};
 
 impl VM {
     /// Execute FunctionNew instruction (construct a FunctionBox value)
@@ -23,11 +23,14 @@ impl VM {
         // Capture 'me' weakly if provided and is a BoxRef
         if let Some(m) = me {
             match self.get_value(*m)? {
-                VMValue::BoxRef(b) => { env.me_value = Some(Arc::downgrade(&b)); }
+                VMValue::BoxRef(b) => {
+                    env.me_value = Some(Arc::downgrade(&b));
+                }
                 _ => {}
             }
         }
-        let fun = crate::boxes::function_box::FunctionBox::with_env(params.to_vec(), body.to_vec(), env);
+        let fun =
+            crate::boxes::function_box::FunctionBox::with_env(params.to_vec(), body.to_vec(), env);
         self.set_value(dst, VMValue::BoxRef(Arc::new(fun)));
         Ok(ControlFlow::Continue)
     }

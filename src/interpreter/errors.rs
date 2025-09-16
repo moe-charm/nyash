@@ -36,7 +36,6 @@ pub enum RuntimeError {
     EnvironmentError(String),
 
     // === 🔥 Enhanced Errors with Span Information ===
-
     #[error("Undefined variable '{name}' at {span}")]
     UndefinedVariableAt { name: String, span: Span },
 

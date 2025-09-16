@@ -23,11 +23,19 @@ impl super::MirBuilder {
         let need_jump = {
             let cur = self.current_block;
             if let (Some(cb), Some(ref func)) = (cur, &self.current_function) {
-                if let Some(bb) = func.blocks.get(&cb) { !bb.is_terminated() } else { true }
-            } else { true }
+                if let Some(bb) = func.blocks.get(&cb) {
+                    !bb.is_terminated()
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
         };
         if need_jump {
-            self.emit_instruction(super::MirInstruction::Jump { target: dispatch_block })?;
+            self.emit_instruction(super::MirInstruction::Jump {
+                target: dispatch_block,
+            })?;
         }
         self.start_new_block(dispatch_block)?;
 
@@ -38,14 +46,19 @@ impl super::MirBuilder {
             self.start_new_block(else_block)?;
             let else_val = self.build_expression_impl(else_expr)?;
             phi_inputs.push((else_block, else_val));
-            self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
+            self.emit_instruction(super::MirInstruction::Jump {
+                target: merge_block,
+            })?;
             self.start_new_block(merge_block)?;
             if self.is_no_phi_mode() {
                 for (pred, val) in phi_inputs {
                     self.insert_edge_copy(pred, result_val, val)?;
                 }
             } else {
-                self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+                self.emit_instruction(super::MirInstruction::Phi {
+                    dst: result_val,
+                    inputs: phi_inputs,
+                })?;
             }
             return Ok(result_val);
         }
@@ -58,24 +71,42 @@ impl super::MirBuilder {
         for (i, (label, arm_expr)) in arms.iter().cloned().enumerate() {
             let then_block = self.block_gen.next();
             // Next dispatch (only for non-last arm)
-            let next_dispatch = if i + 1 < arms.len() { Some(self.block_gen.next()) } else { None };
+            let next_dispatch = if i + 1 < arms.len() {
+                Some(self.block_gen.next())
+            } else {
+                None
+            };
             let else_target = next_dispatch.unwrap_or(else_block);
 
             // In current dispatch block, compare and branch
             self.start_new_block(cur_dispatch)?;
             if let LiteralValue::String(s) = label {
                 let lit_id = self.value_gen.next();
-                self.emit_instruction(super::MirInstruction::Const { dst: lit_id, value: super::ConstValue::String(s) })?;
+                self.emit_instruction(super::MirInstruction::Const {
+                    dst: lit_id,
+                    value: super::ConstValue::String(s),
+                })?;
                 let cond_id = self.value_gen.next();
-                self.emit_instruction(super::MirInstruction::Compare { dst: cond_id, op: super::CompareOp::Eq, lhs: scr_val, rhs: lit_id })?;
-                self.emit_instruction(super::MirInstruction::Branch { condition: cond_id, then_bb: then_block, else_bb: else_target })?;
+                self.emit_instruction(super::MirInstruction::Compare {
+                    dst: cond_id,
+                    op: super::CompareOp::Eq,
+                    lhs: scr_val,
+                    rhs: lit_id,
+                })?;
+                self.emit_instruction(super::MirInstruction::Branch {
+                    condition: cond_id,
+                    then_bb: then_block,
+                    else_bb: else_target,
+                })?;
             }
 
             // then arm
             self.start_new_block(then_block)?;
             let then_val = self.build_expression_impl(arm_expr)?;
             phi_inputs.push((then_block, then_val));
-            self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
+            self.emit_instruction(super::MirInstruction::Jump {
+                target: merge_block,
+            })?;
 
             // Move to next dispatch or else block
             cur_dispatch = else_target;
@@ -85,7 +116,9 @@ impl super::MirBuilder {
         self.start_new_block(else_block)?;
         let else_val = self.build_expression_impl(else_expr)?;
         phi_inputs.push((else_block, else_val));
-        self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
+        self.emit_instruction(super::MirInstruction::Jump {
+            target: merge_block,
+        })?;
 
         // Merge and yield result
         self.start_new_block(merge_block)?;
@@ -94,7 +127,10 @@ impl super::MirBuilder {
                 self.insert_edge_copy(pred, result_val, val)?;
             }
         } else {
-            self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+            self.emit_instruction(super::MirInstruction::Phi {
+                dst: result_val,
+                inputs: phi_inputs,
+            })?;
         }
         Ok(result_val)
     }

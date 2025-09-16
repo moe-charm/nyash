@@ -15,7 +15,16 @@ pub struct ExecutionFrame {
 }
 
 impl ExecutionFrame {
-    pub fn new() -> Self { Self { current_block: None, pc: 0, last_result: None } }
-    pub fn reset(&mut self) { self.current_block = None; self.pc = 0; self.last_result = None; }
+    pub fn new() -> Self {
+        Self {
+            current_block: None,
+            pc: 0,
+            last_result: None,
+        }
+    }
+    pub fn reset(&mut self) {
+        self.current_block = None;
+        self.pc = 0;
+        self.last_result = None;
+    }
 }
-

@@ -1,13 +1,13 @@
 /*!
  * Box Operations - Binary and unary operations between boxes
- * 
+ *
  * This module contains the implementation of operation boxes that perform
  * arithmetic, logical, and comparison operations between different Box types.
  */
 
-use crate::box_trait::{NyashBox, BoxCore, StringBox, IntegerBox, BoolBox, BoxBase};
-use std::fmt::{Debug, Display};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, IntegerBox, NyashBox, StringBox};
 use std::any::Any;
+use std::fmt::{Debug, Display};
 
 // ===== Binary Operation Boxes =====
 
@@ -20,53 +20,53 @@ pub struct AddBox {
 
 impl AddBox {
     pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
-        Self { 
-            left, 
-            right, 
+        Self {
+            left,
+            right,
             base: BoxBase::new(),
         }
     }
-    
+
     /// Execute the addition operation and return the result
     pub fn execute(&self) -> Box<dyn NyashBox> {
         use crate::boxes::math_box::FloatBox;
-        
+
         // 1. Integer + Integer
         if let (Some(left_int), Some(right_int)) = (
             self.left.as_any().downcast_ref::<IntegerBox>(),
-            self.right.as_any().downcast_ref::<IntegerBox>()
+            self.right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             let result = left_int.value + right_int.value;
             return Box::new(IntegerBox::new(result));
         }
-        
+
         // 2. Float + Float (or mixed with Integer)
         if let (Some(left_float), Some(right_float)) = (
             self.left.as_any().downcast_ref::<FloatBox>(),
-            self.right.as_any().downcast_ref::<FloatBox>()
+            self.right.as_any().downcast_ref::<FloatBox>(),
         ) {
             let result = left_float.value + right_float.value;
             return Box::new(FloatBox::new(result));
         }
-        
+
         // 3. Integer + Float
         if let (Some(left_int), Some(right_float)) = (
             self.left.as_any().downcast_ref::<IntegerBox>(),
-            self.right.as_any().downcast_ref::<FloatBox>()
+            self.right.as_any().downcast_ref::<FloatBox>(),
         ) {
             let result = left_int.value as f64 + right_float.value;
             return Box::new(FloatBox::new(result));
         }
-        
+
         // 4. Float + Integer
         if let (Some(left_float), Some(right_int)) = (
             self.left.as_any().downcast_ref::<FloatBox>(),
-            self.right.as_any().downcast_ref::<IntegerBox>()
+            self.right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             let result = left_float.value + right_int.value as f64;
             return Box::new(FloatBox::new(result));
         }
-        
+
         // 5. String concatenation (fallback for any types)
         let left_str = self.left.to_string_box();
         let right_str = self.right.to_string_box();
@@ -90,29 +90,26 @@ impl NyashBox for AddBox {
         let result = self.execute();
         result.to_string_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_add) = other.as_any().downcast_ref::<AddBox>() {
             BoolBox::new(
-                self.left.equals(other_add.left.as_ref()).value && 
-                self.right.equals(other_add.right.as_ref()).value
+                self.left.equals(other_add.left.as_ref()).value
+                    && self.right.equals(other_add.right.as_ref()).value,
             )
         } else {
             BoolBox::new(false)
         }
     }
-    
+
     fn type_name(&self) -> &'static str {
         "AddBox"
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(AddBox::new(
-            self.left.clone_box(),
-            self.right.clone_box()
-        ))
+        Box::new(AddBox::new(self.left.clone_box(), self.right.clone_box()))
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -123,19 +120,19 @@ impl BoxCore for AddBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string_box().value)
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -156,19 +153,19 @@ pub struct SubtractBox {
 
 impl SubtractBox {
     pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
-        Self { 
-            left, 
-            right, 
+        Self {
+            left,
+            right,
             base: BoxBase::new(),
         }
     }
-    
+
     /// Execute the subtraction operation and return the result
     pub fn execute(&self) -> Box<dyn NyashBox> {
         // For now, only handle integer subtraction
         if let (Some(left_int), Some(right_int)) = (
             self.left.as_any().downcast_ref::<IntegerBox>(),
-            self.right.as_any().downcast_ref::<IntegerBox>()
+            self.right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             let result = left_int.value - right_int.value;
             Box::new(IntegerBox::new(result))
@@ -180,7 +177,8 @@ impl SubtractBox {
             } else {
                 0
             };
-            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>() {
+            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>()
+            {
                 int_box.value
             } else {
                 0
@@ -206,23 +204,28 @@ impl NyashBox for SubtractBox {
         let result = self.execute();
         result.to_string_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_sub) = other.as_any().downcast_ref::<SubtractBox>() {
             BoolBox::new(
-                self.left.equals(other_sub.left.as_ref()).value && 
-                self.right.equals(other_sub.right.as_ref()).value
+                self.left.equals(other_sub.left.as_ref()).value
+                    && self.right.equals(other_sub.right.as_ref()).value,
             )
         } else {
             BoolBox::new(false)
         }
     }
-    
-    fn type_name(&self) -> &'static str { "SubtractBox" }
-    fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(SubtractBox::new(self.left.clone_box(), self.right.clone_box()))
+
+    fn type_name(&self) -> &'static str {
+        "SubtractBox"
     }
-    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(SubtractBox::new(
+            self.left.clone_box(),
+            self.right.clone_box(),
+        ))
+    }
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -230,13 +233,21 @@ impl NyashBox for SubtractBox {
 }
 
 impl BoxCore for SubtractBox {
-    fn box_id(&self) -> u64 { self.base.id }
-    fn parent_type_id(&self) -> Option<std::any::TypeId> { self.base.parent_type_id }
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string_box().value)
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Display for SubtractBox {
@@ -254,19 +265,19 @@ pub struct MultiplyBox {
 
 impl MultiplyBox {
     pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
-        Self { 
-            left, 
-            right, 
+        Self {
+            left,
+            right,
             base: BoxBase::new(),
         }
     }
-    
+
     /// Execute the multiplication operation and return the result
     pub fn execute(&self) -> Box<dyn NyashBox> {
         // For now, only handle integer multiplication
         if let (Some(left_int), Some(right_int)) = (
             self.left.as_any().downcast_ref::<IntegerBox>(),
-            self.right.as_any().downcast_ref::<IntegerBox>()
+            self.right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             let result = left_int.value * right_int.value;
             Box::new(IntegerBox::new(result))
@@ -277,7 +288,8 @@ impl MultiplyBox {
             } else {
                 0
             };
-            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>() {
+            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>()
+            {
                 int_box.value
             } else {
                 0
@@ -303,23 +315,28 @@ impl NyashBox for MultiplyBox {
         let result = self.execute();
         result.to_string_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_mul) = other.as_any().downcast_ref::<MultiplyBox>() {
             BoolBox::new(
-                self.left.equals(other_mul.left.as_ref()).value && 
-                self.right.equals(other_mul.right.as_ref()).value
+                self.left.equals(other_mul.left.as_ref()).value
+                    && self.right.equals(other_mul.right.as_ref()).value,
             )
         } else {
             BoolBox::new(false)
         }
     }
-    
-    fn type_name(&self) -> &'static str { "MultiplyBox" }
-    fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(MultiplyBox::new(self.left.clone_box(), self.right.clone_box()))
+
+    fn type_name(&self) -> &'static str {
+        "MultiplyBox"
     }
-    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(MultiplyBox::new(
+            self.left.clone_box(),
+            self.right.clone_box(),
+        ))
+    }
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -327,13 +344,21 @@ impl NyashBox for MultiplyBox {
 }
 
 impl BoxCore for MultiplyBox {
-    fn box_id(&self) -> u64 { self.base.id }
-    fn parent_type_id(&self) -> Option<std::any::TypeId> { self.base.parent_type_id }
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string_box().value)
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Display for MultiplyBox {
@@ -351,21 +376,21 @@ pub struct DivideBox {
 
 impl DivideBox {
     pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
-        Self { 
-            left, 
-            right, 
+        Self {
+            left,
+            right,
             base: BoxBase::new(),
         }
     }
-    
+
     /// Execute the division operation and return the result
     pub fn execute(&self) -> Box<dyn NyashBox> {
         use crate::boxes::math_box::FloatBox;
-        
+
         // Handle integer division, but return float result
         if let (Some(left_int), Some(right_int)) = (
             self.left.as_any().downcast_ref::<IntegerBox>(),
-            self.right.as_any().downcast_ref::<IntegerBox>()
+            self.right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             if right_int.value == 0 {
                 // Return error for division by zero
@@ -380,7 +405,8 @@ impl DivideBox {
             } else {
                 0
             };
-            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>() {
+            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>()
+            {
                 int_box.value
             } else {
                 1 // Avoid division by zero
@@ -409,23 +435,28 @@ impl NyashBox for DivideBox {
         let result = self.execute();
         result.to_string_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_div) = other.as_any().downcast_ref::<DivideBox>() {
             BoolBox::new(
-                self.left.equals(other_div.left.as_ref()).value && 
-                self.right.equals(other_div.right.as_ref()).value
+                self.left.equals(other_div.left.as_ref()).value
+                    && self.right.equals(other_div.right.as_ref()).value,
             )
         } else {
             BoolBox::new(false)
         }
     }
-    
-    fn type_name(&self) -> &'static str { "DivideBox" }
-    fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(DivideBox::new(self.left.clone_box(), self.right.clone_box()))
+
+    fn type_name(&self) -> &'static str {
+        "DivideBox"
     }
-    
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(DivideBox::new(
+            self.left.clone_box(),
+            self.right.clone_box(),
+        ))
+    }
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -433,13 +464,21 @@ impl NyashBox for DivideBox {
 }
 
 impl BoxCore for DivideBox {
-    fn box_id(&self) -> u64 { self.base.id }
-    fn parent_type_id(&self) -> Option<std::any::TypeId> { self.base.parent_type_id }
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string_box().value)
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Display for DivideBox {
@@ -457,19 +496,19 @@ pub struct ModuloBox {
 
 impl ModuloBox {
     pub fn new(left: Box<dyn NyashBox>, right: Box<dyn NyashBox>) -> Self {
-        Self { 
-            left, 
-            right, 
+        Self {
+            left,
+            right,
             base: BoxBase::new(),
         }
     }
-    
+
     /// Execute the modulo operation and return the result
     pub fn execute(&self) -> Box<dyn NyashBox> {
         // Handle integer modulo operation
         if let (Some(left_int), Some(right_int)) = (
             self.left.as_any().downcast_ref::<IntegerBox>(),
-            self.right.as_any().downcast_ref::<IntegerBox>()
+            self.right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             if right_int.value == 0 {
                 // Return error for modulo by zero
@@ -484,7 +523,8 @@ impl ModuloBox {
             } else {
                 0
             };
-            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>() {
+            let right_val = if let Some(int_box) = self.right.as_any().downcast_ref::<IntegerBox>()
+            {
                 int_box.value
             } else {
                 1 // Avoid modulo by zero
@@ -508,16 +548,20 @@ impl Debug for ModuloBox {
 }
 
 impl BoxCore for ModuloBox {
-    fn box_id(&self) -> u64 { self.base.id }
-    fn parent_type_id(&self) -> Option<std::any::TypeId> { self.base.parent_type_id }
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        self.base.parent_type_id
+    }
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "ModuloBox[{}]", self.box_id())
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
@@ -528,26 +572,29 @@ impl NyashBox for ModuloBox {
         let result = self.execute();
         result.to_string_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_modulo) = other.as_any().downcast_ref::<ModuloBox>() {
             BoolBox::new(
-                self.left.equals(other_modulo.left.as_ref()).value && 
-                self.right.equals(other_modulo.right.as_ref()).value
+                self.left.equals(other_modulo.left.as_ref()).value
+                    && self.right.equals(other_modulo.right.as_ref()).value,
             )
         } else {
             BoolBox::new(false)
         }
     }
-    
+
     fn type_name(&self) -> &'static str {
         "ModuloBox"
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
-        Box::new(ModuloBox::new(self.left.clone_box(), self.right.clone_box()))
+        Box::new(ModuloBox::new(
+            self.left.clone_box(),
+            self.right.clone_box(),
+        ))
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -568,65 +615,65 @@ impl CompareBox {
     pub fn equals(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
         left.equals(right)
     }
-    
+
     /// Compare two boxes for less than
     pub fn less(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
         // Try integer comparison first
         if let (Some(left_int), Some(right_int)) = (
             left.as_any().downcast_ref::<IntegerBox>(),
-            right.as_any().downcast_ref::<IntegerBox>()
+            right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             return BoolBox::new(left_int.value < right_int.value);
         }
-        
+
         // Fall back to string comparison
         let left_str = left.to_string_box();
         let right_str = right.to_string_box();
         BoolBox::new(left_str.value < right_str.value)
     }
-    
+
     /// Compare two boxes for greater than
     pub fn greater(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
         // Try integer comparison first
         if let (Some(left_int), Some(right_int)) = (
             left.as_any().downcast_ref::<IntegerBox>(),
-            right.as_any().downcast_ref::<IntegerBox>()
+            right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             return BoolBox::new(left_int.value > right_int.value);
         }
-        
+
         // Fall back to string comparison
         let left_str = left.to_string_box();
         let right_str = right.to_string_box();
         BoolBox::new(left_str.value > right_str.value)
     }
-    
+
     /// Compare two boxes for less than or equal
     pub fn less_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
         // Try integer comparison first
         if let (Some(left_int), Some(right_int)) = (
             left.as_any().downcast_ref::<IntegerBox>(),
-            right.as_any().downcast_ref::<IntegerBox>()
+            right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             return BoolBox::new(left_int.value <= right_int.value);
         }
-        
+
         // Fall back to string comparison
         let left_str = left.to_string_box();
         let right_str = right.to_string_box();
         BoolBox::new(left_str.value <= right_str.value)
     }
-    
+
     /// Compare two boxes for greater than or equal
     pub fn greater_equal(left: &dyn NyashBox, right: &dyn NyashBox) -> BoolBox {
         // Try integer comparison first
         if let (Some(left_int), Some(right_int)) = (
             left.as_any().downcast_ref::<IntegerBox>(),
-            right.as_any().downcast_ref::<IntegerBox>()
+            right.as_any().downcast_ref::<IntegerBox>(),
         ) {
             return BoolBox::new(left_int.value >= right_int.value);
         }
-        
+
         // Fall back to string comparison
         let left_str = left.to_string_box();
         let right_str = right.to_string_box();
@@ -644,7 +691,7 @@ mod tests {
         let right = Box::new(IntegerBox::new(32)) as Box<dyn NyashBox>;
         let add_box = AddBox::new(left, right);
         let result = add_box.execute();
-        
+
         assert_eq!(result.to_string_box().value, "42");
     }
 
@@ -654,7 +701,7 @@ mod tests {
         let right = Box::new(StringBox::new("World!".to_string())) as Box<dyn NyashBox>;
         let add_box = AddBox::new(left, right);
         let result = add_box.execute();
-        
+
         assert_eq!(result.to_string_box().value, "Hello, World!");
     }
 
@@ -664,7 +711,7 @@ mod tests {
         let right = Box::new(IntegerBox::new(8)) as Box<dyn NyashBox>;
         let sub_box = SubtractBox::new(left, right);
         let result = sub_box.execute();
-        
+
         assert_eq!(result.to_string_box().value, "42");
     }
 
@@ -674,7 +721,7 @@ mod tests {
         let right = Box::new(IntegerBox::new(7)) as Box<dyn NyashBox>;
         let mul_box = MultiplyBox::new(left, right);
         let result = mul_box.execute();
-        
+
         assert_eq!(result.to_string_box().value, "42");
     }
 
@@ -684,7 +731,7 @@ mod tests {
         let right = Box::new(IntegerBox::new(2)) as Box<dyn NyashBox>;
         let div_box = DivideBox::new(left, right);
         let result = div_box.execute();
-        
+
         // Division returns float
         assert_eq!(result.to_string_box().value, "42");
     }
@@ -695,7 +742,7 @@ mod tests {
         let right = Box::new(IntegerBox::new(0)) as Box<dyn NyashBox>;
         let div_box = DivideBox::new(left, right);
         let result = div_box.execute();
-        
+
         assert!(result.to_string_box().value.contains("Division by zero"));
     }
 
@@ -705,7 +752,7 @@ mod tests {
         let right = Box::new(IntegerBox::new(3)) as Box<dyn NyashBox>;
         let mod_box = ModuloBox::new(left, right);
         let result = mod_box.execute();
-        
+
         assert_eq!(result.to_string_box().value, "1");
     }
 
@@ -715,26 +762,26 @@ mod tests {
         let right = Box::new(IntegerBox::new(0)) as Box<dyn NyashBox>;
         let mod_box = ModuloBox::new(left, right);
         let result = mod_box.execute();
-        
+
         assert!(result.to_string_box().value.contains("Modulo by zero"));
     }
 
     #[test]
     fn test_modulo_chip8_pattern() {
         // Test Chip-8 style bit operations using modulo
-        let left = Box::new(IntegerBox::new(4096)) as Box<dyn NyashBox>;  // 0x1000
+        let left = Box::new(IntegerBox::new(4096)) as Box<dyn NyashBox>; // 0x1000
         let right = Box::new(IntegerBox::new(4096)) as Box<dyn NyashBox>; // 0x1000
         let mod_box = ModuloBox::new(left, right);
         let result = mod_box.execute();
-        
-        assert_eq!(result.to_string_box().value, "0");  // 4096 % 4096 = 0
+
+        assert_eq!(result.to_string_box().value, "0"); // 4096 % 4096 = 0
     }
 
     #[test]
     fn test_compare_box() {
         let left = IntegerBox::new(10);
         let right = IntegerBox::new(20);
-        
+
         assert_eq!(CompareBox::less(&left, &right).value, true);
         assert_eq!(CompareBox::greater(&left, &right).value, false);
         assert_eq!(CompareBox::equals(&left, &right).value, false);

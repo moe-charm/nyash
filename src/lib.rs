@@ -1,6 +1,6 @@
-/*! 
+/*!
  * Nyash Programming Language - Rust Implementation Library
- * 
+ *
  * Everything is Box philosophy implemented in memory-safe Rust
  */
 
@@ -8,26 +8,26 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+pub mod ast; // Using old ast.rs for now
+pub mod box_arithmetic;
+pub mod box_factory; // 🏭 Unified Box Factory Architecture (Phase 9.78)
+pub mod box_operators; // 🚀 Operator implementations for basic Box types
 pub mod box_trait;
 pub mod boxes;
-pub mod box_factory; // 🏭 Unified Box Factory Architecture (Phase 9.78)
+pub mod channel_box;
+pub mod core; // Core models shared by backends
+pub mod environment;
+pub mod exception_box;
+pub mod finalization;
+pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
+pub mod interpreter;
+pub mod method_box;
+pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
+pub mod parser; // Using old parser.rs for now
 pub mod scope_tracker; // 🎯 Phase 9.78a: Box lifecycle tracking for VM
 pub mod stdlib;
-pub mod environment;
 pub mod tokenizer;
-pub mod ast;  // Using old ast.rs for now
-pub mod parser;  // Using old parser.rs for now
-pub mod interpreter;
-pub mod core; // Core models shared by backends
-pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
-pub mod channel_box;
-pub mod finalization;
-pub mod exception_box;
-pub mod method_box;
-pub mod type_box;  // 🌟 TypeBox revolutionary system
-pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
-pub mod box_operators; // 🚀 Operator implementations for basic Box types
-pub mod box_arithmetic; // 🚀 Arithmetic operations moved from box_trait.rs
+pub mod type_box; // 🌟 TypeBox revolutionary system // 🚀 Arithmetic operations moved from box_trait.rs
 
 // 🔥 NyashValue Revolutionary System (NEW!)
 pub mod value;
@@ -61,9 +61,9 @@ pub mod config;
 pub mod cli;
 
 // Runtime system (plugins, registry, etc.)
-pub mod runtime;
-pub mod runner_plugin_init;
 pub mod debug;
+pub mod runner_plugin_init;
+pub mod runtime;
 // Unified Grammar (Phase 11.9 scaffolding)
 pub mod grammar;
 pub mod syntax; // Phase 12.7: syntax sugar config and helpers
@@ -75,26 +75,26 @@ pub mod wasm_test;
 pub mod tests;
 
 // Re-export main types for easy access
-pub use box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
-pub use box_arithmetic::{AddBox, SubtractBox, MultiplyBox, DivideBox, ModuloBox, CompareBox};
-pub use environment::{Environment, PythonCompatEnvironment};
-pub use tokenizer::{NyashTokenizer, TokenType, Token};
-pub use type_box::{TypeBox, TypeRegistry, MethodSignature};  // 🌟 TypeBox exports
 pub use ast::{ASTNode, BinaryOperator, LiteralValue};
-pub use parser::{NyashParser, ParseError};
+pub use box_arithmetic::{AddBox, CompareBox, DivideBox, ModuloBox, MultiplyBox, SubtractBox};
+pub use box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
+pub use environment::{Environment, PythonCompatEnvironment};
 pub use interpreter::{NyashInterpreter, RuntimeError};
-// pub use instance::InstanceBox;  // 旧実装  
-pub use instance_v2::InstanceBox;  // 🎯 新実装テスト（nyash_rustパス使用）
-pub use channel_box::{ChannelBox, MessageBox};
-pub use boxes::math_box::{MathBox, FloatBox, RangeBox};
-pub use boxes::time_box::{TimeBox, DateTimeBox, TimerBox};
+pub use parser::{NyashParser, ParseError};
+pub use tokenizer::{NyashTokenizer, Token, TokenType};
+pub use type_box::{MethodSignature, TypeBox, TypeRegistry}; // 🌟 TypeBox exports
+                                                            // pub use instance::InstanceBox;  // 旧実装
+pub use boxes::console_box::ConsoleBox;
+pub use boxes::debug_box::DebugBox;
 pub use boxes::map_box::MapBox;
+pub use boxes::math_box::{FloatBox, MathBox, RangeBox};
+pub use boxes::null_box::{null, NullBox};
 pub use boxes::random_box::RandomBox;
 pub use boxes::sound_box::SoundBox;
-pub use boxes::debug_box::DebugBox;
-pub use boxes::console_box::ConsoleBox;
-pub use method_box::{MethodBox, BoxType, FunctionDefinition, EphemeralInstance};
-pub use boxes::null_box::{NullBox, null};
+pub use boxes::time_box::{DateTimeBox, TimeBox, TimerBox};
+pub use channel_box::{ChannelBox, MessageBox};
+pub use instance_v2::InstanceBox; // 🎯 新実装テスト（nyash_rustパス使用）
+pub use method_box::{BoxType, EphemeralInstance, FunctionDefinition, MethodBox};
 
 // 🔥 NyashValue Revolutionary System exports
 pub use value::NyashValue;
@@ -118,17 +118,17 @@ impl NyashWasm {
     pub fn new() -> Self {
         // Setup panic handling for better browser debugging
         console_error_panic_hook::set_once();
-        
+
         // Create interpreter with browser-specific setup
         let interpreter = NyashInterpreter::new();
-        
+
         // Register browser-specific boxes
         // ConsoleBox is available as a constructor: console = new ConsoleBox()
         // TODO: Also register DOMBox, CanvasBox etc.
-        
+
         Self { interpreter }
     }
-    
+
     /// Evaluate Nyash code and return result as string
     #[wasm_bindgen]
     pub fn eval(&mut self, code: &str) -> String {
@@ -137,27 +137,29 @@ impl NyashWasm {
         if trimmed_code.is_empty() {
             return String::new();
         }
-        
+
         // Split multiline code into logical statements for better WASM handling
-        let lines: Vec<&str> = trimmed_code.lines()
+        let lines: Vec<&str> = trimmed_code
+            .lines()
             .map(|line| line.trim())
             .filter(|line| !line.is_empty() && !line.starts_with("//"))
             .collect();
-        
+
         // If single line or looks like a complete static box/box definition, parse as-is
-        if lines.len() == 1 || trimmed_code.contains("static box") || trimmed_code.contains("box ") {
+        if lines.len() == 1 || trimmed_code.contains("static box") || trimmed_code.contains("box ")
+        {
             return self.eval_single_block(trimmed_code);
         }
-        
+
         // For multiple lines, try to execute line by line
         let mut results = Vec::new();
         let mut accumulated_code = String::new();
-        
+
         for line in lines {
             // Accumulate lines for block structures
             accumulated_code.push_str(line);
             accumulated_code.push('\n');
-            
+
             // Check if we have a complete statement
             if self.is_complete_statement(&accumulated_code) {
                 let result = self.eval_single_block(accumulated_code.trim());
@@ -170,7 +172,7 @@ impl NyashWasm {
                 accumulated_code.clear();
             }
         }
-        
+
         // Execute any remaining accumulated code
         if !accumulated_code.trim().is_empty() {
             let result = self.eval_single_block(accumulated_code.trim());
@@ -178,14 +180,15 @@ impl NyashWasm {
                 results.push(result);
             }
         }
-        
+
         // Return the most relevant result
-        results.into_iter()
+        results
+            .into_iter()
             .filter(|r| !r.starts_with("Parse Error:") && !r.starts_with("Runtime Error:"))
             .last()
             .unwrap_or_else(|| "void".to_string())
     }
-    
+
     /// Evaluate a single block of code
     fn eval_single_block(&mut self, code: &str) -> String {
         // First parse the code into an AST
@@ -193,7 +196,7 @@ impl NyashWasm {
             Ok(ast) => ast,
             Err(e) => return format!("Parse Error: {}", e),
         };
-        
+
         // Then execute the AST
         match self.interpreter.execute(ast) {
             Ok(result_box) => {
@@ -208,24 +211,24 @@ impl NyashWasm {
             Err(e) => format!("Runtime Error: {}", e),
         }
     }
-    
+
     /// Check if code represents a complete statement (heuristic)
     fn is_complete_statement(&self, code: &str) -> bool {
         let trimmed = code.trim();
-        
+
         // Always complete: assignments, function calls, simple expressions
         if trimmed.contains('=') && !trimmed.ends_with('=') {
             return true;
         }
-        
+
         // Block structures need closing braces
         let open_braces = trimmed.chars().filter(|&c| c == '{').count();
         let close_braces = trimmed.chars().filter(|&c| c == '}').count();
-        
+
         // Complete if braces are balanced or no braces at all
         open_braces == 0 || open_braces == close_braces
     }
-    
+
     /// Get the current version info
     #[wasm_bindgen]
     pub fn version() -> String {

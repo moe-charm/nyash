@@ -23,24 +23,52 @@ static EXPLICIT_SLOTS: Lazy<Mutex<HashMap<(BoxTypeId, String), MethodSlot>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
 // Builtin type -> (method, slot) static table (slots start at 4; 0..3 are universal)
-static BUILTIN_SLOTS: Lazy<HashMap<&'static str, Vec<(&'static str, MethodSlot)>>> = Lazy::new(|| {
-    use std::iter::FromIterator;
-    let mut m = HashMap::new();
-    m.insert("ArrayBox", vec![
-        ("push", 4), ("pop", 5), ("length", 6), ("len", 6), ("get", 7), ("set", 8),
-        ("remove", 9), ("contains", 10), ("indexOf", 11), ("clear", 12), ("join", 13),
-        ("sort", 14), ("reverse", 15), ("slice", 16)
-    ]);
-    m.insert("MapBox", vec![
-        ("set", 4), ("get", 5), ("has", 6), ("delete", 7), ("remove", 7), ("keys", 8),
-        ("values", 9), ("size", 10), ("clear", 11)
-    ]);
-    m.insert("IntegerBox", vec![("abs", 4)]);
-    m.insert("StringBox", vec![("substring", 4), ("concat", 5)]);
-    // Common plugin boxes (minimal seed)
-    m.insert("FileBox", vec![ ("open", 4), ("read", 5), ("write", 6), ("close", 7) ]);
-    HashMap::from_iter(m)
-});
+static BUILTIN_SLOTS: Lazy<HashMap<&'static str, Vec<(&'static str, MethodSlot)>>> =
+    Lazy::new(|| {
+        use std::iter::FromIterator;
+        let mut m = HashMap::new();
+        m.insert(
+            "ArrayBox",
+            vec![
+                ("push", 4),
+                ("pop", 5),
+                ("length", 6),
+                ("len", 6),
+                ("get", 7),
+                ("set", 8),
+                ("remove", 9),
+                ("contains", 10),
+                ("indexOf", 11),
+                ("clear", 12),
+                ("join", 13),
+                ("sort", 14),
+                ("reverse", 15),
+                ("slice", 16),
+            ],
+        );
+        m.insert(
+            "MapBox",
+            vec![
+                ("set", 4),
+                ("get", 5),
+                ("has", 6),
+                ("delete", 7),
+                ("remove", 7),
+                ("keys", 8),
+                ("values", 9),
+                ("size", 10),
+                ("clear", 11),
+            ],
+        );
+        m.insert("IntegerBox", vec![("abs", 4)]);
+        m.insert("StringBox", vec![("substring", 4), ("concat", 5)]);
+        // Common plugin boxes (minimal seed)
+        m.insert(
+            "FileBox",
+            vec![("open", 4), ("read", 5), ("write", 6), ("close", 7)],
+        );
+        HashMap::from_iter(m)
+    });
 
 // Universal slots mapping for quick checks
 fn universal_slot(method: &str) -> Option<MethodSlot> {

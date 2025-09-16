@@ -7,7 +7,9 @@ pub fn on(var: &str) -> bool {
 
 /// Log a message to stderr if the env var is enabled.
 pub fn log(var: &str, msg: &str) {
-    if on(var) { eprintln!("{}", msg); }
+    if on(var) {
+        eprintln!("{}", msg);
+    }
 }
 
 /// Log with formatting if the env var is enabled.
@@ -19,4 +21,3 @@ macro_rules! debug_logf {
         }
     }};
 }
-

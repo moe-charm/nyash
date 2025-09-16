@@ -1,5 +1,5 @@
+use crate::box_trait::{IntegerBox, NyashBox};
 use crate::mir::function::MirModule;
-use crate::box_trait::{NyashBox, IntegerBox};
 use std::collections::HashMap;
 
 pub struct LLVMCompiler {
@@ -8,7 +8,9 @@ pub struct LLVMCompiler {
 
 impl LLVMCompiler {
     pub fn new() -> Result<Self, String> {
-        Ok(Self { values: HashMap::new() })
+        Ok(Self {
+            values: HashMap::new(),
+        })
     }
 
     pub fn compile_module(&self, _mir: &MirModule, _out: &str) -> Result<(), String> {
@@ -16,8 +18,11 @@ impl LLVMCompiler {
         Ok(())
     }
 
-    pub fn compile_and_execute(&mut self, _mir: &MirModule, _out: &str) -> Result<Box<dyn NyashBox>, String> {
+    pub fn compile_and_execute(
+        &mut self,
+        _mir: &MirModule,
+        _out: &str,
+    ) -> Result<Box<dyn NyashBox>, String> {
         Ok(Box::new(IntegerBox::new(0)))
     }
 }
-

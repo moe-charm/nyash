@@ -6,8 +6,8 @@
  * the existing VM API surface.
  */
 
+use super::vm::{VMError, VM};
 use crate::box_trait::NyashBox;
-use super::vm::{VM, VMError};
 
 impl VM {
     /// Unified method dispatch entry. Currently delegates to `call_box_method_impl`.
@@ -31,4 +31,3 @@ impl VM {
         self.call_box_method_impl(box_value, method, args)
     }
 }
-

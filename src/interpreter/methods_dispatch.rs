@@ -1,14 +1,17 @@
 //! Central builtin method dispatcher (thin wrapper)
 
-use crate::ast::ASTNode;
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore};
-use crate::boxes::{ArrayBox, FloatBox, BufferBox, ResultBox, FutureBox, JSONBox, HttpClientBox, StreamBox, RegexBox, MathBox};
-use crate::boxes::{null_box, time_box, map_box, random_box, sound_box, debug_box, console_box};
-use crate::boxes::{gc_config_box::GcConfigBox, debug_config_box::DebugConfigBox};
-use crate::boxes::ref_cell_box::RefCellBox as RcCell;
-use crate::boxes::file;
-use crate::channel_box::ChannelBox;
 use super::{NyashInterpreter, RuntimeError};
+use crate::ast::ASTNode;
+use crate::box_trait::{BoolBox, BoxCore, IntegerBox, NyashBox, StringBox};
+use crate::boxes::file;
+use crate::boxes::ref_cell_box::RefCellBox as RcCell;
+use crate::boxes::{console_box, debug_box, map_box, null_box, random_box, sound_box, time_box};
+use crate::boxes::{debug_config_box::DebugConfigBox, gc_config_box::GcConfigBox};
+use crate::boxes::{
+    ArrayBox, BufferBox, FloatBox, FutureBox, HttpClientBox, JSONBox, MathBox, RegexBox, ResultBox,
+    StreamBox,
+};
+use crate::channel_box::ChannelBox;
 
 impl NyashInterpreter {
     /// Try dispatching a builtin method based on dynamic type.
@@ -136,10 +139,10 @@ impl NyashInterpreter {
         method: &str,
         arguments: &[ASTNode],
     ) -> Option<Result<Box<dyn NyashBox>, RuntimeError>> {
-        use crate::box_trait::{StringBox, IntegerBox};
+        use crate::box_trait::{IntegerBox, StringBox};
         use crate::boxes::MathBox;
-        use crate::instance_v2::InstanceBox;
         use crate::finalization;
+        use crate::instance_v2::InstanceBox;
 
         let instance = match obj_value.as_any().downcast_ref::<InstanceBox>() {
             Some(i) => i,
@@ -149,11 +152,18 @@ impl NyashInterpreter {
         // fini() special handling (idempotent, weak prohibition)
         if method == "fini" {
             // weak-fini prohibition check: me.<weak_field>.fini()
-            if let ASTNode::FieldAccess { object: field_object, field, .. } = object_ast {
+            if let ASTNode::FieldAccess {
+                object: field_object,
+                field,
+                ..
+            } = object_ast
+            {
                 if let ASTNode::Variable { name, .. } = field_object.as_ref() {
                     if name == "me" {
                         if let Ok(current_me) = self.resolve_variable("me") {
-                            if let Some(current_instance) = (*current_me).as_any().downcast_ref::<InstanceBox>() {
+                            if let Some(current_instance) =
+                                (*current_me).as_any().downcast_ref::<InstanceBox>()
+                            {
                                 if current_instance.is_weak_field(field) {
                                     return Some(Err(RuntimeError::InvalidOperation {
                                         message: format!(
@@ -175,11 +185,17 @@ impl NyashInterpreter {
                     let saved = self.save_local_vars();
                     self.local_vars.clear();
                     self.declare_local_variable("me", obj_value.clone_or_share());
-                    let mut _result = Box::new(crate::box_trait::VoidBox::new()) as Box<dyn NyashBox>;
+                    let mut _result =
+                        Box::new(crate::box_trait::VoidBox::new()) as Box<dyn NyashBox>;
                     for statement in &body {
                         match self.execute_statement(statement) {
-                            Ok(v) => { _result = v; },
-                            Err(e) => { self.restore_local_vars(saved); return Some(Err(e)); }
+                            Ok(v) => {
+                                _result = v;
+                            }
+                            Err(e) => {
+                                self.restore_local_vars(saved);
+                                return Some(Err(e));
+                            }
                         }
                         if let super::ControlFlow::Return(_) = &self.control_flow {
                             self.control_flow = super::ControlFlow::None;
@@ -191,7 +207,9 @@ impl NyashInterpreter {
             }
             let target_info = obj_value.to_string_box().value;
             self.trigger_weak_reference_invalidation(&target_info);
-            if let Err(e) = instance.fini() { return Some(Err(RuntimeError::InvalidOperation { message: e })); }
+            if let Err(e) = instance.fini() {
+                return Some(Err(RuntimeError::InvalidOperation { message: e }));
+            }
             finalization::mark_as_finalized(instance.box_id());
             return Some(Ok(Box::new(crate::box_trait::VoidBox::new())));
         }
@@ -199,7 +217,10 @@ impl NyashInterpreter {
         // Local method on instance
         if let Some(method_ast) = instance.get_method(method) {
             if let ASTNode::FunctionDeclaration { params, body, .. } = method_ast.clone() {
-                eprintln!("[dbg] enter instance method {}.{}", instance.class_name, method);
+                eprintln!(
+                    "[dbg] enter instance method {}.{}",
+                    instance.class_name, method
+                );
                 // Evaluate args in current context
                 let mut arg_values = Vec::new();
                 for a in arguments {
@@ -210,7 +231,12 @@ impl NyashInterpreter {
                 }
                 if arg_values.len() != params.len() {
                     return Some(Err(RuntimeError::InvalidOperation {
-                        message: format!("Method {} expects {} arguments, got {}", method, params.len(), arg_values.len()),
+                        message: format!(
+                            "Method {} expects {} arguments, got {}",
+                            method,
+                            params.len(),
+                            arg_values.len()
+                        ),
                     }));
                 }
                 let saved = self.save_local_vars();
@@ -222,7 +248,9 @@ impl NyashInterpreter {
                 let mut result: Box<dyn NyashBox> = Box::new(crate::box_trait::VoidBox::new());
                 for stmt in &body {
                     match self.execute_statement(stmt) {
-                        Ok(v) => { result = v; },
+                        Ok(v) => {
+                            result = v;
+                        }
                         Err(e) => return Some(Err(e)),
                     }
                     if let super::ControlFlow::Return(ret) = &self.control_flow {
@@ -232,17 +260,25 @@ impl NyashInterpreter {
                     }
                 }
                 self.restore_local_vars(saved);
-                eprintln!("[dbg] exit instance method {}.{}", instance.class_name, method);
+                eprintln!(
+                    "[dbg] exit instance method {}.{}",
+                    instance.class_name, method
+                );
                 return Some(Ok(result));
             } else {
-                return Some(Err(RuntimeError::InvalidOperation { message: format!("Method '{}' is not a valid function declaration", method) }));
+                return Some(Err(RuntimeError::InvalidOperation {
+                    message: format!("Method '{}' is not a valid function declaration", method),
+                }));
             }
         }
 
         // Builtin parent method promotion (StringBox/IntegerBox/MathBox)
         let parent_names = {
             let decls = self.shared.box_declarations.read().unwrap();
-            decls.get(&instance.class_name).map(|d| d.extends.clone()).unwrap_or_default()
+            decls
+                .get(&instance.class_name)
+                .map(|d| d.extends.clone())
+                .unwrap_or_default()
         };
         for parent_name in &parent_names {
             if crate::box_trait::is_builtin_box(parent_name) {
@@ -280,13 +316,18 @@ impl NyashInterpreter {
         {
             if let Some(plugin_shared) = instance.get_field_legacy("__plugin_content") {
                 let plugin_ref = &*plugin_shared;
-                if let Some(plugin) = plugin_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                if let Some(plugin) = plugin_ref
+                    .as_any()
+                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>(
+                ) {
                     return Some(self.call_plugin_method(plugin, method, arguments));
                 }
             }
         }
 
         // Not handled here
-        Some(Err(RuntimeError::InvalidOperation { message: format!("Method '{}' not found in {}", method, instance.class_name) }))
+        Some(Err(RuntimeError::InvalidOperation {
+            message: format!("Method '{}' not found in {}", method, instance.class_name),
+        }))
     }
 }

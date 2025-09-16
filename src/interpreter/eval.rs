@@ -1,8 +1,8 @@
 //! Evaluation entry points: execute program and nodes
 
+use super::{ControlFlow, NyashInterpreter, RuntimeError};
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, VoidBox};
-use super::{NyashInterpreter, RuntimeError, ControlFlow};
 
 impl NyashInterpreter {
     /// ASTを実行
@@ -73,22 +73,41 @@ impl NyashInterpreter {
                                     if params.len() == 1 {
                                         // Try to read script args from env (JSON array); fallback to empty ArrayBox
                                         if let Ok(json) = std::env::var("NYASH_SCRIPT_ARGS_JSON") {
-                                            if let Ok(vals) = serde_json::from_str::<Vec<String>>(&json) {
-                                                let mut str_nodes: Vec<ASTNode> = Vec::with_capacity(vals.len());
+                                            if let Ok(vals) =
+                                                serde_json::from_str::<Vec<String>>(&json)
+                                            {
+                                                let mut str_nodes: Vec<ASTNode> =
+                                                    Vec::with_capacity(vals.len());
                                                 for s in vals {
-                                                    str_nodes.push(ASTNode::Literal { value: crate::ast::LiteralValue::String(s), span: crate::ast::Span::unknown() });
+                                                    str_nodes.push(ASTNode::Literal {
+                                                        value: crate::ast::LiteralValue::String(s),
+                                                        span: crate::ast::Span::unknown(),
+                                                    });
                                                 }
                                                 default_args.push(ASTNode::MethodCall {
-                                                    object: Box::new(ASTNode::Variable { name: "ArrayBox".to_string(), span: crate::ast::Span::unknown() }),
+                                                    object: Box::new(ASTNode::Variable {
+                                                        name: "ArrayBox".to_string(),
+                                                        span: crate::ast::Span::unknown(),
+                                                    }),
                                                     method: "of".to_string(),
                                                     arguments: str_nodes,
                                                     span: crate::ast::Span::unknown(),
                                                 });
                                             } else {
-                                                default_args.push(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() });
+                                                default_args.push(ASTNode::New {
+                                                    class: "ArrayBox".to_string(),
+                                                    arguments: vec![],
+                                                    type_arguments: vec![],
+                                                    span: crate::ast::Span::unknown(),
+                                                });
                                             }
                                         } else {
-                                            default_args.push(ASTNode::New { class: "ArrayBox".to_string(), arguments: vec![], type_arguments: vec![], span: crate::ast::Span::unknown() });
+                                            default_args.push(ASTNode::New {
+                                                class: "ArrayBox".to_string(),
+                                                arguments: vec![],
+                                                type_arguments: vec![],
+                                                span: crate::ast::Span::unknown(),
+                                            });
                                         }
                                     }
                                 }
@@ -97,7 +116,10 @@ impl NyashInterpreter {
                     }
                     let main_call_ast = ASTNode::MethodCall {
                         object: Box::new(ASTNode::FieldAccess {
-                            object: Box::new(ASTNode::Variable { name: "statics".to_string(), span: crate::ast::Span::unknown() }),
+                            object: Box::new(ASTNode::Variable {
+                                name: "statics".to_string(),
+                                span: crate::ast::Span::unknown(),
+                            }),
                             field: "Main".to_string(),
                             span: crate::ast::Span::unknown(),
                         }),

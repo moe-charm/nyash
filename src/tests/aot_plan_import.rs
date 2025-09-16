@@ -10,4 +10,3 @@ fn import_plan_v1_min_and_run_vm() {
     let out = vm.execute_module(&module).expect("vm exec");
     assert_eq!(out.to_string_box().value, "42");
 }
-

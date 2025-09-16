@@ -1,6 +1,6 @@
 /*!
  * Function Processing Module
- * 
+ *
  * Extracted from core.rs - function call and definition handling
  * Handles function declarations, calls, and function-related operations
  * Core philosophy: "Everything is Box" with structured function processing
@@ -10,18 +10,26 @@ use super::*;
 
 impl NyashInterpreter {
     /// 関数呼び出しを実行 - 🌍 革命的実装：GlobalBoxのメソッド呼び出し
-    pub(super) fn execute_function_call(&mut self, name: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(super) fn execute_function_call(
+        &mut self,
+        name: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // Fallback: built-in type ops as global functions: isType(value, "Type"), asType(value, "Type")
         if (name == "isType" || name == "asType") && arguments.len() == 2 {
             // Evaluate args
             let val = self.execute_expression(&arguments[0])?;
             let ty_box = self.execute_expression(&arguments[1])?;
             // Get type name string
-            let type_name = if let Some(s) = ty_box.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+            let type_name = if let Some(s) = ty_box
+                .as_any()
+                .downcast_ref::<crate::box_trait::StringBox>()
+            {
                 s.value.clone()
             } else {
-                return Err(RuntimeError::InvalidOperation { message: "Type name must be a string".to_string() });
+                return Err(RuntimeError::InvalidOperation {
+                    message: "Type name must be a string".to_string(),
+                });
             };
 
             if name == "isType" {
@@ -41,14 +49,17 @@ impl NyashInterpreter {
                 }
             }
         }
-        
+
         // 🌍 GlobalBoxのメソッドとして実行
         let global_box = self.shared.global_box.lock().unwrap();
-        let method_ast = global_box.get_method(name)
-            .ok_or(RuntimeError::UndefinedFunction { name: name.to_string() })?
+        let method_ast = global_box
+            .get_method(name)
+            .ok_or(RuntimeError::UndefinedFunction {
+                name: name.to_string(),
+            })?
             .clone();
         drop(global_box);
-        
+
         // メソッド呼び出しとして実行（GlobalBoxインスタンス上で）
         if let ASTNode::FunctionDeclaration { params, body, .. } = method_ast {
             // 引数を評価
@@ -56,24 +67,28 @@ impl NyashInterpreter {
             for arg in arguments {
                 arg_values.push(self.execute_expression(arg)?);
             }
-            
+
             // パラメータ数チェック
             if arg_values.len() != params.len() {
                 return Err(RuntimeError::InvalidOperation {
-                    message: format!("Function {} expects {} arguments, got {}", 
-                                   name, params.len(), arg_values.len()),
+                    message: format!(
+                        "Function {} expects {} arguments, got {}",
+                        name,
+                        params.len(),
+                        arg_values.len()
+                    ),
                 });
             }
-            
+
             // 🌍 local変数スタックを保存・クリア（関数呼び出し開始）
             let saved_locals = self.save_local_vars();
             self.local_vars.clear();
-            
+
             // パラメータをlocal変数として設定
             for (param, value) in params.iter().zip(arg_values.iter()) {
                 self.declare_local_variable(param, value.clone_or_share());
             }
-            
+
             // 関数本体を実行（TaskGroupスコープをプッシュ）
             crate::runtime::global_hooks::push_task_scope();
             let mut result: Box<dyn NyashBox> = Box::new(VoidBox::new());
@@ -104,22 +119,28 @@ impl NyashInterpreter {
             })
         }
     }
-    
+
     /// 関数宣言を登録 - 🌍 革命的実装：GlobalBoxのメソッドとして登録
-    pub(super) fn register_function_declaration(&mut self, name: String, params: Vec<String>, body: Vec<ASTNode>) {
+    pub(super) fn register_function_declaration(
+        &mut self,
+        name: String,
+        params: Vec<String>,
+        body: Vec<ASTNode>,
+    ) {
         // 🌍 GlobalBoxのメソッドとして登録
         let func_ast = ASTNode::FunctionDeclaration {
             name: name.clone(),
             params,
             body,
-            is_static: false,  // 通常の関数は静的でない
-            is_override: false, // 🔥 通常の関数はオーバーライドでない
+            is_static: false,                  // 通常の関数は静的でない
+            is_override: false,                // 🔥 通常の関数はオーバーライドでない
             span: crate::ast::Span::unknown(), // デフォルトspan
         };
-        
-        self.register_global_function(name, func_ast).unwrap_or_else(|err| {
-            eprintln!("Warning: Failed to register global function: {}", err);
-        });
+
+        self.register_global_function(name, func_ast)
+            .unwrap_or_else(|err| {
+                eprintln!("Warning: Failed to register global function: {}", err);
+            });
     }
 
     /// Helper: match a NyashBox value against a simple type name
@@ -136,7 +157,10 @@ impl NyashInterpreter {
     }
 
     /// Helper: cast box to a target type name (minimal support)
-    fn cast_to_type(val: Box<dyn NyashBox>, type_name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+    fn cast_to_type(
+        val: Box<dyn NyashBox>,
+        type_name: &str,
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match type_name {
             "Integer" | "Int" | "I64" => {
                 // Float -> Integer (truncate), Integer -> Integer, else error
@@ -151,7 +175,8 @@ impl NyashInterpreter {
             "Float" | "F64" => {
                 if let Some(f) = val.as_any().downcast_ref::<crate::boxes::FloatBox>() {
                     Ok(Box::new(crate::boxes::FloatBox::new(f.value)))
-                } else if let Some(i) = val.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                } else if let Some(i) = val.as_any().downcast_ref::<crate::box_trait::IntegerBox>()
+                {
                     Ok(Box::new(crate::boxes::FloatBox::new(i.value as f64)))
                 } else {
                     Ok(val)

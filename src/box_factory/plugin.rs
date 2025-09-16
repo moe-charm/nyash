@@ -1,6 +1,6 @@
 /*!
  * Plugin Box Factory
- * 
+ *
  * Handles creation of plugin-based Box types through BID/FFI system
  * Integrates with v2 plugin system (BoxFactoryRegistry)
  */
@@ -29,9 +29,10 @@ impl BoxFactory for PluginBoxFactory {
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // Use the existing v2 plugin system
         let registry = get_global_registry();
-        
+
         if let Some(_provider) = registry.get_provider(name) {
-            registry.create_box(name, args)
+            registry
+                .create_box(name, args)
                 .map_err(|e| RuntimeError::InvalidOperation {
                     message: format!("Plugin Box creation failed: {}", e),
                 })
@@ -41,13 +42,13 @@ impl BoxFactory for PluginBoxFactory {
             })
         }
     }
-    
+
     fn box_types(&self) -> Vec<&str> {
         // TODO: Get list from BoxFactoryRegistry
         // For now, return empty as registry doesn't expose this yet
         vec![]
     }
-    
+
     fn is_available(&self) -> bool {
         // Check if any plugins are loaded
         let _registry = get_global_registry();

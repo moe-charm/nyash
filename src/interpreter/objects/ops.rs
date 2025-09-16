@@ -4,12 +4,22 @@ use std::sync::Arc;
 
 impl NyashInterpreter {
     /// Evaluate `new` expression arguments to NyashBox values
-    pub(super) fn new_eval_args(&mut self, arguments: &[ASTNode]) -> Result<Vec<Box<dyn NyashBox>>, RuntimeError> {
-        arguments.iter().map(|arg| self.execute_expression(arg)).collect()
+    pub(super) fn new_eval_args(
+        &mut self,
+        arguments: &[ASTNode],
+    ) -> Result<Vec<Box<dyn NyashBox>>, RuntimeError> {
+        arguments
+            .iter()
+            .map(|arg| self.execute_expression(arg))
+            .collect()
     }
 
     /// If user-defined and type args provided, validate/specialize and register declaration
-    pub(super) fn new_specialize_if_needed(&self, class: &str, type_arguments: &[String]) -> Result<String, RuntimeError> {
+    pub(super) fn new_specialize_if_needed(
+        &self,
+        class: &str,
+        type_arguments: &[String],
+    ) -> Result<String, RuntimeError> {
         let mut target_class = class.to_string();
         let user_defined_exists = {
             let box_decls = self.shared.box_declarations.read().unwrap();
@@ -45,7 +55,10 @@ impl NyashInterpreter {
         match registry_lock.create_box(target_class, &args) {
             Ok(box_instance) => {
                 // Check if this is a user-defined box that needs constructor execution
-                if let Some(_instance_box) = box_instance.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                if let Some(_instance_box) = box_instance
+                    .as_any()
+                    .downcast_ref::<crate::instance_v2::InstanceBox>()
+                {
                     // Check if we have a box declaration for this class
                     let (box_decl_opt, constructor_opt) = {
                         let box_decls = self.shared.box_declarations.read().unwrap();
@@ -54,28 +67,39 @@ impl NyashInterpreter {
                             let birth_key = format!("birth/{}", arguments.len());
                             let constructor = box_decl.constructors.get(&birth_key).cloned();
                             (Some(box_decl.clone()), constructor)
-                        } else { (None, None) }
+                        } else {
+                            (None, None)
+                        }
                     };
                     if let Some(box_decl) = box_decl_opt {
                         if let Some(constructor) = constructor_opt {
                             // Execute the constructor
                             let instance_arc: SharedNyashBox = Arc::from(box_instance);
                             drop(registry_lock); // Release lock before executing constructor
-                            self.execute_constructor(&instance_arc, &constructor, arguments, &box_decl)?;
+                            self.execute_constructor(
+                                &instance_arc,
+                                &constructor,
+                                arguments,
+                                &box_decl,
+                            )?;
                             return Ok((*instance_arc).clone_box());
                         } else if arguments.is_empty() {
                             // No constructor needed for zero arguments
                             return Ok(box_instance);
                         } else {
                             return Err(RuntimeError::InvalidOperation {
-                                message: format!("No constructor found for {} with {} arguments", target_class, arguments.len()),
+                                message: format!(
+                                    "No constructor found for {} with {} arguments",
+                                    target_class,
+                                    arguments.len()
+                                ),
                             });
                         }
                     }
                 }
                 // Not a user-defined box or no constructor needed
                 Ok(box_instance)
-            },
+            }
             Err(e) => {
                 // Fallback: handle basic built-in boxes directly (e.g., FutureBox)
                 // This keeps interpreter usability when registry has no provider.
@@ -84,13 +108,17 @@ impl NyashInterpreter {
                     Ok(b) => Ok(b),
                     Err(_) => Err(e),
                 }
-            },
+            }
         }
     }
 
     /// new式を実行 - Object creation engine
-    pub(crate) fn execute_new(&mut self, class: &str, arguments: &[ASTNode], type_arguments: &[String])
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(crate) fn execute_new(
+        &mut self,
+        class: &str,
+        arguments: &[ASTNode],
+        type_arguments: &[String],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // 80/20 path: unified registry + constructor
         let args = self.new_eval_args(arguments)?;
         let target_class = self.new_specialize_if_needed(class, type_arguments)?;

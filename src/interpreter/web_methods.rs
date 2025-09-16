@@ -1,20 +1,20 @@
 /*!
  * Web Box Methods Module
- * 
+ *
  * Extracted from box_methods.rs
  * Contains WASM/browser-specific Box type method implementations:
- * 
+ *
  * - execute_web_display_method (WebDisplayBox) - HTML DOM manipulation
  * - execute_web_console_method (WebConsoleBox) - Browser console logging  
  * - execute_web_canvas_method (WebCanvasBox) - Canvas drawing operations
- * 
+ *
  * All methods are conditionally compiled for WASM target architecture only.
  */
 
 #[cfg(target_arch = "wasm32")]
 use super::*;
 #[cfg(target_arch = "wasm32")]
-use crate::boxes::web::{WebDisplayBox, WebConsoleBox, WebCanvasBox};
+use crate::boxes::web::{WebCanvasBox, WebConsoleBox, WebDisplayBox};
 #[cfg(target_arch = "wasm32")]
 use crate::boxes::FloatBox;
 
@@ -22,14 +22,18 @@ use crate::boxes::FloatBox;
 impl NyashInterpreter {
     /// WebDisplayBoxメソッド実行 (WASM環境のみ)
     /// HTML DOM操作、CSS スタイル設定、クラス管理などの包括的なWeb表示機能
-    pub(super) fn execute_web_display_method(&mut self, web_display_box: &WebDisplayBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(super) fn execute_web_display_method(
+        &mut self,
+        web_display_box: &WebDisplayBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // 引数を評価
         let mut arg_values = Vec::new();
         for arg in arguments {
             arg_values.push(self.execute_expression(arg)?);
         }
-        
+
         // メソッドを実行
         match method {
             "print" => {
@@ -65,7 +69,10 @@ impl NyashInterpreter {
             "appendHTML" => {
                 if arg_values.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("appendHTML() expects 1 argument, got {}", arg_values.len()),
+                        message: format!(
+                            "appendHTML() expects 1 argument, got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 let html_content = arg_values[0].to_string_box().value;
@@ -75,7 +82,10 @@ impl NyashInterpreter {
             "setCSS" => {
                 if arg_values.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("setCSS() expects 2 arguments (property, value), got {}", arg_values.len()),
+                        message: format!(
+                            "setCSS() expects 2 arguments (property, value), got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 let property = arg_values[0].to_string_box().value;
@@ -96,7 +106,10 @@ impl NyashInterpreter {
             "removeClass" => {
                 if arg_values.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("removeClass() expects 1 argument, got {}", arg_values.len()),
+                        message: format!(
+                            "removeClass() expects 1 argument, got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 let class_name = arg_values[0].to_string_box().value;
@@ -133,30 +146,35 @@ impl NyashInterpreter {
             "scrollToBottom" => {
                 if !arg_values.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("scrollToBottom() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!(
+                            "scrollToBottom() expects 0 arguments, got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 web_display_box.scroll_to_bottom();
                 Ok(Box::new(VoidBox::new()))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for WebDisplayBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for WebDisplayBox", method),
+            }),
         }
     }
-    
+
     /// WebConsoleBoxメソッド実行 (WASM環境のみ)
     /// ブラウザーコンソールへの多彩なログ出力、グループ化、区切り表示機能
-    pub(super) fn execute_web_console_method(&mut self, web_console_box: &WebConsoleBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(super) fn execute_web_console_method(
+        &mut self,
+        web_console_box: &WebConsoleBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // 引数を評価
         let mut arg_values = Vec::new();
         for arg in arguments {
             arg_values.push(self.execute_expression(arg)?);
         }
-        
+
         // メソッドを実行
         match method {
             "log" => {
@@ -221,7 +239,10 @@ impl NyashInterpreter {
             "separator" => {
                 if !arg_values.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("separator() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!(
+                            "separator() expects 0 arguments, got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 web_console_box.separator();
@@ -240,30 +261,35 @@ impl NyashInterpreter {
             "groupEnd" => {
                 if !arg_values.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("groupEnd() expects 0 arguments, got {}", arg_values.len()),
+                        message: format!(
+                            "groupEnd() expects 0 arguments, got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 web_console_box.group_end();
                 Ok(Box::new(VoidBox::new()))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for WebConsoleBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for WebConsoleBox", method),
+            }),
         }
     }
-    
+
     /// WebCanvasBoxメソッド実行 (WASM環境のみ)
     /// HTML5 Canvas描画操作 - 矩形、円、テキスト描画の包括的な2D描画機能
-    pub(super) fn execute_web_canvas_method(&mut self, web_canvas_box: &WebCanvasBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(super) fn execute_web_canvas_method(
+        &mut self,
+        web_canvas_box: &WebCanvasBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // 引数を評価
         let mut arg_values = Vec::new();
         for arg in arguments {
             arg_values.push(self.execute_expression(arg)?);
         }
-        
+
         // メソッドを実行
         match method {
             "clear" => {
@@ -278,7 +304,10 @@ impl NyashInterpreter {
             "fillRect" => {
                 if arg_values.len() != 5 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("fillRect() expects 5 arguments (x, y, width, height, color), got {}", arg_values.len()),
+                        message: format!(
+                            "fillRect() expects 5 arguments (x, y, width, height, color), got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 let x = if let Some(n) = arg_values[0].as_any().downcast_ref::<IntegerBox>() {
@@ -364,22 +393,26 @@ impl NyashInterpreter {
                     });
                 };
                 let color = arg_values[4].to_string_box().value;
-                let line_width = if let Some(n) = arg_values[5].as_any().downcast_ref::<IntegerBox>() {
-                    n.value as f64
-                } else if let Some(n) = arg_values[5].as_any().downcast_ref::<FloatBox>() {
-                    n.value
-                } else {
-                    return Err(RuntimeError::TypeError {
-                        message: "strokeRect() lineWidth must be a number".to_string(),
-                    });
-                };
+                let line_width =
+                    if let Some(n) = arg_values[5].as_any().downcast_ref::<IntegerBox>() {
+                        n.value as f64
+                    } else if let Some(n) = arg_values[5].as_any().downcast_ref::<FloatBox>() {
+                        n.value
+                    } else {
+                        return Err(RuntimeError::TypeError {
+                            message: "strokeRect() lineWidth must be a number".to_string(),
+                        });
+                    };
                 web_canvas_box.stroke_rect(x, y, width, height, &color, line_width);
                 Ok(Box::new(VoidBox::new()))
             }
             "fillCircle" => {
                 if arg_values.len() != 4 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("fillCircle() expects 4 arguments (x, y, radius, color), got {}", arg_values.len()),
+                        message: format!(
+                            "fillCircle() expects 4 arguments (x, y, radius, color), got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 let x = if let Some(n) = arg_values[0].as_any().downcast_ref::<IntegerBox>() {
@@ -416,7 +449,10 @@ impl NyashInterpreter {
             "fillText" => {
                 if arg_values.len() != 5 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("fillText() expects 5 arguments (text, x, y, font, color), got {}", arg_values.len()),
+                        message: format!(
+                            "fillText() expects 5 arguments (text, x, y, font, color), got {}",
+                            arg_values.len()
+                        ),
                     });
                 }
                 let text = arg_values[0].to_string_box().value;
@@ -443,11 +479,9 @@ impl NyashInterpreter {
                 web_canvas_box.fill_text(&text, x, y, &font, &color);
                 Ok(Box::new(VoidBox::new()))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for WebCanvasBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for WebCanvasBox", method),
+            }),
         }
     }
 }

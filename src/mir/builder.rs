@@ -1,35 +1,34 @@
 /*!
  * MIR Builder - Converts AST to MIR/SSA form
- * 
+ *
  * Implements AST → MIR conversion with SSA construction
  */
 
-use super::{
-    MirInstruction, BasicBlock, BasicBlockId, MirFunction, MirModule,
-    FunctionSignature, ValueId, ConstValue, CompareOp,
-    MirType, EffectMask, Effect, BasicBlockIdGenerator, ValueIdGenerator
-};
 use super::slot_registry::resolve_slot_by_type_name;
+use super::{
+    BasicBlock, BasicBlockId, BasicBlockIdGenerator, CompareOp, ConstValue, Effect, EffectMask,
+    FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, ValueIdGenerator,
+};
 use crate::ast::{ASTNode, LiteralValue};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 mod builder_calls;
-mod phi;
-mod stmts;
-mod ops;
-mod utils;
-mod exprs; // expression lowering split
 mod decls; // declarations lowering split
-mod fields; // field access/assignment lowering split
-mod exprs_call;    // call(expr)
-mod exprs_qmark;   // ?-propagate
-mod exprs_peek;    // peek expression
-mod exprs_lambda;  // lambda lowering
+mod exprs; // expression lowering split
+mod exprs_call; // call(expr)
 mod exprs_include; // include lowering
+mod exprs_lambda; // lambda lowering
+mod exprs_peek; // peek expression
+mod exprs_qmark; // ?-propagate
+mod fields; // field access/assignment lowering split
+pub(crate) mod loops;
+mod ops;
+mod phi;
 mod plugin_sigs; // plugin signature loader
-mod vars; // variables/scope helpers
-pub(crate) mod loops; // small loop helpers (header/exit context)
+mod stmts;
+mod utils;
+mod vars; // variables/scope helpers // small loop helpers (header/exit context)
 
 // moved helpers to builder/utils.rs
 
@@ -37,22 +36,22 @@ pub(crate) mod loops; // small loop helpers (header/exit context)
 pub struct MirBuilder {
     /// Current module being built
     pub(super) current_module: Option<MirModule>,
-    
+
     /// Current function being built
     pub(super) current_function: Option<MirFunction>,
-    
+
     /// Current basic block being built
     pub(super) current_block: Option<BasicBlockId>,
-    
+
     /// Value ID generator
     pub(super) value_gen: ValueIdGenerator,
-    
+
     /// Basic block ID generator
     pub(super) block_gen: BasicBlockIdGenerator,
-    
+
     /// Variable name to ValueId mapping (for SSA conversion)
     pub(super) variable_map: HashMap<String, ValueId>,
-    
+
     /// Pending phi functions to be inserted
     #[allow(dead_code)]
     pub(super) pending_phis: Vec<(BasicBlockId, ValueId, String)>,
@@ -120,9 +119,8 @@ impl MirBuilder {
         }
     }
 
-
     // moved to builder_calls.rs: lower_method_as_function
-    
+
     /// Build a complete MIR module from AST
     pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
         self.prepare_module()?;
@@ -147,7 +145,11 @@ impl MirBuilder {
         self.current_function = Some(main_function);
         self.current_block = Some(entry_block);
 
-        if std::env::var("NYASH_BUILDER_SAFEPOINT_ENTRY").ok().as_deref() == Some("1") {
+        if std::env::var("NYASH_BUILDER_SAFEPOINT_ENTRY")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
             self.emit_instruction(MirInstruction::Safepoint)?;
         }
 
@@ -177,7 +179,10 @@ impl MirBuilder {
         let mut module = self.current_module.take().unwrap();
         let mut function = self.current_function.take().unwrap();
         function.metadata.value_types = self.value_types.clone();
-        if matches!(function.signature.return_type, super::MirType::Void | super::MirType::Unknown) {
+        if matches!(
+            function.signature.return_type,
+            super::MirType::Void | super::MirType::Unknown
+        ) {
             let mut inferred: Option<super::MirType> = None;
             'outer: for (_bid, bb) in function.blocks.iter() {
                 for inst in bb.instructions.iter() {
@@ -186,7 +191,8 @@ impl MirBuilder {
                             inferred = Some(mt);
                             break 'outer;
                         }
-                        if let Some(mt) = phi::infer_type_from_phi(&function, *v, &self.value_types) {
+                        if let Some(mt) = phi::infer_type_from_phi(&function, *v, &self.value_types)
+                        {
                             inferred = Some(mt);
                             break 'outer;
                         }
@@ -211,59 +217,75 @@ impl MirBuilder {
 
         Ok(module)
     }
-    
+
     /// Build an expression and return its value ID
     pub(super) fn build_expression(&mut self, ast: ASTNode) -> Result<ValueId, String> {
         // Delegated to exprs.rs to keep this file lean
         self.build_expression_impl(ast)
     }
-    
+
     // Moved implementation to exprs.rs; keeping a small shim here improves readability
     pub(super) fn build_expression_impl_legacy(&mut self, ast: ASTNode) -> Result<ValueId, String> {
         match ast {
-            ASTNode::Literal { value, .. } => {
-                self.build_literal(value)
-            },
-            
-            ASTNode::BinaryOp { left, operator, right, .. } => {
-                self.build_binary_op(*left, operator, *right)
-            },
-            
-            ASTNode::UnaryOp { operator, operand, .. } => {
+            ASTNode::Literal { value, .. } => self.build_literal(value),
+
+            ASTNode::BinaryOp {
+                left,
+                operator,
+                right,
+                ..
+            } => self.build_binary_op(*left, operator, *right),
+
+            ASTNode::UnaryOp {
+                operator, operand, ..
+            } => {
                 let op_string = match operator {
                     crate::ast::UnaryOperator::Minus => "-".to_string(),
                     crate::ast::UnaryOperator::Not => "not".to_string(),
                 };
                 self.build_unary_op(op_string, *operand)
-            },
-            
-            ASTNode::Variable { name, .. } => {
-                self.build_variable_access(name.clone())
-            },
-            
-            ASTNode::Me { .. } => {
-                self.build_me_expression()
-            },
-            
-            ASTNode::MethodCall { object, method, arguments, .. } => {
+            }
+
+            ASTNode::Variable { name, .. } => self.build_variable_access(name.clone()),
+
+            ASTNode::Me { .. } => self.build_me_expression(),
+
+            ASTNode::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } => {
                 // Early TypeOp lowering for method-style is()/as()
                 if (method == "is" || method == "as") && arguments.len() == 1 {
                     if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
                         let obj_val = self.build_expression(*object.clone())?;
                         let ty = Self::parse_type_name_to_mir(&type_name);
                         let dst = self.value_gen.next();
-                        let op = if method == "is" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
-                        self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
+                        let op = if method == "is" {
+                            super::TypeOpKind::Check
+                        } else {
+                            super::TypeOpKind::Cast
+                        };
+                        self.emit_instruction(MirInstruction::TypeOp {
+                            dst,
+                            op,
+                            value: obj_val,
+                            ty,
+                        })?;
                         return Ok(dst);
                     }
                 }
                 self.build_method_call(*object.clone(), method.clone(), arguments.clone())
-            },
-            
-            ASTNode::FromCall { parent, method, arguments, .. } => {
-                self.build_from_expression(parent.clone(), method.clone(), arguments.clone())
-            },
-            
+            }
+
+            ASTNode::FromCall {
+                parent,
+                method,
+                arguments,
+                ..
+            } => self.build_from_expression(parent.clone(), method.clone(), arguments.clone()),
+
             ASTNode::Assignment { target, value, .. } => {
                 // Check if target is a field access for RefSet
                 if let ASTNode::FieldAccess { object, field, .. } = target.as_ref() {
@@ -274,33 +296,57 @@ impl MirBuilder {
                 } else {
                     Err("Complex assignment targets not yet supported in MIR".to_string())
                 }
-            },
-            
-            ASTNode::FunctionCall { name, arguments, .. } => {
+            }
+
+            ASTNode::FunctionCall {
+                name, arguments, ..
+            } => {
                 // Early TypeOp lowering for function-style isType()/asType()
                 if (name == "isType" || name == "asType") && arguments.len() == 2 {
                     if let Some(type_name) = Self::extract_string_literal(&arguments[1]) {
                         let val = self.build_expression(arguments[0].clone())?;
                         let ty = Self::parse_type_name_to_mir(&type_name);
                         let dst = self.value_gen.next();
-                        let op = if name == "isType" { super::TypeOpKind::Check } else { super::TypeOpKind::Cast };
-                        self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                        let op = if name == "isType" {
+                            super::TypeOpKind::Check
+                        } else {
+                            super::TypeOpKind::Cast
+                        };
+                        self.emit_instruction(MirInstruction::TypeOp {
+                            dst,
+                            op,
+                            value: val,
+                            ty,
+                        })?;
                         return Ok(dst);
                     }
                 }
                 self.build_function_call(name.clone(), arguments.clone())
-            },
-            ASTNode::Call { callee, arguments, .. } => {
+            }
+            ASTNode::Call {
+                callee, arguments, ..
+            } => {
                 // P1.5: Lambdaはインライン、それ以外は Call に正規化
                 if let ASTNode::Lambda { params, body, .. } = callee.as_ref() {
                     if params.len() != arguments.len() {
-                        return Err(format!("Lambda expects {} args, got {}", params.len(), arguments.len()));
+                        return Err(format!(
+                            "Lambda expects {} args, got {}",
+                            params.len(),
+                            arguments.len()
+                        ));
                     }
                     let mut arg_vals: Vec<ValueId> = Vec::new();
-                    for a in arguments { arg_vals.push(self.build_expression(a)?); }
+                    for a in arguments {
+                        arg_vals.push(self.build_expression(a)?);
+                    }
                     let saved_vars = self.variable_map.clone();
-                    for (p, v) in params.iter().zip(arg_vals.iter()) { self.variable_map.insert(p.clone(), *v); }
-                    let prog = ASTNode::Program { statements: body.clone(), span: crate::ast::Span::unknown() };
+                    for (p, v) in params.iter().zip(arg_vals.iter()) {
+                        self.variable_map.insert(p.clone(), *v);
+                    }
+                    let prog = ASTNode::Program {
+                        statements: body.clone(),
+                        span: crate::ast::Span::unknown(),
+                    };
                     let out = self.build_expression(prog)?;
                     self.variable_map = saved_vars;
                     Ok(out)
@@ -308,43 +354,71 @@ impl MirBuilder {
                     // callee/args を評価し、Call を発行（VM 側で FunctionBox/関数名の両対応）
                     let callee_id = self.build_expression(*callee.clone())?;
                     let mut arg_ids = Vec::new();
-                    for a in arguments { arg_ids.push(self.build_expression(a)?); }
+                    for a in arguments {
+                        arg_ids.push(self.build_expression(a)?);
+                    }
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Call { dst: Some(dst), func: callee_id, args: arg_ids, effects: EffectMask::PURE })?;
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(dst),
+                        func: callee_id,
+                        args: arg_ids,
+                        effects: EffectMask::PURE,
+                    })?;
                     Ok(dst)
                 }
-            },
-            
+            }
+
             ASTNode::QMarkPropagate { expression, .. } => {
                 // Lower: ok = expr.isOk(); br ok then else; else => return expr; then => expr.getValue()
                 let res_val = self.build_expression(*expression.clone())?;
                 let ok_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::BoxCall { dst: Some(ok_id), box_val: res_val, method: "isOk".to_string(), method_id: None, args: vec![], effects: EffectMask::PURE })?;
+                self.emit_instruction(MirInstruction::BoxCall {
+                    dst: Some(ok_id),
+                    box_val: res_val,
+                    method: "isOk".to_string(),
+                    method_id: None,
+                    args: vec![],
+                    effects: EffectMask::PURE,
+                })?;
                 let then_block = self.block_gen.next();
                 let else_block = self.block_gen.next();
-                self.emit_instruction(MirInstruction::Branch { condition: ok_id, then_bb: then_block, else_bb: else_block })?;
+                self.emit_instruction(MirInstruction::Branch {
+                    condition: ok_id,
+                    then_bb: then_block,
+                    else_bb: else_block,
+                })?;
                 // else: return res_val
                 self.current_block = Some(else_block);
                 self.ensure_block_exists(else_block)?;
-                self.emit_instruction(MirInstruction::Return { value: Some(res_val) })?;
+                self.emit_instruction(MirInstruction::Return {
+                    value: Some(res_val),
+                })?;
                 // then: getValue()
                 self.current_block = Some(then_block);
                 self.ensure_block_exists(then_block)?;
                 let val_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::BoxCall { dst: Some(val_id), box_val: res_val, method: "getValue".to_string(), method_id: None, args: vec![], effects: EffectMask::PURE })?;
+                self.emit_instruction(MirInstruction::BoxCall {
+                    dst: Some(val_id),
+                    box_val: res_val,
+                    method: "getValue".to_string(),
+                    method_id: None,
+                    args: vec![],
+                    effects: EffectMask::PURE,
+                })?;
                 self.value_types.insert(val_id, super::MirType::Unknown);
                 Ok(val_id)
-            },
-            
-            ASTNode::Print { expression, .. } => {
-                self.build_print_statement(*expression.clone())
-            },
-            
-            ASTNode::Program { statements, .. } => {
-                self.build_block(statements.clone())
-            },
-            
-            ASTNode::If { condition, then_body, else_body, .. } => {
+            }
+
+            ASTNode::Print { expression, .. } => self.build_print_statement(*expression.clone()),
+
+            ASTNode::Program { statements, .. } => self.build_block(statements.clone()),
+
+            ASTNode::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
                 let else_ast = if let Some(else_statements) = else_body {
                     Some(ASTNode::Program {
                         statements: else_statements.clone(),
@@ -353,31 +427,41 @@ impl MirBuilder {
                 } else {
                     None
                 };
-                
+
                 self.build_if_statement(
-                    *condition.clone(), 
+                    *condition.clone(),
                     ASTNode::Program {
                         statements: then_body.clone(),
                         span: crate::ast::Span::unknown(),
                     },
-                    else_ast
+                    else_ast,
                 )
-            },
-            
-            ASTNode::Loop { condition, body, .. } => {
-                self.build_loop_statement(*condition.clone(), body.clone())
-            },
-            
-            ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => {
-                self.build_try_catch_statement(try_body.clone(), catch_clauses.clone(), finally_body.clone())
-            },
-            
-            ASTNode::Throw { expression, .. } => {
-                self.build_throw_statement(*expression.clone())
-            },
+            }
+
+            ASTNode::Loop {
+                condition, body, ..
+            } => self.build_loop_statement(*condition.clone(), body.clone()),
+
+            ASTNode::TryCatch {
+                try_body,
+                catch_clauses,
+                finally_body,
+                ..
+            } => self.build_try_catch_statement(
+                try_body.clone(),
+                catch_clauses.clone(),
+                finally_body.clone(),
+            ),
+
+            ASTNode::Throw { expression, .. } => self.build_throw_statement(*expression.clone()),
 
             // P1: Lower peek expression into if-else chain with phi
-            ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => {
+            ASTNode::PeekExpr {
+                scrutinee,
+                arms,
+                else_expr,
+                ..
+            } => {
                 // Evaluate scrutinee once
                 let scr_val = self.build_expression(*scrutinee.clone())?;
 
@@ -390,19 +474,30 @@ impl MirBuilder {
                     // Build condition: scr_val == lit
                     let lit_id = self.build_literal(lit)?;
                     let cond_id = self.value_gen.next();
-                    self.emit_instruction(super::MirInstruction::Compare { dst: cond_id, op: super::CompareOp::Eq, lhs: scr_val, rhs: lit_id })?;
+                    self.emit_instruction(super::MirInstruction::Compare {
+                        dst: cond_id,
+                        op: super::CompareOp::Eq,
+                        lhs: scr_val,
+                        rhs: lit_id,
+                    })?;
 
                     // Create then and next blocks
                     let then_block = self.block_gen.next();
                     let next_block = self.block_gen.next();
-                    self.emit_instruction(super::MirInstruction::Branch { condition: cond_id, then_bb: then_block, else_bb: next_block })?;
+                    self.emit_instruction(super::MirInstruction::Branch {
+                        condition: cond_id,
+                        then_bb: then_block,
+                        else_bb: next_block,
+                    })?;
 
                     // then: evaluate arm expr, jump to merge
                     self.current_block = Some(then_block);
                     self.ensure_block_exists(then_block)?;
                     let then_val = self.build_expression(arm_expr)?;
                     if !self.is_current_block_terminated() {
-                        self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
+                        self.emit_instruction(super::MirInstruction::Jump {
+                            target: merge_block,
+                        })?;
                     }
                     phi_inputs.push((then_block, then_val));
 
@@ -416,7 +511,9 @@ impl MirBuilder {
                 let cur_block = self.current_block.ok_or("No current basic block")?;
                 let else_val = self.build_expression(*else_expr.clone())?;
                 if !self.is_current_block_terminated() {
-                    self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
+                    self.emit_instruction(super::MirInstruction::Jump {
+                        target: merge_block,
+                    })?;
                 }
                 phi_inputs.push((cur_block, else_val));
 
@@ -424,10 +521,13 @@ impl MirBuilder {
                 self.current_block = Some(merge_block);
                 self.ensure_block_exists(merge_block)?;
                 let result_val = self.value_gen.next();
-                self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+                self.emit_instruction(super::MirInstruction::Phi {
+                    dst: result_val,
+                    inputs: phi_inputs,
+                })?;
                 Ok(result_val)
-            },
-            
+            }
+
             ASTNode::Lambda { params, body, .. } => {
                 // Lambda→FunctionBox 値 Lower（最小 + 簡易キャプチャ解析）
                 let dst = self.value_gen.next();
@@ -435,57 +535,104 @@ impl MirBuilder {
                 use std::collections::HashSet;
                 let mut used: HashSet<String> = HashSet::new();
                 let mut locals: HashSet<String> = HashSet::new();
-                for p in params.iter() { locals.insert(p.clone()); }
-                for st in body.iter() { vars::collect_free_vars(st, &mut used, &mut locals); }
+                for p in params.iter() {
+                    locals.insert(p.clone());
+                }
+                for st in body.iter() {
+                    vars::collect_free_vars(st, &mut used, &mut locals);
+                }
                 // Materialize captures from current variable_map if known
                 let mut captures: Vec<(String, ValueId)> = Vec::new();
                 for name in used.into_iter() {
-                    if let Some(&vid) = self.variable_map.get(&name) { captures.push((name, vid)); }
+                    if let Some(&vid) = self.variable_map.get(&name) {
+                        captures.push((name, vid));
+                    }
                 }
                 // me capture（存在すれば）
                 let me = self.variable_map.get("me").copied();
-                self.emit_instruction(MirInstruction::FunctionNew { dst, params: params.clone(), body: body.clone(), captures, me })?;
-                self.value_types.insert(dst, super::MirType::Box("FunctionBox".to_string()));
+                self.emit_instruction(MirInstruction::FunctionNew {
+                    dst,
+                    params: params.clone(),
+                    body: body.clone(),
+                    captures,
+                    me,
+                })?;
+                self.value_types
+                    .insert(dst, super::MirType::Box("FunctionBox".to_string()));
                 Ok(dst)
-            },
-            
-            ASTNode::Return { value, .. } => {
-                self.build_return_statement(value.clone())
-            },
-            
-            ASTNode::Local { variables, initial_values, .. } => {
-                self.build_local_statement(variables.clone(), initial_values.clone())
-            },
-            
-            ASTNode::BoxDeclaration { name, methods, is_static, fields, constructors, weak_fields, .. } => {
+            }
+
+            ASTNode::Return { value, .. } => self.build_return_statement(value.clone()),
+
+            ASTNode::Local {
+                variables,
+                initial_values,
+                ..
+            } => self.build_local_statement(variables.clone(), initial_values.clone()),
+
+            ASTNode::BoxDeclaration {
+                name,
+                methods,
+                is_static,
+                fields,
+                constructors,
+                weak_fields,
+                ..
+            } => {
                 if is_static && name == "Main" {
                     self.build_static_main_box(name.clone(), methods.clone())
                 } else {
                     // Support user-defined boxes - handle as statement, return void
                     // Track as user-defined (eligible for method lowering)
                     self.user_defined_boxes.insert(name.clone());
-                    self.build_box_declaration(name.clone(), methods.clone(), fields.clone(), weak_fields.clone())?;
+                    self.build_box_declaration(
+                        name.clone(),
+                        methods.clone(),
+                        fields.clone(),
+                        weak_fields.clone(),
+                    )?;
 
                     // Phase 2: Lower constructors (birth/N) into MIR functions
                     // Function name pattern: "{BoxName}.{constructor_key}" (e.g., "Person.birth/1")
                     for (ctor_key, ctor_ast) in constructors.clone() {
                         if let ASTNode::FunctionDeclaration { params, body, .. } = ctor_ast {
                             let func_name = format!("{}.{}", name, ctor_key);
-                            self.lower_method_as_function(func_name, name.clone(), params.clone(), body.clone())?;
+                            self.lower_method_as_function(
+                                func_name,
+                                name.clone(),
+                                params.clone(),
+                                body.clone(),
+                            )?;
                         }
                     }
 
                     // Phase 3: Lower instance methods into MIR functions
                     // Function name pattern: "{BoxName}.{method}/{N}"
                     for (method_name, method_ast) in methods.clone() {
-                        if let ASTNode::FunctionDeclaration { params, body, is_static, .. } = method_ast {
+                        if let ASTNode::FunctionDeclaration {
+                            params,
+                            body,
+                            is_static,
+                            ..
+                        } = method_ast
+                        {
                             if !is_static {
-                                let func_name = format!("{}.{}{}", name, method_name, format!("/{}", params.len()));
-                                self.lower_method_as_function(func_name, name.clone(), params.clone(), body.clone())?;
+                                let func_name = format!(
+                                    "{}.{}{}",
+                                    name,
+                                    method_name,
+                                    format!("/{}", params.len())
+                                );
+                                self.lower_method_as_function(
+                                    func_name,
+                                    name.clone(),
+                                    params.clone(),
+                                    body.clone(),
+                                )?;
                             }
                         }
                     }
-                    
+
                     // Return a void value since this is a statement
                     let void_val = self.value_gen.next();
                     self.emit_instruction(MirInstruction::Const {
@@ -494,36 +641,49 @@ impl MirBuilder {
                     })?;
                     Ok(void_val)
                 }
-            },
-            
+            }
+
             ASTNode::FieldAccess { object, field, .. } => {
                 self.build_field_access(*object.clone(), field.clone())
-            },
-            
-            ASTNode::New { class, arguments, .. } => {
-                self.build_new_expression(class.clone(), arguments.clone())
-            },
-            
+            }
+
+            ASTNode::New {
+                class, arguments, ..
+            } => self.build_new_expression(class.clone(), arguments.clone()),
+
             ASTNode::ArrayLiteral { elements, .. } => {
                 // Lower: new ArrayBox(); for each elem: .push(elem)
                 let arr_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::NewBox { dst: arr_id, box_type: "ArrayBox".to_string(), args: vec![] })?;
+                self.emit_instruction(MirInstruction::NewBox {
+                    dst: arr_id,
+                    box_type: "ArrayBox".to_string(),
+                    args: vec![],
+                })?;
                 for e in elements {
                     let v = self.build_expression(e)?;
-                    self.emit_instruction(MirInstruction::BoxCall { dst: None, box_val: arr_id, method: "push".to_string(), method_id: None, args: vec![v], effects: super::EffectMask::MUT })?;
+                    self.emit_instruction(MirInstruction::BoxCall {
+                        dst: None,
+                        box_val: arr_id,
+                        method: "push".to_string(),
+                        method_id: None,
+                        args: vec![v],
+                        effects: super::EffectMask::MUT,
+                    })?;
                 }
                 Ok(arr_id)
-            },
-            
+            }
+
             // Phase 7: Async operations
-            ASTNode::Nowait { variable, expression, .. } => {
-                self.build_nowait_statement(variable.clone(), *expression.clone())
-            },
-            
+            ASTNode::Nowait {
+                variable,
+                expression,
+                ..
+            } => self.build_nowait_statement(variable.clone(), *expression.clone()),
+
             ASTNode::AwaitExpression { expression, .. } => {
                 self.build_await_expression(*expression.clone())
-            },
-            
+            }
+
             ASTNode::Include { filename, .. } => {
                 // Resolve and read included file
                 let mut path = utils::resolve_include_path_builder(&filename);
@@ -550,12 +710,19 @@ impl MirBuilder {
                 let mut box_name: Option<String> = None;
                 if let crate::ast::ASTNode::Program { statements, .. } = &included_ast {
                     for st in statements {
-                        if let crate::ast::ASTNode::BoxDeclaration { name, is_static, .. } = st {
-                            if *is_static { box_name = Some(name.clone()); break; }
+                        if let crate::ast::ASTNode::BoxDeclaration {
+                            name, is_static, ..
+                        } = st
+                        {
+                            if *is_static {
+                                box_name = Some(name.clone());
+                                break;
+                            }
                         }
                     }
                 }
-                let bname = box_name.ok_or_else(|| format!("Include target '{}' has no static box", filename))?;
+                let bname = box_name
+                    .ok_or_else(|| format!("Include target '{}' has no static box", filename))?;
                 // Lower included AST into current MIR (register types/methods)
                 let _ = self.build_expression(included_ast)?;
                 // Mark caches
@@ -563,14 +730,12 @@ impl MirBuilder {
                 self.include_box_map.insert(path.clone(), bname.clone());
                 // Return a new instance of included box (no args)
                 self.build_new_expression(bname, vec![])
-            },
-            
-            _ => {
-                Err(format!("Unsupported AST node type: {:?}", ast))
             }
+
+            _ => Err(format!("Unsupported AST node type: {:?}", ast)),
         }
     }
-    
+
     /// Build a literal value
     pub(super) fn build_literal(&mut self, literal: LiteralValue) -> Result<ValueId, String> {
         // Determine type without moving literal
@@ -590,21 +755,23 @@ impl MirBuilder {
             LiteralValue::Null => ConstValue::Null,
             LiteralValue::Void => ConstValue::Void,
         };
-        
+
         let dst = self.value_gen.next();
         self.emit_instruction(MirInstruction::Const {
             dst,
             value: const_value,
         })?;
         // Annotate type
-        if let Some(ty) = ty_for_dst { self.value_types.insert(dst, ty); }
-        
+        if let Some(ty) = ty_for_dst {
+            self.value_types.insert(dst, ty);
+        }
+
         Ok(dst)
     }
-    
+
     // build_binary_op moved to builder/ops.rs
     // build_unary_op moved to builder/ops.rs
-    
+
     /// Build variable access
     pub(super) fn build_variable_access(&mut self, name: String) -> Result<ValueId, String> {
         if let Some(&value_id) = self.variable_map.get(&name) {
@@ -613,51 +780,84 @@ impl MirBuilder {
             Err(format!("Undefined variable: {}", name))
         }
     }
-    
+
     /// Build assignment
-    pub(super) fn build_assignment(&mut self, var_name: String, value: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_assignment(
+        &mut self,
+        var_name: String,
+        value: ASTNode,
+    ) -> Result<ValueId, String> {
         let value_id = self.build_expression(value)?;
-        
+
         // In SSA form, each assignment creates a new value
         self.variable_map.insert(var_name.clone(), value_id);
-        
+
         Ok(value_id)
     }
-    
+
     // build_function_call_legacy removed (use builder_calls::build_function_call)
-    
+
     // build_print_statement_legacy moved to builder/stmts.rs
-    
+
     // build_block_legacy moved to builder/stmts.rs
-    
+
     // build_if_statement_legacy moved to builder/stmts.rs
 
     // extract_assigned_var moved to builder/stmts.rs (as module helper)
-    
+
     /// Emit an instruction to the current basic block
     pub(super) fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
         let block_id = self.current_block.ok_or("No current basic block")?;
-        
+
         if let Some(ref mut function) = self.current_function {
             if let Some(block) = function.get_block_mut(block_id) {
                 if utils::builder_debug_enabled() {
-                    eprintln!("[BUILDER] emit @bb{} -> {}", block_id, match &instruction {
-                        MirInstruction::TypeOp { dst, op, value, ty } => format!("typeop {:?} {} {:?} -> {}", op, value, ty, dst),
-                        MirInstruction::Print { value, .. } => format!("print {}", value),
-                        MirInstruction::BoxCall { box_val, method, method_id, args, dst, .. } => {
-                            if let Some(mid) = method_id { 
-                                format!("boxcall {}.{}[#{}]({:?}) -> {:?}", box_val, method, mid, args, dst)
-                            } else {
-                                format!("boxcall {}.{}({:?}) -> {:?}", box_val, method, args, dst)
+                    eprintln!(
+                        "[BUILDER] emit @bb{} -> {}",
+                        block_id,
+                        match &instruction {
+                            MirInstruction::TypeOp { dst, op, value, ty } =>
+                                format!("typeop {:?} {} {:?} -> {}", op, value, ty, dst),
+                            MirInstruction::Print { value, .. } => format!("print {}", value),
+                            MirInstruction::BoxCall {
+                                box_val,
+                                method,
+                                method_id,
+                                args,
+                                dst,
+                                ..
+                            } => {
+                                if let Some(mid) = method_id {
+                                    format!(
+                                        "boxcall {}.{}[#{}]({:?}) -> {:?}",
+                                        box_val, method, mid, args, dst
+                                    )
+                                } else {
+                                    format!(
+                                        "boxcall {}.{}({:?}) -> {:?}",
+                                        box_val, method, args, dst
+                                    )
+                                }
                             }
-                        },
-                        MirInstruction::Call { func, args, dst, .. } => format!("call {}({:?}) -> {:?}", func, args, dst),
-                        MirInstruction::NewBox { dst, box_type, args } => format!("new {}({:?}) -> {}", box_type, args, dst),
-                        MirInstruction::Const { dst, value } => format!("const {:?} -> {}", value, dst),
-                        MirInstruction::Branch { condition, then_bb, else_bb } => format!("br {}, {}, {}", condition, then_bb, else_bb),
-                        MirInstruction::Jump { target } => format!("br {}", target),
-                        _ => format!("{:?}", instruction),
-                    });
+                            MirInstruction::Call {
+                                func, args, dst, ..
+                            } => format!("call {}({:?}) -> {:?}", func, args, dst),
+                            MirInstruction::NewBox {
+                                dst,
+                                box_type,
+                                args,
+                            } => format!("new {}({:?}) -> {}", box_type, args, dst),
+                            MirInstruction::Const { dst, value } =>
+                                format!("const {:?} -> {}", value, dst),
+                            MirInstruction::Branch {
+                                condition,
+                                then_bb,
+                                else_bb,
+                            } => format!("br {}, {}, {}", condition, then_bb, else_bb),
+                            MirInstruction::Jump { target } => format!("br {}", target),
+                            _ => format!("{:?}", instruction),
+                        }
+                    );
                 }
                 block.add_instruction(instruction);
                 Ok(())
@@ -686,7 +886,10 @@ impl MirBuilder {
                 .get_block_mut(block_id)
                 .ok_or_else(|| format!("Basic block {} does not exist", block_id))?;
             if let Some(term) = &block.terminator {
-                if matches!(term, MirInstruction::Return { .. } | MirInstruction::Throw { .. }) {
+                if matches!(
+                    term,
+                    MirInstruction::Return { .. } | MirInstruction::Throw { .. }
+                ) {
                     return Ok(());
                 }
             }
@@ -704,34 +907,43 @@ impl MirBuilder {
             Err("No current function".to_string())
         }
     }
-    
+
     // moved to builder/utils.rs: ensure_block_exists
-    
+
     // build_loop_statement_legacy moved to builder/stmts.rs
-    
+
     // build_try_catch_statement_legacy moved to builder/stmts.rs
-    
+
     // build_throw_statement_legacy moved to builder/stmts.rs
-    
+
     // build_local_statement_legacy moved to builder/stmts.rs
-    
+
     // build_return_statement_legacy moved to builder/stmts.rs
-    
+
     // moved to builder/decls.rs: build_static_main_box
-    
+
     // moved to builder/fields.rs: build_field_access
-    
+
     /// Build new expression: new ClassName(arguments)
-    pub(super) fn build_new_expression(&mut self, class: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+    pub(super) fn build_new_expression(
+        &mut self,
+        class: String,
+        arguments: Vec<ASTNode>,
+    ) -> Result<ValueId, String> {
         // Phase 9.78a: Unified Box creation using NewBox instruction
         // Core-13 pure mode: emit ExternCall(env.box.new) with type name const only
         if crate::config::env::mir_core13_pure() {
             // Emit Const String for type name
             let ty_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: ty_id, value: ConstValue::String(class.clone()) })?;
+            self.emit_instruction(MirInstruction::Const {
+                dst: ty_id,
+                value: ConstValue::String(class.clone()),
+            })?;
             // Evaluate arguments (pass through to env.box.new shim)
             let mut arg_vals: Vec<ValueId> = Vec::with_capacity(arguments.len());
-            for a in arguments { arg_vals.push(self.build_expression(a)?); }
+            for a in arguments {
+                arg_vals.push(self.build_expression(a)?);
+            }
             // Build arg list: [type, a1, a2, ...]
             let mut args: Vec<ValueId> = Vec::with_capacity(1 + arg_vals.len());
             args.push(ty_id);
@@ -739,33 +951,45 @@ impl MirBuilder {
             // Call env.box.new
             let dst = self.value_gen.next();
             self.emit_instruction(MirInstruction::ExternCall {
-                dst: Some(dst), iface_name: "env.box".to_string(), method_name: "new".to_string(), args, effects: EffectMask::PURE,
+                dst: Some(dst),
+                iface_name: "env.box".to_string(),
+                method_name: "new".to_string(),
+                args,
+                effects: EffectMask::PURE,
             })?;
             // 型注釈（最小）
-            self.value_types.insert(dst, super::MirType::Box(class.clone()));
+            self.value_types
+                .insert(dst, super::MirType::Box(class.clone()));
             return Ok(dst);
         }
-        
+
         // Optimization: Primitive wrappers → emit Const directly when possible
         if class == "IntegerBox" && arguments.len() == 1 {
-            if let ASTNode::Literal { value: LiteralValue::Integer(n), .. } = arguments[0].clone() {
+            if let ASTNode::Literal {
+                value: LiteralValue::Integer(n),
+                ..
+            } = arguments[0].clone()
+            {
                 let dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const { dst, value: ConstValue::Integer(n) })?;
+                self.emit_instruction(MirInstruction::Const {
+                    dst,
+                    value: ConstValue::Integer(n),
+                })?;
                 self.value_types.insert(dst, super::MirType::Integer);
                 return Ok(dst);
             }
         }
-        
+
         // First, evaluate all arguments to get their ValueIds
         let mut arg_values = Vec::new();
         for arg in arguments {
             let arg_value = self.build_expression(arg)?;
             arg_values.push(arg_value);
         }
-        
+
         // Generate the destination ValueId
         let dst = self.value_gen.next();
-        
+
         // Emit NewBox instruction for all Box types
         // VM will handle optimization for basic types internally
         self.emit_instruction(MirInstruction::NewBox {
@@ -775,11 +999,22 @@ impl MirBuilder {
         })?;
         // Annotate primitive boxes
         match class.as_str() {
-            "IntegerBox" => { self.value_types.insert(dst, super::MirType::Integer); },
-            "FloatBox" => { self.value_types.insert(dst, super::MirType::Float); },
-            "BoolBox" => { self.value_types.insert(dst, super::MirType::Bool); },
-            "StringBox" => { self.value_types.insert(dst, super::MirType::String); },
-            other => { self.value_types.insert(dst, super::MirType::Box(other.to_string())); }
+            "IntegerBox" => {
+                self.value_types.insert(dst, super::MirType::Integer);
+            }
+            "FloatBox" => {
+                self.value_types.insert(dst, super::MirType::Float);
+            }
+            "BoolBox" => {
+                self.value_types.insert(dst, super::MirType::Bool);
+            }
+            "StringBox" => {
+                self.value_types.insert(dst, super::MirType::String);
+            }
+            other => {
+                self.value_types
+                    .insert(dst, super::MirType::Box(other.to_string()));
+            }
         }
 
         // Record origin for optimization: dst was created by NewBox of class
@@ -798,14 +1033,14 @@ impl MirBuilder {
                 EffectMask::READ.add(Effect::ReadHeap),
             )?;
         }
-        
+
         Ok(dst)
     }
-    
+
     // moved to builder/fields.rs: build_field_assignment
-    
+
     // moved to builder/utils.rs: start_new_block
-    
+
     /// Check if the current basic block is terminated
     fn is_current_block_terminated(&self) -> bool {
         if let (Some(block_id), Some(ref function)) = (self.current_block, &self.current_function) {
@@ -815,16 +1050,16 @@ impl MirBuilder {
         }
         false
     }
-    
+
     // convert_binary_operator moved to builder/ops.rs
     // convert_unary_operator moved to builder/ops.rs
-    
+
     // build_nowait_statement_legacy moved to builder/stmts.rs
-    
+
     // build_await_expression_legacy moved to builder/stmts.rs
-    
+
     // build_me_expression_legacy moved to builder/stmts.rs
-    
+
     // build_method_call_legacy removed (use builder_calls::build_method_call)
 
     // parse_type_name_to_mir_legacy removed (use builder_calls::parse_type_name_to_mir)
@@ -832,7 +1067,7 @@ impl MirBuilder {
     // build_from_expression_legacy removed (use builder_calls::build_from_expression)
 
     // lower_static_method_as_function_legacy removed (use builder_calls::lower_static_method_as_function)
-    
+
     // moved to builder/decls.rs: build_box_declaration
 }
 
@@ -848,28 +1083,28 @@ impl Default for MirBuilder {
 mod tests {
     use super::*;
     use crate::ast::{ASTNode, LiteralValue, Span};
-    
+
     #[test]
     fn test_literal_building() {
         let mut builder = MirBuilder::new();
-        
+
         let ast = ASTNode::Literal {
             value: LiteralValue::Integer(42),
             span: Span::unknown(),
         };
-        
+
         let result = builder.build_module(ast);
         assert!(result.is_ok());
-        
+
         let module = result.unwrap();
         assert_eq!(module.function_names().len(), 1);
         assert!(module.get_function("main").is_some());
     }
-    
+
     #[test]
     fn test_binary_op_building() {
         let mut builder = MirBuilder::new();
-        
+
         let ast = ASTNode::BinaryOp {
             left: Box::new(ASTNode::Literal {
                 value: LiteralValue::Integer(10),
@@ -882,22 +1117,22 @@ mod tests {
             }),
             span: Span::unknown(),
         };
-        
+
         let result = builder.build_module(ast);
         assert!(result.is_ok());
-        
+
         let module = result.unwrap();
         let function = module.get_function("main").unwrap();
-        
+
         // Should have constants and binary operation
         let stats = function.stats();
         assert!(stats.instruction_count >= 3); // 2 constants + 1 binop + 1 return
     }
-    
+
     #[test]
     fn test_if_statement_building() {
         let mut builder = MirBuilder::new();
-        
+
         // Adapt test to current AST: If with statement bodies
         let ast = ASTNode::If {
             condition: Box::new(ASTNode::Literal {
@@ -914,16 +1149,16 @@ mod tests {
             }]),
             span: Span::unknown(),
         };
-        
+
         let result = builder.build_module(ast);
         assert!(result.is_ok());
-        
+
         let module = result.unwrap();
         let function = module.get_function("main").unwrap();
-        
+
         // Should have multiple blocks for if/then/else/merge
         assert!(function.blocks.len() >= 3);
-        
+
         // Should have phi function in merge block
         let stats = function.stats();
         assert!(stats.phi_count >= 1);

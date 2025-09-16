@@ -1,7 +1,10 @@
 //! Async/Future-related JIT extern symbols
 
 #[allow(unused_imports)]
-use crate::{backend::vm::VMValue, box_trait::{NyashBox, IntegerBox, BoolBox, StringBox}};
+use crate::{
+    backend::vm::VMValue,
+    box_trait::{BoolBox, IntegerBox, NyashBox, StringBox},
+};
 
 /// Symbol name for awaiting a FutureBox and returning a value/handle (i64)
 pub const SYM_FUTURE_AWAIT_H: &str = "nyash.future.await_h";
@@ -15,7 +18,10 @@ pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
     let mut fut_opt: Option<crate::boxes::future::FutureBox> = None;
     if arg0 > 0 {
         if let Some(obj) = handles::get(arg0 as u64) {
-            if let Some(fb) = obj.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
+            if let Some(fb) = obj
+                .as_any()
+                .downcast_ref::<crate::boxes::future::FutureBox>()
+            {
                 fut_opt = Some(fb.clone());
             }
         }
@@ -23,7 +29,11 @@ pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
     #[cfg(not(feature = "jit-direct-only"))]
     if fut_opt.is_none() {
         crate::jit::rt::with_legacy_vm_args(|args| {
-            let pick = if arg0 >= 0 { (arg0 as usize)..(arg0 as usize + 1) } else { 0..args.len() };
+            let pick = if arg0 >= 0 {
+                (arg0 as usize)..(arg0 as usize + 1)
+            } else {
+                0..args.len()
+            };
             for i in pick {
                 if let Some(VMValue::BoxRef(b)) = args.get(i) {
                     if let Some(fb) = b.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
@@ -34,7 +44,9 @@ pub extern "C" fn nyash_future_await_h(arg0: i64) -> i64 {
             }
         });
     }
-    let Some(fut) = fut_opt else { return 0; };
+    let Some(fut) = fut_opt else {
+        return 0;
+    };
     // Cooperative wait with scheduler polling and timeout
     let max_ms: u64 = crate::config::env::await_max_ms();
     let start = std::time::Instant::now();

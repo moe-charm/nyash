@@ -1,5 +1,5 @@
 //! プラグイン設定（nyash.toml）の読み込み
-//! 
+//!
 //! シンプルな実装から始める - 必要最小限の機能のみ
 
 use std::collections::HashMap;
@@ -17,14 +17,14 @@ pub struct PluginConfig {
 impl PluginConfig {
     /// nyash.tomlを読み込む
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read nyash.toml: {}", e))?;
-        
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Failed to read nyash.toml: {}", e))?;
+
         Self::parse(&content)
     }
-    
+
     /// 設定文字列をパース（シンプル版）
-    /// 
+    ///
     /// 対応フォーマット:
     /// ```toml
     /// [plugins]
@@ -34,15 +34,15 @@ impl PluginConfig {
     pub fn parse(content: &str) -> Result<Self, String> {
         let mut config = PluginConfig::default();
         let mut in_plugins_section = false;
-        
+
         for line in content.lines() {
             let line = line.trim();
-            
+
             // 空行やコメントはスキップ
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            
+
             // セクション検出
             if line == "[plugins]" {
                 in_plugins_section = true;
@@ -51,7 +51,7 @@ impl PluginConfig {
                 in_plugins_section = false;
                 continue;
             }
-            
+
             // plugins セクション内の設定を読む
             if in_plugins_section {
                 if let Some((key, value)) = line.split_once('=') {
@@ -61,7 +61,7 @@ impl PluginConfig {
                 }
             }
         }
-        
+
         Ok(config)
     }
 }
@@ -69,7 +69,7 @@ impl PluginConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_simple_config() {
         let toml = r#"
@@ -80,20 +80,23 @@ StringBox = "mystring"
 [other]
 something = "else"
 "#;
-        
+
         let config = PluginConfig::parse(toml).unwrap();
         assert_eq!(config.plugins.get("FileBox"), Some(&"filebox".to_string()));
-        assert_eq!(config.plugins.get("StringBox"), Some(&"mystring".to_string()));
+        assert_eq!(
+            config.plugins.get("StringBox"),
+            Some(&"mystring".to_string())
+        );
         assert_eq!(config.plugins.len(), 2);
     }
-    
+
     #[test]
     fn test_parse_empty_config() {
         let toml = "";
         let config = PluginConfig::parse(toml).unwrap();
         assert!(config.plugins.is_empty());
     }
-    
+
     #[test]
     fn test_parse_with_comments() {
         let toml = r#"
@@ -103,7 +106,7 @@ something = "else"
 FileBox = "filebox"
 # StringBox = "disabled"  # This is commented out
 "#;
-        
+
         let config = PluginConfig::parse(toml).unwrap();
         assert_eq!(config.plugins.get("FileBox"), Some(&"filebox".to_string()));
         assert_eq!(config.plugins.get("StringBox"), None);

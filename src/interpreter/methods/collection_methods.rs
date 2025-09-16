@@ -1,6 +1,6 @@
 /*!
  * Collection Methods Module
- * 
+ *
  * Extracted from box_methods.rs
  * Contains method implementations for collection types:
  * - ArrayBox (execute_array_method)
@@ -8,13 +8,17 @@
  */
 
 use super::super::*;
-use crate::box_trait::{IntegerBox, NyashBox, BoolBox};
+use crate::box_trait::{BoolBox, IntegerBox, NyashBox};
 use crate::boxes::{ArrayBox, MapBox};
 
 impl NyashInterpreter {
     /// ArrayBoxのメソッド呼び出しを実行  
-    pub(in crate::interpreter) fn execute_array_method(&mut self, array_box: &ArrayBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_array_method(
+        &mut self,
+        array_box: &ArrayBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "of" => {
                 // Build a new ArrayBox from provided arguments
@@ -154,25 +158,29 @@ impl NyashInterpreter {
             "slice" => {
                 if arguments.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("slice() expects 2 arguments (start, end), got {}", arguments.len()),
+                        message: format!(
+                            "slice() expects 2 arguments (start, end), got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 let start_value = self.execute_expression(&arguments[0])?;
                 let end_value = self.execute_expression(&arguments[1])?;
                 Ok(array_box.slice(start_value, end_value))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for ArrayBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for ArrayBox", method),
+            }),
         }
     }
 
     /// MapBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_map_method(&mut self, map_box: &MapBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
-        
+    pub(in crate::interpreter) fn execute_map_method(
+        &mut self,
+        map_box: &MapBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // メソッドを実行（必要時評価方式）
         match method {
             "set" => {
@@ -260,7 +268,10 @@ impl NyashInterpreter {
             "containsKey" => {
                 if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("containsKey() expects 1 argument, got {}", arguments.len()),
+                        message: format!(
+                            "containsKey() expects 1 argument, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 let key_value = self.execute_expression(&arguments[0])?;
@@ -269,7 +280,10 @@ impl NyashInterpreter {
             "containsValue" => {
                 if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("containsValue() expects 1 argument, got {}", arguments.len()),
+                        message: format!(
+                            "containsValue() expects 1 argument, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 let _value = self.execute_expression(&arguments[0])?;
@@ -303,11 +317,9 @@ impl NyashInterpreter {
                 }
                 Ok(Box::new(map_box.to_string_box()))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown MapBox method: {}", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown MapBox method: {}", method),
+            }),
         }
     }
 }

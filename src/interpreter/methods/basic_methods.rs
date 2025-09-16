@@ -1,22 +1,26 @@
 /*!
  * Basic Box Methods Module
- * 
+ *
  * Extracted from box_methods.rs
  * Contains method implementations for:
  * - StringBox (execute_string_method)
- * - IntegerBox (execute_integer_method) 
+ * - IntegerBox (execute_integer_method)
  * - BoolBox (execute_bool_method)
  * - FloatBox (execute_float_method)
  */
 
 use super::super::*;
-use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
+use crate::box_trait::{BoolBox, IntegerBox, StringBox, VoidBox};
 use crate::boxes::FloatBox;
 
 impl NyashInterpreter {
     /// StringBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_string_method(&mut self, string_box: &StringBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_string_method(
+        &mut self,
+        string_box: &StringBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "split" => {
                 if arguments.len() != 1 {
@@ -93,7 +97,7 @@ impl NyashInterpreter {
                 let new_value = self.execute_expression(&arguments[1])?;
                 if let (Some(old_str), Some(new_str)) = (
                     old_value.as_any().downcast_ref::<StringBox>(),
-                    new_value.as_any().downcast_ref::<StringBox>()
+                    new_value.as_any().downcast_ref::<StringBox>(),
                 ) {
                     Ok(string_box.replace(&old_str.value, &new_str.value))
                 } else {
@@ -129,7 +133,10 @@ impl NyashInterpreter {
             "toInteger" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("toInteger() expects 0 arguments, got {}", arguments.len()),
+                        message: format!(
+                            "toInteger() expects 0 arguments, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 Ok(string_box.to_integer())
@@ -137,12 +144,15 @@ impl NyashInterpreter {
             "substring" => {
                 if arguments.len() != 2 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("substring() expects 2 arguments, got {}", arguments.len()),
+                        message: format!(
+                            "substring() expects 2 arguments, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 let start = self.execute_expression(&arguments[0])?;
                 let end = self.execute_expression(&arguments[1])?;
-                
+
                 // Convert arguments to integers
                 let start_int = if let Some(int_box) = start.as_any().downcast_ref::<IntegerBox>() {
                     int_box.value as usize
@@ -151,7 +161,7 @@ impl NyashInterpreter {
                         message: "substring() expects integer arguments".to_string(),
                     });
                 };
-                
+
                 let end_int = if let Some(int_box) = end.as_any().downcast_ref::<IntegerBox>() {
                     int_box.value as usize
                 } else {
@@ -159,20 +169,22 @@ impl NyashInterpreter {
                         message: "substring() expects integer arguments".to_string(),
                     });
                 };
-                
+
                 Ok(string_box.substring(start_int, end_int))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for StringBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for StringBox", method),
+            }),
         }
     }
 
     /// IntegerBoxのメソッド呼び出しを実行  
-    pub(in crate::interpreter) fn execute_integer_method(&mut self, integer_box: &IntegerBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_integer_method(
+        &mut self,
+        integer_box: &IntegerBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "toString" => {
                 if !arguments.is_empty() {
@@ -198,7 +210,9 @@ impl NyashInterpreter {
                 }
                 let other_value = self.execute_expression(&arguments[0])?;
                 if let Some(other_int) = other_value.as_any().downcast_ref::<IntegerBox>() {
-                    Ok(Box::new(IntegerBox::new(integer_box.value.max(other_int.value))))
+                    Ok(Box::new(IntegerBox::new(
+                        integer_box.value.max(other_int.value),
+                    )))
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "max() requires integer argument".to_string(),
@@ -213,7 +227,9 @@ impl NyashInterpreter {
                 }
                 let other_value = self.execute_expression(&arguments[0])?;
                 if let Some(other_int) = other_value.as_any().downcast_ref::<IntegerBox>() {
-                    Ok(Box::new(IntegerBox::new(integer_box.value.min(other_int.value))))
+                    Ok(Box::new(IntegerBox::new(
+                        integer_box.value.min(other_int.value),
+                    )))
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "min() requires integer argument".to_string(),
@@ -249,17 +265,19 @@ impl NyashInterpreter {
                     })
                 }
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for IntegerBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for IntegerBox", method),
+            }),
         }
     }
 
     /// BoolBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_bool_method(&mut self, bool_box: &BoolBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_bool_method(
+        &mut self,
+        bool_box: &BoolBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "toString" => {
                 if !arguments.is_empty() {
@@ -316,17 +334,19 @@ impl NyashInterpreter {
                 let other_value = self.execute_expression(&arguments[0])?;
                 Ok(Box::new(bool_box.equals(&*other_value)))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for BoolBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for BoolBox", method),
+            }),
         }
     }
 
     /// FloatBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_float_method(&mut self, float_box: &FloatBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_float_method(
+        &mut self,
+        float_box: &FloatBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "toString" => {
                 if !arguments.is_empty() {
@@ -371,7 +391,10 @@ impl NyashInterpreter {
             "toInteger" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("toInteger() expects 0 arguments, got {}", arguments.len()),
+                        message: format!(
+                            "toInteger() expects 0 arguments, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 Ok(Box::new(IntegerBox::new(float_box.value as i64)))
@@ -384,9 +407,13 @@ impl NyashInterpreter {
                 }
                 let other_value = self.execute_expression(&arguments[0])?;
                 if let Some(other_float) = other_value.as_any().downcast_ref::<FloatBox>() {
-                    Ok(Box::new(FloatBox::new(float_box.value.max(other_float.value))))
+                    Ok(Box::new(FloatBox::new(
+                        float_box.value.max(other_float.value),
+                    )))
                 } else if let Some(other_int) = other_value.as_any().downcast_ref::<IntegerBox>() {
-                    Ok(Box::new(FloatBox::new(float_box.value.max(other_int.value as f64))))
+                    Ok(Box::new(FloatBox::new(
+                        float_box.value.max(other_int.value as f64),
+                    )))
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "max() requires numeric argument".to_string(),
@@ -401,9 +428,13 @@ impl NyashInterpreter {
                 }
                 let other_value = self.execute_expression(&arguments[0])?;
                 if let Some(other_float) = other_value.as_any().downcast_ref::<FloatBox>() {
-                    Ok(Box::new(FloatBox::new(float_box.value.min(other_float.value))))
+                    Ok(Box::new(FloatBox::new(
+                        float_box.value.min(other_float.value),
+                    )))
                 } else if let Some(other_int) = other_value.as_any().downcast_ref::<IntegerBox>() {
-                    Ok(Box::new(FloatBox::new(float_box.value.min(other_int.value as f64))))
+                    Ok(Box::new(FloatBox::new(
+                        float_box.value.min(other_int.value as f64),
+                    )))
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "min() requires numeric argument".to_string(),
@@ -418,9 +449,15 @@ impl NyashInterpreter {
                 }
                 let exponent_value = self.execute_expression(&arguments[0])?;
                 if let Some(exponent_float) = exponent_value.as_any().downcast_ref::<FloatBox>() {
-                    Ok(Box::new(FloatBox::new(float_box.value.powf(exponent_float.value))))
-                } else if let Some(exponent_int) = exponent_value.as_any().downcast_ref::<IntegerBox>() {
-                    Ok(Box::new(FloatBox::new(float_box.value.powf(exponent_int.value as f64))))
+                    Ok(Box::new(FloatBox::new(
+                        float_box.value.powf(exponent_float.value),
+                    )))
+                } else if let Some(exponent_int) =
+                    exponent_value.as_any().downcast_ref::<IntegerBox>()
+                {
+                    Ok(Box::new(FloatBox::new(
+                        float_box.value.powf(exponent_int.value as f64),
+                    )))
                 } else {
                     Err(RuntimeError::TypeError {
                         message: "pow() requires numeric exponent".to_string(),
@@ -512,7 +549,10 @@ impl NyashInterpreter {
             "isInfinite" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("isInfinite() expects 0 arguments, got {}", arguments.len()),
+                        message: format!(
+                            "isInfinite() expects 0 arguments, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 Ok(Box::new(BoolBox::new(float_box.value.is_infinite())))
@@ -534,11 +574,9 @@ impl NyashInterpreter {
                 let other_value = self.execute_expression(&arguments[0])?;
                 Ok(Box::new(float_box.equals(&*other_value)))
             }
-            _ => {
-                Err(RuntimeError::InvalidOperation {
-                    message: format!("Unknown method '{}' for FloatBox", method),
-                })
-            }
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown method '{}' for FloatBox", method),
+            }),
         }
     }
 }

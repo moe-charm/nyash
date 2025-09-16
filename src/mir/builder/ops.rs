@@ -1,6 +1,6 @@
-use super::{MirInstruction, ValueId, MirType};
+use super::{MirInstruction, MirType, ValueId};
 use crate::ast::{ASTNode, BinaryOperator};
-use crate::mir::{BinaryOp, UnaryOp, CompareOp, TypeOpKind};
+use crate::mir::{BinaryOp, CompareOp, TypeOpKind, UnaryOp};
 
 // Internal classification for binary operations
 #[derive(Debug)]
@@ -81,7 +81,12 @@ impl super::MirBuilder {
                 } else {
                     (lhs, rhs)
                 };
-                self.emit_instruction(MirInstruction::Compare { dst, op, lhs: lhs2, rhs: rhs2 })?;
+                self.emit_instruction(MirInstruction::Compare {
+                    dst,
+                    op,
+                    lhs: lhs2,
+                    rhs: rhs2,
+                })?;
                 self.value_types.insert(dst, MirType::Bool);
             }
         }
@@ -90,30 +95,58 @@ impl super::MirBuilder {
     }
 
     // Build a unary operation
-    pub(super) fn build_unary_op(&mut self, operator: String, operand: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_unary_op(
+        &mut self,
+        operator: String,
+        operand: ASTNode,
+    ) -> Result<ValueId, String> {
         let operand_val = self.build_expression(operand)?;
         // Core-13 純化: UnaryOp を直接 展開（Neg/Not/BitNot）
         if crate::config::env::mir_core13_pure() {
             match operator.as_str() {
                 "-" => {
                     let zero = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: zero, value: crate::mir::ConstValue::Integer(0) })?;
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: zero,
+                        value: crate::mir::ConstValue::Integer(0),
+                    })?;
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp { dst, op: crate::mir::BinaryOp::Sub, lhs: zero, rhs: operand_val })?;
+                    self.emit_instruction(MirInstruction::BinOp {
+                        dst,
+                        op: crate::mir::BinaryOp::Sub,
+                        lhs: zero,
+                        rhs: operand_val,
+                    })?;
                     return Ok(dst);
                 }
                 "!" | "not" => {
                     let f = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: f, value: crate::mir::ConstValue::Bool(false) })?;
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: f,
+                        value: crate::mir::ConstValue::Bool(false),
+                    })?;
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Compare { dst, op: crate::mir::CompareOp::Eq, lhs: operand_val, rhs: f })?;
+                    self.emit_instruction(MirInstruction::Compare {
+                        dst,
+                        op: crate::mir::CompareOp::Eq,
+                        lhs: operand_val,
+                        rhs: f,
+                    })?;
                     return Ok(dst);
                 }
                 "~" => {
                     let all1 = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: all1, value: crate::mir::ConstValue::Integer(-1) })?;
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: all1,
+                        value: crate::mir::ConstValue::Integer(-1),
+                    })?;
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp { dst, op: crate::mir::BinaryOp::BitXor, lhs: operand_val, rhs: all1 })?;
+                    self.emit_instruction(MirInstruction::BinOp {
+                        dst,
+                        op: crate::mir::BinaryOp::BitXor,
+                        lhs: operand_val,
+                        rhs: all1,
+                    })?;
                     return Ok(dst);
                 }
                 _ => {}
@@ -121,7 +154,11 @@ impl super::MirBuilder {
         }
         let dst = self.value_gen.next();
         let mir_op = self.convert_unary_operator(operator)?;
-        self.emit_instruction(MirInstruction::UnaryOp { dst, op: mir_op, operand: operand_val })?;
+        self.emit_instruction(MirInstruction::UnaryOp {
+            dst,
+            op: mir_op,
+            operand: operand_val,
+        })?;
         Ok(dst)
     }
 

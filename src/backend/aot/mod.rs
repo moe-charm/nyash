@@ -1,17 +1,17 @@
 /*!
  * AOT (Ahead-of-Time) Backend - Phase 9 Implementation
- * 
+ *
  * Provides native executable generation using wasmtime precompilation
  * for maximum performance and zero JIT startup overhead
  */
 
 mod compiler;
-mod executable;
 mod config;
+mod executable;
 
 pub use compiler::AotCompiler;
-pub use executable::ExecutableBuilder;
 pub use config::AotConfig;
+pub use executable::ExecutableBuilder;
 
 use crate::mir::MirModule;
 use std::path::Path;
@@ -64,53 +64,47 @@ impl AotBackend {
     pub fn new() -> Result<Self, AotError> {
         let config = AotConfig::new()?;
         let compiler = AotCompiler::new(&config)?;
-        
-        Ok(Self {
-            compiler,
-            config,
-        })
+
+        Ok(Self { compiler, config })
     }
-    
+
     /// Create AOT backend with custom configuration
     pub fn with_config(config: AotConfig) -> Result<Self, AotError> {
         let compiler = AotCompiler::new(&config)?;
-        
-        Ok(Self {
-            compiler,
-            config,
-        })
+
+        Ok(Self { compiler, config })
     }
-    
+
     /// Compile MIR module to standalone native executable
     pub fn compile_to_executable<P: AsRef<Path>>(
-        &mut self, 
-        mir_module: MirModule, 
-        output_path: P
+        &mut self,
+        mir_module: MirModule,
+        output_path: P,
     ) -> Result<(), AotError> {
         // For now, just create a .cwasm precompiled module
         // TODO: Implement full standalone executable generation
         let cwasm_path = output_path.as_ref().with_extension("cwasm");
         self.compile_to_precompiled(mir_module, cwasm_path)
     }
-    
+
     /// Compile MIR module to .cwasm precompiled module
     pub fn compile_to_precompiled<P: AsRef<Path>>(
         &mut self,
         mir_module: MirModule,
-        output_path: P
+        output_path: P,
     ) -> Result<(), AotError> {
         // Compile MIR to WASM
         let wasm_bytes = self.compiler.compile_mir_to_wasm(mir_module)?;
-        
+
         // Precompile WASM to .cwasm
         let precompiled_module = self.compiler.precompile_wasm(&wasm_bytes)?;
-        
+
         // Write to file
         std::fs::write(output_path, precompiled_module)?;
-        
+
         Ok(())
     }
-    
+
     /// Get performance statistics
     pub fn get_stats(&self) -> AotStats {
         self.compiler.get_stats()
@@ -136,15 +130,15 @@ pub struct AotStats {
 mod tests {
     use super::*;
     use crate::mir::MirModule;
-    
+
     #[test]
     fn test_aot_backend_creation() {
         let _backend = AotBackend::new();
         // Should not panic - basic creation test
         assert!(true);
     }
-    
-    #[test] 
+
+    #[test]
     fn test_default_config() {
         let config = AotConfig::new().expect("Failed to create default config");
         assert!(config.optimization_level() >= 1);

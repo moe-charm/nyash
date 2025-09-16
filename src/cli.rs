@@ -1,11 +1,11 @@
 /*!
  * CLI Argument Parsing Module - Nyash Command Line Interface
- * 
+ *
  * This module handles all command-line argument parsing using clap,
  * separating CLI concerns from the main execution logic.
  */
 
-use clap::{Arg, Command, ArgMatches};
+use clap::{Arg, ArgMatches, Command};
 use serde_json;
 
 /// Command-line configuration structure
@@ -83,7 +83,9 @@ impl CliConfig {
                 }
             }
             // Only parse CLI args up to '--'
-            let matches = Self::build_command().try_get_matches_from(&argv[..pos]).unwrap_or_else(|e| e.exit());
+            let matches = Self::build_command()
+                .try_get_matches_from(&argv[..pos])
+                .unwrap_or_else(|e| e.exit());
             Self::from_matches(&matches)
         } else {
             let matches = Self::build_command().get_matches();
@@ -140,7 +142,7 @@ impl CliConfig {
                     .help("Register a using entry (e.g., 'ns as Alias' or '\"apps/foo.nyash\" as Foo'). Repeatable.")
                     .action(clap::ArgAction::Append)
             )
-            
+
             .arg(
                 Arg::new("debug-fuel")
                     .long("debug-fuel")
@@ -425,7 +427,11 @@ impl CliConfig {
             compile_native: matches.get_flag("compile-native") || matches.get_flag("aot"),
             output_file: matches.get_one::<String>("output").cloned(),
             benchmark: matches.get_flag("benchmark"),
-            iterations: matches.get_one::<String>("iterations").unwrap().parse().unwrap_or(10),
+            iterations: matches
+                .get_one::<String>("iterations")
+                .unwrap()
+                .parse()
+                .unwrap_or(10),
             vm_stats: matches.get_flag("vm-stats"),
             vm_stats_json: matches.get_flag("vm-stats-json"),
             jit_exec: matches.get_flag("jit-exec"),
@@ -436,7 +442,9 @@ impl CliConfig {
             jit_events_compile: matches.get_flag("jit-events-compile"),
             jit_events_runtime: matches.get_flag("jit-events-runtime"),
             jit_events_path: matches.get_one::<String>("jit-events-path").cloned(),
-            jit_threshold: matches.get_one::<String>("jit-threshold").and_then(|s| s.parse::<u32>().ok()),
+            jit_threshold: matches
+                .get_one::<String>("jit-threshold")
+                .and_then(|s| s.parse::<u32>().ok()),
             jit_phi_min: matches.get_flag("jit-phi-min"),
             jit_hostcall: matches.get_flag("jit-hostcall"),
             jit_handle_debug: matches.get_flag("jit-handle-debug"),
@@ -448,7 +456,10 @@ impl CliConfig {
             cli_verbose: matches.get_flag("verbose"),
             run_task: matches.get_one::<String>("run-task").cloned(),
             load_ny_plugins: matches.get_flag("load-ny-plugins"),
-            parser_ny: matches.get_one::<String>("parser").map(|s| s == "ny").unwrap_or(false),
+            parser_ny: matches
+                .get_one::<String>("parser")
+                .map(|s| s == "ny")
+                .unwrap_or(false),
             ny_parser_pipe: matches.get_flag("ny-parser-pipe"),
             json_file: matches.get_one::<String>("json-file").cloned(),
             // Build system (MVP)
@@ -458,7 +469,10 @@ impl CliConfig {
             build_aot: matches.get_one::<String>("build-aot").cloned(),
             build_profile: matches.get_one::<String>("build-profile").cloned(),
             build_target: matches.get_one::<String>("build-target").cloned(),
-            cli_usings: matches.get_many::<String>("using").map(|v| v.cloned().collect()).unwrap_or_else(|| Vec::new()),
+            cli_usings: matches
+                .get_many::<String>("using")
+                .map(|v| v.cloned().collect())
+                .unwrap_or_else(|| Vec::new()),
         }
     }
 }
@@ -519,7 +533,7 @@ impl Default for CliConfig {
 /// Parse debug fuel value ("unlimited" or numeric)
 fn parse_debug_fuel(value: &str) -> Option<usize> {
     if value == "unlimited" {
-        None  // No limit
+        None // No limit
     } else {
         value.parse::<usize>().ok()
     }

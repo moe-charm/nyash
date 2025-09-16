@@ -1,6 +1,7 @@
 // Host bridge helpers for TypeBox invoke (minimal, v2)
 
-pub type InvokeFn = unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32;
+pub type InvokeFn =
+    unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32;
 
 // Call invoke_id with a temporary output buffer; returns (code, bytes_written, buffer)
 pub fn invoke_alloc(
@@ -25,4 +26,3 @@ pub fn invoke_alloc(
     };
     (code, out_len, out)
 }
-

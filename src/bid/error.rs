@@ -4,31 +4,31 @@
 pub enum BidError {
     /// Operation successful
     Success = 0,
-    
+
     /// Buffer too small (need to call again with larger buffer)
     ShortBuffer = -1,
-    
+
     /// Invalid type ID
     InvalidType = -2,
-    
+
     /// Invalid method ID
     InvalidMethod = -3,
-    
+
     /// Invalid arguments
     InvalidArgs = -4,
-    
+
     /// Plugin internal error
     PluginError = -5,
-    
+
     /// Memory allocation failed
     OutOfMemory = -6,
-    
+
     /// UTF-8 encoding error
     InvalidUtf8 = -7,
-    
+
     /// Handle not found
     InvalidHandle = -8,
-    
+
     /// Version mismatch
     VersionMismatch = -9,
 }
@@ -50,7 +50,7 @@ impl BidError {
             _ => BidError::PluginError, // Unknown errors map to plugin error
         }
     }
-    
+
     /// Get human-readable error message
     pub fn message(&self) -> &'static str {
         match self {

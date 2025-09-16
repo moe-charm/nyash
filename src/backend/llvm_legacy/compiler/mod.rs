@@ -31,4 +31,3 @@ mod tests {
         assert!(true);
     }
 }
-

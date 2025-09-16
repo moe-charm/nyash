@@ -5,9 +5,9 @@
  * phi selection delegation, and small utilities that support the exec loop.
  */
 
-use super::vm::{VM, VMError, VMValue};
-use super::vm_phi::LoopExecutor;
 use super::frame::ExecutionFrame;
+use super::vm::{VMError, VMValue, VM};
+use super::vm_phi::LoopExecutor;
 use crate::mir::{BasicBlockId, ValueId};
 use crate::runtime::NyashRuntime;
 use crate::scope_tracker::ScopeTracker;
@@ -30,7 +30,9 @@ impl VM {
         inputs: &[(BasicBlockId, ValueId)],
     ) -> Result<VMValue, VMError> {
         if inputs.is_empty() {
-            return Err(VMError::InvalidInstruction("Phi node has no inputs".to_string()));
+            return Err(VMError::InvalidInstruction(
+                "Phi node has no inputs".to_string(),
+            ));
         }
         let debug_phi = std::env::var("NYASH_VM_DEBUG").ok().as_deref() == Some("1")
             || std::env::var("NYASH_VM_DEBUG_PHI").ok().as_deref() == Some("1");
@@ -50,7 +52,10 @@ impl VM {
                     Err(VMError::InvalidValue(format!("Value {} not set", val_id)))
                 }
             } else {
-                Err(VMError::InvalidValue(format!("Value {} out of bounds", val_id)))
+                Err(VMError::InvalidValue(format!(
+                    "Value {} out of bounds",
+                    val_id
+                )))
             }
         });
         if debug_phi {
@@ -88,7 +93,9 @@ impl VM {
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
             #[cfg(not(feature = "jit-direct-only"))]
-            jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
+            jit_manager: Some(crate::jit::manager::JitManager::new(
+                Self::jit_threshold_from_env(),
+            )),
             #[cfg(feature = "jit-direct-only")]
             jit_manager: None,
         }
@@ -120,7 +127,9 @@ impl VM {
             boxcall_vtable_funcname: std::collections::HashMap::new(),
             type_versions: std::collections::HashMap::new(),
             #[cfg(not(feature = "jit-direct-only"))]
-            jit_manager: Some(crate::jit::manager::JitManager::new(Self::jit_threshold_from_env())),
+            jit_manager: Some(crate::jit::manager::JitManager::new(
+                Self::jit_threshold_from_env(),
+            )),
             #[cfg(feature = "jit-direct-only")]
             jit_manager: None,
         }
@@ -136,7 +145,10 @@ impl VM {
                 Err(VMError::InvalidValue(format!("Value {} not set", value_id)))
             }
         } else {
-            Err(VMError::InvalidValue(format!("Value {} out of bounds", value_id)))
+            Err(VMError::InvalidValue(format!(
+                "Value {} out of bounds",
+                value_id
+            )))
         }
     }
 

@@ -1,6 +1,6 @@
 use super::super::NyashRunner;
 #[cfg(feature = "cranelift-jit")]
-use std::{process::Command, process};
+use std::{process, process::Command};
 
 impl NyashRunner {
     /// Execute AOT compilation mode (split)
@@ -11,7 +11,16 @@ impl NyashRunner {
         let status = if cfg!(target_os = "windows") {
             // Use PowerShell helper; falls back to bash if available inside the script
             Command::new("powershell")
-                .args(["-ExecutionPolicy","Bypass","-File","tools/build_aot.ps1","-Input", filename, "-Out", &format!("{}.exe", output)])
+                .args([
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    "tools/build_aot.ps1",
+                    "-Input",
+                    filename,
+                    "-Out",
+                    &format!("{}.exe", output),
+                ])
                 .status()
         } else {
             Command::new("bash")
@@ -20,15 +29,24 @@ impl NyashRunner {
         };
         match status {
             Ok(s) if s.success() => {
-                println!("✅ AOT compilation successful!\nExecutable written to: {}", output);
+                println!(
+                    "✅ AOT compilation successful!\nExecutable written to: {}",
+                    output
+                );
             }
             Ok(s) => {
-                eprintln!("❌ AOT compilation failed (exit={} ). See logs above.", s.code().unwrap_or(-1));
+                eprintln!(
+                    "❌ AOT compilation failed (exit={} ). See logs above.",
+                    s.code().unwrap_or(-1)
+                );
                 process::exit(1);
             }
             Err(e) => {
                 eprintln!("❌ Failed to invoke build_aot.sh: {}", e);
-                eprintln!("Hint: ensure bash is available, or run: bash tools/build_aot.sh {} -o {}", filename, output);
+                eprintln!(
+                    "Hint: ensure bash is available, or run: bash tools/build_aot.sh {} -o {}",
+                    filename, output
+                );
                 process::exit(1);
             }
         }

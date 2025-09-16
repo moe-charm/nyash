@@ -10,17 +10,31 @@ pub(super) struct ProgramV0 {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type")]
 pub(super) enum StmtV0 {
-    Return { expr: ExprV0 },
-    Extern { iface: String, method: String, args: Vec<ExprV0> },
-    Expr { expr: ExprV0 },
-    Local { name: String, expr: ExprV0 },
+    Return {
+        expr: ExprV0,
+    },
+    Extern {
+        iface: String,
+        method: String,
+        args: Vec<ExprV0>,
+    },
+    Expr {
+        expr: ExprV0,
+    },
+    Local {
+        name: String,
+        expr: ExprV0,
+    },
     If {
         cond: ExprV0,
         then: Vec<StmtV0>,
         #[serde(rename = "else", default)]
         r#else: Option<Vec<StmtV0>>,
     },
-    Loop { cond: ExprV0, body: Vec<StmtV0> },
+    Loop {
+        cond: ExprV0,
+        body: Vec<StmtV0>,
+    },
     Break,
     Continue,
     Try {
@@ -46,17 +60,52 @@ pub(super) struct CatchV0 {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type")]
 pub(super) enum ExprV0 {
-    Int { value: serde_json::Value },
-    Str { value: String },
-    Bool { value: bool },
-    Binary { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> },
-    Extern { iface: String, method: String, args: Vec<ExprV0> },
-    Compare { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> },
-    Logical { op: String, lhs: Box<ExprV0>, rhs: Box<ExprV0> },
-    Call { name: String, args: Vec<ExprV0> },
-    Method { recv: Box<ExprV0>, method: String, args: Vec<ExprV0> },
-    New { class: String, args: Vec<ExprV0> },
-    Var { name: String },
-    Throw { expr: Box<ExprV0> },
+    Int {
+        value: serde_json::Value,
+    },
+    Str {
+        value: String,
+    },
+    Bool {
+        value: bool,
+    },
+    Binary {
+        op: String,
+        lhs: Box<ExprV0>,
+        rhs: Box<ExprV0>,
+    },
+    Extern {
+        iface: String,
+        method: String,
+        args: Vec<ExprV0>,
+    },
+    Compare {
+        op: String,
+        lhs: Box<ExprV0>,
+        rhs: Box<ExprV0>,
+    },
+    Logical {
+        op: String,
+        lhs: Box<ExprV0>,
+        rhs: Box<ExprV0>,
+    },
+    Call {
+        name: String,
+        args: Vec<ExprV0>,
+    },
+    Method {
+        recv: Box<ExprV0>,
+        method: String,
+        args: Vec<ExprV0>,
+    },
+    New {
+        class: String,
+        args: Vec<ExprV0>,
+    },
+    Var {
+        name: String,
+    },
+    Throw {
+        expr: Box<ExprV0>,
+    },
 }
-

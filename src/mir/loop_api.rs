@@ -26,11 +26,22 @@ pub trait LoopBuilderApi {
     fn new_value(&mut self) -> ValueId;
 
     /// Add predecessor edge to a block (CFG maintenance)
-    fn add_predecessor(&mut self, _block: BasicBlockId, _pred: BasicBlockId) -> Result<(), String> { Err("add_predecessor not implemented".into()) }
+    fn add_predecessor(&mut self, _block: BasicBlockId, _pred: BasicBlockId) -> Result<(), String> {
+        Err("add_predecessor not implemented".into())
+    }
     /// Seal a block when all predecessors are known
-    fn seal_block(&mut self, _block: BasicBlockId) -> Result<(), String> { Err("seal_block not implemented".into()) }
+    fn seal_block(&mut self, _block: BasicBlockId) -> Result<(), String> {
+        Err("seal_block not implemented".into())
+    }
     /// Insert a phi at block start
-    fn insert_phi_at_block_start(&mut self, _block: BasicBlockId, _dst: ValueId, _inputs: Vec<(BasicBlockId, ValueId)>) -> Result<(), String> { Err("insert_phi_at_block_start not implemented".into()) }
+    fn insert_phi_at_block_start(
+        &mut self,
+        _block: BasicBlockId,
+        _dst: ValueId,
+        _inputs: Vec<(BasicBlockId, ValueId)>,
+    ) -> Result<(), String> {
+        Err("insert_phi_at_block_start not implemented".into())
+    }
 }
 
 /// Helper: simplified loop lowering usable by any LoopBuilderApi implementor
@@ -48,7 +59,11 @@ pub fn build_simple_loop<L: LoopBuilderApi>(
 
     // Header: branch on provided condition
     lb.start_new_block(header)?;
-    lb.emit(MirInstruction::Branch { condition, then_bb: body, else_bb: after })?;
+    lb.emit(MirInstruction::Branch {
+        condition,
+        then_bb: body,
+        else_bb: after,
+    })?;
 
     // Body
     lb.start_new_block(body)?;
@@ -58,15 +73,21 @@ pub fn build_simple_loop<L: LoopBuilderApi>(
     // After: return void value
     lb.start_new_block(after)?;
     let void_id = lb.new_value();
-    lb.emit(MirInstruction::Const { dst: void_id, value: super::instruction::ConstValue::Void })?;
+    lb.emit(MirInstruction::Const {
+        dst: void_id,
+        value: super::instruction::ConstValue::Void,
+    })?;
     Ok(void_id)
 }
 
 // === Legacy wiring: implement LoopBuilderApi for mir::builder::MirBuilder ===
 impl LoopBuilderApi for super::builder::MirBuilder {
-    fn new_block(&mut self) -> BasicBlockId { self.block_gen.next() }
+    fn new_block(&mut self) -> BasicBlockId {
+        self.block_gen.next()
+    }
     fn current_block(&self) -> Result<BasicBlockId, String> {
-        self.current_block.ok_or_else(|| "No current block".to_string())
+        self.current_block
+            .ok_or_else(|| "No current block".to_string())
     }
     fn start_new_block(&mut self, block: BasicBlockId) -> Result<(), String> {
         super::builder::MirBuilder::start_new_block(self, block)
@@ -74,15 +95,21 @@ impl LoopBuilderApi for super::builder::MirBuilder {
     fn emit(&mut self, inst: MirInstruction) -> Result<(), String> {
         super::builder::MirBuilder::emit_instruction(self, inst)
     }
-    fn new_value(&mut self) -> ValueId { self.value_gen.next() }
+    fn new_value(&mut self) -> ValueId {
+        self.value_gen.next()
+    }
 
     fn add_predecessor(&mut self, block: BasicBlockId, pred: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut f) = self.current_function {
             if let Some(bb) = f.get_block_mut(block) {
                 bb.add_predecessor(pred);
                 Ok(())
-            } else { Err(format!("Block {} not found", block.as_u32())) }
-        } else { Err("No current function".into()) }
+            } else {
+                Err(format!("Block {} not found", block.as_u32()))
+            }
+        } else {
+            Err("No current function".into())
+        }
     }
 
     fn seal_block(&mut self, block: BasicBlockId) -> Result<(), String> {
@@ -90,11 +117,20 @@ impl LoopBuilderApi for super::builder::MirBuilder {
             if let Some(bb) = f.get_block_mut(block) {
                 bb.seal();
                 Ok(())
-            } else { Err(format!("Block {} not found", block.as_u32())) }
-        } else { Err("No current function".into()) }
+            } else {
+                Err(format!("Block {} not found", block.as_u32()))
+            }
+        } else {
+            Err("No current function".into())
+        }
     }
 
-    fn insert_phi_at_block_start(&mut self, block: BasicBlockId, dst: ValueId, inputs: Vec<(BasicBlockId, ValueId)>) -> Result<(), String> {
+    fn insert_phi_at_block_start(
+        &mut self,
+        block: BasicBlockId,
+        dst: ValueId,
+        inputs: Vec<(BasicBlockId, ValueId)>,
+    ) -> Result<(), String> {
         if let Some(ref mut f) = self.current_function {
             if let Some(bb) = f.get_block_mut(block) {
                 let inst = MirInstruction::Phi { dst, inputs };
@@ -102,7 +138,11 @@ impl LoopBuilderApi for super::builder::MirBuilder {
                 bb.effects = bb.effects | inst.effects();
                 bb.instructions.insert(0, inst);
                 Ok(())
-            } else { Err(format!("Block {} not found", block.as_u32())) }
-        } else { Err("No current function".into()) }
+            } else {
+                Err(format!("Block {} not found", block.as_u32()))
+            }
+        } else {
+            Err("No current function".into())
+        }
     }
 }

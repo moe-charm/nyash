@@ -3,11 +3,11 @@
 /*! 🖼️ EguiBox - デスクトップGUIアプリBox
  * Everything is Box哲学によるGUIフレームワーク統合
  * 「なんでもBoxにできる」化け物言語の第一歩！
- * 
+ *
  * ## 📝 概要  
  * Rustの人気GUI框架eframeを使ったネイティブデスクトップアプリ作成。
  * Nyashコードから直接GUI操作が可能！
- * 
+ *
  * ## 🛠️ 利用可能メソッド
  * - `setTitle(title)` - ウィンドウタイトル設定
  * - `setSize(width, height)` - ウィンドウサイズ設定  
@@ -15,7 +15,7 @@
  * - `addText(text)` - テキスト表示追加
  * - `addButton(label)` - ボタン追加
  * - `close()` - ウィンドウ閉じる
- * 
+ *
  * ## 💡 使用例
  * ```nyash  
  * // 基本的なGUIアプリ
@@ -27,20 +27,20 @@
  * app.addButton("Click Me")
  * app.run()  // GUIアプリ開始
  * ```
- * 
+ *
  * ## ⚠️ 注意
  * - デスクトップ環境でのみ利用可能（WASM環境では無効）
  * - `run()`はブロッキング動作（アプリ終了まで制御を返さない）
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
 use crate::interpreter::RuntimeError;
+use eframe::{self, egui, epaint::Vec2};
 use std::any::Any;
 use std::sync::{Arc, RwLock};
-use eframe::{self, egui, epaint::Vec2};
 
 /// EguiBox - GUI アプリケーションを包むBox
-/// 
+///
 /// # 使用例
 /// ```nyash
 /// app = new EguiBox()
@@ -89,16 +89,16 @@ impl EguiBox {
             update_fn: None,
         }
     }
-    
+
     /// アプリケーション状態を設定
     pub fn set_app_state<T: Any + Send + Sync + 'static>(&mut self, state: T) {
         *self.app_state.write().unwrap() = Box::new(state);
     }
-    
+
     /// 更新関数を設定
-    pub fn set_update_fn<F>(&mut self, f: F) 
-    where 
-        F: Fn(&mut Box<dyn Any + Send + Sync>, &egui::Context) + Send + Sync + 'static
+    pub fn set_update_fn<F>(&mut self, f: F)
+    where
+        F: Fn(&mut Box<dyn Any + Send + Sync>, &egui::Context) + Send + Sync + 'static,
     {
         self.update_fn = Some(Arc::new(f));
     }
@@ -122,19 +122,23 @@ impl BoxCore for EguiBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "EguiBox('{}', {}x{})", self.title, self.size.x, self.size.y)
+        write!(
+            f,
+            "EguiBox('{}', {}x{})",
+            self.title, self.size.x, self.size.y
+        )
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -148,21 +152,21 @@ impl std::fmt::Display for EguiBox {
 
 impl NyashBox for EguiBox {
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(
-            format!("EguiBox('{}', {}x{})", self.title, self.size.x, self.size.y)
-        )
+        StringBox::new(format!(
+            "EguiBox('{}', {}x{})",
+            self.title, self.size.x, self.size.y
+        ))
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
     }
-    
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_egui) = other.as_any().downcast_ref::<EguiBox>() {
             BoolBox::new(self.title == other_egui.title && self.size == other_egui.size)
@@ -170,11 +174,10 @@ impl NyashBox for EguiBox {
             BoolBox::new(false)
         }
     }
-    
+
     fn type_name(&self) -> &'static str {
         "EguiBox"
     }
-    
 }
 
 // EguiBoxのメソッド実装（実際にはインタープリターから呼ばれない）
@@ -187,28 +190,24 @@ impl EguiBox {
             // we would need a more sophisticated state sharing mechanism
             let app_state = Arc::new(RwLock::new(Box::new(()) as Box<dyn Any + Send + Sync>));
             drop(state_snapshot);
-            
+
             let update_fn = Arc::clone(update_fn);
-            
+
             let options = eframe::NativeOptions {
                 viewport: egui::ViewportBuilder::default()
                     .with_inner_size(self.size)
                     .with_title(&self.title),
                 ..Default::default()
             };
-            
+
             let app = NyashApp {
                 app_state,
                 update_fn,
             };
-            
+
             // 注意: これはブロッキング呼び出し
-            let _ = eframe::run_native(
-                &self.title,
-                options,
-                Box::new(|_cc| Ok(Box::new(app))),
-            );
-            
+            let _ = eframe::run_native(&self.title, options, Box::new(|_cc| Ok(Box::new(app))));
+
             Ok(())
         } else {
             Err(RuntimeError::InvalidOperation {
@@ -221,14 +220,14 @@ impl EguiBox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_egui_box_creation() {
         let gui = EguiBox::new();
         assert_eq!(gui.title, "Nyash GUI Application");
         assert_eq!(gui.size, Vec2::new(800.0, 600.0));
     }
-    
+
     #[test]
     fn test_egui_box_to_string() {
         let gui = EguiBox::new();

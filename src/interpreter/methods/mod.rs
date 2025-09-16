@@ -1,11 +1,11 @@
 /*!
  * Box Methods Module Organization
- * 
+ *
  * 旧box_methods.rsを機能別に分割したモジュール群
  * 保守性と可読性の向上を目的とした再構成
- * 
+ *
  * Current implementation:
- * - basic_methods: StringBox, IntegerBox, BoolBox, FloatBox 
+ * - basic_methods: StringBox, IntegerBox, BoolBox, FloatBox
  * - collection_methods: ArrayBox, MapBox
  * - io_methods: FileBox, ResultBox ✅ IMPLEMENTED
  * Future modules (planned):
@@ -16,13 +16,13 @@
  * - special_methods: MethodBox, SoundBox
  */
 
-pub mod basic_methods;      // StringBox, IntegerBox, BoolBox, FloatBox
+pub mod basic_methods; // StringBox, IntegerBox, BoolBox, FloatBox
 pub mod collection_methods; // ArrayBox, MapBox
-pub mod io_methods;         // FileBox, ResultBox
-pub mod data_methods;       // BufferBox, JSONBox, RegexBox
-pub mod network_methods;    // HttpClientBox, StreamBox
-pub mod p2p_methods;        // IntentBox, P2PBox
-pub mod http_methods;       // SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox
-pub mod system_methods;     // GcConfigBox, DebugConfigBox
+pub mod data_methods; // BufferBox, JSONBox, RegexBox
+pub mod http_methods; // SocketBox, HTTPServerBox, HTTPRequestBox, HTTPResponseBox
+pub mod io_methods; // FileBox, ResultBox
+pub mod network_methods; // HttpClientBox, StreamBox
+pub mod p2p_methods; // IntentBox, P2PBox
+pub mod system_methods; // GcConfigBox, DebugConfigBox
 
 // Re-export methods for easy access

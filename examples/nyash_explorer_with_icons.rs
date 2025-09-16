@@ -424,7 +424,7 @@ impl eframe::App for NyashExplorer {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-                
+
                 ui.menu_button("表示", |ui| {
                     if ui.button("大きいアイコン").clicked() {
                         self.status = "表示モード: 大きいアイコン".to_string();
@@ -433,7 +433,7 @@ impl eframe::App for NyashExplorer {
                         self.status = "表示モード: 詳細".to_string();
                     }
                 });
-                
+
                 ui.menu_button("ヘルプ", |ui| {
                     if ui.button("Nyash Explorerについて").clicked() {
                         self.status = "Nyash Explorer - Everything is Box! アイコンも取得できる化け物言語！🐱".to_string();

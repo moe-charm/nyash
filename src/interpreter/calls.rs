@@ -1,8 +1,8 @@
 //! Call helpers: centralizes call paths (PluginHost, functions)
 
+use super::{NyashInterpreter, RuntimeError};
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, VoidBox};
-use super::{NyashInterpreter, RuntimeError};
 
 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
@@ -17,18 +17,31 @@ impl NyashInterpreter {
         arg_nodes: &[ASTNode],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         if plugin_box.is_finalized() {
-            return Err(RuntimeError::RuntimeFailure { message: format!("Use after fini: {}", plugin_box.box_type) });
+            return Err(RuntimeError::RuntimeFailure {
+                message: format!("Use after fini: {}", plugin_box.box_type),
+            });
         }
         let mut arg_values: Vec<Box<dyn NyashBox>> = Vec::new();
         for arg in arg_nodes {
             arg_values.push(self.execute_expression(arg)?);
         }
         let host_guard = crate::runtime::get_global_plugin_host();
-        let host = host_guard.read().map_err(|_| RuntimeError::RuntimeFailure { message: "Plugin host lock poisoned".into() })?;
-        match host.invoke_instance_method(&plugin_box.box_type, method, plugin_box.instance_id(), &arg_values) {
+        let host = host_guard
+            .read()
+            .map_err(|_| RuntimeError::RuntimeFailure {
+                message: "Plugin host lock poisoned".into(),
+            })?;
+        match host.invoke_instance_method(
+            &plugin_box.box_type,
+            method,
+            plugin_box.instance_id(),
+            &arg_values,
+        ) {
             Ok(Some(result_box)) => Ok(result_box),
             Ok(None) => Ok(Box::new(VoidBox::new())),
-            Err(e) => Err(RuntimeError::RuntimeFailure { message: format!("Plugin method {} failed: {:?}", method, e) }),
+            Err(e) => Err(RuntimeError::RuntimeFailure {
+                message: format!("Plugin method {} failed: {:?}", method, e),
+            }),
         }
     }
 
@@ -44,9 +57,15 @@ impl NyashInterpreter {
             arg_values.push(self.execute_expression(arg)?);
         }
         let host_guard = crate::runtime::get_global_plugin_host();
-        let host = host_guard.read().map_err(|_| RuntimeError::RuntimeFailure { message: "Plugin host lock poisoned".into() })?;
+        let host = host_guard
+            .read()
+            .map_err(|_| RuntimeError::RuntimeFailure {
+                message: "Plugin host lock poisoned".into(),
+            })?;
         host.create_box(box_type, &arg_values)
-            .map_err(|e| RuntimeError::InvalidOperation { message: format!("Failed to construct plugin '{}': {:?}", box_type, e) })
+            .map_err(|e| RuntimeError::InvalidOperation {
+                message: format!("Failed to construct plugin '{}': {:?}", box_type, e),
+            })
     }
 
     /// Check if a given box type is provided by plugins (per current config).

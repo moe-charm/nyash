@@ -7,14 +7,16 @@
  */
 
 use super::BoxFactory;
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox};
+use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
 use crate::interpreter::RuntimeError;
 
 /// Factory for builtin Box types
 pub struct BuiltinBoxFactory;
 
 impl BuiltinBoxFactory {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl BoxFactory for BuiltinBoxFactory {
@@ -57,18 +59,27 @@ impl BoxFactory for BuiltinBoxFactory {
             "NullBox" => Ok(Box::new(crate::boxes::null_box::NullBox::new())),
 
             // Leave other types to other factories (user/plugin)
-            _ => Err(RuntimeError::InvalidOperation { message: format!("Unknown Box type: {}", name) }),
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown Box type: {}", name),
+            }),
         }
     }
 
     fn box_types(&self) -> Vec<&str> {
         vec![
             // Primitive wrappers
-            "StringBox", "IntegerBox", "BoolBox",
+            "StringBox",
+            "IntegerBox",
+            "BoolBox",
             // Collections/common
-            "ArrayBox", "MapBox", "ConsoleBox", "NullBox",
+            "ArrayBox",
+            "MapBox",
+            "ConsoleBox",
+            "NullBox",
         ]
     }
 
-    fn is_builtin_factory(&self) -> bool { true }
+    fn is_builtin_factory(&self) -> bool {
+        true
+    }
 }

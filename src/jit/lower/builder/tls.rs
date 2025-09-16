@@ -1,7 +1,7 @@
 #![cfg(feature = "cranelift-jit")]
 
-use cranelift_module::Module;
 use cranelift_codegen::ir::InstBuilder;
+use cranelift_module::Module;
 
 // TLS: 単一関数あたり1つの FunctionBuilder を保持（jit-direct 専用）
 pub(crate) mod clif_tls {
@@ -16,15 +16,25 @@ pub(crate) mod clif_tls {
     }
     impl TlsCtx {
         pub fn new() -> Self {
-            Self { ctx: Box::new(cranelift_codegen::Context::new()), fbc: Box::new(cranelift_frontend::FunctionBuilderContext::new()), fb: core::ptr::null_mut() }
+            Self {
+                ctx: Box::new(cranelift_codegen::Context::new()),
+                fbc: Box::new(cranelift_frontend::FunctionBuilderContext::new()),
+                fb: core::ptr::null_mut(),
+            }
         }
         pub unsafe fn create(&mut self) {
             let func_ptr: *mut cranelift_codegen::ir::Function = &mut self.ctx.func;
             let fbc_ptr: *mut cranelift_frontend::FunctionBuilderContext = &mut *self.fbc;
-            let fb = Box::new(cranelift_frontend::FunctionBuilder::new(&mut *func_ptr, &mut *fbc_ptr));
+            let fb = Box::new(cranelift_frontend::FunctionBuilder::new(
+                &mut *func_ptr,
+                &mut *fbc_ptr,
+            ));
             self.fb = Box::into_raw(fb);
         }
-        pub fn with<R>(&mut self, f: impl FnOnce(&mut cranelift_frontend::FunctionBuilder<'static>) -> R) -> R {
+        pub fn with<R>(
+            &mut self,
+            f: impl FnOnce(&mut cranelift_frontend::FunctionBuilder<'static>) -> R,
+        ) -> R {
             unsafe { f(&mut *self.fb) }
         }
         pub unsafe fn finalize_drop(&mut self) {
@@ -36,7 +46,9 @@ pub(crate) mod clif_tls {
         }
         /// Finalize the current FunctionBuilder and take ownership of the underlying Context.
         pub fn take_context(&mut self) -> cranelift_codegen::Context {
-            unsafe { self.finalize_drop(); }
+            unsafe {
+                self.finalize_drop();
+            }
             // Move the current context out and replace with a fresh one
             let old = std::mem::replace(&mut self.ctx, Box::new(cranelift_codegen::Context::new()));
             *old
@@ -69,7 +81,11 @@ pub(crate) fn tls_call_import_ret(
             }
             let fref = module.declare_func_in_func(func_id, fb.func);
             let call_inst = fb.ins().call(fref, args);
-            if has_ret { fb.inst_results(call_inst).get(0).copied() } else { None }
+            if has_ret {
+                fb.inst_results(call_inst).get(0).copied()
+            } else {
+                None
+            }
         })
     })
 }
@@ -87,11 +103,17 @@ pub(crate) fn tls_call_import_with_iconsts(
         let tls = opt.as_mut().expect("FunctionBuilder TLS not initialized");
         tls.with(|fb| {
             let mut all_args: Vec<cranelift_codegen::ir::Value> = Vec::new();
-            for &c in iconsts { all_args.push(fb.ins().iconst(types::I64, c)); }
+            for &c in iconsts {
+                all_args.push(fb.ins().iconst(types::I64, c));
+            }
             all_args.extend_from_slice(tail_args);
             let fref = module.declare_func_in_func(func_id, fb.func);
             let call_inst = fb.ins().call(fref, &all_args);
-            if has_ret { fb.inst_results(call_inst).get(0).copied() } else { None }
+            if has_ret {
+                fb.inst_results(call_inst).get(0).copied()
+            } else {
+                None
+            }
         })
     })
 }

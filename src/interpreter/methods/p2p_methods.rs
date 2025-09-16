@@ -3,11 +3,11 @@
  * Arc<Mutex>パターン対応版
  */
 
-use crate::interpreter::NyashInterpreter;
-use crate::interpreter::RuntimeError;
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, StringBox};
 use crate::boxes::{IntentBox, P2PBox};
+use crate::interpreter::NyashInterpreter;
+use crate::interpreter::RuntimeError;
 
 impl NyashInterpreter {
     /// IntentBoxのメソッド実行 (RwLock版)
@@ -16,29 +16,23 @@ impl NyashInterpreter {
         intent_box: &IntentBox,
         method: &str,
         _arguments: &[ASTNode],
-    ) -> Result<Box<dyn NyashBox>, RuntimeError> {        
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             // メッセージ名取得
-            "getName" | "name" => {
-                Ok(intent_box.get_name())
-            }
-            
+            "getName" | "name" => Ok(intent_box.get_name()),
+
             // ペイロード取得（JSON文字列として）
-            "getPayload" | "payload" => {
-                Ok(intent_box.get_payload())
-            }
-            
+            "getPayload" | "payload" => Ok(intent_box.get_payload()),
+
             // 型情報取得
-            "getType" | "type" => {
-                Ok(Box::new(StringBox::new("IntentBox")))
-            }
-            
+            "getType" | "type" => Ok(Box::new(StringBox::new("IntentBox"))),
+
             _ => Err(RuntimeError::UndefinedVariable {
                 name: format!("IntentBox method '{}' not found", method),
-            })
+            }),
         }
     }
-    
+
     // P2PBoxのメソッド実装（RwLockベース）
     pub(in crate::interpreter) fn execute_p2p_box_method(
         &mut self,
@@ -46,8 +40,14 @@ impl NyashInterpreter {
         method: &str,
         arguments: &[ASTNode],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        if crate::interpreter::utils::debug_on() || std::env::var("NYASH_DEBUG_P2P").unwrap_or_default() == "1" {
-            eprintln!("[Interp:P2P] {}(..) called with {} args", method, arguments.len());
+        if crate::interpreter::utils::debug_on()
+            || std::env::var("NYASH_DEBUG_P2P").unwrap_or_default() == "1"
+        {
+            eprintln!(
+                "[Interp:P2P] {}(..) called with {} args",
+                method,
+                arguments.len()
+            );
         }
         match method {
             // ノードID取得
@@ -59,7 +59,9 @@ impl NyashInterpreter {
             // ノード到達可能性確認
             "isReachable" => {
                 if arguments.is_empty() {
-                    return Err(RuntimeError::InvalidOperation { message: "isReachable requires node_id argument".to_string() });
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "isReachable requires node_id argument".to_string(),
+                    });
                 }
                 let node_id_result = self.execute_expression(&arguments[0])?;
                 Ok(p2p_box.is_reachable(node_id_result))
@@ -68,7 +70,9 @@ impl NyashInterpreter {
             // send メソッド実装（ResultBox返却）
             "send" => {
                 if arguments.len() < 2 {
-                    return Err(RuntimeError::InvalidOperation { message: "send requires (to, intent) arguments".to_string() });
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "send requires (to, intent) arguments".to_string(),
+                    });
                 }
                 let to_result = self.execute_expression(&arguments[0])?;
                 let intent_result = self.execute_expression(&arguments[1])?;
@@ -78,7 +82,9 @@ impl NyashInterpreter {
             // ping: health check using sys.ping/sys.pong
             "ping" => {
                 if arguments.is_empty() {
-                    return Err(RuntimeError::InvalidOperation { message: "ping requires (to [, timeout_ms]) arguments".to_string() });
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "ping requires (to [, timeout_ms]) arguments".to_string(),
+                    });
                 }
                 let to_result = self.execute_expression(&arguments[0])?;
                 if arguments.len() >= 2 {
@@ -93,7 +99,9 @@ impl NyashInterpreter {
             // on メソッド実装（ResultBox返却）
             "on" => {
                 if arguments.len() < 2 {
-                    return Err(RuntimeError::InvalidOperation { message: "on requires (intentName, handler) arguments".to_string() });
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "on requires (intentName, handler) arguments".to_string(),
+                    });
                 }
                 let name_val = self.execute_expression(&arguments[0])?;
                 let handler_val = self.execute_expression(&arguments[1])?;
@@ -109,7 +117,9 @@ impl NyashInterpreter {
             // onOnce / off
             "onOnce" | "on_once" => {
                 if arguments.len() < 2 {
-                    return Err(RuntimeError::InvalidOperation { message: "onOnce requires (intentName, handler) arguments".to_string() });
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "onOnce requires (intentName, handler) arguments".to_string(),
+                    });
                 }
                 let name_val = self.execute_expression(&arguments[0])?;
                 let handler_val = self.execute_expression(&arguments[1])?;
@@ -117,13 +127,17 @@ impl NyashInterpreter {
             }
             "off" => {
                 if arguments.len() < 1 {
-                    return Err(RuntimeError::InvalidOperation { message: "off requires (intentName) argument".to_string() });
+                    return Err(RuntimeError::InvalidOperation {
+                        message: "off requires (intentName) argument".to_string(),
+                    });
                 }
                 let name_val = self.execute_expression(&arguments[0])?;
                 Ok(p2p_box.off(name_val))
             }
 
-            _ => Err(RuntimeError::UndefinedVariable { name: format!("P2PBox method '{}' not found", method) }),
+            _ => Err(RuntimeError::UndefinedVariable {
+                name: format!("P2PBox method '{}' not found", method),
+            }),
         }
     }
 }

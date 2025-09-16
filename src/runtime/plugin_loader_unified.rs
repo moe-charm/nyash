@@ -3,9 +3,9 @@
 //! Thin wrapper over v2 loader to provide a stable facade
 //! with minimal, friendly API for runtime/runner and future transports.
 
-use std::sync::{Arc, RwLock};
 use once_cell::sync::Lazy;
 use std::cell::Cell;
+use std::sync::{Arc, RwLock};
 
 use crate::bid::{BidError, BidResult};
 use crate::config::nyash_toml_v2::NyashConfigV2;
@@ -44,7 +44,11 @@ pub struct PluginHost {
 
 impl PluginHost {
     pub fn new(loader: Arc<RwLock<PluginLoaderV2>>) -> Self {
-        Self { loader, config: None, config_path: None }
+        Self {
+            loader,
+            config: None,
+            config_path: None,
+        }
     }
 
     /// Load config and dynamic libraries, keeping a local config cache.
@@ -58,7 +62,8 @@ impl PluginHost {
         let canonical = std::fs::canonicalize(config_path)
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| config_path.to_string());
-        self.config = Some(NyashConfigV2::from_file(&canonical).map_err(|_| BidError::PluginError)?);
+        self.config =
+            Some(NyashConfigV2::from_file(&canonical).map_err(|_| BidError::PluginError)?);
         self.config_path = Some(canonical);
 
         // Delegate actual library loads + pre-birth singletons to v2
@@ -67,20 +72,32 @@ impl PluginHost {
     }
 
     /// Register built-ins or user-defined boxes if needed (no-op for now).
-    pub fn register_boxes(&self) -> BidResult<()> { Ok(()) }
+    pub fn register_boxes(&self) -> BidResult<()> {
+        Ok(())
+    }
 
     /// Expose read-only view of loaded config for callers migrating from v2 paths.
-    pub fn config_ref(&self) -> Option<&NyashConfigV2> { self.config.as_ref() }
+    pub fn config_ref(&self) -> Option<&NyashConfigV2> {
+        self.config.as_ref()
+    }
 
     /// Resolve a method handle for a given plugin box type and method name.
     pub fn resolve_method(&self, box_type: &str, method_name: &str) -> BidResult<MethodHandle> {
         let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
-        let (lib_name, _lib_def) = cfg.find_library_for_box(box_type).ok_or(BidError::InvalidType)?;
+        let (lib_name, _lib_def) = cfg
+            .find_library_for_box(box_type)
+            .ok_or(BidError::InvalidType)?;
         let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
         let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
-        let toml_value: toml::Value = toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
-        let box_conf = cfg.get_box_config(lib_name, box_type, &toml_value).ok_or(BidError::InvalidType)?;
-        let m = box_conf.methods.get(method_name).ok_or(BidError::InvalidMethod)?;
+        let toml_value: toml::Value =
+            toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;
+        let box_conf = cfg
+            .get_box_config(lib_name, box_type, &toml_value)
+            .ok_or(BidError::InvalidType)?;
+        let m = box_conf
+            .methods
+            .get(method_name)
+            .ok_or(BidError::InvalidMethod)?;
         Ok(MethodHandle {
             lib: lib_name.to_string(),
             box_type: box_type.to_string(),
@@ -91,7 +108,11 @@ impl PluginHost {
     }
 
     // --- v2 adapter layer: allow gradual migration of callers ---
-    pub fn create_box(&self, box_type: &str, args: &[Box<dyn crate::box_trait::NyashBox>]) -> BidResult<Box<dyn crate::box_trait::NyashBox>> {
+    pub fn create_box(
+        &self,
+        box_type: &str,
+        args: &[Box<dyn crate::box_trait::NyashBox>],
+    ) -> BidResult<Box<dyn crate::box_trait::NyashBox>> {
         let l = self.loader.read().unwrap();
         l.create_box(box_type, args)
     }
@@ -137,7 +158,10 @@ impl PluginHost {
         if iface_name == "env.future" && method_name == "await" {
             use crate::boxes::result::NyashResultBox;
             if let Some(arg0) = args.get(0) {
-                if let Some(fut) = arg0.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
+                if let Some(fut) = arg0
+                    .as_any()
+                    .downcast_ref::<crate::boxes::future::FutureBox>()
+                {
                     let max_ms: u64 = crate::config::env::await_max_ms();
                     let start = std::time::Instant::now();
                     let mut spins = 0usize;
@@ -145,18 +169,24 @@ impl PluginHost {
                         crate::runtime::global_hooks::safepoint_and_poll();
                         std::thread::yield_now();
                         spins += 1;
-                        if spins % 1024 == 0 { std::thread::sleep(std::time::Duration::from_millis(1)); }
+                        if spins % 1024 == 0 {
+                            std::thread::sleep(std::time::Duration::from_millis(1));
+                        }
                         if start.elapsed() >= std::time::Duration::from_millis(max_ms) {
                             let err = crate::box_trait::StringBox::new("Timeout");
                             return Ok(Some(Box::new(NyashResultBox::new_err(Box::new(err)))));
                         }
                     }
-                    return Ok(fut.wait_and_get().ok().map(|v| Box::new(NyashResultBox::new_ok(v)) as Box<dyn crate::box_trait::NyashBox>));
+                    return Ok(fut.wait_and_get().ok().map(|v| {
+                        Box::new(NyashResultBox::new_ok(v)) as Box<dyn crate::box_trait::NyashBox>
+                    }));
                 } else {
                     return Ok(Some(Box::new(NyashResultBox::new_ok(arg0.clone_box()))));
                 }
             }
-            return Ok(Some(Box::new(NyashResultBox::new_err(Box::new(crate::box_trait::StringBox::new("InvalidArgs"))))));
+            return Ok(Some(Box::new(NyashResultBox::new_err(Box::new(
+                crate::box_trait::StringBox::new("InvalidArgs"),
+            )))));
         }
         let l = self.loader.read().unwrap();
         l.extern_call(iface_name, method_name, args)
@@ -169,7 +199,9 @@ static GLOBAL_HOST: Lazy<Arc<RwLock<PluginHost>>> = Lazy::new(|| {
     Arc::new(RwLock::new(PluginHost::new(loader)))
 });
 
-pub fn get_global_plugin_host() -> Arc<RwLock<PluginHost>> { GLOBAL_HOST.clone() }
+pub fn get_global_plugin_host() -> Arc<RwLock<PluginHost>> {
+    GLOBAL_HOST.clone()
+}
 
 pub fn init_global_plugin_host(config_path: &str) -> BidResult<()> {
     let host = get_global_plugin_host();

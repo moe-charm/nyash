@@ -1,6 +1,6 @@
 /*!
  * Data Processing Box Methods Module
- * 
+ *
  * Contains method implementations for data processing Box types:
  * - BufferBox (execute_buffer_method) - Binary data operations
  * - JSONBox (execute_json_method) - JSON parsing and manipulation
@@ -13,8 +13,12 @@ use crate::boxes::{buffer::BufferBox, JSONBox, RegexBox};
 
 impl NyashInterpreter {
     /// BufferBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_buffer_method(&mut self, buffer_box: &BufferBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_buffer_method(
+        &mut self,
+        buffer_box: &BufferBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "write" => {
                 if arguments.len() != 1 {
@@ -81,7 +85,10 @@ impl NyashInterpreter {
             "is_shared_with" => {
                 if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("is_shared_with() expects 1 argument, got {}", arguments.len()),
+                        message: format!(
+                            "is_shared_with() expects 1 argument, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 let other = self.execute_expression(&arguments[0])?;
@@ -90,7 +97,10 @@ impl NyashInterpreter {
             "share_reference" => {
                 if arguments.len() != 1 {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("share_reference() expects 1 argument, got {}", arguments.len()),
+                        message: format!(
+                            "share_reference() expects 1 argument, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 let data = self.execute_expression(&arguments[0])?;
@@ -99,20 +109,27 @@ impl NyashInterpreter {
             "memory_footprint" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("memory_footprint() expects 0 arguments, got {}", arguments.len()),
+                        message: format!(
+                            "memory_footprint() expects 0 arguments, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 Ok(buffer_box.memory_footprint())
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for BufferBox", method),
-            })
+            }),
         }
     }
 
     /// JSONBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_json_method(&mut self, json_box: &JSONBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_json_method(
+        &mut self,
+        json_box: &JSONBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "parse" => {
                 if arguments.len() != 1 {
@@ -126,7 +143,10 @@ impl NyashInterpreter {
             "stringify" => {
                 if !arguments.is_empty() {
                     return Err(RuntimeError::InvalidOperation {
-                        message: format!("stringify() expects 0 arguments, got {}", arguments.len()),
+                        message: format!(
+                            "stringify() expects 0 arguments, got {}",
+                            arguments.len()
+                        ),
                     });
                 }
                 Ok(json_box.stringify())
@@ -169,13 +189,17 @@ impl NyashInterpreter {
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for JSONBox", method),
-            })
+            }),
         }
     }
 
     /// RegexBoxのメソッド呼び出しを実行
-    pub(in crate::interpreter) fn execute_regex_method(&mut self, regex_box: &RegexBox, method: &str, arguments: &[ASTNode]) 
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(in crate::interpreter) fn execute_regex_method(
+        &mut self,
+        regex_box: &RegexBox,
+        method: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match method {
             "test" => {
                 if arguments.len() != 1 {
@@ -225,7 +249,7 @@ impl NyashInterpreter {
             }
             _ => Err(RuntimeError::InvalidOperation {
                 message: format!("Unknown method '{}' for RegexBox", method),
-            })
+            }),
         }
     }
 }

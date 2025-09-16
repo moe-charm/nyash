@@ -1,4 +1,4 @@
-use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox, BoolBox, VoidBox};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox, VoidBox};
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 
@@ -17,9 +17,17 @@ pub struct TaskGroupBox {
 
 impl TaskGroupBox {
     pub fn new() -> Self {
-        Self { base: BoxBase::new(), cancelled: false, inner: Arc::new(TaskGroupInner { strong: Mutex::new(Vec::new()) }) }
+        Self {
+            base: BoxBase::new(),
+            cancelled: false,
+            inner: Arc::new(TaskGroupInner {
+                strong: Mutex::new(Vec::new()),
+            }),
+        }
     }
-    pub fn cancel_all(&mut self) { self.cancelled = true; }
+    pub fn cancel_all(&mut self) {
+        self.cancelled = true;
+    }
     /// Cancel all child tasks (scaffold) and return void
     pub fn cancelAll(&mut self) -> Box<dyn NyashBox> {
         self.cancel_all();
@@ -31,7 +39,9 @@ impl TaskGroupBox {
         self.join_all_inner(ms);
         Box::new(VoidBox::new())
     }
-    pub fn is_cancelled(&self) -> bool { self.cancelled }
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled
+    }
 
     /// Register a Future into this group's ownership
     pub fn add_future(&self, fut: &crate::boxes::future::FutureBox) {
@@ -47,10 +57,16 @@ impl TaskGroupBox {
             let mut all_ready = true;
             if let Ok(mut list) = self.inner.strong.lock() {
                 list.retain(|f| !f.ready());
-                if !list.is_empty() { all_ready = false; }
+                if !list.is_empty() {
+                    all_ready = false;
+                }
             }
-            if all_ready { break; }
-            if Instant::now() >= deadline { break; }
+            if all_ready {
+                break;
+            }
+            if Instant::now() >= deadline {
+                break;
+            }
             crate::runtime::global_hooks::safepoint_and_poll();
             std::thread::yield_now();
         }
@@ -58,20 +74,38 @@ impl TaskGroupBox {
 }
 
 impl BoxCore for TaskGroupBox {
-    fn box_id(&self) -> u64 { self.base.id }
-    fn parent_type_id(&self) -> Option<std::any::TypeId> { None }
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        None
+    }
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "TaskGroup(cancelled={})", self.cancelled)
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl NyashBox for TaskGroupBox {
-    fn to_string_box(&self) -> StringBox { StringBox::new(format!("TaskGroup(cancelled={})", self.cancelled)) }
-    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
-        if let Some(g) = other.as_any().downcast_ref::<TaskGroupBox>() { BoolBox::new(self.base.id == g.base.id) } else { BoolBox::new(false) }
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new(format!("TaskGroup(cancelled={})", self.cancelled))
     }
-    fn clone_box(&self) -> Box<dyn NyashBox> { Box::new(self.clone()) }
-    fn share_box(&self) -> Box<dyn NyashBox> { self.clone_box() }
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(g) = other.as_any().downcast_ref::<TaskGroupBox>() {
+            BoolBox::new(self.base.id == g.base.id)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        self.clone_box()
+    }
 }

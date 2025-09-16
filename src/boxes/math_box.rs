@@ -1,54 +1,54 @@
 /*! 🧮 MathBox - 数学計算Box
- * 
+ *
  * ## 📝 概要
  * 高度な数学演算を提供するBox。Python mathモジュールや
  * JavaScript Math オブジェクトと同様の機能を提供。
- * 
+ *
  * ## 🛠️ 利用可能メソッド
- * 
+ *
  * ### 🔢 基本計算
  * - `abs(value)` - 絶対値
  * - `max(a, b)` - 最大値
  * - `min(a, b)` - 最小値
  * - `pow(base, exp)` - 累乗 (base^exp)
  * - `sqrt(value)` - 平方根
- * 
+ *
  * ### 📐 三角関数
  * - `sin(radians)` - 正弦
  * - `cos(radians)` - 余弦
  * - `tan(radians)` - 正接
- * 
+ *
  * ### 📊 対数・指数関数
  * - `log(value)` - 自然対数 (ln)
  * - `log10(value)` - 常用対数
  * - `exp(value)` - 指数関数 (e^x)
- * 
+ *
  * ### 🔄 丸め関数
  * - `floor(value)` - 切り下げ
  * - `ceil(value)` - 切り上げ  
  * - `round(value)` - 四捨五入
- * 
+ *
  * ### 📏 定数取得
  * - `getPi()` - 円周率π (3.14159...)
  * - `getE()` - 自然対数の底e (2.71828...)
- * 
+ *
  * ## 💡 使用例
  * ```nyash
  * local math, result
  * math = new MathBox()
- * 
+ *
  * result = math.abs(-42)        // 42
  * result = math.max(10, 25)     // 25
  * result = math.sqrt(16)        // 4.0
  * result = math.pow(2, 3)       // 8.0
  * result = math.sin(math.getPi() / 2)  // 1.0
- * 
+ *
  * // 計算例
  * local pi, area
  * pi = math.getPi()
  * area = pi * math.pow(5, 2)    // 半径5の円の面積
  * ```
- * 
+ *
  * ## ⚠️ 注意
  * - 三角関数の引数はラジアン
  * - 負数の平方根・対数はエラー
@@ -56,9 +56,9 @@
  * - 整数演算は自動でFloatBoxに変換される場合あり
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, BoxCore, BoxBase};
-use std::fmt::{Debug, Display};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, IntegerBox, NyashBox, StringBox};
 use std::any::Any;
+use std::fmt::{Debug, Display};
 
 /// 数学演算を提供するBox
 #[derive(Debug, Clone)]
@@ -68,11 +68,11 @@ pub struct MathBox {
 
 impl MathBox {
     pub fn new() -> Self {
-        Self { 
-            base: BoxBase::new() 
+        Self {
+            base: BoxBase::new(),
         }
     }
-    
+
     /// 絶対値を計算
     pub fn abs(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -83,46 +83,46 @@ impl MathBox {
             Box::new(StringBox::new("Error: abs() requires numeric input"))
         }
     }
-    
+
     /// 最大値を返す
     pub fn max(&self, a: Box<dyn NyashBox>, b: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let (Some(a_int), Some(b_int)) = (
             a.as_any().downcast_ref::<IntegerBox>(),
-            b.as_any().downcast_ref::<IntegerBox>()
+            b.as_any().downcast_ref::<IntegerBox>(),
         ) {
             Box::new(IntegerBox::new(a_int.value.max(b_int.value)))
         } else if let (Some(a_float), Some(b_float)) = (
             a.as_any().downcast_ref::<FloatBox>(),
-            b.as_any().downcast_ref::<FloatBox>()
+            b.as_any().downcast_ref::<FloatBox>(),
         ) {
             Box::new(FloatBox::new(a_float.value.max(b_float.value)))
         } else {
             Box::new(StringBox::new("Error: max() requires numeric inputs"))
         }
     }
-    
+
     /// 最小値を返す
     pub fn min(&self, a: Box<dyn NyashBox>, b: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let (Some(a_int), Some(b_int)) = (
             a.as_any().downcast_ref::<IntegerBox>(),
-            b.as_any().downcast_ref::<IntegerBox>()
+            b.as_any().downcast_ref::<IntegerBox>(),
         ) {
             Box::new(IntegerBox::new(a_int.value.min(b_int.value)))
         } else if let (Some(a_float), Some(b_float)) = (
             a.as_any().downcast_ref::<FloatBox>(),
-            b.as_any().downcast_ref::<FloatBox>()
+            b.as_any().downcast_ref::<FloatBox>(),
         ) {
             Box::new(FloatBox::new(a_float.value.min(b_float.value)))
         } else {
             Box::new(StringBox::new("Error: min() requires numeric inputs"))
         }
     }
-    
+
     /// 累乗を計算
     pub fn pow(&self, base: Box<dyn NyashBox>, exp: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let (Some(base_int), Some(exp_int)) = (
             base.as_any().downcast_ref::<IntegerBox>(),
-            exp.as_any().downcast_ref::<IntegerBox>()
+            exp.as_any().downcast_ref::<IntegerBox>(),
         ) {
             if exp_int.value >= 0 {
                 let result = (base_int.value as f64).powi(exp_int.value as i32);
@@ -134,7 +134,7 @@ impl MathBox {
             Box::new(StringBox::new("Error: pow() requires numeric inputs"))
         }
     }
-    
+
     /// 平方根を計算
     pub fn sqrt(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -153,19 +153,19 @@ impl MathBox {
             Box::new(StringBox::new("Error: sqrt() requires numeric input"))
         }
     }
-    
+
     /// 円周率πを返す
     #[allow(non_snake_case)]
     pub fn getPi(&self) -> Box<dyn NyashBox> {
         Box::new(FloatBox::new(std::f64::consts::PI))
     }
-    
+
     /// 自然対数の底eを返す
     #[allow(non_snake_case)]
     pub fn getE(&self) -> Box<dyn NyashBox> {
         Box::new(FloatBox::new(std::f64::consts::E))
     }
-    
+
     /// サイン（正弦）
     pub fn sin(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -176,7 +176,7 @@ impl MathBox {
             Box::new(StringBox::new("Error: sin() requires numeric input"))
         }
     }
-    
+
     /// コサイン（余弦）
     pub fn cos(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -187,7 +187,7 @@ impl MathBox {
             Box::new(StringBox::new("Error: cos() requires numeric input"))
         }
     }
-    
+
     /// タンジェント（正接）
     pub fn tan(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -198,7 +198,7 @@ impl MathBox {
             Box::new(StringBox::new("Error: tan() requires numeric input"))
         }
     }
-    
+
     /// 自然対数
     pub fn log(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -217,7 +217,7 @@ impl MathBox {
             Box::new(StringBox::new("Error: log() requires numeric input"))
         }
     }
-    
+
     /// 常用対数（底10）
     pub fn log10(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -236,7 +236,7 @@ impl MathBox {
             Box::new(StringBox::new("Error: log10() requires numeric input"))
         }
     }
-    
+
     /// 指数関数（e^x）
     pub fn exp(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
@@ -247,33 +247,33 @@ impl MathBox {
             Box::new(StringBox::new("Error: exp() requires numeric input"))
         }
     }
-    
+
     /// 床関数（切り下げ）
     pub fn floor(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
-            Box::new(IntegerBox::new(int_box.value))  // 整数はそのまま
+            Box::new(IntegerBox::new(int_box.value)) // 整数はそのまま
         } else if let Some(float_box) = value.as_any().downcast_ref::<FloatBox>() {
             Box::new(IntegerBox::new(float_box.value.floor() as i64))
         } else {
             Box::new(StringBox::new("Error: floor() requires numeric input"))
         }
     }
-    
+
     /// 天井関数（切り上げ）
     pub fn ceil(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
-            Box::new(IntegerBox::new(int_box.value))  // 整数はそのまま
+            Box::new(IntegerBox::new(int_box.value)) // 整数はそのまま
         } else if let Some(float_box) = value.as_any().downcast_ref::<FloatBox>() {
             Box::new(IntegerBox::new(float_box.value.ceil() as i64))
         } else {
             Box::new(StringBox::new("Error: ceil() requires numeric input"))
         }
     }
-    
+
     /// 四捨五入
     pub fn round(&self, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(int_box) = value.as_any().downcast_ref::<IntegerBox>() {
-            Box::new(IntegerBox::new(int_box.value))  // 整数はそのまま
+            Box::new(IntegerBox::new(int_box.value)) // 整数はそのまま
         } else if let Some(float_box) = value.as_any().downcast_ref::<FloatBox>() {
             Box::new(IntegerBox::new(float_box.value.round() as i64))
         } else {
@@ -286,19 +286,19 @@ impl BoxCore for MathBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "MathBox()")
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -308,20 +308,20 @@ impl NyashBox for MathBox {
     fn type_name(&self) -> &'static str {
         "MathBox"
     }
-    
+
     fn to_string_box(&self) -> StringBox {
         StringBox::new("MathBox()")
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_math) = other.as_any().downcast_ref::<MathBox>() {
             BoolBox::new(self.box_id() == other_math.box_id())
@@ -329,7 +329,6 @@ impl NyashBox for MathBox {
             BoolBox::new(false)
         }
     }
-    
 }
 
 impl Display for MathBox {
@@ -347,9 +346,9 @@ pub struct FloatBox {
 
 impl FloatBox {
     pub fn new(value: f64) -> Self {
-        Self { 
-            value, 
-            base: BoxBase::new() 
+        Self {
+            value,
+            base: BoxBase::new(),
         }
     }
 }
@@ -358,19 +357,19 @@ impl BoxCore for FloatBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -380,20 +379,20 @@ impl NyashBox for FloatBox {
     fn type_name(&self) -> &'static str {
         "FloatBox"
     }
-    
+
     fn to_string_box(&self) -> StringBox {
         StringBox::new(&self.value.to_string())
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
             BoolBox::new((self.value - other_float.value).abs() < f64::EPSILON)
@@ -403,7 +402,6 @@ impl NyashBox for FloatBox {
             BoolBox::new(false)
         }
     }
-    
 }
 
 impl Display for FloatBox {
@@ -423,19 +421,19 @@ pub struct RangeBox {
 
 impl RangeBox {
     pub fn new(start: i64, end: i64, step: i64) -> Self {
-        Self { 
-            start, 
-            end, 
-            step, 
-            base: BoxBase::new() 
+        Self {
+            start,
+            end,
+            step,
+            base: BoxBase::new(),
         }
     }
-    
+
     /// イテレータとして値を生成
     pub fn iter(&self) -> Vec<i64> {
         let mut result = Vec::new();
         let mut current = self.start;
-        
+
         if self.step > 0 {
             while current < self.end {
                 result.push(current);
@@ -447,7 +445,7 @@ impl RangeBox {
                 current += self.step;
             }
         }
-        
+
         result
     }
 }
@@ -456,19 +454,19 @@ impl BoxCore for RangeBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Range({}, {}, {})", self.start, self.end, self.step)
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -478,32 +476,34 @@ impl NyashBox for RangeBox {
     fn type_name(&self) -> &'static str {
         "RangeBox"
     }
-    
+
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(&format!("Range({}, {}, {})", self.start, self.end, self.step))
+        StringBox::new(&format!(
+            "Range({}, {}, {})",
+            self.start, self.end, self.step
+        ))
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_range) = other.as_any().downcast_ref::<RangeBox>() {
             BoolBox::new(
-                self.start == other_range.start &&
-                self.end == other_range.end &&
-                self.step == other_range.step
+                self.start == other_range.start
+                    && self.end == other_range.end
+                    && self.step == other_range.step,
             )
         } else {
             BoolBox::new(false)
         }
     }
-    
 }
 
 impl Display for RangeBox {

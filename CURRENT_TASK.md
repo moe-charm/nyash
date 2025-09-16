@@ -342,3 +342,58 @@ Namespaces / Using（現状）
 **AOT Quick**
 - Array literal: `NYASH_SYNTAX_SUGAR_LEVEL=basic ./tools/build_llvm.sh tmp/aot_array_literal_main.nyash -o app && ./app`
 - Map literal: `NYASH_SYNTAX_SUGAR_LEVEL=basic NYASH_ENABLE_MAP_LITERAL=1 ./tools/build_llvm.sh tmp/aot_map_literal_main.nyash -o app && ./app`
+
+Refactoring Plan (Phase‑15 follow‑up)
+- 背景: 巨大ファイル（AST/MIR/LLVM）が保守コスト増の主因。機能非変化の小刻みリファクタで視認性と変更容易性を上げる。
+
+- 目的と範囲（非機能変更・段階適用）
+  1) AST（src/ast.rs:1）: 定義とヘルパの分離、将来のサブenum活用導線の整備（現行API互換）。
+  2) MIR Builder（src/mir/builder.rs:1）: build_module の骨格化・責務分離、既存分割（builder/*）の徹底。
+  3) Python LLVM（src/llvm_py/llvm_builder.py:1）: lower_function の前処理/本体分離、lower_block の責務拡張。
+  4) MIR 命令（src/mir/instruction.rs:1）: 構造体+トレイト導線の導入（enum への委譲を維持した非破壊移行）。
+
+- 実施順（小PR単位、CI緑維持）
+  PR‑1: AST utils 抽出（非破壊）
+  - 追加: `src/ast/utils.rs` に classify/info/span/to_string などのヘルパを移設。
+  - `src/ast.rs` は ASTNode/StructureNode/ExpressionNode/StatementNode の定義中心に縮退。
+  - 互換維持: `pub use ast::utils::*;` で既存呼び出しを壊さない。
+  - 受入: 全ビルド/スモーク緑、差分はファイル移動のみ。
+
+  PR‑2: MIR Builder build_module 分割（非破壊）
+  - `build_module` を `prepare_module`/`lower_root`/`finalize_module` に3分割。
+  - 型推定（value_types→返り値）は finalize 側へ集約（現行ロジック移設）。
+  - 既存の exprs/stmts などの委譲を明示し、build_module 本体を「骨格のみ」に縮退。
+  - 受入: LLVM/PyVM/Bridge スモーク緑（挙動非変化）。
+
+  PR‑3: Python LLVM lower_function の前処理抽出
+  - 新設: `setup_phi_placeholders()` を導入し、PHI 宣言/CFG 依存前処理をここへ移設。
+  - `lower_block()` に snapshot（block_end_values 収集）までの責務を移動。メインループは薄い周回に。
+  - 受入: `tools/smokes/curated_llvm.sh` / `curated_llvm_stage3.sh` 緑。
+
+  PR‑4: AST ラッパー導入（非破壊導線）
+  - 追加: `src/ast/nodes.rs` に小さな構造体群（Assign/Return/...）。
+  - enum `StatementNode/ExpressionNode` を構造体で保持。`From<T> for ASTNode` / `TryFrom<ASTNode> for T` を提供。
+  - Builder 入口（`builder/stmts.rs`, `builder/exprs.rs`）で ASTNode → TryFrom 変換を 1 行追加し以降はサブ型で match。
+  - 受入: ビルド/スモーク緑（機能非変化）。
+
+  PR‑5: MIR 命令トレイト POC（Const/BinOp）
+  - 追加: `src/mir/instruction_kinds/` に `const_.rs`, `binop.rs`（各命令を struct 化）。
+  - 共通トレイト `InstructionMeta { effects(), dst(), used() }` を定義。
+  - `MirInstruction::{effects,dst_value,used_values}` から一部を構造体 impl に委譲（match 縮退の礎）。
+  - 受入: スモーク緑、`instruction_introspection.rs` の挙動非変化。
+
+- リスクとガード
+  - 機能非変化を原則（挙動差分は不可）。
+  - CI で LLVM/Bridge を優先確認。Selfhost/E2E は任意ジョブで回す。
+  - PR は 400 行未満/ファイル移動中心を目安に分割。
+
+- 参考ファイル
+  - AST: `src/ast.rs`, （新規）`src/ast/utils.rs`, （将来）`src/ast/nodes.rs`
+  - Builder: `src/mir/builder.rs`, `src/mir/builder/*`
+  - Python LLVM: `src/llvm_py/llvm_builder.py`
+  - MIR 命令: `src/mir/instruction.rs`, （新規）`src/mir/instruction_kinds/*`
+
+Acceptance Criteria
+- すべての変更は機能非変化（スモーク/CI 緑）。
+- 大型関数・巨大match の見通しが改善し、追従点が局所化。
+- 新規追加の導線（AST サブ型/命令トレイト）は既存 API と共存し、段階移行を可能にする。

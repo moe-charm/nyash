@@ -15,7 +15,9 @@ pub fn compute_def_blocks(function: &MirFunction) -> HashMap<ValueId, BasicBlock
     let mut def_block: HashMap<ValueId, BasicBlockId> = HashMap::new();
     for (bid, block) in &function.blocks {
         for inst in block.all_instructions() {
-            if let Some(dst) = inst.dst_value() { def_block.insert(dst, *bid); }
+            if let Some(dst) = inst.dst_value() {
+                def_block.insert(dst, *bid);
+            }
         }
     }
     def_block
@@ -40,7 +42,9 @@ pub fn compute_dominators(function: &MirFunction) -> HashMap<BasicBlockId, HashS
     while changed {
         changed = false;
         for &b in function.blocks.keys() {
-            if b == function.entry_block { continue; }
+            if b == function.entry_block {
+                continue;
+            }
             let mut new_set = all_blocks.clone();
             if let Some(p_list) = preds.get(&b) {
                 for p in p_list {
@@ -51,7 +55,10 @@ pub fn compute_dominators(function: &MirFunction) -> HashMap<BasicBlockId, HashS
             }
             new_set.insert(b);
             let cur = dom.get(&b).unwrap();
-            if &new_set != cur { dom.insert(b, new_set); changed = true; }
+            if &new_set != cur {
+                dom.insert(b, new_set);
+                changed = true;
+            }
         }
     }
     dom
@@ -70,12 +77,16 @@ pub fn compute_reachable_blocks(function: &MirFunction) -> HashSet<BasicBlockId>
                 }
                 for instruction in &block.instructions {
                     if let crate::mir::MirInstruction::Catch { handler_bb, .. } = instruction {
-                        if !reachable.contains(handler_bb) { worklist.push(*handler_bb); }
+                        if !reachable.contains(handler_bb) {
+                            worklist.push(*handler_bb);
+                        }
                     }
                 }
                 if let Some(ref terminator) = block.terminator {
                     if let crate::mir::MirInstruction::Catch { handler_bb, .. } = terminator {
-                        if !reachable.contains(handler_bb) { worklist.push(*handler_bb); }
+                        if !reachable.contains(handler_bb) {
+                            worklist.push(*handler_bb);
+                        }
                     }
                 }
             }
@@ -83,4 +94,3 @@ pub fn compute_reachable_blocks(function: &MirFunction) -> HashSet<BasicBlockId>
     }
     reachable
 }
-

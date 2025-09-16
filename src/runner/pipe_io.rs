@@ -21,13 +21,17 @@ impl NyashRunner {
         let json = if let Some(path) = &self.config.json_file {
             match std::fs::read_to_string(path) {
                 Ok(s) => s,
-                Err(e) => { eprintln!("❌ json-file read error: {}", e); std::process::exit(1); }
+                Err(e) => {
+                    eprintln!("❌ json-file read error: {}", e);
+                    std::process::exit(1);
+                }
             }
         } else {
             use std::io::Read;
             let mut buf = String::new();
             if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
-                eprintln!("❌ stdin read error: {}", e); std::process::exit(1);
+                eprintln!("❌ stdin read error: {}", e);
+                std::process::exit(1);
             }
             buf
         };
@@ -45,16 +49,27 @@ impl NyashRunner {
                             let tmp_dir = std::path::Path::new("tmp");
                             let _ = std::fs::create_dir_all(tmp_dir);
                             let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
-                            if let Err(e) = super::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                            if let Err(e) = super::mir_json_emit::emit_mir_json_for_harness_bin(
+                                &module,
+                                &mir_json_path,
+                            ) {
                                 eprintln!("❌ PyVM MIR JSON emit error: {}", e);
                                 std::process::exit(1);
                             }
                             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                eprintln!("[Bridge] using PyVM (pipe) → {}", mir_json_path.display());
+                                eprintln!(
+                                    "[Bridge] using PyVM (pipe) → {}",
+                                    mir_json_path.display()
+                                );
                             }
                             // Determine entry function hint (prefer Main.main if present)
-                            let entry = if module.functions.contains_key("Main.main") { "Main.main" }
-                                        else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                            let entry = if module.functions.contains_key("Main.main") {
+                                "Main.main"
+                            } else if module.functions.contains_key("main") {
+                                "main"
+                            } else {
+                                "Main.main"
+                            };
                             let status = std::process::Command::new(py3)
                                 .args([
                                     runner.to_string_lossy().as_ref(),

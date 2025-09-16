@@ -50,4 +50,3 @@ impl std::fmt::Display for OptimizationStats {
         )
     }
 }
-

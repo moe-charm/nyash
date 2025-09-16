@@ -5,8 +5,8 @@
  * Initial scope focuses on value coercions used by the MIR interpreter and JIT.
  */
 
-use crate::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox, VoidBox};
 use crate::backend::vm::VMValue;
+use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
 use std::sync::Arc;
 
 /// Opaque handle type used by JIT/runtime bridges.
@@ -80,4 +80,3 @@ pub fn handle_of(boxref: Arc<dyn NyashBox>) -> Handle {
 pub fn handle_get(h: Handle) -> Option<Arc<dyn NyashBox>> {
     crate::jit::rt::handles::get(h)
 }
-

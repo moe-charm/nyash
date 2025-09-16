@@ -27,4 +27,3 @@ pub fn bump_many(labels: &[String]) {
         *e = e.saturating_add(1);
     }
 }
-

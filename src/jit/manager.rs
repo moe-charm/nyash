@@ -3,25 +3,65 @@ pub struct JitManager;
 
 #[cfg(feature = "jit-direct-only")]
 impl JitManager {
-    pub fn new(_threshold: u32) -> Self { Self }
+    pub fn new(_threshold: u32) -> Self {
+        Self
+    }
     pub fn set_threshold(&mut self, _t: u32) {}
     pub fn record_entry(&mut self, _func: &str) {}
-    pub fn should_jit(&self, _func: &str) -> bool { false }
+    pub fn should_jit(&self, _func: &str) -> bool {
+        false
+    }
     pub fn mark_compiled(&mut self, _func: &str, _handle: u64) {}
-    pub fn maybe_compile(&mut self, _func: &str, _mir: &crate::mir::MirFunction) -> bool { false }
-    pub fn is_compiled(&self, _func: &str) -> bool { false }
-    pub fn handle_of(&self, _func: &str) -> Option<u64> { None }
-    pub fn sites(&self) -> usize { 0 }
-    pub fn compiled_count(&self) -> usize { 0 }
-    pub fn total_hits(&self) -> u64 { 0 }
-    pub fn exec_ok_count(&self) -> u64 { 0 }
-    pub fn exec_trap_count(&self) -> u64 { 0 }
-    pub fn record_lower_stats(&mut self, _func: &str, _phi_total: u64, _phi_b1: u64, _ret_bool_hint: bool) {}
-    pub fn per_function_stats(&self) -> Vec<(String, u64, u64, u64, u32, bool, u64)> { Vec::new() }
-    pub fn top_hits(&self, _n: usize) -> Vec<(String, u32, bool, u64)> { Vec::new() }
+    pub fn maybe_compile(&mut self, _func: &str, _mir: &crate::mir::MirFunction) -> bool {
+        false
+    }
+    pub fn is_compiled(&self, _func: &str) -> bool {
+        false
+    }
+    pub fn handle_of(&self, _func: &str) -> Option<u64> {
+        None
+    }
+    pub fn sites(&self) -> usize {
+        0
+    }
+    pub fn compiled_count(&self) -> usize {
+        0
+    }
+    pub fn total_hits(&self) -> u64 {
+        0
+    }
+    pub fn exec_ok_count(&self) -> u64 {
+        0
+    }
+    pub fn exec_trap_count(&self) -> u64 {
+        0
+    }
+    pub fn record_lower_stats(
+        &mut self,
+        _func: &str,
+        _phi_total: u64,
+        _phi_b1: u64,
+        _ret_bool_hint: bool,
+    ) {
+    }
+    pub fn per_function_stats(&self) -> Vec<(String, u64, u64, u64, u32, bool, u64)> {
+        Vec::new()
+    }
+    pub fn top_hits(&self, _n: usize) -> Vec<(String, u32, bool, u64)> {
+        Vec::new()
+    }
     pub fn print_summary(&self) {}
-    pub fn maybe_dispatch(&mut self, _func: &str, _argc: usize) -> bool { false }
-    pub fn execute_compiled(&mut self, _func: &str, _ret_ty: &crate::mir::MirType, _args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> { None }
+    pub fn maybe_dispatch(&mut self, _func: &str, _argc: usize) -> bool {
+        false
+    }
+    pub fn execute_compiled(
+        &mut self,
+        _func: &str,
+        _ret_ty: &crate::mir::MirType,
+        _args: &[crate::backend::vm::VMValue],
+    ) -> Option<crate::backend::vm::VMValue> {
+        None
+    }
 }
 
 #[cfg(not(feature = "jit-direct-only"))]
@@ -48,10 +88,22 @@ pub struct JitManager {
 #[cfg(not(feature = "jit-direct-only"))]
 impl JitManager {
     pub fn new(threshold: u32) -> Self {
-        Self { threshold, hits: HashMap::new(), compiled: HashMap::new(), engine: crate::jit::engine::JitEngine::new(), exec_ok: 0, exec_trap: 0, func_phi_total: HashMap::new(), func_phi_b1: HashMap::new(), func_ret_bool_hint: HashMap::new() }
+        Self {
+            threshold,
+            hits: HashMap::new(),
+            compiled: HashMap::new(),
+            engine: crate::jit::engine::JitEngine::new(),
+            exec_ok: 0,
+            exec_trap: 0,
+            func_phi_total: HashMap::new(),
+            func_phi_b1: HashMap::new(),
+            func_ret_bool_hint: HashMap::new(),
+        }
     }
 
-    pub fn set_threshold(&mut self, t: u32) { self.threshold = t.max(1); }
+    pub fn set_threshold(&mut self, t: u32) {
+        self.threshold = t.max(1);
+    }
 
     pub fn record_entry(&mut self, func: &str) {
         let c = self.hits.entry(func.to_string()).or_insert(0);
@@ -84,21 +136,47 @@ impl JitManager {
         self.compiled.contains_key(func)
     }
 
-    pub fn is_compiled(&self, func: &str) -> bool { self.compiled.contains_key(func) }
-    pub fn handle_of(&self, func: &str) -> Option<u64> { self.compiled.get(func).copied() }
+    pub fn is_compiled(&self, func: &str) -> bool {
+        self.compiled.contains_key(func)
+    }
+    pub fn handle_of(&self, func: &str) -> Option<u64> {
+        self.compiled.get(func).copied()
+    }
 
     // --- Stats accessors for unified reporting ---
-    pub fn sites(&self) -> usize { self.hits.len() }
-    pub fn compiled_count(&self) -> usize { self.compiled.len() }
-    pub fn total_hits(&self) -> u64 { self.hits.values().map(|v| *v as u64).sum() }
-    pub fn exec_ok_count(&self) -> u64 { self.exec_ok }
-    pub fn exec_trap_count(&self) -> u64 { self.exec_trap }
+    pub fn sites(&self) -> usize {
+        self.hits.len()
+    }
+    pub fn compiled_count(&self) -> usize {
+        self.compiled.len()
+    }
+    pub fn total_hits(&self) -> u64 {
+        self.hits.values().map(|v| *v as u64).sum()
+    }
+    pub fn exec_ok_count(&self) -> u64 {
+        self.exec_ok
+    }
+    pub fn exec_trap_count(&self) -> u64 {
+        self.exec_trap
+    }
 
     // --- Per-function stats ---
-    pub fn record_lower_stats(&mut self, func: &str, phi_total: u64, phi_b1: u64, ret_bool_hint: bool) {
-        if phi_total > 0 { *self.func_phi_total.entry(func.to_string()).or_insert(0) += phi_total; }
-        if phi_b1 > 0 { *self.func_phi_b1.entry(func.to_string()).or_insert(0) += phi_b1; }
-        if ret_bool_hint { *self.func_ret_bool_hint.entry(func.to_string()).or_insert(0) += 1; }
+    pub fn record_lower_stats(
+        &mut self,
+        func: &str,
+        phi_total: u64,
+        phi_b1: u64,
+        ret_bool_hint: bool,
+    ) {
+        if phi_total > 0 {
+            *self.func_phi_total.entry(func.to_string()).or_insert(0) += phi_total;
+        }
+        if phi_b1 > 0 {
+            *self.func_phi_b1.entry(func.to_string()).or_insert(0) += phi_b1;
+        }
+        if ret_bool_hint {
+            *self.func_ret_bool_hint.entry(func.to_string()).or_insert(0) += 1;
+        }
     }
     pub fn per_function_stats(&self) -> Vec<(String, u64, u64, u64, u32, bool, u64)> {
         // name, phi_total, phi_b1, ret_bool_hint, hits, compiled, handle
@@ -108,7 +186,7 @@ impl JitManager {
         names.extend(self.func_phi_b1.keys().cloned());
         names.extend(self.func_ret_bool_hint.keys().cloned());
         let mut out = Vec::new();
-        for name in names { 
+        for name in names {
             let phi_t = self.func_phi_total.get(&name).copied().unwrap_or(0);
             let phi_b1 = self.func_phi_b1.get(&name).copied().unwrap_or(0);
             let rb = self.func_ret_bool_hint.get(&name).copied().unwrap_or(0);
@@ -135,18 +213,27 @@ impl JitManager {
     }
 
     pub fn print_summary(&self) {
-        if std::env::var("NYASH_JIT_STATS").ok().as_deref() != Some("1") { return; }
+        if std::env::var("NYASH_JIT_STATS").ok().as_deref() != Some("1") {
+            return;
+        }
         let sites = self.hits.len();
         let total_hits: u64 = self.hits.values().map(|v| *v as u64).sum();
         let compiled = self.compiled.len();
-        eprintln!("[JIT] sites={} compiled={} hits_total={} exec_ok={} exec_trap={}", sites, compiled, total_hits, self.exec_ok, self.exec_trap);
+        eprintln!(
+            "[JIT] sites={} compiled={} hits_total={} exec_ok={} exec_trap={}",
+            sites, compiled, total_hits, self.exec_ok, self.exec_trap
+        );
         // Top 5 hot functions
         let mut v: Vec<(&String, &u32)> = self.hits.iter().collect();
         v.sort_by(|a, b| b.1.cmp(a.1));
         for (i, (k, h)) in v.into_iter().take(5).enumerate() {
-            let comp = if self.compiled.contains_key(k) { "*" } else { " " };
+            let comp = if self.compiled.contains_key(k) {
+                "*"
+            } else {
+                " "
+            };
             let hdl = self.compiled.get(k).copied().unwrap_or(0);
-            eprintln!("  #{}{} {} hits={} handle={}", i+1, comp, k, h, hdl);
+            eprintln!("  #{}{} {} hits={} handle={}", i + 1, comp, k, h, hdl);
         }
     }
 
@@ -154,7 +241,10 @@ impl JitManager {
     pub fn maybe_dispatch(&mut self, func: &str, argc: usize) -> bool {
         if std::env::var("NYASH_JIT_EXEC").ok().as_deref() == Some("1") {
             if let Some(h) = self.handle_of(func) {
-                eprintln!("[JIT] executing handle={} argc={} (stub) for {}", h, argc, func);
+                eprintln!(
+                    "[JIT] executing handle={} argc={} (stub) for {}",
+                    h, argc, func
+                );
                 // In 10_c proper, invoke engine with prepared args and return actual result
                 // For now, execute with empty args to exercise the path, ignore result
                 let _ = self.engine.execute_handle(h, &[]);
@@ -165,7 +255,12 @@ impl JitManager {
     }
 
     /// 10_c: execute compiled function if present (stub: empty args). Returns Some(VMValue) if JIT path was taken.
-    pub fn execute_compiled(&mut self, func: &str, ret_ty: &crate::mir::MirType, args: &[crate::backend::vm::VMValue]) -> Option<crate::backend::vm::VMValue> {
+    pub fn execute_compiled(
+        &mut self,
+        func: &str,
+        ret_ty: &crate::mir::MirType,
+        args: &[crate::backend::vm::VMValue],
+    ) -> Option<crate::backend::vm::VMValue> {
         // Strict/Fail‑FastモードではJITは"コンパイル専用"（実行しない）
         if std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
             // 観測のためイベントだけ出す
@@ -174,7 +269,8 @@ impl JitManager {
                     "id": "jit_skip_execute_strict",
                     "func": func
                 }),
-                "jit", func
+                "jit",
+                func,
             );
             return None;
         }
@@ -208,7 +304,8 @@ impl JitManager {
                             "reason": "jit_execute_failed",
                             "ms": dt.as_millis()
                         }),
-                        "trap", func
+                        "trap",
+                        func,
                     );
                     None
                 }

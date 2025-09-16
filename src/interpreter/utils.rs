@@ -4,4 +4,3 @@
 pub fn debug_on() -> bool {
     std::env::var("NYASH_DEBUG").unwrap_or_default() == "1"
 }
-

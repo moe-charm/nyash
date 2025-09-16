@@ -1,9 +1,9 @@
 //! Runner demo helpers (moved out of mod.rs to reduce file size)
-use nyash_rust::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox, AddBox, NyashBox, BoxCore};
-use nyash_rust::tokenizer::NyashTokenizer;
 use nyash_rust::ast::ASTNode;
-use nyash_rust::parser::NyashParser;
+use nyash_rust::box_trait::{AddBox, BoolBox, BoxCore, IntegerBox, NyashBox, StringBox, VoidBox};
 use nyash_rust::interpreter::NyashInterpreter;
+use nyash_rust::parser::NyashParser;
+use nyash_rust::tokenizer::NyashTokenizer;
 
 pub(super) fn demo_basic_boxes() {
     println!("\n📦 1. Basic Box Creation:");
@@ -33,7 +33,10 @@ pub(super) fn demo_box_operations() {
     let str1 = StringBox::new("Hello, ".to_string());
     let str2 = StringBox::new("World!".to_string());
     let concat_box = AddBox::new(Box::new(str1), Box::new(str2));
-    println!("  \"Hello, \" + \"World!\" = {}", concat_box.to_string_box().value);
+    println!(
+        "  \"Hello, \" + \"World!\" = {}",
+        concat_box.to_string_box().value
+    );
 }
 
 pub(super) fn demo_box_collections() {
@@ -55,7 +58,7 @@ pub(super) fn demo_tokenizer_system() {
     match tokenizer.tokenize() {
         Ok(tokens) => {
             println!("  Tokenized {} tokens successfully", tokens.len());
-        },
+        }
         Err(e) => println!("  Tokenization error: {}", e),
     }
 }
@@ -82,7 +85,7 @@ pub(super) fn demo_parser_system() {
                     println!("      [{}] {}", i, stmt.info());
                 }
             }
-        },
+        }
         Err(e) => println!("    Parser error: {}", e),
     }
 }
@@ -103,7 +106,7 @@ pub(super) fn demo_interpreter_system() {
             match interpreter.execute(ast) {
                 Ok(result) => {
                     println!("    ✅ Result: {}", result.to_string_box().value);
-                },
+                }
                 Err(e) => {
                     println!("    ❌ Execution error: {}", e);
                 }
@@ -125,7 +128,7 @@ pub(super) fn demo_interpreter_system() {
             match interpreter.execute(ast) {
                 Ok(result) => {
                     println!("    ✅ Result: {}", result.to_string_box().value);
-                },
+                }
                 Err(e) => {
                     println!("    ❌ Execution error: {}", e);
                 }

@@ -8,14 +8,26 @@ impl NyashInterpreter {
         instance: &SharedNyashBox,
         constructor: &ASTNode,
         arguments: &[ASTNode],
-        box_decl: &BoxDeclaration
+        box_decl: &BoxDeclaration,
     ) -> Result<(), RuntimeError> {
-        if let ASTNode::FunctionDeclaration { name: _, params, body, .. } = constructor {
+        if let ASTNode::FunctionDeclaration {
+            name: _,
+            params,
+            body,
+            ..
+        } = constructor
+        {
             let mut arg_values = Vec::new();
-            for arg in arguments { arg_values.push(self.execute_expression(arg)?); }
+            for arg in arguments {
+                arg_values.push(self.execute_expression(arg)?);
+            }
             if params.len() != arg_values.len() {
                 return Err(RuntimeError::InvalidOperation {
-                    message: format!("Constructor expects {} arguments, got {}", params.len(), arg_values.len()),
+                    message: format!(
+                        "Constructor expects {} arguments, got {}",
+                        params.len(),
+                        arg_values.len()
+                    ),
                 });
             }
             let saved_locals = self.save_local_vars();
@@ -31,35 +43,52 @@ impl NyashInterpreter {
             });
             let mut result = Ok(());
             for statement in body.iter() {
-                if let Err(e) = self.execute_statement(statement) { result = Err(e); break; }
+                if let Err(e) = self.execute_statement(statement) {
+                    result = Err(e);
+                    break;
+                }
             }
             self.restore_local_vars(saved_locals);
             self.current_constructor_context = old_context;
             result
         } else {
-            Err(RuntimeError::InvalidOperation { message: "Invalid constructor node".to_string() })
+            Err(RuntimeError::InvalidOperation {
+                message: "Invalid constructor node".to_string(),
+            })
         }
     }
 
     /// 親コンストラクタを実行 - Parent constructor execution
-    pub(crate) fn execute_parent_constructor(&mut self, parent_class: &str, arguments: &[ASTNode])
-        -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub(crate) fn execute_parent_constructor(
+        &mut self,
+        parent_class: &str,
+        arguments: &[ASTNode],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let parent_decl = {
             let box_decls = self.shared.box_declarations.read().unwrap();
-            box_decls.get(parent_class)
-                .ok_or(RuntimeError::UndefinedClass { name: parent_class.to_string() })?
+            box_decls
+                .get(parent_class)
+                .ok_or(RuntimeError::UndefinedClass {
+                    name: parent_class.to_string(),
+                })?
                 .clone()
         };
         let birth_key = format!("birth/{}", arguments.len());
         if let Some(parent_constructor) = parent_decl.constructors.get(&birth_key) {
-            let this_instance = self.resolve_variable("me").map_err(|_| RuntimeError::InvalidOperation {
-                message: "'this' not available in parent constructor call".to_string(),
-            })?;
+            let this_instance =
+                self.resolve_variable("me")
+                    .map_err(|_| RuntimeError::InvalidOperation {
+                        message: "'this' not available in parent constructor call".to_string(),
+                    })?;
             self.execute_constructor(&this_instance, parent_constructor, arguments, &parent_decl)?;
             Ok(Box::new(VoidBox::new()))
         } else {
             Err(RuntimeError::InvalidOperation {
-                message: format!("No constructor found for parent class {} with {} arguments", parent_class, arguments.len()),
+                message: format!(
+                    "No constructor found for parent class {} with {} arguments",
+                    parent_class,
+                    arguments.len()
+                ),
             })
         }
     }

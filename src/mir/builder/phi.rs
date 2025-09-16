@@ -1,8 +1,7 @@
-
-use crate::mir::{MirFunction, ValueId, MirType, MirInstruction, BasicBlockId};
-use std::collections::HashMap;
-use crate::ast::ASTNode;
 use super::MirBuilder;
+use crate::ast::ASTNode;
+use crate::mir::{BasicBlockId, MirFunction, MirInstruction, MirType, ValueId};
+use std::collections::HashMap;
 
 // PHI-based return type inference helper
 pub(super) fn infer_type_from_phi(
@@ -31,15 +30,31 @@ pub(super) fn infer_type_from_phi(
 pub(super) fn extract_assigned_var(ast: &ASTNode) -> Option<String> {
     match ast {
         ASTNode::Assignment { target, .. } => {
-            if let ASTNode::Variable { name, .. } = target.as_ref() { Some(name.clone()) } else { None }
+            if let ASTNode::Variable { name, .. } = target.as_ref() {
+                Some(name.clone())
+            } else {
+                None
+            }
         }
-        ASTNode::Program { statements, .. } => statements.last().and_then(|st| extract_assigned_var(st)),
-        ASTNode::If { then_body, else_body, .. } => {
+        ASTNode::Program { statements, .. } => {
+            statements.last().and_then(|st| extract_assigned_var(st))
+        }
+        ASTNode::If {
+            then_body,
+            else_body,
+            ..
+        } => {
             // Look into nested if: if both sides assign the same variable, propagate that name upward.
-            let then_prog = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
+            let then_prog = ASTNode::Program {
+                statements: then_body.clone(),
+                span: crate::ast::Span::unknown(),
+            };
             let tvar = extract_assigned_var(&then_prog);
             let evar = else_body.as_ref().and_then(|eb| {
-                let ep = ASTNode::Program { statements: eb.clone(), span: crate::ast::Span::unknown() };
+                let ep = ASTNode::Program {
+                    statements: eb.clone(),
+                    span: crate::ast::Span::unknown(),
+                };
                 extract_assigned_var(&ep)
             });
             match (tvar, evar) {
@@ -70,13 +85,21 @@ impl MirBuilder {
         // If only the then-branch assigns a variable (e.g., `if c { x = ... }`) and the else
         // does not assign the same variable, bind that variable to a Phi of (then_value, pre_if_value).
         let assigned_var_then = extract_assigned_var(then_ast_for_analysis);
-        let assigned_var_else = else_ast_for_analysis.as_ref().and_then(|a| extract_assigned_var(a));
+        let assigned_var_else = else_ast_for_analysis
+            .as_ref()
+            .and_then(|a| extract_assigned_var(a));
         let result_val = self.value_gen.next();
 
         if self.is_no_phi_mode() {
             if let Some(var_name) = assigned_var_then.clone() {
-                let else_assigns_same = assigned_var_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
-                let then_value_for_var = then_var_map_end.get(&var_name).copied().unwrap_or(then_value_raw);
+                let else_assigns_same = assigned_var_else
+                    .as_ref()
+                    .map(|s| s == &var_name)
+                    .unwrap_or(false);
+                let then_value_for_var = then_var_map_end
+                    .get(&var_name)
+                    .copied()
+                    .unwrap_or(then_value_raw);
                 let else_value_for_var = if else_assigns_same {
                     else_var_map_end_opt
                         .as_ref()
@@ -98,22 +121,40 @@ impl MirBuilder {
         }
 
         if let Some(var_name) = assigned_var_then.clone() {
-            let else_assigns_same = assigned_var_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
+            let else_assigns_same = assigned_var_else
+                .as_ref()
+                .map(|s| s == &var_name)
+                .unwrap_or(false);
             // Resolve branch-end values for the assigned variable
-            let then_value_for_var = then_var_map_end.get(&var_name).copied().unwrap_or(then_value_raw);
+            let then_value_for_var = then_var_map_end
+                .get(&var_name)
+                .copied()
+                .unwrap_or(then_value_raw);
             let else_value_for_var = if else_assigns_same {
-                else_var_map_end_opt.as_ref().and_then(|m| m.get(&var_name).copied()).unwrap_or(else_value_raw)
+                else_var_map_end_opt
+                    .as_ref()
+                    .and_then(|m| m.get(&var_name).copied())
+                    .unwrap_or(else_value_raw)
             } else {
                 // Else doesn't assign: use pre-if value if available
                 pre_then_var_value.unwrap_or(else_value_raw)
             };
             // Emit Phi for the assigned variable and bind it
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value_for_var), (else_block, else_value_for_var)] })?;
+            self.emit_instruction(MirInstruction::Phi {
+                dst: result_val,
+                inputs: vec![
+                    (then_block, then_value_for_var),
+                    (else_block, else_value_for_var),
+                ],
+            })?;
             self.variable_map = pre_if_var_map.clone();
             self.variable_map.insert(var_name, result_val);
         } else {
             // No variable assignment pattern detected – just emit Phi for expression result
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs: vec![(then_block, then_value_raw), (else_block, else_value_raw)] })?;
+            self.emit_instruction(MirInstruction::Phi {
+                dst: result_val,
+                inputs: vec![(then_block, then_value_raw), (else_block, else_value_raw)],
+            })?;
             // Merge variable map conservatively to pre-if snapshot (no new bindings)
             self.variable_map = pre_if_var_map.clone();
         }

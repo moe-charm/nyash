@@ -1,6 +1,6 @@
-use std::fs;
 use super::{BasicBlock, BasicBlockId};
-use crate::mir::{TypeOpKind, WeakRefOp, BarrierOp};
+use crate::mir::{BarrierOp, TypeOpKind, WeakRefOp};
+use std::fs;
 
 // Resolve include path using nyash.toml include.roots if present
 pub(super) fn resolve_include_path_builder(filename: &str) -> String {
@@ -42,8 +42,6 @@ pub(super) fn builder_debug_log(msg: &str) {
     }
 }
 
-
-
 // Lightweight helpers moved from builder.rs to reduce file size
 impl super::MirBuilder {
     /// Ensure a basic block exists in the current function
@@ -83,12 +81,23 @@ impl super::MirBuilder {
         args: Vec<super::ValueId>,
         effects: super::EffectMask,
     ) -> Result<(), String> {
-        self.emit_instruction(super::MirInstruction::BoxCall { dst, box_val, method: method.clone(), method_id, args, effects })?;
+        self.emit_instruction(super::MirInstruction::BoxCall {
+            dst,
+            box_val,
+            method: method.clone(),
+            method_id,
+            args,
+            effects,
+        })?;
         if let Some(d) = dst {
             let mut recv_box: Option<String> = self.value_origin_newbox.get(&box_val).cloned();
             if recv_box.is_none() {
                 if let Some(t) = self.value_types.get(&box_val) {
-                    match t { super::MirType::String => recv_box = Some("StringBox".to_string()), super::MirType::Box(name) => recv_box = Some(name.clone()), _ => {} }
+                    match t {
+                        super::MirType::String => recv_box = Some("StringBox".to_string()),
+                        super::MirType::Box(name) => recv_box = Some(name.clone()),
+                        _ => {}
+                    }
                 }
             }
             if let Some(bt) = recv_box {
@@ -96,17 +105,26 @@ impl super::MirBuilder {
                     self.value_types.insert(d, mt.clone());
                 } else {
                     let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
-                        ("StringBox", "length") | ("StringBox", "len") => Some(super::MirType::Integer),
+                        ("StringBox", "length") | ("StringBox", "len") => {
+                            Some(super::MirType::Integer)
+                        }
                         ("StringBox", "is_empty") => Some(super::MirType::Bool),
                         ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
-                        ("StringBox", "substring") | ("StringBox", "concat") | ("StringBox", "replace") | ("StringBox", "trim") | ("StringBox", "toUpper") | ("StringBox", "toLower") => Some(super::MirType::String),
+                        ("StringBox", "substring")
+                        | ("StringBox", "concat")
+                        | ("StringBox", "replace")
+                        | ("StringBox", "trim")
+                        | ("StringBox", "toUpper")
+                        | ("StringBox", "toLower") => Some(super::MirType::String),
                         ("ArrayBox", "length") => Some(super::MirType::Integer),
                         ("MapBox", "size") => Some(super::MirType::Integer),
                         ("MapBox", "has") => Some(super::MirType::Bool),
                         ("MapBox", "get") => Some(super::MirType::Box("Any".to_string())),
                         _ => None,
                     };
-                    if let Some(mt) = inferred { self.value_types.insert(d, mt); }
+                    if let Some(mt) = inferred {
+                        self.value_types.insert(d, mt);
+                    }
                 }
             }
         }
@@ -114,42 +132,84 @@ impl super::MirBuilder {
     }
 
     #[allow(dead_code)]
-    pub(super) fn emit_type_check(&mut self, value: super::ValueId, expected_type: String) -> Result<super::ValueId, String> {
+    pub(super) fn emit_type_check(
+        &mut self,
+        value: super::ValueId,
+        expected_type: String,
+    ) -> Result<super::ValueId, String> {
         let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::TypeOp { dst, op: TypeOpKind::Check, value, ty: super::MirType::Box(expected_type) })?;
+        self.emit_instruction(super::MirInstruction::TypeOp {
+            dst,
+            op: TypeOpKind::Check,
+            value,
+            ty: super::MirType::Box(expected_type),
+        })?;
         Ok(dst)
     }
 
     #[allow(dead_code)]
-    pub(super) fn emit_cast(&mut self, value: super::ValueId, target_type: super::MirType) -> Result<super::ValueId, String> {
+    pub(super) fn emit_cast(
+        &mut self,
+        value: super::ValueId,
+        target_type: super::MirType,
+    ) -> Result<super::ValueId, String> {
         let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::TypeOp { dst, op: TypeOpKind::Cast, value, ty: target_type.clone() })?;
+        self.emit_instruction(super::MirInstruction::TypeOp {
+            dst,
+            op: TypeOpKind::Cast,
+            value,
+            ty: target_type.clone(),
+        })?;
         Ok(dst)
     }
 
     #[allow(dead_code)]
-    pub(super) fn emit_weak_new(&mut self, box_val: super::ValueId) -> Result<super::ValueId, String> {
-        if crate::config::env::mir_core13_pure() { return Ok(box_val); }
+    pub(super) fn emit_weak_new(
+        &mut self,
+        box_val: super::ValueId,
+    ) -> Result<super::ValueId, String> {
+        if crate::config::env::mir_core13_pure() {
+            return Ok(box_val);
+        }
         let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::WeakRef { dst, op: WeakRefOp::New, value: box_val })?;
+        self.emit_instruction(super::MirInstruction::WeakRef {
+            dst,
+            op: WeakRefOp::New,
+            value: box_val,
+        })?;
         Ok(dst)
     }
 
     #[allow(dead_code)]
-    pub(super) fn emit_weak_load(&mut self, weak_ref: super::ValueId) -> Result<super::ValueId, String> {
-        if crate::config::env::mir_core13_pure() { return Ok(weak_ref); }
+    pub(super) fn emit_weak_load(
+        &mut self,
+        weak_ref: super::ValueId,
+    ) -> Result<super::ValueId, String> {
+        if crate::config::env::mir_core13_pure() {
+            return Ok(weak_ref);
+        }
         let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::WeakRef { dst, op: WeakRefOp::Load, value: weak_ref })?;
+        self.emit_instruction(super::MirInstruction::WeakRef {
+            dst,
+            op: WeakRefOp::Load,
+            value: weak_ref,
+        })?;
         Ok(dst)
     }
 
     #[allow(dead_code)]
     pub(super) fn emit_barrier_read(&mut self, ptr: super::ValueId) -> Result<(), String> {
-        self.emit_instruction(super::MirInstruction::Barrier { op: BarrierOp::Read, ptr })
+        self.emit_instruction(super::MirInstruction::Barrier {
+            op: BarrierOp::Read,
+            ptr,
+        })
     }
 
     #[allow(dead_code)]
     pub(super) fn emit_barrier_write(&mut self, ptr: super::ValueId) -> Result<(), String> {
-        self.emit_instruction(super::MirInstruction::Barrier { op: BarrierOp::Write, ptr })
+        self.emit_instruction(super::MirInstruction::Barrier {
+            op: BarrierOp::Write,
+            ptr,
+        })
     }
 }

@@ -1,6 +1,6 @@
 /*!
  * Nyash AST (Abstract Syntax Tree) - Rust Implementation
- * 
+ *
  * Python版nyashc_v4.pyのAST構造をRustで完全再実装
  * Everything is Box哲学に基づく型安全なAST設計
  */
@@ -20,9 +20,9 @@ mod utils;
 /// ASTノードの種類分類
 #[derive(Debug, Clone, PartialEq)]
 pub enum ASTNodeType {
-    Structure,    // 構造定義: box, function, if, loop, try/catch
-    Expression,   // 式: リテラル, 変数, 演算, 呼び出し
-    Statement,    // 文: 代入, return, break, include
+    Structure,  // 構造定義: box, function, if, loop, try/catch
+    Expression, // 式: リテラル, 変数, 演算, 呼び出し
+    Statement,  // 文: 代入, return, break, include
 }
 
 /// 構造ノード - 言語の基本構造を定義
@@ -34,9 +34,9 @@ pub enum StructureNode {
         methods: Vec<ASTNode>,
         constructors: Vec<ASTNode>,
         init_fields: Vec<String>,
-        weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
+        weak_fields: Vec<String>, // 🔗 weak修飾子が付いたフィールドのリスト
         is_interface: bool,
-        extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
+        extends: Vec<String>, // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
         implements: Vec<String>,
         /// 🔥 ジェネリクス型パラメータ (例: ["T", "U"])
         type_parameters: Vec<String>,
@@ -50,8 +50,8 @@ pub enum StructureNode {
         name: String,
         params: Vec<String>,
         body: Vec<ASTNode>,
-        is_static: bool,     // 🔥 静的メソッドフラグ
-        is_override: bool,   // 🔥 オーバーライドフラグ
+        is_static: bool,   // 🔥 静的メソッドフラグ
+        is_override: bool, // 🔥 オーバーライドフラグ
         span: Span,
     },
     IfStructure {
@@ -178,8 +178,8 @@ pub enum StatementNode {
 /// Catch節の構造体
 #[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
-    pub exception_type: Option<String>,  // None = catch-all
-    pub variable_name: Option<String>,   // 例外を受け取る変数名
+    pub exception_type: Option<String>, // None = catch-all
+    pub variable_name: Option<String>,  // 例外を受け取る変数名
     pub body: Vec<ASTNode>,             // catch本体
     pub span: Span,                     // ソースコード位置
 }
@@ -189,18 +189,18 @@ pub struct CatchClause {
 pub enum LiteralValue {
     String(String),
     Integer(i64),
-    Float(f64),  // 浮動小数点数サポート追加
+    Float(f64), // 浮動小数点数サポート追加
     Bool(bool),
-    Null,        // null値
+    Null, // null値
     Void,
 }
 
 impl LiteralValue {
     /// LiteralValueをNyashBoxに変換
     pub fn to_nyash_box(&self) -> Box<dyn NyashBox> {
-        use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
+        use crate::box_trait::{BoolBox, IntegerBox, StringBox, VoidBox};
         use crate::boxes::FloatBox;
-        
+
         match self {
             LiteralValue::String(s) => Box::new(StringBox::new(s)),
             LiteralValue::Integer(i) => Box::new(IntegerBox::new(*i)),
@@ -210,14 +210,14 @@ impl LiteralValue {
             LiteralValue::Void => Box::new(VoidBox::new()),
         }
     }
-    
+
     /// NyashBoxからLiteralValueに変換
     pub fn from_nyash_box(box_val: &dyn NyashBox) -> Option<LiteralValue> {
+        use crate::box_trait::{BoolBox, IntegerBox, StringBox, VoidBox};
+        use crate::boxes::FloatBox;
         #[allow(unused_imports)]
         use std::any::Any;
-        use crate::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox};
-        use crate::boxes::FloatBox;
-        
+
         if let Some(string_box) = box_val.as_any().downcast_ref::<StringBox>() {
             Some(LiteralValue::String(string_box.value.clone()))
         } else if let Some(int_box) = box_val.as_any().downcast_ref::<IntegerBox>() {
@@ -226,7 +226,11 @@ impl LiteralValue {
             Some(LiteralValue::Float(float_box.value))
         } else if let Some(bool_box) = box_val.as_any().downcast_ref::<BoolBox>() {
             Some(LiteralValue::Bool(bool_box.value))
-        } else if box_val.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+        } else if box_val
+            .as_any()
+            .downcast_ref::<crate::boxes::null_box::NullBox>()
+            .is_some()
+        {
             Some(LiteralValue::Null)
         } else if box_val.as_any().downcast_ref::<VoidBox>().is_some() {
             Some(LiteralValue::Void)
@@ -252,22 +256,22 @@ impl fmt::Display for LiteralValue {
 /// 単項演算子の種類
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperator {
-    Minus,  // -x
-    Not,    // not x
+    Minus, // -x
+    Not,   // not x
 }
 
 /// 二項演算子の種類
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOperator {
     Add,
-    Subtract, 
+    Subtract,
     Multiply,
     Divide,
     Modulo,
     BitAnd,
     BitOr,
     BitXor,
-    Shl,      // << shift-left (Phase 1)
+    Shl, // << shift-left (Phase 1)
     Shr,
     Equal,
     NotEqual,
@@ -323,22 +327,21 @@ pub enum ASTNode {
         statements: Vec<ASTNode>,
         span: Span,
     },
-    
+
     // ===== 文 (Statements) =====
-    
     /// 代入文: target = value
     Assignment {
         target: Box<ASTNode>,
         value: Box<ASTNode>,
         span: Span,
     },
-    
+
     /// print文: print(expression)
     Print {
         expression: Box<ASTNode>,
         span: Span,
     },
-    
+
     /// if文: if condition { then_body } else { else_body }
     If {
         condition: Box<ASTNode>,
@@ -346,60 +349,53 @@ pub enum ASTNode {
         else_body: Option<Vec<ASTNode>>,
         span: Span,
     },
-    
+
     /// loop文: loop(condition) { body } のみ
     Loop {
         condition: Box<ASTNode>,
         body: Vec<ASTNode>,
         span: Span,
     },
-    
+
     /// return文: return value
     Return {
         value: Option<Box<ASTNode>>,
         span: Span,
     },
-    
+
     /// break文
-    Break {
-        span: Span,
-    },
+    Break { span: Span },
     /// continue文
-    Continue {
-        span: Span,
-    },
-    
+    Continue { span: Span },
+
     /// using文: using namespace_name
-    UsingStatement {
-        namespace_name: String,
-        span: Span,
-    },
+    UsingStatement { namespace_name: String, span: Span },
     /// import文: import "path" (as Alias)?
     ImportStatement {
         path: String,
         alias: Option<String>,
         span: Span,
     },
-    
+
     /// nowait文: nowait variable = expression
     Nowait {
         variable: String,
         expression: Box<ASTNode>,
         span: Span,
     },
-    
+
     /// await式: await expression
     AwaitExpression {
         expression: Box<ASTNode>,
         span: Span,
     },
-    
+
     /// result伝播: expr? （ResultBoxなら isOk/getValue or 早期return）
     QMarkPropagate {
         expression: Box<ASTNode>,
         span: Span,
     },
-    
+
     /// peek式: peek <expr> { lit => expr, ... else => expr }
     PeekExpr {
         scrutinee: Box<ASTNode>,
@@ -408,30 +404,27 @@ pub enum ASTNode {
         span: Span,
     },
     /// 配列リテラル（糖衣）: [e1, e2, ...]
-    ArrayLiteral {
-        elements: Vec<ASTNode>,
-        span: Span,
-    },
+    ArrayLiteral { elements: Vec<ASTNode>, span: Span },
     /// マップリテラル（糖衣）: { "k": v, ... } （Stage‑2: 文字列キー限定）
     MapLiteral {
         entries: Vec<(String, ASTNode)>,
         span: Span,
     },
-    
+
     /// 無名関数（最小P1: 値としてのみ。呼び出しは未対応）
     Lambda {
         params: Vec<String>,
         body: Vec<ASTNode>,
         span: Span,
     },
-    
+
     /// arrow文: (sender >> receiver).method(args)
     Arrow {
         sender: Box<ASTNode>,
         receiver: Box<ASTNode>,
         span: Span,
     },
-    
+
     /// try/catch/finally文: try { ... } catch (Type e) { ... } finally { ... }
     TryCatch {
         try_body: Vec<ASTNode>,
@@ -439,15 +432,14 @@ pub enum ASTNode {
         finally_body: Option<Vec<ASTNode>>,
         span: Span,
     },
-    
+
     /// throw文: throw expression
     Throw {
         expression: Box<ASTNode>,
         span: Span,
     },
-    
+
     // ===== 宣言 (Declarations) =====
-    
     /// box宣言: box Name { fields... methods... }
     BoxDeclaration {
         name: String,
@@ -458,65 +450,58 @@ pub enum ASTNode {
         private_fields: Vec<String>,
         methods: HashMap<String, ASTNode>, // method_name -> FunctionDeclaration
         constructors: HashMap<String, ASTNode>, // constructor_key -> FunctionDeclaration
-        init_fields: Vec<String>,         // initブロック内のフィールド定義
-        weak_fields: Vec<String>,         // 🔗 weak修飾子が付いたフィールドのリスト
-        is_interface: bool,               // interface box かどうか
-        extends: Vec<String>,             // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
-        implements: Vec<String>,          // 実装するinterface名のリスト
-        type_parameters: Vec<String>,     // 🔥 ジェネリクス型パラメータ (例: ["T", "U"])
+        init_fields: Vec<String>,          // initブロック内のフィールド定義
+        weak_fields: Vec<String>,          // 🔗 weak修飾子が付いたフィールドのリスト
+        is_interface: bool,                // interface box かどうか
+        extends: Vec<String>, // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
+        implements: Vec<String>, // 実装するinterface名のリスト
+        type_parameters: Vec<String>, // 🔥 ジェネリクス型パラメータ (例: ["T", "U"])
         /// 🔥 Static boxかどうかのフラグ
         is_static: bool,
         /// 🔥 Static初期化ブロック (static { ... })
         static_init: Option<Vec<ASTNode>>,
         span: Span,
     },
-    
+
     /// 関数宣言: functionName(params) { body }
     FunctionDeclaration {
         name: String,
         params: Vec<String>,
         body: Vec<ASTNode>,
-        is_static: bool,     // 🔥 静的メソッドフラグ
-        is_override: bool,   // 🔥 オーバーライドフラグ
+        is_static: bool,   // 🔥 静的メソッドフラグ
+        is_override: bool, // 🔥 オーバーライドフラグ
         span: Span,
     },
-    
+
     /// グローバル変数: global name = value
     GlobalVar {
         name: String,
         value: Box<ASTNode>,
         span: Span,
     },
-    
+
     // ===== 式 (Expressions) =====
-    
     /// リテラル値: "string", 42, true, etc
-    Literal {
-        value: LiteralValue,
-        span: Span,
-    },
-    
+    Literal { value: LiteralValue, span: Span },
+
     /// 変数参照: variableName
-    Variable {
-        name: String,
-        span: Span,
-    },
-    
+    Variable { name: String, span: Span },
+
     /// 単項演算: operator operand
     UnaryOp {
         operator: UnaryOperator,
         operand: Box<ASTNode>,
         span: Span,
     },
-    
+
     /// 二項演算: left operator right
     BinaryOp {
         operator: BinaryOperator,
         left: Box<ASTNode>,
         right: Box<ASTNode>,
-        span: Span, 
+        span: Span,
     },
-    
+
     /// メソッド呼び出し: object.method(arguments)
     MethodCall {
         object: Box<ASTNode>,
@@ -524,58 +509,45 @@ pub enum ASTNode {
         arguments: Vec<ASTNode>,
         span: Span,
     },
-    
+
     /// フィールドアクセス: object.field
     FieldAccess {
         object: Box<ASTNode>,
         field: String,
         span: Span,
     },
-    
+
     /// コンストラクタ呼び出し: new ClassName(arguments)
     New {
         class: String,
         arguments: Vec<ASTNode>,
-        type_arguments: Vec<String>,      // 🔥 ジェネリクス型引数 (例: ["IntegerBox", "StringBox"])
+        type_arguments: Vec<String>, // 🔥 ジェネリクス型引数 (例: ["IntegerBox", "StringBox"])
         span: Span,
     },
-    
+
     /// this参照
-    This {
-        span: Span,
-    },
-    
+    This { span: Span },
+
     /// me参照
-    Me {
-        span: Span,
-    },
-    
+    Me { span: Span },
+
     /// 🔥 from呼び出し: from Parent.method(arguments) or from Parent.constructor(arguments)
     FromCall {
-        parent: String,        // Parent名
-        method: String,        // method名またはconstructor
+        parent: String,          // Parent名
+        method: String,          // method名またはconstructor
         arguments: Vec<ASTNode>, // 引数
         span: Span,
     },
-    
+
     /// thisフィールドアクセス: this.field
-    ThisField {
-        field: String,
-        span: Span,
-    },
-    
+    ThisField { field: String, span: Span },
+
     /// meフィールドアクセス: me.field
-    MeField {
-        field: String,
-        span: Span,
-    },
-    
+    MeField { field: String, span: Span },
+
     /// ファイル読み込み: include "filename.nyash"
-    Include {
-        filename: String,
-        span: Span,
-    },
-    
+    Include { filename: String, span: Span },
+
     /// ローカル変数宣言: local x, y, z
     Local {
         variables: Vec<String>,
@@ -583,7 +555,7 @@ pub enum ASTNode {
         initial_values: Vec<Option<Box<ASTNode>>>,
         span: Span,
     },
-    
+
     /// Outbox変数宣言: outbox x, y, z (static関数内専用)
     Outbox {
         variables: Vec<String>,
@@ -591,14 +563,14 @@ pub enum ASTNode {
         initial_values: Vec<Option<Box<ASTNode>>>,
         span: Span,
     },
-    
+
     /// 関数呼び出し: functionName(arguments)
     FunctionCall {
         name: String,
         arguments: Vec<ASTNode>,
         span: Span,
     },
-    
+
     /// 一般式呼び出し: (callee)(arguments)
     Call {
         callee: Box<ASTNode>,

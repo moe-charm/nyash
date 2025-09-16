@@ -5,8 +5,8 @@
  * Status: Initial skeleton for future extraction from vm.rs
  */
 
+use super::vm::VMError;
 use crate::mir::BasicBlockId;
-use super::vm::{VMError};
 
 /// Result of a block step when evaluating a terminator
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,4 +30,3 @@ pub fn record_transition(
     loop_recorder.record_transition(from, to);
     Ok(())
 }
-

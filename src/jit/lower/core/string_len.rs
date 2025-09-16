@@ -9,10 +9,14 @@ impl LowerCore {
     pub(super) fn emit_len_with_fallback_param(&mut self, b: &mut dyn IRBuilder, pidx: usize) {
         use super::super::builder::CmpKind;
         // Temp locals
-        let hslot = self.next_local; self.next_local += 1; // receiver handle slot
-        let t_string = self.next_local; self.next_local += 1;
-        let t_any = self.next_local; self.next_local += 1;
-        let t_cond = self.next_local; self.next_local += 1;
+        let hslot = self.next_local;
+        self.next_local += 1; // receiver handle slot
+        let t_string = self.next_local;
+        self.next_local += 1;
+        let t_any = self.next_local;
+        self.next_local += 1;
+        let t_cond = self.next_local;
+        self.next_local += 1;
         // Materialize receiver handle from param index
         b.emit_param_i64(pidx);
         b.emit_host_call(crate::jit::r#extern::handles::SYM_HANDLE_OF, 1, true);
@@ -23,7 +27,7 @@ impl LowerCore {
             1,
             &["Handle"],
             "allow",
-            "core_len_param"
+            "core_len_param",
         );
         b.load_local_i64(hslot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_LEN_H, 1, true);
@@ -36,7 +40,7 @@ impl LowerCore {
             1,
             &["Handle"],
             "allow",
-            "core_len_param"
+            "core_len_param",
         );
         b.load_local_i64(hslot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
@@ -51,24 +55,31 @@ impl LowerCore {
         // debug: observe condition
         b.emit_debug_i64_local(1102, t_cond);
         // select(cond ? any_len : string_len)
-        b.load_local_i64(t_cond);   // cond (bottom)
-        b.load_local_i64(t_any);    // then
+        b.load_local_i64(t_cond); // cond (bottom)
+        b.load_local_i64(t_any); // then
         b.load_local_i64(t_string); // else
         b.emit_select_i64();
     }
 
-    pub(super) fn emit_len_with_fallback_local_handle(&mut self, b: &mut dyn IRBuilder, slot: usize) {
+    pub(super) fn emit_len_with_fallback_local_handle(
+        &mut self,
+        b: &mut dyn IRBuilder,
+        slot: usize,
+    ) {
         use super::super::builder::CmpKind;
-        let t_string = self.next_local; self.next_local += 1;
-        let t_any = self.next_local; self.next_local += 1;
-        let t_cond = self.next_local; self.next_local += 1;
+        let t_string = self.next_local;
+        self.next_local += 1;
+        let t_any = self.next_local;
+        self.next_local += 1;
+        let t_cond = self.next_local;
+        self.next_local += 1;
         // String.len_h
         crate::jit::observe::lower_hostcall(
             crate::jit::r#extern::collections::SYM_STRING_LEN_H,
             1,
             &["Handle"],
             "allow",
-            "core_len_local"
+            "core_len_local",
         );
         b.load_local_i64(slot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_LEN_H, 1, true);
@@ -80,7 +91,7 @@ impl LowerCore {
             1,
             &["Handle"],
             "allow",
-            "core_len_local"
+            "core_len_local",
         );
         b.load_local_i64(slot);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);
@@ -101,16 +112,19 @@ impl LowerCore {
 
     pub(super) fn emit_len_with_fallback_literal(&mut self, b: &mut dyn IRBuilder, s: &str) {
         use super::super::builder::CmpKind;
-        let t_string = self.next_local; self.next_local += 1;
-        let t_any = self.next_local; self.next_local += 1;
-        let t_cond = self.next_local; self.next_local += 1;
+        let t_string = self.next_local;
+        self.next_local += 1;
+        let t_any = self.next_local;
+        self.next_local += 1;
+        let t_cond = self.next_local;
+        self.next_local += 1;
         // String.len_h on literal handle
         crate::jit::observe::lower_hostcall(
             crate::jit::r#extern::collections::SYM_STRING_LEN_H,
             1,
             &["Handle"],
             "allow",
-            "core_len_lit"
+            "core_len_lit",
         );
         b.emit_string_handle_from_literal(s);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_LEN_H, 1, true);
@@ -122,7 +136,7 @@ impl LowerCore {
             1,
             &["Handle"],
             "allow",
-            "core_len_lit"
+            "core_len_lit",
         );
         b.emit_string_handle_from_literal(s);
         b.emit_host_call(crate::jit::r#extern::collections::SYM_ANY_LEN_H, 1, true);

@@ -4,7 +4,10 @@
 //! Default implementation is a no-op. Real collectors can plug later.
 
 #[derive(Debug, Clone, Copy)]
-pub enum BarrierKind { Read, Write }
+pub enum BarrierKind {
+    Read,
+    Write,
+}
 
 /// GC hooks that execution engines may call at key points.
 /// Implementations must be Send + Sync for multi-thread preparation.
@@ -14,7 +17,9 @@ pub trait GcHooks: Send + Sync {
     /// Memory barrier hint for loads/stores.
     fn barrier(&self, _kind: BarrierKind) {}
     /// Optional counters snapshot for diagnostics. Default: None.
-    fn snapshot_counters(&self) -> Option<(u64, u64, u64)> { None }
+    fn snapshot_counters(&self) -> Option<(u64, u64, u64)> {
+        None
+    }
 }
 
 /// Default no-op hooks.
@@ -55,8 +60,12 @@ impl GcHooks for CountingGc {
     }
     fn barrier(&self, kind: BarrierKind) {
         match kind {
-            BarrierKind::Read => { self.barrier_reads.fetch_add(1, Ordering::Relaxed); }
-            BarrierKind::Write => { self.barrier_writes.fetch_add(1, Ordering::Relaxed); }
+            BarrierKind::Read => {
+                self.barrier_reads.fetch_add(1, Ordering::Relaxed);
+            }
+            BarrierKind::Write => {
+                self.barrier_writes.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
     fn snapshot_counters(&self) -> Option<(u64, u64, u64)> {

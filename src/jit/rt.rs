@@ -9,16 +9,36 @@ use crate::jit::abi::JitValue;
 thread_local! { static LEGACY_VM_ARGS: RefCell<Vec<VMValue>> = RefCell::new(Vec::new()); }
 
 #[cfg(not(feature = "jit-direct-only"))]
-pub fn set_legacy_vm_args(args: &[VMValue]) { LEGACY_VM_ARGS.with(|cell| { let mut v = cell.borrow_mut(); v.clear(); v.extend_from_slice(args); }); }
+pub fn set_legacy_vm_args(args: &[VMValue]) {
+    LEGACY_VM_ARGS.with(|cell| {
+        let mut v = cell.borrow_mut();
+        v.clear();
+        v.extend_from_slice(args);
+    });
+}
 
 #[cfg(feature = "jit-direct-only")]
-pub fn set_legacy_vm_args(_args: &[VMValue]) { /* no-op in jit-direct-only */ }
+pub fn set_legacy_vm_args(_args: &[VMValue]) { /* no-op in jit-direct-only */
+}
 
 #[cfg(not(feature = "jit-direct-only"))]
-pub fn with_legacy_vm_args<F, R>(f: F) -> R where F: FnOnce(&[VMValue]) -> R { LEGACY_VM_ARGS.with(|cell| { let v = cell.borrow(); f(&v) }) }
+pub fn with_legacy_vm_args<F, R>(f: F) -> R
+where
+    F: FnOnce(&[VMValue]) -> R,
+{
+    LEGACY_VM_ARGS.with(|cell| {
+        let v = cell.borrow();
+        f(&v)
+    })
+}
 
 #[cfg(feature = "jit-direct-only")]
-pub fn with_legacy_vm_args<F, R>(f: F) -> R where F: FnOnce(&[VMValue]) -> R { f(&[]) }
+pub fn with_legacy_vm_args<F, R>(f: F) -> R
+where
+    F: FnOnce(&[VMValue]) -> R,
+{
+    f(&[])
+}
 
 // New TLS for independent JIT ABI values
 thread_local! {
@@ -50,16 +70,32 @@ static RET_BOOL_HINT_COUNT: AtomicU64 = AtomicU64::new(0);
 static PHI_TOTAL_SLOTS: AtomicU64 = AtomicU64::new(0);
 static PHI_B1_SLOTS: AtomicU64 = AtomicU64::new(0);
 
-pub fn b1_norm_inc(delta: u64) { B1_NORM_COUNT.fetch_add(delta, Ordering::Relaxed); }
-pub fn b1_norm_get() -> u64 { B1_NORM_COUNT.load(Ordering::Relaxed) }
+pub fn b1_norm_inc(delta: u64) {
+    B1_NORM_COUNT.fetch_add(delta, Ordering::Relaxed);
+}
+pub fn b1_norm_get() -> u64 {
+    B1_NORM_COUNT.load(Ordering::Relaxed)
+}
 
-pub fn ret_bool_hint_inc(delta: u64) { RET_BOOL_HINT_COUNT.fetch_add(delta, Ordering::Relaxed); }
-pub fn ret_bool_hint_get() -> u64 { RET_BOOL_HINT_COUNT.load(Ordering::Relaxed) }
+pub fn ret_bool_hint_inc(delta: u64) {
+    RET_BOOL_HINT_COUNT.fetch_add(delta, Ordering::Relaxed);
+}
+pub fn ret_bool_hint_get() -> u64 {
+    RET_BOOL_HINT_COUNT.load(Ordering::Relaxed)
+}
 
-pub fn phi_total_inc(delta: u64) { PHI_TOTAL_SLOTS.fetch_add(delta, Ordering::Relaxed); }
-pub fn phi_total_get() -> u64 { PHI_TOTAL_SLOTS.load(Ordering::Relaxed) }
-pub fn phi_b1_inc(delta: u64) { PHI_B1_SLOTS.fetch_add(delta, Ordering::Relaxed); }
-pub fn phi_b1_get() -> u64 { PHI_B1_SLOTS.load(Ordering::Relaxed) }
+pub fn phi_total_inc(delta: u64) {
+    PHI_TOTAL_SLOTS.fetch_add(delta, Ordering::Relaxed);
+}
+pub fn phi_total_get() -> u64 {
+    PHI_TOTAL_SLOTS.load(Ordering::Relaxed)
+}
+pub fn phi_b1_inc(delta: u64) {
+    PHI_B1_SLOTS.fetch_add(delta, Ordering::Relaxed);
+}
+pub fn phi_b1_get() -> u64 {
+    PHI_B1_SLOTS.load(Ordering::Relaxed)
+}
 
 // === 10.7c PoC: JIT Handle Registry (thread-local) ===
 use std::collections::HashMap;
@@ -80,7 +116,12 @@ pub mod handles {
     }
 
     impl HandleRegistry {
-        fn new() -> Self { Self { next: 1, map: HashMap::new() } }
+        fn new() -> Self {
+            Self {
+                next: 1,
+                map: HashMap::new(),
+            }
+        }
         fn to_handle(&mut self, obj: Arc<dyn crate::box_trait::NyashBox>) -> u64 {
             // Reuse existing handle if already present (pointer equality check)
             // For PoC simplicity, always assign new handle
@@ -92,11 +133,18 @@ pub mod handles {
             }
             h
         }
-        fn get(&self, h: u64) -> Option<Arc<dyn crate::box_trait::NyashBox>> { self.map.get(&h).cloned() }
+        fn get(&self, h: u64) -> Option<Arc<dyn crate::box_trait::NyashBox>> {
+            self.map.get(&h).cloned()
+        }
         #[allow(dead_code)]
-        fn drop_handle(&mut self, h: u64) { self.map.remove(&h); }
+        fn drop_handle(&mut self, h: u64) {
+            self.map.remove(&h);
+        }
         #[allow(dead_code)]
-        fn clear(&mut self) { self.map.clear(); self.next = 1; }
+        fn clear(&mut self) {
+            self.map.clear();
+            self.next = 1;
+        }
     }
 
     pub fn to_handle(obj: Arc<dyn crate::box_trait::NyashBox>) -> u64 {
@@ -108,8 +156,12 @@ pub mod handles {
         REG.with(|cell| cell.borrow().get(h))
     }
     #[allow(dead_code)]
-    pub fn clear() { REG.with(|cell| cell.borrow_mut().clear()); }
-    pub fn len() -> usize { REG.with(|cell| cell.borrow().map.len()) }
+    pub fn clear() {
+        REG.with(|cell| cell.borrow_mut().clear());
+    }
+    pub fn len() -> usize {
+        REG.with(|cell| cell.borrow().map.len())
+    }
 
     // Scope management: track and clear handles created within a JIT call
     pub fn begin_scope() {
@@ -128,7 +180,9 @@ pub mod handles {
         });
         REG.with(|cell| {
             let mut reg = cell.borrow_mut();
-            for h in to_drop { reg.map.remove(&h); }
+            for h in to_drop {
+                reg.map.remove(&h);
+            }
         });
     }
 }

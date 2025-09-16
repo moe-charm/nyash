@@ -1,6 +1,6 @@
 //! Core ops lowering (non-hostcall): BinOp, Compare, Branch, Jump
-use super::builder::{IRBuilder, BinOpKind, CmpKind};
-use crate::mir::{BinaryOp, CompareOp, ValueId, MirFunction, MirType};
+use super::builder::{BinOpKind, CmpKind, IRBuilder};
+use crate::mir::{BinaryOp, CompareOp, MirFunction, MirType, ValueId};
 
 use super::core::LowerCore;
 
@@ -8,40 +8,88 @@ impl LowerCore {
     fn is_string_like(&self, func: &MirFunction, v: &ValueId) -> bool {
         // Check per-value type metadata
         if let Some(mt) = func.metadata.value_types.get(v) {
-            if matches!(mt, MirType::String) { return true; }
-            if let MirType::Box(ref name) = mt { if name == "StringBox" { return true; } }
+            if matches!(mt, MirType::String) {
+                return true;
+            }
+            if let MirType::Box(ref name) = mt {
+                if name == "StringBox" {
+                    return true;
+                }
+            }
         }
         // Check if this value is a parameter with String or StringBox type
         if let Some(pidx) = self.param_index.get(v).copied() {
             if let Some(pt) = func.signature.params.get(pidx) {
-                if matches!(pt, MirType::String) { return true; }
-                if let MirType::Box(ref name) = pt { if name == "StringBox" { return true; } }
+                if matches!(pt, MirType::String) {
+                    return true;
+                }
+                if let MirType::Box(ref name) = pt {
+                    if name == "StringBox" {
+                        return true;
+                    }
+                }
             }
         }
         // Check if it originates from a StringBox NewBox
-        if let Some(name) = self.box_type_map.get(v) { if name == "StringBox" { return true; } }
+        if let Some(name) = self.box_type_map.get(v) {
+            if name == "StringBox" {
+                return true;
+            }
+        }
         false
     }
 
-    pub fn lower_binop(&mut self, b: &mut dyn IRBuilder, op: &BinaryOp, lhs: &ValueId, rhs: &ValueId, dst: &ValueId, func: &MirFunction) {
+    pub fn lower_binop(
+        &mut self,
+        b: &mut dyn IRBuilder,
+        op: &BinaryOp,
+        lhs: &ValueId,
+        rhs: &ValueId,
+        dst: &ValueId,
+        func: &MirFunction,
+    ) {
         // Optional: consult unified grammar for operator strategy (non-invasive logging)
         if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
             match op {
                 BinaryOp::Add => {
                     let strat = crate::grammar::engine::get().add_coercion_strategy();
-                    crate::jit::events::emit("grammar","add", None, None, serde_json::json!({"coercion": strat}));
+                    crate::jit::events::emit(
+                        "grammar",
+                        "add",
+                        None,
+                        None,
+                        serde_json::json!({"coercion": strat}),
+                    );
                 }
                 BinaryOp::Sub => {
                     let strat = crate::grammar::engine::get().sub_coercion_strategy();
-                    crate::jit::events::emit("grammar","sub", None, None, serde_json::json!({"coercion": strat}));
+                    crate::jit::events::emit(
+                        "grammar",
+                        "sub",
+                        None,
+                        None,
+                        serde_json::json!({"coercion": strat}),
+                    );
                 }
                 BinaryOp::Mul => {
                     let strat = crate::grammar::engine::get().mul_coercion_strategy();
-                    crate::jit::events::emit("grammar","mul", None, None, serde_json::json!({"coercion": strat}));
+                    crate::jit::events::emit(
+                        "grammar",
+                        "mul",
+                        None,
+                        None,
+                        serde_json::json!({"coercion": strat}),
+                    );
                 }
                 BinaryOp::Div => {
                     let strat = crate::grammar::engine::get().div_coercion_strategy();
-                    crate::jit::events::emit("grammar","div", None, None, serde_json::json!({"coercion": strat}));
+                    crate::jit::events::emit(
+                        "grammar",
+                        "div",
+                        None,
+                        None,
+                        serde_json::json!({"coercion": strat}),
+                    );
                 }
                 _ => {}
             }
@@ -52,24 +100,44 @@ impl LowerCore {
                 if self.is_string_like(func, lhs) || self.is_string_like(func, rhs) {
                     self.push_value_if_known_or_param(b, lhs);
                     self.push_value_if_known_or_param(b, rhs);
-                    b.emit_host_call(crate::jit::r#extern::collections::SYM_STRING_CONCAT_HH, 2, true);
+                    b.emit_host_call(
+                        crate::jit::r#extern::collections::SYM_STRING_CONCAT_HH,
+                        2,
+                        true,
+                    );
                     // Track handle result for downstream usages
                     self.handle_values.insert(*dst);
-                    let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    let slot = *self.local_index.entry(*dst).or_insert_with(|| {
+                        let id = self.next_local;
+                        self.next_local += 1;
+                        id
+                    });
                     b.store_local_i64(slot);
                     return;
                 }
                 // If dynamic Box/Unknown types, route to unified semantics add (handle,handle)
-                let is_dynamic = match (func.metadata.value_types.get(lhs), func.metadata.value_types.get(rhs)) {
-                    (Some(MirType::Box(_)) | Some(MirType::Unknown) | None, _) | (_, Some(MirType::Box(_)) | Some(MirType::Unknown) | None) => true,
+                let is_dynamic = match (
+                    func.metadata.value_types.get(lhs),
+                    func.metadata.value_types.get(rhs),
+                ) {
+                    (Some(MirType::Box(_)) | Some(MirType::Unknown) | None, _)
+                    | (_, Some(MirType::Box(_)) | Some(MirType::Unknown) | None) => true,
                     _ => false,
                 };
                 if is_dynamic {
                     self.push_value_if_known_or_param(b, lhs);
                     self.push_value_if_known_or_param(b, rhs);
-                    b.emit_host_call(crate::jit::r#extern::collections::SYM_SEMANTICS_ADD_HH, 2, true);
+                    b.emit_host_call(
+                        crate::jit::r#extern::collections::SYM_SEMANTICS_ADD_HH,
+                        2,
+                        true,
+                    );
                     self.handle_values.insert(*dst);
-                    let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+                    let slot = *self.local_index.entry(*dst).or_insert_with(|| {
+                        let id = self.next_local;
+                        self.next_local += 1;
+                        id
+                    });
                     b.store_local_i64(slot);
                     return;
                 }
@@ -83,7 +151,9 @@ impl LowerCore {
             BinaryOp::Mul => BinOpKind::Mul,
             BinaryOp::Div => BinOpKind::Div,
             BinaryOp::Mod => BinOpKind::Mod,
-            _ => { return; }
+            _ => {
+                return;
+            }
         };
         b.emit_binop(kind);
         if let (Some(a), Some(bv)) = (self.known_i64.get(lhs), self.known_i64.get(rhs)) {
@@ -91,22 +161,46 @@ impl LowerCore {
                 BinaryOp::Add => a.wrapping_add(*bv),
                 BinaryOp::Sub => a.wrapping_sub(*bv),
                 BinaryOp::Mul => a.wrapping_mul(*bv),
-                BinaryOp::Div => if *bv != 0 { a.wrapping_div(*bv) } else { 0 },
-                BinaryOp::Mod => if *bv != 0 { a.wrapping_rem(*bv) } else { 0 },
+                BinaryOp::Div => {
+                    if *bv != 0 {
+                        a.wrapping_div(*bv)
+                    } else {
+                        0
+                    }
+                }
+                BinaryOp::Mod => {
+                    if *bv != 0 {
+                        a.wrapping_rem(*bv)
+                    } else {
+                        0
+                    }
+                }
                 _ => 0,
             };
             self.known_i64.insert(*dst, res);
         }
     }
 
-    pub fn lower_compare(&mut self, b: &mut dyn IRBuilder, op: &CompareOp, lhs: &ValueId, rhs: &ValueId, dst: &ValueId, func: &MirFunction) {
+    pub fn lower_compare(
+        &mut self,
+        b: &mut dyn IRBuilder,
+        op: &CompareOp,
+        lhs: &ValueId,
+        rhs: &ValueId,
+        dst: &ValueId,
+        func: &MirFunction,
+    ) {
         // Route string-like comparisons (Eq/Lt) to hostcalls (i64 0/1)
         if crate::jit::config::current().hostcall {
             if matches!(op, CompareOp::Eq | CompareOp::Lt) {
                 if self.is_string_like(func, lhs) || self.is_string_like(func, rhs) {
                     self.push_value_if_known_or_param(b, lhs);
                     self.push_value_if_known_or_param(b, rhs);
-                    let sym = match op { CompareOp::Eq => crate::jit::r#extern::collections::SYM_STRING_EQ_HH, CompareOp::Lt => crate::jit::r#extern::collections::SYM_STRING_LT_HH, _ => unreachable!() };
+                    let sym = match op {
+                        CompareOp::Eq => crate::jit::r#extern::collections::SYM_STRING_EQ_HH,
+                        CompareOp::Lt => crate::jit::r#extern::collections::SYM_STRING_LT_HH,
+                        _ => unreachable!(),
+                    };
                     b.emit_host_call(sym, 2, true);
                     self.bool_values.insert(*dst);
                     return;
@@ -126,12 +220,20 @@ impl LowerCore {
         b.emit_compare(kind);
         // Persist compare result in a local slot so terminators (Branch) can reload it reliably
         self.bool_values.insert(*dst);
-        let slot = *self.local_index.entry(*dst).or_insert_with(|| { let id = self.next_local; self.next_local += 1; id });
+        let slot = *self.local_index.entry(*dst).or_insert_with(|| {
+            let id = self.next_local;
+            self.next_local += 1;
+            id
+        });
         b.store_local_i64(slot);
     }
 
-    pub fn lower_jump(&mut self, b: &mut dyn IRBuilder) { b.emit_jump(); }
-    pub fn lower_branch(&mut self, b: &mut dyn IRBuilder) { b.emit_branch(); }
+    pub fn lower_jump(&mut self, b: &mut dyn IRBuilder) {
+        b.emit_jump();
+    }
+    pub fn lower_branch(&mut self, b: &mut dyn IRBuilder) {
+        b.emit_branch();
+    }
 }
 
 // Methods moved from core.rs to reduce file size and centralize op helpers
@@ -139,10 +241,20 @@ impl LowerCore {
     // Push a value if known or param/local/phi
     pub(super) fn push_value_if_known_or_param(&self, b: &mut dyn IRBuilder, id: &ValueId) {
         // Prefer compile-time known constants to avoid stale local slots overshadowing folded values
-        if let Some(v) = self.known_i64.get(id).copied() { b.emit_const_i64(v); return; }
-        if let Some(slot) = self.local_index.get(id).copied() { b.load_local_i64(slot); return; }
+        if let Some(v) = self.known_i64.get(id).copied() {
+            b.emit_const_i64(v);
+            return;
+        }
+        if let Some(slot) = self.local_index.get(id).copied() {
+            b.load_local_i64(slot);
+            return;
+        }
         if self.phi_values.contains(id) {
-            let pos = self.phi_param_index.iter().find_map(|((_, vid), idx)| if vid == id { Some(*idx) } else { None }).unwrap_or(0);
+            let pos = self
+                .phi_param_index
+                .iter()
+                .find_map(|((_, vid), idx)| if vid == id { Some(*idx) } else { None })
+                .unwrap_or(0);
             if crate::jit::config::current().native_bool && self.bool_phi_values.contains(id) {
                 b.push_block_param_b1_at(pos);
             } else {
@@ -150,7 +262,10 @@ impl LowerCore {
             }
             return;
         }
-        if let Some(pidx) = self.param_index.get(id).copied() { b.emit_param_i64(pidx); return; }
+        if let Some(pidx) = self.param_index.get(id).copied() {
+            b.emit_param_i64(pidx);
+            return;
+        }
     }
 
     // Coverage helper: increments covered/unsupported counts
@@ -182,7 +297,10 @@ impl LowerCore {
                 | I::Nop
                 | I::PluginInvoke { .. }
         );
-        if supported { self.covered += 1; } else { self.unsupported += 1; }
+        if supported {
+            self.covered += 1;
+        } else {
+            self.unsupported += 1;
+        }
     }
-
 }

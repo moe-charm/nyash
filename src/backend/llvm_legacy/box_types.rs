@@ -3,4 +3,3 @@
 pub fn load_box_type_ids() -> std::collections::HashMap<String, u32> {
     std::collections::HashMap::new()
 }
-

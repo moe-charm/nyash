@@ -6,7 +6,7 @@
  * - Debug prints for roots snapshot and shallow reachability
  */
 
-use super::vm::{VM, VMValue};
+use super::vm::{VMValue, VM};
 
 impl VM {
     /// Enter a GC root region and return a guard that leaves on drop
@@ -22,11 +22,17 @@ impl VM {
     }
 
     /// Leave current GC root region
-    pub(super) fn leave_root_region(&mut self) { self.scope_tracker.leave_root_region(); }
+    pub(super) fn leave_root_region(&mut self) {
+        self.scope_tracker.leave_root_region();
+    }
 
     /// Site info for GC logs: (func, bb, pc)
     pub(super) fn gc_site_info(&self) -> (String, i64, i64) {
-        let func = self.current_function.as_deref().unwrap_or("<none>").to_string();
+        let func = self
+            .current_function
+            .as_deref()
+            .unwrap_or("<none>")
+            .to_string();
         let bb = self.frame.current_block.map(|b| b.0 as i64).unwrap_or(-1);
         let pc = self.frame.pc as i64;
         (func, bb, pc)
@@ -78,7 +84,10 @@ impl VM {
                 }
                 if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
                     let vals = map.values();
-                    if let Some(arr2) = vals.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    if let Some(arr2) = vals
+                        .as_any()
+                        .downcast_ref::<crate::boxes::array::ArrayBox>()
+                    {
                         if let Ok(items) = arr2.items.read() {
                             for item in items.iter() {
                                 let tn = item.type_name().to_string();

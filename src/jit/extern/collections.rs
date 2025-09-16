@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::backend::vm::VMValue;
-use crate::box_trait::{NyashBox, IntegerBox, StringBox};
+use crate::box_trait::{IntegerBox, NyashBox, StringBox};
 
 /// Symbol names for host externs (stable ABI for JIT)
 pub const SYM_ARRAY_LEN: &str = "nyash.array.len";
@@ -75,34 +75,47 @@ pub fn array_get(args: &[VMValue]) -> VMValue {
 
 pub fn array_set(args: &[VMValue]) -> VMValue {
     // Enforce policy for mutating operation
-    if crate::jit::policy::current().read_only &&
-        !crate::jit::policy::current().hostcall_whitelist.iter().any(|s| s == SYM_ARRAY_SET)
+    if crate::jit::policy::current().read_only
+        && !crate::jit::policy::current()
+            .hostcall_whitelist
+            .iter()
+            .any(|s| s == SYM_ARRAY_SET)
     {
         crate::jit::events::emit_runtime(
             serde_json::json!({"id": SYM_ARRAY_SET, "decision":"fallback", "reason":"policy_denied_mutating"}),
-            "hostcall", "<jit>"
+            "hostcall",
+            "<jit>",
         );
         return VMValue::Integer(0);
     }
-    if let (Some(arr), Some(VMValue::Integer(idx)), Some(value)) = (as_array(args), args.get(1), args.get(2)) {
+    if let (Some(arr), Some(VMValue::Integer(idx)), Some(value)) =
+        (as_array(args), args.get(1), args.get(2))
+    {
         let val_box: Box<dyn NyashBox> = value.to_nyash_box();
         let res = arr.set(Box::new(IntegerBox::new(*idx)), val_box);
         crate::jit::events::emit_runtime(
             serde_json::json!({"id": SYM_ARRAY_SET, "decision":"allow", "argc":3, "arg_types":["Handle","I64","Handle"]}),
-            "hostcall", "<jit>"
+            "hostcall",
+            "<jit>",
         );
         return VMValue::from_nyash_box(res);
     }
-    VMValue::BoxRef(Arc::new(StringBox::new("Error: array.set expects (ArrayBox, i64, value)")))
+    VMValue::BoxRef(Arc::new(StringBox::new(
+        "Error: array.set expects (ArrayBox, i64, value)",
+    )))
 }
 
 pub fn array_push(args: &[VMValue]) -> VMValue {
-    if crate::jit::policy::current().read_only &&
-        !crate::jit::policy::current().hostcall_whitelist.iter().any(|s| s == SYM_ARRAY_PUSH)
+    if crate::jit::policy::current().read_only
+        && !crate::jit::policy::current()
+            .hostcall_whitelist
+            .iter()
+            .any(|s| s == SYM_ARRAY_PUSH)
     {
         crate::jit::events::emit_runtime(
             serde_json::json!({"id": SYM_ARRAY_PUSH, "decision":"fallback", "reason":"policy_denied_mutating"}),
-            "hostcall", "<jit>"
+            "hostcall",
+            "<jit>",
         );
         return VMValue::Integer(0);
     }
@@ -111,11 +124,14 @@ pub fn array_push(args: &[VMValue]) -> VMValue {
         let res = arr.push(val_box);
         crate::jit::events::emit_runtime(
             serde_json::json!({"id": SYM_ARRAY_PUSH, "decision":"allow", "argc":2, "arg_types":["Handle","Handle"]}),
-            "hostcall", "<jit>"
+            "hostcall",
+            "<jit>",
         );
         return VMValue::from_nyash_box(res);
     }
-    VMValue::BoxRef(Arc::new(StringBox::new("Error: array.push expects (ArrayBox, value)")))
+    VMValue::BoxRef(Arc::new(StringBox::new(
+        "Error: array.push expects (ArrayBox, value)",
+    )))
 }
 
 pub fn map_get(args: &[VMValue]) -> VMValue {
@@ -127,12 +143,16 @@ pub fn map_get(args: &[VMValue]) -> VMValue {
 }
 
 pub fn map_set(args: &[VMValue]) -> VMValue {
-    if crate::jit::policy::current().read_only &&
-        !crate::jit::policy::current().hostcall_whitelist.iter().any(|s| s == SYM_MAP_SET)
+    if crate::jit::policy::current().read_only
+        && !crate::jit::policy::current()
+            .hostcall_whitelist
+            .iter()
+            .any(|s| s == SYM_MAP_SET)
     {
         crate::jit::events::emit_runtime(
             serde_json::json!({"id": SYM_MAP_SET, "decision":"fallback", "reason":"policy_denied_mutating"}),
-            "hostcall", "<jit>"
+            "hostcall",
+            "<jit>",
         );
         return VMValue::Integer(0);
     }
@@ -142,11 +162,14 @@ pub fn map_set(args: &[VMValue]) -> VMValue {
         let out = map.set(key_box, val_box);
         crate::jit::events::emit_runtime(
             serde_json::json!({"id": SYM_MAP_SET, "decision":"allow", "argc":3, "arg_types":["Handle","Handle","Handle"]}),
-            "hostcall", "<jit>"
+            "hostcall",
+            "<jit>",
         );
         return VMValue::from_nyash_box(out);
     }
-    VMValue::BoxRef(Arc::new(StringBox::new("Error: map.set expects (MapBox, key, value)")))
+    VMValue::BoxRef(Arc::new(StringBox::new(
+        "Error: map.set expects (MapBox, key, value)",
+    )))
 }
 
 pub fn map_size(args: &[VMValue]) -> VMValue {

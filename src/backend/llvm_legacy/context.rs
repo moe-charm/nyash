@@ -11,19 +11,21 @@ pub struct CodegenContext {
 #[cfg(not(feature = "llvm-inkwell-legacy"))]
 impl CodegenContext {
     pub fn new(_module_name: &str) -> Result<Self, String> {
-        Ok(Self { _phantom: std::marker::PhantomData })
+        Ok(Self {
+            _phantom: std::marker::PhantomData,
+        })
     }
 }
 
 // Real implementation (compiled only when feature "llvm-inkwell-legacy" is enabled)
 #[cfg(feature = "llvm-inkwell-legacy")]
+use inkwell::builder::Builder;
+#[cfg(feature = "llvm-inkwell-legacy")]
 use inkwell::context::Context;
 #[cfg(feature = "llvm-inkwell-legacy")]
 use inkwell::module::Module;
 #[cfg(feature = "llvm-inkwell-legacy")]
-use inkwell::builder::Builder;
-#[cfg(feature = "llvm-inkwell-legacy")]
-use inkwell::targets::{Target, TargetMachine, InitializationConfig};
+use inkwell::targets::{InitializationConfig, Target, TargetMachine};
 
 #[cfg(feature = "llvm-inkwell-legacy")]
 pub struct CodegenContext<'ctx> {
@@ -40,8 +42,8 @@ impl<'ctx> CodegenContext<'ctx> {
             .map_err(|e| format!("Failed to initialize native target: {}", e))?;
         let module = context.create_module(module_name);
         let triple = TargetMachine::get_default_triple();
-        let target = Target::from_triple(&triple)
-            .map_err(|e| format!("Failed to get target: {}", e))?;
+        let target =
+            Target::from_triple(&triple).map_err(|e| format!("Failed to get target: {}", e))?;
         let target_machine = target
             .create_target_machine(
                 &triple,
@@ -53,7 +55,11 @@ impl<'ctx> CodegenContext<'ctx> {
             )
             .ok_or_else(|| "Failed to create target machine".to_string())?;
         let builder = context.create_builder();
-        Ok(Self { context, module, builder, target_machine })
+        Ok(Self {
+            context,
+            module,
+            builder,
+            target_machine,
+        })
     }
 }
-

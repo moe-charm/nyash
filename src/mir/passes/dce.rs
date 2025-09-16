@@ -2,7 +2,7 @@
 //!
 //! Extracted from the monolithic optimizer to enable modular pass composition.
 
-use crate::mir::{MirModule, MirFunction, MirInstruction, ValueId};
+use crate::mir::{MirFunction, MirInstruction, MirModule, ValueId};
 use std::collections::HashSet;
 
 /// Eliminate dead code (unused results of pure instructions) across the module.
@@ -23,12 +23,18 @@ fn eliminate_dead_code_in_function(function: &mut MirFunction) -> usize {
     for (_bid, block) in &function.blocks {
         for instruction in &block.instructions {
             if !instruction.effects().is_pure() {
-                if let Some(dst) = instruction.dst_value() { used_values.insert(dst); }
-                for u in instruction.used_values() { used_values.insert(u); }
+                if let Some(dst) = instruction.dst_value() {
+                    used_values.insert(dst);
+                }
+                for u in instruction.used_values() {
+                    used_values.insert(u);
+                }
             }
         }
         if let Some(term) = &block.terminator {
-            for u in term.used_values() { used_values.insert(u); }
+            for u in term.used_values() {
+                used_values.insert(u);
+            }
         }
     }
 
@@ -41,7 +47,9 @@ fn eliminate_dead_code_in_function(function: &mut MirFunction) -> usize {
                 if let Some(dst) = instruction.dst_value() {
                     if used_values.contains(&dst) {
                         for u in instruction.used_values() {
-                            if used_values.insert(u) { changed = true; }
+                            if used_values.insert(u) {
+                                changed = true;
+                            }
                         }
                     }
                 }
@@ -66,7 +74,8 @@ fn eliminate_dead_code_in_function(function: &mut MirFunction) -> usize {
             true
         });
     }
-    if eliminated > 0 { function.update_cfg(); }
+    if eliminated > 0 {
+        function.update_cfg();
+    }
     eliminated
 }
-

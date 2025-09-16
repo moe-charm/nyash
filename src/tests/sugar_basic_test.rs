@@ -27,4 +27,3 @@ fn tokenizer_has_basic_sugar_tokens() {
     assert!(has(|k| matches!(k, TokenType::DivAssign)));
     assert!(has(|k| matches!(k, TokenType::RANGE)));
 }
-

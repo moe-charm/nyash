@@ -1,6 +1,6 @@
 /*!
  * Dependency Analysis Helpers
- * 
+ *
  * Static box依存関係の解析と循環依存検出
  */
 
@@ -10,18 +10,25 @@ use std::collections::{HashMap, HashSet};
 
 impl NyashParser {
     /// Static初期化ブロック内の文から依存関係を抽出
-    pub(super) fn extract_dependencies_from_statements(&self, statements: &[ASTNode]) -> HashSet<String> {
+    pub(super) fn extract_dependencies_from_statements(
+        &self,
+        statements: &[ASTNode],
+    ) -> HashSet<String> {
         let mut dependencies = HashSet::new();
-        
+
         for stmt in statements {
             self.extract_dependencies_from_ast(stmt, &mut dependencies);
         }
-        
+
         dependencies
     }
-    
+
     /// AST内から静的Box参照を再帰的に検出
-    pub(super) fn extract_dependencies_from_ast(&self, node: &ASTNode, dependencies: &mut HashSet<String>) {
+    pub(super) fn extract_dependencies_from_ast(
+        &self,
+        node: &ASTNode,
+        dependencies: &mut HashSet<String>,
+    ) {
         match node {
             ASTNode::FieldAccess { object, .. } => {
                 // Math.PI のような参照を検出
@@ -46,7 +53,12 @@ impl NyashParser {
             ASTNode::UnaryOp { operand, .. } => {
                 self.extract_dependencies_from_ast(operand, dependencies);
             }
-            ASTNode::If { condition, then_body, else_body, .. } => {
+            ASTNode::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
                 self.extract_dependencies_from_ast(condition, dependencies);
                 for stmt in then_body {
                     self.extract_dependencies_from_ast(stmt, dependencies);
@@ -57,7 +69,9 @@ impl NyashParser {
                     }
                 }
             }
-            ASTNode::Loop { condition, body, .. } => {
+            ASTNode::Loop {
+                condition, body, ..
+            } => {
                 self.extract_dependencies_from_ast(condition, dependencies);
                 for stmt in body {
                     self.extract_dependencies_from_ast(stmt, dependencies);
@@ -73,26 +87,26 @@ impl NyashParser {
             }
         }
     }
-    
+
     /// 循環依存検出
     pub fn check_circular_dependencies(&self) -> Result<(), ParseError> {
         // すべてのstatic boxに対して循環検出を実行
         let all_boxes: Vec<_> = self.static_box_dependencies.keys().cloned().collect();
-        
+
         for box_name in &all_boxes {
             let mut visited = HashSet::new();
             let mut stack = Vec::new();
-            
+
             if self.has_cycle_dfs(box_name, &mut visited, &mut stack)? {
                 // 循環を文字列化
                 let cycle_str = stack.join(" -> ");
                 return Err(ParseError::CircularDependency { cycle: cycle_str });
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// DFSで循環依存を検出
     fn has_cycle_dfs(
         &self,
@@ -105,15 +119,15 @@ impl NyashParser {
             stack.push(current.to_string()); // 循環を完成させる
             return Ok(true);
         }
-        
+
         // 既に訪問済みで循環がなければスキップ
         if visited.contains(current) {
             return Ok(false);
         }
-        
+
         visited.insert(current.to_string());
         stack.push(current.to_string());
-        
+
         // 依存先をチェック
         if let Some(dependencies) = self.static_box_dependencies.get(current) {
             for dep in dependencies {
@@ -122,20 +136,28 @@ impl NyashParser {
                 }
             }
         }
-        
+
         stack.pop();
         Ok(false)
     }
-    
+
     /// Override メソッドの検証
-    pub(super) fn validate_override_methods(&self, child_name: &str, parent_name: &str, methods: &HashMap<String, ASTNode>) -> Result<(), ParseError> {
+    pub(super) fn validate_override_methods(
+        &self,
+        child_name: &str,
+        parent_name: &str,
+        methods: &HashMap<String, ASTNode>,
+    ) -> Result<(), ParseError> {
         // 現時点では簡単な検証のみ
         // TODO: 親クラスのメソッドシグネチャとの比較
         for (method_name, method_ast) in methods {
             if let ASTNode::FunctionDeclaration { is_override, .. } = method_ast {
                 if *is_override {
                     // 将来的にここで親クラスのメソッドが存在するかチェック
-                    eprintln!("🔍 Validating override method '{}' in '{}' from '{}'", method_name, child_name, parent_name);
+                    eprintln!(
+                        "🔍 Validating override method '{}' in '{}' from '{}'",
+                        method_name, child_name, parent_name
+                    );
                 }
             }
         }

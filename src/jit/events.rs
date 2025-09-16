@@ -47,10 +47,14 @@ fn should_emit_runtime() -> bool {
 
 fn write_line(s: &str) {
     if let Ok(path) = std::env::var("NYASH_JIT_EVENTS_PATH") {
-        let _ = std::fs::OpenOptions::new().create(true).append(true).open(path).and_then(|mut f| {
-            use std::io::Write;
-            writeln!(f, "{}", s)
-        });
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .and_then(|mut f| {
+                use std::io::Write;
+                writeln!(f, "{}", s)
+            });
     } else {
         println!("{}", s);
     }
@@ -68,29 +72,67 @@ struct Event<'a, T: Serialize> {
     extra: T,
 }
 
-pub fn emit<T: Serialize>(kind: &str, function: &str, handle: Option<u64>, ms: Option<u128>, extra: T) {
-    if !base_emit_enabled() { return; }
-    let ev = Event { kind, function, handle, ms, extra };
-    if let Ok(s) = serde_json::to_string(&ev) { write_line(&s); }
+pub fn emit<T: Serialize>(
+    kind: &str,
+    function: &str,
+    handle: Option<u64>,
+    ms: Option<u128>,
+    extra: T,
+) {
+    if !base_emit_enabled() {
+        return;
+    }
+    let ev = Event {
+        kind,
+        function,
+        handle,
+        ms,
+        extra,
+    };
+    if let Ok(s) = serde_json::to_string(&ev) {
+        write_line(&s);
+    }
 }
 
-fn emit_any(kind: &str, function: &str, handle: Option<u64>, ms: Option<u128>, extra: serde_json::Value) {
-    let ev = Event { kind, function, handle, ms, extra };
-    if let Ok(s) = serde_json::to_string(&ev) { write_line(&s); }
+fn emit_any(
+    kind: &str,
+    function: &str,
+    handle: Option<u64>,
+    ms: Option<u128>,
+    extra: serde_json::Value,
+) {
+    let ev = Event {
+        kind,
+        function,
+        handle,
+        ms,
+        extra,
+    };
+    if let Ok(s) = serde_json::to_string(&ev) {
+        write_line(&s);
+    }
 }
 
 /// Emit an event during lowering (compile-time planning). Adds phase="lower".
 pub fn emit_lower(mut extra: serde_json::Value, kind: &str, function: &str) {
     // Always record decisions for strict-mode enforcement
     record_lower_decision(&extra);
-    if !should_emit_lower() { return; }
-    if let serde_json::Value::Object(ref mut map) = extra { map.insert("phase".into(), serde_json::Value::String("lower".into())); }
+    if !should_emit_lower() {
+        return;
+    }
+    if let serde_json::Value::Object(ref mut map) = extra {
+        map.insert("phase".into(), serde_json::Value::String("lower".into()));
+    }
     emit_any(kind, function, None, None, extra);
 }
 
 /// Emit an event during runtime execution. Adds phase="execute".
 pub fn emit_runtime(mut extra: serde_json::Value, kind: &str, function: &str) {
-    if !should_emit_runtime() { return; }
-    if let serde_json::Value::Object(ref mut map) = extra { map.insert("phase".into(), serde_json::Value::String("execute".into())); }
+    if !should_emit_runtime() {
+        return;
+    }
+    if let serde_json::Value::Object(ref mut map) = extra {
+        map.insert("phase".into(), serde_json::Value::String("execute".into()));
+    }
     emit_any(kind, function, None, None, extra);
 }

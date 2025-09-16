@@ -1,14 +1,21 @@
 //! Observe facade: centralize compile/runtime/trace output rules.
 //! Thin wrappers around jit::events and shim_trace to keep callsites tidy.
 
-pub fn lower_plugin_invoke(box_type: &str, method: &str, type_id: u32, method_id: u32, argc: usize) {
+pub fn lower_plugin_invoke(
+    box_type: &str,
+    method: &str,
+    type_id: u32,
+    method_id: u32,
+    argc: usize,
+) {
     crate::jit::events::emit_lower(
         serde_json::json!({
             "id": format!("plugin:{}:{}", box_type, method),
             "decision":"allow","reason":"plugin_invoke","argc": argc,
             "type_id": type_id, "method_id": method_id
         }),
-        "plugin","<jit>"
+        "plugin",
+        "<jit>",
     );
 }
 
@@ -21,7 +28,8 @@ pub fn lower_hostcall(symbol: &str, argc: usize, arg_types: &[&str], decision: &
             "argc": argc,
             "arg_types": arg_types
         }),
-        "hostcall","<jit>"
+        "hostcall",
+        "<jit>",
     );
 }
 
@@ -34,10 +42,14 @@ pub fn runtime_plugin_shim_i64(type_id: i64, method_id: i64, argc: i64, inst: u3
             "argc": argc,
             "inst": inst
         }),
-        "plugin", "<jit>"
+        "plugin",
+        "<jit>",
     );
 }
 
-pub fn trace_push(msg: String) { crate::jit::shim_trace::push(msg); }
-pub fn trace_enabled() -> bool { crate::jit::shim_trace::is_enabled() }
-
+pub fn trace_push(msg: String) {
+    crate::jit::shim_trace::push(msg);
+}
+pub fn trace_enabled() -> bool {
+    crate::jit::shim_trace::is_enabled()
+}

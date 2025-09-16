@@ -6,8 +6,8 @@
  * to surface aliases defined in nyash.toml/env.
  */
 
-use std::collections::{HashMap, HashSet};
 use once_cell::sync::Lazy;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
 #[derive(Clone, Default)]
@@ -27,16 +27,21 @@ impl BoxIndex {
             if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
                 if let Some(alias_tbl) = doc.get("aliases").and_then(|v| v.as_table()) {
                     for (k, v) in alias_tbl.iter() {
-                        if let Some(target) = v.as_str() { aliases.insert(k.to_string(), target.to_string()); }
+                        if let Some(target) = v.as_str() {
+                            aliases.insert(k.to_string(), target.to_string());
+                        }
                     }
                 }
             }
         }
         if let Ok(raw) = std::env::var("NYASH_ALIASES") {
             for ent in raw.split(',') {
-                if let Some((k,v)) = ent.split_once('=') {
-                    let k = k.trim(); let v = v.trim();
-                    if !k.is_empty() && !v.is_empty() { aliases.insert(k.to_string(), v.to_string()); }
+                if let Some((k, v)) = ent.split_once('=') {
+                    let k = k.trim();
+                    let v = v.trim();
+                    if !k.is_empty() && !v.is_empty() {
+                        aliases.insert(k.to_string(), v.to_string());
+                    }
                 }
             }
         }
@@ -58,14 +63,29 @@ impl BoxIndex {
                     for (k, v) in plugins_tbl.iter() {
                         // Skip non-table entries (string entries are plugin roots)
                         if let Some(t) = v.as_table() {
-                            let prefix = t.get("prefix").and_then(|x| x.as_str()).map(|s| s.to_string());
-                            let require_prefix = t.get("require_prefix").and_then(|x| x.as_bool()).unwrap_or(false);
-                            let expose_short_names = t.get("expose_short_names").and_then(|x| x.as_bool()).unwrap_or(true);
-                            let meta = PluginMeta { prefix, require_prefix, expose_short_names };
+                            let prefix = t
+                                .get("prefix")
+                                .and_then(|x| x.as_str())
+                                .map(|s| s.to_string());
+                            let require_prefix = t
+                                .get("require_prefix")
+                                .and_then(|x| x.as_bool())
+                                .unwrap_or(false);
+                            let expose_short_names = t
+                                .get("expose_short_names")
+                                .and_then(|x| x.as_bool())
+                                .unwrap_or(true);
+                            let meta = PluginMeta {
+                                prefix,
+                                require_prefix,
+                                expose_short_names,
+                            };
                             plugin_meta.insert(k.clone(), meta.clone());
                             if let Some(arr) = t.get("boxes").and_then(|x| x.as_array()) {
                                 for b in arr {
-                                    if let Some(name) = b.as_str() { plugin_meta_by_box.insert(name.to_string(), meta.clone()); }
+                                    if let Some(name) = b.as_str() {
+                                        plugin_meta_by_box.insert(name.to_string(), meta.clone());
+                                    }
                                 }
                             }
                         }
@@ -87,22 +107,43 @@ impl BoxIndex {
             }
         }
 
-        Self { aliases, plugin_boxes, plugin_meta, plugin_meta_by_box, plugins_require_prefix_global }
+        Self {
+            aliases,
+            plugin_boxes,
+            plugin_meta,
+            plugin_meta_by_box,
+            plugins_require_prefix_global,
+        }
     }
 
     pub fn is_known_plugin_short(name: &str) -> bool {
         // Prefer global index view
-        if GLOBAL.read().ok().map(|g| g.plugin_boxes.contains(name)).unwrap_or(false) {
+        if GLOBAL
+            .read()
+            .ok()
+            .map(|g| g.plugin_boxes.contains(name))
+            .unwrap_or(false)
+        {
             return true;
         }
         // Env override list
         if let Ok(raw) = std::env::var("NYASH_KNOWN_PLUGIN_SHORTNAMES") {
             let set: HashSet<String> = raw.split(',').map(|s| s.trim().to_string()).collect();
-            if set.contains(name) { return true; }
+            if set.contains(name) {
+                return true;
+            }
         }
         // Minimal fallback set
         const KNOWN: &[&str] = &[
-            "ArrayBox","MapBox","StringBox","ConsoleBox","FileBox","PathBox","MathBox","IntegerBox","TOMLBox"
+            "ArrayBox",
+            "MapBox",
+            "StringBox",
+            "ConsoleBox",
+            "FileBox",
+            "PathBox",
+            "MathBox",
+            "IntegerBox",
+            "TOMLBox",
         ];
         KNOWN.iter().any(|k| *k == name)
     }
@@ -112,11 +153,14 @@ impl BoxIndex {
 static GLOBAL: Lazy<RwLock<BoxIndex>> = Lazy::new(|| RwLock::new(BoxIndex::default()));
 
 // Global resolve cache (keyed by tgt|base|strict|paths)
-static RESOLVE_CACHE: Lazy<RwLock<HashMap<String, String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static RESOLVE_CACHE: Lazy<RwLock<HashMap<String, String>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub fn refresh_box_index() {
     let next = BoxIndex::build_current();
-    if let Ok(mut w) = GLOBAL.write() { *w = next; }
+    if let Ok(mut w) = GLOBAL.write() {
+        *w = next;
+    }
 }
 
 pub fn get_box_index() -> BoxIndex {
@@ -128,11 +172,15 @@ pub fn cache_get(key: &str) -> Option<String> {
 }
 
 pub fn cache_put(key: &str, value: String) {
-    if let Ok(mut m) = RESOLVE_CACHE.write() { m.insert(key.to_string(), value); }
+    if let Ok(mut m) = RESOLVE_CACHE.write() {
+        m.insert(key.to_string(), value);
+    }
 }
 
 pub fn cache_clear() {
-    if let Ok(mut m) = RESOLVE_CACHE.write() { m.clear(); }
+    if let Ok(mut m) = RESOLVE_CACHE.write() {
+        m.clear();
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -143,5 +191,8 @@ pub struct PluginMeta {
 }
 
 pub fn get_plugin_meta(plugin: &str) -> Option<PluginMeta> {
-    GLOBAL.read().ok().and_then(|g| g.plugin_meta.get(plugin).cloned())
+    GLOBAL
+        .read()
+        .ok()
+        .and_then(|g| g.plugin_meta.get(plugin).cloned())
 }

@@ -9,7 +9,6 @@
 
 use super::*;
 
-mod ops;
-mod methods;
 mod fields;
-
+mod methods;
+mod ops;

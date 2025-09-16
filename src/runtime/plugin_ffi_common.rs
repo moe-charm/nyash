@@ -4,7 +4,9 @@
 use crate::box_trait::NyashBox;
 
 /// Encode empty TLV arguments: version=1, argc=0
-pub fn encode_empty_args() -> Vec<u8> { vec![1u8, 0, 0, 0] }
+pub fn encode_empty_args() -> Vec<u8> {
+    vec![1u8, 0, 0, 0]
+}
 
 /// Encode TLV header with argc (no payload entries encoded here)
 pub fn encode_tlv_header(argc: u16) -> Vec<u8> {
@@ -34,39 +36,56 @@ pub fn encode_args(args: &[Box<dyn NyashBox>]) -> Vec<u8> {
 pub mod decode {
     /// Try to parse a u32 instance id from an output buffer (little-endian).
     pub fn instance_id(buf: &[u8]) -> Option<u32> {
-        if buf.len() < 4 { return None; }
+        if buf.len() < 4 {
+            return None;
+        }
         Some(u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]))
     }
 
     /// Parse TLV header from buffer; returns (tag, size, payload_slice)
     pub fn tlv_first(buf: &[u8]) -> Option<(u8, usize, &[u8])> {
-        if buf.len() < 8 { return None; }
+        if buf.len() < 8 {
+            return None;
+        }
         let tag = buf[4];
         let size = u16::from_le_bytes([buf[6], buf[7]]) as usize;
-        if buf.len() < 8 + size { return None; }
+        if buf.len() < 8 + size {
+            return None;
+        }
         Some((tag, size, &buf[8..8 + size]))
     }
     /// Decode u64 payload (size must be 8)
     pub fn u64(payload: &[u8]) -> Option<u64> {
-        if payload.len() != 8 { return None; }
-        let mut b = [0u8;8]; b.copy_from_slice(payload);
+        if payload.len() != 8 {
+            return None;
+        }
+        let mut b = [0u8; 8];
+        b.copy_from_slice(payload);
         Some(u64::from_le_bytes(b))
     }
     /// Decode bool payload (size must be 1; nonzero => true)
     pub fn bool(payload: &[u8]) -> Option<bool> {
-        if payload.len() != 1 { return None; }
+        if payload.len() != 1 {
+            return None;
+        }
         Some(payload[0] != 0)
     }
     /// Decode i32 payload (size must be 4)
     pub fn i32(payload: &[u8]) -> Option<i32> {
-        if payload.len() != 4 { return None; }
-        let mut b = [0u8;4]; b.copy_from_slice(payload);
+        if payload.len() != 4 {
+            return None;
+        }
+        let mut b = [0u8; 4];
+        b.copy_from_slice(payload);
         Some(i32::from_le_bytes(b))
     }
     /// Decode f64 payload (size must be 8)
     pub fn f64(payload: &[u8]) -> Option<f64> {
-        if payload.len() != 8 { return None; }
-        let mut b = [0u8;8]; b.copy_from_slice(payload);
+        if payload.len() != 8 {
+            return None;
+        }
+        let mut b = [0u8; 8];
+        b.copy_from_slice(payload);
         Some(f64::from_le_bytes(b))
     }
     /// Decode UTF-8 string/bytes
@@ -76,9 +95,11 @@ pub mod decode {
 
     /// Decode plugin handle payload (type_id:u32 + instance_id:u32)
     pub fn plugin_handle(payload: &[u8]) -> Option<(u32, u32)> {
-        if payload.len() != 8 { return None; }
-        let mut a = [0u8;4];
-        let mut b = [0u8;4];
+        if payload.len() != 8 {
+            return None;
+        }
+        let mut a = [0u8; 4];
+        let mut b = [0u8; 4];
         a.copy_from_slice(&payload[0..4]);
         b.copy_from_slice(&payload[4..8]);
         Some((u32::from_le_bytes(a), u32::from_le_bytes(b)))
@@ -86,16 +107,22 @@ pub mod decode {
 
     /// Get nth TLV entry from a buffer with header
     pub fn tlv_nth(buf: &[u8], n: usize) -> Option<(u8, usize, &[u8])> {
-        if buf.len() < 4 { return None; }
+        if buf.len() < 4 {
+            return None;
+        }
         let mut off = 4usize;
         for i in 0..=n {
-            if buf.len() < off + 4 { return None; }
+            if buf.len() < off + 4 {
+                return None;
+            }
             let tag = buf[off];
-            let _rsv = buf[off+1];
-            let size = u16::from_le_bytes([buf[off+2], buf[off+3]]) as usize;
-            if buf.len() < off + 4 + size { return None; }
+            let _rsv = buf[off + 1];
+            let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
+            if buf.len() < off + 4 + size {
+                return None;
+            }
             if i == n {
-                return Some((tag, size, &buf[off+4..off+4+size]));
+                return Some((tag, size, &buf[off + 4..off + 4 + size]));
             }
             off += 4 + size;
         }
@@ -197,7 +224,7 @@ pub mod encode {
 
 #[cfg(test)]
 mod tests {
-    use super::{encode, decode};
+    use super::{decode, encode};
 
     #[test]
     fn test_encode_decode_bool() {
@@ -234,7 +261,7 @@ mod tests {
     fn test_encode_decode_string_and_bytes() {
         let mut buf = super::encode_tlv_header(2);
         encode::string(&mut buf, "hello");
-        encode::bytes(&mut buf, &[1,2,3,4]);
+        encode::bytes(&mut buf, &[1, 2, 3, 4]);
         // First entry string
         let (tag, _sz, payload) = decode::tlv_nth(&buf, 0).unwrap();
         assert_eq!(tag, 6);
@@ -243,6 +270,6 @@ mod tests {
         let (tag2, sz2, payload2) = decode::tlv_nth(&buf, 1).unwrap();
         assert_eq!(tag2, 7);
         assert_eq!(sz2, 4);
-        assert_eq!(payload2, &[1,2,3,4]);
+        assert_eq!(payload2, &[1, 2, 3, 4]);
     }
 }

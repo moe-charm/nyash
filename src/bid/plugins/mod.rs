@@ -1,5 +1,5 @@
 //! BID-FFI Plugins
-//! 
+//!
 //! Collection of built-in and loadable plugins for Nyash.
 
 pub mod filebox;

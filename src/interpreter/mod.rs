@@ -1,54 +1,53 @@
 /*!
  * Nyash Interpreter - Modular Rust Implementation
- * 
+ *
  * Refactored from massive 2,633-line interpreter.rs into logical modules
  * Everything is Box philosophy with clean separation of concerns
  */
 
 // Import all necessary dependencies
 use crate::ast::{ASTNode, CatchClause};
-use crate::box_trait::{NyashBox, StringBox, BoolBox, VoidBox, ErrorBox, BoxCore};
-use crate::boxes::FutureBox;
-use crate::instance_v2::InstanceBox;
-use crate::channel_box::ChannelBox;
-use crate::boxes::math_box::MathBox;
-use crate::boxes::time_box::TimerBox;
-use crate::boxes::random_box::RandomBox;
+use crate::box_trait::{BoolBox, BoxCore, ErrorBox, NyashBox, StringBox, VoidBox};
 use crate::boxes::debug_box::DebugBox;
+use crate::boxes::math_box::MathBox;
+use crate::boxes::random_box::RandomBox;
+use crate::boxes::time_box::TimerBox;
+use crate::boxes::FutureBox;
+use crate::channel_box::ChannelBox;
+use crate::instance_v2::InstanceBox;
 
 // WASM-specific Box types (conditionally included)
 #[cfg(target_arch = "wasm32")]
-use crate::boxes::web::{WebDisplayBox, WebConsoleBox, WebCanvasBox};
+use crate::boxes::web::{WebCanvasBox, WebConsoleBox, WebDisplayBox};
 use crate::exception_box;
 use std::collections::HashMap;
 
-// Module declarations  
+// Module declarations
 mod async_methods;
 mod box_methods;
-mod core;
-mod eval;
 mod calls;
-mod methods_dispatch;
-pub mod utils;
-pub mod state;
+mod core;
 pub mod errors;
+mod eval;
 mod expressions;
-mod statements;
 mod functions;
+mod io;
+mod math_methods;
+mod methods;
+mod methods_dispatch;
 pub mod objects;
 mod objects_basic_constructors;
-mod io;
-mod methods;
-mod math_methods;
-mod system_methods;
-mod web_methods;
 mod special_methods;
+pub mod state;
+mod statements;
+mod system_methods;
+pub mod utils;
+mod web_methods;
 
 // Main interpreter implementation - will be moved from interpreter.rs
 pub use core::NyashInterpreter;
-pub use state::SharedState;
 pub use errors::RuntimeError;
-
+pub use state::SharedState;
 
 /// 実行制御フロー
 #[derive(Debug)]
@@ -77,9 +76,9 @@ pub struct StaticBoxDefinition {
     pub fields: Vec<String>,
     pub methods: HashMap<String, ASTNode>,
     pub init_fields: Vec<String>,
-    pub weak_fields: Vec<String>,  // 🔗 weak修飾子が付いたフィールドのリスト
-    pub static_init: Option<Vec<ASTNode>>,  // static { } ブロック
-    pub extends: Vec<String>,  // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
+    pub weak_fields: Vec<String>, // 🔗 weak修飾子が付いたフィールドのリスト
+    pub static_init: Option<Vec<ASTNode>>, // static { } ブロック
+    pub extends: Vec<String>,     // 🚀 Multi-delegation: Changed from Option<String> to Vec<String>
     pub implements: Vec<String>,
     pub type_parameters: Vec<String>,
     /// 初期化状態
@@ -89,9 +88,9 @@ pub struct StaticBoxDefinition {
 /// 🔥 Static Box初期化状態
 #[derive(Debug, Clone, PartialEq)]
 pub enum StaticBoxState {
-    NotInitialized,     // 未初期化
-    Initializing,       // 初期化中（循環参照検出用）
-    Initialized,        // 初期化完了
+    NotInitialized, // 未初期化
+    Initializing,   // 初期化中（循環参照検出用）
+    Initialized,    // 初期化完了
 }
 
 /// 関数宣言を保持する構造体
@@ -105,5 +104,5 @@ pub struct FunctionDeclaration {
 // Re-export core interpreter types
 pub use core::*;
 
-// Import and re-export stdlib for interpreter modules  
+// Import and re-export stdlib for interpreter modules
 pub use crate::stdlib::BuiltinStdlib;

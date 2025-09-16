@@ -10,7 +10,7 @@
  * Scope: minimal dataflow (direct NewBox and Copy propagation). Phi/complex flows are TODO.
  */
 
-use crate::mir::{MirModule, MirInstruction as I, ValueId};
+use crate::mir::{MirInstruction as I, MirModule, ValueId};
 
 pub fn inject_method_ids(module: &mut MirModule) -> usize {
     use crate::mir::slot_registry::resolve_slot_by_type_name;
@@ -38,14 +38,19 @@ pub fn inject_method_ids(module: &mut MirModule) -> usize {
                             origin.insert(*dst, bt);
                         }
                     }
-                    I::BoxCall { box_val, method, method_id, .. } => {
+                    I::BoxCall {
+                        box_val,
+                        method,
+                        method_id,
+                        ..
+                    } => {
                         if method_id.is_none() {
                             if let Some(bt) = origin.get(box_val).cloned() {
                                 // First try plugin host if available, else builtin slots
                                 let mid_u16 = if let Some(h) = host_guard.as_ref() {
                                     // Try resolve via plugin config (may fail for builtins)
                                     match h.resolve_method(&bt, method) {
-                    Ok(mh) => Some(mh.method_id as u16),
+                                        Ok(mh) => Some(mh.method_id as u16),
                                         Err(_) => resolve_slot_by_type_name(&bt, method),
                                     }
                                 } else {
@@ -58,12 +63,18 @@ pub fn inject_method_ids(module: &mut MirModule) -> usize {
                             }
                         }
                     }
-                    I::PluginInvoke { dst, box_val, method, args, effects } => {
+                    I::PluginInvoke {
+                        dst,
+                        box_val,
+                        method,
+                        args,
+                        effects,
+                    } => {
                         if let Some(bt) = origin.get(box_val).cloned() {
                             // Resolve id as above
                             let mid_u16 = if let Some(h) = host_guard.as_ref() {
                                 match h.resolve_method(&bt, method) {
-                Ok(mh) => Some(mh.method_id as u16),
+                                    Ok(mh) => Some(mh.method_id as u16),
                                     Err(_) => resolve_slot_by_type_name(&bt, method),
                                 }
                             } else {

@@ -5,8 +5,8 @@
 
 #![cfg(feature = "wasm-backend")]
 
-use crate::box_trait::{NyashBox, StringBox, VoidBox, BoolBox};
-use crate::boxes::{ConsoleBox, ArrayBox, MapBox};
+use crate::box_trait::{BoolBox, NyashBox, StringBox, VoidBox};
+use crate::boxes::{ArrayBox, ConsoleBox, MapBox};
 
 /// 受信ボックス/メソッド名/アリティからスロットを解決し、識別子を返す。
 pub fn resolve_slot(recv: &dyn NyashBox, method: &str, arity: usize) -> Option<u16> {
@@ -65,7 +65,7 @@ pub fn dispatch_by_slot(
             }
             None
         }
-        
+
         // ArrayBox slots (100番台)
         100 => {
             // array.get(index)
@@ -84,8 +84,8 @@ pub fn dispatch_by_slot(
             }
             None
         }
-        
-        // MapBox slots (200番台)  
+
+        // MapBox slots (200番台)
         200 => {
             // map.size()
             if let Some(map) = recv.as_any().downcast_ref::<MapBox>() {
@@ -113,7 +113,7 @@ pub fn dispatch_by_slot(
             }
             None
         }
-        
-        _ => None
+
+        _ => None,
     }
 }

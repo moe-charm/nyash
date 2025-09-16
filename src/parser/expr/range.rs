@@ -1,10 +1,12 @@
-use crate::parser::{NyashParser, ParseError};
-use crate::parser::common::ParserUtils;
-use crate::tokenizer::TokenType;
 use crate::ast::{ASTNode, Span};
+use crate::parser::common::ParserUtils;
+use crate::parser::{NyashParser, ParseError};
+use crate::tokenizer::TokenType;
 
 #[inline]
-fn is_sugar_enabled() -> bool { crate::parser::sugar_gate::is_enabled() }
+fn is_sugar_enabled() -> bool {
+    crate::parser::sugar_gate::is_enabled()
+}
 
 impl NyashParser {
     pub(crate) fn expr_parse_range(&mut self) -> Result<ASTNode, ParseError> {
@@ -20,9 +22,12 @@ impl NyashParser {
             }
             self.advance();
             let rhs = self.expr_parse_term()?;
-            expr = ASTNode::FunctionCall { name: "Range".to_string(), arguments: vec![expr, rhs], span: Span::unknown() };
+            expr = ASTNode::FunctionCall {
+                name: "Range".to_string(),
+                arguments: vec![expr, rhs],
+                span: Span::unknown(),
+            };
         }
         Ok(expr)
     }
 }
-

@@ -1,10 +1,10 @@
 /*!
  * Nyash Operator Traits System - Rust-Style Trait-Based Overloading
- * 
+ *
  * This module implements the new operator overloading system based on the
  * AI consultation decision (2025-08-10). It follows Rust's trait pattern
  * with static/dynamic hybrid dispatch for maximum performance and flexibility.
- * 
+ *
  * Design Principles:
  * - Static dispatch when types are known at compile time
  * - Dynamic dispatch (vtable) when types are unknown
@@ -24,7 +24,7 @@ use crate::box_trait::NyashBox;
 pub trait NyashAdd<Rhs = Self> {
     /// The resulting type after applying the `+` operator
     type Output;
-    
+
     /// Performs the `+` operation
     fn add(self, rhs: Rhs) -> Self::Output;
 }
@@ -33,7 +33,7 @@ pub trait NyashAdd<Rhs = Self> {
 pub trait NyashSub<Rhs = Self> {
     /// The resulting type after applying the `-` operator
     type Output;
-    
+
     /// Performs the `-` operation
     fn sub(self, rhs: Rhs) -> Self::Output;
 }
@@ -42,7 +42,7 @@ pub trait NyashSub<Rhs = Self> {
 pub trait NyashMul<Rhs = Self> {
     /// The resulting type after applying the `*` operator
     type Output;
-    
+
     /// Performs the `*` operation
     fn mul(self, rhs: Rhs) -> Self::Output;
 }
@@ -51,7 +51,7 @@ pub trait NyashMul<Rhs = Self> {
 pub trait NyashDiv<Rhs = Self> {
     /// The resulting type after applying the `/` operator
     type Output;
-    
+
     /// Performs the `/` operation
     fn div(self, rhs: Rhs) -> Self::Output;
 }
@@ -64,7 +64,7 @@ pub trait DynamicAdd: NyashBox {
     /// Try to add this box with another box dynamically
     /// Returns None if the operation is not supported
     fn try_add(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>>;
-    
+
     /// Check if this box can be added with another box type
     fn can_add_with(&self, other_type: &str) -> bool;
 }
@@ -73,7 +73,7 @@ pub trait DynamicAdd: NyashBox {
 pub trait DynamicSub: NyashBox {
     /// Try to subtract another box from this box dynamically
     fn try_sub(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>>;
-    
+
     /// Check if this box can be subtracted with another box type
     fn can_sub_with(&self, other_type: &str) -> bool;
 }
@@ -82,7 +82,7 @@ pub trait DynamicSub: NyashBox {
 pub trait DynamicMul: NyashBox {
     /// Try to multiply this box with another box dynamically
     fn try_mul(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>>;
-    
+
     /// Check if this box can be multiplied with another box type
     fn can_mul_with(&self, other_type: &str) -> bool;
 }
@@ -91,7 +91,7 @@ pub trait DynamicMul: NyashBox {
 pub trait DynamicDiv: NyashBox {
     /// Try to divide this box by another box dynamically
     fn try_div(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>>;
-    
+
     /// Check if this box can be divided by another box type
     fn can_div_with(&self, other_type: &str) -> bool;
 }
@@ -107,10 +107,10 @@ pub enum OperatorError {
         left_type: String,
         right_type: String,
     },
-    
+
     /// Division by zero
     DivisionByZero,
-    
+
     /// Ambiguous operation (multiple implementations match)
     AmbiguousOperation {
         operator: String,
@@ -121,16 +121,30 @@ pub enum OperatorError {
 impl std::fmt::Display for OperatorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OperatorError::UnsupportedOperation { operator, left_type, right_type } => {
-                write!(f, "Operator '{}' is not supported between {} and {}", 
-                       operator, left_type, right_type)
+            OperatorError::UnsupportedOperation {
+                operator,
+                left_type,
+                right_type,
+            } => {
+                write!(
+                    f,
+                    "Operator '{}' is not supported between {} and {}",
+                    operator, left_type, right_type
+                )
             }
             OperatorError::DivisionByZero => {
                 write!(f, "Division by zero")
             }
-            OperatorError::AmbiguousOperation { operator, candidates } => {
-                write!(f, "Ambiguous operator '{}': multiple candidates found: {}", 
-                       operator, candidates.join(", "))
+            OperatorError::AmbiguousOperation {
+                operator,
+                candidates,
+            } => {
+                write!(
+                    f,
+                    "Ambiguous operator '{}': multiple candidates found: {}",
+                    operator,
+                    candidates.join(", ")
+                )
             }
         }
     }
@@ -140,4 +154,3 @@ impl std::error::Error for OperatorError {}
 
 // Note: OperatorResolver is now defined in box_operators.rs
 // Import it directly from there if needed
-
