@@ -1,6 +1,6 @@
 // Expression lowering split from builder.rs to keep files lean
 use super::{ConstValue, MirInstruction, ValueId};
-use crate::ast::ASTNode;
+use crate::ast::{ASTNode, AssignStmt, ReturnStmt};
 
 impl super::MirBuilder {
     // Main expression dispatcher
@@ -75,11 +75,13 @@ impl super::MirBuilder {
                 ..
             } => self.build_from_expression(parent.clone(), method.clone(), arguments.clone()),
 
-            ASTNode::Assignment { target, value, .. } => {
-                if let ASTNode::FieldAccess { object, field, .. } = target.as_ref() {
-                    self.build_field_assignment(*object.clone(), field.clone(), *value.clone())
-                } else if let ASTNode::Variable { name, .. } = target.as_ref() {
-                    self.build_assignment(name.clone(), *value.clone())
+            node @ ASTNode::Assignment { .. } => {
+                // Use AssignStmt wrapper for clearer destructuring (no behavior change)
+                let stmt = AssignStmt::try_from(node).expect("ASTNode::Assignment must convert");
+                if let ASTNode::FieldAccess { object, field, .. } = stmt.target.as_ref() {
+                    self.build_field_assignment(*object.clone(), field.clone(), *stmt.value.clone())
+                } else if let ASTNode::Variable { name, .. } = stmt.target.as_ref() {
+                    self.build_assignment(name.clone(), *stmt.value.clone())
                 } else {
                     Err("Complex assignment targets not yet supported".to_string())
                 }
@@ -108,7 +110,11 @@ impl super::MirBuilder {
                 self.build_lambda_expression(params.clone(), body.clone())
             }
 
-            ASTNode::Return { value, .. } => self.build_return_statement(value.clone()),
+            node @ ASTNode::Return { .. } => {
+                // Use ReturnStmt wrapper for consistent access (no behavior change)
+                let stmt = ReturnStmt::try_from(node).expect("ASTNode::Return must convert");
+                self.build_return_statement(stmt.value.clone())
+            }
 
             // Control flow: break/continue are handled inside LoopBuilder context
             ASTNode::Local {
