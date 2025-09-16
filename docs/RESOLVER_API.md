@@ -1,6 +1,7 @@
 # Resolver API (Minimal i64 Prototype)
 
 Goals
+- Phase‑15（MIR13運用）における方針: MIR 生成層は PHI を出さず、LLVM 層で PHI を合成する。
 - Centralize "ValueId → current-block value" resolution.
 - Guarantee dominance by localizing values at the start of the block (before non-PHI).
 - De-duplicate per (block, value) to avoid redundant PHIs/casts.
@@ -28,6 +29,7 @@ Ban: Direct `vmap.get(..)` for cross-BB reads
 Next
 - Migrate remaining `localize_to_i64` call sites to the resolver.
 - Enforce vmap direct access ban in lowerers (Resolver-only for reads).
+- ループ（while 形 CFG）の検出と、ヘッダ BB での搬送 PHI 合成（preheader/backedge の 2 incoming）を実装。
 
 Tracing
 - `NYASH_LLVM_TRACE_PHI=1`: log PHI creation/wiring in the Rust/inkwell path.

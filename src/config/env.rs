@@ -85,6 +85,18 @@ pub fn await_max_ms() -> u64 {
     std::env::var("NYASH_AWAIT_MAX_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(5000)
 }
 
+// ---- MIR PHI-less (edge-copy) mode ----
+/// Enable MIR PHI non-generation. Bridge/Builder emit edge copies instead of PHI.
+pub fn mir_no_phi() -> bool { std::env::var("NYASH_MIR_NO_PHI").ok().as_deref() == Some("1") }
+
+/// Allow verifier to skip SSA/dominance/merge checks for PHI-less MIR.
+pub fn verify_allow_no_phi() -> bool {
+    std::env::var("NYASH_VERIFY_ALLOW_NO_PHI").ok().as_deref() == Some("1") || mir_no_phi()
+}
+
+// ---- LLVM harness toggle (llvmlite) ----
+pub fn llvm_use_harness() -> bool { std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1") }
+
 // ---- Phase 11.8 MIR cleanup toggles ----
 /// Core-13 minimal MIR mode toggle
 /// Default: ON (unless explicitly disabled with NYASH_MIR_CORE13=0)

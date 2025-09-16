@@ -1,0 +1,4 @@
+{"version":0,"kind":"Program","body":[
+  {"type":"Expr","expr":{"type":"Throw","expr":{"type":"Int","value":42}}},
+  {"type":"Return","expr":{"type":"Int","value":0}}
+]}

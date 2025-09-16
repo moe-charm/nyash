@@ -6,82 +6,77 @@
           "id": 0,
           "instructions": [
             {
-              "args": [],
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
               "dst": 0,
-              "op": "newbox",
-              "type": "MapBox"
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
               "dst": 1,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "name"
+                "type": "i64",
+                "value": 2
               }
             },
             {
               "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Alice"
-              }
+              "lhs": 0,
+              "op": "compare",
+              "operation": "<",
+              "rhs": 1
             },
             {
-              "args": [
-                1,
-                2
-              ],
-              "box": 0,
-              "dst": 3,
-              "method": "set",
-              "op": "boxcall"
-            },
+              "cond": 2,
+              "else": 3,
+              "op": "branch",
+              "then": 2
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
             {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "age"
-              }
-            },
+              "op": "jump",
+              "target": 3
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
             {
               "dst": 5,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 25
+                "value": 0
               }
             },
             {
-              "args": [
-                4,
-                5
-              ],
-              "box": 0,
-              "dst": 6,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
-              "args": [],
-              "box": 0,
-              "dst": 7,
-              "method": "size",
-              "op": "boxcall"
-            },
-            {
               "op": "ret",
-              "value": 7
+              "value": 5
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 1
             }
           ]
         }

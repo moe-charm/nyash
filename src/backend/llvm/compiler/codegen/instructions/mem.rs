@@ -134,3 +134,49 @@ pub(in super::super) fn lower_load<'ctx, 'b>(
     vmap.insert(*dst, lv);
     Ok(())
 }
+
+// Lower Copy: define dst in the current block by localizing src via Resolver
+pub(in super::super) fn lower_copy<'ctx, 'b>(
+    codegen: &CodegenContext<'ctx>,
+    cursor: &mut BuilderCursor<'ctx, 'b>,
+    resolver: &mut super::Resolver<'ctx>,
+    cur_bid: BasicBlockId,
+    func: &crate::mir::function::MirFunction,
+    vmap: &mut HashMap<ValueId, BasicValueEnum<'ctx>>,
+    dst: &ValueId,
+    src: &ValueId,
+    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
+    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, BasicValueEnum<'ctx>>>,
+) -> Result<(), String> {
+    // Choose resolution kind based on metadata type preference
+    use inkwell::types::BasicTypeEnum as BT;
+    let expected_bt: Option<BT> = func
+        .metadata
+        .value_types
+        .get(dst)
+        .or_else(|| func.metadata.value_types.get(src))
+        .map(|mt| super::super::types::map_mirtype_to_basic(codegen.context, mt));
+    let out: BasicValueEnum<'ctx> = match expected_bt {
+        Some(BT::IntType(_)) | None => {
+            // Prefer i64 for unknown
+            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            iv.into()
+        }
+        Some(BT::PointerType(_)) => {
+            let pv = resolver.resolve_ptr(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            pv.into()
+        }
+        Some(BT::FloatType(_)) => {
+            let fv = resolver.resolve_f64(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            fv.into()
+        }
+        _ => {
+            // Fallback i64
+            let iv = resolver.resolve_i64(codegen, cursor, cur_bid, *src, bb_map, preds, block_end_values, vmap)?;
+            iv.into()
+        }
+    };
+    vmap.insert(*dst, out);
+    Ok(())
+}

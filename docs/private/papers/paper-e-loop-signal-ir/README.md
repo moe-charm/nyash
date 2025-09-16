@@ -15,7 +15,13 @@ LifeBox Model（LBM）は「Box=Loop1」という見方でライフサイクル�
 - 論文A（MIR13/IR設計）: 本稿は将来の拡張。まずAを優先して仕上げ、その後に独立短論文としてまとめる。
 - 論文B（Nyash言語）: birth/fini・async/generator の設計と橋渡し要素。
 
+## 2025-09-16 追記: MIR進化計画
+- **MIR14→MIR13→MIR17の段階的移行**: `mir-evolution-plan.md` に詳細記載
+- Codexとの協働でLoopForm設計を具体化
+- PHI責務のLLVM層移管とLoopForm追加（+4命令）の戦略
+
 ---
 
 - 下書き本文: `main-paper-jp.md`
+- MIR進化計画: `mir-evolution-plan.md`（新規追加）
 - 補助: 擬似MIRとLowering図、評価計画の雛形を本文内に記載

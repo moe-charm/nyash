@@ -1,0 +1,9 @@
+{"version":0,"kind":"Program","body":[
+  {"type":"Local","name":"x","expr":{"type":"Int","value":0}},
+  {"type":"Try",
+    "try":[{"type":"Expr","expr":{"type":"Throw","expr":{"type":"Int","value":42}}}],
+    "catches":[{"param":"e","body":[{"type":"Local","name":"x","expr":{"type":"Var","name":"e"}}]}],
+    "finally":[{"type":"Expr","expr":{"type":"Int","value":1}}]
+  },
+  {"type":"Return","expr":{"type":"Var","name":"x"}}
+]}

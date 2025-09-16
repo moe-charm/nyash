@@ -1,12 +1,11 @@
-
 #![cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 
-use nyash_rust::parser::NyashParser;
-use nyash_rust::runtime::plugin_loader_v2::{init_global_loader_v2, get_global_loader_v2};
-use nyash_rust::runtime::box_registry::get_global_registry;
-use nyash_rust::runtime::PluginConfig;
-use nyash_rust::runtime::NyashRuntime;
 use nyash_rust::backend::VM;
+use nyash_rust::parser::NyashParser;
+use nyash_rust::runtime::box_registry::get_global_registry;
+use nyash_rust::runtime::plugin_loader_v2::{get_global_loader_v2, init_global_loader_v2};
+use nyash_rust::runtime::NyashRuntime;
+use nyash_rust::runtime::PluginConfig;
 
 fn try_init_plugins() -> bool {
     if !std::path::Path::new("nyash.toml").exists() {
@@ -39,18 +38,20 @@ fn try_init_plugins() -> bool {
 #[test]
 #[ignore = "Plugins not configured by default env; skip in CI"]
 fn e2e_interpreter_plugin_filebox_close_void() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 local f
 f = new FileBox()
 f.close()
 "#;
-    
-    // Test through interpreter path first  
+
+    // Test through interpreter path first
     let ast = NyashParser::parse_from_string(code).expect("parse failed");
     let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
-    
+
     match interpreter.execute(ast) {
         Ok(result) => {
             // close() returns void (BID-1 tag=9)
@@ -67,7 +68,9 @@ f.close()
 #[test]
 #[ignore = "MIR13/plugin FileBox: delegation via from Base.birth/close pending"]
 fn e2e_interpreter_plugin_filebox_delegation() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 box LoggingFileBox from FileBox {
@@ -89,11 +92,11 @@ local lf
 lf = new LoggingFileBox()
 lf.close()
 "#;
-    
-    // Test delegation through interpreter  
+
+    // Test delegation through interpreter
     let ast = NyashParser::parse_from_string(code).expect("parse failed");
     let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
-    
+
     match interpreter.execute(ast) {
         Ok(_) => {
             println!("✅ E2E Plugin FileBox delegation test passed!");
@@ -107,7 +110,9 @@ lf.close()
 #[test]
 #[ignore = "Plugins not configured by default env; skip in CI"]
 fn e2e_vm_plugin_filebox_close_void() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
     if nyash_rust::config::env::mir_core13_pure() {
         eprintln!("[E2E] skip vm filebox under Core-13 pure mode");
         return;
@@ -124,7 +129,9 @@ f.close()
     let mut compiler = nyash_rust::mir::MirCompiler::new();
     let compile_result = compiler.compile(ast).expect("mir compile failed");
     let mut vm = VM::with_runtime(runtime);
-    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    let result = vm
+        .execute_module(&compile_result.module)
+        .expect("vm exec failed");
     // close() is void; ensure result is void
     assert_eq!(result.to_string_box().value, "void");
 }
@@ -132,7 +139,9 @@ f.close()
 #[test]
 #[ignore = "MIR13/plugin FileBox: VM open/rw/read path pending parity"]
 fn e2e_vm_plugin_filebox_open_rw() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     // Open, write, read via VM backend
     let code = r#"
@@ -149,19 +158,24 @@ data
     let mut compiler = nyash_rust::mir::MirCompiler::new();
     let compile_result = compiler.compile(ast).expect("mir compile failed");
     let mut vm = VM::with_runtime(runtime);
-    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    let result = vm
+        .execute_module(&compile_result.module)
+        .expect("vm exec failed");
     assert_eq!(result.to_string_box().value, "HELLO");
 }
 
 #[test]
 #[ignore = "MIR13/plugin FileBox: VM copyFrom(handle) path pending parity"]
 fn e2e_vm_plugin_filebox_copy_from_handle() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let p1 = "./test_out_src.txt";
     let p2 = "./test_out_dst.txt";
 
-    let code = format!(r#"
+    let code = format!(
+        r#"
 local a, b, data
 a = new FileBox()
 b = new FileBox()
@@ -171,28 +185,35 @@ a.write("HELLO")
 b.copyFrom(a)
 data = b.read()
 data
-"#, p1, p2);
+"#,
+        p1, p2
+    );
 
     let ast = NyashParser::parse_from_string(&code).expect("parse failed");
     let runtime = NyashRuntime::new();
     let mut compiler = nyash_rust::mir::MirCompiler::new();
     let compile_result = compiler.compile(ast).expect("mir compile failed");
     let mut vm = VM::with_runtime(runtime);
-    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    let result = vm
+        .execute_module(&compile_result.module)
+        .expect("vm exec failed");
     assert_eq!(result.to_string_box().value, "HELLO");
 }
 
 #[test]
 #[ignore = "MIR13/plugin FileBox: interpreter copyFrom(handle) path pending parity"]
 fn e2e_interpreter_plugin_filebox_copy_from_handle() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     // Prepare two files and copy contents via plugin Handle argument
     let p1 = "./test_out_src.txt";
     let p2 = "./test_out_dst.txt";
 
     // Nyash program: open two FileBox, write to src, copy to dst via copyFrom, then read dst
-    let code = format!(r#"
+    let code = format!(
+        r#"
 local a, b, data
 a = new FileBox()
 b = new FileBox()
@@ -202,7 +223,9 @@ a.write("HELLO")
 b.copyFrom(a)
 data = b.read()
 data
-"#, p1, p2);
+"#,
+        p1, p2
+    );
 
     let ast = NyashParser::parse_from_string(&code).expect("parse failed");
     let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();

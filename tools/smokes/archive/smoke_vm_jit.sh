@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
+# Archived: VM/JIT dual-run helper (JIT is not maintained currently)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/.." && pwd)
+ROOT=$(cd "$HERE/../../" && pwd)
 
 SMOKE_FILE="${1:-$ROOT/tmp/smoke_print.nyash}"
 

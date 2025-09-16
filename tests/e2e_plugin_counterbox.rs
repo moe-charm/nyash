@@ -1,13 +1,14 @@
-
 #![cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 
 use nyash_rust::parser::NyashParser;
-use nyash_rust::runtime::plugin_loader_v2::{init_global_loader_v2, get_global_loader_v2};
 use nyash_rust::runtime::box_registry::get_global_registry;
+use nyash_rust::runtime::plugin_loader_v2::{get_global_loader_v2, init_global_loader_v2};
 use nyash_rust::runtime::PluginConfig;
 
 fn try_init_plugins() -> bool {
-    if !std::path::Path::new("nyash.toml").exists() { return false; }
+    if !std::path::Path::new("nyash.toml").exists() {
+        return false;
+    }
     if let Err(e) = init_global_loader_v2("nyash.toml") {
         eprintln!("[e2e] init_global_loader_v2 failed: {:?}", e);
         return false;
@@ -18,18 +19,24 @@ fn try_init_plugins() -> bool {
     if let Some(conf) = &loader.config {
         let mut map = std::collections::HashMap::new();
         for (lib_name, lib_def) in &conf.libraries {
-            for b in &lib_def.boxes { map.insert(b.clone(), lib_name.clone()); }
+            for b in &lib_def.boxes {
+                map.insert(b.clone(), lib_name.clone());
+            }
         }
         let reg = get_global_registry();
         reg.apply_plugin_config(&PluginConfig { plugins: map });
         true
-    } else { false }
+    } else {
+        false
+    }
 }
 
 #[test]
 #[ignore = "MIR13/plugin loader semantics: counter handle parity pending"]
 fn e2e_counter_basic_inc_get() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 local c, v1, v2
@@ -54,7 +61,9 @@ v2
 #[test]
 #[ignore = "MIR13/plugin loader semantics: assignment sharing parity pending"]
 fn e2e_counter_assignment_shares_handle() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 local c, x, v
@@ -79,7 +88,9 @@ v
 #[test]
 #[ignore = "MIR13/plugin loader semantics: MapBox shared handle parity pending"]
 fn e2e_counter_mapbox_shares_handle() {
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 local c, m, v

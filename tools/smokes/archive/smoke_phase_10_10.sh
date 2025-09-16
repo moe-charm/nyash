@@ -1,6 +1,6 @@
 #!/bin/bash
-# Phase 10.10 Smoke Test - Minimal verification for key features
-# Usage: ./tools/smoke_phase_10_10.sh
+# Phase 10.10 Smoke Test - Minimal verification for key features (archived)
+# Note: JIT/Cranelift paths are not maintained in current phase.
 
 set -e
 
@@ -34,3 +34,4 @@ echo "✓ CountingGC verified"
 echo
 
 echo "=== All smoke tests passed! ==="
+

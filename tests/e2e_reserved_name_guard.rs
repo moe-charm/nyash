@@ -2,49 +2,92 @@
 //! E2E: Reserved-name guard for unified registry
 use std::sync::Arc;
 
-use nyash_rust::box_factory::BoxFactory;
 use nyash_rust::box_factory::builtin::BuiltinGroups;
+use nyash_rust::box_factory::BoxFactory;
+use nyash_rust::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
 use nyash_rust::interpreter::NyashInterpreter;
 use nyash_rust::interpreter::RuntimeError;
-use nyash_rust::box_trait::{NyashBox, BoxCore, BoxBase, StringBox, BoolBox};
 
 // Dummy factory that tries to claim reserved core types
 struct BadFactory;
-impl BadFactory { fn new() -> Self { Self } }
+impl BadFactory {
+    fn new() -> Self {
+        Self
+    }
+}
 
 #[derive(Debug, Clone)]
-struct FakeStringBox { base: BoxBase, inner: String }
+struct FakeStringBox {
+    base: BoxBase,
+    inner: String,
+}
 
 impl BoxCore for FakeStringBox {
-    fn box_id(&self) -> u64 { self.base.id }
-    fn parent_type_id(&self) -> Option<std::any::TypeId> { None }
-    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "FakeString(\"{}\")", self.inner) }
-    fn as_any(&self) -> &dyn std::any::Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+    fn box_id(&self) -> u64 {
+        self.base.id
+    }
+    fn parent_type_id(&self) -> Option<std::any::TypeId> {
+        None
+    }
+    fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FakeString(\"{}\")", self.inner)
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
 }
 
 impl NyashBox for FakeStringBox {
-    fn to_string_box(&self) -> StringBox { StringBox::new(format!("FAKE:{}", self.inner)) }
-    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
-        if let Some(s) = other.as_any().downcast_ref::<FakeStringBox>() { BoolBox::new(self.inner == s.inner) } else { BoolBox::new(false) }
+    fn to_string_box(&self) -> StringBox {
+        StringBox::new(format!("FAKE:{}", self.inner))
     }
-    fn type_name(&self) -> &'static str { "StringBox" }
-    fn clone_box(&self) -> Box<dyn NyashBox> { Box::new(self.clone()) }
-    fn share_box(&self) -> Box<dyn NyashBox> { Box::new(self.clone()) }
+    fn equals(&self, other: &dyn NyashBox) -> BoolBox {
+        if let Some(s) = other.as_any().downcast_ref::<FakeStringBox>() {
+            BoolBox::new(self.inner == s.inner)
+        } else {
+            BoolBox::new(false)
+        }
+    }
+    fn type_name(&self) -> &'static str {
+        "StringBox"
+    }
+    fn clone_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        Box::new(self.clone())
+    }
 }
 
 impl BoxFactory for BadFactory {
-    fn create_box(&self, name: &str, args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, RuntimeError> {
+    fn create_box(
+        &self,
+        name: &str,
+        args: &[Box<dyn NyashBox>],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         match name {
             // Attempt to hijack StringBox
             "StringBox" => {
-                let s = args.get(0).map(|a| a.to_string_box().value).unwrap_or_default();
-                Ok(Box::new(FakeStringBox { base: BoxBase::new(), inner: s }))
+                let s = args
+                    .get(0)
+                    .map(|a| a.to_string_box().value)
+                    .unwrap_or_default();
+                Ok(Box::new(FakeStringBox {
+                    base: BoxBase::new(),
+                    inner: s,
+                }))
             }
-            _ => Err(RuntimeError::InvalidOperation { message: format!("Unknown Box type: {}", name) })
+            _ => Err(RuntimeError::InvalidOperation {
+                message: format!("Unknown Box type: {}", name),
+            }),
         }
     }
-    fn box_types(&self) -> Vec<&str> { vec!["StringBox"] }
+    fn box_types(&self) -> Vec<&str> {
+        vec!["StringBox"]
+    }
 }
 
 #[test]

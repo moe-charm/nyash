@@ -9,6 +9,8 @@ use super::super::types::{to_bool, map_mirtype_to_basic};
 use super::builder_cursor::BuilderCursor;
 use super::Resolver;
 
+fn phi_trace_on() -> bool { std::env::var("NYASH_LLVM_TRACE_PHI").ok().as_deref() == Some("1") }
+
 pub(in super::super) fn emit_return<'ctx, 'b>(
     codegen: &CodegenContext<'ctx>,
     cursor: &mut BuilderCursor<'ctx, 'b>,
@@ -82,6 +84,9 @@ pub(in super::super) fn emit_jump<'ctx, 'b>(
     cursor.emit_term(bid, |b| {
         b.build_unconditional_branch(tbb).map_err(|e| e.to_string()).unwrap();
     });
+    if phi_trace_on() {
+        eprintln!("[PHI:jump] pred={} -> succ={}", bid.as_u32(), target.as_u32());
+    }
     Ok(())
 }
 
@@ -335,10 +340,10 @@ pub(in super::super) fn finalize_phis<'ctx, 'b>(
                         });
                     }
                     let pred_bb = *bb_map.get(pred).ok_or("pred bb missing")?;
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    if phi_trace_on() {
                         eprintln!(
-                            "[PHI] finalize add pred_bb={} val={} ty={}",
-                            pred.as_u32(), in_vid.as_u32(),
+                            "[PHI:finalize] succ={} pred={} vid={} ty={}",
+                            succ_bb.as_u32(), pred.as_u32(), in_vid.as_u32(),
                             phi.as_basic_value().get_type().print_to_string().to_string()
                         );
                     }
@@ -359,10 +364,10 @@ pub(in super::super) fn finalize_phis<'ctx, 'b>(
                         BT::PointerType(pt) => pt.const_zero().into(),
                         _ => return Err("unsupported phi type for zero synth (finalize)".to_string()),
                     };
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    if phi_trace_on() {
                         eprintln!(
-                            "[PHI] finalize add (synth) pred_bb={} zero-ty={}",
-                            pred.as_u32(), bt.print_to_string().to_string()
+                            "[PHI:finalize] succ={} pred={} vid=? ty={} src=synth_zero",
+                            succ_bb.as_u32(), pred.as_u32(), bt.print_to_string().to_string()
                         );
                     }
                     match z {
@@ -431,6 +436,12 @@ pub(in super::super) fn localize_to_i64<'ctx, 'b>(
             };
         });
         phi.add_incoming(&[(&iv_out, pred_bb)]);
+        if phi_trace_on() {
+            eprintln!(
+                "[PHI:resolve] cur={} pred={} vid={} ty=i64",
+                cur_bid.as_u32(), p.as_u32(), vid.as_u32()
+            );
+        }
     }
     // Restore insertion point
     if let Some(bb) = saved_ip { codegen.builder.position_at_end(bb); }

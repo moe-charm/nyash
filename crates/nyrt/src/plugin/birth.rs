@@ -9,28 +9,23 @@ pub extern "C" fn nyash_box_birth_h_export(type_id: i64) -> i64 {
     }
     let tid = type_id as u32;
     // Map type_id back to type name
-    let name_opt = nyash_rust::runtime::plugin_loader_unified::get_global_plugin_host()
-        .read()
-        .ok()
-        .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
-        .and_then(|m| m.into_iter().find(|(_k, v)| *v == tid).map(|(k, _v)| k));
-    if let Some(box_type) = name_opt {
+    if let Some(meta) = nyash_rust::runtime::plugin_loader_v2::metadata_for_type_id(tid) {
         if let Ok(host_g) = nyash_rust::runtime::get_global_plugin_host().read() {
-            if let Ok(b) = host_g.create_box(&box_type, &[]) {
+            if let Ok(b) = host_g.create_box(&meta.box_type, &[]) {
                 let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
                     std::sync::Arc::from(b);
                 let h = nyash_rust::jit::rt::handles::to_handle(arc);
                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                     println!(
                         "nyrt: birth_h {} (type_id={}) -> handle={}",
-                        box_type, tid, h
+                        meta.box_type, meta.type_id, h
                     );
                 }
                 return h as i64;
             } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                 eprintln!(
                     "nyrt: birth_h {} (type_id={}) FAILED: create_box",
-                    box_type, tid
+                    meta.box_type, tid
                 );
             }
         }
@@ -47,33 +42,19 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
     if type_id <= 0 {
         return 0;
     }
-    let mut invoke: Option<
-        unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
-    > = None;
-    // Resolve invoke_fn via temporary instance
-    let box_type_name = nyash_rust::runtime::plugin_loader_unified::get_global_plugin_host()
-        .read()
-        .ok()
-        .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
-        .and_then(|m| {
-            m.into_iter()
-                .find(|(_k, v)| *v == (type_id as u32))
-                .map(|(k, _v)| k)
-        })
-        .unwrap_or_else(|| "PluginBox".to_string());
-    if let Ok(host_g) = nyash_rust::runtime::get_global_plugin_host().read() {
-        if let Ok(b) = host_g.create_box(&box_type_name, &[]) {
-            if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
-                invoke = Some(p.inner.invoke_fn);
-            }
-        }
-    }
-    if invoke.is_none() {
+    // Resolve invoke_fn via loader metadata
+    let meta = if let Some(meta) =
+        nyash_rust::runtime::plugin_loader_v2::metadata_for_type_id(type_id as u32)
+    {
+        meta
+    } else {
         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("nyrt: birth_i64 (type_id={}) FAILED: no invoke", type_id);
+            eprintln!("nyrt: birth_i64 (type_id={}) FAILED: type map", type_id);
         }
         return 0;
-    }
+    };
+    let box_type_name = meta.box_type.clone();
+    let invoke_fn = meta.invoke_fn;
     let method_id: u32 = 0; // birth
     let instance_id: u32 = 0; // static
                               // Build TLV args
@@ -186,7 +167,7 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
     let mut out = vec![0u8; 1024];
     let mut out_len: usize = out.len();
     let rc = unsafe {
-        invoke.unwrap()(
+        invoke_fn(
             type_id as u32,
             method_id,
             instance_id,
@@ -219,7 +200,7 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
                 box_type_name.clone(),
                 r_type,
                 r_inst,
-                invoke.unwrap(),
+                invoke_fn,
             );
             let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::new(pb);
             let h = nyash_rust::jit::rt::handles::to_handle(arc);

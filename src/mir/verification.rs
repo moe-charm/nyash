@@ -428,6 +428,11 @@ impl MirVerifier {
     
     /// Verify SSA form properties
     fn verify_ssa_form(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        // Allow non-SSA (edge-copy) mode for PHI-less MIR when enabled via env
+        if crate::config::env::verify_allow_no_phi()
+        {
+            return Ok(());
+        }
         let mut errors = Vec::new();
         let mut definitions = HashMap::new();
         
@@ -470,6 +475,11 @@ impl MirVerifier {
     
     /// Verify dominance relations (def must dominate use across blocks)
     fn verify_dominance(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        // Allow non-SSA (edge-copy) mode for PHI-less MIR when enabled via env
+        if crate::config::env::verify_allow_no_phi()
+        {
+            return Ok(());
+        }
         let mut errors = Vec::new();
 
         // Build def -> block map and dominators
@@ -536,6 +546,11 @@ impl MirVerifier {
     /// Verify that blocks with multiple predecessors do not use predecessor-defined values directly.
     /// In merge blocks, values coming from predecessors must be routed through Phi.
     fn verify_merge_uses(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        // Allow non-SSA (edge-copy) mode for PHI-less MIR when enabled via env
+        if crate::config::env::verify_allow_no_phi()
+        {
+            return Ok(());
+        }
         let mut errors = Vec::new();
         let preds = self.compute_predecessors(function);
         let def_block = self.compute_def_blocks(function);

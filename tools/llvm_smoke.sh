@@ -47,7 +47,7 @@ cargo build -q ${MODE:+--${MODE}} --features llvm
 
 echo "[llvm-smoke] running --backend llvm on examples/llvm11_core_smoke.nyash ..." >&2
 rm -f "$OBJ"
-NYASH_LLVM_OBJ_OUT="$OBJ" "$BIN" --backend llvm examples/llvm11_core_smoke.nyash >/dev/null || true
+NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_OBJ_OUT="$OBJ" "$BIN" --backend llvm examples/llvm11_core_smoke.nyash >/dev/null || true
 
 if [[ ! -f "$OBJ" ]]; then
   echo "error: expected object not found: $OBJ" >&2
@@ -59,6 +59,28 @@ if [[ ! -s "$OBJ" ]]; then
 fi
 
 echo "[llvm-smoke] OK: object generated: $OBJ ($(stat -c%s "$OBJ") bytes)" >&2
+
+# --- Stage-3 loop control smoke (break/continue) ---
+if [[ "${NYASH_LLVM_STAGE3_SMOKE:-0}" == "1" ]]; then
+  echo "[llvm-smoke] building + linking apps/tests/llvm_stage3_loop_only.nyash ..." >&2
+  OBJ_STAGE3="$PWD/target/aot_objects/stage3_loop_smoke.o"
+  rm -f "$OBJ_STAGE3"
+  # Loop-only case: harness should succeed (no exceptions in IR)
+  NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_OBJ_OUT="$OBJ_STAGE3" \
+    "$BIN" --backend llvm apps/tests/llvm_stage3_loop_only.nyash >/dev/null || true
+  NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_STAGE3" \
+    ./tools/build_llvm.sh apps/tests/llvm_stage3_loop_only.nyash -o app_stage3_loop >/dev/null || true
+  echo "[llvm-smoke] running app_stage3_loop ..." >&2
+  out_stage3=$(./app_stage3_loop || true)
+  echo "[llvm-smoke] output: $out_stage3" >&2
+  if ! echo "$out_stage3" | grep -q "Result: 3"; then
+    echo "error: stage3 loop smoke unexpected output: $out_stage3" >&2
+    exit 1
+  fi
+  echo "[llvm-smoke] OK: Stage-3 break/continue smoke passed" >&2
+else
+  echo "[llvm-smoke] skipping Stage-3 loop smoke (set NYASH_LLVM_STAGE3_SMOKE=1 to enable)" >&2
+fi
 
 # --- AOT smoke: apps/ny-llvm-smoke (Array get/set/print) ---
 if [[ "${NYASH_LLVM_ARRAY_SMOKE:-0}" == "1" ]]; then

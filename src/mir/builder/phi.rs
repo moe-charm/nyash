@@ -73,6 +73,30 @@ impl MirBuilder {
         let assigned_var_else = else_ast_for_analysis.as_ref().and_then(|a| extract_assigned_var(a));
         let result_val = self.value_gen.next();
 
+        if self.is_no_phi_mode() {
+            if let Some(var_name) = assigned_var_then.clone() {
+                let else_assigns_same = assigned_var_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
+                let then_value_for_var = then_var_map_end.get(&var_name).copied().unwrap_or(then_value_raw);
+                let else_value_for_var = if else_assigns_same {
+                    else_var_map_end_opt
+                        .as_ref()
+                        .and_then(|m| m.get(&var_name).copied())
+                        .unwrap_or(else_value_raw)
+                } else {
+                    pre_then_var_value.unwrap_or(else_value_raw)
+                };
+                self.insert_edge_copy(then_block, result_val, then_value_for_var)?;
+                self.insert_edge_copy(else_block, result_val, else_value_for_var)?;
+                self.variable_map = pre_if_var_map.clone();
+                self.variable_map.insert(var_name, result_val);
+            } else {
+                self.insert_edge_copy(then_block, result_val, then_value_raw)?;
+                self.insert_edge_copy(else_block, result_val, else_value_raw)?;
+                self.variable_map = pre_if_var_map.clone();
+            }
+            return Ok(result_val);
+        }
+
         if let Some(var_name) = assigned_var_then.clone() {
             let else_assigns_same = assigned_var_else.as_ref().map(|s| s == &var_name).unwrap_or(false);
             // Resolve branch-end values for the assigned variable

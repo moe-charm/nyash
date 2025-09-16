@@ -1,5 +1,5 @@
 //! Test Multi-Box Plugin for Nyash
-//! 
+//!
 //! Provides TestBoxA and TestBoxB to demonstrate multi-box plugin support
 
 use std::collections::HashMap;
@@ -125,26 +125,26 @@ static TESTBOX_B_INFO: NyashPluginInfo = NyashPluginInfo {
 
 #[no_mangle]
 pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1  // BID-1 ABI version
+    1 // BID-1 ABI version
 }
 
 #[no_mangle]
 pub extern "C" fn nyash_plugin_init(
     host: *const NyashHostVtable,
-    _info: *mut std::ffi::c_void,  // For v2, we use get_box_info instead
+    _info: *mut std::ffi::c_void, // For v2, we use get_box_info instead
 ) -> i32 {
     if host.is_null() {
         return NYB_E_INVALID_ARGS;
     }
-    
+
     unsafe {
         HOST_VTABLE = Some(&*host);
         INSTANCES = Some(Mutex::new(HashMap::new()));
-        
+
         // Log initialization
         log_info("Multi-box test plugin initialized");
     }
-    
+
     NYB_SUCCESS
 }
 
@@ -152,7 +152,7 @@ pub extern "C" fn nyash_plugin_init(
 
 #[no_mangle]
 pub extern "C" fn nyash_plugin_get_box_count() -> u32 {
-    2  // TestBoxA and TestBoxB
+    2 // TestBoxA and TestBoxB
 }
 
 #[no_mangle]
@@ -169,7 +169,7 @@ pub extern "C" fn nyash_plugin_get_type_id(box_name: *const c_char) -> u32 {
     if box_name.is_null() {
         return 0;
     }
-    
+
     unsafe {
         let name = std::ffi::CStr::from_ptr(box_name).to_string_lossy();
         match name.as_ref() {
@@ -195,27 +195,15 @@ pub extern "C" fn nyash_plugin_invoke(
     unsafe {
         match (type_id, method_id) {
             // TestBoxA methods
-            (TYPE_ID_TESTBOX_A, METHOD_BIRTH) => {
-                create_instance_a(result, result_len)
-            }
-            (TYPE_ID_TESTBOX_A, METHOD_HELLO) => {
-                hello_method(instance_id, result, result_len)
-            }
-            (TYPE_ID_TESTBOX_A, METHOD_FINI) => {
-                destroy_instance(instance_id)
-            }
-            
+            (TYPE_ID_TESTBOX_A, METHOD_BIRTH) => create_instance_a(result, result_len),
+            (TYPE_ID_TESTBOX_A, METHOD_HELLO) => hello_method(instance_id, result, result_len),
+            (TYPE_ID_TESTBOX_A, METHOD_FINI) => destroy_instance(instance_id),
+
             // TestBoxB methods
-            (TYPE_ID_TESTBOX_B, METHOD_BIRTH) => {
-                create_instance_b(result, result_len)
-            }
-            (TYPE_ID_TESTBOX_B, METHOD_GREET) => {
-                greet_method(instance_id, result, result_len)
-            }
-            (TYPE_ID_TESTBOX_B, METHOD_FINI) => {
-                destroy_instance(instance_id)
-            }
-            
+            (TYPE_ID_TESTBOX_B, METHOD_BIRTH) => create_instance_b(result, result_len),
+            (TYPE_ID_TESTBOX_B, METHOD_GREET) => greet_method(instance_id, result, result_len),
+            (TYPE_ID_TESTBOX_B, METHOD_FINI) => destroy_instance(instance_id),
+
             _ => NYB_E_INVALID_ARGS,
         }
     }
@@ -228,17 +216,20 @@ unsafe fn create_instance_a(result: *mut u8, result_len: *mut usize) -> i32 {
         if let Ok(mut map) = mutex.lock() {
             let id = INSTANCE_COUNTER;
             INSTANCE_COUNTER += 1;
-            
-            map.insert(id, TestInstance::BoxA {
-                message: "Hello from TestBoxA!".to_string(),
-            });
-            
+
+            map.insert(
+                id,
+                TestInstance::BoxA {
+                    message: "Hello from TestBoxA!".to_string(),
+                },
+            );
+
             // Return instance ID
             if *result_len >= 4 {
                 let bytes = id.to_le_bytes();
                 ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
                 *result_len = 4;
-                
+
                 log_info(&format!("Created TestBoxA instance {}", id));
                 return NYB_SUCCESS;
             }
@@ -252,17 +243,15 @@ unsafe fn create_instance_b(result: *mut u8, result_len: *mut usize) -> i32 {
         if let Ok(mut map) = mutex.lock() {
             let id = INSTANCE_COUNTER;
             INSTANCE_COUNTER += 1;
-            
-            map.insert(id, TestInstance::BoxB {
-                counter: 0,
-            });
-            
+
+            map.insert(id, TestInstance::BoxB { counter: 0 });
+
             // Return instance ID
             if *result_len >= 4 {
                 let bytes = id.to_le_bytes();
                 ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
                 *result_len = 4;
-                
+
                 log_info(&format!("Created TestBoxB instance {}", id));
                 return NYB_SUCCESS;
             }
@@ -294,7 +283,7 @@ unsafe fn greet_method(instance_id: u32, result: *mut u8, result_len: *mut usize
             if let Some(TestInstance::BoxB { counter }) = map.get_mut(&instance_id) {
                 *counter += 1;
                 let message = format!("Greeting #{} from TestBoxB!", counter);
-                
+
                 // Return message as TLV string
                 write_tlv_string(&message, result, result_len)
             } else {
@@ -329,28 +318,28 @@ unsafe fn destroy_instance(instance_id: u32) -> i32 {
 
 unsafe fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
     let bytes = s.as_bytes();
-    let needed = 8 + bytes.len();  // header(4) + entry(4) + string
-    
+    let needed = 8 + bytes.len(); // header(4) + entry(4) + string
+
     if *result_len < needed {
         return NYB_E_INVALID_ARGS;
     }
-    
+
     // TLV header
-    *result = 1;  // version low
-    *result.offset(1) = 0;  // version high
-    *result.offset(2) = 1;  // argc low
-    *result.offset(3) = 0;  // argc high
-    
+    *result = 1; // version low
+    *result.offset(1) = 0; // version high
+    *result.offset(2) = 1; // argc low
+    *result.offset(3) = 0; // argc high
+
     // String entry
-    *result.offset(4) = 6;  // Tag::String
-    *result.offset(5) = 0;  // padding
+    *result.offset(4) = 6; // Tag::String
+    *result.offset(5) = 0; // padding
     let len_bytes = (bytes.len() as u16).to_le_bytes();
     *result.offset(6) = len_bytes[0];
     *result.offset(7) = len_bytes[1];
-    
+
     // String data
     ptr::copy_nonoverlapping(bytes.as_ptr(), result.offset(8), bytes.len());
-    
+
     *result_len = needed;
     NYB_SUCCESS
 }

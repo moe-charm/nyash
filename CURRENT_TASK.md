@@ -13,6 +13,23 @@ What Changed (today)
 - CLI `--using` を追加（`--using "ns as Alias"` / `--using '"apps/foo.nyash" as Foo'`）。
 - フィールドは box 先頭のみルールのリンタを Runner に追加（`NYASH_FIELDS_TOP_STRICT=1` でエラー）。
 - Syntax Torture スイートの実行正規化（末行比較）。一部テスト本文を Nyash 仕様に合わせて修正。
+- JSON v0 仕様に Stage‑3 ノード（Break/Continue/Throw/Try）を追記。Parser Stage‑3 設計メモの現状/残課題を更新。
+- LLVM smoke に Stage‑3 loop サンプル（break/continue + throw/try/catch/finally 付き）を追加（`NYASH_LLVM_STAGE3_SMOKE=1`）。
+- Bridge (`json_v0`) に Stage‑3 throw/try の実稼働ルートを追加（`NYASH_BRIDGE_THROW_ENABLE=1` / `NYASH_BRIDGE_TRY_ENABLE=1` で MIR Throw/Catch を生成）。
+
+Decision (Phase‑15 wrap‑up)
+- MIR13 移行（PHI 非生成）: Phase‑15 の締めとして、MIR 生成層（Bridge/Builder）は PHI を生成しない方針に切替。PHI 合成は LLVM 層（llvmlite/Resolver）に集約。
+- LoopForm は次フェーズ（MIR18）で導入: まずは MIR14 を維持し、次フェーズで `LoopHeader/Enter/Latch` 等の占位命令を追加。現行 Phase‑15 は CFG パターン検知でループ搬送値を合成。
+- 例外は段階導入: Throw/Catch は現行維持（Bridge ゲートで出力可）。Try/Finally の構造化は将来の TryRegion で検討。
+
+Next Focus (Throw/Try — LLVM first)
+- ブリッジ設計: `emit_degraded_throw` の差し替え方針を策定し、JSON v0 `Try` ノード → MIR 変換の仕様を決める（Stage-3 例外モデル）。
+- MIR Builder/Runtime 調査: Rust VM/PyVM の `ControlFlow::Throw` 経路と既存 TryCatch 降格の挙動を整理。必要に応じて docs と CURRENT_TASK に反映。
+- PyVM 設計: 例外モデルをどこまで Python 側に実装するか決め、最小テスト計画を用意。
+- LLVM 実装方針: Throw/Try の MIR 命令を LLVM 側がどう扱うか（panic扱い or fallback）を設計し、smoke 更新案を作る。
+- テスト計画: JSON フィクスチャと `tools/llvm_smoke.sh` を中心に Stage-3 例外用のスモーク/単体テストを整備。
+
+※ Cranelift/JIT 系は当面対象外。ビルド時も LLVM のみを有効化（JIT 関連 feature/CI は無視）。
 
 - llvmlite/AOT（本戦）強化 — コアコレクション配線とエントリ統一
   - Array/Map の BoxCall を NyRT ハンドルAPIに直結：
@@ -42,11 +59,12 @@ Quick Next (today)
      - `--stage3` CLI フラグから ParserBox へ渡す導線を追加。
      - `docs/reference/architecture/parser_mvp_stage3.md` に Stage‑3 設計を記録。
   5) 自己ホスト経路で Ny 実装切替のゲート準備（現状は Python MVP 優先を維持）。
-  6) テスト:
+ 6) テスト:
      - `source tools/dev_env.sh pyvm`
      - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_smoke.sh`
      - `NYASH_VM_USE_PY=1 ./tools/selfhost_stage2_bridge_smoke.sh`
      - Torture（VM中心）: `(cd tests/nyash_syntax_torture_20250916 && BACKENDS="vm" NYASH_BIN=../../target/release/nyash bash run_spec_smoke.sh)`
+     - LLVM Stage‑3 smoke (手動): `NYASH_LLVM_STAGE3_SMOKE=1 ./tools/llvm_smoke.sh release`
 - Runner/Bridge 実行系
   - `--ny-parser-pipe` は `NYASH_PIPE_USE_PYVM=1` で PyVM に委譲（exit code 判定に統一）。
   - 自己ホスト JSON 生成は Python MVP を優先、LLVM EXE/インラインVMを段階フォールバック。
@@ -147,6 +165,17 @@ Recommended Next (short list)
 - Runner（仕上げ）
   - `mod.rs` の残置ヘルパ（usingの候補提示・環境注入ログ）を `pipeline/dispatch` へ集約し、`mod.rs` を最小のオーケストレーションに。
   - Namespaces Phase‑1（実装着手）: BoxIndex 構築・3段階解決・toml aliases・曖昧エラー改善・トレース
+
+Smoke Policy (Phase‑15)
+- PyVM: 一部チェックのみ（async/nowait/await/GC/sync は対象外）
+- LLVM: フル対応（llvmlite harness）。`tools/smokes/curated_llvm.sh [--phi-off]` を利用
+- JIT: 未整備（JIT向けスモークは `tools/smokes/archive/` に移管）
+
+MIR13 Plan（Phase‑15 終盤）
+- Bridge/Builder: PHI を生成しない（受理は維持）。If/Loop の合流は LLVM Resolver に任せる。
+- llvmlite: Resolver を使い、BB 先頭で PHI 合成。ループは preheader/cond/body の CFG から搬送値を復元（break は exit 側でマージ）。
+- Smoke: LLVM はまず loop‑only（break/continue）を常時緑化。例外系（throw/try）は IR 降ろし込み整備後に復帰。
+- 詳細設計: `docs/private/papers/paper-e-loop-signal-ir/mir-evolution-plan.md` に MIR14→MIR13→MIR17 の段階的移行計画を記載。
 
 Array/Map Literals Plan（Syntax Sugar）
 - Stage‑1: Array literal `[e1, e2, ...]` を実装（ゲート: `NYASH_SYNTAX_SUGAR_LEVEL=basic|full` または `NYASH_ENABLE_ARRAY_LITERAL=1`）。

@@ -1,2 +1,4 @@
-local m = {"name": "Alice", "age": 25}
-return m.size()
+loop(1 < 2) {
+  break
+}
+return 0

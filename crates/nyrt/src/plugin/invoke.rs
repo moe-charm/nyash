@@ -295,20 +295,18 @@ pub extern "C" fn nyash_plugin_invoke3_i64(
                     let r_type = u32::from_le_bytes(t);
                     let r_inst = u32::from_le_bytes(i);
                     // Build PluginBoxV2 and register into handle-registry
-                    let box_type_name =
-                        nyash_rust::runtime::plugin_loader_unified::get_global_plugin_host()
-                            .read()
-                            .ok()
-                            .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
-                            .and_then(|m| {
-                                m.into_iter().find(|(_k, v)| *v == r_type).map(|(k, _v)| k)
-                            })
-                            .unwrap_or_else(|| "PluginBox".to_string());
+                    let meta_opt =
+                        nyash_rust::runtime::plugin_loader_v2::metadata_for_type_id(r_type);
+                    let (box_type_name, invoke_ptr) = if let Some(meta) = meta_opt {
+                        (meta.box_type.clone(), meta.invoke_fn)
+                    } else {
+                        ("PluginBox".to_string(), invoke.unwrap())
+                    };
                     let pb = nyash_rust::runtime::plugin_loader_v2::make_plugin_box_v2(
                         box_type_name.clone(),
                         r_type,
                         r_inst,
-                        invoke.unwrap(),
+                        invoke_ptr,
                     );
                     let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
                         std::sync::Arc::new(pb);
@@ -977,11 +975,18 @@ pub extern "C" fn nyash_plugin_invoke_by_name_i64(
                     i.copy_from_slice(&payload[4..8]);
                     let r_type = u32::from_le_bytes(t);
                     let r_inst = u32::from_le_bytes(i);
+                    let meta_opt =
+                        nyash_rust::runtime::plugin_loader_v2::metadata_for_type_id(r_type);
+                    let (box_type_name, invoke_ptr) = if let Some(meta) = meta_opt {
+                        (meta.box_type.clone(), meta.invoke_fn)
+                    } else {
+                        (box_type.clone(), invoke.unwrap())
+                    };
                     let pb = nyash_rust::runtime::plugin_loader_v2::make_plugin_box_v2(
-                        box_type.clone(),
+                        box_type_name,
                         r_type,
                         r_inst,
-                        invoke.unwrap(),
+                        invoke_ptr,
                     );
                     let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
                         std::sync::Arc::new(pb);

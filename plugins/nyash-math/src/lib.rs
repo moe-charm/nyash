@@ -1,7 +1,7 @@
+use chrono::{DateTime, Datelike, Timelike, Utc};
+use rand::Rng;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::ptr;
-use chrono::{DateTime, Utc, Datelike, Timelike};
-use rand::Rng;
 
 // MathBox構造体
 pub struct MathBox {
@@ -185,7 +185,7 @@ pub extern "C" fn nyash_time_parse(time_str: *const c_char) -> *mut c_void {
     if time_str.is_null() {
         return ptr::null_mut();
     }
-    
+
     unsafe {
         let c_str = CStr::from_ptr(time_str);
         if let Ok(rust_str) = c_str.to_str() {
@@ -196,7 +196,7 @@ pub extern "C" fn nyash_time_parse(time_str: *const c_char) -> *mut c_void {
             }
         }
     }
-    
+
     ptr::null_mut()
 }
 
@@ -217,11 +217,11 @@ pub extern "C" fn nyash_datetime_to_string(ptr: *mut c_void) -> *mut c_char {
     if ptr.is_null() {
         return ptr::null_mut();
     }
-    
+
     unsafe {
         let datetime_box = &*(ptr as *mut DateTimeBox);
         let datetime_str = datetime_box.datetime.to_rfc3339();
-        
+
         if let Ok(c_string) = CString::new(datetime_str) {
             c_string.into_raw()
         } else {

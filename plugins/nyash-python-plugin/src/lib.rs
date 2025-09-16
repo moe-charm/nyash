@@ -7,12 +7,15 @@
 //! ABI alignment and loader wiring. Future subphases (10.5b–d) will implement
 //! actual CPython embedding and conversion.
 
+use libloading::Library;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char, c_int, c_void, c_long};
-use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
-use libloading::Library;
+use std::os::raw::{c_char, c_int, c_long, c_void};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Mutex,
+};
 
 // ===== Error Codes (aligned with other plugins) =====
 const NYB_SUCCESS: i32 = 0;
@@ -25,33 +28,35 @@ const NYB_E_INVALID_HANDLE: i32 = -8;
 
 // ===== Type IDs (must match nyash.toml) =====
 const TYPE_ID_PY_RUNTIME: u32 = 40;
-const TYPE_ID_PY_OBJECT:  u32 = 41;
+const TYPE_ID_PY_OBJECT: u32 = 41;
 
 // ===== Method IDs (initial draft) =====
 // PyRuntimeBox
-const PY_METHOD_BIRTH: u32 = 0;        // returns instance_id (u32 LE, no TLV)
-const PY_METHOD_EVAL:  u32 = 1;        // args: string code -> returns Handle(PyObject)
-const PY_METHOD_IMPORT:u32 = 2;        // args: string name -> returns Handle(PyObject)
-const PY_METHOD_FINI:  u32 = u32::MAX; // destructor
-// Result-returning variants (R)
-const PY_METHOD_EVAL_R:  u32 = 11;
-const PY_METHOD_IMPORT_R:u32 = 12;
+const PY_METHOD_BIRTH: u32 = 0; // returns instance_id (u32 LE, no TLV)
+const PY_METHOD_EVAL: u32 = 1; // args: string code -> returns Handle(PyObject)
+const PY_METHOD_IMPORT: u32 = 2; // args: string name -> returns Handle(PyObject)
+const PY_METHOD_FINI: u32 = u32::MAX; // destructor
+                                      // Result-returning variants (R)
+const PY_METHOD_EVAL_R: u32 = 11;
+const PY_METHOD_IMPORT_R: u32 = 12;
 
 // PyObjectBox
-const PYO_METHOD_BIRTH:   u32 = 0;     // reserved (should not be used directly)
-const PYO_METHOD_GETATTR: u32 = 1;     // args: string name -> returns Handle(PyObject)
-const PYO_METHOD_CALL:    u32 = 2;     // args: variadic TLV -> returns Handle(PyObject)
-const PYO_METHOD_STR:     u32 = 3;     // returns String
-const PYO_METHOD_CALL_KW: u32 = 5;     // args: key:string, val:TLV, ... -> returns Handle(PyObject)
-const PYO_METHOD_FINI:    u32 = u32::MAX; // destructor
-// Result-returning variants (R)
-const PYO_METHOD_GETATTR_R:u32 = 11;
-const PYO_METHOD_CALL_R:   u32 = 12;
-const PYO_METHOD_CALL_KW_R:u32 = 15;
+const PYO_METHOD_BIRTH: u32 = 0; // reserved (should not be used directly)
+const PYO_METHOD_GETATTR: u32 = 1; // args: string name -> returns Handle(PyObject)
+const PYO_METHOD_CALL: u32 = 2; // args: variadic TLV -> returns Handle(PyObject)
+const PYO_METHOD_STR: u32 = 3; // returns String
+const PYO_METHOD_CALL_KW: u32 = 5; // args: key:string, val:TLV, ... -> returns Handle(PyObject)
+const PYO_METHOD_FINI: u32 = u32::MAX; // destructor
+                                       // Result-returning variants (R)
+const PYO_METHOD_GETATTR_R: u32 = 11;
+const PYO_METHOD_CALL_R: u32 = 12;
+const PYO_METHOD_CALL_KW_R: u32 = 15;
 
 // ===== Minimal in-memory state for stubs =====
 #[derive(Default)]
-struct PyRuntimeInstance { globals: Option<*mut PyObject> }
+struct PyRuntimeInstance {
+    globals: Option<*mut PyObject>,
+}
 // Safety: Access to CPython state is guarded by the GIL in all call sites
 // and we only store raw pointers captured under the GIL. We never mutate
 // from multiple threads without reacquiring the GIL. Therefore, mark as
@@ -62,10 +67,12 @@ unsafe impl Sync for PyRuntimeInstance {}
 #[derive(Default)]
 struct PyObjectInstance {}
 
-static RUNTIMES: Lazy<Mutex<HashMap<u32, PyRuntimeInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static PYOBJS:   Lazy<Mutex<HashMap<u32, PyObjectInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static RUNTIMES: Lazy<Mutex<HashMap<u32, PyRuntimeInstance>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static PYOBJS: Lazy<Mutex<HashMap<u32, PyObjectInstance>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
-static RT_COUNTER:  AtomicU32 = AtomicU32::new(1);
+static RT_COUNTER: AtomicU32 = AtomicU32::new(1);
 static OBJ_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 // ====== Minimal dynamic CPython loader ======
@@ -79,7 +86,13 @@ struct CPython {
     Py_IsInitialized: unsafe extern "C" fn() -> c_int,
     PyGILState_Ensure: unsafe extern "C" fn() -> PyGILState_STATE,
     PyGILState_Release: unsafe extern "C" fn(PyGILState_STATE),
-    PyRun_StringFlags: unsafe extern "C" fn(*const c_char, c_int, *mut PyObject, *mut PyObject, *mut c_void) -> *mut PyObject,
+    PyRun_StringFlags: unsafe extern "C" fn(
+        *const c_char,
+        c_int,
+        *mut PyObject,
+        *mut PyObject,
+        *mut c_void,
+    ) -> *mut PyObject,
     PyImport_AddModule: unsafe extern "C" fn(*const c_char) -> *mut PyObject,
     PyModule_GetDict: unsafe extern "C" fn(*mut PyObject) -> *mut PyObject,
     PyImport_ImportModule: unsafe extern "C" fn(*const c_char) -> *mut PyObject,
@@ -90,7 +103,8 @@ struct CPython {
     // Added for getattr/call
     PyObject_GetAttrString: unsafe extern "C" fn(*mut PyObject, *const c_char) -> *mut PyObject,
     PyObject_CallObject: unsafe extern "C" fn(*mut PyObject, *mut PyObject) -> *mut PyObject,
-    PyObject_Call: unsafe extern "C" fn(*mut PyObject, *mut PyObject, *mut PyObject) -> *mut PyObject,
+    PyObject_Call:
+        unsafe extern "C" fn(*mut PyObject, *mut PyObject, *mut PyObject) -> *mut PyObject,
     PyTuple_New: unsafe extern "C" fn(isize) -> *mut PyObject,
     PyTuple_SetItem: unsafe extern "C" fn(*mut PyObject, isize, *mut PyObject) -> c_int,
     PyLong_FromLongLong: unsafe extern "C" fn(i64) -> *mut PyObject,
@@ -101,9 +115,11 @@ struct CPython {
     PyFloat_AsDouble: unsafe extern "C" fn(*mut PyObject) -> f64,
     PyLong_AsLongLong: unsafe extern "C" fn(*mut PyObject) -> i64,
     PyBytes_FromStringAndSize: unsafe extern "C" fn(*const c_char, isize) -> *mut PyObject,
-    PyBytes_AsStringAndSize: unsafe extern "C" fn(*mut PyObject, *mut *mut c_char, *mut isize) -> c_int,
+    PyBytes_AsStringAndSize:
+        unsafe extern "C" fn(*mut PyObject, *mut *mut c_char, *mut isize) -> c_int,
     PyDict_New: unsafe extern "C" fn() -> *mut PyObject,
-    PyDict_SetItemString: unsafe extern "C" fn(*mut PyObject, *const c_char, *mut PyObject) -> c_int,
+    PyDict_SetItemString:
+        unsafe extern "C" fn(*mut PyObject, *const c_char, *mut PyObject) -> c_int,
     PyErr_Occurred: unsafe extern "C" fn() -> *mut PyObject,
     PyErr_Fetch: unsafe extern "C" fn(*mut *mut PyObject, *mut *mut PyObject, *mut *mut PyObject),
     PyErr_Clear: unsafe extern "C" fn(),
@@ -130,49 +146,150 @@ fn try_load_cpython() -> Result<(), ()> {
     ];
     // Windows DLLs (search via PATH / System32)
     if cfg!(target_os = "windows") {
-        let dlls = ["python312.dll","python311.dll","python310.dll","python39.dll"];
-        for d in dlls.iter() { candidates.push((*d).into()); }
+        let dlls = [
+            "python312.dll",
+            "python311.dll",
+            "python310.dll",
+            "python39.dll",
+        ];
+        for d in dlls.iter() {
+            candidates.push((*d).into());
+        }
         if let Ok(pyhome) = std::env::var("PYTHONHOME") {
             for d in dlls.iter() {
                 let p = std::path::Path::new(&pyhome).join(d);
-                if p.exists() { candidates.push(p.to_string_lossy().to_string()); }
+                if p.exists() {
+                    candidates.push(p.to_string_lossy().to_string());
+                }
             }
         }
     }
     for name in candidates.into_iter() {
         if let Ok(lib) = unsafe { Library::new(&name) } {
             unsafe {
-                let Py_Initialize = *lib.get::<unsafe extern "C" fn()>(b"Py_Initialize\0").map_err(|_| ())?;
-                let Py_Finalize = *lib.get::<unsafe extern "C" fn()>(b"Py_Finalize\0").map_err(|_| ())?;
-                let Py_IsInitialized = *lib.get::<unsafe extern "C" fn() -> c_int>(b"Py_IsInitialized\0").map_err(|_| ())?;
-                let PyGILState_Ensure = *lib.get::<unsafe extern "C" fn() -> PyGILState_STATE>(b"PyGILState_Ensure\0").map_err(|_| ())?;
-                let PyGILState_Release = *lib.get::<unsafe extern "C" fn(PyGILState_STATE)>(b"PyGILState_Release\0").map_err(|_| ())?;
-                let PyRun_StringFlags = *lib.get::<unsafe extern "C" fn(*const c_char, c_int, *mut PyObject, *mut PyObject, *mut c_void) -> *mut PyObject>(b"PyRun_StringFlags\0").map_err(|_| ())?;
-                let PyImport_AddModule = *lib.get::<unsafe extern "C" fn(*const c_char) -> *mut PyObject>(b"PyImport_AddModule\0").map_err(|_| ())?;
-                let PyModule_GetDict = *lib.get::<unsafe extern "C" fn(*mut PyObject) -> *mut PyObject>(b"PyModule_GetDict\0").map_err(|_| ())?;
-                let PyImport_ImportModule = *lib.get::<unsafe extern "C" fn(*const c_char) -> *mut PyObject>(b"PyImport_ImportModule\0").map_err(|_| ())?;
-                let PyObject_Str = *lib.get::<unsafe extern "C" fn(*mut PyObject) -> *mut PyObject>(b"PyObject_Str\0").map_err(|_| ())?;
-                let PyUnicode_AsUTF8 = *lib.get::<unsafe extern "C" fn(*mut PyObject) -> *const c_char>(b"PyUnicode_AsUTF8\0").map_err(|_| ())?;
-                let Py_DecRef = *lib.get::<unsafe extern "C" fn(*mut PyObject)>(b"Py_DecRef\0").map_err(|_| ())?;
-                let Py_IncRef = *lib.get::<unsafe extern "C" fn(*mut PyObject)>(b"Py_IncRef\0").map_err(|_| ())?;
-                let PyObject_GetAttrString = *lib.get::<unsafe extern "C" fn(*mut PyObject, *const c_char) -> *mut PyObject>(b"PyObject_GetAttrString\0").map_err(|_| ())?;
-                let PyObject_CallObject = *lib.get::<unsafe extern "C" fn(*mut PyObject, *mut PyObject) -> *mut PyObject>(b"PyObject_CallObject\0").map_err(|_| ())?;
-                let PyObject_Call = *lib.get::<unsafe extern "C" fn(*mut PyObject, *mut PyObject, *mut PyObject) -> *mut PyObject>(b"PyObject_Call\0").map_err(|_| ())?;
-                let PyTuple_New = *lib.get::<unsafe extern "C" fn(isize) -> *mut PyObject>(b"PyTuple_New\0").map_err(|_| ())?;
-                let PyTuple_SetItem = *lib.get::<unsafe extern "C" fn(*mut PyObject, isize, *mut PyObject) -> c_int>(b"PyTuple_SetItem\0").map_err(|_| ())?;
-                let PyLong_FromLongLong = *lib.get::<unsafe extern "C" fn(i64) -> *mut PyObject>(b"PyLong_FromLongLong\0").map_err(|_| ())?;
-                let PyUnicode_FromString = *lib.get::<unsafe extern "C" fn(*const c_char) -> *mut PyObject>(b"PyUnicode_FromString\0").map_err(|_| ())?;
-                let PyBool_FromLong = *lib.get::<unsafe extern "C" fn(c_long: c_long) -> *mut PyObject>(b"PyBool_FromLong\0").map_err(|_| ())?;
-                let PyFloat_FromDouble = *lib.get::<unsafe extern "C" fn(f64) -> *mut PyObject>(b"PyFloat_FromDouble\0").map_err(|_| ())?;
-                let PyFloat_AsDouble = *lib.get::<unsafe extern "C" fn(*mut PyObject) -> f64>(b"PyFloat_AsDouble\0").map_err(|_| ())?;
-                let PyLong_AsLongLong = *lib.get::<unsafe extern "C" fn(*mut PyObject) -> i64>(b"PyLong_AsLongLong\0").map_err(|_| ())?;
-                let PyBytes_FromStringAndSize = *lib.get::<unsafe extern "C" fn(*const c_char, isize) -> *mut PyObject>(b"PyBytes_FromStringAndSize\0").map_err(|_| ())?;
+                let Py_Initialize = *lib
+                    .get::<unsafe extern "C" fn()>(b"Py_Initialize\0")
+                    .map_err(|_| ())?;
+                let Py_Finalize = *lib
+                    .get::<unsafe extern "C" fn()>(b"Py_Finalize\0")
+                    .map_err(|_| ())?;
+                let Py_IsInitialized = *lib
+                    .get::<unsafe extern "C" fn() -> c_int>(b"Py_IsInitialized\0")
+                    .map_err(|_| ())?;
+                let PyGILState_Ensure = *lib
+                    .get::<unsafe extern "C" fn() -> PyGILState_STATE>(b"PyGILState_Ensure\0")
+                    .map_err(|_| ())?;
+                let PyGILState_Release = *lib
+                    .get::<unsafe extern "C" fn(PyGILState_STATE)>(b"PyGILState_Release\0")
+                    .map_err(|_| ())?;
+                let PyRun_StringFlags = *lib
+                    .get::<unsafe extern "C" fn(
+                        *const c_char,
+                        c_int,
+                        *mut PyObject,
+                        *mut PyObject,
+                        *mut c_void,
+                    ) -> *mut PyObject>(b"PyRun_StringFlags\0")
+                    .map_err(|_| ())?;
+                let PyImport_AddModule = *lib
+                    .get::<unsafe extern "C" fn(*const c_char) -> *mut PyObject>(
+                        b"PyImport_AddModule\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyModule_GetDict = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject) -> *mut PyObject>(
+                        b"PyModule_GetDict\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyImport_ImportModule = *lib
+                    .get::<unsafe extern "C" fn(*const c_char) -> *mut PyObject>(
+                        b"PyImport_ImportModule\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyObject_Str = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject) -> *mut PyObject>(b"PyObject_Str\0")
+                    .map_err(|_| ())?;
+                let PyUnicode_AsUTF8 = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject) -> *const c_char>(
+                        b"PyUnicode_AsUTF8\0",
+                    )
+                    .map_err(|_| ())?;
+                let Py_DecRef = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject)>(b"Py_DecRef\0")
+                    .map_err(|_| ())?;
+                let Py_IncRef = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject)>(b"Py_IncRef\0")
+                    .map_err(|_| ())?;
+                let PyObject_GetAttrString = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject, *const c_char) -> *mut PyObject>(
+                        b"PyObject_GetAttrString\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyObject_CallObject = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject, *mut PyObject) -> *mut PyObject>(
+                        b"PyObject_CallObject\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyObject_Call = *lib
+                    .get::<unsafe extern "C" fn(
+                        *mut PyObject,
+                        *mut PyObject,
+                        *mut PyObject,
+                    ) -> *mut PyObject>(b"PyObject_Call\0")
+                    .map_err(|_| ())?;
+                let PyTuple_New = *lib
+                    .get::<unsafe extern "C" fn(isize) -> *mut PyObject>(b"PyTuple_New\0")
+                    .map_err(|_| ())?;
+                let PyTuple_SetItem = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject, isize, *mut PyObject) -> c_int>(
+                        b"PyTuple_SetItem\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyLong_FromLongLong = *lib
+                    .get::<unsafe extern "C" fn(i64) -> *mut PyObject>(b"PyLong_FromLongLong\0")
+                    .map_err(|_| ())?;
+                let PyUnicode_FromString = *lib
+                    .get::<unsafe extern "C" fn(*const c_char) -> *mut PyObject>(
+                        b"PyUnicode_FromString\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyBool_FromLong = *lib
+                    .get::<unsafe extern "C" fn(c_long: c_long) -> *mut PyObject>(
+                        b"PyBool_FromLong\0",
+                    )
+                    .map_err(|_| ())?;
+                let PyFloat_FromDouble = *lib
+                    .get::<unsafe extern "C" fn(f64) -> *mut PyObject>(b"PyFloat_FromDouble\0")
+                    .map_err(|_| ())?;
+                let PyFloat_AsDouble = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject) -> f64>(b"PyFloat_AsDouble\0")
+                    .map_err(|_| ())?;
+                let PyLong_AsLongLong = *lib
+                    .get::<unsafe extern "C" fn(*mut PyObject) -> i64>(b"PyLong_AsLongLong\0")
+                    .map_err(|_| ())?;
+                let PyBytes_FromStringAndSize = *lib
+                    .get::<unsafe extern "C" fn(*const c_char, isize) -> *mut PyObject>(
+                        b"PyBytes_FromStringAndSize\0",
+                    )
+                    .map_err(|_| ())?;
                 let PyBytes_AsStringAndSize = *lib.get::<unsafe extern "C" fn(*mut PyObject, *mut *mut c_char, *mut isize) -> c_int>(b"PyBytes_AsStringAndSize\0").map_err(|_| ())?;
-                let PyErr_Occurred = *lib.get::<unsafe extern "C" fn() -> *mut PyObject>(b"PyErr_Occurred\0").map_err(|_| ())?;
-                let PyDict_New = *lib.get::<unsafe extern "C" fn() -> *mut PyObject>(b"PyDict_New\0").map_err(|_| ())?;
+                let PyErr_Occurred = *lib
+                    .get::<unsafe extern "C" fn() -> *mut PyObject>(b"PyErr_Occurred\0")
+                    .map_err(|_| ())?;
+                let PyDict_New = *lib
+                    .get::<unsafe extern "C" fn() -> *mut PyObject>(b"PyDict_New\0")
+                    .map_err(|_| ())?;
                 let PyDict_SetItemString = *lib.get::<unsafe extern "C" fn(*mut PyObject, *const c_char, *mut PyObject) -> c_int>(b"PyDict_SetItemString\0").map_err(|_| ())?;
-                let PyErr_Fetch = *lib.get::<unsafe extern "C" fn(*mut *mut PyObject, *mut *mut PyObject, *mut *mut PyObject)>(b"PyErr_Fetch\0").map_err(|_| ())?;
-                let PyErr_Clear = *lib.get::<unsafe extern "C" fn()>(b"PyErr_Clear\0").map_err(|_| ())?;
+                let PyErr_Fetch =
+                    *lib.get::<unsafe extern "C" fn(
+                        *mut *mut PyObject,
+                        *mut *mut PyObject,
+                        *mut *mut PyObject,
+                    )>(b"PyErr_Fetch\0")
+                        .map_err(|_| ())?;
+                let PyErr_Clear = *lib
+                    .get::<unsafe extern "C" fn()>(b"PyErr_Clear\0")
+                    .map_err(|_| ())?;
 
                 let cpy = CPython {
                     _lib: lib,
@@ -222,7 +339,9 @@ fn ensure_cpython() -> Result<(), ()> {
         // Initialize on first load
         unsafe {
             if let Some(cpy) = &*CPY.lock().unwrap() {
-                if (cpy.Py_IsInitialized)() == 0 { (cpy.Py_Initialize)(); }
+                if (cpy.Py_IsInitialized)() == 0 {
+                    (cpy.Py_Initialize)();
+                }
             }
         }
     }
@@ -230,10 +349,14 @@ fn ensure_cpython() -> Result<(), ()> {
 }
 
 #[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 { 1 }
+pub extern "C" fn nyash_plugin_abi() -> u32 {
+    1
+}
 
 #[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 { NYB_SUCCESS }
+pub extern "C" fn nyash_plugin_init() -> i32 {
+    NYB_SUCCESS
+}
 
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke(
@@ -246,19 +369,36 @@ pub extern "C" fn nyash_plugin_invoke(
     result_len: *mut usize,
 ) -> i32 {
     match type_id {
-        TYPE_ID_PY_RUNTIME => handle_py_runtime(method_id, instance_id, args, args_len, result, result_len),
-        TYPE_ID_PY_OBJECT  => handle_py_object(method_id, instance_id, args, args_len, result, result_len),
+        TYPE_ID_PY_RUNTIME => {
+            handle_py_runtime(method_id, instance_id, args, args_len, result, result_len)
+        }
+        TYPE_ID_PY_OBJECT => {
+            handle_py_object(method_id, instance_id, args, args_len, result, result_len)
+        }
         _ => NYB_E_INVALID_TYPE,
     }
 }
 
-fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
+fn handle_py_runtime(
+    method_id: u32,
+    _instance_id: u32,
+    _args: *const u8,
+    _args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
     unsafe {
         match method_id {
             PY_METHOD_BIRTH => {
-                if result_len.is_null() { return NYB_E_INVALID_ARGS; }
-                if preflight(result, result_len, 4) { return NYB_E_SHORT_BUFFER; }
-                if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
+                if result_len.is_null() {
+                    return NYB_E_INVALID_ARGS;
+                }
+                if preflight(result, result_len, 4) {
+                    return NYB_E_SHORT_BUFFER;
+                }
+                if ensure_cpython().is_err() {
+                    return NYB_E_PLUGIN_ERROR;
+                }
                 let id = RT_COUNTER.fetch_add(1, Ordering::Relaxed);
                 let mut inst = PyRuntimeInstance::default();
                 if let Some(cpy) = &*CPY.lock().unwrap() {
@@ -267,11 +407,17 @@ fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_
                     let module = (cpy.PyImport_AddModule)(c_main.as_ptr());
                     if !module.is_null() {
                         let dict = (cpy.PyModule_GetDict)(module);
-                        if !dict.is_null() { inst.globals = Some(dict); }
+                        if !dict.is_null() {
+                            inst.globals = Some(dict);
+                        }
                     }
                     (cpy.PyGILState_Release)(state);
                 }
-                if let Ok(mut map) = RUNTIMES.lock() { map.insert(id, inst); } else { return NYB_E_PLUGIN_ERROR; }
+                if let Ok(mut map) = RUNTIMES.lock() {
+                    map.insert(id, inst);
+                } else {
+                    return NYB_E_PLUGIN_ERROR;
+                }
                 let bytes = id.to_le_bytes();
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
                 *result_len = 4;
@@ -279,40 +425,73 @@ fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_
             }
             PY_METHOD_FINI => {
                 // Only drop runtime slot; avoid calling Py_Finalize to prevent shutdown crashes.
-                if let Ok(mut map) = RUNTIMES.lock() { map.remove(&_instance_id); }
+                if let Ok(mut map) = RUNTIMES.lock() {
+                    map.remove(&_instance_id);
+                }
                 NYB_SUCCESS
             }
             PY_METHOD_EVAL | PY_METHOD_EVAL_R => {
-                if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
+                if ensure_cpython().is_err() {
+                    return NYB_E_PLUGIN_ERROR;
+                }
                 // Allow zero-arg eval by reading from env var (NYASH_PY_EVAL_CODE) for bootstrap demos
                 let argc = tlv_count_args(_args, _args_len);
                 let code = if argc == 0 {
                     std::env::var("NYASH_PY_EVAL_CODE").unwrap_or_else(|_| "".to_string())
                 } else {
-                    if let Some(s) = read_arg_string(_args, _args_len, 0) { s } else { return NYB_E_INVALID_ARGS }
+                    if let Some(s) = read_arg_string(_args, _args_len, 0) {
+                        s
+                    } else {
+                        return NYB_E_INVALID_ARGS;
+                    }
                 };
-                let c_code = match CString::new(code) { Ok(s) => s, Err(_) => return NYB_E_INVALID_ARGS };
+                let c_code = match CString::new(code) {
+                    Ok(s) => s,
+                    Err(_) => return NYB_E_INVALID_ARGS,
+                };
                 if let Some(cpy) = &*CPY.lock().unwrap() {
                     let state = (cpy.PyGILState_Ensure)();
                     // use per-runtime globals if available
                     let mut dict: *mut PyObject = std::ptr::null_mut();
-                    if let Ok(map) = RUNTIMES.lock() { if let Some(rt) = map.get(&_instance_id) { if let Some(g) = rt.globals { dict = g; } } }
+                    if let Ok(map) = RUNTIMES.lock() {
+                        if let Some(rt) = map.get(&_instance_id) {
+                            if let Some(g) = rt.globals {
+                                dict = g;
+                            }
+                        }
+                    }
                     if dict.is_null() {
                         let c_main = CString::new("__main__").unwrap();
                         let module = (cpy.PyImport_AddModule)(c_main.as_ptr());
-                        if module.is_null() { (cpy.PyGILState_Release)(state); return NYB_E_PLUGIN_ERROR; }
+                        if module.is_null() {
+                            (cpy.PyGILState_Release)(state);
+                            return NYB_E_PLUGIN_ERROR;
+                        }
                         dict = (cpy.PyModule_GetDict)(module);
                     }
                     // 258 == Py_eval_input
-                    let obj = (cpy.PyRun_StringFlags)(c_code.as_ptr(), 258, dict, dict, std::ptr::null_mut());
+                    let obj = (cpy.PyRun_StringFlags)(
+                        c_code.as_ptr(),
+                        258,
+                        dict,
+                        dict,
+                        std::ptr::null_mut(),
+                    );
                     if obj.is_null() {
                         let msg = take_py_error_string(cpy);
                         (cpy.PyGILState_Release)(state);
-                        if method_id == PY_METHOD_EVAL_R { return NYB_E_PLUGIN_ERROR; }
-                        if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
+                        if method_id == PY_METHOD_EVAL_R {
+                            return NYB_E_PLUGIN_ERROR;
+                        }
+                        if let Some(m) = msg {
+                            return write_tlv_string(&m, result, result_len);
+                        }
                         return NYB_E_PLUGIN_ERROR;
                     }
-                    if (method_id == PY_METHOD_EVAL || method_id == PY_METHOD_EVAL_R) && should_autodecode() && try_write_autodecode(cpy, obj, result, result_len) {
+                    if (method_id == PY_METHOD_EVAL || method_id == PY_METHOD_EVAL_R)
+                        && should_autodecode()
+                        && try_write_autodecode(cpy, obj, result, result_len)
+                    {
                         (cpy.Py_DecRef)(obj);
                         (cpy.PyGILState_Release)(state);
                         return NYB_SUCCESS;
@@ -335,23 +514,46 @@ fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_
                 NYB_E_PLUGIN_ERROR
             }
             PY_METHOD_IMPORT | PY_METHOD_IMPORT_R => {
-                if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
-                let Some(name) = read_arg_string(_args, _args_len, 0) else { return NYB_E_INVALID_ARGS; };
-                let c_name = match CString::new(name) { Ok(s) => s, Err(_) => return NYB_E_INVALID_ARGS };
+                if ensure_cpython().is_err() {
+                    return NYB_E_PLUGIN_ERROR;
+                }
+                let Some(name) = read_arg_string(_args, _args_len, 0) else {
+                    return NYB_E_INVALID_ARGS;
+                };
+                let c_name = match CString::new(name) {
+                    Ok(s) => s,
+                    Err(_) => return NYB_E_INVALID_ARGS,
+                };
                 if let Some(cpy) = &*CPY.lock().unwrap() {
                     let state = (cpy.PyGILState_Ensure)();
                     let obj = (cpy.PyImport_ImportModule)(c_name.as_ptr());
                     if obj.is_null() {
                         let msg = take_py_error_string(cpy);
                         (cpy.PyGILState_Release)(state);
-                        if method_id == PY_METHOD_IMPORT_R { return NYB_E_PLUGIN_ERROR; }
-                        if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
+                        if method_id == PY_METHOD_IMPORT_R {
+                            return NYB_E_PLUGIN_ERROR;
+                        }
+                        if let Some(m) = msg {
+                            return write_tlv_string(&m, result, result_len);
+                        }
                         return NYB_E_PLUGIN_ERROR;
                     }
                     // expose module into runtime globals
-                    if let Ok(map) = RUNTIMES.lock() { if let Some(rt) = map.get(&_instance_id) { if let Some(gl) = rt.globals { (cpy.PyDict_SetItemString)(gl, c_name.as_ptr(), obj); } } }
+                    if let Ok(map) = RUNTIMES.lock() {
+                        if let Some(rt) = map.get(&_instance_id) {
+                            if let Some(gl) = rt.globals {
+                                (cpy.PyDict_SetItemString)(gl, c_name.as_ptr(), obj);
+                            }
+                        }
+                    }
                     let id = OBJ_COUNTER.fetch_add(1, Ordering::Relaxed);
-                    if let Ok(mut map) = PYOBJS.lock() { map.insert(id, PyObjectInstance::default()); } else { (cpy.Py_DecRef)(obj); (cpy.PyGILState_Release)(state); return NYB_E_PLUGIN_ERROR; }
+                    if let Ok(mut map) = PYOBJS.lock() {
+                        map.insert(id, PyObjectInstance::default());
+                    } else {
+                        (cpy.Py_DecRef)(obj);
+                        (cpy.PyGILState_Release)(state);
+                        return NYB_E_PLUGIN_ERROR;
+                    }
                     OBJ_PTRS.lock().unwrap().insert(id, PyPtr(obj));
                     (cpy.PyGILState_Release)(state);
                     return write_tlv_handle(TYPE_ID_PY_OBJECT, id, result, result_len);
@@ -363,122 +565,237 @@ fn handle_py_runtime(method_id: u32, _instance_id: u32, _args: *const u8, _args_
     }
 }
 
-fn handle_py_object(method_id: u32, instance_id: u32, _args: *const u8, _args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {
+fn handle_py_object(
+    method_id: u32,
+    instance_id: u32,
+    _args: *const u8,
+    _args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
     match method_id {
         PYO_METHOD_BIRTH => NYB_E_INVALID_METHOD, // should be created via runtime
         PYO_METHOD_FINI => {
             if let Some(cpy) = &*CPY.lock().unwrap() {
                 if let Some(ptr) = OBJ_PTRS.lock().unwrap().remove(&instance_id) {
-                    unsafe { (cpy.Py_DecRef)(ptr.0); }
+                    unsafe {
+                        (cpy.Py_DecRef)(ptr.0);
+                    }
                 }
             }
-            if let Ok(mut map) = PYOBJS.lock() { map.remove(&instance_id); NYB_SUCCESS } else { NYB_E_PLUGIN_ERROR }
+            if let Ok(mut map) = PYOBJS.lock() {
+                map.remove(&instance_id);
+                NYB_SUCCESS
+            } else {
+                NYB_E_PLUGIN_ERROR
+            }
         }
         PYO_METHOD_GETATTR | PYO_METHOD_GETATTR_R => {
-            if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
-            let Some(name) = read_arg_string(_args, _args_len, 0) else { return NYB_E_INVALID_ARGS; };
+            if ensure_cpython().is_err() {
+                return NYB_E_PLUGIN_ERROR;
+            }
+            let Some(name) = read_arg_string(_args, _args_len, 0) else {
+                return NYB_E_INVALID_ARGS;
+            };
             if let Some(cpy) = &*CPY.lock().unwrap() {
-                let Some(obj) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else { return NYB_E_INVALID_HANDLE; };
-                let c_name = match CString::new(name) { Ok(s) => s, Err(_) => return NYB_E_INVALID_ARGS };
+                let Some(obj) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else {
+                    return NYB_E_INVALID_HANDLE;
+                };
+                let c_name = match CString::new(name) {
+                    Ok(s) => s,
+                    Err(_) => return NYB_E_INVALID_ARGS,
+                };
                 let state = unsafe { (cpy.PyGILState_Ensure)() };
                 let attr = unsafe { (cpy.PyObject_GetAttrString)(obj.0, c_name.as_ptr()) };
                 if attr.is_null() {
                     let msg = take_py_error_string(cpy);
-                    unsafe { (cpy.PyGILState_Release)(state); }
-                    if method_id == PYO_METHOD_GETATTR_R { return NYB_E_PLUGIN_ERROR; }
-                    if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
+                    unsafe {
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    if method_id == PYO_METHOD_GETATTR_R {
+                        return NYB_E_PLUGIN_ERROR;
+                    }
+                    if let Some(m) = msg {
+                        return write_tlv_string(&m, result, result_len);
+                    }
                     return NYB_E_PLUGIN_ERROR;
                 }
                 if should_autodecode() && try_write_autodecode(cpy, attr, result, result_len) {
-                    unsafe { (cpy.Py_DecRef)(attr); (cpy.PyGILState_Release)(state); }
+                    unsafe {
+                        (cpy.Py_DecRef)(attr);
+                        (cpy.PyGILState_Release)(state);
+                    }
                     return NYB_SUCCESS;
                 }
                 let id = OBJ_COUNTER.fetch_add(1, Ordering::Relaxed);
                 OBJ_PTRS.lock().unwrap().insert(id, PyPtr(attr));
-                unsafe { (cpy.PyGILState_Release)(state); }
+                unsafe {
+                    (cpy.PyGILState_Release)(state);
+                }
                 return write_tlv_handle(TYPE_ID_PY_OBJECT, id, result, result_len);
             }
             NYB_E_PLUGIN_ERROR
         }
         PYO_METHOD_CALL | PYO_METHOD_CALL_R => {
-            if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
+            if ensure_cpython().is_err() {
+                return NYB_E_PLUGIN_ERROR;
+            }
             if let Some(cpy) = &*CPY.lock().unwrap() {
-                let Some(func) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else { return NYB_E_INVALID_HANDLE; };
+                let Some(func) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else {
+                    return NYB_E_INVALID_HANDLE;
+                };
                 let state = unsafe { (cpy.PyGILState_Ensure)() };
                 // Build tuple from TLV args
                 let argc = tlv_count_args(_args, _args_len);
                 let tuple = unsafe { (cpy.PyTuple_New)(argc as isize) };
-                if tuple.is_null() { unsafe { (cpy.PyGILState_Release)(state); } return NYB_E_PLUGIN_ERROR; }
+                if tuple.is_null() {
+                    unsafe {
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    return NYB_E_PLUGIN_ERROR;
+                }
                 if !fill_tuple_from_tlv(cpy, tuple, _args, _args_len) {
-                    unsafe { (cpy.Py_DecRef)(tuple); (cpy.PyGILState_Release)(state); }
+                    unsafe {
+                        (cpy.Py_DecRef)(tuple);
+                        (cpy.PyGILState_Release)(state);
+                    }
                     return NYB_E_INVALID_ARGS;
                 }
                 let ret = unsafe { (cpy.PyObject_CallObject)(func.0, tuple) };
-                unsafe { (cpy.Py_DecRef)(tuple); }
+                unsafe {
+                    (cpy.Py_DecRef)(tuple);
+                }
                 if ret.is_null() {
                     let msg = take_py_error_string(cpy);
-                    unsafe { (cpy.PyGILState_Release)(state); }
-                    if method_id == PYO_METHOD_CALL_R { return NYB_E_PLUGIN_ERROR; }
-                    if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
+                    unsafe {
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    if method_id == PYO_METHOD_CALL_R {
+                        return NYB_E_PLUGIN_ERROR;
+                    }
+                    if let Some(m) = msg {
+                        return write_tlv_string(&m, result, result_len);
+                    }
                     return NYB_E_PLUGIN_ERROR;
                 }
                 if should_autodecode() && try_write_autodecode(cpy, ret, result, result_len) {
-                    unsafe { (cpy.Py_DecRef)(ret); (cpy.PyGILState_Release)(state); }
+                    unsafe {
+                        (cpy.Py_DecRef)(ret);
+                        (cpy.PyGILState_Release)(state);
+                    }
                     return NYB_SUCCESS;
                 }
                 let id = OBJ_COUNTER.fetch_add(1, Ordering::Relaxed);
                 OBJ_PTRS.lock().unwrap().insert(id, PyPtr(ret));
-                unsafe { (cpy.PyGILState_Release)(state); }
+                unsafe {
+                    (cpy.PyGILState_Release)(state);
+                }
                 return write_tlv_handle(TYPE_ID_PY_OBJECT, id, result, result_len);
             }
             NYB_E_PLUGIN_ERROR
         }
         PYO_METHOD_CALL_KW | PYO_METHOD_CALL_KW_R => {
-            if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
+            if ensure_cpython().is_err() {
+                return NYB_E_PLUGIN_ERROR;
+            }
             if let Some(cpy) = &*CPY.lock().unwrap() {
-                let Some(func) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else { return NYB_E_INVALID_HANDLE; };
+                let Some(func) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else {
+                    return NYB_E_INVALID_HANDLE;
+                };
                 let state = unsafe { (cpy.PyGILState_Ensure)() };
                 // Empty args tuple for kwargs-only call
                 let args_tup = unsafe { (cpy.PyTuple_New)(0) };
-                if args_tup.is_null() { unsafe { (cpy.PyGILState_Release)(state); } return NYB_E_PLUGIN_ERROR; }
+                if args_tup.is_null() {
+                    unsafe {
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    return NYB_E_PLUGIN_ERROR;
+                }
                 // Build kwargs dict from TLV pairs
                 let kwargs = unsafe { (cpy.PyDict_New)() };
-                if kwargs.is_null() { unsafe { (cpy.Py_DecRef)(args_tup); (cpy.PyGILState_Release)(state); } return NYB_E_PLUGIN_ERROR; }
+                if kwargs.is_null() {
+                    unsafe {
+                        (cpy.Py_DecRef)(args_tup);
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    return NYB_E_PLUGIN_ERROR;
+                }
                 if !fill_kwargs_from_tlv(cpy, kwargs, _args, _args_len) {
-                    unsafe { (cpy.Py_DecRef)(kwargs); (cpy.Py_DecRef)(args_tup); (cpy.PyGILState_Release)(state); }
+                    unsafe {
+                        (cpy.Py_DecRef)(kwargs);
+                        (cpy.Py_DecRef)(args_tup);
+                        (cpy.PyGILState_Release)(state);
+                    }
                     return NYB_E_INVALID_ARGS;
                 }
                 let ret = unsafe { (cpy.PyObject_Call)(func.0, args_tup, kwargs) };
-                unsafe { (cpy.Py_DecRef)(kwargs); (cpy.Py_DecRef)(args_tup); }
+                unsafe {
+                    (cpy.Py_DecRef)(kwargs);
+                    (cpy.Py_DecRef)(args_tup);
+                }
                 if ret.is_null() {
                     let msg = take_py_error_string(cpy);
-                    unsafe { (cpy.PyGILState_Release)(state); }
-                    if method_id == PYO_METHOD_CALL_KW_R { return NYB_E_PLUGIN_ERROR; }
-                    if let Some(m) = msg { return write_tlv_string(&m, result, result_len); }
+                    unsafe {
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    if method_id == PYO_METHOD_CALL_KW_R {
+                        return NYB_E_PLUGIN_ERROR;
+                    }
+                    if let Some(m) = msg {
+                        return write_tlv_string(&m, result, result_len);
+                    }
                     return NYB_E_PLUGIN_ERROR;
                 }
-                if (method_id == PYO_METHOD_CALL_KW || method_id == PYO_METHOD_CALL_KW_R) && should_autodecode() && try_write_autodecode(cpy, ret, result, result_len) {
-                    unsafe { (cpy.Py_DecRef)(ret); (cpy.PyGILState_Release)(state); }
+                if (method_id == PYO_METHOD_CALL_KW || method_id == PYO_METHOD_CALL_KW_R)
+                    && should_autodecode()
+                    && try_write_autodecode(cpy, ret, result, result_len)
+                {
+                    unsafe {
+                        (cpy.Py_DecRef)(ret);
+                        (cpy.PyGILState_Release)(state);
+                    }
                     return NYB_SUCCESS;
                 }
                 let id = OBJ_COUNTER.fetch_add(1, Ordering::Relaxed);
                 OBJ_PTRS.lock().unwrap().insert(id, PyPtr(ret));
-                unsafe { (cpy.PyGILState_Release)(state); }
+                unsafe {
+                    (cpy.PyGILState_Release)(state);
+                }
                 return write_tlv_handle(TYPE_ID_PY_OBJECT, id, result, result_len);
             }
             NYB_E_PLUGIN_ERROR
         }
         PYO_METHOD_STR => {
-            if ensure_cpython().is_err() { return NYB_E_PLUGIN_ERROR; }
+            if ensure_cpython().is_err() {
+                return NYB_E_PLUGIN_ERROR;
+            }
             if let Some(cpy) = &*CPY.lock().unwrap() {
-                let Some(obj) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else { return NYB_E_INVALID_HANDLE; };
+                let Some(obj) = OBJ_PTRS.lock().unwrap().get(&instance_id).copied() else {
+                    return NYB_E_INVALID_HANDLE;
+                };
                 let state = unsafe { (cpy.PyGILState_Ensure)() };
                 let s_obj = unsafe { (cpy.PyObject_Str)(obj.0) };
-                if s_obj.is_null() { unsafe { (cpy.PyGILState_Release)(state); } return NYB_E_PLUGIN_ERROR; }
+                if s_obj.is_null() {
+                    unsafe {
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    return NYB_E_PLUGIN_ERROR;
+                }
                 let cstr = unsafe { (cpy.PyUnicode_AsUTF8)(s_obj) };
-                if cstr.is_null() { unsafe { (cpy.Py_DecRef)(s_obj); (cpy.PyGILState_Release)(state); } return NYB_E_PLUGIN_ERROR; }
-                let rust_str = unsafe { CStr::from_ptr(cstr) }.to_string_lossy().to_string();
-                unsafe { (cpy.Py_DecRef)(s_obj); (cpy.PyGILState_Release)(state); }
+                if cstr.is_null() {
+                    unsafe {
+                        (cpy.Py_DecRef)(s_obj);
+                        (cpy.PyGILState_Release)(state);
+                    }
+                    return NYB_E_PLUGIN_ERROR;
+                }
+                let rust_str = unsafe { CStr::from_ptr(cstr) }
+                    .to_string_lossy()
+                    .to_string();
+                unsafe {
+                    (cpy.Py_DecRef)(s_obj);
+                    (cpy.PyGILState_Release)(state);
+                }
                 return write_tlv_string(&rust_str, result, result_len);
             }
             NYB_E_PLUGIN_ERROR
@@ -491,7 +808,9 @@ fn handle_py_object(method_id: u32, instance_id: u32, _args: *const u8, _args_le
 // ===== Minimal TLV helpers (copy from other plugins for consistency) =====
 fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
     unsafe {
-        if result_len.is_null() { return false; }
+        if result_len.is_null() {
+            return false;
+        }
         if result.is_null() || *result_len < needed {
             *result_len = needed;
             return true;
@@ -505,7 +824,12 @@ fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(6u8, payload)], result, result_len)
 }
 
-fn write_tlv_handle(type_id: u32, instance_id: u32, result: *mut u8, result_len: *mut usize) -> i32 {
+fn write_tlv_handle(
+    type_id: u32,
+    instance_id: u32,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
     let mut payload = [0u8; 8];
     payload[..4].copy_from_slice(&type_id.to_le_bytes());
     payload[4..].copy_from_slice(&instance_id.to_le_bytes());
@@ -514,18 +838,26 @@ fn write_tlv_handle(type_id: u32, instance_id: u32, result: *mut u8, result_len:
 
 /// Read nth TLV argument as String (tag 6)
 fn read_arg_string(args: *const u8, args_len: usize, n: usize) -> Option<String> {
-    if args.is_null() || args_len < 4 { return None; }
+    if args.is_null() || args_len < 4 {
+        return None;
+    }
     let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
     let mut off = 4usize; // skip header
     for i in 0..=n {
-        if buf.len() < off + 4 { return None; }
+        if buf.len() < off + 4 {
+            return None;
+        }
         let tag = buf[off];
-        let _rsv = buf[off+1];
-        let size = u16::from_le_bytes([buf[off+2], buf[off+3]]) as usize;
-        if buf.len() < off + 4 + size { return None; }
+        let _rsv = buf[off + 1];
+        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
+        if buf.len() < off + 4 + size {
+            return None;
+        }
         if i == n {
-            if tag != 6 { return None; }
-            let slice = &buf[off+4 .. off+4+size];
+            if tag != 6 {
+                return None;
+            }
+            let slice = &buf[off + 4..off + 4 + size];
             return std::str::from_utf8(slice).ok().map(|s| s.to_string());
         }
         off += 4 + size;
@@ -542,8 +874,11 @@ static OBJ_PTRS: Lazy<Mutex<HashMap<u32, PyPtr>>> = Lazy::new(|| Mutex::new(Hash
 
 // Base TLV writer used by helpers
 fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() { return NYB_E_INVALID_ARGS; }
-    let mut buf: Vec<u8> = Vec::with_capacity(4 + payloads.iter().map(|(_,p)| 4 + p.len()).sum::<usize>());
+    if result_len.is_null() {
+        return NYB_E_INVALID_ARGS;
+    }
+    let mut buf: Vec<u8> =
+        Vec::with_capacity(4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>());
     buf.extend_from_slice(&1u16.to_le_bytes()); // version
     buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes()); // argc
     for (tag, payload) in payloads {
@@ -565,54 +900,85 @@ fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut 
 }
 
 fn tlv_count_args(args: *const u8, args_len: usize) -> usize {
-    if args.is_null() || args_len < 4 { return 0; }
+    if args.is_null() || args_len < 4 {
+        return 0;
+    }
     let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    if buf.len() < 4 { return 0; }
+    if buf.len() < 4 {
+        return 0;
+    }
     let argc = u16::from_le_bytes([buf[2], buf[3]]) as usize;
     argc
 }
 
-fn fill_tuple_from_tlv(cpy: &CPython, tuple: *mut PyObject, args: *const u8, args_len: usize) -> bool {
-    if args.is_null() || args_len < 4 { return true; }
+fn fill_tuple_from_tlv(
+    cpy: &CPython,
+    tuple: *mut PyObject,
+    args: *const u8,
+    args_len: usize,
+) -> bool {
+    if args.is_null() || args_len < 4 {
+        return true;
+    }
     let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
     let mut off = 4usize;
     let mut idx: isize = 0;
     while off + 4 <= buf.len() {
         let tag = buf[off];
-        let _rsv = buf[off+1];
-        let size = u16::from_le_bytes([buf[off+2], buf[off+3]]) as usize;
-        if off + 4 + size > buf.len() { return false; }
-        let payload = &buf[off+4 .. off+4+size];
+        let _rsv = buf[off + 1];
+        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
+        if off + 4 + size > buf.len() {
+            return false;
+        }
+        let payload = &buf[off + 4..off + 4 + size];
         let mut obj: *mut PyObject = std::ptr::null_mut();
         unsafe {
             match tag {
-                1 => { // Bool (1 byte)
+                1 => {
+                    // Bool (1 byte)
                     let v = if size >= 1 && payload[0] != 0 { 1 } else { 0 };
                     obj = (cpy.PyBool_FromLong)(v);
                 }
-                2 => { // I32
-                    if size != 4 { return false; }
-                    let mut b = [0u8;4]; b.copy_from_slice(payload);
+                2 => {
+                    // I32
+                    if size != 4 {
+                        return false;
+                    }
+                    let mut b = [0u8; 4];
+                    b.copy_from_slice(payload);
                     let v = i32::from_le_bytes(b) as i64;
                     obj = (cpy.PyLong_FromLongLong)(v);
                 }
-                3 => { // I64
-                    if size != 8 { return false; }
-                    let mut b = [0u8;8]; b.copy_from_slice(payload);
+                3 => {
+                    // I64
+                    if size != 8 {
+                        return false;
+                    }
+                    let mut b = [0u8; 8];
+                    b.copy_from_slice(payload);
                     let v = i64::from_le_bytes(b);
                     obj = (cpy.PyLong_FromLongLong)(v);
                 }
-                5 => { // F64
-                    if size != 8 { return false; }
-                    let mut b = [0u8;8]; b.copy_from_slice(payload);
+                5 => {
+                    // F64
+                    if size != 8 {
+                        return false;
+                    }
+                    let mut b = [0u8; 8];
+                    b.copy_from_slice(payload);
                     let v = f64::from_le_bytes(b);
                     obj = (cpy.PyFloat_FromDouble)(v);
                 }
-                6 => { // String
-                    let c = match CString::new(payload) { Ok(c) => c, Err(_) => return false };
+                6 => {
+                    // String
+                    let c = match CString::new(payload) {
+                        Ok(c) => c,
+                        Err(_) => return false,
+                    };
                     obj = (cpy.PyUnicode_FromString)(c.as_ptr());
                 }
-                7 => { // Bytes
+                7 => {
+                    // Bytes
                     if size > 0 {
                         let ptr = payload.as_ptr() as *const c_char;
                         obj = (cpy.PyBytes_FromStringAndSize)(ptr, size as isize);
@@ -620,23 +986,36 @@ fn fill_tuple_from_tlv(cpy: &CPython, tuple: *mut PyObject, args: *const u8, arg
                         obj = (cpy.PyBytes_FromStringAndSize)(std::ptr::null(), 0);
                     }
                 }
-                8 => { // Handle
-                    if size != 8 { return false; }
-                    let mut t = [0u8;4]; t.copy_from_slice(&payload[0..4]);
-                    let mut i = [0u8;4]; i.copy_from_slice(&payload[4..8]);
+                8 => {
+                    // Handle
+                    if size != 8 {
+                        return false;
+                    }
+                    let mut t = [0u8; 4];
+                    t.copy_from_slice(&payload[0..4]);
+                    let mut i = [0u8; 4];
+                    i.copy_from_slice(&payload[4..8]);
                     let _type_id = u32::from_le_bytes(t);
                     let inst_id = u32::from_le_bytes(i);
                     if let Some(ptr) = OBJ_PTRS.lock().unwrap().get(&inst_id).copied() {
                         // PyTuple_SetItem steals a reference; INCREF to keep original alive
                         (cpy.Py_IncRef)(ptr.0);
                         obj = ptr.0;
-                    } else { return false; }
+                    } else {
+                        return false;
+                    }
                 }
-                _ => { return false; }
+                _ => {
+                    return false;
+                }
             }
-            if obj.is_null() { return false; }
+            if obj.is_null() {
+                return false;
+            }
             let rc = (cpy.PyTuple_SetItem)(tuple, idx, obj);
-            if rc != 0 { return false; }
+            if rc != 0 {
+                return false;
+            }
             idx += 1;
         }
         off += 4 + size;
@@ -646,16 +1025,25 @@ fn fill_tuple_from_tlv(cpy: &CPython, tuple: *mut PyObject, args: *const u8, arg
 
 fn take_py_error_string(cpy: &CPython) -> Option<String> {
     unsafe {
-        if (cpy.PyErr_Occurred)().is_null() { return None; }
+        if (cpy.PyErr_Occurred)().is_null() {
+            return None;
+        }
         let mut ptype: *mut PyObject = std::ptr::null_mut();
         let mut pvalue: *mut PyObject = std::ptr::null_mut();
         let mut ptrace: *mut PyObject = std::ptr::null_mut();
         (cpy.PyErr_Fetch)(&mut ptype, &mut pvalue, &mut ptrace);
         let s = if !pvalue.is_null() {
             let sobj = (cpy.PyObject_Str)(pvalue);
-            if sobj.is_null() { (cpy.PyErr_Clear)(); return Some("Python error".to_string()); }
+            if sobj.is_null() {
+                (cpy.PyErr_Clear)();
+                return Some("Python error".to_string());
+            }
             let cstr = (cpy.PyUnicode_AsUTF8)(sobj);
-            let msg = if cstr.is_null() { "Python error".to_string() } else { CStr::from_ptr(cstr).to_string_lossy().to_string() };
+            let msg = if cstr.is_null() {
+                "Python error".to_string()
+            } else {
+                CStr::from_ptr(cstr).to_string_lossy().to_string()
+            };
             (cpy.Py_DecRef)(sobj);
             msg
         } else {
@@ -666,75 +1054,156 @@ fn take_py_error_string(cpy: &CPython) -> Option<String> {
     }
 }
 
-fn fill_kwargs_from_tlv(cpy: &CPython, dict: *mut PyObject, args: *const u8, args_len: usize) -> bool {
-    if args.is_null() || args_len < 4 { return true; }
+fn fill_kwargs_from_tlv(
+    cpy: &CPython,
+    dict: *mut PyObject,
+    args: *const u8,
+    args_len: usize,
+) -> bool {
+    if args.is_null() || args_len < 4 {
+        return true;
+    }
     let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
     let mut off = 4usize;
     loop {
-        if off + 4 > buf.len() { break; }
+        if off + 4 > buf.len() {
+            break;
+        }
         let tag_k = buf[off];
-        let _rsv = buf[off+1];
-        let size_k = u16::from_le_bytes([buf[off+2], buf[off+3]]) as usize;
-        if tag_k != 6 || off + 4 + size_k > buf.len() { return false; }
-        let key_bytes = &buf[off+4 .. off+4+size_k];
+        let _rsv = buf[off + 1];
+        let size_k = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
+        if tag_k != 6 || off + 4 + size_k > buf.len() {
+            return false;
+        }
+        let key_bytes = &buf[off + 4..off + 4 + size_k];
         off += 4 + size_k;
-        if off + 4 > buf.len() { return false; }
+        if off + 4 > buf.len() {
+            return false;
+        }
         let tag_v = buf[off];
-        let _rsv2 = buf[off+1];
-        let size_v = u16::from_le_bytes([buf[off+2], buf[off+3]]) as usize;
-        if off + 4 + size_v > buf.len() { return false; }
-        let val_payload = &buf[off+4 .. off+4+size_v];
+        let _rsv2 = buf[off + 1];
+        let size_v = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
+        if off + 4 + size_v > buf.len() {
+            return false;
+        }
+        let val_payload = &buf[off + 4..off + 4 + size_v];
         off += 4 + size_v;
         unsafe {
-            let key_c = match CString::new(key_bytes) { Ok(c) => c, Err(_) => return false };
+            let key_c = match CString::new(key_bytes) {
+                Ok(c) => c,
+                Err(_) => return false,
+            };
             let mut obj: *mut PyObject = std::ptr::null_mut();
             match tag_v {
-                1 => { let v = if size_v >= 1 && val_payload[0] != 0 { 1 } else { 0 }; obj = (cpy.PyBool_FromLong)(v); }
-                2 => { if size_v != 4 { return false; } let mut b = [0u8;4]; b.copy_from_slice(val_payload); obj = (cpy.PyLong_FromLongLong)(i32::from_le_bytes(b) as i64); }
-                3 => { if size_v != 8 { return false; } let mut b=[0u8;8]; b.copy_from_slice(val_payload); obj = (cpy.PyLong_FromLongLong)(i64::from_le_bytes(b)); }
-                5 => { if size_v != 8 { return false; } let mut b=[0u8;8]; b.copy_from_slice(val_payload); obj = (cpy.PyFloat_FromDouble)(f64::from_le_bytes(b)); }
-                6 => { let c = match CString::new(val_payload) { Ok(c) => c, Err(_) => return false }; obj = (cpy.PyUnicode_FromString)(c.as_ptr()); }
-                7 => { let ptr = if size_v>0 { val_payload.as_ptr() as *const c_char } else { std::ptr::null() }; obj = (cpy.PyBytes_FromStringAndSize)(ptr, size_v as isize); }
+                1 => {
+                    let v = if size_v >= 1 && val_payload[0] != 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    obj = (cpy.PyBool_FromLong)(v);
+                }
+                2 => {
+                    if size_v != 4 {
+                        return false;
+                    }
+                    let mut b = [0u8; 4];
+                    b.copy_from_slice(val_payload);
+                    obj = (cpy.PyLong_FromLongLong)(i32::from_le_bytes(b) as i64);
+                }
+                3 => {
+                    if size_v != 8 {
+                        return false;
+                    }
+                    let mut b = [0u8; 8];
+                    b.copy_from_slice(val_payload);
+                    obj = (cpy.PyLong_FromLongLong)(i64::from_le_bytes(b));
+                }
+                5 => {
+                    if size_v != 8 {
+                        return false;
+                    }
+                    let mut b = [0u8; 8];
+                    b.copy_from_slice(val_payload);
+                    obj = (cpy.PyFloat_FromDouble)(f64::from_le_bytes(b));
+                }
+                6 => {
+                    let c = match CString::new(val_payload) {
+                        Ok(c) => c,
+                        Err(_) => return false,
+                    };
+                    obj = (cpy.PyUnicode_FromString)(c.as_ptr());
+                }
+                7 => {
+                    let ptr = if size_v > 0 {
+                        val_payload.as_ptr() as *const c_char
+                    } else {
+                        std::ptr::null()
+                    };
+                    obj = (cpy.PyBytes_FromStringAndSize)(ptr, size_v as isize);
+                }
                 8 => {
-                    if size_v != 8 { return false; }
-                    let mut i = [0u8;4]; i.copy_from_slice(&val_payload[4..8]);
+                    if size_v != 8 {
+                        return false;
+                    }
+                    let mut i = [0u8; 4];
+                    i.copy_from_slice(&val_payload[4..8]);
                     let inst_id = u32::from_le_bytes(i);
-                    if let Some(p) = OBJ_PTRS.lock().unwrap().get(&inst_id).copied() { (cpy.Py_IncRef)(p.0); obj = p.0; } else { return false; }
+                    if let Some(p) = OBJ_PTRS.lock().unwrap().get(&inst_id).copied() {
+                        (cpy.Py_IncRef)(p.0);
+                        obj = p.0;
+                    } else {
+                        return false;
+                    }
                 }
                 _ => return false,
             }
-            if obj.is_null() { return false; }
+            if obj.is_null() {
+                return false;
+            }
             let rc = (cpy.PyDict_SetItemString)(dict, key_c.as_ptr(), obj);
             (cpy.Py_DecRef)(obj);
-            if rc != 0 { return false; }
+            if rc != 0 {
+                return false;
+            }
         }
     }
     true
 }
 fn should_autodecode() -> bool {
-    std::env::var("NYASH_PY_AUTODECODE").map(|v| v != "0").unwrap_or(false)
+    std::env::var("NYASH_PY_AUTODECODE")
+        .map(|v| v != "0")
+        .unwrap_or(false)
 }
 
-fn try_write_autodecode(cpy: &CPython, obj: *mut PyObject, result: *mut u8, result_len: *mut usize) -> bool {
+fn try_write_autodecode(
+    cpy: &CPython,
+    obj: *mut PyObject,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> bool {
     unsafe {
         // Float -> tag=5
         let mut had_err = false;
         let f = (cpy.PyFloat_AsDouble)(obj);
         if !(cpy.PyErr_Occurred)().is_null() {
-            had_err = true; (cpy.PyErr_Clear)();
+            had_err = true;
+            (cpy.PyErr_Clear)();
         }
         if !had_err {
             eprintln!("[PyPlugin] autodecode: Float {}", f);
-            let mut payload = [0u8;8];
+            let mut payload = [0u8; 8];
             payload.copy_from_slice(&f.to_le_bytes());
             let rc = write_tlv_result(&[(5u8, &payload)], result, result_len);
             return rc == NYB_SUCCESS || rc == NYB_E_SHORT_BUFFER;
         }
         // Integer (PyLong) -> tag=3 (i64)
         let i = (cpy.PyLong_AsLongLong)(obj);
-        if !(cpy.PyErr_Occurred)().is_null() { (cpy.PyErr_Clear)(); } else {
+        if !(cpy.PyErr_Occurred)().is_null() {
+            (cpy.PyErr_Clear)();
+        } else {
             eprintln!("[PyPlugin] autodecode: I64 {}", i);
-            let mut payload = [0u8;8];
+            let mut payload = [0u8; 8];
             payload.copy_from_slice(&i.to_le_bytes());
             let rc = write_tlv_result(&[(3u8, &payload)], result, result_len);
             return rc == NYB_SUCCESS || rc == NYB_E_SHORT_BUFFER;
@@ -757,7 +1226,9 @@ fn try_write_autodecode(cpy: &CPython, obj: *mut PyObject, result: *mut u8, resu
             eprintln!("[PyPlugin] autodecode: Bytes {} bytes", sz);
             let rc = write_tlv_result(&[(7u8, slice)], result, result_len);
             return rc == NYB_SUCCESS || rc == NYB_E_SHORT_BUFFER;
-        } else if !(cpy.PyErr_Occurred)().is_null() { (cpy.PyErr_Clear)(); }
+        } else if !(cpy.PyErr_Occurred)().is_null() {
+            (cpy.PyErr_Clear)();
+        }
         false
     }
 }

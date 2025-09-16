@@ -87,12 +87,16 @@ pub struct MirBuilder {
     /// Top of stack corresponds to the innermost active loop
     pub(super) loop_header_stack: Vec<BasicBlockId>,
     pub(super) loop_exit_stack: Vec<BasicBlockId>,
+
+    /// Whether PHI emission is disabled (edge-copy mode)
+    pub(super) no_phi_mode: bool,
 }
 
 impl MirBuilder {
     /// Create a new MIR builder
     pub fn new() -> Self {
         let plugin_method_sigs = plugin_sigs::load_plugin_method_sigs();
+        let no_phi_mode = crate::config::env::mir_no_phi();
         Self {
             current_module: None,
             current_function: None,
@@ -112,6 +116,7 @@ impl MirBuilder {
             include_box_map: HashMap::new(),
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),
+            no_phi_mode,
         }
     }
 
@@ -647,6 +652,42 @@ impl MirBuilder {
             } else {
                 Err(format!("Basic block {} does not exist", block_id))
             }
+        } else {
+            Err("No current function".to_string())
+        }
+    }
+
+    pub(super) fn is_no_phi_mode(&self) -> bool {
+        self.no_phi_mode
+    }
+
+    /// Insert a Copy instruction into `block_id`, defining `dst` from `src`.
+    /// Skips blocks that terminate via return/throw, and avoids duplicate copies.
+    pub(super) fn insert_edge_copy(
+        &mut self,
+        block_id: BasicBlockId,
+        dst: ValueId,
+        src: ValueId,
+    ) -> Result<(), String> {
+        if let Some(ref mut function) = self.current_function {
+            let block = function
+                .get_block_mut(block_id)
+                .ok_or_else(|| format!("Basic block {} does not exist", block_id))?;
+            if let Some(term) = &block.terminator {
+                if matches!(term, MirInstruction::Return { .. } | MirInstruction::Throw { .. }) {
+                    return Ok(());
+                }
+            }
+            let already_present = block.instructions.iter().any(|inst| {
+                matches!(inst, MirInstruction::Copy { dst: existing_dst, .. } if *existing_dst == dst)
+            });
+            if !already_present {
+                block.add_instruction(MirInstruction::Copy { dst, src });
+            }
+            if let Some(ty) = self.value_types.get(&src).cloned() {
+                self.value_types.insert(dst, ty);
+            }
+            Ok(())
         } else {
             Err("No current function".to_string())
         }

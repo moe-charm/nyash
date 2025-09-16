@@ -1,5 +1,5 @@
+use nyash_rust::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
 use nyash_rust::grammar::engine;
-use nyash_rust::box_trait::{StringBox, IntegerBox, BoolBox, VoidBox, NyashBox};
 
 fn classify_value(b: &dyn NyashBox) -> &'static str {
     if nyash_rust::runtime::semantics::coerce_to_string(b).is_some() {
@@ -19,12 +19,14 @@ fn actual_add_result(left: &dyn NyashBox, right: &dyn NyashBox) -> &'static str 
     // Mirror current interpreter semantics succinctly:
     // 1) If either is string-like => String
     if nyash_rust::runtime::semantics::coerce_to_string(left).is_some()
-        || nyash_rust::runtime::semantics::coerce_to_string(right).is_some() {
+        || nyash_rust::runtime::semantics::coerce_to_string(right).is_some()
+    {
         return "String";
     }
     // 2) If both are i64-coercible => Integer
     if nyash_rust::runtime::semantics::coerce_to_i64(left).is_some()
-        && nyash_rust::runtime::semantics::coerce_to_i64(right).is_some() {
+        && nyash_rust::runtime::semantics::coerce_to_i64(right).is_some()
+    {
         return "Integer";
     }
     // 3) Otherwise error（ここでは Error として表現）
@@ -54,12 +56,23 @@ fn snapshot_add_rules_align_with_current_semantics() {
             let expect = eng.decide_add_result(lty, rty).map(|(res, _)| res);
             if let Some(res) = expect {
                 if actual == "Error" {
-                    panic!("grammar provides rule for {}+{} but actual semantics error", li, ri);
+                    panic!(
+                        "grammar provides rule for {}+{} but actual semantics error",
+                        li, ri
+                    );
                 } else {
-                    assert_eq!(res, actual, "grammar expect {} + {} => {}, but actual => {}", li, ri, res, actual);
+                    assert_eq!(
+                        res, actual,
+                        "grammar expect {} + {} => {}, but actual => {}",
+                        li, ri, res, actual
+                    );
                 }
             } else {
-                assert_eq!(actual, "Error", "grammar has no rule for {}+{}, but actual => {}", li, ri, actual);
+                assert_eq!(
+                    actual, "Error",
+                    "grammar has no rule for {}+{}, but actual => {}",
+                    li, ri, actual
+                );
             }
         }
     }

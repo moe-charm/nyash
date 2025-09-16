@@ -1,10 +1,10 @@
 //! FileBox Dynamic Plugin
-//! 
+//!
 //! C ABIを使用した動的ライブラリとしてFileBox機能を提供
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write, Seek};
+use std::io::{Read, Seek, Write};
 use std::os::raw::c_int;
 
 /// プラグインのマジックナンバー（'NYAS'）
@@ -36,7 +36,7 @@ pub extern "C" fn nyash_plugin_init() -> *const FileBoxPlugin {
 }
 
 /// FileBoxを開く
-/// 
+///
 /// # Safety
 /// - pathは有効なUTF-8のC文字列である必要がある
 /// - 返されたポインタはnyash_file_freeで解放する必要がある
@@ -45,12 +45,12 @@ pub unsafe extern "C" fn nyash_file_open(path: *const c_char) -> *mut c_void {
     if path.is_null() {
         return std::ptr::null_mut();
     }
-    
+
     let path_str = match CStr::from_ptr(path).to_str() {
         Ok(s) => s,
         Err(_) => return std::ptr::null_mut(),
     };
-    
+
     match OpenOptions::new()
         .read(true)
         .write(true)
@@ -69,7 +69,7 @@ pub unsafe extern "C" fn nyash_file_open(path: *const c_char) -> *mut c_void {
 }
 
 /// ファイルの内容を読み取る
-/// 
+///
 /// # Safety
 /// - handleはnyash_file_openから返された有効なポインタである必要がある
 /// - 返された文字列はnyash_string_freeで解放する必要がある
@@ -78,46 +78,41 @@ pub unsafe extern "C" fn nyash_file_read(handle: *mut c_void) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
-    
+
     let file_box = &mut *(handle as *mut FileBoxHandle);
     let mut content = String::new();
-    
+
     // ファイルポインタを最初に戻す
     if let Err(_) = file_box.file.seek(std::io::SeekFrom::Start(0)) {
         return std::ptr::null_mut();
     }
-    
+
     match file_box.file.read_to_string(&mut content) {
-        Ok(_) => {
-            match CString::new(content) {
-                Ok(c_str) => c_str.into_raw(),
-                Err(_) => std::ptr::null_mut(),
-            }
-        }
+        Ok(_) => match CString::new(content) {
+            Ok(c_str) => c_str.into_raw(),
+            Err(_) => std::ptr::null_mut(),
+        },
         Err(_) => std::ptr::null_mut(),
     }
 }
 
 /// ファイルに内容を書き込む
-/// 
+///
 /// # Safety
 /// - handleはnyash_file_openから返された有効なポインタである必要がある
 /// - contentは有効なUTF-8のC文字列である必要がある
 #[no_mangle]
-pub unsafe extern "C" fn nyash_file_write(
-    handle: *mut c_void,
-    content: *const c_char
-) -> c_int {
+pub unsafe extern "C" fn nyash_file_write(handle: *mut c_void, content: *const c_char) -> c_int {
     if handle.is_null() || content.is_null() {
         return 0;
     }
-    
+
     let file_box = &mut *(handle as *mut FileBoxHandle);
     let content_str = match CStr::from_ptr(content).to_str() {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    
+
     // ファイルをクリアして最初から書き込む
     if let Err(_) = file_box.file.set_len(0) {
         return 0;
@@ -125,15 +120,15 @@ pub unsafe extern "C" fn nyash_file_write(
     if let Err(_) = file_box.file.seek(std::io::SeekFrom::Start(0)) {
         return 0;
     }
-    
+
     match file_box.file.write_all(content_str.as_bytes()) {
         Ok(_) => 1,  // 成功
-        Err(_) => 0,  // 失敗
+        Err(_) => 0, // 失敗
     }
 }
 
 /// ファイルが存在するかチェック
-/// 
+///
 /// # Safety
 /// - pathは有効なUTF-8のC文字列である必要がある
 #[no_mangle]
@@ -141,12 +136,12 @@ pub unsafe extern "C" fn nyash_file_exists(path: *const c_char) -> c_int {
     if path.is_null() {
         return 0;
     }
-    
+
     let path_str = match CStr::from_ptr(path).to_str() {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    
+
     if std::path::Path::new(path_str).exists() {
         1
     } else {
@@ -155,7 +150,7 @@ pub unsafe extern "C" fn nyash_file_exists(path: *const c_char) -> c_int {
 }
 
 /// FileBoxハンドルを解放
-/// 
+///
 /// # Safety
 /// - handleはnyash_file_openから返された有効なポインタである必要がある
 /// - 解放後はhandleを使用してはいけない
@@ -167,7 +162,7 @@ pub unsafe extern "C" fn nyash_file_free(handle: *mut c_void) {
 }
 
 /// 文字列を解放（nyash_file_readの戻り値用）
-/// 
+///
 /// # Safety
 /// - strはnyash_file_readから返された有効なポインタである必要がある
 #[no_mangle]
@@ -181,7 +176,7 @@ pub unsafe extern "C" fn nyash_string_free(str: *mut c_char) {
 mod tests {
     use super::*;
     use std::ffi::CString;
-    
+
     #[test]
     fn test_plugin_init() {
         unsafe {

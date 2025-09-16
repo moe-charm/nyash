@@ -1,4 +1,4 @@
-name: Smoke (Phase 10.10)
+name: LLVM Curated Smoke
 
 on:
   push:
@@ -20,12 +20,13 @@ on:
       - 'docs/**'
 
 jobs:
-  smoke:
+  llvm-curated:
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
       # Disable external plugins to keep CI deterministic
       NYASH_DISABLE_PLUGINS: '1'
+      NYASH_LLVM_USE_HARNESS: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,10 +45,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Run smoke script
-        run: bash tools/smoke_phase_10_10.sh
+      - name: Run curated LLVM smokes (PHI-on)
+        run: bash tools/smokes/curated_llvm.sh
+
+      - name: Run curated LLVM smokes (PHI-off)
+        run: bash tools/smokes/curated_llvm.sh --phi-off
 
   jit-direct-smoke:
+    if: false # archived: JIT path not maintained in current phase
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -101,6 +106,7 @@ jobs:
           timeout 15s "$BIN" --jit-direct apps/tests/mir-branch-multi/main.nyash
 
   smoke-compile-events:
+    if: false # archived: JIT compile-events not maintained in current phase
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always

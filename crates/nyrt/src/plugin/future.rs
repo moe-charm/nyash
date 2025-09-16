@@ -197,22 +197,20 @@ pub extern "C" fn nyash_future_spawn_method_h(
                             let r_type = u32::from_le_bytes(t);
                             let r_inst = u32::from_le_bytes(i);
                             // Map type_id -> box type name (best-effort)
-                            let box_type_name =
-                                nyash_rust::runtime::plugin_loader_unified::get_global_plugin_host(
-                                )
-                                .read()
-                                .ok()
-                                .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
-                                .and_then(|m| {
-                                    m.into_iter().find(|(_k, v)| *v == r_type).map(|(k, _v)| k)
-                                })
-                                .unwrap_or_else(|| "PluginBox".to_string());
+                            let meta_opt =
+                                nyash_rust::runtime::plugin_loader_v2::metadata_for_type_id(r_type);
+                            let (box_type_name, invoke_ptr, fini_id) = if let Some(meta) = meta_opt
+                            {
+                                (meta.box_type.clone(), meta.invoke_fn, meta.fini_method_id)
+                            } else {
+                                ("PluginBox".to_string(), inv, None)
+                            };
                             let pb = nyash_rust::runtime::plugin_loader_v2::construct_plugin_box(
                                 box_type_name,
                                 r_type,
-                                inv,
+                                invoke_ptr,
                                 r_inst,
-                                None,
+                                fini_id,
                             );
                             fut_box.set_result(Box::new(pb));
                             return;
@@ -260,15 +258,8 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
     }
     let invoke = invoke.unwrap();
     // Determine box type name from type_id
-    let box_type_name = nyash_rust::runtime::plugin_loader_unified::get_global_plugin_host()
-        .read()
-        .ok()
-        .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
-        .and_then(|m| {
-            m.into_iter()
-                .find(|(_k, v)| *v == real_type_id)
-                .map(|(k, _v)| k)
-        })
+    let box_type_name = nyash_rust::runtime::plugin_loader_v2::metadata_for_type_id(real_type_id)
+        .map(|meta| meta.box_type)
         .unwrap_or_else(|| "PluginBox".to_string());
     // Determine method name string (from a1 handle→StringBox, or a1 as C string pointer, or legacy VM args)
     let mut method_name: Option<String> = None;

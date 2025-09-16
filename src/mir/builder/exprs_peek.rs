@@ -40,7 +40,13 @@ impl super::MirBuilder {
             phi_inputs.push((else_block, else_val));
             self.emit_instruction(super::MirInstruction::Jump { target: merge_block })?;
             self.start_new_block(merge_block)?;
-            self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+            if self.is_no_phi_mode() {
+                for (pred, val) in phi_inputs {
+                    self.insert_edge_copy(pred, result_val, val)?;
+                }
+            } else {
+                self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+            }
             return Ok(result_val);
         }
 
@@ -83,7 +89,13 @@ impl super::MirBuilder {
 
         // Merge and yield result
         self.start_new_block(merge_block)?;
-        self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+        if self.is_no_phi_mode() {
+            for (pred, val) in phi_inputs {
+                self.insert_edge_copy(pred, result_val, val)?;
+            }
+        } else {
+            self.emit_instruction(super::MirInstruction::Phi { dst: result_val, inputs: phi_inputs })?;
+        }
         Ok(result_val)
     }
 }

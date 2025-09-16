@@ -24,6 +24,7 @@ pub(super) use newbox::lower_newbox;
 pub(super) use boxcall::{lower_boxcall, lower_boxcall_boxed, lower_boxcall_via_ctx};
 pub(super) use arith::lower_compare;
 pub(super) use mem::{lower_load, lower_store};
+pub(super) use mem::lower_copy;
 pub(super) use consts::lower_const;
 pub(super) use arith_ops::{lower_binop, lower_unary};
 pub(super) use call::lower_call;

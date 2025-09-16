@@ -111,14 +111,26 @@ pub extern "C" fn nyash_string_substring_hii_export(h: i64, start: i64, end: i64
         return 0;
     }
     let s = if let Some(obj) = handles::get(h as u64) {
-        if let Some(sb) = obj.as_any().downcast_ref::<StringBox>() { sb.value.clone() } else { String::new() }
-    } else { String::new() };
+        if let Some(sb) = obj.as_any().downcast_ref::<StringBox>() {
+            sb.value.clone()
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
     let n = s.len() as i64;
     let mut st = if start < 0 { 0 } else { start };
     let mut en = if end < 0 { 0 } else { end };
-    if st > n { st = n; }
-    if en > n { en = n; }
-    if en < st { std::mem::swap(&mut st, &mut en); }
+    if st > n {
+        st = n;
+    }
+    if en > n {
+        en = n;
+    }
+    if en < st {
+        std::mem::swap(&mut st, &mut en);
+    }
     let (st_u, en_u) = (st as usize, en as usize);
     let sub = s.get(st_u.min(s.len())..en_u.min(s.len())).unwrap_or("");
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(sub.to_string()));
@@ -133,16 +145,38 @@ pub extern "C" fn nyash_string_lastindexof_hh_export(h: i64, n: i64) -> i64 {
     use nyash_rust::{box_trait::StringBox, jit::rt::handles};
     let hay = if h > 0 {
         if let Some(o) = handles::get(h as u64) {
-            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() { sb.value.clone() } else { String::new() }
-        } else { String::new() }
-    } else { String::new() };
+            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() {
+                sb.value.clone()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
     let nee = if n > 0 {
         if let Some(o) = handles::get(n as u64) {
-            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() { sb.value.clone() } else { String::new() }
-        } else { String::new() }
-    } else { String::new() };
-    if nee.is_empty() { return hay.len() as i64; }
-    if let Some(pos) = hay.rfind(&nee) { pos as i64 } else { -1 }
+            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() {
+                sb.value.clone()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+    if nee.is_empty() {
+        return hay.len() as i64;
+    }
+    if let Some(pos) = hay.rfind(&nee) {
+        pos as i64
+    } else {
+        -1
+    }
 }
 
 // box.from_i8_string(ptr) -> handle
@@ -181,7 +215,10 @@ pub extern "C" fn nyash_box_from_f64(val: f64) -> i64 {
 // Helper: build an IntegerBox and return a handle
 #[export_name = "nyash.box.from_i64"]
 pub extern "C" fn nyash_box_from_i64(val: i64) -> i64 {
-    use nyash_rust::{box_trait::{NyashBox, IntegerBox}, jit::rt::handles};
+    use nyash_rust::{
+        box_trait::{IntegerBox, NyashBox},
+        jit::rt::handles,
+    };
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(IntegerBox::new(val));
     handles::to_handle(arc) as i64
 }
@@ -544,8 +581,6 @@ pub extern "C" fn nyash_console_birth_h_export() -> i64 {
     }
     0
 }
-
-
 
 // ArrayBox birth shim for AOT/JIT handle-based creation
 #[export_name = "nyash.array.birth_h"]

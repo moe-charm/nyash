@@ -767,6 +767,22 @@ impl LLVMCompiler {
                         instructions::lower_load(&codegen, &mut cursor, *bid, &mut vmap, &mut allocas, &mut alloca_elem_types, dst, ptr)?;
                         defined_in_block.insert(*dst);
                     },
+                    MirInstruction::Copy { dst, src } => {
+                        instructions::lower_copy(
+                            &codegen,
+                            &mut cursor,
+                            &mut resolver,
+                            *bid,
+                            func,
+                            &mut vmap,
+                            dst,
+                            src,
+                            &bb_map,
+                            &preds,
+                            &block_end_values,
+                        )?;
+                        defined_in_block.insert(*dst);
+                    },
                     MirInstruction::Phi { .. } => {
                         // Already created in pre-pass; nothing to do here.
                     }
@@ -798,6 +814,23 @@ impl LLVMCompiler {
                             &preds,
                             &block_end_values,
                         )?;
+                    }
+                    MirInstruction::Throw { .. } => {
+                        // Minimal lowering: call llvm.trap (optional) then unreachable
+                        let use_trap = std::env::var("NYASH_LLVM_TRAP_ON_THROW").ok().as_deref() != Some("0");
+                        if use_trap {
+                            let fn_ty = codegen.context.void_type().fn_type(&[], false);
+                            let trap = codegen
+                                .module
+                                .get_function("llvm.trap")
+                                .unwrap_or_else(|| codegen.module.add_function("llvm.trap", fn_ty, None));
+                            cursor.emit_term(*bid, |b| {
+                                let _ = b.build_call(trap, &[], "trap");
+                            });
+                        }
+                        // Ensure we end the block
+                        cursor.at_end(*bid, bb);
+                        let _ = codegen.builder.build_unreachable();
                     }
                     MirInstruction::Jump { target } => {
                         // LoopForm simple body→dispatch wiring: if this block is a loop body

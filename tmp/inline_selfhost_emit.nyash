@@ -2,10 +2,15 @@ include "apps/selfhost-compiler/boxes/parser_box.nyash"
 include "apps/selfhost-compiler/boxes/emitter_box.nyash"
 static box Main {
   main(args) {
-    local src = "local m = {\"name\": \"Alice\", \"age\": 25}
-return m.size()"
+    local s = "static box Main {
+  main(args) {
+    return (1 < 2) ? 10 : 20
+  }
+}
+
+"
     local p = new ParserBox()
-    local json = p.parse_program2(src)
+    local json = p.parse_program2(s)
     local e = new EmitterBox()
     json = e.emit_program(json, "[]")
     print(json)

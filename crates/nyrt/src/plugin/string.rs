@@ -83,7 +83,7 @@ pub extern "C" fn nyash_string_concat_is(a: i64, b: *const i8) -> *mut i8 {
 // Exported as: nyash.string.substring_sii(i8* s, i64 start, i64 end) -> i8*
 #[export_name = "nyash.string.substring_sii"]
 pub extern "C" fn nyash_string_substring_sii(s: *const i8, start: i64, end: i64) -> *mut i8 {
-use std::ffi::CStr;
+    use std::ffi::CStr;
     if s.is_null() {
         return std::ptr::null_mut();
     }
@@ -95,9 +95,15 @@ use std::ffi::CStr;
     let n = src.len() as i64;
     let mut st = if start < 0 { 0 } else { start };
     let mut en = if end < 0 { 0 } else { end };
-    if st > n { st = n; }
-    if en > n { en = n; }
-    if en < st { std::mem::swap(&mut st, &mut en); }
+    if st > n {
+        st = n;
+    }
+    if en > n {
+        en = n;
+    }
+    if en < st {
+        std::mem::swap(&mut st, &mut en);
+    }
     let (st_u, en_u) = (st as usize, en as usize);
     let sub = &src[st_u.min(src.len())..en_u.min(src.len())];
     let mut bytes = sub.as_bytes().to_vec();
@@ -111,15 +117,27 @@ use std::ffi::CStr;
 #[export_name = "nyash.string.lastIndexOf_ss"]
 pub extern "C" fn nyash_string_lastindexof_ss(s: *const i8, needle: *const i8) -> i64 {
     use std::ffi::CStr;
-    if s.is_null() || needle.is_null() { return -1; }
+    if s.is_null() || needle.is_null() {
+        return -1;
+    }
     let hs = unsafe { CStr::from_ptr(s) };
     let ns = unsafe { CStr::from_ptr(needle) };
-    let h = match hs.to_str() { Ok(v) => v, Err(_) => return -1 };
-    let n = match ns.to_str() { Ok(v) => v, Err(_) => return -1 };
-    if n.is_empty() { return h.len() as i64; }
+    let h = match hs.to_str() {
+        Ok(v) => v,
+        Err(_) => return -1,
+    };
+    let n = match ns.to_str() {
+        Ok(v) => v,
+        Err(_) => return -1,
+    };
+    if n.is_empty() {
+        return h.len() as i64;
+    }
     if let Some(pos) = h.rfind(n) {
         pos as i64
-    } else { -1 }
+    } else {
+        -1
+    }
 }
 
 // Exported as: nyash.string.to_i8p_h(i64 handle) -> i8*

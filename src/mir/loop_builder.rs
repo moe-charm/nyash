@@ -10,7 +10,7 @@ use super::{
     ConstValue
 };
 use crate::ast::ASTNode;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// 不完全なPhi nodeの情報
 #[derive(Debug, Clone)]
@@ -40,6 +40,9 @@ pub struct LoopBuilder<'a> {
 
     /// continue文からの変数スナップショット
     continue_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
+
+    /// PHI を生成しないモードかどうか
+    no_phi_mode: bool,
 }
 
 // Local copy: detect a variable name assigned within an AST fragment
@@ -68,12 +71,14 @@ fn extract_assigned_var_local(ast: &ASTNode) -> Option<String> {
 impl<'a> LoopBuilder<'a> {
     /// 新しいループビルダーを作成
     pub fn new(parent: &'a mut super::builder::MirBuilder) -> Self {
+        let no_phi_mode = parent.is_no_phi_mode();
         Self {
             parent_builder: parent,
             incomplete_phis: HashMap::new(),
             block_var_maps: HashMap::new(),
             loop_header: None,
             continue_snapshots: Vec::new(),
+            no_phi_mode,
         }
     }
     
@@ -175,10 +180,14 @@ impl<'a> LoopBuilder<'a> {
             
             incomplete_phis.push(incomplete_phi);
             
+            if self.no_phi_mode {
+                self.parent_builder.insert_edge_copy(preheader_id, phi_id, value_before)?;
+            }
+
             // 変数マップを更新（Phi nodeの結果を使用）
             self.update_variable(var_name.clone(), phi_id);
         }
-        
+
         // 不完全なPhi nodeを記録
         self.incomplete_phis.insert(header_id, incomplete_phis);
         
@@ -208,7 +217,16 @@ impl<'a> LoopBuilder<'a> {
 
                 phi.known_inputs.push((latch_id, value_after));
 
-                self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
+                if self.no_phi_mode {
+                    let mut seen: HashSet<BasicBlockId> = HashSet::new();
+                    for &(pred, val) in &phi.known_inputs {
+                        if seen.insert(pred) {
+                            self.parent_builder.insert_edge_copy(pred, phi.phi_id, val)?;
+                        }
+                    }
+                } else {
+                    self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
+                }
                 self.update_variable(phi.var_name.clone(), phi.phi_id);
             }
         }
@@ -422,7 +440,12 @@ impl<'a> LoopBuilder<'a> {
                     };
                     if let (Some(tv), Some(ev)) = (then_value_for_var, else_value_for_var) {
                         let phi_id = self.new_value();
-                        self.emit_phi_at_block_start(merge_bb, phi_id, vec![(then_bb, tv), (else_bb, ev)])?;
+                        if self.no_phi_mode {
+                            self.parent_builder.insert_edge_copy(then_bb, phi_id, tv)?;
+                            self.parent_builder.insert_edge_copy(else_bb, phi_id, ev)?;
+                        } else {
+                            self.emit_phi_at_block_start(merge_bb, phi_id, vec![(then_bb, tv), (else_bb, ev)])?;
+                        }
                         // Reset to pre-if map and bind the phi result
                         self.parent_builder.variable_map = pre_if_var_map.clone();
                         self.parent_builder.variable_map.insert(var_name, phi_id);

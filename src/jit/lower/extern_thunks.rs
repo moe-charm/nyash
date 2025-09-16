@@ -9,8 +9,6 @@ use crate::jit::r#extern::collections as c;
 #[cfg(feature = "cranelift-jit")]
 use crate::jit::r#extern::host_bridge as hb;
 #[cfg(feature = "cranelift-jit")]
-use crate::runtime::plugin_loader_unified;
-#[cfg(feature = "cranelift-jit")]
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
 // ---- Generic Birth (handle) ----
@@ -19,19 +17,15 @@ pub(super) extern "C" fn nyash_box_birth_h(type_id: i64) -> i64 {
     // Map type_id -> type name and create via plugin host; return runtime handle
     if type_id <= 0 { return 0; }
     let tid = type_id as u32;
-    let name_opt = crate::runtime::plugin_loader_unified::get_global_plugin_host()
-        .read().ok()
-        .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
-        .and_then(|m| m.into_iter().find(|(_k,v)| *v == tid).map(|(k,_v)| k));
-    if let Some(box_type) = name_opt {
+    if let Some(meta) = crate::runtime::plugin_loader_v2::metadata_for_type_id(tid) {
         if let Ok(host) = crate::runtime::get_global_plugin_host().read() {
-            if let Ok(b) = host.create_box(&box_type, &[]) {
+            if let Ok(b) = host.create_box(&meta.box_type, &[]) {
                 let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(b);
                 let h = crate::jit::rt::handles::to_handle(arc);
-                events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_h", "box_type": box_type, "type_id": tid, "handle": h}), "hostcall", "<jit>");
+                events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_h", "box_type": meta.box_type, "type_id": meta.type_id, "handle": h}), "hostcall", "<jit>");
                 return h as i64;
             } else {
-                events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_h", "error": "create_failed", "box_type": box_type, "type_id": tid}), "hostcall", "<jit>");
+                events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_h", "error": "create_failed", "box_type": meta.box_type, "type_id": meta.type_id}), "hostcall", "<jit>");
             }
         }
     } else {
@@ -44,25 +38,13 @@ pub(super) extern "C" fn nyash_box_birth_h(type_id: i64) -> i64 {
 pub(super) extern "C" fn nyash_box_birth_i64(type_id: i64, argc: i64, a1: i64, a2: i64) -> i64 {
     use crate::runtime::plugin_loader_v2::PluginBoxV2;
     if type_id <= 0 { return 0; }
-    // Resolve invoke for the type by creating a temp instance
-    let mut invoke: Option<unsafe extern "C" fn(u32,u32,u32,*const u8,usize,*mut u8,*mut usize)->i32> = None;
-    let mut box_type = String::new();
-    if let Some(name) = crate::runtime::plugin_loader_unified::get_global_plugin_host()
-        .read().ok()
-        .and_then(|h| h.config_ref().map(|cfg| cfg.box_types.clone()))
-        .and_then(|m| m.into_iter().find(|(_k,v)| *v == (type_id as u32)).map(|(k,_v)| k))
-    {
-        box_type = name;
-        if let Ok(host) = crate::runtime::get_global_plugin_host().read() {
-            if let Ok(b) = host.create_box(&box_type, &[]) {
-                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() { invoke = Some(p.inner.invoke_fn); }
-            }
-        }
-    }
-    if invoke.is_none() {
-        events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "error": "no_invoke", "type_id": type_id}), "hostcall", "<jit>");
+    // Resolve invoke for the type via loader metadata
+    let Some(meta) = crate::runtime::plugin_loader_v2::metadata_for_type_id(type_id as u32) else {
+        events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "error": "type_map_failed", "type_id": type_id}), "hostcall", "<jit>");
         return 0;
-    }
+    };
+    let invoke_fn = meta.invoke_fn;
+    let box_type = meta.box_type.clone();
     let method_id: u32 = 0; let instance_id: u32 = 0;
     // Build TLV from a1/a2
     let nargs = argc.max(0) as usize;
@@ -94,13 +76,13 @@ pub(super) extern "C" fn nyash_box_birth_i64(type_id: i64, argc: i64, a1: i64, a
     if nargs >= 2 { encode_val(a2); }
     // Invoke
     let mut out = vec![0u8; 1024]; let mut out_len: usize = out.len();
-    let rc = unsafe { invoke.unwrap()(type_id as u32, method_id, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
+    let rc = unsafe { invoke_fn(type_id as u32, method_id, instance_id, buf.as_ptr(), buf.len(), out.as_mut_ptr(), &mut out_len) };
     if rc != 0 { events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "error": "invoke_failed", "type_id": type_id}), "hostcall", "<jit>"); return 0; }
     if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
         if tag == 8 && payload.len()==8 {
             let mut t=[0u8;4]; t.copy_from_slice(&payload[0..4]); let mut i=[0u8;4]; i.copy_from_slice(&payload[4..8]);
             let r_type = u32::from_le_bytes(t); let r_inst = u32::from_le_bytes(i);
-            let pb = crate::runtime::plugin_loader_v2::make_plugin_box_v2(box_type.clone(), r_type, r_inst, invoke.unwrap());
+            let pb = crate::runtime::plugin_loader_v2::make_plugin_box_v2(box_type.clone(), r_type, r_inst, invoke_fn);
             let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(pb);
             let h = crate::jit::rt::handles::to_handle(arc);
             events::emit_runtime(serde_json::json!({"id": "nyash.box.birth_i64", "box_type": box_type, "type_id": type_id, "argc": nargs, "handle": h}), "hostcall", "<jit>");
