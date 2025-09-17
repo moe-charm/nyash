@@ -17,6 +17,7 @@
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
 MIR mode note: default is MIR13 (PHI-off). See `docs/development/mir/MIR13_MODE.md`.
 Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
+ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.
 
 ## Table of Contents
 - [Self‑Hosting (Dev Focus)](#self-hosting)

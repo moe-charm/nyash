@@ -327,20 +327,31 @@ impl NyashRunner {
         // - NYASH_SELFHOST_READ_TMP=1   → "-- --read-tmp"
         // - NYASH_NY_COMPILER_CHILD_ARGS: additional raw args (split by whitespace)
         let min_json = std::env::var("NYASH_NY_COMPILER_MIN_JSON").ok().unwrap_or_else(|| "0".to_string());
-        if min_json == "1" { cmd.arg("--").arg("--min-json"); }
+        let mut inserted_sep = false;
+        if min_json == "1" {
+            cmd.arg("--").arg("--min-json");
+            inserted_sep = true;
+        }
         if std::env::var("NYASH_SELFHOST_READ_TMP").ok().as_deref() == Some("1") {
-            cmd.arg("--").arg("--read-tmp");
+            if !inserted_sep { cmd.arg("--"); inserted_sep = true; }
+            cmd.arg("--read-tmp");
         }
         if let Ok(raw) = std::env::var("NYASH_NY_COMPILER_CHILD_ARGS") {
+            if !inserted_sep { cmd.arg("--"); inserted_sep = true; }
             for tok in raw.split_whitespace() { cmd.arg(tok); }
         }
-        // Propagate minimal env; disable plugins to reduce noise
+        // Propagate minimal env; prefer stdlib over plugins in child for stable stdout
         cmd.env_remove("NYASH_USE_NY_COMPILER");
         cmd.env_remove("NYASH_CLI_VERBOSE");
+        cmd.env("NYASH_DISABLE_PLUGINS", "1");
+        cmd.env_remove("NYASH_USE_PLUGIN_BUILTINS");
         // Suppress parent runner's result printing in child
         cmd.env("NYASH_JSON_ONLY", "1");
+        // Prefer PyVM in child to ensure println/externcall are printed to stdout deterministically
+        cmd.env("NYASH_VM_USE_PY", "1");
         // Propagate optional gates to child (if present)
         if let Ok(v) = std::env::var("NYASH_JSON_INCLUDE_USINGS") { cmd.env("NYASH_JSON_INCLUDE_USINGS", v); }
+        if let Ok(v) = std::env::var("NYASH_ENABLE_USING") { cmd.env("NYASH_ENABLE_USING", v); }
         if let Ok(v) = std::env::var("NYASH_ENABLE_USING") { cmd.env("NYASH_ENABLE_USING", v); }
         // Child timeout guard (Hotfix for potential infinite loop in child Ny parser)
         // Config: NYASH_NY_COMPILER_TIMEOUT_MS (default 2000ms)

@@ -716,8 +716,11 @@ pub extern "C" fn main() -> i32 {
         }
         // SAFETY: if not linked, calling will be an unresolved symbol at link-time; we rely on link step to include ny_main.
         let v = ny_main();
-        // Print standardized result line for golden comparisons
-        println!("Result: {}", v);
+        // Print standardized result line for golden comparisons (can be silenced for tests)
+        let silent = std::env::var("NYASH_NYRT_SILENT_RESULT").ok().as_deref() == Some("1");
+        if !silent {
+            println!("Result: {}", v);
+        }
         // Optional GC metrics after program completes
         let want_json = std::env::var("NYASH_GC_METRICS_JSON").ok().as_deref() == Some("1");
         let want_text = std::env::var("NYASH_GC_METRICS").ok().as_deref() == Some("1");

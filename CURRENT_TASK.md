@@ -5,6 +5,10 @@ Summary
 - PyVM is the semantic reference engine; llvmlite is used for AOT and parity checks.
  - GC: user modes defined; controller実装（rc+cycle skeleton + metrics/diagnostics）に移行。LLVM safepoint輸出/NyRT配線と自動挿入（envゲートON）を完了。
 
+Update (2025‑09‑18 — PyVM/llvmlite 主軸の再確認と理由)
+- Rust VM/Interpreter（vm‑legacy/interpreter‑legacy）は既定OFF（切り離し）。理由: MIR13 期の移行で追随工数が合わず、当面は保守最小/比較用に限定。
+- 現在の主軸は PyVM（意味論参照）＋ llvmlite（AOT/EXE‑first）。`--backend vm` は PyVM にフォールバック。
+
 Refactoring — Code Quality (High Priority, 2025‑09‑17 夜間)
 - MIR instruction meta de‑boilerplate:
   - Added `inst_meta!` macro and migrated major instructions (Unary/Compare/Load/Cast/TypeOp/Array{Get,Set}/Return/Branch/Jump/Print/Debug/Barrier*/Ref*/Weak*/Future*/Phi/NewBox).
@@ -42,6 +46,35 @@ Done (2025‑09‑18)
 - ny-llvmc: EXE 出力対応
   - `--emit exe/obj`、`--nyrt <dir>`、`--libs` を実装。`.o` 生成後に NyRT とリンクして実行可能に。
   - 代表ケースで EXE 実行（exit code）を確認。
+ - CLI: 直接 EXE 出力
+  - `nyash --emit-exe <out> [--emit-exe-nyrt <dir>] [--emit-exe-libs "<flags>"]` を追加。MIR JSON を内部出力→`ny-llvmc` 呼出し→EXE 生成。
+ - Selfhost Parser（Stage‑2）
+  - コメント対応（`//` と `/* ... */`）を `skip_ws` に統合。
+  - 文字列エスケープ（`\n`/`\r`/`\t`/`\"`/`\\`/最小 `\uXXXX`）を `read_string_lit`/`parse_string2` に追加。
+ - Smokes/Test 整理（ローカル）
+  - 新ランナー: `tools/test/bin/run.sh`（`--tag fast` で最小セット）。
+  - 共通ヘルパ: `tools/test/lib/shlib.sh`（ビルド/実行/アサート）。
+ - fast セットに crate‑exe（3件）/bridge 短絡 を追加。PyVM 基本スモークを JSON→`pyvm_runner.py` で stdout 判定に移行。
+
+Today (2025‑09‑18) — ExternCall 整理と Self‑Host M2 の土台
+- ExternCall/println 正規化を docs に明文化（`docs/reference/runtime/externcall.md`）。README/README.ja からリンク。
+- NyRT: `NYASH_NYRT_SILENT_RESULT=1` で標準化 `Result:` 行を抑止（tests 既定ON）。
+- PyVM: console.warn/error/trace は stderr、console.log は stdout に出力（MVP）。
+- Self‑Host M2 MVP: `MirEmitterBox` 追加（Return(Int)→const+ret）。コンパイラに `--emit-mir` を実装。
+- Runner（自己ホスト子プロセス）
+  - 子に `NYASH_JSON_ONLY=1 / NYASH_VM_USE_PY=1 / NYASH_DISABLE_PLUGINS=1` を付与し、出力と依存を安定化。
+  - `NYASH_NY_COMPILER_CHILD_ARGS` を必ず `--` の後段に注入。
+  - VM 経路は `NYASH_ENABLE_USING=1` 時に using 行をストリップ（暫定）。
+
+Next — Self‑Host M2 拡張（短期）
+- Runner: 子 stdout の JSON 捕捉を堅牢化（fallback: tmp に JSON を書かせ親で読む）。
+- MirEmitterBox の段階実装：
+  1) Binary（+,-,*,/）→ `binop`
+  2) Compare（==,!=,<,<=,>,>=）→ `compare`（i64 0/1）
+  3) print/println → `externcall env.console.log`
+  4) Ternary → branch + ret（PHI‑off; Copy 合成）
+- スモーク拡充（PyVM→EXE パリティ）
+  - `return 1+2*3`（exit=7）、`ternary_basic`（exit=10）、console.log（EXE は exit のみ）。
 
 Next (Immediate)
 - tools/build_llvm.sh の crate→EXE 統合
@@ -50,8 +83,12 @@ Next (Immediate)
 - Self‑host/EXE スモークの整備
   - 代表3ケース（const/binop/branch など）の JSON→ny-llvmc→EXE→実行をワンショットで検証するスクリプト（Linux）。
   - 既存 `exe_first_smoke.sh`/`build_compiler_exe.sh` の補助として crate 直結経路を並行維持。
-- CI 追補
-  - Linux ジョブに crate‑EXE ルートの最小スモークを追加（exit code 判定のみ）。
+- CI 追補（簡素化方針）
+  - GitHub Actions は `fast-smoke` 一本に集約済み。必要時に拡張。
+  - crate‑EXE 3件（10/50/1）を維持。PyVM 追加はローカル test ランナーに寄せる。
+ - Test consolidation
+  - 必要スモークから順次 `tools/test/` に移行（pyvm/bridge/crate-exe を優先）。
+  - 既存単体スクリプトは `tools/smokes/archive/` へ暫定退避（参照減後に削除検討）。
 
 
 What Changed (recent)

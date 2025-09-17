@@ -101,6 +101,22 @@ impl NyashRunner {
             }
         };
 
+        // Optional Phase-15: strip `using` lines (gate) for minimal acceptance in VM path
+        let enable_using = crate::config::env::enable_using();
+        let code = if enable_using {
+            let mut out = String::with_capacity(code.len());
+            for line in code.lines() {
+                let t = line.trim_start();
+                if t.starts_with("using ") {
+                    // Strip using lines (module resolution handled by nyash.toml elsewhere)
+                    continue;
+                }
+                out.push_str(line);
+                out.push('\n');
+            }
+            out
+        } else { code };
+
         // Parse to AST
         let ast = match NyashParser::parse_from_string(&code) {
             Ok(ast) => ast,

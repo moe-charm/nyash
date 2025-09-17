@@ -458,15 +458,26 @@ class PyVM:
                     func = inst.get("func")
                     args = [self._read(regs, a) for a in inst.get("args", [])]
                     out: Any = None
-                    if func == "nyash.console.println":
-                        s = args[0] if args else ""
-                        if s is None:
-                            s = ""
-                        print(str(s))
-                        out = 0
-                    else:
-                        # Unknown extern
-                        out = None
+                    # Normalize known console/debug externs
+                    if isinstance(func, str):
+                        if func in ("nyash.console.println", "nyash.console.log", "env.console.log"):
+                            s = args[0] if args else ""
+                            if s is None:
+                                s = ""
+                            print(str(s))
+                            out = 0
+                        elif func in ("nyash.console.warn", "env.console.warn", "nyash.console.error", "env.console.error", "nyash.debug.trace", "env.debug.trace"):
+                            s = args[0] if args else ""
+                            if s is None:
+                                s = ""
+                            # Write to stderr for warn/error/trace to approximate real consoles
+                            try:
+                                import sys as _sys
+                                print(str(s), file=_sys.stderr)
+                            except Exception:
+                                print(str(s))
+                            out = 0
+                    # Unknown extern -> no-op with 0/None
                     self._set(regs, inst.get("dst"), out)
                     i += 1
                     continue

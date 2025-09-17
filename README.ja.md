@@ -16,6 +16,7 @@
 
 開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
 セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
+ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
 
 ## 目次
 - [Self-Hosting（自己ホスト開発）](#self-hosting)

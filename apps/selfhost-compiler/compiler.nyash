@@ -5,6 +5,7 @@
 include "apps/selfhost-compiler/boxes/debug_box.nyash"
 include "apps/selfhost-compiler/boxes/parser_box.nyash"
 include "apps/selfhost-compiler/boxes/emitter_box.nyash"
+include "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
 
 static box Main {
   // ---- IO helper ----
@@ -90,27 +91,36 @@ static box Main {
 
     // Gate: minimal JSON when requested via script arg
     local min_mode = 0
+    local emit_mir = 0
     if args != null {
       local alen = args.length()
       local i = 0
       loop(i < alen) {
         local arg = args.get(i)
         if arg == "--min-json" { min_mode = 1 }
+        if arg == "--emit-mir" { emit_mir = 1 }
         i = i + 1
       }
     }
     local json = null
+    local ast_json = null
     if min_mode == 1 {
-      json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
+      ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
     } else {
-      json = me.parse_program(src, stage3_mode)
+      ast_json = me.parse_program(src, stage3_mode)
     }
 
-    // Emit via EmitterBox (attach meta.usings when available)
-    local emitter = new EmitterBox()
-    json = emitter.emit_program(json, me._usings)
+    if emit_mir == 1 {
+      // Lower minimal AST to MIR JSON (Return(Int) only for MVP)
+      local mir = new MirEmitterBox()
+      json = mir.emit_mir_min(ast_json)
+    } else {
+      // Emit Stage‑1 JSON with metadata
+      local emitter = new EmitterBox()
+      json = emitter.emit_program(ast_json, me._usings)
+    }
 
-    // Output
+    // Output JSON
     local console = new ConsoleBox()
     console.println(json)
     return 0

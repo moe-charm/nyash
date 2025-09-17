@@ -9,6 +9,7 @@ paths = ["apps", "lib", "."]
 selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.nyash"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.nyash"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.nyash"
+selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 [libraries]
