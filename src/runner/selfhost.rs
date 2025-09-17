@@ -8,7 +8,7 @@
 
 use super::*;
 
-use nyash_rust::{interpreter::NyashInterpreter, parser::NyashParser};
+use nyash_rust::parser::NyashParser;
 use std::io::Read;
 use std::process::Stdio;
 use std::thread::sleep;

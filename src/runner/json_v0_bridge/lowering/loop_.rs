@@ -1,6 +1,5 @@
-use super::{
-    lower_expr_with_vars, lower_stmt_list_with_vars, new_block, BridgeEnv, LoopContext,
-};
+use super::{lower_stmt_list_with_vars, new_block, BridgeEnv, LoopContext};
+use super::expr::lower_expr_with_vars;
 use crate::mir::{BasicBlockId, MirFunction, MirInstruction, ValueId};
 use std::collections::HashMap;
 use super::super::ast::StmtV0;
@@ -46,7 +45,7 @@ pub(super) fn lower_loop_stmt(
     for (name, &phi) in &phi_map {
         vars.insert(name.clone(), phi);
     }
-    let (cval, _cend) = lower_expr_with_vars(env, f, cond_bb, cond, vars)?;
+    let (cval, _cend) = super::expr::lower_expr_with_vars(env, f, cond_bb, cond, vars)?;
     if let Some(bb) = f.get_block_mut(cond_bb) {
         bb.set_terminator(MirInstruction::Branch {
             condition: cval,
@@ -102,4 +101,3 @@ pub(super) fn lower_loop_stmt(
     }
     Ok(exit_bb)
 }
-

@@ -90,7 +90,7 @@ pub(super) fn lower_try_stmt(
     let catch_branch_vars = catch_vars.clone();
 
     use std::collections::HashSet;
-    let mut branch_vars = vec![(try_end, try_branch_vars), (catch_end, catch_branch_vars)];
+    let branch_vars = vec![(try_end, try_branch_vars), (catch_end, catch_branch_vars)];
     if let Some(finally_block) = finally_bb {
         let names: HashSet<String> = {
             let mut set: HashSet<String> = base_vars.keys().cloned().collect();
@@ -187,4 +187,3 @@ pub(super) fn lower_try_stmt(
         Ok(exit_bb)
     }
 }
-

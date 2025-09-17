@@ -247,6 +247,86 @@ box ParserBox {
     if me.starts_with_kw(src, j, "true") == 1 { me.gpos_set(j + 4) return "{\"type\":\"Bool\",\"value\":true}" }
     if me.starts_with_kw(src, j, "false") == 1 { me.gpos_set(j + 5) return "{\"type\":\"Bool\",\"value\":false}" }
     if me.starts_with_kw(src, j, "null") == 1 { me.gpos_set(j + 4) return "{\"type\":\"Null\"}" }
+    // Peek expression: peek <expr> { "label" => <expr>, ..., else => <expr> }
+    if me.starts_with_kw(src, j, "peek") == 1 {
+      j = j + 4
+      j = me.skip_ws(src, j)
+      // scrutinee expression
+      local scr = me.parse_expr2(src, j)
+      j = me.gpos_get()
+      j = me.skip_ws(src, j)
+      if src.substring(j, j+1) == "{" { j = j + 1 } // enter arms block
+      j = me.skip_ws(src, j)
+      local arms_json = "["
+      local first_arm = 1
+      local else_json = null
+      local n = src.length()
+      local contp = 1
+      local guardp = 0
+      local maxp = 400000
+      loop(contp == 1) {
+        if guardp > maxp { contp = 0 } else { guardp = guardp + 1 }
+        j = me.skip_ws(src, j)
+        if j >= n { contp = 0 } else {
+          if src.substring(j, j+1) == "}" {
+            j = j + 1
+            contp = 0
+          } else {
+            // else arm or labeled arm
+            if me.starts_with_kw(src, j, "else") == 1 {
+              j = j + 4
+              j = me.skip_ws(src, j)
+              if src.substring(j, j+2) == "=>" { j = j + 2 }
+              j = me.skip_ws(src, j)
+              // else body may be a block or bare expr
+              if src.substring(j, j+1) == "{" {
+                j = j + 1
+                j = me.skip_ws(src, j)
+                else_json = me.parse_expr2(src, j)
+                j = me.gpos_get()
+                j = me.skip_ws(src, j)
+                if src.substring(j, j+1) == "}" { j = j + 1 }
+              } else {
+                else_json = me.parse_expr2(src, j)
+                j = me.gpos_get()
+              }
+              // optional separator/newline tolerated; continue until '}'
+            } else {
+              // labeled arm: string literal label
+              if src.substring(j, j+1) != "\"" {
+                // degrade safely to avoid infinite loop
+                j = j + 1
+                continue
+              }
+              local label_raw = me.read_string_lit(src, j)
+              j = me.gpos_get()
+              j = me.skip_ws(src, j)
+              if src.substring(j, j+2) == "=>" { j = j + 2 }
+              j = me.skip_ws(src, j)
+              // arm expr: block or bare expr
+              local expr_json = "{\"type\":\"Int\",\"value\":0}"
+              if src.substring(j, j+1) == "{" {
+                j = j + 1
+                j = me.skip_ws(src, j)
+                expr_json = me.parse_expr2(src, j)
+                j = me.gpos_get()
+                j = me.skip_ws(src, j)
+                if src.substring(j, j+1) == "}" { j = j + 1 }
+              } else {
+                expr_json = me.parse_expr2(src, j)
+                j = me.gpos_get()
+              }
+              local arm_json = "{\"label\":\"" + me.esc_json(label_raw) + "\",\"expr\":" + expr_json + "}"
+              if first_arm == 1 { arms_json = arms_json + arm_json first_arm = 0 } else { arms_json = arms_json + "," + arm_json }
+            }
+          }
+        }
+      }
+      arms_json = arms_json + "]"
+      if else_json == null { else_json = "{\"type\":\"Null\"}" }
+      me.gpos_set(j)
+      return "{\"type\":\"Peek\",\"scrutinee\":" + scr + ",\"arms\":" + arms_json + ",\"else\":" + else_json + "}"
+    }
     local ch = src.substring(j, j+1)
     // Parenthesized
     if ch == "(" {

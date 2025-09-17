@@ -2,7 +2,7 @@
 //!
 //! Extracted from the monolithic optimizer to enable modular pass composition.
 
-use crate::mir::{MirFunction, MirInstruction, MirModule, ValueId};
+use crate::mir::{MirFunction, MirModule, ValueId};
 use std::collections::HashSet;
 
 /// Eliminate dead code (unused results of pure instructions) across the module.
@@ -59,7 +59,7 @@ fn eliminate_dead_code_in_function(function: &mut MirFunction) -> usize {
 
     // Remove unused pure instructions
     let mut eliminated = 0usize;
-    for (bbid, block) in &mut function.blocks {
+    for (_bbid, block) in &mut function.blocks {
         block.instructions.retain(|inst| {
             if inst.effects().is_pure() {
                 if let Some(dst) = inst.dst_value() {

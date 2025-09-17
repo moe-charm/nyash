@@ -7,7 +7,7 @@
 
 use super::common::ParserUtils;
 use super::{NyashParser, ParseError};
-use crate::ast::{ASTNode, BinaryOperator, LiteralValue, Span, UnaryOperator};
+use crate::ast::{ASTNode, Span, UnaryOperator};
 use crate::tokenizer::TokenType;
 
 // Debug macros are now imported from the parent module via #[macro_export]

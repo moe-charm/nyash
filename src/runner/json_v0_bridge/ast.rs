@@ -58,6 +58,12 @@ pub(super) struct CatchV0 {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub(super) struct PeekArmV0 {
+    pub(super) label: String,
+    pub(super) expr: ExprV0,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type")]
 pub(super) enum ExprV0 {
     Int {
@@ -107,5 +113,17 @@ pub(super) enum ExprV0 {
     },
     Throw {
         expr: Box<ExprV0>,
+    },
+    Ternary {
+        cond: Box<ExprV0>,
+        then: Box<ExprV0>,
+        #[serde(rename = "else")]
+        r#else: Box<ExprV0>,
+    },
+    Peek {
+        scrutinee: Box<ExprV0>,
+        arms: Vec<PeekArmV0>,
+        #[serde(rename = "else")]
+        r#else: Box<ExprV0>,
     },
 }

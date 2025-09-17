@@ -1,6 +1,6 @@
 use crate::mir::optimizer::MirOptimizer;
 use crate::mir::optimizer_stats::OptimizationStats;
-use crate::mir::{function::MirFunction, BasicBlockId, MirInstruction, MirModule, ValueId};
+use crate::mir::{BasicBlockId, MirInstruction, MirModule, ValueId};
 
 /// Diagnostic: detect unlowered is/as/isType/asType after Builder
 pub fn diagnose_unlowered_type_ops(

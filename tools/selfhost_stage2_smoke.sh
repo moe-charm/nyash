@@ -141,5 +141,26 @@ else
   fail "Ternary basic" "exit=$CODE"
 fi
 
+# K) peek expression → 1
+cat > "$TMP/selfhost_peek_basic.nyash" <<'NY'
+local d = "dog"
+local v = peek d {
+  "cat" => { 0 }
+  "dog" => { 1 }
+  else => { 0 }
+}
+return v
+NY
+set +e
+NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 NYASH_VM_USE_PY=${NYASH_VM_USE_PY:-1} \
+      "$BIN" --backend vm "$TMP/selfhost_peek_basic.nyash" >/dev/null 2>&1
+CODE=$?
+set -e
+if [[ "$CODE" -eq 1 ]]; then
+  pass "Peek basic"
+else
+  fail "Peek basic" "exit=$CODE"
+fi
+
 echo "All selfhost Stage-2 smokes PASS" >&2
 exit 0

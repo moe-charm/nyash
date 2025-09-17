@@ -1,6 +1,6 @@
 use crate::mir::optimizer::MirOptimizer;
 use crate::mir::optimizer_stats::OptimizationStats;
-use crate::mir::{BarrierOp, MirInstruction, MirModule, TypeOpKind, ValueId, WeakRefOp};
+use crate::mir::{BarrierOp, MirModule, TypeOpKind, ValueId, WeakRefOp};
 
 pub fn force_plugin_invoke(_opt: &mut MirOptimizer, module: &mut MirModule) -> OptimizationStats {
     use crate::mir::MirInstruction as I;

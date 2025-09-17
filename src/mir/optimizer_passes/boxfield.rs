@@ -1,6 +1,6 @@
 use crate::mir::optimizer::MirOptimizer;
 use crate::mir::optimizer_stats::OptimizationStats;
-use crate::mir::{EffectMask, MirInstruction as I, MirModule};
+use crate::mir::{MirInstruction as I, MirModule};
 
 /// Optimize BoxField operations (scaffolding)
 pub fn optimize_boxfield_operations(

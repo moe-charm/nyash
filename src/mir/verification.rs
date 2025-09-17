@@ -7,7 +7,7 @@
 use super::{BasicBlockId, MirFunction, MirModule, ValueId};
 use crate::debug::log as dlog;
 use crate::mir::verification_types::VerificationError;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 mod awaits;
 mod barrier;
 mod legacy;

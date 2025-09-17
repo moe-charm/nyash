@@ -1,7 +1,5 @@
-use super::{
-    lower_expr_with_vars, lower_stmt_list_with_vars, merge_var_maps, new_block, BridgeEnv,
-    LoopContext,
-};
+use super::{lower_stmt_list_with_vars, merge_var_maps, new_block, BridgeEnv, LoopContext};
+use super::expr::lower_expr_with_vars;
 use crate::mir::{BasicBlockId, MirFunction, MirInstruction, ValueId};
 use std::collections::HashMap;
 use super::super::ast::StmtV0;
@@ -17,7 +15,7 @@ pub(super) fn lower_if_stmt(
     loop_stack: &mut Vec<LoopContext>,
     env: &BridgeEnv,
 ) -> Result<BasicBlockId, String> {
-    let (cval, cur) = lower_expr_with_vars(env, f, cur_bb, cond, vars)?;
+    let (cval, cur) = super::expr::lower_expr_with_vars(env, f, cur_bb, cond, vars)?;
     let then_bb = new_block(f);
     let else_bb = new_block(f);
     let merge_bb = new_block(f);
@@ -64,4 +62,3 @@ pub(super) fn lower_if_stmt(
     );
     Ok(merge_bb)
 }
-

@@ -9,13 +9,17 @@ What Changed (recent)
   - `mir_no_phi()` default set to true (can disable via `NYASH_MIR_NO_PHI=0`).
   - Curated LLVM runner defaults to PHI‑off; `--phi-on` enables MIR14 lane.
   - Added doc: `docs/development/mir/MIR13_MODE.md`; README references it.
-- JSON v0 Bridge lowering split (non‑functional)
-  - Added `src/runner/json_v0_bridge/lowering/{if_else.rs, loop_.rs, try_catch.rs, merge.rs}` and routed calls from `lowering.rs`.
+- JSON v0 Bridge lowering refactor + features
+  - Split helpers: `src/runner/json_v0_bridge/lowering/{if_else.rs, loop_.rs, try_catch.rs, merge.rs}`（既存）に加え、式系を `lowering/expr.rs` に分離（振る舞い不変）。
+  - 新規サポート: Ternary/Peek の Lowering を実装し、`expr.rs` から `ternary.rs`/`peek.rs` へ委譲（MIR13 PHI‑off=Copy合流／PHI‑on=Phi 合流）。
+  - Self‑host 生成器（Stage‑1 JSON v0）に Peek emit を追加: `apps/selfhost-compiler/boxes/parser_box.nyash`。
+  - Selfhost/PyVM スモークを通して E2E 確認（peek/ternary）。
 - llvmlite stability for MIR13
   - Resolver: forbids cross‑block non‑dominating vmap reuse; for multi‑pred and no declared PHI, synthesizes a localization PHI at block head.
   - Finalize remains function‑local; `block_end_values` snapshots and placeholder wiring still in place.
 - Parity runner pragmatics
   - `tools/pyvm_vs_llvmlite.sh` compares exit code by default; use `CMP_STRICT=1` for stdout+exit.
+  - Stage‑2 smokes更新: `tools/selfhost_stage2_smoke.sh` に "Peek basic" を追加。
 
 Current Status
 - Self‑hosting Bridge → PyVM smokes: PASS (Stage‑2 reps: array/string/logic/if/loop).
@@ -23,11 +27,16 @@ Current Status
 - Curated LLVM (PHI‑on experimental): `apps/tests/loop_if_phi.nyash` shows a dominance issue (observed; not blocking, MIR13 recommended).
 
 Next (short plan)
-1) JSON v0 lowering: split remaining helpers (peek/ternary/expr) without behavior change.
-2) PHI‑on lane (optional): investigate `loop_if_phi` dominance by tightening finalize ordering and resolver materialization (low priority).
-3) Runner refactor (small PRs):
-   - `selfhost/{child.rs,json.rs}` split; `modes/common/{io,resolve,exec}.rs` split; reduce `runner/mod.rs` surface.
-4) Optimizer/Verifier thin‑hub cleanup (non‑functional): orchestrator minimalization and pass boundaries clarified.
+1) Legacy Interpreter/VM offboarding (phase‑A):
+   - Introduce `vm-legacy` feature (default OFF) to gate old VM execution層。
+   - 抽出: JIT が参照する最小型（例: `VMValue`）を薄い共通モジュールへ切替（`vm_types` 等）。
+   - `interpreter-legacy`/`vm-legacy` を既定ビルドから外し、ビルド警告を縮小。
+2) Legacy Interpreter/VM offboarding (phase‑B):
+   - 物理移動: `src/archive/{interpreter_legacy,vm_legacy}/` へ移設（ドキュメント更新）。
+3) PHI‑on lane（任意）: `loop_if_phi` 支配関係を finalize/resolve の順序強化で観察（低優先）。
+4) Runner refactor（小PR）:
+   - `selfhost/{child.rs,json.rs}` 分離; `modes/common/{io,resolve,exec}.rs` 分割; `runner/mod.rs`の表面削減。
+5) Optimizer/Verifier thin‑hub cleanup（非機能）: orchestrator最小化とパス境界の明確化。
 
 How to Run
 - PyVM reference smokes: `tools/pyvm_stage2_smoke.sh`
@@ -46,4 +55,4 @@ Notes / Policies
 - Focus is self‑hosting stability. JIT/Cranelift is out of scope (safety fixes only).
 - PHI generation remains centralized in llvmlite; Bridge/Builder keep PHI‑off by default.
 - No full tracing GC yet; handles/Arc lifetimes govern object retention. Safepoint/barrier/roots are staging utilities.
-
+ - Legacy Interpreter/VM は段階的にアーカイブへ。日常の意味論確認は PyVM を基準として継続。

@@ -1,7 +1,4 @@
-use super::{
-    BasicBlockIdGenerator, EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule,
-    MirType, ValueId,
-};
+use super::{EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId};
 use crate::ast::ASTNode;
 
 // Lifecycle routines extracted from builder.rs
@@ -106,4 +103,3 @@ impl super::MirBuilder {
         Ok(module)
     }
 }
-
