@@ -1,0 +1,109 @@
+Nyash言語のwhen構文と関数Box設計について深い相談です
+
+【前回の議論からの進展】
+
+1. when文採用でほぼ決定
+   - switch/caseより予約語が少ない
+   - 式としても使える
+   - パターンマッチングへの拡張性
+
+2. => 構文の導入
+   - 現代的で見やすい
+   - 他言語（Rust, Kotlin, JS）でも採用
+   - 単一式とブロック両対応を検討中
+
+3. returnキーワードは必須！
+   - 早期リターンに必要
+   - 明示性のため重要
+   - 式指向だけでは複雑になりすぎる
+
+【新しい設計提案：fnによる関数Box】
+
+通常のブロックと関数Boxを明示的に区別する案：
+
+```nyash
+// 通常のブロック（外側のスコープを共有）
+when animal {
+    "dog" => {
+        me.count = me.count + 1   // 外側のBoxのme
+        local sound = "woof"
+        playSound(sound)
+        return sound              // whenの値として返る
+    }
+    "cat" => meow()              // 単一式もOK
+    else => silent()
+}
+
+// 関数Box（新しいスコープ、再帰可能）
+when operation {
+    "factorial" => fn(n) {
+        if n <= 1 { return 1 }
+        return n * me(n - 1)      // meは新しい関数Box自身！
+    }(5)  // 即座に呼び出し
+    
+    "counter" => fn() {
+        local count = 0
+        return {
+            increment: fn() { count = count + 1 },
+            get: fn() { return count }
+        }
+    }()
+}
+```
+
+【質問事項】
+
+1. when vs match
+   - whenという名前で良いか？
+   - matchの方が良い？
+   - 他の候補：check, on, select
+
+2. => 構文の詳細設計
+   - 単一式：`"dog" => bark()`
+   - ブロック：`"dog" => { ... }`
+   - 関数Box：`"dog" => fn(args) { ... }`
+   - この3パターンで十分か？
+
+3. fnキーワードの役割拡張
+   - 現在：関数定義のみ
+   - 提案：インライン関数Box作成にも使用
+   - 一貫性は保たれるか？
+
+4. Everything is Box哲学との整合性
+   - {} だけでは通常のブロック（Boxではない）
+   - fn{} で関数Box
+   - この区別は哲学に反しないか？
+
+5. 実装の観点
+   - MIR/VM/LLVMでの実装難易度
+   - 最適化の可能性
+   - デバッグのしやすさ
+
+【設計原則の確認】
+
+- 明示性：何が起きているか一目瞭然
+- シンプルさ：初学者にも分かりやすい
+- 表現力：実用的なプログラムが書ける
+- 一貫性：言語全体で統一感がある
+
+【予約語リスト（案）】
+必須機能に必要な最小限：
+1. box
+2. new
+3. me
+4. public
+5. if
+6. else
+7. loop
+8. break
+9. continue
+10. when (またはmatch)
+11. return
+12. import
+13. from
+14. birth (コンストラクタ)
+15. fn
+
+予約語10個厳守ではなく、必要なものは追加する方針です。
+
+プログラミング言語設計の観点から、この設計の妥当性と改善案をお聞かせください。

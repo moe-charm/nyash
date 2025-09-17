@@ -1,0 +1,67 @@
+# Phase 10.7 – Python Native 再スタート計画（合意版 / txt）
+
+目的: 現行の Plugin-First（PyRuntimeBox/PyObjectBox, Handle-First/TLV）を維持しつつ、トランスパイル路線（Python→Nyash）を“All or Nothing”原則で段階導入。10.6の足場（Thread-Safety/Scheduler）上で、AOT配布体験に直結する最短ラインを構築する。
+
+====================
+A) 方針（判断）
+====================
+- 二本立てを明確化：
+  1) 実行系（現行）: PyRuntimeBox 経由（VM=仕様、JIT=AOT生成のみ）。配布/運用の実用ライン。
+  2) トランスパイル系（10.7）: Python→Nyash→MIR→AOT。コンパイル成功/失敗の二択（フォールバック自動無し）。
+- 役割分担：未対応Pythonはユーザーが明示的に PyRuntimeBox を使う。トランスパイルはコンパイル成功率を段階的に拡大。
+- Plugin-Firstは維持（Parser/CompilerもプラグインBox化）。CLI/VMから統一呼び出し。
+
+====================
+B) 最小成功像（Phase 1 / DoD）
+====================
+- サンプルpy（Phase 1 範囲内）を `pythonc`（仮）で Nyashスクリプトへ生成 → `--compile-native` で EXE 生成 → 実行。
+- 機能カバレッジ（Phase 1）: def/if/for/while/return/bool/算術/比較/関数呼び出し/LEGB/デフォルト引数/for-else。
+- Differential（限定）: Phase 1 サンプル群で CPython と一致（出力/戻り/例外の有無）。
+
+====================
+C) サブフェーズとタスク
+====================
+C1) Parser Plugin（1週）
+- `plugins/nyash-python-parser-plugin`: Python→AST（pyo3）。
+- AST→CorePy IR（JSON）: 構文の正規化（with→try/finally などはPhase 2）。
+- Telemetry: ノード統計/未対応ノードを列挙。
+
+C2) Compiler Core（2週）
+- IR→Nyash AST 生成（Box化/クロージャ/LEGB/デフォ引数の再現）。
+- peephole最小（定数畳み込み）。
+- 生成NyashのPretty-print + 簡易ソースマップ。
+
+C3) 配線/CLI/実行（3日）
+- `nyash --pyc file.py -o out.ny`（Nyash出力）/ `--pyc-native file.py -o app`（EXE直行）を追加（内部で既存 `--compile-native` を利用）。
+- 生成Nyashは既存コンパイラ経由で MIR→AOT を通す（Strict）。
+
+C4) テスト/観測（1週並行）
+- `phase-10.7/testing-plan.md` の Phase 1 部分を小粒に実装。
+- VM vs AOT の「Result:」比較ラインを流用（既存スモークベース）。
+
+====================
+D) インターフェース / 成果物
+====================
+- ParserBox: `parse(code: String) -> AstBox/CorePyBox`（内部JSON保持 or to_json）
+- CompilerBox: `compile(ir: CorePyBox) -> Result<NyashSourceBox, ErrorBox>`
+- CLI: `--pyc/--pyc-native`（初期は隠しフラグでも可）
+- Docs: README/implementation/testing-plan を PLAN に沿って更新。
+
+====================
+E) リスク/緩和
+====================
+- 範囲膨張: Phase 1 の構文/意味論を固定し、Beyondは即Err。PyRuntimeBoxは明示利用。
+- 例外/with/comp/async: Phase 2/3の対象。IR設計時に将来ノードを予約（後方互換）。
+- Windows配布: 10.5で整えた PATH/PYTHONHOME 補助はPyRuntime向け。トランスパイル後はCPython依存なし。
+
+====================
+F) タイムライン（目安）
+====================
+- C1: 1週 / C2: 2週 / C3: 3日 / C4: 1週（並行）。
+
+====================
+G) 現行との接続
+====================
+- 10.6の足場（Thread-Safety/Scheduler）は維持。トランスパイル系は単一スレッド/VM基準で十分。
+- 10.5のAOT導線/nyrtシムはそのまま活用（生成Nyashに対して適用）。
+

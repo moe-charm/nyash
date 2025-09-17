@@ -1,0 +1,85 @@
+Phase 10.7 — JIT Branch Wiring + Minimal ABI Extensions
+
+Overview
+- Purpose: Enable real control-flow in the JIT path by wiring MIR Branch/Jump/Return to Cranelift blocks, and extend the minimal ABI to support multi-arg i64 and basic bool/f64.
+- Outcome: If/loop constructs execute natively in JIT for straight-line + branched code paths, with safe VM fallback preserved. HostCall PoC remains opt-in.
+
+Goals (Must)
+- Wire MIR basic blocks to Cranelift blocks; emit `brif` and `jump` for Branch/Jump.
+- Keep Compare result usable as a branch condition (b1); where necessary, convert i64 to b1 via `icmp_imm != 0`.
+- Preserve Return behavior (already in place) and allow branching to return in both sides (no PHI required for first pass).
+- Minimal ABI: multi-argument i64 stable, bool constants lowered to 0/1, f64 constants passed through (no arithmetic yet required).
+- Safety: On JIT panic or unsupported instruction at runtime, VM fallback with logs.
+
+Stretch (Nice-to-have)
+- PHI at merge points via block parameters for simple patterns (two-predecessor if-else returning a value).
+- Bench: Add a small control-flow benchmark to CLI/`examples`.
+
+Non-Goals (10.7)
+- Full PHI generalization across arbitrary CFG.
+- Type-specialized calling conventions beyond i64/f64/bool minimal path.
+- Deoptimization or on-stack replacement.
+
+Deliverables
+- Code: CraneliftBuilder block management + branch/jump emission.
+- Lowering updates: Branch/Jump hook uses real block IDs; Compare emits b1-friendly shape.
+- Env flags: Reuse `NYASH_JIT_EXEC/THRESHOLD/STATS/DUMP`; guard hostcalls by `NYASH_JIT_HOSTCALL`.
+- Docs: Update execution-backends.md with “JIT control-flow coverage (10.7)”.
+- Examples: `examples/jit_branch_demo.nyash` (if/loop minimal).
+
+Design Sketch
+1) Block Mapping
+   - Build `bb_map: MirBB -> Cranelift Block` in `begin_function` based on MIR function blocks.
+   - Switch to entry block, `seal_block(entry)`.
+
+2) Conditions
+   - Compare emits Cranelift `icmp` returning b1; avoid converting to i64 unless explicitly needed.
+   - If the condition arrives as i64 (const/param), lower `icmp_imm != 0` to get b1 for `brif`.
+
+3) Branch / Jump
+   - `emit_branch(cond, then_bb, else_bb)` → `brif(cond_b1, then_block, []); jump(else_block, []); seal both`.
+   - `emit_jump(target_bb)` → `jump(target_block, [])`.
+
+4) Return
+   - Keep current return emission; when branches end in return, no PHI needed.
+
+5) PHI (limited)
+   - For a simple diamond where both arms jump to a single merge, add one block param at merge.
+   - Pass the value via `jump(merge, [val])`; read via `block-arg(merge, 0)`; return it.
+
+6) ABI
+   - Keep signature `(i64 x argc) -> i64?` baseline.
+   - Support f64/bool consts materialization; booleans as 0/1 integers for now unless used as branch cond (then b1).
+
+Implementation Plan (Tasks)
+- T1: Extend IRBuilder API (only behind `cranelift-jit`): create_block(), br_if(), jump(), seal_block(), block_param(), append_block_params_for_function_params().
+- T2: CraneliftBuilder: implement block map allocation in begin_function; store in builder state.
+- T3: LowerCore: 
+  - Track current MIR bb while iterating.
+  - For Branch/Jump, call builder with mapped blocks and condition value hint.
+  - Compare: emit b1 icmp; when Compare is used as value elsewhere, allow i64 extend as needed.
+- T4: Minimal PHI support for a single merge (optional; guarded by env `NYASH_JIT_PHI_MIN=1`).
+- T5: Add `examples/jit_branch_demo.nyash` with: `if (a < b) { return 1 } else { return 2 }` and a small loop with early `return`.
+- T6: Docs update: execution-backends.md “JIT coverage 10.7” + env flags.
+- T7: Bench (optional): integrate into `--benchmark` with JIT warmup when `NYASH_JIT_EXEC=1`.
+
+Validation
+- Build matrix: with/without `cranelift-jit` feature.
+- Smoke tests: run `jit_branch_demo.nyash` with `NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1`.
+- Fallback verification: force a path with unsupported op to confirm VM fallback.
+- GC/scheduler: ensure safepoint path still works (unchanged).
+
+Risk & Mitigation
+- Mismatch of block sealing/order → start with straight-line + simple diamond; add asserts; prefer FunctionBuilder patterns.
+- Condition type confusion (i64 vs b1) → centralize cond normalization helper.
+- PHI complexity → keep optional, limited to single value diamond.
+
+Rollout
+- Phase gate by envs: `NYASH_JIT_EXEC` for enable, `NYASH_JIT_PHI_MIN` for PHI.
+- Keep `NYASH_JIT_HOSTCALL` opt-in.
+
+Success Criteria
+- If/else returning constants runs fully via JIT (Cranelift) without VM fallback.
+- Simple counting loop with early exit returns correct result via JIT.
+- All tests pass with and without feature flag; VM fallback works on traps.
+
