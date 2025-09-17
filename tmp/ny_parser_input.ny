@@ -1,6 +1,2 @@
-static box Main {
-  main() {
-    print("hello")
-    return 0
-  }
-}
+local m = {"name": "Alice", "age": 25}
+return m.size()

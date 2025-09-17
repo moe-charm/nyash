@@ -104,3 +104,36 @@ Notes
 - Phase 15 keeps resolution in the Runner to minimize parser complexity. Future phases may leverage `meta.usings` for compiler decisions.
 - Unknown fields in the top‑level JSON (like `meta`) are ignored by the current bridge.
  - 未解決時（非strict）は実行を継続し、`NYASH_RESOLVE_TRACE=1` で候補を提示。strict時はエラーで候補を表示。
+
+## Include/Export (Phase 1)
+
+Simple include expression for file‑scoped modules（Phase 1 提案）。将来は `using`/Runner 解決へ統合予定。
+
+Overview
+- One file exports one static box. `include(path)` evaluates the file and returns that Box instance.
+
+Syntax
+```
+local Math = include "lib/math.nyash"
+local r = Math.add(1, 2)
+```
+
+Rules
+- Single static box per file（0/複数はエラー）
+- Expression form: `include(...)` は Box インスタンスを返す式
+- Caching: 同一パスは一度だけ評価（2回目以降はキャッシュ返却）
+- Path resolution（MVP）:
+  - Relative allowed; absolute discouraged
+  - nyash.toml `[include.roots]` で `std=/stdlib` 等のルート定義を許可
+  - 省略拡張は `.nyash`、ディレクトリなら `index.nyash`
+
+Backends
+- Interpreter: 実行時に評価し Box を返す
+- VM/AOT: MIR Builder が対象ファイルを読み取り、同一 MIR モジュールに static box を降ろす（専用 MIR 命令は追加しない）
+
+Limitations
+- 循環 include の検出/診断は未実装（後続で active-load 追跡と経路表示を追加）
+
+Rationale
+- MIR 仕様に変更を入れず、実用的なモジュール分割を提供
+- Everything‑is‑Box に整合（モジュール=Box、メソッド/フィールド=API）

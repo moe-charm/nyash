@@ -8,6 +8,10 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+// Provide stubs when legacy interpreter is disabled
+#[cfg(not(feature = "interpreter-legacy"))]
+mod interpreter_stub;
+
 pub mod ast; // Using old ast.rs for now
 pub mod box_arithmetic;
 pub mod box_factory; // 🏭 Unified Box Factory Architecture (Phase 9.78)
@@ -20,7 +24,10 @@ pub mod environment;
 pub mod exception_box;
 pub mod finalization;
 pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
+#[cfg(feature = "interpreter-legacy")]
 pub mod interpreter;
+#[cfg(not(feature = "interpreter-legacy"))]
+pub mod interpreter { pub use crate::interpreter_stub::*; }
 pub mod method_box;
 pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
 pub mod parser; // Using old parser.rs for now
@@ -79,6 +86,8 @@ pub use ast::{ASTNode, BinaryOperator, LiteralValue};
 pub use box_arithmetic::{AddBox, CompareBox, DivideBox, ModuloBox, MultiplyBox, SubtractBox};
 pub use box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
 pub use environment::{Environment, PythonCompatEnvironment};
+#[cfg(feature = "interpreter-legacy")]
+#[cfg(feature = "interpreter-legacy")]
 pub use interpreter::{NyashInterpreter, RuntimeError};
 pub use parser::{NyashParser, ParseError};
 pub use tokenizer::{NyashTokenizer, Token, TokenType};
@@ -100,17 +109,17 @@ pub use method_box::{BoxType, EphemeralInstance, FunctionDefinition, MethodBox};
 pub use value::NyashValue;
 
 // Direct canvas test export
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "interpreter-legacy"))]
 pub use wasm_test::wasm_test::test_direct_canvas_draw;
 
 // 🌐 WebAssembly exports for browser usage
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "interpreter-legacy"))]
 #[wasm_bindgen]
 pub struct NyashWasm {
     interpreter: NyashInterpreter,
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "interpreter-legacy"))]
 #[wasm_bindgen]
 impl NyashWasm {
     /// Create a new Nyash interpreter instance for browser use

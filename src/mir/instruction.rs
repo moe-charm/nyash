@@ -8,6 +8,9 @@ use super::{Effect, EffectMask, ValueId};
 // use crate::value::NyashValue;  // Commented out to avoid circular dependency
 use std::fmt;
 
+// Kind-specific metadata (non-functional refactor scaffolding)
+use crate::mir::instruction_kinds as inst_meta;
+
 /// MIR instruction types - limited to 20 core instructions
 #[derive(Debug, Clone, PartialEq)]
 pub enum MirInstruction {
@@ -362,6 +365,9 @@ pub enum MirType {
 impl MirInstruction {
     /// Get the effect mask for this instruction
     pub fn effects(&self) -> EffectMask {
+        if let Some(eff) = inst_meta::effects_via_meta(self) {
+            return eff;
+        }
         match self {
             // Pure operations
             MirInstruction::Const { .. }
@@ -436,6 +442,9 @@ impl MirInstruction {
 
     /// Get the destination ValueId if this instruction produces a value
     pub fn dst_value(&self) -> Option<ValueId> {
+        if let Some(dst) = inst_meta::dst_via_meta(self) {
+            return Some(dst);
+        }
         match self {
             MirInstruction::Const { dst, .. }
             | MirInstruction::BinOp { dst, .. }
@@ -487,6 +496,9 @@ impl MirInstruction {
 
     /// Get all ValueIds used by this instruction
     pub fn used_values(&self) -> Vec<ValueId> {
+        if let Some(used) = inst_meta::used_via_meta(self) {
+            return used;
+        }
         match self {
             MirInstruction::Const { .. } | MirInstruction::Jump { .. } | MirInstruction::Nop => {
                 Vec::new()

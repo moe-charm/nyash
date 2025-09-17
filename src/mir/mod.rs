@@ -12,6 +12,7 @@ pub mod builder;
 pub mod effect;
 pub mod function;
 pub mod instruction;
+pub mod instruction_kinds; // small kind-specific metadata (Const/BinOp)
 pub mod instruction_introspection; // Introspection helpers for tests (instruction names)
 pub mod loop_api; // Minimal LoopBuilder facade (adapter-ready)
 pub mod loop_builder; // SSA loop construction with phi nodes

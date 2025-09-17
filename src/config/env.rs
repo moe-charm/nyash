@@ -108,7 +108,14 @@ pub fn await_max_ms() -> u64 {
 // ---- MIR PHI-less (edge-copy) mode ----
 /// Enable MIR PHI non-generation. Bridge/Builder emit edge copies instead of PHI.
 pub fn mir_no_phi() -> bool {
-    std::env::var("NYASH_MIR_NO_PHI").ok().as_deref() == Some("1")
+    match std::env::var("NYASH_MIR_NO_PHI").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        // Default: ON for MIR13 stability (PHI generation off by default)
+        None => true,
+    }
 }
 
 /// Allow verifier to skip SSA/dominance/merge checks for PHI-less MIR.

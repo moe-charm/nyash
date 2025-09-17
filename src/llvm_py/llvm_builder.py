@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Nyash LLVM Python Backend - Main Builder
-Following the design principles in docs/LLVM_LAYER_OVERVIEW.md
+Following the design principles in docs/design/LLVM_LAYER_OVERVIEW.md
 """
 
 import json

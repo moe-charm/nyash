@@ -4,9 +4,9 @@
 
 ## Start Here (必ずここから)
 - 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)
-  - 📁 **Main**: [docs/current_task/main/](docs/current_task/main/)
-  - 📁 **LLVM**: [docs/current_task/llvm/](docs/current_task/llvm/)
-  - 📁 **Self**: [docs/current_task/self_current_task/](docs/current_task/self_current_task/)
+  - 📁 **Main**: [docs/development/current/main/](docs/development/current/main/)
+  - 📁 **LLVM**: [docs/development/current/llvm/](docs/development/current/llvm/)
+  - 📁 **Self**: [docs/development/current/self_current_task/](docs/development/current/self_current_task/)
 - ドキュメントハブ: [README.md](README.md)
 - 🚀 **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
  - 📊 **JIT統計JSONスキーマ(v1)**: [jit_stats_json_v1.md](docs/reference/jit/jit_stats_json_v1.md)

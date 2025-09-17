@@ -6,7 +6,7 @@
 
 ---
 
-## 📂 新しいドキュメント構造（2025年8月20日再編成）
+## 📂 ドキュメント構造（指針）
 
 ### 📖 [reference/](reference/) - 正式な技術仕様
 - **language/** - 言語仕様（構文、型システム、Box仕様）
@@ -21,6 +21,9 @@
 - **tutorials/** - ステップバイステップのチュートリアル
 - **examples/** - 実践的なサンプルコード
 - **wasm-guide/** - WebAssemblyビルドガイド
+
+### 🧩 [how-to/](how-to/) - 目的別ハウツー
+- 手順重視の短いガイド（前提→コマンド→検証）
 
 ### 🔧 [development/](development/) - 開発者向け
 - **current/** - 現在進行中のタスク（CURRENT_TASK.md等）
@@ -54,6 +57,9 @@
 - [実行バックエンド](reference/architecture/execution-backends.md)
 - [プラグインシステム](reference/plugin-system/)
  - [CLIオプション早見表](tools/cli-options.md)
+ 
+### デザイン
+- [設計ノート（入口）](design/)
 
 ### 開発状況
 - [現在のタスク](../CURRENT_TASK.md)
@@ -63,7 +69,7 @@
 
 ---
 
-## 📋 再編成について
+## 📋 再編成について / フォルダの見分け方
 ドキュメントは2025年8月20日に再編成されました。詳細は[REORGANIZATION_REPORT.md](REORGANIZATION_REPORT.md)を参照してください。
 
 旧パスから新パスへの主な変更：
@@ -72,5 +78,11 @@
 - 散在していたファイル → 適切なカテゴリに整理
 
 ---
+
+補足:
+- `reference/` は正本（仕様）。
+- `guides/` は読み物、`how-to/` は手順書。
+- `design/` は公開できる設計ノート。
+- `private/` は下書き保管庫（将来 `reference/`/`design/` に昇格）。
 
 Nyash は「Everything is Box」哲学に基づく言語です。詳細はコア概念とガイドを参照してください。

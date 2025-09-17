@@ -11,7 +11,8 @@ categories = ["development-tools::parsing", "interpreters"]
 
 # Default features - minimal CLI only
 [features]
-default = ["cli", "plugins"]
+default = ["cli", "plugins", "interpreter-legacy"]
+interpreter-legacy = []
 e2e = []
 cli = []
 plugins-only = []

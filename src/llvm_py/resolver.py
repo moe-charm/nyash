@@ -10,7 +10,7 @@ import llvmlite.ir as ir
 class Resolver:
     """
     Centralized value resolution with per-block caching.
-    Following the Core Invariants from LLVM_LAYER_OVERVIEW.md:
+    Following the Core Invariants from docs/design/LLVM_LAYER_OVERVIEW.md:
     - Resolver-only reads
     - Localize at block start (PHI creation)
     - Cache per (block, value) to avoid redundant PHIs
@@ -121,24 +121,10 @@ class Resolver:
                 self.i64_cache[cache_key] = existing
                 return existing
         else:
-            # Prefer a directly available SSA value from vmap（同一ブロック直前定義の再利用）。
-            # def_blocks が未更新でも、vmap に存在するなら局所定義とみなす。
-            try:
-                existing = vmap.get(value_id)
-            except Exception:
-                existing = None
-            if existing is not None and hasattr(existing, 'type') and isinstance(existing.type, ir.IntType):
-                if existing.type.width == 64:
-                    if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                        print(f"[resolve] vmap-fast reuse: bb{bid} v{value_id}", flush=True)
-                    self.i64_cache[cache_key] = existing
-                    return existing
-                else:
-                    zextd = self.builder.zext(existing, self.i64) if self.builder is not None else ir.Constant(self.i64, 0)
-                    if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                        print(f"[resolve] vmap-fast zext: bb{bid} v{value_id}", flush=True)
-                    self.i64_cache[cache_key] = zextd
-                    return zextd
+            # Do NOT blindly reuse vmap across blocks: it may reference values defined
+            # in non-dominating predecessors (e.g., other branches). Only reuse when
+            # defined_here (handled above) or at entry/no-preds (handled below).
+            pass
         
         if not pred_ids:
             # Entry block or no predecessors: prefer local vmap value (already dominating)
@@ -182,8 +168,9 @@ class Resolver:
             return coerced
         else:
             # Multi-pred: if JSON declares a PHI for (current block, value_id),
-            # materialize it on-demand via end-of-block resolver. Otherwise, avoid
-            # synthesizing a localization PHI (return zero to preserve dominance).
+            # materialize it on-demand via end-of-block resolver. Otherwise,
+            # synthesize a localization PHI at the current block head to ensure
+            # dominance for downstream uses (MIR13 PHI-off compatibility).
             try:
                 cur_bid = int(str(current_block.name).replace('bb',''))
             except Exception:
@@ -203,9 +190,37 @@ class Resolver:
                 placeholder = vmap.get(value_id)
                 result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
             else:
-                if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-                    print(f"[resolve] multi-pred no-declare: bb{cur_bid} v{value_id} -> 0", flush=True)
-                result = ir.Constant(self.i64, 0)
+                # Synthesize a PHI to localize the value and dominate its uses.
+                try:
+                    bb = bb_map.get(cur_bid) if isinstance(bb_map, dict) else current_block
+                except Exception:
+                    bb = current_block
+                b = ir.IRBuilder(bb)
+                try:
+                    b.position_at_start(bb)
+                except Exception:
+                    pass
+                existing = vmap.get(value_id)
+                if existing is not None and hasattr(existing, 'add_incoming'):
+                    phi = existing
+                else:
+                    phi = b.phi(self.i64, name=f"res_phi_{value_id}_{cur_bid}")
+                    vmap[value_id] = phi
+                # Wire end-of-block values from each predecessor
+                for pred_bid in pred_ids:
+                    try:
+                        pred_bb = bb_map.get(pred_bid) if isinstance(bb_map, dict) else None
+                    except Exception:
+                        pred_bb = None
+                    val = self._value_at_end_i64(value_id, pred_bid, preds, block_end_values, vmap, bb_map)
+                    if pred_bb is None:
+                        # If we cannot map to a real basic block (shouldn't happen),
+                        # fallback to a zero to keep IR consistent.
+                        val = val if hasattr(val, 'type') else ir.Constant(self.i64, 0)
+                        # llvmlite requires a real BasicBlock; skip if missing.
+                        continue
+                    phi.add_incoming(val, pred_bb)
+                result = phi
         
         # Cache and return
         self.i64_cache[cache_key] = result

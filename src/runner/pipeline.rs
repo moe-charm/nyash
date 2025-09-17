@@ -150,6 +150,8 @@ pub(super) fn resolve_using_target(
     strict: bool,
     verbose: bool,
 ) -> Result<String, String> {
+    // Invalidate and rebuild index/cache if env or nyash.toml changed
+    super::box_index::rebuild_if_env_changed();
     if is_path {
         return Ok(tgt.to_string());
     }

@@ -15,7 +15,8 @@
 ---
 
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
-Self‑hosting one‑pager: `docs/self-hosting.md`.
+MIR mode note: default is MIR13 (PHI-off). See `docs/development/mir/MIR13_MODE.md`.
+Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
 
 ## Table of Contents
 - [Self‑Hosting (Dev Focus)](#self-hosting)
@@ -23,7 +24,7 @@ Self‑hosting one‑pager: `docs/self-hosting.md`.
 
 <a id="self-hosting"></a>
 ## 🧪 Self‑Hosting (Dev Focus)
-- Guide: `docs/self-hosting.md`
+- Guide: `docs/how-to/self-hosting.md`
 - Minimal E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`

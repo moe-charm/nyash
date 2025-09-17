@@ -170,7 +170,7 @@ Flags
 ## Commit & Pull Request Guidelines
 - Commits: concise imperative subject; scope the change (e.g., "llvm: fix argc handling in nyrt").
 - PRs must include: description, rationale, reproduction (if bug), and run instructions.
-- Link issues (`docs/issues/*.md`) and reference affected scripts (e.g., `tools/llvm_smoke.sh`).
+- Link issues (`docs/development/issues/*.md`) and reference affected scripts (e.g., `tools/llvm_smoke.sh`).
 - CI: ensure smokes pass; use env toggles in the workflow as needed.
 
 ## Security & Configuration Tips

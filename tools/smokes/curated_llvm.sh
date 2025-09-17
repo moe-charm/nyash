@@ -15,10 +15,13 @@ fi
 
 export NYASH_LLVM_USE_HARNESS=1
 
-# Optional: PHI-off mode
-if [[ "${1:-}" == "--phi-off" ]]; then
-  export NYASH_MIR_NO_PHI=1
-  export NYASH_VERIFY_ALLOW_NO_PHI=1
+# Default: PHI-off (MIR13). Use --phi-on to test PHI-on path.
+export NYASH_MIR_NO_PHI=${NYASH_MIR_NO_PHI:-1}
+export NYASH_VERIFY_ALLOW_NO_PHI=${NYASH_VERIFY_ALLOW_NO_PHI:-1}
+if [[ "${1:-}" == "--phi-on" ]]; then
+  export NYASH_MIR_NO_PHI=0
+  echo "[curated-llvm] PHI-on (JSON PHI + finalize) enabled" >&2
+else
   echo "[curated-llvm] PHI-off (edge-copy) enabled" >&2
 fi
 

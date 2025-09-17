@@ -117,6 +117,20 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             }
             runner.execute_vm_mode(filename);
         }
+        "interpreter" => {
+            eprintln!("⚠ interpreter backend is legacy and deprecated. Use 'vm' (PyVM/LLVM) instead.");
+            if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    println!("👉 Redirecting to VM backend (PyVM) as requested by NYASH_VM_USE_PY=1");
+                }
+                runner.execute_vm_mode(filename);
+            } else {
+                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                    println!("👉 Redirecting to VM backend");
+                }
+                runner.execute_vm_mode(filename);
+            }
+        }
         #[cfg(feature = "cranelift-jit")]
         "jit-direct" => {
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
@@ -142,23 +156,9 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             }
             runner.execute_llvm_mode(filename);
         }
-        _ => {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!(
-                    "🦀 Nyash Rust Implementation - Executing file: {} 🦀",
-                    filename
-                );
-                if let Some(fuel) = runner.config.debug_fuel {
-                    println!("🔥 Debug fuel limit: {} iterations", fuel);
-                } else {
-                    println!("🔥 Debug fuel limit: unlimited");
-                }
-                println!("====================================================");
-            }
-            super::modes::interpreter::execute_nyash_file(
-                filename,
-                runner.config.debug_fuel.clone(),
-            );
+        other => {
+            eprintln!("❌ Unknown backend: {}. Use 'vm' or 'llvm' (or 'interpreter' legacy).", other);
+            std::process::exit(2);
         }
     }
 }

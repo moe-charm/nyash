@@ -178,4 +178,4 @@ The analysis reveals a well-architected system that would benefit from tactical 
 
 Phase 15 Addendum (Mainline only)
 - Implemented: extracted CLI directives scanning and fields-top lint into `src/runner/cli_directives.rs` to slim `src/runner/mod.rs` without behavior changes.
-- Proposed next steps (non-JIT): see `docs/refactoring/candidates_phase15.md` for focused items on Runner/LLVM/VM.
+- Proposed next steps (non-JIT): see `docs/development/refactoring/candidates_phase15.md` for focused items on Runner/LLVM/VM.

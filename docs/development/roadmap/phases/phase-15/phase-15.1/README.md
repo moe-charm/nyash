@@ -33,7 +33,7 @@ Avoid: deep AOT emission/linking, cross-platform toolchain work, or scope creep 
 ## Deliverables
 
 - `tools/aot_plan/` Nyash scripts and helpers
-- `docs/specs/aot_plan_v1.md` (lightweight schema)
+- `docs/design/aot-plan-v1.md` (lightweight schema)
 - Compiler entry to import AOT-Plan → MIR13 (feature-gated)
 - 3 smokes + 1 golden JSON sample
 
@@ -86,4 +86,3 @@ Key takeaways aligned into this document:
 - Importer can read that JSON and construct MIR13 module(s) without panics
 - VM runs those modules and matches expected string/number results for trivial bodies
 - Events present when enabled; counters reflect plan/import activity; no AOT emit performed
-

@@ -4,7 +4,7 @@
 
 **最新の完全な言語リファレンスは以下を参照してください：**
 
-- **[🚀 Nyash Language Reference 2025](../language/LANGUAGE_REFERENCE_2025.md)** - 完全な言語仕様（最新版）
+- **[🚀 Nyash Language Reference 2025](../../../reference/language/LANGUAGE_REFERENCE_2025.md)** - 完全な言語仕様（最新版）
 - **[📝 構文早見表](../../quick-reference/syntax-cheatsheet.md)** - よく使う構文のクイックリファレンス
 
 ## 📁 このディレクトリの内容
@@ -20,4 +20,4 @@
 
 ---
 
-**注意**: 言語仕様に関する最新情報は必ず [LANGUAGE_REFERENCE_2025.md](../language/LANGUAGE_REFERENCE_2025.md) を参照してください。
+**注意**: 言語仕様に関する最新情報は必ず [LANGUAGE_REFERENCE_2025.md](../../../reference/language/LANGUAGE_REFERENCE_2025.md) を参照してください。

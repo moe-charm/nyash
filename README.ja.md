@@ -15,7 +15,7 @@
 ---
 
 開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
-セルフホスト1枚ガイド: `docs/self-hosting.md`
+セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
 
 ## 目次
 - [Self-Hosting（自己ホスト開発）](#self-hosting)
@@ -23,7 +23,7 @@
 
 <a id="self-hosting"></a>
 ## 🧪 Self-Hosting（自己ホスト開発）
-- ガイド: `docs/self-hosting.md`
+- ガイド: `docs/how-to/self-hosting.md`
 - 最小E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - スモーク: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`

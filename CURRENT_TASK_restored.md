@@ -103,7 +103,7 @@ TODO（bitops）
 - 走査: コメント（`//`, `#`）・文字列内の `include` を無視する状態機械を導入（誤検出抑制）。
 - サンプル: `apps/selfhost/smokes/dep_smoke_root.nyash`（子: `dep_smoke_child.nyash`）。
 
-出力仕様・受け入れ基準: docs/selfhost/dep_tree_min_string.md に移設（CURRENT_TASKは要点のみ表記）。
+出力仕様・受け入れ基準: docs/development/current/selfhost/dep_tree_min_string.md に移設（CURRENT_TASKは要点のみ表記）。
 
 残タスク（Phase 0 必須）
 - P0-2: スモーク（循環あり/なし）と合わせて確認（追加済み）。
@@ -439,9 +439,9 @@ Phase A 進捗（実施済）
 - Phase 12 クローズアウト完了。言語糖衣（12.7-B/P0）と VM 分割は反映済み。
 - Phase 15（Self-Hosting: Cranelift AOT）へフォーカス移行。
   - 設計/仕様ドキュメントとスモーク雛形を追加済み。
-    - 設計: `docs/backend-cranelift-aot-design.md`
-    - API案: `docs/interfaces/cranelift-aot-box.md`
-    - LinkerBox: `docs/interfaces/linker-box.md`
+    - 設計: `docs/design/backend-cranelift-aot-design.md`
+    - API案: `docs/design/cranelift-aot-box.md`
+    - LinkerBox: `docs/design/linker-box.md`
     - スモーク仕様: `docs/tests/aot_smoke_cranelift.md`
     - 雛形スクリプト: `tools/aot_smoke_cranelift.sh`, `tools/aot_smoke_cranelift.ps1`
 - README にセルフホスト到達の道筋を明記（C ABI を Box 化）。
@@ -848,7 +848,7 @@ Phase A 進捗（実施済）
 - 参照
   - Phase 15 概要/ロードマップ: `docs/development/roadmap/phases/phase-15/README.md`, `docs/development/roadmap/phases/phase-15/ROADMAP.md`
   - ハンドオフ: `docs/handoff/phase-15-handoff.md`
-  - 設計/API: `docs/backend-cranelift-aot-design.md`, `docs/interfaces/*`
+  - 設計/API: `docs/design/backend-cranelift-aot-design.md`, `docs/design/*`
 
 ■ 合否基準（P0: Ny→MIR→MIR-Interp→VM 最小成立）
 - 自作Nyashパーサ（最小サブセット）が Nyash で動作し、テスト入力から中間形式(JSON暫定)を生成できる。

@@ -8,7 +8,9 @@
 
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
 use std::sync::RwLock;
+use std::time::SystemTime;
 
 #[derive(Clone, Default)]
 pub struct BoxIndex {
@@ -156,6 +158,16 @@ static GLOBAL: Lazy<RwLock<BoxIndex>> = Lazy::new(|| RwLock::new(BoxIndex::defau
 static RESOLVE_CACHE: Lazy<RwLock<HashMap<String, String>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
+// Track env/file state to invalidate index and cache when changed
+#[derive(Clone, Default)]
+struct IndexState {
+    aliases_env: Option<String>,
+    toml_mtime: Option<SystemTime>,
+    toml_size: Option<u64>,
+}
+
+static LAST_STATE: Lazy<Mutex<IndexState>> = Lazy::new(|| Mutex::new(IndexState::default()));
+
 pub fn refresh_box_index() {
     let next = BoxIndex::build_current();
     if let Ok(mut w) = GLOBAL.write() {
@@ -180,6 +192,26 @@ pub fn cache_put(key: &str, value: String) {
 pub fn cache_clear() {
     if let Ok(mut m) = RESOLVE_CACHE.write() {
         m.clear();
+    }
+}
+
+/// Rebuild BoxIndex and clear resolve cache if env/toml changed
+pub fn rebuild_if_env_changed() {
+    let cur_env = std::env::var("NYASH_ALIASES").ok();
+    let meta = std::fs::metadata("nyash.toml").ok();
+    let (mtime, size) = if let Some(m) = meta {
+        (m.modified().ok(), Some(m.len()))
+    } else {
+        (None, None)
+    };
+    let mut last = LAST_STATE.lock().expect("state");
+    let changed = last.aliases_env != cur_env || last.toml_mtime != mtime || last.toml_size != size;
+    if changed {
+        last.aliases_env = cur_env;
+        last.toml_mtime = mtime;
+        last.toml_size = size;
+        refresh_box_index();
+        cache_clear();
     }
 }
 

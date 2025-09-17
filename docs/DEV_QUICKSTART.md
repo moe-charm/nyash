@@ -3,7 +3,7 @@
 This quickstart summarizes the most common build/run/test flows when working on Nyash.
 
 See also
-- Self‑hosting one‑pager: `docs/self-hosting.md`
+- Self‑hosting one‑pager: `docs/how-to/self-hosting.md`
 
 ## Build
 - VM/JIT (Cranelift): `cargo build --release --features cranelift-jit`

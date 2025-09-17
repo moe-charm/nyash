@@ -77,17 +77,31 @@ impl super::MirBuilder {
                     Ok(void_id)
                 }
             };
-            return Some(match (iface, m) {
-                ("future", "delay") => extern_call("env.future", "delay", EffectMask::READ.add(Effect::Io), true),
-                ("task", "currentToken") => extern_call("env.task", "currentToken", EffectMask::READ, true),
-                ("task", "cancelCurrent") => extern_call("env.task", "cancelCurrent", EffectMask::IO, false),
-                ("console", "log") => extern_call("env.console", "log", EffectMask::IO, false),
-                ("console", "readLine") => extern_call("env.console", "readLine", EffectMask::IO, true),
-                ("canvas", m) if matches!(m, "fillRect" | "fillText") => extern_call("env.canvas", m, EffectMask::IO, false),
-                _ => return None,
-            });
+            if let Some((iface_name, method_name, effects, returns)) =
+                Self::get_env_method_spec(iface, m)
+            {
+                return Some(extern_call(&iface_name, &method_name, effects, returns));
+            }
+            return None;
         }
         None
+    }
+
+    /// Table-like spec for env.* methods. Returns iface_name, method_name, effects, returns.
+    fn get_env_method_spec(
+        iface: &str,
+        method: &str,
+    ) -> Option<(String, String, EffectMask, bool)> {
+        // This match is the table. Keep it small and explicit.
+        match (iface, method) {
+            ("future", "delay") => Some(("env.future".to_string(), "delay".to_string(), EffectMask::READ.add(Effect::Io), true)),
+            ("task", "currentToken") => Some(("env.task".to_string(), "currentToken".to_string(), EffectMask::READ, true)),
+            ("task", "cancelCurrent") => Some(("env.task".to_string(), "cancelCurrent".to_string(), EffectMask::IO, false)),
+            ("console", "log") => Some(("env.console".to_string(), "log".to_string(), EffectMask::IO, false)),
+            ("console", "readLine") => Some(("env.console".to_string(), "readLine".to_string(), EffectMask::IO, true)),
+            ("canvas", m) if matches!(m, "fillRect" | "fillText") => Some(("env.canvas".to_string(), method.to_string(), EffectMask::IO, false)),
+            _ => None,
+        }
     }
 
     /// Try direct static call for `me` in static box

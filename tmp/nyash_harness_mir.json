@@ -6,6 +6,25 @@
           "id": 0,
           "instructions": [
             {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [],
+              "dst": 1,
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
               "dst": 2,
               "op": "const",
               "value": {
@@ -18,21 +37,12 @@
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 2
+                "value": 0
               }
             },
             {
-              "dst": 4,
-              "lhs": 2,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 3
-            },
-            {
-              "cond": 4,
-              "else": 2,
-              "op": "branch",
-              "then": 1
+              "op": "jump",
+              "target": 1
             }
           ]
         },
@@ -40,15 +50,67 @@
           "id": 1,
           "instructions": [
             {
-              "dst": 5,
-              "lhs": 2,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 3
+              "dst": 6,
+              "incoming": [
+                [
+                  3,
+                  0
+                ],
+                [
+                  17,
+                  6
+                ]
+              ],
+              "op": "phi"
             },
             {
-              "op": "jump",
-              "target": 3
+              "dst": 5,
+              "incoming": [
+                [
+                  1,
+                  0
+                ],
+                [
+                  5,
+                  6
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 4,
+              "incoming": [
+                [
+                  2,
+                  0
+                ],
+                [
+                  20,
+                  6
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 5
+              }
+            },
+            {
+              "dst": 9,
+              "lhs": 4,
+              "op": "compare",
+              "operation": "<=",
+              "rhs": 8
+            },
+            {
+              "cond": 9,
+              "else": 3,
+              "op": "branch",
+              "then": 2
             }
           ]
         },
@@ -56,8 +118,40 @@
           "id": 2,
           "instructions": [
             {
-              "op": "jump",
-              "target": 3
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 2
+              }
+            },
+            {
+              "dst": 11,
+              "lhs": 4,
+              "op": "binop",
+              "operation": "%",
+              "rhs": 10
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 13,
+              "lhs": 11,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 12
+            },
+            {
+              "cond": 13,
+              "else": 5,
+              "op": "branch",
+              "then": 4
             }
           ]
         },
@@ -65,8 +159,125 @@
           "id": 3,
           "instructions": [
             {
+              "dst": 22,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "sum="
+              }
+            },
+            {
+              "dst": 23,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 22,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 6
+            },
+            {
+              "args": [
+                23
+              ],
+              "box": 5,
+              "dst": 24,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 25,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
               "op": "ret",
-              "value": 7
+              "value": 25
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "dst": 14,
+              "lhs": 6,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 4
+            },
+            {
+              "op": "jump",
+              "target": 6
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "instructions": [
+            {
+              "dst": 15,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 16,
+              "lhs": 14,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 15
+            },
+            {
+              "op": "jump",
+              "target": 6
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 17,
+              "incoming": [
+                [
+                  14,
+                  4
+                ],
+                [
+                  16,
+                  5
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "dst": 19,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 20,
+              "lhs": 4,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 19
+            },
+            {
+              "op": "jump",
+              "target": 1
             }
           ]
         }

@@ -1,3 +1,4 @@
+#![cfg(feature = "interpreter-legacy")]
 use crate::interpreter::NyashInterpreter;
 use crate::parser::NyashParser;
 use crate::runner::pipeline::{resolve_using_target, UsingContext};
