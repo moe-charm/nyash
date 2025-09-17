@@ -69,6 +69,17 @@ box ParserBox {
     return s.substring(i, j)
   }
 
+  // Enhanced whitespace skipper (inline lines): used by line-based using extractor
+  trim_ws_and_line_comments(s) {
+    local i = 0
+    local n = s.length()
+    // leading spaces/tabs
+    loop(i < n && (s.substring(i,i+1) == " " || s.substring(i,i+1) == "\t")) { i = i + 1 }
+    // strip line comments
+    if i + 1 < n && s.substring(i, i+2) == "//" { return "" }
+    return s.substring(i, n)
+  }
+
   // keyword match at position i with word-boundary (next char not [A-Za-z0-9_])
   starts_with_kw(src, i, kw) {
     if me.starts_with(src, i, kw) == 0 { return 0 }
@@ -114,8 +125,7 @@ box ParserBox {
       if ch == "\"" { j = j + 1 me.gpos_set(j) return out }
       if ch == "\\" && j + 1 < n {
         local nx = src.substring(j+1, j+2)
-        if nx == "\"" { out = out + "\"" } else { if nx == "\\" { out = out + "\\" } else { out = out + nx } }
-        j = j + 2
+        if nx == "\"" { out = out + "\"" j = j + 2 } else { if nx == "\\" { out = out + "\\" j = j + 2 } else { if nx == "n" { out = out + "\n" j = j + 2 } else { if nx == "r" { out = out + "\r" j = j + 2 } else { if nx == "t" { out = out + "\t" j = j + 2 } else { if nx == "u" && j + 5 < n { out = out + src.substring(j, j+6) j = j + 6 } else { out = out + nx j = j + 2 } } } } } }
       } else { out = out + ch j = j + 1 }
     }
     me.gpos_set(j)
@@ -239,7 +249,7 @@ box ParserBox {
   // using metadata omitted in Stage‑1
 
   parse_number2(src, i) { local n = src.length() local j = i local cont = 1 local guard = 0 local max = 100000 loop(cont == 1) { if guard > max { cont = 0 } else { guard = guard + 1 if j < n { if me.is_digit(src.substring(j, j+1)) { j = j + 1 } else { cont = 0 } } else { cont = 0 } } } local s = src.substring(i, j) me.gpos_set(j) return "{\"type\":\"Int\",\"value\":" + s + "}" }
-  parse_string2(src, i) { local n = src.length() local j = i + 1 local out = "" local guard = 0 local max = 200000 loop(j < n) { if guard > max { break } guard = guard + 1 local ch = src.substring(j, j+1) if ch == "\"" { j = j + 1 me.gpos_set(j) return "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}" } if ch == "\\" && j + 1 < n { local nx = src.substring(j+1, j+2) if nx == "\"" { out = out + "\"" } else { if nx == "\\" { out = out + "\\" } else { out = out + nx } } j = j + 2 } else { out = out + ch j = j + 1 } } me.gpos_set(j) return "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}" }
+  parse_string2(src, i) { local n = src.length() local j = i + 1 local out = "" local guard = 0 local max = 200000 loop(j < n) { if guard > max { break } guard = guard + 1 local ch = src.substring(j, j+1) if ch == "\"" { j = j + 1 me.gpos_set(j) return "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}" } if ch == "\\" && j + 1 < n { local nx = src.substring(j+1, j+2) if nx == "\"" { out = out + "\"" j = j + 2 } else { if nx == "\\" { out = out + "\\" j = j + 2 } else { if nx == "n" { out = out + "\n" j = j + 2 } else { if nx == "r" { out = out + "\r" j = j + 2 } else { if nx == "t" { out = out + "\t" j = j + 2 } else { if nx == "u" && j + 5 < n { out = out + src.substring(j, j+6) j = j + 6 } else { out = out + nx j = j + 2 } } } } } } } else { out = out + ch j = j + 1 } } me.gpos_set(j) return "{\"type\":\"Str\",\"value\":\"" + me.esc_json(out) + "\"}" }
 
   parse_factor2(src, i) {
     local j = me.skip_ws(src, i)
