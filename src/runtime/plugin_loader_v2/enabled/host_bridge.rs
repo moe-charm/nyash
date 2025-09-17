@@ -1,9 +1,27 @@
-// Host bridge helpers for TypeBox invoke (minimal, v2)
+// Host bridge helpers for TypeBox invoke (v2)
 
-pub type InvokeFn =
-    unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32;
+// Library-level shim signature used across the runtime (compat convenience)
+pub type InvokeFn = unsafe extern "C" fn(
+    u32, /* type_id (for dispatch) */
+    u32, /* method_id */
+    u32, /* instance_id */
+    *const u8,
+    usize,
+    *mut u8,
+    *mut usize,
+) -> i32;
 
-// Call invoke_id with a temporary output buffer; returns (code, bytes_written, buffer)
+// Native v2 per-Box signature
+pub type BoxInvokeFn = extern "C" fn(
+    u32, /* instance_id */
+    u32, /* method_id */
+    *const u8,
+    usize,
+    *mut u8,
+    *mut usize,
+) -> i32;
+
+// Call library-level shim with a temporary output buffer
 pub fn invoke_alloc(
     invoke: InvokeFn,
     type_id: u32,

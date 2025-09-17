@@ -1,3 +1,4 @@
+use super::host_bridge::BoxInvokeFn;
 use super::types::{LoadedPluginV2, NyashTypeBoxFfi, PluginBoxMetadata, PluginBoxV2, PluginHandleInner};
 use crate::bid::{BidError, BidResult};
 use crate::box_trait::NyashBox;
@@ -12,7 +13,7 @@ fn dbg_on() -> bool {
     std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
 }
 
-type BoxInvokeFn = extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32;
+// (alias imported from host_bridge)
 
 #[derive(Debug, Clone, Default)]
 struct LoadedBoxSpec {
@@ -128,33 +129,24 @@ impl PluginLoaderV2 {
         let lib = unsafe { Library::new(&lib_path) }.map_err(|_| BidError::PluginError)?;
         let lib_arc = Arc::new(lib);
 
-        // Resolve required invoke symbol (legacy library-level): nyash_plugin_invoke
+        // Optional init (best-effort)
         unsafe {
-            let invoke_sym: Symbol<
-                unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
-            > = lib_arc
-                .get(b"nyash_plugin_invoke\0")
-                .map_err(|_| BidError::PluginError)?;
-
-            // Optional init (best-effort)
             if let Ok(init_sym) =
                 lib_arc.get::<Symbol<unsafe extern "C" fn() -> i32>>(b"nyash_plugin_init\0")
             {
                 let _ = init_sym();
             }
-
-            let loaded = LoadedPluginV2 {
-                _lib: lib_arc.clone(),
-                box_types: lib_def.boxes.clone(),
-                typeboxes: HashMap::new(),
-                init_fn: None,
-                invoke_fn: *invoke_sym,
-            };
-            self.plugins
-                .write()
-                .map_err(|_| BidError::PluginError)?
-                .insert(lib_name.to_string(), Arc::new(loaded));
         }
+        let loaded = LoadedPluginV2 {
+            _lib: lib_arc.clone(),
+            box_types: lib_def.boxes.clone(),
+            typeboxes: HashMap::new(),
+            init_fn: None,
+        };
+        self.plugins
+            .write()
+            .map_err(|_| BidError::PluginError)?
+            .insert(lib_name.to_string(), Arc::new(loaded));
 
         // Try to resolve Nyash ABI v2 per-box TypeBox symbols and record invoke_id
         // Symbol pattern: nyash_typebox_<BoxType>
@@ -227,13 +219,26 @@ impl PluginLoaderV2 {
         None
     }
 
+    /// Lookup per-Box invoke function pointer for given type_id via loaded TypeBox specs
+    pub fn box_invoke_fn_for_type_id(&self, type_id: u32) -> Option<BoxInvokeFn> {
+        let config = self.config.as_ref()?;
+        let cfg_path = self.config_path.as_ref()?;
+        let toml_str = std::fs::read_to_string(cfg_path).ok()?;
+        let toml_value: toml::Value = toml::from_str(&toml_str).ok()?;
+        let (lib_name, box_type) = self.find_box_by_type_id(config, &toml_value, type_id)?;
+        let key = (lib_name.to_string(), box_type.to_string());
+        let map = self.box_specs.read().ok()?;
+        let spec = map.get(&key)?;
+        spec.invoke_id
+    }
+
     pub fn metadata_for_type_id(&self, type_id: u32) -> Option<PluginBoxMetadata> {
         let config = self.config.as_ref()?;
         let cfg_path = self.config_path.as_ref()?;
         let toml_str = std::fs::read_to_string(cfg_path).ok()?;
         let toml_value: toml::Value = toml::from_str(&toml_str).ok()?;
         let (lib_name, box_type) = self.find_box_by_type_id(config, &toml_value, type_id)?;
-        let plugin = {
+        let _plugin = {
             let plugins = self.plugins.read().ok()?;
             plugins.get(lib_name)?.clone()
         };
@@ -262,7 +267,7 @@ impl PluginLoaderV2 {
             lib_name: lib_name.to_string(),
             box_type: box_type.to_string(),
             type_id: resolved_type,
-            invoke_fn: plugin.invoke_fn,
+            invoke_fn: super::super::nyash_plugin_invoke_v2_shim,
             fini_method_id: fini_method,
         })
     }
@@ -278,7 +283,7 @@ impl PluginLoaderV2 {
         let toml_value: toml::Value = toml::from_str(&toml_str).ok()?;
         let (lib_name, box_type) = self.find_box_by_type_id(config, &toml_value, type_id)?;
         let plugins = self.plugins.read().ok()?;
-        let plugin = plugins.get(lib_name)?.clone();
+        let _plugin = plugins.get(lib_name)?.clone();
         let fini_method_id = if let Some(spec) = self
             .box_specs
             .read()
@@ -293,7 +298,7 @@ impl PluginLoaderV2 {
         let bx = super::types::construct_plugin_box(
             box_type.to_string(),
             type_id,
-            plugin.invoke_fn,
+            super::super::nyash_plugin_invoke_v2_shim,
             instance_id,
             fini_method_id,
         );
@@ -329,7 +334,7 @@ impl PluginLoaderV2 {
                 .map_err(|_| BidError::PluginError)?;
         let config = self.config.as_ref().ok_or(BidError::PluginError)?;
         let plugins = self.plugins.read().unwrap();
-        let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+        let _plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
         let type_id = if let Some(spec) = self
             .box_specs
             .read()
@@ -348,7 +353,7 @@ impl PluginLoaderV2 {
         let out_len = out.len();
         let tlv_args = crate::runtime::plugin_ffi_common::encode_empty_args();
         let (birth_result, _len, out_vec) =
-            super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, 0, 0, &tlv_args);
+            super::host_bridge::invoke_alloc(super::super::nyash_plugin_invoke_v2_shim, type_id, 0, 0, &tlv_args);
         let out = out_vec;
         if birth_result != 0 || out_len < 4 {
             return Err(BidError::PluginError);
@@ -369,7 +374,7 @@ impl PluginLoaderV2 {
         };
         let handle = Arc::new(PluginHandleInner {
             type_id,
-            invoke_fn: plugin.invoke_fn,
+            invoke_fn: super::super::nyash_plugin_invoke_v2_shim,
             instance_id,
             fini_method_id: fini_id,
             finalized: std::sync::atomic::AtomicBool::new(false),
@@ -583,11 +588,11 @@ impl PluginLoaderV2 {
             .ok_or(BidError::InvalidMethod)?;
         // Get plugin handle
         let plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
-        let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+        let _plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
         // Encode TLV args via shared helper (numeric→string→toString)
         let tlv = crate::runtime::plugin_ffi_common::encode_args(args);
         let (_code, out_len, out) = super::host_bridge::invoke_alloc(
-            plugin.invoke_fn,
+            super::super::nyash_plugin_invoke_v2_shim,
             type_id,
             method.method_id,
             instance_id,
@@ -629,7 +634,7 @@ impl PluginLoaderV2 {
                     {
                         let handle = Arc::new(super::types::PluginHandleInner {
                             type_id: ret_type,
-                            invoke_fn: plugin.invoke_fn,
+                            invoke_fn: super::super::nyash_plugin_invoke_v2_shim,
                             instance_id: inst,
                             fini_method_id: None,
                             finalized: std::sync::atomic::AtomicBool::new(false),
@@ -686,8 +691,7 @@ impl PluginLoaderV2 {
         let fini_id = box_conf.methods.get("fini").map(|m| m.method_id);
 
         // Get loaded plugin invoke
-        let plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
-        let plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
+        let _plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
 
         // Call birth (no args TLV) and read returned instance id (little-endian u32 in bytes 0..4)
         if dbg_on() {
@@ -697,8 +701,13 @@ impl PluginLoaderV2 {
             );
         }
         let tlv = crate::runtime::plugin_ffi_common::encode_empty_args();
-        let (code, out_len, out_buf) =
-            super::host_bridge::invoke_alloc(plugin.invoke_fn, type_id, birth_id, 0, &tlv);
+        let (code, out_len, out_buf) = super::host_bridge::invoke_alloc(
+            super::super::nyash_plugin_invoke_v2_shim,
+            type_id,
+            birth_id,
+            0,
+            &tlv,
+        );
         if dbg_on() {
             eprintln!("[PluginLoaderV2] create_box: box_type={} type_id={} birth_id={} code={} out_len={}", box_type, type_id, birth_id, code, out_len);
             if out_len > 0 {
@@ -717,7 +726,7 @@ impl PluginLoaderV2 {
             box_type: box_type.to_string(),
             inner: Arc::new(PluginHandleInner {
                 type_id,
-                invoke_fn: plugin.invoke_fn,
+                invoke_fn: super::super::nyash_plugin_invoke_v2_shim,
                 instance_id,
                 fini_method_id: fini_id,
                 finalized: std::sync::atomic::AtomicBool::new(false),

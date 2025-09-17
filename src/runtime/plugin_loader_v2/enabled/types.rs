@@ -13,7 +13,6 @@ pub struct LoadedPluginV2 {
     pub(super) box_types: Vec<String>,
     pub(super) typeboxes: std::collections::HashMap<String, usize>,
     pub(super) init_fn: Option<unsafe extern "C" fn() -> i32>,
-    pub(super) invoke_fn: InvokeFn,
 }
 
 #[derive(Clone)]
