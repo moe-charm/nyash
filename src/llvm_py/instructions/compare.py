@@ -5,7 +5,9 @@ Handles comparison operations (<, >, <=, >=, ==, !=)
 
 import llvmlite.ir as ir
 from typing import Dict, Optional, Any
+from utils.values import resolve_i64_strict
 from .externcall import lower_externcall
+from trace import values as trace_values
 
 def lower_compare(
     builder: ir.IRBuilder,
@@ -20,6 +22,7 @@ def lower_compare(
     block_end_values=None,
     bb_map=None,
     meta: Optional[Dict[str, Any]] = None,
+    ctx: Optional[Any] = None,
 ) -> None:
     """
     Lower MIR Compare instruction
@@ -32,15 +35,23 @@ def lower_compare(
         dst: Destination value ID
         vmap: Value map
     """
+    # If BuildCtx is provided, prefer its maps for consistency.
+    if ctx is not None:
+        try:
+            if getattr(ctx, 'resolver', None) is not None:
+                resolver = ctx.resolver
+            if getattr(ctx, 'preds', None) is not None and preds is None:
+                preds = ctx.preds
+            if getattr(ctx, 'block_end_values', None) is not None and block_end_values is None:
+                block_end_values = ctx.block_end_values
+            if getattr(ctx, 'bb_map', None) is not None and bb_map is None:
+                bb_map = ctx.bb_map
+        except Exception:
+            pass
     # Get operands
     # Prefer same-block SSA from vmap; fallback to resolver for cross-block dominance
-    lhs_val = vmap.get(lhs)
-    rhs_val = vmap.get(rhs)
-    if (lhs_val is None or rhs_val is None) and resolver is not None and preds is not None and block_end_values is not None and current_block is not None:
-        if lhs_val is None:
-            lhs_val = resolver.resolve_i64(lhs, current_block, preds, block_end_values, vmap, bb_map)
-        if rhs_val is None:
-            rhs_val = resolver.resolve_i64(rhs, current_block, preds, block_end_values, vmap, bb_map)
+    lhs_val = resolve_i64_strict(resolver, lhs, current_block, preds, block_end_values, vmap, bb_map)
+    rhs_val = resolve_i64_strict(resolver, rhs, current_block, preds, block_end_values, vmap, bb_map)
 
     i64 = ir.IntType(64)
     i8p = ir.IntType(8).as_pointer()
@@ -63,12 +74,7 @@ def lower_compare(
         except Exception:
             pass
         if force_string or lhs_tag or rhs_tag:
-            try:
-                import os
-                if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                    print(f"[compare] string-eq path: lhs={lhs} rhs={rhs} force={force_string} tagL={lhs_tag} tagR={rhs_tag}", flush=True)
-            except Exception:
-                pass
+            trace_values(f"[compare] string-eq path: lhs={lhs} rhs={rhs} force={force_string} tagL={lhs_tag} tagR={rhs_tag}")
             # Prefer same-block SSA (vmap) since string handles are produced in-place; fallback to resolver
             lh = lhs_val if lhs_val is not None else (
                 resolver.resolve_i64(lhs, current_block, preds, block_end_values, vmap, bb_map)
@@ -78,14 +84,7 @@ def lower_compare(
                 resolver.resolve_i64(rhs, current_block, preds, block_end_values, vmap, bb_map)
                 if (resolver is not None and preds is not None and block_end_values is not None and current_block is not None) else ir.Constant(i64, 0)
             )
-            try:
-                import os
-                if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                    lz = isinstance(lh, ir.Constant) and getattr(getattr(lh,'constant',None),'constant',None) == 0
-                    rz = isinstance(rh, ir.Constant) and getattr(getattr(rh,'constant',None),'constant',None) == 0
-                    print(f"[compare] string-eq args: lh_is_const={isinstance(lh, ir.Constant)} rh_is_const={isinstance(rh, ir.Constant)}", flush=True)
-            except Exception:
-                pass
+            trace_values(f"[compare] string-eq args: lh_is_const={isinstance(lh, ir.Constant)} rh_is_const={isinstance(rh, ir.Constant)}")
             eqf = None
             for f in builder.module.functions:
                 if f.name == 'nyash.string.eq_hh':
@@ -117,12 +116,11 @@ def lower_compare(
     # Perform signed comparison using canonical predicates ('<','>','<=','>=','==','!=')
     pred = op if op in ('<','>','<=','>=','==','!=') else '=='
     cmp_result = builder.icmp_signed(pred, lhs_val, rhs_val, name=f"cmp_{dst}")
-    
-    # Convert i1 to i64 (0 or 1)
-    result = builder.zext(cmp_result, i64, name=f"cmp_i64_{dst}")
-    
-    # Store result
-    vmap[dst] = result
+    # Store the canonical i1 compare result. Consumers that require i64
+    # should explicitly cast at their use site (e.g., via resolver or
+    # instruction-specific lowering) to avoid emitting casts after
+    # terminators when used as branch conditions.
+    vmap[dst] = cmp_result
 
 def lower_fcmp(
     builder: ir.IRBuilder,

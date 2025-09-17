@@ -9,6 +9,7 @@
 
 #[cfg(feature = "wasm-backend")]
 use crate::backend::WasmBackend;
+#[cfg(feature = "vm-legacy")]
 use crate::backend::VM;
 use crate::interpreter::NyashInterpreter;
 use crate::mir::MirCompiler;
@@ -54,6 +55,7 @@ impl BenchmarkSuite {
                     results.push(interpreter_result);
                 }
 
+                #[cfg(feature = "vm-legacy")]
                 if let Ok(vm_result) = self.run_vm_benchmark(name, &source) {
                     results.push(vm_result);
                 }
@@ -104,6 +106,7 @@ impl BenchmarkSuite {
     }
 
     /// Run benchmark on VM backend
+    #[cfg(feature = "vm-legacy")]
     fn run_vm_benchmark(
         &self,
         name: &str,

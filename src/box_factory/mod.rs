@@ -230,6 +230,7 @@ impl UnifiedBoxRegistry {
 pub mod builtin;
 pub mod plugin;
 /// Re-export submodules
+#[cfg(feature = "interpreter-legacy")]
 pub mod user_defined;
 
 #[cfg(test)]

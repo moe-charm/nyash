@@ -4,7 +4,7 @@ Handles box creation (new StringBox(), new IntegerBox(), etc.)
 """
 
 import llvmlite.ir as ir
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 def lower_newbox(
     builder: ir.IRBuilder,
@@ -13,7 +13,8 @@ def lower_newbox(
     args: List[int],
     dst_vid: int,
     vmap: Dict[int, ir.Value],
-    resolver=None
+    resolver=None,
+    ctx: Optional[Any] = None
 ) -> None:
     """
     Lower MIR NewBox instruction

@@ -123,7 +123,10 @@ def lower_while_loopform(
     lf.tag_phi = tag_phi
     lf.payload_phi = payload_phi
     
-    if os.environ.get('NYASH_CLI_VERBOSE') == '1':
-        print(f"[LoopForm] Created loop structure (id={loop_id})")
+    try:
+        from trace import debug as trace_debug
+        trace_debug(f"[LoopForm] Created loop structure (id={loop_id})")
+    except Exception:
+        pass
     
     return True

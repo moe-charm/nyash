@@ -20,7 +20,11 @@ pub mod environment;
 pub mod exception_box;
 pub mod finalization;
 pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
+// Legacy interpreter module is not included by default; when disabled, re-export lib's stub
+#[cfg(feature = "interpreter-legacy")]
 pub mod interpreter;
+#[cfg(not(feature = "interpreter-legacy"))]
+pub mod interpreter { pub use nyash_rust::interpreter::*; }
 pub mod messaging; // 🌐 P2P Communication Infrastructure
 pub mod method_box;
 pub mod operator_traits;
@@ -41,8 +45,7 @@ pub mod backend;
 pub mod jit;
 pub mod semantics; // mirror library semantics module for crate path consistency in bin
 
-// 📊 Performance Benchmarks
-pub mod benchmarks;
+// 📊 Performance Benchmarks (lib provides; bin does not re-declare)
 
 // 🚀 Refactored modules for better organization
 pub mod cli;

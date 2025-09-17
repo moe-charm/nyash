@@ -236,3 +236,4 @@ impl NyashRunner {
         Ok(())
     }
 }
+#![cfg(feature = "vm-legacy")]

@@ -4,7 +4,7 @@ Handles void and value returns
 """
 
 import llvmlite.ir as ir
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 def lower_return(
     builder: ir.IRBuilder,
@@ -14,7 +14,8 @@ def lower_return(
     resolver=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    ctx: Optional[Any] = None,
 ) -> None:
     """
     Lower MIR Return instruction
@@ -25,6 +26,19 @@ def lower_return(
         vmap: Value map
         return_type: Expected return type
     """
+    # Prefer BuildCtx maps if provided
+    if ctx is not None:
+        try:
+            if getattr(ctx, 'resolver', None) is not None:
+                resolver = ctx.resolver
+            if getattr(ctx, 'preds', None) is not None and preds is None:
+                preds = ctx.preds
+            if getattr(ctx, 'block_end_values', None) is not None and block_end_values is None:
+                block_end_values = ctx.block_end_values
+            if getattr(ctx, 'bb_map', None) is not None and bb_map is None:
+                bb_map = ctx.bb_map
+        except Exception:
+            pass
     if value_id is None:
         # Void return
         builder.ret_void()
@@ -33,6 +47,53 @@ def lower_return(
         ret_val = None
         if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
             try:
+                # If this block has a declared PHI for the return value, force using the
+                # local PHI placeholder to ensure dominance and let finalize_phis wire it.
+                try:
+                    block_name = builder.block.name
+                    cur_bid = int(str(block_name).replace('bb',''))
+                except Exception:
+                    cur_bid = -1
+                try:
+                    bm = getattr(resolver, 'block_phi_incomings', {}) or {}
+                except Exception:
+                    bm = {}
+                if isinstance(value_id, int) and isinstance(bm.get(cur_bid), dict) and value_id in bm.get(cur_bid):
+                    # Reuse predeclared ret-phi when available
+                    cur = None
+                    try:
+                        rp = getattr(resolver, 'ret_phi_map', {}) or {}
+                        key = (int(cur_bid), int(value_id))
+                        if key in rp:
+                            cur = rp[key]
+                    except Exception:
+                        cur = None
+                    if cur is None:
+                        btop = ir.IRBuilder(builder.block)
+                        try:
+                            btop.position_at_start(builder.block)
+                        except Exception:
+                            pass
+                        # Reuse existing local phi if present; otherwise create
+                        cur = vmap.get(value_id)
+                        need_new = True
+                        try:
+                            need_new = not (cur is not None and hasattr(cur, 'add_incoming') and getattr(getattr(cur, 'basic_block', None), 'name', None) == builder.block.name)
+                        except Exception:
+                            need_new = True
+                        if need_new:
+                            cur = btop.phi(ir.IntType(64), name=f"phi_ret_{value_id}")
+                    # Bind to maps
+                    vmap[value_id] = cur
+                    try:
+                        if hasattr(resolver, 'global_vmap') and isinstance(resolver.global_vmap, dict):
+                            resolver.global_vmap[value_id] = cur
+                    except Exception:
+                        pass
+                    ret_val = cur
+                if ret_val is not None:
+                    builder.ret(ret_val)
+                    return
                 if isinstance(return_type, ir.PointerType):
                     ret_val = resolver.resolve_ptr(value_id, builder.block, preds, block_end_values, vmap)
                 else:

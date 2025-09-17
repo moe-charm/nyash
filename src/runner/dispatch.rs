@@ -115,20 +115,26 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                 println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             }
-            runner.execute_vm_mode(filename);
+            #[cfg(feature = "vm-legacy")]
+            {
+                runner.execute_vm_mode(filename);
+            }
+            #[cfg(not(feature = "vm-legacy"))]
+            {
+                // Legacy VM is disabled; use PyVM harness instead.
+                super::modes::pyvm::execute_pyvm_only(runner, filename);
+            }
         }
         "interpreter" => {
             eprintln!("⚠ interpreter backend is legacy and deprecated. Use 'vm' (PyVM/LLVM) instead.");
-            if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    println!("👉 Redirecting to VM backend (PyVM) as requested by NYASH_VM_USE_PY=1");
-                }
+            #[cfg(feature = "vm-legacy")]
+            {
                 runner.execute_vm_mode(filename);
-            } else {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    println!("👉 Redirecting to VM backend");
-                }
-                runner.execute_vm_mode(filename);
+            }
+            #[cfg(not(feature = "vm-legacy"))]
+            {
+                // Legacy VM disabled; route to PyVM-only runner
+                super::modes::pyvm::execute_pyvm_only(runner, filename);
             }
         }
         #[cfg(feature = "cranelift-jit")]

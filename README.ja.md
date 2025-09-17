@@ -108,7 +108,15 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 
 ## 🏗️ **複数の実行モード**
 
-重要: 現在、JIT ランタイム実行はデバッグ容易性のため封印しています。実行は「インタープリター／VM」、配布は「Cranelift AOT(EXE)／LLVM AOT(EXE)」の4体制です。
+重要: 現在、JIT ランタイム実行は封印中です。実行は「PyVM（既定）／VM（任意でレガシー有効）」、配布は「Cranelift AOT(EXE)／LLVM AOT(EXE)」の4体制です。
+
+Phase‑15（自己ホスト期）: VM/インタープリタはフィーチャーで切替
+- 既定ビルド: `--backend vm` は PyVM 実行（python3 + `tools/pyvm_runner.py` が必要）
+- レガシー Rust VM/インタープリターを有効化するには:
+  ```bash
+  cargo build --release --features vm-legacy,interpreter-legacy
+  ```
+  以降、`--backend vm`/`--backend interpreter` が従来経路で動作します。
 
 ### 1. **インタープリターモード** （開発用）
 ```bash
@@ -118,13 +126,17 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 - 完全なデバッグ情報
 - 開発に最適
 
-### 2. **VMモード** （本番用）
+### 2. **VMモード（既定は PyVM／レガシーは任意）**
 ```bash
+# 既定: PyVM ハーネス（python3 必要）
+./target/release/nyash --backend vm program.nyash
+
+# レガシー Rust VM を使う場合
+cargo build --release --features vm-legacy
 ./target/release/nyash --backend vm program.nyash
 ```
-- インタープリターより13.5倍高速
-- 最適化されたバイトコード実行
-- 本番環境対応のパフォーマンス
+- 既定（vm-legacy OFF）: MIR(JSON) を出力して `tools/pyvm_runner.py` で実行
+- レガシー VM: インタープリター比で 13.5x（歴史的実測）。比較・検証用途で維持
 
 ### 3. **ネイティブバイナリ（Cranelift AOT）** （配布用）
 ```bash

@@ -5,6 +5,7 @@ Conditional branch based on condition value
 
 import llvmlite.ir as ir
 from typing import Dict
+from utils.values import resolve_i64_strict
 
 def lower_branch(
     builder: ir.IRBuilder,
@@ -28,22 +29,22 @@ def lower_branch(
         vmap: Value map
         bb_map: Block map
     """
-    # Get condition value
-    if resolver is not None and preds is not None and block_end_values is not None:
-        cond = resolver.resolve_i64(cond_vid, builder.block, preds, block_end_values, vmap, bb_map)
-    else:
-        cond = vmap.get(cond_vid)
-    if not cond:
+    # Get condition value with preference to same-block SSA
+    cond = resolve_i64_strict(resolver, cond_vid, builder.block, preds, block_end_values, vmap, bb_map)
+    if cond is None:
         # Default to false if missing
         cond = ir.Constant(ir.IntType(1), 0)
     
     # Convert to i1 if needed
     if hasattr(cond, 'type'):
-        if cond.type == ir.IntType(64):
+        # If we already have an i1 (canonical compare result), use it directly.
+        if isinstance(cond.type, ir.IntType) and cond.type.width == 1:
+            pass
+        elif isinstance(cond.type, ir.IntType) and cond.type.width == 64:
             # i64 to i1: compare != 0
             zero = ir.Constant(ir.IntType(64), 0)
             cond = builder.icmp_unsigned('!=', cond, zero, name="cond_i1")
-        elif cond.type == ir.IntType(8).as_pointer():
+        elif isinstance(cond.type, ir.PointerType):
             # Pointer to i1: compare != null
             null = ir.Constant(cond.type, None)
             cond = builder.icmp_unsigned('!=', cond, null, name="cond_p1")

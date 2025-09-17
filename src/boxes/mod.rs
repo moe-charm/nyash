@@ -155,6 +155,7 @@ pub mod stream;
 
 // P2P通信Box群 (NEW! - Completely rewritten)
 pub mod intent_box;
+#[cfg(feature = "interpreter-legacy")]
 pub mod p2p_box;
 
 // null関数も再エクスポート
@@ -176,4 +177,5 @@ pub use stream::{NyashStreamBox, StreamBox};
 
 // P2P通信Boxの再エクスポート
 pub use intent_box::IntentBox;
+#[cfg(feature = "interpreter-legacy")]
 pub use p2p_box::P2PBox;

@@ -2,24 +2,48 @@
  * Backend module - Different execution backends for MIR
  */
 
-pub mod vm;
-pub mod vm_boxcall;
-pub mod vm_instructions;
-pub mod vm_phi;
-pub mod vm_stats;
+// VM core types are always available
 pub mod vm_types;
+
+// Legacy VM execution pipeline (feature-gated)
+#[cfg(feature = "vm-legacy")]
+pub mod vm;
+#[cfg(feature = "vm-legacy")]
+pub mod vm_boxcall;
+#[cfg(feature = "vm-legacy")]
+pub mod vm_instructions;
+#[cfg(feature = "vm-legacy")]
+pub mod vm_phi;
+#[cfg(feature = "vm-legacy")]
+pub mod vm_stats;
+#[cfg(feature = "vm-legacy")]
 pub mod vm_values;
+
+// When vm-legacy is disabled, provide a compatibility shim module so
+// crate::backend::vm::VMValue etc. keep resolving to vm_types::*.
+#[cfg(not(feature = "vm-legacy"))]
+pub mod vm {
+    pub use super::vm_types::{VMError, VMValue};
+}
 // Phase 9.78h: VM split scaffolding (control_flow/dispatch/frame)
 pub mod abi_util; // Shared ABI/utility helpers
+#[cfg(feature = "vm-legacy")]
 pub mod control_flow;
+#[cfg(feature = "vm-legacy")]
 pub mod dispatch;
+#[cfg(feature = "vm-legacy")]
 pub mod frame;
 pub mod gc_helpers;
 pub mod mir_interpreter;
+#[cfg(feature = "vm-legacy")]
 pub mod vm_control_flow;
+#[cfg(feature = "vm-legacy")]
 mod vm_exec; // A3: execution loop extracted
+#[cfg(feature = "vm-legacy")]
 mod vm_gc; // A3: GC roots & diagnostics extracted
+#[cfg(feature = "vm-legacy")]
 mod vm_methods; // A3-S1: method dispatch wrappers extracted
+#[cfg(feature = "vm-legacy")]
 mod vm_state; // A3: state & basic helpers extracted // Lightweight MIR interpreter
 
 #[cfg(feature = "wasm-backend")]
@@ -38,7 +62,10 @@ pub mod cranelift;
 pub mod llvm;
 
 pub use mir_interpreter::MirInterpreter;
-pub use vm::{VMError, VMValue, VM};
+// Always re-export VMError/VMValue from vm_types; VM (executor) only when enabled
+pub use vm_types::{VMError, VMValue};
+#[cfg(feature = "vm-legacy")]
+pub use vm::VM;
 
 #[cfg(feature = "wasm-backend")]
 pub use aot::{AotBackend, AotConfig, AotError, AotStats};

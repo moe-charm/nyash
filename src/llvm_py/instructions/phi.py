@@ -134,12 +134,15 @@ def lower_phi(
     import os
     if used_default_zero and os.environ.get('NYASH_LLVM_PHI_STRICT') == '1':
         raise RuntimeError(f"[LLVM_PY] PHI dst={dst_vid} used synthesized zero; check preds/incoming")
-    if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+    try:
+        from trace import phi as trace_phi
         try:
             blkname = str(current_block.name)
         except Exception:
             blkname = '<blk>'
-        print(f"[PHI] {blkname} v{dst_vid} incoming={len(incoming_pairs)} zero={1 if used_default_zero else 0}")
+        trace_phi(f"[PHI] {blkname} v{dst_vid} incoming={len(incoming_pairs)} zero={1 if used_default_zero else 0}")
+    except Exception:
+        pass
     # Propagate string-ness: if any incoming value-id is tagged string-ish, mark dst as string-ish.
     try:
         if resolver is not None and hasattr(resolver, 'is_stringish') and hasattr(resolver, 'mark_string'):

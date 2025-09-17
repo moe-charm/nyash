@@ -73,6 +73,8 @@ impl MirBuilder {
         &mut self,
         then_block: BasicBlockId,
         else_block: BasicBlockId,
+        then_exit_block_opt: Option<BasicBlockId>,
+        else_exit_block_opt: Option<BasicBlockId>,
         then_value_raw: ValueId,
         else_value_raw: ValueId,
         pre_if_var_map: &HashMap<String, ValueId>,
@@ -91,6 +93,33 @@ impl MirBuilder {
         let result_val = self.value_gen.next();
 
         if self.is_no_phi_mode() {
+            // In PHI-off mode, emit per-predecessor copies into the actual predecessors
+            // of the current (merge) block instead of the entry blocks. This correctly
+            // handles nested conditionals where the then-branch fans out and merges later.
+            let merge_block = self
+                .current_block
+                .ok_or_else(|| "normalize_if_else_phi: no current (merge) block".to_string())?;
+            let preds: Vec<crate::mir::BasicBlockId> = if let Some(ref fun_ro) = self.current_function {
+                if let Some(bb) = fun_ro.get_block(merge_block) {
+                    bb.predecessors.iter().copied().collect()
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            };
+            // Prefer explicit exit blocks if provided; fall back to predecessor scan
+            let then_exits: Vec<crate::mir::BasicBlockId> = if let Some(b) = then_exit_block_opt {
+                vec![b]
+            } else {
+                preds.iter().copied().filter(|p| *p != else_block).collect()
+            };
+            let else_exits: Vec<crate::mir::BasicBlockId> = if let Some(b) = else_exit_block_opt {
+                vec![b]
+            } else {
+                preds.iter().copied().filter(|p| *p == else_block).collect()
+            };
+
             if let Some(var_name) = assigned_var_then.clone() {
                 let else_assigns_same = assigned_var_else
                     .as_ref()
@@ -108,13 +137,22 @@ impl MirBuilder {
                 } else {
                     pre_then_var_value.unwrap_or(else_value_raw)
                 };
-                self.insert_edge_copy(then_block, result_val, then_value_for_var)?;
-                self.insert_edge_copy(else_block, result_val, else_value_for_var)?;
+                // Map predecessors: else_block retains else value; others take then value
+                for p in then_exits.iter().copied() {
+                    self.insert_edge_copy(p, result_val, then_value_for_var)?;
+                }
+                for p in else_exits.iter().copied() {
+                    self.insert_edge_copy(p, result_val, else_value_for_var)?;
+                }
                 self.variable_map = pre_if_var_map.clone();
                 self.variable_map.insert(var_name, result_val);
             } else {
-                self.insert_edge_copy(then_block, result_val, then_value_raw)?;
-                self.insert_edge_copy(else_block, result_val, else_value_raw)?;
+                for p in then_exits.iter().copied() {
+                    self.insert_edge_copy(p, result_val, then_value_raw)?;
+                }
+                for p in else_exits.iter().copied() {
+                    self.insert_edge_copy(p, result_val, else_value_raw)?;
+                }
                 self.variable_map = pre_if_var_map.clone();
             }
             return Ok(result_val);

@@ -1,7 +1,2 @@
-local d = "dog"
-local v = peek d {
-  "cat" => { 0 }
-  "dog" => { 1 }
-  else => { 0 }
-}
-return v
+local m = {"name": "Alice", "age": 25}
+return m.size()

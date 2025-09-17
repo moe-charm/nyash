@@ -113,7 +113,15 @@ local py = new PyRuntimeBox()       // Python plugin
 
 ## 🏗️ **Multiple Execution Modes**
 
-Important: JIT runtime execution is sealed for now. Use Interpreter/VM for running, and Cranelift AOT/LLVM AOT for native executables.
+Important: JIT runtime execution is sealed for now. Use PyVM/VM for running, and Cranelift AOT/LLVM AOT for native executables.
+
+Phase‑15 (Self‑Hosting): Legacy VM/Interpreter are feature‑gated
+- Default build runs PyVM for `--backend vm` (python3 + `tools/pyvm_runner.py` required)
+- To enable legacy Rust VM/Interpreter, build with:
+  ```bash
+  cargo build --release --features vm-legacy,interpreter-legacy
+  ```
+  Then `--backend vm`/`--backend interpreter` use the legacy paths.
 
 ### 1. **Interpreter Mode** (Development)
 ```bash
@@ -123,13 +131,17 @@ Important: JIT runtime execution is sealed for now. Use Interpreter/VM for runni
 - Full debug information
 - Perfect for development
 
-### 2. **VM Mode** (Production) 
+### 2. **VM Mode (PyVM default / Legacy optional)**
 ```bash
+# Default: PyVM harness (requires python3)
+./target/release/nyash --backend vm program.nyash
+
+# Enable legacy Rust VM if needed
+cargo build --release --features vm-legacy
 ./target/release/nyash --backend vm program.nyash
 ```
-- 13.5x faster than interpreter
-- Optimized bytecode execution
-- Production-ready performance
+- Default (vm-legacy OFF): PyVM executes MIR(JSON) via `tools/pyvm_runner.py`
+- Legacy VM: 13.5x over interpreter (historical); kept for comparison and plugin tests
 
 ### 3. **Native Binary (Cranelift AOT)** (Distribution)
 ```bash

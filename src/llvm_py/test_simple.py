@@ -1,51 +1,36 @@
 #!/usr/bin/env python3
 """
-Simple test for Nyash LLVM Python backend
-Tests basic MIR -> LLVM compilation
+Simple smoke for Nyash LLVM Python backend
+Generates a minimal MIR(JSON) in the current schema and compiles it.
 """
 
-import json
 from llvm_builder import NyashLLVMBuilder
 
-# Simple MIR test case: function that returns 42
-test_mir = {
-    "functions": {
-        "main": {
+# Minimal MIR(JSON): main() { ret 42 }
+TEST_MIR = {
+    "functions": [
+        {
             "name": "main",
             "params": [],
-            "return_type": "i64",
-            "entry_block": 0,
-            "blocks": {
-                "0": {
+            "blocks": [
+                {
+                    "id": 0,
                     "instructions": [
-                        {
-                            "kind": "Const",
-                            "dst": 0,
-                            "value": {"type": "i64", "value": 42}
-                        }
-                    ],
-                    "terminator": {
-                        "kind": "Return",
-                        "value": 0
-                    }
+                        {"op": "const", "dst": 0, "value": {"type": "i64", "value": 42}},
+                        {"op": "ret", "value": 0}
+                    ]
                 }
-            }
+            ]
         }
-    }
+    ]
 }
 
 def test_basic():
-    """Test basic MIR -> LLVM compilation"""
     builder = NyashLLVMBuilder()
-    
-    # Generate LLVM IR
-    llvm_ir = builder.build_from_mir(test_mir)
-    print("Generated LLVM IR:")
-    print(llvm_ir)
-    
-    # Compile to object file
+    ir = builder.build_from_mir(TEST_MIR)
+    print("Generated LLVM IR (truncated):\n", ir.splitlines()[0:8])
     builder.compile_to_object("test_simple.o")
-    print("\nCompiled to test_simple.o")
+    print("Compiled to test_simple.o")
 
 if __name__ == "__main__":
     test_basic()

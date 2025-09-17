@@ -112,8 +112,17 @@ class PyVM:
         cur = min(fn.blocks.keys())
         prev: Optional[int] = None
 
-        # Simple block execution loop
+        # Simple block execution loop with step budget to avoid infinite hangs
+        max_steps = 0
+        try:
+            max_steps = int(os.environ.get("NYASH_PYVM_MAX_STEPS", "200000"))
+        except Exception:
+            max_steps = 200000
+        steps = 0
         while True:
+            steps += 1
+            if max_steps and steps > max_steps:
+                raise RuntimeError(f"pyvm: max steps exceeded ({max_steps}) in function {fn.name}")
             block = fn.blocks.get(cur)
             if block is None:
                 raise RuntimeError(f"block not found: {cur}")
@@ -226,18 +235,28 @@ class PyVM:
                     a = self._read(regs, inst.get("lhs"))
                     b = self._read(regs, inst.get("rhs"))
                     res: bool
-                    if operation == "==":
+                    # For ordering comparisons, be robust to None by coercing to ints
+                    if operation in ("<", "<=", ">", ">="):
+                        try:
+                            ai = 0 if a is None else (int(a) if not isinstance(a, str) else 0)
+                        except Exception:
+                            ai = 0
+                        try:
+                            bi = 0 if b is None else (int(b) if not isinstance(b, str) else 0)
+                        except Exception:
+                            bi = 0
+                        if operation == "<":
+                            res = ai < bi
+                        elif operation == "<=":
+                            res = ai <= bi
+                        elif operation == ">":
+                            res = ai > bi
+                        else:
+                            res = ai >= bi
+                    elif operation == "==":
                         res = (a == b)
                     elif operation == "!=":
                         res = (a != b)
-                    elif operation == "<":
-                        res = (a < b)
-                    elif operation == "<=":
-                        res = (a <= b)
-                    elif operation == ">":
-                        res = (a > b)
-                    elif operation == ">=":
-                        res = (a >= b)
                     else:
                         raise RuntimeError(f"unsupported compare: {operation}")
                     # VM convention: booleans are i64 0/1
@@ -284,6 +303,12 @@ class PyVM:
                         # Unknown box -> opaque
                         val = {"__box__": btype}
                     self._set(regs, inst.get("dst"), val)
+                    i += 1
+                    continue
+
+                if op == "copy":
+                    src = self._read(regs, inst.get("src"))
+                    self._set(regs, inst.get("dst"), src)
                     i += 1
                     continue
 

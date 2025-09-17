@@ -18,6 +18,10 @@ pub fn emit_mir_json_for_harness(
                 let mut insts = Vec::new();
                 // PHI first（オプション）
                 for inst in &bb.instructions {
+                    if let I::Copy { dst, src } = inst {
+                        insts.push(json!({"op":"copy","dst": dst.as_u32(), "src": src.as_u32()}));
+                        continue;
+                    }
                     if let I::Phi { dst, inputs } = inst {
                         let incoming: Vec<_> = inputs
                             .iter()
@@ -47,6 +51,13 @@ pub fn emit_mir_json_for_harness(
                 // Non-PHI
                 for inst in &bb.instructions {
                     match inst {
+                        I::Copy { dst, src } => {
+                            insts.push(json!({
+                                "op": "copy",
+                                "dst": dst.as_u32(),
+                                "src": src.as_u32()
+                            }));
+                        }
                         I::UnaryOp { dst, op, operand } => {
                             let kind = match op {
                                 nyash_rust::mir::UnaryOp::Neg => "neg",
@@ -296,6 +307,13 @@ pub fn emit_mir_json_for_harness_bin(
                 }
                 for inst in &bb.instructions {
                     match inst {
+                        I::Copy { dst, src } => {
+                            insts.push(json!({
+                                "op": "copy",
+                                "dst": dst.as_u32(),
+                                "src": src.as_u32()
+                            }));
+                        }
                         I::Const { dst, value } => match value {
                             crate::mir::ConstValue::Integer(i) => {
                                 insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "i64", "value": i}}));

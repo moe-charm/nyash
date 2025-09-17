@@ -187,6 +187,7 @@ impl super::MirBuilder {
         // Build then with a clean snapshot of pre-if variables
         self.variable_map = pre_if_var_map.clone();
         let then_value_raw = self.build_expression(then_branch)?;
+        let then_exit_block = Self::current_block(self)?;
         let then_var_map_end = self.variable_map.clone();
         if !self.is_current_block_terminated() {
             self.emit_instruction(MirInstruction::Jump {
@@ -211,6 +212,7 @@ impl super::MirBuilder {
                 })?;
                 (void_val, None, None)
             };
+        let else_exit_block = Self::current_block(self)?;
         if !self.is_current_block_terminated() {
             self.emit_instruction(MirInstruction::Jump {
                 target: merge_block,
@@ -223,6 +225,8 @@ impl super::MirBuilder {
         let result_val = self.normalize_if_else_phi(
             then_block,
             else_block,
+            Some(then_exit_block),
+            Some(else_exit_block),
             then_value_raw,
             else_value_raw,
             &pre_if_var_map,
@@ -489,3 +493,4 @@ impl super::MirBuilder {
         Ok(me_value)
     }
 }
+use crate::mir::loop_api::LoopBuilderApi; // for current_block()

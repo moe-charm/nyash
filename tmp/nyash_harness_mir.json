@@ -12,87 +12,15 @@
               "type": "ArrayBox"
             },
             {
-              "args": [],
               "dst": 1,
-              "op": "newbox",
-              "type": "ConsoleBox"
-            },
-            {
-              "args": [],
-              "box": 1,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 3
+              }
             },
             {
               "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 6,
-              "incoming": [
-                [
-                  3,
-                  0
-                ],
-                [
-                  17,
-                  6
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 5,
-              "incoming": [
-                [
-                  1,
-                  0
-                ],
-                [
-                  5,
-                  6
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 4,
-              "incoming": [
-                [
-                  2,
-                  0
-                ],
-                [
-                  20,
-                  6
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 8,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -100,17 +28,43 @@
               }
             },
             {
-              "dst": 9,
-              "lhs": 4,
+              "dst": 3,
+              "lhs": 1,
               "op": "compare",
-              "operation": "<=",
-              "rhs": 8
+              "operation": "<",
+              "rhs": 2
             },
             {
-              "cond": 9,
-              "else": 3,
+              "cond": 3,
+              "else": 2,
               "op": "branch",
-              "then": 2
+              "then": 1
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 5,
+              "lhs": 2,
+              "op": "compare",
+              "operation": "<",
+              "rhs": 4
+            },
+            {
+              "cond": 5,
+              "else": 5,
+              "op": "branch",
+              "then": 4
             }
           ]
         },
@@ -119,39 +73,25 @@
           "instructions": [
             {
               "dst": 10,
+              "op": "copy",
+              "src": 9
+            },
+            {
+              "dst": 9,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 2
+                "value": 60
               }
             },
             {
-              "dst": 11,
-              "lhs": 4,
-              "op": "binop",
-              "operation": "%",
-              "rhs": 10
+              "dst": 10,
+              "op": "copy",
+              "src": 9
             },
             {
-              "dst": 12,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 13,
-              "lhs": 11,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 12
-            },
-            {
-              "cond": 13,
-              "else": 5,
-              "op": "branch",
-              "then": 4
+              "op": "jump",
+              "target": 3
             }
           ]
         },
@@ -159,47 +99,8 @@
           "id": 3,
           "instructions": [
             {
-              "dst": 22,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "sum="
-              }
-            },
-            {
-              "dst": 23,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 22,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 6
-            },
-            {
-              "args": [
-                23
-              ],
-              "box": 5,
-              "dst": 24,
-              "method": "println",
-              "op": "boxcall"
-            },
-            {
-              "dst": 25,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
               "op": "ret",
-              "value": 25
+              "value": 10
             }
           ]
         },
@@ -207,11 +108,22 @@
           "id": 4,
           "instructions": [
             {
-              "dst": 14,
-              "lhs": 6,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 4
+              "dst": 8,
+              "op": "copy",
+              "src": 6
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 40
+              }
+            },
+            {
+              "dst": 8,
+              "op": "copy",
+              "src": 6
             },
             {
               "op": "jump",
@@ -223,19 +135,22 @@
           "id": 5,
           "instructions": [
             {
-              "dst": 15,
+              "dst": 8,
+              "op": "copy",
+              "src": 7
+            },
+            {
+              "dst": 7,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 0
+                "value": 50
               }
             },
             {
-              "dst": 16,
-              "lhs": 14,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 15
+              "dst": 8,
+              "op": "copy",
+              "src": 7
             },
             {
               "op": "jump",
@@ -247,37 +162,18 @@
           "id": 6,
           "instructions": [
             {
-              "dst": 17,
-              "incoming": [
-                [
-                  14,
-                  4
-                ],
-                [
-                  16,
-                  5
-                ]
-              ],
-              "op": "phi"
+              "dst": 10,
+              "op": "copy",
+              "src": 8
             },
             {
-              "dst": 19,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 20,
-              "lhs": 4,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 19
+              "dst": 10,
+              "op": "copy",
+              "src": 8
             },
             {
               "op": "jump",
-              "target": 1
+              "target": 3
             }
           ]
         }

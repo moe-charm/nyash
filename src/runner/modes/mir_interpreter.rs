@@ -101,4 +101,4 @@ impl NyashRunner {
         let _ = runtime; // reserved for future GC/safepoint integration
     }
 }
-
+#![cfg(feature = "interpreter-legacy")]

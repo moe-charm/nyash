@@ -4,7 +4,7 @@ Handles type conversions and type checks
 """
 
 import llvmlite.ir as ir
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 def lower_typeop(
     builder: ir.IRBuilder,
@@ -16,7 +16,8 @@ def lower_typeop(
     resolver=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    ctx: Optional[Any] = None,
 ) -> None:
     """
     Lower MIR TypeOp instruction
@@ -35,6 +36,19 @@ def lower_typeop(
         vmap: Value map
         resolver: Optional resolver for type handling
     """
+    # Prefer BuildCtx maps when provided
+    if ctx is not None:
+        try:
+            if getattr(ctx, 'resolver', None) is not None:
+                resolver = ctx.resolver
+            if getattr(ctx, 'preds', None) is not None and preds is None:
+                preds = ctx.preds
+            if getattr(ctx, 'block_end_values', None) is not None and block_end_values is None:
+                block_end_values = ctx.block_end_values
+            if getattr(ctx, 'bb_map', None) is not None and bb_map is None:
+                bb_map = ctx.bb_map
+        except Exception:
+            pass
     if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
         src_val = resolver.resolve_i64(src_vid, builder.block, preds, block_end_values, vmap, bb_map)
     else:
@@ -83,7 +97,8 @@ def lower_convert(
     resolver=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    ctx: Optional[Any] = None,
 ) -> None:
     """
     Lower type conversion between primitive types
@@ -96,6 +111,18 @@ def lower_convert(
         to_type: Target type
         vmap: Value map
     """
+    if ctx is not None:
+        try:
+            if getattr(ctx, 'resolver', None) is not None:
+                resolver = ctx.resolver
+            if getattr(ctx, 'preds', None) is not None and preds is None:
+                preds = ctx.preds
+            if getattr(ctx, 'block_end_values', None) is not None and block_end_values is None:
+                block_end_values = ctx.block_end_values
+            if getattr(ctx, 'bb_map', None) is not None and bb_map is None:
+                bb_map = ctx.bb_map
+        except Exception:
+            pass
     if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
         # Choose resolution based on from_type
         if from_type == "ptr":

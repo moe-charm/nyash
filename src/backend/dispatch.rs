@@ -295,3 +295,4 @@ impl DispatchTable {
 pub fn execute_entry(_entry: &DispatchEntry) -> Result<(), VMError> {
     Ok(())
 }
+#![cfg(feature = "vm-legacy")]

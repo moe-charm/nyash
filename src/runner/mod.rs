@@ -413,8 +413,17 @@ impl NyashRunner {
             println!("====================================");
             println!("Running {} iterations per test...", self.config.iterations);
             println!();
-
-            self.execute_benchmark_mode();
+            #[cfg(feature = "vm-legacy")]
+            {
+                self.execute_benchmark_mode();
+            }
+            #[cfg(not(feature = "vm-legacy"))]
+            {
+                eprintln!(
+                    "❌ Benchmark mode requires VM backend. Rebuild with --features vm-legacy."
+                );
+                std::process::exit(1);
+            }
             return;
         }
 
