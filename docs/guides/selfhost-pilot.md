@@ -20,6 +20,7 @@ CI Workflows
     2) EXE 生成: `./target/release/ny-llvmc --in tmp/app.json --emit exe --nyrt target/release --out tmp/app`
     3) 実行: `./tmp/app`（戻り値が exit code）
   - ワンコマンドスモーク: `bash tools/crate_exe_smoke.sh apps/tests/ternary_basic.nyash`
+  - CLI で直接 EXE 出力: `./target/release/nyash --emit-exe tmp/app --backend mir apps/tests/ternary_basic.nyash`
   - Installs LLVM 18 + llvmlite, then runs `tools/exe_first_smoke.sh`.
 
 Useful Env Flags

@@ -37,9 +37,12 @@ Wiring（Rust 側）
   2) `python3 tools/llvmlite_harness.py --in <mir.json> --out <obj.o>` を起動
   3) 成功後は通常のリンク手順（NyRT とリンク）
 
-Tools（統合フロー）
+Tools / CLI（統合フロー）
 - crate 直結の EXE 出力: `NYASH_LLVM_COMPILER=crate NYASH_LLVM_EMIT=exe tools/build_llvm.sh apps/tests/ternary_basic.nyash -o app`
   - 環境変数 `NYASH_LLVM_NYRT` で NyRT の場所を、`NYASH_LLVM_LIBS` で追加フラグを指定できる。
+ - CLI から直接 EXE 出力（新規）:
+   - `./target/release/nyash --emit-exe tmp/app --backend mir apps/tests/ternary_basic.nyash`
+   - 追加オプション: `--emit-exe-nyrt <dir>` / `--emit-exe-libs "<flags>"`
 
 Scope（Phase 15）
 - 最小命令: Const/BinOp/Compare/Phi/Branch/Jump/Return

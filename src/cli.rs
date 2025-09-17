@@ -71,6 +71,10 @@ pub struct CliConfig {
     pub cli_usings: Vec<String>,
     // Emit MIR JSON to a file and exit (bridge mode)
     pub emit_mir_json: Option<String>,
+    // Emit native executable via ny-llvmc (crate) and exit
+    pub emit_exe: Option<String>,
+    pub emit_exe_nyrt: Option<String>,
+    pub emit_exe_libs: Option<String>,
 }
 
 impl CliConfig {
@@ -138,6 +142,24 @@ impl CliConfig {
                     .long("emit-mir-json")
                     .value_name("FILE")
                     .help("Emit MIR JSON v0 to file (validation-friendly) and exit")
+            )
+            .arg(
+                Arg::new("emit-exe")
+                    .long("emit-exe")
+                    .value_name("FILE")
+                    .help("Emit native executable via ny-llvmc (crate) and exit")
+            )
+            .arg(
+                Arg::new("emit-exe-nyrt")
+                    .long("emit-exe-nyrt")
+                    .value_name("DIR")
+                    .help("Directory containing libnyrt.a (used with --emit-exe)")
+            )
+            .arg(
+                Arg::new("emit-exe-libs")
+                    .long("emit-exe-libs")
+                    .value_name("FLAGS")
+                    .help("Extra linker flags for ny-llvmc when emitting executable")
             )
             .arg(
                 Arg::new("stage3")
@@ -491,6 +513,9 @@ impl CliConfig {
                 .map(|v| v.cloned().collect())
                 .unwrap_or_else(|| Vec::new()),
             emit_mir_json: matches.get_one::<String>("emit-mir-json").cloned(),
+            emit_exe: matches.get_one::<String>("emit-exe").cloned(),
+            emit_exe_nyrt: matches.get_one::<String>("emit-exe-nyrt").cloned(),
+            emit_exe_libs: matches.get_one::<String>("emit-exe-libs").cloned(),
         }
     }
 }
@@ -546,6 +571,9 @@ impl Default for CliConfig {
             build_target: None,
             cli_usings: Vec::new(),
             emit_mir_json: None,
+            emit_exe: None,
+            emit_exe_nyrt: None,
+            emit_exe_libs: None,
         }
     }
 }

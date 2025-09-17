@@ -181,6 +181,48 @@ impl NyashRunner {
             println!("MIR JSON written: {}", p.display());
             std::process::exit(0);
         }
+        // If CLI requested EXE emit, generate JSON then invoke ny-llvmc to link NyRT and exit.
+        if let Some(exe_out) = self.config.emit_exe.as_ref() {
+            let tmp_dir = std::path::Path::new("tmp");
+            let _ = std::fs::create_dir_all(tmp_dir);
+            let json_path = tmp_dir.join("nyash_cli_emit.json");
+            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(module, &json_path) {
+                eprintln!("❌ MIR JSON emit error: {}", e);
+                std::process::exit(1);
+            }
+            // Resolve ny-llvmc
+            let ny_llvmc = std::env::var("NYASH_NY_LLVM_COMPILER")
+                .ok()
+                .and_then(|s| if !s.is_empty() { Some(std::path::PathBuf::from(s)) } else { None })
+                .or_else(|| which::which("ny-llvmc").ok())
+                .unwrap_or_else(|| std::path::PathBuf::from("target/release/ny-llvmc"));
+            // Build command
+            let mut cmd = std::process::Command::new(ny_llvmc);
+            cmd.arg("--in").arg(&json_path)
+                .arg("--emit").arg("exe")
+                .arg("--out").arg(exe_out);
+            if let Some(dir) = self.config.emit_exe_nyrt.as_ref() {
+                cmd.arg("--nyrt").arg(dir);
+            } else {
+                // default hint
+                cmd.arg("--nyrt").arg("target/release");
+            }
+            if let Some(flags) = self.config.emit_exe_libs.as_ref() {
+                if !flags.trim().is_empty() {
+                    cmd.arg("--libs").arg(flags);
+                }
+            }
+            let status = cmd.status().unwrap_or_else(|e| {
+                eprintln!("❌ failed to spawn ny-llvmc: {}", e);
+                std::process::exit(1);
+            });
+            if !status.success() {
+                eprintln!("❌ ny-llvmc failed with status: {:?}", status.code());
+                std::process::exit(1);
+            }
+            println!("EXE written: {}", exe_out);
+            std::process::exit(0);
+        }
         use crate::backend::MirInterpreter;
         use crate::box_trait::{BoolBox, IntegerBox, StringBox};
         use crate::boxes::FloatBox;
