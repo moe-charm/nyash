@@ -48,15 +48,7 @@ struct MapInstance {
 static INSTANCES: Lazy<Mutex<HashMap<u32, MapInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
 
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    NYB_SUCCESS
-}
+// legacy v1 abi/init removed
 
 /* legacy v1 entry removed
 #[no_mangle]

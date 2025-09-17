@@ -178,16 +178,7 @@ unsafe fn write_tlv_void(out: *mut u8, out_len: *mut usize) -> i32 {
 }
 
 // ===== Entry points =====
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    eprintln!("[ConsoleBox] Plugin initialized");
-    NYB_SUCCESS
-}
+// legacy v1 abi/init removed
 
 /* legacy v1 entry removed
 #[no_mangle]

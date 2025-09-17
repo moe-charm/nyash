@@ -34,10 +34,7 @@ static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
 // legacy v1 entry points removed
 /*
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 { 1 }
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 { OK }
+// legacy v1 abi/init removed
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke(
     type_id: u32,

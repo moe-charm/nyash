@@ -162,24 +162,7 @@ struct SockConnState {
 
 struct SockClientState;
 
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    // Force initialize logging
-    let _ = *LOG_ON;
-    let _ = &*LOG_PATH;
-    netlog!(
-        "Net plugin initialized, LOG_ON={}, LOG_PATH={}",
-        *LOG_ON,
-        *LOG_PATH
-    );
-    eprintln!("Net plugin: LOG_ON={}, LOG_PATH={}", *LOG_ON, *LOG_PATH);
-    OK
-}
+// legacy v1 abi/init removed
 
 /* legacy v1 entry removed
 #[no_mangle]

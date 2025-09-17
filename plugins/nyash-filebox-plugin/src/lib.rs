@@ -70,19 +70,7 @@ static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 // ============ Plugin Entry Points ============
 
-/// ABI version
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1 // BID-1 support
-}
-
-/// Plugin initialization (optional - global setup)
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    // グローバル初期化（Lazy staticのため特に必要なし）
-    eprintln!("[FileBox] Plugin initialized");
-    NYB_SUCCESS
-}
+// legacy v1 abi/init removed
 
 /// Method invocation - 仮実装
 /* legacy v1 entry removed

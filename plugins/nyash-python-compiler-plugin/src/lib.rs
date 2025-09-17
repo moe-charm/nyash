@@ -13,15 +13,7 @@ const METHOD_FINI: u32 = u32::MAX;
 
 static NEXT_ID: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(1));
 
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    NYB_SUCCESS
-}
+// legacy v1 abi/init removed
 
 /* legacy v1 entry removed
 #[no_mangle]

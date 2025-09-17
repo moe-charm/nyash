@@ -343,15 +343,7 @@ fn ensure_cpython() -> Result<(), ()> {
     Ok(())
 }
 
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    NYB_SUCCESS
-}
+// legacy v1 abi/init removed
 
 /* legacy v1 entry removed
 #[no_mangle]

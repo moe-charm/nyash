@@ -239,6 +239,7 @@ members = [
 ]
 exclude = [
   "plugins/nyash-file",
+  "plugins/nyash-test-multibox",
 ]
 
 [profile.release]
