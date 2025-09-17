@@ -64,12 +64,16 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
     crate)
       # Use crates/nyash-llvm-compiler (ny-llvmc): requires pre-generated MIR JSON path in NYASH_LLVM_MIR_JSON
       if [[ -z "${NYASH_LLVM_MIR_JSON:-}" ]]; then
-        echo "[warn] NYASH_LLVM_COMPILER=crate but NYASH_LLVM_MIR_JSON is not set; falling back to harness" >&2
-        COMPILER_MODE="harness"
-      else
-        echo "    using ny-llvmc (crate) with JSON: $NYASH_LLVM_MIR_JSON" >&2
-        cargo build --release -p nyash-llvm-compiler >/dev/null
-        # Optional schema validation if tool is available
+        # Auto‑emit MIR JSON via nyash CLI flag
+        mkdir -p tmp
+        NYASH_LLVM_MIR_JSON="tmp/nyash_crate_mir.json"
+        echo "    emitting MIR JSON: $NYASH_LLVM_MIR_JSON" >&2
+        ./target/release/nyash --emit-mir-json "$NYASH_LLVM_MIR_JSON" --backend mir "$INPUT" >/dev/null
+      fi
+      echo "    using ny-llvmc (crate) with JSON: $NYASH_LLVM_MIR_JSON" >&2
+      cargo build --release -p nyash-llvm-compiler >/dev/null
+      # Optional schema validation when explicitly requested
+      if [[ "${NYASH_LLVM_VALIDATE_JSON:-0}" == "1" ]]; then
         if [[ -f tools/validate_mir_json.py ]]; then
           if ! python3 -m jsonschema --version >/dev/null 2>&1; then
             echo "[warn] jsonschema not available; skipping schema validation" >&2
@@ -79,8 +83,8 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
               echo "error: MIR JSON validation failed" >&2; exit 3; }
           fi
         fi
-        ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OBJ"
       fi
+      ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OBJ"
       ;;
   esac
   if [[ "$COMPILER_MODE" == "harness" ]]; then
@@ -99,6 +103,11 @@ if [[ ! -f "$OBJ" ]]; then
   echo "error: object not generated: $OBJ" >&2
   echo "hint: you can pre-generate it (e.g. via --run-task smoke_obj_*) and set NYASH_LLVM_SKIP_EMIT=1" >&2
   exit 3
+fi
+
+if [[ "${NYASH_LLVM_ONLY_OBJ:-0}" == "1" ]]; then
+  echo "[3/4] Skipping link: object generated at $OBJ (NYASH_LLVM_ONLY_OBJ=1)"
+  exit 0
 fi
 
 echo "[3/4] Building NyRT static runtime ..."

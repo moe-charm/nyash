@@ -64,5 +64,16 @@ impl NyashRunner {
             println!("🚀 MIR Output for {}:", filename);
             println!("{}", printer.print_module(&compile_result.module));
         }
+
+        // Emit MIR JSON if requested and exit
+        if let Some(path) = self.config.emit_mir_json.as_ref() {
+            let p = std::path::Path::new(path);
+            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness(&compile_result.module, p) {
+                eprintln!("❌ MIR JSON emit error: {}", e);
+                std::process::exit(1);
+            }
+            println!("MIR JSON written: {}", p.display());
+            std::process::exit(0);
+        }
     }
 }
