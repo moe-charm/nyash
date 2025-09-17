@@ -45,6 +45,7 @@ pub extern "C" fn nyash_plugin_init() -> i32 {
     NYB_SUCCESS
 }
 
+/* legacy v1 entry removed
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke(
     type_id: u32,
@@ -123,6 +124,7 @@ pub extern "C" fn nyash_plugin_invoke(
         }
     }
 }
+*/
 
 // ===== TLV helpers =====
 fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {

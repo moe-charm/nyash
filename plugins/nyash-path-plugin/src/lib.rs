@@ -32,16 +32,12 @@ struct PathInstance; // stateless
 static INST: Lazy<Mutex<HashMap<u32, PathInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
+// legacy v1 entry points removed
+/*
 #[no_mangle]
-pub extern "C" fn nyash_plugin_abi() -> u32 {
-    1
-}
-
+pub extern "C" fn nyash_plugin_abi() -> u32 { 1 }
 #[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    OK
-}
-
+pub extern "C" fn nyash_plugin_init() -> i32 { OK }
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke(
     type_id: u32,
@@ -152,6 +148,7 @@ pub extern "C" fn nyash_plugin_invoke(
         }
     }
 }
+*/
 
 // ===== TypeBox ABI (resolve/invoke_id) =====
 #[repr(C)]

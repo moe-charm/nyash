@@ -237,6 +237,9 @@ members = [
   "crates/*",
   "plugins/*",
 ]
+exclude = [
+  "plugins/nyash-file",
+]
 
 [profile.release]
 # 最適化設定

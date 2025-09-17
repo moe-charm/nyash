@@ -40,6 +40,7 @@ pub extern "C" fn nyash_plugin_init() -> i32 {
     OK
 }
 
+/* legacy v1 entry removed
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke(
     type_id: u32,
@@ -153,6 +154,103 @@ pub extern "C" fn nyash_plugin_invoke(
         }
     }
 }
+*/
+
+// ===== TypeBox ABI v2 (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const std::os::raw::c_char,
+    pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+use std::ffi::CStr;
+extern "C" fn toml_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "parse" => M_PARSE,
+        "get" => M_GET,
+        "toJson" | "toJSON" => M_TO_JSON,
+        "birth" => M_BIRTH,
+        "fini" => M_FINI,
+        _ => 0,
+    }
+}
+
+extern "C" fn toml_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe {
+        match method_id {
+            M_BIRTH => {
+                if result_len.is_null() { return E_ARGS; }
+                if preflight(result, result_len, 4) { return E_SHORT; }
+                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut m) = INST.lock() { m.insert(id, TomlInstance { value: None }); } else { return E_PLUGIN; }
+                let b = id.to_le_bytes();
+                std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4);
+                *result_len = 4; OK
+            }
+            M_FINI => { if let Ok(mut m) = INST.lock() { m.remove(&instance_id); OK } else { E_PLUGIN } }
+            M_PARSE => {
+                let text = match read_arg_string(args, args_len, 0) { Some(s) => s, None => return E_ARGS };
+                if let Ok(mut m) = INST.lock() {
+                    if let Some(inst) = m.get_mut(&instance_id) {
+                        inst.value = toml::from_str::<toml::Value>(&text).ok();
+                        return write_tlv_bool(inst.value.is_some(), result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
+            M_GET => {
+                let path = match read_arg_string(args, args_len, 0) { Some(s) => s, None => return E_ARGS };
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        let mut cur = match &inst.value { Some(v) => v, None => { return write_tlv_string("", result, result_len); } };
+                        if !path.is_empty() {
+                            for seg in path.split('.') {
+                                match cur.get(seg) { Some(v) => cur = v, None => { return write_tlv_string("", result, result_len); } }
+                            }
+                        }
+                        return write_tlv_string(&cur.to_string(), result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
+            M_TO_JSON => {
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        if let Some(v) = &inst.value {
+                            if let Ok(s) = serde_json::to_string(v) { return write_tlv_string(&s, result, result_len); }
+                        }
+                        return write_tlv_string("{}", result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
+            _ => E_METHOD,
+        }
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_TOMLBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"TOMLBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(toml_resolve),
+    invoke_id: Some(toml_invoke_id),
+    capabilities: 0,
+};
 
 fn toml_to_json(v: &toml::Value) -> serde_json::Value {
     match v {

@@ -23,6 +23,7 @@ pub extern "C" fn nyash_plugin_init() -> i32 {
     NYB_SUCCESS
 }
 
+/* legacy v1 entry removed
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke(
     type_id: u32,
@@ -125,6 +126,7 @@ pub extern "C" fn nyash_plugin_invoke(
         _ => NYB_E_INVALID_METHOD,
     }
 }
+*/
 
 // ===== TypeBox ABI v2 (resolve/invoke_id) =====
 #[repr(C)]

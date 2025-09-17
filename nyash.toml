@@ -186,6 +186,41 @@ close = { method_id = 3 }
 recvTimeout = { method_id = 4 }
 fini = { method_id = 4294967295 }
 
+[libraries."libnyash_encoding_plugin.so"]
+boxes = ["EncodingBox"]
+path = "plugins/nyash-encoding-plugin/target/release/libnyash_encoding_plugin.so"
+
+[libraries."libnyash_encoding_plugin.so".EncodingBox]
+type_id = 53
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_encoding_plugin.so".EncodingBox.methods]
+birth = { method_id = 0 }
+toUtf8Bytes = { method_id = 1 }
+fromUtf8Bytes = { method_id = 2 }
+base64Encode = { method_id = 3 }
+base64Decode = { method_id = 4 }
+hexEncode = { method_id = 5 }
+hexDecode = { method_id = 6 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_toml_plugin.so"]
+boxes = ["TOMLBox"]
+path = "plugins/nyash-toml-plugin/target/release/libnyash_toml_plugin.so"
+
+[libraries."libnyash_toml_plugin.so".TOMLBox]
+type_id = 54
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_toml_plugin.so".TOMLBox.methods]
+birth = { method_id = 0 }
+parse = { method_id = 1 }
+get = { method_id = 2 }
+toJson = { method_id = 3 }
+fini = { method_id = 4294967295 }
+
 # Python (v2 TypeBox) plugins
 [libraries."libnyash_python_plugin.so"]
 boxes = ["PyRuntimeBox", "PyObjectBox"]

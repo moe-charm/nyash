@@ -85,6 +85,7 @@ pub extern "C" fn nyash_plugin_init() -> i32 {
 }
 
 /// Method invocation - 仮実装
+/* legacy v1 entry removed
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke(
     _type_id: u32,
@@ -397,6 +398,7 @@ pub extern "C" fn nyash_plugin_invoke(
         }
     }
 }
+*/
 
 // ===== Helpers =====
 

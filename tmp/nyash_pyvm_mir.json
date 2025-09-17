@@ -6,111 +6,206 @@
           "id": 0,
           "instructions": [
             {
-              "dst": 1,
-              "op": "copy",
-              "src": 0
-            },
-            {
+              "args": [],
               "dst": 0,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
+              "op": "newbox",
+              "type": "ServerBox"
+            },
+            {
+              "args": [],
+              "box": 0,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
             },
             {
               "dst": 1,
-              "op": "copy",
-              "src": 0
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 2,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 3
+                "value": 18081
               }
-            },
-            {
-              "dst": 3,
-              "lhs": 1,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 2
-            },
-            {
-              "cond": 3,
-              "else": 3,
-              "op": "branch",
-              "then": 2
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "instructions": [
-            {
-              "dst": 1,
-              "op": "copy",
-              "src": 5
             },
             {
               "args": [
                 1
+              ],
+              "box": 0,
+              "dst": 2,
+              "method": "start",
+              "op": "boxcall"
+            },
+            {
+              "args": [],
+              "dst": 3,
+              "op": "newbox",
+              "type": "ClientBox"
+            },
+            {
+              "args": [],
+              "box": 3,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "http://127.0.0.1:18081/hello"
+              }
+            },
+            {
+              "args": [
+                4
+              ],
+              "box": 3,
+              "dst": 5,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "args": [],
+              "box": 0,
+              "dst": 6,
+              "method": "accept",
+              "op": "boxcall"
+            },
+            {
+              "args": [],
+              "dst": 7,
+              "op": "newbox",
+              "type": "ResponseBox"
+            },
+            {
+              "args": [],
+              "box": 7,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 200
+              }
+            },
+            {
+              "args": [
+                8
+              ],
+              "box": 7,
+              "dst": 9,
+              "method": "setStatus",
+              "op": "boxcall"
+            },
+            {
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Content-Type"
+              }
+            },
+            {
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "text/plain"
+              }
+            },
+            {
+              "args": [
+                10,
+                11
+              ],
+              "box": 7,
+              "dst": 12,
+              "method": "setHeader",
+              "op": "boxcall"
+            },
+            {
+              "dst": 13,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "ok"
+              }
+            },
+            {
+              "args": [
+                13
+              ],
+              "box": 7,
+              "dst": 14,
+              "method": "write",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                7
+              ],
+              "box": 6,
+              "dst": 15,
+              "method": "respond",
+              "op": "boxcall"
+            },
+            {
+              "args": [],
+              "box": 5,
+              "dst": 16,
+              "method": "getStatus",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                16
               ],
               "dst": null,
               "func": "nyash.console.log",
               "op": "externcall"
             },
             {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
+              "args": [],
+              "box": 5,
+              "dst": 17,
+              "method": "readBody",
+              "op": "boxcall"
             },
             {
-              "dst": 5,
-              "lhs": 1,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 4
+              "args": [
+                17
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
-              "dst": 1,
-              "op": "copy",
-              "src": 5
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 3,
-          "instructions": [
-            {
-              "dst": 7,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
+              "args": [],
+              "box": 0,
+              "dst": 18,
+              "method": "stop",
+              "op": "boxcall"
             },
             {
               "op": "ret",
-              "value": 7
+              "value": 18
             }
           ]
         }
