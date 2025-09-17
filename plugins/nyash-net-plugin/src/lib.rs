@@ -1,6 +1,6 @@
-//! Nyash Net Plugin (HTTP stub) - BID-FFI v1
-//! Provides HttpServerBox (singleton), HttpRequestBox, HttpResponseBox, HttpClientBox
-//! This is a pure in-process stub (no real sockets), suitable for E2E of BoxRef args/returns.
+//! Nyash Net Plugin (HTTP minimal) — TypeBox v2
+//! Provides ServerBox/RequestBox/ResponseBox/ClientBox and socket variants.
+//! Pure in-process HTTP over localhost for E2E of BoxRef args/returns.
 
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, VecDeque};

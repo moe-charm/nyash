@@ -1,4 +1,4 @@
-//! Nyash MapBox Plugin - Minimal BID-FFI v1
+//! Nyash MapBox Plugin — TypeBox v2 (minimal)
 //! Methods: birth(0), size(1), get(2), has(3), set(4), fini(u32::MAX)
 //! Extension: support both i64 and UTF-8 string keys; values remain i64.
 

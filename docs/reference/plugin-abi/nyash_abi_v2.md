@@ -101,6 +101,38 @@ Notes
 - Keep result payloads small; prefer handles (tag=8) for large data and stream APIs.
 - Use UTF‑8 strings (tag=6) for human‑readable values; use bytes (tag=7) otherwise.
 
+Method Tables (TLV Contracts)
+- RegexBox
+  - birth(0): returns `handle` (RegexBox)
+  - compile(1): args [string pattern]; returns `OK`
+  - isMatch(2): args [string text]; returns [bool]
+  - find(3): args [string text]; returns [string match]
+  - replaceAll(4): args [string text, string repl]; returns [string]
+  - split(5): args [string text, i64 limit?]; returns [string joined by "\n"]
+  - fini(MAX): returns `OK`
+
+- Net — Client/Response/Request
+  - ClientBox
+    - birth(0): returns `handle` (ClientBox)
+    - get(1): args [string url]; returns `handle` (ResponseBox)
+    - post(2): args [string url, bytes|string body]; returns `handle` (ResponseBox)
+    - fini(MAX)
+  - ResponseBox
+    - birth(0)
+    - setStatus(1): args [i32]
+    - setHeader(2): args [string name, string value]
+    - write(3): args [bytes|string]
+    - readBody(4): returns [bytes]
+    - getStatus(5): returns [i32]
+    - getHeader(6): args [string name]; returns [string]
+    - fini(MAX)
+  - RequestBox
+    - birth(0): returns `handle` (RequestBox)
+    - path(1): returns [string]
+    - readBody(2): returns [bytes]
+    - respond(3): args [handle(ResponseBox)]
+    - fini(MAX)
+
 Phase‑12 Alignment & Roadmap
 - Alignment: The Phase‑12 “Unified TypeBox ABI” is a superset of this v2 minimal design. It shares the same core shape: per‑Box TypeBox export, method_id dispatch, and TLV arguments/results.
 - Current focus (v2 minimal): simplicity and portability for first‑party plugins (Regex/Net/File/Path/Math/Time/Python family). The loader probes `nyash_typebox_<Box>` and calls `invoke_id` with `(instance_id, method_id, TLV)`.

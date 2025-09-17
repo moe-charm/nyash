@@ -1,4 +1,4 @@
-//! Nyash IntegerBox Plugin - Minimal BID-FFI v1
+//! Nyash IntegerBox Plugin — TypeBox v2 (minimal)
 //! Methods: birth(0), get(1), set(2), fini(u32::MAX)
 
 use once_cell::sync::Lazy;

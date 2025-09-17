@@ -1,4 +1,4 @@
-//! Nyash ArrayBox Plugin - Minimal BID-FFI v1
+//! Nyash ArrayBox Plugin — TypeBox v2 (minimal)
 //! Methods: birth(0), length(1), get(2), push(3), fini(u32::MAX)
 
 use once_cell::sync::Lazy;

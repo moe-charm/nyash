@@ -1,4 +1,4 @@
-//! Nyash StringBox Plugin - Minimal BID-FFI v1
+//! Nyash StringBox Plugin — TypeBox v2 (minimal)
 //! Methods: birth(0), length(1), is_empty(2), charCodeAt(3), fini(u32::MAX)
 
 use once_cell::sync::Lazy;

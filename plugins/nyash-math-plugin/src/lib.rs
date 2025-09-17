@@ -1,5 +1,5 @@
-//! Nyash Math/Time Plugin - BID-FFI v1 (minimal)
-//! MathBox: sqrt(i64) -> i64
+//! Nyash Math/Time Plugin — TypeBox v2
+//! MathBox: sqrt/sin/cos/round
 //! TimeBox: now() -> i64 (unix seconds)
 
 use std::collections::HashMap;

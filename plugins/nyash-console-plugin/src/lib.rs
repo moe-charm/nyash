@@ -1,4 +1,4 @@
-//! Nyash ConsoleBox Plugin - BID-FFI v1
+//! Nyash ConsoleBox Plugin — TypeBox v2
 //! Provides simple stdout printing via ConsoleBox
 
 use std::collections::HashMap;

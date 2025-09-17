@@ -1,4 +1,4 @@
-//! Nyash RegexBox Plugin - Minimal regex support (compile + match/find/replace/split)
+//! Nyash RegexBox Plugin — TypeBox v2（compile / isMatch / find / replaceAll / split）
 
 use once_cell::sync::Lazy;
 use regex::Regex;

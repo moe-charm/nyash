@@ -1,6 +1,6 @@
-//! Nyash FileBox Plugin - BID-FFI v1 Implementation
+//! Nyash FileBox Plugin — TypeBox v2
 //!
-//! Provides file I/O operations as a Nyash plugin
+//! Provides file I/O operations as a Nyash plugin（TypeBox v2 エクスポート済み）
 
 use std::collections::HashMap;
 use std::ffi::CStr;
