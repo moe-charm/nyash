@@ -3,6 +3,7 @@
 //! Provides file I/O operations as a Nyash plugin
 
 use std::collections::HashMap;
+use std::ffi::CStr;
 use std::os::raw::c_char;
 // std::ptr削除（未使用）
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -633,3 +634,317 @@ pub extern "C" fn nyash_plugin_shutdown() {
 // ============ Unified Plugin API ============
 // Note: Metadata (Box types, methods) now comes from nyash.toml
 // This plugin provides only the actual processing functions
+
+// ===== TypeBox ABI v2 (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX' (0x54594258)
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const c_char, // C string, e.g., "FileBox\0"
+    pub resolve: Option<extern "C" fn(*const c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+extern "C" fn filebox_resolve(name: *const c_char) -> u32 {
+    if name.is_null() {
+        return 0;
+    }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        // lifecycle (optional to expose via resolve)
+        "birth" => METHOD_BIRTH,
+        "fini" => METHOD_FINI,
+        // methods
+        "open" => METHOD_OPEN,
+        "read" => METHOD_READ,
+        "write" => METHOD_WRITE,
+        "close" => METHOD_CLOSE,
+        "exists" => METHOD_EXISTS,
+        "copyFrom" => METHOD_COPY_FROM,
+        "cloneSelf" => METHOD_CLONE_SELF,
+        _ => 0,
+    }
+}
+
+extern "C" fn filebox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe {
+        match method_id {
+            // Support birth through per-Box invoke for v2 shim
+            METHOD_BIRTH => {
+                if result_len.is_null() {
+                    return NYB_E_INVALID_ARGS;
+                }
+                if preflight(result, result_len, 4) {
+                    return NYB_E_SHORT_BUFFER;
+                }
+                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.insert(
+                        id,
+                        FileBoxInstance { file: None, path: String::new(), buffer: None },
+                    );
+                } else {
+                    return NYB_E_PLUGIN_ERROR;
+                }
+                let b = id.to_le_bytes();
+                std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4);
+                *result_len = 4;
+                NYB_SUCCESS
+            }
+            METHOD_FINI => {
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.remove(&instance_id);
+                    NYB_SUCCESS
+                } else {
+                    NYB_E_PLUGIN_ERROR
+                }
+            }
+            METHOD_OPEN => {
+                // args: TLV { String path, String mode }
+                let slice = std::slice::from_raw_parts(args, args_len);
+                match tlv_parse_two_strings(slice) {
+                    Ok((path, mode)) => {
+                        if preflight(result, result_len, 8) {
+                            return NYB_E_SHORT_BUFFER;
+                        }
+                        if let Ok(mut map) = INSTANCES.lock() {
+                            if let Some(inst) = map.get_mut(&instance_id) {
+                                match open_file(&mode, &path) {
+                                    Ok(file) => {
+                                        inst.file = Some(file);
+                                        return write_tlv_void(result, result_len);
+                                    }
+                                    Err(_) => return NYB_E_PLUGIN_ERROR,
+                                }
+                            } else {
+                                return NYB_E_INVALID_HANDLE;
+                            }
+                        } else {
+                            return NYB_E_PLUGIN_ERROR;
+                        }
+                    }
+                    Err(_) => NYB_E_INVALID_ARGS,
+                }
+            }
+            METHOD_READ => {
+                let slice = std::slice::from_raw_parts(args, args_len);
+                if args_len > 0 {
+                    match tlv_parse_string(slice) {
+                        Ok(path) => match open_file("r", &path) {
+                            Ok(mut file) => {
+                                let mut buf = Vec::new();
+                                if let Err(_) = file.read_to_end(&mut buf) {
+                                    return NYB_E_PLUGIN_ERROR;
+                                }
+                                let need = 8usize.saturating_add(buf.len());
+                                if preflight(result, result_len, need) {
+                                    return NYB_E_SHORT_BUFFER;
+                                }
+                                return write_tlv_bytes(&buf, result, result_len);
+                            }
+                            Err(_) => return NYB_E_PLUGIN_ERROR,
+                        },
+                        Err(_) => return NYB_E_INVALID_ARGS,
+                    }
+                } else {
+                    if let Ok(mut map) = INSTANCES.lock() {
+                        if let Some(inst) = map.get_mut(&instance_id) {
+                            if let Some(file) = inst.file.as_mut() {
+                                let _ = file.seek(SeekFrom::Start(0));
+                                let mut buf = Vec::new();
+                                match file.read_to_end(&mut buf) {
+                                    Ok(_) => {
+                                        let need = 8usize.saturating_add(buf.len());
+                                        if preflight(result, result_len, need) {
+                                            return NYB_E_SHORT_BUFFER;
+                                        }
+                                        return write_tlv_bytes(&buf, result, result_len);
+                                    }
+                                    Err(_) => return NYB_E_PLUGIN_ERROR,
+                                }
+                            } else {
+                                return NYB_E_INVALID_HANDLE;
+                            }
+                        } else {
+                            return NYB_E_PLUGIN_ERROR;
+                        }
+                    } else {
+                        return NYB_E_PLUGIN_ERROR;
+                    }
+                }
+            }
+            METHOD_WRITE => {
+                let slice = std::slice::from_raw_parts(args, args_len);
+                match tlv_parse_optional_string_and_bytes(slice) {
+                    Ok((Some(path), data)) => {
+                        if preflight(result, result_len, 12) {
+                            return NYB_E_SHORT_BUFFER;
+                        }
+                        match open_file("w", &path) {
+                            Ok(mut file) => {
+                                if let Err(_) = file.write_all(&data) {
+                                    return NYB_E_PLUGIN_ERROR;
+                                }
+                                if let Err(_) = file.flush() {
+                                    return NYB_E_PLUGIN_ERROR;
+                                }
+                                return write_tlv_i32(data.len() as i32, result, result_len);
+                            }
+                            Err(_) => return NYB_E_PLUGIN_ERROR,
+                        }
+                    }
+                    Ok((None, data)) => {
+                        if preflight(result, result_len, 12) {
+                            return NYB_E_SHORT_BUFFER;
+                        }
+                        if let Ok(mut map) = INSTANCES.lock() {
+                            if let Some(inst) = map.get_mut(&instance_id) {
+                                if let Some(file) = inst.file.as_mut() {
+                                    match file.write(&data) {
+                                        Ok(n) => {
+                                            if let Err(_) = file.flush() {
+                                                return NYB_E_PLUGIN_ERROR;
+                                            }
+                                            inst.buffer = Some(data.clone());
+                                            return write_tlv_i32(n as i32, result, result_len);
+                                        }
+                                        Err(_) => return NYB_E_PLUGIN_ERROR,
+                                    }
+                                } else {
+                                    return NYB_E_INVALID_HANDLE;
+                                }
+                            } else {
+                                return NYB_E_PLUGIN_ERROR;
+                            }
+                        } else {
+                            return NYB_E_PLUGIN_ERROR;
+                        }
+                    }
+                    Err(_) => NYB_E_INVALID_ARGS,
+                }
+            }
+            METHOD_CLOSE => {
+                if preflight(result, result_len, 8) {
+                    return NYB_E_SHORT_BUFFER;
+                }
+                if let Ok(mut map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get_mut(&instance_id) {
+                        inst.file = None;
+                        return write_tlv_void(result, result_len);
+                    } else {
+                        return NYB_E_PLUGIN_ERROR;
+                    }
+                } else {
+                    return NYB_E_PLUGIN_ERROR;
+                }
+            }
+            METHOD_COPY_FROM => {
+                let slice = std::slice::from_raw_parts(args, args_len);
+                match tlv_parse_handle(slice) {
+                    Ok((_type_id, other_id)) => {
+                        if preflight(result, result_len, 8) {
+                            return NYB_E_SHORT_BUFFER;
+                        }
+                        if let Ok(mut map) = INSTANCES.lock() {
+                            // Extract data from src
+                            let mut data: Vec<u8> = Vec::new();
+                            if let Some(src) = map.get(&other_id) {
+                                let mut read_ok = false;
+                                if let Some(file) = src.file.as_ref() {
+                                    if let Ok(mut f) = file.try_clone() {
+                                        let _ = f.seek(SeekFrom::Start(0));
+                                        if f.read_to_end(&mut data).is_ok() {
+                                            read_ok = true;
+                                        }
+                                    }
+                                }
+                                if !read_ok {
+                                    if let Some(buf) = src.buffer.as_ref() {
+                                        data.extend_from_slice(buf);
+                                        read_ok = true;
+                                    }
+                                }
+                                if !read_ok {
+                                    return NYB_E_PLUGIN_ERROR;
+                                }
+                            } else {
+                                return NYB_E_INVALID_HANDLE;
+                            }
+                            // Write into dst
+                            if let Some(dst) = map.get_mut(&instance_id) {
+                                if let Some(fdst) = dst.file.as_mut() {
+                                    let _ = fdst.seek(SeekFrom::Start(0));
+                                    if fdst.write_all(&data).is_err() {
+                                        return NYB_E_PLUGIN_ERROR;
+                                    }
+                                    let _ = fdst.set_len(data.len() as u64);
+                                    let _ = fdst.flush();
+                                }
+                                dst.buffer = Some(data);
+                                return write_tlv_void(result, result_len);
+                            } else {
+                                return NYB_E_INVALID_HANDLE;
+                            }
+                        } else {
+                            return NYB_E_PLUGIN_ERROR;
+                        }
+                    }
+                    Err(_) => NYB_E_INVALID_ARGS,
+                }
+            }
+            METHOD_CLONE_SELF => {
+                if preflight(result, result_len, 16) {
+                    return NYB_E_SHORT_BUFFER;
+                }
+                let new_id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.insert(
+                        new_id,
+                        FileBoxInstance { file: None, path: String::new(), buffer: None },
+                    );
+                }
+                // Return Handle TLV (type_id from config resolves host-side; we encode (6,new_id) here if needed)
+                let mut payload = [0u8; 8];
+                // We don’t embed type_id here (host can ignore); keep zero for neutrality
+                payload[0..4].copy_from_slice(&0u32.to_le_bytes());
+                payload[4..8].copy_from_slice(&new_id.to_le_bytes());
+                return write_tlv_result(&[(8u8, &payload)], result, result_len);
+            }
+            METHOD_EXISTS => {
+                let slice = std::slice::from_raw_parts(args, args_len);
+                match tlv_parse_string(slice) {
+                    Ok(path) => {
+                        let exists = std::path::Path::new(&path).exists();
+                        if preflight(result, result_len, 9) {
+                            return NYB_E_SHORT_BUFFER;
+                        }
+                        return write_tlv_bool(exists, result, result_len);
+                    }
+                    Err(_) => NYB_E_INVALID_ARGS,
+                }
+            }
+            _ => NYB_E_INVALID_METHOD,
+        }
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_FileBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258, // 'TYBX'
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"FileBox\0".as_ptr() as *const c_char,
+    resolve: Some(filebox_resolve),
+    invoke_id: Some(filebox_invoke_id),
+    capabilities: 0,
+};

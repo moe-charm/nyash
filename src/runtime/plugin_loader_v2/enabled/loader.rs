@@ -159,6 +159,16 @@ impl PluginLoaderV2 {
                     let abi_ok = st.abi_tag == 0x5459_4258
                         && st.struct_size as usize >= std::mem::size_of::<NyashTypeBoxFfi>();
                     if !abi_ok {
+                        if dbg_on() {
+                            eprintln!(
+                                "[PluginLoaderV2] WARN: invalid TypeBox ABI for {}.{} (abi_tag=0x{:08x} size={} need>={})",
+                                lib_name,
+                                box_type,
+                                st.abi_tag,
+                                st.struct_size,
+                                std::mem::size_of::<NyashTypeBoxFfi>()
+                            );
+                        }
                         continue;
                     }
                     // Remember invoke_id in box_specs for (lib_name, box_type)
@@ -172,7 +182,19 @@ impl PluginLoaderV2 {
                             invoke_id: None,
                         });
                         entry.invoke_id = Some(invoke_id);
+                    } else if dbg_on() {
+                        eprintln!(
+                            "[PluginLoaderV2] WARN: TypeBox present but no invoke_id for {}.{} — plugin should export per-Box invoke",
+                            lib_name, box_type
+                        );
                     }
+                } else if dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] NOTE: TypeBox symbol not found for {}.{} (symbol='{}'). Migrate plugin to Nyash ABI v2 to enable per-Box dispatch.",
+                        lib_name,
+                        box_type,
+                        sym_name.trim_end_matches('\0')
+                    );
                 }
             }
         }
@@ -228,8 +250,24 @@ impl PluginLoaderV2 {
         let (lib_name, box_type) = self.find_box_by_type_id(config, &toml_value, type_id)?;
         let key = (lib_name.to_string(), box_type.to_string());
         let map = self.box_specs.read().ok()?;
-        let spec = map.get(&key)?;
-        spec.invoke_id
+        let spec = map.get(&key);
+        if let Some(s) = spec {
+            if s.invoke_id.is_none() && dbg_on() {
+                eprintln!(
+                    "[PluginLoaderV2] WARN: no per-Box invoke for {}.{} (type_id={}). Calls will fail with E_PLUGIN (-5) until plugin migrates to v2.",
+                    lib_name, box_type, type_id
+                );
+            }
+            s.invoke_id
+        } else {
+            if dbg_on() {
+                eprintln!(
+                    "[PluginLoaderV2] INFO: no TypeBox spec loaded for {}.{} (type_id={}).",
+                    lib_name, box_type, type_id
+                );
+            }
+            None
+        }
     }
 
     pub fn metadata_for_type_id(&self, type_id: u32) -> Option<PluginBoxMetadata> {

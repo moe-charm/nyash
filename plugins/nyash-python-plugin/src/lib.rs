@@ -1,11 +1,6 @@
-//! Nyash Python Plugin (Phase 10.5a scaffold)
-//! - ABI v1 compatible entry points
-//! - Defines two Box types: PyRuntimeBox (TYPE_ID=40) and PyObjectBox (TYPE_ID=41)
-//! - Currently stubs; returns NYB_E_INVALID_METHOD for unimplemented routes
-//!
-//! This crate intentionally does not link to CPython yet. 10.5a focuses on
-//! ABI alignment and loader wiring. Future subphases (10.5b–d) will implement
-//! actual CPython embedding and conversion.
+//! Nyash Python Plugin (Phase 15):
+//! - ABI v1 compatible entry points + ABI v2 TypeBox exports
+//! - Two Box types: PyRuntimeBox (TYPE_ID=40) and PyObjectBox (TYPE_ID=41)
 
 use libloading::Library;
 use once_cell::sync::Lazy;
@@ -806,6 +801,92 @@ fn handle_py_object(
 }
 
 // ===== Minimal TLV helpers (copy from other plugins for consistency) =====
+// ===== TypeBox ABI v2 (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const std::os::raw::c_char,
+    pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+extern "C" fn pyruntime_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "birth" => PY_METHOD_BIRTH,
+        "eval" | "evalR" => { if s.as_ref() == "evalR" { PY_METHOD_EVAL_R } else { PY_METHOD_EVAL } }
+        "import" | "importR" => { if s.as_ref() == "importR" { PY_METHOD_IMPORT_R } else { PY_METHOD_IMPORT } }
+        "fini" => PY_METHOD_FINI,
+        _ => 0,
+    }
+}
+
+extern "C" fn pyruntime_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    handle_py_runtime(method_id, instance_id, args, args_len, result, result_len)
+}
+
+extern "C" fn pyobject_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "getattr" | "getAttr" | "getattrR" | "getAttrR" => {
+            if s.ends_with('R') { PYO_METHOD_GETATTR_R } else { PYO_METHOD_GETATTR }
+        }
+        "call" | "callR" => { if s.ends_with('R') { PYO_METHOD_CALL_R } else { PYO_METHOD_CALL } }
+        "callKw" | "callKW" | "call_kw" | "callKwR" | "callKWR" => {
+            if s.to_lowercase().ends_with('r') { PYO_METHOD_CALL_KW_R } else { PYO_METHOD_CALL_KW }
+        }
+        "str" | "toString" => PYO_METHOD_STR,
+        "birth" => PYO_METHOD_BIRTH,
+        "fini" => PYO_METHOD_FINI,
+        _ => 0,
+    }
+}
+
+extern "C" fn pyobject_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    handle_py_object(method_id, instance_id, args, args_len, result, result_len)
+}
+
+#[no_mangle]
+pub static nyash_typebox_PyRuntimeBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"PyRuntimeBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(pyruntime_resolve),
+    invoke_id: Some(pyruntime_invoke_id),
+    capabilities: 0,
+};
+
+#[no_mangle]
+pub static nyash_typebox_PyObjectBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"PyObjectBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(pyobject_resolve),
+    invoke_id: Some(pyobject_invoke_id),
+    capabilities: 0,
+};
 fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
     unsafe {
         if result_len.is_null() {

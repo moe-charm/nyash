@@ -208,6 +208,113 @@ fn parse_python_code(py: Python, code: &str) -> ParseResult {
     result
 }
 
+// ===== TypeBox ABI v2 (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const std::os::raw::c_char,
+    pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+const TYPE_ID_PARSER: u32 = 60;
+const METHOD_BIRTH: u32 = 0;
+const METHOD_PARSE: u32 = 1;
+const METHOD_FINI: u32 = u32::MAX;
+
+use std::ffi::CStr;
+extern "C" fn pyparser_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "birth" => METHOD_BIRTH,
+        "parse" => METHOD_PARSE,
+        "fini" => METHOD_FINI,
+        _ => 0,
+    }
+}
+
+extern "C" fn pyparser_invoke_id(
+    _instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    match method_id {
+        METHOD_BIRTH => unsafe {
+            let instance_id = 1u32; // simple singleton
+            if result_len.is_null() { return -1; }
+            if *result_len < 4 {
+                *result_len = 4;
+                return -1;
+            }
+            let out = std::slice::from_raw_parts_mut(result, *result_len);
+            out[0..4].copy_from_slice(&instance_id.to_le_bytes());
+            *result_len = 4;
+            0
+        },
+        METHOD_PARSE => {
+            // Decode TLV string from args if present, else env fallback
+            let code = unsafe {
+                if args.is_null() || args_len < 4 {
+                    std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                } else {
+                    let buf = std::slice::from_raw_parts(args, args_len);
+                    if args_len >= 8 {
+                        let tag = u16::from_le_bytes([buf[0], buf[1]]);
+                        let len = u16::from_le_bytes([buf[2], buf[3]]) as usize;
+                        if tag == 6 && 4 + len <= args_len {
+                            match std::str::from_utf8(&buf[4..4 + len]) { Ok(s) => s.to_string(), Err(_) => std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string()) }
+                        } else {
+                            std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                        }
+                    } else {
+                        std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                    }
+                }
+            };
+            let parse_result = Python::with_gil(|py| parse_python_code(py, &code));
+            match serde_json::to_string(&parse_result) {
+                Ok(json) => unsafe {
+                    if result_len.is_null() { return -1; }
+                    let bytes = json.as_bytes();
+                    let need = 4 + bytes.len();
+                    if *result_len < need {
+                        *result_len = need;
+                        return -1;
+                    }
+                    let out = std::slice::from_raw_parts_mut(result, *result_len);
+                    out[0..2].copy_from_slice(&6u16.to_le_bytes());
+                    out[2..4].copy_from_slice(&(bytes.len() as u16).to_le_bytes());
+                    out[4..4 + bytes.len()].copy_from_slice(bytes);
+                    *result_len = need;
+                    0
+                },
+                Err(_) => -4,
+            }
+        }
+        METHOD_FINI => 0,
+        _ => -3,
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_PythonParserBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"PythonParserBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(pyparser_resolve),
+    invoke_id: Some(pyparser_invoke_id),
+    capabilities: 0,
+};
+
 fn analyze_ast(_py: Python, node: &Bound<'_, PyAny>, result: &mut ParseResult) {
     result.counts.total_nodes += 1;
 

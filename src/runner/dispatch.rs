@@ -171,6 +171,16 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
 
 impl NyashRunner {
     pub(crate) fn execute_mir_module(&self, module: &crate::mir::MirModule) {
+        // If CLI requested MIR JSON emit, write to file and exit immediately.
+        if let Some(path) = self.config.emit_mir_json.as_ref() {
+            let p = std::path::Path::new(path);
+            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(module, p) {
+                eprintln!("❌ MIR JSON emit error: {}", e);
+                std::process::exit(1);
+            }
+            println!("MIR JSON written: {}", p.display());
+            std::process::exit(0);
+        }
         use crate::backend::MirInterpreter;
         use crate::box_trait::{BoolBox, IntegerBox, StringBox};
         use crate::boxes::FloatBox;

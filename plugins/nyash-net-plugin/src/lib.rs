@@ -213,6 +213,260 @@ pub extern "C" fn nyash_plugin_invoke(
     }
 }
 
+// ===== TypeBox ABI v2 (per-Box resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const std::os::raw::c_char,
+    pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+use std::ffi::CStr;
+extern "C" fn responsebox_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "setStatus" => M_RESP_SET_STATUS,
+        "setHeader" => M_RESP_SET_HEADER,
+        "write" => M_RESP_WRITE,
+        "readBody" => M_RESP_READ_BODY,
+        "getStatus" => M_RESP_GET_STATUS,
+        "getHeader" => M_RESP_GET_HEADER,
+        "birth" => M_BIRTH,
+        "fini" => u32::MAX,
+        _ => 0,
+    }
+}
+extern "C" fn clientbox_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "get" => M_CLIENT_GET,
+        "post" => M_CLIENT_POST,
+        "birth" => M_BIRTH,
+        "fini" => u32::MAX,
+        _ => 0,
+    }
+}
+
+extern "C" fn responsebox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { response_invoke(method_id, instance_id, args, args_len, result, result_len) }
+}
+
+extern "C" fn clientbox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { client_invoke(method_id, instance_id, args, args_len, result, result_len) }
+}
+
+#[no_mangle]
+pub static nyash_typebox_ResponseBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"ResponseBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(responsebox_resolve),
+    invoke_id: Some(responsebox_invoke_id),
+    capabilities: 0,
+};
+
+#[no_mangle]
+pub static nyash_typebox_ClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"ClientBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(clientbox_resolve),
+    invoke_id: Some(clientbox_invoke_id),
+    capabilities: 0,
+};
+
+// --- ServerBox ---
+extern "C" fn serverbox_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "start" => M_SERVER_START,
+        "stop" => M_SERVER_STOP,
+        "accept" => M_SERVER_ACCEPT,
+        "birth" => M_BIRTH,
+        "fini" => u32::MAX,
+        _ => 0,
+    }
+}
+extern "C" fn serverbox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { server_invoke(method_id, instance_id, args, args_len, result, result_len) }
+}
+#[no_mangle]
+pub static nyash_typebox_ServerBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"ServerBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(serverbox_resolve),
+    invoke_id: Some(serverbox_invoke_id),
+    capabilities: 0,
+};
+
+// --- SockServerBox ---
+extern "C" fn sockserver_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "start" => M_SRV_START,
+        "stop" => M_SRV_STOP,
+        "accept" => M_SRV_ACCEPT,
+        "acceptTimeout" => M_SRV_ACCEPT_TIMEOUT,
+        "birth" => M_SRV_BIRTH,
+        "fini" => u32::MAX,
+        _ => 0,
+    }
+}
+extern "C" fn sockserver_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { sock_server_invoke(method_id, instance_id, args, args_len, result, result_len) }
+}
+#[no_mangle]
+pub static nyash_typebox_SockServerBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"SockServerBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(sockserver_resolve),
+    invoke_id: Some(sockserver_invoke_id),
+    capabilities: 0,
+};
+
+// --- SockClientBox ---
+extern "C" fn sockclient_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "connect" => M_SC_CONNECT,
+        "birth" => M_SC_BIRTH,
+        "fini" => u32::MAX,
+        _ => 0,
+    }
+}
+extern "C" fn sockclient_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { sock_client_invoke(method_id, instance_id, args, args_len, result, result_len) }
+}
+#[no_mangle]
+pub static nyash_typebox_SockClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"SockClientBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(sockclient_resolve),
+    invoke_id: Some(sockclient_invoke_id),
+    capabilities: 0,
+};
+
+// --- SockConnBox ---
+extern "C" fn sockconn_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "send" => M_CONN_SEND,
+        "recv" => M_CONN_RECV,
+        "close" => M_CONN_CLOSE,
+        "recvTimeout" => M_CONN_RECV_TIMEOUT,
+        "birth" => M_CONN_BIRTH,
+        "fini" => u32::MAX,
+        _ => 0,
+    }
+}
+extern "C" fn sockconn_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { sock_conn_invoke(method_id, instance_id, args, args_len, result, result_len) }
+}
+#[no_mangle]
+pub static nyash_typebox_SockConnBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"SockConnBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(sockconn_resolve),
+    invoke_id: Some(sockconn_invoke_id),
+    capabilities: 0,
+};
+extern "C" fn requestbox_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "path" => M_REQ_PATH,
+        "readBody" => M_REQ_READ_BODY,
+        "respond" => M_REQ_RESPOND,
+        "birth" => M_BIRTH,
+        "fini" => u32::MAX,
+        _ => 0,
+    }
+}
+extern "C" fn requestbox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { request_invoke(method_id, instance_id, args, args_len, result, result_len) }
+}
+
+#[no_mangle]
+pub static nyash_typebox_RequestBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"RequestBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(requestbox_resolve),
+    invoke_id: Some(requestbox_invoke_id),
+    capabilities: 0,
+};
+
 unsafe fn server_invoke(
     m: u32,
     id: u32,

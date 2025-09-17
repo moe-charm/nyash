@@ -155,3 +155,46 @@ Notes / Policies
 - No full tracing/moving GC yet; handles/Arc lifetimes govern object retention. Safepoint/barrier/roots are staging utilities.
  - GC mode UX: keep user‑facing modes minimal (rc+cycle, minorgen); advanced modes are opt‑in for language dev.
  - Legacy Interpreter/VM は段階的にアーカイブへ。日常の意味論確認は PyVM を基準として継続。
+
+Plugin ABI v2 updates (2025‑09‑17)
+- v2 migration (TypeBox) 完了/進捗
+  - 完了: FileBox / PathBox / RegexBox / MathBox / TimeBox
+  - Net 完了: ClientBox / ResponseBox / RequestBox / ServerBox / SockServerBox / SockClientBox / SockConnBox
+  - 既存: ConsoleBox / StringBox / IntegerBox / MapBox は v2 実装あり
+- ローダ診断強化
+  - `NYASH_DEBUG_PLUGIN=1` で TypeBox 未検出/ABI不一致/invoke_id未定義の詳細をログ出力
+- Docs 追補
+  - `docs/reference/plugin-abi/nyash_abi_v2.md` に命名規約・例（Regex/Net）を追記
+  - `include/nyash_abi.h`（Cヘッダ）追加済み
+- 設定/スモーク/CI
+  - `nyash.toml` に各 v2 Box を登録（type_id/method_id 定義）
+  - スモーク: `tools/plugin_v2_smoke.sh`（Linux常時）。全 v2 プラグインのロード確認＋簡易機能スモーク（`apps/tests/plugin_v2_functional.nyash`）
+- LLVM 共通化の足場
+  - `tools/build_llvm.sh` に `NYASH_LLVM_COMPILER=crate|harness` を追加（`crate` は `ny-llvmc`。JSON は `NYASH_LLVM_MIR_JSON` 指定）
+  - JSON スキーマ検証を可能なら実行（`tools/validate_mir_json.py`）
+
+Plugin ABI v2 updates (2025‑09‑17 — Python family + Net smoke + JSON emit)
+- v2 migration（Python 系 完了）
+  - `plugins/nyash-python-plugin`: `nyash_typebox_PyRuntimeBox` / `nyash_typebox_PyObjectBox` を追加（resolve/invoke_id 実装。既存 v1 は残存）
+  - `plugins/nyash-python-parser-plugin`: `nyash_typebox_PythonParserBox` を追加（birth/parse/fini）
+  - `plugins/nyash-python-compiler-plugin`: `nyash_typebox_PythonCompilerBox` を追加（birth/compile/fini）
+  - `nyash.toml` に Python 系 3 ライブラリを登録（type_id: 40/41/60/61）
+- Net 往復スモーク（最小）
+  - 追加: `apps/tests/net_roundtrip.nyash`（Server.start→Client.get→Server.accept/respond→Client.readBody）
+  - 追加: `tools/plugin_v2_smoke.sh` に Net 機能スモークを条件付きで実行（CI常時ジョブに内包）
+- nyash → MIR JSON emit フラグ
+  - CLI `--emit-mir-json <path>` を追加（`src/cli.rs`）。`runner.execute_mir_module` でファイル出力→即終了を実装。
+  - これにより `ny-llvmc` へ JSON を直結しやすくなった（次の CI 経路で使用予定）
+
+Plan after restart（次の計画）
+- Python 系プラグインの v2 化（parser/compiler/python-plugin）
+- Docs 追記（Net/Regex のメソッド表、型/戻りTLVの簡易表）
+- スモーク強化
+  - Net: `ServerBox.start -> Client.get -> Request.respond -> Response.readBody` の往復最小ケースを追加
+  - 主要 v2 Box の軽機能（String/Array/Map/Regex/Path/Math/Time）を 1 ジョブで走らせる
+- LLVM 共通化
+  - `nyash` からの JSON emit コマンド/フラグ導入（`--emit-mir-json <path>` など）→ `ny-llvmc` 直結
+  - CI に `ny-llvmc` 実 JSON 経路を追加（Linux 常時）
+- NyRT 整理（軽）
+  - TLV/エラー定数を `include/nyash_abi.h` と整合させる（ヘッダ経由参照）
+  - （必要時）`nyrt_last_error()` の追加検討

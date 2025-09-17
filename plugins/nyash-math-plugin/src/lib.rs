@@ -118,6 +118,105 @@ pub extern "C" fn nyash_plugin_invoke(
     }
 }
 
+// ===== TypeBox ABI v2 (resolve/invoke_id per box) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,        // 'TYBX'
+    pub version: u16,        // 1
+    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub name: *const std::os::raw::c_char,
+    pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+use std::ffi::CStr;
+extern "C" fn mathbox_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "sqrt" => M_SQRT,
+        "sin" => M_SIN,
+        "cos" => M_COS,
+        "round" => M_ROUND,
+        "birth" => M_BIRTH,
+        "fini" => M_FINI,
+        _ => 0,
+    }
+}
+extern "C" fn timebox_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() { return 0; }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "now" => T_NOW,
+        "birth" => M_BIRTH,
+        "fini" => M_FINI,
+        _ => 0,
+    }
+}
+
+extern "C" fn mathbox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe {
+        match method_id {
+            M_BIRTH => birth(TID_MATH, &MATH_INST, result, result_len),
+            M_FINI => fini(&MATH_INST, instance_id),
+            M_SQRT => sqrt_call(args, args_len, result, result_len),
+            M_SIN => trig_call(args, args_len, result, result_len, true),
+            M_COS => trig_call(args, args_len, result, result_len, false),
+            M_ROUND => round_call(args, args_len, result, result_len),
+            _ => E_METHOD,
+        }
+    }
+}
+
+extern "C" fn timebox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    _args: *const u8,
+    _args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe {
+        match method_id {
+            M_BIRTH => birth(TID_TIME, &TIME_INST, result, result_len),
+            M_FINI => fini(&TIME_INST, instance_id),
+            T_NOW => now_call(result, result_len),
+            _ => E_METHOD,
+        }
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_MathBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"MathBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(mathbox_resolve),
+    invoke_id: Some(mathbox_invoke_id),
+    capabilities: 0,
+};
+
+#[no_mangle]
+pub static nyash_typebox_TimeBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"TimeBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(timebox_resolve),
+    invoke_id: Some(timebox_invoke_id),
+    capabilities: 0,
+};
+
 unsafe fn birth<T>(
     tid: u32,
     map: &Lazy<Mutex<HashMap<u32, T>>>,

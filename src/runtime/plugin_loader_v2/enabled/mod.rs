@@ -25,7 +25,6 @@ pub fn box_invoke_for_type_id(type_id: u32) -> Option<super::enabled::host_bridg
 }
 
 /// Library-level shim to dispatch a v2 per-Box invoke function using type_id
-#[no_mangle]
 pub extern "C" fn nyash_plugin_invoke_v2_shim(
     type_id: u32,
     method_id: u32,

@@ -59,14 +59,40 @@ stem=${stem%.nyash}
 OBJ="${NYASH_LLVM_OBJ_OUT:-$PWD/target/aot_objects/${stem}.o}"
 if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
   rm -f "$OBJ"
-  if [[ "${NYASH_LLVM_FEATURE:-llvm}" == "llvm-inkwell-legacy" ]]; then
-    # Legacy path: do not use harness
-    NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-      ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
-  else
-    # Harness path
-    NYASH_LLVM_OBJ_OUT="$OBJ" NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-      ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
+  COMPILER_MODE=${NYASH_LLVM_COMPILER:-harness}
+  case "$COMPILER_MODE" in
+    crate)
+      # Use crates/nyash-llvm-compiler (ny-llvmc): requires pre-generated MIR JSON path in NYASH_LLVM_MIR_JSON
+      if [[ -z "${NYASH_LLVM_MIR_JSON:-}" ]]; then
+        echo "[warn] NYASH_LLVM_COMPILER=crate but NYASH_LLVM_MIR_JSON is not set; falling back to harness" >&2
+        COMPILER_MODE="harness"
+      else
+        echo "    using ny-llvmc (crate) with JSON: $NYASH_LLVM_MIR_JSON" >&2
+        cargo build --release -p nyash-llvm-compiler >/dev/null
+        # Optional schema validation if tool is available
+        if [[ -f tools/validate_mir_json.py ]]; then
+          if ! python3 -m jsonschema --version >/dev/null 2>&1; then
+            echo "[warn] jsonschema not available; skipping schema validation" >&2
+          else
+            echo "    validating MIR JSON schema ..." >&2
+            python3 tools/validate_mir_json.py "$NYASH_LLVM_MIR_JSON" || {
+              echo "error: MIR JSON validation failed" >&2; exit 3; }
+          fi
+        fi
+        ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OBJ"
+      fi
+      ;;
+  esac
+  if [[ "$COMPILER_MODE" == "harness" ]]; then
+    if [[ "${NYASH_LLVM_FEATURE:-llvm}" == "llvm-inkwell-legacy" ]]; then
+      # Legacy path: do not use harness
+      NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+        ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
+    else
+      # Harness path (Python llvmlite)
+      NYASH_LLVM_OBJ_OUT="$OBJ" NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+        ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
+    fi
   fi
 fi
 if [[ ! -f "$OBJ" ]]; then

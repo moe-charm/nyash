@@ -69,6 +69,8 @@ pub struct CliConfig {
     pub build_target: Option<String>,
     // Using (CLI)
     pub cli_usings: Vec<String>,
+    // Emit MIR JSON to a file and exit (bridge mode)
+    pub emit_mir_json: Option<String>,
 }
 
 impl CliConfig {
@@ -130,6 +132,12 @@ impl CliConfig {
                     .long("json-file")
                     .value_name("FILE")
                     .help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter")
+            )
+            .arg(
+                Arg::new("emit-mir-json")
+                    .long("emit-mir-json")
+                    .value_name("FILE")
+                    .help("Emit MIR JSON v0 to file (validation-friendly) and exit")
             )
             .arg(
                 Arg::new("stage3")
@@ -482,6 +490,7 @@ impl CliConfig {
                 .get_many::<String>("using")
                 .map(|v| v.cloned().collect())
                 .unwrap_or_else(|| Vec::new()),
+            emit_mir_json: matches.get_one::<String>("emit-mir-json").cloned(),
         }
     }
 }
@@ -536,6 +545,7 @@ impl Default for CliConfig {
             build_profile: None,
             build_target: None,
             cli_usings: Vec::new(),
+            emit_mir_json: None,
         }
     }
 }
