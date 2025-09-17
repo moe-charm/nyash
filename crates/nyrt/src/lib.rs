@@ -677,7 +677,9 @@ pub extern "C" fn main() -> i32 {
     // Choose GC hooks based on env (default dev: Counting for observability unless explicitly off)
     let mut rt_builder = nyash_rust::runtime::NyashRuntimeBuilder::new();
     let gc_mode = nyash_rust::runtime::gc_mode::GcMode::from_env();
-    let controller = std::sync::Arc::new(nyash_rust::runtime::gc_controller::GcController::new(gc_mode));
+    let controller = std::sync::Arc::new(nyash_rust::runtime::gc_controller::GcController::new(
+        gc_mode,
+    ));
     rt_builder = rt_builder.with_gc_hooks(controller);
     let rt_hooks = rt_builder.build();
     nyash_rust::runtime::global_hooks::set_from_runtime(&rt_hooks);
@@ -720,16 +722,23 @@ pub extern "C" fn main() -> i32 {
         let want_json = std::env::var("NYASH_GC_METRICS_JSON").ok().as_deref() == Some("1");
         let want_text = std::env::var("NYASH_GC_METRICS").ok().as_deref() == Some("1");
         if want_json || want_text {
-            let (sp, br, bw) = rt_hooks
-                .gc
-                .snapshot_counters()
-                .unwrap_or((0, 0, 0));
+            let (sp, br, bw) = rt_hooks.gc.snapshot_counters().unwrap_or((0, 0, 0));
             let handles = nyash_rust::jit::rt::handles::len();
             let gc_mode_s = gc_mode.as_str();
             // Include allocation totals if controller is used
             let any_gc: &dyn std::any::Any = &*rt_hooks.gc;
-            let (alloc_count, alloc_bytes, trial_nodes, trial_edges, collect_total, collect_sp, collect_alloc, last_ms, last_reason) = if let Some(ctrl) = any_gc
-                .downcast_ref::<nyash_rust::runtime::gc_controller::GcController>()
+            let (
+                alloc_count,
+                alloc_bytes,
+                trial_nodes,
+                trial_edges,
+                collect_total,
+                collect_sp,
+                collect_alloc,
+                last_ms,
+                last_reason,
+            ) = if let Some(ctrl) =
+                any_gc.downcast_ref::<nyash_rust::runtime::gc_controller::GcController>()
             {
                 let (ac, ab) = ctrl.alloc_totals();
                 let (tn, te) = ctrl.trial_reachability_last();
@@ -741,9 +750,18 @@ pub extern "C" fn main() -> i32 {
                 (0, 0, 0, 0, 0, 0, 0, 0, 0)
             };
             // Settings snapshot (env)
-            let sp_interval = std::env::var("NYASH_GC_COLLECT_SP").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
-            let alloc_thresh = std::env::var("NYASH_GC_COLLECT_ALLOC").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
-            let auto_sp = std::env::var("NYASH_LLVM_AUTO_SAFEPOINT").ok().map(|v| v == "1").unwrap_or(true);
+            let sp_interval = std::env::var("NYASH_GC_COLLECT_SP")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
+            let alloc_thresh = std::env::var("NYASH_GC_COLLECT_ALLOC")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
+            let auto_sp = std::env::var("NYASH_LLVM_AUTO_SAFEPOINT")
+                .ok()
+                .map(|v| v == "1")
+                .unwrap_or(true);
             if want_json {
                 // Minimal JSON assembly to avoid extra deps in nyrt
                 println!(

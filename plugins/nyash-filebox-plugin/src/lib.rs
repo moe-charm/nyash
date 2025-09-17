@@ -681,7 +681,11 @@ extern "C" fn filebox_invoke_id(
                 if let Ok(mut map) = INSTANCES.lock() {
                     map.insert(
                         id,
-                        FileBoxInstance { file: None, path: String::new(), buffer: None },
+                        FileBoxInstance {
+                            file: None,
+                            path: String::new(),
+                            buffer: None,
+                        },
                     );
                 } else {
                     return NYB_E_PLUGIN_ERROR;
@@ -900,7 +904,11 @@ extern "C" fn filebox_invoke_id(
                 if let Ok(mut map) = INSTANCES.lock() {
                     map.insert(
                         new_id,
-                        FileBoxInstance { file: None, path: String::new(), buffer: None },
+                        FileBoxInstance {
+                            file: None,
+                            path: String::new(),
+                            buffer: None,
+                        },
                     );
                 }
                 // Return Handle TLV (type_id from config resolves host-side; we encode (6,new_id) here if needed)

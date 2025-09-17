@@ -105,9 +105,9 @@ fn parse_python_code(py: Python, code: &str) -> ParseResult {
 // ===== TypeBox ABI v2 (resolve/invoke_id) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {
-    pub abi_tag: u32,        // 'TYBX'
-    pub version: u16,        // 1
-    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub abi_tag: u32,     // 'TYBX'
+    pub version: u16,     // 1
+    pub struct_size: u16, // sizeof(NyashTypeBoxFfi)
     pub name: *const std::os::raw::c_char,
     pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
     pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
@@ -122,7 +122,9 @@ const METHOD_FINI: u32 = u32::MAX;
 
 use std::ffi::CStr;
 extern "C" fn pyparser_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
+    if name.is_null() {
+        return 0;
+    }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
         "birth" => METHOD_BIRTH,
@@ -143,7 +145,9 @@ extern "C" fn pyparser_invoke_id(
     match method_id {
         METHOD_BIRTH => unsafe {
             let instance_id = 1u32; // simple singleton
-            if result_len.is_null() { return -1; }
+            if result_len.is_null() {
+                return -1;
+            }
             if *result_len < 4 {
                 *result_len = 4;
                 return -1;
@@ -157,26 +161,35 @@ extern "C" fn pyparser_invoke_id(
             // Decode TLV string from args if present, else env fallback
             let code = unsafe {
                 if args.is_null() || args_len < 4 {
-                    std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                    std::env::var("NYASH_PY_CODE")
+                        .unwrap_or_else(|_| "def main():\n    return 0".to_string())
                 } else {
                     let buf = std::slice::from_raw_parts(args, args_len);
                     if args_len >= 8 {
                         let tag = u16::from_le_bytes([buf[0], buf[1]]);
                         let len = u16::from_le_bytes([buf[2], buf[3]]) as usize;
                         if tag == 6 && 4 + len <= args_len {
-                            match std::str::from_utf8(&buf[4..4 + len]) { Ok(s) => s.to_string(), Err(_) => std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string()) }
+                            match std::str::from_utf8(&buf[4..4 + len]) {
+                                Ok(s) => s.to_string(),
+                                Err(_) => std::env::var("NYASH_PY_CODE")
+                                    .unwrap_or_else(|_| "def main():\n    return 0".to_string()),
+                            }
                         } else {
-                            std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                            std::env::var("NYASH_PY_CODE")
+                                .unwrap_or_else(|_| "def main():\n    return 0".to_string())
                         }
                     } else {
-                        std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                        std::env::var("NYASH_PY_CODE")
+                            .unwrap_or_else(|_| "def main():\n    return 0".to_string())
                     }
                 }
             };
             let parse_result = Python::with_gil(|py| parse_python_code(py, &code));
             match serde_json::to_string(&parse_result) {
                 Ok(json) => unsafe {
-                    if result_len.is_null() { return -1; }
+                    if result_len.is_null() {
+                        return -1;
+                    }
                     let bytes = json.as_bytes();
                     let need = 4 + bytes.len();
                     if *result_len < need {

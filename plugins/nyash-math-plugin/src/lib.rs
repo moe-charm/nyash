@@ -115,9 +115,9 @@ pub extern "C" fn nyash_plugin_invoke(
 // ===== TypeBox ABI v2 (resolve/invoke_id per box) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {
-    pub abi_tag: u32,        // 'TYBX'
-    pub version: u16,        // 1
-    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub abi_tag: u32,     // 'TYBX'
+    pub version: u16,     // 1
+    pub struct_size: u16, // sizeof(NyashTypeBoxFfi)
     pub name: *const std::os::raw::c_char,
     pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
     pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
@@ -127,7 +127,9 @@ unsafe impl Sync for NyashTypeBoxFfi {}
 
 use std::ffi::CStr;
 extern "C" fn mathbox_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
+    if name.is_null() {
+        return 0;
+    }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
         "sqrt" => M_SQRT,
@@ -140,7 +142,9 @@ extern "C" fn mathbox_resolve(name: *const std::os::raw::c_char) -> u32 {
     }
 }
 extern "C" fn timebox_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
+    if name.is_null() {
+        return 0;
+    }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
         "now" => T_NOW,

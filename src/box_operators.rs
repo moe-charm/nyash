@@ -16,47 +16,57 @@ use crate::operator_traits::{
     OperatorError,
 };
 
-// ===== IntegerBox Operator Implementations =====
-
-/// IntegerBox + IntegerBox -> IntegerBox
-impl NyashAdd<IntegerBox> for IntegerBox {
-    type Output = IntegerBox;
-
-    fn add(self, rhs: IntegerBox) -> Self::Output {
-        IntegerBox::new(self.value + rhs.value)
-    }
+// Small helpers to reduce duplication in dynamic operators
+#[inline]
+fn concat_result(left: &dyn NyashBox, right: &dyn NyashBox) -> Box<dyn NyashBox> {
+    let l = left.to_string_box();
+    let r = right.to_string_box();
+    Box::new(StringBox::new(format!("{}{}", l.value, r.value)))
 }
 
-/// IntegerBox - IntegerBox -> IntegerBox
-impl NyashSub<IntegerBox> for IntegerBox {
-    type Output = IntegerBox;
-
-    fn sub(self, rhs: IntegerBox) -> Self::Output {
-        IntegerBox::new(self.value - rhs.value)
-    }
+#[inline]
+fn can_repeat(times: i64) -> bool {
+    (0..=10_000).contains(&times)
 }
 
-/// IntegerBox * IntegerBox -> IntegerBox
-impl NyashMul<IntegerBox> for IntegerBox {
-    type Output = IntegerBox;
-
-    fn mul(self, rhs: IntegerBox) -> Self::Output {
-        IntegerBox::new(self.value * rhs.value)
-    }
-}
-
-/// IntegerBox / IntegerBox -> IntegerBox (with zero check)
-impl NyashDiv<IntegerBox> for IntegerBox {
-    type Output = Result<IntegerBox, OperatorError>;
-
-    fn div(self, rhs: IntegerBox) -> Self::Output {
-        if rhs.value == 0 {
-            Err(OperatorError::DivisionByZero)
-        } else {
-            Ok(IntegerBox::new(self.value / rhs.value))
+// ===== Static numeric operators (macro-generated) =====
+macro_rules! impl_static_numeric_ops {
+    ($ty:ty, $zero:expr) => {
+        impl NyashAdd<$ty> for $ty {
+            type Output = $ty;
+            fn add(self, rhs: $ty) -> Self::Output {
+                < $ty >::new(self.value + rhs.value)
+            }
         }
-    }
+
+        impl NyashSub<$ty> for $ty {
+            type Output = $ty;
+            fn sub(self, rhs: $ty) -> Self::Output {
+                < $ty >::new(self.value - rhs.value)
+            }
+        }
+
+        impl NyashMul<$ty> for $ty {
+            type Output = $ty;
+            fn mul(self, rhs: $ty) -> Self::Output {
+                < $ty >::new(self.value * rhs.value)
+            }
+        }
+
+        impl NyashDiv<$ty> for $ty {
+            type Output = Result<$ty, OperatorError>;
+            fn div(self, rhs: $ty) -> Self::Output {
+                if rhs.value == $zero {
+                    Err(OperatorError::DivisionByZero)
+                } else {
+                    Ok(< $ty >::new(self.value / rhs.value))
+                }
+            }
+        }
+    };
 }
+
+impl_static_numeric_ops!(IntegerBox, 0);
 
 /// Dynamic dispatch implementation for IntegerBox
 impl DynamicAdd for IntegerBox {
@@ -73,14 +83,8 @@ impl DynamicAdd for IntegerBox {
             )));
         }
 
-        // Fallback: Convert both to strings and concatenate
-        // This preserves the existing AddBox behavior
-        let left_str = self.to_string_box();
-        let right_str = other.to_string_box();
-        Some(Box::new(StringBox::new(format!(
-            "{}{}",
-            left_str.value, right_str.value
-        ))))
+        // Fallback: Convert both to strings and concatenate (existing AddBox behavior)
+        Some(concat_result(self, other))
     }
 
     fn can_add_with(&self, other_type: &str) -> bool {
@@ -126,8 +130,7 @@ impl DynamicMul for IntegerBox {
 
         // IntegerBox * StringBox -> Repeated string
         if let Some(other_str) = other.as_any().downcast_ref::<StringBox>() {
-            if self.value >= 0 && self.value <= 10000 {
-                // Safety limit
+            if can_repeat(self.value) {
                 let repeated = other_str.value.repeat(self.value as usize);
                 return Some(Box::new(StringBox::new(repeated)));
             }
@@ -171,47 +174,7 @@ impl DynamicDiv for IntegerBox {
     }
 }
 
-// ===== FloatBox Operator Implementations =====
-
-/// FloatBox + FloatBox -> FloatBox
-impl NyashAdd<FloatBox> for FloatBox {
-    type Output = FloatBox;
-
-    fn add(self, rhs: FloatBox) -> Self::Output {
-        FloatBox::new(self.value + rhs.value)
-    }
-}
-
-/// FloatBox - FloatBox -> FloatBox
-impl NyashSub<FloatBox> for FloatBox {
-    type Output = FloatBox;
-
-    fn sub(self, rhs: FloatBox) -> Self::Output {
-        FloatBox::new(self.value - rhs.value)
-    }
-}
-
-/// FloatBox * FloatBox -> FloatBox
-impl NyashMul<FloatBox> for FloatBox {
-    type Output = FloatBox;
-
-    fn mul(self, rhs: FloatBox) -> Self::Output {
-        FloatBox::new(self.value * rhs.value)
-    }
-}
-
-/// FloatBox / FloatBox -> FloatBox (with zero check)
-impl NyashDiv<FloatBox> for FloatBox {
-    type Output = Result<FloatBox, OperatorError>;
-
-    fn div(self, rhs: FloatBox) -> Self::Output {
-        if rhs.value == 0.0 {
-            Err(OperatorError::DivisionByZero)
-        } else {
-            Ok(FloatBox::new(self.value / rhs.value))
-        }
-    }
-}
+impl_static_numeric_ops!(FloatBox, 0.0);
 
 // ===== FloatBox Dynamic Operator Implementations =====
 
@@ -228,12 +191,7 @@ impl DynamicAdd for FloatBox {
         }
 
         // Fallback: Convert both to strings and concatenate
-        let left_str = self.to_string_box();
-        let right_str = other.to_string_box();
-        Some(Box::new(StringBox::new(format!(
-            "{}{}",
-            left_str.value, right_str.value
-        ))))
+        Some(concat_result(self, other))
     }
 
     fn can_add_with(&self, other_type: &str) -> bool {
@@ -344,11 +302,7 @@ impl DynamicAdd for StringBox {
         }
 
         // StringBox + any other type -> Convert to string and concatenate
-        let other_str = other.to_string_box();
-        Some(Box::new(StringBox::new(format!(
-            "{}{}",
-            self.value, other_str.value
-        ))))
+        Some(concat_result(self, other))
     }
 
     fn can_add_with(&self, _other_type: &str) -> bool {
@@ -370,8 +324,7 @@ impl DynamicMul for StringBox {
     fn try_mul(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
         // StringBox * IntegerBox -> Repeated string
         if let Some(other_int) = other.as_any().downcast_ref::<IntegerBox>() {
-            if other_int.value >= 0 && other_int.value <= 10000 {
-                // Safety limit
+            if can_repeat(other_int.value) {
                 let repeated = self.value.repeat(other_int.value as usize);
                 return Some(Box::new(StringBox::new(repeated)));
             }
@@ -505,6 +458,67 @@ impl DynamicDiv for BoolBox {
 pub struct OperatorResolver;
 
 impl OperatorResolver {
+    #[inline]
+    fn try_dyn_left_add(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            if let Some(result) = int_box.try_add(right) { return Some(result); }
+        }
+        if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+            if let Some(result) = str_box.try_add(right) { return Some(result); }
+        }
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_add(right) { return Some(result); }
+        }
+        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            if let Some(result) = bool_box.try_add(right) { return Some(result); }
+        }
+        None
+    }
+
+    #[inline]
+    fn try_dyn_left_sub(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            if let Some(result) = int_box.try_sub(right) { return Some(result); }
+        }
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_sub(right) { return Some(result); }
+        }
+        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            if let Some(result) = bool_box.try_sub(right) { return Some(result); }
+        }
+        None
+    }
+
+    #[inline]
+    fn try_dyn_left_mul(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            if let Some(result) = int_box.try_mul(right) { return Some(result); }
+        }
+        if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+            if let Some(result) = str_box.try_mul(right) { return Some(result); }
+        }
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            if let Some(result) = float_box.try_mul(right) { return Some(result); }
+        }
+        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            if let Some(result) = bool_box.try_mul(right) { return Some(result); }
+        }
+        None
+    }
+
+    #[inline]
+    fn try_dyn_left_div(left: &dyn NyashBox, right: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
+        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+            return int_box.try_div(right);
+        }
+        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+            return float_box.try_div(right);
+        }
+        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+            return bool_box.try_div(right);
+        }
+        None
+    }
     /// Resolve addition operation with hybrid dispatch
     pub fn resolve_add(
         left: &dyn NyashBox,
@@ -513,33 +527,7 @@ impl OperatorResolver {
         // Try to cast to concrete types first and use their DynamicAdd implementation
         // This approach uses the concrete types rather than trait objects
 
-        // Check if left implements DynamicAdd by trying common types
-        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-            if let Some(result) = int_box.try_add(right) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
-            if let Some(result) = str_box.try_add(right) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(float_box) = right
-            .as_any()
-            .downcast_ref::<crate::boxes::math_box::FloatBox>()
-        {
-            if let Some(result) = float_box.try_add(right) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
-            if let Some(result) = bool_box.try_add(right) {
-                return Ok(result);
-            }
-        }
+        if let Some(result) = Self::try_dyn_left_add(left, right) { return Ok(result); }
 
         Err(OperatorError::UnsupportedOperation {
             operator: "+".to_string(),
@@ -553,21 +541,7 @@ impl OperatorResolver {
         left: &dyn NyashBox,
         right: &dyn NyashBox,
     ) -> Result<Box<dyn NyashBox>, OperatorError> {
-        // Try concrete types for DynamicSub
-        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-            if let Some(result) = int_box.try_sub(right) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(float_box) = left
-            .as_any()
-            .downcast_ref::<crate::boxes::math_box::FloatBox>()
-        {
-            if let Some(result) = float_box.try_sub(right) {
-                return Ok(result);
-            }
-        }
+        if let Some(result) = Self::try_dyn_left_sub(left, right) { return Ok(result); }
 
         Err(OperatorError::UnsupportedOperation {
             operator: "-".to_string(),
@@ -581,33 +555,7 @@ impl OperatorResolver {
         left: &dyn NyashBox,
         right: &dyn NyashBox,
     ) -> Result<Box<dyn NyashBox>, OperatorError> {
-        // Try concrete types for DynamicMul
-        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-            if let Some(result) = int_box.try_mul(right) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
-            if let Some(result) = str_box.try_mul(right) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(float_box) = left
-            .as_any()
-            .downcast_ref::<crate::boxes::math_box::FloatBox>()
-        {
-            if let Some(result) = float_box.try_mul(right) {
-                return Ok(result);
-            }
-        }
-
-        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
-            if let Some(result) = bool_box.try_mul(right) {
-                return Ok(result);
-            }
-        }
+        if let Some(result) = Self::try_dyn_left_mul(left, right) { return Ok(result); }
 
         Err(OperatorError::UnsupportedOperation {
             operator: "*".to_string(),
@@ -621,35 +569,7 @@ impl OperatorResolver {
         left: &dyn NyashBox,
         right: &dyn NyashBox,
     ) -> Result<Box<dyn NyashBox>, OperatorError> {
-        // Try concrete types for DynamicDiv
-        if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
-            if let Some(result) = int_box.try_div(right) {
-                return Ok(result);
-            } else {
-                // If try_div returns None, it might be division by zero
-                return Err(OperatorError::DivisionByZero);
-            }
-        }
-
-        if let Some(float_box) = left
-            .as_any()
-            .downcast_ref::<crate::boxes::math_box::FloatBox>()
-        {
-            if let Some(result) = float_box.try_div(right) {
-                return Ok(result);
-            } else {
-                // If try_div returns None, it might be division by zero
-                return Err(OperatorError::DivisionByZero);
-            }
-        }
-
-        if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
-            if let Some(result) = bool_box.try_div(right) {
-                return Ok(result);
-            } else {
-                return Err(OperatorError::DivisionByZero);
-            }
-        }
+        if let Some(result) = Self::try_dyn_left_div(left, right) { return Ok(result); }
 
         Err(OperatorError::UnsupportedOperation {
             operator: "/".to_string(),

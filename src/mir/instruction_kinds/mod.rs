@@ -11,6 +11,37 @@ use crate::mir::instruction::{
     TypeOpKind as MirTypeOpKind, WeakRefOp as MirWeakRefOp,
 };
 
+// Local macro utilities for generating InstructionMeta boilerplate.
+// This macro is intentionally scoped to this module to avoid polluting the crate namespace.
+macro_rules! inst_meta {
+    (
+        $(
+            pub struct $name:ident { $($field:ident : $fty:ty),* $(,)? }
+            => {
+                from_mir = |$i:ident| $from_expr:expr;
+                effects = $effects:expr;
+                dst = $dst:expr;
+                used = $used:expr;
+            }
+        )+
+    ) => {
+        $(
+            #[derive(Debug, Clone)]
+            pub struct $name { $(pub $field: $fty),* }
+
+            impl $name {
+                pub fn from_mir($i: &MirInstruction) -> Option<Self> { $from_expr }
+            }
+
+            impl InstructionMeta for $name {
+                fn effects(&self) -> EffectMask { ($effects)(self) }
+                fn dst(&self) -> Option<ValueId> { ($dst)(self) }
+                fn used(&self) -> Vec<ValueId> { ($used)(self) }
+            }
+        )+
+    };
+}
+
 pub trait InstructionMeta {
     fn effects(&self) -> EffectMask;
     fn dst(&self) -> Option<ValueId>;
@@ -130,499 +161,289 @@ pub fn used_via_meta(i: &MirInstruction) -> Option<Vec<ValueId>> {
     None
 }
 
-// ---- BarrierRead ----
-#[derive(Debug, Clone, Copy)]
-pub struct BarrierReadInst { pub ptr: ValueId }
-
-impl BarrierReadInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::BarrierRead { ptr } => Some(BarrierReadInst { ptr: *ptr }), _ => None }
+// ---- BarrierRead ---- (macro-generated)
+inst_meta! {
+    pub struct BarrierReadInst { ptr: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::BarrierRead { ptr } => Some(BarrierReadInst { ptr: *ptr }), _ => None };
+        effects = |_: &Self| EffectMask::READ.add(Effect::Barrier);
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.ptr];
     }
 }
 
-impl InstructionMeta for BarrierReadInst {
-    fn effects(&self) -> EffectMask { EffectMask::READ.add(Effect::Barrier) }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.ptr] }
-}
-
-// ---- BarrierWrite ----
-#[derive(Debug, Clone, Copy)]
-pub struct BarrierWriteInst { pub ptr: ValueId }
-
-impl BarrierWriteInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::BarrierWrite { ptr } => Some(BarrierWriteInst { ptr: *ptr }), _ => None }
+// ---- BarrierWrite ---- (macro-generated)
+inst_meta! {
+    pub struct BarrierWriteInst { ptr: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::BarrierWrite { ptr } => Some(BarrierWriteInst { ptr: *ptr }), _ => None };
+        effects = |_: &Self| EffectMask::WRITE.add(Effect::Barrier);
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.ptr];
     }
 }
 
-impl InstructionMeta for BarrierWriteInst {
-    fn effects(&self) -> EffectMask { EffectMask::WRITE.add(Effect::Barrier) }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.ptr] }
-}
-
-// ---- Barrier (unified) ----
-#[derive(Debug, Clone, Copy)]
-pub struct BarrierInst { pub op: MirBarrierOp, pub ptr: ValueId }
-
-impl BarrierInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::Barrier { op, ptr } => Some(BarrierInst { op: *op, ptr: *ptr }), _ => None }
+// ---- Barrier (unified) ---- (macro-generated)
+inst_meta! {
+    pub struct BarrierInst { op: MirBarrierOp, ptr: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Barrier { op, ptr } => Some(BarrierInst { op: *op, ptr: *ptr }), _ => None };
+        effects = |s: &Self| match s.op { MirBarrierOp::Read => EffectMask::READ.add(Effect::Barrier), MirBarrierOp::Write => EffectMask::WRITE.add(Effect::Barrier) };
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.ptr];
     }
 }
 
-impl InstructionMeta for BarrierInst {
-    fn effects(&self) -> EffectMask {
-        match self.op {
-            MirBarrierOp::Read => EffectMask::READ.add(Effect::Barrier),
-            MirBarrierOp::Write => EffectMask::WRITE.add(Effect::Barrier),
-        }
-    }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.ptr] }
-}
-
-// ---- Ref ops ----
-#[derive(Debug, Clone, Copy)]
-pub struct RefNewInst { pub dst: ValueId, pub box_val: ValueId }
-impl RefNewInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::RefNew { dst, box_val } => Some(RefNewInst { dst: *dst, box_val: *box_val }), _ => None }
+// ---- Ref ops ---- (macro-generated)
+inst_meta! {
+    pub struct RefNewInst { dst: ValueId, box_val: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::RefNew { dst, box_val } => Some(RefNewInst { dst: *dst, box_val: *box_val }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.box_val];
     }
 }
-impl InstructionMeta for RefNewInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.box_val] }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct RefGetInst { pub dst: ValueId, pub reference: ValueId }
-impl RefGetInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::RefGet { dst, reference, .. } => Some(RefGetInst { dst: *dst, reference: *reference }), _ => None }
+inst_meta! {
+    pub struct RefGetInst { dst: ValueId, reference: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::RefGet { dst, reference, .. } => Some(RefGetInst { dst: *dst, reference: *reference }), _ => None };
+        effects = |_: &Self| EffectMask::READ;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.reference];
     }
 }
-impl InstructionMeta for RefGetInst {
-    fn effects(&self) -> EffectMask { EffectMask::READ }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.reference] }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct RefSetInst { pub reference: ValueId, pub value: ValueId }
-impl RefSetInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::RefSet { reference, value, .. } => Some(RefSetInst { reference: *reference, value: *value }), _ => None }
-    }
-}
-impl InstructionMeta for RefSetInst {
-    fn effects(&self) -> EffectMask { EffectMask::WRITE }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.reference, self.value] }
-}
-
-// ---- Weak ops ----
-#[derive(Debug, Clone, Copy)]
-pub struct WeakNewInst { pub dst: ValueId, pub box_val: ValueId }
-impl WeakNewInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::WeakNew { dst, box_val } => Some(WeakNewInst { dst: *dst, box_val: *box_val }), _ => None }
-    }
-}
-impl InstructionMeta for WeakNewInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.box_val] }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WeakLoadInst { pub dst: ValueId, pub weak_ref: ValueId }
-impl WeakLoadInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::WeakLoad { dst, weak_ref } => Some(WeakLoadInst { dst: *dst, weak_ref: *weak_ref }), _ => None }
-    }
-}
-impl InstructionMeta for WeakLoadInst {
-    fn effects(&self) -> EffectMask { EffectMask::READ }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.weak_ref] }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct WeakRefInst { pub dst: ValueId, pub op: MirWeakRefOp, pub value: ValueId }
-impl WeakRefInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::WeakRef { dst, op, value } => Some(WeakRefInst { dst: *dst, op: *op, value: *value }), _ => None }
-    }
-}
-impl InstructionMeta for WeakRefInst {
-    fn effects(&self) -> EffectMask {
-        match self.op {
-            MirWeakRefOp::New => EffectMask::PURE,
-            MirWeakRefOp::Load => EffectMask::READ,
-        }
-    }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.value] }
-}
-
-// ---- Future ops ----
-#[derive(Debug, Clone, Copy)]
-pub struct FutureNewInst { pub dst: ValueId, pub value: ValueId }
-impl FutureNewInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::FutureNew { dst, value } => Some(FutureNewInst { dst: *dst, value: *value }), _ => None }
-    }
-}
-impl InstructionMeta for FutureNewInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE.add(Effect::Alloc) }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.value] }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct FutureSetInst { pub future: ValueId, pub value: ValueId }
-impl FutureSetInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::FutureSet { future, value } => Some(FutureSetInst { future: *future, value: *value }), _ => None }
-    }
-}
-impl InstructionMeta for FutureSetInst {
-    fn effects(&self) -> EffectMask { EffectMask::WRITE }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.future, self.value] }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct AwaitInst { pub dst: ValueId, pub future: ValueId }
-impl AwaitInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::Await { dst, future } => Some(AwaitInst { dst: *dst, future: *future }), _ => None }
-    }
-}
-impl InstructionMeta for AwaitInst {
-    fn effects(&self) -> EffectMask { EffectMask::READ.add(Effect::Async) }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.future] }
-}
-
-// ---- UnaryOp ----
-#[derive(Debug, Clone, Copy)]
-pub struct UnaryOpInst {
-    pub dst: ValueId,
-    pub operand: ValueId,
-}
-
-impl UnaryOpInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::UnaryOp { dst, operand, .. } => Some(UnaryOpInst { dst: *dst, operand: *operand }),
-            _ => None,
-        }
+inst_meta! {
+    pub struct RefSetInst { reference: ValueId, value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::RefSet { reference, value, .. } => Some(RefSetInst { reference: *reference, value: *value }), _ => None };
+        effects = |_: &Self| EffectMask::WRITE;
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.reference, s.value];
     }
 }
 
-impl InstructionMeta for UnaryOpInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.operand] }
+// ---- Weak ops ---- (macro-generated)
+inst_meta! {
+    pub struct WeakNewInst { dst: ValueId, box_val: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::WeakNew { dst, box_val } => Some(WeakNewInst { dst: *dst, box_val: *box_val }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.box_val];
+    }
 }
-
-// ---- Compare ----
-#[derive(Debug, Clone, Copy)]
-pub struct CompareInst {
-    pub dst: ValueId,
-    pub lhs: ValueId,
-    pub rhs: ValueId,
+inst_meta! {
+    pub struct WeakLoadInst { dst: ValueId, weak_ref: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::WeakLoad { dst, weak_ref } => Some(WeakLoadInst { dst: *dst, weak_ref: *weak_ref }), _ => None };
+        effects = |_: &Self| EffectMask::READ;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.weak_ref];
+    }
 }
-
-impl CompareInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Compare { dst, lhs, rhs, .. } => Some(CompareInst { dst: *dst, lhs: *lhs, rhs: *rhs }),
-            _ => None,
-        }
+inst_meta! {
+    pub struct WeakRefInst { dst: ValueId, op: MirWeakRefOp, value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::WeakRef { dst, op, value } => Some(WeakRefInst { dst: *dst, op: *op, value: *value }), _ => None };
+        effects = |s: &Self| match s.op { MirWeakRefOp::New => EffectMask::PURE, MirWeakRefOp::Load => EffectMask::READ };
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.value];
     }
 }
 
-impl InstructionMeta for CompareInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.lhs, self.rhs] }
+// ---- Future ops ---- (macro-generated)
+inst_meta! {
+    pub struct FutureNewInst { dst: ValueId, value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::FutureNew { dst, value } => Some(FutureNewInst { dst: *dst, value: *value }), _ => None };
+        effects = |_: &Self| EffectMask::PURE.add(Effect::Alloc);
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.value];
+    }
 }
-
-// ---- Load ----
-#[derive(Debug, Clone, Copy)]
-pub struct LoadInst {
-    pub dst: ValueId,
-    pub ptr: ValueId,
+inst_meta! {
+    pub struct FutureSetInst { future: ValueId, value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::FutureSet { future, value } => Some(FutureSetInst { future: *future, value: *value }), _ => None };
+        effects = |_: &Self| EffectMask::WRITE;
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.future, s.value];
+    }
 }
-
-impl LoadInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Load { dst, ptr } => Some(LoadInst { dst: *dst, ptr: *ptr }),
-            _ => None,
-        }
+inst_meta! {
+    pub struct AwaitInst { dst: ValueId, future: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Await { dst, future } => Some(AwaitInst { dst: *dst, future: *future }), _ => None };
+        effects = |_: &Self| EffectMask::READ.add(Effect::Async);
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.future];
     }
 }
 
-impl InstructionMeta for LoadInst {
-    fn effects(&self) -> EffectMask { EffectMask::READ }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.ptr] }
-}
-
-// ---- Cast ----
-#[derive(Debug, Clone)]
-pub struct CastInst {
-    pub dst: ValueId,
-    pub value: ValueId,
-    pub target_type: MirType,
-}
-
-impl CastInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Cast { dst, value, target_type } =>
-                Some(CastInst { dst: *dst, value: *value, target_type: target_type.clone() }),
-            _ => None,
-        }
+// ---- UnaryOp ---- (macro-generated)
+inst_meta! {
+    pub struct UnaryOpInst { dst: ValueId, operand: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::UnaryOp { dst, operand, .. } => Some(UnaryOpInst { dst: *dst, operand: *operand }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.operand];
     }
 }
 
-impl InstructionMeta for CastInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.value] }
-}
-
-// ---- TypeOp ----
-#[derive(Debug, Clone)]
-pub struct TypeOpInst {
-    pub dst: ValueId,
-    pub op: MirTypeOpKind,
-    pub value: ValueId,
-    pub ty: MirType,
-}
-
-impl TypeOpInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::TypeOp { dst, op, value, ty } =>
-                Some(TypeOpInst { dst: *dst, op: *op, value: *value, ty: ty.clone() }),
-            _ => None,
-        }
+// ---- Compare ---- (macro-generated)
+inst_meta! {
+    pub struct CompareInst { dst: ValueId, lhs: ValueId, rhs: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Compare { dst, lhs, rhs, .. } => Some(CompareInst { dst: *dst, lhs: *lhs, rhs: *rhs }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.lhs, s.rhs];
     }
 }
 
-impl InstructionMeta for TypeOpInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.value] }
-}
-
-// ---- ArrayGet ----
-#[derive(Debug, Clone, Copy)]
-pub struct ArrayGetInst {
-    pub dst: ValueId,
-    pub array: ValueId,
-    pub index: ValueId,
-}
-
-impl ArrayGetInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::ArrayGet { dst, array, index } =>
-                Some(ArrayGetInst { dst: *dst, array: *array, index: *index }),
-            _ => None,
-        }
+// ---- Load ---- (macro-generated)
+inst_meta! {
+    pub struct LoadInst { dst: ValueId, ptr: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Load { dst, ptr } => Some(LoadInst { dst: *dst, ptr: *ptr }), _ => None };
+        effects = |_: &Self| EffectMask::READ;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.ptr];
     }
 }
 
-impl InstructionMeta for ArrayGetInst {
-    fn effects(&self) -> EffectMask { EffectMask::READ }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { vec![self.array, self.index] }
-}
-
-// ---- Phi ----
-#[derive(Debug, Clone)]
-pub struct PhiInst { pub dst: ValueId, pub inputs: Vec<(BasicBlockId, ValueId)> }
-
-impl PhiInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Phi { dst, inputs } => Some(PhiInst { dst: *dst, inputs: inputs.clone() }),
-            _ => None,
-        }
+// ---- Cast ---- (macro-generated)
+inst_meta! {
+    pub struct CastInst { dst: ValueId, value: ValueId, target_type: MirType }
+    => {
+        from_mir = |i| match i { MirInstruction::Cast { dst, value, target_type } => Some(CastInst { dst: *dst, value: *value, target_type: target_type.clone() }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.value];
     }
 }
 
-impl InstructionMeta for PhiInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { self.inputs.iter().map(|(_, v)| *v).collect() }
-}
-
-// ---- NewBox ----
-#[derive(Debug, Clone)]
-pub struct NewBoxInst {
-    pub dst: ValueId,
-    pub args: Vec<ValueId>,
-}
-
-impl NewBoxInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::NewBox { dst, args, .. } =>
-                Some(NewBoxInst { dst: *dst, args: args.clone() }),
-            _ => None,
-        }
+// ---- TypeOp ---- (macro-generated)
+inst_meta! {
+    pub struct TypeOpInst { dst: ValueId, op: MirTypeOpKind, value: ValueId, ty: MirType }
+    => {
+        from_mir = |i| match i { MirInstruction::TypeOp { dst, op, value, ty } => Some(TypeOpInst { dst: *dst, op: *op, value: *value, ty: ty.clone() }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.value];
     }
 }
 
-impl InstructionMeta for NewBoxInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE.add(Effect::Alloc) }
-    fn dst(&self) -> Option<ValueId> { Some(self.dst) }
-    fn used(&self) -> Vec<ValueId> { self.args.clone() }
-}
-
-// ---- Store ----
-#[derive(Debug, Clone, Copy)]
-pub struct StoreInst {
-    pub value: ValueId,
-    pub ptr: ValueId,
-}
-
-impl StoreInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Store { value, ptr } => Some(StoreInst { value: *value, ptr: *ptr }),
-            _ => None,
-        }
+// ---- ArrayGet ---- (macro-generated)
+inst_meta! {
+    pub struct ArrayGetInst { dst: ValueId, array: ValueId, index: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::ArrayGet { dst, array, index } => Some(ArrayGetInst { dst: *dst, array: *array, index: *index }), _ => None };
+        effects = |_: &Self| EffectMask::READ;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.array, s.index];
     }
 }
 
-impl InstructionMeta for StoreInst {
-    fn effects(&self) -> EffectMask { EffectMask::WRITE }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.value, self.ptr] }
-}
-
-// ---- ArraySet ----
-#[derive(Debug, Clone, Copy)]
-pub struct ArraySetInst {
-    pub array: ValueId,
-    pub index: ValueId,
-    pub value: ValueId,
-}
-
-impl ArraySetInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::ArraySet { array, index, value } =>
-                Some(ArraySetInst { array: *array, index: *index, value: *value }),
-            _ => None,
-        }
+// ---- Phi ---- (macro-generated)
+inst_meta! {
+    pub struct PhiInst { dst: ValueId, inputs: Vec<(BasicBlockId, ValueId)> }
+    => {
+        from_mir = |i| match i { MirInstruction::Phi { dst, inputs } => Some(PhiInst { dst: *dst, inputs: inputs.clone() }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| s.inputs.iter().map(|(_, v)| *v).collect();
     }
 }
 
-impl InstructionMeta for ArraySetInst {
-    fn effects(&self) -> EffectMask { EffectMask::WRITE }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.array, self.index, self.value] }
-}
-
-// ---- Return ----
-#[derive(Debug, Clone, Copy)]
-pub struct ReturnInst { pub value: Option<ValueId> }
-
-impl ReturnInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Return { value } => Some(ReturnInst { value: *value }),
-            _ => None,
-        }
+// ---- NewBox ---- (macro-generated)
+inst_meta! {
+    pub struct NewBoxInst { dst: ValueId, args: Vec<ValueId> }
+    => {
+        from_mir = |i| match i { MirInstruction::NewBox { dst, args, .. } => Some(NewBoxInst { dst: *dst, args: args.clone() }), _ => None };
+        effects = |_: &Self| EffectMask::PURE.add(Effect::Alloc);
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| s.args.clone();
     }
 }
 
-impl InstructionMeta for ReturnInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { self.value.map(|v| vec![v]).unwrap_or_default() }
-}
-
-// ---- Branch ----
-#[derive(Debug, Clone, Copy)]
-pub struct BranchInst { pub condition: ValueId }
-
-impl BranchInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Branch { condition, .. } => Some(BranchInst { condition: *condition }),
-            _ => None,
-        }
+// ---- Store ---- (macro-generated)
+inst_meta! {
+    pub struct StoreInst { value: ValueId, ptr: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Store { value, ptr } => Some(StoreInst { value: *value, ptr: *ptr }), _ => None };
+        effects = |_: &Self| EffectMask::WRITE;
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.value, s.ptr];
     }
 }
 
-impl InstructionMeta for BranchInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.condition] }
-}
-
-// ---- Jump ----
-#[derive(Debug, Clone, Copy)]
-pub struct JumpInst;
-
-impl JumpInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::Jump { .. } => Some(JumpInst), _ => None }
+// ---- ArraySet ---- (macro-generated)
+inst_meta! {
+    pub struct ArraySetInst { array: ValueId, index: ValueId, value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::ArraySet { array, index, value } => Some(ArraySetInst { array: *array, index: *index, value: *value }), _ => None };
+        effects = |_: &Self| EffectMask::WRITE;
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.array, s.index, s.value];
     }
 }
 
-impl InstructionMeta for JumpInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { Vec::new() }
-}
-
-// ---- Print ----
-#[derive(Debug, Clone, Copy)]
-pub struct PrintInst { pub value: ValueId, pub effects_mask: EffectMask }
-
-impl PrintInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i {
-            MirInstruction::Print { value, effects } => Some(PrintInst { value: *value, effects_mask: *effects }),
-            _ => None,
-        }
+// ---- Return ---- (macro-generated)
+inst_meta! {
+    pub struct ReturnInst { value: Option<ValueId> }
+    => {
+        from_mir = |i| match i { MirInstruction::Return { value } => Some(ReturnInst { value: *value }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |_: &Self| None;
+        used = |s: &Self| s.value.map(|v| vec![v]).unwrap_or_default();
     }
 }
 
-impl InstructionMeta for PrintInst {
-    fn effects(&self) -> EffectMask { self.effects_mask }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.value] }
-}
-
-// ---- Debug ----
-#[derive(Debug, Clone, Copy)]
-pub struct DebugInst { pub value: ValueId }
-
-impl DebugInst {
-    pub fn from_mir(i: &MirInstruction) -> Option<Self> {
-        match i { MirInstruction::Debug { value, .. } => Some(DebugInst { value: *value }), _ => None }
+// ---- Branch ---- (macro-generated)
+inst_meta! {
+    pub struct BranchInst { condition: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Branch { condition, .. } => Some(BranchInst { condition: *condition }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.condition];
     }
 }
 
-impl InstructionMeta for DebugInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE.add(Effect::Debug) }
-    fn dst(&self) -> Option<ValueId> { None }
-    fn used(&self) -> Vec<ValueId> { vec![self.value] }
+// ---- Jump ---- (macro-generated)
+inst_meta! {
+    pub struct JumpInst { }
+    => {
+        from_mir = |i| match i { MirInstruction::Jump { .. } => Some(JumpInst {}), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |_: &Self| None;
+        used = |_: &Self| Vec::new();
+    }
+}
+
+// ---- Print ---- (macro-generated)
+inst_meta! {
+    pub struct PrintInst { value: ValueId, effects_mask: EffectMask }
+    => {
+        from_mir = |i| match i { MirInstruction::Print { value, effects } => Some(PrintInst { value: *value, effects_mask: *effects }), _ => None };
+        effects = |s: &Self| s.effects_mask;
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.value];
+    }
+}
+
+// ---- Debug ---- (macro-generated)
+inst_meta! {
+    pub struct DebugInst { value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Debug { value, .. } => Some(DebugInst { value: *value }), _ => None };
+        effects = |_: &Self| EffectMask::PURE.add(Effect::Debug);
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.value];
+    }
 }
 
 // ---- Call-like (dst/used only; effects fallback in MirInstruction) ----

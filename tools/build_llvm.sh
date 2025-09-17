@@ -84,7 +84,18 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
           fi
         fi
       fi
-      ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OBJ"
+      if [[ "${NYASH_LLVM_EMIT:-obj}" == "exe" ]]; then
+        echo "    emitting EXE via ny-llvmc (crate) ..." >&2
+        # Ensure NyRT is built (for libnyrt.a)
+        if [[ ! -f crates/nyrt/target/release/libnyrt.a && "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" != "1" ]]; then
+          ( cd crates/nyrt && cargo build --release -j 24 >/dev/null )
+        fi
+        NYRT_DIR_HINT="${NYASH_LLVM_NYRT:-crates/nyrt/target/release}"
+        ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OUT" --emit exe --nyrt "$NYRT_DIR_HINT" ${NYASH_LLVM_LIBS:+--libs "$NYASH_LLVM_LIBS"}
+        echo "✅ Done: $OUT"; echo "   (runtime may require nyash.toml and plugins depending on app)"; exit 0
+      else
+        ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OBJ"
+      fi
       ;;
   esac
   if [[ "$COMPILER_MODE" == "harness" ]]; then

@@ -23,13 +23,11 @@ pub extern "C" fn nyash_plugin_invoke3_i64(
     let nargs = argc.max(0) as usize;
     let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(nargs as u16);
     // Encode legacy VM arg at position into provided buffer (avoid capturing &mut buf)
-    let mut encode_from_legacy_into = |dst: &mut Vec<u8>, arg_pos: usize| {
-        nyrt_encode_from_legacy_at(dst, arg_pos)
-    };
+    let mut encode_from_legacy_into =
+        |dst: &mut Vec<u8>, arg_pos: usize| nyrt_encode_from_legacy_at(dst, arg_pos);
     // Encode argument value or fallback to legacy slot (avoid capturing &mut buf)
-    let mut encode_arg_into = |dst: &mut Vec<u8>, val: i64, pos: usize| {
-        nyrt_encode_arg_or_legacy(dst, val, pos)
-    };
+    let mut encode_arg_into =
+        |dst: &mut Vec<u8>, val: i64, pos: usize| nyrt_encode_arg_or_legacy(dst, val, pos);
     if nargs >= 1 {
         encode_arg_into(&mut buf, a1, 1);
     }
@@ -203,9 +201,8 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
             }
         });
     };
-    let mut encode_arg = |val: i64, pos: usize| {
-        crate::encode::nyrt_encode_arg_or_legacy(&mut buf, val, pos)
-    };
+    let mut encode_arg =
+        |val: i64, pos: usize| crate::encode::nyrt_encode_arg_or_legacy(&mut buf, val, pos);
     if nargs >= 1 {
         encode_arg(a1, 1);
     }
@@ -218,16 +215,17 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
         }
     }
     // Invoke via shared helper
-    let (mut tag_ret, mut sz_ret, mut payload_ret): (u8, usize, Vec<u8>) = match invoke_core::plugin_invoke_call(
-        invoke.unwrap(),
-        type_id as u32,
-        method_id as u32,
-        instance_id,
-        &buf,
-    ) {
-        Some((t, s, p)) => (t, s, p),
-        None => return 0.0,
-    };
+    let (mut tag_ret, mut sz_ret, mut payload_ret): (u8, usize, Vec<u8>) =
+        match invoke_core::plugin_invoke_call(
+            invoke.unwrap(),
+            type_id as u32,
+            method_id as u32,
+            instance_id,
+            &buf,
+        ) {
+            Some((t, s, p)) => (t, s, p),
+            None => return 0.0,
+        };
     if let Some((tag, sz, payload)) = Some((tag_ret, sz_ret, payload_ret.as_slice())) {
         if let Some(f) = invoke_core::decode_entry_to_f64(tag, sz, payload) {
             return f;
@@ -425,10 +423,17 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
             &mut out_len,
         )
     };
-    if rc != 0 { return 0; }
+    if rc != 0 {
+        return 0;
+    }
     let out_slice = &out[..out_len];
-    if let Some((tag, sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
-        if let Some(v) = super::invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) { return v; }
+    if let Some((tag, sz, payload)) =
+        nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(out_slice)
+    {
+        if let Some(v) = super::invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap())
+        {
+            return v;
+        }
     }
     0
 }
@@ -667,8 +672,12 @@ pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
     if rc != 0 {
         return 0;
     }
-    if let Some((tag, sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
-        if let Some(v) = invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) { return v; }
+    if let Some((tag, sz, payload)) =
+        nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len])
+    {
+        if let Some(v) = invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) {
+            return v;
+        }
     }
     0
 }
@@ -759,8 +768,12 @@ pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
     if rc != 0 {
         return 0;
     }
-    if let Some((tag, sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
-        if let Some(v) = invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) { return v; }
+    if let Some((tag, sz, payload)) =
+        nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len])
+    {
+        if let Some(v) = invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) {
+            return v;
+        }
     }
     0
 }

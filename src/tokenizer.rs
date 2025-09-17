@@ -359,86 +359,11 @@ impl NyashTokenizer {
                 self.advance();
                 return Ok(Token::new(TokenType::PipeForward, start_line, start_column));
             }
-            Some('<') => {
+            // 単文字トークンはテーブル駆動で処理
+            Some(c) if self.single_char_token(c).is_some() => {
+                let tt = self.single_char_token(c).unwrap();
                 self.advance();
-                Ok(Token::new(TokenType::LESS, start_line, start_column))
-            }
-            Some('>') => {
-                self.advance();
-                Ok(Token::new(TokenType::GREATER, start_line, start_column))
-            }
-            Some('&') => {
-                self.advance();
-                Ok(Token::new(TokenType::BitAnd, start_line, start_column))
-            }
-            Some('|') => {
-                self.advance();
-                Ok(Token::new(TokenType::BitOr, start_line, start_column))
-            }
-            Some('^') => {
-                self.advance();
-                Ok(Token::new(TokenType::BitXor, start_line, start_column))
-            }
-            Some('=') => {
-                self.advance();
-                Ok(Token::new(TokenType::ASSIGN, start_line, start_column))
-            }
-            Some('+') => {
-                self.advance();
-                Ok(Token::new(TokenType::PLUS, start_line, start_column))
-            }
-            Some('-') => {
-                self.advance();
-                Ok(Token::new(TokenType::MINUS, start_line, start_column))
-            }
-            Some('*') => {
-                self.advance();
-                Ok(Token::new(TokenType::MULTIPLY, start_line, start_column))
-            }
-            Some('/') => {
-                self.advance();
-                Ok(Token::new(TokenType::DIVIDE, start_line, start_column))
-            }
-            Some('%') => {
-                self.advance();
-                Ok(Token::new(TokenType::MODULO, start_line, start_column))
-            }
-            Some('.') => {
-                self.advance();
-                Ok(Token::new(TokenType::DOT, start_line, start_column))
-            }
-            Some('(') => {
-                self.advance();
-                Ok(Token::new(TokenType::LPAREN, start_line, start_column))
-            }
-            Some(')') => {
-                self.advance();
-                Ok(Token::new(TokenType::RPAREN, start_line, start_column))
-            }
-            Some('[') => {
-                self.advance();
-                Ok(Token::new(TokenType::LBRACK, start_line, start_column))
-            }
-            Some(']') => {
-                self.advance();
-                Ok(Token::new(TokenType::RBRACK, start_line, start_column))
-            }
-            Some('{') => {
-                self.advance();
-                Ok(Token::new(TokenType::LBRACE, start_line, start_column))
-            }
-            Some('}') => {
-                self.advance();
-                Ok(Token::new(TokenType::RBRACE, start_line, start_column))
-            }
-            Some(',') => {
-                self.advance();
-                Ok(Token::new(TokenType::COMMA, start_line, start_column))
-            }
-            // '?' and ':' are handled earlier (including variants); avoid duplicate arms
-            Some('\n') => {
-                self.advance();
-                Ok(Token::new(TokenType::NEWLINE, start_line, start_column))
+                Ok(Token::new(tt, start_line, start_column))
             }
             Some(c) => Err(TokenizeError::UnexpectedCharacter {
                 char: c,
@@ -446,6 +371,34 @@ impl NyashTokenizer {
                 column: self.column,
             }),
             None => Ok(Token::new(TokenType::EOF, self.line, self.column)),
+        }
+    }
+
+    // 単文字トークンのマップ（最長一致系は呼び出し元で処理済み）
+    fn single_char_token(&self, c: char) -> Option<TokenType> {
+        // '?' は上位で分岐済み、':' も同様。ここでは純粋な1文字を扱う。
+        match c {
+            '<' => Some(TokenType::LESS),
+            '>' => Some(TokenType::GREATER),
+            '&' => Some(TokenType::BitAnd),
+            '|' => Some(TokenType::BitOr),
+            '^' => Some(TokenType::BitXor),
+            '=' => Some(TokenType::ASSIGN),
+            '+' => Some(TokenType::PLUS),
+            '-' => Some(TokenType::MINUS),
+            '*' => Some(TokenType::MULTIPLY),
+            '/' => Some(TokenType::DIVIDE),
+            '%' => Some(TokenType::MODULO),
+            '.' => Some(TokenType::DOT),
+            '(' => Some(TokenType::LPAREN),
+            ')' => Some(TokenType::RPAREN),
+            '[' => Some(TokenType::LBRACK),
+            ']' => Some(TokenType::RBRACK),
+            '{' => Some(TokenType::LBRACE),
+            '}' => Some(TokenType::RBRACE),
+            ',' => Some(TokenType::COMMA),
+            '\n' => Some(TokenType::NEWLINE),
+            _ => None,
         }
     }
 

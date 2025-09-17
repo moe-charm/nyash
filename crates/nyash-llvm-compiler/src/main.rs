@@ -7,13 +7,16 @@ use anyhow::{bail, Context, Result};
 use clap::{ArgAction, Parser};
 
 #[derive(Parser, Debug)]
-#[command(name = "ny-llvmc", about = "Nyash LLVM compiler (llvmlite harness wrapper)")]
+#[command(
+    name = "ny-llvmc",
+    about = "Nyash LLVM compiler (llvmlite harness wrapper)"
+)]
 struct Args {
     /// MIR JSON input file path (use '-' to read from stdin). When omitted with --dummy, a dummy ny_main is emitted.
     #[arg(long = "in", value_name = "FILE", default_value = "-")]
     infile: String,
 
-    /// Output object file (.o)
+    /// Output path. For `--emit obj`, this is an object (.o). For `--emit exe`, this is an executable path.
     #[arg(long, value_name = "FILE")]
     out: PathBuf,
 
@@ -24,6 +27,18 @@ struct Args {
     /// Path to Python harness script (defaults to tools/llvmlite_harness.py in CWD)
     #[arg(long, value_name = "FILE")]
     harness: Option<PathBuf>,
+
+    /// Emit kind: 'obj' (default) or 'exe'.
+    #[arg(long, value_name = "{obj|exe}", default_value = "obj")]
+    emit: String,
+
+    /// Path to directory containing libnyrt.a when emitting an executable. If omitted, searches target/release then crates/nyrt/target/release.
+    #[arg(long, value_name = "DIR")]
+    nyrt: Option<PathBuf>,
+
+    /// Extra linker libs/flags appended when emitting an executable (single string, space-separated).
+    #[arg(long, value_name = "FLAGS")]
+    libs: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -41,10 +56,27 @@ fn main() -> Result<()> {
         PathBuf::from("tools/llvmlite_harness.py")
     };
 
+    // Determine emit kind
+    let emit_exe = matches!(args.emit.as_str(), "exe" | "EXE");
+
     if args.dummy {
-        run_harness_dummy(&harness_path, &args.out)
+        // Dummy ny_main: always go through harness to produce an object then link if requested
+        let obj_path = if emit_exe {
+            // derive a temporary .o path next to output
+            let mut p = args.out.clone();
+            p.set_extension("o");
+            p
+        } else {
+            args.out.clone()
+        };
+        run_harness_dummy(&harness_path, &obj_path)
             .with_context(|| "failed to run harness in dummy mode")?;
-        println!("[ny-llvmc] dummy object written: {}", args.out.display());
+        if emit_exe {
+            link_executable(&obj_path, &args.out, args.nyrt.as_ref(), args.libs.as_deref())?;
+            println!("[ny-llvmc] executable written: {}", args.out.display());
+        } else {
+            println!("[ny-llvmc] dummy object written: {}", obj_path.display());
+        }
         return Ok(());
     }
 
@@ -56,8 +88,8 @@ fn main() -> Result<()> {
             .read_to_string(&mut buf)
             .context("reading MIR JSON from stdin")?;
         // Basic sanity check that it's JSON
-        let _: serde_json::Value = serde_json::from_str(&buf)
-            .context("stdin does not contain valid JSON")?;
+        let _: serde_json::Value =
+            serde_json::from_str(&buf).context("stdin does not contain valid JSON")?;
         let tmp = std::env::temp_dir().join("ny_llvmc_stdin.json");
         let mut f = File::create(&tmp).context("create temp json file")?;
         f.write_all(buf.as_bytes()).context("write temp json")?;
@@ -71,9 +103,27 @@ fn main() -> Result<()> {
         bail!("input JSON not found: {}", input_path.display());
     }
 
-    run_harness_in(&harness_path, &input_path, &args.out)
-        .with_context(|| format!("failed to compile MIR JSON via harness: {}", input_path.display()))?;
-    println!("[ny-llvmc] object written: {}", args.out.display());
+    // Produce object first
+    let obj_path = if emit_exe {
+        let mut p = args.out.clone();
+        p.set_extension("o");
+        p
+    } else {
+        args.out.clone()
+    };
+
+    run_harness_in(&harness_path, &input_path, &obj_path).with_context(|| {
+        format!(
+            "failed to compile MIR JSON via harness: {}",
+            input_path.display()
+        )
+    })?;
+    if emit_exe {
+        link_executable(&obj_path, &args.out, args.nyrt.as_ref(), args.libs.as_deref())?;
+        println!("[ny-llvmc] executable written: {}", args.out.display());
+    } else {
+        println!("[ny-llvmc] object written: {}", obj_path.display());
+    }
 
     // Cleanup temp file if used
     if let Some(p) = temp_path {
@@ -120,3 +170,39 @@ fn ensure_python() -> Result<()> {
     }
 }
 
+fn link_executable(obj: &Path, out_exe: &Path, nyrt_dir_opt: Option<&PathBuf>, extra_libs: Option<&str>) -> Result<()> {
+    // Resolve nyRT static lib
+    let nyrt_dir = if let Some(dir) = nyrt_dir_opt {
+        dir.clone()
+    } else {
+        // try target/release then crates/nyrt/target/release
+        let a = PathBuf::from("target/release");
+        let b = PathBuf::from("crates/nyrt/target/release");
+        if a.join("libnyrt.a").exists() { a } else { b }
+    };
+    let libnyrt = nyrt_dir.join("libnyrt.a");
+    if !libnyrt.exists() {
+        bail!("libnyrt.a not found in {} (use --nyrt to specify)", nyrt_dir.display());
+    }
+
+    // Choose a C linker
+    let linker = ["cc", "clang", "gcc"].into_iter().find(|c| Command::new(c).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)).unwrap_or("cc");
+
+    let mut cmd = Command::new(linker);
+    cmd.arg("-o").arg(out_exe);
+    cmd.arg(obj);
+    // Whole-archive libnyrt to ensure all objects are linked
+    cmd.arg("-Wl,--whole-archive").arg(&libnyrt).arg("-Wl,--no-whole-archive");
+    // Common libs on Linux
+    cmd.arg("-ldl").arg("-lpthread").arg("-lm");
+    if let Some(extras) = extra_libs {
+        for tok in extras.split_whitespace() {
+            cmd.arg(tok);
+        }
+    }
+    let status = cmd.status().context("failed to invoke system linker")?;
+    if !status.success() {
+        bail!("linker exited with status: {:?}", status.code());
+    }
+    Ok(())
+}

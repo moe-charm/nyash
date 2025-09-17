@@ -5,6 +5,55 @@ Summary
 - PyVM is the semantic reference engine; llvmlite is used for AOT and parity checks.
  - GC: user modes defined; controller実装（rc+cycle skeleton + metrics/diagnostics）に移行。LLVM safepoint輸出/NyRT配線と自動挿入（envゲートON）を完了。
 
+Refactoring — Code Quality (High Priority, 2025‑09‑17 夜間)
+- MIR instruction meta de‑boilerplate:
+  - Added `inst_meta!` macro and migrated major instructions (Unary/Compare/Load/Cast/TypeOp/Array{Get,Set}/Return/Branch/Jump/Print/Debug/Barrier*/Ref*/Weak*/Future*/Phi/NewBox).
+  - File `src/mir/instruction_kinds/mod.rs` shrank ~100 lines; behavior unchanged (introspection only).
+- Tests safety pass (unwrap elimination):
+  - `src/tests/typebox_tlv_diff.rs` now uses `with_host` + `EnvGuard` + `inv_{ok,some,void}` helpers.
+  - Removed all `.unwrap()` from the file; failures carry context via `expect` or helper panic messages.
+- Tokenizer duplication cut:
+  - Centralized single‑char token mapping via `single_char_token()`; kept longest‑match logic for multi‑char ops.
+- Box operators de‑duplicate:
+  - Added `impl_static_numeric_ops!` for Integer/Float static ops (Add/Sub/Mul/Div), preserved zero‑division checks.
+  - Introduced `concat_result` and `can_repeat`; simplified Dynamic* impls and `OperatorResolver` via helper functions.
+- Net plugin modularization (unsafe/TLV/state split):
+  - New: `plugins/nyash-net-plugin/src/ffi.rs` (CStr/ptr helpers), `tlv.rs` (encode/decode), `state.rs` (global maps/IDs).
+  - `lib.rs` delegates to these modules; unsafe is centralized, TLV logic unified, globals encapsulated.
+— Python plugin refactor (Phase‑15)
+  - ffi 分離: `plugins/nyash-python-plugin/src/ffi.rs` に CPython ローダ/シンボル/`ensure_cpython()` を移設（挙動等価）。
+  - GILGuard 適用拡大: `eval/import/getattr/str/call/callKw` の全パスを `gil::GILGuard` で保護。手動 Ensure/Release を撤去。
+  - pytypes 導入: `plugins/nyash-python-plugin/src/pytypes.rs`
+    - TLV→Py 変換を集約: `count_tlv_args/tuple_from_tlv/kwargs_from_tlv`（内部 `fill_*` で unsafe を局在化）。
+    - `take_py_error_string` を移設し、lib 側からの呼び出しを置換。
+    - 参照ヘルパ（`incref/decref`）と CString/CStr ヘルパを用意（段階移行用）。
+  - 旧ロジックの削除/整理:
+    - `lib.rs` の `fill_kwargs_from_tlv` を削除（pytypes へ移行済み）。
+    - 旧 `tlv_count_args` と `fill_tuple_from_tlv` は廃止（コメント化→撤去予定）。
+  - ビルド: `cargo check -p nyash-python-plugin` 警告ゼロ、Net プラグインも警告ゼロを維持。
+
+Done (2025‑09‑18)
+- Python plugin refactor 完了
+  - RAII: `PyOwned`/`PyBorrowed` 導入＋ `OBJ_PTRS` 撤去。参照は型で管理（Drop=DecRef）。
+  - autodecode を `pytypes` に移設（`DecodedValue`）。呼び出し側は TLV 書き戻しのみ。
+  - CString/CStr/bytes 変換を `pytypes` に統一。
+  - ログ出力を `NYASH_PY_LOG` でガードし既定静音化。
+  - クリーンアップ: 過剰 `allow(dead_code)` の縮小とコメント整理。
+- ny-llvmc: EXE 出力対応
+  - `--emit exe/obj`、`--nyrt <dir>`、`--libs` を実装。`.o` 生成後に NyRT とリンクして実行可能に。
+  - 代表ケースで EXE 実行（exit code）を確認。
+
+Next (Immediate)
+- tools/build_llvm.sh の crate→EXE 統合
+  - `NYASH_LLVM_COMPILER=crate` かつ `NYASH_LLVM_EMIT=exe` の場合、`ny-llvmc --emit exe` を呼び出し、手動リンクをスキップ。
+  - `NYASH_LLVM_NYRT`/`NYASH_LLVM_LIBS` 環境変数でリンク先/追加フラグを指定可能に（Linux 既定は `-ldl -lpthread -lm`）。
+- Self‑host/EXE スモークの整備
+  - 代表3ケース（const/binop/branch など）の JSON→ny-llvmc→EXE→実行をワンショットで検証するスクリプト（Linux）。
+  - 既存 `exe_first_smoke.sh`/`build_compiler_exe.sh` の補助として crate 直結経路を並行維持。
+- CI 追補
+  - Linux ジョブに crate‑EXE ルートの最小スモークを追加（exit code 判定のみ）。
+
+
 What Changed (recent)
 - MIR13 default enabled
   - `mir_no_phi()` default set to true (can disable via `NYASH_MIR_NO_PHI=0`).
@@ -173,28 +222,31 @@ Plugin ABI v2 updates (2025‑09‑17)
   - `tools/build_llvm.sh` に `NYASH_LLVM_COMPILER=crate|harness` を追加（`crate` は `ny-llvmc`。JSON は `NYASH_LLVM_MIR_JSON` 指定）
   - JSON スキーマ検証を可能なら実行（`tools/validate_mir_json.py`）
 
-Plugin ABI v2 updates (2025‑09‑17 — Python family + Net smoke + JSON emit)
-- v2 migration（Python 系 完了）
-  - `plugins/nyash-python-plugin`: `nyash_typebox_PyRuntimeBox` / `nyash_typebox_PyObjectBox` を追加（resolve/invoke_id 実装。既存 v1 は残存）
-  - `plugins/nyash-python-parser-plugin`: `nyash_typebox_PythonParserBox` を追加（birth/parse/fini）
-  - `plugins/nyash-python-compiler-plugin`: `nyash_typebox_PythonCompilerBox` を追加（birth/compile/fini）
-  - `nyash.toml` に Python 系 3 ライブラリを登録（type_id: 40/41/60/61）
-- Net 往復スモーク（最小）
-  - 追加: `apps/tests/net_roundtrip.nyash`（Server.start→Client.get→Server.accept/respond→Client.readBody）
-  - 追加: `tools/plugin_v2_smoke.sh` に Net 機能スモークを条件付きで実行（CI常時ジョブに内包）
-- nyash → MIR JSON emit フラグ
-  - CLI `--emit-mir-json <path>` を追加（`src/cli.rs`）。`runner.execute_mir_module` でファイル出力→即終了を実装。
-  - これにより `ny-llvmc` へ JSON を直結しやすくなった（次の CI 経路で使用予定）
+Plugin ABI v2 updates — 完了報告（2025‑09‑17）
+- v2 migration（全 first‑party 完了）
+  - Python 系: `PyRuntimeBox`/`PyObjectBox`/`PythonParserBox`/`PythonCompilerBox` を v2 化
+  - 既存 first‑party（File/Path/Math/Time/Regex/Net/String/Array/Map/Integer/Console）を v2 化
+  - Encoding/TOML も v2 追加（`EncodingBox`/`TOMLBox`）し `nyash.toml` に登録
+- Legacy 撤去
+  - 旧ローダ（`src/runtime/plugin_loader_legacy.rs`）と旧C‑ABI FileBox を削除
+  - 全プラグインの v1 エクスポート（abi/init/invoke）を物理削除（v2専用化）
+- スモーク/CI
+  - v2 ロード＋機能（Regex/Response/Net往復）スモークを常時
+  - `ny-llvmc`（crate）で .o 生成するCIジョブを追加（Linux）
+- nyash → MIR JSON emit
+  - CLI `--emit-mir-json <path>` を追加し、`ny-llvmc` 直結導線を整備
 
-Plan after restart（次の計画）
-- Python 系プラグインの v2 化（parser/compiler/python-plugin）
-- Docs 追記（Net/Regex のメソッド表、型/戻りTLVの簡易表）
-- スモーク強化
-  - Net: `ServerBox.start -> Client.get -> Request.respond -> Response.readBody` の往復最小ケースを追加
-  - 主要 v2 Box の軽機能（String/Array/Map/Regex/Path/Math/Time）を 1 ジョブで走らせる
-- LLVM 共通化
-  - `nyash` からの JSON emit コマンド/フラグ導入（`--emit-mir-json <path>` など）→ `ny-llvmc` 直結
-  - CI に `ny-llvmc` 実 JSON 経路を追加（Linux 常時）
-- NyRT 整理（軽）
-  - TLV/エラー定数を `include/nyash_abi.h` と整合させる（ヘッダ経由参照）
-  - （必要時）`nyrt_last_error()` の追加検討
+Next — Self‑Hosting/EXE（crate 直結）
+- ny-llvmc 機能拡張（.exe 出力）
+  - `ny-llvmc --emit exe --out <path>` を実装（`.o` + NyRT リンク）。`--nyrt <dir>`/`--libs <extra>` を受理
+  - 既存 `tools/build_llvm.sh` の crate 経路と統合（env: `NYASH_LLVM_COMPILER=crate`）
+  - Linux でのリンクフラグ最小化（`-Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -ldl -lpthread -lm`）
+- CI 拡張
+  - `.o` 生成に加え、`.exe` 生成＋実行（exit code 検証）ジョブを追加（Linux）
+  - 代表3ケース（const/binop/branch）で EXE を起動し `0` 戻りを確認
+- Self‑host pipeline 寄り
+  - nyash CLI `--emit-mir-json` を EXE-first パスにも活用（JSON → ny-llvmc → exe → 実行）
+  - 将来: PyVM/llvmlite パリティベンチ（小規模）→ EXE でも同値を継続確認
+- Docs/Guides 更新
+  - `docs/LLVM_HARNESS.md` に ny-llvmc の exe 出力手順を追記
+  - `docs/guides/selfhost-pilot.md` に crate 直結（.o/.exe）手順とトラブルシュート

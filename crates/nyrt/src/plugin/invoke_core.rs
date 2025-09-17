@@ -8,8 +8,7 @@ use nyash_rust::runtime::plugin_loader_v2::PluginBoxV2;
 pub struct Receiver {
     pub instance_id: u32,
     pub real_type_id: u32,
-    pub invoke:
-        unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+    pub invoke: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
 }
 
 /// Resolve receiver from a0: prefer handle registry; fallback to legacy VM args when allowed.
@@ -27,9 +26,7 @@ pub fn resolve_receiver_for_a0(a0: i64) -> Option<Receiver> {
         }
     }
     // 2) Legacy VM args (index by a0) unless handle-only is enforced
-    if a0 >= 0
-        && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1")
-    {
+    if a0 >= 0 && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
         nyash_rust::jit::rt::with_legacy_vm_args(|args| {
             let idx = a0 as usize;
             if let Some(nyash_rust::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
@@ -104,7 +101,15 @@ pub fn decode_entry_to_i64(
     tag: u8,
     sz: usize,
     payload: &[u8],
-    fallback_invoke: unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
+    fallback_invoke: unsafe extern "C" fn(
+        u32,
+        u32,
+        u32,
+        *const u8,
+        usize,
+        *mut u8,
+        *mut usize,
+    ) -> i32,
 ) -> Option<i64> {
     match tag {
         2 => nyash_rust::runtime::plugin_ffi_common::decode::i32(payload).map(|v| v as i64),
@@ -154,8 +159,10 @@ pub fn decode_entry_to_i64(
             }
             None
         }
-        1 => nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
-            .map(|b| if b { 1 } else { 0 }),
+        1 => {
+            nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
+                .map(|b| if b { 1 } else { 0 })
+        }
         5 => {
             if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref() == Some("1") && sz == 8 {
                 let mut b = [0u8; 8];
@@ -192,8 +199,13 @@ pub fn decode_entry_to_f64(tag: u8, sz: usize, payload: &[u8]) -> Option<f64> {
             }
             None
         }
-        1 => nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
-            .map(|b| if b { 1.0 } else { 0.0 }),
+        1 => nyash_rust::runtime::plugin_ffi_common::decode::bool(payload).map(|b| {
+            if b {
+                1.0
+            } else {
+                0.0
+            }
+        }),
         _ => None,
     }
 }

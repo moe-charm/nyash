@@ -4,11 +4,11 @@
 
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, VecDeque};
+use std::io::Read;
 use std::io::Write as IoWrite;
-use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
 use std::time::Duration;
@@ -43,21 +43,21 @@ macro_rules! netlog {
 // Error codes
 const OK: i32 = 0;
 const E_SHORT: i32 = -1;
-const E_INV_TYPE: i32 = -2;
+const _E_INV_TYPE: i32 = -2;
 const E_INV_METHOD: i32 = -3;
 const E_INV_ARGS: i32 = -4;
 const E_ERR: i32 = -5;
 const E_INV_HANDLE: i32 = -8;
 
 // Type IDs
-const T_SERVER: u32 = 20;
+const _T_SERVER: u32 = 20;
 const T_REQUEST: u32 = 21;
 const T_RESPONSE: u32 = 22;
-const T_CLIENT: u32 = 23;
+const _T_CLIENT: u32 = 23;
 // Socket
-const T_SOCK_SERVER: u32 = 30;
+const _T_SOCK_SERVER: u32 = 30;
 const T_SOCK_CONN: u32 = 31;
-const T_SOCK_CLIENT: u32 = 32;
+const _T_SOCK_CLIENT: u32 = 32;
 
 // Methods
 const M_BIRTH: u32 = 0;
@@ -103,23 +103,7 @@ const M_CONN_CLOSE: u32 = 3; // -> void
 const M_CONN_RECV_TIMEOUT: u32 = 4; // ms -> bytes (empty if timeout)
 
 // Global State
-static SERVER_INSTANCES: Lazy<Mutex<HashMap<u32, ServerState>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static SERVER_START_SEQ: AtomicU32 = AtomicU32::new(1);
-static ACTIVE_SERVER_ID: Lazy<Mutex<Option<u32>>> = Lazy::new(|| Mutex::new(None));
-static LAST_ACCEPTED_REQ: Lazy<Mutex<Option<u32>>> = Lazy::new(|| Mutex::new(None));
-static REQUESTS: Lazy<Mutex<HashMap<u32, RequestState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static RESPONSES: Lazy<Mutex<HashMap<u32, ResponseState>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static CLIENTS: Lazy<Mutex<HashMap<u32, ClientState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-
-static SERVER_ID: AtomicU32 = AtomicU32::new(1);
-static REQUEST_ID: AtomicU32 = AtomicU32::new(1);
-static RESPONSE_ID: AtomicU32 = AtomicU32::new(1);
-static CLIENT_ID: AtomicU32 = AtomicU32::new(1);
-static SOCK_SERVER_ID: AtomicU32 = AtomicU32::new(1);
-static SOCK_CONN_ID: AtomicU32 = AtomicU32::new(1);
-static SOCK_CLIENT_ID: AtomicU32 = AtomicU32::new(1);
+// moved to state.rs
 
 struct ServerState {
     running: Arc<AtomicBool>,
@@ -201,9 +185,9 @@ pub extern "C" fn nyash_plugin_invoke(
 // ===== TypeBox ABI v2 (per-Box resolve/invoke_id) =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {
-    pub abi_tag: u32,        // 'TYBX'
-    pub version: u16,        // 1
-    pub struct_size: u16,    // sizeof(NyashTypeBoxFfi)
+    pub abi_tag: u32,     // 'TYBX'
+    pub version: u16,     // 1
+    pub struct_size: u16, // sizeof(NyashTypeBoxFfi)
     pub name: *const std::os::raw::c_char,
     pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
     pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
@@ -211,10 +195,12 @@ pub struct NyashTypeBoxFfi {
 }
 unsafe impl Sync for NyashTypeBoxFfi {}
 
-use std::ffi::CStr;
+mod ffi;
 extern "C" fn responsebox_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
-    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    if name.is_null() {
+        return 0;
+    }
+    let s = ffi::cstr_to_string(name);
     match s.as_ref() {
         "setStatus" => M_RESP_SET_STATUS,
         "setHeader" => M_RESP_SET_HEADER,
@@ -228,8 +214,10 @@ extern "C" fn responsebox_resolve(name: *const std::os::raw::c_char) -> u32 {
     }
 }
 extern "C" fn clientbox_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
-    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    if name.is_null() {
+        return 0;
+    }
+    let s = ffi::cstr_to_string(name);
     match s.as_ref() {
         "get" => M_CLIENT_GET,
         "post" => M_CLIENT_POST,
@@ -285,8 +273,10 @@ pub static nyash_typebox_ClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 
 // --- ServerBox ---
 extern "C" fn serverbox_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
-    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    if name.is_null() {
+        return 0;
+    }
+    let s = ffi::cstr_to_string(name);
     match s.as_ref() {
         "start" => M_SERVER_START,
         "stop" => M_SERVER_STOP,
@@ -319,8 +309,10 @@ pub static nyash_typebox_ServerBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 
 // --- SockServerBox ---
 extern "C" fn sockserver_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
-    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    if name.is_null() {
+        return 0;
+    }
+    let s = ffi::cstr_to_string(name);
     match s.as_ref() {
         "start" => M_SRV_START,
         "stop" => M_SRV_STOP,
@@ -354,8 +346,10 @@ pub static nyash_typebox_SockServerBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 
 // --- SockClientBox ---
 extern "C" fn sockclient_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
-    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    if name.is_null() {
+        return 0;
+    }
+    let s = ffi::cstr_to_string(name);
     match s.as_ref() {
         "connect" => M_SC_CONNECT,
         "birth" => M_SC_BIRTH,
@@ -386,8 +380,10 @@ pub static nyash_typebox_SockClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 
 // --- SockConnBox ---
 extern "C" fn sockconn_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
-    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    if name.is_null() {
+        return 0;
+    }
+    let s = ffi::cstr_to_string(name);
     match s.as_ref() {
         "send" => M_CONN_SEND,
         "recv" => M_CONN_RECV,
@@ -419,8 +415,10 @@ pub static nyash_typebox_SockConnBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     capabilities: 0,
 };
 extern "C" fn requestbox_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
-    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    if name.is_null() {
+        return 0;
+    }
+    let s = ffi::cstr_to_string(name);
     match s.as_ref() {
         "path" => M_REQ_PATH,
         "readBody" => M_REQ_READ_BODY,
@@ -462,8 +460,8 @@ unsafe fn server_invoke(
 ) -> i32 {
     match m {
         M_BIRTH => {
-            let id = SERVER_ID.fetch_add(1, Ordering::Relaxed);
-            SERVER_INSTANCES.lock().unwrap().insert(
+            let id = state::next_server_id();
+            state::SERVER_INSTANCES.lock().unwrap().insert(
                 id,
                 ServerState {
                     running: Arc::new(AtomicBool::new(false)),
@@ -473,14 +471,14 @@ unsafe fn server_invoke(
                     start_seq: 0,
                 },
             );
-            write_u32(id, res, res_len)
+            tlv::write_u32(id, res, res_len)
         }
         M_SERVER_START => {
             // args: TLV string/int (port)
-            let port = tlv_parse_i32(slice(args, args_len)).unwrap_or(0);
-            if let Some(s) = SERVER_INSTANCES.lock().unwrap().get_mut(&id) {
+            let port = tlv::tlv_parse_i32(slice(args, args_len)).unwrap_or(0);
+            if let Some(s) = state::SERVER_INSTANCES.lock().unwrap().get_mut(&id) {
                 s.port = port;
-                s.start_seq = SERVER_START_SEQ.fetch_add(1, Ordering::Relaxed);
+                s.start_seq = state::next_server_start_seq();
                 let running = s.running.clone();
                 let pending = s.pending.clone();
                 running.store(true, Ordering::SeqCst);
@@ -494,11 +492,10 @@ unsafe fn server_invoke(
                     Err(e) => {
                         netlog!("http:bind error {} err={:?}", addr, e);
                         running.store(false, Ordering::SeqCst);
-                        return write_tlv_void(res, res_len);
+                        return tlv::write_tlv_void(res, res_len);
                     }
                 };
                 // Spawn HTTP listener thread (real TCP)
-                let server_id_copy = id;
                 let handle = std::thread::spawn(move || {
                     let _ = listener.set_nonblocking(true);
                     loop {
@@ -513,16 +510,16 @@ unsafe fn server_invoke(
                                     read_http_request(&mut stream)
                                 {
                                     // Store stream for later respond()
-                                    let conn_id = SOCK_CONN_ID.fetch_add(1, Ordering::Relaxed);
-                                    SOCK_CONNS.lock().unwrap().insert(
+                                    let conn_id = state::next_sock_conn_id();
+                                    state::SOCK_CONNS.lock().unwrap().insert(
                                         conn_id,
                                         SockConnState {
                                             stream: Mutex::new(stream),
                                         },
                                     );
 
-                                    let req_id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-                                    REQUESTS.lock().unwrap().insert(
+                                    let req_id = state::next_request_id();
+                                    state::REQUESTS.lock().unwrap().insert(
                                         req_id,
                                         RequestState {
                                             path,
@@ -549,36 +546,36 @@ unsafe fn server_invoke(
                 *s.handle.lock().unwrap() = Some(handle);
             }
             // mark active server
-            *ACTIVE_SERVER_ID.lock().unwrap() = Some(id);
-            write_tlv_void(res, res_len)
+            *state::ACTIVE_SERVER_ID.lock().unwrap() = Some(id);
+            tlv::write_tlv_void(res, res_len)
         }
         M_SERVER_STOP => {
-            if let Some(s) = SERVER_INSTANCES.lock().unwrap().get_mut(&id) {
+            if let Some(s) = state::SERVER_INSTANCES.lock().unwrap().get_mut(&id) {
                 s.running.store(false, Ordering::SeqCst);
                 if let Some(h) = s.handle.lock().unwrap().take() {
                     let _ = h.join();
                 }
             }
             // clear active if this server was active
-            let mut active = ACTIVE_SERVER_ID.lock().unwrap();
+            let mut active = state::ACTIVE_SERVER_ID.lock().unwrap();
             if active.map(|v| v == id).unwrap_or(false) {
                 *active = None;
             }
-            write_tlv_void(res, res_len)
+            tlv::write_tlv_void(res, res_len)
         }
         M_SERVER_ACCEPT => {
             // wait up to ~5000ms for a request to arrive
             for _ in 0..1000 {
                 // Prefer TCP-backed requests (server_conn_id=Some) over stub ones
                 if let Some(req_id) = {
-                    let mut map = SERVER_INSTANCES.lock().unwrap();
+                    let mut map = state::SERVER_INSTANCES.lock().unwrap();
                     if let Some(s) = map.get_mut(&id) {
                         let mut q = s.pending.lock().unwrap();
                         // Find first index with TCP backing
                         let mut chosen: Option<usize> = None;
                         for i in 0..q.len() {
                             if let Some(rid) = q.get(i).copied() {
-                                if let Some(rq) = REQUESTS.lock().unwrap().get(&rid) {
+                                if let Some(rq) = state::REQUESTS.lock().unwrap().get(&rid) {
                                     if rq.server_conn_id.is_some() {
                                         chosen = Some(i);
                                         break;
@@ -596,12 +593,12 @@ unsafe fn server_invoke(
                     }
                 } {
                     netlog!("server.accept: return req_id={} srv_id={}", req_id, id);
-                    *LAST_ACCEPTED_REQ.lock().unwrap() = Some(req_id);
-                    return write_tlv_handle(T_REQUEST, req_id, res, res_len);
+                    *state::LAST_ACCEPTED_REQ.lock().unwrap() = Some(req_id);
+                    return tlv::write_tlv_handle(T_REQUEST, req_id, res, res_len);
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }
-            write_tlv_void(res, res_len)
+            tlv::write_tlv_void(res, res_len)
         }
         _ => E_INV_METHOD,
     }
@@ -617,8 +614,8 @@ unsafe fn request_invoke(
 ) -> i32 {
     match m {
         M_BIRTH => {
-            let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-            REQUESTS.lock().unwrap().insert(
+            let id = state::next_request_id();
+            state::REQUESTS.lock().unwrap().insert(
                 id,
                 RequestState {
                     path: String::new(),
@@ -628,25 +625,25 @@ unsafe fn request_invoke(
                     responded: false,
                 },
             );
-            write_u32(id, res, res_len)
+            tlv::write_u32(id, res, res_len)
         }
         M_REQ_PATH => {
-            if let Some(rq) = REQUESTS.lock().unwrap().get(&id) {
-                write_tlv_string(&rq.path, res, res_len)
+            if let Some(rq) = state::REQUESTS.lock().unwrap().get(&id) {
+                tlv::write_tlv_string(&rq.path, res, res_len)
             } else {
                 E_INV_HANDLE
             }
         }
         M_REQ_READ_BODY => {
-            if let Some(rq) = REQUESTS.lock().unwrap().get(&id) {
-                write_tlv_bytes(&rq.body, res, res_len)
+            if let Some(rq) = state::REQUESTS.lock().unwrap().get(&id) {
+                tlv::write_tlv_bytes(&rq.body, res, res_len)
             } else {
                 E_INV_HANDLE
             }
         }
         M_REQ_RESPOND => {
             // args: TLV Handle(Response)
-            let (t, provided_resp_id) = tlv_parse_handle(slice(_args, _args_len))
+            let (t, provided_resp_id) = tlv::tlv_parse_handle(slice(_args, _args_len))
                 .map_err(|_| ())
                 .or(Err(()))
                 .unwrap_or((0, 0));
@@ -654,7 +651,7 @@ unsafe fn request_invoke(
                 return E_INV_ARGS;
             }
             // Acquire request
-            let mut rq_map = REQUESTS.lock().unwrap();
+            let mut rq_map = state::REQUESTS.lock().unwrap();
             if let Some(rq) = rq_map.get_mut(&id) {
                 netlog!(
                     "Request.respond: req_id={} provided_resp_id={} server_conn_id={:?} response_id_hint={:?}",
@@ -665,7 +662,7 @@ unsafe fn request_invoke(
                     drop(rq_map);
                     // Read response content from provided response handle
                     let (status, headers, body) = {
-                        let resp_map = RESPONSES.lock().unwrap();
+                        let resp_map = state::RESPONSES.lock().unwrap();
                         if let Some(src) = resp_map.get(&provided_resp_id) {
                             netlog!(
                                 "Request.respond: Reading response id={}, status={}, body_len={}",
@@ -714,7 +711,7 @@ unsafe fn request_invoke(
                         "Request.respond: Sending HTTP response, buf_len={}",
                         buf.len()
                     );
-                    if let Some(conn) = SOCK_CONNS.lock().unwrap().remove(&conn_id) {
+                    if let Some(conn) = state::SOCK_CONNS.lock().unwrap().remove(&conn_id) {
                         if let Ok(mut s) = conn.stream.lock() {
                             let _ = s.write_all(&buf);
                             let _ = s.flush();
@@ -728,10 +725,10 @@ unsafe fn request_invoke(
                     }
                     // Also mirror to paired client Response handle to avoid race on immediate read
                     if let Some(target_id) = {
-                        let rq_map2 = REQUESTS.lock().unwrap();
+                        let rq_map2 = state::REQUESTS.lock().unwrap();
                         rq_map2.get(&id).and_then(|rq2| rq2.response_id)
                     } {
-                        let mut resp_map = RESPONSES.lock().unwrap();
+                        let mut resp_map = state::RESPONSES.lock().unwrap();
                         let dst = resp_map.entry(target_id).or_insert(ResponseState {
                             status: 200,
                             headers: HashMap::new(),
@@ -746,19 +743,19 @@ unsafe fn request_invoke(
                     }
                     // mark responded
                     {
-                        let mut rq_map3 = REQUESTS.lock().unwrap();
+                        let mut rq_map3 = state::REQUESTS.lock().unwrap();
                         if let Some(rq3) = rq_map3.get_mut(&id) {
                             rq3.responded = true;
                         }
                     }
-                    return write_tlv_void(res, res_len);
+                    return tlv::write_tlv_void(res, res_len);
                 }
 
                 // Not backed by a socket: attempt reroute to last accepted or latest TCP-backed unresponded request
                 drop(rq_map);
                 let candidate_req = {
-                    if let Some(last_id) = *LAST_ACCEPTED_REQ.lock().unwrap() {
-                        if let Some(r) = REQUESTS.lock().unwrap().get(&last_id) {
+                    if let Some(last_id) = *state::LAST_ACCEPTED_REQ.lock().unwrap() {
+                        if let Some(r) = state::REQUESTS.lock().unwrap().get(&last_id) {
                             if r.server_conn_id.is_some() && !r.responded {
                                 Some(last_id)
                             } else {
@@ -772,7 +769,7 @@ unsafe fn request_invoke(
                     }
                 }
                 .or_else(|| {
-                    REQUESTS
+                    state::REQUESTS
                         .lock()
                         .unwrap()
                         .iter()
@@ -787,12 +784,12 @@ unsafe fn request_invoke(
                 });
                 if let Some(target_req_id) = candidate_req {
                     let (conn_id_alt, resp_hint_alt) = {
-                        let map = REQUESTS.lock().unwrap();
+                        let map = state::REQUESTS.lock().unwrap();
                         let r = map.get(&target_req_id).unwrap();
                         (r.server_conn_id.unwrap(), r.response_id)
                     };
                     let (status, headers, body) = {
-                        let resp_map = RESPONSES.lock().unwrap();
+                        let resp_map = state::RESPONSES.lock().unwrap();
                         if let Some(src) = resp_map.get(&provided_resp_id) {
                             (src.status, src.headers.clone(), src.body.clone())
                         } else {
@@ -829,14 +826,14 @@ unsafe fn request_invoke(
                         target_req_id,
                         conn_id_alt
                     );
-                    if let Some(conn) = SOCK_CONNS.lock().unwrap().remove(&conn_id_alt) {
+                    if let Some(conn) = state::SOCK_CONNS.lock().unwrap().remove(&conn_id_alt) {
                         if let Ok(mut s) = conn.stream.lock() {
                             let _ = s.write_all(&buf);
                             let _ = s.flush();
                         }
                     }
                     if let Some(target_id) = resp_hint_alt {
-                        let mut resp_map = RESPONSES.lock().unwrap();
+                        let mut resp_map = state::RESPONSES.lock().unwrap();
                         let dst = resp_map.entry(target_id).or_insert(ResponseState {
                             status: 200,
                             headers: HashMap::new(),
@@ -849,10 +846,10 @@ unsafe fn request_invoke(
                         dst.body = body.clone();
                         netlog!("Request.respond: mirrored client handle id={} body_len={} headers={} status={}", target_id, dst.body.len(), dst.headers.len(), dst.status);
                     }
-                    if let Some(rq4) = REQUESTS.lock().unwrap().get_mut(&target_req_id) {
+                    if let Some(rq4) = state::REQUESTS.lock().unwrap().get_mut(&target_req_id) {
                         rq4.responded = true;
                     }
-                    return write_tlv_void(res, res_len);
+                    return tlv::write_tlv_void(res, res_len);
                 }
                 netlog!("Request.respond: no suitable TCP-backed request found for reroute; invalid handle");
                 return E_INV_HANDLE;
@@ -873,8 +870,8 @@ unsafe fn response_invoke(
 ) -> i32 {
     match m {
         M_BIRTH => {
-            let id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
-            RESPONSES.lock().unwrap().insert(
+            let id = state::next_response_id();
+            state::RESPONSES.lock().unwrap().insert(
                 id,
                 ResponseState {
                     status: 200,
@@ -885,40 +882,40 @@ unsafe fn response_invoke(
                 },
             );
             netlog!("Response.birth: new id={}", id);
-            write_u32(id, res, res_len)
+            tlv::write_u32(id, res, res_len)
         }
         M_RESP_SET_STATUS => {
-            let code = tlv_parse_i32(slice(args, args_len)).unwrap_or(200);
-            if let Some(rp) = RESPONSES.lock().unwrap().get_mut(&id) {
+            let code = tlv::tlv_parse_i32(slice(args, args_len)).unwrap_or(200);
+            if let Some(rp) = state::RESPONSES.lock().unwrap().get_mut(&id) {
                 rp.status = code;
             }
-            write_tlv_void(res, res_len)
+            tlv::write_tlv_void(res, res_len)
         }
         M_RESP_SET_HEADER => {
-            if let Ok((name, value)) = tlv_parse_two_strings(slice(args, args_len)) {
-                if let Some(rp) = RESPONSES.lock().unwrap().get_mut(&id) {
+            if let Ok((name, value)) = tlv::tlv_parse_two_strings(slice(args, args_len)) {
+                if let Some(rp) = state::RESPONSES.lock().unwrap().get_mut(&id) {
                     rp.headers.insert(name, value);
                 }
-                return write_tlv_void(res, res_len);
+                return tlv::write_tlv_void(res, res_len);
             }
             E_INV_ARGS
         }
         M_RESP_WRITE => {
             // Accept String or Bytes
-            let bytes = tlv_parse_bytes(slice(args, args_len)).unwrap_or_default();
+            let bytes = tlv::tlv_parse_bytes(slice(args, args_len)).unwrap_or_default();
             netlog!("HttpResponse.write: id={} bytes_len={}", id, bytes.len());
-            if let Some(rp) = RESPONSES.lock().unwrap().get_mut(&id) {
+            if let Some(rp) = state::RESPONSES.lock().unwrap().get_mut(&id) {
                 rp.body.extend_from_slice(&bytes);
                 netlog!("HttpResponse.write: body now has {} bytes", rp.body.len());
             }
-            write_tlv_void(res, res_len)
+            tlv::write_tlv_void(res, res_len)
         }
         M_RESP_READ_BODY => {
             netlog!("HttpResponse.readBody: enter id={}", id);
             // If bound to a client connection, lazily read and parse (with short retries)
             for _ in 0..50 {
                 let need_parse = {
-                    if let Some(rp) = RESPONSES.lock().unwrap().get(&id) {
+                    if let Some(rp) = state::RESPONSES.lock().unwrap().get(&id) {
                         rp.client_conn_id
                     } else {
                         return E_INV_HANDLE;
@@ -931,13 +928,13 @@ unsafe fn response_invoke(
                     break;
                 }
             }
-            if let Some(rp) = RESPONSES.lock().unwrap().get(&id) {
+            if let Some(rp) = state::RESPONSES.lock().unwrap().get(&id) {
                 netlog!(
                     "HttpResponse.readBody: id={} body_len={}",
                     id,
                     rp.body.len()
                 );
-                write_tlv_bytes(&rp.body, res, res_len)
+                tlv::write_tlv_bytes(&rp.body, res, res_len)
             } else {
                 E_INV_HANDLE
             }
@@ -945,7 +942,7 @@ unsafe fn response_invoke(
         M_RESP_GET_STATUS => {
             for _ in 0..50 {
                 let need_parse = {
-                    if let Some(rp) = RESPONSES.lock().unwrap().get(&id) {
+                    if let Some(rp) = state::RESPONSES.lock().unwrap().get(&id) {
                         rp.client_conn_id
                     } else {
                         return E_INV_HANDLE;
@@ -958,17 +955,17 @@ unsafe fn response_invoke(
                     break;
                 }
             }
-            if let Some(rp) = RESPONSES.lock().unwrap().get(&id) {
-                write_tlv_i32(rp.status, res, res_len)
+            if let Some(rp) = state::RESPONSES.lock().unwrap().get(&id) {
+                tlv::write_tlv_i32(rp.status, res, res_len)
             } else {
                 E_INV_HANDLE
             }
         }
         M_RESP_GET_HEADER => {
-            if let Ok(name) = tlv_parse_string(slice(args, args_len)) {
+            if let Ok(name) = tlv::tlv_parse_string(slice(args, args_len)) {
                 for _ in 0..50 {
                     let need_parse = {
-                        if let Some(rp) = RESPONSES.lock().unwrap().get(&id) {
+                        if let Some(rp) = state::RESPONSES.lock().unwrap().get(&id) {
                             rp.client_conn_id
                         } else {
                             return E_INV_HANDLE;
@@ -981,9 +978,9 @@ unsafe fn response_invoke(
                         break;
                     }
                 }
-                if let Some(rp) = RESPONSES.lock().unwrap().get(&id) {
+                if let Some(rp) = state::RESPONSES.lock().unwrap().get(&id) {
                     let v = rp.headers.get(&name).cloned().unwrap_or_default();
-                    return write_tlv_string(&v, res, res_len);
+                    return tlv::write_tlv_string(&v, res, res_len);
                 } else {
                     return E_INV_HANDLE;
                 }
@@ -996,7 +993,7 @@ unsafe fn response_invoke(
 
 unsafe fn client_invoke(
     m: u32,
-    id: u32,
+    _id: u32,
     args: *const u8,
     args_len: usize,
     res: *mut u8,
@@ -1004,40 +1001,33 @@ unsafe fn client_invoke(
 ) -> i32 {
     match m {
         M_BIRTH => {
-            let id = CLIENT_ID.fetch_add(1, Ordering::Relaxed);
-            CLIENTS.lock().unwrap().insert(id, ClientState);
-            write_u32(id, res, res_len)
+            let id = state::next_client_id();
+            state::CLIENTS.lock().unwrap().insert(id, ClientState);
+            tlv::write_u32(id, res, res_len)
         }
         M_CLIENT_GET => {
             // args: TLV String(url)
-            let url = tlv_parse_string(slice(args, args_len)).unwrap_or_default();
+            let url = tlv::tlv_parse_string(slice(args, args_len)).unwrap_or_default();
             let port = parse_port(&url).unwrap_or(80);
             let host = parse_host(&url).unwrap_or_else(|| "127.0.0.1".to_string());
             let path = parse_path(&url);
             // Create client response handle first, so we can include it in header
-            let resp_id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
+            let resp_id = state::next_response_id();
             let (_h, _p, req_bytes) = build_http_request("GET", &url, None, resp_id);
             // Try TCP connect (best effort)
             let mut tcp_ok = false;
             if let Ok(mut stream) = TcpStream::connect(format!("{}:{}", host, port)) {
                 let _ = stream.write_all(&req_bytes);
                 let _ = stream.flush();
-                let conn_id = SOCK_CONN_ID.fetch_add(1, Ordering::Relaxed);
-                SOCK_CONNS.lock().unwrap().insert(
+                let conn_id = state::next_sock_conn_id();
+                state::SOCK_CONNS.lock().unwrap().insert(
                     conn_id,
                     SockConnState {
                         stream: Mutex::new(stream),
                     },
                 );
-                // Map to server_id by port if available
-                let server_id_for_port = {
-                    let servers = SERVER_INSTANCES.lock().unwrap();
-                    servers
-                        .iter()
-                        .find(|(_, s)| s.port == port)
-                        .map(|(sid, _)| *sid)
-                };
-                RESPONSES.lock().unwrap().insert(
+                // Map to server_id by port if available (not used; reserved)
+                state::RESPONSES.lock().unwrap().insert(
                     resp_id,
                     ResponseState {
                         status: 0,
@@ -1055,14 +1045,8 @@ unsafe fn client_invoke(
                     conn_id
                 );
             } else {
-                let server_id_for_port = {
-                    let servers = SERVER_INSTANCES.lock().unwrap();
-                    servers
-                        .iter()
-                        .find(|(_, s)| s.port == port)
-                        .map(|(sid, _)| *sid)
-                };
-                RESPONSES.lock().unwrap().insert(
+                // Map to server_id by port if available (not used; reserved)
+                state::RESPONSES.lock().unwrap().insert(
                     resp_id,
                     ResponseState {
                         status: 0,
@@ -1076,7 +1060,7 @@ unsafe fn client_invoke(
             }
             // No stub enqueue in TCP-only design
             if tcp_ok {
-                write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
+                tlv::write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
             } else {
                 // Encode error string; loader interprets returns_result=true methods' string payload as Err
                 let msg = format!(
@@ -1085,20 +1069,20 @@ unsafe fn client_invoke(
                     port,
                     if path.is_empty() { "" } else { &path }
                 );
-                write_tlv_string(&msg, res, res_len)
+                tlv::write_tlv_string(&msg, res, res_len)
             }
         }
         M_CLIENT_POST => {
             // args: TLV String(url), Bytes body
             let data = slice(args, args_len);
-            let (_, argc, mut pos) = tlv_parse_header(data)
+            let (_, argc, mut pos) = tlv::tlv_parse_header(data)
                 .map_err(|_| ())
                 .or(Err(()))
                 .unwrap_or((1, 0, 4));
             if argc < 2 {
                 return E_INV_ARGS;
             }
-            let (_t1, s1, p1) = tlv_parse_entry_hdr(data, pos)
+            let (_t1, s1, p1) = tlv::tlv_parse_entry_hdr(data, pos)
                 .map_err(|_| ())
                 .or(Err(()))
                 .unwrap_or((0, 0, 0));
@@ -1111,7 +1095,7 @@ unsafe fn client_invoke(
                 .unwrap_or("")
                 .to_string();
             pos = p1 + s1;
-            let (t2, s2, p2) = tlv_parse_entry_hdr(data, pos)
+            let (t2, s2, p2) = tlv::tlv_parse_entry_hdr(data, pos)
                 .map_err(|_| ())
                 .or(Err(()))
                 .unwrap_or((0, 0, 0));
@@ -1124,27 +1108,21 @@ unsafe fn client_invoke(
             let path = parse_path(&url);
             let body_len = body.len();
             // Create client response handle
-            let resp_id = RESPONSE_ID.fetch_add(1, Ordering::Relaxed);
+            let resp_id = state::next_response_id();
             let (_h, _p, req_bytes) = build_http_request("POST", &url, Some(&body), resp_id);
             let mut tcp_ok = false;
             if let Ok(mut stream) = TcpStream::connect(format!("{}:{}", host, port)) {
                 let _ = stream.write_all(&req_bytes);
                 let _ = stream.flush();
-                let conn_id = SOCK_CONN_ID.fetch_add(1, Ordering::Relaxed);
-                SOCK_CONNS.lock().unwrap().insert(
+                let conn_id = state::next_sock_conn_id();
+                state::SOCK_CONNS.lock().unwrap().insert(
                     conn_id,
                     SockConnState {
                         stream: Mutex::new(stream),
                     },
                 );
-                let server_id_for_port = {
-                    let servers = SERVER_INSTANCES.lock().unwrap();
-                    servers
-                        .iter()
-                        .find(|(_, s)| s.port == port)
-                        .map(|(sid, _)| *sid)
-                };
-                RESPONSES.lock().unwrap().insert(
+                // Map to server_id by port if available (not used; reserved)
+                state::RESPONSES.lock().unwrap().insert(
                     resp_id,
                     ResponseState {
                         status: 0,
@@ -1163,14 +1141,8 @@ unsafe fn client_invoke(
                     body.len()
                 );
             } else {
-                let server_id_for_port = {
-                    let servers = SERVER_INSTANCES.lock().unwrap();
-                    servers
-                        .iter()
-                        .find(|(_, s)| s.port == port)
-                        .map(|(sid, _)| *sid)
-                };
-                RESPONSES.lock().unwrap().insert(
+                // Map to server_id by port if available (not used; reserved)
+                state::RESPONSES.lock().unwrap().insert(
                     resp_id,
                     ResponseState {
                         status: 0,
@@ -1189,7 +1161,7 @@ unsafe fn client_invoke(
             }
             // No stub enqueue in TCP-only design
             if tcp_ok {
-                write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
+                tlv::write_tlv_handle(T_RESPONSE, resp_id, res, res_len)
             } else {
                 let msg = format!(
                     "connect failed for {}:{}{} (body_len={})",
@@ -1198,7 +1170,7 @@ unsafe fn client_invoke(
                     if path.is_empty() { "" } else { &path },
                     body_len
                 );
-                write_tlv_string(&msg, res, res_len)
+                tlv::write_tlv_string(&msg, res, res_len)
             }
         }
         _ => E_INV_METHOD,
@@ -1238,176 +1210,8 @@ fn parse_port(url: &str) -> Option<i32> {
 }
 
 // ===== Helpers =====
-unsafe fn slice<'a>(p: *const u8, len: usize) -> &'a [u8] {
-    std::slice::from_raw_parts(p, len)
-}
-
-fn write_u32(v: u32, res: *mut u8, res_len: *mut usize) -> i32 {
-    unsafe {
-        if res_len.is_null() {
-            return E_INV_ARGS;
-        }
-        if res.is_null() || *res_len < 4 {
-            *res_len = 4;
-            return E_SHORT;
-        }
-        let b = v.to_le_bytes();
-        std::ptr::copy_nonoverlapping(b.as_ptr(), res, 4);
-        *res_len = 4;
-    }
-    OK
-}
-
-fn write_tlv_result(payloads: &[(u8, &[u8])], res: *mut u8, res_len: *mut usize) -> i32 {
-    if res_len.is_null() {
-        return E_INV_ARGS;
-    }
-    let mut buf = Vec::with_capacity(4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>());
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes());
-    for (tag, p) in payloads {
-        buf.push(*tag);
-        buf.push(0);
-        buf.extend_from_slice(&(p.len() as u16).to_le_bytes());
-        buf.extend_from_slice(p);
-    }
-    unsafe {
-        let need = buf.len();
-        if res.is_null() || *res_len < need {
-            *res_len = need;
-            return E_SHORT;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), res, need);
-        *res_len = need;
-    }
-    OK
-}
-
-fn write_tlv_void(res: *mut u8, res_len: *mut usize) -> i32 {
-    write_tlv_result(&[(9u8, &[])], res, res_len)
-}
-fn write_tlv_string(s: &str, res: *mut u8, res_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], res, res_len)
-}
-fn write_tlv_bytes(b: &[u8], res: *mut u8, res_len: *mut usize) -> i32 {
-    write_tlv_result(&[(7u8, b)], res, res_len)
-}
-fn write_tlv_i32(v: i32, res: *mut u8, res_len: *mut usize) -> i32 {
-    write_tlv_result(&[(2u8, &v.to_le_bytes())], res, res_len)
-}
-fn write_tlv_handle(t: u32, id: u32, res: *mut u8, res_len: *mut usize) -> i32 {
-    let mut payload = [0u8; 8];
-    payload[0..4].copy_from_slice(&t.to_le_bytes());
-    payload[4..8].copy_from_slice(&id.to_le_bytes());
-    write_tlv_result(&[(8u8, &payload)], res, res_len)
-}
-
-fn tlv_parse_header(data: &[u8]) -> Result<(u16, u16, usize), ()> {
-    if data.len() < 4 {
-        return Err(());
-    }
-    let ver = u16::from_le_bytes([data[0], data[1]]);
-    let argc = u16::from_le_bytes([data[2], data[3]]);
-    if ver != 1 {
-        return Err(());
-    }
-    Ok((ver, argc, 4))
-}
-fn tlv_parse_string(data: &[u8]) -> Result<String, ()> {
-    let (_, argc, mut pos) = tlv_parse_header(data)?;
-    if argc < 1 {
-        return Err(());
-    }
-    let (tag, size, p) = tlv_parse_entry_hdr(data, pos)?;
-    if tag != 6 {
-        return Err(());
-    }
-    Ok(std::str::from_utf8(&data[p..p + size])
-        .map_err(|_| ())?
-        .to_string())
-}
-fn tlv_parse_two_strings(data: &[u8]) -> Result<(String, String), ()> {
-    let (_, argc, mut pos) = tlv_parse_header(data)?;
-    if argc < 2 {
-        return Err(());
-    }
-    let (tag1, size1, p1) = tlv_parse_entry_hdr(data, pos)?;
-    if tag1 != 6 {
-        return Err(());
-    }
-    let s1 = std::str::from_utf8(&data[p1..p1 + size1])
-        .map_err(|_| ())?
-        .to_string();
-    pos = p1 + size1;
-    let (tag2, size2, p2) = tlv_parse_entry_hdr(data, pos)?;
-    if tag2 != 6 {
-        return Err(());
-    }
-    let s2 = std::str::from_utf8(&data[p2..p2 + size2])
-        .map_err(|_| ())?
-        .to_string();
-    Ok((s1, s2))
-}
-fn tlv_parse_bytes(data: &[u8]) -> Result<Vec<u8>, ()> {
-    let (_, argc, mut pos) = tlv_parse_header(data)?;
-    if argc < 1 {
-        return Err(());
-    }
-    let (tag, size, p) = tlv_parse_entry_hdr(data, pos)?;
-    if tag != 6 && tag != 7 {
-        return Err(());
-    }
-    Ok(data[p..p + size].to_vec())
-}
-fn tlv_parse_i32(data: &[u8]) -> Result<i32, ()> {
-    let (_, argc, mut pos) = tlv_parse_header(data)?;
-    if argc < 1 {
-        return Err(());
-    }
-    let (tag, size, p) = tlv_parse_entry_hdr(data, pos)?;
-    match (tag, size) {
-        (2, 4) => {
-            let mut b = [0u8; 4];
-            b.copy_from_slice(&data[p..p + 4]);
-            Ok(i32::from_le_bytes(b))
-        }
-        (5, 8) => {
-            // accept i64
-            let mut b = [0u8; 8];
-            b.copy_from_slice(&data[p..p + 8]);
-            Ok(i64::from_le_bytes(b) as i32)
-        }
-        _ => Err(()),
-    }
-}
-fn tlv_parse_handle(data: &[u8]) -> Result<(u32, u32), ()> {
-    let (_, argc, mut pos) = tlv_parse_header(data)?;
-    if argc < 1 {
-        return Err(());
-    }
-    let (tag, size, p) = tlv_parse_entry_hdr(data, pos)?;
-    if tag != 8 || size != 8 {
-        return Err(());
-    }
-    let mut t = [0u8; 4];
-    let mut i = [0u8; 4];
-    t.copy_from_slice(&data[p..p + 4]);
-    i.copy_from_slice(&data[p + 4..p + 8]);
-    Ok((u32::from_le_bytes(t), u32::from_le_bytes(i)))
-}
-fn tlv_parse_entry_hdr(data: &[u8], pos: usize) -> Result<(u8, usize, usize), ()> {
-    if pos + 4 > data.len() {
-        return Err(());
-    }
-    let tag = data[pos];
-    let _rsv = data[pos + 1];
-    let size = u16::from_le_bytes([data[pos + 2], data[pos + 3]]) as usize;
-    let p = pos + 4;
-    if p + size > data.len() {
-        return Err(());
-    }
-    Ok((tag, size, p))
-}
+use ffi::slice;
+mod tlv;
 
 // ===== HTTP helpers =====
 fn parse_host(url: &str) -> Option<String> {
@@ -1526,7 +1330,7 @@ fn parse_client_response_into(resp_id: u32, conn_id: u32) {
     let mut body: Vec<u8> = Vec::new();
     // Keep the connection until parsing succeeds; do not remove up front
     let mut should_remove = false;
-    if let Ok(mut map) = SOCK_CONNS.lock() {
+    if let Ok(mut map) = state::SOCK_CONNS.lock() {
         if let Some(conn) = map.get(&conn_id) {
             if let Ok(mut s) = conn.stream.lock() {
                 let _ = s.set_read_timeout(Some(Duration::from_millis(4000)));
@@ -1589,7 +1393,7 @@ fn parse_client_response_into(resp_id: u32, conn_id: u32) {
             map.remove(&conn_id);
         }
     }
-    if let Some(rp) = RESPONSES.lock().unwrap().get_mut(&resp_id) {
+    if let Some(rp) = state::RESPONSES.lock().unwrap().get_mut(&resp_id) {
         rp.status = status;
         rp.headers = headers;
         rp.body = body;
@@ -1599,12 +1403,7 @@ fn parse_client_response_into(resp_id: u32, conn_id: u32) {
 }
 
 // ===== Socket implementation =====
-static SOCK_SERVERS: Lazy<Mutex<HashMap<u32, SockServerState>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static SOCK_CONNS: Lazy<Mutex<HashMap<u32, SockConnState>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static SOCK_CLIENTS: Lazy<Mutex<HashMap<u32, SockClientState>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+// moved to state.rs
 
 unsafe fn sock_server_invoke(
     m: u32,
@@ -1617,8 +1416,8 @@ unsafe fn sock_server_invoke(
     match m {
         M_SRV_BIRTH => {
             netlog!("sock:birth server");
-            let id = SOCK_SERVER_ID.fetch_add(1, Ordering::Relaxed);
-            SOCK_SERVERS.lock().unwrap().insert(
+            let id = state::next_sock_server_id();
+            state::SOCK_SERVERS.lock().unwrap().insert(
                 id,
                 SockServerState {
                     running: Arc::new(AtomicBool::new(false)),
@@ -1626,12 +1425,12 @@ unsafe fn sock_server_invoke(
                     handle: Mutex::new(None),
                 },
             );
-            write_u32(id, res, res_len)
+            tlv::write_u32(id, res, res_len)
         }
         M_SRV_START => {
-            let port = tlv_parse_i32(slice(args, args_len)).unwrap_or(0);
+            let port = tlv::tlv_parse_i32(slice(args, args_len)).unwrap_or(0);
             netlog!("sock:start server id={} port={}", id, port);
-            if let Some(ss) = SOCK_SERVERS.lock().unwrap().get(&id) {
+            if let Some(ss) = state::SOCK_SERVERS.lock().unwrap().get(&id) {
                 let running = ss.running.clone();
                 let pending = ss.pending.clone();
                 running.store(true, Ordering::SeqCst);
@@ -1644,8 +1443,8 @@ unsafe fn sock_server_invoke(
                             match listener.accept() {
                                 Ok((stream, _)) => {
                                     stream.set_nonblocking(false).ok();
-                                    let conn_id = SOCK_CONN_ID.fetch_add(1, Ordering::Relaxed);
-                                    SOCK_CONNS.lock().unwrap().insert(
+                                    let conn_id = state::next_sock_conn_id();
+                                    state::SOCK_CONNS.lock().unwrap().insert(
                                         conn_id,
                                         SockConnState {
                                             stream: Mutex::new(stream),
@@ -1664,40 +1463,42 @@ unsafe fn sock_server_invoke(
                 });
                 *ss.handle.lock().unwrap() = Some(handle);
             }
-            write_tlv_void(res, res_len)
+            tlv::write_tlv_void(res, res_len)
         }
         M_SRV_STOP => {
             netlog!("sock:stop server id={}", id);
-            if let Some(ss) = SOCK_SERVERS.lock().unwrap().get(&id) {
+            if let Some(ss) = state::SOCK_SERVERS.lock().unwrap().get(&id) {
                 ss.running.store(false, Ordering::SeqCst);
                 if let Some(h) = ss.handle.lock().unwrap().take() {
                     let _ = h.join();
                 }
             }
-            write_tlv_void(res, res_len)
+            tlv::write_tlv_void(res, res_len)
         }
         M_SRV_ACCEPT => {
-            if let Some(ss) = SOCK_SERVERS.lock().unwrap().get(&id) {
+            if let Some(ss) = state::SOCK_SERVERS.lock().unwrap().get(&id) {
                 // wait up to ~5000ms
                 for _ in 0..1000 {
                     if let Some(cid) = ss.pending.lock().unwrap().pop_front() {
                         netlog!("sock:accept returned conn_id={}", cid);
-                        return write_tlv_handle(T_SOCK_CONN, cid, res, res_len);
+                        return tlv::write_tlv_handle(T_SOCK_CONN, cid, res, res_len);
                     }
                     std::thread::sleep(std::time::Duration::from_millis(5));
                 }
             }
             netlog!("sock:accept timeout id={}", id);
-            write_tlv_void(res, res_len)
+            tlv::write_tlv_void(res, res_len)
         }
         M_SRV_ACCEPT_TIMEOUT => {
-            let timeout_ms = tlv_parse_i32(slice(args, args_len)).unwrap_or(0).max(0) as u64;
-            if let Some(ss) = SOCK_SERVERS.lock().unwrap().get(&id) {
+            let timeout_ms = tlv::tlv_parse_i32(slice(args, args_len))
+                .unwrap_or(0)
+                .max(0) as u64;
+            if let Some(ss) = state::SOCK_SERVERS.lock().unwrap().get(&id) {
                 let deadline = std::time::Instant::now() + Duration::from_millis(timeout_ms);
                 loop {
                     if let Some(cid) = ss.pending.lock().unwrap().pop_front() {
                         netlog!("sock:acceptTimeout returned conn_id={}", cid);
-                        return write_tlv_handle(T_SOCK_CONN, cid, res, res_len);
+                        return tlv::write_tlv_handle(T_SOCK_CONN, cid, res, res_len);
                     }
                     if std::time::Instant::now() >= deadline {
                         break;
@@ -1715,7 +1516,7 @@ unsafe fn sock_server_invoke(
 
 unsafe fn sock_client_invoke(
     m: u32,
-    id: u32,
+    _id: u32,
     args: *const u8,
     args_len: usize,
     res: *mut u8,
@@ -1723,21 +1524,24 @@ unsafe fn sock_client_invoke(
 ) -> i32 {
     match m {
         M_SC_BIRTH => {
-            let id = SOCK_CLIENT_ID.fetch_add(1, Ordering::Relaxed);
-            SOCK_CLIENTS.lock().unwrap().insert(id, SockClientState);
-            write_u32(id, res, res_len)
+            let id = state::next_sock_client_id();
+            state::SOCK_CLIENTS
+                .lock()
+                .unwrap()
+                .insert(id, SockClientState);
+            tlv::write_u32(id, res, res_len)
         }
         M_SC_CONNECT => {
             // args: host(string), port(i32)
             let data = slice(args, args_len);
-            let (_, argc, mut pos) = tlv_parse_header(data)
+            let (_, argc, mut pos) = tlv::tlv_parse_header(data)
                 .map_err(|_| ())
                 .or(Err(()))
                 .unwrap_or((1, 0, 4));
             if argc < 2 {
                 return E_INV_ARGS;
             }
-            let (_t1, s1, p1) = tlv_parse_entry_hdr(data, pos)
+            let (_t1, s1, p1) = tlv::tlv_parse_entry_hdr(data, pos)
                 .map_err(|_| ())
                 .or(Err(()))
                 .unwrap_or((0, 0, 0));
@@ -1750,7 +1554,7 @@ unsafe fn sock_client_invoke(
                 .unwrap_or("")
                 .to_string();
             pos = p1 + s1;
-            let (_t2, _s2, p2) = tlv_parse_entry_hdr(data, pos)
+            let (_t2, _s2, p2) = tlv::tlv_parse_entry_hdr(data, pos)
                 .map_err(|_| ())
                 .or(Err(()))
                 .unwrap_or((0, 0, 0));
@@ -1764,17 +1568,17 @@ unsafe fn sock_client_invoke(
             };
             let addr = format!("{}:{}", host, port);
             match TcpStream::connect(addr) {
-                Ok(mut stream) => {
+                Ok(stream) => {
                     stream.set_nonblocking(false).ok();
-                    let conn_id = SOCK_CONN_ID.fetch_add(1, Ordering::Relaxed);
-                    SOCK_CONNS.lock().unwrap().insert(
+                    let conn_id = state::next_sock_conn_id();
+                    state::SOCK_CONNS.lock().unwrap().insert(
                         conn_id,
                         SockConnState {
                             stream: Mutex::new(stream),
                         },
                     );
                     netlog!("sock:connect ok conn_id={}", conn_id);
-                    write_tlv_handle(T_SOCK_CONN, conn_id, res, res_len)
+                    tlv::write_tlv_handle(T_SOCK_CONN, conn_id, res, res_len)
                 }
                 Err(e) => {
                     netlog!("sock:connect error: {:?}", e);
@@ -1797,38 +1601,40 @@ unsafe fn sock_conn_invoke(
     match m {
         M_CONN_BIRTH => {
             // not used directly
-            write_u32(0, res, res_len)
+            tlv::write_u32(0, res, res_len)
         }
         M_CONN_SEND => {
-            let bytes = tlv_parse_bytes(slice(args, args_len)).unwrap_or_default();
-            if let Some(conn) = SOCK_CONNS.lock().unwrap().get(&id) {
+            let bytes = tlv::tlv_parse_bytes(slice(args, args_len)).unwrap_or_default();
+            if let Some(conn) = state::SOCK_CONNS.lock().unwrap().get(&id) {
                 if let Ok(mut s) = conn.stream.lock() {
                     let _ = s.write_all(&bytes);
                 }
                 netlog!("sock:send id={} n={}", id, bytes.len());
-                return write_tlv_void(res, res_len);
+                return tlv::write_tlv_void(res, res_len);
             }
             E_INV_HANDLE
         }
         M_CONN_RECV => {
-            if let Some(conn) = SOCK_CONNS.lock().unwrap().get(&id) {
+            if let Some(conn) = state::SOCK_CONNS.lock().unwrap().get(&id) {
                 if let Ok(mut s) = conn.stream.lock() {
                     let mut buf = vec![0u8; 4096];
                     match s.read(&mut buf) {
                         Ok(n) => {
                             buf.truncate(n);
                             netlog!("sock:recv id={} n={}", id, n);
-                            return write_tlv_bytes(&buf, res, res_len);
+                            return tlv::write_tlv_bytes(&buf, res, res_len);
                         }
-                        Err(_) => return write_tlv_bytes(&[], res, res_len),
+                        Err(_) => return tlv::write_tlv_bytes(&[], res, res_len),
                     }
                 }
             }
             E_INV_HANDLE
         }
         M_CONN_RECV_TIMEOUT => {
-            let timeout_ms = tlv_parse_i32(slice(args, args_len)).unwrap_or(0).max(0) as u64;
-            if let Some(conn) = SOCK_CONNS.lock().unwrap().get(&id) {
+            let timeout_ms = tlv::tlv_parse_i32(slice(args, args_len))
+                .unwrap_or(0)
+                .max(0) as u64;
+            if let Some(conn) = state::SOCK_CONNS.lock().unwrap().get(&id) {
                 if let Ok(mut s) = conn.stream.lock() {
                     let _ = s.set_read_timeout(Some(Duration::from_millis(timeout_ms)));
                     let mut buf = vec![0u8; 4096];
@@ -1838,7 +1644,7 @@ unsafe fn sock_conn_invoke(
                         Ok(n) => {
                             buf.truncate(n);
                             netlog!("sock:recvTimeout id={} n={} ms={}", id, n, timeout_ms);
-                            return write_tlv_bytes(&buf, res, res_len);
+                            return tlv::write_tlv_bytes(&buf, res, res_len);
                         }
                         Err(e) => {
                             netlog!(
@@ -1856,9 +1662,10 @@ unsafe fn sock_conn_invoke(
         }
         M_CONN_CLOSE => {
             // Drop the stream by removing entry
-            SOCK_CONNS.lock().unwrap().remove(&id);
-            write_tlv_void(res, res_len)
+            state::SOCK_CONNS.lock().unwrap().remove(&id);
+            tlv::write_tlv_void(res, res_len)
         }
         _ => E_INV_METHOD,
     }
 }
+mod state;
