@@ -211,6 +211,41 @@ pub fn gc_trace_level() -> u8 {
     }
 }
 
+// ---- GC mode and instrumentation ----
+/// Return current GC mode string (auto default = "rc+cycle").
+/// Allowed: "auto", "rc+cycle", "minorgen", "stw", "rc", "off"
+pub fn gc_mode() -> String {
+    match std::env::var("NYASH_GC_MODE").ok() {
+        Some(m) if !m.trim().is_empty() => m,
+        _ => "rc+cycle".to_string(),
+    }
+}
+/// Brief metrics emission (text)
+pub fn gc_metrics() -> bool {
+    std::env::var("NYASH_GC_METRICS").ok().as_deref() == Some("1")
+}
+/// JSON metrics emission (single line)
+pub fn gc_metrics_json() -> bool {
+    std::env::var("NYASH_GC_METRICS_JSON").ok().as_deref() == Some("1")
+}
+/// Leak diagnostics on exit
+pub fn gc_leak_diag() -> bool {
+    std::env::var("NYASH_GC_LEAK_DIAG").ok().as_deref() == Some("1")
+}
+/// Optional allocation threshold; if Some(n) and exceeded, print warning
+pub fn gc_alloc_threshold() -> Option<u64> {
+    std::env::var("NYASH_GC_ALLOC_THRESHOLD").ok()?.parse().ok()
+}
+
+/// Run a collection every N safepoints (if Some)
+pub fn gc_collect_sp_interval() -> Option<u64> {
+    std::env::var("NYASH_GC_COLLECT_SP").ok()?.parse().ok()
+}
+/// Run a collection when allocated bytes since last >= N (if Some)
+pub fn gc_collect_alloc_bytes() -> Option<u64> {
+    std::env::var("NYASH_GC_COLLECT_ALLOC").ok()?.parse().ok()
+}
+
 // ---- Rewriter flags (optimizer transforms)
 pub fn rewrite_debug() -> bool {
     std::env::var("NYASH_REWRITE_DEBUG").ok().as_deref() == Some("1")

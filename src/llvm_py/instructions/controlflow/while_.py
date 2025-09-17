@@ -4,6 +4,7 @@ Lowering helpers for while-control flow (regular structured)
 
 from typing import List, Dict, Any
 import llvmlite.ir as ir
+from instructions.safepoint import insert_automatic_safepoint
 
 def lower_while_regular(
     builder: ir.IRBuilder,
@@ -57,6 +58,13 @@ def lower_while_regular(
     else:
         cond_val = ir.Constant(i1, 0)
 
+    # Insert a safepoint at loop header to allow cooperative GC
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+            insert_automatic_safepoint(cbuild, builder.block.parent.module, "loop_header")
+    except Exception:
+        pass
     cbuild.cbranch(cond_val, body_bb, exit_bb)
 
     # Body block
@@ -77,4 +85,3 @@ def lower_while_regular(
 
     # Continue at exit
     builder.position_at_end(exit_bb)
-

@@ -3,6 +3,7 @@
 Summary
 - Default execution is MIR13 (PHI‑off). Bridge/Builder do not emit PHIs; llvmlite synthesizes PHIs when needed. MIR14 (PHI‑on) remains experimental for targeted tests.
 - PyVM is the semantic reference engine; llvmlite is used for AOT and parity checks.
+ - GC: user modes defined; controller実装（rc+cycle skeleton + metrics/diagnostics）に移行。LLVM safepoint輸出/NyRT配線と自動挿入（envゲートON）を完了。
 
 What Changed (recent)
 - MIR13 default enabled
@@ -16,30 +17,56 @@ What Changed (recent)
   - Selfhost/PyVM スモークを通して E2E 確認（peek/ternary）。
 - llvmlite stability for MIR13（bring‑up進行中）
   - Control‑flow 分離: `instructions/controlflow/{branch,jump,while_.py}` を導入し、`llvm_builder.py` の責務を縮小。
-  - プリパス導入（環境変数で有効化）: `NYASH_LLVM_PREPASS_LOOP=1`
+  - プリパス（環境変数で有効化）: `NYASH_LLVM_PREPASS_LOOP=1`, `NYASH_LLVM_PREPASS_IFMERGE=1`
     - ループ検出（単純 while 形）→ 構造化 lower（LoopForm失敗時は regular while）
-    - CFG ユーティリティ: `cfg/utils.py`（preds/succs）
-  - 値解決ポリシー共通化: `utils/values.py`（prefer same‑block SSA → resolver）
-  - vmap の per‑block 化: `lower_block` 内で `vmap_cur` を用意し、ブロック末に `block_end_values` へスナップショット。cross‑block 汚染を抑制。
-  - Resolver 強化: end‑of‑block解決で他ブロックのPHIを安易に採用しない（自己参照/非支配回避）。
+    - if‑merge（ret‑merge）前処理: ret 値 PHI の前宣言と finalize 配線の一意化
+    - CFG ユーティリティ: `src/llvm_py/cfg/utils.py`（preds/succs）
+  - PHI 配線の分離: `src/llvm_py/phi_wiring.py` に placeholder/finalize を移管（builder 薄化）
+  - 値解決ポリシー共通化: `src/llvm_py/utils/values.py`（prefer same‑block SSA → resolver）
+  - vmap の per‑block 化: `vmap_cur` を用意し、ブロック末に `block_end_values` へスナップショット。cross‑block 汚染を抑制。
+  - Resolver 強化: end‑of‑block 解決で他ブロック PHI を安易に採用しない（自己参照/非支配を回避）。
+  - BuildCtx 導入: `src/llvm_py/build_ctx.py` で lowering 引数を集約（compare/ret/call/boxcall/externcall/typeop/newbox/safepoint が ctx 対応）
+  - トレース統一: `src/llvm_py/trace.py` を追加し、`NYASH_CLI_VERBOSE`/`NYASH_LLVM_TRACE_PHI`/`NYASH_LLVM_TRACE_VALUES` を一元管理
+  - curated スモーク拡張: `tools/smokes/curated_llvm.sh --with-if-merge` を追加（if‑merge ケース含む）
 - Parity runner pragmatics
   - `tools/pyvm_vs_llvmlite.sh` compares exit code by default; use `CMP_STRICT=1` for stdout+exit.
   - Stage‑2 smokes更新: `tools/selfhost_stage2_smoke.sh` に "Peek basic" を追加。
+- GC controller/metrics（Phase‑15）
+  - `GcController`（統合フック）導入＋CLI `--gc`（`NYASH_GC_MODE`）。CountingGcは互換ラッパに縮退。
+  - NyRT exports: `ny_safepoint` / `ny_check_safepoint` / `nyash.gc.barrier_write` → runtime hooks 連携。
+  - LLVM：自動 safepoint 挿入（loop header / call / externcall / boxcall）。`NYASH_LLVM_AUTO_SAFEPOINT` で制御（既定=1）。
+  - メトリクス：text/JSON（`NYASH_GC_METRICS{,_JSON}=1`）。JSONに alloc_count/alloc_bytes/trial_nodes/edges/collections/last_ms/reason_bits/thresholds を含む。
+  - 診断：`NYASH_GC_LEAK_DIAG=1` でハンドルTop‑K（残存）出力。Array/Map 到達集合の試走（gc_trace）。
+
+- CI/DevOps（Self‑Hosting パイロット強化）
+  - 追加: `.github/workflows/selfhost-bootstrap.yml`（常時） — `tools/bootstrap_selfhost_smoke.sh` を40s timeoutで実行。
+  - 追加: `.github/workflows/selfhost-exe-first.yml`（任意/cron） — LLVM18 + llvmlite をセットアップし `tools/exe_first_smoke.sh` を実行。
+  - スモーク堅牢化: `tools/bootstrap_selfhost_smoke.sh`/`tools/exe_first_smoke.sh` に timeout を付与。
+  - JSON v0 スキーマ追加: `docs/reference/mir/json_v0.schema.json` と検証ツール `tools/validate_mir_json.py`。EXE‑first スモークに組み込み。
+
+- LLVM crate 分離の足場（Phase‑15.6 向け）
+  - 新規クレート（スキャフォールド）: `crates/nyash-llvm-compiler`（CLI名: `ny-llvmc`）。
+    - `--dummy --out <o>` でダミー `.o` を生成。
+    - `--in <mir.json|-> --out <o>` で MIR(JSON)→`.o` を llvmlite ハーネス経由で生成（`tools/llvmlite_harness.py`）。
+  - ドキュメント追記: `docs/LLVM_HARNESS.md` に `ny-llvmc` とスキーマ検証の項を追加。
+
+- Nyash ABI v2（TypeBox）検出の足場
+  - ローダに `nyash_typebox_<Box>` シンボル検出を追加（`abi_tag='TYBX'`/`version`/`invoke_id`）し、Boxスペックへ保持（まだ実行には未使用）。
 
 Current Status
 - Self‑hosting Bridge → PyVM smokes: PASS（Stage‑2 代表: array/string/logic/if/loop/ternary/peek/dot-chain）
 - PyVM core fixes applied: compare(None,x) の安全化、Copy 命令サポート、最大ステップ上限（NYASH_PYVM_MAX_STEPS）
 - MIR13（PHI‑off）: if/ternary/loop の合流で Copy が正しく JSON に出るよう修正（emit_mir_json + builder no‑phi 合流）
 - Curated LLVM（PHI‑off 既定）: 継続（個別ケースの IR 生成不備は未着手）
-- LLVM ハーネス（llvmlite）:
+LLVM ハーネス（llvmlite/AOT）:
   - `loop_if_phi`: プリパスON＋構造化whileで EXE 退出コード 0（緑）。
-  - `ternary_nested`: vmap per‑block で安定度向上。残タスク: merge(ret) の PHI 配線をプリパス/resolve 側で確定・重複排除。
+  - `ternary_nested`: if‑merge プリパス＋phi_wiring で ret‑merge を構造化し、退出コード一致（緑）。
 
 Next (short plan)
 0) Refactor/Structure（継続）
-   - controlflow の切出し完了（branch/jump/while）。binop/compare/copy の前処理を `utils/values.resolve_i64_strict` に集約（完了）。
-   - vmap per‑block 化（完了）。builder の責務縮小と prepass/cfg/util への移譲（進行中）。
-   - if‑merge プリパス実装: ret‑merge の構造化/PHI確定（予定）。
+   - BuildCtx 展開を完了（barrier/atomic/loopform も ctx 主経路に）
+   - trace 化の残り掃除（環境直読み print を削減）
+   - phi_wiring を関数分割（解析/配線/タグ付け）→ ユニットテスト追加
 1) Legacy Interpreter/VM offboarding (phase‑A):
    - ✅ Introduced `vm-legacy` feature (default OFF) to gate old VM execution層。
    - ✅ 抽出: JIT が参照する最小型（例: `VMValue`）を薄い共通モジュールへ切替（`vm_types`）。
@@ -50,23 +77,48 @@ Next (short plan)
 2) Legacy Interpreter/VM offboarding (phase‑B):
    - 物理移動: `src/archive/{interpreter_legacy,vm_legacy}/` へ移設（ドキュメント更新）。
 3) LLVM/llvmlite 整備（優先中）:
-   - MIR13 の Copy 合流を LLVM IR に等価反映（pred‑localize or PHI 合成）: per‑block vmap 完了、resolver 強化済。
+   - MIR13 の Copy 合流を LLVM IR に等価反映（pred‑localize or PHI 合成）: per‑block vmap 完了、resolver/phi_wiring 強化済。
    - 代表ケース:
      - `apps/tests/loop_if_phi.nyash`: プリパスONで緑（退出コード一致）。
-     - `apps/tests/ternary_nested.nyash`: if‑merge プリパスでの構造化/PHI 確定を実装 → IR 検証通過・退出コード一致まで。
+     - `apps/tests/ternary_nested.nyash`: if‑merge + phi_wiring で退出コード一致を継続。
    - `tools/pyvm_vs_llvmlite.sh` で PyVM と EXE の退出コード一致（必要に応じて CMP_STRICT=1）。
 4) PHI‑on lane（任意）: `loop_if_phi` 支配関係を finalize/resolve の順序強化で観察（低優先）。
 5) Runner refactor（小PR）:
    - `selfhost/{child.rs,json.rs}` 分離; `modes/common/{io,resolve,exec}.rs` 分割; `runner/mod.rs`の表面削減。
 6) Optimizer/Verifier thin‑hub cleanup（非機能）: orchestrator最小化とパス境界の明確化。
+7) GC（controller）観測の磨き込み
+   - JSON: running averages / roots要約（任意） / 理由タグ拡張
+   - 収集頻度のサンプリング支援
+   - plugin/FFI は非移動のまま、ハンドル間接を継続
+8) LLVM crate split（EXE‑first）
+   - LLVM harness/builder を `nyash-llvm-compiler` crate と CLI（`ny-llvmc`）に分離（入力: MIR JSON v0 / 出力: .o/.exe）
+   - `tools/build_llvm.sh` 内部を新crate APIに寄せ、Runnerからも呼べるよう段階移行
+   - CI: selfhost smokes と LLVM EXE smokes を分離しアーティファクト配布線を評価
+
+9) Nyash ABI v2 統一（後方互換なし）
+   - 方針: 既存 Type‑C ABI（library‑level `nyash_plugin_invoke`）を撤退し、Box単位の TypeBox へ一本化。
+   - ローダ: `nyash_typebox_<Box>` の `invoke_id(instance_id, method_id, ...)` を実行ポインタとして保持し、birth/fini も含めて統一。
+   - プラグイン: 公式プラグイン（String/File/Array/Map/Console/Integer）を順次 v2 へ移行。`resolve(name)->method_id` 実装。
+   - 仕様: エラー規約（OK/E_SHORT/E_ARGS/E_TYPE/E_METHOD/E_HANDLE/E_PLUGIN）・TLVタグ一覧を docs に凍結、Cヘッダ雛形（`nyash_abi.h`）を配布。
+   - CI: v2専用スモークを常時化（Linux）。Windows/macOS は任意ジョブで追随。
 
 How to Run
 - PyVM reference smokes: `tools/pyvm_stage2_smoke.sh`
 - Bridge → PyVM smokes: `tools/selfhost_stage2_bridge_smoke.sh`
 - LLVM curated (PHI‑off default): `tools/smokes/curated_llvm.sh`
 - LLVM PHI‑on (experimental): `tools/smokes/curated_llvm.sh --phi-on`
+- LLVM curated with if‑merge prepass: `tools/smokes/curated_llvm.sh --with-if-merge`
 - Parity (AOT vs PyVM): `tools/pyvm_vs_llvmlite.sh <file.nyash>` (`CMP_STRICT=1` to enable stdout check)
   - 開発時の補助: `NYASH_LLVM_PREPASS_LOOP=1` を併用（loop/if‑merge のプリパス有効化）。
+ - GC modes/metrics: see `docs/reference/runtime/gc.md`（`--gc` / 自動 safepoint / 収集トリガ / JSONメトリクス）
+
+Self‑Hosting CI
+- Bootstrap（常時）: `.github/workflows/selfhost-bootstrap.yml`
+- EXE‑first（任意）: `.github/workflows/selfhost-exe-first.yml`
+
+LLVM Crate（試用）
+- ダミー: `cargo build -p nyash-llvm-compiler --release && ./target/release/ny-llvmc --dummy --out /tmp/dummy.o`
+- JSON→.o: `./target/release/ny-llvmc --in mir.json --out out.o`
 
 Operational Notes
 - 環境変数
@@ -93,9 +145,13 @@ Key Flags
 - `NYASH_VERIFY_ALLOW_NO_PHI` (default 1): relax verifier for PHI‑less MIR.
 - `NYASH_LLVM_USE_HARNESS=1`: route AOT through llvmlite harness.
 - `NYASH_LLVM_TRACE_PHI=1`: trace PHI resolution/wiring.
+- `NYASH_LLVM_PREPASS_LOOP=1`: enable loop prepass (while detection/structure)
+- `NYASH_LLVM_PREPASS_IFMERGE=1`: enable if‑merge (ret‑merge) prepass
+- `NYASH_LLVM_TRACE_VALUES=1`: trace value resolution path
 
 Notes / Policies
 - Focus is self‑hosting stability. JIT/Cranelift is out of scope (safety fixes only).
 - PHI generation remains centralized in llvmlite; Bridge/Builder keep PHI‑off by default.
-- No full tracing GC yet; handles/Arc lifetimes govern object retention. Safepoint/barrier/roots are staging utilities.
+- No full tracing/moving GC yet; handles/Arc lifetimes govern object retention. Safepoint/barrier/roots are staging utilities.
+ - GC mode UX: keep user‑facing modes minimal (rc+cycle, minorgen); advanced modes are opt‑in for language dev.
  - Legacy Interpreter/VM は段階的にアーカイブへ。日常の意味論確認は PyVM を基準として継続。

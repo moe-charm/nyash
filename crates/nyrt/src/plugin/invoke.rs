@@ -1,4 +1,5 @@
 use crate::encode::{nyrt_encode_arg_or_legacy, nyrt_encode_from_legacy_at};
+use crate::plugin::invoke_core;
 #[no_mangle]
 pub extern "C" fn nyash_plugin_invoke3_i64(
     type_id: i64,
@@ -8,39 +9,14 @@ pub extern "C" fn nyash_plugin_invoke3_i64(
     a1: i64,
     a2: i64,
 ) -> i64 {
-    use nyash_rust::runtime::plugin_loader_v2::PluginBoxV2;
-    // Resolve receiver instance from handle first; fallback to legacy VM args (param index)
-    let mut instance_id: u32 = 0;
-    let mut real_type_id: u32 = 0;
-    let mut invoke: Option<
-        unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
-    > = None;
-    if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0 as u64) {
-            if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
-                instance_id = p.instance_id();
-                real_type_id = p.inner.type_id;
-                invoke = Some(p.inner.invoke_fn);
-            }
-        }
-    }
-    if invoke.is_none()
-        && a0 >= 0
-        && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1")
-    {
-        nyash_rust::jit::rt::with_legacy_vm_args(|args| {
-            let idx = a0 as usize;
-            if let Some(nyash_rust::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
-                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
-                    instance_id = p.instance_id();
-                    invoke = Some(p.inner.invoke_fn);
-                }
-            }
-        });
-    }
-    if invoke.is_none() {
-        return 0;
-    }
+    // Resolve receiver via shared core helper
+    let recv = match invoke_core::resolve_receiver_for_a0(a0) {
+        Some(r) => r,
+        None => return 0,
+    };
+    let instance_id: u32 = recv.instance_id;
+    let _real_type_id: u32 = recv.real_type_id;
+    let invoke = recv.invoke;
     // Build TLV args from a1/a2 if present. Prefer handles/StringBox/IntegerBox via runtime host.
     use nyash_rust::{backend::vm::VMValue, jit::rt::handles};
     // argc from LLVM lowering is explicit arg count (excludes receiver)
@@ -48,164 +24,11 @@ pub extern "C" fn nyash_plugin_invoke3_i64(
     let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(nargs as u16);
     // Encode legacy VM arg at position into provided buffer (avoid capturing &mut buf)
     let mut encode_from_legacy_into = |dst: &mut Vec<u8>, arg_pos: usize| {
-        nyash_rust::jit::rt::with_legacy_vm_args(|args| {
-            if let Some(v) = args.get(arg_pos) {
-                match v {
-                    VMValue::String(s) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::string(dst, s)
-                    }
-                    VMValue::Integer(i) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::i64(dst, *i)
-                    }
-                    VMValue::Float(f) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::f64(dst, *f)
-                    }
-                    VMValue::Bool(b) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::bool(dst, *b)
-                    }
-                    VMValue::BoxRef(b) => {
-                        // BufferBox → TLV bytes
-                        if let Some(bufbox) = b
-                            .as_any()
-                            .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
-                        {
-                            nyash_rust::runtime::plugin_ffi_common::encode::bytes(
-                                dst,
-                                &bufbox.to_vec(),
-                            );
-                            return;
-                        }
-                        if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
-                            // Prefer StringBox/IntegerBox primitives when possible
-                            let host = nyash_rust::runtime::get_global_plugin_host();
-                            if let Ok(hg) = host.read() {
-                                if p.box_type == "StringBox" {
-                                    if let Ok(Some(sb)) = hg.invoke_instance_method(
-                                        "StringBox",
-                                        "toUtf8",
-                                        p.instance_id(),
-                                        &[],
-                                    ) {
-                                        if let Some(s) = sb
-                                            .as_any()
-                                            .downcast_ref::<nyash_rust::box_trait::StringBox>()
-                                        {
-                                            nyash_rust::runtime::plugin_ffi_common::encode::string(
-                                                dst, &s.value,
-                                            );
-                                            return;
-                                        }
-                                    }
-                                } else if p.box_type == "IntegerBox" {
-                                    if let Ok(Some(ibx)) = hg.invoke_instance_method(
-                                        "IntegerBox",
-                                        "get",
-                                        p.instance_id(),
-                                        &[],
-                                    ) {
-                                        if let Some(i) =
-                                            ibx.as_any()
-                                                .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
-                                        {
-                                            nyash_rust::runtime::plugin_ffi_common::encode::i64(
-                                                dst, i.value,
-                                            );
-                                            return;
-                                        }
-                                    }
-                                }
-                            }
-                            // Fallback: pass handle as plugin-handle TLV
-                            nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
-                                dst,
-                                p.inner.type_id,
-                                p.instance_id(),
-                            );
-                        } else {
-                            // Stringify unknown boxes
-                            let s = b.to_string_box().value;
-                            nyash_rust::runtime::plugin_ffi_common::encode::string(dst, &s)
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        });
+        nyrt_encode_from_legacy_at(dst, arg_pos)
     };
     // Encode argument value or fallback to legacy slot (avoid capturing &mut buf)
     let mut encode_arg_into = |dst: &mut Vec<u8>, val: i64, pos: usize| {
-        let mut appended = false;
-        // Try handle first
-        if val > 0 {
-            if let Some(obj) = handles::get(val as u64) {
-                // BufferBox handle → TLV bytes
-                if let Some(bufbox) = obj
-                    .as_any()
-                    .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
-                {
-                    nyash_rust::runtime::plugin_ffi_common::encode::bytes(dst, &bufbox.to_vec());
-                    appended = true;
-                    return;
-                }
-                if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
-                    let host = nyash_rust::runtime::get_global_plugin_host();
-                    if let Ok(hg) = host.read() {
-                        if p.box_type == "StringBox" {
-                            if let Ok(Some(sb)) = hg.invoke_instance_method(
-                                "StringBox",
-                                "toUtf8",
-                                p.instance_id(),
-                                &[],
-                            ) {
-                                if let Some(s) = sb
-                                    .as_any()
-                                    .downcast_ref::<nyash_rust::box_trait::StringBox>()
-                                {
-                                    nyash_rust::runtime::plugin_ffi_common::encode::string(
-                                        dst, &s.value,
-                                    );
-                                    appended = true;
-                                    return;
-                                }
-                            }
-                        } else if p.box_type == "IntegerBox" {
-                            if let Ok(Some(ibx)) =
-                                hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[])
-                            {
-                                if let Some(i) = ibx
-                                    .as_any()
-                                    .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
-                                {
-                                    nyash_rust::runtime::plugin_ffi_common::encode::i64(
-                                        dst, i.value,
-                                    );
-                                    appended = true;
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                    // Otherwise, pass as handle TLV
-                    nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
-                        dst,
-                        p.inner.type_id,
-                        p.instance_id(),
-                    );
-                    appended = true;
-                    return;
-                }
-            }
-        }
-        // Legacy VM args by positional index (1-based for a1)
-        let before = dst.len();
-        encode_from_legacy_into(dst, pos);
-        if dst.len() != before {
-            appended = true;
-        }
-        // If still nothing appended (no-op), fallback to raw i64
-        if !appended {
-            nyash_rust::runtime::plugin_ffi_common::encode::i64(dst, val);
-        }
+        nyrt_encode_arg_or_legacy(dst, val, pos)
     };
     if nargs >= 1 {
         encode_arg_into(&mut buf, a1, 1);
@@ -219,123 +42,20 @@ pub extern "C" fn nyash_plugin_invoke3_i64(
             encode_from_legacy_into(&mut buf, pos);
         }
     }
-    // Prepare output buffer (dynamic growth on short buffer)
-    let mut cap: usize = 256;
-    let (mut tag_ret, mut sz_ret, mut payload_ret): (u8, usize, Vec<u8>) = (0, 0, Vec::new());
-    loop {
-        let mut out = vec![0u8; cap];
-        let mut out_len: usize = out.len();
-        let rc = unsafe {
-            invoke.unwrap()(
-                type_id as u32,
-                method_id as u32,
-                instance_id,
-                buf.as_ptr(),
-                buf.len(),
-                out.as_mut_ptr(),
-                &mut out_len,
-            )
-        };
-        if rc != 0 {
-            // Retry on short buffer hint (-1) or when plugin wrote beyond capacity (len > cap)
-            if rc == -1 || out_len > cap {
-                cap = cap.saturating_mul(2).max(out_len + 16);
-                if cap > 1 << 20 {
-                    break;
-                }
-                continue;
-            }
-            return 0;
-        }
-        let slice = &out[..out_len];
-        if let Some((t, s, p)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(slice) {
-            tag_ret = t;
-            sz_ret = s;
-            payload_ret = p.to_vec();
-        }
-        break;
-    }
-    if payload_ret.is_empty() {
-        return 0;
-    }
+    // Call invoke with dynamic buffer logic centralized
+    let (tag_ret, sz_ret, payload_ret): (u8, usize, Vec<u8>) = match invoke_core::plugin_invoke_call(
+        invoke,
+        type_id as u32,
+        method_id as u32,
+        instance_id,
+        &buf,
+    ) {
+        Some((t, s, p)) => (t, s, p),
+        None => return 0,
+    };
     if let Some((tag, sz, payload)) = Some((tag_ret, sz_ret, payload_ret.as_slice())) {
-        match tag {
-            2 => {
-                // I32
-                if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload) {
-                    return v as i64;
-                }
-            }
-            3 => {
-                // I64
-                if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload) {
-                    return v as i64;
-                }
-                if payload.len() == 8 {
-                    let mut b = [0u8; 8];
-                    b.copy_from_slice(payload);
-                    return i64::from_le_bytes(b);
-                }
-            }
-            6 | 7 => {
-                // String/Bytes -> register StringBox handle
-                use nyash_rust::box_trait::{NyashBox, StringBox};
-                let s = nyash_rust::runtime::plugin_ffi_common::decode::string(payload);
-                let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
-                let h = nyash_rust::jit::rt::handles::to_handle(arc);
-                return h as i64;
-            }
-            8 => {
-                // Handle(tag=8) -> register and return handle id (i64)
-                if sz == 8 {
-                    let mut t = [0u8; 4];
-                    t.copy_from_slice(&payload[0..4]);
-                    let mut i = [0u8; 4];
-                    i.copy_from_slice(&payload[4..8]);
-                    let r_type = u32::from_le_bytes(t);
-                    let r_inst = u32::from_le_bytes(i);
-                    // Build PluginBoxV2 and register into handle-registry
-                    let meta_opt =
-                        nyash_rust::runtime::plugin_loader_v2::metadata_for_type_id(r_type);
-                    let (box_type_name, invoke_ptr) = if let Some(meta) = meta_opt {
-                        (meta.box_type.clone(), meta.invoke_fn)
-                    } else {
-                        ("PluginBox".to_string(), invoke.unwrap())
-                    };
-                    let pb = nyash_rust::runtime::plugin_loader_v2::make_plugin_box_v2(
-                        box_type_name.clone(),
-                        r_type,
-                        r_inst,
-                        invoke_ptr,
-                    );
-                    let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
-                        std::sync::Arc::new(pb);
-                    let h = nyash_rust::jit::rt::handles::to_handle(arc);
-                    return h as i64;
-                }
-            }
-            1 => {
-                // Bool
-                return if nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
-                    .unwrap_or(false)
-                {
-                    1
-                } else {
-                    0
-                };
-            }
-            5 => {
-                // F64 → optional conversion to i64
-                if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref() == Some("1") {
-                    if sz == 8 {
-                        let mut b = [0u8; 8];
-                        b.copy_from_slice(payload);
-                        let f = f64::from_le_bytes(b);
-                        return f as i64;
-                    }
-                }
-            }
-            _ => {}
+        if let Some(v) = invoke_core::decode_entry_to_i64(tag, sz, payload, invoke) {
+            return v;
         }
     }
     0
@@ -484,77 +204,7 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
         });
     };
     let mut encode_arg = |val: i64, pos: usize| {
-        let mut appended = false;
-        if val > 0 {
-            if let Some(obj) = handles::get(val as u64) {
-                if let Some(bufbox) = obj
-                    .as_any()
-                    .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
-                {
-                    nyash_rust::runtime::plugin_ffi_common::encode::bytes(
-                        &mut buf,
-                        &bufbox.to_vec(),
-                    );
-                    appended = true;
-                    return;
-                }
-                if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
-                    let host = nyash_rust::runtime::get_global_plugin_host();
-                    if let Ok(hg) = host.read() {
-                        if p.box_type == "StringBox" {
-                            if let Ok(Some(sb)) = hg.invoke_instance_method(
-                                "StringBox",
-                                "toUtf8",
-                                p.instance_id(),
-                                &[],
-                            ) {
-                                if let Some(s) = sb
-                                    .as_any()
-                                    .downcast_ref::<nyash_rust::box_trait::StringBox>()
-                                {
-                                    nyash_rust::runtime::plugin_ffi_common::encode::string(
-                                        &mut buf, &s.value,
-                                    );
-                                    appended = true;
-                                    return;
-                                }
-                            }
-                        } else if p.box_type == "IntegerBox" {
-                            if let Ok(Some(ibx)) =
-                                hg.invoke_instance_method("IntegerBox", "get", p.instance_id(), &[])
-                            {
-                                if let Some(i) = ibx
-                                    .as_any()
-                                    .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
-                                {
-                                    nyash_rust::runtime::plugin_ffi_common::encode::i64(
-                                        &mut buf, i.value,
-                                    );
-                                    appended = true;
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                    nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
-                        &mut buf,
-                        p.inner.type_id,
-                        p.instance_id(),
-                    );
-                    appended = true;
-                    return;
-                }
-            }
-        }
-        let before = buf.len();
-        // Use global helper to avoid nested mutable borrows on buf
-        nyrt_encode_from_legacy_at(&mut buf, pos);
-        if buf.len() != before {
-            appended = true;
-        }
-        if !appended {
-            nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, val);
-        }
+        crate::encode::nyrt_encode_arg_or_legacy(&mut buf, val, pos)
     };
     if nargs >= 1 {
         encode_arg(a1, 1);
@@ -567,77 +217,20 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
             nyrt_encode_from_legacy_at(&mut buf, pos);
         }
     }
-    // Prepare output buffer (dynamic growth on short buffer)
-    let mut cap: usize = 256;
-    let (mut tag_ret, mut sz_ret, mut payload_ret): (u8, usize, Vec<u8>) = (0, 0, Vec::new());
-    loop {
-        let mut out = vec![0u8; cap];
-        let mut out_len: usize = out.len();
-        let rc = unsafe {
-            invoke.unwrap()(
-                type_id as u32,
-                method_id as u32,
-                instance_id,
-                buf.as_ptr(),
-                buf.len(),
-                out.as_mut_ptr(),
-                &mut out_len,
-            )
-        };
-        if rc != 0 {
-            // Retry on short buffer (-1) or when plugin wrote beyond capacity
-            if rc == -1 || out_len > cap {
-                cap = cap.saturating_mul(2).max(out_len + 16);
-                if cap > 1 << 20 {
-                    break;
-                }
-                continue;
-            }
-            return 0.0;
-        }
-        let slice = &out[..out_len];
-        if let Some((t, s, p)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(slice) {
-            tag_ret = t;
-            sz_ret = s;
-            payload_ret = p.to_vec();
-        }
-        break;
-    }
-    if payload_ret.is_empty() {
-        return 0.0;
-    }
+    // Invoke via shared helper
+    let (mut tag_ret, mut sz_ret, mut payload_ret): (u8, usize, Vec<u8>) = match invoke_core::plugin_invoke_call(
+        invoke.unwrap(),
+        type_id as u32,
+        method_id as u32,
+        instance_id,
+        &buf,
+    ) {
+        Some((t, s, p)) => (t, s, p),
+        None => return 0.0,
+    };
     if let Some((tag, sz, payload)) = Some((tag_ret, sz_ret, payload_ret.as_slice())) {
-        match tag {
-            5 => {
-                // F64
-                if sz == 8 {
-                    let mut b = [0u8; 8];
-                    b.copy_from_slice(payload);
-                    return f64::from_le_bytes(b);
-                }
-            }
-            3 => {
-                // I64 -> f64
-                if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload) {
-                    return v as f64;
-                }
-                if payload.len() == 8 {
-                    let mut b = [0u8; 8];
-                    b.copy_from_slice(payload);
-                    return (i64::from_le_bytes(b)) as f64;
-                }
-            }
-            1 => {
-                // Bool -> f64
-                return if nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
-                    .unwrap_or(false)
-                {
-                    1.0
-                } else {
-                    0.0
-                };
-            }
-            _ => {}
+        if let Some(f) = invoke_core::decode_entry_to_f64(tag, sz, payload) {
+            return f;
         }
     }
     0.0
@@ -832,42 +425,10 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
             &mut out_len,
         )
     };
-    if rc != 0 {
-        return 0;
-    }
+    if rc != 0 { return 0; }
     let out_slice = &out[..out_len];
-    if let Some((tag, _sz, payload)) =
-        nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(out_slice)
-    {
-        match tag {
-            3 => {
-                if payload.len() == 8 {
-                    let mut b = [0u8; 8];
-                    b.copy_from_slice(payload);
-                    return i64::from_le_bytes(b);
-                }
-            }
-            1 => {
-                return if nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
-                    .unwrap_or(false)
-                {
-                    1
-                } else {
-                    0
-                };
-            }
-            5 => {
-                if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref() == Some("1") {
-                    if payload.len() == 8 {
-                        let mut b = [0u8; 8];
-                        b.copy_from_slice(payload);
-                        let f = f64::from_le_bytes(b);
-                        return f as i64;
-                    }
-                }
-            }
-            _ => {}
-        }
+    if let Some((tag, sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(out_slice) {
+        if let Some(v) = super::invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) { return v; }
     }
     0
 }
@@ -1106,73 +667,8 @@ pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
     if rc != 0 {
         return 0;
     }
-    if let Some((tag, _sz, payload)) =
-        nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len])
-    {
-        match tag {
-            2 => {
-                if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload) {
-                    return v as i64;
-                }
-            }
-            3 => {
-                if payload.len() == 8 {
-                    let mut b = [0u8; 8];
-                    b.copy_from_slice(payload);
-                    return i64::from_le_bytes(b);
-                }
-                if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload) {
-                    return v as i64;
-                }
-            }
-            6 | 7 => {
-                use nyash_rust::box_trait::{NyashBox, StringBox};
-                let s = nyash_rust::runtime::plugin_ffi_common::decode::string(payload);
-                let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
-                let h = nyash_rust::jit::rt::handles::to_handle(arc);
-                return h as i64;
-            }
-            1 => {
-                return if nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
-                    .unwrap_or(false)
-                {
-                    1
-                } else {
-                    0
-                };
-            }
-            8 => {
-                if payload.len() == 8 {
-                    let mut t = [0u8; 4];
-                    t.copy_from_slice(&payload[0..4]);
-                    let mut i = [0u8; 4];
-                    i.copy_from_slice(&payload[4..8]);
-                    let r_type = u32::from_le_bytes(t);
-                    let r_inst = u32::from_le_bytes(i);
-                    let pb = nyash_rust::runtime::plugin_loader_v2::make_plugin_box_v2(
-                        "PluginBox".into(),
-                        r_type,
-                        r_inst,
-                        invoke.unwrap(),
-                    );
-                    let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
-                        std::sync::Arc::new(pb);
-                    let h = nyash_rust::jit::rt::handles::to_handle(arc);
-                    return h as i64;
-                }
-            }
-            5 => {
-                if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref() == Some("1") {
-                    if payload.len() == 8 {
-                        let mut b = [0u8; 8];
-                        b.copy_from_slice(payload);
-                        let f = f64::from_le_bytes(b);
-                        return f as i64;
-                    }
-                }
-            }
-            _ => {}
-        }
+    if let Some((tag, sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+        if let Some(v) = invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) { return v; }
     }
     0
 }
@@ -1263,73 +759,8 @@ pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
     if rc != 0 {
         return 0;
     }
-    if let Some((tag, _sz, payload)) =
-        nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len])
-    {
-        match tag {
-            2 => {
-                if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload) {
-                    return v as i64;
-                }
-            }
-            3 => {
-                if payload.len() == 8 {
-                    let mut b = [0u8; 8];
-                    b.copy_from_slice(payload);
-                    return i64::from_le_bytes(b);
-                }
-                if let Some(v) = nyash_rust::runtime::plugin_ffi_common::decode::i32(payload) {
-                    return v as i64;
-                }
-            }
-            6 | 7 => {
-                use nyash_rust::box_trait::{NyashBox, StringBox};
-                let s = nyash_rust::runtime::plugin_ffi_common::decode::string(payload);
-                let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
-                let h = nyash_rust::jit::rt::handles::to_handle(arc);
-                return h as i64;
-            }
-            1 => {
-                return if nyash_rust::runtime::plugin_ffi_common::decode::bool(payload)
-                    .unwrap_or(false)
-                {
-                    1
-                } else {
-                    0
-                };
-            }
-            8 => {
-                if payload.len() == 8 {
-                    let mut t = [0u8; 4];
-                    t.copy_from_slice(&payload[0..4]);
-                    let mut i = [0u8; 4];
-                    i.copy_from_slice(&payload[4..8]);
-                    let r_type = u32::from_le_bytes(t);
-                    let r_inst = u32::from_le_bytes(i);
-                    let pb = nyash_rust::runtime::plugin_loader_v2::make_plugin_box_v2(
-                        "PluginBox".into(),
-                        r_type,
-                        r_inst,
-                        invoke.unwrap(),
-                    );
-                    let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
-                        std::sync::Arc::new(pb);
-                    let h = nyash_rust::jit::rt::handles::to_handle(arc);
-                    return h as i64;
-                }
-            }
-            5 => {
-                if std::env::var("NYASH_JIT_NATIVE_F64").ok().as_deref() == Some("1") {
-                    if payload.len() == 8 {
-                        let mut b = [0u8; 8];
-                        b.copy_from_slice(payload);
-                        let f = f64::from_le_bytes(b);
-                        return f as i64;
-                    }
-                }
-            }
-            _ => {}
-        }
+    if let Some((tag, sz, payload)) = nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out[..out_len]) {
+        if let Some(v) = invoke_core::decode_entry_to_i64(tag, sz, payload, invoke.unwrap()) { return v; }
     }
     0
 }

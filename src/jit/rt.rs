@@ -162,6 +162,28 @@ pub mod handles {
     pub fn len() -> usize {
         REG.with(|cell| cell.borrow().map.len())
     }
+    /// Tally handles by NyashBox type name (best-effort)
+    pub fn type_tally() -> Vec<(String, usize)> {
+        use std::collections::HashMap;
+        REG.with(|cell| {
+            let reg = cell.borrow();
+            let mut map: HashMap<String, usize> = HashMap::new();
+            for (_h, obj) in reg.map.iter() {
+                let tn = obj.type_name().to_string();
+                *map.entry(tn).or_insert(0) += 1;
+            }
+            let mut v: Vec<(String, usize)> = map.into_iter().collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            v
+        })
+    }
+    /// Snapshot current handle objects (Arc clones)
+    pub fn snapshot_arcs() -> Vec<Arc<dyn crate::box_trait::NyashBox>> {
+        REG.with(|cell| {
+            let reg = cell.borrow();
+            reg.map.values().cloned().collect()
+        })
+    }
 
     // Scope management: track and clear handles created within a JIT call
     pub fn begin_scope() {

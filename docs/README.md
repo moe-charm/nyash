@@ -55,6 +55,7 @@
 - [言語リファレンス](reference/language/LANGUAGE_REFERENCE_2025.md)
 - [アーキテクチャ概要](reference/architecture/TECHNICAL_ARCHITECTURE_2025.md)
 - [実行バックエンド](reference/architecture/execution-backends.md)
+- [GC モードと運用](reference/runtime/gc.md)
 - [プラグインシステム](reference/plugin-system/)
  - [CLIオプション早見表](tools/cli-options.md)
  

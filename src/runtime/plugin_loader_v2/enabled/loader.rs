@@ -1,4 +1,4 @@
-use super::types::{LoadedPluginV2, PluginBoxMetadata, PluginBoxV2, PluginHandleInner};
+use super::types::{LoadedPluginV2, NyashTypeBoxFfi, PluginBoxMetadata, PluginBoxV2, PluginHandleInner};
 use crate::bid::{BidError, BidResult};
 use crate::box_trait::NyashBox;
 use crate::config::nyash_toml_v2::{LibraryDefinition, NyashConfigV2};
@@ -12,11 +12,15 @@ fn dbg_on() -> bool {
     std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
 }
 
+type BoxInvokeFn = extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32;
+
 #[derive(Debug, Clone, Default)]
 struct LoadedBoxSpec {
     type_id: Option<u32>,
     methods: HashMap<String, MethodSpec>,
     fini_method_id: Option<u32>,
+    // Optional Nyash ABI v2 per-box invoke entry (not yet used for calls)
+    invoke_id: Option<BoxInvokeFn>,
 }
 #[derive(Debug, Clone, Copy)]
 struct MethodSpec {
@@ -124,7 +128,7 @@ impl PluginLoaderV2 {
         let lib = unsafe { Library::new(&lib_path) }.map_err(|_| BidError::PluginError)?;
         let lib_arc = Arc::new(lib);
 
-        // Resolve required invoke symbol (TypeBox v2: nyash_plugin_invoke)
+        // Resolve required invoke symbol (legacy library-level): nyash_plugin_invoke
         unsafe {
             let invoke_sym: Symbol<
                 unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
@@ -150,6 +154,35 @@ impl PluginLoaderV2 {
                 .write()
                 .map_err(|_| BidError::PluginError)?
                 .insert(lib_name.to_string(), Arc::new(loaded));
+        }
+
+        // Try to resolve Nyash ABI v2 per-box TypeBox symbols and record invoke_id
+        // Symbol pattern: nyash_typebox_<BoxType>
+        for box_type in &lib_def.boxes {
+            let sym_name = format!("nyash_typebox_{}\0", box_type);
+            unsafe {
+                if let Ok(tb_sym) = lib_arc.get::<Symbol<&NyashTypeBoxFfi>>(sym_name.as_bytes()) {
+                    let st: &NyashTypeBoxFfi = &*tb_sym;
+                    // Validate ABI tag 'TYBX' (0x54594258) and basic invariants
+                    let abi_ok = st.abi_tag == 0x5459_4258
+                        && st.struct_size as usize >= std::mem::size_of::<NyashTypeBoxFfi>();
+                    if !abi_ok {
+                        continue;
+                    }
+                    // Remember invoke_id in box_specs for (lib_name, box_type)
+                    if let Some(invoke_id) = st.invoke_id {
+                        let key = (lib_name.to_string(), box_type.to_string());
+                        let mut map = self.box_specs.write().map_err(|_| BidError::PluginError)?;
+                        let entry = map.entry(key).or_insert(LoadedBoxSpec {
+                            type_id: None,
+                            methods: HashMap::new(),
+                            fini_method_id: None,
+                            invoke_id: None,
+                        });
+                        entry.invoke_id = Some(invoke_id);
+                    }
+                }
+            }
         }
 
         Ok(())

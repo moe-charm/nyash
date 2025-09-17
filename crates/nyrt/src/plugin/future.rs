@@ -114,7 +114,7 @@ pub extern "C" fn nyash_future_spawn_method_h(
     let handle =
         nyash_rust::jit::rt::handles::to_handle(fut_box.clone() as std::sync::Arc<dyn NyashBox>);
     // Copy data for async task
-    let mut cap: usize = 512;
+    let cap: usize = 512;
     let tlv = buf.clone();
     let inv = invoke.unwrap();
     nyash_rust::runtime::global_hooks::spawn_task(

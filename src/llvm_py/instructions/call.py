@@ -6,6 +6,7 @@ Handles regular function calls (not BoxCall or ExternCall)
 import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
 from trace import debug as trace_debug
+from instructions.safepoint import insert_automatic_safepoint
 
 def lower_call(
     builder: ir.IRBuilder,
@@ -45,6 +46,13 @@ def lower_call(
                 bb_map = ctx.bb_map
         except Exception:
             pass
+    # Insert an automatic safepoint after the function call
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+            insert_automatic_safepoint(builder, module, "function_call")
+    except Exception:
+        pass
     # Short-hands with ctx (backward-compatible fallback)
     r = resolver
     p = preds

@@ -76,22 +76,20 @@ pub fn execute_pyvm_only(_runner: &NyashRunner, filename: &str) {
                 mir_json_path.display()
             );
         }
-        let status = std::process::Command::new(py3)
-            .args([
-                runner.to_string_lossy().as_ref(),
-                "--in",
-                &mir_json_path.display().to_string(),
-                "--entry",
-                entry,
-            ])
-            .status()
+        let mut cmd = std::process::Command::new(py3);
+        cmd.args([
+            runner.to_string_lossy().as_ref(),
+            "--in",
+            &mir_json_path.display().to_string(),
+            "--entry",
+            entry,
+        ]);
+        let out = crate::runner::modes::common_util::io::spawn_with_timeout(cmd, 10_000)
             .map_err(|e| format!("spawn pyvm: {}", e))
             .unwrap();
-        let code = status.code().unwrap_or(1);
-        if !status.success() {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("❌ PyVM failed (status={})", code);
-            }
+        let code = if out.timed_out { 1 } else { out.exit_code.unwrap_or(1) };
+        if out.timed_out && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!("❌ PyVM timeout");
         }
         process::exit(code);
     } else {
@@ -99,4 +97,3 @@ pub fn execute_pyvm_only(_runner: &NyashRunner, filename: &str) {
         process::exit(1);
     }
 }
-

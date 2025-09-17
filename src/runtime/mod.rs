@@ -4,6 +4,9 @@
 
 pub mod box_registry;
 pub mod gc;
+pub mod gc_controller;
+pub mod gc_mode;
+pub mod gc_trace;
 pub mod global_hooks;
 pub mod leak_tracker;
 pub mod nyash_runtime;

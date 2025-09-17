@@ -84,21 +84,22 @@ impl NyashRunner {
                                 );
                             }
                             // 2) Run harness with --in/--out（失敗時は即エラー）
-                            let status = std::process::Command::new(py3)
-                                .args([
-                                    harness.to_string_lossy().as_ref(),
-                                    "--in",
-                                    &mir_json_path.display().to_string(),
-                                    "--out",
-                                    &_out_path,
-                                ])
-                                .status()
+                            let mut cmd = std::process::Command::new(py3);
+                            cmd.args([
+                                harness.to_string_lossy().as_ref(),
+                                "--in",
+                                &mir_json_path.display().to_string(),
+                                "--out",
+                                &_out_path,
+                            ]);
+                            let out = crate::runner::modes::common_util::io::spawn_with_timeout(cmd, 20_000)
                                 .map_err(|e| format!("spawn harness: {}", e))
                                 .unwrap();
-                            if !status.success() {
+                            if out.timed_out || !out.status_ok {
                                 eprintln!(
-                                    "❌ llvmlite harness failed (status={})",
-                                    status.code().unwrap_or(-1)
+                                    "❌ llvmlite harness failed (timeout={} code={:?})",
+                                    out.timed_out,
+                                    out.exit_code
                                 );
                                 process::exit(1);
                             }

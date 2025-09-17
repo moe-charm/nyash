@@ -16,6 +16,12 @@ Protocol
 - Output: `.o` オブジェクト（既定: `NYASH_AOT_OBJECT_OUT` または `NYASH_LLVM_OBJ_OUT`）。
 - 入口: `ny_main() -> i64`（戻り値は exit code 相当。必要時 handle 正規化を行う）。
 
+CLI（crate）
+- `crates/nyash-llvm-compiler` 提供の `ny-llvmc` は llvmlite ハーネスの薄ラッパーだよ。
+  - ダミー: `./target/release/ny-llvmc --dummy --out /tmp/dummy.o`
+  - JSON から: `./target/release/ny-llvmc --in mir.json --out out.o`
+  - 既定のハーネスパスは `tools/llvmlite_harness.py`。変更は `--harness <path>` で上書き可。
+
 Quick Start
 - 依存: `python3 -m pip install llvmlite`
 - ダミー生成（配線検証）:
@@ -40,6 +46,10 @@ Acceptance
 Notes
 - 初版は固定 `ny_main` から開始してもよい（配線確認）。以降、MIR 命令を順次対応。
 - ハーネスは自律（外部状態に依存しない）。エラーは即 stderr に詳細を出す。
+
+Schema Validation（任意）
+- JSON v0 のスキーマは `docs/reference/mir/json_v0.schema.json` にあるよ。
+- 検証: `python3 tools/validate_mir_json.py <mir.json>`（要: `python3 -m pip install jsonschema`）。
 
 Appendix: 静的リンクについて
 - 生成 EXE は NyRT（libnyrt.a）を静的リンク。完全静的（-static）は musl 推奨（dlopen 不可になるため動的プラグインは使用不可）。

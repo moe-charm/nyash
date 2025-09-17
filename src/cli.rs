@@ -58,6 +58,8 @@ pub struct CliConfig {
     // Phase-15: JSON IR v0 bridge
     pub ny_parser_pipe: bool,
     pub json_file: Option<String>,
+    // GC mode (dev; forwarded to env as NYASH_GC_MODE)
+    pub gc_mode: Option<String>,
     // Build system (MVP)
     pub build_path: Option<String>,
     pub build_app: Option<String>,
@@ -104,6 +106,12 @@ impl CliConfig {
                     .help("Nyash file to execute")
                     .value_name("FILE")
                     .index(1)
+            )
+            .arg(
+                Arg::new("gc")
+                    .long("gc")
+                    .value_name("{auto,rc+cycle,minorgen,stw,rc,off}")
+                    .help("Select GC mode (default: rc+cycle)")
             )
             .arg(
                 Arg::new("parser")
@@ -456,6 +464,7 @@ impl CliConfig {
             cli_verbose: matches.get_flag("verbose"),
             run_task: matches.get_one::<String>("run-task").cloned(),
             load_ny_plugins: matches.get_flag("load-ny-plugins"),
+            gc_mode: matches.get_one::<String>("gc").cloned(),
             parser_ny: matches
                 .get_one::<String>("parser")
                 .map(|s| s == "ny")
@@ -516,6 +525,7 @@ impl Default for CliConfig {
             cli_verbose: false,
             run_task: None,
             load_ny_plugins: false,
+            gc_mode: None,
             parser_ny: false,
             ny_parser_pipe: false,
             json_file: None,

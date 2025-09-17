@@ -143,6 +143,12 @@ impl NyashRunner {
         if self.config.cli_verbose {
             std::env::set_var("NYASH_CLI_VERBOSE", "1");
         }
+        // GC mode forwarding: map CLI --gc to NYASH_GC_MODE for downstream runtimes
+        if let Some(ref m) = self.config.gc_mode {
+            if !m.trim().is_empty() {
+                std::env::set_var("NYASH_GC_MODE", m);
+            }
+        }
         // Script-level env directives (special comments) — parse early
         // Supported:
         //   // @env KEY=VALUE

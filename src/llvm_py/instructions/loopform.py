@@ -7,6 +7,7 @@ import os
 import llvmlite.ir as ir
 from dataclasses import dataclass
 from typing import Dict, Tuple, List, Optional, Any
+from instructions.safepoint import insert_automatic_safepoint
 
 @dataclass
 class LoopFormContext:
@@ -53,7 +54,8 @@ def lower_while_loopform(
     bb_map: Dict[int, ir.Block],
     resolver=None,
     preds=None,
-    block_end_values=None
+    block_end_values=None,
+    ctx=None,
 ) -> bool:
     """
     Lower a while loop using LoopForm structure
@@ -72,9 +74,22 @@ def lower_while_loopform(
     builder.position_at_end(lf.preheader)
     builder.branch(lf.header)
     
-    # Header: Evaluate condition
+    # Header: Evaluate condition (insert a safepoint at loop header)
     builder.position_at_end(lf.header)
-    if resolver is not None and preds is not None and block_end_values is not None:
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+            insert_automatic_safepoint(builder, func.module, "loop_header")
+    except Exception:
+        pass
+    if ctx is not None:
+        try:
+            cond64 = ctx.resolver.resolve_i64(condition_vid, builder.block, ctx.preds, ctx.block_end_values, ctx.vmap, ctx.bb_map)
+            zero64 = ir.IntType(64)(0)
+            cond = builder.icmp_unsigned('!=', cond64, zero64)
+        except Exception:
+            cond = vmap.get(condition_vid, ir.Constant(ir.IntType(1), 0))
+    elif resolver is not None and preds is not None and block_end_values is not None:
         cond64 = resolver.resolve_i64(condition_vid, builder.block, preds, block_end_values, vmap, bb_map)
         zero64 = ir.IntType(64)(0)
         cond = builder.icmp_unsigned('!=', cond64, zero64)

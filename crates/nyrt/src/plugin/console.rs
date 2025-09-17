@@ -131,7 +131,7 @@ pub extern "C" fn nyash_console_readline_export() -> *mut i8 {
     // Use read_to_end if stdin is not a TTY? Simpler: read_line through BufRead
     // For simplicity, read from stdin into buffer until newline or EOF
     let mut buf = String::new();
-    let mut handle = io::stdin();
+    // Note: use std::io::stdin() directly without an unused handle binding
     // On failure or EOF, return empty string
     match io::stdin().read_line(&mut buf) {
         Ok(_n) => {

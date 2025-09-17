@@ -5,6 +5,7 @@ Core of Nyash's "Everything is Box" philosophy
 
 import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
+from instructions.safepoint import insert_automatic_safepoint
 
 def _declare(module: ir.Module, name: str, ret, args):
     for f in module.functions:
@@ -68,6 +69,13 @@ def lower_boxcall(
     i64 = ir.IntType(64)
     i8 = ir.IntType(8)
     i8p = i8.as_pointer()
+    # Insert a safepoint around potential heavy boxcall sites (pre-call)
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+            insert_automatic_safepoint(builder, module, "boxcall")
+    except Exception:
+        pass
 
     # Short-hands with ctx (backward-compatible fallback)
     r = resolver

@@ -78,6 +78,7 @@ pub extern "C" fn nyash_string_concat_hh_export(a_h: i64, b_h: i64) -> i64 {
         String::new()
     };
     let s = format!("{}{}", to_s(a_h), to_s(b_h));
+    nyash_rust::runtime::global_hooks::gc_alloc(s.len() as u64);
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
     let h = handles::to_handle(arc) as i64;
     eprintln!("[TRACE] concat_hh -> {}", h);
@@ -134,6 +135,7 @@ pub extern "C" fn nyash_string_substring_hii_export(h: i64, start: i64, end: i64
     let (st_u, en_u) = (st as usize, en as usize);
     let sub = s.get(st_u.min(s.len())..en_u.min(s.len())).unwrap_or("");
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(sub.to_string()));
+    nyash_rust::runtime::global_hooks::gc_alloc(sub.len() as u64);
     let nh = handles::to_handle(arc) as i64;
     eprintln!("[TRACE] substring_hii -> {}", nh);
     nh
@@ -196,7 +198,8 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
         Ok(v) => v.to_string(),
         Err(_) => return 0,
     };
-    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s.clone()));
+    nyash_rust::runtime::global_hooks::gc_alloc(s.len() as u64);
     let h = handles::to_handle(arc) as i64;
     eprintln!("[TRACE] from_i8_string -> {}", h);
     h
@@ -208,6 +211,7 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
 pub extern "C" fn nyash_box_from_f64(val: f64) -> i64 {
     use nyash_rust::{box_trait::NyashBox, boxes::FloatBox, jit::rt::handles};
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(FloatBox::new(val));
+    nyash_rust::runtime::global_hooks::gc_alloc(8);
     handles::to_handle(arc) as i64
 }
 
@@ -220,6 +224,7 @@ pub extern "C" fn nyash_box_from_i64(val: i64) -> i64 {
         jit::rt::handles,
     };
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(IntegerBox::new(val));
+    nyash_rust::runtime::global_hooks::gc_alloc(8);
     handles::to_handle(arc) as i64
 }
 
@@ -487,7 +492,8 @@ pub extern "C" fn nyash_string_from_u64x2_export(lo: i64, hi: i64, len: i64) -> 
         bytes.push(((hi_u >> (8 * i)) & 0xff) as u8);
     }
     let s = String::from_utf8_lossy(&bytes).to_string();
-    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s.clone()));
+    nyash_rust::runtime::global_hooks::gc_alloc(s.len() as u64);
     handles::to_handle(arc) as i64
 }
 
@@ -542,7 +548,23 @@ pub extern "C" fn nyash_gc_barrier_write_export(handle_or_ptr: i64) -> i64 {
     if std::env::var("NYASH_GC_BARRIER_TRACE").ok().as_deref() == Some("1") {
         eprintln!("[nyrt] nyash.gc.barrier_write h=0x{:x}", handle_or_ptr);
     }
+    // Forward to runtime GC hooks when available (Write barrier)
+    nyash_rust::runtime::global_hooks::gc_barrier(nyash_rust::runtime::BarrierKind::Write);
     0
+}
+
+// LLVM safepoint exports (llvmlite harness)
+// export: ny_safepoint(live_count: i64, live_values: i64*) -> void
+#[no_mangle]
+pub extern "C" fn ny_safepoint(_live_count: i64, _live_values: *const i64) {
+    // For now we ignore live-values; runtime uses cooperative safepoint + poll
+    nyash_rust::runtime::global_hooks::safepoint_and_poll();
+}
+
+// export: ny_check_safepoint() -> void
+#[no_mangle]
+pub extern "C" fn ny_check_safepoint() {
+    nyash_rust::runtime::global_hooks::safepoint_and_poll();
 }
 
 #[export_name = "nyash.string.birth_h"]
@@ -552,6 +574,7 @@ pub extern "C" fn nyash_string_birth_h_export() -> i64 {
         if let Ok(b) = host_g.create_box("StringBox", &[]) {
             let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::from(b);
             let h = nyash_rust::jit::rt::handles::to_handle(arc);
+            nyash_rust::runtime::global_hooks::gc_alloc(0);
             return h as i64;
         }
     }
@@ -564,6 +587,7 @@ pub extern "C" fn nyash_integer_birth_h_export() -> i64 {
         if let Ok(b) = host_g.create_box("IntegerBox", &[]) {
             let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::from(b);
             let h = nyash_rust::jit::rt::handles::to_handle(arc);
+            nyash_rust::runtime::global_hooks::gc_alloc(0);
             return h as i64;
         }
     }
@@ -576,6 +600,7 @@ pub extern "C" fn nyash_console_birth_h_export() -> i64 {
         if let Ok(b) = host_g.create_box("ConsoleBox", &[]) {
             let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::from(b);
             let h = nyash_rust::jit::rt::handles::to_handle(arc);
+            nyash_rust::runtime::global_hooks::gc_alloc(0);
             return h as i64;
         }
     }
@@ -587,6 +612,7 @@ pub extern "C" fn nyash_console_birth_h_export() -> i64 {
 pub extern "C" fn nyash_array_birth_h_export() -> i64 {
     let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
         std::sync::Arc::new(nyash_rust::boxes::array::ArrayBox::new());
+    nyash_rust::runtime::global_hooks::gc_alloc(0);
     nyash_rust::jit::rt::handles::to_handle(arc) as i64
 }
 
@@ -595,6 +621,7 @@ pub extern "C" fn nyash_array_birth_h_export() -> i64 {
 pub extern "C" fn nyash_map_birth_h_export() -> i64 {
     let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
         std::sync::Arc::new(nyash_rust::boxes::map_box::MapBox::new());
+    nyash_rust::runtime::global_hooks::gc_alloc(0);
     nyash_rust::jit::rt::handles::to_handle(arc) as i64
 }
 // ---- Process entry (driver) ----
@@ -646,6 +673,15 @@ pub extern "C" fn main() -> i32 {
             }
         }
     }
+    // Initialize a minimal runtime to back global hooks (GC/scheduler) for safepoints
+    // Choose GC hooks based on env (default dev: Counting for observability unless explicitly off)
+    let mut rt_builder = nyash_rust::runtime::NyashRuntimeBuilder::new();
+    let gc_mode = nyash_rust::runtime::gc_mode::GcMode::from_env();
+    let controller = std::sync::Arc::new(nyash_rust::runtime::gc_controller::GcController::new(gc_mode));
+    rt_builder = rt_builder.with_gc_hooks(controller);
+    let rt_hooks = rt_builder.build();
+    nyash_rust::runtime::global_hooks::set_from_runtime(&rt_hooks);
+
     let mut inited = false;
     if let Some(dir) = &exe_dir {
         let candidate = dir.join("nyash.toml");
@@ -680,6 +716,70 @@ pub extern "C" fn main() -> i32 {
         let v = ny_main();
         // Print standardized result line for golden comparisons
         println!("Result: {}", v);
+        // Optional GC metrics after program completes
+        let want_json = std::env::var("NYASH_GC_METRICS_JSON").ok().as_deref() == Some("1");
+        let want_text = std::env::var("NYASH_GC_METRICS").ok().as_deref() == Some("1");
+        if want_json || want_text {
+            let (sp, br, bw) = rt_hooks
+                .gc
+                .snapshot_counters()
+                .unwrap_or((0, 0, 0));
+            let handles = nyash_rust::jit::rt::handles::len();
+            let gc_mode_s = gc_mode.as_str();
+            // Include allocation totals if controller is used
+            let any_gc: &dyn std::any::Any = &*rt_hooks.gc;
+            let (alloc_count, alloc_bytes, trial_nodes, trial_edges, collect_total, collect_sp, collect_alloc, last_ms, last_reason) = if let Some(ctrl) = any_gc
+                .downcast_ref::<nyash_rust::runtime::gc_controller::GcController>()
+            {
+                let (ac, ab) = ctrl.alloc_totals();
+                let (tn, te) = ctrl.trial_reachability_last();
+                let (ct, csp, calloc) = ctrl.collection_totals();
+                let lms = ctrl.trial_duration_last_ms();
+                let lrf = ctrl.trial_reason_last_bits();
+                (ac, ab, tn, te, ct, csp, calloc, lms, lrf)
+            } else {
+                (0, 0, 0, 0, 0, 0, 0, 0, 0)
+            };
+            // Settings snapshot (env)
+            let sp_interval = std::env::var("NYASH_GC_COLLECT_SP").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+            let alloc_thresh = std::env::var("NYASH_GC_COLLECT_ALLOC").ok().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+            let auto_sp = std::env::var("NYASH_LLVM_AUTO_SAFEPOINT").ok().map(|v| v == "1").unwrap_or(true);
+            if want_json {
+                // Minimal JSON assembly to avoid extra deps in nyrt
+                println!(
+                    "{{\"kind\":\"gc_metrics\",\"safepoints\":{},\"barrier_reads\":{},\"barrier_writes\":{},\"jit_handles\":{},\"alloc_count\":{},\"alloc_bytes\":{},\"trial_nodes\":{},\"trial_edges\":{},\"collections\":{},\"collect_by_sp\":{},\"collect_by_alloc\":{},\"last_collect_ms\":{},\"last_reason_bits\":{},\"sp_interval\":{},\"alloc_threshold\":{},\"auto_safepoint\":{},\"gc_mode\":\"{}\"}}",
+                    sp, br, bw, handles, alloc_count, alloc_bytes, trial_nodes, trial_edges, collect_total, collect_sp, collect_alloc, last_ms, last_reason, sp_interval, alloc_thresh, if auto_sp {1} else {0}, gc_mode_s
+                );
+            } else if want_text {
+                eprintln!(
+                    "[GC] metrics: safepoints={} read_barriers={} write_barriers={} jit_handles={} allocs={} bytes={} collections={} (sp={} alloc={}) last_ms={} mode={}",
+                    sp, br, bw, handles, alloc_count, alloc_bytes, collect_total, collect_sp, collect_alloc, last_ms, gc_mode_s
+                );
+            }
+            // Threshold warning
+            if let Ok(s) = std::env::var("NYASH_GC_ALLOC_THRESHOLD") {
+                if let Ok(th) = s.parse::<u64>() {
+                    if alloc_bytes > th {
+                        eprintln!(
+                            "[GC][warn] allocation bytes {} exceeded threshold {}",
+                            alloc_bytes, th
+                        );
+                    }
+                }
+            }
+        }
+
+        // Leak diagnostics: report remaining JIT handles by type (Top-10)
+        if std::env::var("NYASH_GC_LEAK_DIAG").ok().as_deref() == Some("1") {
+            let tally = nyash_rust::jit::rt::handles::type_tally();
+            let total = tally.iter().map(|(_, n)| *n as u64).sum::<u64>();
+            if total > 0 {
+                eprintln!("[leak] Remaining handles by type (top 10):");
+                for (i, (ty, n)) in tally.into_iter().take(10).enumerate() {
+                    eprintln!("  {}. {} x{}", i + 1, ty, n);
+                }
+            }
+        }
         v as i32
     }
 }

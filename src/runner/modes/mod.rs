@@ -8,5 +8,8 @@ pub mod mir;
 pub mod vm;
 pub mod pyvm;
 
+// Shared helpers extracted from common.rs (in progress)
+pub mod common_util;
+
 #[cfg(feature = "cranelift-jit")]
 pub mod aot;

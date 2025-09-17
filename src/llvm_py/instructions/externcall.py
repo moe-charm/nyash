@@ -5,6 +5,7 @@ Minimal mapping for NyRT-exported symbols (console/log family等)
 
 import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
+from instructions.safepoint import insert_automatic_safepoint
 
 def lower_externcall(
     builder: ir.IRBuilder,
@@ -197,3 +198,10 @@ def lower_externcall(
             vmap[dst_vid] = ir.Constant(i64, 0)
         else:
             vmap[dst_vid] = result
+    # Insert an automatic safepoint after externcall
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+            insert_automatic_safepoint(builder, module, "extern_call")
+    except Exception:
+        pass

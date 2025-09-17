@@ -776,7 +776,7 @@ class NyashLLVMBuilder:
         for inst in term_ops:
             try:
                 import os
-            trace_debug(f"[llvm-py] term op: {inst.get('op')} dst={inst.get('dst')} cond={inst.get('cond')}")
+                trace_debug(f"[llvm-py] term op: {inst.get('op')} dst={inst.get('dst')} cond={inst.get('cond')}")
             except Exception:
                 pass
             try:
@@ -950,7 +950,8 @@ class NyashLLVMBuilder:
             self.loop_count += 1
             if not lower_while_loopform(builder, func, cond, body,
                                        self.loop_count, self.vmap, self.bb_map,
-                                       self.resolver, self.preds, self.block_end_values):
+                                       self.resolver, self.preds, self.block_end_values,
+                                       getattr(self, 'ctx', None)):
                 # Fallback to regular while (structured)
                 try:
                     self.resolver._owner_lower_instruction = self.lower_instruction
@@ -975,58 +976,10 @@ class NyashLLVMBuilder:
         except Exception:
             pass
     
-    def _lower_while_regular(self, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
-        """Fallback regular while lowering"""
-        # Create basic blocks: cond -> body -> cond, and exit
-        cond_vid = inst.get("cond")
-        body_insts = inst.get("body", [])
-
-        cur_bb = builder.block
-        cond_bb = func.append_basic_block(name=f"while{self.loop_count}_cond")
-        body_bb = func.append_basic_block(name=f"while{self.loop_count}_body")
-        exit_bb = func.append_basic_block(name=f"while{self.loop_count}_exit")
-
-        # Jump from current to cond
-        builder.branch(cond_bb)
-
-        # Cond block
-        cbuild = ir.IRBuilder(cond_bb)
-        try:
-            # Resolve against the condition block to localize dominance
-            cond_val = self.resolver.resolve_i64(cond_vid, cbuild.block, self.preds, self.block_end_values, self.vmap, self.bb_map)
-        except Exception:
-            cond_val = self.vmap.get(cond_vid)
-        if cond_val is None:
-            cond_val = ir.Constant(self.i1, 0)
-        # Normalize to i1
-        if hasattr(cond_val, 'type'):
-            if isinstance(cond_val.type, ir.IntType) and cond_val.type.width == 64:
-                zero64 = ir.Constant(self.i64, 0)
-                cond_val = cbuild.icmp_unsigned('!=', cond_val, zero64, name="while_cond_i1")
-            elif isinstance(cond_val.type, ir.PointerType):
-                nullp = ir.Constant(cond_val.type, None)
-                cond_val = cbuild.icmp_unsigned('!=', cond_val, nullp, name="while_cond_p1")
-            elif isinstance(cond_val.type, ir.IntType) and cond_val.type.width == 1:
-                # already i1
-                pass
-            else:
-                # Fallback: treat as false
-                cond_val = ir.Constant(self.i1, 0)
-        else:
-            cond_val = ir.Constant(self.i1, 0)
-
-        cbuild.cbranch(cond_val, body_bb, exit_bb)
-
-        # Body block
-        bbuild = ir.IRBuilder(body_bb)
-        # Allow nested lowering of body instructions within this block
-        self._lower_instruction_list(bbuild, body_insts, func)
-        # Ensure terminator: if not terminated, branch back to cond
-        if bbuild.block.terminator is None:
-            bbuild.branch(cond_bb)
-
-        # Continue at exit
-        builder.position_at_end(exit_bb)
+    # NOTE: regular while lowering is implemented in
+    # instructions/controlflow/while_.py::lower_while_regular and invoked
+    # from NyashLLVMBuilder.lower_instruction(). This legacy helper is removed
+    # to avoid divergence between two implementations.
 
     def _lower_instruction_list(self, builder: ir.IRBuilder, insts: List[Dict[str, Any]], func: ir.Function):
         """Lower a flat list of instructions using current builder and function."""
