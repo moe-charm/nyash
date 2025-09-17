@@ -19,8 +19,11 @@ Protocol
 CLI（crate）
 - `crates/nyash-llvm-compiler` 提供の `ny-llvmc` は llvmlite ハーネスの薄ラッパーだよ。
   - ダミー: `./target/release/ny-llvmc --dummy --out /tmp/dummy.o`
-  - JSON から: `./target/release/ny-llvmc --in mir.json --out out.o`
-  - 既定のハーネスパスは `tools/llvmlite_harness.py`。変更は `--harness <path>` で上書き可。
+  - JSON→.o: `./target/release/ny-llvmc --in mir.json --out out.o`
+  - JSON→EXE（新規）: `./target/release/ny-llvmc --in mir.json --emit exe --nyrt target/release --out app`
+    - `--nyrt <dir>` で `libnyrt.a` の位置を指定（省略時は `target/release`→`crates/nyrt/target/release` の順に探索）
+    - 追加フラグは `--libs "<flags>"` で渡せる（例: `--libs "-static"`）
+  - 既定のハーネススクリプトは `tools/llvmlite_harness.py`（`--harness` で上書き可）。
 
 Quick Start
 - 依存: `python3 -m pip install llvmlite`
@@ -33,6 +36,10 @@ Wiring（Rust 側）
   1) `--emit-mir-json <path>` 等で MIR(JSON) を出力
   2) `python3 tools/llvmlite_harness.py --in <mir.json> --out <obj.o>` を起動
   3) 成功後は通常のリンク手順（NyRT とリンク）
+
+Tools（統合フロー）
+- crate 直結の EXE 出力: `NYASH_LLVM_COMPILER=crate NYASH_LLVM_EMIT=exe tools/build_llvm.sh apps/tests/ternary_basic.nyash -o app`
+  - 環境変数 `NYASH_LLVM_NYRT` で NyRT の場所を、`NYASH_LLVM_LIBS` で追加フラグを指定できる。
 
 Scope（Phase 15）
 - 最小命令: Const/BinOp/Compare/Phi/Branch/Jump/Return

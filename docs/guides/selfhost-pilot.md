@@ -13,7 +13,13 @@ Recommended Flows
 CI Workflows
 - Selfhost Bootstrap (always): `.github/workflows/selfhost-bootstrap.yml`
   - Builds nyash (`cranelift-jit`) and runs `tools/bootstrap_selfhost_smoke.sh`.
-- Selfhost EXE‑first (optional): `.github/workflows/selfhost-exe-first.yml`
+- Selfhost EXE‑first（optional）
+  - crate 直結（ny-llvmc）で JSON→EXE→実行までを最短経路で確認できるよ。
+  - 手順（ローカル）:
+    1) MIR(JSON) を出力: `./target/release/nyash --emit-mir-json tmp/app.json --backend mir apps/tests/ternary_basic.nyash`
+    2) EXE 生成: `./target/release/ny-llvmc --in tmp/app.json --emit exe --nyrt target/release --out tmp/app`
+    3) 実行: `./tmp/app`（戻り値が exit code）
+  - ワンコマンドスモーク: `bash tools/crate_exe_smoke.sh apps/tests/ternary_basic.nyash`
   - Installs LLVM 18 + llvmlite, then runs `tools/exe_first_smoke.sh`.
 
 Useful Env Flags
