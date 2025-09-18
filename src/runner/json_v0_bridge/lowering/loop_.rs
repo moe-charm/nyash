@@ -1,5 +1,4 @@
 use super::{lower_stmt_list_with_vars, new_block, BridgeEnv, LoopContext};
-use super::expr::lower_expr_with_vars;
 use crate::mir::{BasicBlockId, MirFunction, MirInstruction, ValueId};
 use std::collections::HashMap;
 use super::super::ast::StmtV0;

@@ -1,3 +1,4 @@
+#![allow(unreachable_patterns, unused_variables)]
 //! HostCall-related lowering helpers split from core.rs (no behavior change)
 use super::builder::IRBuilder;
 use crate::mir::{MirFunction, ValueId};

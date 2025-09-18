@@ -1,65 +1,55 @@
+#!/usr/bin/env python3
 """
-Unit tests for phi_wiring helpers
+Lightweight unit tests for src/llvm_py/phi_wiring.py (analysis helpers).
 
-These tests construct a minimal function with two blocks and a PHI in the
-second block. We verify that placeholders are created and incoming edges
-are wired from the correct predecessor, using end-of-block snapshots.
+These do not require llvmlite; they validate pure-Python helpers like
+analyze_incomings() and small control-flow utilities.
+Run locally with:
+  python3 -m unittest src.llvm_py.tests.test_phi_wiring
 """
+import unittest
 
-import sys
-from pathlib import Path
-
-# Ensure 'src' is importable when running this test directly
-TEST_DIR = Path(__file__).resolve().parent
-PKG_DIR = TEST_DIR.parent  # src/llvm_py
-ROOT = PKG_DIR.parent      # src
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-if str(PKG_DIR) not in sys.path:
-    sys.path.insert(0, str(PKG_DIR))
-
-import llvmlite.ir as ir  # type: ignore
-
-from phi_wiring import setup_phi_placeholders, finalize_phis  # type: ignore
-import llvm_builder  # type: ignore
+from src.llvm_py import phi_wiring
 
 
-def _simple_mir_with_phi():
-    """
-    Build a minimal MIR JSON that compiles to:
-      bb0: const v1=42; jump bb1
-      bb1: phi v2=[(bb0,v1)] ; ret v2
-    """
-    return {
-        "functions": [
+class TestPhiWiringHelpers(unittest.TestCase):
+    def test_analyze_incomings_simple(self):
+        blocks = [
             {
-                "name": "main",
-                "params": [],
-                "blocks": [
-                    {"id": 0, "instructions": [
-                        {"op": "const", "dst": 1, "value": {"type": "int", "value": 42}},
-                        {"op": "jump", "target": 1}
-                    ]},
-                    {"id": 1, "instructions": [
-                        {"op": "phi", "dst": 2, "incoming": [[1, 0]]},
-                        {"op": "ret", "value": 2}
-                    ]}
-                ]
-            }
+                "id": 10,
+                "instructions": [
+                    {
+                        "op": "phi",
+                        "dst": 100,
+                        # JSON v0 uses [(value, block)] but helper adapts to [(decl_b, v_src)]
+                        "incoming": [(1, 20), (2, 30)],
+                    }
+                ],
+            },
+            {"id": 1, "instructions": []},
+            {"id": 2, "instructions": []},
         ]
-    }
+        inc = phi_wiring.analyze_incomings(blocks)
+        self.assertIn(10, inc)
+        self.assertIn(100, inc[10])
+        pairs = set(inc[10][100])
+        # Helper normalizes JSON v0 order (value, block) -> (decl_b, v_src)
+        self.assertEqual(pairs, {(20, 1), (30, 2)})
+
+    def test_nearest_pred_on_path_negative(self):
+        # Build a tiny CFG: 1 -> 2 -> 3, preds_list only contains 9 (not on path)
+        succs = {1: [2], 2: [3]}
+        preds_list = [9]
+        decl_b = 1
+        target = 3
+        res = phi_wiring._nearest_pred_on_path(succs, preds_list, decl_b, target)
+        self.assertIsNone(res)
+
+    def test_build_succs(self):
+        preds = {3: [1, 2], 4: [3]}
+        succs = phi_wiring._build_succs(preds)
+        self.assertEqual(succs, {1: [3], 2: [3], 3: [4]})
 
 
-def test_phi_placeholders_and_finalize_basic():
-    mir = _simple_mir_with_phi()
-    b = llvm_builder.NyashLLVMBuilder()
-    # Build once to create function, blocks, preds; stop before finalize by calling internals like lower_function
-    reader_functions = mir["functions"]
-    assert reader_functions
-    b.lower_function(reader_functions[0])
-    # After lowering a function, finalize_phis is already called at the end of lower_function.
-    # Verify via IR text that a PHI exists in bb1 with an incoming from bb0.
-    ir_text = str(b.module)
-    assert 'bb1' in ir_text
-    assert 'phi  i64' in ir_text
-    assert '[0, %"bb0"]' in ir_text or '[ i64 0, %"bb0"]' in ir_text
+if __name__ == "__main__":
+    unittest.main()

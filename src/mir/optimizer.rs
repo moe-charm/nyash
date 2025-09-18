@@ -264,6 +264,7 @@ impl MirOptimizer {
     }
 
     /// Convert instruction to string key for CSE
+    #[allow(dead_code)]
     fn instruction_to_key(&self, instruction: &MirInstruction) -> String {
         match instruction {
             MirInstruction::Const { value, .. } => format!("const_{:?}", value),
@@ -299,6 +300,7 @@ impl MirOptimizer {
 
 impl MirOptimizer {
     /// Rewrite all BoxCall to PluginInvoke to force plugin path (no builtin fallback)
+    #[allow(dead_code)]
     fn force_plugin_invoke(&mut self, module: &mut MirModule) -> OptimizationStats {
         crate::mir::optimizer_passes::normalize::force_plugin_invoke(self, module)
     }
@@ -307,6 +309,7 @@ impl MirOptimizer {
     ///
     /// Rewrites: PluginInvoke { box_val=py (PyRuntimeBox), method="getattr"|"call", args=[obj, rest...] }
     ///        →  PluginInvoke { box_val=obj, method, args=[rest...] }
+    #[allow(dead_code)]
     fn normalize_python_helper_calls(&mut self, module: &mut MirModule) -> OptimizationStats {
         crate::mir::optimizer_passes::normalize::normalize_python_helper_calls(self, module)
     }
@@ -315,6 +318,7 @@ impl MirOptimizer {
     /// - WeakNew/WeakLoad → WeakRef(New/Load)
     /// - BarrierRead/BarrierWrite → Barrier(Read/Write)
     /// - Print → ExternCall(env.console.log)
+    #[allow(dead_code)]
     fn normalize_legacy_instructions(&mut self, module: &mut MirModule) -> OptimizationStats {
         use super::{BarrierOp, MirInstruction as I, MirType, TypeOpKind, WeakRefOp};
         let mut stats = OptimizationStats::new();
@@ -810,6 +814,7 @@ impl MirOptimizer {
 }
 
 /// Map string type name to MIR type (optimizer-level helper)
+#[allow(dead_code)]
 fn map_type_name(name: &str) -> MirType {
     match name {
         "Integer" | "Int" | "I64" => MirType::Integer,
@@ -821,9 +826,11 @@ fn map_type_name(name: &str) -> MirType {
     }
 }
 
+#[allow(dead_code)]
 fn opt_debug_enabled() -> bool {
     crate::config::env::opt_debug()
 }
+#[allow(dead_code)]
 fn opt_debug(msg: &str) {
     if opt_debug_enabled() {
         eprintln!("[OPT] {}", msg);
@@ -832,6 +839,7 @@ fn opt_debug(msg: &str) {
 
 /// Resolve a MIR type from a value id that should represent a type name
 /// Supports: Const String("T") and NewBox(StringBox, Const String("T"))
+#[allow(dead_code)]
 fn resolve_type_from_value(
     function: &MirFunction,
     def_map: &std::collections::HashMap<ValueId, (super::basic_block::BasicBlockId, usize)>,
@@ -884,6 +892,7 @@ impl Default for MirOptimizer {
 
 impl MirOptimizer {
     /// Diagnostic: detect unlowered is/as/isType/asType after Builder
+    #[allow(dead_code)]
     fn diagnose_unlowered_type_ops(&mut self, module: &MirModule) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
         let diag_on = self.debug || crate::config::env::opt_diag();
@@ -954,6 +963,7 @@ impl MirOptimizer {
     /// Diagnostic: detect legacy instructions that should be unified
     /// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite/ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke
     /// When NYASH_OPT_DIAG or NYASH_OPT_DIAG_FORBID_LEGACY is set, prints diagnostics.
+    #[allow(dead_code)]
     fn diagnose_legacy_instructions(&mut self, module: &MirModule) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
         let diag_on = self.debug

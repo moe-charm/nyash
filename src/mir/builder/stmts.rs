@@ -199,7 +199,7 @@ impl super::MirBuilder {
         self.current_block = Some(else_block);
         self.ensure_block_exists(else_block)?;
         // Build else with a clean snapshot of pre-if variables
-        let (mut else_value_raw, else_ast_for_analysis, else_var_map_end_opt) =
+        let (else_value_raw, else_ast_for_analysis, else_var_map_end_opt) =
             if let Some(else_ast) = else_branch {
                 self.variable_map = pre_if_var_map.clone();
                 let val = self.build_expression(else_ast.clone())?;

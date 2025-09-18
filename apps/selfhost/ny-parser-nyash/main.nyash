@@ -1,5 +1,6 @@
 // Entry: read stdin, parse with ParserV0, print JSON IR or error JSON
 
+using "./apps/selfhost/ny-parser-nyash/parser_minimal.nyash" as ParserMod
 include "./apps/selfhost/ny-parser-nyash/parser_minimal.nyash"
 
 static box Main {

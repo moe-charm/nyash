@@ -11,6 +11,8 @@ can be unit-tested in isolation.
 """
 
 from typing import Dict, List, Any, Optional, Tuple
+import os
+import json
 import llvmlite.ir as ir
 
 # ---- Small helpers (analyzable/testable) ----
@@ -40,6 +42,28 @@ def _collect_produced_stringish(blocks: List[Dict[str, Any]]) -> Dict[int, bool]
                 pass
     return produced_str
 
+def _trace(msg: Any):
+    if os.environ.get("NYASH_LLVM_TRACE_PHI", "0") == "1":
+        out = os.environ.get("NYASH_LLVM_TRACE_OUT")
+        # Format as single-line JSON for machine parsing
+        if not isinstance(msg, (str, bytes)):
+            try:
+                msg = json.dumps(msg, ensure_ascii=False, separators=(",", ":"))
+            except Exception:
+                msg = str(msg)
+        if out:
+            try:
+                with open(out, "a", encoding="utf-8") as f:
+                    f.write(msg.rstrip() + "\n")
+            except Exception:
+                pass
+        else:
+            try:
+                print(msg)
+            except Exception:
+                pass
+
+
 def analyze_incomings(blocks: List[Dict[str, Any]]) -> Dict[int, Dict[int, List[Tuple[int, int]]]]:
     """Return block_phi_incomings map: block_id -> { dst_vid -> [(decl_b, v_src), ...] }"""
     result: Dict[int, Dict[int, List[Tuple[int, int]]]] = {}
@@ -55,7 +79,14 @@ def analyze_incomings(blocks: List[Dict[str, Any]]) -> Dict[int, Dict[int, List[
                 if dst0 is None:
                     continue
                 try:
-                    result.setdefault(int(bid0), {})[dst0] = [(int(b), int(v)) for (v, b) in incoming0]
+                    pairs = [(int(b), int(v)) for (v, b) in incoming0]
+                    result.setdefault(int(bid0), {})[dst0] = pairs
+                    _trace({
+                        "phi": "analyze",
+                        "block": int(bid0),
+                        "dst": dst0,
+                        "incoming": pairs,
+                    })
                 except Exception:
                     pass
     return result
@@ -72,6 +103,7 @@ def ensure_phi(builder, block_id: int, dst_vid: int, bb: ir.Block) -> ir.Instruc
     phi = predecl.get((int(block_id), int(dst_vid))) if predecl else None
     if phi is not None:
         builder.vmap[dst_vid] = phi
+        _trace({"phi": "ensure_predecl", "block": int(block_id), "dst": int(dst_vid)})
         return phi
     # Reuse current if it is a PHI in the correct block
     cur = builder.vmap.get(dst_vid)
@@ -83,6 +115,7 @@ def ensure_phi(builder, block_id: int, dst_vid: int, bb: ir.Block) -> ir.Instruc
     # Create a new placeholder
     ph = b.phi(builder.i64, name=f"phi_{dst_vid}")
     builder.vmap[dst_vid] = ph
+    _trace({"phi": "ensure_create", "block": int(block_id), "dst": int(dst_vid)})
     return ph
 
 def _build_succs(preds: Dict[int, List[int]]) -> Dict[int, List[int]]:
@@ -142,6 +175,12 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
             continue
         pred_match = _nearest_pred_on_path(succs, preds_list, bd, block_id)
         if pred_match is None:
+            _trace({
+                "phi": "wire_skip_no_path",
+                "decl_b": bd,
+                "target": int(block_id),
+                "src": vs,
+            })
             continue
         if vs == int(dst_vid) and init_src_vid is not None:
             vs = int(init_src_vid)
@@ -152,11 +191,18 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
         if val is None:
             val = ir.Constant(builder.i64, 0)
         chosen[pred_match] = val
+        _trace({
+            "phi": "wire_choose",
+            "pred": int(pred_match),
+            "dst": int(dst_vid),
+            "src": int(vs),
+        })
     for pred_bid, val in chosen.items():
         pred_bb = builder.bb_map.get(pred_bid)
         if pred_bb is None:
             continue
         phi.add_incoming(val, pred_bb)
+        _trace({"phi": "add_incoming", "dst": int(dst_vid), "pred": int(pred_bid)})
 
 # ---- Public API (used by llvm_builder) ----
 
@@ -170,6 +216,7 @@ def setup_phi_placeholders(builder, blocks: List[Dict[str, Any]]):
     try:
         produced_str = _collect_produced_stringish(blocks)
         builder.block_phi_incomings = analyze_incomings(blocks)
+        _trace({"phi": "setup", "produced_str_keys": list(produced_str.keys())})
         # Materialize placeholders and propagate stringish tags
         for block_data in blocks:
             bid0 = block_data.get("id", 0)
@@ -220,3 +267,4 @@ def finalize_phis(builder):
     for block_id, dst_map in (getattr(builder, 'block_phi_incomings', {}) or {}).items():
         for dst_vid, incoming in (dst_map or {}).items():
             wire_incomings(builder, int(block_id), int(dst_vid), incoming)
+            _trace({"phi": "finalize", "block": int(block_id), "dst": int(dst_vid)})

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::bid::{BidError, BidResult};
 
 // Minimal helpers to keep loader.rs lean and consistent

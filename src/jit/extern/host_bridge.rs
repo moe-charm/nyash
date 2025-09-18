@@ -1,3 +1,4 @@
+#![allow(unused_unsafe)]
 //! JIT externs bridging to NyRT host API (C symbols) via by-slot encoding.
 //!
 //! 目的: VM/JIT一致のため、JITからも host_api::nyrt_host_call_slot を使うPoC。

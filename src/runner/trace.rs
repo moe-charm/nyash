@@ -1,6 +1,7 @@
 //! Runner tracing helpers (verbose-guarded)
 
 /// Return whether CLI verbose logging is enabled
+#[allow(dead_code)]
 pub fn cli_verbose() -> bool {
     crate::config::env::cli_verbose()
 }

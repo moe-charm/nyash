@@ -1,6 +1,7 @@
-use std::process::Stdio;
+// no extra imports needed
 
 /// Run PyVM harness over a MIR module, returning the exit code
+#[allow(dead_code)]
 pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str) -> Result<i32, String> {
     let py3 = which::which("python3").map_err(|e| format!("python3 not found: {}", e))?;
     let runner = std::path::Path::new("tools/pyvm_runner.py");

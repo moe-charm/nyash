@@ -12,7 +12,7 @@ use crate::backend::WasmBackend;
 #[cfg(feature = "vm-legacy")]
 use crate::backend::VM;
 use crate::interpreter::NyashInterpreter;
-use crate::mir::MirCompiler;
+// use crate::mir::MirCompiler; // not used in Phase-15 (PyVM primary)
 use crate::parser::NyashParser;
 use std::fs;
 use std::time::Instant;

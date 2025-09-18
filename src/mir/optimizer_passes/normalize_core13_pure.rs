@@ -1,6 +1,6 @@
 use crate::mir::optimizer::MirOptimizer;
 use crate::mir::optimizer_stats::OptimizationStats;
-use crate::mir::{BinaryOp, CompareOp, EffectMask, MirInstruction as I, MirModule, MirType, ValueId};
+use crate::mir::{BinaryOp, CompareOp, EffectMask, MirInstruction as I, MirModule, ValueId};
 
 /// Core-13 "pure" normalization: rewrite a few non-13 ops to allowed forms.
 /// - Load(dst, ptr)  => ExternCall(Some dst, env.local.get, [ptr])
@@ -142,4 +142,3 @@ pub fn normalize_pure_core13(_opt: &mut MirOptimizer, module: &mut MirModule) ->
     }
     stats
 }
-

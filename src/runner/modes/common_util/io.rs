@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 
 pub struct ChildOutput {
     pub stdout: Vec<u8>,
+    #[allow(dead_code)]
     pub stderr: Vec<u8>,
+    #[allow(dead_code)]
     pub status_ok: bool,
     pub exit_code: Option<i32>,
     pub timed_out: bool,
@@ -13,10 +15,10 @@ pub struct ChildOutput {
 
 /// Spawn command with timeout (ms), capture stdout/stderr, and return ChildOutput.
 pub fn spawn_with_timeout(mut cmd: Command, timeout_ms: u64) -> std::io::Result<ChildOutput> {
-    let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
-    let mut ch_stdout = child.stdout.take();
-    let mut ch_stderr = child.stderr.take();
+    let ch_stdout = child.stdout.take();
+    let ch_stderr = child.stderr.take();
     let start = Instant::now();
     let mut timed_out = false;
     let mut exit_status: Option<std::process::ExitStatus> = None;

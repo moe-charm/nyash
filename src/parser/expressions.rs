@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /*!
  * Nyash Parser - Expression Parsing Module
  *

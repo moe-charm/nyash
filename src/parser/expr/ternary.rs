@@ -4,6 +4,7 @@ use crate::parser::{NyashParser, ParseError};
 use crate::tokenizer::TokenType;
 
 #[inline]
+#[allow(dead_code)]
 fn is_sugar_enabled() -> bool {
     crate::parser::sugar_gate::is_enabled()
 }

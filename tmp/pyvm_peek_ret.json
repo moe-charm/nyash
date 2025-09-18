@@ -1,0 +1,214 @@
+{
+  "functions": [
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "op": "jump",
+              "target": 2
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 10,
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 10,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                2
+              ],
+              "box": 10,
+              "dst": 11,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 12
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "0"
+              }
+            },
+            {
+              "dst": 4,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 3
+            },
+            {
+              "cond": 4,
+              "else": 5,
+              "op": "branch",
+              "then": 4
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 9
+            },
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 9
+            },
+            {
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 5
+            },
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 5
+            },
+            {
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "instructions": [
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "dst": 7,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 6
+            },
+            {
+              "cond": 7,
+              "else": 3,
+              "op": "branch",
+              "then": 6
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 8
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 8
+            },
+            {
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        }
+      ],
+      "name": "main",
+      "params": []
+    }
+  ]
+}

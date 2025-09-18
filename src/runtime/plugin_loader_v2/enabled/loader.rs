@@ -1,3 +1,4 @@
+#![allow(dead_code, private_interfaces)]
 use super::host_bridge::BoxInvokeFn;
 use super::types::{LoadedPluginV2, NyashTypeBoxFfi, PluginBoxMetadata, PluginBoxV2, PluginHandleInner};
 use crate::bid::{BidError, BidResult};

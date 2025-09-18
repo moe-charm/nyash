@@ -13,6 +13,6 @@ JSON="$TMP_DIR/ternary_basic.json"
 APP="$ROOT/apps/tests/ternary_basic.nyash"
 emit_json "$APP" "$JSON"
 
-# Expect exit code 10 for ternary_basic
-assert_exit "run_pyvm_json $JSON >/dev/null" 10
+# Expect exit code 10 for ternary_basic (invoke runner directly to avoid subshell func scope)
+assert_exit "python3 $ROOT/tools/pyvm_runner.py --in $JSON >/dev/null" 10
 echo "OK: pyvm ternary_basic exit=10"

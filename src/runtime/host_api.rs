@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 /*!
  * Host reverse-call API for plugins (Phase 12 / A-1)
  *

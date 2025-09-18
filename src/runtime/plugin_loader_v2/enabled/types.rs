@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::host_bridge::InvokeFn;
 use crate::box_trait::{BoxCore, NyashBox, StringBox};
 use std::any::Any;

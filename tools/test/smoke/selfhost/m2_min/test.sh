@@ -5,8 +5,14 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../../../.." && pwd)
 source "$ROOT/tools/test/lib/shlib.sh"
 
 build_nyash_release
-build_ny_llvmc
-build_nyrt
+
+# Skip when LLVM toolchain is not available (either llvm-config-18 or LLVM_SYS_180_PREFIX)
+if ! command -v llvm-config-18 >/dev/null 2>&1 && [[ -z "${LLVM_SYS_180_PREFIX:-}" ]]; then
+  echo "[SKIP] selfhost M2 minimal: LLVM18 not available"; exit 0
+fi
+
+build_ny_llvmc || { echo "[SKIP] selfhost M2 minimal: ny-llvmc not built"; exit 0; }
+build_nyrt || { echo "[SKIP] selfhost M2 minimal: nyrt not built"; exit 0; }
 
 TMP_DIR=$(mktemp -d)
 SRC="$TMP_DIR/m2_min.nyash"
@@ -31,6 +37,9 @@ NYASH_JSON_ONLY=1 \
 if [[ ! -s "$JSON" ]]; then echo "[SKIP] selfhost M2 minimal: empty JSON"; exit 0; fi
 
 # Build EXE via crate compiler and assert exit code
+if [[ ! -x "$ROOT/target/release/ny-llvmc" ]]; then
+  echo "[SKIP] selfhost M2 minimal: ny-llvmc binary missing"; exit 0
+fi
 build_exe_crate "$JSON" "$EXE"
 assert_exit "$EXE" 42
 echo "OK: selfhost M2 minimal (return 42)"

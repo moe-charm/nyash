@@ -1,3 +1,4 @@
+#![allow(unreachable_patterns, unused_variables)]
 use super::builder::{BinOpKind, IRBuilder};
 use crate::mir::{ConstValue, MirFunction, MirInstruction, ValueId};
 

@@ -1,3 +1,4 @@
+#![allow(unused_mut, unused_variables)]
 use crate::encode::{nyrt_encode_arg_or_legacy, nyrt_encode_from_legacy_at};
 use crate::plugin::invoke_core;
 #[no_mangle]
@@ -18,7 +19,8 @@ pub extern "C" fn nyash_plugin_invoke3_i64(
     let _real_type_id: u32 = recv.real_type_id;
     let invoke = recv.invoke;
     // Build TLV args from a1/a2 if present. Prefer handles/StringBox/IntegerBox via runtime host.
-    use nyash_rust::{backend::vm::VMValue, jit::rt::handles};
+    // Bring VMValue into scope for pattern matches below
+    use nyash_rust::backend::vm::VMValue;
     // argc from LLVM lowering is explicit arg count (excludes receiver)
     let nargs = argc.max(0) as usize;
     let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(nargs as u16);
@@ -116,7 +118,7 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
         return 0.0;
     }
     // Build TLV args from a1/a2 with String/Integer support
-    use nyash_rust::{backend::vm::VMValue, jit::rt::handles};
+    // legacy helper imports not required in current path
     // argc from LLVM lowering is explicit arg count (excludes receiver)
     let nargs = argc.max(0) as usize;
     let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(nargs as u16);
@@ -124,19 +126,19 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
         nyash_rust::jit::rt::with_legacy_vm_args(|args| {
             if let Some(v) = args.get(arg_pos) {
                 match v {
-                    VMValue::String(s) => {
+                    nyash_rust::backend::vm::VMValue::String(s) => {
                         nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, s)
                     }
-                    VMValue::Integer(i) => {
+                    nyash_rust::backend::vm::VMValue::Integer(i) => {
                         nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, *i)
                     }
-                    VMValue::Float(f) => {
+                    nyash_rust::backend::vm::VMValue::Float(f) => {
                         nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, *f)
                     }
-                    VMValue::Bool(b) => {
+                    nyash_rust::backend::vm::VMValue::Bool(b) => {
                         nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, *b)
                     }
-                    VMValue::BoxRef(b) => {
+                    nyash_rust::backend::vm::VMValue::BoxRef(b) => {
                         if let Some(bufbox) = b
                             .as_any()
                             .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()

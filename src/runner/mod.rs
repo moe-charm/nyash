@@ -422,6 +422,7 @@ impl NyashRunner {
             #[cfg(feature = "vm-legacy")]
             {
                 self.execute_benchmark_mode();
+                return;
             }
             #[cfg(not(feature = "vm-legacy"))]
             {
@@ -430,7 +431,6 @@ impl NyashRunner {
                 );
                 std::process::exit(1);
             }
-            return;
         }
 
         if let Some(ref filename) = self.config.file {

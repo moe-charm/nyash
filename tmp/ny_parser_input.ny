@@ -1,2 +1,2 @@
-local m = {"name": "Alice", "age": 25}
-return m.size()
+// M2 minimal: Return(Int)
+return 42

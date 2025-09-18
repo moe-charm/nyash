@@ -1,0 +1,209 @@
+{
+  "functions": [
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [],
+              "dst": 1,
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "abcde"
+              }
+            },
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "len="
+              }
+            },
+            {
+              "args": [],
+              "box": 2,
+              "dst": 4,
+              "dst_type": "i64",
+              "method": "length",
+              "op": "boxcall"
+            },
+            {
+              "dst": 5,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 3,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 4
+            },
+            {
+              "args": [
+                5
+              ],
+              "box": 1,
+              "dst": 6,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 4
+              }
+            },
+            {
+              "args": [
+                7,
+                8
+              ],
+              "box": 2,
+              "dst": 9,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "method": "substring",
+              "op": "boxcall"
+            },
+            {
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "sub="
+              }
+            },
+            {
+              "dst": 11,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 10,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 9
+            },
+            {
+              "args": [
+                11
+              ],
+              "box": 1,
+              "dst": 12,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 13,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "idx="
+              }
+            },
+            {
+              "dst": 14,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "b"
+              }
+            },
+            {
+              "args": [
+                14
+              ],
+              "box": 2,
+              "dst": 15,
+              "dst_type": "i64",
+              "method": "lastIndexOf",
+              "op": "boxcall"
+            },
+            {
+              "dst": 16,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 13,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 15
+            },
+            {
+              "args": [
+                16
+              ],
+              "box": 1,
+              "dst": 17,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 18,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 18
+            }
+          ]
+        }
+      ],
+      "name": "main",
+      "params": []
+    }
+  ]
+}

@@ -51,10 +51,16 @@ Done (2025‑09‑18)
  - Selfhost Parser（Stage‑2）
   - コメント対応（`//` と `/* ... */`）を `skip_ws` に統合。
   - 文字列エスケープ（`\n`/`\r`/`\t`/`\"`/`\\`/最小 `\uXXXX`）を `read_string_lit`/`parse_string2` に追加。
- - Smokes/Test 整理（ローカル）
+- Smokes/Test 整理（ローカル）
   - 新ランナー: `tools/test/bin/run.sh`（`--tag fast` で最小セット）。
   - 共通ヘルパ: `tools/test/lib/shlib.sh`（ビルド/実行/アサート）。
- - fast セットに crate‑exe（3件）/bridge 短絡 を追加。PyVM 基本スモークを JSON→`pyvm_runner.py` で stdout 判定に移行。
+  - fast セットに crate‑exe（3件）/bridge 短絡/LLVM quick/if‑merge/py unit を追加。
+  - PyVM 基本スモークを JSON→`pyvm_runner.py` で stdout 判定に移行。
+  - Python ユニット: `src/llvm_py/tests/test_phi_wiring.py` を `tools/python_unit.sh` で起動（fast 経由）。
+ - Runner selfhost リファクタ（小PR）
+  - 共通化: `src/runner/modes/common_util/selfhost/{child.rs,json.rs}` を新設し、子プロセス起動と JSON v0 抽出/パースを分離。
+  - 移行: `src/runner/selfhost.rs` の子起動・PyVM 実行経路を新ヘルパで置換（挙動等価）。
+  - 清掃: 未使用 import/mut の削減、到達不能 return の解消（`runner/mod.rs` の benchmark 分岐）。
 
 Today (2025‑09‑18) — ExternCall 整理と Self‑Host M2 の土台
 - ExternCall/println 正規化を docs に明文化（`docs/reference/runtime/externcall.md`）。README/README.ja からリンク。
@@ -170,7 +176,12 @@ Next (short plan)
    - `tools/pyvm_vs_llvmlite.sh` で PyVM と EXE の退出コード一致（必要に応じて CMP_STRICT=1）。
 4) PHI‑on lane（任意）: `loop_if_phi` 支配関係を finalize/resolve の順序強化で観察（低優先）。
 5) Runner refactor（小PR）:
-   - `selfhost/{child.rs,json.rs}` 分離; `modes/common/{io,resolve,exec}.rs` 分割; `runner/mod.rs`の表面削減。
+   - ✅ `selfhost/{child.rs,json.rs}` 分離済み（子起動と JSON 抽出の共通化）。
+   - `modes/common/{io,resolve,exec}.rs` 分割; `runner/mod.rs`の表面削減（継続）。
+5.1) Self‑hosting using 移行（段階）
+   - ✅ compiler: using 宣言＋参照を Alias 化（include は暫定残置）
+   - parser/tooling: ParserV0/Tokenizer/DepTree を順次名前空間化し、include を削減
+   - 実行時: `--enable-using` と `--using-path apps:selfhost` を前提に整備（Runner 側でストリップ＋登録）
 6) Optimizer/Verifier thin‑hub cleanup（非機能）: orchestrator最小化とパス境界の明確化。
 7) GC（controller）観測の磨き込み
    - JSON: running averages / roots要約（任意） / 理由タグ拡張
@@ -197,6 +208,15 @@ How to Run
 - Parity (AOT vs PyVM): `tools/pyvm_vs_llvmlite.sh <file.nyash>` (`CMP_STRICT=1` to enable stdout check)
   - 開発時の補助: `NYASH_LLVM_PREPASS_LOOP=1` を併用（loop/if‑merge のプリパス有効化）。
  - GC modes/metrics: see `docs/reference/runtime/gc.md`（`--gc` / 自動 safepoint / 収集トリガ / JSONメトリクス）
+Trace (PHI wiring / LLVM harness)
+- `NYASH_LLVM_TRACE_PHI=1`: PHI 解析/配線のトレースを有効化（1 行 JSON）。
+- `NYASH_LLVM_TRACE_OUT=/path/to/file`: 出力先ファイル（未指定時は標準出力）。
+- 例: `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=/tmp/phi_trace.jsonl NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/loop_if_phi.nyash`
+
+Trace (PHI wiring / LLVM harness)
+- `NYASH_LLVM_TRACE_PHI=1`: PHI 解析/配線のトレースを有効化（1 行 JSON）。
+- `NYASH_LLVM_TRACE_OUT=/path/to/file`: 出力先ファイル（未指定時は標準出力）。
+- 例: `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=/tmp/phi_trace.jsonl NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/loop_if_phi.nyash`
 
 Self‑Hosting CI
 - Bootstrap（常時）: `.github/workflows/selfhost-bootstrap.yml`

@@ -318,6 +318,7 @@ impl<'a> LoopBuilder<'a> {
         }
     }
 
+    #[allow(dead_code)]
     fn add_predecessor(&mut self, block: BasicBlockId, pred: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut function) = self.parent_builder.current_function {
             if let Some(block) = function.get_block_mut(block) {

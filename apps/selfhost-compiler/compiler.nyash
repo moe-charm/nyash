@@ -2,6 +2,13 @@
 // Reads tmp/ny_parser_input.ny and prints a minimal JSON v0 program.
 // Components are split under boxes/ and included here.
 
+// Prefer using for module declaration (Runner strips and registers)
+using "apps/selfhost-compiler/boxes/debug_box.nyash" as DebugBoxMod
+using "apps/selfhost-compiler/boxes/parser_box.nyash" as ParserBoxMod
+using "apps/selfhost-compiler/boxes/emitter_box.nyash" as EmitterBoxMod
+using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash" as MirEmitterBoxMod
+
+// Transitional: keep include for Phase-15 compatibility
 include "apps/selfhost-compiler/boxes/debug_box.nyash"
 include "apps/selfhost-compiler/boxes/parser_box.nyash"
 include "apps/selfhost-compiler/boxes/emitter_box.nyash"
@@ -35,7 +42,7 @@ static box Main {
 
   // Parser delegation
   parse_program(src, stage3_flag) {
-    local parser = new ParserBox()
+    local parser = new ParserBoxMod.ParserBox()
     if stage3_flag == 1 { parser.stage3_enable(1) }
     // Collect using metadata (no-op acceptance in Stage‑15)
     parser.extract_usings(src)
@@ -45,7 +52,7 @@ static box Main {
 
   main(args) {
     // Debug setup
-    me.dbg = new DebugBox()
+    me.dbg = new DebugBoxMod.DebugBox()
     me.dbg.set_enabled(0)
 
     // Source selection (EXE-first friendly)
@@ -112,11 +119,11 @@ static box Main {
 
     if emit_mir == 1 {
       // Lower minimal AST to MIR JSON (Return(Int) only for MVP)
-      local mir = new MirEmitterBox()
+      local mir = new MirEmitterBoxMod.MirEmitterBox()
       json = mir.emit_mir_min(ast_json)
     } else {
       // Emit Stage‑1 JSON with metadata
-      local emitter = new EmitterBox()
+      local emitter = new EmitterBoxMod.EmitterBox()
       json = emitter.emit_program(ast_json, me._usings)
     }
 

@@ -18,8 +18,8 @@ ok=0; fail=0; skip=0
 for t in "${TESTS[@]}"; do
   case "$TAG" in
     fast)
-      # Very small subset: crate-exe and bridge shortcircuit
-      if [[ "$t" != *"/smoke/crate-exe/"* && "$t" != *"/smoke/bridge/"* ]]; then
+      # Very small subset: crate-exe, bridge shortcircuit, and tiny LLVM checks
+      if [[ "$t" != *"/smoke/crate-exe/"* && "$t" != *"/smoke/bridge/"* && "$t" != *"/smoke/llvm/quick/"* && "$t" != *"/smoke/llvm/ifmerge/"* && "$t" != *"/smoke/python/unit/"* ]]; then
         echo "[SKIP] $t"; skip=$((skip+1)); continue
       fi
       ;;

@@ -1,3 +1,4 @@
+#![allow(unused_mut, unused_assignments)]
 // Spawn a plugin instance method asynchronously and return a Future handle (i64)
 // Exported as: nyash.future.spawn_method_h(type_id, method_id, argc, recv_h, vals*, tags*) -> i64 (FutureBox handle)
 #[export_name = "nyash.future.spawn_method_h"]

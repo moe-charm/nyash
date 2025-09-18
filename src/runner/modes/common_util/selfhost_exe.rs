@@ -47,7 +47,7 @@ pub fn exe_try_parse_json_v0(filename: &str, timeout_ms: u64) -> Option<crate::m
             cmd.arg(tok);
         }
     }
-    let mut cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let cmd = cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -55,8 +55,8 @@ pub fn exe_try_parse_json_v0(filename: &str, timeout_ms: u64) -> Option<crate::m
             return None;
         }
     };
-    let mut ch_stdout = child.stdout.take();
-    let mut ch_stderr = child.stderr.take();
+    let ch_stdout = child.stdout.take();
+    let ch_stderr = child.stderr.take();
     let start = Instant::now();
     let mut timed_out = false;
     loop {
@@ -97,18 +97,9 @@ pub fn exe_try_parse_json_v0(filename: &str, timeout_ms: u64) -> Option<crate::m
         );
         return None;
     }
-    let stdout = match String::from_utf8(out_buf) {
-        Ok(s) => s,
-        Err(_) => String::new(),
-    };
-    let mut json_line = String::new();
-    for line in stdout.lines() {
-        let t = line.trim();
-        if t.starts_with('{') && t.contains("\"version\"") && t.contains("\"kind\"") {
-            json_line = t.to_string();
-            break;
-        }
-    }
+    let stdout = match String::from_utf8(out_buf) { Ok(s) => s, Err(_) => String::new() };
+    let json_line = crate::runner::modes::common_util::selfhost::json::first_json_v0_line(&stdout)
+        .unwrap_or_default();
     if json_line.is_empty() {
         if crate::config::env::cli_verbose() {
             let head: String = stdout.chars().take(200).collect();
