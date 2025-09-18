@@ -56,52 +56,29 @@ def lower_return(
                 ret_val = tmp0
         if ret_val is None:
             if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-                # Multi-pred special case: construct a PHI at block head and wire per-pred values
-                # to keep PHIs grouped at top and avoid late synthesis that violates ordering.
-                cur_bid = int(str(builder.block.name).replace('bb','')) if hasattr(builder.block, 'name') else -1
-                pred_ids = [p for p in preds.get(cur_bid, []) if p != cur_bid] if isinstance(preds, dict) else []
-                if isinstance(value_id, int) and len(pred_ids) > 1 and isinstance(return_type, ir.IntType):
-                    # Create PHI at block head
-                    btop = ir.IRBuilder(builder.block)
-                    try:
-                        btop.position_at_start(builder.block)
-                    except Exception:
-                        pass
-                    ph = btop.phi(return_type, name=f"res_phi_{value_id}_{cur_bid}")
-                    # Wire per-pred end values
-                    for pred_bid in pred_ids:
-                        pred_bb = bb_map.get(pred_bid) if isinstance(bb_map, dict) else None
-                        if pred_bb is None:
-                            continue
-                        val = resolver._value_at_end_i64(value_id, pred_bid, preds, block_end_values, vmap, bb_map)
-                        if not hasattr(val, 'type'):
-                            val = ir.Constant(return_type, 0)
-                        ph.add_incoming(val, pred_bb)
-                    ret_val = ph
+                # Resolve direct value; PHIは finalize_phis に一任
+                if isinstance(return_type, ir.PointerType):
+                    ret_val = resolver.resolve_ptr(value_id, builder.block, preds, block_end_values, vmap)
                 else:
-                    # Resolve direct value
-                    if isinstance(return_type, ir.PointerType):
-                        ret_val = resolver.resolve_ptr(value_id, builder.block, preds, block_end_values, vmap)
+                    is_stringish = False
+                    if hasattr(resolver, 'is_stringish'):
+                        try:
+                            is_stringish = resolver.is_stringish(int(value_id))
+                        except Exception:
+                            is_stringish = False
+                    if is_stringish and hasattr(resolver, 'string_ptrs') and int(value_id) in getattr(resolver, 'string_ptrs'):
+                        p = resolver.string_ptrs[int(value_id)]
+                        i8p = ir.IntType(8).as_pointer()
+                        i64 = ir.IntType(64)
+                        boxer = None
+                        for f in builder.module.functions:
+                            if f.name == 'nyash.box.from_i8_string':
+                                boxer = f; break
+                        if boxer is None:
+                            boxer = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
+                        ret_val = builder.call(boxer, [p], name='ret_ptr2h')
                     else:
-                        is_stringish = False
-                        if hasattr(resolver, 'is_stringish'):
-                            try:
-                                is_stringish = resolver.is_stringish(int(value_id))
-                            except Exception:
-                                is_stringish = False
-                        if is_stringish and hasattr(resolver, 'string_ptrs') and int(value_id) in getattr(resolver, 'string_ptrs'):
-                            p = resolver.string_ptrs[int(value_id)]
-                            i8p = ir.IntType(8).as_pointer()
-                            i64 = ir.IntType(64)
-                            boxer = None
-                            for f in builder.module.functions:
-                                if f.name == 'nyash.box.from_i8_string':
-                                    boxer = f; break
-                            if boxer is None:
-                                boxer = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
-                            ret_val = builder.call(boxer, [p], name='ret_ptr2h')
-                        else:
-                            ret_val = resolver.resolve_i64(value_id, builder.block, preds, block_end_values, vmap, bb_map)
+                        ret_val = resolver.resolve_i64(value_id, builder.block, preds, block_end_values, vmap, bb_map)
                 
         if ret_val is None:
             # Default to vmap (non-PHI) if available

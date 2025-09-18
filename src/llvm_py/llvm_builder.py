@@ -30,6 +30,7 @@ from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform
 from instructions.controlflow.while_ import lower_while_regular
 from phi_wiring import setup_phi_placeholders as _setup_phi_placeholders, finalize_phis as _finalize_phis
+from phi_wiring import ensure_phi as _ensure_phi
 from trace import debug as trace_debug
 from trace import phi as trace_phi
 try:
@@ -753,26 +754,8 @@ class NyashLLVMBuilder:
         except Exception:
             pass
         instructions = block_data.get("instructions", [])
-        # Ensure JSON-declared PHIs are materialized at block start before any terminator
-        try:
-            phi_insts = [inst for inst in (instructions or []) if inst.get('op') == 'phi']
-            if phi_insts:
-                btop = ir.IRBuilder(bb)
-                btop.position_at_start(bb)
-                for pinst in phi_insts:
-                    dstp = pinst.get('dst')
-                    if isinstance(dstp, int):
-                        cur = self.vmap.get(dstp)
-                        need_new = True
-                        try:
-                            need_new = not (cur is not None and hasattr(cur, 'add_incoming'))
-                        except Exception:
-                            need_new = True
-                        if need_new:
-                            phi = btop.phi(self.i64, name=f"phi_{dstp}")
-                            self.vmap[dstp] = phi
-        except Exception:
-            pass
+        # JSON-declared PHIs are not materialized here; placeholders are created uniformly
+        # via ensure_phi in finalize_phis to keep PHIs grouped at block head.
         # Partition into body ops and terminators
         body_ops: List[Dict[str, Any]] = []
         term_ops: List[Dict[str, Any]] = []
@@ -1112,41 +1095,14 @@ class NyashLLVMBuilder:
             bb = self.bb_map.get(block_id)
             if bb is None:
                 continue
-            b = ir.IRBuilder(bb)
-            try:
-                b.position_at_start(bb)
-            except Exception:
-                pass
             for dst_vid, incoming in (dst_map or {}).items():
                 try:
                     trace_phi_json({"phi": "finalize_dst", "block": int(block_id), "dst": int(dst_vid), "incoming": [(int(v), int(b)) for (b, v) in [(b, v) for (v, b) in (incoming or [])]]})
                 except Exception:
                     pass
-                # Ensure placeholder exists at block head
-                # Prefer predeclared ret-phi when available and force using it.
-                predecl = getattr(self, 'predeclared_ret_phis', {}) if hasattr(self, 'predeclared_ret_phis') else {}
-                phi = predecl.get((int(block_id), int(dst_vid))) if predecl else None
-                if phi is not None:
-                    # Bind as canonical target
-                    self.vmap[dst_vid] = phi
-                else:
-                    phi = self.vmap.get(dst_vid)
-                    # Ensure we target a PHI belonging to the current block; if a
-                    # global mapping points to a PHI in another block (due to
-                    # earlier localization), create/replace with a local PHI.
-                    need_local_phi = False
-                    try:
-                        if not (phi is not None and hasattr(phi, 'add_incoming')):
-                            need_local_phi = True
-                        else:
-                            bb_of_phi = getattr(getattr(phi, 'basic_block', None), 'name', None)
-                            if bb_of_phi != bb.name:
-                                need_local_phi = True
-                    except Exception:
-                        need_local_phi = True
-                    if need_local_phi:
-                        phi = b.phi(self.i64, name=f"phi_{dst_vid}")
-                        self.vmap[dst_vid] = phi
+                # Ensure placeholder exists at block head with common helper
+                phi = _ensure_phi(self, int(block_id), int(dst_vid), bb)
+                self.vmap[int(dst_vid)] = phi
                 n = getattr(phi, 'name', b'').decode() if hasattr(getattr(phi, 'name', None), 'decode') else str(getattr(phi, 'name', ''))
                 try:
                     trace_phi_json({"phi": "finalize_target", "block": int(block_id), "dst": int(dst_vid), "ir": str(n)})

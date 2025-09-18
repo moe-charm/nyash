@@ -104,6 +104,14 @@ class Resolver:
                 bmap = self.block_phi_incomings.get(block_id)
                 if isinstance(bmap, dict) and value_id in bmap:
                     existing_cur = vmap.get(value_id)
+                    # Fallback: try builder/global vmap when local map lacks placeholder
+                    try:
+                        if (existing_cur is None or not hasattr(existing_cur, 'add_incoming')) and hasattr(self, 'global_vmap') and isinstance(self.global_vmap, dict):
+                            gcand = self.global_vmap.get(value_id)
+                            if gcand is not None and hasattr(gcand, 'add_incoming'):
+                                existing_cur = gcand
+                    except Exception:
+                        pass
                     # Use placeholder only if it belongs to the current block; otherwise
                     # create/ensure a local PHI at the current block head to dominate uses.
                     is_phi_here = False
@@ -118,21 +126,11 @@ class Resolver:
                     if is_phi_here:
                         self.i64_cache[cache_key] = existing_cur
                         return existing_cur
-                    # Materialize a local PHI placeholder at block start and bind to vmap
-                    b = ir.IRBuilder(current_block)
-                    try:
-                        b.position_at_start(current_block)
-                    except Exception:
-                        pass
-                    phi_local = b.phi(self.i64, name=f"phi_{value_id}")
-                    vmap[value_id] = phi_local
-                    try:
-                        if isinstance(getattr(self, 'global_vmap', None), dict):
-                            self.global_vmap[value_id] = phi_local
-                    except Exception:
-                        pass
-                    self.i64_cache[cache_key] = phi_local
-                    return phi_local
+                    # Do not synthesize PHI here; expect predeclared placeholder exists.
+                    # Fallback to 0 to keep IR consistent if placeholder is missing (should be rare).
+                    zero = ir.Constant(self.i64, 0)
+                    self.i64_cache[cache_key] = zero
+                    return zero
         except Exception:
             pass
         
@@ -220,6 +218,10 @@ class Resolver:
                 # Return existing placeholder if present; do not create a new PHI here.
                 trace_phi(f"[resolve] use placeholder PHI: bb{cur_bid} v{value_id}")
                 placeholder = vmap.get(value_id)
+                if (placeholder is None or not hasattr(placeholder, 'add_incoming')) and hasattr(self, 'global_vmap') and isinstance(self.global_vmap, dict):
+                    cand = self.global_vmap.get(value_id)
+                    if cand is not None and hasattr(cand, 'add_incoming'):
+                        placeholder = cand
                 result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
             else:
                 # No declared PHI and multi-pred: do not synthesize; fallback to zero
