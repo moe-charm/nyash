@@ -28,8 +28,20 @@ def plan_ret_phi_predeclare(block_by_id: Dict[int, Dict[str, Any]]) -> Optional[
         val = term.get('value')
         if not isinstance(val, int):
             continue
+        # Heuristic: skip when the return value is freshly defined in this block
+        # (e.g., returning a const computed in cleanup). Predeclaring a PHI for such
+        # values is unnecessary and may violate PHI grouping/order.
+        try:
+            defined_here = False
+            for ins in blk.get('instructions') or []:
+                if isinstance(ins, dict) and ins.get('dst') == int(val):
+                    defined_here = True
+                    break
+            if defined_here:
+                continue
+        except Exception:
+            pass
         pred_list = [p for p in preds.get(int(bid), []) if p != int(bid)]
         if len(pred_list) > 1:
             plan[int(bid)] = int(val)
     return plan or None
-

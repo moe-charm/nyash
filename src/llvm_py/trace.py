@@ -14,28 +14,40 @@ Import and use:
 """
 
 import os
+import json
+
+_TRACE_OUT = os.environ.get('NYASH_LLVM_TRACE_OUT')
+
+def _write(msg: str) -> None:
+    if _TRACE_OUT:
+        try:
+            with open(_TRACE_OUT, 'a', encoding='utf-8') as f:
+                f.write(msg.rstrip() + "\n")
+            return
+        except Exception:
+            pass
+    try:
+        print(msg, flush=True)
+    except Exception:
+        pass
 
 def _enabled(env_key: str) -> bool:
     return os.environ.get(env_key) == '1'
 
 def debug(msg: str) -> None:
     if _enabled('NYASH_CLI_VERBOSE'):
-        try:
-            print(msg, flush=True)
-        except Exception:
-            pass
+        _write(msg)
 
-def phi(msg: str) -> None:
+def phi(msg) -> None:
     if _enabled('NYASH_LLVM_TRACE_PHI'):
-        try:
-            print(msg, flush=True)
-        except Exception:
-            pass
+        # Accept raw strings or arbitrary objects; non-strings are JSON-encoded
+        if not isinstance(msg, (str, bytes)):
+            try:
+                msg = json.dumps(msg, ensure_ascii=False, separators=(",", ":"))
+            except Exception:
+                msg = str(msg)
+        _write(msg)
 
 def values(msg: str) -> None:
     if _enabled('NYASH_LLVM_TRACE_VALUES'):
-        try:
-            print(msg, flush=True)
-        except Exception:
-            pass
-
+        _write(msg)

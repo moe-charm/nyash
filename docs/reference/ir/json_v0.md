@@ -16,7 +16,7 @@ Statements (`StmtV0`)
 - `Loop { cond, body: Stmt[] }` (Stage‑2; while(cond) body)
 - `Break` (Stage‑3; exits current loop)
 - `Continue` (Stage‑3; jumps to loop head)
-- `Try { try: Stmt[], catches?: Catch[], finally?: Stmt[] }` (Stage‑3 skeleton; currently lowered as sequential `try` body only when runtime support is absent)
+- `Try { try: Stmt[], catches?: Catch[], finally?: Stmt[] }` (Stage‑3 skeleton; surface syntax uses `cleanup`, but the v0 field name remains `finally` for compatibility; currently lowered as sequential `try` body only when runtime support is absent)
 
 Expressions (`ExprV0`)
 - `Int { value }` where `value` is JSON number or digit string
@@ -41,6 +41,7 @@ PHI merging（Phase‑15 終盤の方針）
 - MIR 生成層は PHI を生成しない（MIR13 運用）。If/Loop の合流は LLVM 層（llvmlite/Resolver）が PHI を合成。
 - ループは既存 CFG（preheader→cond→{body|exit}; body→cond）の検出により、ヘッダ BB で搬送値の PHI を構築。
 - 将来（LoopForm= MIR18）では LoopForm 占位命令から逆 Lowering で PHI を自動化予定。
+ - PHI‑off 運用（Builder 側の規約）: merge 内に copy を置かず、then/else の pred へ edge_copy のみを挿入（self‑copy は No‑Op）。use‑before‑def と重複 copy を原理的に回避する。
 
 Type meta (emitter/LLVM harness cooperation)
 - `+` with any string operand → string concat path（handle固定）。
@@ -81,4 +82,4 @@ If with local + PHI merge
 ]}
 ```
 - `Break` / `Continue` are emitted when Stage‑3 gate is enabled. When the bridge is compiled without Stage‑3 lowering, frontends may degrade them into `Expr(Int(0))` as a safety fallback.
-- `Try` nodes include optional `catches` entries of the form `{ param?: string, typeHint?: string, body: Stmt[] }`. Until runtime exception semantics land, downstream lowers only the `try` body and ignores handlers/finally.
+- `Try` nodes include optional `catches` entries of the form `{ param?: string, typeHint?: string, body: Stmt[] }`. Until runtime exception semantics land, downstream lowers only the `try` body and ignores handlers/`finally`.

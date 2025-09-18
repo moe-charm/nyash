@@ -46,7 +46,7 @@ pub enum TokenType {
     INCLUDE,   // include (ファイル読み込み)
     TRY,       // try
     CATCH,     // catch
-    FINALLY,   // finally
+    CLEANUP,   // cleanup (finally replacement)
     THROW,     // throw
     LOCAL,     // local (一時変数宣言)
     STATIC,    // static (静的メソッド)
@@ -520,7 +520,7 @@ impl NyashTokenizer {
             "import" => TokenType::IMPORT,
             "try" => TokenType::TRY,
             "catch" => TokenType::CATCH,
-            "finally" => TokenType::FINALLY,
+            "cleanup" => TokenType::CLEANUP,
             "throw" => TokenType::THROW,
             "local" => TokenType::LOCAL,
             "static" => TokenType::STATIC,

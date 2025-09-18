@@ -138,6 +138,7 @@ cargo build --release --features vm-legacy
 ```
 - 既定（vm-legacy OFF）: MIR(JSON) を出力して `tools/pyvm_runner.py` で実行
 - レガシー VM: インタープリター比で 13.5x（歴史的実測）。比較・検証用途で維持
+ - 補足: `--benchmark` はレガシー VM（`vm-legacy`）が必要です。実行前に `cargo build --release --features vm-legacy` を行ってください。
 
 ### 3. **ネイティブバイナリ（Cranelift AOT）** （配布用）
 ```bash

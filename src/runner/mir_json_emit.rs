@@ -16,10 +16,38 @@ pub fn emit_mir_json_for_harness(
         for bid in ids {
             if let Some(bb) = f.blocks.get(&bid) {
                 let mut insts = Vec::new();
+                // Pre-scan: collect values defined anywhere in this block (to delay use-before-def copies)
+                let mut block_defines: std::collections::HashSet<u32> = std::collections::HashSet::new();
+                for inst in &bb.instructions {
+                    match inst {
+                        I::Copy { dst, .. }
+                        | I::UnaryOp { dst, .. }
+                        | I::Const { dst, .. }
+                        | I::BinOp { dst, .. }
+                        | I::Compare { dst, .. }
+                        | I::Call { dst: Some(dst), .. }
+                        | I::ExternCall { dst: Some(dst), .. }
+                        | I::BoxCall { dst: Some(dst), .. }
+                        | I::NewBox { dst, .. }
+                        | I::Phi { dst, .. } => {
+                            block_defines.insert(dst.as_u32());
+                        }
+                        _ => {}
+                    }
+                }
+                // Track which values have been emitted (to order copies after their sources)
+                let mut emitted_defs: std::collections::HashSet<u32> = std::collections::HashSet::new();
                 // PHI first（オプション）
                 for inst in &bb.instructions {
                     if let I::Copy { dst, src } = inst {
-                        insts.push(json!({"op":"copy","dst": dst.as_u32(), "src": src.as_u32()}));
+                        // For copies whose source will be defined later in this block, delay emission
+                        let s = src.as_u32();
+                        if block_defines.contains(&s) && !emitted_defs.contains(&s) {
+                            // delayed; will be emitted after non-PHI pass
+                        } else {
+                            insts.push(json!({"op":"copy","dst": dst.as_u32(), "src": src.as_u32()}));
+                            emitted_defs.insert(dst.as_u32());
+                        }
                         continue;
                     }
                     if let I::Phi { dst, inputs } = inst {
@@ -49,14 +77,19 @@ pub fn emit_mir_json_for_harness(
                     }
                 }
                 // Non-PHI
+                // Non-PHI
+                let mut delayed_copies: Vec<(u32, u32)> = Vec::new();
                 for inst in &bb.instructions {
                     match inst {
                         I::Copy { dst, src } => {
-                            insts.push(json!({
-                                "op": "copy",
-                                "dst": dst.as_u32(),
-                                "src": src.as_u32()
-                            }));
+                            let d = dst.as_u32();
+                            let s = src.as_u32();
+                            if block_defines.contains(&s) && !emitted_defs.contains(&s) {
+                                delayed_copies.push((d, s));
+                            } else {
+                                insts.push(json!({"op":"copy","dst": d, "src": s}));
+                                emitted_defs.insert(d);
+                            }
                         }
                         I::UnaryOp { dst, op, operand } => {
                             let kind = match op {
@@ -220,6 +253,7 @@ pub fn emit_mir_json_for_harness(
                                 obj["dst_type"] = t;
                             }
                             insts.push(obj);
+                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
                         I::NewBox {
                             dst,
@@ -228,6 +262,7 @@ pub fn emit_mir_json_for_harness(
                         } => {
                             let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
                             insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
+                            emitted_defs.insert(dst.as_u32());
                         }
                         I::Branch {
                             condition,
@@ -244,6 +279,10 @@ pub fn emit_mir_json_for_harness(
                         }
                         _ => { /* skip non-essential ops for initial harness */ }
                     }
+                }
+                // Emit delayed copies now (sources should be available)
+                for (d, s) in delayed_copies {
+                    insts.push(json!({"op":"copy","dst": d, "src": s}));
                 }
                 if let Some(term) = &bb.terminator {
                     match term {
@@ -279,6 +318,23 @@ pub fn emit_mir_json_for_harness_bin(
         for bid in ids {
             if let Some(bb) = f.blocks.get(&bid) {
                 let mut insts = Vec::new();
+                // Pre-scan to collect values defined in this block
+                let mut block_defines: std::collections::HashSet<u32> = std::collections::HashSet::new();
+                for inst in &bb.instructions {
+                    match inst {
+                        I::Copy { dst, .. }
+                        | I::Const { dst, .. }
+                        | I::BinOp { dst, .. }
+                        | I::Compare { dst, .. }
+                        | I::Call { dst: Some(dst), .. }
+                        | I::ExternCall { dst: Some(dst), .. }
+                        | I::BoxCall { dst: Some(dst), .. }
+                        | I::NewBox { dst, .. }
+                        | I::Phi { dst, .. } => { block_defines.insert(dst.as_u32()); }
+                        _ => {}
+                    }
+                }
+                let mut emitted_defs: std::collections::HashSet<u32> = std::collections::HashSet::new();
                 for inst in &bb.instructions {
                     if let I::Phi { dst, inputs } = inst {
                         let incoming: Vec<_> = inputs
@@ -303,41 +359,48 @@ pub fn emit_mir_json_for_harness_bin(
                                 json!({"op":"phi","dst": dst.as_u32(), "incoming": incoming}),
                             );
                         }
+                        emitted_defs.insert(dst.as_u32());
                     }
                 }
+                let mut delayed_copies: Vec<(u32, u32)> = Vec::new();
                 for inst in &bb.instructions {
                     match inst {
                         I::Copy { dst, src } => {
-                            insts.push(json!({
-                                "op": "copy",
-                                "dst": dst.as_u32(),
-                                "src": src.as_u32()
-                            }));
+                            let d = dst.as_u32(); let s = src.as_u32();
+                            if block_defines.contains(&s) && !emitted_defs.contains(&s) {
+                                delayed_copies.push((d, s));
+                            } else {
+                                insts.push(json!({"op":"copy","dst": d, "src": s}));
+                                emitted_defs.insert(d);
+                            }
                         }
-                        I::Const { dst, value } => match value {
-                            crate::mir::ConstValue::Integer(i) => {
-                                insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "i64", "value": i}}));
+                        I::Const { dst, value } => {
+                            match value {
+                                crate::mir::ConstValue::Integer(i) => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "i64", "value": i}}));
+                                }
+                                crate::mir::ConstValue::Float(fv) => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "f64", "value": fv}}));
+                                }
+                                crate::mir::ConstValue::Bool(b) => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "i64", "value": if *b {1} else {0}}}));
+                                }
+                                crate::mir::ConstValue::String(s) => {
+                                    insts.push(json!({
+                                        "op":"const",
+                                        "dst": dst.as_u32(),
+                                        "value": {
+                                            "type": {"kind":"handle","box_type":"StringBox"},
+                                            "value": s
+                                        }
+                                    }));
+                                }
+                                crate::mir::ConstValue::Null | crate::mir::ConstValue::Void => {
+                                    insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "void", "value": 0}}));
+                                }
                             }
-                            crate::mir::ConstValue::Float(fv) => {
-                                insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "f64", "value": fv}}));
-                            }
-                            crate::mir::ConstValue::Bool(b) => {
-                                insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "i64", "value": if *b {1} else {0}}}));
-                            }
-                            crate::mir::ConstValue::String(s) => {
-                                insts.push(json!({
-                                    "op":"const",
-                                    "dst": dst.as_u32(),
-                                    "value": {
-                                        "type": {"kind":"handle","box_type":"StringBox"},
-                                        "value": s
-                                    }
-                                }));
-                            }
-                            crate::mir::ConstValue::Null | crate::mir::ConstValue::Void => {
-                                insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "void", "value": 0}}));
-                            }
-                        },
+                            emitted_defs.insert(dst.as_u32());
+                        }
                         I::BinOp { dst, op, lhs, rhs } => {
                             let op_s = match op {
                                 B::Add => "+",
@@ -371,6 +434,7 @@ pub fn emit_mir_json_for_harness_bin(
                                 }
                             }
                             insts.push(obj);
+                            emitted_defs.insert(dst.as_u32());
                         }
                         I::Compare { dst, op, lhs, rhs } => {
                             let op_s = match op {
@@ -382,6 +446,7 @@ pub fn emit_mir_json_for_harness_bin(
                                 C::Ge => ">=",
                             };
                             insts.push(json!({"op":"compare","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
+                            emitted_defs.insert(dst.as_u32());
                         }
                         I::ExternCall {
                             dst,
@@ -401,6 +466,7 @@ pub fn emit_mir_json_for_harness_bin(
                                 }
                             }
                             insts.push(obj);
+                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
                         I::BoxCall {
                             dst,
@@ -430,6 +496,7 @@ pub fn emit_mir_json_for_harness_bin(
                                 obj["dst_type"] = t;
                             }
                             insts.push(obj);
+                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
                         I::NewBox {
                             dst,
@@ -438,6 +505,7 @@ pub fn emit_mir_json_for_harness_bin(
                         } => {
                             let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
                             insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
+                            emitted_defs.insert(dst.as_u32());
                         }
                         I::Branch {
                             condition,
@@ -455,6 +523,8 @@ pub fn emit_mir_json_for_harness_bin(
                         _ => {}
                     }
                 }
+                // Append delayed copies after their sources
+                for (d, s) in delayed_copies { insts.push(json!({"op":"copy","dst": d, "src": s})); }
                 if let Some(term) = &bb.terminator {
                     match term {
                     I::Return { value } => insts.push(json!({"op":"ret","value": value.map(|v| v.as_u32())})),

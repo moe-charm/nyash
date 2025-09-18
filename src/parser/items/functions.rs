@@ -53,19 +53,8 @@ impl NyashParser {
 
         self.consume(TokenType::RPAREN)?;
 
-        // 関数本体をパース
-        self.consume(TokenType::LBRACE)?;
-        self.skip_newlines();
-
-        let mut body = Vec::new();
-        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-            self.skip_newlines();
-            if !self.match_token(&TokenType::RBRACE) {
-                body.push(self.parse_statement()?);
-            }
-        }
-
-        self.consume(TokenType::RBRACE)?;
+        // 関数本体をパース（共通ブロックヘルパー）
+        let body = self.parse_block_statements()?;
 
         Ok(ASTNode::FunctionDeclaration {
             name,

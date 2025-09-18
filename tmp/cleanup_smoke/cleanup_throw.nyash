@@ -1,0 +1,11 @@
+static box Main {
+  main(args) {
+    try {
+      return 1
+    } catch (e) {
+      return 2
+    } cleanup {
+      throw 9
+    }
+  }
+}

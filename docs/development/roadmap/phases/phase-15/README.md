@@ -46,6 +46,15 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
   - 抽象レイヤの純度維持（Everything is Box）。
   - 実装責務の一極化（行数削減／保守性向上）。
 
+#### IfForm（構造化 if）— Builder 内部モデル（追加）
+- 目的: if/merge を構造化フォームで生成し、PHI‑off/PHI‑on の両経路で安定合流を得る。
+- 規約（PHI‑off 既定）:
+  - merge 内に copy は置かない。then/else の pred へ edge_copy のみを挿入（self‑copy は No‑Op）。
+  - 分岐直前に pre_if_snapshot を取得し、then/else は snapshot ベースで独立構築。merge で snapshot を基底に戻す。
+  - 差分検出で“変更された変数のみ”をマージ対象にする。
+- LoopForm との合成: ループ body 内に IfForm をネスト。continue は latch、break は after へ分岐（IfForm の merge preds から除外）。
+- 検証: スナップショットテストで CFG/edge_copy/終端/分岐先を固定。
+
 ### Phase 15.3: NyashコンパイラMVP（次フェーズ着手）
 - PyVM 安定後、Nyash製パーサ/レクサ（サブセット）と MIR ビルダを段階導入
 - フラグでRustフォールバックと併存（例: `NYASH_USE_NY_COMPILER=1`）

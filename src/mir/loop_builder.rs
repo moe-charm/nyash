@@ -82,6 +82,48 @@ fn extract_assigned_var_local(ast: &ASTNode) -> Option<String> {
 }
 
 impl<'a> LoopBuilder<'a> {
+    // --- Small helpers for continue/break commonization ---
+
+    /// Emit a jump to `target` from the current block and record predecessor metadata.
+    fn jump_with_pred(&mut self, target: BasicBlockId) -> Result<(), String> {
+        let cur_block = self.current_block()?;
+        self.emit_jump(target)?;
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, target, cur_block);
+        Ok(())
+    }
+
+    /// Switch insertion to a fresh (unreachable) block and place a Void const to keep callers satisfied.
+    fn switch_to_unreachable_block_with_void(&mut self) -> Result<ValueId, String> {
+        let next_block = self.new_block();
+        self.set_current_block(next_block)?;
+        let void_id = self.new_value();
+        self.emit_const(void_id, ConstValue::Void)?;
+        Ok(void_id)
+    }
+
+    /// Handle a `break` statement: jump to loop exit and continue in a fresh unreachable block.
+    fn do_break(&mut self) -> Result<ValueId, String> {
+        if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
+            self.jump_with_pred(exit_bb)?;
+        }
+        self.switch_to_unreachable_block_with_void()
+    }
+
+    /// Handle a `continue` statement: snapshot vars, jump to loop header, then continue in a fresh unreachable block.
+    fn do_continue(&mut self) -> Result<ValueId, String> {
+        // Snapshot variables at current block to be considered as a predecessor input
+        let snapshot = self.get_current_variable_map();
+        let cur_block = self.current_block()?;
+        self.block_var_maps.insert(cur_block, snapshot.clone());
+        self.continue_snapshots.push((cur_block, snapshot));
+
+        if let Some(header) = self.loop_header {
+            self.jump_with_pred(header)?;
+        }
+
+        self.switch_to_unreachable_block_with_void()
+    }
+
     /// 新しいループビルダーを作成
     pub fn new(parent: &'a mut super::builder::MirBuilder) -> Self {
         let no_phi_mode = parent.is_no_phi_mode();
@@ -528,38 +570,8 @@ impl<'a> LoopBuilder<'a> {
                 self.emit_const(void_id, ConstValue::Void)?;
                 Ok(void_id)
             }
-            ASTNode::Break { .. } => {
-                // Jump to loop exit (after_loop_id) if available
-                let cur_block = self.current_block()?;
-                if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
-                    self.emit_jump(exit_bb)?;
-                    let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, exit_bb, cur_block);
-                }
-                // Continue building in a fresh (unreachable) block to satisfy callers
-                let next_block = self.new_block();
-                self.set_current_block(next_block)?;
-                let void_id = self.new_value();
-                self.emit_const(void_id, ConstValue::Void)?;
-                Ok(void_id)
-            }
-            ASTNode::Continue { .. } => {
-                let snapshot = self.get_current_variable_map();
-                let cur_block = self.current_block()?;
-                self.block_var_maps.insert(cur_block, snapshot.clone());
-                self.continue_snapshots.push((cur_block, snapshot));
-
-                if let Some(header) = self.loop_header {
-                    self.emit_jump(header)?;
-                    let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, header, cur_block);
-                }
-
-                let next_block = self.new_block();
-                self.set_current_block(next_block)?;
-
-                let void_id = self.new_value();
-                self.emit_const(void_id, ConstValue::Void)?;
-                Ok(void_id)
-            }
+            ASTNode::Break { .. } => self.do_break(),
+            ASTNode::Continue { .. } => self.do_continue(),
             other => self.parent_builder.build_expression(other),
         }
     }

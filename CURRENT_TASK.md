@@ -1,309 +1,203 @@
-# Current Task — Phase 15 Self‑Hosting (2025‑09‑17)
+# Current Task — Phase 15 Snapshot (2025-09-18)
 
-Summary
-- Default execution is MIR13 (PHI‑off). Bridge/Builder do not emit PHIs; llvmlite synthesizes PHIs when needed. MIR14 (PHI‑on) remains experimental for targeted tests.
-- PyVM is the semantic reference engine; llvmlite is used for AOT and parity checks.
- - GC: user modes defined; controller実装（rc+cycle skeleton + metrics/diagnostics）に移行。LLVM safepoint輸出/NyRT配線と自動挿入（envゲートON）を完了。
+## Snapshot / Policy
+- Execution policy: PHI-off (edge-copy) by default. MIR builders/bridge do not emit PHIs; LLVM (llvmlite harness) synthesizes PHIs. PHI-on is dev-only and gated by feature `phi-legacy`.
+- Semantic reference: PyVM. AOT/EXE-first via llvmlite harness + `ny-llvmc`.
+- Harness-first run path: `--backend llvm` uses llvmlite harness (when `NYASH_LLVM_USE_HARNESS=1`) to emit an EXE and run it, returning the program exit code.
 
-Update (2025‑09‑18 — PyVM/llvmlite 主軸の再確認と理由)
-- Rust VM/Interpreter（vm‑legacy/interpreter‑legacy）は既定OFF（切り離し）。理由: MIR13 期の移行で追随工数が合わず、当面は保守最小/比較用に限定。
-- 現在の主軸は PyVM（意味論参照）＋ llvmlite（AOT/EXE‑first）。`--backend vm` は PyVM にフォールバック。
+Env toggles (current)
+- `NYASH_MIR_NO_PHI` (default=1): PHI-off.
+- `NYASH_VERIFY_EDGE_COPY_STRICT=1`: Enable strict edge-copy verifier in PHI-off.
+- `NYASH_LLVM_USE_HARNESS=1`: Use llvmlite harness path.
+- `NYASH_LLVM_PREPASS_IFMERGE=1`: Enable if-merge prepass for ret-merge convenience (harness).
+- `NYASH_LLVM_TRACE_PHI=1` + `NYASH_LLVM_TRACE_OUT=<file>`: Emit PHI wiring JSONL trace.
+- `phi-legacy` feature + `NYASH_MIR_NO_PHI=0`: Dev-only PHI-on (legacy/testing).
 
-Refactoring — Code Quality (High Priority, 2025‑09‑17 夜間)
-- MIR instruction meta de‑boilerplate:
-  - Added `inst_meta!` macro and migrated major instructions (Unary/Compare/Load/Cast/TypeOp/Array{Get,Set}/Return/Branch/Jump/Print/Debug/Barrier*/Ref*/Weak*/Future*/Phi/NewBox).
-  - File `src/mir/instruction_kinds/mod.rs` shrank ~100 lines; behavior unchanged (introspection only).
-- Tests safety pass (unwrap elimination):
-  - `src/tests/typebox_tlv_diff.rs` now uses `with_host` + `EnvGuard` + `inv_{ok,some,void}` helpers.
-  - Removed all `.unwrap()` from the file; failures carry context via `expect` or helper panic messages.
-- Tokenizer duplication cut:
-  - Centralized single‑char token mapping via `single_char_token()`; kept longest‑match logic for multi‑char ops.
-- Box operators de‑duplicate:
-  - Added `impl_static_numeric_ops!` for Integer/Float static ops (Add/Sub/Mul/Div), preserved zero‑division checks.
-  - Introduced `concat_result` and `can_repeat`; simplified Dynamic* impls and `OperatorResolver` via helper functions.
-- Net plugin modularization (unsafe/TLV/state split):
-  - New: `plugins/nyash-net-plugin/src/ffi.rs` (CStr/ptr helpers), `tlv.rs` (encode/decode), `state.rs` (global maps/IDs).
-  - `lib.rs` delegates to these modules; unsafe is centralized, TLV logic unified, globals encapsulated.
-— Python plugin refactor (Phase‑15)
-  - ffi 分離: `plugins/nyash-python-plugin/src/ffi.rs` に CPython ローダ/シンボル/`ensure_cpython()` を移設（挙動等価）。
-  - GILGuard 適用拡大: `eval/import/getattr/str/call/callKw` の全パスを `gil::GILGuard` で保護。手動 Ensure/Release を撤去。
-  - pytypes 導入: `plugins/nyash-python-plugin/src/pytypes.rs`
-    - TLV→Py 変換を集約: `count_tlv_args/tuple_from_tlv/kwargs_from_tlv`（内部 `fill_*` で unsafe を局在化）。
-    - `take_py_error_string` を移設し、lib 側からの呼び出しを置換。
-    - 参照ヘルパ（`incref/decref`）と CString/CStr ヘルパを用意（段階移行用）。
-  - 旧ロジックの削除/整理:
-    - `lib.rs` の `fill_kwargs_from_tlv` を削除（pytypes へ移行済み）。
-    - 旧 `tlv_count_args` と `fill_tuple_from_tlv` は廃止（コメント化→撤去予定）。
-  - ビルド: `cargo check -p nyash-python-plugin` 警告ゼロ、Net プラグインも警告ゼロを維持。
+Planned (parser Stage‑3 gate):
+- `NYASH_PARSER_STAGE3=1` to accept try/catch/throw/cleanup syntax in the core parser (postfix catch/cleanup included).
 
-Done (2025‑09‑18)
-- Python plugin refactor 完了
-  - RAII: `PyOwned`/`PyBorrowed` 導入＋ `OBJ_PTRS` 撤去。参照は型で管理（Drop=DecRef）。
-  - autodecode を `pytypes` に移設（`DecodedValue`）。呼び出し側は TLV 書き戻しのみ。
-  - CString/CStr/bytes 変換を `pytypes` に統一。
-  - ログ出力を `NYASH_PY_LOG` でガードし既定静音化。
-  - クリーンアップ: 過剰 `allow(dead_code)` の縮小とコメント整理。
-- ny-llvmc: EXE 出力対応
-  - `--emit exe/obj`、`--nyrt <dir>`、`--libs` を実装。`.o` 生成後に NyRT とリンクして実行可能に。
-  - 代表ケースで EXE 実行（exit code）を確認。
- - CLI: 直接 EXE 出力
-  - `nyash --emit-exe <out> [--emit-exe-nyrt <dir>] [--emit-exe-libs "<flags>"]` を追加。MIR JSON を内部出力→`ny-llvmc` 呼出し→EXE 生成。
- - Selfhost Parser（Stage‑2）
-  - コメント対応（`//` と `/* ... */`）を `skip_ws` に統合。
-  - 文字列エスケープ（`\n`/`\r`/`\t`/`\"`/`\\`/最小 `\uXXXX`）を `read_string_lit`/`parse_string2` に追加。
-- Smokes/Test 整理（ローカル）
-  - 新ランナー: `tools/test/bin/run.sh`（`--tag fast` で最小セット）。
-  - 共通ヘルパ: `tools/test/lib/shlib.sh`（ビルド/実行/アサート）。
-  - fast セットに crate‑exe（3件）/bridge 短絡/LLVM quick/if‑merge/py unit を追加。
-  - PyVM 基本スモークを JSON→`pyvm_runner.py` で stdout 判定に移行。
-  - Python ユニット: `src/llvm_py/tests/test_phi_wiring.py` を `tools/python_unit.sh` で起動（fast 経由）。
- - Runner selfhost リファクタ（小PR）
-  - 共通化: `src/runner/modes/common_util/selfhost/{child.rs,json.rs}` を新設し、子プロセス起動と JSON v0 抽出/パースを分離。
-  - 移行: `src/runner/selfhost.rs` の子起動・PyVM 実行経路を新ヘルパで置換（挙動等価）。
-  - 清掃: 未使用 import/mut の削減、到達不能 return の解消（`runner/mod.rs` の benchmark 分岐）。
+## Completed (highlights)
+- Loop/If builder hygiene
+  - Continue/Break commonized (`jump_with_pred`, `do_{break,continue}`) in MIR LoopBuilder and JSON bridge.
+- PHI-off correctness tooling
+  - Strict verifier (PHI-off): checks per-pred `Copy` coverage and forbids merge self-copy (`NYASH_VERIFY_EDGE_COPY_STRICT=1`).
+  - LLVM PHI trace (JSONL): unified structured events from harness (`finalize_*`, `add_incoming`, `wire_choose`, `snapshot`).
+  - Trace checker: `tools/phi_trace_check.py` (diffs on mismatch, `--summary`/`--strict-zero`).
+- Harness-first runner
+  - `--backend llvm` + `NYASH_LLVM_USE_HARNESS=1`: emit EXE via `ny-llvmc` and run (returns exit code).
+- One-shot + smokes
+  - `tools/phi_trace_run.sh`: build → run → trace → check in one shot (multi-app; `--strict-zero`).
+  - `tools/test/smoke/llvm/phi_trace/test.sh`: curated cases (loop_if_phi / ternary_nested / phi_mix / heavy_mix).
+  - Difficult mixes added: `apps/tests/llvm_phi_mix.nyash`, `apps/tests/llvm_phi_heavy_mix.nyash` (Box生成 + continue/break/early return)。
+- Docs
+  - PHI policy: `docs/reference/mir/phi_policy.md`（PHI‑off恒久・PHI‑on保守限定）。
+  - Lowering contexts guide: `docs/design/LOWERING_CONTEXTS.md`（If/Loop スナップショット規約）。
+  - PHI-off トラブルシュート: `docs/guides/phi-off-troubleshooting.md`。
+  - Testing guide updated with trace usage.
+  - Stage‑3 Exceptions (MVP): `docs/guides/exceptions-stage3.md`（単一catch＋Resultモード＋ThrowCtx の方針）。
+- Stage‑3 parser gate（Phase A 完了）
+  - Rust parser が `NYASH_PARSER_STAGE3=1` で try/catch/cleanup/throw を受理（`(Type x)|(x)|()` の各形式）。
+  - parser tests/EBNF/doc を更新。
+- Bridge Result‑mode（Phase B/C の実装基盤）
+  - `NYASH_TRY_RESULT_MODE=1` で try/catch/cleanup を MIR Throw/Catch なしに構造化lower（単一catchポリシー）。
+  - ThrowCtx（thread‑local）で try 降下中の任意スコープの throw を現在の catch に集約（ネスト throw 対応）。
+  - 合流は PHI‑off 規約（edge‑copy）。Bridge 出力に PHI が混ざった場合は `strip_phi_functions` で正規化（後段ハーネスは PHI 合成）。
+  - Bridge スモーク追加: `tools/test/smoke/bridge/try_result_mode.sh`（JSON v0 → Bridge → PyVM/VM。代表ケース緑）。
 
-Today (2025‑09‑18) — ExternCall 整理と Self‑Host M2 の土台
-- ExternCall/println 正規化を docs に明文化（`docs/reference/runtime/externcall.md`）。README/README.ja からリンク。
-- NyRT: `NYASH_NYRT_SILENT_RESULT=1` で標準化 `Result:` 行を抑止（tests 既定ON）。
-- PyVM: console.warn/error/trace は stderr、console.log は stdout に出力（MVP）。
-- Self‑Host M2 MVP: `MirEmitterBox` 追加（Return(Int)→const+ret）。コンパイラに `--emit-mir` を実装。
-- Runner（自己ホスト子プロセス）
-  - 子に `NYASH_JSON_ONLY=1 / NYASH_VM_USE_PY=1 / NYASH_DISABLE_PLUGINS=1` を付与し、出力と依存を安定化。
-  - `NYASH_NY_COMPILER_CHILD_ARGS` を必ず `--` の後段に注入。
-  - VM 経路は `NYASH_ENABLE_USING=1` 時に using 行をストリップ（暫定）。
+## Tools & Scripts (quick)
+- One-shot: `bash tools/phi_trace_run.sh apps/tests/llvm_phi_heavy_mix.nyash --strict-zero`
+- PHI trace smoke (optional): `bash tools/test/smoke/llvm/phi_trace/test.sh`
+- Fast smokes (opt-in trace): `NYASH_LLVM_TRACE_SMOKE=1 bash tools/smokes/fast_local.sh`
+- Bridge (Result‑mode) smokes: `bash tools/test/smoke/bridge/try_result_mode.sh`
+- Bridge→harness PHI trace (WIP): `bash tools/phi_trace_bridge_try.sh tests/json_v0_stage3/try_nested_if.json`
 
-Next — Self‑Host M2 拡張（短期）
-- Runner: 子 stdout の JSON 捕捉を堅牢化（fallback: tmp に JSON を書かせ親で読む）。
-- MirEmitterBox の段階実装：
-  1) Binary（+,-,*,/）→ `binop`
-  2) Compare（==,!=,<,<=,>,>=）→ `compare`（i64 0/1）
-  3) print/println → `externcall env.console.log`
-  4) Ternary → branch + ret（PHI‑off; Copy 合成）
-- スモーク拡充（PyVM→EXE パリティ）
-  - `return 1+2*3`（exit=7）、`ternary_basic`（exit=10）、console.log（EXE は exit のみ）。
+## Next — Stage‑3 Try/Catch/Throw (cleanup unified; parser→lowering, incremental)
 
-Next (Immediate)
-- tools/build_llvm.sh の crate→EXE 統合
-  - `NYASH_LLVM_COMPILER=crate` かつ `NYASH_LLVM_EMIT=exe` の場合、`ny-llvmc --emit exe` を呼び出し、手動リンクをスキップ。
-  - `NYASH_LLVM_NYRT`/`NYASH_LLVM_LIBS` 環境変数でリンク先/追加フラグを指定可能に（Linux 既定は `-ldl -lpthread -lm`）。
-- Self‑host/EXE スモークの整備
-  - 代表3ケース（const/binop/branch など）の JSON→ny-llvmc→EXE→実行をワンショットで検証するスクリプト（Linux）。
-  - 既存 `exe_first_smoke.sh`/`build_compiler_exe.sh` の補助として crate 直結経路を並行維持。
-- CI 追補（簡素化方針）
-  - GitHub Actions は `fast-smoke` 一本に集約済み。必要時に拡張。
-  - crate‑EXE 3件（10/50/1）を維持。PyVM 追加はローカル test ランナーに寄せる。
- - Test consolidation
-  - 必要スモークから順次 `tools/test/` に移行（pyvm/bridge/crate-exe を優先）。
-  - 既存単体スクリプトは `tools/smokes/archive/` へ暫定退避（参照減後に削除検討）。
+Phase A — Parser acceptance (no behavior change)
+- Goal: Accept Stage‑3 syntax in the Rust parser behind a gate.
+- Scope:
+- Parse `try { … } catch [(Type x)|(x)|()] { … } [cleanup { … }]` and `throw <expr>`.
+  - Build existing AST forms: `ASTNode::TryCatch`, `CatchClause`, `ASTNode::Throw`.
+  - Gate via env (planned): `NYASH_PARSER_STAGE3=1`（既定OFF）。
+Status: DONE (cleanup unified; finally removed)
+- Deliverables:
+  - Parser unit tests: 正常（各バリアント）/構文エラー（不完全・重複cleanup等）。
+  - EBNF/doc 更新（最小仕様、複数catchは将来）。
 
+Phase B — Safe lowering path (no exceptions thrown)
+- Goal: Allow “no-throw path” lowering to MIR/JSON so existing runners remain green.
+- Scope:
+  - Lower try/catch when try-body doesn’t throw; catch block is structurally present but not executed.
+  - JSON v0 bridgeとASTの形状整合を確認（既存 `lowering/try_catch.rs` を安全適用）。
+- Deliverables:
+  - Minimal smoke: try/catch where try 内で例外なし（正常合流/ret の健全性）。
 
-What Changed (recent)
-- MIR13 default enabled
-  - `mir_no_phi()` default set to true (can disable via `NYASH_MIR_NO_PHI=0`).
-  - Curated LLVM runner defaults to PHI‑off; `--phi-on` enables MIR14 lane.
-  - Added doc: `docs/development/mir/MIR13_MODE.md`; README references it.
-- JSON v0 Bridge lowering refactor + features
-  - Split helpers: `src/runner/json_v0_bridge/lowering/{if_else.rs, loop_.rs, try_catch.rs, merge.rs}`（既存）に加え、式系を `lowering/expr.rs` に分離（振る舞い不変）。
-  - 新規サポート: Ternary/Peek の Lowering を実装し、`expr.rs` から `ternary.rs`/`peek.rs` へ委譲（MIR13 PHI‑off=Copy合流／PHI‑on=Phi 合流）。
-  - Self‑host 生成器（Stage‑1 JSON v0）に Peek emit を追加: `apps/selfhost-compiler/boxes/parser_box.nyash`。
-  - Selfhost/PyVM スモークを通して E2E 確認（peek/ternary）。
-- llvmlite stability for MIR13（bring‑up進行中）
-  - Control‑flow 分離: `instructions/controlflow/{branch,jump,while_.py}` を導入し、`llvm_builder.py` の責務を縮小。
-  - プリパス（環境変数で有効化）: `NYASH_LLVM_PREPASS_LOOP=1`, `NYASH_LLVM_PREPASS_IFMERGE=1`
-    - ループ検出（単純 while 形）→ 構造化 lower（LoopForm失敗時は regular while）
-    - if‑merge（ret‑merge）前処理: ret 値 PHI の前宣言と finalize 配線の一意化
-    - CFG ユーティリティ: `src/llvm_py/cfg/utils.py`（preds/succs）
-  - PHI 配線の分離: `src/llvm_py/phi_wiring.py` に placeholder/finalize を移管（builder 薄化）
-  - 値解決ポリシー共通化: `src/llvm_py/utils/values.py`（prefer same‑block SSA → resolver）
-  - vmap の per‑block 化: `vmap_cur` を用意し、ブロック末に `block_end_values` へスナップショット。cross‑block 汚染を抑制。
-  - Resolver 強化: end‑of‑block 解決で他ブロック PHI を安易に採用しない（自己参照/非支配を回避）。
-  - BuildCtx 導入: `src/llvm_py/build_ctx.py` で lowering 引数を集約（compare/ret/call/boxcall/externcall/typeop/newbox/safepoint が ctx 対応）
-  - トレース統一: `src/llvm_py/trace.py` を追加し、`NYASH_CLI_VERBOSE`/`NYASH_LLVM_TRACE_PHI`/`NYASH_LLVM_TRACE_VALUES` を一元管理
-  - curated スモーク拡張: `tools/smokes/curated_llvm.sh --with-if-merge` を追加（if‑merge ケース含む）
-- Parity runner pragmatics
-  - `tools/pyvm_vs_llvmlite.sh` compares exit code by default; use `CMP_STRICT=1` for stdout+exit.
-  - Stage‑2 smokes更新: `tools/selfhost_stage2_smoke.sh` に "Peek basic" を追加。
-- GC controller/metrics（Phase‑15）
-  - `GcController`（統合フック）導入＋CLI `--gc`（`NYASH_GC_MODE`）。CountingGcは互換ラッパに縮退。
-  - NyRT exports: `ny_safepoint` / `ny_check_safepoint` / `nyash.gc.barrier_write` → runtime hooks 連携。
-  - LLVM：自動 safepoint 挿入（loop header / call / externcall / boxcall）。`NYASH_LLVM_AUTO_SAFEPOINT` で制御（既定=1）。
-  - メトリクス：text/JSON（`NYASH_GC_METRICS{,_JSON}=1`）。JSONに alloc_count/alloc_bytes/trial_nodes/edges/collections/last_ms/reason_bits/thresholds を含む。
-  - 診断：`NYASH_GC_LEAK_DIAG=1` でハンドルTop‑K（残存）出力。Array/Map 到達集合の試走（gc_trace）。
+Status note (Result‑mode MVP)
+- `NYASH_TRY_RESULT_MODE=1`: try/catch/cleanup を構造化lower（MIR Throw/Catch 不使用）。
+- 単一catchポリシー＋ThrowCtx でネスト throw を含む try 範囲の throw を集約（catch パラメータは preds→値の束ねで受理）。
+- 合流は PHI‑off（edge‑copy）。Bridge 出力時に PHI が残った場合は正規化して除去。
 
-- CI/DevOps（Self‑Hosting パイロット強化）
-  - 追加: `.github/workflows/selfhost-bootstrap.yml`（常時） — `tools/bootstrap_selfhost_smoke.sh` を40s timeoutで実行。
-  - 追加: `.github/workflows/selfhost-exe-first.yml`（任意/cron） — LLVM18 + llvmlite をセットアップし `tools/exe_first_smoke.sh` を実行。
-  - スモーク堅牢化: `tools/bootstrap_selfhost_smoke.sh`/`tools/exe_first_smoke.sh` に timeout を付与。
-  - JSON v0 スキーマ追加: `docs/reference/mir/json_v0.schema.json` と検証ツール `tools/validate_mir_json.py`。EXE‑first スモークに組み込み。
+Phase C — Minimal throw/catch path
+- Goal: Enable one end-to-end throw→catch→cleanup path for simple cases.
+- Scope:
+  - `throw "message"` → 単一 catch で受理（型は文字列ラベル相当の最小仕様）。
+- cleanup は “常に実行” の構造のみ（副作用最小）。
+  - PHI-off 合流は edge-copy 規約を維持（phi-trace で preds→dst 網羅を確認）。
+- Deliverables:
+  - 代表スモーク（print/return 系）
+  - phi-trace を用いた整合チェック
+Implementation track (current)
+- Use `NYASH_TRY_RESULT_MODE=1` and single‑catch policy（catch 内分岐）。
+- ThrowCtx によりネスト throw を集約。catch パラメータは preds→値の束ねで受理（PHI‑offはedge‑copy）。
+- LLVM harness: PHI 責務を finalize_phis に一任。ret.py を簡素化（Return のみ）。if‑merge 事前宣言の安全化、uses 向け predeclare を追加。
+- 結果: try/cleanup 基本・print・throw(デッド)・cleanup return override(許可) は harness 緑。
+- 残: method 後置 cleanup + return(許可) は PHI 先頭化の徹底が必要（resolver の未宣言 multi‑pred PHI 合成を完全停止→predeclare 必須化）。
 
-- LLVM crate 分離の足場（Phase‑15.6 向け）
-  - 新規クレート（スキャフォールド）: `crates/nyash-llvm-compiler`（CLI名: `ny-llvmc`）。
-    - `--dummy --out <o>` でダミー `.o` を生成。
-    - `--in <mir.json|-> --out <o>` で MIR(JSON)→`.o` を llvmlite ハーネス経由で生成（`tools/llvmlite_harness.py`）。
-  - ドキュメント追記: `docs/LLVM_HARNESS.md` に `ny-llvmc` とスキーマ検証の項を追加。
+---
 
-- Nyash ABI v2（TypeBox）検出の足場
-  - ローダに `nyash_typebox_<Box>` シンボル検出を追加（`abi_tag='TYBX'`/`version`/`invoke_id`）し、Boxスペックへ保持（まだ実行には未使用）。
+## Phase 15.5 — Block‑Postfix Catch（try を無くす設計）
 
-Current Status
-- Self‑hosting Bridge → PyVM smokes: PASS（Stage‑2 代表: array/string/logic/if/loop/ternary/peek/dot-chain）
-- PyVM core fixes applied: compare(None,x) の安全化、Copy 命令サポート、最大ステップ上限（NYASH_PYVM_MAX_STEPS）
-- MIR13（PHI‑off）: if/ternary/loop の合流で Copy が正しく JSON に出るよう修正（emit_mir_json + builder no‑phi 合流）
-- Curated LLVM（PHI‑off 既定）: 継続（個別ケースの IR 生成不備は未着手）
-LLVM ハーネス（llvmlite/AOT）:
-  - `loop_if_phi`: プリパスON＋構造化whileで EXE 退出コード 0（緑）。
-  - `ternary_nested`: if‑merge プリパス＋phi_wiring で ret‑merge を構造化し、退出コード一致（緑）。
+Design (MVP)
+- Syntax（後置）:
+- `{ body } catch (e) { handler } [cleanup { … }]`
+- `{ body } cleanup { … }`（catch 省略可）
+- Policy:
+  - 単一 catch（分岐は catch 内で行う）。パラメータ形式は `(Type x)|(x)|()` を許容。
+  - 作用域は “同じ階層” のブロックに限定。ブロック内の `throw` は直後の catch にのみ到達（外に伝播しない）。
+  - MVP 静的検査: 直後に catch のない独立ブロック内で「直接の `throw` 文」を禁止（ビルドエラー）。関数呼び出し由来の throw は当面ノーチェック。
+  - 適用対象: 独立ブロック文に限定（if/else/loop の構文ブロック直後は不可）。必要なら独立ブロックで包む。
 
-Next (short plan)
-0) Refactor/Structure（継続）
-   - BuildCtx 展開を完了（barrier/atomic/loopform も ctx 主経路に）
-   - trace 化の残り掃除（環境直読み print を削減）
-   - phi_wiring を関数分割（解析/配線/タグ付け）→ ユニットテスト追加
-1) Legacy Interpreter/VM offboarding (phase‑A):
-   - ✅ Introduced `vm-legacy` feature (default OFF) to gate old VM execution層。
-   - ✅ 抽出: JIT が参照する最小型（例: `VMValue`）を薄い共通モジュールへ切替（`vm_types`）。
-   - ✅ `interpreter-legacy`/`vm-legacy` を既定ビルドから外し、既定は PyVM 経路に（`--backend vm` は PyVM へフォールバック）。
-   - ✅ Runner: vm-legacy OFF のとき `vm`/`interpreter` は PyVM モードで実行。
-   - ✅ HostAPI: VM 依存の GC バリアは vm-legacy ON 時のみ有効。
-   - ✅ PyVM/Bridge Stage‑2 スモークを緑に再整備（短絡/三項/合流 反映）
-2) Legacy Interpreter/VM offboarding (phase‑B):
-   - 物理移動: `src/archive/{interpreter_legacy,vm_legacy}/` へ移設（ドキュメント更新）。
-3) LLVM/llvmlite 整備（優先中）:
-   - MIR13 の Copy 合流を LLVM IR に等価反映（pred‑localize or PHI 合成）: per‑block vmap 完了、resolver/phi_wiring 強化済。
-   - 代表ケース:
-     - `apps/tests/loop_if_phi.nyash`: プリパスONで緑（退出コード一致）。
-     - `apps/tests/ternary_nested.nyash`: if‑merge + phi_wiring で退出コード一致を継続。
-   - `tools/pyvm_vs_llvmlite.sh` で PyVM と EXE の退出コード一致（必要に応じて CMP_STRICT=1）。
-4) PHI‑on lane（任意）: `loop_if_phi` 支配関係を finalize/resolve の順序強化で観察（低優先）。
-5) Runner refactor（小PR）:
-   - ✅ `selfhost/{child.rs,json.rs}` 分離済み（子起動と JSON 抽出の共通化）。
-   - `modes/common/{io,resolve,exec}.rs` 分割; `runner/mod.rs`の表面削減（継続）。
-5.1) Self‑hosting using 移行（段階）
-   - ✅ compiler: using 宣言＋参照を Alias 化（include は暫定残置）
-   - parser/tooling: ParserV0/Tokenizer/DepTree を順次名前空間化し、include を削減
-   - 実行時: `--enable-using` と `--using-path apps:selfhost` を前提に整備（Runner 側でストリップ＋登録）
-6) Optimizer/Verifier thin‑hub cleanup（非機能）: orchestrator最小化とパス境界の明確化。
-7) GC（controller）観測の磨き込み
-   - JSON: running averages / roots要約（任意） / 理由タグ拡張
-   - 収集頻度のサンプリング支援
-   - plugin/FFI は非移動のまま、ハンドル間接を継続
-8) LLVM crate split（EXE‑first）
-   - LLVM harness/builder を `nyash-llvm-compiler` crate と CLI（`ny-llvmc`）に分離（入力: MIR JSON v0 / 出力: .o/.exe）
-   - `tools/build_llvm.sh` 内部を新crate APIに寄せ、Runnerからも呼べるよう段階移行
-   - CI: selfhost smokes と LLVM EXE smokes を分離しアーティファクト配布線を評価
+Gates / Flags
+- Parser gate（提案）: `NYASH_BLOCK_CATCH=1`（受理ON）。初期は Stage‑3 と同一ゲートでも可（`NYASH_PARSER_STAGE3=1`）。
+- Bridge: 既存 `NYASH_TRY_RESULT_MODE=1`（構造化lower／MIR Throw/Catch不使用）。
 
-9) Nyash ABI v2 統一（後方互換なし）
-   - 方針: 既存 Type‑C ABI（library‑level `nyash_plugin_invoke`）を撤退し、Box単位の TypeBox へ一本化。
-   - ローダ: `nyash_typebox_<Box>` の `invoke_id(instance_id, method_id, ...)` を実行ポインタとして保持し、birth/fini も含めて統一。
-   - プラグイン: 公式プラグイン（String/File/Array/Map/Console/Integer）を順次 v2 へ移行。`resolve(name)->method_id` 実装。
-   - 仕様: エラー規約（OK/E_SHORT/E_ARGS/E_TYPE/E_METHOD/E_HANDLE/E_PLUGIN）・TLVタグ一覧を docs に凍結、Cヘッダ雛形（`nyash_abi.h`）を配布。
-   - CI: v2専用スモークを常時化（Linux）。Windows/macOS は任意ジョブで追随。
+Lowering（実装方針）
+- Parser で後置 catch/cleanup を既存 `ASTNode::TryCatch` に畳み込む（try_body=直前ブロック）。
+- Bridge は既存 Result‑mode/ThrowCtx/単一catch・PHI‑off（edge‑copy）をそのまま利用（コード変更最小）。
 
-How to Run
-- PyVM reference smokes: `tools/pyvm_stage2_smoke.sh`
-- Bridge → PyVM smokes: `tools/selfhost_stage2_bridge_smoke.sh`
-- LLVM curated (PHI‑off default): `tools/smokes/curated_llvm.sh`
-- LLVM PHI‑on (experimental): `tools/smokes/curated_llvm.sh --phi-on`
-- LLVM curated with if‑merge prepass: `tools/smokes/curated_llvm.sh --with-if-merge`
-- Parity (AOT vs PyVM): `tools/pyvm_vs_llvmlite.sh <file.nyash>` (`CMP_STRICT=1` to enable stdout check)
-  - 開発時の補助: `NYASH_LLVM_PREPASS_LOOP=1` を併用（loop/if‑merge のプリパス有効化）。
- - GC modes/metrics: see `docs/reference/runtime/gc.md`（`--gc` / 自動 safepoint / 収集トリガ / JSONメトリクス）
-Trace (PHI wiring / LLVM harness)
-- `NYASH_LLVM_TRACE_PHI=1`: PHI 解析/配線のトレースを有効化（1 行 JSON）。
-- `NYASH_LLVM_TRACE_OUT=/path/to/file`: 出力先ファイル（未指定時は標準出力）。
-- 例: `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=/tmp/phi_trace.jsonl NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/loop_if_phi.nyash`
+Tasks（順番） — Progress
+1) Parser acceptance（ゲート付き） — DONE（cleanup 統一）
+- 後置 catch/cleanup を受理 → `ASTNode::TryCatch` に組み立て。
+   - 限定: 独立ブロック文のみ。トップレベルの `catch`/`finally` 先頭は専用エラーで誘導（if/else/loop 直後では使わず、独立ブロックで包む）。
+  - Unit tests: `(Type x)/(x)/()`＋cleanup、ネガティブ（直後に catch 無しで直接 throw など）。
+2) Static checks（MVP） — DONE
+   - 独立ブロック内 “直接の throw 文” に後置 catch が無ければビルドエラー。
+   - 将来拡張: 関数に最小 throws 効果ビットを導入し、静的安全性を高める（未着手）。
+3) Bridge / Lowering（確認のみ） — DONE
+   - 既存 Result‑mode の try/catch/finally 経路で正常動作（ThrowCtx によるネスト throw 集約、PHI‑off 合流）。
+   - Bridge スモーク（JSON v0→PyVM）を拡充。統合ハードケース追加（後述）。
+4) Docs & EBNF 更新 — DONE
+- 例外ガイドを後置 catch 中心に再編。EBNF に `block_catch := '{' stmt* '}' ('catch' '(' … ')' block)? ('cleanup' block)?` を追加し、ゲートも明記。
+5) Harness PHI trace（継続） — WIP
+   - finalize_phis の PHI 配置を「常にブロック先頭」へ修正し、Bridge→harness の後置構文ケースを緑に。
 
-Trace (PHI wiring / LLVM harness)
-- `NYASH_LLVM_TRACE_PHI=1`: PHI 解析/配線のトレースを有効化（1 行 JSON）。
-- `NYASH_LLVM_TRACE_OUT=/path/to/file`: 出力先ファイル（未指定時は標準出力）。
-- 例: `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=/tmp/phi_trace.jsonl NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/loop_if_phi.nyash`
+Migration / Compatibility
+- 旧 `try { … } catch { … }` は当面受理（非推奨）。段階導入後に後置 catch を推奨デフォルトへ。
+- 将来: フォーマッタ/自動変換の提供を検討。
 
-Self‑Hosting CI
-- Bootstrap（常時）: `.github/workflows/selfhost-bootstrap.yml`
-- EXE‑first（任意）: `.github/workflows/selfhost-exe-first.yml`
+Risks / Notes（Phase 15.5）
+- 直後 catch 不在での throw を静的に完全検出するには “効果型” が必要。MVP は「直接の throw 文のみチェック」で開始。
+- 構文の曖昧さ（if/else/loop ブロック直後）は独立ブロックに限定する規則で回避。
 
-LLVM Crate（試用）
-- ダミー: `cargo build -p nyash-llvm-compiler --release && ./target/release/ny-llvmc --dummy --out /tmp/dummy.o`
-- JSON→.o: `./target/release/ny-llvmc --in mir.json --out out.o`
+Out of scope（初期）
+- 複数 catch/型階層、例外伝播/ネストの深い制御、最適化。
 
-Operational Notes
-- 環境変数
-  - `NYASH_PYVM_MAX_STEPS`: PyVM の最大命令ステップ（既定 200000）。ループ暴走時に安全終了。
-  - `NYASH_VM_USE_PY=1`: `--backend vm` を PyVM ハーネスへ切替。
-  - `NYASH_PIPE_USE_PYVM=1`: `--ny-parser-pipe` / JSON v0 ブリッジも PyVM 実行に切替。
-  - `NYASH_CLI_VERBOSE=1`: ブリッジ/エミットの詳細出力。
-- スモークの実行例
-  - `timeout -s KILL 20s bash tools/pyvm_stage2_smoke.sh`
-  - `timeout -s KILL 30s bash tools/selfhost_stage2_bridge_smoke.sh`
+---
 
-Backend selection (Phase‑A after vm‑legacy off)
-- Default: `vm-legacy` = OFF, `interpreter-legacy` = OFF
-- `--backend vm` → PyVM 実行（python3 と `tools/pyvm_runner.py` が必要）
-- `--backend interpreter` → legacy 警告の上で PyVM 実行
-- `--benchmark` → vm‑legacy が必要（`cargo build --features vm-legacy`）
+## Phase 15.6 — Method‑Level Postfix Catch/Finally（メソッド境界の安全化）
 
-Enable legacy VM/Interpreter (opt‑in)
-- `cargo build --features vm-legacy,interpreter-legacy`
-- その後 `--backend vm`/`--backend interpreter` が有効
+Design (MVP)
+- Syntax（後置 at method end）:
+- `method name(params) { body } [catch (e) { handler }] [cleanup { … }]`
+- Policy:
+  - 単一 catch、順序は `catch` → `finally` のみ許可。
+  - 近接優先: ブロック後置の catch があればそれが優先。次にメソッドレベル、最後に呼出し側。
+- Gates / Flags
+  - `NYASH_METHOD_CATCH=1`（または `NYASH_PARSER_STAGE3=1` と同梱）
 
-Key Flags
-- `NYASH_MIR_NO_PHI` (default 1): PHI‑off when 1 (MIR13). Set `0` for PHI‑on.
-- `NYASH_VERIFY_ALLOW_NO_PHI` (default 1): relax verifier for PHI‑less MIR.
-- `NYASH_LLVM_USE_HARNESS=1`: route AOT through llvmlite harness.
-- `NYASH_LLVM_TRACE_PHI=1`: trace PHI resolution/wiring.
-- `NYASH_LLVM_PREPASS_LOOP=1`: enable loop prepass (while detection/structure)
-- `NYASH_LLVM_PREPASS_IFMERGE=1`: enable if‑merge (ret‑merge) prepass
-- `NYASH_LLVM_TRACE_VALUES=1`: trace value resolution path
+Plan（段階）
+1) Parser acceptance（ゲート付き）
+   - 既存メソッド定義の末尾に `catch/finally` を受理 → `TryCatch` に正規化（body を try_body に束ねる）。
+   - Unit tests: 正常/順序違反/複数catchエラー/末尾finallyのみ。
+2) Lowering（確認のみ）
+   - 既存 Result‑mode/ThrowCtx/PHI‑off 降下を再利用（変更なし）。
+3) Docs & EBNF 更新（本チケットで一部済）
+   - 仕様・ガイドを method‑level 追記、使用例と制約を明記。
 
-Notes / Policies
-- Focus is self‑hosting stability. JIT/Cranelift is out of scope (safety fixes only).
-- PHI generation remains centralized in llvmlite; Bridge/Builder keep PHI‑off by default.
-- No full tracing/moving GC yet; handles/Arc lifetimes govern object retention. Safepoint/barrier/roots are staging utilities.
- - GC mode UX: keep user‑facing modes minimal (rc+cycle, minorgen); advanced modes are opt‑in for language dev.
- - Legacy Interpreter/VM は段階的にアーカイブへ。日常の意味論確認は PyVM を基準として継続。
+Future (Phase 16.x)
+- ブロック先行・メソッド後置 `{ body } method name(..) [catch..] [finally..]` に拡張（先読み/二段パース）。
 
-Plugin ABI v2 updates (2025‑09‑17)
-- v2 migration (TypeBox) 完了/進捗
-  - 完了: FileBox / PathBox / RegexBox / MathBox / TimeBox
-  - Net 完了: ClientBox / ResponseBox / RequestBox / ServerBox / SockServerBox / SockClientBox / SockConnBox
-  - 既存: ConsoleBox / StringBox / IntegerBox / MapBox は v2 実装あり
-- ローダ診断強化
-  - `NYASH_DEBUG_PLUGIN=1` で TypeBox 未検出/ABI不一致/invoke_id未定義の詳細をログ出力
-- Docs 追補
-  - `docs/reference/plugin-abi/nyash_abi_v2.md` に命名規約・例（Regex/Net）を追記
-  - `include/nyash_abi.h`（Cヘッダ）追加済み
-- 設定/スモーク/CI
-  - `nyash.toml` に各 v2 Box を登録（type_id/method_id 定義）
-  - スモーク: `tools/plugin_v2_smoke.sh`（Linux常時）。全 v2 プラグインのロード確認＋簡易機能スモーク（`apps/tests/plugin_v2_functional.nyash`）
-- LLVM 共通化の足場
-  - `tools/build_llvm.sh` に `NYASH_LLVM_COMPILER=crate|harness` を追加（`crate` は `ny-llvmc`。JSON は `NYASH_LLVM_MIR_JSON` 指定）
-  - JSON スキーマ検証を可能なら実行（`tools/validate_mir_json.py`）
+Handoff (2025‑09‑18)
+- Status
+  - Parser: DONE（ゲート `NYASH_METHOD_CATCH=1` または `NYASH_PARSER_STAGE3=1`）。
+  - AST: FunctionDeclaration.body は TryCatch に正規化（単一catch、順序=catch→cleanup）。
+  - Docs/EBNF: 更新済。
+  - Unit tests: パーサ単体（cleanup‑only）追加済。
+  - E2E: PENDING（VM/MIR 経路）。現状 `static box Main { main() { … } finally { … } }` で MIR ビルダが duplicate terminator panic。
+- Repro (E2E panic)
+  - `NYASH_METHOD_CATCH=1 NYASH_PARSER_STAGE3=1 ./target/release/nyash --backend vm apps/tests/method_postfix_finally_only.nyash`
+  - Panic: `Basic block bb* already has a terminator`（src/mir/basic_block.rs:94）。
+- Next
+  1) MIR builder: Try/Cleanup の終端整理（return は cleanup 実行後に有効化；二重 terminator 抑止）。
+  2) E2E samples: method_postfix_finally_only（期待 42）/ method_postfix_catch_basic（構造確認）。
+  3) 追加テスト: 複数 catch エラー/順序違反/近接優先の確認。
+  4) Optional: TRM（JSON v0 Bridge）経由へのルート（暫定の回避パスとして）検討。
 
-Plugin ABI v2 updates — 完了報告（2025‑09‑17）
-- v2 migration（全 first‑party 完了）
-  - Python 系: `PyRuntimeBox`/`PyObjectBox`/`PythonParserBox`/`PythonCompilerBox` を v2 化
-  - 既存 first‑party（File/Path/Math/Time/Regex/Net/String/Array/Map/Integer/Console）を v2 化
-  - Encoding/TOML も v2 追加（`EncodingBox`/`TOMLBox`）し `nyash.toml` に登録
-- Legacy 撤去
-  - 旧ローダ（`src/runtime/plugin_loader_legacy.rs`）と旧C‑ABI FileBox を削除
-  - 全プラグインの v1 エクスポート（abi/init/invoke）を物理削除（v2専用化）
-- スモーク/CI
-  - v2 ロード＋機能（Regex/Response/Net往復）スモークを常時
-  - `ny-llvmc`（crate）で .o 生成するCIジョブを追加（Linux）
-- nyash → MIR JSON emit
-  - CLI `--emit-mir-json <path>` を追加し、`ny-llvmc` 直結導線を整備
+## How to Run / Verify (current)
+- Harness-first run（EXE ファースト）
+  - `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/loop_if_phi.nyash`
+- PHI trace（one-shot）
+  - `bash tools/phi_trace_run.sh apps/tests/llvm_phi_heavy_mix.nyash --strict-zero`
+- Strict verifier（PHI-off）
+  - `NYASH_VERIFY_EDGE_COPY_STRICT=1 cargo test --lib`
+- Bridge(Result‑mode) — JSON v0 → Bridge → PyVM/VM
+  - `bash tools/test/smoke/bridge/try_result_mode.sh`
+  - 直接: `NYASH_TRY_RESULT_MODE=1 NYASH_PIPE_USE_PYVM=1 ./target/release/nyash --ny-parser-pipe --backend vm < tests/json_v0_stage3/try_basic.json`
+  - 統合ケース（複合）: `tests/json_v0_stage3/try_unified_hard.json`（期待 exit=40）
+- Bridge→Harness PHI trace（WIP）
+  - `bash tools/phi_trace_bridge_try.sh tests/json_v0_stage3/try_nested_if.json`
 
-Next — Self‑Hosting/EXE（crate 直結）
-- ny-llvmc 機能拡張（.exe 出力）
-  - `ny-llvmc --emit exe --out <path>` を実装（`.o` + NyRT リンク）。`--nyrt <dir>`/`--libs <extra>` を受理
-  - 既存 `tools/build_llvm.sh` の crate 経路と統合（env: `NYASH_LLVM_COMPILER=crate`）
-  - Linux でのリンクフラグ最小化（`-Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -ldl -lpthread -lm`）
-- CI 拡張
-  - `.o` 生成に加え、`.exe` 生成＋実行（exit code 検証）ジョブを追加（Linux）
-  - 代表3ケース（const/binop/branch）で EXE を起動し `0` 戻りを確認
-- Self‑host pipeline 寄り
-  - nyash CLI `--emit-mir-json` を EXE-first パスにも活用（JSON → ny-llvmc → exe → 実行）
-  - 将来: PyVM/llvmlite パリティベンチ（小規模）→ EXE でも同値を継続確認
-- Docs/Guides 更新
-  - `docs/LLVM_HARNESS.md` に ny-llvmc の exe 出力手順を追記
-  - `docs/guides/selfhost-pilot.md` に crate 直結（.o/.exe）手順とトラブルシュート
+## Risks / Notes
+- PHI-off と LLVM 合成の一貫性は phi-trace/strict で監視。開発時にズレが出たら JSONL と diff 出力で即座に特定可能。
+- Harness 実行に Python/llvmlite が必要。`ny-llvmc` は `cargo build -p nyash-llvm-compiler --release` で用意。
+- 現在の課題: llvmlite ハーネス側の PHI 配置順序（"PHI nodes not grouped at top"）により Bridge→harness の一部ケースで失敗。Bridge 側は PHI‑off 正規化済み。ハーネスの `finalize_phis` を「常にブロック先頭に PHI を配置」へ修正予定。

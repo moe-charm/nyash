@@ -2,7 +2,13 @@
 set -euo pipefail
 
 # Curated LLVM smoke runner (llvmlite harness)
-# Usage: tools/smokes/curated_llvm.sh [--phi-off|--phi-on] [--with-if-merge]
+if [[ "${NYASH_CLI_VERBOSE:-0}" == "1" ]]; then set -x; fi
+
+# Usage:
+#   tools/smokes/curated_llvm.sh [--phi-on] [--with-if-merge] [--with-loop-prepass]
+# Notes:
+#   - Default is PHI-off (edge-copy) with harness on.
+#   - Flags are independent and can be combined.
 
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 BIN="$ROOT_DIR/target/release/nyash"
@@ -15,19 +21,38 @@ fi
 
 export NYASH_LLVM_USE_HARNESS=1
 
-# Default: PHI-off (MIR13). Use --phi-on to test PHI-on path.
+# Defaults
 export NYASH_MIR_NO_PHI=${NYASH_MIR_NO_PHI:-1}
 export NYASH_VERIFY_ALLOW_NO_PHI=${NYASH_VERIFY_ALLOW_NO_PHI:-1}
+unset NYASH_LLVM_PREPASS_IFMERGE || true
+unset NYASH_LLVM_PREPASS_LOOP || true
+
 WITH_IFMERGE=0
-if [[ "${1:-}" == "--phi-on" ]]; then
-  export NYASH_MIR_NO_PHI=0
-  echo "[curated-llvm] PHI-on (JSON PHI + finalize) enabled" >&2
-elif [[ "${1:-}" == "--with-if-merge" || "${2:-}" == "--with-if-merge" ]]; then
-  WITH_IFMERGE=1
-  echo "[curated-llvm] enabling if-merge prepass for ternary tests" >&2
-  export NYASH_LLVM_PREPASS_IFMERGE=1
-  echo "[curated-llvm] PHI-off (edge-copy) enabled" >&2
-else
+WITH_LOOP=0
+
+# Parse flags
+for arg in "$@"; do
+  case "$arg" in
+    --phi-on)
+      export NYASH_MIR_NO_PHI=0
+      echo "[curated-llvm] PHI-on (JSON PHI + finalize) enabled" >&2
+      ;;
+    --with-if-merge)
+      WITH_IFMERGE=1
+      export NYASH_LLVM_PREPASS_IFMERGE=1
+      echo "[curated-llvm] if-merge prepass enabled" >&2
+      ;;
+    --with-loop-prepass)
+      WITH_LOOP=1
+      export NYASH_LLVM_PREPASS_LOOP=1
+      echo "[curated-llvm] loop prepass enabled" >&2
+      ;;
+    -h|--help)
+      echo "Usage: $0 [--phi-on] [--with-if-merge] [--with-loop-prepass]"; exit 0 ;;
+  esac
+done
+
+if [[ "${NYASH_MIR_NO_PHI}" == "1" ]]; then
   echo "[curated-llvm] PHI-off (edge-copy) enabled" >&2
 fi
 
@@ -53,7 +78,7 @@ run "$ROOT_DIR/apps/tests/loop_if_phi.nyash"
 # Peek expression
 run "$ROOT_DIR/apps/tests/peek_expr_block.nyash"
 
-# Try/finally control-flow without actual throw
+# Try/cleanup control-flow without actual throw
 run "$ROOT_DIR/apps/tests/try_finally_break_inner_loop.nyash"
 
 # Optional: if-merge (ret-merge) tests

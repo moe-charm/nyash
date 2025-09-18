@@ -45,7 +45,7 @@ Tools / CLI（統合フロー）
    - 追加オプション: `--emit-exe-nyrt <dir>` / `--emit-exe-libs "<flags>"`
 
 Scope（Phase 15）
-- 最小命令: Const/BinOp/Compare/Phi/Branch/Jump/Return
+- 最小命令: Const/BinOp/Compare/Branch/Jump/Return（PHI は LLVM 側で合成）
 - 文字列: NyRT Shim（`nyash.string.len_h`, `charCodeAt_h`, `concat_hh`, `eq_hh`）を declare → call
 - NewBox/ExternCall/BoxCall: まずは固定シンボル／by-id を優先（段階導入）
 - 目標: `apps/selfhost/tools/dep_tree_min_string.nyash` の `.ll verify green → .o` 安定化
@@ -56,6 +56,11 @@ Acceptance
 Notes
 - 初版は固定 `ny_main` から開始してもよい（配線確認）。以降、MIR 命令を順次対応。
 - ハーネスは自律（外部状態に依存しない）。エラーは即 stderr に詳細を出す。
+
+PHI Policy（要点）
+- 既定は PHI‑off（`NYASH_MIR_NO_PHI=1`）。Builder/Bridge は pred への edge‑copy のみを生成。
+- llvmlite ハーネスは pred 情報から PHI を合成する。
+- 開発確認で PHI‑on にする場合は `NYASH_MIR_NO_PHI=0`（dev‑only）。詳細は `docs/reference/mir/phi_policy.md` を参照。
 
 Schema Validation（任意）
 - JSON v0 のスキーマは `docs/reference/mir/json_v0.schema.json` にあるよ。

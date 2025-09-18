@@ -5,6 +5,7 @@ Experimental loop normalization following paper-e-loop-signal-ir
 
 import os
 import llvmlite.ir as ir
+from phi_wiring import phi_at_block_head
 from dataclasses import dataclass
 from typing import Dict, Tuple, List, Optional, Any
 from instructions.safepoint import insert_automatic_safepoint
@@ -109,9 +110,9 @@ def lower_while_loopform(
     i8 = ir.IntType(8)
     i64 = ir.IntType(64)
     
-    # Create PHI nodes
-    tag_phi = builder.phi(i8, name=f"lf{loop_id}_tag")
-    payload_phi = builder.phi(i64, name=f"lf{loop_id}_payload")
+    # Create PHI nodes at the block head (LLVM requires PHIs grouped at top)
+    tag_phi = phi_at_block_head(lf.dispatch, i8, name=f"lf{loop_id}_tag")
+    payload_phi = phi_at_block_head(lf.dispatch, i64, name=f"lf{loop_id}_payload")
     
     # Add incoming values
     # From header (condition false): Break signal

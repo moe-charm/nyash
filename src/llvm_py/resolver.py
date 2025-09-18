@@ -222,37 +222,8 @@ class Resolver:
                 placeholder = vmap.get(value_id)
                 result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
             else:
-                # Synthesize a PHI to localize the value and dominate its uses.
-                try:
-                    bb = bb_map.get(cur_bid) if isinstance(bb_map, dict) else current_block
-                except Exception:
-                    bb = current_block
-                b = ir.IRBuilder(bb)
-                try:
-                    b.position_at_start(bb)
-                except Exception:
-                    pass
-                existing = vmap.get(value_id)
-                if existing is not None and hasattr(existing, 'add_incoming'):
-                    phi = existing
-                else:
-                    phi = b.phi(self.i64, name=f"res_phi_{value_id}_{cur_bid}")
-                    vmap[value_id] = phi
-                # Wire end-of-block values from each predecessor
-                for pred_bid in pred_ids:
-                    try:
-                        pred_bb = bb_map.get(pred_bid) if isinstance(bb_map, dict) else None
-                    except Exception:
-                        pred_bb = None
-                    val = self._value_at_end_i64(value_id, pred_bid, preds, block_end_values, vmap, bb_map)
-                    if pred_bb is None:
-                        # If we cannot map to a real basic block (shouldn't happen),
-                        # fallback to a zero to keep IR consistent.
-                        val = val if hasattr(val, 'type') else ir.Constant(self.i64, 0)
-                        # llvmlite requires a real BasicBlock; skip if missing.
-                        continue
-                    phi.add_incoming(val, pred_bb)
-                result = phi
+                # No declared PHI and multi-pred: do not synthesize; fallback to zero
+                result = ir.Constant(self.i64, 0)
         
         # Cache and return
         self.i64_cache[cache_key] = result

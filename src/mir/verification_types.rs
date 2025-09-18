@@ -66,4 +66,11 @@ pub enum VerificationError {
         instruction_index: usize,
         position: &'static str,
     },
+    /// PHI-off strict policy violation (edge-copy rules)
+    EdgeCopyStrictViolation {
+        block: BasicBlockId,
+        value: ValueId,
+        pred_block: Option<BasicBlockId>,
+        reason: String,
+    },
 }

@@ -1,0 +1,21 @@
+// Block‑postfix catch sample (Stage‑3 gated)
+// Enable: NYASH_PARSER_STAGE3=1 (or NYASH_BLOCK_CATCH=1) + NYASH_TRY_RESULT_MODE=1 for JSON v0 Bridge
+
+function main() {
+  local y
+  y = 0
+
+  {
+    // try body
+    // do_something_dangerous()
+    throw "E"
+  } catch (e) {
+    // handle error
+    y = 42
+  } cleanup {
+    // cleanup
+    y = y + 1
+  }
+
+  return y
+}

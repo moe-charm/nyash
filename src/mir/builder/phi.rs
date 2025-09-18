@@ -67,6 +67,76 @@ pub(super) fn extract_assigned_var(ast: &ASTNode) -> Option<String> {
 }
 
 impl MirBuilder {
+    /// Merge all variables modified in then/else relative to pre_if_snapshot.
+    /// In PHI-off mode inserts edge copies from branch exits to merge. In PHI-on mode emits Phi.
+    /// `skip_var` allows skipping a variable already merged elsewhere (e.g., bound to an expression result).
+    pub(super) fn merge_modified_vars(
+        &mut self,
+        then_block: super::BasicBlockId,
+        else_block: super::BasicBlockId,
+        then_exit_block: super::BasicBlockId,
+        else_exit_block_opt: Option<super::BasicBlockId>,
+        pre_if_snapshot: &std::collections::HashMap<String, super::ValueId>,
+        then_map_end: &std::collections::HashMap<String, super::ValueId>,
+        else_map_end_opt: &Option<std::collections::HashMap<String, super::ValueId>>,
+        skip_var: Option<&str>,
+    ) -> Result<(), String> {
+        use std::collections::HashSet;
+        let mut names: HashSet<&str> = HashSet::new();
+        for k in then_map_end.keys() { names.insert(k.as_str()); }
+        if let Some(emap) = else_map_end_opt.as_ref() {
+            for k in emap.keys() { names.insert(k.as_str()); }
+        }
+        // Only variables that changed against pre_if_snapshot
+        let mut changed: Vec<&str> = Vec::new();
+        for &name in &names {
+            let pre = pre_if_snapshot.get(name);
+            let t = then_map_end.get(name);
+            let e = else_map_end_opt.as_ref().and_then(|m| m.get(name));
+            // changed when either branch value differs from pre
+            if (t.is_some() && Some(t.copied().unwrap()) != pre.copied())
+                || (e.is_some() && Some(e.copied().unwrap()) != pre.copied())
+            {
+                changed.push(name);
+            }
+        }
+        for name in changed {
+            if skip_var.map(|s| s == name).unwrap_or(false) {
+                continue;
+            }
+            let pre = match pre_if_snapshot.get(name) {
+                Some(v) => *v,
+                None => continue, // unknown before-if; skip
+            };
+            let then_v = then_map_end.get(name).copied().unwrap_or(pre);
+            let else_v = else_map_end_opt
+                .as_ref()
+                .and_then(|m| m.get(name).copied())
+                .unwrap_or(pre);
+            if self.is_no_phi_mode() {
+                let merged = self.value_gen.next();
+                // Insert edge copies from then/else exits into merge
+                self.insert_edge_copy(then_exit_block, merged, then_v)?;
+                if let Some(else_exit_block) = else_exit_block_opt {
+                    self.insert_edge_copy(else_exit_block, merged, else_v)?;
+                } else {
+                    // Fallback: if else missing, copy pre value from then as both inputs already cover
+                    self.insert_edge_copy(then_exit_block, merged, then_v)?;
+                }
+                self.variable_map.insert(name.to_string(), merged);
+            } else {
+                let merged = self.value_gen.next();
+                self.emit_instruction(
+                    MirInstruction::Phi {
+                        dst: merged,
+                        inputs: vec![(then_block, then_v), (else_block, else_v)],
+                    }
+                )?;
+                self.variable_map.insert(name.to_string(), merged);
+            }
+        }
+        Ok(())
+    }
     /// Normalize Phi creation for if/else constructs.
     /// This handles variable reassignment patterns and ensures a single exit value.
     pub(super) fn normalize_if_else_phi(

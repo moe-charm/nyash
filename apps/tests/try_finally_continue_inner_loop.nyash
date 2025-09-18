@@ -10,7 +10,7 @@ static box Main {
         try {
           j = j + 1
           if (j == 1) { mark = 1; continue }
-        } finally {
+        } cleanup {
           // continue でも finally は実行される
           if (mark == 1) { fin = fin + 1 }
         }
@@ -21,4 +21,3 @@ static box Main {
     return fin
   }
 }
-

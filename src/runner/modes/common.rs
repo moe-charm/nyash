@@ -61,9 +61,7 @@ impl NyashRunner {
 
         // MIR dump/verify
         if self.config.dump_mir || self.config.verify_mir {
-            if crate::config::env::cli_verbose() {
-                println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
-            }
+            crate::cli_v!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             self.execute_mir_mode(filename);
             return;
         }
@@ -85,21 +83,17 @@ impl NyashRunner {
         // Backend selection
         match self.config.backend.as_str() {
             "mir" => {
-                if crate::config::env::cli_verbose() {
-                    println!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
-                }
+                crate::cli_v!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
                 self.execute_mir_interpreter_mode(filename);
             }
             "vm" => {
-                if crate::config::env::cli_verbose() {
-                    println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
-                }
+                crate::cli_v!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
                 self.execute_vm_mode(filename);
             }
             "cranelift" => {
                 #[cfg(feature = "cranelift-jit")]
                 {
-                    if cli_verbose() { println!("⚙️  Nyash Cranelift JIT - Executing file: {}", filename); }
+                crate::cli_v!("⚙️  Nyash Cranelift JIT - Executing file: {}", filename);
                     self.execute_cranelift_mode(filename);
                 }
                 #[cfg(not(feature = "cranelift-jit"))]
@@ -109,7 +103,7 @@ impl NyashRunner {
                 }
             }
             "llvm" => {
-                if cli_verbose() { println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename); }
+                crate::cli_v!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
                 self.execute_llvm_mode(filename);
             }
             _ => {
@@ -494,79 +488,11 @@ impl NyashRunner {
 
         // Optional Phase-15: strip `using` lines (gate) for minimal acceptance
         let mut code_ref: &str = &code;
-        let enable_using = crate::config::env::enable_using();
         let cleaned_code_owned;
-        if enable_using {
-            let mut out = String::with_capacity(code.len());
-            let mut used_names: Vec<(String, Option<String>)> = Vec::new();
-            for line in code.lines() {
-                let t = line.trim_start();
-                if t.starts_with("using ") {
-                    // Skip `using ns` or `using ns as alias` lines (MVP)
-                    if crate::config::env::cli_verbose() {
-                        eprintln!("[using] stripped line: {}", line);
-                    }
-                    // Parse namespace or path and optional alias
-                    let rest0 = t.strip_prefix("using ").unwrap().trim();
-                    // allow trailing semicolon
-                    let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
-                    // Split alias
-                    let (target, alias) = if let Some(pos) = rest0.find(" as ") {
-                        (rest0[..pos].trim().to_string(), Some(rest0[pos+4..].trim().to_string()))
-                    } else { (rest0.to_string(), None) };
-                    // If quoted or looks like relative/absolute path, treat as path; else as namespace
-                    let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
-                    if is_path {
-                        let mut path = target.trim_matches('"').to_string();
-                        // existence check and strict handling
-                        let missing = !std::path::Path::new(&path).exists();
-                        if missing {
-                            if std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1") {
-                                eprintln!("❌ using: path not found: {}", path);
-                                std::process::exit(1);
-                            } else if crate::config::env::cli_verbose() {
-                                eprintln!("[using] path not found (continuing): {}", path);
-                            }
-                        }
-                        // choose alias or derive from filename stem
-                        let name = alias.clone().unwrap_or_else(|| {
-                            std::path::Path::new(&path)
-                                .file_stem().and_then(|s| s.to_str()).unwrap_or("module").to_string()
-                        });
-                        // register alias only (path-backed)
-                        used_names.push((name, Some(path)));
-                    } else {
-                        used_names.push((target, alias));
-                    }
-                    continue;
-                }
-                out.push_str(line);
-                out.push('\n');
-            }
-            cleaned_code_owned = out;
-            code_ref = &cleaned_code_owned;
-
-            // Register modules with resolver (aliases/modules/paths)
-            let using_ctx = self.init_using_context();
-            let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
-            let verbose = crate::config::env::cli_verbose();
-            let ctx_dir = std::path::Path::new(filename).parent();
-            for (ns_or_alias, alias_or_path) in used_names {
-                if let Some(path) = alias_or_path {
-                    let sb = crate::box_trait::StringBox::new(path);
-                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
-                } else {
-                    match resolve_using_target(&ns_or_alias, false, &using_ctx.pending_modules, &using_ctx.using_paths, &using_ctx.aliases, ctx_dir, strict, verbose) {
-                        Ok(value) => {
-                            let sb = crate::box_trait::StringBox::new(value);
-                            crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
-                        }
-                        Err(e) => {
-                            eprintln!("❌ using: {}", e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
+        if crate::config::env::enable_using() {
+            match crate::runner::modes::common_util::resolve::strip_using_and_register(self, &code, filename) {
+                Ok(s) => { cleaned_code_owned = s; code_ref = &cleaned_code_owned; }
+                Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
             }
         }
 

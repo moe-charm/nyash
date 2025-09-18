@@ -22,63 +22,12 @@ impl NyashRunner {
             }
         };
         // Optional Phase-15: strip `using` lines and register modules (same policy as execute_nyash_file)
-        let enable_using = crate::config::env::enable_using();
         let mut code_ref: std::borrow::Cow<'_, str> = std::borrow::Cow::Borrowed(&code);
-        if enable_using {
-            let mut out = String::with_capacity(code.len());
-            let mut used_names: Vec<(String, Option<String>)> = Vec::new();
-            for line in code.lines() {
-                let t = line.trim_start();
-                if t.starts_with("using ") {
-                    if crate::config::env::cli_verbose() {
-                        eprintln!("[using] stripped(line→selfhost): {}", line);
-                    }
-                    let rest0 = t.strip_prefix("using ").unwrap().trim();
-                    let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
-                    let (target, alias) = if let Some(pos) = rest0.find(" as ") {
-                        (
-                            rest0[..pos].trim().to_string(),
-                            Some(rest0[pos + 4..].trim().to_string()),
-                        )
-                    } else {
-                        (rest0.to_string(), None)
-                    };
-                    let is_path = target.starts_with('"')
-                        || target.starts_with("./")
-                        || target.starts_with('/')
-                        || target.ends_with(".nyash");
-                    if is_path {
-                        let path = target.trim_matches('"').to_string();
-                        let name = alias.clone().unwrap_or_else(|| {
-                            std::path::Path::new(&path)
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("module")
-                                .to_string()
-                        });
-                        used_names.push((name, Some(path)));
-                    } else {
-                        used_names.push((target, alias));
-                    }
-                    continue;
-                }
-                out.push_str(line);
-                out.push('\n');
+        if crate::config::env::enable_using() {
+            match crate::runner::modes::common_util::resolve::strip_using_and_register(self, &code, filename) {
+                Ok(s) => { code_ref = std::borrow::Cow::Owned(s); }
+                Err(e) => { eprintln!("[ny-compiler] {}", e); return false; }
             }
-            // Register modules into minimal registry with best-effort path resolution
-            for (ns_or_alias, alias_or_path) in used_names {
-                if let Some(path) = alias_or_path {
-                    let sb = crate::box_trait::StringBox::new(path);
-                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
-                } else {
-                    let rel = format!("apps/{}.nyash", ns_or_alias.replace('.', "/"));
-                    let exists = std::path::Path::new(&rel).exists();
-                    let path_or_ns = if exists { rel } else { ns_or_alias.clone() };
-                    let sb = crate::box_trait::StringBox::new(path_or_ns);
-                    crate::runtime::modules_registry::set(ns_or_alias, Box::new(sb));
-                }
-            }
-            code_ref = std::borrow::Cow::Owned(out);
         }
 
         // Write to tmp/ny_parser_input.ny (as expected by Ny parser v0), unless forced to reuse existing tmp
@@ -183,57 +132,11 @@ impl NyashRunner {
                                             return false;
                                         }
                                         // Prefer PyVM for selfhost pipeline (parity reference)
-                                        if std::env::var("NYASH_VM_USE_PY").ok().as_deref()
-                                            == Some("1")
-                                        {
-                                            // Reuse the common PyVM runner path
-                                            let tmp_dir = std::path::Path::new("tmp");
-                                            let _ = std::fs::create_dir_all(tmp_dir);
-                                            let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
-                                            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
-                                            eprintln!("❌ PyVM MIR JSON emit error: {}", e);
-                                            process::exit(1);
-                                        }
-                                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref()
-                                                == Some("1")
-                                            {
-                                                eprintln!(
-                                                    "[Bridge] using PyVM (selfhost-py) → {}",
-                                                    mir_json_path.display()
-                                                );
-                                            }
-                                            let entry =
-                                                if module.functions.contains_key("Main.main") {
-                                                    "Main.main"
-                                                } else if module.functions.contains_key("main") {
-                                                    "main"
-                                                } else {
-                                                    "Main.main"
-                                                };
-                                            let status = std::process::Command::new(&py3)
-                                                .args([
-                                                    "tools/pyvm_runner.py",
-                                                    "--in",
-                                                    &mir_json_path.display().to_string(),
-                                                    "--entry",
-                                                    entry,
-                                                ])
-                                                .status()
-                                                .map_err(|e| format!("spawn pyvm: {}", e))
-                                                .unwrap();
-                                            let code = status.code().unwrap_or(1);
-                                            if !status.success() {
-                                                if std::env::var("NYASH_CLI_VERBOSE")
-                                                    .ok()
-                                                    .as_deref()
-                                                    == Some("1")
-                                                {
-                                                    eprintln!(
-                                                        "❌ PyVM (selfhost-py) failed (status={})",
-                                                        code
-                                                    );
-                                                }
-                                            }
+                                        if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                                            let code = match crate::runner::modes::common_util::pyvm::run_pyvm_harness(&module, "selfhost-py") {
+                                                Ok(c) => c,
+                                                Err(e) => { eprintln!("❌ PyVM error: {}", e); 1 }
+                                            };
                                             println!("Result: {}", code);
                                             std::process::exit(code);
                                         }
@@ -300,9 +203,7 @@ impl NyashRunner {
                                     eprintln!("❌ PyVM MIR JSON emit error: {}", e);
                                     process::exit(1);
                                 }
-                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                    eprintln!("[Bridge] using PyVM (selfhost) → {}", mir_json_path.display());
-                                }
+                                crate::cli_v!("[Bridge] using PyVM (selfhost) → {}", mir_json_path.display());
                                 let entry = if module.functions.contains_key("Main.main") { "Main.main" }
                                             else if module.functions.contains_key("main") { "main" } else { "Main.main" };
                                 let status = std::process::Command::new(py3)

@@ -1,0 +1,12 @@
+static box Main {
+  main(args) {
+    // try body: compute a value
+    local x = 41
+    // no return here; finally will return
+  }
+  cleanup {
+    // finally runs and returns x+1
+    x = x + 1
+    return x
+  }
+}

@@ -8,3 +8,5 @@ pub mod pyvm;
 pub mod selfhost_exe;
 pub mod io;
 pub mod selfhost;
+pub mod resolve;
+pub mod exec;

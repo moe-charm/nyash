@@ -1,0 +1,16 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local i = 1
+    local sum = 0
+    loop(i <= 5) {
+      local cond = (i % 2 == 1)
+      console.println("i=" + i + ", cond=" + cond)
+      if (cond) { sum = sum + i } else { sum = sum + 0 }
+      console.println("sumnow=" + sum)
+      i = i + 1
+    }
+    console.println("sum=" + sum)
+    return 0
+  }
+}

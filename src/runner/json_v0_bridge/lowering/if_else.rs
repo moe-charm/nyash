@@ -48,9 +48,10 @@ pub(super) fn lower_if_stmt(
         }
         (else_bb, base_vars.clone())
     };
+    // PHI-off policy (edge-copy) is the default in Phase 15; enforce for stability
     merge_var_maps(
         f,
-        env.mir_no_phi,
+        true,
         merge_bb,
         tend,
         else_end_pred,

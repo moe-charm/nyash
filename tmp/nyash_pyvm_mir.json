@@ -6,7 +6,22 @@
           "id": 0,
           "instructions": [
             {
+              "args": [],
               "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 3,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -15,58 +30,12 @@
             },
             {
               "dst": 1,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
+              "op": "copy",
+              "src": 3
             },
             {
-              "dst": 2,
-              "lhs": 0,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 1
-            },
-            {
-              "cond": 2,
-              "else": 2,
-              "op": "branch",
-              "then": 1
-            }
-          ]
-        },
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 5,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 6,
-              "lhs": 4,
-              "op": "compare",
-              "operation": ">",
-              "rhs": 5
-            },
-            {
-              "cond": 6,
-              "else": 4,
-              "op": "branch",
-              "then": 5
+              "op": "jump",
+              "target": 3
             }
           ]
         },
@@ -74,17 +43,17 @@
           "id": 2,
           "instructions": [
             {
-              "dst": 3,
+              "dst": 4,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 0
+                "value": 2
               }
             },
             {
-              "dst": 12,
+              "dst": 1,
               "op": "copy",
-              "src": 3
+              "src": 4
             },
             {
               "op": "jump",
@@ -96,8 +65,12 @@
           "id": 3,
           "instructions": [
             {
-              "op": "ret",
-              "value": 12
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 9
+              }
             }
           ]
         },
@@ -105,72 +78,8 @@
           "id": 4,
           "instructions": [
             {
-              "dst": 8,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 9,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 3
-              }
-            },
-            {
-              "dst": 10,
-              "lhs": 8,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 9
-            },
-            {
-              "dst": 11,
-              "op": "copy",
-              "src": 10
-            },
-            {
-              "op": "jump",
-              "target": 6
-            }
-          ]
-        },
-        {
-          "id": 5,
-          "instructions": [
-            {
-              "dst": 7,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 11,
-              "op": "copy",
-              "src": 7
-            },
-            {
-              "op": "jump",
-              "target": 6
-            }
-          ]
-        },
-        {
-          "id": 6,
-          "instructions": [
-            {
-              "dst": 12,
-              "op": "copy",
-              "src": 11
-            },
-            {
-              "op": "jump",
-              "target": 3
+              "op": "ret",
+              "value": 1
             }
           ]
         }

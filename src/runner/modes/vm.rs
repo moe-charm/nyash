@@ -101,20 +101,12 @@ impl NyashRunner {
             }
         };
 
-        // Optional Phase-15: strip `using` lines (gate) for minimal acceptance in VM path
-        let enable_using = crate::config::env::enable_using();
-        let code = if enable_using {
-            let mut out = String::with_capacity(code.len());
-            for line in code.lines() {
-                let t = line.trim_start();
-                if t.starts_with("using ") {
-                    // Strip using lines (module resolution handled by nyash.toml elsewhere)
-                    continue;
-                }
-                out.push_str(line);
-                out.push('\n');
+        // Optional Phase-15: strip `using` lines and register aliases/modules
+        let code = if crate::config::env::enable_using() {
+            match crate::runner::modes::common::resolve::strip_using_and_register(self, &code, filename) {
+                Ok(s) => s,
+                Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
             }
-            out
         } else { code };
 
         // Parse to AST
@@ -185,67 +177,14 @@ impl NyashRunner {
         let mut module_vm = compile_result.module.clone();
         if std::env::var("NYASH_VM_ESCAPE_ANALYSIS").ok().as_deref() == Some("1") {
             let removed = nyash_rust::mir::passes::escape::escape_elide_barriers_vm(&mut module_vm);
-            if removed > 0 && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("[VM] escape_elide_barriers: removed {} barriers", removed);
-            }
+            if removed > 0 { crate::cli_v!("[VM] escape_elide_barriers: removed {} barriers", removed); }
         }
 
         // Optional: PyVM path. When NYASH_VM_USE_PY=1, emit MIR(JSON) and delegate execution to tools/pyvm_runner.py
         if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-            let py = which::which("python3").ok();
-            if let Some(py3) = py {
-                let runner = std::path::Path::new("tools/pyvm_runner.py");
-                if runner.exists() {
-                    // Emit MIR(JSON)
-                    let tmp_dir = std::path::Path::new("tmp");
-                    let _ = std::fs::create_dir_all(tmp_dir);
-                    let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
-                    if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness(
-                        &module_vm,
-                        &mir_json_path,
-                    ) {
-                        eprintln!("❌ PyVM MIR JSON emit error: {}", e);
-                        process::exit(1);
-                    }
-                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                        eprintln!(
-                            "[Runner/VM] using PyVM → {} (mir={})",
-                            filename,
-                            mir_json_path.display()
-                        );
-                    }
-                    // Determine entry function hint (prefer Main.main if present)
-                    let entry = if module_vm.functions.contains_key("Main.main") {
-                        "Main.main"
-                    } else if module_vm.functions.contains_key("main") {
-                        "main"
-                    } else {
-                        "Main.main"
-                    };
-                    // Spawn runner
-                    let mut cmd = std::process::Command::new(py3);
-                    cmd.args([
-                        runner.to_string_lossy().as_ref(),
-                        "--in",
-                        &mir_json_path.display().to_string(),
-                        "--entry",
-                        entry,
-                    ]);
-                    let out = super::common_util::io::spawn_with_timeout(cmd, 10_000)
-                        .map_err(|e| format!("spawn pyvm: {}", e))
-                        .unwrap();
-                    let code = if out.timed_out { 1 } else { out.exit_code.unwrap_or(1) };
-                    if out.timed_out && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                        eprintln!("❌ PyVM timeout");
-                    }
-                    process::exit(code);
-                } else {
-                    eprintln!("❌ PyVM runner not found: {}", runner.display());
-                    process::exit(1);
-                }
-            } else {
-                eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM.");
-                process::exit(1);
+            match super::common_util::pyvm::run_pyvm_harness_lib(&module_vm, "vm") {
+                Ok(code) => { process::exit(code); }
+                Err(e) => { eprintln!("❌ PyVM error: {}", e); process::exit(1); }
             }
         }
 

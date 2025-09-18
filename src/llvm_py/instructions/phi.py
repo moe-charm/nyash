@@ -4,6 +4,7 @@ Critical for SSA form - handles value merging from different control flow paths
 """
 
 import llvmlite.ir as ir
+from phi_wiring import phi_at_block_head
 from typing import Dict, List, Tuple, Optional
 
 def lower_phi(
@@ -123,8 +124,8 @@ def lower_phi(
         vmap[dst_vid] = ir.Constant(phi_type, 0)
         return
 
-    # Create PHI instruction now and add incoming
-    phi = builder.phi(phi_type, name=f"phi_{dst_vid}")
+    # Create PHI instruction at the block head and add incoming
+    phi = phi_at_block_head(current_block, phi_type, name=f"phi_{dst_vid}")
     for block, val in incoming_pairs:
         phi.add_incoming(val, block)
     

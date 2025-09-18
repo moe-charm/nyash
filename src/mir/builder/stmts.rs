@@ -1,4 +1,3 @@
-use super::phi::extract_assigned_var;
 use super::{ConstValue, Effect, EffectMask, MirInstruction, ValueId};
 use crate::ast::{ASTNode, CallExpr};
 use crate::mir::loop_builder::LoopBuilder;
@@ -162,82 +161,7 @@ impl super::MirBuilder {
         then_branch: ASTNode,
         else_branch: Option<ASTNode>,
     ) -> Result<ValueId, String> {
-        let condition_val = self.build_expression(condition)?;
-        let then_block = self.block_gen.next();
-        let else_block = self.block_gen.next();
-        let merge_block = self.block_gen.next();
-        self.emit_instruction(MirInstruction::Branch {
-            condition: condition_val,
-            then_bb: then_block,
-            else_bb: else_block,
-        })?;
-
-        // Snapshot variable map before entering branches to avoid cross-branch pollution
-        let pre_if_var_map = self.variable_map.clone();
-        // Pre-analysis: detect then-branch assigned var and capture its pre-if value
-        let assigned_then_pre = extract_assigned_var(&then_branch);
-        let pre_then_var_value: Option<ValueId> = assigned_then_pre
-            .as_ref()
-            .and_then(|name| pre_if_var_map.get(name).copied());
-
-        // then
-        self.current_block = Some(then_block);
-        self.ensure_block_exists(then_block)?;
-        let then_ast_for_analysis = then_branch.clone();
-        // Build then with a clean snapshot of pre-if variables
-        self.variable_map = pre_if_var_map.clone();
-        let then_value_raw = self.build_expression(then_branch)?;
-        let then_exit_block = Self::current_block(self)?;
-        let then_var_map_end = self.variable_map.clone();
-        if !self.is_current_block_terminated() {
-            self.emit_instruction(MirInstruction::Jump {
-                target: merge_block,
-            })?;
-        }
-
-        // else
-        self.current_block = Some(else_block);
-        self.ensure_block_exists(else_block)?;
-        // Build else with a clean snapshot of pre-if variables
-        let (else_value_raw, else_ast_for_analysis, else_var_map_end_opt) =
-            if let Some(else_ast) = else_branch {
-                self.variable_map = pre_if_var_map.clone();
-                let val = self.build_expression(else_ast.clone())?;
-                (val, Some(else_ast), Some(self.variable_map.clone()))
-            } else {
-                let void_val = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const {
-                    dst: void_val,
-                    value: ConstValue::Void,
-                })?;
-                (void_val, None, None)
-            };
-        let else_exit_block = Self::current_block(self)?;
-        if !self.is_current_block_terminated() {
-            self.emit_instruction(MirInstruction::Jump {
-                target: merge_block,
-            })?;
-        }
-
-        // merge + phi
-        self.current_block = Some(merge_block);
-        self.ensure_block_exists(merge_block)?;
-        let result_val = self.normalize_if_else_phi(
-            then_block,
-            else_block,
-            Some(then_exit_block),
-            Some(else_exit_block),
-            then_value_raw,
-            else_value_raw,
-            &pre_if_var_map,
-            &then_ast_for_analysis,
-            &else_ast_for_analysis,
-            &then_var_map_end,
-            &else_var_map_end_opt,
-            pre_then_var_value,
-        )?;
-
-        Ok(result_val)
+        self.lower_if_form(condition, then_branch, else_branch)
     }
 
     // Loop: delegate to LoopBuilder
@@ -277,6 +201,21 @@ impl super::MirBuilder {
             None
         };
         let exit_block = self.block_gen.next();
+
+        // Snapshot and enable deferred-return mode for try/catch
+        let saved_defer_active = self.return_defer_active;
+        let saved_defer_slot = self.return_defer_slot;
+        let saved_defer_target = self.return_defer_target;
+        let saved_deferred_flag = self.return_deferred_emitted;
+        let saved_in_cleanup = self.in_cleanup_block;
+        let saved_allow_ret = self.cleanup_allow_return;
+        let saved_allow_throw = self.cleanup_allow_throw;
+
+        let ret_slot = self.value_gen.next();
+        self.return_defer_active = true;
+        self.return_defer_slot = Some(ret_slot);
+        self.return_deferred_emitted = false;
+        self.return_defer_target = Some(finally_block.unwrap_or(exit_block));
 
         if let Some(catch_clause) = catch_clauses.first() {
             if std::env::var("NYASH_DEBUG_TRYCATCH").ok().as_deref() == Some("1") {
@@ -331,27 +270,61 @@ impl super::MirBuilder {
             })?;
         }
 
+        let mut cleanup_terminated = false;
         if let (Some(finally_block_id), Some(finally_statements)) = (finally_block, finally_body) {
             self.start_new_block(finally_block_id)?;
+            // Enter cleanup mode; returns may or may not be allowed by policy
+            self.in_cleanup_block = true;
+            self.cleanup_allow_return = crate::config::env::cleanup_allow_return();
+            self.cleanup_allow_throw = crate::config::env::cleanup_allow_throw();
+            // Inside cleanup, do not defer returns; either forbid or emit real Return
+            self.return_defer_active = false;
             let finally_ast = ASTNode::Program {
                 statements: finally_statements,
                 span: crate::ast::Span::unknown(),
             };
             self.build_expression(finally_ast)?;
-            self.emit_instruction(MirInstruction::Jump { target: exit_block })?;
+            // Do not emit a Jump if the finally block already terminated (e.g., via return/throw)
+            cleanup_terminated = self.is_current_block_terminated();
+            if !cleanup_terminated {
+                self.emit_instruction(MirInstruction::Jump { target: exit_block })?;
+            }
+            self.in_cleanup_block = false;
         }
 
         self.start_new_block(exit_block)?;
-        let result = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: result,
-            value: ConstValue::Void,
-        })?;
+        // If any deferred return occurred in try/catch and cleanup did not already return,
+        // finalize with a Return of the slot; otherwise emit a dummy const/ret to satisfy structure.
+        let result = if self.return_deferred_emitted && !cleanup_terminated {
+            self.emit_instruction(MirInstruction::Return { value: Some(ret_slot) })?;
+            // Emit a symbolic const to satisfy return type inference paths when inspecting non-terminated blocks (not used here)
+            let r = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: r, value: ConstValue::Void })?;
+            r
+        } else {
+            let r = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: r, value: ConstValue::Void })?;
+            r
+        };
+
+        // Restore deferred-return context
+        self.return_defer_active = saved_defer_active;
+        self.return_defer_slot = saved_defer_slot;
+        self.return_defer_target = saved_defer_target;
+        self.return_deferred_emitted = saved_deferred_flag;
+        self.in_cleanup_block = saved_in_cleanup;
+        self.cleanup_allow_return = saved_allow_ret;
+        self.cleanup_allow_throw = saved_allow_throw;
+
         Ok(result)
     }
 
     // Throw: emit Throw or fallback to env.debug.trace when disabled
     pub(super) fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+        // Enforce cleanup policy
+        if self.in_cleanup_block && !self.cleanup_allow_throw {
+            return Err("throw is not allowed inside cleanup block (enable NYASH_CLEANUP_ALLOW_THROW=1 to permit)".to_string());
+        }
         if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
             let v = self.build_expression(expression)?;
             self.emit_instruction(MirInstruction::ExternCall {
@@ -396,20 +369,38 @@ impl super::MirBuilder {
         &mut self,
         value: Option<Box<ASTNode>>,
     ) -> Result<ValueId, String> {
+        // Enforce cleanup policy
+        if self.in_cleanup_block && !self.cleanup_allow_return {
+            return Err("return is not allowed inside cleanup block (enable NYASH_CLEANUP_ALLOW_RETURN=1 to permit)".to_string());
+        }
+
         let return_value = if let Some(expr) = value {
             self.build_expression(*expr)?
         } else {
             let void_dst = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: void_dst,
-                value: ConstValue::Void,
-            })?;
+            self.emit_instruction(MirInstruction::Const { dst: void_dst, value: ConstValue::Void })?;
             void_dst
         };
-        self.emit_instruction(MirInstruction::Return {
-            value: Some(return_value),
-        })?;
-        Ok(return_value)
+
+        if self.return_defer_active {
+            // Defer: copy into slot and jump to target
+            if let (Some(slot), Some(target)) = (self.return_defer_slot, self.return_defer_target) {
+                self.return_deferred_emitted = true;
+                self.emit_instruction(MirInstruction::Copy { dst: slot, src: return_value })?;
+                if !self.is_current_block_terminated() {
+                    self.emit_instruction(MirInstruction::Jump { target })?;
+                }
+                Ok(return_value)
+            } else {
+                // Fallback: no configured slot/target; emit a real return
+                self.emit_instruction(MirInstruction::Return { value: Some(return_value) })?;
+                Ok(return_value)
+            }
+        } else {
+            // Normal return
+            self.emit_instruction(MirInstruction::Return { value: Some(return_value) })?;
+            Ok(return_value)
+        }
     }
 
     // Nowait: prefer env.future.spawn_instance if method call; else FutureNew
@@ -493,4 +484,4 @@ impl super::MirBuilder {
         Ok(me_value)
     }
 }
-use crate::mir::loop_api::LoopBuilderApi; // for current_block()
+// use crate::mir::loop_api::LoopBuilderApi; // no longer needed here

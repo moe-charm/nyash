@@ -2,12 +2,20 @@ mod ast;
 mod lexer;
 mod lowering;
 
-use ast::ProgramV0;
+use ast::{ProgramV0, StmtV0};
 use lowering::lower_program;
 
 pub fn parse_json_v0_to_module(json: &str) -> Result<crate::mir::MirModule, String> {
     let prog: ProgramV0 =
         serde_json::from_str(json).map_err(|e| format!("invalid JSON v0: {}", e))?;
+    if crate::config::env::cli_verbose() {
+        let first = prog
+            .body
+            .get(1)
+            .map(|s| match s { StmtV0::Try { .. } => "Try", _ => "Other" })
+            .unwrap_or("<none>");
+        eprintln!("[Bridge] JSON v0: body_len={} first_type={}", prog.body.len(), first);
+    }
     if prog.version != 0 || prog.kind != "Program" {
         return Err("unsupported IR: expected {version:0, kind:\"Program\"}".into());
     }

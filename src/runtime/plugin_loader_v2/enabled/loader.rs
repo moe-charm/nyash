@@ -439,6 +439,19 @@ impl PluginLoaderV2 {
                 }
                 Ok(None)
             }
+            ("env.result", "ok") => {
+                // Wrap the first argument as Result.Ok; if missing, use Void
+                let v = args.get(0).map(|b| b.clone_box()).unwrap_or_else(|| Box::new(crate::box_trait::VoidBox::new()));
+                Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(v))))
+            }
+            ("env.result", "err") => {
+                // Wrap the first argument as Result.Err; if missing, synthesize a StringBox("Error")
+                let e: Box<dyn NyashBox> = args
+                    .get(0)
+                    .map(|b| b.clone_box())
+                    .unwrap_or_else(|| Box::new(crate::box_trait::StringBox::new("Error")));
+                Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_err(e))))
+            }
             ("env.modules", "set") => {
                 if args.len() >= 2 {
                     let key = args[0].to_string_box().value;

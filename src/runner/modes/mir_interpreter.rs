@@ -45,9 +45,7 @@ impl NyashRunner {
         let mut module_interp = compile_result.module.clone();
         if std::env::var("NYASH_VM_ESCAPE_ANALYSIS").ok().as_deref() == Some("1") {
             let removed = nyash_rust::mir::passes::escape::escape_elide_barriers_vm(&mut module_interp);
-            if removed > 0 && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("[MIR-Interp] escape_elide_barriers: removed {} barriers", removed);
-            }
+            if removed > 0 { crate::cli_v!("[MIR-Interp] escape_elide_barriers: removed {} barriers", removed); }
         }
 
         // Execute with MIR interpreter

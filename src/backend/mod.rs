@@ -5,18 +5,24 @@
 // VM core types are always available
 pub mod vm_types;
 
-// Legacy VM execution pipeline (feature-gated)
+// Legacy VM execution pipeline (feature-gated) — loaded from archive path
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm.rs"]
 pub mod vm;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_boxcall.rs"]
 pub mod vm_boxcall;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_instructions/mod.rs"]
 pub mod vm_instructions;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_phi.rs"]
 pub mod vm_phi;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_stats.rs"]
 pub mod vm_stats;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_values.rs"]
 pub mod vm_values;
 
 // When vm-legacy is disabled, provide a compatibility shim module so
@@ -28,22 +34,30 @@ pub mod vm {
 // Phase 9.78h: VM split scaffolding (control_flow/dispatch/frame)
 pub mod abi_util; // Shared ABI/utility helpers
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/control_flow.rs"]
 pub mod control_flow;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/dispatch.rs"]
 pub mod dispatch;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/frame.rs"]
 pub mod frame;
 pub mod gc_helpers;
 pub mod mir_interpreter;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_control_flow.rs"]
 pub mod vm_control_flow;
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_exec.rs"]
 mod vm_exec; // A3: execution loop extracted
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_gc.rs"]
 mod vm_gc; // A3: GC roots & diagnostics extracted
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_methods.rs"]
 mod vm_methods; // A3-S1: method dispatch wrappers extracted
 #[cfg(feature = "vm-legacy")]
+#[path = "../archive/vm_legacy/vm_state.rs"]
 mod vm_state; // A3: state & basic helpers extracted // Lightweight MIR interpreter
 
 #[cfg(feature = "wasm-backend")]

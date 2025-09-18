@@ -131,8 +131,45 @@ impl NyashParser {
         let mut weak_fields = Vec::new(); // 🔗 Track weak fields for static box
         let mut static_init = None;
 
+        // Track last inserted method name to allow postfix catch/cleanup fallback parsing
+        let mut last_method_name: Option<String> = None;
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
             self.skip_newlines(); // ループ開始時に改行をスキップ
+
+            // Fallback: method-level postfix catch/cleanup immediately following a method
+            if (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP)) && last_method_name.is_some() {
+                let mname = last_method_name.clone().unwrap();
+                // Parse optional catch then optional cleanup
+                let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
+                if self.match_token(&TokenType::CATCH) {
+                    self.advance();
+                    self.consume(TokenType::LPAREN)?;
+                    let (exc_ty, exc_var) = self.parse_catch_param()?;
+                    self.consume(TokenType::RPAREN)?;
+                    let catch_body = self.parse_block_statements()?;
+                    catch_clauses.push(crate::ast::CatchClause { exception_type: exc_ty, variable_name: exc_var, body: catch_body, span: crate::ast::Span::unknown() });
+                    self.skip_newlines();
+                    if self.match_token(&TokenType::CATCH) {
+                        let line = self.current_token().line;
+                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "single catch only after method body".to_string(), line });
+                    }
+                }
+                let finally_body = if self.match_token(&TokenType::CLEANUP) { self.advance(); Some(self.parse_block_statements()?) } else { None };
+                // Wrap existing method body
+                if let Some(mnode) = methods.get_mut(&mname) {
+                    if let crate::ast::ASTNode::FunctionDeclaration { body, .. } = mnode {
+                        // If already TryCatch present, disallow duplicate postfix
+                        let already = body.iter().any(|n| matches!(n, crate::ast::ASTNode::TryCatch{..}));
+                        if already {
+                            let line = self.current_token().line;
+                            return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "duplicate postfix catch/cleanup after method".to_string(), line });
+                        }
+                        let old = std::mem::take(body);
+                        *body = vec![crate::ast::ASTNode::TryCatch { try_body: old, catch_clauses, finally_body, span: crate::ast::Span::unknown() }];
+                        continue;
+                    }
+                }
+            }
 
             // RBRACEに到達していればループを抜ける
             if self.match_token(&TokenType::RBRACE) {
@@ -142,17 +179,7 @@ impl NyashParser {
             // 🔥 static { } ブロックの処理
             if self.match_token(&TokenType::STATIC) {
                 self.advance(); // consume 'static'
-                self.consume(TokenType::LBRACE)?;
-
-                let mut static_body = Vec::new();
-                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                    self.skip_newlines();
-                    if !self.match_token(&TokenType::RBRACE) {
-                        static_body.push(self.parse_statement()?);
-                    }
-                }
-
-                self.consume(TokenType::RBRACE)?;
+                let static_body = self.parse_block_statements()?;
                 static_init = Some(static_body);
                 continue;
             }
@@ -230,17 +257,49 @@ impl NyashParser {
                     }
 
                     self.consume(TokenType::RPAREN)?;
-                    self.consume(TokenType::LBRACE)?;
+                    let mut body = self.parse_block_statements()?;
+                    self.skip_newlines();
 
-                    let mut body = Vec::new();
-                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                        self.skip_newlines();
-                        if !self.match_token(&TokenType::RBRACE) {
-                            body.push(self.parse_statement()?);
+                    // Method-level postfix catch/cleanup (gate)
+                    if self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP)
+                    {
+                        let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
+                        if self.match_token(&TokenType::CATCH) {
+                            self.advance(); // consume 'catch'
+                            self.consume(TokenType::LPAREN)?;
+                            let (exc_ty, exc_var) = self.parse_catch_param()?;
+                            self.consume(TokenType::RPAREN)?;
+                            let catch_body = self.parse_block_statements()?;
+                            catch_clauses.push(crate::ast::CatchClause {
+                                exception_type: exc_ty,
+                                variable_name: exc_var,
+                                body: catch_body,
+                                span: crate::ast::Span::unknown(),
+                            });
+                            self.skip_newlines();
+                            if self.match_token(&TokenType::CATCH) {
+                                let line = self.current_token().line;
+                                return Err(ParseError::UnexpectedToken {
+                                    found: self.current_token().token_type.clone(),
+                                    expected: "single catch only after method body".to_string(),
+                                    line,
+                                });
+                            }
                         }
+                        let finally_body = if self.match_token(&TokenType::CLEANUP) {
+                            self.advance();
+                            Some(self.parse_block_statements()?)
+                        } else {
+                            None
+                        };
+                        // Wrap original body with TryCatch
+                        body = vec![ASTNode::TryCatch {
+                            try_body: body,
+                            catch_clauses,
+                            finally_body,
+                            span: crate::ast::Span::unknown(),
+                        }];
                     }
-
-                    self.consume(TokenType::RBRACE)?;
 
                     let method = ASTNode::FunctionDeclaration {
                         name: field_or_method.clone(),
@@ -251,6 +310,7 @@ impl NyashParser {
                         span: Span::unknown(),
                     };
 
+                    last_method_name = Some(field_or_method.clone());
                     methods.insert(field_or_method, method);
                 } else {
                     // フィールド定義

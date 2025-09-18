@@ -36,7 +36,7 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 | `override` | 明示的オーバーライド | `override speak() { }` |
 | `break` | ループ脱出 | `break` |
 | `catch` | 例外処理 | `catch (e) { }` |
-| `finally` | 最終処理 | `finally { }` |
+| `cleanup` | 最終処理（finally の後継） | `cleanup { }` |
 | `throw` | 例外発生 | `throw error` |
 | `nowait` | 非同期実行 | `nowait future = task()` |
 | `await` | 待機・結果取得 | `result = await future` |

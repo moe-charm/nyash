@@ -1,0 +1,41 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local arr = new ArrayBox()
+    local map = new MapBox()
+    local s = "start"
+    local i = 0
+    local x = 0
+
+    loop(i < 10) {
+      i = i + 1
+
+      // even path: push and maybe continue
+      if (i % 2 == 0) {
+        arr.push(i)
+        if (i == 4) { continue }
+        x = x + 2
+      } else {
+        // odd path
+        x = x + 1
+      }
+
+      // nested break candidate
+      if (i == 7) {
+        map.set("k", "v")
+        if (x > 5) { break }
+      }
+
+      // early return check to add more merge points
+      if (i == 3) {
+        return x
+      } else {
+        s = s + i
+      }
+    }
+
+    console.println("x=" + x + ", len=" + arr.len())
+    return x
+  }
+}
+

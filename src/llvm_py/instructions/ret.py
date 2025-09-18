@@ -45,83 +45,73 @@ def lower_return(
     else:
         # Get return value (prefer resolver)
         ret_val = None
-        if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+        # Fast path: if vmap has a concrete non-PHI value defined in this block, use it directly
+        if isinstance(value_id, int):
+            tmp0 = vmap.get(value_id)
             try:
-                # If this block has a declared PHI for the return value, force using the
-                # local PHI placeholder to ensure dominance and let finalize_phis wire it.
-                try:
-                    block_name = builder.block.name
-                    cur_bid = int(str(block_name).replace('bb',''))
-                except Exception:
-                    cur_bid = -1
-                try:
-                    bm = getattr(resolver, 'block_phi_incomings', {}) or {}
-                except Exception:
-                    bm = {}
-                if isinstance(value_id, int) and isinstance(bm.get(cur_bid), dict) and value_id in bm.get(cur_bid):
-                    # Reuse predeclared ret-phi when available
-                    cur = None
+                is_phi0 = hasattr(tmp0, 'add_incoming')
+            except Exception:
+                is_phi0 = False
+            if tmp0 is not None and not is_phi0:
+                ret_val = tmp0
+        if ret_val is None:
+            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+                # Multi-pred special case: construct a PHI at block head and wire per-pred values
+                # to keep PHIs grouped at top and avoid late synthesis that violates ordering.
+                cur_bid = int(str(builder.block.name).replace('bb','')) if hasattr(builder.block, 'name') else -1
+                pred_ids = [p for p in preds.get(cur_bid, []) if p != cur_bid] if isinstance(preds, dict) else []
+                if isinstance(value_id, int) and len(pred_ids) > 1 and isinstance(return_type, ir.IntType):
+                    # Create PHI at block head
+                    btop = ir.IRBuilder(builder.block)
                     try:
-                        rp = getattr(resolver, 'ret_phi_map', {}) or {}
-                        key = (int(cur_bid), int(value_id))
-                        if key in rp:
-                            cur = rp[key]
-                    except Exception:
-                        cur = None
-                    if cur is None:
-                        btop = ir.IRBuilder(builder.block)
-                        try:
-                            btop.position_at_start(builder.block)
-                        except Exception:
-                            pass
-                        # Reuse existing local phi if present; otherwise create
-                        cur = vmap.get(value_id)
-                        need_new = True
-                        try:
-                            need_new = not (cur is not None and hasattr(cur, 'add_incoming') and getattr(getattr(cur, 'basic_block', None), 'name', None) == builder.block.name)
-                        except Exception:
-                            need_new = True
-                        if need_new:
-                            cur = btop.phi(ir.IntType(64), name=f"phi_ret_{value_id}")
-                    # Bind to maps
-                    vmap[value_id] = cur
-                    try:
-                        if hasattr(resolver, 'global_vmap') and isinstance(resolver.global_vmap, dict):
-                            resolver.global_vmap[value_id] = cur
+                        btop.position_at_start(builder.block)
                     except Exception:
                         pass
-                    ret_val = cur
-                if ret_val is not None:
-                    builder.ret(ret_val)
-                    return
-                if isinstance(return_type, ir.PointerType):
-                    ret_val = resolver.resolve_ptr(value_id, builder.block, preds, block_end_values, vmap)
+                    ph = btop.phi(return_type, name=f"res_phi_{value_id}_{cur_bid}")
+                    # Wire per-pred end values
+                    for pred_bid in pred_ids:
+                        pred_bb = bb_map.get(pred_bid) if isinstance(bb_map, dict) else None
+                        if pred_bb is None:
+                            continue
+                        val = resolver._value_at_end_i64(value_id, pred_bid, preds, block_end_values, vmap, bb_map)
+                        if not hasattr(val, 'type'):
+                            val = ir.Constant(return_type, 0)
+                        ph.add_incoming(val, pred_bb)
+                    ret_val = ph
                 else:
-                    # Prefer pointer→handle reboxing for string-ish returns even if function return type is i64
-                    is_stringish = False
-                    if hasattr(resolver, 'is_stringish'):
-                        try:
-                            is_stringish = resolver.is_stringish(int(value_id))
-                        except Exception:
-                            is_stringish = False
-                    if is_stringish and hasattr(resolver, 'string_ptrs') and int(value_id) in getattr(resolver, 'string_ptrs'):
-                        # Re-box known string pointer to handle
-                        p = resolver.string_ptrs[int(value_id)]
-                        i8p = ir.IntType(8).as_pointer()
-                        i64 = ir.IntType(64)
-                        boxer = None
-                        for f in builder.module.functions:
-                            if f.name == 'nyash.box.from_i8_string':
-                                boxer = f; break
-                        if boxer is None:
-                            boxer = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
-                        ret_val = builder.call(boxer, [p], name='ret_ptr2h')
+                    # Resolve direct value
+                    if isinstance(return_type, ir.PointerType):
+                        ret_val = resolver.resolve_ptr(value_id, builder.block, preds, block_end_values, vmap)
                     else:
-                        ret_val = resolver.resolve_i64(value_id, builder.block, preds, block_end_values, vmap, bb_map)
-            except Exception:
-                ret_val = None
+                        is_stringish = False
+                        if hasattr(resolver, 'is_stringish'):
+                            try:
+                                is_stringish = resolver.is_stringish(int(value_id))
+                            except Exception:
+                                is_stringish = False
+                        if is_stringish and hasattr(resolver, 'string_ptrs') and int(value_id) in getattr(resolver, 'string_ptrs'):
+                            p = resolver.string_ptrs[int(value_id)]
+                            i8p = ir.IntType(8).as_pointer()
+                            i64 = ir.IntType(64)
+                            boxer = None
+                            for f in builder.module.functions:
+                                if f.name == 'nyash.box.from_i8_string':
+                                    boxer = f; break
+                            if boxer is None:
+                                boxer = ir.Function(builder.module, ir.FunctionType(i64, [i8p]), name='nyash.box.from_i8_string')
+                            ret_val = builder.call(boxer, [p], name='ret_ptr2h')
+                        else:
+                            ret_val = resolver.resolve_i64(value_id, builder.block, preds, block_end_values, vmap, bb_map)
+                
         if ret_val is None:
-            ret_val = vmap.get(value_id)
+            # Default to vmap (non-PHI) if available
+            tmp = vmap.get(value_id)
+            try:
+                is_phi = hasattr(tmp, 'add_incoming')
+            except Exception:
+                is_phi = False
+            if tmp is not None and not is_phi:
+                ret_val = tmp
         if not ret_val:
             # Default based on return type
             if isinstance(return_type, ir.IntType):

@@ -56,12 +56,7 @@ impl NyashRunner {
                                 eprintln!("❌ PyVM MIR JSON emit error: {}", e);
                                 std::process::exit(1);
                             }
-                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                eprintln!(
-                                    "[Bridge] using PyVM (pipe) → {}",
-                                    mir_json_path.display()
-                                );
-                            }
+                            crate::cli_v!("[Bridge] using PyVM (pipe) → {}", mir_json_path.display());
                             // Determine entry function hint (prefer Main.main if present)
                             let entry = if module.functions.contains_key("Main.main") {
                                 "Main.main"
@@ -82,11 +77,7 @@ impl NyashRunner {
                                 .map_err(|e| format!("spawn pyvm: {}", e))
                                 .unwrap();
                             let code = status.code().unwrap_or(1);
-                            if !status.success() {
-                                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                    eprintln!("❌ PyVM (pipe) failed (status={})", code);
-                                }
-                            }
+                            if !status.success() { crate::cli_v!("❌ PyVM (pipe) failed (status={})", code); }
                             std::process::exit(code);
                         } else {
                             eprintln!("❌ PyVM runner not found: {}", runner.display());

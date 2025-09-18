@@ -9,7 +9,8 @@ from typing import Dict, Optional
 def lower_barrier(
     builder: ir.IRBuilder,
     barrier_type: str,
-    ordering: Optional[str] = None
+    ordering: Optional[str] = None,
+    ctx=None,
 ) -> None:
     """
     Lower MIR Barrier instruction

@@ -42,3 +42,25 @@ Notes
 - Array literal is enabled when syntax sugar is on (NYASH_SYNTAX_SUGAR_LEVEL=basic|full) or when NYASH_ENABLE_ARRAY_LITERAL=1 is set.
 - Map literal is enabled when syntax sugar is on (NYASH_SYNTAX_SUGAR_LEVEL=basic|full) or when NYASH_ENABLE_MAP_LITERAL=1 is set.
 - Identifier keys (`{name: v}`) are Stage‑3 and require either NYASH_SYNTAX_SUGAR_LEVEL=full or NYASH_ENABLE_MAP_IDENT_KEY=1.
+
+## Stage‑3 (Gated) Additions
+
+Enabled when `NYASH_PARSER_STAGE3=1` for the Rust parser (and via `--stage3`/`NYASH_NY_COMPILER_STAGE3=1` for the selfhost parser):
+
+- try/catch/cleanup
+  - `try_stmt := 'try' block ('catch' '(' (IDENT IDENT | IDENT | ε) ')' block) ('cleanup' block)?`
+    - MVP policy: single `catch` per `try`。
+    - `(Type var)` or `(var)` or `()` are accepted for the catch parameter。
+
+- Block‑postfix catch/cleanup（Phase 15.5）
+  - `block_catch := '{' stmt* '}' ('catch' '(' (IDENT IDENT | IDENT | ε) ')' block)? ('cleanup' block)?`
+  - Applies to standalone block statements. Do not attach to `if/else/loop` structural blocks (wrap with a standalone block when needed).
+  - Gate: `NYASH_BLOCK_CATCH=1` (or `NYASH_PARSER_STAGE3=1`).
+- throw
+  - `throw_stmt := 'throw' expr`
+
+- Method‑level postfix catch/cleanup（Phase 15.6, gated）
+  - `method_decl := 'method' IDENT '(' params? ')' block ('catch' '(' (IDENT IDENT | IDENT | ε) ')' block)? ('cleanup' block)?`
+  - Gate: `NYASH_METHOD_CATCH=1`（または `NYASH_PARSER_STAGE3=1` と同梱）
+
+These constructs remain experimental; behaviour may degrade to no‑op in some backends until runtime support lands, as tracked in CURRENT_TASK.md.

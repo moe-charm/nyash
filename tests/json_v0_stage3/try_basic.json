@@ -1,0 +1,28 @@
+{
+  "version": 0,
+  "kind": "Program",
+  "body": [
+    { "type": "Local", "name": "x", "expr": { "type": "Int", "value": 0 } },
+    { "type": "Try",
+      "try": [
+        { "type": "Expr", "expr": { "type": "Throw", "expr": { "type": "Str", "value": "boom" } } }
+      ],
+      "catches": [
+        { "param": "e", "typeHint": null, "body": [
+            { "type": "Local", "name": "x", "expr": { "type": "Int", "value": 2 } }
+        ]}
+      ],
+      "finally": [
+        { "type": "Local", "name": "x",
+          "expr": { "type": "Binary", "op": "+",
+            "lhs": { "type": "Var", "name": "x" },
+            "rhs": { "type": "Int", "value": 10 }
+          }
+        }
+      ]
+    },
+    { "type": "Extern", "iface": "env.console", "method": "log", "args": [ { "type": "Var", "name": "x" } ] },
+    { "type": "Return", "expr": { "type": "Var", "name": "x" } }
+  ]
+}
+

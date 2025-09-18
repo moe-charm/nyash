@@ -15,30 +15,16 @@
               "dst": 1,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 1
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
               }
             },
             {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 3,
-              "lhs": 1,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 2
-            },
-            {
-              "cond": 3,
-              "else": 2,
-              "op": "branch",
-              "then": 1
+              "op": "jump",
+              "target": 2
             }
           ]
         },
@@ -46,26 +32,8 @@
           "id": 1,
           "instructions": [
             {
-              "dst": 6,
-              "op": "copy",
-              "src": 4
-            },
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 10
-              }
-            },
-            {
-              "dst": 6,
-              "op": "copy",
-              "src": 4
-            },
-            {
-              "op": "jump",
-              "target": 3
+              "op": "ret",
+              "value": 2
             }
           ]
         },
@@ -73,26 +41,28 @@
           "id": 2,
           "instructions": [
             {
-              "dst": 6,
-              "op": "copy",
-              "src": 5
-            },
-            {
-              "dst": 5,
+              "dst": 3,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 20
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "0"
               }
             },
             {
-              "dst": 6,
-              "op": "copy",
-              "src": 5
+              "dst": 4,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 3
             },
             {
-              "op": "jump",
-              "target": 3
+              "cond": 4,
+              "else": 5,
+              "op": "branch",
+              "then": 4
             }
           ]
         },
@@ -100,8 +70,151 @@
           "id": 3,
           "instructions": [
             {
-              "op": "ret",
-              "value": 6
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "other"
+              }
+            },
+            {
+              "args": [
+                11
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 12
+            },
+            {
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "found zero"
+              }
+            },
+            {
+              "args": [
+                5
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 6
+            },
+            {
+              "op": "jump",
+              "target": 1
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "instructions": [
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "dst": 8,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 7
+            },
+            {
+              "cond": 8,
+              "else": 3,
+              "op": "branch",
+              "then": 6
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "found one"
+              }
+            },
+            {
+              "args": [
+                9
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 2,
+              "op": "copy",
+              "src": 10
+            },
+            {
+              "op": "jump",
+              "target": 1
             }
           ]
         }

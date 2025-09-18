@@ -68,3 +68,31 @@ Acceptance
 - Refactored entrypoints accept at most three boxed parameters.
 - Deny-Direct passes (no direct `vmap.get` in lowering/instructions).
 - Dominance: verifier green on representative functions (e.g., dep_tree_min_string).
+
+## Context Stack Guide (If/Loop)
+
+Purpose
+- Make control-flow merge/loop boundaries explicit and uniform across builders (MIR) and the JSON v0 bridge.
+
+Stacks in MirBuilder
+- If merge: `if_merge_stack: Vec<BasicBlockId>`
+  - Push the merge target before lowering branches, pop after wiring edge copies or Phi at the merge.
+  - PHI-off: emit per-predecessor edge copies into the merge pred blocks; merge block itself must not add a self-copy.
+  - PHI-on: place Phi(s) at the merge block head; inputs must cover all predecessors.
+- Loop context: `loop_header_stack` / `loop_exit_stack`
+  - Header = re-check condition; Exit = after-loop block.
+  - `continue` → jump to Header; `break` → jump to Exit. Both add predecessor metadata from the current block.
+  - Builder captures variable-map snapshots on `continue` to contribute latch-like inputs when sealing the header.
+
+JSON v0 Bridge parity
+- Bridge `LoopContext { cond_bb, exit_bb }` mirrors MIR loop stacks.
+- `continue` lowers to `Jump { target: cond_bb }`; `break` lowers to `Jump { target: exit_bb }`.
+
+Verification hints
+- Use-before-def: delay copies that would reference later-defined values or route via Phi at block head.
+- Pred consistency: for every `Jump`/`Branch`, record the predecessor on the successor block.
+- PHI-off invariant: all merged values reach the merge via predecessor copies; the merge block contains no extra Copy to the same dst.
+
+Snapshot rules (Loop/If)
+- Loop: take the latch snapshot at the actual latch block (end of body, after nested if merges). Use it as the backedge source when sealing header.
+- If: capture `pre_if_snapshot` before entering then/else; restore at merge and only bind merged variables (diff-based). Avoid self-copy at merge.

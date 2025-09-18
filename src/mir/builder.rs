@@ -25,6 +25,7 @@ mod fields; // field access/assignment lowering split
 pub(crate) mod loops;
 mod ops;
 mod phi;
+mod if_form;
 mod lifecycle; // prepare/lower_root/finalize split
 // legacy large-match remains inline for now (planned extraction)
 mod plugin_sigs; // plugin signature loader
@@ -89,8 +90,28 @@ pub struct MirBuilder {
     pub(super) loop_header_stack: Vec<BasicBlockId>,
     pub(super) loop_exit_stack: Vec<BasicBlockId>,
 
+    /// If/merge context stack (innermost first). Used to make merge targets explicit
+    /// when lowering nested conditionals and to simplify jump generation.
+    pub(super) if_merge_stack: Vec<BasicBlockId>,
+
     /// Whether PHI emission is disabled (edge-copy mode)
     pub(super) no_phi_mode: bool,
+
+    // ---- Try/Catch/Cleanup lowering context ----
+    /// When true, `return` statements are deferred: they assign to `return_defer_slot`
+    /// and jump to `return_defer_target` (typically the cleanup/exit block).
+    pub(super) return_defer_active: bool,
+    /// Slot value to receive deferred return values (edge-copy mode friendly).
+    pub(super) return_defer_slot: Option<ValueId>,
+    /// Target block to jump to on deferred return.
+    pub(super) return_defer_target: Option<BasicBlockId>,
+    /// Set to true when a deferred return has been emitted in the current context.
+    pub(super) return_deferred_emitted: bool,
+    /// True while lowering the cleanup block.
+    pub(super) in_cleanup_block: bool,
+    /// Policy flags (snapshotted at entry of try/catch lowering)
+    pub(super) cleanup_allow_return: bool,
+    pub(super) cleanup_allow_throw: bool,
 }
 
 impl MirBuilder {
@@ -117,9 +138,21 @@ impl MirBuilder {
             include_box_map: HashMap::new(),
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),
+            if_merge_stack: Vec::new(),
             no_phi_mode,
+            return_defer_active: false,
+            return_defer_slot: None,
+            return_defer_target: None,
+            return_deferred_emitted: false,
+            in_cleanup_block: false,
+            cleanup_allow_return: false,
+            cleanup_allow_throw: false,
         }
     }
+
+    /// Push/pop helpers for If merge context (best-effort; optional usage)
+    pub(super) fn push_if_merge(&mut self, bb: BasicBlockId) { self.if_merge_stack.push(bb); }
+    pub(super) fn pop_if_merge(&mut self) { let _ = self.if_merge_stack.pop(); }
 
     // moved to builder_calls.rs: lower_method_as_function
 
@@ -795,6 +828,10 @@ impl MirBuilder {
         dst: ValueId,
         src: ValueId,
     ) -> Result<(), String> {
+        // No-op self copy guard to avoid useless instructions and accidental reordering issues
+        if dst == src {
+            return Ok(());
+        }
         if let Some(ref mut function) = self.current_function {
             let block = function
                 .get_block_mut(block_id)

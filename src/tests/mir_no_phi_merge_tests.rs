@@ -58,5 +58,16 @@ fn mir13_no_phi_if_merge_inserts_edge_copies_for_return() {
             .any(|inst| matches!(inst, MirInstruction::Copy { dst, .. } if *dst == out_v));
         assert!(has_copy, "expected Copy to out_v in predecessor {:?}", p);
     }
-}
 
+    // And we expect that the merge/ret block itself does not contain
+    // an extra Copy to the merged value (edge-copy only policy)
+    let merge_bb = f.blocks.get(&ret_block).expect("ret block present");
+    let merge_has_copy = merge_bb
+        .instructions
+        .iter()
+        .any(|inst| matches!(inst, MirInstruction::Copy { dst, .. } if *dst == out_v));
+    assert!(
+        !merge_has_copy,
+        "ret/merge block should not contain Copy to merged value (edge-copy only)"
+    );
+}

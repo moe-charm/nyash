@@ -13,6 +13,10 @@ if ! [ -x "$BIN" ]; then
 fi
 
 export NYASH_LLVM_USE_HARNESS=1
+# Accept Stage-3 surface in Rust parser for these inputs
+export NYASH_PARSER_STAGE3=1
+# Lower try/throw using Result-style structured blocks (MVP path)
+export NYASH_TRY_RESULT_MODE=1
 
 if [[ "${1:-}" == "--phi-off" ]]; then
   export NYASH_MIR_NO_PHI=1
@@ -26,7 +30,7 @@ run_ok() {
   timeout 10s "$BIN" --backend llvm "$path" >/dev/null
 }
 
-# A) try/catch/finally without actual throw
+# A) try/catch/cleanup without actual throw
 run_ok "$ROOT_DIR/apps/tests/stage3_try_finally_basic.nyash"
 
 # B) throw in dead branch (acceptance only)
@@ -37,4 +41,3 @@ NYASH_LLVM_TRAP_ON_THROW=0 run_ok "$ROOT_DIR/apps/tests/stage3_try_finally_basic
 NYASH_LLVM_TRAP_ON_THROW=0 run_ok "$ROOT_DIR/apps/tests/stage3_throw_dead_branch.nyash"
 
 echo "[curated-llvm-stage3] OK"
-

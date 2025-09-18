@@ -35,8 +35,8 @@ pub extern "C" fn nyash_plugin_invoke_v2_shim(
     result_len: *mut usize,
 ) -> i32 {
     if let Some(f) = box_invoke_for_type_id(type_id) {
-        // Safety: Plugin-provided function pointer; adhere to C ABI
-        return unsafe { f(instance_id, method_id, args, args_len, result, result_len) };
+        // BoxInvokeFn is extern "C"; call directly (no additional unsafe needed here)
+        return f(instance_id, method_id, args, args_len, result, result_len);
     }
     // E_PLUGIN (-5) when not found
     -5

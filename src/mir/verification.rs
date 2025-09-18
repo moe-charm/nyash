@@ -90,6 +90,13 @@ impl MirVerifier {
             local_errors.append(&mut await_cp);
         }
 
+        // 9. PHI-off strict edge-copy policy (optional)
+        if crate::config::env::mir_no_phi() && crate::config::env::verify_edge_copy_strict() {
+            if let Err(mut ecs) = self.verify_edge_copy_strict(function) {
+                local_errors.append(&mut ecs);
+            }
+        }
+
         if local_errors.is_empty() {
             Ok(())
         } else {
@@ -171,6 +178,80 @@ impl MirVerifier {
             }
             Err(local_errors)
         }
+    }
+
+    /// When PHI-off strict mode is enabled, enforce that merge blocks do not
+    /// introduce self-copies and that each predecessor provides a Copy into the
+    /// merged destination for values used in the merge block that do not dominate it.
+    fn verify_edge_copy_strict(
+        &self,
+        function: &MirFunction,
+    ) -> Result<(), Vec<VerificationError>> {
+        let mut errors = Vec::new();
+        let preds = utils::compute_predecessors(function);
+        let def_block = utils::compute_def_blocks(function);
+        let dominators = utils::compute_dominators(function);
+
+        for (merge_bid, merge_bb) in &function.blocks {
+            let p = preds.get(merge_bid).cloned().unwrap_or_default();
+            if p.len() < 2 {
+                continue; // Only enforce on real merges (>=2 predecessors)
+            }
+
+            // Collect values used in merge block
+            let mut used_values = std::collections::HashSet::new();
+            for inst in merge_bb.all_instructions() {
+                for v in inst.used_values() {
+                    used_values.insert(v);
+                }
+            }
+
+            // For each used value that doesn't dominate the merge block, enforce edge-copy policy
+            for &u in &used_values {
+                if let Some(&def_bb) = def_block.get(&u) {
+                    // If the def dominates the merge block, edge copies are not required
+                    let dominated = dominators
+                        .get(merge_bid)
+                        .map(|set| set.contains(&def_bb))
+                        .unwrap_or(false);
+                    if dominated && def_bb != *merge_bid {
+                        continue;
+                    }
+                }
+
+                // Merge block itself must not contain a Copy to the merged value
+                let has_self_copy_in_merge = merge_bb
+                    .instructions
+                    .iter()
+                    .any(|inst| matches!(inst, super::MirInstruction::Copy { dst, .. } if *dst == u));
+                if has_self_copy_in_merge {
+                    errors.push(VerificationError::EdgeCopyStrictViolation {
+                        block: *merge_bid,
+                        value: u,
+                        pred_block: None,
+                        reason: "merge block contains Copy to merged value; use predecessor copies only".to_string(),
+                    });
+                }
+
+                // Each predecessor must provide a Copy into the merged destination
+                for pred in &p {
+                    let Some(pbb) = function.blocks.get(pred) else { continue; };
+                    let has_copy = pbb.instructions.iter().any(|inst| matches!(
+                        inst,
+                        super::MirInstruction::Copy { dst, .. } if *dst == u
+                    ));
+                    if !has_copy {
+                        errors.push(VerificationError::MergeUsesPredecessorValue {
+                            value: u,
+                            merge_block: *merge_bid,
+                            pred_block: *pred,
+                        });
+                    }
+                }
+            }
+        }
+
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
 
     /// Reject legacy instructions that should be rewritten to Core-15 equivalents
@@ -526,6 +607,21 @@ impl std::fmt::Display for VerificationError {
                     "Missing {} checkpoint around await in block {} at instruction {}",
                     position, block, instruction_index
                 )
+            }
+            VerificationError::EdgeCopyStrictViolation { block, value, pred_block, reason } => {
+                if let Some(pb) = pred_block {
+                    write!(
+                        f,
+                        "EdgeCopyStrictViolation for value {} at merge block {} from pred {}: {}",
+                        value, block, pb, reason
+                    )
+                } else {
+                    write!(
+                        f,
+                        "EdgeCopyStrictViolation for value {} at merge block {}: {}",
+                        value, block, reason
+                    )
+                }
             }
         }
     }

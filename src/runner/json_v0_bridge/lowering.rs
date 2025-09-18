@@ -15,6 +15,7 @@ pub(super) mod try_catch;
 pub(super) mod expr;
 pub(super) mod ternary; // placeholder (not wired)
 pub(super) mod peek; // placeholder (not wired)
+pub(super) mod throw_ctx; // thread-local ctx for Result-mode throw routing
 
 #[derive(Clone, Copy)]
 pub(super) struct LoopContext {
@@ -28,17 +29,94 @@ pub(super) struct BridgeEnv {
     pub(super) mir_no_phi: bool,
     pub(super) allow_me_dummy: bool,
     pub(super) me_class: String,
+    pub(super) try_result_mode: bool,
 }
 
 impl BridgeEnv {
     pub(super) fn load() -> Self {
+        let trm = crate::config::env::try_result_mode();
+        let no_phi = crate::config::env::mir_no_phi();
+        if crate::config::env::cli_verbose() {
+            eprintln!("[Bridge] load: try_result_mode={} mir_no_phi={}", trm, no_phi);
+        }
         Self {
             throw_enabled: std::env::var("NYASH_BRIDGE_THROW_ENABLE").ok().as_deref() == Some("1"),
-            mir_no_phi: crate::config::env::mir_no_phi(),
+            mir_no_phi: no_phi,
             allow_me_dummy: std::env::var("NYASH_BRIDGE_ME_DUMMY").ok().as_deref() == Some("1"),
             me_class: std::env::var("NYASH_BRIDGE_ME_CLASS").unwrap_or_else(|_| "Main".to_string()),
+            try_result_mode: trm,
         }
     }
+}
+
+/// Small helper: set Jump terminator and record predecessor on the target.
+fn jump_with_pred(f: &mut MirFunction, cur_bb: BasicBlockId, target: BasicBlockId) {
+    if let Some(bb) = f.get_block_mut(cur_bb) {
+        bb.set_terminator(MirInstruction::Jump { target });
+    }
+    if let Some(succ) = f.get_block_mut(target) {
+        succ.add_predecessor(cur_bb);
+    }
+}
+
+/// Strip Phi instructions by inserting edge copies on each predecessor.
+/// This normalizes MIR to PHI-off form for downstream harnesses that synthesize PHIs.
+fn strip_phi_functions(f: &mut MirFunction) {
+    // Collect block ids to avoid borrow issues while mutating
+    let block_ids: Vec<BasicBlockId> = f.blocks.keys().copied().collect();
+    for bbid in block_ids {
+        // Snapshot phi instructions at the head
+        let mut phi_entries: Vec<(ValueId, Vec<(BasicBlockId, ValueId)>)> = Vec::new();
+        if let Some(bb) = f.blocks.get(&bbid) {
+            for inst in &bb.instructions {
+                if let MirInstruction::Phi { dst, inputs } = inst {
+                    phi_entries.push((*dst, inputs.clone()));
+                } else {
+                    // PHIs must be at the beginning; once we see non-Phi, stop
+                    break;
+                }
+            }
+        }
+        if phi_entries.is_empty() {
+            continue;
+        }
+        // Insert copies on predecessors
+        for (dst, inputs) in &phi_entries {
+            for (pred, val) in inputs {
+                if let Some(pbb) = f.blocks.get_mut(pred) {
+                    pbb.add_instruction(MirInstruction::Copy { dst: *dst, src: *val });
+                }
+            }
+        }
+        // Remove Phi instructions from the merge block
+        if let Some(bb) = f.blocks.get_mut(&bbid) {
+            let non_phi: Vec<MirInstruction> = bb
+                .instructions
+                .iter()
+                .cloned()
+                .skip_while(|inst| matches!(inst, MirInstruction::Phi { .. }))
+                .collect();
+            bb.instructions = non_phi;
+        }
+    }
+}
+
+fn lower_break_stmt(f: &mut MirFunction, cur_bb: BasicBlockId, exit_bb: BasicBlockId) {
+    jump_with_pred(f, cur_bb, exit_bb);
+    crate::jit::events::emit_lower(
+        serde_json::json!({ "id": "loop_break","exit_bb": exit_bb.0,"decision": "lower" }),
+        "loop",
+        "<json_v0>",
+    );
+}
+
+fn lower_continue_stmt(f: &mut MirFunction, cur_bb: BasicBlockId, cond_bb: BasicBlockId) {
+    jump_with_pred(f, cur_bb, cond_bb);
+    crate::jit::events::emit_lower(
+        serde_json::json!({ "id": "loop_continue","cond_bb": cond_bb.0,"decision": "lower" }),
+        "loop",
+        "<json_v0>",
+    );
 }
 
 
@@ -86,31 +164,13 @@ pub(super) fn lower_stmt_with_vars(
         }
         StmtV0::Break => {
             if let Some(ctx) = loop_stack.last().copied() {
-                if let Some(bb) = f.get_block_mut(cur_bb) {
-                    bb.set_terminator(MirInstruction::Jump {
-                        target: ctx.exit_bb,
-                    });
-                }
-                crate::jit::events::emit_lower(
-                    serde_json::json!({ "id": "loop_break","exit_bb": ctx.exit_bb.0,"decision": "lower" }),
-                    "loop",
-                    "<json_v0>",
-                );
+                lower_break_stmt(f, cur_bb, ctx.exit_bb);
             }
             Ok(cur_bb)
         }
         StmtV0::Continue => {
             if let Some(ctx) = loop_stack.last().copied() {
-                if let Some(bb) = f.get_block_mut(cur_bb) {
-                    bb.set_terminator(MirInstruction::Jump {
-                        target: ctx.cond_bb,
-                    });
-                }
-                crate::jit::events::emit_lower(
-                    serde_json::json!({ "id": "loop_continue","cond_bb": ctx.cond_bb.0,"decision": "lower" }),
-                    "loop",
-                    "<json_v0>",
-                );
+                lower_continue_stmt(f, cur_bb, ctx.cond_bb);
             }
             Ok(cur_bb)
         }
@@ -194,12 +254,16 @@ pub(super) fn lower_program(prog: ProgramV0) -> Result<MirModule, String> {
         }
     }
     f.signature.return_type = MirType::Unknown;
+    // PHI-off normalization for Bridge output
+    if env.mir_no_phi {
+        strip_phi_functions(&mut f);
+    }
     module.add_function(f);
     Ok(module)
 }
 
 pub(super) fn maybe_dump_mir(module: &MirModule) {
-    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+    if crate::config::env::cli_verbose() {
         let p = MirPrinter::new();
         println!("{}", p.print_module(module));
     }

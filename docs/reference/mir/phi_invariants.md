@@ -1,5 +1,8 @@
 # MIR PHI Invariants
 
+Note
+- Default policy is PHI‑off at MIR level. These invariants apply to the dev‑only PHI‑on mode and to how LLVM synthesizes PHIs from predecessor copies. See also `phi_policy.md`.
+
 Scope: Builder/Bridge, PyVM, llvmlite (AOT)
 
 Goal: Ensure deterministic PHI formation at control-flow merges so that
@@ -32,4 +35,3 @@ Diagnostics
   wiring in the LLVM path.
 - Bridge verifier may allow `verify_allow_no_phi()` in PHI-off mode, but
   the invariants above still apply to resolver synthesis order.
-

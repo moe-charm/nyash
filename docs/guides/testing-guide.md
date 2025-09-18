@@ -58,6 +58,53 @@ echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
 ./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_is_empty.nyash
 ```
 
+## PHI ポリシー（Phase‑15）と検証トグル
+
+- 既定は PHI‑off（エッジコピー方式）だよ。MIR では Phi を発行せず、合流は predecessor 側に `Copy` を挿入して表現するよ。
+- LLVM/llvmlite 側が PHI を合成する（AOT/EXE）。PyVM は意味論のリファレンスとして動作。
+- 詳細は `docs/reference/mir/phi_policy.md` を参照してね。
+
+テスト時の環境（推奨）
+```bash
+# 既定の PHI-off を明示（未設定なら 1 と同義）
+export NYASH_MIR_NO_PHI=${NYASH_MIR_NO_PHI:-1}
+
+# エッジコピー厳格検証（オプション）
+#   マージブロック自身の self-copy 禁止、全 predecessor に Copy があるか検査
+export NYASH_VERIFY_EDGE_COPY_STRICT=1
+
+# PHI-on（レガシー/保守限定、開発者のみ）
+#   ビルド時に feature を付け、実行時は 0 に設定
+cargo test --features phi-legacy
+NYASH_MIR_NO_PHI=0 cargo test --features phi-legacy -- --ignored
+```
+
+スモークスクリプトの既定
+- `tools/smokes/curated_llvm.sh`: `NYASH_MIR_NO_PHI=${NYASH_MIR_NO_PHI:-1}` を既定設定
+- `tools/smokes/fast_local.sh`: 同上。`NYASH_VERIFY_EDGE_COPY_STRICT` は opt-in（既定 0）
+
+## PHI 配線トレース（JSONL）
+
+- 目的: LLVM 側の PHI 合成が、PHI‑off のエッジコピー規約に整合しているかを可視化・検証する。
+- 出力: 1 行 JSON（JSONL）。`NYASH_LLVM_TRACE_OUT=<path>` に追記出力。
+- イベント: `finalize_begin/finalize_dst/add_incoming/wire_choose/snapshot` など（pred→dst 整合が分かる）
+
+クイック実行
+```bash
+# すべてPHI‑offで OK。llvmlite ハーネスと if-merge プリパスをON
+NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi.jsonl \
+NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_PREPASS_IFMERGE=1 \
+bash tools/test/smoke/llvm/phi_trace/test.sh
+
+# 結果の検証（要: python3）
+python3 tools/phi_trace_check.py --file tmp/phi.jsonl --summary
+```
+
+ショートカット
+- `tools/smokes/phi_trace_local.sh`（ビルド→スモーク→チェックを一括）
+- `tools/smokes/fast_local.sh` は `NYASH_LLVM_TRACE_SMOKE=1` でオプション実行
+
+
 ## 🔌 **プラグインテスター（BID-FFI診断ツール）**
 ```bash
 # プラグインテスターのビルド

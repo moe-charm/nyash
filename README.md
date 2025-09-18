@@ -123,6 +123,7 @@ Phase‑15 (Self‑Hosting): Legacy VM/Interpreter are feature‑gated
   cargo build --release --features vm-legacy,interpreter-legacy
   ```
   Then `--backend vm`/`--backend interpreter` use the legacy paths.
+ - Note: `--benchmark` requires the legacy VM. Build with `--features vm-legacy` before running benchmarks.
 
 ### 1. **Interpreter Mode** (Development)
 ```bash

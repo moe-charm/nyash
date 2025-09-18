@@ -34,6 +34,7 @@ use once_cell::sync::OnceCell;
 use std::sync::RwLock;
 
 static GLOBAL_ENV: OnceCell<RwLock<NyashEnv>> = OnceCell::new();
+static PHI_ON_GATED_WARNED: OnceCell<()> = OnceCell::new();
 
 pub fn current() -> NyashEnv {
     if let Some(lock) = GLOBAL_ENV.get() {
@@ -111,7 +112,24 @@ pub fn mir_no_phi() -> bool {
     match std::env::var("NYASH_MIR_NO_PHI").ok() {
         Some(v) => {
             let lv = v.to_ascii_lowercase();
-            !(lv == "0" || lv == "false" || lv == "off")
+            let requested_no_phi = !(lv == "0" || lv == "false" || lv == "off");
+            if requested_no_phi {
+                return true;
+            }
+            // PHI-on requested
+            #[cfg(feature = "phi-legacy")]
+            {
+                return false;
+            }
+            #[cfg(not(feature = "phi-legacy"))]
+            {
+                if PHI_ON_GATED_WARNED.set(()).is_ok() {
+                    eprintln!(
+                        "[nyash] PHI-on requested but disabled in this build (missing 'phi-legacy' feature). Falling back to PHI-off."
+                    );
+                }
+                return true;
+            }
         }
         // Default: ON for MIR13 stability (PHI generation off by default)
         None => true,
@@ -121,6 +139,13 @@ pub fn mir_no_phi() -> bool {
 /// Allow verifier to skip SSA/dominance/merge checks for PHI-less MIR.
 pub fn verify_allow_no_phi() -> bool {
     std::env::var("NYASH_VERIFY_ALLOW_NO_PHI").ok().as_deref() == Some("1") || mir_no_phi()
+}
+
+/// Enable strict edge-copy policy verification in PHI-off mode.
+/// When enabled, merge blocks must receive merged values via predecessor copies only,
+/// and the merge block itself must not introduce a self-copy to the merged destination.
+pub fn verify_edge_copy_strict() -> bool {
+    std::env::var("NYASH_VERIFY_EDGE_COPY_STRICT").ok().as_deref() == Some("1")
 }
 
 // ---- LLVM harness toggle (llvmlite) ----
@@ -237,6 +262,29 @@ pub fn gc_alloc_threshold() -> Option<u64> {
     std::env::var("NYASH_GC_ALLOC_THRESHOLD").ok()?.parse().ok()
 }
 
+// ---- Cleanup (method-level postfix) policy toggles ----
+/// Allow `return` inside a cleanup block. Default: false (0)
+pub fn cleanup_allow_return() -> bool {
+    match std::env::var("NYASH_CLEANUP_ALLOW_RETURN").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => false,
+    }
+}
+
+/// Allow `throw` inside a cleanup block. Default: false (0)
+pub fn cleanup_allow_throw() -> bool {
+    match std::env::var("NYASH_CLEANUP_ALLOW_THROW").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => false,
+    }
+}
+
 /// Run a collection every N safepoints (if Some)
 pub fn gc_collect_sp_interval() -> Option<u64> {
     std::env::var("NYASH_GC_COLLECT_SP").ok()?.parse().ok()
@@ -331,6 +379,35 @@ pub fn selfhost_read_tmp() -> bool {
 }
 pub fn ny_compiler_stage3() -> bool {
     std::env::var("NYASH_NY_COMPILER_STAGE3").ok().as_deref() == Some("1")
+}
+/// Core (Rust) parser Stage-3 gate
+/// When enabled, the Rust parser accepts Stage-3 surface (try/catch/finally, throw).
+/// Default is OFF to keep Stage-2 stable.
+pub fn parser_stage3() -> bool {
+    std::env::var("NYASH_PARSER_STAGE3").ok().as_deref() == Some("1")
+}
+
+/// Parser gate for Block‑Postfix Catch acceptance
+/// Enabled when either NYASH_BLOCK_CATCH=1 or Stage‑3 gate is on.
+/// Phase 15.5 allows parsing a standalone `{ ... }` block optionally followed by
+/// a single `catch (...) { ... }` and/or `finally { ... }`, which is folded into
+/// ASTNode::TryCatch with the preceding block as the try body.
+pub fn block_postfix_catch() -> bool {
+    std::env::var("NYASH_BLOCK_CATCH").ok().as_deref() == Some("1") || parser_stage3()
+}
+
+/// Bridge lowering: use Result-style try/throw lowering instead of MIR Catch/Throw
+/// When on, try/catch is lowered using structured blocks and direct jumps,
+/// without emitting MIR Throw/Catch. The thrown value is routed to catch via
+/// block parameters (PHI-off uses edge-copy).
+pub fn try_result_mode() -> bool {
+    std::env::var("NYASH_TRY_RESULT_MODE").ok().as_deref() == Some("1")
+}
+
+/// Parser gate for method-level postfix catch/finally acceptance on method definitions.
+/// Enabled when either NYASH_METHOD_CATCH=1 or Stage‑3 gate is on.
+pub fn method_catch() -> bool {
+    std::env::var("NYASH_METHOD_CATCH").ok().as_deref() == Some("1") || parser_stage3()
 }
 pub fn ny_compiler_child_args() -> Option<String> {
     std::env::var("NYASH_NY_COMPILER_CHILD_ARGS").ok()

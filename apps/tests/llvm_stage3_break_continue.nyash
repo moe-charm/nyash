@@ -1,4 +1,4 @@
-// Stage-3 regression smoke: break/continue executes once; with bridge throw/try flags enabled the catch sets 42 and finally runs.
+// Stage-3 regression smoke: break/continue executes once; with bridge throw/try flags enabled the catch sets 42 and cleanup runs.
 static box Main {
   main() {
     local break_counter = 0
@@ -16,7 +16,7 @@ static box Main {
       throw 42
     } catch (Error e) {
       caught = 42
-    } finally {
+    } cleanup {
       finally_flag = 1
     }
 

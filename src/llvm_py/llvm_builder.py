@@ -32,6 +32,12 @@ from instructions.controlflow.while_ import lower_while_regular
 from phi_wiring import setup_phi_placeholders as _setup_phi_placeholders, finalize_phis as _finalize_phis
 from trace import debug as trace_debug
 from trace import phi as trace_phi
+try:
+    # Structured JSON trace for PHI wiring (shared with phi_wiring)
+    from phi_wiring.common import trace as trace_phi_json
+except Exception:
+    def trace_phi_json(_msg):
+        pass
 from prepass.loops import detect_simple_while
 from prepass.if_merge import plan_ret_phi_predeclare
 from build_ctx import BuildCtx
@@ -397,6 +403,90 @@ class NyashLLVMBuilder:
         except Exception:
             pass
 
+        # Predeclare PHIs for values used in a block but defined in predecessors (multi-pred only).
+        # This keeps PHI nodes grouped at the top and avoids late synthesis during operand resolution.
+        try:
+            from cfg.utils import build_preds_succs
+            local_preds, _ = build_preds_succs(block_by_id)
+            def _collect_defs(block):
+                defs = set()
+                for ins in block.get('instructions') or []:
+                    try:
+                        dstv = ins.get('dst')
+                        if isinstance(dstv, int):
+                            defs.add(int(dstv))
+                    except Exception:
+                        pass
+                return defs
+            def _collect_uses(block):
+                uses = set()
+                for ins in block.get('instructions') or []:
+                    # Minimal keys: lhs/rhs (binop), value (ret/copy), cond (branch), box_val (boxcall)
+                    for k in ('lhs','rhs','value','cond','box_val'):
+                        try:
+                            v = ins.get(k)
+                            if isinstance(v, int):
+                                uses.add(int(v))
+                        except Exception:
+                            pass
+                return uses
+            # Ensure map for declared incomings exists
+            if not hasattr(self, 'block_phi_incomings') or self.block_phi_incomings is None:
+                self.block_phi_incomings = {}
+            for bid, blk in block_by_id.items():
+                # Only multi-pred blocks need PHIs
+                try:
+                    preds_raw = [p for p in local_preds.get(int(bid), []) if p != int(bid)]
+                except Exception:
+                    preds_raw = []
+                # Dedup preds preserve order
+                seen = set(); preds_list = []
+                for p in preds_raw:
+                    if p not in seen: preds_list.append(p); seen.add(p)
+                if len(preds_list) <= 1:
+                    continue
+                defs = _collect_defs(blk)
+                uses = _collect_uses(blk)
+                need = [u for u in uses if u not in defs]
+                if not need:
+                    continue
+                bb0 = self.bb_map.get(int(bid))
+                if bb0 is None:
+                    continue
+                b0 = ir.IRBuilder(bb0)
+                try:
+                    b0.position_at_start(bb0)
+                except Exception:
+                    pass
+                for vid in need:
+                    # Skip if we already have a PHI mapped for (bid, vid)
+                    cur = self.vmap.get(int(vid))
+                    has_phi_here = False
+                    try:
+                        has_phi_here = (
+                            cur is not None and hasattr(cur, 'add_incoming') and
+                            getattr(getattr(cur, 'basic_block', None), 'name', None) == bb0.name
+                        )
+                    except Exception:
+                        has_phi_here = False
+                    if not has_phi_here:
+                        ph = b0.phi(self.i64, name=f"phi_{vid}")
+                        self.vmap[int(vid)] = ph
+                    # Record incoming metadata for finalize_phis (pred -> same vid)
+                    try:
+                        self.block_phi_incomings.setdefault(int(bid), {}).setdefault(int(vid), [])
+                        # Overwrite with dedup list of (pred, vid)
+                        self.block_phi_incomings[int(bid)][int(vid)] = [(int(p), int(vid)) for p in preds_list]
+                    except Exception:
+                        pass
+            # Expose to resolver
+            try:
+                self.resolver.block_phi_incomings = self.block_phi_incomings
+            except Exception:
+                pass
+        except Exception:
+            pass
+
         # Optional: simple loop prepass → synthesize a structured while body
         loop_plan = None
         try:
@@ -444,9 +534,19 @@ class NyashLLVMBuilder:
                 try:
                     # Use a clean per-while vmap context seeded from global placeholders
                     self._current_vmap = dict(self.vmap)
-                    ok = lower_while_loopform(builder, func, cond_vid, body_insts,
-                                              self.loop_count, self.vmap, self.bb_map,
-                                              self.resolver, self.preds, self.block_end_values)
+                    ok = lower_while_loopform(
+                        builder,
+                        func,
+                        cond_vid,
+                        body_insts,
+                        self.loop_count,
+                        self.vmap,
+                        self.bb_map,
+                        self.resolver,
+                        self.preds,
+                        self.block_end_values,
+                        getattr(self, 'ctx', None),
+                    )
                 except Exception:
                     ok = False
                 if not ok:
@@ -810,7 +910,11 @@ class NyashLLVMBuilder:
         try:
             import os
             keys = sorted(list(snap.keys()))
-            trace_phi(f"[builder] snapshot bb{bid} keys={keys[:20]}...")
+            # Emit structured snapshot event for up to first 20 keys
+            try:
+                trace_phi_json({"phi": "snapshot", "block": int(bid), "keys": [int(k) for k in keys[:20]]})
+            except Exception:
+                pass
         except Exception:
             pass
         # Record block-local definitions for lifetime hinting
@@ -941,7 +1045,7 @@ class NyashLLVMBuilder:
             
         elif op == "barrier":
             barrier_type = inst.get("type", "memory")
-            lower_barrier(builder, barrier_type)
+            lower_barrier(builder, barrier_type, ctx=getattr(self, 'ctx', None))
             
         elif op == "while":
             # Experimental LoopForm lowering
@@ -1001,7 +1105,10 @@ class NyashLLVMBuilder:
             for fr in from_list:
                 succs.setdefault(fr, []).append(to_bid)
         for block_id, dst_map in (getattr(self, 'block_phi_incomings', {}) or {}).items():
-            trace_phi(f"[finalize] bb{block_id} dsts={list(dst_map.keys())}")
+            try:
+                trace_phi_json({"phi": "finalize_begin", "block": int(block_id), "dsts": [int(k) for k in (dst_map or {}).keys()]})
+            except Exception:
+                pass
             bb = self.bb_map.get(block_id)
             if bb is None:
                 continue
@@ -1011,7 +1118,10 @@ class NyashLLVMBuilder:
             except Exception:
                 pass
             for dst_vid, incoming in (dst_map or {}).items():
-                trace_phi(f"[finalize]  dst v{dst_vid} incoming={incoming}")
+                try:
+                    trace_phi_json({"phi": "finalize_dst", "block": int(block_id), "dst": int(dst_vid), "incoming": [(int(v), int(b)) for (b, v) in [(b, v) for (v, b) in (incoming or [])]]})
+                except Exception:
+                    pass
                 # Ensure placeholder exists at block head
                 # Prefer predeclared ret-phi when available and force using it.
                 predecl = getattr(self, 'predeclared_ret_phis', {}) if hasattr(self, 'predeclared_ret_phis') else {}
@@ -1038,7 +1148,10 @@ class NyashLLVMBuilder:
                         phi = b.phi(self.i64, name=f"phi_{dst_vid}")
                         self.vmap[dst_vid] = phi
                 n = getattr(phi, 'name', b'').decode() if hasattr(getattr(phi, 'name', None), 'decode') else str(getattr(phi, 'name', ''))
-                trace_phi(f"[finalize]  target phi={n}")
+                try:
+                    trace_phi_json({"phi": "finalize_target", "block": int(block_id), "dst": int(dst_vid), "ir": str(n)})
+                except Exception:
+                    pass
                 # Wire incoming per CFG predecessor; map src_vid when provided
                 preds_raw = [p for p in self.preds.get(block_id, []) if p != block_id]
                 # Deduplicate while preserving order
@@ -1214,8 +1327,7 @@ def main():
     if dummy:
         # Emit dummy ny_main
         ir_text = builder._create_dummy_main()
-        if os.environ.get('NYASH_CLI_VERBOSE') == '1':
-            print(f"[Python LLVM] Generated dummy IR:\n{ir_text}")
+        trace_debug(f"[Python LLVM] Generated dummy IR:\n{ir_text}")
         builder.compile_to_object(output_file)
         print(f"Compiled to {output_file}")
         return
@@ -1229,8 +1341,7 @@ def main():
         mir_json = json.load(f)
 
     llvm_ir = builder.build_from_mir(mir_json)
-    if os.environ.get('NYASH_CLI_VERBOSE') == '1':
-        print(f"[Python LLVM] Generated LLVM IR (see NYASH_LLVM_DUMP_IR or tmp/nyash_harness.ll)")
+    trace_debug("[Python LLVM] Generated LLVM IR (see NYASH_LLVM_DUMP_IR or tmp/nyash_harness.ll)")
 
     builder.compile_to_object(output_file)
     print(f"Compiled to {output_file}")

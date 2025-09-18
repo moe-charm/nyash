@@ -213,7 +213,7 @@ try {
     local result = riskyOperation()
 } catch (error) {
     print("Error: " + error.message)
-} finally {
+} cleanup {
     cleanup()
 }
 ```

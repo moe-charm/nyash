@@ -752,7 +752,7 @@ box ParserBox {
       me.gpos_set(j)
       return "{\"type\":\"Expr\",\"expr\":" + e_throw + "}"
     }
-    // Stage-3 acceptance: try { ... } (catch ...)* (finally { ... })? → degrade to no-op (syntax only)
+    // Stage-3 acceptance: try { ... } (catch ...)* (cleanup { ... })? → degrade to no-op (syntax only)
     if me.starts_with_kw(src, j, "try") == 1 {
       j = j + 3
       j = me.skip_ws(src, j)
@@ -811,10 +811,10 @@ box ParserBox {
         } else { cont_ct = 0 }
       }
       catches_json = catches_json + "]"
-      // optional finally
+      // optional cleanup
       j = me.skip_ws(src, j)
       local finally_json = null
-      if me.starts_with_kw(src, j, "finally") == 1 {
+      if me.starts_with_kw(src, j, "cleanup") == 1 {
         j = j + 7
         j = me.skip_ws(src, j)
         local f_res = me.parse_block2(src, j)

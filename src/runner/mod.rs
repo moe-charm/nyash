@@ -114,7 +114,7 @@ impl NyashRunner {
                             root_info = format!(" root='{}'", r);
                         }
                     }
-                    eprintln!(
+                    crate::cli_v!(
                         "[deps] loaded {} bytes from{} {}",
                         bytes,
                         if root_info.is_empty() { "" } else { ":" },
@@ -122,7 +122,7 @@ impl NyashRunner {
                     );
                 }
                 Err(e) => {
-                    eprintln!("[deps] read error: {}", e);
+                    crate::cli_v!("[deps] read error: {}", e);
                 }
             }
         }
@@ -199,7 +199,7 @@ impl NyashRunner {
                 }
                 // Resolve pending using with clear precedence and ambiguity handling
                 let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
-                let verbose = std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+                let verbose = crate::config::env::cli_verbose();
                 let ctx = std::path::Path::new(filename).parent();
                 for (ns, alias) in pending_using.iter() {
                     let value = match resolve_using_target(

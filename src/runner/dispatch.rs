@@ -13,8 +13,8 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
     if std::env::var("NYASH_USE_NY_COMPILER").ok().as_deref() == Some("1") {
         if runner.try_run_selfhost_pipeline(filename) {
             return;
-        } else if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("[ny-compiler] fallback to default path (MVP unavailable for this input)");
+        } else {
+            crate::cli_v!("[ny-compiler] fallback to default path (MVP unavailable for this input)");
         }
     }
 
@@ -31,12 +31,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         };
         match json_v0_bridge::parse_source_v0_to_module(&code) {
             Ok(module) => {
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    println!(
-                        "🚀 Nyash MIR Interpreter - (parser=ny) Executing file: {} 🚀",
-                        filename
-                    );
-                }
+                crate::cli_v!("🚀 Nyash MIR Interpreter - (parser=ny) Executing file: {} 🚀", filename);
                 runner.execute_mir_module(&module);
                 return;
             }
@@ -70,9 +65,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
 
     // MIR dump/verify
     if runner.config.dump_mir || runner.config.verify_mir {
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            println!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
-        }
+        crate::cli_v!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
         runner.execute_mir_mode(filename);
         return;
     }
@@ -106,15 +99,11 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
     // Backend selection
     match runner.config.backend.as_str() {
         "mir" => {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
-            }
+            crate::cli_v!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
             runner.execute_mir_mode(filename);
         }
         "vm" => {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
-            }
+            crate::cli_v!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             #[cfg(feature = "vm-legacy")]
             {
                 runner.execute_vm_mode(filename);
@@ -139,12 +128,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         }
         #[cfg(feature = "cranelift-jit")]
         "jit-direct" => {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!(
-                    "⚡ Nyash JIT-Direct Backend - Executing file: {} ⚡",
-                    filename
-                );
-            }
+            crate::cli_v!("⚡ Nyash JIT-Direct Backend - Executing file: {} ⚡", filename);
             #[cfg(feature = "cranelift-jit")]
             {
                 // Use independent JIT-direct runner method (no VM execute loop)
@@ -157,9 +141,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             }
         }
         "llvm" => {
-            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                println!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
-            }
+            crate::cli_v!("⚡ Nyash LLVM Backend - Executing file: {} ⚡", filename);
             runner.execute_llvm_mode(filename);
         }
         other => {
@@ -183,41 +165,13 @@ impl NyashRunner {
         }
         // If CLI requested EXE emit, generate JSON then invoke ny-llvmc to link NyRT and exit.
         if let Some(exe_out) = self.config.emit_exe.as_ref() {
-            let tmp_dir = std::path::Path::new("tmp");
-            let _ = std::fs::create_dir_all(tmp_dir);
-            let json_path = tmp_dir.join("nyash_cli_emit.json");
-            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(module, &json_path) {
-                eprintln!("❌ MIR JSON emit error: {}", e);
-                std::process::exit(1);
-            }
-            // Resolve ny-llvmc
-            let ny_llvmc = std::env::var("NYASH_NY_LLVM_COMPILER")
-                .ok()
-                .and_then(|s| if !s.is_empty() { Some(std::path::PathBuf::from(s)) } else { None })
-                .or_else(|| which::which("ny-llvmc").ok())
-                .unwrap_or_else(|| std::path::PathBuf::from("target/release/ny-llvmc"));
-            // Build command
-            let mut cmd = std::process::Command::new(ny_llvmc);
-            cmd.arg("--in").arg(&json_path)
-                .arg("--emit").arg("exe")
-                .arg("--out").arg(exe_out);
-            if let Some(dir) = self.config.emit_exe_nyrt.as_ref() {
-                cmd.arg("--nyrt").arg(dir);
-            } else {
-                // default hint
-                cmd.arg("--nyrt").arg("target/release");
-            }
-            if let Some(flags) = self.config.emit_exe_libs.as_ref() {
-                if !flags.trim().is_empty() {
-                    cmd.arg("--libs").arg(flags);
-                }
-            }
-            let status = cmd.status().unwrap_or_else(|e| {
-                eprintln!("❌ failed to spawn ny-llvmc: {}", e);
-                std::process::exit(1);
-            });
-            if !status.success() {
-                eprintln!("❌ ny-llvmc failed with status: {:?}", status.code());
+            if let Err(e) = crate::runner::modes::common_util::exec::ny_llvmc_emit_exe_bin(
+                module,
+                exe_out,
+                self.config.emit_exe_nyrt.as_deref(),
+                self.config.emit_exe_libs.as_deref(),
+            ) {
+                eprintln!("❌ {}", e);
                 std::process::exit(1);
             }
             println!("EXE written: {}", exe_out);

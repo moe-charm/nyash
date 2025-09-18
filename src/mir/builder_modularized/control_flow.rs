@@ -10,72 +10,7 @@ use crate::ast::ASTNode;
 impl MirBuilder {
     /// Build if statement with conditional branches
     pub(super) fn build_if_statement(&mut self, condition: ASTNode, then_branch: ASTNode, else_branch: Option<ASTNode>) -> Result<ValueId, String> {
-        let condition_val = self.build_expression(condition)?;
-        
-        // Create basic blocks for then/else/merge
-        let then_block = self.block_gen.next();
-        let else_block = self.block_gen.next();
-        let merge_block = self.block_gen.next();
-        
-        // Emit branch instruction in current block
-        self.emit_instruction(MirInstruction::Branch {
-            condition: condition_val,
-            then_bb: then_block,
-            else_bb: else_block,
-        })?;
-        
-        // Build then branch
-        self.current_block = Some(then_block);
-        self.ensure_block_exists(then_block)?;
-        // Keep a copy of AST for analysis (phi for variable reassignment)
-        let then_ast_for_analysis = then_branch.clone();
-        let then_value = self.build_expression(then_branch)?;
-        if !self.is_current_block_terminated() {
-            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
-        }
-        
-        // Build else branch
-        self.current_block = Some(else_block);
-        self.ensure_block_exists(else_block)?;
-        let (else_value, else_ast_for_analysis) = if let Some(else_ast) = else_branch {
-            let val = self.build_expression(else_ast.clone())?;
-            (val, Some(else_ast))
-        } else {
-            // No else branch, use void
-            let void_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: void_val,
-                value: ConstValue::Void,
-            })?;
-            (void_val, None)
-        };
-        if !self.is_current_block_terminated() {
-            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
-        }
-        
-        // Create merge block with phi function
-        self.current_block = Some(merge_block);
-        self.ensure_block_exists(merge_block)?;
-        let result_val = self.value_gen.next();
-        
-        self.emit_instruction(MirInstruction::Phi {
-            dst: result_val,
-            inputs: vec![
-                (then_block, then_value),
-                (else_block, else_value),
-            ],
-        })?;
-
-        // Heuristic: If both branches assign the same variable name, bind that variable to the phi result
-        let assigned_var_then = Self::extract_assigned_var(&then_ast_for_analysis);
-        let assigned_var_else = else_ast_for_analysis.as_ref().and_then(|a| Self::extract_assigned_var(a));
-        if let (Some(a), Some(b)) = (assigned_var_then, assigned_var_else) {
-            if a == b {
-                self.variable_map.insert(a, result_val);
-            }
-        }
-
-        Ok(result_val)
+        self.lower_if_form(condition, then_branch, else_branch)
     }
 
     /// Extract assigned variable name from an AST node if it represents an assignment to a variable.

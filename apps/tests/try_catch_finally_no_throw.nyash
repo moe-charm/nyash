@@ -7,9 +7,8 @@ static box Main {
     } catch (Error e) {
       // 例外なし → ここは通らない想定
       console.println("C")
-    } finally {
+    } cleanup {
       console.println("F")
     }
   }
 }
-

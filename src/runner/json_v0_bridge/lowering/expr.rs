@@ -78,6 +78,15 @@ fn lower_throw(
     cur_bb: BasicBlockId,
     exception_value: ValueId,
 ) -> (ValueId, BasicBlockId) {
+    // Result-mode try context active: route to current catch via Jump and record incoming
+    if env.try_result_mode && super::throw_ctx::is_active() {
+        if crate::config::env::cli_verbose() {
+            eprintln!("[Bridge] lower_throw: routing to catch (Result-mode)");
+        }
+        let _ = super::throw_ctx::record_throw(f, cur_bb, exception_value);
+        return (exception_value, cur_bb);
+    }
+    // Legacy path: emit MIR Throw (if enabled) or degrade to const 0
     if env.throw_enabled {
         if let Some(bb) = f.get_block_mut(cur_bb) {
             bb.set_terminator(MirInstruction::Throw {
@@ -89,10 +98,7 @@ fn lower_throw(
     } else {
         let dst = f.next_value_id();
         if let Some(bb) = f.get_block_mut(cur_bb) {
-            bb.add_instruction(MirInstruction::Const {
-                dst,
-                value: ConstValue::Integer(0),
-            });
+            bb.add_instruction(MirInstruction::Const { dst, value: ConstValue::Integer(0) });
         }
         (dst, cur_bb)
     }
