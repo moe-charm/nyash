@@ -10,7 +10,7 @@
 
 use super::{Effect, EffectMask, MirFunction, MirInstruction, MirModule, MirType, ValueId};
 use crate::mir::optimizer_stats::OptimizationStats;
-use std::collections::{HashMap, HashSet};
+// std::collections imports removed (local DCE/CSE impls deleted)
 
 /// MIR optimization passes
 pub struct MirOptimizer {
@@ -123,145 +123,8 @@ impl MirOptimizer {
         stats
     }
 
-    /// Eliminate dead code (unused values)
-    fn eliminate_dead_code(&mut self, module: &mut MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
+    /// Core-13 "pure" normalization notes moved to optimizer_passes::normalize_core13_pure
 
-        for (func_name, function) in &mut module.functions {
-            if self.debug {
-                println!("  🗑️  Dead code elimination in function: {}", func_name);
-            }
-
-            let eliminated = self.eliminate_dead_code_in_function(function);
-            stats.dead_code_eliminated += eliminated;
-        }
-
-        stats
-    }
-
-    /// Core-13 "pure" normalization: rewrite a few non-13 ops to allowed forms.
-    /// - Load(dst, ptr)  => ExternCall(Some dst, env.local.get, [ptr])
-    /// - Store(val, ptr) => ExternCall(None, env.local.set, [ptr, val])
-    /// - NewBox(dst, T, args...) => ExternCall(Some dst, env.box.new, [Const String(T), args...])
-    /// - UnaryOp:
-    ///     Neg x    => BinOp(Sub, Const 0, x)
-    ///     Not x    => Compare(Eq, x, Const false)
-    ///     BitNot x => BinOp(BitXor, x, Const(-1))
-    // normalize_pure_core13 moved to optimizer_passes::normalize_core13_pure
-
-    /// Eliminate dead code in a single function
-    fn eliminate_dead_code_in_function(&mut self, function: &mut MirFunction) -> usize {
-        // Collect all used values
-        let mut used_values = HashSet::new();
-
-        // Mark values used in terminators and side-effect instructions
-        for (_, block) in &function.blocks {
-            for instruction in &block.instructions {
-                // Always keep instructions with side effects
-                if !instruction.effects().is_pure() {
-                    if let Some(dst) = instruction.dst_value() {
-                        used_values.insert(dst);
-                    }
-                    for used in instruction.used_values() {
-                        used_values.insert(used);
-                    }
-                }
-            }
-
-            // Mark values used in terminators
-            if let Some(terminator) = &block.terminator {
-                for used in terminator.used_values() {
-                    used_values.insert(used);
-                }
-            }
-        }
-
-        // Propagate usage backwards
-        let mut changed = true;
-        while changed {
-            changed = false;
-            for (_, block) in &function.blocks {
-                for instruction in &block.instructions {
-                    if let Some(dst) = instruction.dst_value() {
-                        if used_values.contains(&dst) {
-                            for used in instruction.used_values() {
-                                if used_values.insert(used) {
-                                    changed = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Remove unused pure instructions
-        let mut eliminated = 0;
-        for (bbid, block) in &mut function.blocks {
-            block.instructions.retain(|instruction| {
-                if instruction.effects().is_pure() {
-                    if let Some(dst) = instruction.dst_value() {
-                        if !used_values.contains(&dst) {
-                            opt_debug(&format!("DCE drop @{}: {:?}", bbid.as_u32(), instruction));
-                            eliminated += 1;
-                            return false;
-                        }
-                    }
-                }
-                true
-            });
-        }
-
-        eliminated
-    }
-
-    /// Common Subexpression Elimination for pure instructions
-    fn common_subexpression_elimination(&mut self, module: &mut MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
-
-        for (func_name, function) in &mut module.functions {
-            if self.debug {
-                println!("  🔄 CSE in function: {}", func_name);
-            }
-
-            let eliminated = self.cse_in_function(function);
-            stats.cse_eliminated += eliminated;
-        }
-
-        stats
-    }
-
-    /// CSE in a single function
-    fn cse_in_function(&mut self, function: &mut MirFunction) -> usize {
-        let mut expression_map: HashMap<String, ValueId> = HashMap::new();
-        let mut replacements: HashMap<ValueId, ValueId> = HashMap::new();
-        let mut eliminated = 0;
-
-        for (_, block) in &mut function.blocks {
-            for instruction in &mut block.instructions {
-                // Only optimize pure instructions
-                if instruction.effects().is_pure() {
-                    let expr_key = self.instruction_to_key(instruction);
-
-                    if let Some(&existing_value) = expression_map.get(&expr_key) {
-                        // Found common subexpression
-                        if let Some(dst) = instruction.dst_value() {
-                            replacements.insert(dst, existing_value);
-                            eliminated += 1;
-                        }
-                    } else {
-                        // First occurrence of this expression
-                        if let Some(dst) = instruction.dst_value() {
-                            expression_map.insert(expr_key, dst);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Apply replacements (simplified - in full implementation would need proper SSA update)
-        eliminated
-    }
 
     /// Convert instruction to string key for CSE
     #[allow(dead_code)]
@@ -320,496 +183,13 @@ impl MirOptimizer {
     /// - Print → ExternCall(env.console.log)
     #[allow(dead_code)]
     fn normalize_legacy_instructions(&mut self, module: &mut MirModule) -> OptimizationStats {
-        use super::{BarrierOp, MirInstruction as I, MirType, TypeOpKind, WeakRefOp};
-        let mut stats = OptimizationStats::new();
-        let rw_dbg = crate::config::env::rewrite_debug();
-        let rw_sp = crate::config::env::rewrite_safepoint();
-        let rw_future = crate::config::env::rewrite_future();
-        // Phase 11.8 toggles
-        let core13 = crate::config::env::mir_core13();
-        let mut array_to_boxcall = crate::config::env::mir_array_boxcall();
-        if core13 {
-            array_to_boxcall = true;
-        }
-        for (_fname, function) in &mut module.functions {
-            for (_bb, block) in &mut function.blocks {
-                // Rewrite in-place for normal instructions
-                for inst in &mut block.instructions {
-                    match inst {
-                        I::TypeCheck {
-                            dst,
-                            value,
-                            expected_type,
-                        } => {
-                            let ty = MirType::Box(expected_type.clone());
-                            *inst = I::TypeOp {
-                                dst: *dst,
-                                op: TypeOpKind::Check,
-                                value: *value,
-                                ty,
-                            };
-                            stats.reorderings += 0; // no-op; keep stats structure alive
-                        }
-                        I::Cast {
-                            dst,
-                            value,
-                            target_type,
-                        } => {
-                            let ty = target_type.clone();
-                            *inst = I::TypeOp {
-                                dst: *dst,
-                                op: TypeOpKind::Cast,
-                                value: *value,
-                                ty,
-                            };
-                        }
-                        I::WeakNew { dst, box_val } => {
-                            let val = *box_val;
-                            *inst = I::WeakRef {
-                                dst: *dst,
-                                op: WeakRefOp::New,
-                                value: val,
-                            };
-                        }
-                        I::WeakLoad { dst, weak_ref } => {
-                            let val = *weak_ref;
-                            *inst = I::WeakRef {
-                                dst: *dst,
-                                op: WeakRefOp::Load,
-                                value: val,
-                            };
-                        }
-                        I::BarrierRead { ptr } => {
-                            let val = *ptr;
-                            *inst = I::Barrier {
-                                op: BarrierOp::Read,
-                                ptr: val,
-                            };
-                        }
-                        I::BarrierWrite { ptr } => {
-                            let val = *ptr;
-                            *inst = I::Barrier {
-                                op: BarrierOp::Write,
-                                ptr: val,
-                            };
-                        }
-                        I::Print { value, .. } => {
-                            let v = *value;
-                            *inst = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.console".to_string(),
-                                method_name: "log".to_string(),
-                                args: vec![v],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass (guarded) */
-                        }
-                        I::ArrayGet { dst, array, index } if array_to_boxcall => {
-                            let d = *dst;
-                            let a = *array;
-                            let i = *index;
-                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name(
-                                "ArrayBox", "get",
-                            );
-                            *inst = I::BoxCall {
-                                dst: Some(d),
-                                box_val: a,
-                                method: "get".to_string(),
-                                method_id: mid,
-                                args: vec![i],
-                                effects: EffectMask::READ,
-                            };
-                        }
-                        I::ArraySet {
-                            array,
-                            index,
-                            value,
-                        } if array_to_boxcall => {
-                            let a = *array;
-                            let i = *index;
-                            let v = *value;
-                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name(
-                                "ArrayBox", "set",
-                            );
-                            *inst = I::BoxCall {
-                                dst: None,
-                                box_val: a,
-                                method: "set".to_string(),
-                                method_id: mid,
-                                args: vec![i, v],
-                                effects: EffectMask::WRITE,
-                            };
-                        }
-                        I::PluginInvoke {
-                            dst,
-                            box_val,
-                            method,
-                            args,
-                            effects,
-                        } => {
-                            let d = *dst;
-                            let recv = *box_val;
-                            let m = method.clone();
-                            let as_ = args.clone();
-                            let eff = *effects;
-                            *inst = I::BoxCall {
-                                dst: d,
-                                box_val: recv,
-                                method: m,
-                                method_id: None,
-                                args: as_,
-                                effects: eff,
-                            };
-                        }
-                        I::Debug { value, .. } if rw_dbg => {
-                            let v = *value;
-                            *inst = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.debug".to_string(),
-                                method_name: "trace".to_string(),
-                                args: vec![v],
-                                effects: EffectMask::PURE.add(Effect::Debug),
-                            };
-                        }
-                        I::Safepoint if rw_sp => {
-                            *inst = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.runtime".to_string(),
-                                method_name: "checkpoint".to_string(),
-                                args: vec![],
-                                effects: EffectMask::PURE,
-                            };
-                        }
-                        // Future/Await の段階移行: ExternCall(env.future.*) に書き換え（トグル）
-                        I::FutureNew { dst, value } if rw_future => {
-                            let d = *dst;
-                            let v = *value;
-                            *inst = I::ExternCall {
-                                dst: Some(d),
-                                iface_name: "env.future".to_string(),
-                                method_name: "new".to_string(),
-                                args: vec![v],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        I::FutureSet { future, value } if rw_future => {
-                            let f = *future;
-                            let v = *value;
-                            *inst = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.future".to_string(),
-                                method_name: "set".to_string(),
-                                args: vec![f, v],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        I::Await { dst, future } if rw_future => {
-                            let d = *dst;
-                            let f = *future;
-                            *inst = I::ExternCall {
-                                dst: Some(d),
-                                iface_name: "env.future".to_string(),
-                                method_name: "await".to_string(),
-                                args: vec![f],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        _ => {}
-                    }
-                }
-                // Rewrite terminator, if any
-                if let Some(term) = &mut block.terminator {
-                    match term {
-                        I::TypeCheck {
-                            dst,
-                            value,
-                            expected_type,
-                        } => {
-                            let ty = MirType::Box(expected_type.clone());
-                            *term = I::TypeOp {
-                                dst: *dst,
-                                op: TypeOpKind::Check,
-                                value: *value,
-                                ty,
-                            };
-                        }
-                        I::Cast {
-                            dst,
-                            value,
-                            target_type,
-                        } => {
-                            let ty = target_type.clone();
-                            *term = I::TypeOp {
-                                dst: *dst,
-                                op: TypeOpKind::Cast,
-                                value: *value,
-                                ty,
-                            };
-                        }
-                        I::WeakNew { dst, box_val } => {
-                            let val = *box_val;
-                            *term = I::WeakRef {
-                                dst: *dst,
-                                op: WeakRefOp::New,
-                                value: val,
-                            };
-                        }
-                        I::WeakLoad { dst, weak_ref } => {
-                            let val = *weak_ref;
-                            *term = I::WeakRef {
-                                dst: *dst,
-                                op: WeakRefOp::Load,
-                                value: val,
-                            };
-                        }
-                        I::BarrierRead { ptr } => {
-                            let val = *ptr;
-                            *term = I::Barrier {
-                                op: BarrierOp::Read,
-                                ptr: val,
-                            };
-                        }
-                        I::BarrierWrite { ptr } => {
-                            let val = *ptr;
-                            *term = I::Barrier {
-                                op: BarrierOp::Write,
-                                ptr: val,
-                            };
-                        }
-                        I::Print { value, .. } => {
-                            let v = *value;
-                            *term = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.console".to_string(),
-                                method_name: "log".to_string(),
-                                args: vec![v],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        I::RefGet { .. } | I::RefSet { .. } => { /* handled in normalize_ref_field_access pass (guarded) */
-                        }
-                        I::ArrayGet { dst, array, index } if array_to_boxcall => {
-                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name(
-                                "ArrayBox", "get",
-                            );
-                            *term = I::BoxCall {
-                                dst: Some(*dst),
-                                box_val: *array,
-                                method: "get".to_string(),
-                                method_id: mid,
-                                args: vec![*index],
-                                effects: EffectMask::READ,
-                            };
-                        }
-                        I::ArraySet {
-                            array,
-                            index,
-                            value,
-                        } if array_to_boxcall => {
-                            let mid = crate::mir::slot_registry::resolve_slot_by_type_name(
-                                "ArrayBox", "set",
-                            );
-                            *term = I::BoxCall {
-                                dst: None,
-                                box_val: *array,
-                                method: "set".to_string(),
-                                method_id: mid,
-                                args: vec![*index, *value],
-                                effects: EffectMask::WRITE,
-                            };
-                        }
-                        I::PluginInvoke {
-                            dst,
-                            box_val,
-                            method,
-                            args,
-                            effects,
-                        } => {
-                            *term = I::BoxCall {
-                                dst: *dst,
-                                box_val: *box_val,
-                                method: method.clone(),
-                                method_id: None,
-                                args: args.clone(),
-                                effects: *effects,
-                            };
-                        }
-                        I::Debug { value, .. } if rw_dbg => {
-                            let v = *value;
-                            *term = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.debug".to_string(),
-                                method_name: "trace".to_string(),
-                                args: vec![v],
-                                effects: EffectMask::PURE.add(Effect::Debug),
-                            };
-                        }
-                        I::Safepoint if rw_sp => {
-                            *term = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.runtime".to_string(),
-                                method_name: "checkpoint".to_string(),
-                                args: vec![],
-                                effects: EffectMask::PURE,
-                            };
-                        }
-                        // Future/Await （終端側）
-                        I::FutureNew { dst, value } if rw_future => {
-                            let d = *dst;
-                            let v = *value;
-                            *term = I::ExternCall {
-                                dst: Some(d),
-                                iface_name: "env.future".to_string(),
-                                method_name: "new".to_string(),
-                                args: vec![v],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        I::FutureSet { future, value } if rw_future => {
-                            let f = *future;
-                            let v = *value;
-                            *term = I::ExternCall {
-                                dst: None,
-                                iface_name: "env.future".to_string(),
-                                method_name: "set".to_string(),
-                                args: vec![f, v],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        I::Await { dst, future } if rw_future => {
-                            let d = *dst;
-                            let f = *future;
-                            *term = I::ExternCall {
-                                dst: Some(d),
-                                iface_name: "env.future".to_string(),
-                                method_name: "await".to_string(),
-                                args: vec![f],
-                                effects: EffectMask::PURE.add(Effect::Io),
-                            };
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        stats
+        crate::mir::optimizer_passes::normalize::normalize_legacy_instructions(self, module)
     }
 
     /// Normalize RefGet/RefSet to BoxCall("getField"/"setField") with Const String field argument.
+    #[allow(dead_code)]
     fn normalize_ref_field_access(&mut self, module: &mut MirModule) -> OptimizationStats {
-        use super::{BarrierOp, MirInstruction as I};
-        let mut stats = OptimizationStats::new();
-        for (_fname, function) in &mut module.functions {
-            for (_bb, block) in &mut function.blocks {
-                let mut out: Vec<I> = Vec::with_capacity(block.instructions.len() + 2);
-                let old = std::mem::take(&mut block.instructions);
-                for inst in old.into_iter() {
-                    match inst {
-                        I::RefGet {
-                            dst,
-                            reference,
-                            field,
-                        } => {
-                            let new_id = super::ValueId::new(function.next_value_id);
-                            function.next_value_id += 1;
-                            out.push(I::Const {
-                                dst: new_id,
-                                value: super::instruction::ConstValue::String(field),
-                            });
-                            out.push(I::BoxCall {
-                                dst: Some(dst),
-                                box_val: reference,
-                                method: "getField".to_string(),
-                                method_id: None,
-                                args: vec![new_id],
-                                effects: super::EffectMask::READ,
-                            });
-                            stats.intrinsic_optimizations += 1;
-                        }
-                        I::RefSet {
-                            reference,
-                            field,
-                            value,
-                        } => {
-                            let new_id = super::ValueId::new(function.next_value_id);
-                            function.next_value_id += 1;
-                            out.push(I::Const {
-                                dst: new_id,
-                                value: super::instruction::ConstValue::String(field),
-                            });
-                            // Prepend an explicit write barrier before setField to make side-effects visible
-                            out.push(I::Barrier {
-                                op: BarrierOp::Write,
-                                ptr: reference,
-                            });
-                            out.push(I::BoxCall {
-                                dst: None,
-                                box_val: reference,
-                                method: "setField".to_string(),
-                                method_id: None,
-                                args: vec![new_id, value],
-                                effects: super::EffectMask::WRITE,
-                            });
-                            stats.intrinsic_optimizations += 1;
-                        }
-                        other => out.push(other),
-                    }
-                }
-                block.instructions = out;
-
-                if let Some(term) = block.terminator.take() {
-                    block.terminator = Some(match term {
-                        I::RefGet {
-                            dst,
-                            reference,
-                            field,
-                        } => {
-                            let new_id = super::ValueId::new(function.next_value_id);
-                            function.next_value_id += 1;
-                            block.instructions.push(I::Const {
-                                dst: new_id,
-                                value: super::instruction::ConstValue::String(field),
-                            });
-                            I::BoxCall {
-                                dst: Some(dst),
-                                box_val: reference,
-                                method: "getField".to_string(),
-                                method_id: None,
-                                args: vec![new_id],
-                                effects: super::EffectMask::READ,
-                            }
-                        }
-                        I::RefSet {
-                            reference,
-                            field,
-                            value,
-                        } => {
-                            let new_id = super::ValueId::new(function.next_value_id);
-                            function.next_value_id += 1;
-                            block.instructions.push(I::Const {
-                                dst: new_id,
-                                value: super::instruction::ConstValue::String(field),
-                            });
-                            block.instructions.push(I::Barrier {
-                                op: BarrierOp::Write,
-                                ptr: reference,
-                            });
-                            I::BoxCall {
-                                dst: None,
-                                box_val: reference,
-                                method: "setField".to_string(),
-                                method_id: None,
-                                args: vec![new_id, value],
-                                effects: super::EffectMask::WRITE,
-                            }
-                        }
-                        other => other,
-                    });
-                }
-            }
-        }
-        stats
+        crate::mir::optimizer_passes::normalize::normalize_ref_field_access(self, module)
     }
 }
 
@@ -890,143 +270,144 @@ impl Default for MirOptimizer {
 
 // OptimizationStats moved to crate::mir::optimizer_stats
 
-impl MirOptimizer {
-    /// Diagnostic: detect unlowered is/as/isType/asType after Builder
-    #[allow(dead_code)]
-    fn diagnose_unlowered_type_ops(&mut self, module: &MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
-        let diag_on = self.debug || crate::config::env::opt_diag();
-        for (fname, function) in &module.functions {
-            // def map for resolving constants
-            let mut def_map: std::collections::HashMap<
-                ValueId,
-                (super::basic_block::BasicBlockId, usize),
-            > = std::collections::HashMap::new();
-            for (bb_id, block) in &function.blocks {
-                for (i, inst) in block.instructions.iter().enumerate() {
-                    if let Some(dst) = inst.dst_value() {
-                        def_map.insert(dst, (*bb_id, i));
-                    }
-                }
-                if let Some(term) = &block.terminator {
-                    if let Some(dst) = term.dst_value() {
-                        def_map.insert(dst, (*bb_id, usize::MAX));
-                    }
+/// Diagnostics: identify unlowered type-ops embedded as strings in Call/BoxCall
+#[allow(dead_code)]
+fn diagnose_unlowered_type_ops(
+    optimizer: &MirOptimizer,
+    module: &MirModule,
+) -> OptimizationStats {
+    let mut stats = OptimizationStats::new();
+    let diag_on = optimizer.debug || crate::config::env::opt_diag();
+    for (fname, function) in &module.functions {
+        // def map for resolving constants
+        let mut def_map: std::collections::HashMap<
+            ValueId,
+            (super::basic_block::BasicBlockId, usize),
+        > = std::collections::HashMap::new();
+        for (bb_id, block) in &function.blocks {
+            for (i, inst) in block.instructions.iter().enumerate() {
+                if let Some(dst) = inst.dst_value() {
+                    def_map.insert(dst, (*bb_id, i));
                 }
             }
-            let mut count = 0usize;
-            for (_bb, block) in &function.blocks {
-                for inst in &block.instructions {
-                    match inst {
-                        MirInstruction::BoxCall { method, .. }
-                            if method == "is"
-                                || method == "as"
-                                || method == "isType"
-                                || method == "asType" =>
-                        {
-                            count += 1;
-                        }
-                        MirInstruction::Call { func, .. } => {
-                            if let Some((bb, idx)) = def_map.get(func).copied() {
-                                if let Some(b) = function.blocks.get(&bb) {
-                                    if idx < b.instructions.len() {
-                                        if let MirInstruction::Const {
-                                            value: super::instruction::ConstValue::String(s),
-                                            ..
-                                        } = &b.instructions[idx]
-                                        {
-                                            if s == "isType" || s == "asType" {
-                                                count += 1;
-                                            }
+            if let Some(term) = &block.terminator {
+                if let Some(dst) = term.dst_value() {
+                    def_map.insert(dst, (*bb_id, usize::MAX));
+                }
+            }
+        }
+        let mut count = 0usize;
+        for (_bb, block) in &function.blocks {
+            for inst in &block.instructions {
+                match inst {
+                    MirInstruction::BoxCall { method, .. }
+                        if method == "is"
+                            || method == "as"
+                            || method == "isType"
+                            || method == "asType" =>
+                    {
+                        count += 1;
+                    }
+                    MirInstruction::Call { func, .. } => {
+                        if let Some((bb, idx)) = def_map.get(func).copied() {
+                            if let Some(b) = function.blocks.get(&bb) {
+                                if idx < b.instructions.len() {
+                                    if let MirInstruction::Const {
+                                        value: super::instruction::ConstValue::String(s),
+                                        ..
+                                    } = &b.instructions[idx]
+                                    {
+                                        if s == "isType" || s == "asType" {
+                                            count += 1;
                                         }
                                     }
                                 }
                             }
                         }
-                        _ => {}
                     }
-                }
-            }
-            if count > 0 {
-                stats.diagnostics_reported += count;
-                if diag_on {
-                    eprintln!(
-                        "[OPT][DIAG] Function '{}' has {} unlowered type-op calls",
-                        fname, count
-                    );
+                    _ => {}
                 }
             }
         }
-        stats
+        if count > 0 {
+            stats.diagnostics_reported += count;
+            if diag_on {
+                eprintln!(
+                    "[OPT][DIAG] Function '{}' has {} unlowered type-op calls",
+                    fname, count
+                );
+            }
+        }
     }
+    stats
+}
 
-    /// Diagnostic: detect legacy instructions that should be unified
-    /// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite/ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke
-    /// When NYASH_OPT_DIAG or NYASH_OPT_DIAG_FORBID_LEGACY is set, prints diagnostics.
-    #[allow(dead_code)]
-    fn diagnose_legacy_instructions(&mut self, module: &MirModule) -> OptimizationStats {
-        let mut stats = OptimizationStats::new();
-        let diag_on = self.debug
-            || crate::config::env::opt_diag()
-            || crate::config::env::opt_diag_forbid_legacy();
-        for (fname, function) in &module.functions {
-            let mut count = 0usize;
-            for (_bb, block) in &function.blocks {
-                for inst in &block.instructions {
-                    match inst {
-                        MirInstruction::TypeCheck { .. }
-                        | MirInstruction::Cast { .. }
-                        | MirInstruction::WeakNew { .. }
-                        | MirInstruction::WeakLoad { .. }
-                        | MirInstruction::BarrierRead { .. }
-                        | MirInstruction::BarrierWrite { .. }
-                        | MirInstruction::ArrayGet { .. }
-                        | MirInstruction::ArraySet { .. }
-                        | MirInstruction::RefGet { .. }
-                        | MirInstruction::RefSet { .. }
-                        | MirInstruction::PluginInvoke { .. } => {
-                            count += 1;
-                        }
-                        _ => {}
+/// Diagnostic: detect legacy instructions that should be unified
+/// Legacy set: TypeCheck/Cast/WeakNew/WeakLoad/BarrierRead/BarrierWrite/ArrayGet/ArraySet/RefGet/RefSet/PluginInvoke
+/// When NYASH_OPT_DIAG or NYASH_OPT_DIAG_FORBID_LEGACY is set, prints diagnostics.
+#[allow(dead_code)]
+fn diagnose_legacy_instructions(module: &MirModule, debug: bool) -> OptimizationStats {
+    let mut stats = OptimizationStats::new();
+    let diag_on = debug
+        || crate::config::env::opt_diag()
+        || crate::config::env::opt_diag_forbid_legacy();
+    for (fname, function) in &module.functions {
+        let mut count = 0usize;
+        for (_bb, block) in &function.blocks {
+            for inst in &block.instructions {
+                match inst {
+                    MirInstruction::TypeCheck { .. }
+                    | MirInstruction::Cast { .. }
+                    | MirInstruction::WeakNew { .. }
+                    | MirInstruction::WeakLoad { .. }
+                    | MirInstruction::BarrierRead { .. }
+                    | MirInstruction::BarrierWrite { .. }
+                    | MirInstruction::ArrayGet { .. }
+                    | MirInstruction::ArraySet { .. }
+                    | MirInstruction::RefGet { .. }
+                    | MirInstruction::RefSet { .. }
+                    | MirInstruction::PluginInvoke { .. } => {
+                        count += 1;
                     }
-                }
-                if let Some(term) = &block.terminator {
-                    match term {
-                        MirInstruction::TypeCheck { .. }
-                        | MirInstruction::Cast { .. }
-                        | MirInstruction::WeakNew { .. }
-                        | MirInstruction::WeakLoad { .. }
-                        | MirInstruction::BarrierRead { .. }
-                        | MirInstruction::BarrierWrite { .. }
-                        | MirInstruction::ArrayGet { .. }
-                        | MirInstruction::ArraySet { .. }
-                        | MirInstruction::RefGet { .. }
-                        | MirInstruction::RefSet { .. }
-                        | MirInstruction::PluginInvoke { .. } => {
-                            count += 1;
-                        }
-                        _ => {}
-                    }
+                    _ => {}
                 }
             }
-            if count > 0 {
-                stats.diagnostics_reported += count;
-                if diag_on {
-                    eprintln!(
-                        "[OPT][DIAG] Function '{}' has {} legacy MIR ops: unify to Core‑13 (TypeOp/WeakRef/Barrier/BoxCall)",
-                        fname, count
-                    );
-                    if crate::config::env::opt_diag_forbid_legacy() {
-                        panic!(
-                            "NYASH_OPT_DIAG_FORBID_LEGACY=1: legacy MIR ops detected in '{}': {}",
-                            fname, count
-                        );
+            if let Some(term) = &block.terminator {
+                match term {
+                    MirInstruction::TypeCheck { .. }
+                    | MirInstruction::Cast { .. }
+                    | MirInstruction::WeakNew { .. }
+                    | MirInstruction::WeakLoad { .. }
+                    | MirInstruction::BarrierRead { .. }
+                    | MirInstruction::BarrierWrite { .. }
+                    | MirInstruction::ArrayGet { .. }
+                    | MirInstruction::ArraySet { .. }
+                    | MirInstruction::RefGet { .. }
+                    | MirInstruction::RefSet { .. }
+                    | MirInstruction::PluginInvoke { .. } => {
+                        count += 1;
                     }
+                    _ => {}
                 }
             }
         }
-        stats
+        if count > 0 {
+            stats.diagnostics_reported += count;
+            if diag_on {
+                eprintln!(
+                    "[OPT][DIAG] Function '{}' has {} legacy MIR ops: unify to Core‑13 (TypeOp/WeakRef/Barrier/BoxCall)",
+                    fname, count
+                );
+                if crate::config::env::opt_diag_forbid_legacy() {
+                    panic!(
+                        "NYASH_OPT_DIAG_FORBID_LEGACY=1: legacy MIR ops detected in '{}': {}",
+                        fname, count
+                    );
+                }
+            }
+        }
     }
+    stats
 }
 
 #[cfg(test)]
@@ -1133,3 +514,4 @@ mod tests {
         );
     }
 }
+
