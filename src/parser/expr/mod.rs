@@ -9,3 +9,4 @@ pub(crate) mod range;
 pub(crate) mod shift;
 pub(crate) mod term;
 pub(crate) mod ternary;
+pub(crate) mod match_expr;

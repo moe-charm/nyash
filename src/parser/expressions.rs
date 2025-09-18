@@ -187,7 +187,7 @@ impl NyashParser {
     pub(crate) fn parse_unary(&mut self) -> Result<ASTNode, ParseError> {
         // match式（peek置換）の先読み
         if self.match_token(&TokenType::MATCH) {
-            return self.parse_match_expr();
+            return self.expr_parse_match();
         }
         if self.match_token(&TokenType::MINUS) {
             self.advance(); // consume '-'
@@ -221,99 +221,7 @@ impl NyashParser {
         self.parse_call()
     }
 
-    /// match式: match <expr> { pat => arm ... _ => arm }
-    /// MVP: pat はリテラルのみ（OR/型/構造は後段）。アームは式またはブロック（最後の式が値）。
-    fn parse_match_expr(&mut self) -> Result<ASTNode, ParseError> {
-        self.advance(); // consume 'match'
-        // Scrutinee: keep MVP simple and accept a primary/call expression
-        let scrutinee = self.parse_primary()?;
-        self.consume(TokenType::LBRACE)?;
-
-        let mut arms: Vec<(crate::ast::LiteralValue, ASTNode)> = Vec::new();
-        let mut default_expr: Option<ASTNode> = None;
-
-        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-            self.skip_newlines();
-            while self.match_token(&TokenType::COMMA) || self.match_token(&TokenType::NEWLINE) {
-                self.advance();
-                self.skip_newlines();
-            }
-            if self.match_token(&TokenType::RBRACE) {
-                break;
-            }
-
-            // default '_' or literal arm
-            let is_default = matches!(self.current_token().token_type, TokenType::IDENTIFIER(ref s) if s == "_");
-            if is_default {
-                self.advance(); // consume '_'
-                self.consume(TokenType::FatArrow)?;
-                // else アーム: ブロック or 式
-                let expr = if self.match_token(&TokenType::LBRACE) {
-                    // ブロックを式として扱う（最後の文の値が返る）
-                    self.advance(); // consume '{'
-                    let mut stmts: Vec<ASTNode> = Vec::new();
-                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                        self.skip_newlines();
-                        if !self.match_token(&TokenType::RBRACE) {
-                            stmts.push(self.parse_statement()?);
-                        }
-                    }
-                    self.consume(TokenType::RBRACE)?;
-                    ASTNode::Program {
-                        statements: stmts,
-                        span: Span::unknown(),
-                    }
-                } else {
-                    // MVP: accept a primary/call expression for arm body
-                    self.parse_primary()?
-                };
-                default_expr = Some(expr);
-            } else {
-                // リテラルのみ許可（P0）
-                let lit = self.parse_literal_only()?;
-                self.consume(TokenType::FatArrow)?;
-                // アーム: ブロック or 式
-                let expr = if self.match_token(&TokenType::LBRACE) {
-                    self.advance(); // consume '{'
-                    let mut stmts: Vec<ASTNode> = Vec::new();
-                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                        self.skip_newlines();
-                        if !self.match_token(&TokenType::RBRACE) {
-                            stmts.push(self.parse_statement()?);
-                        }
-                    }
-                    self.consume(TokenType::RBRACE)?;
-                    ASTNode::Program {
-                        statements: stmts,
-                        span: Span::unknown(),
-                    }
-                } else {
-                    self.parse_expression()?
-                };
-                arms.push((lit, expr));
-            }
-
-            // 区切り（カンマや改行を許可）
-            while self.match_token(&TokenType::COMMA) || self.match_token(&TokenType::NEWLINE) {
-                self.advance();
-            }
-            self.skip_newlines();
-        }
-
-        self.consume(TokenType::RBRACE)?;
-        let else_expr = default_expr.ok_or(ParseError::UnexpectedToken {
-            found: self.current_token().token_type.clone(),
-            expected: "_ => <expr> in match".to_string(),
-            line: self.current_token().line,
-        })?;
-
-        Ok(ASTNode::PeekExpr {
-            scrutinee: Box::new(scrutinee),
-            arms,
-            else_expr: Box::new(else_expr),
-            span: Span::unknown(),
-        })
-    }
+    // parse_match_expr moved to expr/match_expr.rs as expr_parse_match
 
     fn parse_literal_only(&mut self) -> Result<crate::ast::LiteralValue, ParseError> {
         match &self.current_token().token_type {
